@@ -419,7 +419,9 @@ export function openExport() {
       const payload = buildPayload(collect());
       const d = await fetch('/api/mv3q/add', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'talking', key: Store.key(), title: Store.title(), payload }),
+        // The length goes with it: the queue's progress bar is seconds written over seconds
+        // total, and only this side knows the total.
+        body: JSON.stringify({ kind: 'talking', key: Store.key(), title: Store.title(), payload, dur: Store.duration() }),
       }).then(r => r.json());
       if (!d || !d.success) throw new Error((d && d.error) || 'refused');
       toQueue.textContent = 'Queued';

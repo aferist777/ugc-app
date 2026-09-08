@@ -15,7 +15,9 @@
    over unrendered work is the one press here that cannot be taken back.
 
    The list is YOURS: the server hands each person their own entries. The admin gets
-   everyone's, and each row then says whose it is.
+   everyone's, and each row then says whose it is. Render all is yours too: it starts what
+   you queued and nothing else. The encoder is one per machine, so a started entry may still
+   stand in line behind somebody else's - the row says how many are ahead.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -83,12 +85,19 @@ function _row(it, refresh, admin) {
 
   const st = document.createElement('span');
   st.className = 'mv3-qrow-s';
+  // Four states, said plainly: queued (yours, not started), in line (started, the encoder
+  // is on something else), rendering (with the number when there is one), and the two ends.
+  const running = it.status === 'running';
+  const named = it.phase === 'normalizing' ? 'preparing clips…'
+              : it.phase === 'speeding' ? 'speeding up…'
+              : null;
   st.textContent = it.status === 'done' ? 'ready'
-                 : it.status === 'running'
-                     ? ((it.percent ? it.percent + '%' : 'rendering…')
-                        + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : ''))
+                 : running
+                     ? (named || ((it.percent ? it.percent + '%' : 'rendering…')
+                        + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : '')))
                  : it.status === 'failed' ? 'failed'
-                 : 'waiting';
+                 : it.armed ? ('in line' + (it.ahead ? ' · ' + it.ahead + ' ahead' : ' · next'))
+                 : 'queued';
   top.appendChild(st);
   main.appendChild(top);
 
@@ -97,6 +106,18 @@ function _row(it, refresh, admin) {
   sub.textContent = (admin && it.ownerNick ? it.ownerNick + ' · ' : '')
                   + (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
   main.appendChild(sub);
+
+  // The bar, only while the encoder is on this one. Indeterminate when the phase reports no
+  // number - a stripe that moves says "working" where a bar stuck at 0% says "stuck".
+  if (running) {
+    const bar = document.createElement('div');
+    const known = !named && it.percent > 0;
+    bar.className = 'mv3-qbar' + (known ? '' : ' is-indet');
+    const fill = document.createElement('i');
+    if (known) fill.style.width = it.percent + '%';
+    bar.appendChild(fill);
+    main.appendChild(bar);
+  }
 
   if (it.status === 'failed' && it.error) {
     const e = document.createElement('div');
@@ -198,9 +219,13 @@ async function _paintList() {
   all.type = 'button';
   all.className = 'mv3-btn sm primary';
   all.textContent = 'Render all';
-  const waiting = (d.items || []).filter(x => x.status === 'queued').length;
-  all.disabled = !waiting || d.running;
-  all.title = d.running ? 'Already rendering' : (waiting ? 'Render everything waiting, one after another' : 'Nothing waiting');
+  // Yours that have not been started. Once started they are in line whatever the encoder is
+  // doing, so the button has nothing left to do for them.
+  const waiting = (d.items || []).filter(x => x.status === 'queued' && !x.armed).length;
+  const inLine = (d.items || []).some(x => x.status === 'running' || (x.status === 'queued' && x.armed));
+  all.disabled = !waiting;
+  all.title = waiting ? 'Start everything of yours that is queued, one after another'
+            : inLine ? 'Yours are started and in line' : 'Nothing queued';
   all.addEventListener('click', async (e) => {
     e.stopPropagation();
     await fetch('/api/mv3q/run', { method: 'POST' });
@@ -267,8 +292,8 @@ export async function addCurrent() {
   const tl = Store.timeline();
   if (!tl || !Store.hasProject()) return { success: false, error: 'no project open' };
   const body = Store.isBlank()
-    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl }
-    : { kind: 'talking', key: Store.key(), title: Store.title() };
+    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration() }
+    : { kind: 'talking', key: Store.key(), title: Store.title(), dur: Store.duration() };
   const d = await fetch('/api/mv3q/add', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }).then(r => r.json());

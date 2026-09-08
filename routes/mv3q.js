@@ -22,8 +22,13 @@
 
    WHOSE ENTRY. Each one names who queued it, and the list a person sees is their own; the
    admin sees everyone's, with names, and may clear any of them. Entries from before there
-   were owners have none and are the admin's. The RUNNER is still shared: one ffmpeg at a
-   time on this machine, in the order things were queued, whoever queued them.
+   were owners have none and are the admin's.
+
+   WHOSE "RENDER ALL". Queuing something does not start it. Render all ARMS the caller's
+   waiting entries - theirs and nobody else's - and the runner takes armed entries in the
+   order they were queued. It used to take everything waiting, so one person's Render all
+   rendered another person's projects. The encoder itself is still one per machine: armed
+   entries from two people go one after another, and each row says how many are ahead.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -64,6 +69,11 @@ function write(s) {
 // ── Running one entry ───────────────────────────────────────────────────────
 let _proc = null;
 let _startedAt = 0;
+// The entry under the encoder, whichever path is encoding it. A blank entry has a local ffmpeg
+// process; a scenario entry is rendered inside routes/ffmpeg.js and only polled from here, so
+// `_proc` alone said "idle" all through a scenario render - every list read then took the
+// running row for a leftover and put it back to queued, and Render all could start it twice.
+let _active = null;
 
 function argsForBlank(timeline) {
   const g = buildGraph(timeline || {});
@@ -88,13 +98,15 @@ function argsForBlank(timeline) {
 
 function next() {
   const s = read();
-  const item = s.items.find(x => x.status === 'queued');
-  if (!item) { s.running = false; write(s); return; }
+  // Armed, and oldest first. An entry nobody has pressed Render all for waits.
+  const item = s.items.find(x => x.status === 'queued' && x.armed);
+  if (!item) { s.running = false; write(s); _active = null; return; }
 
   item.status = 'running';
   item.startedAt = new Date().toISOString();
   s.running = true;
   write(s);
+  _active = item.id;
 
   // A scenario entry is handed to the renderer that knows how to read it, over HTTP to this
   // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
@@ -138,7 +150,7 @@ function next() {
     }
   });
   _proc.on('close', (code) => {
-    _proc = null;
+    _proc = null; _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
@@ -150,7 +162,7 @@ function next() {
     next();
   });
   _proc.on('error', (e) => {
-    _proc = null;
+    _proc = null; _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = e.message; }
@@ -168,6 +180,7 @@ function runTalking(item) {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = msg; }
     write(t);
+    _active = null;
     next();
   };
   if (!item.payload) return fail('this entry carries no render payload');
@@ -192,7 +205,20 @@ function runTalking(item) {
         if (st.status !== 'done' && st.status !== 'cancelled' && !st.error) {
           const t = read();
           const it = t.items.find(x => x.id === item.id);
-          if (it) { it.percent = st.percent || 0; write(t); }
+          if (it) {
+            // progressSecs is how much OUTPUT ffmpeg has written; against the cut's length,
+            // sent along when the entry was queued, that is a real fraction. The phases before
+            // and after the encode report no seconds, so they are named instead of shown as 0%.
+            it.phase = st.status;
+            const dur = +item.dur || 0;
+            if (st.status === 'running' && dur > 0) {
+              const pc = Math.max(0, Math.min(99, Math.round((+st.progressSecs || 0) / dur * 100)));
+              const el = (Date.now() - started) / 1000;
+              it.percent = pc;
+              it.remain = (pc > 3 && el > 1.5) ? Math.round(el / (pc / 100) - el) : null;
+            }
+            write(t);
+          }
           return setTimeout(poll, 1500);
         }
         const t = read();
@@ -204,6 +230,7 @@ function runTalking(item) {
           else { it.status = 'failed'; it.error = st.error || ('ended as ' + st.status); }
         }
         write(t);
+        _active = null;
         next();
       }).catch(e => fail(e.message));
     };
@@ -253,15 +280,23 @@ function _canSee(it, req) {
 router.get('/mv3q', (req, res) => {
   const s = read();
   // Same leftover, shown honestly: a row cannot be rendering when nothing is.
-  if (!_proc && s.items.some(x => x.status === 'running')) {
+  if (!_active && s.items.some(x => x.status === 'running')) {
     for (const it of s.items) if (it.status === 'running') it.status = it.url ? 'done' : 'queued';
     write(s);
   }
-  const items = s.items.filter(it => _canSee(it, req));
+  // How many are in line before each armed entry - across everyone, because the encoder is
+  // shared and that is what the wait actually depends on.
+  const ahead = new Map();
+  let line = 0;
+  for (const it of s.items) {
+    if (it.status === 'running' || (it.status === 'queued' && it.armed)) ahead.set(it.id, line++);
+  }
+  const items = s.items.filter(it => _canSee(it, req))
+    .map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null }));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   // `running` is the machine's, not the person's: the encoder is busy for everyone.
-  res.json({ success: true, waiting, running: !!_proc, admin: OWN.isAdmin(req.user), items });
+  res.json({ success: true, waiting, running: !!_active, admin: OWN.isAdmin(req.user), items });
 });
 
 router.post('/mv3q/add', (req, res) => {
@@ -280,6 +315,11 @@ router.post('/mv3q/add', (req, res) => {
       payload: kind === 'talking' ? (b.payload || null) : null,
       url: null, error: null,
       owner: OWN.uidOf(req), ownerNick: req.user ? (req.user.nickname || null) : null,
+      // Starts only when its owner presses Render all - see the header.
+      armed: false,
+      // The cut's length in seconds, for the progress bar of a scenario render: the renderer
+      // reports seconds written, and only against a total is that a percentage.
+      dur: Number(b.dur) > 0 ? Number(b.dur) : null,
     };
     item.summary = summarise(item);
     s.items.push(item);
@@ -300,24 +340,23 @@ router.delete('/mv3q/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// Start working through whatever is queued. Idempotent: pressing it twice does not start a
-// second runner, it just returns that one is already going.
-router.post('/mv3q/run', (_req, res) => {
-  if (_proc) return res.json({ success: true, already: true });
-  // NOTHING IS ACTUALLY RUNNING - there is no process. Any row still marked running is a
-  // leftover: the server was restarted mid-encode, or a scenario job's poll died with it.
-  // Left alone it sits at the head of the list for ever and everything behind it waits on a
-  // render that finished, failed or was never going to happen.
+// Render all: arm the caller's waiting entries and start the runner if it is idle. Pressing
+// it while the encoder is busy with somebody else's render is fine - the entries are armed
+// and take their turn. Pressing it twice does not start a second runner.
+router.post('/mv3q/run', (req, res) => {
   const s = read();
-  let freed = 0;
+  let freed = 0, armed = 0;
   for (const it of s.items) {
-    if (it.status !== 'running') continue;
-    it.status = it.url ? 'done' : 'queued';
-    freed++;
+    // NOTHING IS ACTUALLY RUNNING - there is no process. Any row still marked running is a
+    // leftover: the server was restarted mid-encode, or a scenario job's poll died with it.
+    // Left alone it sits at the head of the list for ever and everything behind it waits on
+    // a render that finished, failed or was never going to happen.
+    if (it.status === 'running' && !_active) { it.status = it.url ? 'done' : 'queued'; freed++; }
+    if (it.status === 'queued' && !it.armed && _canSee(it, req)) { it.armed = true; armed++; }
   }
-  if (freed) write(s);
-  next();
-  res.json({ success: true, already: false, freed });
+  write(s);
+  if (!_active) next();
+  res.json({ success: true, already: !!_active, freed, armed });
 });
 
 // Clearing has two meanings and the caller has to say which. A finished entry stays in the
@@ -334,9 +373,11 @@ router.post('/mv3q/retry/:id', (req, res) => {
   if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
   if (!_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
-  it.status = 'queued';
-  it.error = null; it.url = null; it.percent = 0; it.remain = null;
+  // Trying again is asking for it: armed, and started at once if the encoder is idle.
+  it.status = 'queued'; it.armed = true;
+  it.error = null; it.url = null; it.percent = 0; it.remain = null; it.phase = null;
   write(s);
+  if (!_active) next();
   res.json({ success: true });
 });
 

@@ -1456,6 +1456,12 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qrow-top{display:flex; align-items:baseline; gap:8px}
 .mv3-qrow-sub{margin-top:2px; font:10px var(--font); color:var(--muted)}
 .mv3-qrow-e{margin-top:3px; font:10px/1.4 var(--font); color:var(--danger)}
+/* The encoder's progress, under the row it is working on. Indeterminate while a phase reports
+   no seconds (preparing clips, the speed pass): a moving stripe rather than a bar stuck at 0. */
+.mv3-qbar{margin-top:5px; height:3px; border-radius:2px; background:var(--surface-2); overflow:hidden}
+.mv3-qbar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .4s var(--ease)}
+.mv3-qbar.is-indet > i{width:28%; animation:mv3-qslide 1.1s linear infinite}
+@keyframes mv3-qslide{from{transform:translateX(-100%)} to{transform:translateX(360%)}}
 .mv3-qrow-acts{flex:0 0 auto; display:flex; align-items:center; gap:4px}
 .mv3-qx{
   width:18px; height:18px; padding:0; line-height:1;
