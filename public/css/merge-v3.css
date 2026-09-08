@@ -726,6 +726,22 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-pv-prep i{display:block; width:90px; height:4px; border-radius:2px; background:var(--surface-2); overflow:hidden; position:relative}
 .mv3-pv-prep i::after{content:''; position:absolute; left:0; top:0; bottom:0; width:var(--p, 0%); background:var(--primary); transition:width .2s var(--ease)}
 
+/* The preview cut's chip: a dot for its state, the word, and the button that makes it now. */
+.mv3-pv-cut{display:flex; align-items:center; gap:6px; flex:0 0 auto; font:600 10px/1 var(--font); color:var(--muted); white-space:nowrap}
+.mv3-pv-cut i{display:block; width:7px; height:7px; border-radius:50%; background:var(--muted)}
+.mv3-pv-cut.is-busy i{background:var(--primary); animation:mv3-cut-pulse .9s infinite alternate}
+.mv3-pv-cut.is-ready{color:var(--success)}
+.mv3-pv-cut.is-ready i{background:var(--success)}
+.mv3-pv-cut.is-bad{color:var(--danger)}
+.mv3-pv-cut.is-bad i{background:var(--danger)}
+.mv3-pv-cut button{
+  width:20px; height:18px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
+}
+.mv3-pv-cut button:hover:not([disabled]){color:var(--ink); border-color:var(--border-soft)}
+.mv3-pv-cut button[disabled]{opacity:.5; cursor:default}
+@keyframes mv3-cut-pulse{from{opacity:.35} to{opacity:1}}
+
 /* ── Transport ────────────────────────────────────────────────────────────────
    Bottom left, with the resolution picker immediately right of the buttons. */
 .mv3-pv-bar{

@@ -1017,6 +1017,8 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     const key = String(req.params.key || '');
     const cur = _read();
     if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    // Its preview cuts go with it - a by-product nothing can ask for once the project is gone.
+    try { require('./ffmpeg').dropCuts(key); } catch (e) {}
     // Deleting is the one write nobody but the owner should be able to undo their way out of,
     // so it is held to the same line as the rest - and the admin's on anything.
     if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);

@@ -67,7 +67,10 @@ const PREROLL = 4;
 // nearest the playhead first. The rest load PREROLL seconds before their turn, as before. A
 // cap because every primed clip is a <video> holding a decoded frame, and a timeline of a
 // hundred clips must not become a hundred decoders.
-const PRIME_MAX = 24;
+// Four, not twenty-four: the browser gives a page six connections to one host, and a stack
+// of primed downloads was starving the one the Main lane needed right then - the sound went
+// with it. Playback of any length is the cut's job now, not the pool's.
+const PRIME_MAX = 4;
 
 // Named by width, which is how a vertical Reel is usually described. Height is derived
 // so nothing here can drift from 9:16.
@@ -92,6 +95,11 @@ let _over = null, _octx = null;
 // The video-only buffer. See the note in _draw: the picture is composited here so a decode
 // gap keeps the last good frame WITHOUT also freezing the captions drawn over it.
 let _buf = null, _bctx = null;
+// THE CUT: the timeline rendered small by the server (preview-cut.js), played in place of
+// the compositor whenever it is current. One stream, so every lane is in step by construction;
+// the compositor stays for what a file cannot do - answer a scrub at once, and show an overlay
+// where it is being dragged to.
+let _cut = null, _cutUrl = null, _cutReady = false;
 let _pool = new Map();       // clip id -> <video>
 let _music = new Map();      // clip id -> <audio>
 let _playing = false;
@@ -422,7 +430,10 @@ function _tick() {
   if (_playing) {
     if (_held()) { _baseWall = _now(); _baseClock = _clock; }
     else {
-      _clock = _baseClock + (_now() - _baseWall);
+      // The cut keeps the time while it plays: its own clock is the one its picture and
+      // sound actually follow, and the wall clock would only drift from it.
+      if (_useCut() && !_cut.paused && !_cut.seeking && _cut.readyState >= 2) { _clock = _cut.currentTime; _baseWall = _now(); _baseClock = _clock; }
+      else _clock = _baseClock + (_now() - _baseWall);
       const end = _dur();
       if (end > 0 && _clock >= end) { _clock = end; pause(); }
       setPlayhead(_clock);          // visual only - it must not call back into here
@@ -453,11 +464,30 @@ export function pause() {
   // hardware, and both previews listening to them would drive two clocks at once.
   if (!_mounted) return;
   _playing = false;
+  if (_cut) { try { _cut.pause(); } catch (e) {} }
   for (const v of _pool.values()) { try { v.pause(); } catch (e) {} }
   for (const a of _music.values()) { try { a.pause(); } catch (e) {} }
   _paintPlay();
 }
 export function toggle() { _playing ? pause() : play(); }
+
+/** The cut for the open version of the project, or null when there is none - kept by
+ *  preview-cut.js. Switching mid-play is fine both ways: the next frame drives whichever is
+ *  there, from the same clock. */
+export function setCut(url) {
+  if ((url || null) === _cutUrl) return;
+  if (_cut) { try { _cut.pause(); _cut.removeAttribute('src'); _cut.load(); } catch (e) {} }
+  _cut = null; _cutUrl = url || null; _cutReady = false;
+  if (!url) { if (_playing) _syncSources(true); return; }
+  const v = document.createElement('video');
+  v.preload = 'auto'; v.playsInline = true;
+  v.addEventListener('loadeddata', () => { if (_cut === v) _cutReady = true; });
+  v.addEventListener('error', () => { if (_cut === v) _cutReady = false; });
+  v.src = url;
+  _cut = v;
+}
+// Is the cut what is playing right now?
+const _useCut = () => !!(_playing && _cut && _cutReady);
 
 // ── Which clips are live, and keeping their elements in step ────────────────
 function _activeClips() {
@@ -582,6 +612,20 @@ function _syncSources(hard) {
 
   // Playing, and not held on the ruler: what the media should be doing right now.
   const run = _playing && !_held();
+
+  // THE CUT CARRIES EVERYTHING while playback is on: the pool is paused and the cut is the
+  // one element kept in step - and it is what a scrub moves while the ruler is held. Paused,
+  // the compositor is back: it answers a scrub at once, and it shows an overlay where it is
+  // being dragged to, which a file rendered before the drag cannot.
+  if (_cut && _cutReady && _playing) {
+    for (const el of _pool.values()) { if (el.pause && !el.paused) { try { el.pause(); } catch (e) {} } }
+    for (const el of _music.values()) { if (!el.paused) { try { el.pause(); } catch (e) {} } }
+    if (hard || (!_cut.seeking && Math.abs(_cut.currentTime - _clock) > 0.25)) { try { _cut.currentTime = Math.max(0, _clock); } catch (e) {} }
+    if (run) { if (_cut.paused && !_cut.__playReq) _cut.__playReq = _cut.play().catch(() => {}).finally(() => { _cut.__playReq = null; }); }
+    else if (!_cut.paused) { try { _cut.pause(); } catch (e) {} }
+    return;
+  }
+  if (_cut && !_cut.paused) { try { _cut.pause(); } catch (e) {} }
 
   // PRE-ROLL. The other half of the flicker fix: the clip that is about to start is created
   // and seeked to its first frame slightly BEFORE its turn, so by the time the playhead
@@ -1270,8 +1314,16 @@ function _draw() {
   const drawable = live.filter(x => x.scope !== 'music')
     .some(x => { const v = _pic(x.c); return v && _w(v) && (x.c.poster || isStill(x.c) || v.readyState >= 2); });
 
+  // The cut is the whole frame - every lane, the captions burnt in - so while it plays it IS
+  // the buffer, and nothing is composited over it but the selection furniture.
+  const cut = _useCut() && _cut.readyState >= 2;
   let reversed = 0;
-  if (drawable || !live.length) {
+  if (cut) {
+    _bctx.clearRect(0, 0, cw, ch);
+    _bctx.fillStyle = '#000';
+    _bctx.fillRect(0, 0, cw, ch);
+    try { _bctx.drawImage(_cut, 0, 0, cw, ch); } catch (e) {}
+  } else if (drawable || !live.length) {
     _bctx.clearRect(0, 0, cw, ch);
     _bctx.fillStyle = '#000';
     _bctx.fillRect(0, 0, cw, ch);
@@ -1305,7 +1357,7 @@ function _draw() {
   // store the export reads, so what you position here is what gets burned.
   _ctx.save();
   if (_liveSub) _ctx.translate(_liveSub.dx, _liveSub.dy);
-  const sub = Subs.draw(_ctx, cw, ch, _clock);
+  const sub = cut ? null : Subs.draw(_ctx, cw, ch, _clock);
   _ctx.restore();
 
   // Said on the frame rather than left as a silent difference from the export. Not while a
