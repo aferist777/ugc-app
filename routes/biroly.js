@@ -143,6 +143,9 @@ router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   let thumbPath = null;
   try { thumbPath = (await VT.makeThumb(videoPath)).thumb; }
   catch (e) { console.warn('[biroly/upload] thumb failed:', e.message); }
+  // The Merge preview's proxy, queued now so the clip plays smoothly the first time it is
+  // dropped on a lane.
+  try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
   res.json({ success: true, name, videoPath, thumbPath });
 });
 router.use('/biroly/upload', (err, _req, res, _next) => {
@@ -239,6 +242,8 @@ async function _videoStage(jobId, imageUrl) {
   }
   const vd = await _pollStatus(_vidStatusPath(vEng, _genJobs[jobId].videoTaskId, p.flow));
   _patchJob(jobId, { videoPath: vd.videoPath });
+  // A birol just made: its Merge preview proxy goes into the queue at once.
+  try { if (vd.videoPath) require('./ffmpeg').warmProxies([vd.videoPath], 480); } catch (e) {}
 }
 
 async function _runGen(jobId) {

@@ -478,6 +478,48 @@ function warmProxies(srcs, h) {
 router.warmProxies = warmProxies;
 router.proxyStatus = proxyStatus;
 
+// ── THE SWEEP: every film the previews might play, made ahead ──────────────────
+// The birols and hooks libraries, every Merge timeline, every take a Scenarios line has:
+// anything without a proxy at the default quality is queued warm. Once at boot (a little
+// after, so the start is quiet) and every ten minutes after that, so a birol generated on
+// the Birols page or a hook uploaded by hand has its proxy before anyone drops it on a lane -
+// the pages that make files also ask directly (routes/biroly.js, routes/scen3.js,
+// routes/library.js), the sweep is the net under them. Nothing is remade: a cached proxy is
+// one stat, and the queue itself refuses duplicates.
+const SWEEP_H = 480;
+const SWEEP_EVERY_MS = 10 * 60 * 1000;
+function _readJson(name, dflt) {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, name), 'utf8')); } catch { return dflt; }
+}
+function _librarySources() {
+  const out = new Set();
+  for (const e of (_readJson('biroly.json', {}).archive || [])) if (e && e.videoPath && e.status !== 'failed') out.add(String(e.videoPath));
+  const hooks = _readJson('hooks-archive.json', []);
+  for (const e of (Array.isArray(hooks) ? hooks : [])) if (e && e.videoPath) out.add(String(e.videoPath));
+  const tl = _readJson('merge-v3.json', {}).timelines || {};
+  for (const t of Object.values(tl)) {
+    const tracks = (t && t.tracks) || {};
+    for (const lane of (Array.isArray(tracks) ? tracks : Object.values(tracks))) for (const c of ((lane && lane.clips) || [])) if (c && c.src) out.add(String(c.src));
+  }
+  for (const p of (_readJson('scen3-projects.json', []) || [])) {
+    for (const l of ((p && p.lines) || [])) {
+      const v = (l && l.video) || {};
+      for (const arr of Object.values(v)) for (const take of (Array.isArray(arr) ? arr : [])) if (take && take.path) out.add(String(take.path));
+    }
+  }
+  return [...out];
+}
+function sweepProxies(reason) {
+  try {
+    const srcs = _librarySources();
+    const queued = warmProxies(srcs, SWEEP_H);
+    console.log(`[proxy] sweep (${reason}): ${srcs.length} films known, ${queued} queued` + (_pq.length ? `, ${_pq.length} waiting` : ''));
+  } catch (e) { console.warn('[proxy] sweep failed:', e.message); }
+}
+router.sweepProxies = sweepProxies;
+setTimeout(() => sweepProxies('boot'), 20000).unref();
+setInterval(() => sweepProxies('timer'), SWEEP_EVERY_MS).unref();
+
 // GET /api/ffmpeg/proxy-status?h=480&srcs=<JSON array of web paths>
 // Read-only: which of these have a proxy, which are being made, which are waiting.
 router.get('/ffmpeg/proxy-status', (req, res) => {

@@ -1056,6 +1056,8 @@ router.post('/library/media/record', (req, res) => {
     if (prompt) rec.prompt = String(prompt).slice(0, 2000);
     list.unshift(rec);
     store.write(list);
+    // On the shelf means it can land on a lane: its preview proxy is queued now.
+    try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
     res.json({ success: true, item: rec, kind, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
