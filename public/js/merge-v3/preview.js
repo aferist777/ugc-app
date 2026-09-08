@@ -412,12 +412,21 @@ export function stepFragment(dir) {
   seek(prev != null ? prev : 0);
 }
 
+// The ruler (or a lane) is being held - a scrub in progress. The timeline marks the body
+// for the length of the press, and while it lasts the clock stands still and the media
+// waits: the picture follows the mouse, the sound does not run ahead of it, and on release
+// playback resumes from the last moment the mouse pointed at.
+const _held = () => document.body.classList.contains('mv3-scrubbing');
+
 function _tick() {
   if (_playing) {
-    _clock = _baseClock + (_now() - _baseWall);
-    const end = _dur();
-    if (end > 0 && _clock >= end) { _clock = end; pause(); }
-    setPlayhead(_clock);          // visual only - it must not call back into here
+    if (_held()) { _baseWall = _now(); _baseClock = _clock; }
+    else {
+      _clock = _baseClock + (_now() - _baseWall);
+      const end = _dur();
+      if (end > 0 && _clock >= end) { _clock = end; pause(); }
+      setPlayhead(_clock);          // visual only - it must not call back into here
+    }
   }
   _syncSources(false);
   _draw();
@@ -571,10 +580,13 @@ function _syncSources(hard) {
   for (const [id, el] of _pool) if (!liveIds.has(id)) { try { el.pause(); } catch (e) {} }
   for (const [id, el] of _music) if (!liveIds.has(id)) { try { el.pause(); } catch (e) {} }
 
+  // Playing, and not held on the ruler: what the media should be doing right now.
+  const run = _playing && !_held();
+
   // PRE-ROLL. The other half of the flicker fix: the clip that is about to start is created
   // and seeked to its first frame slightly BEFORE its turn, so by the time the playhead
   // reaches it there is a frame to draw. Without this every cut begins with a decode.
-  if (_playing && tl) {
+  if (run && tl) {
     for (const scope of DRAW_ORDER) {
       const tr = tl.tracks[scope];
       if (!tr) continue;
@@ -648,7 +660,7 @@ function _syncSources(hard) {
     }
     // play() once per pause, not once per frame: `paused` stays true for as long as the
     // element is loading, and a fresh play() every frame is a fresh promise every frame.
-    if (_playing) { if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; }); }
+    if (run) { if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; }); }
     else if (!el.paused) { try { el.pause(); } catch (e) {} }
   }
 }
@@ -1453,7 +1465,12 @@ export function initPreview() {
 
   // Scrubbing the timeline moves the preview; the preview moves the playhead while it
   // plays. One clock, two views of it - the ruler and the canvas can never disagree.
-  onSeek((t) => { if (!_playing) seek(t); });
+  //
+  // WHILE PLAYING TOO. A seek used to be ignored during playback, so the only way to jump
+  // was to stop first. Now it lands: the clock restarts from the new moment and playback
+  // carries on from there. While the ruler is HELD the clock stands still (see _held), so a
+  // drag scrubs the picture and playback resumes from wherever the mouse let go.
+  onSeek((t) => seek(t));
   _clock = playheadAt();
 
   // Leaving the tab stops playback. requestAnimationFrame does not fire in a hidden tab,
