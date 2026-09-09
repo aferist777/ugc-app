@@ -32,7 +32,14 @@
    A ratio is safe now that the column width is definite (a sixth of the grid) — the
    circular case was aspect-ratio inside an auto-fill column sized by its content. */
 .lib-grid.is-characters .lib-thumb-box{ height:auto; aspect-ratio:16 / 9; }
-.lib-grid.is-characters .lib-card{ height:auto; }
+.lib-grid.is-characters /* A hook permanent number, beside its name in the grid (lib/hook-ids.js). */
+.lib-hid{
+  display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
+  background:var(--surface-2); color:var(--accent);
+  font:700 9.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing:.03em; vertical-align:1px;
+}
+.lib-card{ height:auto; }
 .lib-grid.is-lookbooks,
 .lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
 .lib-looks-grid{ --card-w:120px; --card-h:68px; --card-total:86px; }

@@ -194,6 +194,8 @@ router.post('/hooks/upload', upload.single('video'), async (req, res) => {
   try { thumbUrl = (await VT.makeThumb('/hooks/' + filename)).thumb; }
   catch (e) { console.warn('[hooks/upload] thumb failed:', e.message); }
 
+  // The hook's permanent number, given the moment the file exists.
+  try { require('../lib/hook-ids').assign(['/hooks/' + filename]); } catch (e) {}
   return res.json({
     success:   true,
     filename,

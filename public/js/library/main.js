@@ -363,6 +363,9 @@ function _picker(cls, current, options, onPick, title) {
 function _card(it, extra) {
   const card = document.createElement('div');
   card.className = 'lib-card' + (it.meta && it.meta.favorite ? ' fav' : '');
+  // A hook's permanent number (lib/hook-ids.js): what the render window puts into the name
+  // of every creative that opens with this hook, so it belongs where the hook is chosen.
+  const hookId = (it.meta && it.meta.hookId) || null;
   card.title = it.name + (it.meta && it.meta.character ? '\n' + it.meta.character : '');
 
   // The ratio lives on the box: an <img> with no loaded source contributes no height,
@@ -422,7 +425,13 @@ function _card(it, extra) {
 
   const name = document.createElement('div');
   name.className = 'lib-name';
-  name.textContent = it.name;
+  if (hookId) {
+    const tag = document.createElement('b');
+    tag.className = 'lib-hid';
+    tag.textContent = hookId;
+    name.appendChild(tag);
+  }
+  name.appendChild(document.createTextNode(it.name));
   card.appendChild(name);
 
   // Second line: which category this clip is filed under, changeable in place. Only

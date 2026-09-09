@@ -162,6 +162,11 @@ function _looks() {
 const UPLOADS_CAT = '__uploads__';
 const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === UPLOADS_CAT));
 
+// The hook numbers, read once per shelf build rather than once per tile.
+function _hookIds() {
+  try { return require('../lib/hook-ids').map(); } catch (e) { return {}; }
+}
+
 function _mediaShelf() {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
@@ -197,7 +202,11 @@ function _mediaShelf() {
     // Hook records have never carried a duration; 0 means "ask the file", which is what
     // the timeline falls back to.
     dur: +h.duration || 0,
-    meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite },
+    // The hook's permanent number, which the grid shows on the tile and the render window
+    // puts in the creative's name. Read from the registry rather than the record: the
+    // record belongs to the browser and is overwritten wholesale on every push.
+    meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
+            hookId: _hookIds()[String(h.videoPath || '').split('?')[0]] || null },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -1056,8 +1065,10 @@ router.post('/library/media/record', (req, res) => {
     if (prompt) rec.prompt = String(prompt).slice(0, 2000);
     list.unshift(rec);
     store.write(list);
-    // On the shelf means it can land on a lane: its preview proxy is queued now.
+    // On the shelf means it can land on a lane: its preview proxy is queued now, and a
+    // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
     try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
+    if (kind === 'hooks') { try { require('../lib/hook-ids').assign([videoPath]); } catch (e) {} }
     res.json({ success: true, item: rec, kind, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

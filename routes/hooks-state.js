@@ -15,7 +15,18 @@ const path    = require('path');
 const router  = express.Router();
 
 const { DATA_DIR, HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
+const HOOK_IDS = require('../lib/hook-ids');
 const HOOKS_FILE = path.join(DATA_DIR, 'hooks-archive.json');
+
+// Every hook has a permanent number - H01, H02 - and it is what the render window puts in
+// the creative's name. Given out here because this is where a hook first reaches the
+// server, whichever page made it; see lib/hook-ids.js for why the numbers cannot live in
+// the archive records themselves. Once at boot for whatever is already there.
+try {
+  const first = HOOK_IDS.sweep();
+  const n = Object.keys(first).length;
+  if (n) console.log(`[hooks] numbered ${n} hook${n === 1 ? '' : 's'}, latest ${Object.values(first).pop()}`);
+} catch (e) { console.warn('[hooks] numbering failed:', e.message); }
 
 function _load() {
   try { return JSON.parse(fs.readFileSync(HOOKS_FILE, 'utf8')); }
@@ -30,11 +41,24 @@ router.get('/hooks/state', (_req, res) => {
   res.json({ success: true, list: _load() });
 });
 
+// ── GET /api/hooks/ids ───────────────────────────────────────────────────────
+// { "<clip path>": "H01" } for every hook that has been numbered. The Library grid reads
+// it to put the number on the tile; the render window gets its one number from the
+// timeline instead (routes/mergev3.js, /mv3/timeline/:key/source).
+router.get('/hooks/ids', (_req, res) => {
+  try { res.json({ success: true, ids: HOOK_IDS.map() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/hooks/state', (req, res) => {
   const { list } = req.body || {};
   if (!Array.isArray(list)) return res.status(400).json({ success: false, error: 'list:array required' });
   try {
     _save(list);
+    // A hook that has just appeared gets its number now, so it is there before anyone can
+    // drop the clip on a lane. Ones that have a number keep it, and a hook deleted from the
+    // list keeps its number reserved - nothing is renumbered, ever.
+    try { HOOK_IDS.sweep(); } catch (e) {}
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });

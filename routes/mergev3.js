@@ -1119,16 +1119,39 @@ function _scenBehind(timelines, key) {
   return p ? { p, via: 'title' } : null;
 }
 
+// THE HOOK THAT NAMES THE RENDER. The Meta pattern carries a hook id (…_AUTH_H03_…) and
+// it is the hook the video OPENS with: the clip on the Hooks lane pinned to the very start
+// of the timeline. One that begins a moment later is an insert, not the hook the creative
+// is built on, so only the first frames count - anything within a frame of zero at 30 fps.
+// No such clip, or a hook with no number, and the field keeps its Hxx placeholder.
+const HOOK_AT_START = 0.04;
+function _openingHookId(t) {
+  const tracks = (t && t.tracks) || {};
+  const lane = Array.isArray(tracks) ? tracks.find(x => x && x.kind === 'hook') : tracks.hook;
+  const clips = (lane && lane.clips) || [];
+  let first = null;
+  for (const c of clips) {
+    if (!c || !c.src) continue;
+    const at = +c.start || 0;
+    if (at > HOOK_AT_START) continue;
+    if (!first || at < ((+first.start) || 0)) first = c;
+  }
+  if (!first) return null;
+  try { return require('../lib/hook-ids').idFor(first.src); } catch (e) { return null; }
+}
+
 router.get('/mv3/timeline/:key/source', (req, res) => {
   try {
     const cur = _read();
     const key = String(req.params.key || '');
-    if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    const rec = cur.timelines[key];
+    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    const hookId = _openingHookId(rec);
     const hit = _scenBehind(cur.timelines, key);
-    if (!hit) return res.json({ success: true, project: null, via: null });
+    if (!hit) return res.json({ success: true, project: null, via: null, hookId });
     const p = hit.p;
     const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
-    res.json({ success: true, via: hit.via, project: {
+    res.json({ success: true, via: hit.via, hookId, project: {
       id: String(p.id), name: String(p.name || ''), title: String(p.title || ''),
       vertical: String(p.vertical || ''), product: String(p.product || ''),
       gender: String(p.gender || ''), characterName: String(cast.characterName || ''),

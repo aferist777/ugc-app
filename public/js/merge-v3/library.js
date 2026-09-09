@@ -72,7 +72,8 @@ function _note(text, isError) {
 function _tile(it, i) {
   const cell = document.createElement('div');
   cell.className = 'mv3-tile' + (it.meta && it.meta.favorite ? ' is-fav' : '');
-  cell.title = [it.name, it.kind, (it.meta || {}).categoryId].filter(Boolean).join(' · ');
+  const hid = (it.meta || {}).hookId || null;
+  cell.title = [hid, it.name, it.kind, (it.meta || {}).categoryId].filter(Boolean).join(' · ');
 
   if (it.thumb) {
     const img = document.createElement('img');
@@ -96,6 +97,16 @@ function _tile(it, i) {
     s.className = 'mv3-tile-none';
     s.textContent = 'no thumb';
     cell.appendChild(s);
+  }
+
+  // THE HOOK'S NUMBER, on the tile. It is what the render window puts in the creative's
+  // name (lib/hook-ids.js), so which hook is H01 has to be answerable by looking rather
+  // than by opening each one. Bottom left, out of the way of the star and the cross.
+  if (hid) {
+    const tag = document.createElement('span');
+    tag.className = 'mv3-tile-hid';
+    tag.textContent = hid;
+    cell.appendChild(tag);
   }
 
   const star = document.createElement('button');

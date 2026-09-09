@@ -34,7 +34,7 @@ const PARTS = [
   { id: 'ingredient', label: 'Ingredient',    desc: 'the trick/ingredient, e.g. RedHoney, Honey, Beetroot', ph: 'RedHoney' },
   { id: 'angle',      label: 'angleScenario', desc: 'the angle, e.g. ScientistSecret, GirlfriendsStoryTime, BreakingNews', ph: 'ScientistSecret' },
   { id: 'trigger',    label: 'trigger',       desc: 'one of: AUTH · FEAR · FOMO · SECRET · PROOF · DESIRE', select: TRIGGERS },
-  { id: 'hook',       label: 'hookid',        desc: 'hook-library id, e.g. H03 (library not built yet — Hxx until then)', ph: 'H03' },
+  { id: 'hook',       label: 'hookid',        desc: 'the hook this cut opens with, numbered in the library (H01, H02…)', ph: 'H03' },
   { id: 'character',  label: 'character',     desc: 'narrator, e.g. DrFauci', ph: 'DrFauci' },
   { id: 'gender',     label: 'gender',        desc: 'M / F', select: ['M', 'F'] },
 ];
@@ -106,10 +106,13 @@ function readTitle(title) {
 // name fills in whatever the title did not say. Anything still unknown stays a placeholder.
 async function partsFromProject(key, title) {
   const out = { vertical: '', ingredient: '', angle: '', trigger: '', hook: '', character: '', gender: '' };
-  let p = null;
+  let p = null, hookId = null;
   if (key) {
-    try { const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/source').then(r => r.json()); p = (d && d.project) || null; }
-    catch (e) { p = null; }
+    try {
+      const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/source').then(r => r.json());
+      p = (d && d.project) || null;
+      hookId = (d && d.hookId) || null;
+    } catch (e) { p = null; }
   }
   p = p || {};
   out.vertical = camel(p.vertical);
@@ -121,6 +124,10 @@ async function partsFromProject(key, title) {
   for (const k of ['angle', 'trigger', 'hook']) out[k] = a[k] || b[k];
   out.character = out.character || a.character || b.character;
   out.gender = out.gender || a.gender || b.gender;
+  // THE HOOK ON THE TIMELINE WINS. Every hook file carries a permanent number of its own
+  // (lib/hook-ids.js), and the one this cut opens with is the answer - a number read out of
+  // the project's title is a guess about a hook that may since have been swapped.
+  if (hookId) out.hook = hookId;
   return out;
 }
 
