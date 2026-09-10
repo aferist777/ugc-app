@@ -60,7 +60,17 @@ function row(u) {
   const login = document.createElement('span');
   login.className = 'adm-login' + (u.login === u.nickname ? ' pending' : '');
   login.textContent = u.login;
-  td(login);
+  const loginCell = td(login);
+  // SOMEBODY WHO COMES FROM PARTNER has no password here and never sees a sign-in form;
+  // their address over there is the thing that identifies them, so it is shown under the
+  // login rather than left for whoever opens the users file.
+  if (u.source === 'partner') {
+    const from = document.createElement('span');
+    from.className = 'adm-from';
+    from.textContent = u.email ? 'Partner · ' + u.email : 'Partner';
+    from.title = 'Signs in through Partner. No password here.';
+    loginCell.appendChild(from);
+  }
   td(chip(u.role, u.role === 'admin' ? 'admin' : ''));
   td(ago(u.createdAt), 'adm-time');
   td(ago(u.lastSeenAt), 'adm-time');
