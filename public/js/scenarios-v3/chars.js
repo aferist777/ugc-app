@@ -27,10 +27,28 @@ export function thumb(path) {
   return `${m[1]}thumbs/${m[2]}.jpg${m[4] || ''}`;    // thumbs are always .jpg
 }
 
-// An <img> showing the thumbnail, falling back to the full asset if the thumb was
-// never generated — otherwise a missing thumb would render as a broken image.
+// The on-demand derivative: /api/thumb makes one the first time it is asked for and caches
+// it forever, so unlike the neighbouring-file rule above it cannot be missing. Its key
+// carries the source's mtime, so a regenerated image gets a new URL rather than a stale
+// picture. See lib/thumbs.js for the sizes.
+export const derived = (path, v) => path
+  ? '/api/thumb?src=' + encodeURIComponent(String(path).split('?')[0]) + '&v=' + (v || 'frame')
+  : path;
+
+// An <img> showing the thumbnail, in three steps, each cheaper than the one it replaces:
+//
+//   1. the neighbouring thumbs/ file, when it is there - a plain static file, already cached
+//   2. /api/thumb, which MAKES one for anything that has none
+//   3. the full asset, so a picture always appears even if both of those fail
+//
+// Step 2 is the point of this. The rule used to be "neighbour, else the original", and the
+// original is where a 4 MB frame comes from: a cropped frame, a look, a location - anything
+// whose neighbour was never written - was quietly downloaded whole into a 52-pixel cell.
+// Nothing announces that; it just feels slow.
+//
 // opts.noFit — skip the landscape letterboxing, for slots that crop on purpose
 // (the character column deliberately crops the sheet to just the face).
+// opts.v     — which derivative to ask for; `frame` (220px, 10 KB) suits every strip here.
 export function thumbImg(fullPath, className, opts) {
   const img = document.createElement('img');
   if (className) img.className = className;
@@ -47,15 +65,17 @@ export function thumbImg(fullPath, className, opts) {
     });
   }
 
-  const t = thumb(fullPath);
-  img.src = t;
-  if (t !== fullPath) {
-    img.addEventListener('error', () => {
-      if (img.dataset.fellBack) return;
-      img.dataset.fellBack = '1';
-      img.src = fullPath;
-    }, { once: true });
-  }
+  const v = (opts && opts.v) || 'frame';
+  const chain = [thumb(fullPath), derived(fullPath, v), fullPath]
+    .filter((x, i, a) => x && a.indexOf(x) === i);
+  let step = 0;
+  img.src = chain[step];
+  img.addEventListener('error', function next() {
+    if (++step >= chain.length) return;
+    img.dataset.fellBack = String(step);
+    img.src = chain[step];
+    if (step < chain.length - 1) img.addEventListener('error', next, { once: true });
+  }, { once: true });
   return img;
 }
 

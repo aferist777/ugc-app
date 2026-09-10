@@ -12,7 +12,7 @@
 // Phase scope: the shell and its persistence. Generation lands next.
 
 import { patchProject } from './projects.js';
-import { thumbImg, thumb } from './chars.js';
+import { thumbImg, derived } from './chars.js';
 // The pickers, and the two popups their + opens, are fetched the first time one is asked
 // for. None of them is needed to show a frame - most visits to this popup never open one -
 // and together they are a sizeable share of the page's JavaScript.
@@ -801,7 +801,9 @@ async function _openPeek(anchor, fullPath, tag, beside) {
   cap.textContent = tag;
   const img = document.createElement('img');
   img.alt = tag;
-  img.src = thumb(fullPath);          // the small one shows instantly…
+  // The derivative, not the neighbouring file: a hover must never be the thing that pulls a
+  // 4 MB original down the wire. The bigger one replaces it below, once it has arrived.
+  img.src = derived(fullPath, 'card');   // the small one shows instantly…
   el.append(img, cap);
   document.body.appendChild(el);
   _peek = el;
@@ -1030,7 +1032,8 @@ async function _renderPreview() {
   const token = ++_prevToken;
   const img = document.createElement('img');
   img.alt = '';
-  img.src = thumb(av.path);
+  // Same here: something to look at within a frame or two, then the ~1K preview over it.
+  img.src = derived(av.path, 'card');
   img.className = 'warming';
   box.appendChild(img);
   const p = await preview1k(av.path);
