@@ -71,7 +71,21 @@ function row(u) {
     from.title = 'Signs in through Partner. No password here.';
     loginCell.appendChild(from);
   }
-  td(chip(u.role, u.role === 'admin' ? 'admin' : ''));
+  // THE ROLE IS A CHOICE, not a label. An admin sees everybody's keys, everybody's projects
+  // and this list; changing that is one of the few things worth being able to do without
+  // opening a file on the server. Saved the moment it is chosen - there is nothing to
+  // compose here, so an Apply button would only be a second click.
+  const roleSel = document.createElement('select');
+  roleSel.className = 'adm-role' + (u.role === 'admin' ? ' is-admin' : '');
+  for (const r of ['user', 'admin']) {
+    const o = document.createElement('option');
+    o.value = r; o.textContent = r;
+    if (u.role === r) o.selected = true;
+    roleSel.appendChild(o);
+  }
+  roleSel.title = 'An admin can see every key, every project and this list';
+  roleSel.addEventListener('change', () => setRole(u, roleSel));
+  td(roleSel);
   td(ago(u.createdAt), 'adm-time');
   td(ago(u.lastSeenAt), 'adm-time');
   // How much they did today, from the audit log; a click opens their rows on the Activity tab.
@@ -145,6 +159,29 @@ async function toggle(u, disable) {
     await load();
     setStatus(`${u.nickname} ${disable ? 'disabled' : 'enabled'}.`);
   } catch (e) { setStatus('Not changed: ' + e.message, true); }
+}
+
+// Making somebody an admin, or taking it back. The select is put back to what it was if the
+// server refuses - the last admin standing cannot be demoted, and a dropdown left showing a
+// change that did not happen is worse than no dropdown at all.
+async function setRole(u, sel) {
+  const want = sel.value;
+  const was = u.role;
+  sel.disabled = true;
+  try {
+    const r = await fetch(`/api/admin/users/${encodeURIComponent(u.id)}/role`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: want }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
+    await load();
+    setStatus(`${u.nickname} is now ${want}.`);
+  } catch (e) {
+    sel.value = was;
+    sel.disabled = false;
+    setStatus('Not changed: ' + e.message, true);
+  }
 }
 
 // ── the one-time password ─────────────────────────────────────────────────

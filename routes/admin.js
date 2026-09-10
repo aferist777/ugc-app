@@ -46,6 +46,13 @@ router.post('/admin/users/:id/reset', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
+// Admin or user. Refused for the last admin standing, which is the same guard disabling has:
+// a role change nobody is left to undo is a locked door.
+router.post('/admin/users/:id/role', (req, res) => {
+  try { res.json({ success: true, user: users.setRole(String(req.params.id), (req.body || {}).role) }); }
+  catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
 router.post('/admin/users/:id/disable', (req, res) => {
   try { res.json({ success: true, user: users.setDisabled(String(req.params.id), true) }); }
   catch (e) { res.status(400).json({ success: false, error: e.message }); }
