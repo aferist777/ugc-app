@@ -100,7 +100,9 @@ function row(u) {
 
   const actions = document.createElement('div');
   actions.className = 'adm-actions';
-  actions.appendChild(btn('Reset', () => reset(u)));
+  // No Reset for somebody who signs in through Partner: they have no password here and
+  // never see our form, so a new one would be a secret nobody uses on a door nobody opens.
+  if (u.source !== 'partner') actions.appendChild(btn('Reset', () => reset(u)));
   actions.appendChild(u.disabled ? btn('Enable', () => toggle(u, false)) : btn('Disable', () => toggle(u, true)));
   td(actions);
   return tr;
