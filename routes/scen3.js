@@ -1215,6 +1215,7 @@ const FRAME_RULE_POSED =
   + ' IMAGE 1 is a blue artist mannequin and it defines the BODY: reproduce its pose, the tilt and'
   + ' rotation of its head, its shoulder line, the direction and foreshortening of its arms, and the camera'
   + ' angle — exactly, including any arm that reaches toward the lens and runs out past the edge of the frame.'
+  + ' The mannequin has no eyes and says nothing about where the person is looking: the GAZE rule decides that.'
   + ' Take the POSE from it, never the crop: the mannequin is photographed at its own shot size, and the'
   + ' SHOT SIZE stated above wins over it.'
   + ' Never render the mannequin itself: no blue material, no ball joints, no seams, no blank faceless head,'
@@ -1236,8 +1237,34 @@ const FRAME_RULE_PLAIN =
   + ' The person is centred in the frame. Natural perspective and contact shadows.'
   + ' No text, no captions, no logos, no watermark.';
 
+// THE EYES ALWAYS COME BACK TO THE LENS.
+//
+// A first frame is the opening of an ad: the person is talking to whoever is holding the
+// phone, and a subject looking off past the camera reads as a stock photo of somebody else's
+// conversation. Nothing in this prompt used to ask for eye contact, and three things quietly
+// argued against it - the mannequin rule copies the head's rotation, six of the sixteen poses
+// either say the head is turned aside or say nothing about the gaze at all, and the reading
+// pass is asked to describe the head's position.
+//
+// So the head is left alone and only the EYES are pinned. The pose survives intact - turned
+// shoulders, a head in profile, a glance back over one shoulder - and the person still looks
+// at the viewer, which is what a face turned three-quarters to camera does in every portrait
+// ever taken. Stated as a ranked constraint next to the shot size, because a rule that has to
+// beat both the pose description and the reference image has to say so.
+const FRAME_GAZE_RULE =
+  'GAZE — as important as the shot size, and it outranks the pose and every reference image:'
+  + ' the person LOOKS STRAIGHT INTO THE CAMERA LENS, making direct eye contact with the viewer.'
+  + ' The head may stay turned, tilted, in profile or looking back over a shoulder exactly as the'
+  + ' pose requires — only the EYES turn back to the lens, with both irises and pupils clearly'
+  + ' visible and centred on the camera. Never render averted eyes, eyes drifting off-frame, eyes'
+  + ' following the direction the head is turned, closed eyes, or a downward glance.';
+
 // Editing an existing frame: the frame already carries its own light, camera and
 // framing, so those are NOT restated — repeating them would fight the edit.
+//
+// The gaze rule is deliberately NOT here. An edit is a sentence somebody typed about this
+// picture; if it says "have her look away", the app arguing back would be the bug. To pull an
+// old frame's eyes to the lens, ask for it - "look into the camera" - and it happens.
 const FRAME_EDIT_RULE =
   'Edit the photograph in the reference image. Keep the same person — same face, hair, skin and clothing —'
   + ' the same location and the same framing, unless the instruction says otherwise. Change ONLY what the'
@@ -1369,8 +1396,13 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
           + ' position and tilt of the head, the shoulder line, where each arm goes and how strongly it is'
           + ' foreshortened, which limbs run out past the edge of the frame and at which edge, and the camera'
           + ' height and angle. Do NOT say how much of the body is in shot and do NOT name a shot size:'
-          + ' the crop is decided separately and your description must not contradict it. Never mention the'
-          + ' mannequin\'s material, colour, joints or background.'
+          + ' the crop is decided separately and your description must not contradict it.'
+          // The eyes are settled by the gaze rule and by nothing else. A mannequin has no eyes,
+          // so anything said here about where it "looks" is invented - and it would land in the
+          // prompt as a second opinion the generator has to choose between.
+          + ' Say nothing about where it is looking or where its gaze is directed: the mannequin has no'
+          + ' eyes, and the gaze is decided elsewhere. Describe the head as an angle, not as a direction'
+          + ' of attention. Never mention the mannequin\'s material, colour, joints or background.'
         : '')
       + '\nCHARACTER: describe the person on the sheet — face, hair, build, skin tone and the clothing they'
       + ' are wearing, as the traits to preserve.'
@@ -1491,6 +1523,8 @@ router.post('/scen3/gen/frame', async (req, res) => {
       parts.push(`SHOT SIZE — the most important constraint, obey it before anything else:`
         + ` ${framing.crop}. Frame the person exactly this way and do not pull back to fit more of the body in.`);
     }
+    // Beside the shot size, and before the pose it has to outrank.
+    parts.push(FRAME_GAZE_RULE);
     parts.push(posePath ? FRAME_RULE_POSED : FRAME_RULE_PLAIN);
     if (cam) parts.push(`Camera: ${cam.prompt}.`);
     // The stored description leads and the reading fills in the detail. On its own the
