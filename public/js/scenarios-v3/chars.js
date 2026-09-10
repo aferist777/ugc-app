@@ -74,14 +74,23 @@ function _obrazMain(o, mainMap) {
 export async function loadCharacters(force) {
   if (_chars && !force) return _chars;
 
-  const [cd, od, md] = await Promise.all([
+  const [cd, od, md, sd] = await Promise.all([
     _get('/api/char-store/list'),
     _get('/api/userdata/obrazy'),
     _get('/api/obrazy/main-images'),
+    // WHO IS ACTUALLY ON THE SHELF. The character store answers with every record that is
+    // not a draft, including ones whose reference sheet was never made or has since been
+    // deleted - on real data, four of forty-six. The Library shows none of those, because it
+    // checks the file is on disk, and a character you cannot see in the Library is not one
+    // anybody can cast. This list is the same question, asked of the same place.
+    _get('/api/library/shelf/characters'),
   ]);
   const chars   = (cd && cd.chars) || [];
   const obrazy  = (od && od.list)  || [];
   const mainMap = (md && md.mainImages) || {};
+  // Fails OPEN: if the shelf cannot be read, everybody is shown rather than nobody. A column
+  // that empties itself because one request failed is worse than one that shows too much.
+  const shelf = (sd && Array.isArray(sd.items)) ? new Set(sd.items.map(x => String(x.id))) : null;
 
   // group obrazy under their character, newest first (ids are timestamps)
   const byChar = {};
@@ -100,7 +109,7 @@ export async function loadCharacters(force) {
   });
   Object.keys(byChar).forEach(cid => byChar[cid].sort((a, b) => b.ts - a.ts));
 
-  _chars = chars.map(c => ({
+  _chars = chars.filter(c => !shelf || shelf.has(String(c.id))).map(c => ({
     id:     String(c.id),
     name:   String(c.name || 'unnamed'),
     gender: String(c.gender || '').toLowerCase(),
@@ -121,6 +130,17 @@ export async function loadLookbooks(force) {
   const d = await _get('/api/gallery/lookbooks');
   _lookbooks = (d && d.files) || [];
   return _lookbooks;
+}
+
+// Most looks first, which is the order the Library already uses and the one that matches
+// what each row says about itself. A character you have dressed twenty times is the one you
+// are casting again; a character with none cannot be cast at all and belongs at the bottom.
+// Ids are timestamps, so the newer of two equals comes first.
+export function byLooks(chars) {
+  return chars.slice().sort((a, b) =>
+    (b.obrazy.length - a.obrazy.length)
+    || ((Number(b.id) || 0) - (Number(a.id) || 0))
+    || String(a.name).localeCompare(String(b.name)));
 }
 
 // Gender lock: filter when the project states a gender, show everyone when it

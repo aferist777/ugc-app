@@ -23,7 +23,7 @@
 // rewrites a path to a neighbouring thumbs/ folder - it returns whatever happens to be there,
 // at whatever weight, and nothing at all when the file was never made.
 
-import { loadCharacters, filterByGender } from './chars.js';
+import { loadCharacters, filterByGender, byLooks } from './chars.js';
 
 const CARD = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=card';
 
@@ -90,8 +90,46 @@ function _blank(text) {
   return d;
 }
 
+// ── opening a character, without losing your place ──────────────────────────
+// This used to repaint the whole column: the list element itself was replaced, and the
+// scroll position died with it. Scrolled to the twentieth name, clicking it threw you back
+// to the first - measured, 3640px to 0. So the strip of looks is inserted and removed on
+// its own and nothing else is touched, which is also the only way the row you pressed can
+// still be under the pointer afterwards.
+function _toggleLooks(list, box, c, row) {
+  const wasOpen = _state.openId === c.id;
+
+  const open = list.querySelector('.sv3-pk-looks');
+  if (open) open.remove();
+  list.querySelectorAll('.sv3-pk-row.on').forEach(r => {
+    r.classList.remove('on');
+    const car = r.querySelector('.sv3-pk-caret');
+    if (car) car.textContent = '▸';
+  });
+
+  if (wasOpen) { _state.openId = ''; return; }
+
+  _state.openId = c.id;
+  row.classList.add('on');
+  const car = row.querySelector('.sv3-pk-caret');
+  if (car) car.textContent = '▾';
+
+  const looks = _looks(c, box);
+  row.after(looks);
+
+  // Only if it opened below the fold, and only far enough to see it - never past the row
+  // itself, so what you pressed stays on screen. scrollIntoView is not used: it walks every
+  // scrollable ancestor and would move the page as well as this list.
+  const lr = list.getBoundingClientRect();
+  const br = looks.getBoundingClientRect();
+  if (br.bottom > lr.bottom) {
+    const rowTop = row.getBoundingClientRect().top - lr.top + list.scrollTop;
+    list.scrollTop = Math.min(rowTop, list.scrollTop + (br.bottom - lr.bottom) + 8);
+  }
+}
+
 // One character, and its looks underneath when it is the open one.
-function _charRow(c, box) {
+function _charRow(c, box, list) {
   const row = document.createElement('button');
   row.type = 'button';
   row.className = 'sv3-pk-row' + (_state.openId === c.id ? ' on' : '');
@@ -124,10 +162,7 @@ function _charRow(c, box) {
   car.textContent = _state.openId === c.id ? '▾' : '▸';
   row.appendChild(car);
 
-  row.addEventListener('click', () => {
-    _state.openId = (_state.openId === c.id) ? '' : c.id;
-    _paint(box);
-  });
+  row.addEventListener('click', () => _toggleLooks(list, box, c, row));
   return row;
 }
 
@@ -268,14 +303,21 @@ async function _paintChars(box) {
   }
   // The project's gender is a lock, not a preference: casting a man in a script written for
   // a woman is not a choice anyone makes on purpose.
-  const shown = filterByGender(chars, _state.gender);
+  //
+  // MOST-DRESSED FIRST, and only the ones the Library actually shows - both rules are the
+  // Library's own (routes/library.js, _charactersShelf), and this column disagreeing with it
+  // was the bug: four characters appeared here that are on no shelf, three with no reference
+  // sheet at all and one whose file is gone. A character you cannot see anywhere else is not
+  // one you can cast.
+  const shown = byLooks(filterByGender(chars, _state.gender));
   list.textContent = '';
   if (!shown.length) {
     list.appendChild(_blank('No characters match this project. + makes one.'));
     return;
   }
   for (const c of shown) {
-    list.appendChild(_charRow(c, box));
+    const row = _charRow(c, box, list);
+    list.appendChild(row);
     if (_state.openId === c.id) list.appendChild(_looks(c, box));
   }
 }
