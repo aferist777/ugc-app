@@ -446,8 +446,36 @@ export async function pollGeneration(jobId) {
 // lives on the track and is untouched.
 export function applyWords(words, perLine) {
   const caps = groupWords(words || [], perLine || 0);
-  Store.mutate(tl => { _subs(tl).clips = caps; });
+  Store.mutate(tl => {
+    const t = _subs(tl);
+    t.clips = caps;
+    // These came from the Main track as it is right now, so whatever was cut out of it
+    // before is answered for. The one place captions are replaced is the one place the
+    // warning can honestly be taken down - see _markSubsStale in timeline.js.
+    t.stale = false;
+  });
   return caps.length;
+}
+
+// ── "The timeline changed" ──────────────────────────────────────────────────
+// The warning in the top bar, left of queue. Painted from the project rather than raised by
+// the edit that set it: that way it is right after a reload, right after switching projects,
+// and right after an undo - which puts the flag back along with everything else.
+function _paintStale() {
+  const el = document.getElementById('mv3-subs-stale');
+  if (!el) return;
+  const t = _subs(Store.timeline());
+  // No captions, nothing to regenerate: the flag can only be stale ABOUT something.
+  el.hidden = !(t && t.stale && ((t.clips || []).length > 0));
+}
+
+export function initSubsStale(open) {
+  const el = document.getElementById('mv3-subs-stale');
+  // A click takes you to the button it is asking you to press, rather than leaving you to
+  // remember that captions live behind the subtitle track in the inspector.
+  if (el && typeof open === 'function') el.addEventListener('click', open);
+  _paintStale();
+  Store.onChange(_paintStale);
 }
 
 // ── The inspector panels ────────────────────────────────────────────────────

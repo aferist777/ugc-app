@@ -72,6 +72,12 @@
     <span class="mv3-bar-lock" id="mv3-project-lock" hidden></span>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
+    <!-- Raised when a fragment is cut out of Main under captions that already exist: they
+         have been slid along with the picture, but the sentences no longer match the audio.
+         Clicking opens the subtitle track, where the Regenerate button is. Set in
+         js/merge-v3/timeline.js, cleared in js/merge-v3/subtitles.js. -->
+    <button class="mv3-bar-stale" id="mv3-subs-stale" type="button" hidden
+            title="A fragment was removed from Main after these captions were made. Generate them again from the audio.">timeline changed - regenerate subtitles</button>
     <!-- The old editor's FFmpeg dialog, same sections and same defaults; the payload is
          built from this store instead of timeline_data_v2. See js/merge-v3/export.js. -->
     <button class="mv3-iconbtn is-text" id="mv3-queue" type="button"

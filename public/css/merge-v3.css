@@ -64,6 +64,15 @@
   font:600 11px/22px var(--font); cursor:pointer;
 }
 .mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
+/* The one red thing in this bar, and it earns it: what is on screen is no longer what is
+   being said. Parked immediately left of queue, in the path of anybody on their way to
+   render - which is the moment it matters. A button, because it goes somewhere. */
+.mv3-bar-stale{
+  flex:0 0 auto; margin-right:8px; padding:4px 7px;
+  border:1px solid var(--danger); border-radius:var(--r-xs); background:oklch(.42 .16 22 / .14);
+  font:700 10px/1 var(--font); color:var(--danger); white-space:nowrap; cursor:pointer;
+}
+.mv3-bar-stale:hover{background:var(--danger); color:oklch(.99 0 0)}
 /* The owner picker: a name, not a title, so narrower than the project picker beside it - and
    never squeezed: the field it sits in may shrink (min-width:0 above) but the select cannot,
    so a squeezed field would let the select run under the next label. */

@@ -377,6 +377,13 @@ function _sanitizeTalking(timeline) {
   const out = _emptyTimeline();
   const src = (timeline && timeline.tracks) || {};
   out.tracks.subs.style = _subsStyle(src.subs && src.subs.style);
+  // Raised when a fragment is cut out of Main under captions that already existed: they have
+  // been slid along with the picture, but the sentences no longer match the audio. It is
+  // kept because the warning has to outlive the tab - it is the project that is out of date,
+  // not the session looking at it. Set in public/js/merge-v3/timeline.js, cleared when the
+  // captions are generated again. Everything else on a track is rebuilt from the whitelist
+  // below, which is exactly why this needs a line of its own.
+  out.tracks.subs.stale = !!(src.subs && src.subs.stale);
 
   for (const t of TRACKS) {
     const from = src[t] || {};

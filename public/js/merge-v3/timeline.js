@@ -275,6 +275,47 @@ function _room(clips, c, scope) {
   return { prevEnd, nextStart };
 }
 
+// REMOVING A FRAGMENT FROM MAIN CLOSES THE GAP BEHIND IT.
+//
+// Main is a sequence, so a hole in it is black picture and silence - never what somebody
+// meant by cutting a piece out. Everything that begins after the removed stretch therefore
+// slides left by exactly its length: the rest of Main, and with it the overlays and captions
+// pinned to the picture (_ripple), so a birol stays over the shot it was placed against.
+//
+// By the SAME distance, all of it. Nothing is clamped to the join, because clamping is how
+// three overlays end up stacked on one instant. What lay entirely INSIDE the removed stretch
+// is left where it is rather than dragged backwards past the cut - it has nothing to be
+// measured against any more, and it is still there to be moved or removed by hand.
+//
+// Only Main. A hole in an overlay lane is precisely what removing an overlay means, and
+// music is not pinned to a shot at all (see RIPPLE_SCOPES).
+function _cutOut(tl, scope, id) {
+  const tr = tl.tracks[scope];
+  if (!tr) return;
+  const c = (tr.clips || []).find(x => x.id === id);
+  tr.clips = (tr.clips || []).filter(x => x.id !== id);
+  if (!c || scope !== 'seg') return;
+  const dur = +c.dur || 0;
+  _ripple(tl, (+c.start || 0) + dur, -dur);
+  _markSubsStale(tl);
+}
+
+// The captions are the words being said at that moment, and a cut changes which words those
+// are. Sliding them keeps them off the wrong shot but cannot mend a sentence cut in half -
+// only the audio as it now stands can, through Whisper. So the project remembers that it was
+// cut under existing captions, and the top bar says so until they are made again. On the
+// track, not in a variable: it has to survive a reload, and an undo has to take it back.
+function _markSubsStale(tl) {
+  const subs = tl.tracks && tl.tracks.subs;
+  if (subs && Array.isArray(subs.clips) && subs.clips.length) subs.stale = true;
+}
+
+/** Removing a clip from somewhere other than the lane itself - the inspector's Remove
+ *  buttons. Through the same door as the X on the clip, so Main closes up behind it there
+ *  too; two ways of removing a fragment that left the timeline in two different shapes is
+ *  exactly the kind of disagreement this file keeps in one place. */
+export function removeClip(scope, id) { Store.mutate(tl => _cutOut(tl, scope, id)); }
+
 // Deletes a CLIP. A selected track is not a thing you can delete - the six tracks are
 // the editor, not content - so this is a no-op rather than a guess.
 function _deleteSelected() {
@@ -286,10 +327,15 @@ function _deleteSelected() {
     _sel = null;
     _afterSel();
     Store.mutate(tl => {
-      for (const [scope, id] of jobs) {
+      // Rightmost first. Each cut is measured where it was made, and closing a gap only
+      // moves what is to the right of it - so working backwards leaves every cut still to
+      // come sitting at the time it was read at.
+      const at = ([scope, id]) => {
         const tr = tl.tracks[scope];
-        if (tr) tr.clips = tr.clips.filter(c => c.id !== id);
-      }
+        const c = tr && (tr.clips || []).find(x => x.id === id);
+        return c ? (+c.start || 0) : 0;
+      };
+      for (const [scope, id] of jobs.slice().sort((a, b) => at(b) - at(a))) _cutOut(tl, scope, id);
     });
     return;
   }
@@ -297,10 +343,7 @@ function _deleteSelected() {
   const { scope, id } = _sel;
   _sel = null;
   _afterSel();
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (tr) tr.clips = tr.clips.filter(c => c.id !== id);
-  });
+  Store.mutate(tl => _cutOut(tl, scope, id));
 }
 
 // ── Asking first, on every lane ─────────────────────────────────────────────

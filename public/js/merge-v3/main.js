@@ -16,7 +16,8 @@
 import { initNav } from '../app-nav.js';
 import { initLayout, setOpenColumn } from './layout.js';
 import { initLibrary } from './library.js';
-import { initTimeline, onSelect, mount as mountA, unmount as unmountA } from './timeline.js';
+import { initTimeline, onSelect, selectTrack, mount as mountA, unmount as unmountA } from './timeline.js';
+import { initSubsStale } from './subtitles.js';
 import { initTimelineB, onSelChange as onSelB, mount as mountB, unmount as unmountB } from './timeline-b.js';
 import { initPreviewB, mount as mountPvB, unmount as unmountPvB } from './preview-b.js';
 import { initExportB } from './export-b.js';
@@ -41,6 +42,10 @@ initPreview();
 initProjects();
 initOverlays();
 initExport();
+// "The timeline changed - regenerate subtitles", in the top bar. Selecting the subtitle
+// track is all it has to do: the rule below brings the Inspector out for any selection, so
+// the Regenerate button is on screen in one click.
+initSubsStale(() => selectTrack('subs'));
 
 // Selecting anything brings the Inspector out - the left pair is a switch, so the
 // Library folds to its spine by the same rule that already governs them.

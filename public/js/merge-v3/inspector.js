@@ -20,7 +20,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { onSelect, selected, clearSelection, setClipDur,
+import { onSelect, selected, clearSelection, setClipDur, removeClip as cutClip,
          multiCount as multiA, deleteMulti as deleteMultiA } from './timeline.js';
 import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
          onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
@@ -219,10 +219,9 @@ function _removeClip(scope, id) {
   // Deselect first: leaving the selection pointing at a clip that no longer exists would
   // leave the panel on its "clip is gone" state instead of returning to the help.
   clearSelection();
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (tr) tr.clips = tr.clips.filter(c => c.id !== id);
-  });
+  // The timeline owns what removing a clip MEANS - on Main that includes closing the gap
+  // behind it and everything pinned to the picture sliding with it.
+  cutClip(scope, id);
 }
 
 // Clears the track's OWN settings and the fields the stamp writes. It deliberately does
