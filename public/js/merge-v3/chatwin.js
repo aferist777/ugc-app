@@ -47,6 +47,9 @@
 
 import { startInlineProgress, lockControls } from '../progress.js';
 import { askDelete, closeAsk, note } from './ask.js';
+// Whether a failure is worth a second try - shared with Animate, because the aggregators are
+// the same and so are their bad days.
+import { canRetry as _canRetry } from './retry.js';
 import * as Store from './store.js';
 
 export const POLL_MS = 4000;
@@ -566,27 +569,6 @@ function _stepsBox(parent) {
       return h;
     },
   };
-}
-
-// WHETHER TRYING AGAIN COULD END DIFFERENTLY, which is not the same as whether it failed.
-//
-// Worth retrying: the aggregator had no capacity, the gateway timed out, the connection broke,
-// our own host could not be read. All of those are about the weather.
-//
-// Not worth retrying: the model refused the prompt or the picture, a field was wrong, the key is
-// not valid. Those will refuse identically for as long as nothing is changed, and a Retry
-// against them is a button that spends a minute to say the same thing twice.
-const RETRYABLE = [
-  /no available user account/i, /timeout/i, /timed out/i, /\b5\d\d\b/, /temporar/i,
-  /capacity/i, /overload/i, /rate limit/i, /too many requests/i, /try again/i,
-  /connection/i, /socket/i, /network/i, /download/i, /unreachable/i, /gateway/i,
-];
-const NEVER = [/refus/i, /policy/i, /moderat/i, /safety/i, /invalid/i, /not supported/i,
-               /unauthor/i, /forbidden/i, /api key/i, /required/i];
-function _canRetry(reason) {
-  const s = String(reason || '');
-  if (NEVER.some(re => re.test(s))) return false;
-  return RETRYABLE.some(re => re.test(s));
 }
 
 // ── Saying something ────────────────────────────────────────────────────────

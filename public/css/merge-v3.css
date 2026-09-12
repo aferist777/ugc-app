@@ -1644,3 +1644,35 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-rbar{height:6px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin:2px 0 10px}
 .mv3-rbar > i{display:block; height:100%; background:var(--primary); transition:width .3s var(--ease)}
 .mv3-rvid{width:100%; border-radius:var(--r-xs); background:#000; display:block; margin-bottom:10px}
+
+/* ── Animate: the work, step by step ──────────────────────────────────────────
+   A video is made in two places - the analyst writes the motion prompt, the aggregator draws
+   it - and each can fail on its own. One line each, turning while it runs, ticked when done,
+   red with the aggregator's own words when not; the Retry appears only where trying again
+   could end differently (js/merge-v3/retry.js). */
+.mv3-anim-steps{ display:flex; flex-direction:column; gap:3px; margin:6px 0 0 }
+.mv3-anim-step{
+  display:flex; align-items:flex-start; gap:6px;
+  font:600 10px/1.45 var(--font); color:var(--muted);
+}
+.mv3-anim-step i{
+  flex:0 0 auto; width:9px; height:9px; margin-top:3px; border-radius:50%;
+  border:1.5px solid var(--border-soft); border-top-color:var(--primary);
+  animation:mv3-anim-spin .7s linear infinite;
+}
+@keyframes mv3-anim-spin{ to{ transform:rotate(360deg) } }
+.mv3-anim-step.is-done i{
+  border:0; animation:none; margin-top:4px;
+  border-right:1.5px solid var(--success); border-bottom:1.5px solid var(--success);
+  transform:rotate(45deg) scale(.9);
+}
+.mv3-anim-step.is-bad{ color:var(--danger) }
+.mv3-anim-step.is-bad i{ border:0; animation:none; background:var(--danger) }
+.mv3-anim-retry{
+  flex:0 0 auto; margin-left:2px; padding:1px 6px;
+  border:1px solid var(--danger); border-radius:var(--r-xs);
+  background:transparent; color:var(--danger);
+  font:700 9px/1.5 var(--font); cursor:pointer;
+}
+.mv3-anim-retry:hover:not([disabled]){ background:var(--danger); color:oklch(.99 0 0) }
+.mv3-anim-retry[disabled]{ opacity:.45; cursor:default }

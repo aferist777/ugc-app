@@ -38,6 +38,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { startInlineProgress, lockControls } from '../progress.js';
+// Whether a failure is worth a second try - shared with the picture window.
+import { canRetry } from './retry.js';
 import * as C from './controls.js';
 
 // The matrix, fetched once per page and shared by every opening of this window. It changes
@@ -386,7 +388,7 @@ export async function openAnimate(clip) {
   dur.type = 'range';
   dur.step = '1';
   const durOut = _el('span', 'mv3-anim-val', '');
-  dur.addEventListener('input', () => { durOut.textContent = dur.value + 's'; });
+  dur.addEventListener('input', () => { durOut.textContent = dur.value + 's'; _paintCost(); });
   durRow.appendChild(dur);
   durRow.appendChild(durOut);
   right.appendChild(durRow);
@@ -415,7 +417,15 @@ export async function openAnimate(clip) {
         // so flipping it needs a new one rather than a mutation of the old.
         ctl = C.toggle(!!values[spec.key], (on) => { write(on); _paintParams(); });
       } else {
-        ctl = C.select((spec.options || []).map(o => [o, o]), values[spec.key], write);
+        // THE CHOICES CAN DIFFER BY AGGREGATOR, not just the parameter: kie serves a 1080p the
+        // Replicate rows have never heard of, and offering it there would be a 422 after the
+        // wait. The table says so in optionsBy; this reads it for whoever is chosen.
+        const opts = (spec.optionsBy && spec.optionsBy[provSel.value]) || spec.options || [];
+        if (!opts.includes(values[spec.key])) {
+          values[spec.key] = opts.includes(spec.def) ? spec.def : opts[0];
+          _saveParams(engine, values);
+        }
+        ctl = C.select(opts.map(o => [o, o]), values[spec.key], write);
       }
       ctl.title = spec.hint || spec.label || spec.key;
       ctl.classList.add('mv3-anim-pctl');
@@ -444,10 +454,15 @@ export async function openAnimate(clip) {
     durRow.hidden = !engine.dur;
     vidSlot.hidden = !engine.needsVideo;
     if (engine.dur) {
-      dur.min = String(engine.dur.min);
-      dur.max = String(engine.dur.max);
-      const want = Math.round(+clip.dur || engine.dur.def);
-      dur.value = String(Math.max(engine.dur.min, Math.min(engine.dur.max, want)));
+      // THE BOUNDS BELONG TO THE PAIRING. kie takes 6 to 30 seconds for Grok Imagine Video and
+      // Replicate takes 1 to 15 - and asking kie for five is answered "Value must be within the
+      // specified range", which names no value and no field. The slider is what stops that
+      // being possible, so it is refitted whenever the aggregator changes.
+      const b = (engine.durBy && engine.durBy[provSel.value]) || engine.dur;
+      dur.min = String(b.min);
+      dur.max = String(b.max);
+      const want = Math.round(+clip.dur || b.def);
+      dur.value = String(Math.max(b.min, Math.min(b.max, want)));
       durOut.textContent = dur.value + 's';
     }
     // The exact wording the model's own schema uses for this field, and only for the models
@@ -473,11 +488,21 @@ export async function openAnimate(clip) {
   const MOTION_HINT = 'Bring a clip of someone moving - a dance works well. '
     + 'The person in your picture will perform what they do, one character at a time.';
 
-  function _price() {
+  // What a second costs on the chosen pairing. `quality` is the motion models' word for it and
+  // `resolution` is grok's; both name the same thing, so both are read.
+  function _rate() {
     const p = (engine.providers.find(x => x.id === provSel.value) || {}).price;
     if (!p) return null;
-    const rate = p[values.quality] != null ? p[values.quality] : p['720p'];
-    const len = _segLen();
+    const tier = values.resolution || values.quality;
+    const v = (tier != null && p[tier] !== undefined) ? p[tier] : p['720p'];
+    return v == null ? null : v;
+  }
+
+  // HOW MANY SECONDS ARE BEING PAID FOR: the slider's, for a model that takes a length, and the
+  // trimmed segment's for one that takes a clip and matches it.
+  function _price() {
+    const rate = _rate();
+    const len = engine.dur ? (parseInt(dur.value, 10) || engine.dur.def) : _segLen();
     return (rate == null || !len) ? null : rate * len;
   }
 
@@ -486,14 +511,23 @@ export async function openAnimate(clip) {
     // rate times seconds equals total - and putting the total on the button as well is the
     // same number twice, the second one crowding the one control that has to stay readable at
     // a glance. Nothing about the price changes what pressing it does.
-    if (!engine.needsVideo) { guide.hidden = true; return; }
+    //
+    // EVERY model on this list is sold by the second, so the line is shown for all of them
+    // rather than only for the ones that take a clip. A tier nobody has published a rate for
+    // says so instead of showing a number it does not have.
     guide.hidden = false;
-    guide.textContent = MOTION_HINT;
+    guide.textContent = engine.needsVideo ? MOTION_HINT : '';
+    const rate = _rate();
     const cost = _price();
+    if (rate == null) {
+      guide.appendChild(_el('b', null, (engine.needsVideo ? ' · ' : '')
+        + 'no published price at this resolution'));
+      return;
+    }
     if (cost == null) return;
-    const rate = (engine.providers.find(x => x.id === provSel.value) || {}).price[values.quality];
-    guide.appendChild(_el('b', null,
-      ' · ' + _segLen().toFixed(1) + 's × $' + rate + '/s = $' + cost.toFixed(2)));
+    const len = engine.dur ? (parseInt(dur.value, 10) || engine.dur.def) : _segLen();
+    guide.appendChild(_el('b', null, (engine.needsVideo ? ' · ' : '')
+      + len.toFixed(1) + 's × $' + rate + '/s = $' + cost.toFixed(2)));
   }
 
 
@@ -504,6 +538,14 @@ export async function openAnimate(clip) {
   });
   provSel.addEventListener('change', () => {
     _put(LS_PROV(engine.id), provSel.value);
+    // The length allowed is the aggregator's, so the slider is rebuilt with it.
+    if (engine.dur) {
+      const b = (engine.durBy && engine.durBy[provSel.value]) || engine.dur;
+      dur.min = String(b.min);
+      dur.max = String(b.max);
+      dur.value = String(Math.max(b.min, Math.min(b.max, parseInt(dur.value, 10) || b.def)));
+      durOut.textContent = dur.value + 's';
+    }
     // Both depend on WHICH aggregator: it decides which parameters exist and what a second
     // costs - 2.6 is cheaper through kie, 3.0 through Replicate.
     _paintParams();
@@ -526,6 +568,14 @@ export async function openAnimate(clip) {
     + 'effects through prompt words.');
   promptHint.hidden = true;
   right.appendChild(promptHint);
+
+  // ── WHAT IS HAPPENING, STEP BY STEP ──────────────────────────────────────
+  // A video is made in two places - the analyst writes the motion prompt, the aggregator draws
+  // it - and each can be slow or can fail on its own. One spinner over the lot says only that
+  // something is happening; when it stops there is nothing to point at, which is exactly what
+  // "internal error and I do not know what died" looked like.
+  const steps = _el('div', 'mv3-anim-steps');
+  right.appendChild(steps);
 
   body.appendChild(right);
   box.appendChild(body);
@@ -666,19 +716,57 @@ export async function openAnimate(clip) {
 
   ta.focus();
   go.addEventListener('click', () => _run({
-    clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params,
+    clip, outBox, note, steps, go, cancel, save, dur, ta, modelSel, provSel, params,
     engineOf: () => engine, valuesOf: () => values, refOf: () => ref,
     onShot: (sh) => { _shots.push(sh); _showShot(_shots.length - 1); _paintSave(); },
   }));
 }
 
 // -- The run ----------------------------------------------------------------
-async function _run(ui) {
-  const { clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params,
+// One line per thing happening somewhere else: turning while it runs, ticked when it is done
+// with what it actually did, red with the reason when it is not. A failed line keeps a Retry
+// beside it only when trying again could end differently - see retry.js.
+function _steps(host) {
+  host.textContent = '';
+  return {
+    add(text) {
+      const row = _el('div', 'mv3-anim-step is-run');
+      const mark = _el('i');
+      const label = _el('span', null, text);
+      row.appendChild(mark);
+      row.appendChild(label);
+      host.appendChild(row);
+      const h = {
+        say(t) { label.textContent = t; return h; },
+        done(t) { row.className = 'mv3-anim-step is-done'; if (t) label.textContent = t; return h; },
+        fail(t, again) {
+          row.className = 'mv3-anim-step is-bad';
+          label.textContent = t;
+          if (again) {
+            const b = _el('button', 'mv3-anim-retry', 'Retry');
+            b.type = 'button';
+            b.title = 'Try this step again. The prompt that was already written is kept.';
+            b.addEventListener('click', () => { b.disabled = true; again(); });
+            row.appendChild(b);
+          }
+          return h;
+        },
+      };
+      return h;
+    },
+  };
+}
+
+/**
+ * @param opts.prompt  a motion prompt already written, for a Retry: the analyst is not asked
+ *                     again, because what it wrote is not what failed and it is not free.
+ */
+async function _run(ui, opts) {
+  const { clip, outBox, note, steps: stepHost, go, cancel, save, dur, ta, modelSel, provSel, params,
           engineOf, valuesOf, refOf, onShot } = ui;
-  const prompt = ta.value.trim();
+  const said = ta.value.trim();
   const eng = engineOf();
-  if (!prompt && !eng.promptOptional) {
+  if (!said && !eng.promptOptional) {
     ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900);
     return;
   }
@@ -710,19 +798,64 @@ async function _run(ui) {
   outBox.appendChild(ghost);
   const prog = startInlineProgress(outBox, { label: 'Animating\u2026', key: 'mv3-animate', estimateMs: ETA_MS });
 
+  // ── 1. the analyst ─────────────────────────────────────────────────
+  // The picture and the sentence go for reading, translating and tidying BEFORE anything is
+  // spent on a video: these models read English, and a Russian sentence sent as typed is a
+  // video of something adjacent. A Retry arrives with the prompt already written and skips
+  // this - what it wrote is not what failed, and it is not free.
+  const log = _steps(stepHost);
+  let prompt = (opts && opts.prompt) || '';
+  let writer = (opts && opts.writer) || '';
+  if (!prompt) {
+    const st = log.add('Sent to the analyst — your words and the picture…');
+    prog.say('reading your words and the picture…');
+    try {
+      const d = await fetch('/api/video/think', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: said, imagePath: clip.src }),
+      }).then(r => r.json());
+      if (d && d.success && d.prompt) {
+        prompt = d.prompt;
+        writer = d.writer || '';
+        if (d.fell) st.fail('The analyst did not answer — sending your words as typed. ' + d.fell, null);
+        else st.done('Motion prompt written' + (writer ? ' by ' + writer : '') + '.');
+      } else {
+        prompt = said;
+        st.fail('The analyst refused — sending your words as typed. '
+          + String((d && d.error) || '').slice(0, 140), null);
+      }
+    } catch (err) {
+      prompt = said;
+      st.fail('The analyst could not be reached — sending your words as typed.', null);
+    }
+  } else {
+    log.add('Motion prompt kept from the last attempt.').done();
+  }
+
+  // ── 2. the asking, then 3. the drawing ───────────────────────────────
+  const again = () => _run(ui, { prompt, writer });
+  const asking = log.add('Asking ' + ((provSel.options[provSel.selectedIndex] || {}).text || 'the model')
+    + ' for ' + (eng.dur ? parseInt(dur.value, 10) + ' seconds' : 'a clip') + '…');
+  prog.say('asking ' + ((provSel.options[provSel.selectedIndex] || {}).text || 'the model') + '…');
+
   try {
     const start = await fetch('/api/video/animate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         engine: eng.id,
         provider: provSel.value,
+        // The WRITTEN prompt, not what was typed: the analyst's answer is the thing these
+        // models were meant to read. What was typed is kept beside it on the record.
         prompt,
+        said,
         imagePath: clip.src,
         ...(refNow ? { videoPath: refNow.videoPath, videoIn: refNow.in, videoOut: refNow.out } : {}),
         params: { ...valuesOf(), duration: parseInt(dur.value, 10) },
       }),
     }).then(r => r.json());
     if (!start || !start.success || !start.taskId) throw new Error((start && start.error) || 'the model refused the job');
+    asking.done('Sent — the model is drawing it.');
+    const drawing = log.add('Drawing…');
 
     // Every four seconds for twenty minutes. A blip in polling is not a failure - only an
     // explicit `failed` is - because giving up early throws away a job already paid for.
@@ -735,6 +868,7 @@ async function _run(ui) {
       if (st.state === 'success' && st.videoPath) { videoPath = st.videoPath; break; }
     }
     if (!videoPath) throw new Error('gave up waiting for the model');
+    drawing.done('The clip is back.');
 
     // A real poster frame before it is filed, so the shelf never has to load the video to
     // draw a 72px card. A failure here costs a thumbnail, not the clip.
@@ -763,7 +897,28 @@ async function _run(ui) {
     // with a word changed - so everything goes straight back to being pressable.
     note.textContent = 'tick the ones to keep, then Save';
   } catch (e) {
-    prog.fail(e.message);
+    // THE AGGREGATOR'S OWN WORDS, not ours. "Internal Error, Please try again later." is kie
+    // saying its upstream fell over, and that is exactly the sentence worth showing - along
+    // with a Retry, because that one genuinely can end differently. A refusal gets no button.
+    const why = String((e && e.message) || e).slice(0, 300);
+    const last = stepHost.lastElementChild;
+    const line = 'Could not be made: ' + why;
+    if (last && last.classList.contains('is-run')) {
+      // whichever step was still running is the one that died
+      last.className = 'mv3-anim-step is-bad';
+      const label = last.querySelector('span');
+      if (label) label.textContent = line;
+      if (canRetry(why)) {
+        const b = _el('button', 'mv3-anim-retry', 'Retry');
+        b.type = 'button';
+        b.title = 'Try again with the same prompt. The analyst is not asked a second time.';
+        b.addEventListener('click', () => { b.disabled = true; again(); });
+        last.appendChild(b);
+      }
+    } else {
+      log.add('').fail(line, canRetry(why) ? again : null);
+    }
+    prog.fail(why.slice(0, 160));
     unlock();
   }
 }

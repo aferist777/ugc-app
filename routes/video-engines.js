@@ -31,6 +31,8 @@ const { uploadToPublicHost, normalizeVideoForBrowser, noteHostFailure } = requir
 const { isFetchFailure } = require('../lib/img-providers');
 const VT = require('../lib/video-thumb');
 const VP = require('../lib/video-providers');
+// The same analyst the picture window uses - one ladder, one set of eyes.
+const AGENT = require('../lib/mv3-agent');
 
 const KIE_BASE = 'https://api.kie.ai';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
@@ -189,6 +191,35 @@ const _remember = (taskId, urls) => {
   _hosted.set(taskId, urls.filter(Boolean));
   if (_hosted.size > 200) _hosted.delete(_hosted.keys().next().value);
 };
+
+/* ── The analyst, before anything is spent ───────────────────────────────────
+   POST /api/video/think { text, imagePath } -> { prompt, writer } | { prompt, fell }
+
+   The picture and the sentence go to the same analyst the picture window uses, and it writes
+   the motion prompt: English, because these models read English, and about what CHANGES rather
+   than about what is in the frame - the frame is the picture, and re-describing it is how a
+   video model ends up redrawing the face instead of moving it.
+
+   Its own call rather than something folded into the submit, because the two fail separately
+   and the window has to be able to say WHICH: an analyst that could not be reached is a video
+   made from the words as typed, and a model that refused is no video at all.
+
+   A failure here is answered with the words as typed and `fell` saying why. Nothing about
+   polishing is worth losing the job over. */
+router.post('/video/think', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const text = String(b.text || '').trim();
+    if (!text) return res.status(400).json({ success: false, error: 'nothing was said' });
+    let imageUrl = '';
+    try { imageUrl = b.imagePath ? await _publicUrl(b.imagePath) : ''; }
+    catch (err) { console.warn('[video/think] could not host the picture -', err.message); }
+    const out = await AGENT.thinkMotion({ text, imageUrl });
+    res.json({ success: true, ...out });
+  } catch (err) {
+    res.status(502).json({ success: false, error: String(err.message || err).slice(0, 300) });
+  }
+});
 
 router.post('/video/animate', async (req, res) => {
   const { engine, provider, prompt, imagePath, imageUrl: direct,
