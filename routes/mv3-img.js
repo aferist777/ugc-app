@@ -8,10 +8,12 @@
 //
 //   GET    /api/mv3/img/matrix              what can be asked for: engines, aggregators, shapes
 //   GET    /api/mv3/img/rules               how to ask: one prompting rule set per model
-//   GET    /api/mv3/img/settings            the ladders, the writer, the defaults
+//   GET    /api/mv3/img/settings            the analyst's chain and the defaults
 //   PUT    /api/mv3/img/settings            a shallow patch of any of them
 //   POST   /api/mv3/img/think                { engine, text, refs, thread } -> { prompt } or
-//                                            { ask } - the rewrite, or a question instead of one
+//                                            { ask } - the rewrite, or a question instead of
+//                                            one. `refs` are library paths: they are hosted and
+//                                            the analyst is given the pictures, not a count
 //   GET    /api/mv3/img/feed?project=…      that project's generations, newest first
 //   POST   /api/mv3/img/gen                 { project, engine, provider, prompt, aspect, quality,
 //                                             refs? } - refs are library paths; with any of them
@@ -30,7 +32,7 @@
 //                                            under the project's category
 //
 // ONE PICTURE PER CALL. A panel that wants four asks four times, and gets four independent
-// walks down the ladder for it - one submit that dies takes one picture with it rather than
+// walk down the fallback for it - one submit that dies takes one picture with it rather than
 // the batch.
 //
 // The reply to a submit is the RECORD, not the picture: the picture is minutes away and the
@@ -80,12 +82,12 @@ router.get('/mv3/img/rules', (_req, res) => {
 // do with either.
 // ── What the gear edits ─────────────────────────────────────────────────────
 // The order aggregators are tried in, per engine; which model does the rewriting; and whether a
-// ladder may step over an aggregator whose key is known to be down.
+// chain may step over an aggregator whose key is known to be down.
 router.get('/mv3/img/settings', (_req, res) => {
   try {
     res.json({
       success: true, settings: SET.read(),
-      // Who can do the writing, and what each answers to - the same list the ladder is built
+      // Who can do the reading, and what each answers to - the same list the chain is built
       // from, so the panel cannot offer a pairing the walk would not understand.
       writers: SET.WRITER_PROVIDERS, maxWriterSteps: SET.MAX_WRITER_STEPS,
     });
@@ -106,8 +108,22 @@ router.post('/mv3/img/think', async (req, res) => {
   const b = req.body || {};
   try {
     const e = MV.ENGINES[String(b.engine || '')];
+    // THE ANALYST LOOKS AT THE REFERENCES. `refs` is the list of library paths attached above
+    // the input, and they are hosted here exactly as they are for a generation - the same
+    // helper, the same cache, so attaching a picture and then generating from it is one upload
+    // rather than two. A number alone was what it used to get, and a number cannot be looked at.
+    //
+    // Hosting is not allowed to cost the rewrite: if it fails the count still goes through, and
+    // the analyst writes from the words as it always did.
+    let refUrls = [];
+    const refs = Array.isArray(b.refs) ? b.refs.filter(Boolean) : [];
+    if (refs.length) {
+      try { refUrls = await GENS.hostRefs(refs); }
+      catch (err) { console.warn('[mv3-img] think: could not host references -', err.message); }
+    }
     const out = await AGENT.think({
-      engine: b.engine, text: b.text, refs: +b.refs || 0, thread: b.thread,
+      engine: b.engine, text: b.text, thread: b.thread,
+      refs: refs.length || (+b.refs || 0), refUrls,
       aspects: MV.ASPECTS, tiers: e ? e.tiers : [],
     });
     res.json(Object.assign({ success: true }, out));

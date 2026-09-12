@@ -6,9 +6,14 @@
    twice: a backdrop, a rail of sections down the left, and one scrolling canvas on the
    right with the aggregators' health above it.
 
-   What it edits is not the same, though. Character's ladder is per OPERATION - create,
-   reference, sheet. Merge has one operation and eleven models, so the ladder here is per
-   MODEL: for each one, the order its aggregators are tried in.
+   TWO SECTIONS, and only one of them edits anything. The almanac is what each model wants to
+   be told, read-only and the reason to open this at all while deciding which to use. The
+   analyst's ladder is the one setting left: which model reads your message and the pictures
+   attached to it, and who is asked when the first refuses.
+
+   There used to be a third - a per-model order of aggregators. The picture window names the
+   aggregator outright now, so the only thing that order still decided was who catches a
+   refusal, and "the other one" needs no setting.
 
    ── Nothing loads with the page ─────────────────────────────────────────────
    imagen.js imports this the first time the gear is pressed, and this module injects its
@@ -16,25 +21,24 @@
    visit its markup and its CSS.
 
    ── What is stored and what is not ──────────────────────────────────────────
-   Only the ORDER of aggregators, never the list. Which ones can serve a model is a fact
-   about the outside world and belongs to the table - store the list here and a model added
-   tomorrow would be invisible until somebody edited a setting.
+   The analyst's chain, and nothing about the picture models. Which aggregators carry which
+   model is a fact about the outside world and belongs to the table - store it here and a model
+   added tomorrow would be invisible until somebody edited a setting.
    ════════════════════════════════════════════════════════════════════════════ */
 
 let _root = null;
 let _table = null;      // the matrix: engines, their aggregators, prices
-let _set = null;        // ladders, writer, skipDown
+let _set = null;        // the analyst's chain, skipDown
 let _health = null;
-let _sec = 'ladders';
-let _eng = '';          // which model the ladder view is showing
+let _sec = 'almanac';
+let _eng = '';          // which model the almanac is showing
 let _saving = 0;
-let _writers = [];      // who can do the writing, and what they answer to
+let _writers = [];      // who can do the reading, and what they answer to
 let _maxW = 5;
 
 const $ = (sel, root) => (root || _root).querySelector(sel);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const money = (v) => (v == null ? '—' : '$' + (+(+v).toFixed(4)));
 
 // ── the data ────────────────────────────────────────────────────────────────
 async function load() {
@@ -54,7 +58,6 @@ async function load() {
 // land close together.
 async function save(patch) {
   _saving++;
-  paintSaved();
   try {
     const d = await fetch('/api/mv3/img/settings', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -63,16 +66,10 @@ async function save(patch) {
     if (d && d.success) _set = d.settings;
   } catch (e) { /* the next change tries again */ }
   _saving--;
-  paintSaved();
 }
 
-function paintSaved() {
-  const el = $('#mvg-saved');
-  if (el) el.textContent = _saving ? 'saving…' : 'Changes save as you make them';
-}
-
-// ── health, the three that matter here ──────────────────────────────────────
-const AGG = ['kie.ai', 'openrouter', 'replicate'];
+// ── health, the two that matter here ────────────────────────────────────────
+const AGG = ['kie.ai', 'replicate'];
 
 function healthBar() {
   const list = ((_health && _health.providers) || []).filter(p => AGG.includes(p.id));
@@ -81,72 +78,19 @@ function healthBar() {
     + '<i></i>' + esc(p.label) + ' <b>' + esc(p.detail || '') + '</b></span>').join('');
 }
 
-// ── the ladders ─────────────────────────────────────────────────────────────
-// One model at a time. A grid of all eleven at once would be eleven ladders nobody is
-// looking at, and the thing being decided is always about one model.
-function viewLadders() {
-  const e = _table.engines.find(x => x.id === _eng) || _table.engines[0];
-  const order = orderOf(e);
-  const rows = order.map((pid, i) => rung(e, pid, i, order.length)).join('');
-  const stored = !!(_set.ladders && _set.ladders[e.id]);
-
-  return `
-    <div class="mvg-pick">
-      ${_table.engines.map(x => '<button class="mvg-chip' + (x.id === e.id ? ' on' : '')
-        + '" data-eng="' + esc(x.id) + '">' + esc(x.label) + '</button>').join('')}
-    </div>
-    <p class="mvg-say">The order <b>${esc(e.label)}</b> is asked in. The first rung does the work;
-      the rest are there for the day it refuses. Only the order is kept — which aggregators carry
-      a model is the table's business, so one added tomorrow appears here on its own.</p>
-    <div class="mvg-ladder">${rows}</div>
-    ${stored ? '<button class="mvg-reset" data-reset="' + esc(e.id) + '">Back to the default order</button>' : ''}
-    <label class="mvg-sw">
-      <input type="checkbox" id="mvg-skip"${_set.skipDown ? ' checked' : ''}>
-      <span><b>Step over an aggregator whose key is down</b>
-        A rung that cannot possibly work only costs the wait.</span>
-    </label>`;
-}
-
-function orderOf(e) {
-  const all = e.all || e.providers;
-  const want = (_set.ladders || {})[e.id];
-  if (!Array.isArray(want) || !want.length) return all.slice();
-  const first = want.filter(p => all.includes(p));
-  return first.concat(all.filter(p => !first.includes(p)));
-}
-
-function rung(e, pid, i, n) {
-  const row = (e.rows || []).find(r => r.provider === pid) || {};
-  const price = row.price ? row.price[e.def] : null;
-  const down = ((_health && _health.providers) || []).find(p => p.id === (pid === 'kie' ? 'kie.ai' : pid));
-  const bad = down && down.state !== 'ok';
-  const can = [row.t2i ? 'makes' : '', row.i2i ? 'edits' : ''].filter(Boolean).join(' &amp; ') || '—';
-  return `
-    <div class="mvg-rung${bad ? ' is-down' : ''}">
-      <span class="mvg-no">${i + 1}</span>
-      <span class="mvg-who"><b>${esc(row.label || pid)}</b>
-        <i>${can} · ${esc(row.model || '')}${row.i2i && row.maxRefs ? ' · up to ' + row.maxRefs + ' refs' : ''}</i></span>
-      <span class="mvg-price">${money(price)}<i>at ${esc(e.def)}</i></span>
-      <span class="mvg-move">
-        <button data-up="${esc(pid)}"${i === 0 ? ' disabled' : ''} title="Ask this one earlier">&#9650;</button>
-        <button data-down="${esc(pid)}"${i === n - 1 ? ' disabled' : ''} title="Ask this one later">&#9660;</button>
-      </span>
-    </div>`;
-}
-
-// ── the writer ──────────────────────────────────────────────────────────────
-// A ladder, laid out the way the picture ladders are and the way Character's is: a number, the
-// aggregator, the model, and a way to move or remove the step. One choice was never enough -
-// the first rung is what runs, and the rest are there for the day it refuses.
+// ── the analyst's ladder ────────────────────────────────────────────────────
+// A number, the aggregator, the model, and a way to move or remove the step. One choice was
+// never enough - the first rung is what runs, and the rest are there for the day it refuses.
 function viewWriter() {
   const w = _set.writer || {};
   const chain = w.chain || [];
   const full = chain.length >= _maxW;
 
   return `
-    <p class="mvg-say">The writer turns what you type into a prompt shaped for the picture model
-      you chose — eleven models want eleven different sentences, and it holds the rule sets so you
-      do not have to. It never changes what you asked for, and what it actually sent is under
+    <p class="mvg-say">The analyst reads your message <b>and the pictures attached to it</b>, and
+      writes the prompt the picture model is actually given — shaped to whichever model you chose,
+      because six models want six different sentences and it holds the rule sets so you do not
+      have to. It never changes what you asked for, and what it actually sent is under
       <b>read more</b> on every picture.</p>
 
     <div class="mvg-ladder">${chain.map((r, i) => wRung(r, i, chain.length)).join('')}</div>
@@ -223,20 +167,19 @@ function viewAlmanac() {
 }
 
 const HEADS = {
-  ladders: 'Who is asked, and in what order',
-  writer: 'The writer',
   almanac: 'How each model wants to be asked',
+  writer: 'Who reads your message',
 };
 
 function render() {
   if (!_root) return;
   $('#mvg-h3').textContent = HEADS[_sec];
+  // The keys' health belongs to the one section that names aggregators.
   const hb = $('#mvg-health');
-  hb.innerHTML = _sec === 'ladders' ? healthBar() : '';
-  hb.hidden = _sec !== 'ladders';
+  hb.innerHTML = _sec === 'writer' ? healthBar() : '';
+  hb.hidden = _sec !== 'writer';
   _root.querySelectorAll('.mvg-nav').forEach(b => b.classList.toggle('cur', b.dataset.sec === _sec));
-  $('#mvg-canvas').innerHTML = _sec === 'writer' ? viewWriter()
-    : _sec === 'almanac' ? viewAlmanac() : viewLadders();
+  $('#mvg-canvas').innerHTML = _sec === 'writer' ? viewWriter() : viewAlmanac();
 }
 
 // ── the shell ───────────────────────────────────────────────────────────────
@@ -246,17 +189,16 @@ function build() {
   back.innerHTML = `
     <div class="mvg">
       <div class="mvg-head">
-        <h2>Pictures</h2><span class="sub">Settings for this window only — nothing here touches the timeline or the render</span>
-        <span class="sp"></span><span class="saves" id="mvg-saved">Changes save as you make them</span>
+        <h2>Pictures</h2>
+        <span class="sp"></span>
         <button class="mvg-x" id="mvg-close" aria-label="Close">&times;</button>
       </div>
       <div class="mvg-body">
         <div class="mvg-rail">
           <div class="mvg-rail-t">Models</div>
-          <button class="mvg-nav cur" data-sec="ladders"><span><b>Ladders</b><i>Who is asked for each model, and who catches it when they refuse</i></span></button>
-          <button class="mvg-nav" data-sec="almanac"><span><b>Almanac</b><i>The prompting rules each model follows</i></span></button>
+          <button class="mvg-nav cur" data-sec="almanac"><span><b>Almanac</b><i>The prompting rules each model follows</i></span></button>
           <div class="mvg-rail-t">Writing</div>
-          <button class="mvg-nav" data-sec="writer"><span><b>The writer</b><i>Which model turns what you type into a prompt</i></span></button>
+          <button class="mvg-nav" data-sec="writer"><span><b>The analyst</b><i>Which model reads your message and its pictures</i></span></button>
         </div>
         <div class="mvg-main">
           <div class="mvg-title"><h3 id="mvg-h3"></h3><span class="sp"></span>
@@ -282,23 +224,7 @@ function wire() {
     const chip = t.closest('[data-eng]');
     if (chip) { _eng = chip.dataset.eng; return render(); }
 
-    // Moving a rung writes the WHOLE order, not a swap: the stored thing is an order, and
-    // sending half of one would leave the rest to be inferred.
-    const up = t.closest('[data-up]'), dn = t.closest('[data-down]');
-    if (up || dn) {
-      const e = _table.engines.find(x => x.id === _eng);
-      const order = orderOf(e);
-      const pid = (up || dn).dataset.up || (up || dn).dataset.down;
-      const i = order.indexOf(pid);
-      const j = up ? i - 1 : i + 1;
-      if (i < 0 || j < 0 || j >= order.length) return;
-      order.splice(j, 0, order.splice(i, 1)[0]);
-      _set.ladders = Object.assign({}, _set.ladders, { [e.id]: order });
-      render();
-      return save({ ladders: { [e.id]: order } });
-    }
-
-    // the writer's ladder
+    // the analyst's ladder
     const wUp = t.closest('[data-wup]'), wDn = t.closest('[data-wdown]'), wDel = t.closest('[data-wdel]');
     if (wUp || wDn || wDel) {
       const chain = (_set.writer.chain || []).slice();
@@ -321,15 +247,6 @@ function wire() {
       return saveChain(chain);
     }
 
-    const rs = t.closest('[data-reset]');
-    if (rs) {
-      const id = rs.dataset.reset;
-      const next = Object.assign({}, _set.ladders);
-      delete next[id];
-      _set.ladders = next;
-      render();
-      return save({ ladders: { [id]: null } });
-    }
   });
 
   _root.addEventListener('change', (ev) => {
@@ -355,14 +272,6 @@ function wire() {
       if (!model || model === chain[i].model) return;
       chain[i] = Object.assign({}, chain[i], { model });
       return saveChain(chain);
-    }
-    if (t.name === 'mvg-writer') {
-      const other = $('#mvg-writer-other');
-      const model = t.value === '__other' ? (other.value || '').trim() : t.value;
-      _set.writer = Object.assign({}, _set.writer, { model });
-      render();
-      if (t.value === '__other') { const b = $('#mvg-writer-other'); if (b) b.focus(); }
-      return save({ writer: { model } });
     }
   });
 

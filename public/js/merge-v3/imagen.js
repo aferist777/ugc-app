@@ -33,16 +33,6 @@ import * as Store from './store.js';
 const ETA_MS = 40000;
 const LS = 'mv3-imagen-last';
 
-// The five shapes a prompt can take, in words a person reads rather than the keys the almanac
-// files them under.
-const FORM_WORD = {
-  prose: 'describe the scene',
-  brief: 'write a design brief',
-  template: 'labelled lines',
-  slots: 'ordered slots',
-  plain: 'plain sentences',
-};
-
 let _table = null;      // the matrix, fetched once per page
 let _ui = null;         // the left column's own controls, while a window is open
 
@@ -61,11 +51,10 @@ async function _matrix() {
 const engineOf = () => (_table.engines.find(e => e.id === _ui.eng.value) || _table.engines[0]);
 
 /**
- * Who can serve this model, at this quality, with this many references - in the order they will
- * be tried.
+ * Who can serve this model, at this quality, with this many references.
  *
- * All three narrow the field and all three are per-pairing: kie has no `pro` for qwen-image-2,
- * z-image-turbo cannot edit at all, and grok-imagine takes three references through kie but
+ * All three narrow the field and all three are per-pairing: the gpt model is graded by
+ * resolution on kie and by effort on Replicate, and grok takes three references through kie but
  * exactly one through Replicate.
  */
 function rungs(e, q, refs) {
@@ -74,17 +63,66 @@ function rungs(e, q, refs) {
     (n ? (r.i2i && r.maxRefs >= n) : r.t2i) && (r.tiers || e.tiers).includes(q));
 }
 
+// Which aggregators can serve this model in the direction it is being asked in, whatever the
+// quality - the quality list is built from whichever one is chosen, so it cannot narrow this.
+function houses(e, refs) {
+  const n = refs || 0;
+  return (e.rows || []).filter(r => (n ? (r.i2i && r.maxRefs >= n) : r.t2i));
+}
+
 // Which engines can do anything at all with this many references attached.
 const _usable = (n) => _table.engines.filter(e => e.tiers.some(t => rungs(e, t, n).length));
+
+// THE PAIRING THAT WILL ACTUALLY RUN: the aggregator named in the dropdown, or the first that
+// can do the job when the chosen one cannot (a model it does not carry, or more references than
+// it takes). Everything the column says - the tiers, the price - reads this and not a ladder.
+function rowOf(e, refs) {
+  const can = houses(e, refs);
+  return can.find(r => r.provider === (_ui && _ui.prov && _ui.prov.value)) || can[0] || null;
+}
+
+// t2i or i2i, said in the model list, because the direction decides which half of the pairing
+// runs and what it costs. It is not a setting: it is whether anything is attached.
+const _dir = (n) => (n ? 'i2i' : 't2i');
+
+// ── The three dropdowns ─────────────────────────────────────────────────────
+// Aggregator, then model, then quality, in that order down the column because that is the order
+// they narrow each other: who is being asked decides which models are on offer at all, and the
+// pairing of the two decides how it can be graded and what it costs.
+
+function _paintProviders(api) {
+  const e = engineOf();
+  const n = api.atts.length;
+  const can = houses(e, n);
+  const want = _ui.prov.value;
+  _ui.prov.innerHTML = '';
+  for (const r of can) {
+    const o = document.createElement('option');
+    o.value = r.provider; o.textContent = r.label;
+    o.selected = r.provider === want;
+    _ui.prov.appendChild(o);
+  }
+  // The one that was chosen may not carry this model, or may not take this many pictures. The
+  // list is what is possible; the choice moves to the first of them rather than staying on a
+  // name that would quietly be substituted at submit time.
+  if (want && !can.some(r => r.provider === want) && can.length) _ui.prov.value = can[0].provider;
+  _ui.prov.disabled = can.length < 2;
+}
 
 function _paintEngines(api) {
   const n = api.atts.length;
   const want = _ui.eng.value;
-  const list = _usable(n);
+  // ALPHABETICAL. The table's own order is the order they were added to it, which is a fact
+  // about this file's history and not about the models; a list you cannot predict is a list you
+  // have to read every time.
+  const list = _usable(n).slice().sort((a, b) => a.label.localeCompare(b.label));
   _ui.eng.innerHTML = '';
   for (const e of list) {
     const o = document.createElement('option');
-    o.value = e.id; o.textContent = e.label;
+    o.value = e.id;
+    // Which half of the pairing this will be. Not a choice - it is whether anything is attached -
+    // but it decides which model id runs and what it is charged at, so it is said out loud.
+    o.textContent = e.label + ' · ' + _dir(n);
     o.selected = e.id === want;
     _ui.eng.appendChild(o);
   }
@@ -97,20 +135,22 @@ function _paintEngines(api) {
     api.say(was + ' cannot take ' + n + (n === 1 ? ' reference' : ' references')
       + ' — using ' + ((list[0] || {}).label || 'nothing'));
   }
+  _paintProviders(api);
   _paintQuality(api);
 }
 
 function _paintQuality(api) {
   const e = engineOf();
   const want = _ui.q.value;
-  const n = api.atts.length;
-  // Only the tiers this engine can actually be graded by with what is attached.
-  const tiers = e.tiers.filter(t => rungs(e, t, n).length);
+  const row = rowOf(e, api.atts.length);
+  // THE CHOSEN AGGREGATOR'S OWN WORDS. The gpt model is graded 1K/2K/4K on kie and
+  // low..max on Replicate; offering the union would offer six words that do nothing.
+  const tiers = (row && row.tiers && row.tiers.length) ? row.tiers : e.tiers;
   _ui.q.innerHTML = '';
-  for (const t of (tiers.length ? tiers : e.tiers)) {
+  for (const t of tiers) {
     const o = document.createElement('option');
     o.value = t; o.textContent = t;
-    o.selected = (t === want) || (!tiers.includes(want) && t === e.def);
+    o.selected = (t === want) || (!tiers.includes(want) && t === (tiers.includes(e.def) ? e.def : tiers[0]));
     _ui.q.appendChild(o);
   }
   _paintPrice(api);
@@ -119,11 +159,8 @@ function _paintQuality(api) {
 function _paintPrice(api) {
   const e = engineOf();
   const q = _ui.q.value;
-  const rows = rungs(e, q, api.atts.length);
-  // The price is the FIRST rung's, not the cheapest: the ladder tries them in order, so that is
-  // the one that will actually be charged unless it refuses. Quoting the cheapest would name a
-  // price nobody is going to pay.
-  const chosen = rows[0];
+  const n = api.atts.length;
+  const chosen = rowOf(e, n);
   const val = chosen ? (chosen.price || {})[q] : null;
   const many = attempts();
 
@@ -137,27 +174,15 @@ function _paintPrice(api) {
       + '<span>per picture' + (many > 1 ? ' · ' + money(val * many) + ' for ' + many : '') + '</span>';
   }
 
-  // WHAT THIS MODEL WANTS TO BE TOLD. The almanac travels with the table, so the moment a model
-  // is chosen the panel can say how it likes to be asked - which is the half of the decision the
-  // price does not cover.
-  const r = e.rule;
-  _ui.hint.innerHTML = r
-    ? '<b>' + FORM_WORD[r.form] + '</b> · ' + r.sweetSpot
-      + (r.negatives === 'none' ? ' · <i>never say what to avoid</i>' : '')
-    : '';
-  _ui.hint.title = r ? [r.formula, r.weakness].filter(Boolean).join('\n\n') : '';
-
-  _ui.via.innerHTML = rows.length
-    ? 'served by <b>' + rows[0].label + '</b>'
-      + (rows.length > 1 ? ', then <i>' + rows.slice(1).map(x => x.label).join(', ') + '</i>' : '')
-    : '<b>nothing can serve this</b>';
-
-  const others = rows.slice(1).filter(x => (x.price || {})[q] != null);
-  _ui.fall.innerHTML = (val != null && others.length)
-    ? 'if it falls through: ' + others.map(x => '<b>' + x.label + '</b> ' + money(x.price[q])).join(', ')
+  // WHO CATCHES A REFUSAL. The aggregator is chosen rather than walked to, but a model that is
+  // down at one of them is not a reason to lose the picture - so the other one is tried behind
+  // it, and what that would cost is worth knowing before it happens rather than after.
+  const others = houses(e, n).filter(r => r !== chosen && (r.price || {})[q] != null);
+  _ui.fall.innerHTML = others.length
+    ? 'if it refuses: ' + others.map(x => '<b>' + x.label + '</b> ' + money(x.price[q])).join(', ')
     : '';
 
-  _remember({ engine: e.id, quality: q, aspect: _ui.ar });
+  _remember({ engine: e.id, provider: _ui.prov.value, quality: q, aspect: _ui.ar });
 }
 
 function _paintAspects(api) {
@@ -251,6 +276,9 @@ const SPEC = {
         r.appendChild(ctl);
         host.appendChild(r);
       };
+      const prov = document.createElement('select');
+      prov.id = 'mv3-ig-prov';
+      row('aggregator', prov);
       const eng = document.createElement('select');
       eng.id = 'mv3-ig-eng';
       row('model', eng);
@@ -258,10 +286,6 @@ const SPEC = {
       q.id = 'mv3-ig-q';
       row('quality', q);
 
-      const hint = el('div', 'mv3-ig-hint');
-      host.appendChild(hint);
-      const via = el('div', 'mv3-ig-via');
-      host.appendChild(via);
       host.appendChild(el('div', 'mv3-ig-sep', 'shape'));
       const arWrap = el('div', 'mv3-ig-ar-row');
       host.appendChild(arWrap);
@@ -271,10 +295,16 @@ const SPEC = {
       host.appendChild(fall);
 
       const fmt = (tl && tl.format) || '9:16';
-      _ui = { host, eng, q, hint, via, arWrap, cost, fall, fmt,
+      _ui = { host, prov, eng, q, arWrap, cost, fall, fmt,
               ar: _table.aspects.includes(last.aspect) ? last.aspect : fmt };
-      eng.addEventListener('change', () => _paintQuality(api));
+      // Choosing an aggregator can change which models are on offer and how they are graded, so
+      // it repaints the two below it; a model can change which aggregators carry it at all.
+      prov.addEventListener('change', () => _paintEngines(api));
+      eng.addEventListener('change', () => { _paintProviders(api); _paintQuality(api); });
       q.addEventListener('change', () => _paintPrice(api));
+      // Last time's choice, for all four. The window is opened to carry on from where the last
+      // picture left off far more often than to start somewhere new.
+      if (last.provider) prov.value = last.provider;
       if (last.engine) eng.value = last.engine;
       if (last.quality) q.value = last.quality;
       _paintAspects(api);
@@ -293,7 +323,7 @@ const SPEC = {
 
   progress(refs) {
     const e = engineOf();
-    const first = (rungs(e, _ui.q.value, refs)[0] || {}).label || 'the model';
+    const first = (rowOf(e, refs) || {}).label || 'the model';
     return {
       label: refs ? 'reading ' + refs + (refs === 1 ? ' picture…' : ' pictures…')
                   : 'asking ' + first + '…',
@@ -302,14 +332,17 @@ const SPEC = {
       key: 'mv3-imagen-' + e.id, estimateMs: ETA_MS,
     };
   },
-  askWord: () => 'asking ' + ((rungs(engineOf(), _ui.q.value, 0)[0] || {}).label || 'the model') + '…',
+  askWord: () => 'asking ' + ((rowOf(engineOf(), 0) || {}).label || 'the model') + '…',
   madeWord: (n) => (n > 1 ? 'drawing ' + n + ' pictures…' : 'drawing…'),
 
   async think(text, refs, api) {
     const d = await fetch('/api/mv3/img/think', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engine: engineOf().id, text, refs: refs.length,
+        engine: engineOf().id, text,
+        // The pictures themselves, not how many: the analyst is shown them in the same call
+        // that writes the prompt, so it can say what is in one rather than repeat its number.
+        refs,
         // Only what was said last, and only so "the same but at night" has something to be the
         // same AS. The continuity here is the attachments, not the conversation.
         thread: api.thread.slice(-4).map(m => ({ role: m.role, text: m.text })),
@@ -325,6 +358,10 @@ const SPEC = {
   async submit(payload, api) {
     const body = {
       project: api.project, engine: engineOf().id,
+      // THE AGGREGATOR IS A CHOICE NOW, not the head of a stored order. The server still repairs
+      // an impossible pairing rather than refusing it - a model the chosen one does not carry
+      // goes to the one that does, and says so in the log.
+      provider: _ui.prov.value,
       prompt: payload.prompt, said: payload.text,
       aspect: payload.aspect || _ui.ar, quality: payload.quality || _ui.q.value,
       refs: payload.refs,
