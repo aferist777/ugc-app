@@ -1,0 +1,391 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   MERGE — the picture window: the shared chat shell (js/merge-v3/chatwin.js) and
+   what makes it the picture one (js/merge-v3/imagen.js).
+
+   Its own file rather than more of merge-v3.css, which is already 1700 lines of the
+   page itself: this window is opened from one button, is loaded with the module that
+   draws it, and has nothing to say about the page behind it. Linked from merge-v3.html.
+
+   Brought across from the wip/animate-chat branch, where the window was built and
+   verified, unchanged except for this note.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── The chat windows' shared parts (js/merge-v3/chatwin.js) ─────────────────
+   Pictures and Animate are one window with two specs, so the classes below are the
+   shell's and each window only adds a modifier - .is-pics or .is-anim. */
+
+/* A reference that is a CLIP rather than a picture. Marked, because what a slot holds
+   decides what the model can be given, and a row of identical squares would not be
+   saying which is which. */
+.mv3-ig-att.is-vid{border-color:#6b4fa8}
+.mv3-ig-att.is-vid::after{
+  content:'▶'; position:absolute; left:3px; bottom:2px;
+  font:700 8px/1 var(--font); color:oklch(.99 0 0); text-shadow:0 1px 2px oklch(0 0 0/.7);
+}
+/* Cutting the movement down to a segment - only ever on a clip, so it rides on the cell
+   rather than taking a row of its own. */
+.mv3-ig-att-trim{
+  position:absolute; right:2px; bottom:2px; z-index:2;
+  min-width:15px; height:14px; padding:0 3px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:700 8px/12px var(--font); cursor:pointer;
+}
+.mv3-ig-att-trim:hover{color:var(--ink); border-color:var(--primary)}
+
+/* AN EMPTY PLACE SAYS WHAT GOES IN IT. A model wanting a picture and a clip has two
+   different holes to fill; ten identical plus signs would not be telling anybody that.
+   The spare ones are dead ground - present so the row keeps its height, dimmed so they
+   do not read as an offer. */
+.mv3-ig-att-slot.is-video{border-style:solid; border-color:#6b4fa8; color:#a58ede}
+.mv3-ig-att-slot.is-spare[disabled]{opacity:.25; cursor:default}
+
+/* A clip in the library column. Same tile, with a corner that says it moves. */
+.mv3-ig-card.is-vid::after{
+  content:'▶'; position:absolute; right:4px; bottom:3px;
+  font:700 10px/1 var(--font); color:oklch(.99 0 0); text-shadow:0 1px 3px oklch(0 0 0/.8);
+  pointer-events:none;
+}
+.mv3-ig-peek video{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
+/* The result in a bubble, when the result moves. Controls are left on: a clip is judged by
+   scrubbing it, and hover-to-play alone cannot do that. */
+video.mv3-ig-shot{ width:100%; height:auto; display:block; border-radius:var(--r-sm); background:oklch(.14 0 0) }
+
+
+/* ── The picture window ───────────────────────────────────────────────────────
+   Three columns: what to make them WITH, what was SAID, and everything there is to
+   POINT AT. The middle one is a conversation, because making pictures is iterative and
+   a prompt box starts from nothing every time.
+
+   Colour follows the rest of the page rather than inventing: --primary fills the one
+   action and marks the one selection, --accent stays ink (a heading, the rule down the
+   side of the price), and --danger is worn only by what removes something. */
+.mv3-ig-ov{ z-index:9450 }
+.mv3-ig{
+  display:flex; flex-direction:column;
+  width:min(1320px, 97vw); height:min(820px, 93vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.mv3-ig-head{
+  display:flex; align-items:center; gap:9px; flex:0 0 auto;
+  padding:9px 13px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.mv3-ig-head h3{ margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink) }
+.mv3-ig-head .sp{ flex:1 }
+/* Whose thread this is. Named in the window because everything made here belongs to that
+   project, and a window that does not say so is one you can generate into the wrong
+   project from. */
+.mv3-ig-proj{
+  font:600 10px/1 var(--font); color:var(--muted);
+  padding:4px 7px; border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:var(--surface);
+}
+.mv3-ig-proj b{ color:var(--ink) }
+.mv3-ig-gear{
+  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
+}
+.mv3-ig-gear:hover{ color:var(--ink) }
+.mv3-ig-body{ display:flex; flex:1 1 auto; min-height:0 }
+
+/* ── left: what to make them with ── */
+.mv3-ig-set{
+  flex:0 0 232px; display:flex; flex-direction:column; min-height:0;
+  border-right:1px solid var(--border); background:var(--surface);
+}
+.mv3-ig-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:11px 12px }
+.mv3-ig-row{ display:flex; align-items:center; gap:8px; min-height:26px; padding:2px 0 }
+.mv3-ig-row > label{ flex:0 0 52px; font:600 10.5px/1.3 var(--font); color:var(--muted) }
+.mv3-ig-row select{
+  flex:1 1 auto; min-width:0; height:26px; padding:0 5px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
+}
+/* Who will serve this model, in the order they will be tried. Told, not asked: the choice
+   belongs to the gear, and this line is here so the answer is never a surprise. */
+/* How this model likes to be asked - the half of the choice the price does not cover. */
+.mv3-ig-hint{
+  margin:8px 0 0; padding:5px 7px; border-radius:var(--r-xs);
+  border-left:2px solid var(--accent); background:var(--surface-2);
+  font:600 9.5px/1.5 var(--font); color:var(--muted); cursor:help;
+}
+.mv3-ig-hint:empty{ display:none }
+.mv3-ig-hint b{ color:var(--ink); font-weight:700 }
+.mv3-ig-hint i{ font-style:normal; color:var(--danger) }
+.mv3-ig-via{ margin:6px 0 0; font:600 9.5px/1.5 var(--font); color:var(--muted) }
+.mv3-ig-via b{ color:var(--ink); font-weight:700 }
+.mv3-ig-via i{ font-style:normal; opacity:.7 }
+.mv3-ig-sep{
+  margin:11px 0 6px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--accent); border-bottom:1px solid var(--border-soft); padding-bottom:4px;
+}
+.mv3-ig-ar-row{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px }
+.mv3-ig-ar-b{
+  flex:0 0 auto; padding:4px 7px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted); font:600 10px/1 var(--font);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-ig-ar-b:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft); background:var(--surface) }
+.mv3-ig-ar-b.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.mv3-ig-ar-b .dot{ color:var(--primary) }
+.mv3-ig-ar-b.on .dot{ color:var(--primary-ink); opacity:.7 }
+/* What this will cost, under the choice that decides it - and the price of the FIRST
+   aggregator that will be tried, not the cheapest, which is a price nobody pays. */
+.mv3-ig-cost{
+  display:flex; align-items:baseline; gap:6px; margin:9px 0 0; padding:6px 8px;
+  border:1px solid var(--border); border-left:2px solid var(--accent); border-radius:var(--r-xs);
+  background:var(--surface-2);
+}
+.mv3-ig-cost b{ font:700 13px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
+.mv3-ig-cost span{ font:600 10px/1.3 var(--font); color:var(--muted) }
+.mv3-ig-cost.is-unknown b{ color:var(--muted) }
+.mv3-ig-fall{ margin:5px 0 0; font:600 9.5px/1.4 var(--font); color:var(--muted) }
+.mv3-ig-fall b{ color:var(--ink) }
+/* Under the settings rather than inside them: it belongs to the window, not to whichever
+   column the spec has built, and the spec empties its own host to build it. */
+.mv3-ig-said{
+  flex:0 0 auto; margin:0; padding:8px 12px 10px;
+  font:600 9.5px/1.45 var(--font); color:var(--danger);
+}
+.mv3-ig-said:empty{ display:none }
+
+/* ── middle: the conversation ── */
+.mv3-ig-chat{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg) }
+.mv3-ig-thread{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.mv3-ig-empty{
+  margin:auto; max-width:320px; text-align:center;
+  font:600 11px/1.6 var(--font); color:var(--muted);
+}
+/* A turn. The two sides lean opposite ways and nothing else about them differs - a chat
+   that colours its two voices differently makes the pictures inside it harder to read. */
+.mv3-ig-msg{
+  display:flex; flex-direction:column; gap:7px; max-width:80%;
+  padding:9px 11px; border-radius:var(--r-sm);
+  border:1px solid var(--border); background:var(--surface);
+}
+.mv3-ig-msg.is-user{ align-self:flex-end; background:var(--surface-2) }
+.mv3-ig-msg.is-agent{ align-self:flex-start }
+.mv3-ig-msg.is-busy{ min-width:240px }
+.mv3-ig-text{ font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
+.mv3-ig-note{ font:600 10px/1.4 var(--font); color:var(--muted) }
+.mv3-ig-bad{ font:600 10px/1.5 var(--font); color:var(--danger) }
+
+/* What a message was pointing at, numbered the way the row above the input numbered them -
+   because that is what the words in it refer to. */
+.mv3-ig-msg-refs{ display:flex; flex-wrap:wrap; gap:5px }
+.mv3-ig-msg-ref{
+  position:relative; width:52px; height:52px; border-radius:var(--r-xs); overflow:hidden;
+  border:1px solid var(--border-soft); background:var(--surface-2);
+}
+.mv3-ig-msg-ref img{ width:100%; height:100%; object-fit:cover; display:block }
+.mv3-ig-msg-ref .n,
+.mv3-ig-att .n{
+  position:absolute; top:2px; left:2px; min-width:13px; padding:0 3px; border-radius:2px;
+  background:var(--primary); color:var(--primary-ink);
+  font:700 8.5px/13px var(--font); text-align:center;
+}
+
+.mv3-ig-shot-wrap{ position:relative; display:flex; flex-direction:column; gap:6px }
+/* A THUMBNAIL. A thread of full-size pictures cannot be scrolled - two of them and the words
+   between are off the screen. Hovering shows it properly and clicking opens it over everything,
+   so nothing is lost by keeping it small here. */
+.mv3-ig-shot{
+  width:auto; height:132px; max-width:100%; object-fit:cover;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  align-self:flex-start; cursor:zoom-in;
+}
+.mv3-ig-shot:hover{ border-color:var(--primary) }
+/* The strip the countdown fills. startInlineProgress positions its row absolutely against the
+   nearest positioned ancestor - without this it finds the page and lies across the screen. */
+.mv3-ig-prog{
+  position:relative; height:26px; min-width:220px;
+  border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
+}
+/* Nothing to blur while a picture is being made from words alone - so the frame it will fill
+   IS the target, reserved at the shape that was asked for, which is also the shape the strip
+   has already set aside. */
+.mv3-ig-shot.is-busy{
+  width:min(100%, 132px); height:auto; cursor:default;
+  background:repeating-linear-gradient(135deg,
+    oklch(.27 .02 265) 0 10px, oklch(.24 .02 265) 10px 20px);
+}
+/* Always there. Hiding them until the pointer arrives saved a little quiet and cost the one
+   thing that matters more: knowing, without hunting, what can be done with what just arrived. */
+.mv3-ig-acts{ display:flex; flex-wrap:wrap; gap:5px }
+
+/* The technical half, folded away: brief above, everything underneath. */
+.mv3-ig-more{ display:flex; flex-direction:column; gap:4px }
+.mv3-ig-more-b{
+  align-self:flex-start; padding:0; border:0; background:none; cursor:pointer;
+  font:600 9.5px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
+}
+.mv3-ig-more-b:hover{ color:var(--ink) }
+.mv3-ig-more-body{
+  display:flex; flex-direction:column; gap:2px; padding:6px 8px;
+  border-left:2px solid var(--accent); background:var(--surface-2); border-radius:var(--r-xs);
+}
+.mv3-ig-more-row{ display:flex; gap:8px; font:600 9.5px/1.45 var(--font) }
+.mv3-ig-more-row .k{ flex:0 0 68px; color:var(--muted) }
+.mv3-ig-more-row .v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word }
+
+/* ── the attachment row ── */
+/* Above the input rather than inside it: what is attached is a fact about the NEXT message,
+   and it has to be visible without looking for it. Whatever sits here goes as a reference -
+   that is the whole of the rule, which is why a picture that lands is put here rather than
+   attached invisibly. */
+.mv3-ig-atts{
+  flex:0 0 auto; display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+  /* Bottom padding as well: a picture whose edge touches the message box reads as part of the
+     box, and the row is a statement about the NEXT message rather than a part of it. */
+  padding:9px 12px 9px 12px;
+}
+/* An empty place. Dotted because it is not a control that does something - it is a hole with a
+   shape, which is the only way a row can say "these can be filled" without a sentence. */
+.mv3-ig-att-slot{
+  flex:0 0 auto; width:58px; height:58px; padding:0;
+  border:1px dashed var(--border); border-radius:var(--r-xs);
+  background:transparent; color:var(--border);
+  font:400 18px/56px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-ig-att-slot:hover:not([disabled]){ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-att{
+  position:relative; width:58px; height:58px; border-radius:var(--r-xs); overflow:hidden;
+  border:1px solid var(--primary); background:var(--surface-2);
+}
+.mv3-ig-att img{ width:100%; height:100%; object-fit:cover; display:block }
+.mv3-ig-att .x{
+  position:absolute; top:2px; right:2px; width:15px; height:15px; padding:0;
+  border:0; border-radius:2px; background:oklch(0 0 0 / .6); color:oklch(.98 0 0);
+  font:600 8px/15px var(--font); cursor:pointer;
+}
+.mv3-ig-att .x:hover{ background:var(--danger) }
+.mv3-ig-att-note{ font:600 9.5px/1.4 var(--font); color:var(--muted) }
+
+/* ── the input ── */
+.mv3-ig-bar{
+  flex:0 0 auto; display:flex; align-items:flex-end; gap:7px;
+  padding:10px 12px; border-top:1px solid var(--border); background:var(--surface-2);
+}
+.mv3-ig-clip{
+  flex:0 0 auto; width:30px; height:30px; padding:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 14px/28px var(--font); cursor:pointer;
+}
+.mv3-ig-clip:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
+.mv3-ig-say{
+  flex:1 1 auto; min-width:0; min-height:30px; max-height:140px; padding:7px 9px; resize:none;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--ink); font:500 11.5px/1.5 var(--font);
+}
+.mv3-ig-say::placeholder{ color:var(--muted) }
+.mv3-ig-say.is-bad{ border-color:var(--danger) }
+/* The writer, on or off. Filled when on, because it changes what is sent and that is not a
+   thing to have to remember the state of. */
+.mv3-ig-bar .pen{
+  flex:0 0 auto; width:30px; height:30px; padding:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 13px/28px var(--font);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-ig-bar .pen:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
+.mv3-ig-bar .pen.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
+.mv3-ig-bar .pen[disabled]{ opacity:.45; cursor:default }
+.mv3-ig-bar .n{
+  flex:0 0 auto; height:30px; padding:0 9px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 11px/28px var(--font);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-ig-bar .n:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
+/* Dressed the way .mv3-x-go dresses Render, for the same reason: it is the one action here. */
+.mv3-ig-bar .b{
+  flex:0 0 auto; height:30px; padding:0 16px;
+  border:1px solid var(--primary); border-radius:var(--r-xs);
+  background:var(--primary); color:var(--primary-ink); font:700 11.5px/1 var(--font);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-ig-bar .b:hover:not([disabled]){ filter:brightness(1.1) }
+.mv3-ig-bar .b[disabled], .mv3-ig-bar .n[disabled], .mv3-ig-clip[disabled]{ opacity:.45; cursor:default }
+
+/* ── right: everything there is to point at ──
+   Wide enough for two tiles of about a hundred pixels. Narrower and a 21:9 still is forty
+   pixels tall, which is a colour swatch rather than a picture. */
+.mv3-ig-strip{
+  flex:0 0 238px; display:flex; flex-direction:column; min-height:0;
+  border-left:1px solid var(--border); background:var(--surface);
+}
+.mv3-ig-strip-head{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 10px;
+  border-bottom:1px solid var(--border); background:var(--surface-2);
+  font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+.mv3-ig-strip-head .p{
+  flex:1 1 auto; min-width:0; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.mv3-ig-cat{
+  flex:0 0 auto; margin:8px 8px 0; height:24px; padding:0 5px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 10.5px/22px var(--font); cursor:pointer;
+}
+/* Columns rather than a grid: every tile keeps its OWN shape, and the next one goes into
+   whichever column is currently shorter. A grid would have to give them all one box, and a
+   21:9 in a square box is either letterboxed into a hole or cropped - and cropping a picture
+   is exactly what makes it impossible to judge. */
+.mv3-ig-strip-list{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px;
+  display:flex; gap:7px; align-items:flex-start;
+}
+.mv3-ig-col{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:7px }
+.mv3-ig-card{
+  position:relative; width:100%; min-height:40px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); cursor:pointer; overflow:hidden;
+}
+.mv3-ig-card img{ width:100%; height:100%; object-fit:cover; display:block }
+.mv3-ig-card.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset }
+.mv3-ig-card.is-busy, .mv3-ig-card.is-fail{ display:flex; align-items:center; justify-content:center }
+.mv3-ig-card.is-busy .sp{ font:600 9px/1 var(--font); color:var(--muted) }
+.mv3-ig-card.is-fail{ border-color:var(--danger) }
+.mv3-ig-card.is-fail .sp{ font:600 8.5px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
+.mv3-ig-card.is-dragging{ opacity:.5 }
+.mv3-ig-none{ font:600 10px/1.5 var(--font); color:var(--muted); padding:10px 4px; text-align:center }
+
+/* ── while a picture is being made ────────────────────────────────────────────
+   Everything that would describe a DIFFERENT job goes quiet: the actions on a finished
+   picture, the crosses on the attachments, the empty places that open a file dialog.
+
+   Two things deliberately do NOT: the message box, because a half-written sentence is
+   somebody still thinking, and hovering, because looking changes nothing. That is why the
+   tiles keep their pointer events - pointer-events:none would take the enlargement with
+   it - and their click is refused in script instead. */
+.mv3-ig.is-locked .mv3-ig-acts,
+.mv3-ig.is-locked .mv3-ig-att .x,
+.mv3-ig.is-locked .mv3-ig-att-slot{
+  pointer-events:none; opacity:.4;
+}
+.mv3-ig.is-locked .mv3-ig-card{ cursor:default }
+.mv3-ig.is-locked .mv3-ig-cat{ pointer-events:none; opacity:.5 }
+
+/* Hovering shows the picture larger. A floating panel rather than a slot of its own: the tiles
+   are a hundred pixels wide and the whole point of looking is to judge whether it worked. */
+/* Animate is the other window that opens from inside this one, and it was built for a page
+   with nothing above it - at 9400 it would open BEHIND the thread that opened it. */
+/* Both chat windows sit here; the viewer and the trimmer go over them. */
+.mv3-anim-ov{ z-index:9470 }
+
+/* The library's viewer sits at 9000, which is under this window at 9450 - opening a picture
+   from the thread would put it BEHIND the thread it was opened from. Lifted here rather than in
+   css/lib-viewer.css, because on every other page 9000 is right and nothing is above it. */
+.lib-view-ov{ z-index:9470 }
+
+.mv3-ig-peek{
+  position:fixed; z-index:9460; pointer-events:none;
+  padding:4px; border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface); box-shadow:var(--shadow);
+}
+.mv3-ig-peek img{ display:block; width:100%; height:auto; max-height:calc(100% - 8px); object-fit:contain }
+

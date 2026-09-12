@@ -310,6 +310,12 @@ function _markSubsStale(tl) {
   if (subs && Array.isArray(subs.clips) && subs.clips.length) subs.stale = true;
 }
 
+/** Laying a clip down from somewhere other than a drag - the picture window's "put it on the
+ *  timeline". The SAME function a drop ends in, so a placed clip and a dragged one are shaped
+ *  identically; `scope` is the lane, `at` the second it should start at, `data` the library
+ *  payload { src, thumb, name, libId, dur }. */
+export function placeClip(scope, at, data) { _drop(scope, Math.max(0, +at || 0), data); }
+
 /** Removing a clip from somewhere other than the lane itself - the inspector's Remove
  *  buttons. Through the same door as the X on the clip, so Main closes up behind it there
  *  too; two ways of removing a fragment that left the timeline in two different shapes is
@@ -892,76 +898,85 @@ function _wireLaneDrop(lane) {
     try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch (err) { return; }
     if (!data || !data.src) return;
 
-    const scope = lane.dataset.scope;
     const rect = lane.getBoundingClientRect();
-    const want = Math.max(0, (e.clientX - rect.left) / _zoom());
+    _drop(lane.dataset.scope, Math.max(0, (e.clientX - rect.left) / _zoom()), data);
+  });
+}
 
-    // The clip lands NOW. Waiting for _probeDuration first meant nothing appeared until the
-    // head of the file had been fetched, which over a network is seconds and reads as a
-    // broken editor. The library sends the length it has recorded since the clip was made,
-    // so the usual drop is laid down at its true width with nothing to correct. Only a
-    // source the shelf knows no duration for - a hook, an older record - starts at the
-    // placeholder and is resized once the file answers, and that resize is the reason to
-    // prefer the known value: a clip that changes width after it lands looks like a bug.
-    // A picture is not a film: there is no length in the file to ask for, so it is given
-    // one. Ten seconds - long enough to read, short enough that trimming down is the
-    // common direction. srcDur stays 0, which is what lets it stretch either way without
-    // a source running out; see the maxFromSource note in the trim.
-    const still = isStill({ src: data.src });
-    const known = still ? 0 : (+data.dur || 0);
-    const dur = still ? STILL_DUR : (known > 0 ? known : FALLBACK_DUR);
-    const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+/* A clip laid on a lane: the end of a drag, and also what the picture window calls when it
+   has made something and is asked to put it down. ONE function on purpose - a clip placed by
+   a button and one dragged by hand have to arrive identically shaped, and two places that
+   build a clip are two places that drift apart.
 
-    Store.mutate(tl => {
-      const track = tl.tracks[scope];
-      if (!track) return;
-      // On Main the drop makes ROOM for itself: the sequence opens at the nearest join and
-      // everything from there on moves right by the insert's length. Anywhere else in the
-      // read there is no room to be had - the fragments are already end to end - so a drop
-      // that did not push would either land on top of a fragment or be refused outright.
-      const at = (scope === 'seg') ? _nearestJoin(track.clips, want) : 0;
-      if (scope === 'seg') _ripple(tl, at, dur);
-      track.clips.push({
-        id,
-        src: data.src, thumb: data.thumb || null, name: data.name || '',
-        libId: data.libId || null,
-        start: scope === 'seg' ? at
-             : _canOverlap(scope) ? Math.round(Math.max(0, want) * 100) / 100
-                                  : _freeStart(track.clips, want, dur),
-        dur: Math.round(dur * 100) / 100,
-        srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
-        trimIn: 0, trimOut: 0, speed: 1,
-        // Explicit, and its own from the moment it lands. Following the track was tried and
-        // taken out again: what it gave was a master slider, and what it cost was knowing at a
-        // glance what any one clip is set to. Levels here are set per clip, by hand.
-        volume: scope === 'seg' ? 1 : 0,
-        reversed: false,
-        transition: null, animation: null, filter: null,
-      });
+   `data` is the library payload: { src, thumb, name, libId, dur }. `want` is where it should
+   land, in seconds; what actually happens to that depends on the lane, below. */
+function _drop(scope, want, data) {
+  if (!scope || !data || !data.src) return;
+  // The clip lands NOW. Waiting for _probeDuration first meant nothing appeared until the
+  // head of the file had been fetched, which over a network is seconds and reads as a
+  // broken editor. The library sends the length it has recorded since the clip was made,
+  // so the usual drop is laid down at its true width with nothing to correct. Only a
+  // source the shelf knows no duration for - a hook, an older record - starts at the
+  // placeholder and is resized once the file answers, and that resize is the reason to
+  // prefer the known value: a clip that changes width after it lands looks like a bug.
+  // A picture is not a film: there is no length in the file to ask for, so it is given
+  // one. Ten seconds - long enough to read, short enough that trimming down is the
+  // common direction. srcDur stays 0, which is what lets it stretch either way without
+  // a source running out; see the maxFromSource note in the trim.
+  const still = isStill({ src: data.src });
+  const known = still ? 0 : (+data.dur || 0);
+  const dur = still ? STILL_DUR : (known > 0 ? known : FALLBACK_DUR);
+  const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+
+  Store.mutate(tl => {
+    const track = tl.tracks[scope];
+    if (!track) return;
+    // On Main the drop makes ROOM for itself: the sequence opens at the nearest join and
+    // everything from there on moves right by the insert's length. Anywhere else in the
+    // read there is no room to be had - the fragments are already end to end - so a drop
+    // that did not push would either land on top of a fragment or be refused outright.
+    const at = (scope === 'seg') ? _nearestJoin(track.clips, want) : 0;
+    if (scope === 'seg') _ripple(tl, at, dur);
+    track.clips.push({
+      id,
+      src: data.src, thumb: data.thumb || null, name: data.name || '',
+      libId: data.libId || null,
+      start: scope === 'seg' ? at
+           : _canOverlap(scope) ? Math.round(Math.max(0, want) * 100) / 100
+                                : _freeStart(track.clips, want, dur),
+      dur: Math.round(dur * 100) / 100,
+      srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
+      trimIn: 0, trimOut: 0, speed: 1,
+      // Explicit, and its own from the moment it lands. Following the track was tried and
+      // taken out again: what it gave was a master slider, and what it cost was knowing at a
+      // glance what any one clip is set to. Levels here are set per clip, by hand.
+      volume: scope === 'seg' ? 1 : 0,
+      reversed: false,
+      transition: null, animation: null, filter: null,
     });
+  });
 
-    // Nothing more to do when the length came with the clip - or when there was never a
-    // length to come. _probeDuration asks a <video> element, which a PNG answers with an
-    // error, so running it for a still is a wasted round trip with no answer at the end.
-    if (known > 0 || still) return;
+  // Nothing more to do when the length came with the clip - or when there was never a
+  // length to come. _probeDuration asks a <video> element, which a PNG answers with an
+  // error, so running it for a still is a wasted round trip with no answer at the end.
+  if (known > 0 || still) return;
 
-    // Otherwise: the correction, once the file has told us how long it is. It only writes
-    // into a clip still exactly as it was dropped - srcDur unknown, length still the
-    // placeholder. Trim or resize it in those few hundred milliseconds and that is an edit;
-    // overwriting it here would undo a deliberate act with a stale answer.
-    _probeDuration(data.src).then(srcDur => {
-      if (!(srcDur > 0)) return;
-      Store.mutate(tl => {
-        const tr = tl.tracks[scope];
-        const c = tr && tr.clips.find(x => x.id === id);
-        if (!c || c.srcDur) return;
-        const was = c.dur;
-        c.srcDur = Math.round(srcDur * 100) / 100;
-        if (c.dur === Math.round(dur * 100) / 100) c.dur = c.srcDur;
-        // Main opened a gap the size of the placeholder. The real length has to be paid for
-        // out of the same sequence, or the insert would grow into the fragment after it.
-        if (scope === 'seg') _ripple(tl, c.start + was, c.dur - was);
-      });
+  // Otherwise: the correction, once the file has told us how long it is. It only writes
+  // into a clip still exactly as it was dropped - srcDur unknown, length still the
+  // placeholder. Trim or resize it in those few hundred milliseconds and that is an edit;
+  // overwriting it here would undo a deliberate act with a stale answer.
+  _probeDuration(data.src).then(srcDur => {
+    if (!(srcDur > 0)) return;
+    Store.mutate(tl => {
+      const tr = tl.tracks[scope];
+      const c = tr && tr.clips.find(x => x.id === id);
+      if (!c || c.srcDur) return;
+      const was = c.dur;
+      c.srcDur = Math.round(srcDur * 100) / 100;
+      if (c.dur === Math.round(dur * 100) / 100) c.dur = c.srcDur;
+      // Main opened a gap the size of the placeholder. The real length has to be paid for
+      // out of the same sequence, or the insert would grow into the fragment after it.
+      if (scope === 'seg') _ripple(tl, c.start + was, c.dur - was);
     });
   });
 }

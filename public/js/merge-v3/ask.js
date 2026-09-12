@@ -40,7 +40,12 @@ export const short = (s, n = 20) => {
  * @param sub     what else goes with it, or '' when nothing does
  * @param onYes   called only on Yes
  */
-export function askDelete(anchor, text, sub, onYes) {
+/**
+ * The panel itself. Two things are asked with it - a question with an answer, and a note with
+ * nothing to answer - and they differ only in the buttons, so they share everything else:
+ * where it opens, what dismisses it, and which keys it swallows on the way past.
+ */
+function _panel(anchor, text, sub, buttons) {
   closeAsk();
 
   const el = document.createElement('div');
@@ -56,16 +61,26 @@ export function askDelete(anchor, text, sub, onYes) {
     el.appendChild(s);
   }
 
-  const yes = document.createElement('button');
-  yes.type = 'button'; yes.className = 'mv3-ask-b is-yes'; yes.textContent = 'Yes';
-  const no = document.createElement('button');
-  no.type = 'button'; no.className = 'mv3-ask-b'; no.textContent = 'No';
   // With a consequence line the buttons need a row of their own; without one they sit in the
   // strip beside the question exactly as they do on the other timeline. `display:contents`
   // makes the wrapper vanish in that case, so there is one DOM shape and two layouts.
   const row = document.createElement('span');
   row.className = 'mv3-ask-r';
-  row.append(yes, no);
+  const made = buttons.map(b => {
+    const el2 = document.createElement('button');
+    el2.type = 'button';
+    el2.className = 'mv3-ask-b' + (b.kind === 'yes' ? ' is-yes' : '');
+    el2.textContent = b.label;
+    // On mousedown, and swallowed: a click here must not reach the lane underneath, where it
+    // would start a drag or a selection band on the way to answering a question.
+    el2.addEventListener('mousedown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      closeAsk();
+      if (b.on) b.on();
+    });
+    row.appendChild(el2);
+    return el2;
+  });
   el.appendChild(row);
 
   document.body.appendChild(el);
@@ -91,13 +106,22 @@ export function askDelete(anchor, text, sub, onYes) {
   document.addEventListener('mousedown', away, true);
   document.addEventListener('keydown', key, true);
   window.addEventListener('scroll', closeAsk, true);
+  return made;
+}
 
-  // On mousedown, and swallowed: a click here must not reach the lane underneath, where it
-  // would start a drag or a selection band on the way to answering a question.
-  yes.addEventListener('mousedown', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    closeAsk();
-    onYes();
-  });
-  no.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); closeAsk(); });
+export function askDelete(anchor, text, sub, onYes) {
+  _panel(anchor, text, sub, [
+    { label: 'Yes', kind: 'yes', on: onYes },
+    { label: 'No' },
+  ]);
+}
+
+/**
+ * Something to say rather than something to ask. One button, and it only closes.
+ *
+ * Its own function rather than askDelete with an empty handler: a Yes/No offers a choice, and
+ * offering a choice where there is none is how a button ends up meaning nothing.
+ */
+export function note(anchor, text, sub) {
+  _panel(anchor, text, sub, [{ label: 'Got it' }]);
 }

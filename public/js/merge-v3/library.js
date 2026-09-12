@@ -178,14 +178,88 @@ function _plusTile() {
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
   b.textContent = '+';
-  b.title = 'Add ' + (_isImages() ? 'pictures' : 'video files') + ' to ' + _tab
-    + ' - click, or drop files anywhere on this panel';
+  b.title = _isImages()
+    ? 'Add a picture to images - from this computer, or made here'
+    : 'Add video files to ' + _tab + ' - click, or drop files anywhere on this panel';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
-    const inp = document.getElementById('mv3-lib-file');
-    if (inp) inp.click();
+    // Pictures can be MADE as well as found, so on that shelf the plus asks which. On the
+    // others there is one answer, and a menu with one item is a click nobody asked for.
+    if (_isImages()) _plusMenu(b);
+    else _pickFiles();
   });
   return b;
+}
+
+function _pickFiles() {
+  const inp = document.getElementById('mv3-lib-file');
+  if (inp) inp.click();
+}
+
+// ── The two ways a picture gets onto the shelf ──────────────────────────────
+// A small menu under the plus rather than a second tile beside it: they are two answers to
+// one question - where is this picture coming from - and two tiles would read as two
+// different things to add.
+let _plus = null;
+
+function _closePlus() {
+  if (!_plus) return;
+  _plus.el.remove();
+  document.removeEventListener('mousedown', _plus.away, true);
+  document.removeEventListener('keydown', _plus.key, true);
+  window.removeEventListener('scroll', _closePlus, true);
+  _plus = null;
+}
+
+function _plusMenu(anchor) {
+  if (_plus) { _closePlus(); return; }               // the same press closes it again
+
+  const el = document.createElement('div');
+  el.className = 'mv3-plus-menu';
+
+  const item = (label, sub, on) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-plus-item';
+    const t = document.createElement('span');
+    t.textContent = label;
+    b.appendChild(t);
+    if (sub) {
+      const s = document.createElement('small');
+      s.textContent = sub;
+      b.appendChild(s);
+    }
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closePlus(); on(); });
+    el.appendChild(b);
+  };
+
+  item('load from local', 'pictures from this computer', _pickFiles);
+  // Loaded on demand: the picture window is a thousand lines and a stylesheet, and most
+  // visits to this panel never open it.
+  item('generate', 'make one with a model', async () => {
+    try {
+      const M = await import('./imagen.js');
+      await M.openImagen();
+    } catch (err) {
+      _status('Could not open the picture window: ' + ((err && err.message) || err), true);
+    }
+  });
+
+  // Fixed to the viewport and parked on the body: the panel scrolls and clips its own
+  // children, and the grid is the thing being scrolled.
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, r.left))) + 'px';
+  const below = r.bottom + 4;
+  el.style.top = Math.round(below + h <= window.innerHeight - 6 ? below : Math.max(6, r.top - h - 4)) + 'px';
+
+  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closePlus(); };
+  const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); _closePlus(); } };
+  _plus = { el, away, key };
+  document.addEventListener('mousedown', away, true);
+  document.addEventListener('keydown', key, true);
+  window.addEventListener('scroll', _closePlus, true);
 }
 
 function _paint() {
