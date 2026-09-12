@@ -121,6 +121,26 @@
 }
 .mv3-pull-x:hover:not([disabled]){background:oklch(.42 .16 22 / .2); color:var(--danger)}
 .mv3-pull-note{padding:7px 9px; font:400 10.5px/1.4 var(--font); color:var(--muted)}
+/* The menu's one filter: the scenario this project came from on the left, the way out of it
+   on the right. Sticky like the footer - with the list scrolled, "which scenario am I
+   looking at" is exactly the question the header answers. */
+.mv3-pull-head{
+  position:sticky; top:-4px; z-index:1;
+  display:flex; align-items:center; gap:10px; padding:5px 8px 6px; margin-bottom:2px;
+  background:var(--surface); border-bottom:1px solid var(--border-soft);
+}
+.mv3-pull-scen{
+  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font:700 9.5px/1.3 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
+}
+.mv3-pull-all{
+  flex:0 0 auto; display:flex; align-items:center; gap:4px; cursor:pointer;
+  font:600 10px/1 var(--font); color:var(--muted); white-space:nowrap;
+}
+.mv3-pull-all input{margin:0; cursor:pointer}
+/* Nothing else to reveal: still there, so the list does not change shape between projects. */
+.mv3-pull-all.is-off{opacity:.4; cursor:default}
+.mv3-pull-all.is-off input{cursor:default}
 /* Always the last thing in the panel, and separated from the list because it acts on THIS
    project while every row above acts on another one. The panel scrolls; this does not go
    with it - reaching Save should never mean scrolling past ten projects. */

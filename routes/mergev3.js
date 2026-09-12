@@ -700,10 +700,27 @@ function _sourceTracks(cur, key) {
   return { tracks: (t && t.tracks) || {}, frozen: false, at: t ? t.updatedAt : null };
 }
 
-router.get('/mv3/overlays', (_req, res) => {
+/* WHICH SCENARIO EACH ARRANGEMENT BELONGS TO.
+   A birol is cut against a particular script, so an arrangement built for another scenario
+   is timed against speech this project never says. The menu therefore opens on the projects
+   that came from the SAME scenario - usually the earlier sends of this very cut, sv3_<id>_2
+   and _3 - and keeps the rest behind a tick. Everything is still offered; it is the default
+   that changes.
+
+   `?for=<key>` names the project the menu was opened from, and the answer says which
+   scenario that is, so the browser has something to filter by without knowing any of the
+   rules below. _scenBehind is the same resolver the render window uses (key, then the copy
+   chain, then the title), and it is given the scenarios ONCE: left to itself it reads them
+   off disk per call, which over a list this size is one file read per row. */
+router.get('/mv3/overlays', (req, res) => {
   try {
     const cur = _read();
     const hidden = new Set(Array.isArray(cur.hidden) ? cur.hidden : []);
+    const scens = SCEN3.loadProjects() || [];
+    const scenOf = (key) => {
+      const hit = _scenBehind(cur.timelines, key, scens);
+      return hit ? { id: String(hit.p.id), name: String(hit.p.name || hit.p.title || '') } : null;
+    };
     const list = Object.keys(cur.timelines).map(key => {
       const t = cur.timelines[key];
       const src = _sourceTracks(cur, key);
@@ -717,8 +734,12 @@ router.get('/mv3/overlays', (_req, res) => {
     })
       // Only projects that actually have an arrangement to give, and only ones not hidden.
       .filter(x => x.total > 0 && !hidden.has(x.key))
-      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-    res.json({ success: true, list });
+      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+      // Resolved AFTER the filter, so nothing is worked out for a row nobody will see.
+      .map(x => Object.assign(x, { scen: scenOf(x.key) }));
+    const forKey = String(req.query.for || '');
+    const on = forKey ? scenOf(forKey) : null;
+    res.json({ success: true, list, for: on ? { key: forKey, id: on.id, name: on.name } : null });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1107,8 +1128,10 @@ const _titleBase = (s) => String(s || '')
   .replace(/\s*·\s*stills$/i, '')
   .trim().toLowerCase();
 
-function _scenBehind(timelines, key) {
-  const all = SCEN3.loadProjects() || [];
+// `loaded` is the scenarios, for a caller resolving a whole list at once: without it every
+// call reads them off disk again.
+function _scenBehind(timelines, key, loaded) {
+  const all = loaded || SCEN3.loadProjects() || [];
   const byId = (id) => all.find(x => String(x.id) === String(id)) || null;
   const seen = new Set();
   let k = String(key || '');

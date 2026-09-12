@@ -27,6 +27,20 @@ const TRACK_FIELDS = ['volume', 'speed', 'transition', 'animation', 'filter'];
 
 let _panel = null;
 
+// WHAT THE MENU OPENS ON. A birol is cut against a particular script, so an arrangement
+// from another scenario is timed against speech this project never says - and on real data
+// two thirds of the list is exactly that. So the menu opens on the projects that came from
+// the same scenario, which are usually the earlier sends of this very cut, and the tick in
+// the header gives back the rest. Nothing is removed from the list; only the default view.
+//
+// The list and the scenario come from the server together (see /api/mv3/overlays), and are
+// kept here so the tick re-draws from what is already in hand instead of asking again. The
+// tick resets every time the menu is opened: "this scenario" is the answer that is right
+// almost always, and a preference remembered from last week would quietly stop being one.
+let _list = [];
+let _for = null;
+let _showAll = false;
+
 function _close() {
   if (!_panel) return;
   _panel.remove();
@@ -75,26 +89,75 @@ async function _open() {
   document.addEventListener('mousedown', _outside, true);
   document.addEventListener('keydown', _esc);
 
-  let list = [];
+  const here = Store.key();
+  _list = []; _for = null; _showAll = false;
   try {
-    const d = await fetch('/api/mv3/overlays').then(x => x.json());
-    list = (d && d.list) || [];
+    // `for` is the open project, so the answer can say which scenario this menu belongs to.
+    const d = await fetch('/api/mv3/overlays?for=' + encodeURIComponent(here || '')).then(x => x.json());
+    // The open project is not offered: pulling its own arrangement into itself does nothing
+    // except cost an undo step.
+    _list = ((d && d.list) || []).filter(x => x.key !== here);
+    _for = (d && d.for) || null;
   } catch (e) {
     box.textContent = '';
     box.appendChild(_row(null, e.message));
     return;
   }
-  const here = Store.key();
-  // The open project is not offered: pulling its own arrangement into itself does nothing
-  // except cost an undo step.
-  list = list.filter(x => x.key !== here);
+  _paint(box);
+}
+
+// Drawn from _list every time, so the tick costs a redraw and not a request.
+function _paint(box) {
+  const mine = _for ? _list.filter(x => x.scen && x.scen.id === _for.id) : _list;
+  const shown = (_showAll || !_for) ? _list : mine;
+  const elsewhere = _list.length - mine.length;
+
   box.textContent = '';
-  if (!list.length) box.appendChild(_row(null, 'No other project has overlays yet'));
-  else for (const p of list) box.appendChild(_entry(p));
+  if (_for) box.appendChild(_head(box, elsewhere));
+  else if (_list.length) {
+    // No scenario behind this project - a blank one, or a cut assembled by hand. There is
+    // nothing to filter BY, so everything is listed and the reason is said out loud rather
+    // than left looking like the filter failed.
+    box.appendChild(_row(null, 'This project came from no scenario, so every arrangement is listed.'));
+  }
+
+  if (!_list.length) box.appendChild(_row(null, 'No other project has overlays yet'));
+  else if (!shown.length) box.appendChild(_row(null, 'Nothing from this scenario yet - tick "show all" for the rest.'));
+  else for (const p of shown) box.appendChild(_entry(p));
+
   // The footer does not belong to the list and does not depend on it: saving THIS
   // project's arrangement is exactly what you do when the list is empty and you would
   // rather it were not. So it is always the last thing in the panel.
-  box.appendChild(_saveFooter(here));
+  box.appendChild(_saveFooter(Store.key()));
+}
+
+// Which scenario the list is showing, and the way out of it.
+function _head(box, elsewhere) {
+  const h = document.createElement('div');
+  h.className = 'mv3-pull-head';
+
+  const name = document.createElement('span');
+  name.className = 'mv3-pull-scen';
+  name.textContent = _for.name || 'this scenario';
+  name.title = 'The scenario this project came from. Its arrangements are the ones timed '
+             + 'against the same script.';
+
+  const lab = document.createElement('label');
+  lab.className = 'mv3-pull-all' + (elsewhere ? '' : ' is-off');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = _showAll;
+  cb.disabled = !elsewhere;
+  cb.addEventListener('change', () => { _showAll = cb.checked; _paint(box); });
+  lab.appendChild(cb);
+  lab.appendChild(document.createTextNode('show all' + (elsewhere ? ' (' + elsewhere + ')' : '')));
+  lab.title = elsewhere
+    ? elsewhere + ' arrangement' + (elsewhere === 1 ? '' : 's') + ' from other scenarios, hidden'
+    : 'Every arrangement there is belongs to this scenario';
+
+  h.appendChild(name);
+  h.appendChild(lab);
+  return h;
 }
 
 // Pin this project's overlays, deliberately. This used to happen by itself every time a
