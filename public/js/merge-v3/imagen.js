@@ -312,11 +312,16 @@ const SPEC = {
     _paintEngines(api);
   },
 
-  // One kind, and how many of it depends on the pairing that will actually serve the job.
+  // One kind, and how many of it is the PAIRING's business rather than the engine's: kie takes
+  // five pictures for grok and Replicate takes one, and the row that will run is the one whose
+  // number has to be on screen. Five is the ceiling whatever it says (see MAX_ATTS); a row that
+  // takes fewer shows fewer, because an empty place that cannot be filled is a lie.
   slots(api) {
     const e = _table.engines.find(x => x.id === (_ui && _ui.eng.value)) || _table.engines[0];
-    const most = Math.max(1, ...(e.rows || []).filter(r => r.i2i).map(r => r.maxRefs || 1));
-    return [{ kind: 'image', min: 0, max: most, accept: 'image/*', label: 'a picture to work from' }];
+    const rows = (e.rows || []).filter(r => r.i2i);
+    const mine = rows.find(r => r.provider === (_ui && _ui.prov && _ui.prov.value));
+    const most = (mine ? mine.maxRefs : Math.max(1, ...rows.map(r => r.maxRefs || 1))) || 0;
+    return [{ kind: 'image', min: 0, max: Math.min(5, most), accept: 'image/*', label: 'a picture to work from' }];
   },
 
   aspect: () => (_ui ? _ui.ar : '9:16'),
@@ -333,6 +338,11 @@ const SPEC = {
     };
   },
   askWord: () => 'asking ' + ((rowOf(engineOf(), 0) || {}).label || 'the model') + '…',
+
+  // For the step log: WHO is being asked, and HOW MANY pictures were asked of them. Both are
+  // the window's own facts, but only this file knows where they are kept.
+  who: (api) => (rowOf(engineOf(), api.atts.length) || {}).label || 'the model',
+  count: () => attempts(),
   madeWord: (n) => (n > 1 ? 'drawing ' + n + ' pictures…' : 'drawing…'),
 
   async think(text, refs, api) {

@@ -51,10 +51,12 @@ import * as Store from './store.js';
 
 export const POLL_MS = 4000;
 
-// Ten, and the row shows all ten as empty places from the start. A row that grows as it is
-// filled never TELLS anybody it can be filled - and the whole point of it standing there empty
-// is that attaching is discoverable without being explained.
-const MAX_ATTS = 10;
+// FIVE, and the same five for every model and for the analyst that reads them. Some rows would
+// take far more - kie's gpt model counts to sixteen - but a reference row is a thing a person
+// fills by hand and then has to describe in words; past five the describing is the work. A row
+// that takes FEWER than five shows only what it takes, because an empty place that cannot be
+// filled is a promise the model will not keep.
+const MAX_ATTS = 5;
 
 export function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -97,6 +99,11 @@ export const current = () => _open;
 // ── Hover peek ──────────────────────────────────────────────────────────────
 let _peek = null;
 
+// ONE PLACE, ALWAYS THE SAME PLACE: the top right of the window, standing on the reference row.
+// It used to open beside whatever was hovered, which put it over the conversation and moved it
+// every time - so the eye had to find it again on each hover, and on the reference row it
+// covered the very pictures being compared. A fixed corner is learnt once: look up and right,
+// the big version is there.
 export function peekShow(src, anchor) {
   peekHide();
   const box = el('div', 'mv3-ig-peek');
@@ -108,18 +115,73 @@ export function peekShow(src, anchor) {
   box.appendChild(m);
   document.body.appendChild(box);
   _peek = box;
+
+  // Measured from the reference row, which is the bottom edge it stands on, and from the chat
+  // column, which is the right edge it lines up with. Falls back to the hovered thing if the
+  // window is not open - the strip's own tiles use this too, and nothing else knows the shape.
+  const row = (_open && _open.atts_) ? _open.atts_.getBoundingClientRect() : null;
+  const col = (_open && _open.chat) ? _open.chat.getBoundingClientRect() : null;
   const r = anchor.getBoundingClientRect();
-  // To the left of what is hovered, which for the strip is the only side with room, and clamped
-  // so something near the bottom does not open off the screen.
-  const w = 400, h = Math.min(520, window.innerHeight - 40);
+  const w = Math.min(400, (col ? col.width : 400) - 24);
+  const bottom = row ? row.top - 10 : r.top - 10;
+  const h = Math.max(120, Math.min(520, bottom - 16));
   box.style.width = w + 'px';
   box.style.maxHeight = h + 'px';
-  box.style.left = Math.max(8, r.left - w - 12) + 'px';
-  box.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, r.top - 40)) + 'px';
+  box.style.left = Math.round(Math.max(8, (col ? col.right : r.right) - w - 12)) + 'px';
+  // Bottom rather than top: it grows upward from the row it stands on, so a tall picture and a
+  // wide one open in the same place instead of the tall one pushing itself off the screen.
+  box.style.bottom = Math.round(Math.max(8, window.innerHeight - bottom)) + 'px';
+  box.style.top = 'auto';
 }
 
 export function peekHide() {
   if (_peek) { try { _peek.remove(); } catch (e) {} _peek = null; }
+}
+
+// ── The library column's width ──────────────────────────────────────────────
+// Narrow by default: this column is a place to point at rather than to browse, and the words
+// are the work. How narrow is a preference, so it is dragged and remembered - and a double
+// click hands it back, the same manners as the sashes on the page behind this window.
+const LS_STRIP = 'mv3-ig-strip-w';
+const STRIP_DEF = 150, STRIP_MIN = 110, STRIP_MAX = 460;
+
+const _stripW = () => {
+  let v = 0;
+  try { v = parseInt(localStorage.getItem(LS_STRIP) || '', 10); } catch (e) {}
+  return Math.max(STRIP_MIN, Math.min(STRIP_MAX, v || STRIP_DEF));
+};
+
+function _wireStripSash(sash, stripBox) {
+  const apply = (w) => {
+    const v = Math.max(STRIP_MIN, Math.min(STRIP_MAX, Math.round(w)));
+    stripBox.style.flexBasis = v + 'px';
+    // The masonry decides its column count from the width it is given, so it is redrawn as the
+    // edge moves rather than left one column wide until something else repaints it.
+    _paintStrip();
+    return v;
+  };
+  apply(_stripW());
+  sash.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const from = e.clientX;
+    const base = stripBox.getBoundingClientRect().width;
+    document.body.classList.add('mv3-resize-v');
+    // Dragging LEFT makes it bigger - the column is on the right, so its edge moves the other
+    // way from the pointer.
+    const move = (ev) => apply(base - (ev.clientX - from));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-v');
+      try { localStorage.setItem(LS_STRIP, String(Math.round(stripBox.getBoundingClientRect().width))); } catch (err) {}
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => {
+    apply(STRIP_DEF);
+    try { localStorage.setItem(LS_STRIP, String(STRIP_DEF)); } catch (e) {}
+  });
 }
 
 // ── The lock ────────────────────────────────────────────────────────────────
@@ -264,6 +326,14 @@ function _atEnd() {
   return t.scrollTop + t.clientHeight >= t.scrollHeight - 40;
 }
 
+// The thread follows the work while it is at the end, and leaves somebody who has scrolled up
+// to read where they are.
+function _scrollThread() {
+  if (!_open) return;
+  const t = _open.thread_;
+  if (_atEnd()) t.scrollTop = t.scrollHeight;
+}
+
 function _paintThread() {
   if (!_open) return;
   const host = _open.thread_;
@@ -307,25 +377,41 @@ function _bubble(m) {
     b.appendChild(row);
   }
 
-  const g = m.gen;
-  if (g) {
-    if (_open.spec.done(g)) {
-      const fig = el('div', 'mv3-ig-shot-wrap');
-      const node = _open.spec.result(g, _api());
-      if (node) fig.appendChild(node);
-      const acts = el('div', 'mv3-ig-acts');
-      for (const btn of _open.spec.acts(g, _api())) acts.appendChild(btn);
-      fig.appendChild(acts);
-      b.appendChild(fig);
-    } else if (_open.spec.pending(g)) {
-      const ghost = el('div', 'mv3-ig-shot is-busy');
-      ghost.style.aspectRatio = String(g.aspect || '9:16').replace(':', '/');
-      b.appendChild(ghost);
-      b.appendChild(el('div', 'mv3-ig-note', _open.spec.waitWord || 'still working on this one…'));
-    } else {
-      b.appendChild(el('div', 'mv3-ig-bad', g.error || 'nothing came back'));
+  // ONE TURN, EVERY PICTURE IT SPEAKS FOR. Asking for three at once is one answer; three turns
+  // for it is a thread nobody can read back. They are laid side by side, each in whatever state
+  // it is actually in - so one back and one still drawing is one bubble showing both, rather
+  // than a picture here and a cloud somewhere else.
+  const gens = (m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []);
+  if (gens.length) {
+    const many = gens.length > 1;
+    const wrap = el('div', 'mv3-ig-shots' + (many ? ' is-many' : ''));
+    for (const g of gens) {
+      if (_open.spec.done(g)) {
+        const fig = el('div', 'mv3-ig-shot-wrap');
+        const node = _open.spec.result(g, _api());
+        if (node) fig.appendChild(node);
+        const acts = el('div', 'mv3-ig-acts');
+        for (const btn of _open.spec.acts(g, _api())) acts.appendChild(btn);
+        fig.appendChild(acts);
+        wrap.appendChild(fig);
+      } else if (_open.spec.pending(g)) {
+        const cell = el('div', 'mv3-ig-shot-wrap');
+        const ghost = el('div', 'mv3-ig-shot is-busy');
+        ghost.style.aspectRatio = String(g.aspect || '9:16').replace(':', '/');
+        cell.appendChild(ghost);
+        cell.appendChild(el('div', 'mv3-ig-note', _open.spec.waitWord || 'still working on this one…'));
+        wrap.appendChild(cell);
+      } else {
+        const cell = el('div', 'mv3-ig-shot-wrap');
+        cell.appendChild(el('div', 'mv3-ig-bad', g.error || 'nothing came back'));
+        wrap.appendChild(cell);
+      }
     }
-    b.appendChild(_facts(m, g));
+    b.appendChild(wrap);
+    // The technical half belongs to the order rather than to each picture: they were all made
+    // from the same prompt by the same pairing, and three identical folds would say so twice
+    // too often.
+    b.appendChild(_facts(m, gens[0]));
   }
   return b;
 }
@@ -397,6 +483,77 @@ async function _ensureProject() {
   return true;
 }
 
+// ── The work, said step by step ─────────────────────────────────────────────
+// A picture takes three separate things happening at three different places - the analyst reads
+// the message and the references, the aggregator is asked, the model draws - and each of them
+// can be slow or can fail on its own. One spinner over the lot says only "something is
+// happening", and when it stops there is nothing to point at.
+//
+// So each step gets a line, and each line carries its own state: turning while it runs, ticked
+// when it is done with what it actually did, red with the reason when it is not. A failed line
+// keeps a Retry beside it ONLY when trying again could plausibly end differently - see _canRetry.
+function _stepsBox(parent) {
+  const box = el('div', 'mv3-ig-steps');
+  parent.appendChild(box);
+  return {
+    add(text) {
+      const row = el('div', 'mv3-ig-step is-run');
+      const mark = el('i');                    // the turning thing, or the tick, or the cross
+      const label = el('span', null, text);
+      row.appendChild(mark);
+      row.appendChild(label);
+      box.appendChild(row);
+      _scrollThread();
+      const h = {
+        say(t) { label.textContent = t; _scrollThread(); return h; },
+        done(t) {
+          row.className = 'mv3-ig-step is-done';
+          if (t) label.textContent = t;
+          _scrollThread();
+          return h;
+        },
+        // `retry` is a function, or nothing when trying again would only cost the wait.
+        fail(t, retry) {
+          row.className = 'mv3-ig-step is-bad';
+          label.textContent = t;
+          if (retry) {
+            const b = el('button', 'mv3-ig-step-retry', 'Retry');
+            b.type = 'button';
+            b.title = 'Try this step again. What has already been done - the prompt, and any '
+                    + 'picture that did arrive - is kept.';
+            b.addEventListener('click', () => { b.disabled = true; retry(); });
+            row.appendChild(b);
+          }
+          _scrollThread();
+          return h;
+        },
+      };
+      return h;
+    },
+  };
+}
+
+// WHETHER TRYING AGAIN COULD END DIFFERENTLY, which is not the same as whether it failed.
+//
+// Worth retrying: the aggregator had no capacity, the gateway timed out, the connection broke,
+// our own host could not be read. All of those are about the weather.
+//
+// Not worth retrying: the model refused the prompt or the picture, a field was wrong, the key is
+// not valid. Those will refuse identically for as long as nothing is changed, and a Retry
+// against them is a button that spends a minute to say the same thing twice.
+const RETRYABLE = [
+  /no available user account/i, /timeout/i, /timed out/i, /\b5\d\d\b/, /temporar/i,
+  /capacity/i, /overload/i, /rate limit/i, /too many requests/i, /try again/i,
+  /connection/i, /socket/i, /network/i, /download/i, /unreachable/i, /gateway/i,
+];
+const NEVER = [/refus/i, /policy/i, /moderat/i, /safety/i, /invalid/i, /not supported/i,
+               /unauthor/i, /forbidden/i, /api key/i, /required/i];
+function _canRetry(reason) {
+  const s = String(reason || '');
+  if (NEVER.some(re => re.test(s))) return false;
+  return RETRYABLE.some(re => re.test(s));
+}
+
 // ── Saying something ────────────────────────────────────────────────────────
 // THE CHOREOGRAPHY, and the reason this file exists. Every line of it is the same for a picture
 // and for a clip; the three places they differ are calls into the spec.
@@ -441,10 +598,12 @@ async function _send() {
   await _loadThread();
 
   // ── The waiting, shown as what it actually is ────────────────────────────
-  // ONE bubble that rewrites its own line as the work moves, rather than a spinner cycling
-  // captions on a timer. Every line below is a state this window is genuinely in, which is what
-  // makes it worth showing: when something hangs, the line it is stuck on is the diagnosis.
+  // ONE bubble for the whole order, with a line per step inside it. Every line below is a state
+  // this window is genuinely in, which is what makes it worth showing: when something hangs, the
+  // line it is stuck on is the diagnosis, and when something fails, the line it failed on is
+  // where the Retry goes.
   const busy = el('div', 'mv3-ig-msg is-agent is-busy');
+  const steps = _stepsBox(busy);
   const ghost = el('div', 'mv3-ig-shot is-busy');
   ghost.style.aspectRatio = String(_open.spec.aspect(api) || '9:16').replace(':', '/');
   busy.appendChild(ghost);
@@ -458,17 +617,23 @@ async function _send() {
 
   const prog = startInlineProgress(progHost, _open.spec.progress(refs.length, api));
 
+  // ── 1. the analyst ───────────────────────────────────────────────────────
   let payload = { text, refs, prompt: text };
-  try {
-    if (_open.write && _open.spec.think) {
-      prog.say(refs.length
-        ? 'reading your message and ' + refs.length + (refs.length === 1 ? ' reference…' : ' references…')
-        : 'reading your message…');
+  if (_open.write && _open.spec.think) {
+    const st = steps.add(refs.length
+      ? 'Sent to the analyst — your message and ' + refs.length
+        + (refs.length === 1 ? ' picture…' : ' pictures…')
+      : 'Sent to the analyst — your message…');
+    prog.say(refs.length
+      ? 'reading your message and ' + refs.length + (refs.length === 1 ? ' reference…' : ' references…')
+      : 'reading your message…');
+    try {
       const think = await _open.spec.think(text, refs, api);
       // A QUESTION IS A TURN, NOT A FAILURE. It happens when two or more references are attached
       // and the message never says which is which - the model would only guess, and a guess
       // costs the same as an answer.
       if (think && think.ask) {
+        st.done('The analyst needs to know which picture is which.');
         prog.detach();
         _open.busy = null;
         _open.waiting = [];
@@ -482,95 +647,151 @@ async function _send() {
         ta.focus();
         return;
       }
-      if (think && think.prompt) {
+      if (think && think.prompt && !think.fell) {
         payload = { ...payload, ...think };
-        if (think.fell) _open.said.textContent = 'sent as typed - ' + think.fell;
-        else prog.say('writing the prompt…');
-      }
-    }
-  } catch (err) { /* the words as typed are always a working fallback */ }
-
-  try {
-    prog.say(_open.spec.askWord(api));
-    const ids = await _open.spec.submit(payload, api);
-    if (!ids || !ids.length) throw new Error('the model refused the job');
-    // Set on the WAY IN rather than on the way out. By the time this window closes the thing is
-    // either on the shelf or on its way to it, and the shelf behind was read before either was
-    // true - which is what made a generation look like it had never been saved.
-    _made = true;
-    prog.say(_open.spec.madeWord(ids.length, api));
-
-    // THE TURN IS WRITTEN WHEN IT LANDS, not when it is asked for. Writing it now would put a
-    // second cloud in the thread - the turn's own pending bubble beside this one - both saying
-    // the same thing about the same job.
-    //
-    // Nothing is risked by waiting: if this window closes mid-flight the server still finishes
-    // and files the result, and the thread folds in any generation that has no turn of its own,
-    // at its own time. It appears in the right place either way.
-    _open.waiting = ids;
-    let landed = [];
-    for (let i = 0; i < 450 && _open; i++) {
-      await new Promise(r => setTimeout(r, POLL_MS));
-      if (!_open) return;
-      await _loadThread();
-      await _loadStrip();
-      const rows = _thread.filter(x => x.gen && ids.includes(x.gen.id)).map(x => x.gen);
-      // A ladder that fell says so while it is still falling: the record carries the reason for
-      // as long as it is true, and a wait that explains itself is not the same wait.
-      const fell = rows.find(x => _open.spec.pending(x) && x.error);
-      if (fell) prog.say(String(fell.error).slice(0, 60) + ' — trying the next…');
-      if (rows.length && rows.every(x => !_open.spec.pending(x))) { landed = rows; break; }
-    }
-
-    _open.busy = null;
-    _open.waiting = [];
-    // Now that there is something to show, the turns go up - and the thread reads back exactly
-    // as it happened whether or not this window was still open to write them.
-    for (const g of landed) {
-      await fetch('/api/mv3/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: _open.project, kind: _open.spec.kind, role: 'agent', text: '', genId: g.id, refs }),
-      }).catch(() => {});
-    }
-    await _loadThread();
-    const won = landed.filter(x => _open.spec.done(x));
-    if (won.length) {
-      prog.finish();
-      // THE RESULT BECOMES THE REFERENCE. Whatever is said next is almost always about what just
-      // arrived. Only for windows that can carry on from their own output - a clip is not a
-      // reference a video model takes, so Animate keeps what was already in the row.
-      if (_open.spec.resultIsReference) {
-        _open.atts = [];
-        _attach(_open.spec.pathOf(won[0]), won[0].prompt || '');
+        st.done('Prompt written' + (think.writer ? ' by ' + think.writer : '') + '.');
+      } else if (think && think.fell) {
+        payload = { ...payload, ...think };
+        // Not a failure of the send - the words as typed are always a working prompt - but it is
+        // the reason the picture may not be shaped the way this model likes, so it is said.
+        st.fail('The analyst did not answer — sending your words as typed. ' + think.fell, null);
+        _open.said.textContent = 'sent as typed - ' + think.fell;
       } else {
-        _paintAtts();
+        st.done('Sending your words as typed.');
       }
-      // AND THE COLUMN COMES HOME. Something was just made, and this project's own run is where
-      // it landed - leaving the picker on whichever library shelf was being browsed hides the
-      // thing that was just paid for behind a dropdown.
-      if (_open.cat.value) {
-        _open.cat.value = '';
-        await _loadStrip();
-      }
-    } else if (landed.length) {
-      prog.fail(String(landed[0].error || 'nothing came back').slice(0, 160));
-    } else {
-      // Out of patience here, but the job is not lost: the server watches it to the end and
-      // files it, so it will be in the thread whenever it lands.
-      prog.detach();
+    } catch (err) {
+      st.fail('The analyst could not be reached — sending your words as typed.', null);
     }
-    _paintThread();
-    _paintStrip();
+  }
+
+  // ── 2 and 3: the asking and the drawing, which a Retry can run again ─────
+  await _dispatch(payload, refs, api, steps, prog);
+  unlock();
+  _setLocked(false);
+  ta.focus();
+}
+
+/**
+ * Ask the aggregator, then wait for what it makes. Apart so a Retry can run it again WITHOUT
+ * paying for the analyst a second time: the prompt is already written and travels in `payload`,
+ * so a retry starts at the step that failed rather than at the beginning.
+ */
+async function _dispatch(payload, refs, api, steps, prog) {
+  if (!_open) return;
+  const again = () => { _setLocked(true); _dispatch(payload, refs, api, steps, prog).then(() => _setLocked(false)); };
+  const who = _open.spec.who ? _open.spec.who(api) : 'the model';
+  const many = _open.spec.count ? _open.spec.count(api) : 1;
+
+  // ── 2. the asking ────────────────────────────────────────────────────────
+  const ask = steps.add('Asking ' + who + ' for ' + (many > 1 ? many + ' pictures…' : 'a picture…'));
+  prog.say(_open.spec.askWord(api));
+  let ids = null;
+  try {
+    ids = await _open.spec.submit(payload, api);
+    if (!ids || !ids.length) throw new Error('the model refused the job');
   } catch (err) {
+    const why = String((err && err.message) || err).slice(0, 300);
+    ask.fail('Could not be sent: ' + why, _canRetry(why) ? again : null);
+    prog.fail(why.slice(0, 160));
     _open.busy = null;
     _open.waiting = [];
-    prog.fail(String((err && err.message) || err).slice(0, 160));
     await _loadThread();
-  } finally {
-    unlock();
-    _setLocked(false);
-    ta.focus();
+    return;
   }
+  ask.done('Sent — ' + (ids.length > 1 ? ids.length + ' pictures asked for.' : 'one picture asked for.'));
+  // Set on the WAY IN rather than on the way out. By the time this window closes the thing is
+  // either on the shelf or on its way to it, and the shelf behind was read before either was
+  // true - which is what made a generation look like it had never been saved.
+  _made = true;
+  prog.say(_open.spec.madeWord(ids.length, api));
+
+  // ── 3. the drawing ───────────────────────────────────────────────────────
+  // THE TURN IS WRITTEN WHEN IT LANDS, not when it is asked for. Writing it now would put a
+  // second cloud in the thread - the turn's own pending bubble beside this one - both saying
+  // the same thing about the same job.
+  //
+  // Nothing is risked by waiting: if this window closes mid-flight the server still finishes and
+  // files the result, and the thread folds in any generation that has no turn of its own, at its
+  // own time. It appears in the right place either way.
+  const drawing = steps.add(ids.length > 1 ? 'Drawing — none of the ' + ids.length + ' back yet…' : 'Drawing…');
+  _open.waiting = ids;
+  let landed = [];
+  let saidFell = '';
+  for (let i = 0; i < 450 && _open; i++) {
+    await new Promise(r => setTimeout(r, POLL_MS));
+    if (!_open) return;
+    await _loadThread();
+    await _loadStrip();
+    const rows = _thread.filter(x => x.gen && ids.includes(x.gen.id)).map(x => x.gen);
+    const back = rows.filter(x => _open.spec.done(x)).length;
+    // ONE OF TWO CAN BE BACK WHILE THE OTHER DRAWS. Said as a count rather than by putting the
+    // finished one up on its own, which would split one order across two bubbles.
+    if (ids.length > 1) drawing.say('Drawing — ' + back + ' of ' + ids.length + ' back…');
+    // A ladder that fell says so while it is still falling: the record carries the reason for as
+    // long as it is true, and a wait that explains itself is not the same wait.
+    const fell = rows.find(x => _open.spec.pending(x) && x.error);
+    if (fell && String(fell.error) !== saidFell) {
+      saidFell = String(fell.error);
+      prog.say(saidFell.slice(0, 60) + ' — trying the next…');
+    }
+    if (rows.length && rows.every(x => !_open.spec.pending(x))) { landed = rows; break; }
+  }
+
+  _open.busy = null;
+  _open.waiting = [];
+  const won = landed.filter(x => _open.spec.done(x));
+  const lost = landed.filter(x => !_open.spec.done(x));
+
+  // ONE TURN FOR THE WHOLE ORDER. Four pictures asked for in one breath are one answer, and four
+  // turns for them is a thread nobody can read back. The turn carries every id; the bubble lays
+  // them out side by side.
+  if (won.length) {
+    await fetch('/api/mv3/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: _open.project, kind: _open.spec.kind, role: 'agent', text: '',
+        genId: won[0].id, genIds: won.map(g => g.id), refs,
+      }),
+    }).catch(() => {});
+  }
+  await _loadThread();
+
+  if (won.length) {
+    drawing.done(won.length > 1 ? won.length + ' pictures back.' : 'Picture back.');
+    prog.finish();
+    // THE RESULT BECOMES THE REFERENCE. Whatever is said next is almost always about what just
+    // arrived. Only for windows that can carry on from their own output - a clip is not a
+    // reference a video model takes, so Animate keeps what was already in the row.
+    if (_open.spec.resultIsReference) {
+      _open.atts = [];
+      _attach(_open.spec.pathOf(won[0]), won[0].prompt || '');
+    } else {
+      _paintAtts();
+    }
+    // AND THE COLUMN COMES HOME. Something was just made, and this project's own run is where it
+    // landed - leaving the picker on whichever library shelf was being browsed hides the thing
+    // that was just paid for behind a dropdown.
+    if (_open.cat.value) {
+      _open.cat.value = '';
+      await _loadStrip();
+    }
+  }
+  // Said whether or not anything else arrived: two pictures asked for and one back is a half
+  // answer, and the half that did not come is the half worth explaining.
+  if (lost.length) {
+    const why = String(lost[0].error || 'nothing came back').slice(0, 300);
+    const line = (won.length ? lost.length + ' of ' + landed.length + ' did not arrive: ' : 'Nothing came back: ') + why;
+    if (won.length) steps.add('').fail(line, _canRetry(why) ? again : null);
+    else drawing.fail(line, _canRetry(why) ? again : null);
+    if (!won.length) prog.fail(why.slice(0, 160));
+  } else if (!landed.length) {
+    // Out of patience here, but the job is not lost: the server watches it to the end and files
+    // it, so it will be in the thread whenever it lands.
+    drawing.done('Still drawing — it will appear here when it lands.');
+    prog.detach();
+  }
+  _paintThread();
+  _paintStrip();
 }
 
 // ── The right column ────────────────────────────────────────────────────────
@@ -834,7 +1055,7 @@ export async function openChatWindow(spec, opts) {
 
   const gear = el('button', 'mv3-ig-gear', '⚙');
   gear.type = 'button';
-  gear.title = 'Models and ladders — which aggregator serves what, and in what order';
+  gear.title = 'The almanac - how each model wants to be asked - and who reads your message';
   // IMPORTED ON THE FIRST PRESS, not with the page - the panel is one most visits never open,
   // and it carries its own stylesheet as well as its own markup. Both arrive together, here.
   gear.addEventListener('click', async () => {
@@ -870,6 +1091,11 @@ export async function openChatWindow(spec, opts) {
   body.appendChild(set);
 
   // ── middle: the conversation ──
+  // ── the sash, between the conversation and the library ──
+  // The library column is narrow by default - it is a place to point at, not to browse - but
+  // how narrow is a working preference: a person picking references out of two hundred pictures
+  // wants it wide, and somebody writing wants the words. Dragged, remembered, and handed back to
+  // the default by a double click, exactly like the sashes on the page behind this window.
   const chat = el('div', 'mv3-ig-chat');
   const thread_ = el('div', 'mv3-ig-thread');
   chat.appendChild(thread_);
@@ -931,7 +1157,11 @@ export async function openChatWindow(spec, opts) {
   stripBox.appendChild(cat);
   const strip = el('div', 'mv3-ig-strip-list');
   stripBox.appendChild(strip);
+  // BETWEEN the conversation and the library, so it is dragged where the boundary is.
+  const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
+  body.appendChild(sash);
   body.appendChild(stripBox);
+  _wireStripSash(sash, stripBox);
 
   box.appendChild(body);
   ov.appendChild(box);
@@ -943,7 +1173,9 @@ export async function openChatWindow(spec, opts) {
 
   _open = {
     spec, ov, box, key, left, said, ta, go, nBtn, clip, pen, file,
-    thread_, atts_, strip, count, cat, projB, stripProj,
+    // `chat` is the middle column: the peek lines its right edge up with it, so the big version
+    // opens over the conversation and never over the library it was taken from.
+    chat, thread_, atts_, strip, count, cat, projB, stripProj,
     trackId: (o.track && o.track.id) || '',
     project: Store.key() || '',
     n: 1, atts: [], slots: null, busy: null, locked: false,
