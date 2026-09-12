@@ -422,17 +422,17 @@ const SPEC = {
   },
 
   acts(g, api) {
-    const use = el('button', 'mv3-c-btn', 'Use as reference');
+    const use = el('button', 'mv3-c-btn', 'to reference');
     use.title = 'Put it in the row above the message box and carry on from it';
     use.addEventListener('click', () => { api.attach(g.imagePath, g.prompt || ''); api.repaint(); });
 
-    const add = el('button', 'mv3-c-btn', 'To the timeline');
+    const add = el('button', 'mv3-c-btn', 'to timeline');
     add.title = 'Puts it on the Birols lane, at the playhead.';
     add.addEventListener('click', () => _place(g, add, api));
 
     // ANIMATE, the same window a still on the timeline opens - with this picture already in its
     // reference row, because that is the whole reason the button is here.
-    const anim = el('button', 'mv3-c-btn', 'Animate');
+    const anim = el('button', 'mv3-c-btn', 'animate');
     anim.title = 'Make a clip from this picture.';
     anim.addEventListener('click', async () => {
       try {

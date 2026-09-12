@@ -477,7 +477,14 @@ function _facts(m, g) {
 }
 
 // Everything this thread has finished, for a viewer that can be paged through.
-export const finished = () => _thread.filter(x => x.gen && _open.spec.done(x.gen)).map(x => x.gen);
+//
+// EVERY picture of every turn, not the first of each. A turn carries the whole order now, and
+// reading only `gen` left the second picture of a pair out of this list - so opening it found no
+// match, fell to index 0, and showed the first one instead. The bug was invisible until an order
+// had more than one picture in it.
+export const finished = () => _thread
+  .flatMap(x => (x.gens && x.gens.length ? x.gens : (x.gen ? [x.gen] : [])))
+  .filter(g => g && _open.spec.done(g));
 
 // ── A project to belong to ──────────────────────────────────────────────────
 // Generating outside a project used to leave a result nothing could be done with: the thread

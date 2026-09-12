@@ -178,14 +178,22 @@ video.mv3-ig-shot{ width:100%; height:auto; display:block; border-radius:var(--r
   font:700 8.5px/13px var(--font); text-align:center;
 }
 
-.mv3-ig-shot-wrap{ position:relative; display:flex; flex-direction:column; gap:6px }
+/* ONE CARD PER PICTURE: the picture, then its buttons under it in a column, everything the same
+   width. The width is the widest BUTTON's - `max-content` on the card measures the buttons, and
+   the picture is told to fill it rather than to be its own size (width:0 takes its intrinsic
+   width out of that measurement; min-width:100% puts it back as a fill). So three buttons of
+   different lengths become one tidy column and the picture sits exactly over them. */
+.mv3-ig-shot-wrap{
+  position:relative; display:flex; flex-direction:column; gap:5px;
+  width:max-content; max-width:100%;
+}
 /* A THUMBNAIL. A thread of full-size pictures cannot be scrolled - two of them and the words
    between are off the screen. Hovering shows it properly and clicking opens it over everything,
    so nothing is lost by keeping it small here. */
 .mv3-ig-shot{
-  width:auto; height:132px; max-width:100%; object-fit:cover;
+  width:0; min-width:100%; height:auto; object-fit:contain;
   border:1px solid var(--border); border-radius:var(--r-xs);
-  align-self:flex-start; cursor:zoom-in;
+  cursor:zoom-in;
 }
 .mv3-ig-shot:hover{ border-color:var(--primary) }
 /* The strip the countdown fills. startInlineProgress positions its row absolutely against the
@@ -204,7 +212,10 @@ video.mv3-ig-shot{ width:100%; height:auto; display:block; border-radius:var(--r
 }
 /* Always there. Hiding them until the pointer arrives saved a little quiet and cost the one
    thing that matters more: knowing, without hunting, what can be done with what just arrived. */
-.mv3-ig-acts{ display:flex; flex-wrap:wrap; gap:5px }
+/* A column, not a row: they belong to the picture above them and read as a list of what can be
+   done with it. Every one the full width of the card, so none of them is the odd one out. */
+.mv3-ig-acts{ display:flex; flex-direction:column; gap:4px; width:100% }
+.mv3-ig-acts > .mv3-c-btn{ width:100%; text-align:center; white-space:nowrap }
 
 /* The technical half, folded away: brief above, everything underneath. */
 .mv3-ig-more{ display:flex; flex-direction:column; gap:4px }
@@ -424,4 +435,5 @@ video.mv3-ig-shot{ width:100%; height:auto; display:block; border-radius:var(--r
 /* Several pictures from one order, side by side in the one bubble that answers for them. */
 .mv3-ig-shots{ display:flex; flex-direction:column; gap:8px }
 .mv3-ig-shots.is-many{ flex-direction:row; flex-wrap:wrap; align-items:flex-start }
-.mv3-ig-shots.is-many > .mv3-ig-shot-wrap{ flex:1 1 210px; min-width:0; max-width:100% }
+/* Side by side, each keeping the width its own buttons ask for. */
+.mv3-ig-shots.is-many > .mv3-ig-shot-wrap{ flex:0 0 auto }
