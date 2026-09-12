@@ -1097,6 +1097,27 @@ function _fit() {
   host.scrollLeft = 0;                               // fitted means "from the start"
 }
 
+// ── ZOOM HOLDS THE PLAYHEAD ─────────────────────────────────────────────────
+// Changing the zoom used to leave the scroll position alone, which anchors the view to a
+// PIXEL: at 60 px/sec that pixel is a different second than it is at 200, so pulling the
+// slider slid the timeline sideways under the eye and the playhead could leave the screen
+// entirely. Zooming in is a way of looking closer at the moment you are on, so that moment
+// is what stays put - in the middle of the lanes, where there is room on both sides of it.
+//
+// The label column is sticky and never scrolls, so the strip the playhead has to be centred
+// in starts after it, and the scroll position is measured from the lane's own zero.
+// Negative clamps to 0; past the end the browser clamps by itself.
+function _centreOnPlayhead() {
+  // Not while the blank editor holds the panel: it listens to the same slider and keeps its
+  // own playhead, and two modules scrolling one box would fight over it.
+  if (!_mounted) return;
+  const host = document.getElementById('mv3-tl');
+  if (!host) return;
+  const strip = host.clientWidth - LBL_W;
+  if (strip <= 0) return;
+  host.scrollLeft = Math.max(0, _at * _zoom() - strip / 2);
+}
+
 function _wireHistoryButtons() {
   const u = document.getElementById('mv3-undo');
   const r = document.getElementById('mv3-redo');
@@ -1139,6 +1160,7 @@ export function initTimeline() {
     // input, not change: the ruler has to follow the slider while it is being dragged.
     z.addEventListener('input', () => {
       _applyWidths();
+      _centreOnPlayhead();          // the moment you are on is what the zoom is about
       try { localStorage.setItem(LS_ZOOM, String(_zoom())); } catch (e) {}
     });
   }

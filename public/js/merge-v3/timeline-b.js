@@ -911,6 +911,20 @@ function _seekTo(t) {
   import('./preview-b.js').then(P => P.seek(_playhead)).catch(() => {});
 }
 
+// ZOOM HOLDS THE PLAYHEAD. Leaving the scroll alone anchors the view to a pixel, and a pixel
+// is a different second at every zoom - so the timeline slid sideways under the eye and the
+// playhead could end up off screen. Zooming in is looking closer at the moment you are on, so
+// that moment is what stays, in the middle of the lanes. The frozen gutter (the square and
+// the track name, both sticky) never scrolls, so the strip to centre in begins after it.
+// Same rule as the talking-head timeline, which owns the same scroll box.
+function _centreOnPlayhead() {
+  const host = _host();
+  if (!host) return;
+  const strip = host.clientWidth - GUTTER;
+  if (strip <= 0) return;
+  host.scrollLeft = Math.max(0, _playhead * _zoom() - strip / 2);
+}
+
 export const playhead = () => _playhead;
 export function setPlayhead(t) {
   _playhead = Math.max(0, +t || 0);
@@ -1261,7 +1275,7 @@ export const deleteMulti = () => _deleteSelected();
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
   const z = document.getElementById('mv3-zoom');
-  if (z) z.addEventListener('input', () => { if (_on) _build(); });
+  if (z) z.addEventListener('input', () => { if (_on) { _build(); _centreOnPlayhead(); } });
   // On the document, not the clip: the pointer routinely leaves a 20px-tall element during a
   // drag, and a listener on the clip would drop the gesture the moment it did.
   document.addEventListener('mousemove', _moveDrag);
