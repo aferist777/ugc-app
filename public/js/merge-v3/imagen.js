@@ -297,10 +297,12 @@ const SPEC = {
       const fmt = (tl && tl.format) || '9:16';
       _ui = { host, prov, eng, q, arWrap, cost, fall, fmt,
               ar: _table.aspects.includes(last.aspect) ? last.aspect : fmt };
-      // Choosing an aggregator can change which models are on offer and how they are graded, so
-      // it repaints the two below it; a model can change which aggregators carry it at all.
-      prov.addEventListener('change', () => _paintEngines(api));
-      eng.addEventListener('change', () => { _paintProviders(api); _paintQuality(api); });
+      // THE WHOLE WINDOW, not just this column. Choosing an aggregator or a model changes how
+      // many references the job can take - kie takes five for grok and Replicate takes one - and
+      // the row of empty places above the message box is where that number is shown. Repainting
+      // only the column left it offering five places to a model that would accept one.
+      prov.addEventListener('change', () => api.repaint());
+      eng.addEventListener('change', () => api.repaint());
       q.addEventListener('change', () => _paintPrice(api));
       // Last time's choice, for all four. The window is opened to carry on from where the last
       // picture left off far more often than to start somewhere new.

@@ -97,7 +97,15 @@ let _made = false;
 export const current = () => _open;
 
 // ── Hover peek ──────────────────────────────────────────────────────────────
+// IT CLOSES ITSELF, and not only on the way out of what opened it. `mouseleave` alone left it
+// hanging over the window in every case where the thing under the pointer simply stopped
+// existing - the reference row is rebuilt whenever anything is attached or detached, the thread
+// is repainted on every poll, and the library column redraws as pictures land. So the pointer is
+// watched instead: the moment it is somewhere other than the element this was opened from - or
+// that element leaves the page - the peek goes. A wheel, a press and Escape close it too.
 let _peek = null;
+let _peekOn = null;      // what it was opened from
+let _peekOff = null;     // the pointer watcher, while one is open
 
 // ONE PLACE, ALWAYS THE SAME PLACE: the top right of the window, standing on the reference row.
 // It used to open beside whatever was hovered, which put it over the conversation and moved it
@@ -132,9 +140,29 @@ export function peekShow(src, anchor) {
   // wide one open in the same place instead of the tall one pushing itself off the screen.
   box.style.bottom = Math.round(Math.max(8, window.innerHeight - bottom)) + 'px';
   box.style.top = 'auto';
+
+  _peekOn = anchor;
+  _peekOff = (e) => {
+    if (!_peek) return;
+    const a = _peekOn;
+    if (!a || !a.isConnected) return peekHide();          // repainted out from under the pointer
+    const t = e && e.target;
+    if (!t || !(a === t || a.contains(t))) peekHide();     // the pointer is somewhere else now
+  };
+  // Capture, so a listener on the way down cannot swallow it before this sees it.
+  document.addEventListener('mousemove', _peekOff, true);
+  document.addEventListener('wheel', peekHide, true);
+  document.addEventListener('mousedown', peekHide, true);
 }
 
 export function peekHide() {
+  if (_peekOff) {
+    document.removeEventListener('mousemove', _peekOff, true);
+    document.removeEventListener('wheel', peekHide, true);
+    document.removeEventListener('mousedown', peekHide, true);
+    _peekOff = null;
+  }
+  _peekOn = null;
   if (_peek) { try { _peek.remove(); } catch (e) {} _peek = null; }
 }
 
@@ -1167,7 +1195,14 @@ export async function openChatWindow(spec, opts) {
   ov.appendChild(box);
   document.body.appendChild(ov);
 
-  const key = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); closeChatWindow(); } };
+  // Escape takes the top thing off: the enlarged picture if one is open, the window otherwise.
+  // Closing both at once would shut the window because somebody wanted a peek to go away.
+  const key = (ev) => {
+    if (ev.key !== 'Escape') return;
+    ev.stopPropagation();
+    if (_peek) return peekHide();
+    closeChatWindow();
+  };
   document.addEventListener('keydown', key, true);
   ov.addEventListener('mousedown', (ev) => { if (ev.target === ov) closeChatWindow(); });
 
