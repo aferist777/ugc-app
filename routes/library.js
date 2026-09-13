@@ -162,6 +162,28 @@ function _looks() {
 const UPLOADS_CAT = '__uploads__';
 const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === UPLOADS_CAT));
 
+// WHO MAY BE TRIMMED - ONCE, and the file is cut (POST /library/item/:kind/:id/trim).
+//
+// A RULE RATHER THAN A MARK written into every existing record. The birol and hook archives
+// belong to the browser: a page pushes its whole copy here every couple of seconds, so a mark
+// added to 82 uploads and 62 hooks on the server would last until the first open tab with an
+// older copy changed anything. A rule read off the record cannot be pushed away.
+//
+//   uploads   every clip on the shelf - it is where hand-brought files go, by definition
+//   hooks     every hook
+//   birols    only one uploaded by hand after trimming existed (the `trimmable` the upload
+//             flow writes); a generated birol is trimmed on the timeline instead
+//
+// And never twice. `trimmed` says so; the file name says so as well - a cut is always written
+// as <name>_trim_<id>.mp4 - which is the half a stale push cannot take back.
+function _canTrim(rec, kind) {
+  if (!rec || rec.trimmed) return false;
+  if (/_trim_[a-z0-9]+\.mp4$/i.test(String(rec.videoPath || '').split('?')[0])) return false;
+  if (kind === 'hooks') return true;
+  if (_isUpload(rec)) return true;
+  return rec.trimmable === true;
+}
+
 // The hook numbers, read once per shelf build rather than once per tile.
 function _hookIds() {
   try { return require('../lib/hook-ids').map(); } catch (e) { return {}; }
@@ -189,7 +211,7 @@ function _mediaShelf() {
       prompt: e.prompt || '',
       // Whether the viewer may offer the one trim this clip is allowed, and what it was
       // trimmed to if that has happened.
-      trimmable: !!e.trimmable && !e.trimmed, trimmed: e.trimmed || null,
+      trimmable: _canTrim(e, _isUpload(e) ? 'uploads' : 'birols'), trimmed: e.trimmed || null,
     },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
@@ -210,7 +232,7 @@ function _mediaShelf() {
     // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
             hookId: _hookIds()[String(h.videoPath || '').split('?')[0]] || null,
-            trimmable: !!h.trimmable && !h.trimmed, trimmed: h.trimmed || null },
+            trimmable: _canTrim(h, 'hooks'), trimmed: h.trimmed || null },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -676,10 +698,10 @@ router.patch('/library/item/:kind/:id', (req, res) => {
 /* ── Trimming an uploaded clip, once ─────────────────────────────────────────
    POST /api/library/item/:kind/:id/trim { in, out } -> { success, kind, id, patch, lsKey }
 
-   THE FILE IS CUT, ONCE, AND THE RECORD MOVES TO THE CUT. Only a clip somebody uploaded by hand
-   carries `trimmable`, and it loses it here: after this the library shows the shorter clip and
-   everything dropped onto a lane from now on is the shorter clip. Anything generated is
-   trimmed on the timeline instead, without its file being rewritten.
+   THE FILE IS CUT, ONCE, AND THE RECORD MOVES TO THE CUT. Who may be is _canTrim's answer:
+   every clip on Uploads and Hooks, and a birol only if it was uploaded by hand. After this the
+   library shows the shorter clip and everything dropped onto a lane from now on is the shorter
+   clip. A generated birol is trimmed on the timeline instead, without its file being rewritten.
 
    THE ORIGINAL STAYS EXACTLY WHERE IT WAS. A timeline that took this clip before it was trimmed
    points at that path, and moving or deleting the file would turn that project's clip into a
@@ -715,8 +737,14 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
     if (!it) return res.status(404).json({ success: false, error: 'not found' });
-    if (it.trimmed) return res.status(409).json({ success: false, error: 'this clip has already been trimmed once' });
-    if (!it.trimmable) return res.status(409).json({ success: false, error: 'only a clip you uploaded can be trimmed here' });
+    // The store decides the kind, not the address: birols and uploads share one store, so a
+    // request for uploads/<id> can find a birol, and the rule has to see what it really is.
+    const realKind = kind === 'hooks' ? 'hooks' : (_isUpload(it) ? 'uploads' : 'birols');
+    const cutAlready = it.trimmed || /_trim_[a-z0-9]+\.mp4$/i.test(String(it.videoPath || '').split('?')[0]);
+    if (cutAlready) return res.status(409).json({ success: false, error: 'this clip has already been trimmed once' });
+    if (!_canTrim(it, realKind)) {
+      return res.status(409).json({ success: false, error: 'only clips on Uploads or Hooks, or a birol you uploaded, can be trimmed here' });
+    }
 
     const from = String(it.videoPath || '').split('?')[0];
     const src = path.join(ROOT_DIR, from.replace(/^\/+/, ''));
