@@ -17,6 +17,9 @@ let _onIndex = null;
 let _onAction = null;
 let _actionsFor = () => [];
 let _extraRows = null;
+// Something a caller hangs UNDER the media on the stage - Merge's trimmer is the one there is.
+// Opt-in: a page that passes nothing gets exactly the viewer it had.
+let _underStage = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
 
@@ -56,12 +59,18 @@ function _paint() {
     v.src = it.media;
     v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
     stage.appendChild(v);
+    if (_underStage) {
+      const extra = _underStage(it, v);
+      if (extra) { stage.classList.add('has-under'); stage.appendChild(extra); }
+      else stage.classList.remove('has-under');
+    }
   } else {
     const img = document.createElement('img');
     img.className = 'lib-view-media';
     img.src = it.media;
     img.alt = it.name || '';
     stage.appendChild(img);
+    stage.classList.remove('has-under');
   }
 
   $('.lib-view-title', _ov).textContent = it.name || '';
@@ -151,6 +160,10 @@ export function dropCurrent() {
   _paint();
 }
 
+/** Draw the current item again - after a caller has changed it in place (a clip trimmed to a
+ *  new file has a new `media`, and the stage has to play that one, not the one it opened on). */
+export function repaint() { _paint(); }
+
 export function step(d) {
   if (!_ov || !_list.length) return;
   _at = (_at + d + _list.length) % _list.length;
@@ -174,6 +187,7 @@ export function openViewer(items, index, opts) {
   _onAction = o.onAction || null;
   _actionsFor = typeof o.actionsFor === 'function' ? o.actionsFor : () => [];
   _extraRows = typeof o.extraRows === 'function' ? o.extraRows : null;
+  _underStage = typeof o.underStage === 'function' ? o.underStage : null;
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';

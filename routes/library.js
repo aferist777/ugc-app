@@ -187,6 +187,9 @@ function _mediaShelf() {
       // Present only on clips animated out of a picture; the viewer draws it beside them.
       refImage: (e.refImage && _onDisk(e.refImage)) ? e.refImage : null,
       prompt: e.prompt || '',
+      // Whether the viewer may offer the one trim this clip is allowed, and what it was
+      // trimmed to if that has happened.
+      trimmable: !!e.trimmable && !e.trimmed, trimmed: e.trimmed || null,
     },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
@@ -206,7 +209,8 @@ function _mediaShelf() {
     // puts in the creative's name. Read from the registry rather than the record: the
     // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
-            hookId: _hookIds()[String(h.videoPath || '').split('?')[0]] || null },
+            hookId: _hookIds()[String(h.videoPath || '').split('?')[0]] || null,
+            trimmable: !!h.trimmable && !h.trimmed, trimmed: h.trimmed || null },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -669,6 +673,104 @@ router.patch('/library/item/:kind/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── Trimming an uploaded clip, once ─────────────────────────────────────────
+   POST /api/library/item/:kind/:id/trim { in, out } -> { success, kind, id, patch, lsKey }
+
+   THE FILE IS CUT, ONCE, AND THE RECORD MOVES TO THE CUT. Only a clip somebody uploaded by hand
+   carries `trimmable`, and it loses it here: after this the library shows the shorter clip and
+   everything dropped onto a lane from now on is the shorter clip. Anything generated is
+   trimmed on the timeline instead, without its file being rewritten.
+
+   THE ORIGINAL STAYS EXACTLY WHERE IT WAS. A timeline that took this clip before it was trimmed
+   points at that path, and moving or deleting the file would turn that project's clip into a
+   hole. Nothing lists it any more - the record points at the new file - so it is out of sight
+   without being gone. There is deliberately no way back in the interface.
+
+   Re-encoded rather than stream-copied: a copy can only begin on a keyframe, which lands a
+   second or two away from where the handle was put, and the whole point of a trim is where.
+
+   A hook keeps its number (H07 stays H07): see lib/hook-ids.js carry(). */
+function _probeLen(abs) {
+  const ffmpegPath = require('ffmpeg-static');
+  return new Promise((resolve) => {
+    const proc = require('child_process').spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let out = '';
+    proc.stderr.on('data', c => { out += c.toString(); });
+    proc.on('close', () => {
+      const d = out.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      resolve(d ? (+d[1] * 3600 + +d[2] * 60 + parseFloat(d[3])) : 0);
+    });
+    proc.on('error', () => resolve(0));
+  });
+}
+
+router.post('/library/item/:kind/:id/trim', async (req, res) => {
+  try {
+    const kind = String(req.params.kind || '');
+    if (!['birols', 'uploads', 'hooks'].includes(kind)) {
+      return res.status(400).json({ success: false, error: 'only clips on birols, uploads or hooks can be trimmed' });
+    }
+    const store = RECORD_STORES[kind];
+    const id = String(req.params.id || '');
+    const list = store.read();
+    const it = list.find(x => x && String(x.id) === id);
+    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+    if (it.trimmed) return res.status(409).json({ success: false, error: 'this clip has already been trimmed once' });
+    if (!it.trimmable) return res.status(409).json({ success: false, error: 'only a clip you uploaded can be trimmed here' });
+
+    const from = String(it.videoPath || '').split('?')[0];
+    const src = path.join(ROOT_DIR, from.replace(/^\/+/, ''));
+    if (!fs.existsSync(src)) return res.status(410).json({ success: false, error: 'the file is not on disk any more' });
+
+    const full = await _probeLen(src);
+    const a = Math.max(0, Math.round((+req.body.in || 0) * 100) / 100);
+    const b = Math.min(full || Infinity, Math.round((+req.body.out || 0) * 100) / 100);
+    if (!(b - a >= 0.3)) return res.status(400).json({ success: false, error: 'the trimmed clip has to be at least 0.3 seconds long' });
+
+    // Beside the original, under a name that says what it is: same folder, so everything that
+    // serves the original serves this too.
+    const dir = path.dirname(src);
+    const base = path.basename(src, path.extname(src));
+    const fileName = base + '_trim_' + Date.now().toString(36) + '.mp4';
+    const abs = path.join(dir, fileName);
+    const ffmpegPath = require('ffmpeg-static');
+    await new Promise((resolve, reject) => {
+      const proc = require('child_process').spawn(ffmpegPath, [
+        '-hide_banner', '-loglevel', 'error',
+        '-ss', a.toFixed(3), '-t', (b - a).toFixed(3), '-i', src,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-y', abs,
+      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+      let err = '';
+      proc.stderr.on('data', c => { err += c.toString(); });
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the clip: ' + err.slice(-200))));
+      proc.on('error', reject);
+    });
+    const videoPath = '/' + path.relative(ROOT_DIR, abs).split(path.sep).join('/');
+
+    let thumbPath = it.thumbPath || null;
+    try { thumbPath = (await VT.makeThumb(videoPath)).thumb || thumbPath; }
+    catch (e) { console.warn('[library/trim] thumb failed:', e.message); }
+
+    const dur = (await _probeLen(abs)) || Math.round((b - a) * 100) / 100;
+    const patch = {
+      videoPath, thumbPath, duration: Math.round(dur * 100) / 100,
+      trimmable: false,
+      trimmed: { in: a, out: b, from, at: new Date().toISOString(), by: (req.user && req.user.login) || null },
+    };
+    if (kind !== 'hooks') patch.imagePath = thumbPath;
+    Object.assign(it, patch);
+    store.write(list);
+
+    // Ready for a lane, and a hook is still the same hook.
+    try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
+    if (kind === 'hooks') { try { require('../lib/hook-ids').carry(from, videoPath); } catch (e) {} }
+
+    console.log('[library/trim]', kind, id, from, '->', videoPath, a + 's..' + b + 's');
+    res.json({ success: true, kind, id, patch, lsKey: store.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.delete('/library/item/:kind/:id', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
@@ -809,6 +911,13 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
       thumbPath: it.thumbPath || null,
       date: it.date || new Date().toISOString(),
     };
+    // The one-time trim travels with the clip. Rebuilding the record for the other store used
+    // to drop it: an upload moved to Hooks before it was trimmed lost the trim it was owed, and
+    // one moved after lost the note of what it was cut to. Its length goes too, so a drop onto a
+    // lane lands at the right width instead of reading the file first.
+    if (it.trimmable) moved.trimmable = true;
+    if (it.trimmed) moved.trimmed = it.trimmed;
+    if (it.duration) moved.duration = it.duration;
     if (to === 'hooks') {
       moved.prompt = it.prompt || '';
     } else {
@@ -1063,6 +1172,10 @@ router.post('/library/media/record', (req, res) => {
     // Only set when given: every other way of filing a record leaves it absent.
     if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
     if (prompt) rec.prompt = String(prompt).slice(0, 2000);
+    // CAN BE TRIMMED ONCE. Only a file somebody brought in by hand - the upload flow says so -
+    // and only until it has been trimmed; a generated clip is trimmed on the timeline instead,
+    // without its file ever being rewritten. See POST /library/item/:kind/:id/trim.
+    if ((req.body || {}).trimmable === true) rec.trimmable = true;
     list.unshift(rec);
     store.write(list);
     // On the shelf means it can land on a lane: its preview proxy is queued now, and a

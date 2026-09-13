@@ -250,6 +250,29 @@ export async function setCategory(it, categoryId, categoryLabel) {
   return categoryId;
 }
 
+// ── Trimming, once ──────────────────────────────────────────────────────────
+// The server cuts the file and moves the record to the cut; the browser's copy of the archive
+// is told the same thing at once, or the next push from this page would put the record back
+// on the long file. The original file is left where it was - see the route.
+export async function trimItem(it, inS, outS) {
+  const d = await _json(_itemUrl(it) + '/trim', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ in: inS, out: outS }),
+  });
+  _lsPatch(d.lsKey, it.id, d.patch);
+  return d.patch;
+}
+
+// A category that did not exist a moment ago, for one kind. The server hands back the existing
+// one when the name is already taken (LC.add is idempotent by label), so asking twice is safe.
+export async function createCategory(kind, label) {
+  const d = await _json('/api/library/cats', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, label }),
+  });
+  return { cat: d.cat, created: d.created !== false };
+}
+
 // ── Kind ────────────────────────────────────────────────────────────────────
 // birols <-> uploads is one field in one store; anything involving hooks is a record
 // moving between two files. The server does both so a move cannot land half-applied;
@@ -342,7 +365,9 @@ export async function uploadVideos(files, kind, onEach) {
       const up = await _json('/api/biroly/upload', { method: 'POST', body: fd });
       const rec = await _json('/api/library/media/record', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind }),
+        // trimmable: a file brought in by hand may be trimmed once, in the viewer. Nothing
+        // generated carries this - those are trimmed on the timeline without a new file.
+        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind, trimmable: true }),
       });
       _lsUnshift(rec.lsKey, rec.item);
       ok++;

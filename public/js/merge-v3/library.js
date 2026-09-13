@@ -29,9 +29,10 @@
    what was just deleted.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { openViewer } from '../library/viewer.js';
+import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
 import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
-         loadCats, setCategory } from '../library/actions.js';
+         loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
+import { trimmer } from './trim.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
 
@@ -166,33 +167,87 @@ function _tile(it, i) {
   });
   cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
 
-  cell.addEventListener('click', () => openViewer(_items, i, { extraRows: _categoryRow }));
+  cell.addEventListener('click', () => openViewer(_items, i, _viewerOpts()));
   return cell;
 }
 
-// ── The category, from inside the viewer ────────────────────────────────────
-// A clip is usually filed while it is being LOOKED AT - that is when you know what it is - and
-// sending somebody to the Library page to do it means finding the clip a second time. So the
-// viewer's right column carries the same category select the Library page puts there, writing
-// through the same shared call (library/actions.js), which also keeps the browser's copy of
-// the archive in step.
-//
-// The whole list for the item's kind, not just the categories that happen to have something
-// in the grid right now: a new clip belongs in a category that may still be empty. Read once
-// per opening of the viewer, because a category added on the Library page since this panel
-// loaded has to be offered too.
+// ── What can be done to a clip from inside the viewer ───────────────────────
+// A clip is sorted while it is being LOOKED AT - that is when you know what it is - and sending
+// somebody to the Library page to do it means finding the clip a second time. So the viewer
+// carries it all: the KIND and the CATEGORY in the right column (the same controls the Library
+// page puts there, through the same shared calls in library/actions.js, which keep the
+// browser's copy of the archive in step), a way to make a category that does not exist yet,
+// and - for a clip somebody uploaded - the one trim it is allowed, under the video.
 const CATABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
+// The kinds a clip can be moved between. These three and no others: a still lives in a
+// different store and is not a clip to be re-filed as one.
+const KINDABLE = new Set(['birols', 'uploads', 'hooks']);
+const NEW_CAT = '__new__';
 let _allCats = null;
 
-function _categoryRow(item) {
-  if (!item || !CATABLE.has(item.kind)) return [];
+const _viewerOpts = () => ({ extraRows: _viewerRows, underStage: _underStage });
+
+function _viewerRows(item) {
+  if (!item) return [];
+  const rows = [];
+  if (KINDABLE.has(item.kind)) rows.push(['kind', _kindSelect(item)]);
+  if (CATABLE.has(item.kind)) rows.push(['category', _categorySelect(item)]);
+  // Said once and quietly: it cannot be done again, and what it was cut to is worth knowing.
+  const tr = item.meta && item.meta.trimmed;
+  if (tr) rows.push(['trimmed', (+tr.in).toFixed(1) + 's – ' + (+tr.out).toFixed(1) + 's of the upload']);
+  return rows;
+}
+
+// ── kind ──
+// Moving a clip to another kind moves it off this shelf, so the viewer - which pages through
+// this shelf - closes, and the grid is read again. Staying open on a clip that is no longer
+// here would be paging through something that is not the grid behind it.
+function _kindSelect(item) {
+  const sel = document.createElement('select');
+  sel.className = 'lib-view-sel';
+  sel.title = 'Which kind of clip this is';
+  for (const k of KINDS) {
+    const o = document.createElement('option');
+    o.value = k.id; o.textContent = k.label;
+    sel.appendChild(o);
+  }
+  sel.value = item.kind;
+  sel.addEventListener('change', async () => {
+    const to = sel.value;
+    if (to === item.kind) return;
+    sel.disabled = true;
+    try {
+      await setKind(item, to);
+      const label = (KINDS.find(k => k.id === to) || {}).label || to;
+      closeViewer();
+      _status('Moved to ' + label + 's.');
+      setTimeout(() => _status(''), 2400);
+      await _load();
+    } catch (e) {
+      _status('Could not move it: ' + e.message, true);
+      sel.value = item.kind;
+      sel.disabled = false;
+    }
+  });
+  return sel;
+}
+
+// ── category, and making one ──
+// The whole list for the item's kind, not just the categories that happen to have something in
+// the grid: a new clip belongs in a category that may still be empty. The first line makes a
+// new one - named in a small box, created for this kind, and given to this clip in the same
+// breath, because nobody makes a category except to put something in it.
+function _categorySelect(item) {
   const sel = document.createElement('select');
   sel.className = 'lib-view-sel';
   sel.title = 'Which category this is filed under';
-  const current = (item.meta && item.meta.categoryId) || '';
+  let current = (item.meta && item.meta.categoryId) || '';
 
   const fill = (list) => {
     sel.textContent = '';
+    const make = document.createElement('option');
+    make.value = NEW_CAT; make.textContent = '+ category';
+    sel.appendChild(make);
     const none = document.createElement('option');
     none.value = ''; none.textContent = '— no category —';
     sel.appendChild(none);
@@ -202,25 +257,24 @@ function _categoryRow(item) {
       sel.appendChild(o);
     }
     sel.value = current;
-    // A category this item points at that is not in the list any more still has to read as
-    // itself rather than silently showing "no category".
+    // One this clip points at that is not in the list any more still reads as itself.
     if (sel.value !== current) {
       const o = document.createElement('option');
       o.value = current; o.textContent = current; sel.appendChild(o); sel.value = current;
     }
   };
-  fill([]);
-  (async () => {
+  const refill = async () => {
     try { _allCats = await loadCats(); } catch (e) { _allCats = _allCats || {}; }
     fill((_allCats || {})[item.kind] || []);
-  })();
+  };
+  fill([]);
+  refill();
 
-  sel.addEventListener('change', async () => {
-    const id = sel.value;
-    const label = id ? ((sel.selectedOptions[0] || {}).textContent || '') : '';
+  const file = async (id, label) => {
     sel.disabled = true;
     try {
       await setCategory(item, id, label);
+      current = id;
       if (item.meta) item.meta.categoryId = id;
       _status('Filed under ' + (label || 'no category') + '.');
       setTimeout(() => _status(''), 2200);
@@ -233,8 +287,142 @@ function _categoryRow(item) {
     } finally {
       sel.disabled = false;
     }
+  };
+
+  sel.addEventListener('change', () => {
+    if (sel.value === NEW_CAT) {
+      sel.value = current;                 // the choice is not made until the name is
+      _askCategoryName(sel, item.kind, async (cat) => {
+        await refill();
+        sel.value = cat.id;
+        await file(cat.id, cat.label);
+      });
+      return;
+    }
+    const id = sel.value;
+    file(id, id ? ((sel.selectedOptions[0] || {}).textContent || '') : '');
   });
-  return [['category', sel]];
+  return sel;
+}
+
+// The small box a new category is named in. Beside the dropdown it came from, above the viewer
+// (which sits at 9470 on this page), and gone on Escape, on a click elsewhere, or once made.
+let _nameBox = null;
+function _closeNameBox() {
+  if (!_nameBox) return;
+  _nameBox.el.remove();
+  document.removeEventListener('mousedown', _nameBox.away, true);
+  document.removeEventListener('keydown', _nameBox.key, true);
+  _nameBox = null;
+}
+
+function _askCategoryName(anchor, kind, onMade) {
+  _closeNameBox();
+  const el = document.createElement('div');
+  el.className = 'mv3-newcat';
+  const lbl = document.createElement('div');
+  lbl.className = 'mv3-newcat-t';
+  lbl.textContent = 'New ' + kind.replace(/s$/, '') + ' category';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'mv3-newcat-in';
+  inp.placeholder = 'Name';
+  inp.maxLength = 60;
+  const err = document.createElement('div');
+  err.className = 'mv3-newcat-err';
+  const row = document.createElement('div');
+  row.className = 'mv3-newcat-r';
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.className = 'mv3-newcat-b is-ok'; ok.textContent = 'Create';
+  const no = document.createElement('button');
+  no.type = 'button'; no.className = 'mv3-newcat-b'; no.textContent = 'Cancel';
+  row.append(ok, no);
+  el.append(lbl, inp, err, row);
+  document.body.appendChild(el);
+
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth;
+  el.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))) + 'px';
+  el.style.top = Math.round(r.bottom + 6) + 'px';
+  inp.focus();
+
+  const make = async () => {
+    const name = inp.value.trim();
+    if (!name) { err.textContent = 'Give it a name.'; inp.focus(); return; }
+    const taken = ((_allCats || {})[kind] || []).find(c => String(c.label).toLowerCase() === name.toLowerCase());
+    if (taken) { err.textContent = 'There is already a category called ' + taken.label + '.'; inp.select(); return; }
+    ok.disabled = true;
+    try {
+      const { cat } = await createCategory(kind, name);
+      _closeNameBox();
+      await onMade(cat);
+    } catch (e) {
+      err.textContent = e.message;
+      ok.disabled = false;
+    }
+  };
+  ok.addEventListener('click', make);
+  no.addEventListener('click', _closeNameBox);
+  const away = (e) => { if (!el.contains(e.target)) _closeNameBox(); };
+  // Captured, so Escape closes this box and not the viewer underneath it.
+  const key = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeNameBox(); }
+    else if (e.key === 'Enter' && document.activeElement === inp) { e.preventDefault(); make(); }
+  };
+  _nameBox = { el, away, key };
+  document.addEventListener('mousedown', away, true);
+  document.addEventListener('keydown', key, true);
+}
+
+// ── the one trim an upload is allowed ──
+// Under the video, and only for a clip that was uploaded by hand and has not been trimmed yet.
+// Saving asks once, because it cannot be undone here: the file is cut, the clip on the shelf
+// becomes the cut, and the trimmer goes away for good. The original stays on disk where it was,
+// so a timeline that already uses the clip is not touched.
+function _underStage(item, video) {
+  if (!item || !KINDABLE.has(item.kind)) return null;
+  if (!(item.meta && item.meta.trimmable)) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'mv3-trimbox';
+  const t = trimmer(video);
+  wrap.appendChild(t.el);
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'mv3-trimbox-save';
+  save.textContent = 'Save trim';
+  save.title = 'Cut the clip to this stretch. It can be done once, and not undone here.';
+  wrap.appendChild(save);
+
+  save.addEventListener('click', async () => {
+    const { in: a, out: b, dur } = t.get();
+    if (!(dur > 0)) return;
+    if (a <= 0.05 && b >= dur - 0.05) { _status('Move a handle first - that is the whole clip.', true); return; }
+    if (!confirm('Trim this clip to ' + a.toFixed(1) + 's – ' + b.toFixed(1) + 's?\n\n'
+      + 'This can be done once. The library will show only the trimmed clip from now on, and there is '
+      + 'no way back to the full length here. Projects that already use it are not affected.')) return;
+    save.disabled = true;
+    save.textContent = 'Trimming…';
+    try {
+      const patch = await trimItem(item, a, b);
+      // The same object the grid and the viewer both hold: changed in place, so the viewer can
+      // simply draw it again - now playing the short file, without a trimmer.
+      item.media = patch.videoPath;
+      if (patch.thumbPath) item.thumb = patch.thumbPath;
+      item.dur = patch.duration || item.dur;
+      item.meta = Object.assign({}, item.meta, { trimmable: false, trimmed: patch.trimmed });
+      t.destroy();
+      repaintViewer();
+      _status('Trimmed to ' + (b - a).toFixed(1) + ' s.');
+      setTimeout(() => _status(''), 2400);
+      _load();
+    } catch (e) {
+      save.disabled = false;
+      save.textContent = 'Save trim';
+      _status('Could not trim it: ' + e.message, true);
+    }
+  });
+  return wrap;
 }
 
 // The upload cell, first in the grid. A tile-sized target rather than a header
@@ -557,6 +745,11 @@ function _setTab(tab) {
     localStorage.setItem(LS_TAB, _tab);
     _cat = localStorage.getItem(catKey(_tab)) || '';
   } catch (e) { _cat = ''; }
+  // WHAT THE FILE DIALOG OFFERS follows the shelf. One input serves all four, and it used to
+  // accept pictures and films everywhere - so on a clip shelf the dialog offered pictures that
+  // were then dropped with a "skipped" line, which read as pictures being allowed there.
+  const inp = document.getElementById('mv3-lib-file');
+  if (inp) inp.accept = _isImages() ? 'image/*' : 'video/*';
   _load();
 }
 
