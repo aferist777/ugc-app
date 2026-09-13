@@ -1092,6 +1092,41 @@ function _write(c, key, value) {
 }
 
 /**
+ * THE PICTURE BECOMES THE CLIP THAT WAS MADE FROM IT - Animate's Save, in place: same lane,
+ * same moment, the video's own length. No ripple, because nothing here is a sequence (see the
+ * placement rule above); a clip that has a sound twin on a linked lane takes it along, or the
+ * picture and its sound would disagree about how long they run. One mutation, one undo.
+ *
+ * Returns false when there was nothing to change or the project cannot be edited.
+ */
+export function swapClipMedia(id, media) {
+  let hit = false;
+  const ok = Store.mutate(tl => {
+    for (const t of (tl.tracks || [])) {
+      const c = (t.clips || []).find(x => x.id === id);
+      if (!c) continue;
+      hit = true;
+      const len = Math.max(0.1, Math.round((+media.dur || +c.dur || 0) * 100) / 100);
+      c.src = media.src;
+      c.thumb = media.thumb || null;
+      if (media.libId) c.libId = media.libId;
+      if (media.name) c.name = media.name;
+      c.srcDur = len; c.dur = len; c.trimIn = 0; c.trimOut = 0; c.speed = 1; c.reversed = false;
+      if (c.pairId) {
+        for (const other of (tl.tracks || [])) {
+          for (const x of (other.clips || [])) {
+            if (x === c || x.pairId !== c.pairId) continue;
+            x.srcDur = len; x.dur = len; x.trimIn = 0; x.trimOut = 0; x.speed = 1; x.reversed = false;
+          }
+        }
+      }
+      return;
+    }
+  });
+  return !!(ok && hit);
+}
+
+/**
  * Several fields on one clip, in ONE mutation - which is what a placement is: putting a
  * picture on the frame sets its middle, its width and sometimes its turn, and that is one
  * thing the person did, not four.
@@ -1286,8 +1321,9 @@ export function initTimelineB() {
   // anything changes, so a listener on a clip is a listener on a node that may not survive
   // until the second click.
   //
-  // Safe from here: that window writes nothing to any timeline - what it makes goes to the
-  // library, and getting it onto the montage is a drag like anything else there.
+  // What that window saves goes to the library AND replaces this still on its lane, in place -
+  // through swapClipMedia above, which keeps this editor's rules (no ripple, the sound twin
+  // follows the length).
   document.addEventListener('dblclick', (e) => {
     if (!_on || !e.target || !e.target.closest) return;
     const el = e.target.closest('.mv3b-clip');

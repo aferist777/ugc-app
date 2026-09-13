@@ -1676,3 +1676,10 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-anim-retry:hover:not([disabled]){ background:var(--danger); color:oklch(.99 0 0) }
 .mv3-anim-retry[disabled]{ opacity:.45; cursor:default }
+
+/* The viewer's right column, on this page only: 220px left 146 for a value after the label,
+   and a category like "grok-imagine-video" read as "grok-imagine-vi" on the control - which is
+   a dropdown you have to open to find out what it says. A little wider, and the label column a
+   little narrower. Scoped to Merge, so the Library page's viewer is left exactly as it is. */
+.lib-view-info{ flex-basis:260px }
+.lib-view-info .lib-view-k{ flex-basis:62px }

@@ -310,6 +310,41 @@ function _markSubsStale(tl) {
   if (subs && Array.isArray(subs.clips) && subs.clips.length) subs.stale = true;
 }
 
+/** THE PICTURE BECOMES THE CLIP THAT WAS MADE FROM IT. Animate calls this when a clip it made
+ *  is saved: the still on the lane is replaced by the video, in place - same lane, same start -
+ *  and runs for the video's own length. One mutation, so one undo puts the picture back.
+ *
+ *  On MAIN the length matters to everything after it: the read is a sequence, so a still that
+ *  ran ten seconds replaced by a six-second clip closes the four-second gap behind it, and the
+ *  overlays and captions pinned to the picture move with it - the same rule a trim follows.
+ *  Anywhere else the clip simply gets its new length.
+ *
+ *  Returns false when there is nothing to change: the clip is gone, or the project is somebody
+ *  else's and cannot be edited - which the caller says out loud rather than claiming it worked. */
+export function swapClipMedia(id, media) {
+  let hit = false;
+  const ok = Store.mutate(tl => {
+    for (const scope of Object.keys(tl.tracks || {})) {
+      const tr = tl.tracks[scope];
+      const c = tr && (tr.clips || []).find(x => x.id === id);
+      if (!c) continue;
+      hit = true;
+      const was = +c.dur || 0;
+      const len = Math.max(MIN_DUR, Math.round((+media.dur || was) * 100) / 100);
+      c.src = media.src;
+      c.thumb = media.thumb || null;
+      if (media.libId) c.libId = media.libId;
+      if (media.name) c.name = media.name;
+      c.srcDur = len;
+      c.dur = len;
+      c.trimIn = 0; c.trimOut = 0; c.speed = 1; c.reversed = false;
+      if (scope === 'seg') _ripple(tl, (+c.start) + was, len - was);
+      return;
+    }
+  });
+  return !!(ok && hit);
+}
+
 /** Laying a clip down from somewhere other than a drag - the picture window's "put it on the
  *  timeline". The SAME function a drop ends in, so a placed clip and a dragged one are shaped
  *  identically; `scope` is the lane, `at` the second it should start at, `data` the library

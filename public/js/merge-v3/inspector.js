@@ -397,7 +397,8 @@ function _renderStillClip(host, scope, id, c, set) {
   // makes something NEW rather than adjusting the clip, so it stands apart from the grid of
   // settings instead of queueing at the bottom of it.
   const animate = C.button('Animate', () => openAnimate(c), {
-    title: 'Generate a video from this picture. It lands in Birols; the picture stays where it is.',
+    title: 'Generate a video from this picture. The one you save replaces the picture here, '
+         + 'and it lands in Birols as well.',
   });
   animate.classList.add('mv3-c-animate');
   left.appendChild(animate);
@@ -789,17 +790,16 @@ function _blankStill(host, track, c, set) {
     fig.appendChild(img);
   }
   left.appendChild(fig);
-  // THE SAME WINDOW THE OTHER PANEL OPENS, and it is safe to open from here because of what
-  // it does not do: it writes nothing to any timeline. What it makes goes to the Birols shelf
-  // of the library - which both workflows already share - and getting it onto the montage is
-  // a drag, the same as for anything else on that shelf.
+  // THE SAME WINDOW THE OTHER PANEL OPENS. The clip it saves replaces this picture on the lane,
+  // in place - through this editor's own swapClipMedia, which knows this editor's rules - and
+  // goes to the Birols shelf the two workflows share as well.
   //
   // Directly under the picture it acts on, and centred: this is the one thing on this panel
   // that makes something NEW rather than adjusting the clip, so it stands apart from the
   // settings instead of queueing among them.
   const animate = C.button('Animate', () => openAnimate(c), {
-    title: 'Generate a video from this picture. It lands in the library, in Birols; '
-         + 'the picture stays where it is. Double-clicking the clip opens this too.',
+    title: 'Generate a video from this picture. The one you save replaces the picture on the '
+         + 'lane and lands in Birols as well. Double-clicking the clip opens this too.',
   });
   animate.classList.add('mv3-c-animate');
   left.appendChild(animate);

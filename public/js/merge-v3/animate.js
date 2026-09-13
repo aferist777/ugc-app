@@ -688,6 +688,8 @@ export async function openAnimate(clip) {
         // next push would erase the record the server just wrote.
         _lsUnshift(rec.lsKey, rec.item);
         sh.saved = true;
+        // Remembered so the timeline can point at the shelf record, not only at the file.
+        sh.libId = (rec.item && rec.item.id) || null;
         done++;
       } catch (e) {
         save.textContent = was;
@@ -696,9 +698,36 @@ export async function openAnimate(clip) {
         return;
       }
     }
-    note.textContent = done + (done === 1 ? ' clip' : ' clips') + ' saved to Birols / ' + keep[0].engine;
-    // Saved is saved: closing now has nothing to warn about.
-    closeAnimate(true);
+    // ── THE PICTURE BECOMES THE CLIP ─────────────────────────────────────
+    // Animating a still is replacing it: the point was never a second copy somewhere in the
+    // library, it was that picture, moving, where the picture was. So the clip opened from a
+    // timeline is swapped in place for the FIRST one ticked - same lane, same start, the
+    // video's own length - and it is in the library as well, as before.
+    //
+    // Only when the window was opened from a clip on a timeline; opened from the picture window
+    // there is no clip to replace. Each timeline does its own swap, because each has its own
+    // rules about what a change of length does to its neighbours - Main closes up behind a
+    // shorter clip, a blank project's lanes do not. Imported here, at Save, rather than at the
+    // top: the blank timeline imports this file, and a cycle at load is a cycle nobody needs.
+    let swapped = '';
+    if (clip.id && keep[0]) {
+      try {
+        const Store = await import('./store.js');
+        const T = Store.isBlank() ? await import('./timeline-b.js') : await import('./timeline.js');
+        const ok = T.swapClipMedia(clip.id, {
+          src: keep[0].videoPath, thumb: keep[0].thumbPath || null, libId: keep[0].libId || null,
+          name: (clip.name || 'animated').slice(0, 90), dur: keep[0].duration,
+        });
+        swapped = ok ? ' — and it has replaced the picture on the timeline'
+                     : ' — the timeline could not be changed (the project is not yours to edit)';
+      } catch (e) {
+        swapped = ' — the timeline could not be changed: ' + e.message;
+      }
+    }
+    note.textContent = done + (done === 1 ? ' clip' : ' clips') + ' saved to Birols / ' + keep[0].engine + swapped;
+    // Saved is saved: closing now has nothing to warn about. Unless the swap did not happen -
+    // then the window stays open long enough for the sentence saying so to be read.
+    if (!clip.id || swapped.startsWith(' — and')) closeAnimate(true);
   };
   save.addEventListener('click', _save);
 

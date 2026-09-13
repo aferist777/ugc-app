@@ -30,7 +30,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer } from '../library/viewer.js';
-import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages } from '../library/actions.js';
+import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
+         loadCats, setCategory } from '../library/actions.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
 
@@ -165,8 +166,75 @@ function _tile(it, i) {
   });
   cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
 
-  cell.addEventListener('click', () => openViewer(_items, i));
+  cell.addEventListener('click', () => openViewer(_items, i, { extraRows: _categoryRow }));
   return cell;
+}
+
+// ── The category, from inside the viewer ────────────────────────────────────
+// A clip is usually filed while it is being LOOKED AT - that is when you know what it is - and
+// sending somebody to the Library page to do it means finding the clip a second time. So the
+// viewer's right column carries the same category select the Library page puts there, writing
+// through the same shared call (library/actions.js), which also keeps the browser's copy of
+// the archive in step.
+//
+// The whole list for the item's kind, not just the categories that happen to have something
+// in the grid right now: a new clip belongs in a category that may still be empty. Read once
+// per opening of the viewer, because a category added on the Library page since this panel
+// loaded has to be offered too.
+const CATABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
+let _allCats = null;
+
+function _categoryRow(item) {
+  if (!item || !CATABLE.has(item.kind)) return [];
+  const sel = document.createElement('select');
+  sel.className = 'lib-view-sel';
+  sel.title = 'Which category this is filed under';
+  const current = (item.meta && item.meta.categoryId) || '';
+
+  const fill = (list) => {
+    sel.textContent = '';
+    const none = document.createElement('option');
+    none.value = ''; none.textContent = '— no category —';
+    sel.appendChild(none);
+    for (const c of (list || [])) {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.label;
+      sel.appendChild(o);
+    }
+    sel.value = current;
+    // A category this item points at that is not in the list any more still has to read as
+    // itself rather than silently showing "no category".
+    if (sel.value !== current) {
+      const o = document.createElement('option');
+      o.value = current; o.textContent = current; sel.appendChild(o); sel.value = current;
+    }
+  };
+  fill([]);
+  (async () => {
+    try { _allCats = await loadCats(); } catch (e) { _allCats = _allCats || {}; }
+    fill((_allCats || {})[item.kind] || []);
+  })();
+
+  sel.addEventListener('change', async () => {
+    const id = sel.value;
+    const label = id ? ((sel.selectedOptions[0] || {}).textContent || '') : '';
+    sel.disabled = true;
+    try {
+      await setCategory(item, id, label);
+      if (item.meta) item.meta.categoryId = id;
+      _status('Filed under ' + (label || 'no category') + '.');
+      setTimeout(() => _status(''), 2200);
+      // The grid behind is filtered by category, so the clip may have to leave it - reloaded
+      // rather than patched, because which tiles belong on screen is the server's answer.
+      _load();
+    } catch (e) {
+      _status('Could not change the category: ' + e.message, true);
+      sel.value = current;
+    } finally {
+      sel.disabled = false;
+    }
+  });
+  return [['category', sel]];
 }
 
 // The upload cell, first in the grid. A tile-sized target rather than a header
