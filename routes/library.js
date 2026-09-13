@@ -792,7 +792,14 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
 
     // Ready for a lane, and a hook is still the same hook.
     try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
-    if (kind === 'hooks') { try { require('../lib/hook-ids').carry(from, videoPath); } catch (e) {} }
+    // A hook keeps its number; a hook that somehow never had one is numbered now, rather than a
+    // trim being the thing that leaves it without.
+    if (kind === 'hooks') {
+      try {
+        const HI = require('../lib/hook-ids');
+        if (!HI.carry(from, videoPath)) HI.assign([videoPath]);
+      } catch (e) {}
+    }
 
     console.log('[library/trim]', kind, id, from, '->', videoPath, a + 's..' + b + 's');
     res.json({ success: true, kind, id, patch, lsKey: store.lsKey });
@@ -921,10 +928,18 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
 
     // Same store: flip the flag that decides which kind it reads as. `categoryId` is
     // kept — moving a birol to uploads and back should not lose which category it was in.
+    // A MOVED CLIP ARRIVES AS THE NEWEST THING ON ITS NEW SHELF. The shelf is ordered by `date`
+    // (favourites first), and a clip that kept the date it was uploaded landed wherever that old
+    // date put it - in the middle of the grid, looking as if the move had not happened. The
+    // original date is kept beside it as `uploadedAt`, so nothing about when it came in is lost.
+    const now = new Date().toISOString();
+    const stamp = (rec) => { if (!rec.uploadedAt) rec.uploadedAt = it.date || now; rec.date = now; };
+
     if (src.file === dst.file) {
       if (to === 'uploads') it.source = 'upload';
       else delete it.source;
       if (it.categoryId === UPLOADS_CAT) it.categoryId = '';       // the legacy marker is not a category
+      stamp(it);
       src.write(srcList);
       return res.json({ success: true, kind: to, id, item: it, lsKey: src.lsKey });
     }
@@ -937,7 +952,8 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
       name: it.name,
       videoPath: it.videoPath,
       thumbPath: it.thumbPath || null,
-      date: it.date || new Date().toISOString(),
+      date: now,
+      uploadedAt: it.uploadedAt || it.date || now,
     };
     // The one-time trim travels with the clip. Rebuilding the record for the other store used
     // to drop it: an upload moved to Hooks before it was trimmed lost the trim it was owed, and
@@ -961,6 +977,11 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     dstList.unshift(moved);
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
+    // BECOMING A HOOK IS WHEN A HOOK GETS ITS NUMBER. A file uploaded straight onto Hooks is
+    // numbered as it is filed (POST /library/media/record); one moved here from Uploads used to
+    // wait for the next time a browser pushed the hooks archive - which the Merge page never
+    // does - so it sat on the shelf with no number at all.
+    if (to === 'hooks') { try { require('../lib/hook-ids').assign([moved.videoPath]); } catch (e) {} }
     res.json({ success: true, kind: to, id, item: moved, lsKey: dst.lsKey, fromLsKey: src.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
