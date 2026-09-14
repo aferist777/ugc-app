@@ -427,7 +427,7 @@ async function _fromText(text, pr, { convert, report }) {
 
   const g = await (await fetch('/api/character-v2/generate', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    // imageUrl, not the image again: analyze already put it on imgbb and said where.
+    // imageUrl, not the image again: analyze already put it on R2 and said where.
     body: JSON.stringify({
       prompt, imageUrl: a.imageUrl,
       aspect: convert ? '3:2' : 'match_input_image',

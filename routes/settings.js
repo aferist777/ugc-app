@@ -10,28 +10,23 @@ const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.jso
 // Fields that hold live credentials. Their VALUES must never be sent to the browser — the
 // page only needs to know a key is set and show a masked hint. The server reads the real
 // values straight off disk on every request path (audio.js, video-engines.js, helpers.js,
-// …), so redacting the HTTP view changes no behaviour. This is the companion to the app-wide
-// login gate in lib/access-gate.js: even a signed-in browser never receives a raw key, so a
-// leaked screen-share, a browser extension, or a future open endpoint can't hand them out.
+// …), so redacting the HTTP view changes no behaviour. Even on one machine with one person a
+// raw key in the page is a key in a screen-share or a browser extension's reach.
 //
 // r2SecretAccessKey is here; r2AccountId, r2AccessKeyId, r2Bucket and r2PublicBase are not.
 // Those four are identifiers, not credentials - useless without the secret, and worth seeing at
 // a glance to check which bucket an install is pointed at. Masking them would only hide whether
 // the field is filled in correctly.
 const SECRET_KEYS = [
-  'kieApiKey', 'replicateApiKey', 'imgbbApiKey',
+  'kieApiKey', 'replicateApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
-  // The Partner ingest key (lib/partner.js): a finished render goes to their
-  // dashboard with it. Their spec asks for an env var; the settings file is our equivalent.
-  'partnerApiKey',
 ];
 
-// WHO MAY TOUCH A SECRET. Every signed-in page reads GET /settings - engine defaults, column
-// widths, the chosen image engine live there - so the read stays open and safeView keeps the
-// secrets out of it. Reading a secret back, or writing one, is the admin's alone. The Keys tab
-// on /admin is the only place that does either; a non-admin gets a plain 403.
-function isAdmin(req) { return !!(req.user && req.user.role === 'admin'); }
+// Keys of services this app no longer talks to: imgBB, and Partner's ingest. A library
+// carried over from the server version still holds them, and they are not in SECRET_KEYS any
+// more - so they are kept out of the page by name, and dropped from the file on the next save.
+const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl'];
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
@@ -86,6 +81,7 @@ function safeView(s) {
     secretsPreview[k] = maskPreview(s[k]);
     delete settings[k];
   }
+  for (const k of RETIRED_KEYS) delete settings[k];
   return { success: true, settings, secretsSet, secretsPreview, envFallback: envFallback(s) };
 }
 
@@ -110,8 +106,8 @@ router.post('/settings', (req, res) => {
     const clean = {};
     const gone = [];
     for (const [k, v] of Object.entries(incoming)) {
+      if (RETIRED_KEYS.includes(k)) continue;
       if (SECRET_KEYS.includes(k)) {
-        if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'admin only: ' + k });
         if (looksMasked(v)) continue; // ignore echoed masks
         // An empty value is a removal, not a key that happens to be empty.
         if (v == null || String(v).trim() === '') { gone.push(k); continue; }
@@ -119,7 +115,7 @@ router.post('/settings', (req, res) => {
       clean[k] = v;
     }
     const updated = { ...current, ...clean };
-    for (const k of gone) delete updated[k];
+    for (const k of [...gone, ...RETIRED_KEYS]) delete updated[k];
     saveSettings(updated);
     res.json(safeView(updated));
   } catch (err) {

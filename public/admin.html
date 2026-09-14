@@ -21,49 +21,14 @@
   <span class="sp"></span>
   <a href="/library" data-also="/library2">Library</a>
   <a href="/admin">Admin</a>
-  <!-- The kie.ai balance. This is the one page that carries it: it is the admin's number,
+  <!-- The kie.ai balance. This is the one page that carries it: it is a number to act on here,
        and on every other page it was a reading nobody could act on. -->
   <span class="sv3-bal" id="sv3-balance" title="kie.ai balance">…</span>
 </nav>
 
 <div class="adm-body">
-  <!-- Two panes, one strip. Users is where the admin spends their time; Keys is where the
-       credentials live now that the Brains popup on Library is gone. -->
-  <div class="adm-tabs" role="tablist">
-    <button class="adm-tab cur" type="button" role="tab" data-pane="users">Users</button>
-    <button class="adm-tab" type="button" role="tab" data-pane="keys">API keys</button>
-    <button class="adm-tab" type="button" role="tab" data-pane="activity">Activity</button>
-  </div>
-
-  <section class="adm-panel" data-pane="users">
-    <div class="adm-head">
-      <span class="adm-title">Users</span>
-      <span class="adm-count" id="adm-count">—</span>
-      <span class="sp"></span>
-      <button class="lib-btn adm-go" type="button" id="adm-create">+ Create user</button>
-    </div>
-
-    <!-- One row per person. Nothing in this table can log anyone in: the server sends the
-         public view only. -->
-    <table class="adm-table">
-      <thead>
-        <tr>
-          <th>Nickname</th>
-          <th>Login</th>
-          <th>Role</th>
-          <th>Created</th>
-          <th>Last seen</th>
-          <th>Activity</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="adm-rows"></tbody>
-    </table>
-    <div class="adm-status" id="adm-status"></div>
-  </section>
-
-  <section class="adm-panel" data-pane="keys" hidden>
+  <!-- The settings: the keys every generator reads, saved into settings.json in the library. -->
+  <section class="adm-panel">
     <div class="adm-head">
       <span class="adm-title">API keys</span>
       <span class="adm-count">first six and last four are all anyone sees here</span>
@@ -75,118 +40,10 @@
     <div class="adm-keys" id="adm-keys"></div>
     <div class="adm-status" id="adm-keys-status"></div>
   </section>
-
-  <!-- Who did what, when: the audit log read back (routes/audit.js, js/admin-activity.js).
-       One row per event, newest first; the details under a row are for the developer. -->
-  <section class="adm-panel" data-pane="activity" hidden>
-    <div class="adm-head">
-      <span class="adm-title">Activity</span>
-      <span class="adm-count" id="act-count">—</span>
-      <span class="adm-count" id="act-keep"></span>
-      <span class="adm-chip pending act-unmapped" id="act-unmapped" hidden></span>
-      <span class="sp"></span>
-      <button class="lib-btn" type="button" id="act-refresh" title="Read again">↻</button>
-      <button class="lib-btn" type="button" id="act-dl-jsonl" title="The 'to' day as it is on disk">⬇ JSONL</button>
-      <button class="lib-btn" type="button" id="act-dl-csv" title="The 'to' day, flattened">⬇ CSV</button>
-    </div>
-    <div class="act-filters">
-      <label class="act-fld"><span>User</span><select id="act-user"></select></label>
-      <label class="act-fld"><span>Page</span><select id="act-page"></select></label>
-      <label class="act-fld"><span>From</span><input type="date" id="act-from"></label>
-      <label class="act-fld"><span>To</span><input type="date" id="act-to"></label>
-      <span class="act-quicks">
-        <button class="lib-btn act-quick" type="button" data-days="0">today</button>
-        <button class="lib-btn act-quick" type="button" data-days="-1">yesterday</button>
-        <button class="lib-btn act-quick" type="button" data-days="7">7 days</button>
-        <button class="lib-btn act-quick" type="button" data-days="30">30 days</button>
-      </span>
-      <input type="search" id="act-q" placeholder="search — project, button, prompt…">
-      <button class="lib-btn adm-go" type="button" id="act-apply">Apply</button>
-    </div>
-    <!-- Which kinds of event to show: tick what you want, the list follows, the ticks are
-         remembered in this browser. All ticked is everything; none ticked is nothing. -->
-    <div class="act-kinds">
-      <span class="act-kinds-l">Show</span>
-      <label class="act-kind"><input type="checkbox" value="buttons" checked> buttons &amp; links</label>
-      <label class="act-kind"><input type="checkbox" value="inputs" checked> dropdowns, fields, keys</label>
-      <label class="act-kind"><input type="checkbox" value="edits" checked> timeline edits</label>
-      <label class="act-kind"><input type="checkbox" value="actions" checked> actions</label>
-      <label class="act-kind"><input type="checkbox" value="processes" checked> processes</label>
-      <label class="act-kind"><input type="checkbox" value="signin" checked> sign-in / out</label>
-      <label class="act-kind"><input type="checkbox" value="admin" checked> admin</label>
-      <label class="act-kind"><input type="checkbox" value="errors" checked> errors</label>
-      <span class="sp"></span>
-      <button class="lib-btn act-mini" type="button" id="act-kinds-all">all</button>
-      <button class="lib-btn act-mini" type="button" id="act-kinds-none">none</button>
-    </div>
-    <!-- Above the list and again below it: how many rows a page holds, and the pager. -->
-    <div class="act-bar">
-      <span class="sp"></span>
-      <span class="act-size"><span class="act-bar-l">Rows</span><button class="lib-btn act-mini" type="button" data-size="20">20</button><button class="lib-btn act-mini" type="button" data-size="50">50</button><button class="lib-btn act-mini" type="button" data-size="100">100</button></span>
-      <span class="act-pager"><button class="lib-btn act-mini" type="button" data-go="first" title="First page">«</button><button class="lib-btn act-mini" type="button" data-go="prev" title="Previous page">‹</button><span class="act-pg">—</span><button class="lib-btn act-mini" type="button" data-go="next" title="Next page">›</button><button class="lib-btn act-mini" type="button" data-go="last" title="Last page">»</button></span>
-    </div>
-    <div class="act-wrap" id="act-wrap">
-      <table class="adm-table act-table">
-        <thead><tr><th>Time</th><th>User</th><th>Page</th><th>Event</th><th class="act-th-r">Result</th></tr></thead>
-        <tbody id="act-rows"></tbody>
-      </table>
-    </div>
-    <div class="act-bar">
-      <div class="adm-status" id="act-status"></div>
-      <span class="sp"></span>
-      <span class="act-size"><span class="act-bar-l">Rows</span><button class="lib-btn act-mini" type="button" data-size="20">20</button><button class="lib-btn act-mini" type="button" data-size="50">50</button><button class="lib-btn act-mini" type="button" data-size="100">100</button></span>
-      <span class="act-pager"><button class="lib-btn act-mini" type="button" data-go="first" title="First page">«</button><button class="lib-btn act-mini" type="button" data-go="prev" title="Previous page">‹</button><span class="act-pg">—</span><button class="lib-btn act-mini" type="button" data-go="next" title="Next page">›</button><button class="lib-btn act-mini" type="button" data-go="last" title="Last page">»</button></span>
-    </div>
-  </section>
-</div>
-
-<!-- The one moment a password is visible. Closing this is closing it for good: the server has
-     already forgotten the clear text, and "Reset" is the only way to get another. -->
-<div class="adm-ov" id="adm-ov" hidden>
-  <div class="adm-pop" role="dialog" aria-modal="true" aria-labelledby="adm-pop-title">
-    <div class="adm-pop-head">
-      <span class="adm-title" id="adm-pop-title">One-time password</span>
-      <span class="sp"></span>
-      <button class="lib-btn" type="button" id="adm-pop-close" title="Close (Esc)">✕</button>
-    </div>
-    <div class="adm-pop-body">
-      <div class="adm-cred">
-        <span class="adm-cred-k">login</span>
-        <code class="adm-cred-v" id="adm-cred-login"></code>
-      </div>
-      <div class="adm-cred">
-        <span class="adm-cred-k">password</span>
-        <code class="adm-cred-v" id="adm-cred-pass"></code>
-        <button class="lib-btn" type="button" id="adm-copy">Copy</button>
-      </div>
-      <p class="adm-warn">
-        Shown once. Pass it on now — after this window closes it cannot be read back, only
-        replaced with <b>Reset</b>.
-      </p>
-    </div>
-  </div>
 </div>
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
-<script>
-  // The tab strip. Panes are hidden rather than rebuilt, so a half-typed key survives a switch.
-  (function () {
-    var tabs = document.querySelectorAll('.adm-tab');
-    tabs.forEach(function (t) {
-      t.addEventListener('click', function () {
-        tabs.forEach(function (x) { x.classList.toggle('cur', x === t); });
-        document.querySelectorAll('.adm-panel[data-pane]').forEach(function (p) {
-          p.hidden = p.getAttribute('data-pane') !== t.getAttribute('data-pane');
-        });
-      });
-    });
-  })();
-</script>
-<script src="js/admin.js"></script>
 <script src="js/admin-keys.js"></script>
-<script src="js/admin-activity.js"></script>
-<!-- What was pressed, for the audit log (Admin / Activity). -->
-<script src="js/audit-client.js"></script>
 </body>
 </html>

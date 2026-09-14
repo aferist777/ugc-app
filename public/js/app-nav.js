@@ -10,6 +10,7 @@
 //   • the balance chip, wherever a page carries #sv3-balance - which is /admin alone now.
 //     It is the kie.ai balance, an admin's number; on the work pages it was a reading
 //     nobody could act on.
+//   • the Admin entry, on a page whose strip leaves it out.
 
 const REFRESH_MS = 60000;
 
@@ -43,33 +44,20 @@ async function _paintBalance(el) {
   } catch (e) { /* a missing balance is not worth a visible error on this page */ }
 }
 
-// Who is signed in, appended to the strip: their nickname, an Admin entry when they have the
-// role (and the page does not already carry one), and Sign out. Fetched rather than baked into
-// each page, so the same markup serves everybody and the role decides.
-async function _whoAmI(nav) {
-  let me = null;
-  try { me = (await fetch('/api/me').then(r => r.json())).user; } catch { return; }
-  if (!me) return;
-  const who = document.createElement('span');
-  who.className = 'sv3-who';
-  who.textContent = me.nickname;
-  who.title = 'signed in as ' + me.login;
-  nav.appendChild(who);
-  if (me.role === 'admin' && !nav.querySelector('a[href="/admin"]')) {
-    const a = document.createElement('a');
-    a.href = '/admin'; a.textContent = 'Admin';
-    nav.appendChild(a);
-  }
-  const out = document.createElement('a');
-  out.href = '/logout'; out.textContent = 'Sign out'; out.className = 'sv3-out';
-  nav.appendChild(out);
+// The Admin entry - settings and API keys - on a page whose strip does not carry one already.
+// There is one person and no sign-in, so there is nobody to hide it from.
+function _adminLink(nav) {
+  if (nav.querySelector('a[href="/admin"]')) return;
+  const a = document.createElement('a');
+  a.href = '/admin'; a.textContent = 'Admin';
+  nav.appendChild(a);
 }
 
 export function initNav() {
   const nav = document.querySelector('.sv3-nav');
   if (!nav) return;
+  _adminLink(nav);
   _lightCurrent(nav);
-  _whoAmI(nav);
   const bal = nav.querySelector('#sv3-balance');
   if (bal) { _paintBalance(bal); setInterval(() => _paintBalance(bal), REFRESH_MS); }
 }

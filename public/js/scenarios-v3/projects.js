@@ -92,6 +92,9 @@ function _renderOwner() {
   try { localStorage.setItem(OWNER_KEY, _ownerSel); } catch (e) {}
   const own = $('sv3-owner');
   if (!own) return;
+  // A list of one owner is not a choice - the desktop app has one person - so it is not shown.
+  const fld = $('sv3-owner-fld');
+  if (fld) fld.style.display = _owners.length > 1 ? '' : 'none';
   own.textContent = '';
   _owners.forEach(o => {
     const e = document.createElement('option');

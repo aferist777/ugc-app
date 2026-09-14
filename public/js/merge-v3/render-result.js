@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the result window: a render, playable, named, kept, sent.
+   MERGE v3 — the result window: a render, playable, named, kept.
 
    One window for every finished render, wherever it came from: straight after Render on
    either editor, or from the queue's "open" on a ready entry.
 
-   LEFT: the video, with the "also send to Partner" tick under it.
+   LEFT: the video.
    RIGHT: the name taken apart. Seven fields, one per part of the Meta naming pattern, each
    with its description beside it; they are filled from the project on open (the Scenarios
    project behind the render knows the vertical, the ingredient, the character, the gender,
@@ -14,9 +14,9 @@
    Editing the full name feeds the parts back while it still has seven of them.
 
    TWO BUTTONS. Save & download names the file in finals/ (renaming it if the name changed),
-   keeps it on the Library's renders shelf, downloads it, and - when ticked - sends it to
-   Partner. Cancel on a FRESH render deletes the file, as it always did; Cancel on a
-   render opened from the queue just closes, because that file was kept on purpose.
+   keeps it on the Library's renders shelf and downloads it. Cancel on a FRESH render deletes
+   the file, as it always did; Cancel on a render opened from the queue just closes, because
+   that file was kept on purpose.
 
    THE NAME IS THE PERSON'S. The pattern is a recommendation for creatives that go to Meta -
    the same string becomes the ad name there - so the line beside the field says whether the
@@ -25,10 +25,9 @@
 
 import * as Store from './store.js';
 
-const SEND_KEY = 'mv3-send-partner';
 const TRIGGERS = ['AUTH', 'FEAR', 'FOMO', 'SECRET', 'PROOF', 'DESIRE'];
 
-// The pattern, part by part, in the words of the Partner side.
+// The pattern, part by part.
 const PARTS = [
   { id: 'vertical',   label: 'vertical',      desc: 'the niche: MaleEnh · WeightLoss · Prostate', ph: 'MaleEnh' },
   { id: 'ingredient', label: 'Ingredient',    desc: 'the trick/ingredient, e.g. RedHoney, Honey, Beetroot', ph: 'RedHoney' },
@@ -39,7 +38,7 @@ const PARTS = [
   { id: 'gender',     label: 'gender',        desc: 'M / F', select: ['M', 'F'] },
 ];
 const INTRO = [
-  'Use this exact pattern — the same string becomes the Meta Ad name, so stats pull back into the app automatically. Underscore _ is the separator, so never use _ or a space inside a field (use camelCase or a hyphen).',
+  'Use this exact pattern — the same string becomes the Meta Ad name. Underscore _ is the separator, so never use _ or a space inside a field (use camelCase or a hyphen).',
   'No offer in the name — a creative gets reused across offers, so the offer lives at the campaign level, not here.',
 ];
 const PATTERN = 'vertical_Ingredient_angleScenario_trigger_hookid_character_gender';
@@ -137,12 +136,12 @@ function close() { if (_ov) { _ov.remove(); _ov = null; } document.removeEventLi
 function _key(e) { if (e.key === 'Escape') close(); }
 
 /**
- * @param {object} o  { url, title, key, queueId?, sent?, fresh }
+ * @param {object} o  { url, title, key, queueId?, fresh }
  *   fresh   true straight after a render: Cancel deletes the file. From the queue: false.
  */
 export async function showResult(o) {
   close();
-  const state = { url: o.url, queueId: o.queueId || null, sent: o.sent || null, fresh: !!o.fresh, saved: !o.fresh };
+  const state = { url: o.url, queueId: o.queueId || null, fresh: !!o.fresh, saved: !o.fresh };
 
   // A fresh render is filed into the queue first, so it can be found again after this
   // window closes. Not fatal if that fails - the file is still on disk.
@@ -158,7 +157,6 @@ export async function showResult(o) {
 
   const ov = el('div', 'mv3-x-ov');
   const box = el('div', 'mv3-x is-result is-wide');
-  box.dataset.auditScope = 'Render result';
   const head = el('div', 'mv3-x-head');
   head.appendChild(el('h3', null, o.fresh ? 'Render finished' : (o.title || 'Render')));
   const x = el('button', 'mv3-x-close', '✕'); x.type = 'button'; x.title = 'Close (Esc)';
@@ -167,23 +165,13 @@ export async function showResult(o) {
 
   const body = el('div', 'mv3-rr');
 
-  // ── left: the video and the tick ──
+  // ── left: the video ──
   const left = el('div', 'mv3-rr-left');
   const vwrap = el('div', 'mv3-rr-video');
   const v = document.createElement('video');
   v.src = o.url; v.controls = true; v.autoplay = !!o.fresh; v.playsInline = true; v.preload = 'metadata';
   vwrap.appendChild(v);
   left.appendChild(vwrap);
-  const tick = el('label', 'mv3-rr-check');
-  const cb = document.createElement('input'); cb.type = 'checkbox';
-  let remembered = '1';
-  try { remembered = localStorage.getItem(SEND_KEY) || '1'; } catch (e) {}
-  cb.checked = remembered !== '0';
-  cb.addEventListener('change', () => { try { localStorage.setItem(SEND_KEY, cb.checked ? '1' : '0'); } catch (e) {} });
-  tick.appendChild(cb); tick.appendChild(document.createTextNode(' also send to Partner'));
-  left.appendChild(tick);
-  const sentLine = el('div', 'mv3-rr-sent');
-  left.appendChild(sentLine);
   body.appendChild(left);
 
   // ── right: the name taken apart ──
@@ -206,7 +194,6 @@ export async function showResult(o) {
       f = document.createElement('input');
       f.type = 'text'; f.className = 'mv3-rr-rf'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
     }
-    f.dataset.audit = 'Name part: ' + p.label;
     row.appendChild(f);
     row.appendChild(el('div', 'mv3-rr-rd', p.desc));
     side.appendChild(row);
@@ -219,15 +206,13 @@ export async function showResult(o) {
   const foot = el('div', 'mv3-x-foot is-rr');
   const name = document.createElement('input');
   name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
-  name.placeholder = 'file name'; name.title = 'The file name - and the creative name on the Partner side';
-  name.dataset.audit = 'Render name';
+  name.placeholder = 'file name'; name.title = 'The file name - and the ad name on Meta';
   // One line for two things: what the name says against the pattern, and what saving did.
   const hint = el('span', 'mv3-rr-hint');
   const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
   if (o.fresh) cancel.title = 'Delete this render';
-  const again = el('button', 'mv3-c-btn', 'Send again'); again.type = 'button'; again.hidden = true;
   const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
-  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(cancel); foot.appendChild(again); foot.appendChild(save);
+  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(cancel); foot.appendChild(save);
   box.appendChild(foot);
 
   // ── keeping the parts and the name in step ──
@@ -262,15 +247,6 @@ export async function showResult(o) {
     compose();
   };
 
-  const paintSent = () => {
-    sentLine.textContent = '';
-    if (!state.sent) { sentLine.hidden = true; return; }
-    sentLine.hidden = false;
-    sentLine.appendChild(document.createTextNode('sent to Partner → creative #' + state.sent.creativeId + ' '));
-    if (state.sent.url) { const a = el('a', null, 'open'); a.href = state.sent.url; a.target = '_blank'; a.rel = 'noopener'; sentLine.appendChild(a); }
-  };
-  paintSent();
-
   const release = () => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} };
   const download = (url) => {
     const a = document.createElement('a');
@@ -291,44 +267,25 @@ export async function showResult(o) {
   save.addEventListener('click', async () => {
     const want = name.value.trim();
     if (!want) { say('a name is needed', 'is-bad'); name.focus(); return; }
-    save.disabled = true; cancel.disabled = true; again.hidden = true;
+    save.disabled = true; cancel.disabled = true;
     say('saving…');
     release();     // the file may be renamed underneath the player
     try {
       const d = await fetch('/api/mv3/render/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: state.url, name: want, send: cb.checked, queueId: state.queueId, key: o.key || Store.key() }),
+        body: JSON.stringify({ url: state.url, name: want, queueId: state.queueId, key: o.key || Store.key() }),
       }).then(r => r.json());
       if (!d || !d.success) throw new Error((d && d.error) || 'could not save');
       state.url = d.url; state.saved = true; state.fresh = false;
-      if (d.sent) state.sent = d.sent;
       v.src = state.url;
       download(state.url);
-      paintSent();
-      const bits = ['saved as ' + decodeURIComponent(String(d.url).split('/').pop()), 'on the Library renders shelf'];
-      if (d.sent) bits.push('sent to Partner');
-      if (d.sendError) { bits.push('Partner: ' + d.sendError); again.hidden = false; }
-      say(bits.join(' · '), d.sendError ? 'is-bad' : 'is-good');
+      say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + ' · on the Library renders shelf', 'is-good');
       cancel.textContent = 'Close'; cancel.classList.remove('danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');
     } finally {
       save.disabled = false; cancel.disabled = false;
     }
-  });
-
-  again.addEventListener('click', async () => {
-    again.disabled = true; say('sending…');
-    try {
-      const d = await fetch('/api/mv3/render/send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: state.url, name: name.value.trim(), queueId: state.queueId, key: o.key || Store.key() }),
-      }).then(r => r.json());
-      if (!d || !d.success) throw new Error((d && d.error) || 'not sent');
-      state.sent = d.sent; paintSent(); again.hidden = true;
-      say('sent to Partner', 'is-good');
-    } catch (e) { say(e.message, 'is-bad'); }
-    finally { again.disabled = false; }
   });
 
   x.addEventListener('click', () => { if (state.fresh && !state.saved) cancel.click(); else close(); });

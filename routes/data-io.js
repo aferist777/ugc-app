@@ -15,8 +15,6 @@
 // Compressing them again buys a percent or two and turns a disk-speed copy into minutes of
 // CPU. level 0 it is.
 const express  = require('express');
-// The finish row of an export - a page may have moved on before the last volume closed.
-const AUDIT = require('../lib/audit');
 const fs       = require('fs');
 const path     = require('path');
 const crypto   = require('crypto');
@@ -249,7 +247,6 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
         job.finishedAt = Date.now();
         const gb = (job.parts.reduce((n, p) => n + p.bytes, 0) / 1e9).toFixed(2);
         console.log(`[data-io] built ${volumes.length} volume(s) — ${gb} GB, ${job.files} files`);
-        AUDIT.processEnd(null, id, { ok: true, result: `${volumes.length} volume(s) · ${gb} GB · ${job.files} files` });
         return;
       }
       const part = job.parts[i];
@@ -262,7 +259,6 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
       archive.on('error', (e) => {
         job.state = 'failed'; part.state = 'failed'; job.error = e.message;
         job.finishedAt = Date.now();
-        AUDIT.processEnd(null, id, { ok: false, error: e.message });
       });
       sink.on('close', () => {
         if (job.state === 'failed') return;

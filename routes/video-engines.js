@@ -170,15 +170,10 @@ async function _clipUrl(webPath, inS, outS) {
     proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the reference: ' + err.slice(-200))));
     proc.on('error', reject);
   });
-  // Two of the hosts in the chain take images only - imgbb and imgcdn - and this is the first
-  // caller that hands the chain a VIDEO. Skipping them outright rather than letting the
-  // fallback discover it: the fall-through works, but it spends a failed upload of up to a
-  // hundred megabytes to learn something already known.
-  //
   // verify: a paid job dies ten seconds after being charged if the renderer cannot read this,
   // so it is worth one round trip to read it back first.
   return await uploadToPublicHost(fs.readFileSync(out), {
-    forceFresh: true, ext: 'mp4', avoid: ['imgbb', 'imgcdn'], verify: true,
+    forceFresh: true, ext: 'mp4', verify: true,
   });
 }
 

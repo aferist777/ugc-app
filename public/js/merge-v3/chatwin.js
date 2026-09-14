@@ -1038,10 +1038,6 @@ export async function openChatWindow(spec, opts) {
 
   const ov = el('div', 'mv3-x-ov mv3-ig-ov');
   const box = el('div', 'mv3-ig ' + (spec.cls || ''));
-  // So a press in here says WHERE it was in the activity log (js/audit-client.js reads the
-  // nearest data-audit-scope). From the spec, because one shell serves two windows and a
-  // fixed name would file every Animate click under Pictures.
-  box.dataset.auditScope = spec.title;
 
   // ── head ──
   const head = el('div', 'mv3-ig-head');

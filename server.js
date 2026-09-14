@@ -33,15 +33,12 @@ const { runMigrationIfNeeded } = require('./lib/obrazy-store');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
-// ── Access gate ─────────────────────────────────────────────────────────────
-// FIRST, before anything parses a body or serves a file: this app holds live API keys and
-// spends real credits, so every route, static asset and /api endpoint sits behind a sign-in.
-// Each person has a login and password in data/users.json (lib/users.js); a successful /login
-// sets a signed session cookie naming them, held per browser for SESSION_HOURS (default 6). The
-// gate has no "off" mode - the first admin is created at boot so there is always someone who
-// can get in. See lib/access-gate.js and the redaction in routes/settings.js.
-require('./lib/access-gate').install(app);
-require('./lib/users').ensureAdmin();
+// ── One person ──────────────────────────────────────────────────────────────
+// The desktop app has no sign-in: whoever opens the window is its user. Routes still read
+// req.user - a queue entry names who queued it, a trim who made it - so every request carries
+// the one local user. lib/ownership.js says why every project answers to them.
+const { LOCAL_USER } = require('./lib/ownership');
+app.use((req, _res, next) => { req.user = LOCAL_USER; next(); });
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
@@ -123,17 +120,6 @@ app.get('/scenarios-v3', (_req, res) => res.redirect('/scenarios'));
 // the address every note, bookmark and link from its build still uses.
 app.get('/character-v2', (_req, res) => res.redirect('/character'));
 
-// ── Audit ─────────────────────────────────────────────────────────────────────
-// Who did what: every mutating /api request, with the person from the session and a phrase in
-// the app's own words. lib/audit.js writes; lib/audit-map.js holds the phrases; a route
-// without one is still recorded, marked `unmapped`, and listed at boot (see the end of the
-// routes below). This replaced the diagnostic harness that wrote logs/audit.jsonl; that file
-// is left where it is.
-const audit = require('./lib/audit');
-audit.start();
-app.use('/api', audit.requests());
-app.use('/api', require('./routes/audit'));   // the browser's clicks, in batches (public/js/audit-client.js)
-
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/lookbook'));
@@ -179,7 +165,6 @@ app.use('/api', require('./routes/edit'));
 app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
-app.use('/api', require('./routes/admin'));   // the people list; see lib/users.js
 app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
@@ -203,14 +188,6 @@ app.use('/api', require('./routes/mv3-voice'));
 // Clips made inside Merge. The matrix stays where it was - /api/video/engines - because this
 // submits against that same table.
 app.use('/api', require('./routes/mv3-vid'));
-
-// Every mutating route the app declares, minus the ones lib/audit-map.js can phrase. Said at
-// boot so a new route does not go unnamed for long; the Activity tab counts them too.
-{
-  const missing = require('./lib/audit-map').unmappedRoutes(app, audit.isSkipped);
-  if (missing.length) console.log(`[audit] ${missing.length} mutating route(s) without a phrase yet: ${missing.join(', ')}`);
-  else console.log('[audit] every mutating route has a phrase');
-}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a

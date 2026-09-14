@@ -147,7 +147,6 @@ function _open() {
   _ov = document.createElement('div');
   _ov.className = 'mv3-rov';
   const box = document.createElement('div');
-  box.dataset.auditScope = 'Export';
   box.className = 'mv3-rbox';
 
   const h = document.createElement('div');

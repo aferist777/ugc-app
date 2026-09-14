@@ -70,6 +70,9 @@ async function _paint() {
 
   const own = _own();
   if (own) {
+    // A list of one owner is not a choice - the desktop app has one person - so it is not shown.
+    const fld = own.closest('label');
+    if (fld) fld.style.display = owners.length > 1 ? '' : 'none';
     own.textContent = '';
     for (const o of owners) {
       const e = document.createElement('option');

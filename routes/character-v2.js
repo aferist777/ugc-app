@@ -53,10 +53,9 @@ const DEFAULT_PROVIDER = 'replicate';   // where every engine here has always be
 // it is refused rather than quietly mapped.
 const ASPECTS = ['3:2', 'match_input_image'];
 
-// A reference has to become a URL: the vision model and the image engines both fetch one. A
-// TPDNE face and an upload arrive as base64 and exist on no disk, so they go to imgbb - host 2
-// in the rotation and the first real one once own-server is skipped, which it must be: our
-// :3000 is unreachable to Replicate's fetchers.
+// A reference has to become a URL: the vision model and the image engines both fetch one, and
+// this machine is unreachable to their fetchers - so every reference goes up to R2 first
+// (uploadToPublicHost), whether it arrived as base64 or is a file in the library.
 async function _refUrl(body) {
   if (body.imageUrl && /^https?:\/\//i.test(String(body.imageUrl))) return String(body.imageUrl);
   let buf = null;
@@ -72,8 +71,7 @@ async function _refUrl(body) {
     throw new Error('no reference image was sent');
   }
   // verify reads the link back before it is handed to an engine. One round trip against a
-  // generation that fails ten seconds after being paid for - and imgbb links expire in an
-  // hour, so "it worked earlier" is not evidence that it works now.
+  // generation that fails ten seconds after being paid for.
   return await uploadToPublicHost(buf, { verify: true });
 }
 

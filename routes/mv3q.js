@@ -20,15 +20,13 @@
    The queue runs ONE AT A TIME. Rendering is the heaviest thing this machine does, and four
    at once is four renders that all finish late rather than one that finishes soon.
 
-   WHOSE ENTRY. Each one names who queued it, and the list a person sees is their own; the
-   admin sees everyone's, with names, and may clear any of them. Entries from before there
-   were owners have none and are the admin's.
+   WHOSE ENTRY. Each one still names who queued it, from the server version, where the list a
+   person saw was their own. The desktop app has one person (lib/ownership.js), so every entry
+   is theirs, whoever's name an old one carries.
 
-   WHOSE "RENDER ALL". Queuing something does not start it. Render all ARMS the caller's
-   waiting entries - theirs and nobody else's - and the runner takes armed entries in the
-   order they were queued. It used to take everything waiting, so one person's Render all
-   rendered another person's projects. The encoder itself is still one per machine: armed
-   entries from two people go one after another, and each row says how many are ahead.
+   RENDER ALL. Queuing something does not start it. Render all ARMS the waiting entries, and
+   the runner takes armed entries in the order they were queued; each row says how many are
+   ahead.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -37,12 +35,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const { buildGraph } = require('../lib/mv3b-render');
-const GATE = require('../lib/access-gate');
 const OWN = require('../lib/ownership');
-// The queue renders on nobody's request, so its rows are written here, in the owner's name.
-const AUDIT = require('../lib/audit');
-const _who = (item) => (item && item.owner ? { id: item.owner, nickname: item.ownerNick, role: 'user' } : null);
-const _qid = (item) => 'queue:' + item.id;
 
 const router = express.Router();
 const { ROOT_DIR: ROOT, APP_DIR, DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
@@ -113,17 +106,10 @@ function next() {
   s.running = true;
   write(s);
   _active = item.id;
-  AUDIT.processStart(null, _qid(item), {
-    user: _who(item), page: 'Merge', kind: 'queue.render',
-    label: `started queue render of “${item.title}” (${item.kind === 'blank' ? 'blank' : 'scenario'}${item.summary ? ' · ' + item.summary : ''})`,
-    ids: { queueId: item.id, key: item.key }, params: { kind: item.kind, dur: item.dur || null },
-  });
 
   // A scenario entry is handed to the renderer that knows how to read it, over HTTP to this
   // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
-  // point of the split is that neither render path can reach the other. The call carries the
-  // internal token (lib/access-gate.js): it has no cookie, and without the token the sign-in
-  // gate turned it away - every scenario entry failed as "auth required".
+  // point of the split is that neither render path can reach the other.
   if (item.kind !== 'blank') return runTalking(item);
 
   const built = argsForBlank(item.timeline);
@@ -132,7 +118,6 @@ function next() {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = built.error; }
     write(t);
-    AUDIT.processEnd(null, _qid(item), { ok: false, error: built.error });
     _active = null;
     return next();
   }
@@ -172,8 +157,6 @@ function next() {
       it.tookMs = Date.now() - _startedAt;
     }
     write(t);
-    const good = code === 0 && fs.existsSync(out);
-    AUDIT.processEnd(null, _qid(item), good ? { ok: true, result: '/finals/' + name } : { ok: false, error: 'ffmpeg exited ' + code });
     next();
   });
   _proc.on('error', (e) => {
@@ -182,7 +165,6 @@ function next() {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = e.message; }
     write(t);
-    AUDIT.processEnd(null, _qid(item), { ok: false, error: e.message });
     next();
   });
 }
@@ -196,7 +178,6 @@ function runTalking(item) {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = msg; }
     write(t);
-    AUDIT.processEnd(null, _qid(item), { ok: false, error: msg });
     _active = null;
     next();
   };
@@ -204,15 +185,14 @@ function runTalking(item) {
 
   const PORT = process.env.PORT || 3000;
   const base = 'http://127.0.0.1:' + PORT;
-  const auth = { 'X-Internal-Token': GATE.internalToken() };
   fetch(base + '/api/ffmpeg/render', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...auth },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item.payload),
   }).then(r => r.json()).then(d => {
     if (!d || !d.success || !d.jobId) throw new Error((d && d.error) || 'the scenario renderer refused it');
     const started = Date.now();
     const poll = () => {
-      fetch(base + '/api/ffmpeg/status/' + encodeURIComponent(d.jobId), { headers: auth }).then(r => r.json()).then(st => {
+      fetch(base + '/api/ffmpeg/status/' + encodeURIComponent(d.jobId)).then(r => r.json()).then(st => {
         if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
         // TERMINAL is the short list, and everything else is still working. The scenario
         // renderer passes through 'normalizing' and 'speeding' on its way to a file, and
@@ -247,9 +227,6 @@ function runTalking(item) {
           else { it.status = 'failed'; it.error = st.error || ('ended as ' + st.status); }
         }
         write(t);
-        AUDIT.processEnd(null, _qid(item), st.status === 'done' && st.url ? { ok: true, result: st.url }
-          : st.status === 'cancelled' ? { ok: false, cancelled: true }
-          : { ok: false, error: st.error || ('ended as ' + st.status) });
         _active = null;
         next();
       }).catch(e => fail(e.message));

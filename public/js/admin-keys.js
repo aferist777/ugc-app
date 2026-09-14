@@ -1,15 +1,14 @@
-/* admin-keys.js — the API keys, on the Keys tab of /admin.
+/* admin-keys.js — the API keys, on /admin.
 
-   A key is something only the admin sees or sets, and even the admin never sees a whole one
-   here: the field shows its first six and last four characters, the server keeps the rest.
-   There is no reveal. The full values live in data/settings.json on the server and nowhere
-   else - to read one, read the file.
+   Nobody sees a whole key here: the field shows its first six and last four characters, the
+   server keeps the rest. There is no reveal. The full values live in data/settings.json in the
+   library and nowhere else - to read one, read the file.
 
    EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
    provider accepted it, amber when it is there but the provider refused it (the reason sits
    under the field), red when it is missing. The check is the same one the Character page
    runs (GET /api/keys/health: kie.ai, OpenRouter, Replicate, ElevenLabs, Groq); the keys it
-   does not probe - imgBB, R2 - are green when present, with "not probed" said.
+   does not probe - R2 - are green when present, with "not probed" said.
 
    EDITING. Focusing a filled field clears it for typing; leaving it empty puts the mask back.
    Typing replaces on Save. The × beside a field removes the key on Save - the button asks
@@ -35,12 +34,6 @@ const ROWS = [
     placeholder: 'r8_••• (replicate.com)',
     link: 'https://replicate.com/account/api-tokens', linkText: 'replicate.com → API tokens',
     desc: 'Image generation: nano-banana-2, gpt-image-2, seedream-5-lite, qwen-image-edit-plus.',
-  },
-  {
-    label: 'imgBB (image host):', settingsKey: 'imgbbApiKey',
-    placeholder: '••• (api.imgbb.com)',
-    link: 'https://api.imgbb.com/', linkText: 'api.imgbb.com',
-    desc: 'Fallback host for the INPUT image on img2img (character sheets, edits) so Replicate and kie can fetch it.',
   },
   {
     label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey', probe: 'elevenlabs',
@@ -77,17 +70,6 @@ const ROWS = [
     label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true, optional: true,
     placeholder: 'https://pub-••••.r2.dev  (optional)',
     desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
-  },
-  {
-    group: 'Partner · where finished creatives go',
-    label: 'Partner key:', settingsKey: 'partnerApiKey', probe: 'partner',
-    placeholder: '••• (the UGC ingest key)',
-    desc: 'Save & download on a render sends the file to the Partner Library as a new creative. The key only works on their ingest endpoint; rotate it in Partner → Settings → "UGC ingest key".',
-  },
-  {
-    label: 'Partner URL:', settingsKey: 'partnerUrl', plain: true, optional: true,
-    placeholder: 'https://signin.example.com/api/ingest  (default)',
-    desc: 'Their ingest endpoint. Leave empty for the default.',
   },
 ];
 

@@ -14,10 +14,8 @@
    they say so with things still waiting, they are asked which they meant, because "clear"
    over unrendered work is the one press here that cannot be taken back.
 
-   The list is YOURS: the server hands each person their own entries. The admin gets
-   everyone's, and each row then says whose it is. Render all is yours too: it starts what
-   you queued and nothing else. The encoder is one per machine, so a started entry may still
-   stand in line behind somebody else's - the row says how many are ahead.
+   Render all starts what is waiting. The encoder does one at a time, so a started entry may
+   still stand in line - the row says how many are ahead.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -69,7 +67,7 @@ const _mmss = (v) => {
 // A row says three things: what it is, what it is made of, and where it has got to. The
 // middle one is why the rows are tall: two projects called "2026-08-19" tell you nothing
 // apart, and the composition is what actually distinguishes them.
-function _row(it, refresh, admin) {
+function _row(it, refresh) {
   const el = document.createElement('div');
   el.className = 'mv3-qrow is-' + it.status;
 
@@ -104,9 +102,7 @@ function _row(it, refresh, admin) {
 
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = (admin && it.ownerNick ? it.ownerNick + ' · ' : '')
-                  + (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '')
-                  + (it.sent ? ' · sent → creative #' + it.sent.creativeId : (it.sendError ? ' · not sent' : ''));
+  sub.textContent = (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
   main.appendChild(sub);
 
   // The bar, only while the encoder is on this one. Indeterminate when the phase reports no
@@ -142,7 +138,7 @@ function _row(it, refresh, admin) {
     a.addEventListener('click', (e) => {
       e.stopPropagation();
       _close();
-      showResult({ url: it.url, title: it.title, key: it.key, queueId: it.id, sent: it.sent || null, fresh: false });
+      showResult({ url: it.url, title: it.title, key: it.key, queueId: it.id, fresh: false });
     });
     acts.appendChild(a);
   }
@@ -266,7 +262,7 @@ async function _paintList() {
     list.appendChild(e);
   } else {
     const again = () => { _paintList(); _paintBadge(); };
-    for (const it of d.items) list.appendChild(_row(it, again, !!d.admin));
+    for (const it of d.items) list.appendChild(_row(it, again));
   }
   _pop.appendChild(list);
   _paintBadge();
@@ -278,7 +274,6 @@ function _open() {
   if (!btn) return;
   _pop = document.createElement('div');
   _pop.className = 'mv3-qpop';
-  _pop.dataset.auditScope = 'Render queue';
   document.body.appendChild(_pop);
   const r = btn.getBoundingClientRect();
   _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';
