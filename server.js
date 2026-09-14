@@ -192,7 +192,10 @@ app.use('/api', require('./routes/mv3-vid'));
 try { runMigrationIfNeeded(); }
 catch (e) { console.error('[obrazy-migrate] error:', e.stack || e.message); }
 
-const server = app.listen(PORT, () => {
+// Loopback only. There is no sign-in any more, so an app listening on every interface would hand
+// its API keys and the whole library to anyone on the same network. The window, and the server's
+// calls to itself, all use 127.0.0.1.
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`[boot] library: ${ROOT_DIR}`);
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Character Generator               ║`);
