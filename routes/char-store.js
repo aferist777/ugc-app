@@ -11,6 +11,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
@@ -749,7 +750,7 @@ async function _releaseCharVoices(char) {
     // The legacy catalog entry goes with it.
     if (entry) {
       try {
-        fs.writeFileSync(_CUSTOM_VOICES, JSON.stringify(catalog.filter(x => x !== entry), null, 2), 'utf8');
+        writeFileAtomic(_CUSTOM_VOICES, JSON.stringify(catalog.filter(x => x !== entry), null, 2));
       } catch (e) {}
     }
   }

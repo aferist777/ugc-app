@@ -11,6 +11,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -34,7 +35,7 @@ function _load() {
 }
 function _save(list) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(HOOKS_FILE, JSON.stringify(list, null, 2), 'utf8');
+  writeFileAtomic(HOOKS_FILE, JSON.stringify(list, null, 2));
 }
 
 router.get('/hooks/state', (_req, res) => {

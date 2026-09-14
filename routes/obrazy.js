@@ -9,6 +9,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -154,7 +155,7 @@ router.post('/obrazy/prune-missing', (_req, res) => {
       if (!hasImage) { removedObrazy.push({ id: o && o.id, name: (o && o.name) || '' }); return false; }
       return true;
     });
-    if (removedObrazy.length) fs.writeFileSync(OBRAZY_FILE, JSON.stringify(keptObrazy, null, 2), 'utf8');
+    if (removedObrazy.length) writeFileAtomic(OBRAZY_FILE, JSON.stringify(keptObrazy, null, 2));
 
     // geni.json — drop history entries whose file is gone
     const geniFile = path.join(DATA_DIR, 'geni.json');
@@ -163,7 +164,7 @@ router.post('/obrazy/prune-missing', (_req, res) => {
     let removedGeni = 0, keptGeni = Array.isArray(geni) ? geni : [];
     if (Array.isArray(geni)) {
       keptGeni = geni.filter(g => { const ok = _existsUnderRoot(g && g.path); if (!ok) removedGeni++; return ok; });
-      if (removedGeni) fs.writeFileSync(geniFile, JSON.stringify(keptGeni, null, 2), 'utf8');
+      if (removedGeni) writeFileAtomic(geniFile, JSON.stringify(keptGeni, null, 2));
     }
 
     res.json({ success: true, removedObrazy, removedGeniCount: removedGeni, obrazy: keptObrazy, geni: keptGeni });

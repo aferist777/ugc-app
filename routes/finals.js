@@ -3,6 +3,7 @@
 const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const { execFile } = require('child_process');
 const ffmpegPath   = require('ffmpeg-static');
 const router       = express.Router();
@@ -60,7 +61,7 @@ function readMeta() {
   try { return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); } catch { return []; }
 }
 function writeMeta(list) {
-  fs.writeFileSync(META_FILE, JSON.stringify(list, null, 2));
+  writeFileAtomic(META_FILE, JSON.stringify(list, null, 2));
 }
 
 // ── GET /api/finals/list ──────────────────────────────────────────────────────
@@ -102,7 +103,7 @@ router.post('/finals/save', async (req, res) => {
     const jsonName = baseName + '.json';
     const absJson  = path.join(FINALS_DIR, jsonName);
     if (projectData) {
-      fs.writeFileSync(absJson, JSON.stringify(projectData, null, 2));
+      writeFileAtomic(absJson, JSON.stringify(projectData, null, 2));
     }
 
     // Extract first frame as thumbnail

@@ -2,6 +2,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -51,7 +52,7 @@ function load() {
 
 function save(data) {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  writeFileAtomic(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
 // POST /api/custom-options/analyze-image  { imageBase64, dropdown }

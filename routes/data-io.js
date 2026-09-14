@@ -16,6 +16,7 @@
 // CPU. level 0 it is.
 const express  = require('express');
 const fs       = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path     = require('path');
 const crypto   = require('crypto');
 const archiver = require('archiver');
@@ -87,8 +88,8 @@ const GROUPS = [
     dirs: [], jsons: ['data/settings.json'] },
 ];
 
-// Deliberately absent: temp_files (half a gigabyte of scratch renders that rebuild
-// themselves), logs, node_modules, and data/exports itself - an export must never contain
+// Deliberately absent: scratch (it lives in the system temp folder, not the library, and
+// rebuilds itself), logs, node_modules, and data/exports itself - an export must never contain
 // the last export. pending-tasks.json and biroly-gen-jobs.json are a queue of unfinished
 // work; on another machine they describe jobs that will never come back.
 
@@ -417,7 +418,7 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
         try { local = JSON.parse(fs.readFileSync(dest, 'utf8')); } catch {}
         const merged = local == null ? incoming : _merge(local, incoming, overwrite);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.writeFileSync(dest, JSON.stringify(merged, null, 2));
+        writeFileAtomic(dest, JSON.stringify(merged, null, 2));
         report.jsons++;
         continue;
       }

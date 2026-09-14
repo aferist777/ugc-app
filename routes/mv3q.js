@@ -32,13 +32,14 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const { buildGraph } = require('../lib/mv3b-render');
 const OWN = require('../lib/ownership');
 
 const router = express.Router();
-const { ROOT_DIR: ROOT, APP_DIR, DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { ROOT_DIR: ROOT, APP_DIR, SCRATCH_DIR, DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
 const ROOTS = ['uploads', 'obrazy', 'characters', 'environments', 'lookbooks',
@@ -49,8 +50,8 @@ function resolveSrc(rel) {
   if (!clean || clean.includes('..')) return null;
   const top = clean.split('/')[0];
   if (!ROOTS.includes(top)) return null;
-  // public/ ships with the program; every other root is in the library.
-  const base = top === 'public' ? APP_DIR : ROOT;
+  // public/ ships with the program, temp_public is scratch; every other root is in the library.
+  const base = top === 'public' ? APP_DIR : top === 'temp_public' ? SCRATCH_DIR : ROOT;
   const abs = path.join(base, clean);
   if (!abs.startsWith(base)) return null;
   return fs.existsSync(abs) ? abs : null;
@@ -62,7 +63,7 @@ function read() {
 }
 function write(s) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(s, null, 2));
+  writeFileAtomic(FILE, JSON.stringify(s, null, 2));
 }
 
 // ── Running one entry ───────────────────────────────────────────────────────

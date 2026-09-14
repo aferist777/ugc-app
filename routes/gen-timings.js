@@ -19,6 +19,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -43,7 +44,7 @@ function _load() {
 }
 function _save(obj) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(TIMINGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  writeFileAtomic(TIMINGS_FILE, JSON.stringify(obj, null, 2));
 }
 
 // Compute average ratio from samples. Falls back to seed when empty.

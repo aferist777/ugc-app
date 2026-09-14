@@ -2,6 +2,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -36,7 +37,7 @@ function loadSettings() {
 function saveSettings(obj) {
   const dir = path.dirname(SETTINGS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  writeFileAtomic(SETTINGS_FILE, JSON.stringify(obj, null, 2));
 }
 
 // The first six and the last four: enough to tell two keys apart, never enough to use one.

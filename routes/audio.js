@@ -3,6 +3,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const axios   = require('axios');
 const multer  = require('multer');
 const router  = express.Router();
@@ -120,7 +121,7 @@ function _loadCustomVoices() {
   catch { return []; }
 }
 function _saveCustomVoices(list) {
-  fs.writeFileSync(CUSTOM_VOICES_FILE, JSON.stringify(list, null, 2), 'utf8');
+  writeFileAtomic(CUSTOM_VOICES_FILE, JSON.stringify(list, null, 2));
 }
 // Look up an ElevenLabs voice_id by stored name OR by raw voiceId (catalog
 // stores both, frontend may pass either as `voice` parameter). Returns the
@@ -2048,7 +2049,7 @@ function _loadSunoLib() {
   try { return JSON.parse(fs.readFileSync(SUNO_LIB_FILE, 'utf8')); } catch { return []; }
 }
 function _saveSunoLib(list) {
-  try { fs.writeFileSync(SUNO_LIB_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch {}
+  try { writeFileAtomic(SUNO_LIB_FILE, JSON.stringify(list, null, 2)); } catch {}
 }
 
 // POST /api/audio/suno/generate

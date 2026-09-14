@@ -12,6 +12,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const axios   = require('axios');
 const multer  = require('multer');
@@ -27,7 +28,7 @@ function _load() {
 }
 function _save(state) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(BIROLY_FILE, JSON.stringify(state, null, 2), 'utf8');
+  writeFileAtomic(BIROLY_FILE, JSON.stringify(state, null, 2));
 }
 
 router.get('/biroly/state', (_req, res) => {
@@ -166,7 +167,7 @@ const GEN_JOBS_FILE = path.join(DATA_DIR, 'biroly-gen-jobs.json');
 let _genJobs = {};
 try { _genJobs = JSON.parse(fs.readFileSync(GEN_JOBS_FILE, 'utf8')) || {}; } catch { _genJobs = {}; }
 function _saveGenJobs() {
-  try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(GEN_JOBS_FILE, JSON.stringify(_genJobs)); } catch {}
+  try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); writeFileAtomic(GEN_JOBS_FILE, JSON.stringify(_genJobs)); } catch {}
 }
 function _patchJob(jobId, patch) { const j = _genJobs[jobId]; if (!j) return j; Object.assign(j, patch); _saveGenJobs(); return j; }
 

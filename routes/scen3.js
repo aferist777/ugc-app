@@ -17,6 +17,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const sharp   = require('sharp');
 // Merge hand-off: one audio extractor shared with the old workflow (same output names,
@@ -52,7 +53,7 @@ function _read(file) {
 
 function _save(list) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  fs.writeFileSync(FILE, JSON.stringify(list, null, 2), 'utf8');
+  writeFileAtomic(FILE, JSON.stringify(list, null, 2));
 }
 
 // Coerce any incoming (or legacy) record into the v3 shape. Line COUNT is
@@ -145,7 +146,7 @@ const OPT_KINDS = ['verticals', 'products', 'roles'];
 
 function _saveOptions(o) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  fs.writeFileSync(OPT_FILE, JSON.stringify(o, null, 2), 'utf8');
+  writeFileAtomic(OPT_FILE, JSON.stringify(o, null, 2));
 }
 
 // Case-insensitive append; keeps the first spelling it saw. True when it added.
@@ -571,7 +572,7 @@ function _lbMeta() {
 }
 function _lbMetaSave(m) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  fs.writeFileSync(LBMETA_FILE, JSON.stringify(m, null, 2), 'utf8');
+  writeFileAtomic(LBMETA_FILE, JSON.stringify(m, null, 2));
 }
 
 async function _detectGender(note, photoUrl) {
@@ -838,7 +839,7 @@ function _loadFrameOpts() {
     framings: _normOptList(cur && cur.framings, FRAME_OPT_DEFAULTS.framings),
   };
   if (!cur || !Array.isArray(cur.framings)) {
-    try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(FRAME_OPT_FILE, JSON.stringify(out, null, 2), 'utf8'); } catch (e) {}
+    try { fs.mkdirSync(DATA_DIR, { recursive: true }); writeFileAtomic(FRAME_OPT_FILE, JSON.stringify(out, null, 2)); } catch (e) {}
   }
   return out;
 }
@@ -861,7 +862,7 @@ router.post('/scen3/frame-options', (req, res) => {
     }
     const out = { cameras, framings };
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FRAME_OPT_FILE, JSON.stringify(out, null, 2), 'utf8');
+    writeFileAtomic(FRAME_OPT_FILE, JSON.stringify(out, null, 2));
     res.json({ success: true, options: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1003,113 +1004,14 @@ function _normPose(p) {
 
 function _savePoses(list) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(POSE_FILE, JSON.stringify(list, null, 2), 'utf8');
-}
-
-// The look of the mannequins. The first lite pass came back as smooth shop-window
-// torsos with a feminine silhouette and an implied garment, so the articulation and
-// the genderless surface are now stated outright rather than implied.
-// The colour, the material and the joints live HERE and nowhere else — a pose that
-// also names a colour fights this and the result comes out mixed.
-const MANNEQUIN_STYLE_BASE =
-  " Subject: ONE single articulated artist's mannequin with clearly VISIBLE BALL JOINTS at the neck,"
-  + ' shoulders and elbows, moulded from smooth matte MEDIUM-BLUE material.'
-  + ' No face, no facial features, no hair. No clothing of any kind.'
-  + " Its torso is that of a MALE artist's dummy: a FLAT, broad, square chest with NO breasts, no bust,"
-  + ' no cleavage and no rounded chest curves, straight hips, and no crop-top, bra-like band or garment'
-  + ' seam anywhere across the chest — one continuous blank blue surface throughout.'
-  + ' Plain seamless light-grey studio background, soft even lighting, subtle soft shadow.'
-  + ' Exactly one figure. This is a clean POSE REFERENCE.';
-const MANNEQUIN_STYLE_TAIL =
-  ' No text, no words, no watermark, no logos, no extra people, no extra limbs. Vertical 2:3 framing.';
-// Poses that deliberately hold something opt out of the "nothing in frame" ban;
-// without this the prop pose contradicts its own style line and loses the object.
-const MANNEQUIN_NO_PROP = ' No phone or object visible anywhere in frame.';
-const _mannequinStyle = (pose) =>
-  MANNEQUIN_STYLE_BASE + (pose && pose.prop ? '' : MANNEQUIN_NO_PROP) + MANNEQUIN_STYLE_TAIL;
-
-// Redraw path: the subject of the reference is replaced by a mannequin and nothing
-// else changes. The BODY is pinned hard, because text-only attempts kept losing the
-// outstretched arm. The CROP is pinned too — unless the pose carries a framing note,
-// which is how a pose gets re-shot into a different aspect ratio.
-// `targetAr` is the ratio to RE-FRAME into, or '' to keep the reference's own crop.
-// It is stated in the prompt rather than hardcoded — the library moved from 2:3 to
-// 9:16 once already, and a stale number here would quietly fight the real output.
-function _redrawPrompt(pose, targetAr) {
-  const note = (pose && pose.mprompt) ? pose.mprompt : '';
-  const reframing = !!note || !!targetAr;
-  const ar = targetAr || '2:3';
-  return 'Redraw this image as a clean POSE REFERENCE.'
-    + " Replace the subject with ONE articulated artist's mannequin moulded from smooth matte MEDIUM-BLUE"
-    + ' material, with clearly visible ball joints at the neck, shoulders and elbows.'
-    // Nothing here may presuppose a particular pose. An earlier version described a
-    // selfie — an arm reaching toward the lens, cut by the frame edge — and every
-    // reference was bent to match it: a man standing with his arms down came back
-    // waving. The photograph is the only source of the pose.
-    + ' COPY THE POSE FROM THE PHOTOGRAPH EXACTLY and invent nothing:'
-    + ' the same tilt and rotation of the head, the same shoulder line, the same twist of the torso,'
-    + ' the same weight distribution, and each arm and hand exactly where the photograph has it —'
-    + ' if the arms hang at the sides they hang at the sides, if they are folded they stay folded,'
-    + ' if the hands are in the pockets they stay there. Do not raise, extend or re-pose any limb.'
-    + ' A limb leaves the frame here only where it leaves the frame in the photograph.'
-    + ' Keep the same camera angle.'
-    + (reframing
-      ? ` Only the FRAMING changes, never the body: present that same unchanged pose in an upright`
-        + ` VERTICAL ${ar} portrait frame, the figure centred and filling the height with a little room`
-        + ' above the head and below the feet, seen from the same camera angle.'
-        + (note ? ' ' + note : '')
-      : ' Keep the SAME CROP too — do not re-frame, do not zoom out, do not move the figure.')
-    + ' The mannequin has no face, no facial features, no hair and no clothing of any kind.'
-    // "Genderless" reliably produced the female figurine this model knows best,
-    // complete with a bust and a bra-like seam. Naming the masculine build is what
-    // actually holds.
-    + " Its torso is that of a MALE artist's dummy: a FLAT, broad, square chest with NO breasts,"
-    + ' no bust, no cleavage and no rounded chest curves, straight hips, and no crop-top,'
-    + ' bra-like band or garment seam anywhere across the chest — one continuous blank blue surface.'
-    + ' The background is a plain seamless light-grey studio backdrop, soft even lighting, subtle soft shadow.'
-    + ' No text, no words, no watermark, no logos, no extra people, no extra limbs.'
-    + (pose && pose.prop ? '' : ' No phone or object visible in frame.');
-}
-
-// Mirror a mannequin and its thumbnail horizontally, in place. Left/right selfie
-// pairs are one render flipped, so the two never drift apart.
-//
-// sharp is handed a BUFFER, never the path it is about to overwrite: on Windows
-// reading and rewriting the same file leaves libvips holding the descriptor and the
-// write fails with a bare "UNKNOWN: unknown error, open".
-async function _mirrorInPlace(abs) {
-  const flip = async (p) => {
-    if (!fs.existsSync(p)) return;
-    const src = fs.readFileSync(p);
-    const out = await sharp(src).flop().jpeg({ quality: 92 }).toBuffer();
-    fs.writeFileSync(p, out);
-  };
-  await flip(abs);
-  await flip(path.join(path.dirname(abs), 'thumbs', path.basename(abs)));
-}
-
-// Poll a task to completion, landing the file in `dir` under the app's public tree.
-async function _pollInto(taskId, dir, prefix) {
-  for (let i = 0; i < 90; i++) {
-    await new Promise(r => setTimeout(r, 3000));
-    let s = null;
-    try { s = await H.resolveTask(taskId, dir, prefix); } catch (e) { continue; }
-    if (!s) continue;
-    if (s.state === 'success') {
-      // resolveTask returns a path relative to the dir it saved into
-      const name = path.basename(s.imagePath || '');
-      return { imagePath: `/poses/scen3/${name}` };
-    }
-    if (s.state === 'failed') return { error: s.error || 'generation failed' };
-  }
-  return { error: 'timed out' };
+  writeFileAtomic(POSE_FILE, JSON.stringify(list, null, 2));
 }
 
 function _loadPoses() {
   const cur = _read(POSE_FILE);
   if (Array.isArray(cur)) return cur.map(_normPose).filter(p => p.id && p.group);
   const seeded = POSE_SEED.map(_normPose);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(POSE_FILE, JSON.stringify(seeded, null, 2), 'utf8'); } catch (e) {}
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); writeFileAtomic(POSE_FILE, JSON.stringify(seeded, null, 2)); } catch (e) {}
   console.log(`[scen3] seeded ${seeded.length} mannequin poses across 4 framing groups`);
   return seeded;
 }
@@ -1784,7 +1686,7 @@ router.post('/scen3/obraz-save', async (req, res) => {
       date: new Date().toISOString(),
       seed: null, slotTasks: {}, projectId: null, voice: null,
     });
-    fs.writeFileSync(OBRAZY_JSON, JSON.stringify(list, null, 2), 'utf8');
+    writeFileAtomic(OBRAZY_JSON, JSON.stringify(list, null, 2));
     console.log(`[scen3/obraz-save] char=${charId} obraz=${id} -> ${rel} (library now ${list.length})`);
 
     res.json({ success: true, obrazId: id, path: rel, preview });
@@ -1814,7 +1716,7 @@ router.post('/scen3/obraz-delete', (req, res) => {
     if (next.length !== list.length - 1) {
       return res.status(500).json({ success: false, error: 'refusing to remove more than one record' });
     }
-    fs.writeFileSync(OBRAZY_JSON, JSON.stringify(next, null, 2), 'utf8');
+    writeFileAtomic(OBRAZY_JSON, JSON.stringify(next, null, 2));
 
     // its folder, only if it really sits under obrazy/
     let removedDir = null;
@@ -1937,7 +1839,7 @@ function _loadMoods() {
   const seeded = VT.AD_MOODS.map(_normMood);
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(MOOD_FILE, JSON.stringify(seeded, null, 2), 'utf8');
+    writeFileAtomic(MOOD_FILE, JSON.stringify(seeded, null, 2));
   } catch (e) {}
   console.log(`[scen3] seeded ${seeded.length} voice moods`);
   return seeded;
@@ -2672,7 +2574,7 @@ setTimeout(_resumeWatchers, 1500);
 
 function _saveProjects(list) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  fs.writeFileSync(PROJ_FILE, JSON.stringify(list, null, 2), 'utf8');
+  writeFileAtomic(PROJ_FILE, JSON.stringify(list, null, 2));
 }
 
 function _loadProjects() {

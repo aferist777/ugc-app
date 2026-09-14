@@ -25,7 +25,7 @@ const { buildGraph, frame } = require('../lib/mv3b-render');
 const { buildAss, captionLanes } = require('../lib/mv3b-subs');
 
 const router = express.Router();
-const { ROOT_DIR: ROOT, APP_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { ROOT_DIR: ROOT, APP_DIR, SCRATCH_DIR, TEMP_PUBLIC_DIR, FINALS_DIR: FINALS } = require('../lib/config');
 
 // The same mapping express.static does, and only where media legitimately lives. A src is a
 // web path as the pages already use it, not an invitation to name any file on the disk.
@@ -37,8 +37,8 @@ function resolveSrc(rel) {
   if (!clean || clean.includes('..')) return null;
   const top = clean.split('/')[0];
   if (!ROOTS.includes(top)) return null;
-  // public/ ships with the program; every other root is in the library.
-  const base = top === 'public' ? APP_DIR : ROOT;
+  // public/ ships with the program, temp_public is scratch; every other root is in the library.
+  const base = top === 'public' ? APP_DIR : top === 'temp_public' ? SCRATCH_DIR : ROOT;
   const abs = path.join(base, clean);
   if (!abs.startsWith(base)) return null;
   return fs.existsSync(abs) ? abs : null;
@@ -95,7 +95,7 @@ router.post('/mv3b/plan', (req, res) => {
 // The captions, written where ffmpeg can be pointed at them. A file rather than something
 // passed inline because that is the only thing libass reads - and one per job rather than one
 // shared, so two renders of two projects cannot burn each other's words.
-const ASS_DIR = path.join(ROOT, 'temp_public', 'mv3b_ass');
+const ASS_DIR = path.join(TEMP_PUBLIC_DIR, 'mv3b_ass');
 
 function writeAss(timeline, id) {
   const lanes = captionLanes(timeline);

@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 const DATA_DIR = require('../lib/config').DATA_DIR;
@@ -11,7 +12,7 @@ function _read(name, fallback = []) {
 }
 function _write(name, value) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(value, null, 2), 'utf8');
+  writeFileAtomic(path.join(DATA_DIR, name + '.json'), JSON.stringify(value, null, 2));
 }
 
 router.get('/userdata/obrazy',   (_req, res) => res.json({ success: true, list: _read('obrazy') }));

@@ -24,6 +24,7 @@
 
 const express = require('express');
 const fs      = require('fs');
+const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
@@ -545,7 +546,7 @@ const { obrazAbsFolder } = require('../lib/obrazy-store');
 const BIROLY_FILE = path.join(DATA_DIR, 'biroly.json');
 const HOOKS_FILE  = path.join(DATA_DIR, 'hooks-archive.json');
 
-const _write = (f, v) => fs.writeFileSync(f, JSON.stringify(v, null, 2), 'utf8');
+const _write = (f, v) => writeFileAtomic(f, JSON.stringify(v, null, 2));
 
 // Every path that reaches unlink() comes from a record, and a record is only as
 // trustworthy as whatever wrote it. Resolve, then refuse anything that climbs out

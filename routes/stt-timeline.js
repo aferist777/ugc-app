@@ -29,7 +29,7 @@ const router = express.Router();
 const ROOT_DIR      = require('../lib/config').ROOT_DIR;
 const UPLOADS_DIR   = path.join(ROOT_DIR, 'uploads');
 const FINALS_DIR    = path.join(ROOT_DIR, 'finals');
-const TEMP_DIR      = path.join(ROOT_DIR, 'temp_files');
+const TEMP_DIR      = require('../lib/config').TEMP_DIR;
 const SETTINGS_FILE = path.join(ROOT_DIR, 'data', 'settings.json');
 const GROQ_STT_URL  = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
