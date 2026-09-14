@@ -124,11 +124,6 @@ app.get('/character-v2', (_req, res) => res.redirect('/character'));
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/lookbook'));
 app.use('/api', require('./routes/gallery'));
-// routes/scenarios.js — the OLD scenarios backend, unmounted. Its 14 endpoints under
-// /api/scenarios* had exactly one caller left, scen-state.js, which is deleted; the v3 page
-// keeps its own store. The file stays on disk because it is the only code that still knows the
-// layout of the old scenario files and archive under data/ - remount the line to reach them.
-// app.use('/api', require('./routes/scenarios'));
 app.use('/api', require('./routes/misc'));
 app.use('/api', require('./routes/prompts'));
 app.use('/api', require('./routes/asset-interact'));
