@@ -52,23 +52,6 @@
 .sv3-nav .sv3-gear.is-loading svg{ animation:sv3-gear-spin 1.1s linear infinite; }
 @keyframes sv3-gear-spin{ to{ transform:rotate(360deg); } }
 
-/* Balance: same pill as the tag but neutral — it is a reading, not a label. */
-.sv3-nav .sv3-bal{
-  font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;
-  color:var(--muted); background:var(--surface-2);
-  border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
-}
-
-/* A nav entry that is NOT navigation: Brain and Import / Export open popups, so they have
-   to stay buttons. Styled exactly like the links so the row reads as one thing - the only
-   giveaway is the cursor, which is correct: they do something else. */
-.sv3-nav .sv3-navbtn{
-  color:var(--muted); background:none; border:0;
-  font:600 12px var(--font); padding:5px 10px; border-radius:var(--r-xs);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.sv3-nav .sv3-navbtn:hover{ color:var(--ink); background:var(--surface-2); }
-
 /* ── The gallery picker ───────────────────────────────────────────────────────
    Sits above the shelves on every library page (js/lib-switch.js). Full width of the
    shelf column and ruled off from the shelves below it, because it acts on the whole

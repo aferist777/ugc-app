@@ -21,14 +21,17 @@
   <span class="sp"></span>
   <a href="/library" data-also="/library2">Library</a>
   <a href="/admin">Admin</a>
-  <!-- The kie.ai balance. This is the one page that carries it: it is a number to act on here,
-       and on every other page it was a reading nobody could act on. -->
-  <span class="sv3-bal" id="sv3-balance" title="kie.ai balance">…</span>
 </nav>
 
 <div class="adm-body">
-  <!-- The settings: the keys every generator reads, saved into settings.json in the library. -->
-  <section class="adm-panel">
+  <!-- Two panes, one strip. The address carries the pane (#keys, #data), so a reload stays put. -->
+  <div class="adm-tabs" role="tablist">
+    <button class="adm-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="data">Import / Export</button>
+  </div>
+
+  <!-- The keys every generator reads, saved into settings.json in the library. -->
+  <section class="adm-panel" data-pane="keys">
     <div class="adm-head">
       <span class="adm-title">API keys</span>
       <span class="adm-count">first six and last four are all anyone sees here</span>
@@ -40,10 +43,71 @@
     <div class="adm-keys" id="adm-keys"></div>
     <div class="adm-status" id="adm-keys-status"></div>
   </section>
+
+  <!-- Taking the library out as .zip volumes, and bringing volumes in (js/data-io.js). -->
+  <section class="adm-panel" data-pane="data" hidden>
+    <div class="adm-head">
+      <span class="adm-title">Import / Export</span>
+      <span class="adm-count">everything in this library, as .zip volumes - out, or back in</span>
+    </div>
+    <div class="dio-body">
+      <div class="dio-sec">Take out</div>
+      <div id="dio-groups"></div>
+      <div class="dio-warn" id="dio-warn" hidden></div>
+      <div class="dio-total" id="dio-total">measuring…</div>
+      <div class="dio-actions">
+        <button class="lib-btn dio-go" type="button" id="dio-export">Build the archive</button>
+      </div>
+      <div class="dio-status" id="dio-status"></div>
+      <div class="dio-parts" id="dio-parts"></div>
+
+      <div class="dio-sec">Bring in</div>
+      <label class="dio-row">
+        <input type="checkbox" id="dio-overwrite">
+        <span class="dio-lbl"><b>Overwrite what is already here</b>
+          <i>Off, an import only ADDS: nothing already in this library is touched, and a
+             record that exists keeps its local version. On, an archive taken later
+             replaces what it collides with.</i></span>
+      </label>
+      <div class="dio-actions">
+        <button class="lib-btn" type="button" id="dio-import">Choose .zip volumes…</button>
+        <input type="file" id="dio-file" accept=".zip" multiple hidden>
+      </div>
+      <div class="dio-status" id="dio-imp-status"></div>
+      <div class="dio-prog" id="dio-imp-prog" hidden>
+        <div class="dio-bar"><i id="dio-bar-all"></i></div>
+        <div class="dio-now" id="dio-now"></div>
+        <div class="dio-bar dio-bar-sm"><i id="dio-bar-one"></i></div>
+      </div>
+      <div class="dio-parts" id="dio-imp-log"></div>
+    </div>
+  </section>
 </div>
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
 <script src="js/admin-keys.js"></script>
+<script src="js/data-io.js"></script>
+<script>
+  // The tab strip, after the panes' own scripts so they hear the first `adm-pane`. Panes are
+  // hidden rather than rebuilt, so a half-typed key or an export being built survives a switch.
+  (function () {
+    var tabs = document.querySelectorAll('.adm-tab');
+    function show(name, fromClick) {
+      var known = [].some.call(tabs, function (t) { return t.getAttribute('data-pane') === name; });
+      if (!known) name = 'keys';
+      tabs.forEach(function (t) { t.classList.toggle('cur', t.getAttribute('data-pane') === name); });
+      document.querySelectorAll('.adm-panel[data-pane]').forEach(function (p) {
+        p.hidden = p.getAttribute('data-pane') !== name;
+      });
+      if (fromClick) history.replaceState(null, '', '#' + name);
+      document.dispatchEvent(new CustomEvent('adm-pane', { detail: name }));
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { show(t.getAttribute('data-pane'), true); });
+    });
+    show(location.hash.slice(1));
+  })();
+</script>
 </body>
 </html>

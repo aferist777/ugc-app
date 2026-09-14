@@ -1,8 +1,8 @@
-// Import / Export — the popup behind the gear in Brains.
+// Import / Export — the second tab on /admin.
 //
-// It sits ABOVE Brains rather than replacing it: Brains is where the keys live and this is a
-// different errand, but it is reached from there, so leaving it open underneath keeps the way
-// back obvious. .dio-ov carries a z-index above the media viewer for exactly that reason.
+// The library is measured the first time the tab is shown, not when the page loads: counting
+// every file takes a moment on a large library, and most visits to /admin are about the keys.
+// It is measured again after an import, which is the one thing here that changes the answer.
 //
 // THE DOWNLOAD IS A PLAIN LINK, never fetch(). A fetched archive would have to be held in the
 // tab's memory before it could be saved - gigabytes of it - and a connection that dies takes
@@ -18,6 +18,7 @@ const MB = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB'
 
 let _groups = [];
 let _poll = null;
+let _measured = false;
 
 function _el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -86,12 +87,14 @@ function _renderGroups() {
 }
 
 async function _load() {
+  _measured = true;
   $('dio-total').textContent = 'measuring…';
   try {
     const r = await fetch('/api/data/groups').then(x => x.json());
     _groups = r.groups || [];
     _renderGroups();
   } catch (e) {
+    _measured = false;
     $('dio-total').textContent = 'could not read what is here: ' + e.message;
   }
 }
@@ -298,33 +301,14 @@ async function _runImport(files) {
     + `${tally.skipped} already here`
     + (tally.failed ? `, ${tally.failed} volume(s) failed.` : '.')
     + ($('dio-overwrite').checked ? '' : ' Nothing was overwritten.');
-}
-
-function openDataIO() {
-  const ov = $('dio-ov');
-  if (!ov) return;
-  ov.hidden = false;
+  // What an export would take out has just changed.
   _load();
 }
 
-function _close() {
-  _stopPoll();
-  const ov = $('dio-ov');
-  if (ov) ov.hidden = true;
-}
-
 function initDataIO() {
-  const ov = $('dio-ov');
-  if (!ov) return;
-  $('dio-close')?.addEventListener('click', _close);
-  $('btn-open-dio')?.addEventListener('click', openDataIO);
-  // The scrim closes; a click that began inside the panel must not fall through it.
-  ov.addEventListener('click', (e) => { if (e.target === ov) _close(); });
-  // Esc closes this one and stops the key travelling to whatever is underneath.
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !ov.hidden) { _close(); e.stopPropagation(); }
-  }, true);
-
+  if (!$('dio-groups')) return;
+  // The strip on /admin announces every pane it shows.
+  document.addEventListener('adm-pane', (e) => { if (e.detail === 'data' && !_measured) _load(); });
   $('dio-export')?.addEventListener('click', _startExport);
   $('dio-import')?.addEventListener('click', () => $('dio-file').click());
   $('dio-file')?.addEventListener('change', (e) => {
@@ -334,9 +318,5 @@ function initDataIO() {
   });
 }
 
-// Classic script, exposed on the window so the nav button on Library can open it without an
-// import. One name only: opening is the whole of what anyone else needs.
-window.openDataIO = openDataIO;
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDataIO);
-else initDataIO();
+initDataIO();
 })();

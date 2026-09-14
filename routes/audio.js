@@ -787,22 +787,6 @@ router.post('/upload-public', async (req, res) => {
   }
 });
 
-// ── POST /api/upload-public-base64 ────────────────────────────────────────────
-// Body: { imageBase64 (raw or data: URL) } -> { url } — hosts a browser-uploaded
-// image on an externally reachable public host (for analyze + Grok i2v).
-router.post('/upload-public-base64', async (req, res) => {
-  const raw = String((req.body && req.body.imageBase64) || '');
-  if (!raw) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
-  try {
-    const buf = Buffer.from(raw.replace(/^data:[^,]+,/, ''), 'base64');
-    const url = await uploadToPublicHost(buf);
-    res.json({ success: true, url });
-  } catch (err) {
-    console.error('[upload-public-base64]', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // ── POST /api/audio/avatar ────────────────────────────────────────────────────
 // Body: { imageUrl | imagePath, audioPath, prompt }
 // Accepts pre-uploaded imageUrl (skips upload) or imagePath (uploads internally)
@@ -1327,112 +1311,6 @@ router.get('/video/p-video/status/:taskId', async (req, res) => {
   }
 });
 
-// ── POST /api/biroly/hands-generate ──────────────────────────────────────────
-// Body: { prompt, engine: 'grok'|'veo3'|'sora', duration?, aspectRatio? }
-// Submits a text-to-video task to the chosen engine and returns { taskId }.
-function _handsBuildKieRequest(engine, prompt, duration, aspectRatio) {
-  const dur = String(duration);
-  if (engine === 'grok') {
-    return {
-      model: 'grok-imagine/text-to-video',
-      input: {
-        prompt,
-        duration: dur,
-        resolution: '480p',
-        aspect_ratio: aspectRatio,
-        mode: 'normal',
-      },
-    };
-  }
-  if (engine === 'veo3') {
-    return {
-      model: 'veo3-fast/text-to-video',
-      input: { prompt, ratio: aspectRatio, resolution: '720p' },
-    };
-  }
-  if (engine === 'sora') {
-    return {
-      model: 'sora-2/text-to-video',
-      input: { prompt, aspect_ratio: aspectRatio },
-    };
-  }
-  return null;
-}
-
-router.post('/biroly/hands-generate', async (req, res) => {
-  const { prompt, engine = 'grok', duration = 5, aspectRatio = '9:16' } = req.body || {};
-  if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
-  // All engines (grok / veo3 / sora) run on kie.ai via _handsBuildKieRequest.
-  const payload = _handsBuildKieRequest(engine, prompt, duration, aspectRatio);
-  if (!payload) return res.status(400).json({ success: false, error: 'Unknown engine: ' + engine });
-
-  try {
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      payload,
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) {
-      const detail = taskRes.data;
-      console.error('[biroly/hands-generate] no taskId. engine=' + engine + ' model=' + payload.model + ' kieResp=' + JSON.stringify(detail));
-      const kieMsg = detail?.msg || detail?.message || detail?.data?.msg || JSON.stringify(detail);
-      return res.status(502).json({ success: false, error: 'kie.ai (' + engine + '): ' + kieMsg, detail });
-    }
-    res.json({ success: true, taskId, engine });
-  } catch (err) {
-    const data = err.response?.data;
-    console.error('[biroly/hands-generate] error. engine=' + engine + ' status=' + err.response?.status + ' data=' + JSON.stringify(data) + ' msg=' + err.message);
-    const apiMsg = data?.msg || data?.message || err.message;
-    res.status(502).json({ success: false, error: 'kie.ai (' + engine + '): ' + apiMsg, detail: data });
-  }
-});
-
-// ── GET /api/biroly/hands-status ─────────────────────────────────────────────
-// Query: ?engine=grok|veo3|sora&taskId=xxx
-// Polls kie.ai recordInfo and, on success, downloads the resulting mp4 to /uploads/.
-router.get('/biroly/hands-status', async (req, res) => {
-  const { engine = 'grok', taskId } = req.query;
-  if (!taskId) return res.status(400).json({ success: false, error: 'taskId required' });
-  // grok runs on Replicate now (repl:<id>); veo3/sora still poll kie.ai.
-  if (String(taskId).startsWith('repl:')) {
-    try { return await _replicateVideoStatus(taskId, 'hands_grok', res); }
-    catch (err) { console.error('[biroly/hands-status repl]', err.response?.data || err.message); return res.status(502).json({ success: false, error: err.message }); }
-  }
-  try {
-    const statusRes = await axios.get(
-      `${KIE_BASE}/api/v1/jobs/recordInfo`,
-      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
-    );
-    const data  = statusRes.data?.data;
-    const state = data?.state;
-
-    if (state === 'success') {
-      let videoUrl = null;
-      try {
-        const result = JSON.parse(data.resultJson);
-        videoUrl = result.resultUrls?.[0] || result.video_url || result.url || null;
-      } catch {}
-      if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
-
-      const filename = `hands_${engine}_${taskId}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
-      const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
-      fs.writeFileSync(destPath, Buffer.from(videoRes.data));
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
-    }
-
-    if (state === 'failed') {
-      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Generation failed' });
-    }
-
-    return res.json({ success: true, state: state || 'pending' });
-  } catch (err) {
-    console.error('[biroly/hands-status]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.message });
-  }
-});
-
 // ── POST /api/biroly/enhance-realism ─────────────────────────────────────────
 // Body: { prompt }
 // Uses Gemini to integrate contextually appropriate realism markers into the prompt.
@@ -1506,7 +1384,6 @@ router.post('/biroly/gen-image', async (req, res) => {
 // Uses Gemini to analyze the generated image and produce a quality Grok video prompt
 router.post('/biroly/analyze-for-video', async (req, res) => {
   const { imagePath, imageUrl: directImageUrl } = req.body;
-  const count = Math.min(6, Math.max(1, parseInt(req.body && req.body.count, 10) || 1));
   if (!imagePath && !directImageUrl) return res.status(400).json({ success: false, error: 'Нет imageUrl или imagePath' });
   try {
     let imageUrl;
@@ -1527,25 +1404,14 @@ Analyze this image carefully. Each prompt is a detailed, technical English video
 - Lighting and color mood
 - Style (cinematic, UGC, product demo, etc.)
 Each prompt must be optimized for Grok image-to-video.`;
-    const systemPrompt = count > 1
-      ? `${base}\n\nWrite EXACTLY ${count} DISTINCT motion prompts that genuinely differ from each other (vary the motion, the camera move and the mood). Output ONLY the prompts, one per line, each numbered like "1. ", "2. ", "3. ". No explanations, no blank lines.`
-      : `${base}\n\nRespond with ONLY the prompt text, no explanations.`;
+    const systemPrompt = `${base}\n\nRespond with ONLY the prompt text, no explanations.`;
 
     const raw = await callAI([{ role: 'user', content: [
       { type: 'text',      text: systemPrompt },
       { type: 'image_url', image_url: { url: imageUrl } },
     ]}], { timeout: 40000, useOpenRouter: true });
 
-    if (count > 1) {
-      let prompts = String(raw || '').split(/\r?\n/)
-        .map(l => l.replace(/^\s*\d+[.)]\s*/, '').replace(/^\s*[-*]\s*/, '').replace(/^["'`]+|["'`]+$/g, '').trim())
-        .filter(Boolean);
-      // de-dup (case-insensitive) and cap to count
-      const seen = new Set(); prompts = prompts.filter(p => { const k = p.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, count);
-      if (!prompts.length) prompts = [String(raw || '').trim()].filter(Boolean);
-      return res.json({ success: true, prompts, prompt: prompts[0] || '' });
-    }
-    res.json({ success: true, prompt: String(raw || '').trim(), prompts: [String(raw || '').trim()].filter(Boolean) });
+    res.json({ success: true, prompt: String(raw || '').trim() });
   } catch (err) {
     console.error('[biroly/analyze-for-video]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });

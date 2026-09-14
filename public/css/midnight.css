@@ -1012,58 +1012,11 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 
 /* ===================================================================
    BIROLS (b-roll generator) — SHELL group
-   Scope: #biroly-mode-bar (top strip) + #l1-osnovnye (3-col panel)
+   Scope: #l1-osnovnye (3-col panel)
           + #biroly-engines-popup (generic primitives only).
-   Target looks: sec-layout A (clean 3-col port), sec-modebar A
-   (flat strip + hairline divider), sec-controls C (mode selector).
+   Target look: sec-layout A (clean 3-col port).
    Every rule scoped + !important to beat legacy inline + 98.css.
    =================================================================== */
-
-/* ---------- Mode bar container (#biroly-mode-bar) -> sec-modebar A ---------- */
-#biroly-mode-bar{
-  background:var(--bg)!important;
-  border-bottom:1px solid var(--border-soft)!important;
-  padding:8px 12px!important;
-  gap:10px!important;
-  font-family:var(--font)!important;
-}
-/* "Type:" label (first child span) -> bmodebar-lblA */
-#biroly-mode-bar > span{
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  font-weight:700!important;
-  color:var(--muted)!important;
-  letter-spacing:.02em!important;
-}
-
-/* ---------- Type selector (#biroly-mode-select) -> sec-controls C themed ---------- */
-/* Native <select> can't become a real segmented toggle in CSS alone, so port it
-   to a clean Midnight pill-select that reads like the chosen toggle. */
-#biroly-mode-select{
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  color:var(--ink)!important;
-  background:var(--surface-2)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;
-  padding:4px 9px!important;
-  cursor:pointer!important;
-  outline:none!important;
-  box-shadow:none!important;
-  transition:border-color .16s var(--ease),box-shadow .16s var(--ease)!important;
-}
-#biroly-mode-select:hover{ border-color:var(--primary)!important; }
-#biroly-mode-select:focus{
-  border-color:var(--primary)!important;
-  box-shadow:0 0 0 3px var(--primary-soft)!important;
-}
-/* dropdown list items (where supported) */
-#biroly-mode-select option{
-  background:var(--surface)!important;
-  color:var(--ink)!important;
-}
-/* "hands" is in-development -> read as muted/disabled, do NOT design hands UI */
-#biroly-mode-select option[value="hands"]{ color:var(--muted)!important; }
 
 /* ---------- 3-column panel shell (#l1-osnovnye) -> sec-layout A ---------- */
 #l1-osnovnye{
@@ -2115,21 +2068,6 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 #l1-osnovnye > .col-9-16:last-child{overflow-y:auto!important;min-height:0!important}
 /* action buttons moved up under the Engines block — sits as a tidy row */
 #l1-osnovnye #biroly-editor-actions{display:flex;gap:6px!important;margin:0 0 8px!important;padding-bottom:8px!important;border-bottom:1px solid var(--border-soft)!important}
-
-/* ===================== BIROLS: img2vid popup (Midnight) ===================== */
-#biroly-i2v-overlay > div{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;box-shadow:var(--shadow)!important;color:var(--ink)!important;font-family:var(--font)!important}
-#biroly-i2v-overlay > div > div:first-child{background:var(--surface-2)!important;color:var(--ink)!important;border-bottom:1px solid var(--border-soft)!important}
-#biroly-i2v-overlay #biroly-i2v-close{background:transparent!important;color:var(--danger)!important;border:1px solid oklch(from var(--danger) l c h /.45)!important;border-radius:var(--r-sm)!important}
-#biroly-i2v-overlay #biroly-i2v-close:hover{background:oklch(from var(--danger) l c h /.16)!important}
-#biroly-i2v-overlay #biroly-i2v-drop{background:var(--bg)!important;border:2px dashed var(--border)!important;border-radius:var(--r-sm)!important;color:var(--muted)!important}
-#biroly-i2v-overlay #biroly-i2v-prompt{background:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important}
-#biroly-i2v-overlay #biroly-i2v-prompt:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important;outline:none!important}
-#biroly-i2v-overlay button{background:var(--surface-2)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;cursor:pointer!important}
-#biroly-i2v-overlay button:hover:not(:disabled){border-color:var(--primary)!important}
-#biroly-i2v-overlay button:disabled{opacity:.45!important;cursor:not-allowed!important}
-#biroly-i2v-overlay #biroly-i2v-send{background:var(--success)!important;color:var(--bg)!important;border-color:transparent!important;font-weight:600!important}
-#biroly-i2v-overlay #biroly-i2v-msg,#biroly-i2v-overlay #biroly-i2v-status,#biroly-i2v-overlay #biroly-i2v-vc{color:var(--muted)!important}
-#biroly-i2v-overlay #biroly-i2v-result{background:var(--bg)!important;border:1px solid var(--border-soft)!important;border-radius:var(--r-sm)!important}
 
 /* ===================== BIROLS: slot-edit modal (#biroly-modal-overlay) — Midnight ===================== */
 

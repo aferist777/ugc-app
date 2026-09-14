@@ -26,9 +26,6 @@
   <a href="/birols">Birols</a>
   <span class="sp"></span>
   <a href="/library" data-also="/library2">Library</a>
-  <!-- Not navigation: opens Import / Export on this page. A button rather than a link so it
-       does not look like somewhere to go. The API keys that used to sit here are on /admin. -->
-  <button id="btn-open-dio" class="sv3-navbtn" type="button" title="Import / Export — take everything out of here, or bring it in">Import / Export</button>
   <span class="tag" id="lib-count">—</span>
 </nav>
 
@@ -104,50 +101,6 @@
   </main>
 </div>
 
-<!-- Import / Export. Opened by #btn-open-dio in the nav. -->
-<div class="dio-ov" id="dio-ov" hidden>
-  <div class="dio-panel" role="dialog" aria-modal="true" aria-labelledby="dio-title">
-    <div class="dio-head">
-      <span class="dio-title" id="dio-title">📦 Import / Export</span>
-      <span class="sp"></span>
-      <button class="lib-btn" type="button" id="dio-close" title="Close (Esc)">✕</button>
-    </div>
-
-    <div class="dio-body">
-      <div class="dio-sec">Take out</div>
-      <div id="dio-groups"></div>
-      <div class="dio-warn" id="dio-warn" hidden></div>
-      <div class="dio-total" id="dio-total">measuring…</div>
-      <div class="dio-actions">
-        <button class="lib-btn dio-go" type="button" id="dio-export">Build the archive</button>
-      </div>
-      <div class="dio-status" id="dio-status"></div>
-      <div class="dio-parts" id="dio-parts"></div>
-
-      <div class="dio-sec">Bring in</div>
-      <label class="dio-row">
-        <input type="checkbox" id="dio-overwrite">
-        <span class="dio-lbl"><b>Overwrite what is already here</b>
-          <i>Off, an import only ADDS: nothing already on this machine is touched, and a
-             record that exists keeps its local version. On, an archive taken later
-             replaces what it collides with.</i></span>
-      </label>
-      <div class="dio-actions">
-        <button class="lib-btn" type="button" id="dio-import">Choose .zip volumes…</button>
-        <input type="file" id="dio-file" accept=".zip" multiple hidden>
-      </div>
-      <div class="dio-status" id="dio-imp-status"></div>
-      <div class="dio-prog" id="dio-imp-prog" hidden>
-        <div class="dio-bar"><i id="dio-bar-all"></i></div>
-        <div class="dio-now" id="dio-now"></div>
-        <div class="dio-bar dio-bar-sm"><i id="dio-bar-one"></i></div>
-      </div>
-      <div class="dio-parts" id="dio-imp-log"></div>
-    </div>
-  </div>
-</div>
-
 <script type="module" src="js/library/main.js"></script>
-<script src="js/data-io.js"></script>
 </body>
 </html>

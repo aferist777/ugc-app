@@ -73,19 +73,9 @@ function showComboPanel(value) {
   activateL1Panel('l1-skleyka');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
-  const handsEl    = document.getElementById('biroly-hands-panel');
-  const modeSel    = document.getElementById('biroly-mode-select');
-  const isHandsMode = (modeSel?.value === 'hands');
 
-  if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly' && !isHandsMode);
-  if (handsEl) {
-    const showHands = (value === 'biroly' && isHandsMode);
-    handsEl.style.display = showHands ? 'flex' : 'none';
-    handsEl.classList.toggle('active', showHands);
-  }
+  if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly');
   if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
-  const birolyModeBar = document.getElementById('biroly-mode-bar');
-  if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
 
   if (value === 'biroly')       { window.renderBirolyStrip?.(); }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
@@ -133,19 +123,9 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 // ── Init: always show the saved combo sub-panel inside l1-skleyka ────────────
 {
   const birolyEl   = document.getElementById('l1-osnovnye');
-  const handsElInit = document.getElementById('biroly-hands-panel');
-  const modeSelInit = document.getElementById('biroly-mode-select');
-  const isHandsModeInit = (modeSelInit?.value === 'hands');
-  if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly' && !isHandsModeInit);
-  if (handsElInit) {
-    const showHands = (activeComboVal === 'biroly' && isHandsModeInit);
-    handsElInit.style.display = showHands ? 'flex' : 'none';
-    handsElInit.classList.toggle('active', showHands);
-  }
+  if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly');
   const mergev2ElInit = document.getElementById('combo-sub-mergev2');
   if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
-  const birolyModeBarInit = document.getElementById('biroly-mode-bar');
-  if (birolyModeBarInit) birolyModeBarInit.style.display = (activeComboVal === 'biroly') ? 'flex' : 'none';
 }
 
 // ── Init: sync custom prompt labels to dropdowns on page load ─────────────────
@@ -177,8 +157,8 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 // backdrop click (event.target === popup), Esc key. Mutex: opening a popup
 // closes any currently-open one. First-open hooks lazy-load content.
 (function setupAppPopups() {
-  // `brain` and `data` are gone from this registry: Brain is now the Brains popup on the Library
-  // page (now the Keys tab on /admin, js/admin-keys.js) and Import / Export was removed outright.
+  // `brain` and `data` are gone from this registry: the API keys and Import / Export are the two
+  // tabs on /admin now (js/admin-keys.js, js/data-io.js).
   const POPUPS = {
     // Engine settings popup — per-model default params (aspect_ratio, quality,
     // etc.) for image generation. Wired by js/engine-settings.js, opened from
