@@ -2152,6 +2152,15 @@
         <!-- l1-scenarii (v1) removed - Phase D -->
 
         <!-- Sub-panel: Биролы -->
+        <!-- The type of birol. b-roll is the one that exists; hands is listed so it is seen as
+             coming, and cannot be chosen until it is built - there is nothing behind it yet. -->
+        <div id="biroly-mode-bar" style="flex-shrink:0;padding:4px 8px 2px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #b0b0b0;">
+          <span style="font-size:11px;color:#444;font-weight:bold;">Type:</span>
+          <select id="biroly-mode-select" style="font-size:11px;padding:2px 6px;">
+            <option value="b-roll">b-roll</option>
+            <option value="hands" disabled>hands — under development</option>
+          </select>
+        </div>
         <div id="l1-osnovnye" class="tab-panel three-col-panel combo-sub" style="flex:1;overflow:hidden;">
 
           <!-- Col 1: Слоты (biroly categories) -->

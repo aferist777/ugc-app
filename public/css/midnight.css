@@ -1012,11 +1012,58 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 
 /* ===================================================================
    BIROLS (b-roll generator) — SHELL group
-   Scope: #l1-osnovnye (3-col panel)
+   Scope: #biroly-mode-bar (top strip) + #l1-osnovnye (3-col panel)
           + #biroly-engines-popup (generic primitives only).
-   Target look: sec-layout A (clean 3-col port).
+   Target looks: sec-layout A (clean 3-col port), sec-modebar A
+   (flat strip + hairline divider), sec-controls C (type selector).
    Every rule scoped + !important to beat legacy inline + 98.css.
    =================================================================== */
+
+/* ---------- Mode bar container (#biroly-mode-bar) -> sec-modebar A ---------- */
+#biroly-mode-bar{
+  background:var(--bg)!important;
+  border-bottom:1px solid var(--border-soft)!important;
+  padding:8px 12px!important;
+  gap:10px!important;
+  font-family:var(--font)!important;
+}
+/* "Type:" label (first child span) -> bmodebar-lblA */
+#biroly-mode-bar > span{
+  font-family:var(--font)!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  color:var(--muted)!important;
+  letter-spacing:.02em!important;
+}
+
+/* ---------- Type selector (#biroly-mode-select) -> sec-controls C themed ---------- */
+/* Native <select> can't become a real segmented toggle in CSS alone, so port it
+   to a clean Midnight pill-select that reads like the chosen toggle. */
+#biroly-mode-select{
+  font-family:var(--font)!important;
+  font-size:11px!important;
+  color:var(--ink)!important;
+  background:var(--surface-2)!important;
+  border:1px solid var(--border)!important;
+  border-radius:var(--r-sm)!important;
+  padding:4px 9px!important;
+  cursor:pointer!important;
+  outline:none!important;
+  box-shadow:none!important;
+  transition:border-color .16s var(--ease),box-shadow .16s var(--ease)!important;
+}
+#biroly-mode-select:hover{ border-color:var(--primary)!important; }
+#biroly-mode-select:focus{
+  border-color:var(--primary)!important;
+  box-shadow:0 0 0 3px var(--primary-soft)!important;
+}
+/* dropdown list items (where supported) */
+#biroly-mode-select option{
+  background:var(--surface)!important;
+  color:var(--ink)!important;
+}
+/* a type that is under development: listed, muted, not selectable (disabled in the markup) */
+#biroly-mode-select option:disabled{ color:var(--muted)!important; }
 
 /* ---------- 3-column panel shell (#l1-osnovnye) -> sec-layout A ---------- */
 #l1-osnovnye{
