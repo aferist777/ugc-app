@@ -5,7 +5,7 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 
-const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.json');
 
 // Fields that hold live credentials. Their VALUES must never be sent to the browser — the
 // page only needs to know a key is set and show a masked hint. The server reads the real

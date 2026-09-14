@@ -51,7 +51,7 @@ const path = require('path');
 const router = express.Router();
 const OWN = require('../lib/ownership');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const { DATA_DIR } = require('../lib/config');
 const FILE = path.join(DATA_DIR, 'merge-v3.json');
 
 // The tracks, and their order, are the previous editor's - see js/merge-v3/timeline.js.
@@ -840,7 +840,7 @@ function _finalPath(url) {
 //   send     the same upload on its own, for "send again".
 const MVQ = require('./mv3q');
 const MP = require('../lib/partner');
-const _ROOT_DIR = path.join(__dirname, '..');
+const _ROOT_DIR = require('../lib/config').ROOT_DIR;
 const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
 const _thumbAbs = (url) => { try { return path.join(_ROOT_DIR, String(thumbUrlFor(url)).replace(/^\/+/, '')); } catch (e) { return null; } };
 
@@ -922,7 +922,7 @@ router.post('/mv3/render/discard', (req, res) => {
     // Its poster too, if one was made.
     try {
       const turl = thumbUrlFor('/finals/' + path.basename(abs));
-      const tabs = path.join(__dirname, '..', String(turl).replace(/^\/+/, ''));
+      const tabs = path.join(_ROOT_DIR, String(turl).replace(/^\/+/, ''));
       if (fs.existsSync(tabs)) fs.unlinkSync(tabs);
     } catch (e) {}
     res.json({ success: true });

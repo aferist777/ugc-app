@@ -36,7 +36,7 @@ const { DATA_DIR } = require('../lib/config');
 const router = express.Router();
 
 const EL_TTS = 'https://api.elevenlabs.io/v1/text-to-speech';
-const VOICE_DIR = path.join(__dirname, '..', 'uploads', 'voice');
+const VOICE_DIR = path.join(require('../lib/config').UPLOADS_DIR, 'voice');
 
 // ONE MODEL, ON PURPOSE. `eleven_v3` also exists and is what the Scenarios read uses, because
 // it PERFORMS bracketed tags - [sighs], [whispering] - and v2 has no idea what they are and

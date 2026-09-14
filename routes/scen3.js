@@ -37,7 +37,7 @@ const AUDIT = require('../lib/audit');
 // runs a pro model.
 const DEFAULT_ENGINE = 'nano-banana-2';
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const { DATA_DIR } = require('../lib/config');
 const FILE     = path.join(DATA_DIR, 'scen3-scenarios.json');
 const OPT_FILE = path.join(DATA_DIR, 'scen3-options.json');
 const PROJ_FILE = path.join(DATA_DIR, 'scen3-projects.json');
@@ -404,7 +404,7 @@ const MOUNTS = {
   scenes:       CFG.SCENES_DIR,
   finals:       CFG.FINALS_DIR,
   // mannequins live under the static root, so the served path drops `public/`
-  poses:        path.join(__dirname, '..', 'public', 'poses'),
+  poses:        path.join(CFG.PUBLIC_DIR, 'poses'),
 };
 
 // Map a public /mount/... URL to an absolute file, refusing anything that escapes
@@ -445,6 +445,20 @@ async function _makePreview(srcAbs, outAbs) {
   }
 }
 
+// Where the 1K derivative of a mounted file is written, and the URL it answers at: beside its
+// source, in a preview/ folder. The mannequins are the exception - they ship with the program in
+// public/poses, which an update replaces - so theirs are filed in the library, under
+// uploads/_poses/.
+function _previewTarget(hit) {
+  const base = path.basename(hit.rel).replace(/\.[^.]+$/, '') + '.jpg';
+  const dir  = path.dirname(hit.rel);
+  const sub  = dir === '.' ? '' : dir.split(path.sep).join('/');
+  const shipped = hit.mount === 'poses';
+  const mount = shipped ? 'uploads' : hit.mount;
+  const relOut = path.posix.join(shipped ? '_poses' : '', sub, 'preview', base);
+  return { abs: path.resolve(MOUNTS[mount], relOut), url: `/${mount}/${relOut}` };
+}
+
 // POST { path } -> { path: '/<mount>/.../preview/<name>.jpg' }
 // Returns the source path unchanged when it is already small enough to be its
 // own preview, so the client never has to special-case that.
@@ -456,11 +470,7 @@ router.post('/scen3/preview1k', async (req, res) => {
     if (!fs.existsSync(hit.abs)) return res.status(404).json({ success: false, error: 'source not found' });
     if (/(^|\/)(thumbs|preview)\//i.test(hit.rel)) return res.json({ success: true, path: src });
 
-    const dir  = path.dirname(hit.rel);
-    const base = path.basename(hit.rel).replace(/\.[^.]+$/, '') + '.jpg';
-    const relOut = path.posix.join(dir === '.' ? '' : dir.split(path.sep).join('/'), 'preview', base);
-    const outAbs = path.resolve(MOUNTS[hit.mount], relOut);
-    const outUrl = `/${hit.mount}/${relOut}`;
+    const { abs: outAbs, url: outUrl } = _previewTarget(hit);
 
     if (!fs.existsSync(outAbs)) {
       const srcKb = fs.statSync(hit.abs).size / 1024;
@@ -1186,7 +1196,7 @@ router.post('/scen3/frame/crop', async (req, res) => {
 
     const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
     const name = `crop_${base}_${Date.now()}.jpg`;
-    const dest = path.join(__dirname, '..', 'uploads', name);
+    const dest = path.join(CFG.UPLOADS_DIR, name);
     await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
 
     const finalUrl = '/uploads/' + name;
@@ -1875,12 +1885,9 @@ router.post('/scen3/finalize', async (req, res) => {
     try {
       const fh = _resolveMedia(finalUrl);
       if (fh && fs.statSync(fh.abs).size / 1024 > PREVIEW_MAX_KB) {
-        const base = path.basename(fh.rel).replace(/\.[^.]+$/, '') + '.jpg';
-        const dir  = path.dirname(fh.rel);
-        const relOut = path.posix.join(dir === '.' ? '' : dir.split(path.sep).join('/'), 'preview', base);
-        const outAbs = path.resolve(MOUNTS[fh.mount], relOut);
-        if (!fs.existsSync(outAbs)) await _makePreview(fh.abs, outAbs);
-        previewUrl = `/${fh.mount}/${relOut}`;
+        const out = _previewTarget(fh);
+        if (!fs.existsSync(out.abs)) await _makePreview(fh.abs, out.abs);
+        previewUrl = out.url;
       }
     } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
 
@@ -2257,7 +2264,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
       ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
       : lines.map((_, i) => i).filter(i => needs(lines[i]));
 
-    const dir = path.join(__dirname, '..', 'uploads', 'voice');
+    const dir = path.join(CFG.UPLOADS_DIR, 'voice');
     fs.mkdirSync(dir, { recursive: true });
 
     const report = { variant, model, spoken: 0, skipped: [], failed: [] };
@@ -2319,12 +2326,9 @@ async function _framePreview(finalUrl) {
     const fh = _resolveMedia(finalUrl);
     if (!fh || !fs.existsSync(fh.abs)) return finalUrl;
     if (fs.statSync(fh.abs).size / 1024 <= PREVIEW_MAX_KB) return finalUrl;
-    const base = path.basename(fh.rel).replace(/\.[^.]+$/, '') + '.jpg';
-    const dir  = path.dirname(fh.rel);
-    const relOut = path.posix.join(dir === '.' ? '' : dir.split(path.sep).join('/'), 'preview', base);
-    const outAbs = path.resolve(MOUNTS[fh.mount], relOut);
-    if (!fs.existsSync(outAbs)) await _makePreview(fh.abs, outAbs);
-    return `/${fh.mount}/${relOut}`;
+    const out = _previewTarget(fh);
+    if (!fs.existsSync(out.abs)) await _makePreview(fh.abs, out.abs);
+    return out.url;
   } catch (e) {
     console.warn('[scen3/watch] preview failed:', e.message);
     return finalUrl;
@@ -2349,7 +2353,7 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
   if (_watching.has(key)) return;
   _watching.add(key);
 
-  const UPLOADS = path.join(__dirname, '..', 'uploads');
+  const UPLOADS = CFG.UPLOADS_DIR;
   const started = Date.now();
   const MAX_MS = 15 * 60 * 1000;
 
@@ -2446,7 +2450,7 @@ async function _fetchClip(taskId) {
   } catch (e) {}
   if (!url) return { state: 'failed', error: 'the render came back without a video URL' };
 
-  const dir = path.join(__dirname, '..', 'uploads', 'clips');
+  const dir = path.join(CFG.UPLOADS_DIR, 'clips');
   fs.mkdirSync(dir, { recursive: true });
   const name = `c${taskId}_${Date.now()}.mp4`;
   const abs = path.join(dir, name);
@@ -2467,7 +2471,7 @@ async function _fetchClip(taskId) {
 // One frame out of the clip, for the card. Half a second in rather than frame zero: the
 // very first frame of a lipsync render is often mid-blink or still settling.
 async function _clipPoster(absVideo, name) {
-  const dir = path.join(__dirname, '..', 'uploads', 'clips', 'thumbs');
+  const dir = path.join(CFG.UPLOADS_DIR, 'clips', 'thumbs');
   fs.mkdirSync(dir, { recursive: true });
   const out = path.join(dir, name.replace(/\.mp4$/i, '.jpg'));
   const ok = await new Promise(resolve => {
@@ -3312,7 +3316,7 @@ const FACE_W = 480, FACE_H = 720;
 async function _castFace(sheetPath, charId) {
   const hit = _resolveMedia(sheetPath);
   if (!hit || !fs.existsSync(hit.abs)) return '';
-  const dir = path.join(__dirname, '..', 'uploads', 'faces');
+  const dir = path.join(CFG.UPLOADS_DIR, 'faces');
   fs.mkdirSync(dir, { recursive: true });
   const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
   const abs = path.join(dir, name);
@@ -3414,7 +3418,7 @@ router.post('/scen3/voices/take', async (req, res) => {
     // is keyed by, and it is the one the account will answer to from here on.
     const known = VSHELF.get(id) || VSHELF.read().find(e => String(e.sharedVoiceId || '') === voice) || null;
     const knownDemo = known && known.demo
-      && fs.existsSync(path.join(__dirname, '..', String(known.demo).replace(/^\/+/, '')))
+      && fs.existsSync(path.join(CFG.ROOT_DIR, String(known.demo).replace(/^\/+/, '')))
       ? known.demo : '';
 
     let sample = '', dur = 0, sampleError = '', reused = false;
@@ -3425,7 +3429,7 @@ router.post('/scen3/voices/take', async (req, res) => {
       console.log('[scen3/voices] already known:', id, '- keeping its demo', knownDemo.split('/').pop());
     } else try {
       const buf = await _speakLine(key, id, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
-      const dir = path.join(__dirname, '..', 'uploads', 'voice-demos');
+      const dir = path.join(CFG.UPLOADS_DIR, 'voice-demos');
       fs.mkdirSync(dir, { recursive: true });
       const file = `demo_${id}_${Date.now()}.mp3`;
       fs.writeFileSync(path.join(dir, file), buf);
@@ -3777,7 +3781,7 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
     const removed = [], kept = [];
     for (const rel of [gone.path, gone.preview]) {
       if (!rel || inUse.has(rel)) { if (rel) kept.push(rel); continue; }
-      const abs = path.join(__dirname, '..', String(rel).replace(/^\/+/, ''));
+      const abs = path.join(CFG.ROOT_DIR, String(rel).replace(/^\/+/, ''));
       try { if (fs.existsSync(abs)) { fs.unlinkSync(abs); removed.push(rel); } } catch (e) {}
     }
     console.log('[scen3/look-frames] deleted', frameId, 'from', host.id, '| files removed', removed.length,

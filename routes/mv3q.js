@@ -45,9 +45,8 @@ const _who = (item) => (item && item.owner ? { id: item.owner, nickname: item.ow
 const _qid = (item) => 'queue:' + item.id;
 
 const router = express.Router();
-const ROOT = path.join(__dirname, '..');
-const FILE = path.join(ROOT, 'data', 'mv3-queue.json');
-const FINALS = path.join(ROOT, 'finals');
+const { ROOT_DIR: ROOT, APP_DIR, DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
 const ROOTS = ['uploads', 'obrazy', 'characters', 'environments', 'lookbooks',
                'details', 'refs', 'archive', 'scenes', 'temp_public', 'finals', 'images', 'public'];
@@ -55,9 +54,12 @@ const ROOTS = ['uploads', 'obrazy', 'characters', 'environments', 'lookbooks',
 function resolveSrc(rel) {
   const clean = String(rel || '').split('?')[0].replace(/^\/+/, '');
   if (!clean || clean.includes('..')) return null;
-  if (!ROOTS.includes(clean.split('/')[0])) return null;
-  const abs = path.join(ROOT, clean);
-  if (!abs.startsWith(ROOT)) return null;
+  const top = clean.split('/')[0];
+  if (!ROOTS.includes(top)) return null;
+  // public/ ships with the program; every other root is in the library.
+  const base = top === 'public' ? APP_DIR : ROOT;
+  const abs = path.join(base, clean);
+  if (!abs.startsWith(base)) return null;
   return fs.existsSync(abs) ? abs : null;
 }
 

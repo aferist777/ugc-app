@@ -3,7 +3,7 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = require('../lib/config').DATA_DIR;
 
 function _read(name, fallback = []) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, name + '.json'), 'utf8')); }

@@ -16,7 +16,7 @@ const { callAI, uploadToPublicHost, parseLooseJson,
 const { getPrompt } = require('../lib/prompts');
 
 const ASSIGNMENTS_FILE       = path.join(SCENARIOS_DIR, '_assignments.json');
-const DATA_DIR               = path.join(__dirname, '..', 'data');
+const DATA_DIR               = require('../lib/config').DATA_DIR;
 const SCENARIOS_META_FILE    = path.join(DATA_DIR, 'scenarios-meta.json');
 
 function loadScenariosMeta() {

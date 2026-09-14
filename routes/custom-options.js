@@ -7,8 +7,8 @@ const router  = express.Router();
 
 const { kieHeaders, uploadToPublicHost, callAI, parseLooseJson } = require('../lib/helpers');
 
-const DATA_FILE  = path.join(__dirname, '..', 'data', 'custom-options.json');
-const IMAGES_DIR = path.join(__dirname, '..', 'data', 'cop-images');
+const DATA_FILE  = path.join(require('../lib/config').DATA_DIR, 'custom-options.json');
+const IMAGES_DIR = path.join(require('../lib/config').DATA_DIR, 'cop-images');
 const ALLOWED    = ['pose', 'emotion', 'char-type', 'age', 'gender'];
 
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });

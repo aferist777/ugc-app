@@ -10,7 +10,7 @@ const router  = express.Router();
 const FormData = require('form-data');
 const { execFile }  = require('child_process');
 const ffmpegPath    = require('ffmpeg-static');
-const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR, DATA_DIR, VOICE_PREVIEWS_DIR } = require('../lib/config');
 const UPLOADS_THUMBS_DIR = path.join(UPLOADS_DIR, 'thumbs');
 const {
   kieHeaders, uploadToPublicHost, callAI, callAIVisionWithFallback,
@@ -209,7 +209,8 @@ const _audioStorage = multer.diskStorage({
 const _audioUpload = multer({ storage: _audioStorage, limits: { fileSize: 100 * 1024 * 1024 } });
 
 // ── GET /api/audio/voices — verify ElevenLabs voice IDs, cache previews locally ─
-const VOICE_PREVIEWS_DIR = path.join(__dirname, '..', 'public', 'voice-previews');
+// VOICE_PREVIEWS_DIR is lib/config's: previews are saved as voices are browsed, so they live in
+// the library now, not in public/.
 if (!fs.existsSync(VOICE_PREVIEWS_DIR)) fs.mkdirSync(VOICE_PREVIEWS_DIR, { recursive: true });
 
 router.get('/audio/voices', async (req, res) => {
@@ -404,7 +405,7 @@ OUTPUT FORMAT (strict JSON, no markdown, no prose):
 // ── POST /api/audio/voice-design/previews ────────────────────────────────────
 // Body: { voiceDescription, sampleText? }
 // Calls ElevenLabs /v1/text-to-voice/create-previews → returns 3 previews.
-// Each preview is saved locally under public/voice-previews/preview_<previewId>.mp3
+// Each preview is saved locally under voice-previews/preview_<previewId>.mp3 in the library
 // so the frontend can play it without re-fetching base64 over the wire.
 // Response: { success, previews: [{ previewId, audioPath, generatedVoiceId, mediaType }] }
 const _voiceDesignSampleText =
@@ -774,7 +775,7 @@ router.get('/audio/tts/status/:taskId', async (req, res) => {
 router.post('/upload-public', async (req, res) => {
   const { imagePath } = req.body;
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
-  const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+  const absPath = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath)) return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
   try {
     const url = await uploadToPublicHost(fs.readFileSync(absPath));
@@ -810,7 +811,7 @@ router.post('/audio/avatar', async (req, res) => {
   // Accept 'kling/ai-avatar-standard' (default) or 'kling/ai-avatar-pro'.
   const model = (modelRaw === 'kling/ai-avatar-pro') ? 'kling/ai-avatar-pro' : 'kling/ai-avatar-standard';
   try {
-    const audioBuf = fs.readFileSync(path.join(__dirname, '..', audioPath.replace(/^\//, '')));
+    const audioBuf = fs.readFileSync(path.join(ROOT_DIR, audioPath.replace(/^\//, '')));
     // Talking-head avatar: always re-upload so kie.ai never gets a stale
     // tmpfiles.org URL ("Image fetch failed" / "Audio fetch failed" errors).
     // Explicit ext per buffer type — without it the upload helper defaults to
@@ -821,7 +822,7 @@ router.post('/audio/avatar', async (req, res) => {
       imageUrl = directImageUrl;
     } else {
       imageUrl = await uploadToPublicHost(
-        fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, ''))),
+        fs.readFileSync(path.join(ROOT_DIR, imagePath.replace(/^\//, ''))),
         { forceFresh: true, ext: 'jpg' }
       );
     }
@@ -864,11 +865,11 @@ router.post('/audio/avatar-replicate', async (req, res) => {
       imageUrl = directImageUrl;
     } else {
       imageUrl = await uploadToPublicHost(
-        fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, ''))),
+        fs.readFileSync(path.join(ROOT_DIR, imagePath.replace(/^\//, ''))),
         { forceFresh: true, ext: 'jpg' }
       );
     }
-    const audioBuf = fs.readFileSync(path.join(__dirname, '..', audioPath.replace(/^\//, '')));
+    const audioBuf = fs.readFileSync(path.join(ROOT_DIR, audioPath.replace(/^\//, '')));
     const audioUrl = await uploadToPublicHost(audioBuf, { forceFresh: true, ext: 'mp3' });
 
     // The motion prompt becomes p-video-avatar's video_prompt. If empty —
@@ -992,14 +993,14 @@ router.post('/audio/avatar-prompt', async (req, res) => {
     if (directImageUrl) {
       imageUrl = directImageUrl;
     } else {
-      const filePath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+      const filePath = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
       if (!fs.existsSync(filePath)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
       imageUrl = await uploadToPublicHost(fs.readFileSync(filePath), { forceFresh: true });
     }
 
     let detailImageUrl = directDetailUrl || null;
     if (!detailImageUrl && detailImagePath) {
-      const detailFilePath = path.join(__dirname, '..', detailImagePath.replace(/^\//, ''));
+      const detailFilePath = path.join(ROOT_DIR, detailImagePath.replace(/^\//, ''));
       if (fs.existsSync(detailFilePath)) {
         detailImageUrl = await uploadToPublicHost(fs.readFileSync(detailFilePath), { forceFresh: true });
       }
@@ -1252,14 +1253,14 @@ router.post('/video/p-video', async (req, res) => {
   try {
     let imageUrl = directImageUrl || null;
     if (!imageUrl && imagePath) {
-      const abs = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+      const abs = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
       if (fs.existsSync(abs)) {
         imageUrl = await uploadToPublicHost(fs.readFileSync(abs), { forceFresh: true, ext: 'jpg' });
       }
     }
     let audioUrl = directAudioUrl || null;
     if (!audioUrl && audioPath) {
-      const abs = path.join(__dirname, '..', audioPath.replace(/^\//, ''));
+      const abs = path.join(ROOT_DIR, audioPath.replace(/^\//, ''));
       if (fs.existsSync(abs)) {
         audioUrl = await uploadToPublicHost(fs.readFileSync(abs), { forceFresh: true, ext: 'mp3' });
       }
@@ -1511,7 +1512,7 @@ router.post('/biroly/analyze-for-video', async (req, res) => {
     if (directImageUrl) {
       imageUrl = directImageUrl;
     } else {
-      const filePath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+      const filePath = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
       if (!fs.existsSync(filePath)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
       imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
     }
@@ -1597,7 +1598,7 @@ router.post('/biroly/gen-gpt2-i2i', async (req, res) => {
   if (!prompt || !refImagePath)
     return res.status(400).json({ success: false, error: 'Нет промпта или refImagePath' });
 
-  const filePath = path.join(__dirname, '..', refImagePath.replace(/^\//, ''));
+  const filePath = path.join(ROOT_DIR, refImagePath.replace(/^\//, ''));
   if (!fs.existsSync(filePath))
     return res.status(400).json({ success: false, error: 'Файл референса не найден' });
 
@@ -1681,7 +1682,7 @@ router.post('/video/grok', async (req, res) => {
     } else if (directImageUrl) {
       finalUrls = [directImageUrl];
     } else if (imagePath) {
-      const buf = fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, '')));
+      const buf = fs.readFileSync(path.join(ROOT_DIR, imagePath.replace(/^\//, '')));
       finalUrls = [await uploadToPublicHost(buf)];
     } else {
       return res.status(400).json({ success: false, error: 'Нужен imageUrl, imagePath или imageUrls' });

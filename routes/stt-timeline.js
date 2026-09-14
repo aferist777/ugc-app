@@ -26,7 +26,7 @@ const ffmpegPath = require('ffmpeg-static');
 
 const router = express.Router();
 
-const ROOT_DIR      = path.join(__dirname, '..');
+const ROOT_DIR      = require('../lib/config').ROOT_DIR;
 const UPLOADS_DIR   = path.join(ROOT_DIR, 'uploads');
 const FINALS_DIR    = path.join(ROOT_DIR, 'finals');
 const TEMP_DIR      = path.join(ROOT_DIR, 'temp_files');

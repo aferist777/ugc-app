@@ -1,6 +1,8 @@
 'use strict';
 
-require('dotenv').config();
+// The library folder is settled before anything else (lib/config.js), so a .env kept there -
+// beside the exe, in the desktop build - is read before any module looks at process.env.
+require('dotenv').config({ path: require('path').join(require('./lib/config').ROOT_DIR, '.env') });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[CRASH] Unhandled Rejection:', reason?.stack || reason);
@@ -22,6 +24,7 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const {
+  ROOT_DIR, VOICE_PREVIEWS_DIR, MODELS_DIR,
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
   ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
   ARCHIVE_SUBDIRS,
@@ -80,6 +83,9 @@ app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
 app.use('/hooks',        express.static(HOOKS_DIR));
+// Written while the app runs, so served from the library rather than public/ (lib/config.js).
+app.use('/voice-previews', express.static(VOICE_PREVIEWS_DIR));
+app.use('/models',       express.static(MODELS_DIR));
 // /vsl stays gone (Ph15).
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
@@ -215,6 +221,7 @@ try { runMigrationIfNeeded(); }
 catch (e) { console.error('[obrazy-migrate] error:', e.stack || e.message); }
 
 const server = app.listen(PORT, () => {
+  console.log(`[boot] library: ${ROOT_DIR}`);
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Character Generator               ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);

@@ -8,14 +8,14 @@ const router  = express.Router();
 
 const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-  DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
+  DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR, DATA_DIR, PUBLIC_DIR,
 } = require('../lib/config');
 const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
-const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 function readNegativePrompt() {
   try {
     const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
@@ -54,7 +54,7 @@ function urlToFilePath(urlPath) {
     ['/temp_files/',   TEMP_DIR],
     ['/uploads/',      UPLOADS_DIR],
     ['/obrazy/',       OBRAZY_DIR],
-    ['/poses/',        path.join(__dirname, '..', 'public', 'poses')],
+    ['/poses/',        path.join(PUBLIC_DIR, 'poses')],
   ];
   for (const [prefix, dir] of map) {
     if (stripped.startsWith(prefix)) {

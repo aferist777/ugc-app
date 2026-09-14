@@ -6,7 +6,7 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR, OBRAZY_DIR } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR, OBRAZY_DIR, MODELS_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
   kieHeaders, getImgVisionModel, parseLooseJson, createTrellisTask, getReplicateRawOutput,
@@ -44,7 +44,7 @@ router.post('/generate', async (req, res) => {
       imageBuffer = Buffer.from(faceBase64, 'base64');
       imageBase64ForGemini = faceBase64;
     } else {
-      const absPath = path.join(__dirname, '..', localImagePath.replace(/^\//, ''));
+      const absPath = path.join(ROOT_DIR, localImagePath.replace(/^\//, ''));
       imageBuffer = fs.readFileSync(absPath);
       imageBase64ForGemini = imageBuffer.toString('base64');
     }
@@ -214,8 +214,8 @@ router.get('/random-face', async (_req, res) => {
 });
 
 // Pose Studio: text -> cheap object image -> TRELLIS image-to-3D -> GLB saved under
-// public/models, returned for loading into the 3D scene. Synchronous (cheap t2i ~10s
-// + TRELLIS ~25s); the client shows a spinner. GLBs are gitignored generated output.
+// models/ in the library (served at /models/), returned for loading into the 3D scene.
+// Synchronous (cheap t2i ~10s + TRELLIS ~25s); the client shows a spinner.
 router.post('/studio/gen-object', async (req, res) => {
   const { description } = req.body || {};
   try {
@@ -230,7 +230,7 @@ router.post('/studio/gen-object', async (req, res) => {
     const glbUrl = trOut && (trOut.model_file || trOut.glb || trOut.mesh);
     if (!glbUrl) throw new Error('TRELLIS не вернул GLB');
     const name = 'obj_' + Date.now() + '.glb';
-    const dest = path.join(ROOT_DIR, 'public', 'models', name);
+    const dest = path.join(MODELS_DIR, name);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     const dl = await axios.get(glbUrl, { responseType: 'arraybuffer', timeout: 120000 });
     fs.writeFileSync(dest, Buffer.from(dl.data));
@@ -295,7 +295,7 @@ router.post('/characters/pose-variations', async (req, res) => {
   const numVariations = Math.min(Math.max(parseInt(count) || 4, 1), 4);
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
 
-  const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+  const absPath = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath))
     return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
 
@@ -410,7 +410,7 @@ router.post('/edit-pose/generate', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Нет imagePath или poseKey' });
 
   const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
-  const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+  const absPath = path.join(ROOT_DIR, imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath))
     return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
 

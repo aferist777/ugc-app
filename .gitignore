@@ -1,5 +1,7 @@
 node_modules/
 .env
+# The library when the app runs from source (lib/config.js): everything it writes.
+local-data/
 uploads/
 lookbooks/
 characters/

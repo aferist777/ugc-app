@@ -15,7 +15,7 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, ROOT_DIR } = require('../lib/config');
+const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
   uploadToPublicHost, resolveTask, resolveLocalMedia,
@@ -179,7 +179,7 @@ function _sheetPatch(sub, prompt, imageUrl) {
 function _presetSheetFor(faceImagePath) {
   const m = String(faceImagePath || '').match(/^\/presets\/([a-z0-9._-]+)\.jpg$/i);
   if (!m) return '';
-  const abs = path.join(ROOT_DIR, 'public', 'presets', 'sheets', m[1] + '.jpg');
+  const abs = path.join(PUBLIC_DIR, 'presets', 'sheets', m[1] + '.jpg');
   return fs.existsSync(abs) ? abs : '';
 }
 
@@ -679,7 +679,7 @@ router.patch('/char-store/:id', (req, res) => {
 // obraz — still references it (only the deleted character's own obrazy are
 // ignored, since they go away with the character). The API key now has voice
 // delete permission.
-const _DATA_DIR        = path.join(__dirname, '..', 'data');
+const _DATA_DIR        = DATA_DIR;
 const _SETTINGS_FILE   = path.join(_DATA_DIR, 'settings.json');
 const _CUSTOM_VOICES   = path.join(_DATA_DIR, 'custom-voices.json');
 const _OBRAZY_FILE     = path.join(_DATA_DIR, 'obrazy.json');

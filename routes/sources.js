@@ -96,7 +96,7 @@ async function _process(id, job, { poster = true } = {}) {
 
   job.step = 'extracting audio';
   store.update(id, { state: 'transcribing', transcript: { state: 'running' } });
-  const abs = path.join(__dirname, '..', String(rec.videoPath).replace(/^\/+/, ''));
+  const abs = path.join(require('../lib/config').ROOT_DIR, String(rec.videoPath).replace(/^\/+/, ''));
   const out = await STT.transcribeFile(abs, { onProgress: (s) => { job.step = s; } });
 
   job.step = 'storing the transcript';

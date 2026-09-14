@@ -25,8 +25,7 @@ const { buildGraph, frame } = require('../lib/mv3b-render');
 const { buildAss, captionLanes } = require('../lib/mv3b-subs');
 
 const router = express.Router();
-const ROOT = path.join(__dirname, '..');
-const FINALS = path.join(ROOT, 'finals');
+const { ROOT_DIR: ROOT, APP_DIR, FINALS_DIR: FINALS } = require('../lib/config');
 
 // The same mapping express.static does, and only where media legitimately lives. A src is a
 // web path as the pages already use it, not an invitation to name any file on the disk.
@@ -38,8 +37,10 @@ function resolveSrc(rel) {
   if (!clean || clean.includes('..')) return null;
   const top = clean.split('/')[0];
   if (!ROOTS.includes(top)) return null;
-  const abs = path.join(ROOT, clean);
-  if (!abs.startsWith(ROOT)) return null;
+  // public/ ships with the program; every other root is in the library.
+  const base = top === 'public' ? APP_DIR : ROOT;
+  const abs = path.join(base, clean);
+  if (!abs.startsWith(base)) return null;
   return fs.existsSync(abs) ? abs : null;
 }
 
