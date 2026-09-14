@@ -66,7 +66,7 @@ function _extractAudioMp3(srcAbs, outAbs, ssSec, durSec) {
     args.push('-i', srcAbs);
     if (durSec != null) args.push('-t', String(durSec));
     args.push('-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '64k', '-y', outAbs);
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let err = ''; proc.stderr.on('data', c => { err = (err + c.toString()).slice(-600); });
     proc.on('close', code => code === 0 ? resolve() : reject(new Error('audio extract failed (' + code + '): ' + err.slice(-160))));
     proc.on('error', reject);
@@ -81,7 +81,7 @@ function _extractSegWav(seg, outAbs) {
     const dur = Math.max(0.02, +seg.dur || 0);
     const silence = () => {
       const a = ['-hide_banner', '-f', 'lavfi', '-t', dur.toFixed(3), '-i', 'anullsrc=r=16000:cl=mono', '-ac', '1', '-ar', '16000', '-y', outAbs];
-      const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'] });
+      const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
       p.on('close', () => resolve()); p.on('error', () => resolve());
     };
     const src = _sttWebToFs(seg.src);
@@ -91,7 +91,7 @@ function _extractSegWav(seg, outAbs) {
     const readSec = (dur * sp).toFixed(3);                       // source secs consumed
     const af = _atempoChain(sp) + ',aresample=16000,apad';       // retime + pad-to-length
     const a = ['-hide_banner', '-ss', String(crop), '-t', readSec, '-i', src, '-af', af, '-ac', '1', '-ar', '16000', '-t', dur.toFixed(3), '-y', outAbs];
-    const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'] });
+    const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
     p.on('close', (code) => (code === 0 && fs.existsSync(outAbs)) ? resolve() : silence());   // no audio stream -> silence
     p.on('error', () => silence());
   });
@@ -134,7 +134,7 @@ function _startTimelineStt(segments, jobId) {
       fs.writeFileSync(listFile, segFiles.map(f => "file '" + f.replace(/\\/g, '/').replace(/'/g, "'\\''") + "'").join('\n'), 'utf8');
       const fullMp3 = path.join(TEMP_DIR, `_tl_${jobId}.mp3`); temps.push(fullMp3);
       await new Promise((res, rej) => {
-        const p = spawn(ffmpegPath, ['-hide_banner', '-f', 'concat', '-safe', '0', '-i', listFile, '-c:a', 'libmp3lame', '-ar', '16000', '-ac', '1', '-y', fullMp3], { stdio: ['ignore', 'ignore', 'pipe'] });
+        const p = spawn(ffmpegPath, ['-hide_banner', '-f', 'concat', '-safe', '0', '-i', listFile, '-c:a', 'libmp3lame', '-ar', '16000', '-ac', '1', '-y', fullMp3], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
         let e = ''; p.stderr.on('data', c => { e = (e + c).slice(-300); });
         p.on('close', c => c === 0 ? res() : rej(new Error('concat failed: ' + e.slice(-120)))); p.on('error', rej);
       });

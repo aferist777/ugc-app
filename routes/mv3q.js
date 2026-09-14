@@ -127,7 +127,7 @@ function next() {
   const name = 'mv3q_' + Date.now() + '.mp4';
   const out = path.join(FINALS, name);
   _startedAt = Date.now();
-  _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'] });
+  _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let log = '';
   _proc.stderr.on('data', d => {
     const chunk = d.toString();

@@ -65,7 +65,7 @@ function _dur(file) {
   return new Promise(resolve => {
     let out = '';
     try {
-      const p = spawn(ffmpegPath, ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+      const p = spawn(ffmpegPath, ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
       p.stderr.on('data', c => { out += c.toString(); });
       p.on('error', () => resolve(0));
       p.on('close', () => {
@@ -87,7 +87,7 @@ function _trim(file) {
       '-y', '-i', file,
       '-af', 'silenceremove=stop_periods=-1:stop_duration=0.3:stop_threshold=-40dB:stop_silence=0.1',
       '-c:a', 'libmp3lame', '-q:a', '2', tmp,
-    ], (err) => {
+    ], { windowsHide: true }, (err) => {
       // Keeping the untrimmed file beats losing the read: the padding is a blemish, a failed
       // rename is a line that has to be paid for twice.
       if (err) { try { fs.unlinkSync(tmp); } catch (e) {} return resolve(); }

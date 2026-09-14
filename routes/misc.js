@@ -21,12 +21,6 @@ router.get('/balance', async (_req, res) => {
   }
 });
 
-// ── Restart server ────────────────────────────────────────────────────────────
-router.post('/restart', (_req, res) => {
-  res.json({ success: true });
-  setTimeout(() => process.exit(0), 300);
-});
-
 // ── Public host — own-server replacement for tmpfiles.org and friends ───────
 // Saves an uploaded buffer to TEMP_PUBLIC_DIR and returns an absolute public
 // URL that kie.ai (or any external puller) can fetch. PUBLIC_HOST_URL env var

@@ -74,7 +74,7 @@ const _refUpload = multer({
 // trick _hasAudioStream has used here for years.
 function _probe(abs) {
   return new Promise((resolve) => {
-    const proc = spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let out = '';
     proc.stderr.on('data', c => { out += c.toString(); });
     proc.on('close', () => {
@@ -164,7 +164,7 @@ async function _clipUrl(webPath, inS, outS) {
       '-ss', a.toFixed(3), '-t', dur.toFixed(3), '-i', src,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', out,
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let err = '';
     proc.stderr.on('data', c => { err += c.toString(); });
     proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the reference: ' + err.slice(-200))));

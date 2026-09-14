@@ -69,7 +69,7 @@ function stripSilence(filePath) {
       '-c:a', 'libmp3lame', '-q:a', '2',
       tmp,
     ];
-    execFile(ffmpegPath, args, (err) => {
+    execFile(ffmpegPath, args, { windowsHide: true }, (err) => {
       if (err) {
         console.warn('[stripSilence] FFmpeg error, keeping original:', err.message);
         try { fs.unlinkSync(tmp); } catch {}
@@ -87,7 +87,7 @@ function stripSilence(filePath) {
 function extractBirolyThumb(absVideoPath, absThumbPath) {
   return new Promise(resolve => {
     const args = ['-ss', '0.5', '-i', absVideoPath, '-frames:v', '1', '-q:v', '3', '-y', absThumbPath];
-    execFile(ffmpegPath, args, { timeout: 15000 }, err => {
+    execFile(ffmpegPath, args, { timeout: 15000, windowsHide: true }, err => {
       resolve(!err && fs.existsSync(absThumbPath));
     });
   });
@@ -1988,7 +1988,7 @@ async function _concatSunoVariants(urlA, urlB, taskId) {
     // none on it here, so every concat since it was written has thrown ENOENT and quietly
     // fallen back to the first variant alone - half the track, with the other half already
     // downloaded and sitting next to it. Everything else in this file uses ffmpeg-static.
-    const proc = spawn(ffmpegPath, args);
+    const proc = spawn(ffmpegPath, args, { windowsHide: true });
     let stderr = '';
     proc.stderr.on('data', c => { stderr += c.toString(); });
     proc.on('error', reject);

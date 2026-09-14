@@ -134,7 +134,7 @@ router.post('/mv3b/render', (req, res) => {
                   dur: g.dur, at: 0, startedAt: Date.now() };
     _jobs.set(id, job);
 
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     // HOW FAR IT HAS GOT, read off ffmpeg rather than guessed from a stopwatch. It prints the
     // position it has encoded to; against the known length that is real progress, and real
     // progress is what makes "time remaining" a measurement instead of a wish.

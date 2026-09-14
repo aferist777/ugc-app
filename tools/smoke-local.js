@@ -34,7 +34,8 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl'];
 const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
-                 ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64']];
+                 ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
+                 ['POST', '/api/restart']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

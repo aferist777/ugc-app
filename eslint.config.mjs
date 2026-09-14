@@ -32,7 +32,7 @@ export default [
     },
   },
   {
-    files: ['server.js', 'launcher.js', 'routes/**/*.js', 'lib/**/*.js'],
+    files: ['server.js', 'desktop/**/*.js', 'routes/**/*.js', 'lib/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',
@@ -42,6 +42,15 @@ export default [
       'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_' }],
       'no-undef': 'warn',
       'no-unreachable': 'warn',
+      // The desktop window has no console, so on Windows a console program started without
+      // windowsHide opens a console window of its own - one flashing up for every ffmpeg run.
+      'no-restricted-syntax': ['error', {
+        selector: "CallExpression[callee.name=/^(spawn|spawnSync|execFile|execFileSync|execSync)$/]:not(:has(Property[key.name='windowsHide']))",
+        message: 'Pass windowsHide: true (see eslint.config.mjs).',
+      }, {
+        selector: "CallExpression[callee.property.name=/^(spawn|spawnSync|execFile|execFileSync|execSync)$/]:not(:has(Property[key.name='windowsHide']))",
+        message: 'Pass windowsHide: true (see eslint.config.mjs).',
+      }],
     },
   },
 ];

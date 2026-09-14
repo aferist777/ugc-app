@@ -20,7 +20,7 @@ function extractThumb(absVideoPath, baseName) {
       '-q:v', '3',
       '-y', absThumb,
     ];
-    execFile(ffmpegPath, args, { timeout: 15000 }, err => {
+    execFile(ffmpegPath, args, { timeout: 15000, windowsHide: true }, err => {
       if (err || !fs.existsSync(absThumb)) { resolve(null); return; }
       resolve('/finals/' + thumbName);
     });

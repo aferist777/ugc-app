@@ -325,7 +325,7 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low) {
     outPath,
   ];
   return new Promise((resolve, reject) => {
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     if (low) { try { require('os').setPriority(proc.pid, 10); } catch (e) {} }
     let err = '';
     proc.stderr.on('data', c => { err += c.toString(); });
@@ -1795,7 +1795,7 @@ function _probeSmartSource(abs) {
   if (_smartProbeCache.has(key)) return Promise.resolve(_smartProbeCache.get(key));
   return new Promise(resolve => {
     const proc = spawn(ffmpegPath, ['-hide_banner', '-discard', 'nokey', '-i', abs, '-vf', 'showinfo', '-an', '-f', 'null', '-'],
-      { stdio: ['ignore', 'ignore', 'pipe'] });
+      { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     // The input header (Duration / Video / Audio lines) all arrive before the
     // first showinfo line; retain just the leading chunk for it and parse the
     // header ONCE at close (parsing it incrementally raced with the showinfo
@@ -2166,7 +2166,7 @@ async function _appendBlackTail(mainPath, tailPath, finalPath, jobId) {
 // ── Probe file duration via FFmpeg stderr ─────────────────────────────────────
 function _getFileDuration(fp) {
   return new Promise(resolve => {
-    const proc = spawn(ffmpegPath, ['-i', fp], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, ['-i', fp], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let s = '';
     proc.stderr.on('data', c => { s += c.toString(); });
     proc.on('close', () => {
@@ -2180,7 +2180,7 @@ function _getFileDuration(fp) {
 // ── Probe whether a file has at least one audio stream (from ffmpeg stderr) ───
 function _hasAudioStream(fp) {
   return new Promise(resolve => {
-    const proc = spawn(ffmpegPath, ['-i', fp], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, ['-i', fp], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let s = '';
     proc.stderr.on('data', c => { s += c.toString(); });
     proc.on('close', () => resolve(/Stream #\d+:\d+.*:\s*Audio:/.test(s)));
@@ -2192,7 +2192,7 @@ function _hasAudioStream(fp) {
 function _execFfmpeg(args, jobId) {
   return new Promise((resolve, reject) => {
     console.log(`[ffmpeg] start job=${jobId}`);
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     if (_jobs[jobId]) _jobs[jobId].proc = proc;
     let stderr = '';
 

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>UGC Studio</title>
+<!-- What the window shows while the server starts (desktop/main.js). Colours from midnight.css. -->
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center;
+    background: #0c0f16; color: #eef0f5;
+    font: 14px "Inter", "Segoe UI", system-ui, sans-serif;
+    cursor: progress; user-select: none;
+  }
+  .name { font-size: 22px; font-weight: 600; }
+  .note { margin-top: 8px; color: #a4a8b2; text-align: center; animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { opacity: .45; } }
+</style>
+</head>
+<body>
+  <div>
+    <div class="name">UGC Studio</div>
+    <div class="note">Starting...</div>
+  </div>
+</body>
+</html>

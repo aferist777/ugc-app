@@ -2089,7 +2089,7 @@ function _audioDur(file) {
     let out = '';
     try {
       const proc = require('child_process').spawn(require('ffmpeg-static'),
-        ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+        ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
       proc.stderr.on('data', c => { out += c.toString(); });
       proc.on('error', () => resolve(0));
       proc.on('close', () => {
@@ -2376,7 +2376,7 @@ async function _clipPoster(absVideo, name) {
       const proc = require('child_process').spawn(require('ffmpeg-static'),
         ['-hide_banner', '-loglevel', 'error', '-ss', '0.5', '-i', absVideo,
          '-frames:v', '1', '-vf', 'scale=320:-2', '-y', out],
-        { stdio: 'ignore' });
+        { stdio: 'ignore', windowsHide: true });
       proc.on('error', () => resolve(false));
       proc.on('close', (code) => resolve(code === 0 && fs.existsSync(out)));
     } catch (e) { resolve(false); }

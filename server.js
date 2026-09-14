@@ -252,6 +252,15 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });
 
+// A port that cannot be had ends the process. Left to the crash handler at the top, the error is
+// logged and the process stays up serving nothing - and the desktop shell, which tries another
+// port when a start fails, would wait on it instead.
+server.on('error', (e) => {
+  if (server.listening) { console.error('[server] error:', e.code || e.message); return; }
+  console.error(`[boot] cannot listen on 127.0.0.1:${PORT}: ${e.code || e.message}`);
+  process.exit(1);
+});
+
 // Allow long-running uploads (large ZIP imports). Node 18+ defaults of
 // requestTimeout=300s (5 min) and headersTimeout=60s abort multi-GB uploads
 // over slow upstream links half-way through. 0 = no timeout.

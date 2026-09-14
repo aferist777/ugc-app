@@ -716,7 +716,7 @@ router.patch('/library/item/:kind/:id', (req, res) => {
 function _probeLen(abs) {
   const ffmpegPath = require('ffmpeg-static');
   return new Promise((resolve) => {
-    const proc = require('child_process').spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = require('child_process').spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let out = '';
     proc.stderr.on('data', c => { out += c.toString(); });
     proc.on('close', () => {
@@ -769,7 +769,7 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
         '-ss', a.toFixed(3), '-t', (b - a).toFixed(3), '-i', src,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-y', abs,
-      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+      ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
       let err = '';
       proc.stderr.on('data', c => { err += c.toString(); });
       proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the clip: ' + err.slice(-200))));
