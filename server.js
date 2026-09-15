@@ -19,12 +19,11 @@ require('sharp').cache(false);
 
 const express = require('express');
 const path    = require('path');
-const https   = require('https');
-const axios   = require('axios');
 const fs      = require('fs');
 
-// Bypass corporate proxy SSL inspection
-axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
+// Outgoing HTTPS checks certificates - Node's default, left alone on purpose. The server version
+// switched the check off for every axios call (to get past a corporate proxy's SSL inspection),
+// and every one of those calls carries an API key.
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
