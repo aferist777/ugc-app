@@ -90,7 +90,6 @@ export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { pr
 // One fragment's audio, pulled out of its clip and padded to the clip's length — Merge
 // times a main-track clip by its audio, and drops a cell that has none. Driven one at a
 // time so the footer can count them; idempotent, so a retry is free.
-export const reelAudio       = (projectId, n) => _post('/api/scen3/reel/audio', { projectId, n });
 // Hand the cut to the editor: Merge's own store writes the Main track of the project's timeline
 // and gives back the key to deep-link to.
 export const reelMerge       = (projectId) => _post('/api/mv3/import/scen3', { projectId });

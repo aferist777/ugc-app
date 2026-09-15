@@ -226,11 +226,10 @@ export function openReelPopup({ items, onPick, onSave } = {}) {
     _st.playing = false; playB.textContent = 'Play';
     status.textContent = '';
     status.className = 'sv3-status';
-    // The estimate is of the whole hand-off and it is ffmpeg-bound, so it scales with the
-    // number of clips: measured at ~0.6s to extract a clip's audio plus ~0.25s for the
-    // second pass that reads it back. The EMA then corrects it from real runs.
+    // The hand-off is a save and an import - no ffmpeg since the audio extraction went - so a
+    // second or two whatever the length. The EMA corrects it from real runs.
     const prog = startInlineProgress($('.sv3-pop-foot', ov),
-      { label: 'Preparing the cut…', estimateMs: 900 * list.length });
+      { label: 'Preparing the cut…', estimateMs: 1500 });
     try {
       const msg = (await onSave((k, n) => prog.say(`Preparing clip ${k}/${n}…`))) || 'Saved';
       prog.finish();

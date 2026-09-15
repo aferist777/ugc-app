@@ -33,6 +33,12 @@ const {
   LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
+// The project list and the folders in projects/ agree before anything reads either: a folder
+// carried over from another library joins the list, a listed folder that is gone leaves it.
+{
+  const s = require('./lib/projects-store').sync();
+  if (s.added || s.dropped) console.log(`[projects] ${s.added} folder(s) joined the list, ${s.dropped} missing left it`);
+}
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── One person ──────────────────────────────────────────────────────────────

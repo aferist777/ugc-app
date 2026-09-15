@@ -471,7 +471,7 @@ function _librarySources() {
     const tracks = (t && t.tracks) || {};
     for (const lane of (Array.isArray(tracks) ? tracks : Object.values(tracks))) for (const c of ((lane && lane.clips) || [])) if (c && c.src) out.add(String(c.src));
   }
-  for (const p of (_readJson('scen3-projects.json', []) || [])) {
+  for (const p of require('../lib/projects-store').list()) {
     for (const l of ((p && p.lines) || [])) {
       const v = (l && l.video) || {};
       for (const arr of Object.values(v)) for (const take of (Array.isArray(arr) ? arr : [])) if (take && take.path) out.add(String(take.path));

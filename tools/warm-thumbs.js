@@ -36,8 +36,7 @@ function targets() {
   const looks = Array.isArray(obrazy) ? obrazy : (obrazy.obrazy || Object.values(obrazy || {}));
   looks.filter(Boolean).forEach(o => add(o.char, ['strip', 'sheet']));
 
-  const projects = read('scen3-projects.json', []);
-  (Array.isArray(projects) ? projects : []).forEach(p => {
+  require('../lib/projects-store').list().forEach(p => {
     ((p.mix || {}).variants || []).forEach(v => {
       if (!v) return;
       add(v.preview || v.path, ['frame']);

@@ -20,8 +20,6 @@ const fs      = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const sharp   = require('sharp');
-// Merge hand-off: the audio extractor /reel/audio drives, one fragment at a time.
-const AV      = require('../lib/av-extract');
 
 const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
@@ -35,7 +33,9 @@ const DEFAULT_ENGINE = 'nano-banana-2';
 const { DATA_DIR } = require('../lib/config');
 const FILE     = path.join(DATA_DIR, 'scen3-scenarios.json');
 const OPT_FILE = path.join(DATA_DIR, 'scen3-options.json');
-const PROJ_FILE = path.join(DATA_DIR, 'scen3-projects.json');
+// Projects are folders (lib/projects-store.js): data/project-list.json names them, and
+// projects/<folder>/project.json is each one, beside its voice/, frames/ and clips/.
+const PROJECTS = require('../lib/projects-store');
 
 // Minimum usable scenario length, enforced on both ends (the client greys out
 // Save below this, the server refuses it).
@@ -390,19 +390,21 @@ const { toDiskWithin, toUrl } = require('../lib/media');
 // The mannequins ship with the program, under the static root; everything else is the library's media.
 const POSES_DIR = path.join(CFG.PUBLIC_DIR, 'poses');
 
-// Map a public URL to an absolute file, refusing anything outside the media folders and the
-// shipped mannequins (so a crafted ../ path cannot reach anything else).
+// Map a public URL to an absolute file, refusing anything outside the library's media and
+// project folders and the shipped mannequins (so a crafted ../ path cannot reach anything else).
 // `exts` defaults to stills, which is what every caller but the lipsync render wants —
 // that one also has to hand over an mp3, and widening the default would quietly let any
 // file type through the other paths.
 const MEDIA_IMG = /\.(jpg|jpeg|png|webp)$/i;
 function _resolveMedia(urlPath, exts) {
-  const abs = toDiskWithin(String(urlPath || '').split('?')[0], [CFG.MEDIA_DIR, POSES_DIR]);
+  const roots = [CFG.MEDIA_DIR, CFG.PROJECTS_DIR, POSES_DIR];
+  const abs = toDiskWithin(String(urlPath || '').split('?')[0], roots);
   if (!abs) return null;
   if (!(exts || MEDIA_IMG).test(abs)) return null;
-  const shipped = abs.startsWith(path.resolve(POSES_DIR) + path.sep);
-  const rel = path.relative(shipped ? POSES_DIR : CFG.MEDIA_DIR, abs).split(path.sep).join('/');
-  return { abs, shipped, rel };
+  const root = roots.find(r => abs.startsWith(path.resolve(r) + path.sep));
+  const shipped = root === POSES_DIR;
+  const rel = path.relative(root, abs).split(path.sep).join('/');
+  return { abs, shipped, rel, root };
 }
 
 const { needsPreview, makePreview } = require('../lib/thumbs');
@@ -414,7 +416,7 @@ function _previewTarget(hit) {
   const base = path.basename(hit.rel).replace(/\.[^.]+$/, '') + '.jpg';
   const sub  = path.posix.dirname(hit.rel);
   const relOut = path.posix.join(sub === '.' ? '' : sub, 'preview', base);
-  const abs = path.resolve(hit.shipped ? CFG.POSES_CACHE_DIR : CFG.MEDIA_DIR, relOut);
+  const abs = path.resolve(hit.shipped ? CFG.POSES_CACHE_DIR : hit.root, relOut);
   return { abs, url: toUrl(abs) };
 }
 
@@ -669,7 +671,14 @@ async function _i2i(engine, prompt, urls, aspect, quality, agg) {
     prompt, image_input: imgs, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
   });
 }
-const _track = (tid, tag) => { try { require('../lib/pending-tasks').addPendingTask(tid, 'images', tag, tag); } catch (e) {} };
+// A frame task names its project, so /api/status and recovery file it into the project's
+// frames/; every other result is a candidate and lands in media/work/.
+const _track = (tid, tag, projectId) => {
+  try {
+    const meta = projectId != null && String(projectId).trim() ? { projectId: String(projectId).trim(), sub: 'frames' } : {};
+    require('../lib/pending-tasks').addPendingTask(tid, 'work', tag, tag, meta);
+  } catch (e) {}
+};
 
 // ── Lookbook generator: three modes, decided by what came in ────────────────
 //   prompt only        -> N distinct prompts -> N text-to-image runs
@@ -1004,10 +1013,12 @@ router.post('/scen3/frame/crop', async (req, res) => {
 
     const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
     const name = `crop_${base}_${Date.now()}.jpg`;
-    const dest = path.join(CFG.MEDIA.images, name);
+    // Beside its frame, which is a project's working file; a frame from anywhere else (a shelf
+    // picture cropped for a one-off) has no project, and its crop is working material.
+    const dest = path.join(hit.root === CFG.PROJECTS_DIR ? path.dirname(hit.abs) : CFG.MEDIA.work, name);
     await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
 
-    const finalUrl = '/media/images/' + name;
+    const finalUrl = toUrl(dest);
     const preview  = await _framePreview(finalUrl);
     console.log(`[scen3/frame/crop] ${base} ${meta.width}x${meta.height}`
       + ` -> ${w}x${h} at ${left},${top}`);
@@ -1288,7 +1299,7 @@ router.post('/scen3/gen/frame', async (req, res) => {
       const prompt = `${FRAME_EDIT_RULE} Instruction: ${direction}`;
       const taskId = await _i2i(eng, prompt, [await _hostLocal(basePath)], aspect, quality, agg);
       if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-      _track(taskId, 'frame');
+      _track(taskId, 'frame', b.projectId);
       _armWatcher(b.projectId, taskId, 'edit', prompt);
       console.log(`[scen3/gen/frame] edit on=${agg} engine=${eng} aspect=${aspect} quality=${quality}`);
       return res.json({ success: true, mode: 'edit', taskId, prompt });
@@ -1372,7 +1383,7 @@ router.post('/scen3/gen/frame', async (req, res) => {
 
     const taskId = await _i2i(eng, prompt, urls, aspect, quality, agg);
     if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    _track(taskId, 'frame');
+    _track(taskId, 'frame', b.projectId);
     _armWatcher(b.projectId, taskId, 'compose', prompt);
     console.log(`[scen3/gen/frame] compose ${tag}`);
     res.json({ success: true, mode: 'compose', taskId, prompt });
@@ -2072,8 +2083,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
       ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
       : lines.map((_, i) => i).filter(i => needs(lines[i]));
 
-    const dir = CFG.MEDIA.voice;
-    fs.mkdirSync(dir, { recursive: true });
+    const dir = PROJECTS.dirOf(id, 'voice');
 
     const report = { variant, model, spoken: 0, skipped: [], failed: [] };
     for (const i of only) {
@@ -2090,7 +2100,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
         const dur = await _audioDur(abs);
         l.audio = l.audio || { plain: null, tagged: null };
         l.audio[variant] = {
-          path: '/media/voice/' + name,
+          path: toUrl(abs),
           dur: Math.round(dur * 100) / 100,
           at: new Date().toISOString(),
           said: text,          // what was actually spoken; the staleness check reads this
@@ -2146,13 +2156,12 @@ async function _framePreview(finalUrl) {
 // Read-modify-write in one synchronous burst, so the page's own save cannot
 // interleave with the watcher's.
 function _patchMix(projectId, fn) {
-  const list = _loadProjects();
-  const p = list.find(x => String(x.id) === String(projectId));
+  const p = PROJECTS.get(projectId);
   if (!p) return false;
   p.mix = _normMix(p.mix);
   if (fn(p.mix) === false) return false;
   p.updatedAt = new Date().toISOString();
-  _saveProjects(list);
+  PROJECTS.save(p);
   return true;
 }
 
@@ -2161,7 +2170,6 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
   if (_watching.has(key)) return;
   _watching.add(key);
 
-  const IMAGES = CFG.MEDIA.images;
   const started = Date.now();
   const MAX_MS = 15 * 60 * 1000;
 
@@ -2176,11 +2184,18 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
       _watching.delete(key);
       return;
     }
+    // The project's frames/ - asked for on every tick, so a project renamed meanwhile is followed.
+    const FRAMES = PROJECTS.dirOf(projectId, 'frames');
+    if (!FRAMES) {
+      console.warn('[scen3/watch]', taskId.slice(0, 24), 'the project is gone - not watching');
+      _watching.delete(key);
+      return;
+    }
     let s = null;
-    try { s = await H.resolveTask(taskId, IMAGES, 'generated'); } catch (e) { s = null; }
+    try { s = await H.resolveTask(taskId, FRAMES, 'generated'); } catch (e) { s = null; }
 
     if (s && s.state === 'success' && s.imagePath) {
-      const finalUrl = '/media/images/' + path.basename(s.imagePath);
+      const finalUrl = s.imagePath;
       const preview  = await _framePreview(finalUrl);
       _patchMix(projectId, (mix) => {
         const already = mix.variants.some(v => v.taskId === taskId);
@@ -2223,19 +2238,18 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
 // its own schedule, so whoever files it has to write straight to the store rather than
 // hand something back to a page that may be long gone.
 function _patchProj(projectId, fn) {
-  const list = _loadProjects();
-  const p = list.find(x => String(x.id) === String(projectId));
+  const p = PROJECTS.get(projectId);
   if (!p) return false;
   p.lines = Array.isArray(p.lines) ? p.lines.map(_normLine) : [];
   if (fn(p) === false) return false;
   p.updatedAt = new Date().toISOString();
-  _saveProjects(list);
+  PROJECTS.save(p);
   return true;
 }
 
 // resolveTask cannot be reused here: it names every download .jpg, compresses it as an
 // image and builds a thumbnail. A clip needs its own extension and its real duration.
-async function _fetchClip(taskId) {
+async function _fetchClip(taskId, projectId) {
   const r = await axios.get(`${CFG.KIE_BASE}/api/v1/jobs/recordInfo`,
     { params: { taskId }, headers: H.kieHeaders(), timeout: 15000 });
   // One reader for every kie answer - see H.readKieRecord. This used to compare the state
@@ -2255,8 +2269,8 @@ async function _fetchClip(taskId) {
   } catch (e) {}
   if (!url) return { state: 'failed', error: 'the render came back without a video URL' };
 
-  const dir = CFG.MEDIA.clips;
-  fs.mkdirSync(dir, { recursive: true });
+  const dir = PROJECTS.dirOf(projectId, 'clips');
+  if (!dir) return { state: 'failed', error: 'the project is gone' };
   const name = `c${taskId}_${Date.now()}.mp4`;
   const abs = path.join(dir, name);
   const dl = await axios({ url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
@@ -2268,7 +2282,7 @@ async function _fetchClip(taskId) {
   catch (e) { console.warn('[scen3/clip] normalize failed:', e.message); }
   // same ffmpeg-header trick the reads use — it reports any container's duration
   return {
-    state: 'success', path: `/media/clips/${name}`, dur: await _audioDur(abs),
+    state: 'success', path: toUrl(abs), dur: await _audioDur(abs),
     thumb: await _clipPoster(abs, name),
   };
 }
@@ -2276,11 +2290,11 @@ async function _fetchClip(taskId) {
 // One frame out of the clip, for the card. Half a second in rather than frame zero: the
 // very first frame of a lipsync render is often mid-blink or still settling.
 async function _clipPoster(absVideo, name) {
-  const out = path.join(CFG.MEDIA.clips, 'thumbs', name.replace(/\.mp4$/i, '.jpg'));
+  const out = path.join(path.dirname(absVideo), 'thumbs', name.replace(/\.mp4$/i, '.jpg'));
   try {
     const VThumb = require('../lib/video-thumb');
     await VThumb.posterFrame(absVideo, out, { width: VThumb.CLIP_POSTER_W, at: 0.5 });
-    return `/media/clips/thumbs/${path.basename(out)}`;
+    return toUrl(out);
   } catch (e) {
     console.warn('[scen3/clip] no poster frame for', name, '-', e.message);
     return '';
@@ -2359,7 +2373,7 @@ function _watchClip(projectId, idx, taskId) {
   // allowed to write, so it should stop rather than poll on to its timeout.
   const stillMine = () => {
     try {
-      const p = _loadProjects().find(x => String(x.id) === String(projectId));
+      const p = PROJECTS.get(projectId);
       const l = p && (p.lines || [])[idx];
       return !!(l && l.render && String(l.render.taskId) === String(taskId));
     } catch (e) { return true; }        // unreadable store: keep watching rather than drop a job
@@ -2388,7 +2402,7 @@ function _watchClip(projectId, idx, taskId) {
       return stop('the renderer was still on "' + (lastState || 'no state') + '" after 12 minutes');
     }
     let s = null;
-    try { s = await _fetchClip(taskId); } catch (e) { s = null; }
+    try { s = await _fetchClip(taskId, projectId); } catch (e) { s = null; }
     if (s && s.raw) lastState = s.raw;
 
     if (s && s.state === 'success') {
@@ -2473,16 +2487,14 @@ setTimeout(_resumeWatchers, 1500);
 // land on top of it.
 // ════════════════════════════════════════════════════════════════════════════
 
+// Writes only the records that changed; a record missing from `list` is NOT deleted - that is
+// PROJECTS.remove, and only the delete route calls it.
 function _saveProjects(list) {
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  writeFileAtomic(PROJ_FILE, JSON.stringify(list, null, 2));
+  PROJECTS.saveAll(list);
 }
 
 function _loadProjects() {
-  const cur = _read(PROJ_FILE);
-  if (Array.isArray(cur)) return cur;
-  _saveProjects([]);
-  return [];
+  return PROJECTS.list();
 }
 
 // The casting is per project (one character + one location for the whole script).
@@ -2923,8 +2935,10 @@ router.delete('/scen3/projects/:id', (req, res) => {
     const rec = list.find(x => String(x.id) === String(req.params.id));
     if (!rec) return res.status(404).json({ success: false, error: 'not found' });
     if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
-    _saveProjects(list.filter(x => x !== rec));
-    res.json({ success: true });
+    // The project's folder goes with it - voice, frames, clips, timelines. What another project,
+    // a timeline elsewhere or a shelf still points at is moved to media/work/ first.
+    const { moved } = PROJECTS.remove(rec.id);
+    res.json({ success: true, kept: moved });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -3111,11 +3125,12 @@ const FACE_W = 960, FACE_H = 1440;
 async function _castFace(sheetPath, charId) {
   const hit = _resolveMedia(sheetPath);
   if (!hit || !fs.existsSync(hit.abs)) return '';
-  const dir = path.join(CFG.MEDIA.images, 'faces');
+  // Derived from the sheet and made again when missing, so it is cache, not media.
+  const dir = path.join(CFG.CACHE_DIR, 'faces');
   fs.mkdirSync(dir, { recursive: true });
   const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
   const abs = path.join(dir, name);
-  const url = `/media/images/faces/${name}`;
+  const url = `/cache/faces/${name}`;
   if (fs.existsSync(abs) && ((await sharp(abs).metadata()).width || 0) >= FACE_W) return url;
   const meta = await sharp(hit.abs).metadata();
   const w = Math.min(meta.width, Math.round(meta.height * 2 / 3));
@@ -3333,23 +3348,9 @@ router.post('/scen3/reel/save', (req, res) => {
 });
 
 // ── Hand the cut to Merge ────────────────────────────────────────────────────
-// The page saves the reel, extracts each fragment's audio here, then hands the project to Merge
-// through /api/mv3/import/scen3 (routes/mergev3.js).
-
-// One fragment's audio. The page drives this per clip so the footer can count 3/10;
-// extractAudio is idempotent, so a retry or a second pass costs nothing.
-router.post('/scen3/reel/audio', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const p = _loadProjects().find(x => String(x.id) === String(b.projectId || '').trim());
-    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
-    const { cut } = _cutClips(p);
-    const it = cut.find(c => c.n === Number(b.n));
-    if (!it) return res.status(400).json({ success: false, error: `fragment ${b.n} has no clip in the cut` });
-    const { audio, dur, reused } = await AV.extractAudio(it.clip.path);
-    res.json({ success: true, n: it.n, audio, dur, reused });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
+// The page saves the reel, then hands the project to Merge through /api/mv3/import/scen3
+// (routes/mergev3.js). Each fragment's audio used to be pulled out of its clip first, into
+// <clip>_av.mp3; nothing ever read those files, and that step is gone.
 
 // What the page polls while a batch runs. Deliberately tiny: the full project carries
 // the whole mix workspace, and re-fetching that every few seconds to learn one boolean

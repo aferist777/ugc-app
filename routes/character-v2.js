@@ -229,11 +229,11 @@ router.post('/character-v2/generate', async (req, res) => {
     });
 
     // Same bucket either way, so the page's one polling path resolves both.
-    addPendingTask(sub.taskId, 'images', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
+    addPendingTask(sub.taskId, 'work', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
     // And the server watches it to the end itself. The page's poll used to be the only thing
     // driving this to a conclusion, which meant closing the tab abandoned a paid-for
     // generation. Now the page's poll only READS what the watcher already found.
-    WATCH.watch(sub.taskId, MEDIA.images, 'generated');
+    WATCH.watch(sub.taskId, MEDIA.work, 'generated');
     console.log('[cv2/generate]', dir, sub.engine, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
     res.json({
       success: true, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,

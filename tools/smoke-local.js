@@ -46,7 +46,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/api/mv3/vid/feed'], ['POST', '/api/biroly/gen-broll-prompt'], ['GET', '/merge-v2'],
                  ['GET', '/studio'], ['POST', '/api/studio/gen-object'], ['POST', '/api/generate'],
                  ['GET', '/api/audio/voices'], ['POST', '/api/biroly/generate'], ['GET', '/api/biroly/state'],
-                 ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules']];
+                 ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules'],
+                 // phase 2: the per-clip audio extraction nothing read
+                 ['POST', '/api/scen3/reel/audio']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

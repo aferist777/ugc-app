@@ -12,7 +12,7 @@
 import { patchProject, adoptProject, onProjectSaved } from './projects.js';
 import { flushFragments, setFragmentsLocked, markLineVoicing, renderLine,
          primeMotionKit, pickVariant, ceilingOf } from './fragments.js';
-import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, reelMerge, stillsMerge } from './api.js';
+import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelMerge, stillsMerge } from './api.js';
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
 import { openVoicePopup } from './voice-popup.js';
@@ -1001,18 +1001,6 @@ export function initMontage(onProjectChange) {
         await flushFragments();          // a take just chosen must be on disk before this
         const { reel } = await saveReel(_proj.id);
         _proj.reel = reel;
-        const clips = (reel && reel.clips) || [];
-        const n = clips.length;
-
-        // Merge times a main-track clip by its audio and drops a cell that has none, so
-        // every clip's audio is pulled out first. One at a time: it is ffmpeg on the same
-        // machine that may still be rendering, and a counter is worth more here than
-        // concurrency — the files are cached, so a second run is instant.
-        for (let k = 0; k < n; k++) {
-          if (onStep) onStep(k + 1, n);
-          await reelAudio(_proj.id, clips[k].n);
-        }
-
         const r = await reelMerge(_proj.id);
         // Every send makes its own project in Merge, numbered, with the overlays carried
         // over from the last one - so an earlier cut is never overwritten by a later send.

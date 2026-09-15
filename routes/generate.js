@@ -14,7 +14,7 @@ const router  = express.Router();
 
 const { MEDIA } = require('../lib/config');
 const { resolveTask } = require('../lib/helpers');
-const { removePendingTask } = require('../lib/pending-tasks');
+const { removePendingTask, find: findPendingTask, dirFor } = require('../lib/pending-tasks');
 
 // ── Poll generation status ────────────────────────────────────────────────────
 // Universal poll endpoint. resolveTask dispatches by taskId prefix:
@@ -35,7 +35,11 @@ router.get('/status/:taskId', async (req, res) => {
   const provider = (typeof taskId === 'string' && taskId.startsWith('repl:')) ? 'Replicate' : 'kie.ai';
   console.log('[/api/status]', taskId.slice(0, 60), '→', provider);
   try {
-    const result = await resolveTask(taskId, MEDIA.images, 'generated');
+    // Into the folder the task was started for - a Scenarios frame into its project - so this
+    // poll and the server's own watcher land on the same file. Anything else is working material.
+    const task = findPendingTask(taskId);
+    const dest = (task && dirFor(task)) || MEDIA.work;
+    const result = await resolveTask(taskId, dest, 'generated');
     if (result.state === 'success' || result.state === 'failed') removePendingTask(taskId);
     console.log('[/api/status]', taskId.slice(0, 30), 'state:', result.state, result.imagePath || result.error || '');
     return res.json({ success: true, ...result });
