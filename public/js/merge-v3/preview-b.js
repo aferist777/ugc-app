@@ -81,16 +81,17 @@ function _layers(tl) {
   return tl.tracks.filter(t => t.kind === 'video').slice().reverse();
 }
 
-// One clip per lane - the one under the playhead. A lane may hold clips that cover one
-// another; the LAST one in the lane's own order wins, matching the order the renderer
-// will chain its overlays in.
-function _clipAt(track, t) {
-  let hit = null;
+// Every clip of a lane under the playhead, in the lane's own order - which is the order the
+// renderer overlays them in, so the later one is drawn over the earlier. Only one of them used to
+// be drawn, and a picture laid over part of a clip on the same lane hid the rest of that clip on
+// screen while the render showed both.
+function _clipsAt(track, t) {
+  const out = [];
   for (const c of (track.clips || [])) {
     const s = +c.start, e = s + (+c.dur);
-    if (t >= s - 0.0001 && t < e) hit = c;
+    if (t >= s - 0.0001 && t < e) out.push(c);
   }
-  return hit;
+  return out;
 }
 
 export function duration() {
@@ -203,8 +204,8 @@ function _place(sw, sh, c) {
   if (isPlaced(c)) {
     const dw = Math.max(2, (+c.tw) * W);
     const dh = Math.max(2, dw * (sh / sw));
-    const cx = (+c.tx == null ? 0.5 : +c.tx) * W;
-    const cy = (+c.ty == null ? 0.5 : +c.ty) * H;
+    const cx = (c.tx == null ? 0.5 : +c.tx) * W;
+    const cy = (c.ty == null ? 0.5 : +c.ty) * H;
     return { sx: 0, sy: 0, sw, sh, dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
              angle: +c.angle || 0, feather: Math.max(0, Math.min(0.45, +c.feather || 0)),
              cx, cy, placed: true };
@@ -413,9 +414,8 @@ function _paint() {
   const tl = Store.timeline();
   const alive = new Set();
   const gaps = [];
-  for (const track of _layers(tl)) {
-    const c = _clipAt(track, _at);
-    if (!c || !c.src) continue;
+  for (const c of _layers(tl).flatMap(track => _clipsAt(track, _at))) {
+    if (!c.src) continue;
     const still = isStill({ src: c.src });
     alive.add(_key(c.src, _rev(c)));
     const el = _el(c.src, _rev(c));

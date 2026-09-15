@@ -77,9 +77,14 @@ function next() {
   // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
   // point of the split is that neither render path can reach the other.
   if (item.kind !== 'blank') return runTalking(item);
+  return runBlank(item);
+}
 
+// Marked running (and _active) before this is called, so nothing starts it twice while the files
+// are being asked about.
+async function runBlank(item) {
   // The same preparation Export -> Render uses (lib/mv3b-job.js): captions included.
-  const built = JOB.prepare(item.timeline, item.id);
+  const built = await JOB.prepare(item.timeline, item.id);
   if (built.error) {
     const t = read();
     const it = t.items.find(x => x.id === item.id);

@@ -97,8 +97,8 @@ function _from(c, r) {
   const f = _api.frame();
   if (_isPlaced(c)) {
     return { tw: +c.tw,
-             tx: (+c.tx == null ? 0.5 : +c.tx),
-             ty: (+c.ty == null ? 0.5 : +c.ty),
+             tx: (c.tx == null ? 0.5 : +c.tx),
+             ty: (c.ty == null ? 0.5 : +c.ty),
              angle: +c.angle || 0 };
   }
   const conv = r.conv || {};

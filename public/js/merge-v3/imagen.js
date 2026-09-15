@@ -211,16 +211,14 @@ function _view(g, api) {
     done.findIndex(x => x.id === g.id));
 }
 
-// ── Onto the Birols lane, where the playhead is ──────────────────────────────
-// The talking-head timeline is not a stack of lanes you choose between: Main is the read and
-// the three above it are overlays. A picture made here is an overlay by definition - it is
-// something to put OVER the person talking - so it goes on Birols, which is the top layer and
-// the lane every b-roll already lives on.
+// ── Onto the timeline, where the playhead is ────────────────────────────────
+// A picture made here is something to put OVER the film - so it goes on the layer above it, at
+// the moment the playhead is standing on: that is what the playhead is for.
 //
-// AT THE PLAYHEAD, unlike the blank editor, which lays a picture after whatever is already on
-// its lane. There the lane is being filled from nothing; here the film exists and you are
-// standing at the moment you want covered - that is what the playhead is for, and Birols may
-// overlap anyway, so there is no queue to join.
+//   a project made in Merge   the lane directly above main video (made, if there is none), over
+//                             whatever is there already - the one underneath stays
+//                             (js/merge-v3/timeline-b.js placeAbove)
+//   a talking-head project    Birols, the top layer and the lane every b-roll lives on
 //
 // It is in the library either way: that happens when the picture is made, not when this is
 // pressed (lib/mv3-gens.js files it on the images shelf under the project's own category).
@@ -229,8 +227,15 @@ async function _place(g, anchor, api) {
   catch (e) { note(anchor, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
 
   const tl = Store.timeline();
-  // A blank project keeps its tracks in a LIST and has no Birols; this window is the
-  // talking-head one's, and saying so is better than putting the picture somewhere odd.
+  if (Store.isBlank()) {
+    const T = await import('./timeline-b.js');
+    const r = T.placeAbove({ src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '', name: (g.prompt || '').slice(0, 60) });
+    if (!r.ok) { note(anchor, 'Not added.', r.why); return; }
+    api.made();
+    note(anchor, 'Added to ' + r.lane + '.', 'At the playhead, ' + r.at.toFixed(1) + 's.');
+    setTimeout(() => closeAsk(), 2400);
+    return;
+  }
   if (!tl || Array.isArray(tl.tracks) || !tl.tracks.biro) {
     note(anchor, 'No Birols lane on this project.', 'The picture is in the library - drag it in.');
     return;
@@ -427,7 +432,8 @@ const SPEC = {
     use.addEventListener('click', () => { api.attach(g.imagePath, g.prompt || ''); api.repaint(); });
 
     const add = el('button', 'mv3-c-btn', 'to timeline');
-    add.title = 'Puts it on the Birols lane, at the playhead.';
+    add.title = Store.isBlank() ? 'Puts it on the lane above main video, at the playhead.'
+                                : 'Puts it on the Birols lane, at the playhead.';
     add.addEventListener('click', () => _place(g, add, api));
 
     // ANIMATE, the same window a still on the timeline opens - with this picture already in its

@@ -690,6 +690,9 @@ export async function openAnimate(clip) {
         sh.saved = true;
         // Remembered so the timeline can point at the shelf record, not only at the file.
         sh.libId = (rec.item && rec.item.id) || null;
+        // WHERE IT WAS FILED. Filing moves the file out of media/work into the shelf's folder, and
+        // the clip on the timeline belongs at the new address, not the one it was made at.
+        if (rec.item && rec.item.videoPath) { sh.videoPath = rec.item.videoPath; sh.thumbPath = rec.item.thumbPath || sh.thumbPath; }
         done++;
       } catch (e) {
         save.textContent = was;
@@ -714,9 +717,15 @@ export async function openAnimate(clip) {
       try {
         const Store = await import('./store.js');
         const T = Store.isBlank() ? await import('./timeline-b.js') : await import('./timeline.js');
+        // Its real length and whether it has sound, off the file: the length asked of the model is
+        // not always the length it made, and a clip with sound arrives with its sound twin.
+        const pr = await fetch('/api/media/probe?src=' + encodeURIComponent(keep[0].videoPath))
+          .then(r => r.json()).catch(() => null);
         const ok = T.swapClipMedia(clip.id, {
           src: keep[0].videoPath, thumb: keep[0].thumbPath || null, libId: keep[0].libId || null,
-          name: (clip.name || 'animated').slice(0, 90), dur: keep[0].duration,
+          name: (clip.name || 'animated').slice(0, 90),
+          dur: (pr && pr.success && pr.duration > 0) ? pr.duration : keep[0].duration,
+          audio: !!(pr && pr.success && pr.audio),
         });
         swapped = ok ? ' — and it has replaced the picture on the timeline'
                      : ' — the timeline could not be changed (the project is not yours to edit)';

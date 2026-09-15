@@ -24,11 +24,11 @@ const { toUrl } = require('../lib/media');
 
 const _jobs = new Map();
 
-router.post('/mv3b/render', (req, res) => {
+router.post('/mv3b/render', async (req, res) => {
   try {
     const tl = (req.body || {}).timeline || {};
     const id = 'j' + Date.now().toString(36);
-    const ready = JOB.prepare(tl, id);
+    const ready = await JOB.prepare(tl, id);
     if (ready.error) return res.status(400).json({ success: false, error: ready.error });
 
     // Into the folder of the project the timeline belongs to (lib/shelf-files.js).

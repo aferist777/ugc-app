@@ -110,22 +110,25 @@ const _count = (tracks, kind) => tracks.filter(t => t.kind === kind).length;
 // will land on. An audio track added on its own is a music bed - there is no picture to pair
 // it with, and inventing an empty video lane for it would be a lane nobody asked for.
 export function addVideoTrack() {
-  Store.mutate(tl => {
-    const t = tl.tracks;
-    if (_count(t, 'video') >= MAX_PER_SIDE) return;
-    const v = { id: _freshId(t, 'v'), kind: 'video', name: '', linkId: null, main: false,
-                volume: null, speed: null, clips: [] };
-    const a = { id: _freshId(t.concat(v), 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
-                volume: null, speed: null, clips: [] };
-    v.linkId = a.id;
-    // The new video lane goes on TOP - a new layer sits over what is already there - and its
-    // sound goes at the far end of the audio block, which is the mirror of the same place.
-    const firstVideo = t.findIndex(x => x.kind === 'video');
-    t.splice(firstVideo < 0 ? 0 : firstVideo, 0, v);
-    const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
-    t.splice(lastAudio + 1, 0, a);
-    _renumber(t);
-  });
+  Store.mutate(tl => { _newVideoLane(tl.tracks); });
+}
+
+// Inside a mutation. Returns the new video lane, or null at the ceiling.
+function _newVideoLane(t) {
+  if (_count(t, 'video') >= MAX_PER_SIDE) return null;
+  const v = { id: _freshId(t, 'v'), kind: 'video', name: '', linkId: null, main: false,
+              volume: null, speed: null, clips: [] };
+  const a = { id: _freshId(t.concat(v), 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
+              volume: null, speed: null, clips: [] };
+  v.linkId = a.id;
+  // The new video lane goes on TOP - a new layer sits over what is already there - and its
+  // sound goes at the far end of the audio block, which is the mirror of the same place.
+  const firstVideo = t.findIndex(x => x.kind === 'video');
+  t.splice(firstVideo < 0 ? 0 : firstVideo, 0, v);
+  const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
+  t.splice(lastAudio + 1, 0, a);
+  _renumber(t);
+  return v;
 }
 
 export function addAudioTrack() {
@@ -1237,6 +1240,10 @@ function _write(c, key, value) {
  * placement rule above); a clip that has a sound twin on a linked lane takes it along, or the
  * picture and its sound would disagree about how long they run. One mutation, one undo.
  *
+ * A CLIP THAT CAME BACK WITH SOUND (`media.audio`) gets the twin a film dropped here would have:
+ * on the lane paired with this one, muted - it is filed as a birol, and a birol lands silent - so
+ * turning it up is the sound slider on the clip's own panel.
+ *
  * Returns false when there was nothing to change or the project cannot be edited.
  */
 export function swapClipMedia(id, media) {
@@ -1252,7 +1259,16 @@ export function swapClipMedia(id, media) {
       if (media.libId) c.libId = media.libId;
       if (media.name) c.name = media.name;
       c.srcDur = len; c.dur = len; c.trimIn = 0; c.trimOut = 0; c.speed = 1; c.reversed = false;
-      if (c.pairId) {
+      const mate = !c.pairId && media.audio && t.linkId ? (tl.tracks || []).find(x => x.id === t.linkId && x.kind === 'audio') : null;
+      if (mate) {
+        c.pairId = 'p' + _id().slice(1);
+        mate.clips.push({
+          id: _id(), src: media.src, thumb: null, name: c.name || '', libId: c.libId || null,
+          start: c.start, dur: len, srcDur: len, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+          transition: null, animation: null, filter: null, volume: 0, pairId: c.pairId,
+        });
+        mate.clips.sort((a, b) => a.start - b.start);
+      } else if (c.pairId) {
         for (const other of (tl.tracks || [])) {
           for (const x of (other.clips || [])) {
             if (x === c || x.pairId !== c.pairId) continue;
@@ -1271,6 +1287,39 @@ export function swapClipMedia(id, media) {
  * picture on the frame sets its middle, its width and sometimes its turn, and that is one
  * thing the person did, not four.
  */
+/**
+ * A PICTURE FROM THE PICTURE WINDOW, onto the lane directly above main video at the playhead -
+ * over whatever is already there at that moment: clips on a lane may cover one another, and the
+ * later one in the lane is drawn on top, so the one underneath stays where it was. With no lane
+ * above main (only main exists) one is made in the same step, as + would make it. One mutation,
+ * one undo. The new clip is selected, so its panel is the one open.
+ *
+ * Returns { ok, lane, at } or { ok: false, why }.
+ */
+export function placeAbove(data) {
+  if (!_on) return { ok: false, why: 'The timeline is not showing' };
+  const at = _r2(Math.max(0, _playhead));
+  const id = _id();
+  let lane = '';
+  const ok = Store.mutate(tl => {
+    const t = tl.tracks || [];
+    const vids = t.filter(x => x.kind === 'video');
+    let over = vids.length > 1 ? vids[vids.length - 2] : null;
+    if (!over) over = _newVideoLane(t);
+    if (!over) return;
+    over.clips.push({
+      id, src: data.src, thumb: data.thumb || data.src, name: String(data.name || '').slice(0, 200),
+      libId: data.libId || null, start: at, dur: STILL_DUR, srcDur: 0, trimIn: 0, trimOut: 0,
+      speed: 1, reversed: false, transition: null, animation: null, filter: null,
+      volume: 0, pairId: null,
+    });
+    lane = over.name;
+  });
+  if (!ok || !lane) return { ok: false, why: Store.status() || 'The picture could not be placed' };
+  selectClipById(id);
+  return { ok: true, lane, at };
+}
+
 export function setClipFields(trackId, clipId, patch) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);

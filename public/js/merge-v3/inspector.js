@@ -851,19 +851,8 @@ function _blankStill(host, track, c, set) {
     fig.appendChild(img);
   }
   left.appendChild(fig);
-  // THE SAME WINDOW THE OTHER PANEL OPENS. The clip it saves replaces this picture on the lane,
-  // in place - through this editor's own swapClipMedia, which knows this editor's rules - and
-  // goes to the Birols shelf the two workflows share as well.
-  //
-  // Directly under the picture it acts on, and centred: this is the one thing on this panel
-  // that makes something NEW rather than adjusting the clip, so it stands apart from the
-  // settings instead of queueing among them.
-  const animate = C.button('Animate', () => openAnimate(c), {
-    title: 'Generate a video from this picture. The one you save replaces the picture on the '
-         + 'lane and lands in Birols as well. Double-clicking the clip opens this too.',
-  });
-  animate.classList.add('mv3-c-animate');
-  left.appendChild(animate);
+  // NO ANIMATE BUTTON HERE (decided with the owner): a double click on the picture on the timeline
+  // opens it, and so does animate in the picture window. A right-click menu is where it goes next.
   top.appendChild(left);
 
   // EVERYTHING ELSE BESIDE THE PICTURE, in one column. Half the panel is not wide enough for
@@ -1271,7 +1260,7 @@ function _renderBlankIdle(host) {
   block('Nothing moves on its own', [
     'A clip stays exactly where it is dropped. Nothing to the right of it shifts when '
       + 'something else changes length.',
-    'Clips on one lane may overlap - the later one in the lane is the one you see.',
+    'Clips on one lane may overlap - the later one in the lane is drawn on top of the other.',
   ]);
 
   block('Removing', [

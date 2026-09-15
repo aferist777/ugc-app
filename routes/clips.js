@@ -100,6 +100,19 @@ router.post('/media/thumb', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// What is in a file: length, frame size, whether it has sound (lib/media-probe.js). Merge asks it of
+// a clip Animate made, to know whether the clip arrives on the timeline with a sound twin.
+//   GET /api/media/probe?src=<address>   -> { duration, w, h, audio }
+router.get('/media/probe', async (req, res) => {
+  try {
+    const src = String(req.query.src || '');
+    const abs = src ? VT.localFromUrl(src) : null;
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not on disk' });
+    const p = await require('../lib/media-probe').probe(abs);
+    res.json({ success: true, ...p });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
   const videoPath = '/media/work/' + req.file.filename;

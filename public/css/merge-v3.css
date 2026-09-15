@@ -1502,7 +1502,12 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
   position:fixed; z-index:40; pointer-events:none;
   border:1px solid var(--primary); background:var(--primary-soft);
 }
+/* A video lane is a layer and its clips may lie on top of one another. Two blocks meeting edge
+   to edge read as one long block, so each casts a shadow to its right, and the clip it covers
+   shows underneath - as on the talking-head editor's overlay lanes. */
+.mv3b-clip.is-video{box-shadow:2px 0 7px oklch(0 0 0 / .5)}
 .mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary)}
+.mv3b-clip.is-video.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary), 2px 0 7px oklch(0 0 0 / .5)}
 /* A halfer band says so on the clip: on the timeline it looks like any other picture, and on the
    preview it is a strip rather than the frame. */
 .mv3b-clip.is-halfer .mv3b-clip-t::before{content:'HALFER \00b7  '; color:#ffd400}
