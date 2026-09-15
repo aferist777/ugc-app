@@ -59,21 +59,28 @@ Everything the app writes, and nothing of the program:
 
 ```
 library\
-  data\      the stores - JSON, written atomically (temp file, fsync, rename)
-  media\     characters, looks, lookbooks, locations, images, clips, voice, audio,
-             hooks, sources, renders, projects
-  cache\     derived and made again when missing: thumbnail sizes, mannequin previews, voice
-             samples, export archives, an updated yt-dlp, the window's profile
+  data\        the shared stores - JSON, written atomically (temp file, fsync, rename)
+  projects\    a folder per project: project.json (the Scenarios project itself), voice\,
+               frames\, clips\, and merge\ with its timelines
+  media\       characters, looks, lookbooks, locations, voice, audio, sources;
+               images, birols, uploads, hooks - a folder per category, nocat for none;
+               renders - a folder per project; work - what belongs to no project or shelf yet
+  cache\       derived and made again when missing: thumbnail sizes, mannequin previews, voice
+               samples, export archives, an updated yt-dlp, the window's profile
+  backups\     what an upgrade of the library set aside
   logs\
 ```
 
-A stored path like `/media/images/x.jpg` is a path inside the library. An update replaces the
-program and leaves the library alone.
+A stored path like `/projects/Honey/clips/c.mp4` is a path inside the library. Renaming a project
+or a category renames its folder, and every stored path follows. An update replaces the program
+and leaves the library alone; a library from an older version is sorted into these folders the
+first time the app starts (the old stores and the files nothing used go to `backups\`).
 
 **Import / Export** (Admin) carries a whole library, or chosen groups of it, to another machine.
 The archive is built to a file first, so a dropped download resumes; an import adds what is
-missing and touches nothing that is already there. Archives from the server version are read too:
-their paths are translated to this layout, and what has no place here is left out.
+missing and touches nothing that is already there - a project or category of the same name but
+another origin gets a folder of its own. Archives from older versions and from the server version
+are read too: they are sorted into this layout, and what has no place here is left out.
 
 ---
 
