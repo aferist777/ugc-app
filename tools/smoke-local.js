@@ -27,7 +27,7 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/birols', '/studio', '/admin'];
+const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/studio', '/admin'];
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', '/poses/mirror_full.jpg'];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
@@ -35,7 +35,7 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
 const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
-                 ['POST', '/api/restart']];
+                 ['POST', '/api/restart'], ['GET', '/birols']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

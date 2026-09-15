@@ -84,7 +84,7 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 // reason the old Character page was: keeping a second editor around is how two of them drift
 // apart. The file is still merge-v3.html; renaming it would churn every import path in
 // public/js/merge-v3/ for no gain. /merge-v3, /merge-v2 and /edit redirect here.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
