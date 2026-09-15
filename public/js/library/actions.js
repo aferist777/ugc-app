@@ -111,10 +111,9 @@ export async function fixThumb(it) {
 //     those filenames, so renaming the file would quietly break them.
 //   - looks (obrazy): a look's folder on disk is slug(name)_shortId(id), so the name is
 //     part of a path. The stored image URLs would still resolve, but anything that
-//     re-derives the folder from the record — lib/obrazy-store.js findObrazFolderById,
-//     which the pose-variations endpoint uses to decide where to write — would point at
-//     a folder that does not exist. Renaming a look safely means moving the folder and
-//     rewriting every URL in the record; that belongs with the looks rework, not here.
+//     re-derives the folder from the record would point at a folder that does not exist.
+//     Renaming a look safely means moving the folder and rewriting every URL in the record;
+//     that belongs with the storage rework (moves on rename), not here.
 export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks']);
 
 export async function renameItem(it) {

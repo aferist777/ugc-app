@@ -24,10 +24,11 @@ const SECRET_KEYS = [
   'r2SecretAccessKey',
 ];
 
-// Keys of services this app no longer talks to: imgBB, and Partner's ingest. A library
-// carried over from the server version still holds them, and they are not in SECRET_KEYS any
-// more - so they are kept out of the page by name, and dropped from the file on the next save.
-const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl'];
+// Keys of services this app no longer talks to: imgBB, Partner's ingest, and the Telegram
+// bot the server version reported to. A library carried over from the server version can still
+// hold them, and they are not in SECRET_KEYS - so they are kept out of the page by name, and
+// dropped from the file on the next save.
+const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl', 'telegramBotToken', 'telegramChatId'];
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }

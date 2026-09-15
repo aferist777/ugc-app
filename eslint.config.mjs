@@ -1,38 +1,39 @@
 import globals from 'globals';
 
 // Flat config for a no-build, vanilla-JS project.
-// Frontend (public/js) loads via <script> tags into one shared global scope —
-// so `no-undef` is off there (cross-file globals would be all false positives).
-// The highest-value signal here is parse/syntax errors (always reported) plus
-// unused locals and unreachable code.
+// The pages (public/js) are ES modules, apart from three classic scripts loaded with a plain
+// <script> tag. `no-undef` is off there: a page's modules share state through window, and those
+// globals would all be false positives. The highest-value signal is parse/syntax errors (always
+// reported) plus unused locals and unreachable code.
+const PAGE_RULES = {
+  'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_' }],
+  'no-undef': 'off',
+  'no-unreachable': 'warn',
+  'no-dupe-keys': 'warn',
+  'no-dupe-args': 'warn',
+  'no-func-assign': 'warn',
+  'no-cond-assign': 'warn',
+};
+
 export default [
   {
-    ignores: [
-      'node_modules/**', 'data/**', 'logs/**', 'finals/**', 'archive/**',
-      'characters/**', 'environments/**', 'details/**', 'refs/**', 'obrazy/**',
-      'lookbooks/**', 'uploads/**', 'scenes/**', 'temp_files/**', 'temp_public/**',
-      'hooks/**',
-    ],
+    ignores: ['node_modules/**', 'vendor/**', 'local-data/**', 'library/**'],
   },
   {
     files: ['public/js/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
-      sourceType: 'script',
+      sourceType: 'module',
       globals: { ...globals.browser },
     },
-    rules: {
-      'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_' }],
-      'no-undef': 'off',
-      'no-unreachable': 'warn',
-      'no-dupe-keys': 'warn',
-      'no-dupe-args': 'warn',
-      'no-func-assign': 'warn',
-      'no-cond-assign': 'warn',
-    },
+    rules: PAGE_RULES,
   },
   {
-    files: ['server.js', 'desktop/**/*.js', 'routes/**/*.js', 'lib/**/*.js'],
+    files: ['public/js/admin-keys.js', 'public/js/data-io.js', 'public/js/storage-sync.js'],
+    languageOptions: { sourceType: 'script' },
+  },
+  {
+    files: ['server.js', 'desktop/**/*.js', 'routes/**/*.js', 'lib/**/*.js', 'tools/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',

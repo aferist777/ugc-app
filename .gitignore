@@ -1,51 +1,12 @@
 node_modules/
 .env
 # Binaries the app ships but does not keep in git: yt-dlp, fetched by tools/fetch-yt-dlp.js.
-# Rooted, so public/vendor/ (three.js, committed) is not caught by it.
 /vendor/
 # The library when the app runs from source (lib/config.js): everything it writes.
 local-data/
 # The owner's own library, which UGC Studio.cmd opens. Rooted: public/js/library/ is code.
 /library/
-uploads/
-lookbooks/
-characters/
-environments/
-archive/
-details/
-scenarios/
-logs/
-data/
-finals/
-scenes/
-refs/
-temp_files/
-hooks/
-vsl/
-prompts/*/sources/
-obrazy/
-temp_public/
-public/voice-previews/
 *.log
 *.zip
+# Claude Code's local settings and preview launch configurations.
 .claude/
-
-# cleanup tooling raw reports
-docs/cleanup/eslint-report.json
-docs/cleanup/eslint-stderr.txt
-/models/
-public/models/
-public/param-icons-demo/
-
-# Scenarios v3 mannequins: the drawn pose library IS committed (POSE_SEED points at
-# those exact filenames, so a fresh checkout would otherwise have broken poses).
-# Its inputs and derivatives are not:
-#   src/     - licensed stock photographs the mannequins were redrawn from
-#   preview/ - 1K derivatives, rebuilt on demand
-public/poses/scen3/src/
-public/poses/scen3/preview/
-
-# The stock photographs the knees-up mannequins were traced from, as supplied. Same
-# reason as src/ above: licensed input, and nothing in the app reads it.
-.rawrefs/
-data/mv3-queue.json

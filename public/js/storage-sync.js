@@ -22,22 +22,18 @@
   // the browser carried the real one. The server is the source of truth here, so a value being
   // large is not a reason to stop telling the server about it. express.json accepts 50MB.
   var MAX_VAL = 4000000;
-  // Owned elsewhere OR pure cache/ephemeral -> leave to their own mechanism.
+  // Never mirrored. Nearly all are keys of pages and stores that are gone (the old Merge and Edit
+  // workspaces, Birols, the first Library, the old UGC page, the log panel); nothing writes them
+  // now. They stay blocked because a browser or a ui-state.json from the server version can still
+  // hold one, and mirroring it would push a large legacy blob back as if it were current.
   var BLOCK = {
-    edit_frozen_sessions_v1: 1,   // edit-sync.js / /api/edit-state
-    // The OLD Merge workspace. Dead keys: merge.html, merge-v2.html, edit-sync.js and
-    // timeline-store.js are all deleted, and Merge keeps its timelines server-side under
-    // /api/mv3 - there is no localStorage copy of a timeline anywhere any more. Both were
-    // removed from this browser (612KB), saved first to
-    // data/backups/2026-08-12-legacy-merge-localstorage.json. They stay blocked all the same:
-    // another machine may still hold its own copy, and mirroring that now would push a large
-    // legacy blob back onto the server as if it were current.
+    edit_frozen_sessions_v1: 1,
     timeline_data_v2: 1, skleyka_saved_projects_v1: 1,
-    all_geni_v1: 1,               // library-server-sync.js / /api/userdata/geni
-    biroly_cats: 1, biroly_slots_v2: 1, biroly_archive_v1: 1,  // biroly-server-sync.js
-    hooks_archive_v1: 1,          // hooks-server-sync.js
-    obrazy: 1, projects_v1: 1,    // obrazy.js / projects.js bootstraps
-    applog_v2: 1,                 // debug log panel — large + per-session, no cross-device value
+    all_geni_v1: 1,
+    biroly_cats: 1, biroly_slots_v2: 1, biroly_archive_v1: 1,
+    hooks_archive_v1: 1,
+    obrazy: 1, projects_v1: 1,
+    applog_v2: 1,
     __just_imported_at: 1         // ephemeral cross-tab ping
   };
   function blocked(k) { return !k || BLOCK[k] === 1; }
