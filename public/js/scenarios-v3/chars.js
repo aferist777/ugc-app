@@ -13,7 +13,7 @@ let _lookbooks = null;
 // sibling `thumbs/` folder with the extension normalised to .jpg, for EVERY media
 // dir (characters, lookbooks, environments, uploads, details…). v2 only rewrote
 // /uploads/ paths and therefore served full-size images for character sheets —
-// a 4K sheet is ~320 KB against ~9 KB for its thumb, so this generalises it.
+// a 4K sheet is megabytes against a fraction of that for its thumb, so this generalises it.
 export function thumb(path) {
   if (!path) return path;
   const s = String(path);
@@ -28,9 +28,9 @@ export function thumb(path) {
 }
 
 // The on-demand derivative: /api/thumb makes one the first time it is asked for and caches
-// it forever, so unlike the neighbouring-file rule above it cannot be missing. Its key
-// carries the source's mtime, so a regenerated image gets a new URL rather than a stale
-// picture. See lib/thumbs.js for the sizes.
+// it, so unlike the neighbouring-file rule above it cannot be missing. Its key carries the
+// source's mtime, so a regenerated image gets a fresh derivative rather than a stale picture.
+// See lib/thumbs.js for the sizes.
 export const derived = (path, v) => path
   ? '/api/thumb?src=' + encodeURIComponent(String(path).split('?')[0]) + '&v=' + (v || 'frame')
   : path;
@@ -48,7 +48,7 @@ export const derived = (path, v) => path
 //
 // opts.noFit — skip the landscape letterboxing, for slots that crop on purpose
 // (the character column deliberately crops the sheet to just the face).
-// opts.v     — which derivative to ask for; `frame` (220px, 10 KB) suits every strip here.
+// opts.v     — which derivative to ask for; `frame` (440px) suits every strip here.
 export function thumbImg(fullPath, className, opts) {
   const img = document.createElement('img');
   if (className) img.className = className;

@@ -50,7 +50,7 @@ let _lbGender = {};      // public path -> { gender } for lookbooks that have on
 let _projGender = '';    // the open project's narrator gender
 
 // ── hover preview: enlarged tile, always to the right, never off-interface ───
-const _hoverMemo = new Map();   // full path -> 1K path, so repeat hovers are instant
+const _hoverMemo = new Map();   // full path -> preview path, so repeat hovers are instant
 let _hoverEl = null;
 
 function _hideHover() {
@@ -151,7 +151,7 @@ function _renderChars() {
     // /api/thumb, NOT chars.js thumbImg: that one rewrites the path into a neighbouring
     // thumbs/ folder and, when nothing is there, falls back to the full 4K sheet. Two
     // characters missing their thumbs were pulling 1.96 MB into a column of small tiles.
-    // This derivative is capped at 30 KB and cached on its source's mtime.
+    // This derivative is cached on its source's mtime.
     const im = document.createElement('div');
     im.className = 'sv3-pop-ch-im';
     if (c.sheet) {
@@ -179,8 +179,8 @@ function _pickChar(c) {
   _status('');
 }
 
-// ── centre: the active image at ~1K ─────────────────────────────────────────
-// The thumb goes up instantly so the pane is never blank, then the 1K derivative
+// ── centre: the active image as its preview ─────────────────────────────────
+// The thumb goes up instantly so the pane is never blank, then the preview
 // replaces it. The full 4K file is never pulled here.
 let _prevToken = 0;
 

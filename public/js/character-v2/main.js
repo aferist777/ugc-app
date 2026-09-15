@@ -30,9 +30,9 @@ Trace.install();
 const $ = (id) => document.getElementById(id);
 
 // Every displayed image goes through the thumbnail door: /api/thumb resizes to the named variant
-// and caches by source path plus mtime, so the URL changes when the picture does and the browser
-// can hold these forever. A 4096-wide sheet drawn into a 220px cell costs 640 KB to say almost
-// nothing, which is what this is for.
+// and caches by source path plus mtime, so a regenerated picture gets a fresh derivative. A
+// 4096-wide sheet drawn into a small cell is megabytes spent to say almost nothing, which is what
+// this is for.
 //
 // Data URLs pass straight through - a TPDNE face or a fresh upload is on no disk, so there is
 // nothing for the server to resize.
@@ -1057,7 +1057,7 @@ function renderChars() {
     img.loading = 'lazy';
     img.decoding = 'async';
     // Through the door as well: a draft's thumbnail is its full-size kept face, and a list of
-    // fourteen of those is exactly what the 10 KB variant exists for.
+    // fourteen of those is exactly what the strip variant exists for.
     if (c.thumb) img.src = _thumb(c.thumb, 'strip');
     row.appendChild(img);
 
@@ -1495,8 +1495,8 @@ function _renderGallery(look) {
     // what would put a tall preview through the floor.
     big.addEventListener('load', () => { if (pop.classList.contains('is-on')) place(); });
     cell.addEventListener('mouseenter', () => {
-      // Fetched on FIRST hover, not at render: eleven previews at their 100 KB budget is a
-      // megabyte of pictures nobody has pointed at. Not loading="lazy" - that never fires in the
+      // Fetched on FIRST hover, not at render: eleven big previews are megabytes of
+      // pictures nobody has pointed at. Not loading="lazy" - that never fires in the
       // automated pane, which composites nothing.
       if (!big.getAttribute('src')) big.src = _thumb(f.path, 'main');
       pop.classList.add('is-on');

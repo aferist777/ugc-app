@@ -1,6 +1,6 @@
 // Scenarios v3 — locations.
 //
-// One way in: the POPUP -> saved grid | 1K preview + Save | collapsible generator.
+// One way in: the POPUP -> saved grid | preview + Save | collapsible generator.
 // A hover flyout used to sit beside the old casting card as a quick pick. The card is
 // gone and so is it: choosing a place is now one of the two questions the annexed
 // column in Build mix asks, and a hover target cannot hold a second level anyway.
@@ -84,7 +84,7 @@ function _setActive(p) {
   _renderGrid(); _renderPreview(); _syncSave(); _syncGen(); _syncEdit();
 }
 
-// ── centre preview at 1K ────────────────────────────────────────────────────
+// ── centre preview ──────────────────────────────────────────────────────────
 async function _renderPreview() {
   const box = _q('#sv3-env-prev');
   if (!box) return;

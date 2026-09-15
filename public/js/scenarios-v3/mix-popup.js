@@ -296,7 +296,7 @@ function _cropRender() {
   no.title = 'Discard the selection';
   const size = document.createElement('span');
   size.className = 'sv3-crop-size';
-  // measured on the FULL frame, which the preview is only a 1K derivative of
+  // measured on the FULL frame, which the preview is only a derivative of
   const ss = _crop.srcSize;
   size.textContent = ss ? `${Math.round(r.w * ss.w)}×${Math.round(r.h * ss.h)}` : '…';
   acts.append(ok, size, no);
@@ -776,7 +776,7 @@ function _renderWorkingWith() {
 }
 
 // ── hover preview for the attached references ───────────────────────────────
-// Reads the ~1K derivative rather than the full asset, so the popup appears at
+// Reads the preview rather than the full asset, so the popup appears at
 // once on a 4K sheet. Pure hover: no clicks, no selection side effects.
 let _peek = null;
 let _peekFor = '';
@@ -831,7 +831,7 @@ async function _openPeek(anchor, fullPath, tag, beside) {
   };
   place();
 
-  // …then the 1K derivative replaces it, unless the cursor has already left
+  // …then the preview replaces it, unless the cursor has already left
   try {
     const big = await preview1k(fullPath);
     if (_peek !== el || _peekFor !== fullPath) return;
@@ -950,7 +950,7 @@ async function _onGenerate() {
           quality: snap.quality,
         });
     const s = await awaitTask(r.taskId);
-    const f = await finalize(s.imagePath, '');   // frames stay in uploads/, only the 1K is built
+    const f = await finalize(s.imagePath, '');   // the frame stays where it is, only its preview is built
     _jobStep();
 
     await _commitVariant(snap.projectId, mode, {
@@ -1032,7 +1032,7 @@ async function _renderPreview() {
   const token = ++_prevToken;
   const img = document.createElement('img');
   img.alt = '';
-  // Same here: something to look at within a frame or two, then the ~1K preview over it.
+  // Same here: something to look at within a frame or two, then the preview over it.
   img.src = derived(av.path, 'card');
   img.className = 'warming';
   box.appendChild(img);

@@ -11,6 +11,12 @@ process.on('uncaughtException', (err) => {
   console.error('[CRASH] Uncaught Exception:', err.stack || err);
 });
 
+// No sharp (libvips) operation cache. On Windows a cached decode keeps its input file open, and an
+// open file cannot be written: a thumbnail made again in place, a preview, a poster over an old
+// one all fail with UNKNOWN until the cache happens to let go. Measured - and nothing here decodes
+// the same file often enough for the cache to be worth that.
+require('sharp').cache(false);
+
 const express = require('express');
 const path    = require('path');
 const https   = require('https');
@@ -139,7 +145,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   setTimeout(() => {
     // Generate missing thumbnails for all image directories in the background
     // Per-project mix folders (media/projects/<key>/mixes) hold composited
-    // product images shown as thumbnails in the Edit popup — backfill their thumbs.
+    // product images - backfill their thumbs too.
     let mixDirs = [];
     try {
       mixDirs = fs.readdirSync(MEDIA.projects)
@@ -148,12 +154,17 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     } catch {}
     // Each shelf's archive/ sits inside it (media/<kind>/archive).
     const archiveDirs = [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].map(d => path.join(d, 'archive'));
+    // Then the thumbnails still at the server's smaller sizes are made again (once per library),
+    // and /api/thumb's cache of an earlier size table is cleared.
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
       MEDIA.images,
       ...archiveDirs,
       ...mixDirs,
-    ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
+    ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message))
+      .then(() => require('./lib/thumb-refresh').run())
+      .catch(e => console.warn('[thumbs] refresh failed:', e.message));
+    require('./lib/thumbs').sweepOldSizes();
 
     // A picture Merge asked for is watched by the server, not by the page - so a watcher is a
     // live loop and cannot survive a restart, while the record of what was asked for is on disk

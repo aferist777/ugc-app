@@ -373,17 +373,16 @@ router.delete('/scen3/scenarios/:id', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1K PREVIEW TIER
+// PREVIEW TIER
 //
-// Three sizes now exist per asset:
-//   thumbs/<name>.jpg   ~300px  — grids and cards
-//   preview/<name>.jpg  ~1024px — the popup's centre image
-//   <name>.jpg          full 4K — only ever downloaded on purpose
+// Three sizes exist per asset:
+//   thumbs/<name>.jpg   600px  — grids and cards (lib/helpers.js createThumbnail)
+//   preview/<name>.jpg  2048px — the popup's centre image (lib/thumbs.js PREVIEW)
+//   <name>.jpg          full 4K — only ever loaded on purpose
 //
-// A 4K sheet is ~320 KB; its 1K derivative is a fraction of that and is all the
-// centre column needs. Built on demand and cached on disk, so assets that
-// existed before this tier get one the first time they are viewed. Dressing
-// results will have theirs written right after generation.
+// A still no bigger than a preview is its own. Built on demand and cached on disk, so
+// assets that existed before this tier get one the first time they are viewed. Dressing
+// results have theirs written right after generation. The route keeps its old name.
 // ════════════════════════════════════════════════════════════════════════════
 
 const CFG = require('../lib/config');
@@ -406,26 +405,9 @@ function _resolveMedia(urlPath, exts) {
   return { abs, shipped, rel };
 }
 
-const PREVIEW_MAX_PX = 1024;
-const PREVIEW_MAX_KB = 220;
+const { needsPreview, makePreview } = require('../lib/thumbs');
 
-async function _makePreview(srcAbs, outAbs) {
-  fs.mkdirSync(path.dirname(outAbs), { recursive: true });
-  let quality = 82;
-  while (quality >= 40) {
-    const buf = await sharp(srcAbs)
-      .resize(PREVIEW_MAX_PX, PREVIEW_MAX_PX, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality })
-      .toBuffer();
-    if (buf.length <= PREVIEW_MAX_KB * 1024 || quality <= 40) {
-      fs.writeFileSync(outAbs, buf);
-      return;
-    }
-    quality -= 10;
-  }
-}
-
-// Where the 1K derivative of a file is written, and the URL it answers at: beside its source, in
+// Where the preview of a file is written, and the URL it answers at: beside its source, in
 // a preview/ folder. The mannequins are the exception - they ship with the program in public/poses,
 // which an update replaces - so theirs are made again into the library's cache/poses/.
 function _previewTarget(hit) {
@@ -450,9 +432,8 @@ router.post('/scen3/preview1k', async (req, res) => {
     const { abs: outAbs, url: outUrl } = _previewTarget(hit);
 
     if (!fs.existsSync(outAbs)) {
-      const srcKb = fs.statSync(hit.abs).size / 1024;
-      if (srcKb <= PREVIEW_MAX_KB) return res.json({ success: true, path: src, note: 'source already small' });
-      await _makePreview(hit.abs, outAbs);
+      if (!(await needsPreview(hit.abs))) return res.json({ success: true, path: src, note: 'source already small' });
+      await makePreview(hit.abs, outAbs);
     }
     res.json({ success: true, path: outUrl });
   } catch (e) {
@@ -974,7 +955,7 @@ router.get('/scen3/poses', (_req, res) => {
 // own pixels: no upscale, no interpolation, and the honest size comes back with it.
 const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
 
-// The pixel size of a stored asset. The centre preview shows a 1K DERIVATIVE, so the
+// The pixel size of a stored asset. The centre preview shows a DERIVATIVE, so the
 // page cannot read the real dimensions off the <img> it is displaying — labelling a
 // selection from that reported a size several times smaller than the crop it produced.
 router.post('/scen3/media-size', async (req, res) => {
@@ -1594,9 +1575,9 @@ router.post('/scen3/obraz-save', async (req, res) => {
     try { await H.createThumbnail(destAbs, path.join(folder, 'thumbs', file.replace(/\.[^.]+$/, '') + '.jpg')); } catch (e) {}
     let preview = rel;
     try {
-      if (fs.statSync(destAbs).size / 1024 > PREVIEW_MAX_KB) {
+      if (await needsPreview(destAbs)) {
         const outAbs = path.join(folder, 'preview', file.replace(/\.[^.]+$/, '') + '.jpg');
-        if (!fs.existsSync(outAbs)) await _makePreview(destAbs, outAbs);
+        if (!fs.existsSync(outAbs)) await makePreview(destAbs, outAbs);
         preview = toUrl(outAbs);
       }
     } catch (e) {}
@@ -1669,7 +1650,7 @@ router.post('/scen3/obraz-delete', (req, res) => {
 
 // ── Finalize a finished task ────────────────────────────────────────────────
 // The shared /api/status poller drops the result into uploads/. This copies a
-// lookbook candidate into the lookbook base, and builds the 1K derivative for
+// lookbook candidate into the lookbook base, and builds the preview for
 // whatever came out, so the popup never has to fetch a full-size file.
 router.post('/scen3/finalize', async (req, res) => {
   try {
@@ -1707,13 +1688,13 @@ router.post('/scen3/finalize', async (req, res) => {
       }
     }
 
-    // 1K derivative for the centre column
+    // the preview for the centre column
     let previewUrl = finalUrl;
     try {
       const fh = _resolveMedia(finalUrl);
-      if (fh && fs.statSync(fh.abs).size / 1024 > PREVIEW_MAX_KB) {
+      if (fh && await needsPreview(fh.abs)) {
         const out = _previewTarget(fh);
-        if (!fs.existsSync(out.abs)) await _makePreview(fh.abs, out.abs);
+        if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
         previewUrl = out.url;
       }
     } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
@@ -2146,15 +2127,15 @@ router.post('/scen3/voice/speak', async (req, res) => {
 // no-op rather than a duplicate frame.
 const _watching = new Set();
 
-// Build the 1K derivative for a freshly generated frame. Frames stay in uploads/;
+// Build the preview for a freshly generated frame. The frame stays where it is;
 // only the preview is made, exactly as POST /scen3/finalize does for the page.
 async function _framePreview(finalUrl) {
   try {
     const fh = _resolveMedia(finalUrl);
     if (!fh || !fs.existsSync(fh.abs)) return finalUrl;
-    if (fs.statSync(fh.abs).size / 1024 <= PREVIEW_MAX_KB) return finalUrl;
+    if (!(await needsPreview(fh.abs))) return finalUrl;
     const out = _previewTarget(fh);
-    if (!fs.existsSync(out.abs)) await _makePreview(fh.abs, out.abs);
+    if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
     return out.url;
   } catch (e) {
     console.warn('[scen3/watch] preview failed:', e.message);
@@ -2295,22 +2276,15 @@ async function _fetchClip(taskId) {
 // One frame out of the clip, for the card. Half a second in rather than frame zero: the
 // very first frame of a lipsync render is often mid-blink or still settling.
 async function _clipPoster(absVideo, name) {
-  const dir = path.join(CFG.MEDIA.clips, 'thumbs');
-  fs.mkdirSync(dir, { recursive: true });
-  const out = path.join(dir, name.replace(/\.mp4$/i, '.jpg'));
-  const ok = await new Promise(resolve => {
-    try {
-      const proc = require('child_process').spawn(require('ffmpeg-static'),
-        ['-hide_banner', '-loglevel', 'error', '-ss', '0.5', '-i', absVideo,
-         '-frames:v', '1', '-vf', 'scale=320:-2', '-y', out],
-        { stdio: 'ignore', windowsHide: true });
-      proc.on('error', () => resolve(false));
-      proc.on('close', (code) => resolve(code === 0 && fs.existsSync(out)));
-    } catch (e) { resolve(false); }
-  });
-  if (ok) return `/media/clips/thumbs/${path.basename(out)}`;
-  console.warn('[scen3/clip] no poster frame for', name);
-  return '';
+  const out = path.join(CFG.MEDIA.clips, 'thumbs', name.replace(/\.mp4$/i, '.jpg'));
+  try {
+    const VThumb = require('../lib/video-thumb');
+    await VThumb.posterFrame(absVideo, out, { width: VThumb.CLIP_POSTER_W, at: 0.5 });
+    return `/media/clips/thumbs/${path.basename(out)}`;
+  } catch (e) {
+    console.warn('[scen3/clip] no poster frame for', name, '-', e.message);
+    return '';
+  }
 }
 
 // ── Resubmit a clip the renderer could not fetch ─────────────────────────────
@@ -3128,11 +3102,11 @@ router.post('/scen3/video/cancel', (req, res) => {
 // the right. Looked at it to be sure rather than guessing: a slice of width = height * 2/3
 // taken from x=0 lands on a clean head-and-shoulders on every character in the library.
 //
-// The sheet's own thumbnail is 300x167, so that slice would be 111px wide and a face panel
-// would show it blown up nearly threefold. This makes a face-sized thumbnail instead —
-// still a thumbnail, 40-60KB against a 5MB sheet — and caches it, since a sheet never
-// changes without a new file name.
-const FACE_W = 480, FACE_H = 720;
+// The sheet's own thumbnail is 600px wide, so that slice would be ~225px and the 360px face
+// panel would show it blown up. This makes a face-sized picture instead - twice the panel, for a
+// high-density screen - and caches it, since a sheet never changes without a new file name.
+// One cut at the server's size (480x720) is made again.
+const FACE_W = 960, FACE_H = 1440;
 
 async function _castFace(sheetPath, charId) {
   const hit = _resolveMedia(sheetPath);
@@ -3142,13 +3116,13 @@ async function _castFace(sheetPath, charId) {
   const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
   const abs = path.join(dir, name);
   const url = `/media/images/faces/${name}`;
-  if (fs.existsSync(abs)) return url;
+  if (fs.existsSync(abs) && ((await sharp(abs).metadata()).width || 0) >= FACE_W) return url;
   const meta = await sharp(hit.abs).metadata();
   const w = Math.min(meta.width, Math.round(meta.height * 2 / 3));
   await sharp(hit.abs)
     .extract({ left: 0, top: 0, width: w, height: meta.height })
     .resize(FACE_W, FACE_H, { fit: 'cover' })
-    .jpeg({ quality: 82 })
+    .jpeg({ quality: 85 })
     .toFile(abs);
   console.log('[scen3/face]', name, 'from', w + 'x' + meta.height);
   return url;

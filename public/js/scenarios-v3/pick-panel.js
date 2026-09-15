@@ -18,8 +18,8 @@
 // character, see its looks - is a target inside a target, missed constantly with a mouse and
 // unreachable on a touchscreen. Hover only lights the row.
 //
-// Thumbnails come from /api/thumb at the `card` variant: 320px, capped at 20 KB, and cached
-// forever because its key carries the source's mtime. chars.js has a thumb() of its own that
+// Thumbnails come from /api/thumb at the `card` variant: 640px, and cached on the source's
+// mtime. chars.js has a thumb() of its own that
 // rewrites a path to a neighbouring thumbs/ folder - it returns whatever happens to be there,
 // at whatever weight, and nothing at all when the file was never made.
 

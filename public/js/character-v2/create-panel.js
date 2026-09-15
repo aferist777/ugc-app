@@ -174,8 +174,7 @@ function paintPresetState() {
   const img = document.getElementById('cv2-preset-img');
   const p = presetById(_preset);
   if (img) {
-    // Through the thumbnail door: 640px at 30 KB is more than this column resolves, and the
-    // originals are 110 KB apiece.
+    // Through the thumbnail door, like every picture on the page.
     if (p) {
       img.src = '/api/thumb?v=preset&src=' + encodeURIComponent(exampleUrl(p.id));
       img.alt = p.name + ' example';

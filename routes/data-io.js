@@ -457,6 +457,8 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
 
     console.log(`[data-io] imported ${report.jsons} stores, ${report.files} files, ${report.skipped} already here, `
       + `${report.leftOut} left out${fromServer ? ' (a server-version archive, paths translated)' : ''}`);
+    // Thumbnails in an archive may have been cut at an older, smaller size.
+    if (report.files) require('../lib/thumb-refresh').again();
     res.json({ success: true, ...report });
   } catch (e) {
     console.error('[data-io] import failed:', e.message);

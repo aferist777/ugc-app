@@ -318,7 +318,7 @@ function _mediaCats(items, kind, labelFor) {
 //
 // `thumb` is null on purpose. A voice has no picture, so the page draws rows for this
 // shelf instead of cards; the pictures in the info column are the CHARACTERS' sheets,
-// through the 20kB card variant of the thumbnail door.
+// through the card variant of the thumbnail door.
 function _voicesShelf() {
   const shelf = VS.read();
   const chars = _read(path.join(DATA_DIR, 'characters.json'), []);

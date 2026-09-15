@@ -842,7 +842,7 @@ async function _fixThumbs() {
   const lines = [
     need.length + ' clip' + (need.length === 1 ? ' needs' : 's need') + ' a thumbnail.',
     '',
-    'Each one is read once and a 160px poster is written next to it. Nothing is',
+    'Each one is read once and a 320px poster is written next to it. Nothing is',
     'deleted and no clip is re-encoded.',
   ];
   // Said up front rather than discovered halfway: a clip whose file lives on another

@@ -33,7 +33,7 @@ export const deleteScenario    = (id)  => _json(`${BASE}/${encodeURIComponent(id
 export const listOptions  = ()             => _json('/api/scen3/options').then(d => d.options || {});
 export const deleteOption = (kind, value)  => _post('/api/scen3/options/delete', { kind, value }).then(d => d.options || {});
 
-// Ask the server for an asset's ~1K derivative (built on first use, cached on
+// Ask the server for an asset's preview (built on first use, cached on
 // disk). Falls back to the original path if anything goes wrong, so a preview
 // always renders something.
 export const preview1k = (p) => _post('/api/scen3/preview1k', { path: p })
@@ -43,7 +43,7 @@ export const preview1k = (p) => _post('/api/scen3/preview1k', { path: p })
 // ── Generation ──────────────────────────────────────────────────────────────
 // The engine layer is shared with the rest of the app: tasks are polled through
 // /api/status, then handed to /api/scen3/finalize which files the result and
-// builds its 1K derivative.
+// builds its preview.
 export const genLookbook = (body) => _post('/api/scen3/gen/lookbook', body);
 export const genDress    = (body) => _post('/api/scen3/gen/dress', body);
 export const genMix      = (body) => _post('/api/scen3/gen/mix', body);
@@ -52,7 +52,7 @@ export const genFrame        = (body) => _post('/api/scen3/gen/frame', body);
 // Cut a region out of a finished frame into a new file. rect is {x,y,w,h} as
 // fractions of the source; the crop keeps its own pixels, nothing is upscaled.
 export const cropFrame       = (path, rect) => _post('/api/scen3/frame/crop', { path, rect });
-// Real pixel size of a stored asset. The preview shows a 1K derivative, so the page
+// Real pixel size of a stored asset. The preview shows a derivative, so the page
 // cannot read the true dimensions off the image it is displaying.
 export const mediaSize       = (path) => _post('/api/scen3/media-size', { path });
 // Returns { mode, reading?, intent? } — the lighting read and/or the cleaned-up

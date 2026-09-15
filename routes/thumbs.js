@@ -5,8 +5,9 @@
 // The one door to a resized image. The pages point an <img> here instead of at the original, and
 // the first request makes the derivative; every request after is a cached file.
 //
-// Cached hard on purpose: the key includes the source's mtime, so a regenerated image gets a
-// different URL rather than a stale picture. That means the browser can keep these forever.
+// Revalidated, not cached hard: the address names the source and the size, not a version, so a
+// regenerated image - or a new size table - answers at the same address. sendFile's ETag makes the
+// check a 304 when nothing changed. (The desktop window has no HTTP cache at all.)
 
 const express = require('express');
 const router = express.Router();
@@ -22,7 +23,7 @@ router.get('/thumb', async (req, res) => {
   }
   try {
     const abs = await ensureThumb(src, v);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(abs);
   } catch (e) {
     // A missing source is the page asking for something that has been deleted - a 404 is the
