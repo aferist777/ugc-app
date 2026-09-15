@@ -65,7 +65,8 @@ router.post('/mv3b/render', async (req, res) => {
           if (job.phase !== ph) { job.phase = ph; job.span = spans[ph] || 0; job.phaseAt = Date.now(); }
           job.at = at;
         });
-        if (r && r.warnings && r.warnings.length) job.warning = r.warnings.join('; ');
+        const said = [...(ready.warnings || []), ...((r && r.warnings) || [])];
+        if (said.length) job.warning = said.join('; ');
         job.status = 'done'; job.url = toUrl(out);
       } catch (e) {
         // Not a render with a setting quietly missing: the file goes, and the reason is said.

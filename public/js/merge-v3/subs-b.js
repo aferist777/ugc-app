@@ -117,17 +117,29 @@ function _karaokeLine(ctx, words, x, y, st, scale, into) {
   }
 }
 
-function _wrap(ctx, text, maxWidth) {
-  const words = String(text).split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = '';
-  for (const w of words) {
-    const next = line ? line + ' ' + w : w;
-    if (line && ctx.measureText(next).width > maxWidth) { lines.push(line); line = w; }
-    else line = next;
+// LINES WHERE LIBASS BREAKS THEM. The render wraps a caption in libass (WrapStyle 0), and a preview
+// that broke it anywhere else would show the words in places the file does not. libass fills each
+// line as far as the frame less the style's margins allows, then evens the lines out: the last word
+// of a line moves down to the next while that brings the two closer in width, until nothing moves.
+// Returns [from, to) ranges into `words`.
+function _lines(ctx, words, maxWidth) {
+  if (!words.length) return [[0, 0]];
+  const space = ctx.measureText(' ').width;
+  const wide = words.map(w => ctx.measureText(w).width);
+  const span = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += wide[i]; return s + space * Math.max(0, b - a - 1); };
+  const starts = [0];
+  for (let i = 1; i < words.length; i++) {
+    if (span(starts[starts.length - 1], i + 1) > maxWidth) starts.push(i);
   }
-  if (line) lines.push(line);
-  return lines.length ? lines : [''];
+  for (let moved = true, guard = 0; moved && guard < 200; guard++) {
+    moved = false;
+    for (let k = 1; k < starts.length; k++) {
+      const a = starts[k - 1], b = starts[k], c = k + 1 < starts.length ? starts[k + 1] : words.length;
+      if (b - a < 2) continue;
+      if (Math.abs(span(a, b - 1) - span(b - 1, c)) < Math.abs(span(a, b) - span(b, c))) { starts[k] = b - 1; moved = true; }
+    }
+  }
+  return starts.map((s, k) => [s, k + 1 < starts.length ? starts[k + 1] : words.length]);
 }
 
 /**
@@ -140,6 +152,24 @@ export function paintCaptions(ctx, tl, at, W, H, fmt) {
   for (const tr of captionLanes(tl)) _paintLane(ctx, tr, at, W, H, fmt);
 }
 
+// HOW BIG LIBASS DRAWS A SIZE. An .ass Fontsize is the height of the font's line - its ascent and
+// descent together - and not the em a CSS pixel size names, so the same number draws a smaller
+// letter in the file (Arial: 60 is an em of about 54). Measured once per face off the canvas's own
+// metrics for it, which are the same tables libass reads.
+const _faces = new Map();
+function _faceOf(ctx, st) {
+  const css = (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + '100px ' + st.font + ', Arial, sans-serif';
+  if (_faces.has(css)) return _faces.get(css);
+  ctx.save();
+  ctx.font = css;
+  const m = ctx.measureText('Hg');
+  ctx.restore();
+  const up = +m.fontBoundingBoxAscent || 0, down = +m.fontBoundingBoxDescent || 0;
+  const face = (up + down > 0) ? { line: (up + down) / 100, ascent: up / (up + down) } : { line: 1.15, ascent: 0.8 };
+  _faces.set(css, face);
+  return face;
+}
+
 function _paintLane(ctx, tr, at, W, H, fmt) {
   if (!tr || !(tr.clips || []).length) return;
   const live = tr.clips.filter(c => c && c.name && at >= (+c.start || 0)
@@ -149,8 +179,12 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
   const st = styleOf(tr, fmt);
   // The style speaks in frame pixels; the canvas is a smaller frame of the same shape.
   const scale = H / renderFrame(fmt).h;
-  const px = Math.max(6, st.size * scale);
+  const face = _faceOf(ctx, st);
+  // A line is the size the style names; the letters inside it are smaller (see _faceOf).
+  const lh = Math.max(6, st.size * scale);
+  const px = lh / face.line;
   const a = anchorOf(st, W, H);
+  // The style's margins in the .ass (lib/mv3b-subs.js styleLine), which is what libass wraps against.
   const margin = W * 0.06;
 
   ctx.save();
@@ -161,30 +195,46 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
 
   for (const c of live) {
     const words = st.karaoke && Array.isArray(c.words) && c.words.length ? c.words : null;
-    const lines = words ? [words.map(w => w.w).join(' ')]
-                        : (st.wrap ? _wrap(ctx, c.name, W - margin * 2) : [String(c.name)]);
-    const lh = px * 1.18;
+    // Karaoke captions wrap like any other - they ran off both edges on screen while the file wrapped
+    // them. A line break typed into a caption is a break in both.
+    const lines = [];
+    if (words) {
+      const tokens = words.map(w => String(w.w));
+      for (const [from, to] of (st.wrap ? _lines(ctx, tokens, W - margin * 2) : [[0, tokens.length]])) {
+        lines.push({ text: tokens.slice(from, to).join(' '), words: words.slice(from, to) });
+      }
+    } else {
+      for (const para of String(c.name).split('\n')) {
+        const tokens = para.split(/\s+/).filter(Boolean);
+        for (const [from, to] of (st.wrap ? _lines(ctx, tokens, W - margin * 2) : [[0, tokens.length]])) {
+          lines.push({ text: tokens.slice(from, to).join(' '), words: null });
+        }
+      }
+    }
     // The anchor is the BOTTOM of the block for a bottom caption and its middle for a centred
     // one, so a second line grows upward rather than off the frame.
     const blockTop = a.an === 8 ? a.y
                    : a.an === 5 ? a.y - (lines.length * lh) / 2
                    : a.y - lines.length * lh;
 
+    // A box behind each LINE, as libass draws it: the line's own width, padded by the outline size.
     if (st.borderStyle === 'box' && st.backAlpha > 0) {
-      let wide = 0;
-      for (const l of lines) wide = Math.max(wide, ctx.measureText(l).width);
+      const pad = Math.max(1, (+st.outline || 0) * scale);
       ctx.save();
       ctx.globalAlpha = Math.min(1, st.backAlpha);
       ctx.fillStyle = st.backColor;
-      ctx.fillRect(a.x - wide / 2 - px * 0.25, blockTop, wide + px * 0.5, lines.length * lh);
+      lines.forEach((ln, i) => {
+        const wide = ctx.measureText(ln.text).width;
+        ctx.fillRect(a.x - wide / 2 - pad, blockTop + i * lh - pad, wide + pad * 2, lh + pad * 2);
+      });
       ctx.restore();
     }
 
-    lines.forEach((text, i) => {
-      const y = blockTop + (i + 1) * lh - px * 0.24;      // baseline inside the line box
-      if (words && i === 0) { _karaokeLine(ctx, words, a.x, y, st, scale, at - (+c.start || 0)); return; }
+    lines.forEach((ln, i) => {
+      const y = blockTop + i * lh + lh * face.ascent;     // the baseline, where libass puts it in the line
+      if (ln.words) { _karaokeLine(ctx, ln.words, a.x, y, st, scale, at - (+c.start || 0)); return; }
       ctx.fillStyle = st.primary;
-      _line(ctx, text, a.x, y, st, scale);
+      _line(ctx, ln.text, a.x, y, st, scale);
     });
   }
   ctx.restore();

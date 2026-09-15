@@ -21,8 +21,9 @@
 //
 // AN IMPORT IS STAGED, THEN MERGED. Each volume unpacks into a staging library of its own set,
 // cache/import/<set>/lib - an older archive translated to layout 5 on the way. Once the volumes
-// chosen are all up, POST /data/import/finish upgrades a staged library that is older than layout
-// 6 (lib/library-upgrade.js) and merges it into this one (lib/library-merge.js): a project or a
+// chosen are all up, POST /data/import/finish upgrades a staged library (lib/library-upgrade.js: to
+// layout 6 when it is older, and talking-head timelines rewritten) and merges it into this one
+// (lib/library-merge.js): a project or a
 // category this library already has takes the incoming files into its own folder, a new one gets
 // a folder of its own name or "name (2)", and every path in the incoming stores follows. Staged,
 // because both steps need the whole set: the stores that say where a file belongs can sit in
@@ -471,10 +472,14 @@ router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) =>
     const lib = path.join(setDir, 'lib');
     const r = { takenAt: state.takenAt, format: state.version, parts: state.parts, have: state.have.length, upgraded: false };
     try {
-      if (state.version < 6) {
-        const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace('[upgrade]', '[data-io] staged set:')) });
+      // Every set, whatever its format: an archive of layout 6 can still hold talking-head timelines,
+      // and the upgrade is what rewrites them (lib/timeline-convert.js). On a set already in layout 6
+      // that is all it does.
+      {
+        const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace(/^\[(upgrade|timelines)\]/, '[data-io] staged set:')) });
         r.upgraded = !!u.upgraded;
         r.setAside = u.upgraded ? u.report.unreferenced : 0;
+        r.timelinesRewritten = (u.timelines && u.timelines.converted) || 0;
       }
       Object.assign(r, require('../lib/library-merge').mergeLibrary(lib, ROOT_DIR, {
         overwrite, onNewFolder: (url) => require('../lib/moves').forget(url),

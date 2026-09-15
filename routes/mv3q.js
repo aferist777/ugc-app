@@ -135,7 +135,8 @@ async function runBlank(item) {
       };
       try {
         const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase));
-        if (r && r.warnings && r.warnings.length) warning = r.warnings.join('; ');
+        const said = [...(built.warnings || []), ...((r && r.warnings) || [])];
+        if (said.length) warning = said.join('; ');
       } catch (e) {
         try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
         ok = false; error = e.message;

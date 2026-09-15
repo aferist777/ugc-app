@@ -32,8 +32,21 @@ console.log(`library: ${LIB}\nlayout:  ${layout === 0 ? 'empty' : layout}`);
 
 if (APPLY) {
   const r = U.upgrade(LIB, { log: (s) => console.log(s) });
-  if (!r.upgraded) console.log('nothing to upgrade');
+  if (!r.upgraded && !(r.timelines && r.timelines.converted)) console.log('nothing to upgrade');
   process.exit(r.newlyMissing && r.newlyMissing.length ? 2 : 0);
+}
+// The timelines' step reads projects/*/merge/, which a layout 5 library does not have yet: counted
+// here only for a library already in layout 6.
+if (layout === 6) {
+  let talking = 0;
+  const P = path.join(LIB, 'projects');
+  for (const d of (fs.existsSync(P) ? fs.readdirSync(P) : [])) {
+    const M = path.join(P, d, 'merge');
+    for (const f of (fs.existsSync(M) ? fs.readdirSync(M).filter((x) => x.endsWith('.json')) : [])) {
+      try { const doc = JSON.parse(fs.readFileSync(path.join(M, f), 'utf8')); if (doc.tracks && !Array.isArray(doc.tracks) && doc.kind !== 'blank') talking++; } catch (e) { /* unreadable */ }
+    }
+  }
+  console.log(talking ? `talking-head timelines to rewrite: ${talking}` : 'no talking-head timelines');
 }
 if (layout !== 5) { console.log('nothing to upgrade'); process.exit(0); }
 
