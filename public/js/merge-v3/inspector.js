@@ -1037,7 +1037,7 @@ function _blankWordsTrack(host, track) {
   if (isSubs) {
     // The two ways a line gets onto this lane, side by side: heard, or typed.
     const gen = C.button(_stt.busy ? 'Listening...' : 'Generate from the sound', _generateCaptions, {
-      title: 'Transcribes every audible audio track and writes the words onto this lane',
+      title: 'Transcribes the audible sound - the main audio lane first, music beds left out - and writes the words onto this lane',
     });
     gen.disabled = _stt.busy;
     host.appendChild(C.row('', C.pair(gen, add)));

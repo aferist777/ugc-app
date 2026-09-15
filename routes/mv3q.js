@@ -35,18 +35,13 @@ const fs = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
-const { buildGraph } = require('../lib/mv3b-render');
+const JOB = require('../lib/mv3b-job');
 const OWN = require('../lib/ownership');
 
 const router = express.Router();
 const { DATA_DIR } = require('../lib/config');
-const { toDisk, toUrl } = require('../lib/media');
+const { toUrl } = require('../lib/media');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
-
-function resolveSrc(rel) {
-  const abs = toDisk(rel);
-  return abs && fs.existsSync(abs) ? abs : null;
-}
 
 function read() {
   try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); }
@@ -66,27 +61,6 @@ let _startedAt = 0;
 // running row for a leftover and put it back to queued, and Render all could start it twice.
 let _active = null;
 
-function argsForBlank(timeline) {
-  const g = buildGraph(timeline || {});
-  if (!(g.dur > 0)) return { error: 'nothing on the timeline to render' };
-  const args = ['-hide_banner', '-y'];
-  const missing = [];
-  for (const i of g.inputs) {
-    const abs = resolveSrc(i.file);
-    if (!abs) { missing.push(i.file); continue; }
-    if (i.loop) args.push('-loop', '1');
-    if (i.ss) args.push('-ss', String(i.ss));
-    args.push('-t', String(i.t), '-i', abs);
-  }
-  if (missing.length) return { error: 'missing files: ' + missing.join(', ') };
-  args.push('-filter_complex', g.filter, '-map', `[${g.map.v}]`);
-  if (g.map.a) args.push('-map', `[${g.map.a}]`); else args.push('-an');
-  args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
-            '-r', '30', '-t', String(g.dur));
-  if (g.map.a) args.push('-c:a', 'aac', '-b:a', '192k');
-  return { args, dur: g.dur };
-}
-
 function next() {
   const s = read();
   // Armed, and oldest first. An entry nobody has pressed Render all for waits.
@@ -104,7 +78,8 @@ function next() {
   // point of the split is that neither render path can reach the other.
   if (item.kind !== 'blank') return runTalking(item);
 
-  const built = argsForBlank(item.timeline);
+  // The same preparation Export -> Render uses (lib/mv3b-job.js): captions included.
+  const built = JOB.prepare(item.timeline, item.id);
   if (built.error) {
     const t = read();
     const it = t.items.find(x => x.id === item.id);
@@ -139,12 +114,16 @@ function next() {
       }
     }
   });
-  _proc.on('close', (code) => {
-    _proc = null; _active = null;
+  _proc.on('close', async (code) => {
+    _proc = null;
+    built.dispose();
+    const ok = code === 0 && fs.existsSync(out);
+    if (ok) await JOB.finish(out);
+    _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
-      if (code === 0 && fs.existsSync(out)) { it.status = 'done'; it.url = toUrl(out); }
+      if (ok) { it.status = 'done'; it.url = toUrl(out); }
       else { it.status = 'failed'; it.error = 'ffmpeg exited ' + code; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }
@@ -153,6 +132,7 @@ function next() {
   });
   _proc.on('error', (e) => {
     _proc = null; _active = null;
+    built.dispose();
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = e.message; }

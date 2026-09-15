@@ -274,7 +274,7 @@ const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // that could otherwise reorder a track without meaning anything by it.
 const OVERLAY_SCOPES = ['biro', 'hook', 'halfer'];
 
-function _mergeTrack(base, mine, theirs, scope) {
+function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
   const out = [];
   // Their order first, so a clip added elsewhere keeps its place in their lane.
@@ -288,10 +288,10 @@ function _mergeTrack(base, mine, theirs, scope) {
   }
   // Anything of mine they have never seen.
   for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id)) out.push(c);
-  // Start order everywhere except the overlay lanes, whose clips may cover one another:
-  // there the order is the stacking order, and a merge that tidied it would restack the
-  // picture as a side effect of another device having saved.
-  if (!OVERLAY_SCOPES.includes(scope)) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  // Start order only where the order means nothing. On a lane whose clips may cover one another
+  // the order is the stacking order, and a merge that tidied it would restack the picture as a
+  // side effect of another device having saved.
+  if (sortByStart) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };
@@ -305,6 +305,7 @@ function _mergeTrack(base, mine, theirs, scope) {
 // Returns the merged timeline plus what arrived from the other device, for the notice.
 function _merge(base, mine, theirs) {
   if (!base || !theirs) return { timeline: mine, added: 0, removed: 0 };
+  if (Array.isArray(theirs.tracks)) return _mergeBlank(base, mine, theirs);
   const out = { tracks: {} };
   let added = 0, removed = 0;
   for (const scope of Object.keys(theirs.tracks || {})) {
@@ -314,9 +315,46 @@ function _merge(base, mine, theirs) {
     const bIds = _byId(b.clips), mIds = _byId(m.clips);
     for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
     for (const c of (b.clips || [])) if (!_byId(t.clips).has(c.id) && mIds.has(c.id)) removed++;
-    out.tracks[scope] = _mergeTrack(b, m, t, scope);
+    out.tracks[scope] = _mergeTrack(b, m, t, !OVERLAY_SCOPES.includes(scope));
   }
   return { timeline: out, added, removed };
+}
+
+// A blank project's lanes are a LIST, matched by id and never by position, and their order is
+// the layer order. Treating the list as the talking-head object of named lanes is what wiped
+// projects: the lanes came back keyed "0", "1"... with no kind, the page handed the project to
+// the other editor, and the retried save stored no lanes at all.
+//
+// Same rules as a lane's clips: a lane I deleted stays deleted, a lane added elsewhere is kept,
+// a lane of mine they never saw goes back in beside the lane it followed here. Only audio lanes
+// are put in start order - on a video lane the order of the clips is which one shows.
+function _mergeBlank(base, mine, theirs) {
+  const byId = (list) => new Map((Array.isArray(list) ? list : []).map((t) => [t.id, t]));
+  const bL = byId(base.tracks), mL = byId(mine.tracks), tL = byId(theirs.tracks);
+  const out = [];
+  let added = 0, removed = 0;
+  for (const t of theirs.tracks) {
+    if (!t || !t.id) continue;
+    const b = bL.get(t.id), m = mL.get(t.id);
+    if (b && !m) continue;                                  // I removed the lane
+    if (!m) { out.push(t); added += (t.clips || []).length; continue; }
+    const bb = b || { clips: [] };
+    const bIds = _byId(bb.clips), mIds = _byId(m.clips), tIds = _byId(t.clips);
+    for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
+    for (const c of (bb.clips || [])) if (!tIds.has(c.id) && mIds.has(c.id)) removed++;
+    out.push(_mergeTrack(bb, m, t, t.kind === 'audio'));
+  }
+  const mineList = Array.isArray(mine.tracks) ? mine.tracks : [];
+  mineList.forEach((m, i) => {
+    if (!m || !m.id || tL.has(m.id) || bL.has(m.id)) return;
+    // Beside the lane it followed in my copy, so it lands in the layer I put it in.
+    const prev = i > 0 ? mineList[i - 1] : null;
+    const at = prev ? out.findIndex((x) => x.id === prev.id) : -1;
+    out.splice(at + 1, 0, m);
+  });
+  // The format is one field: mine if I changed it, otherwise whatever is stored.
+  const format = (mine.format !== base.format) ? mine.format : theirs.format;
+  return { timeline: { kind: theirs.kind || mine.kind || BLANK_KIND, format, tracks: out }, added, removed };
 }
 
 // Bound on load rather than at boot: History reads and writes through us, and until there is

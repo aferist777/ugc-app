@@ -258,37 +258,65 @@ export function regroup(track, perLine) {
 // One flat run of audio laid end to end, silence where the timeline is silent, so the words
 // come back already in timeline coordinates and need no shifting.
 //
-// OVERLAPS ARE NOT REPRESENTABLE in a flat run, and two people talking at once is not
-// something a transcript can hold either. Where clips overlap the earlier one keeps the
-// ground and the later one is taken from where the first leaves off - which is also the more
-// useful answer: the thing that started first is the thing being said.
+// MUSIC IS NOT LISTENED TO. A bed runs under the whole video, and heard as sound it took the
+// ground from every voice on top of it - the captions came out of the song. A bed says so on the
+// clip (`bed`, music.js); a bed laid before that was said is known by what it is: a music-panel
+// clip (id m...), no picture half, a track from the music shelf.
+//
+// OVERLAPS ARE NOT REPRESENTABLE in a flat run, and two people talking at once is not something a
+// transcript can hold either. The main audio lane - where the voice is - keeps its ground; every
+// other lane is only heard where the main one is silent. Among those, the earlier clip keeps the
+// ground and a later one is taken from where the first leaves off.
+const isBed = (c) => !!c && (c.bed === true
+  || (/^m[0-9a-z]/.test(String(c.id || '')) && !c.pairId && /^\/media\/audio\//.test(String(c.src || ''))));
+
 export function segmentsFor(tl) {
-  const heard = [];
+  const main = [], rest = [];
   for (const tr of ((tl && tl.tracks) || [])) {
     if (tr.kind !== 'audio') continue;
     const master = (tr.volume == null) ? 1 : +tr.volume;
     if (!(master > 0)) continue;
     for (const c of (tr.clips || [])) {
       const v = ((c.volume == null) ? 1 : +c.volume) * master;
-      if (!(v > 0) || !c.src) continue;
-      heard.push(c);
+      if (!(v > 0) || !c.src || isBed(c)) continue;
+      (tr.main ? main : rest).push(c);
     }
   }
-  heard.sort((a, b) => (+a.start) - (+b.start));
+  // Pieces of sound in timeline order, each a stretch of one clip: [start, end, clip].
+  const pieces = [];
+  const lay = (clips, blocked) => {
+    const took = [];
+    let at = 0;
+    for (const c of clips.slice().sort((a, b) => (+a.start) - (+b.start))) {
+      let s = Math.max(+c.start || 0, at);
+      const e = (+c.start || 0) + (+c.dur || 0);
+      if (e <= s + 0.01) continue;                          // wholly under something earlier
+      // Cut around what an earlier layer already holds.
+      for (const [bs, be] of blocked) {
+        if (be <= s || bs >= e) continue;
+        if (bs > s + 0.01) took.push([s, bs, c]);
+        s = Math.max(s, be);
+      }
+      if (e > s + 0.01) took.push([s, e, c]);
+      at = e;
+    }
+    return took;
+  };
+  const held = lay(main, []);
+  pieces.push(...held, ...lay(rest, held.map(([s, e]) => [s, e]).sort((a, b) => a[0] - b[0])));
+  pieces.sort((a, b) => a[0] - b[0]);
 
   const segs = [];
   let at = 0;
-  for (const c of heard) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  for (const [s0, e, c] of pieces) {
+    const s = Math.max(s0, at);
+    if (e <= s + 0.01) continue;
     const sp = +c.speed > 0 ? +c.speed : 1;
-    let start = +c.start || 0;
-    let dur = +c.dur || 0;
-    let crop = +c.trimIn || 0;
-    if (start + dur <= at + 0.01) continue;              // wholly under something earlier
-    if (start < at) { const cut = at - start; crop += cut * sp; dur -= cut; start = at; }
-    if (start > at + 0.01) { segs.push({ src: '', dur: Math.round((start - at) * 100) / 100 }); }
-    segs.push({ src: c.src, crop: Math.round(crop * 100) / 100, speed: sp,
-                dur: Math.round(dur * 100) / 100, voiceOnly: false });
-    at = start + dur;
+    const crop = (+c.trimIn || 0) + (s - (+c.start || 0)) * sp;
+    if (s > at + 0.01) segs.push({ src: '', dur: r2(s - at) });
+    segs.push({ src: c.src, crop: r2(crop), speed: sp, dur: r2(e - s), voiceOnly: false });
+    at = e;
   }
   return segs;
 }

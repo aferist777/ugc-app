@@ -431,7 +431,10 @@ function _sanitizeBlank(timeline) {
                                // same reason as pairId: only a blank project asks the question.
                                // A talking-head Main fragment IS the frame, and its overlays
                                // have cropAlign, which _clipOf already keeps.
-                               fit: c.fit === 'fill' ? 'fill' : null })),
+                               fit: c.fit === 'fill' ? 'fill' : null,
+                               // Music laid under the rest (public/js/merge-v3/music.js): what
+                               // captions made from the sound leave out.
+                               bed: c.bed ? true : null })),
     };
     // `sizeAuto` is added HERE and not inside _subsStyle, which talking-head projects also go
     // through: it is the flag that says the caption size is still the format's suggestion
@@ -574,8 +577,14 @@ router.put('/mv3/timeline', (req, res) => {
       return res.status(409).json({
         success: false, error: 'stale version', expected: _revOf(prev), got: claimed,
         version: _revOf(prev), key,
-        timeline: { kind: prev.kind || null, tracks: prev.tracks },
+        timeline: { kind: prev.kind || null, format: prev.format || null, tracks: prev.tracks },
       });
+    }
+    // A blank project's lanes are a list. Anything else sent for one is a page that has lost track
+    // of what it holds, and storing it would store no lanes at all - refused, not saved.
+    const incoming = (req.body || {}).timeline;
+    if (((prev && prev.kind) || _kindOf(incoming)) === BLANK_KIND && !Array.isArray(incoming && incoming.tracks)) {
+      return res.status(400).json({ success: false, error: 'this project keeps its lanes as a list - the edit was not saved, reload the project' });
     }
     const now = new Date().toISOString();
     cur.timelines[key] = {

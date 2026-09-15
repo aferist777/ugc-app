@@ -1,19 +1,15 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — rendering a BLANK project.
+   MERGE v3 — rendering a project, from Export -> Render.
 
-   The second render path, and separate from routes/ffmpeg.js on purpose - see the note at
-   the top of lib/mv3b-render.js. Nothing here is imported by the scenario renderer and
-   nothing there is imported here, so a scenario export keeps working by construction.
+   The graph is lib/mv3b-render.js; getting a render ready (captions, inputs, arguments) and its
+   poster afterwards are lib/mv3b-job.js, shared with the render queue (routes/mv3q.js) so the two
+   cannot drift apart again.
 
-   Two endpoints and no more:
-     POST /api/mv3b/plan    -> the graph, built and returned, nothing run
-     POST /api/mv3b/render  -> the same graph, run to a file in finals/
-
-   `plan` exists because a filter graph is the kind of thing that is far cheaper to read
-   than to debug from a broken video, and because it lets the layer order be checked against
-   the preview without waiting for an encode.
+     POST /api/mv3b/render      { timeline, key } -> { jobId, w, h, dur }, a file in the renders
+                                folder of the project the timeline belongs to
+     GET  /api/mv3b/render/:id  -> status, url, percent, remaining seconds
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -21,61 +17,10 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
-const { buildGraph, frame } = require('../lib/mv3b-render');
-const { buildAss, captionLanes } = require('../lib/mv3b-subs');
+const JOB = require('../lib/mv3b-job');
 
 const router = express.Router();
-const { TEMP_PUBLIC_DIR } = require('../lib/config');
-const { toDisk, toUrl } = require('../lib/media');
-
-// The same mapping the static mounts serve, and only where media legitimately lives. A src is a
-// web path as the pages already use it, not an invitation to name any file on the disk.
-function resolveSrc(rel) {
-  const abs = toDisk(rel);
-  return abs && fs.existsSync(abs) ? abs : null;
-}
-
-// Every input resolved before a single one is decoded. A graph half-built around a file that
-// turns out to be missing fails deep inside ffmpeg with a message about a stream index, which
-// is a long way from "that clip is gone".
-function argsFor(graph) {
-  const args = ['-hide_banner', '-y'];
-  const missing = [];
-  for (const i of graph.inputs) {
-    const abs = resolveSrc(i.file);
-    if (!abs) { missing.push(i.file); continue; }
-    if (i.loop) args.push('-loop', '1');
-    if (i.ss) args.push('-ss', String(i.ss));
-    args.push('-t', String(i.t), '-i', abs);
-  }
-  if (missing.length) return { missing };
-  args.push('-filter_complex', graph.filter, '-map', `[${graph.map.v}]`);
-  if (graph.map.a) args.push('-map', `[${graph.map.a}]`);
-  else args.push('-an');
-  args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
-            '-r', '30', '-t', String(graph.dur));
-  if (graph.map.a) args.push('-c:a', 'aac', '-b:a', '192k');
-  return { args };
-}
-
-// The captions, written where ffmpeg can be pointed at them. A file rather than something
-// passed inline because that is the only thing libass reads - and one per job rather than one
-// shared, so two renders of two projects cannot burn each other's words.
-const ASS_DIR = path.join(TEMP_PUBLIC_DIR, 'mv3b_ass');
-
-function writeAss(timeline, id) {
-  const lanes = captionLanes(timeline);
-  if (!lanes.length) return null;
-  const { w, h } = frame(timeline);
-  const text = buildAss(lanes, w, h);
-  if (!text) return null;
-  fs.mkdirSync(ASS_DIR, { recursive: true });
-  const p = path.join(ASS_DIR, 'ass_' + id + '.ass');
-  fs.writeFileSync(p, text, 'utf8');
-  return p;
-}
-
-const dropAss = (p) => { try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch (e) {} };
+const { toUrl } = require('../lib/media');
 
 const _jobs = new Map();
 
@@ -83,24 +28,17 @@ router.post('/mv3b/render', (req, res) => {
   try {
     const tl = (req.body || {}).timeline || {};
     const id = 'j' + Date.now().toString(36);
-    var assPath = writeAss(tl, id);
-    const g = buildGraph(tl, { assPath });
-    if (!(g.dur > 0)) { dropAss(assPath); return res.status(400).json({ success: false, error: 'nothing on the timeline to render' }); }
-    const built = argsFor(g);
-    if (built.missing) {
-      dropAss(assPath);
-      return res.status(400).json({ success: false, error: 'these files are not on the disk: ' + built.missing.join(', ') });
-    }
+    const ready = JOB.prepare(tl, id);
+    if (ready.error) return res.status(400).json({ success: false, error: ready.error });
 
     // Into the folder of the project the timeline belongs to (lib/shelf-files.js).
     const name = 'mv3b_' + Date.now() + '.mp4';
     const out = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
-    const args = built.args.concat([out]);
     const job = { id, status: 'running', url: null, error: null, log: '',
-                  dur: g.dur, at: 0, startedAt: Date.now() };
+                  dur: ready.dur, at: 0, startedAt: Date.now() };
     _jobs.set(id, job);
 
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    const proc = spawn(ffmpegPath, ready.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     // HOW FAR IT HAS GOT, read off ffmpeg rather than guessed from a stopwatch. It prints the
     // position it has encoded to; against the known length that is real progress, and real
     // progress is what makes "time remaining" a measurement instead of a wish.
@@ -110,16 +48,16 @@ router.post('/mv3b/render', (req, res) => {
       const m = /time=(\d+):(\d\d):(\d\d(?:\.\d+)?)/.exec(s);
       if (m) job.at = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
     });
-    proc.on('close', (code) => {
-      // The caption file outlives the graph and not the encode: ffmpeg reads it while it runs,
-      // so it can only go once the process has closed - either way, finished or failed.
-      dropAss(assPath);
-      if (code === 0 && fs.existsSync(out)) { job.status = 'done'; job.url = toUrl(out); }
-      else { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; }
+    proc.on('close', async (code) => {
+      ready.dispose();
+      if (code === 0 && fs.existsSync(out)) {
+        await JOB.finish(out);
+        job.status = 'done'; job.url = toUrl(out);
+      } else { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; }
     });
-    proc.on('error', (e) => { dropAss(assPath); job.status = 'failed'; job.error = e.message; });
+    proc.on('error', (e) => { ready.dispose(); job.status = 'failed'; job.error = e.message; });
 
-    res.json({ success: true, jobId: id, w: g.w, h: g.h, dur: g.dur });
+    res.json({ success: true, jobId: id, w: ready.w, h: ready.h, dur: ready.dur });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

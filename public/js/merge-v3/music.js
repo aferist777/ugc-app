@@ -161,6 +161,10 @@ async function _add(url, title, opts) {
         // starts at half.
         volume: 0.5, reversed: false,
         transition: null, animation: null, filter: null,
+        // A BED, said on the clip: on a blank project's audio lane it sits among voices and sounds,
+        // and the one thing that must tell them apart is the transcriber - captions made from the
+        // sound are made from the voice, never from the music under it (subs-b.js).
+        bed: _dest ? true : undefined,
       });
       at = r2(at + dur);
       left = r2(left - dur);
