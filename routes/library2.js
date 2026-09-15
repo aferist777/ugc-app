@@ -48,12 +48,6 @@ router.get('/library2/drafts', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// BEFORE /drafts/:id, or the parameter swallows "for-topic" and answers "no such draft".
-router.get('/library2/drafts/for-topic', (req, res) => {
-  const q = req.query || {};
-  res.json({ success: true, draft: drafts.forTopic(q.sourceId, q.topicId) });
-});
-
 router.get('/library2/drafts/:id', (req, res) => {
   const d = drafts.get(req.params.id);
   if (!d) return res.status(404).json({ success: false, error: 'no such draft' });

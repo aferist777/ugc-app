@@ -2,9 +2,9 @@
    APP NAV — the one definition of the top bar, for every page that has one.
    Its own file because the pages that need it disagree about everything else:
    Scenarios v3, Character and Library load css/app-shell.css (design tokens plus
-   a global reset), while Merge and Birols are legacy pages on css/midnight.css and
-   would be wrecked by that reset. Both stylesheets declare the same tokens, so the
-   rules below work under either - and there is still only one copy of them.
+   a global reset), while Merge brings its own tokens and would be wrecked by that
+   reset. Both declare the same tokens, so the rules below work under either - and
+   there is still only one copy of them.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* ── Top nav ────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the Music panels. Phase I5.
 
-   The saved-tracks library is server-side already (routes/audio.js):
+   The saved-tracks library is server-side already (routes/music.js):
 
      GET    /api/audio/suno/library        -> { list: [{id, title, audioPath, style}] }
      DELETE /api/audio/suno/library/:id

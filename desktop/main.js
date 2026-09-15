@@ -31,7 +31,7 @@ const APP_DIR = path.join(__dirname, '..');
 const DEV = !app.isPackaged;
 // Development only: `npm start -- --windowed` opens an ordinary window and leaves the focus alone.
 const WINDOWED = DEV && process.argv.includes('--windowed');
-// --bg of public/css/midnight.css, so no window flashes white before its page paints.
+// The pages' dark background, so no window flashes white before its page paints.
 const BG = '#0c0f16';
 
 const LIBRARY = path.resolve(process.env.UGC_DATA_DIR

@@ -60,7 +60,7 @@ const VOLUME_BYTES = 1024 * 1024 * 1024;
 const GROUPS = [
   { id: 'media', label: 'Media library (pictures, clips, voice, music, video sources)',
     dirs: ['media/images', 'media/clips', 'media/voice', 'media/audio', 'media/projects', 'media/sources',
-           'media/models', 'data/transcripts'],
+           'data/transcripts'],
     except: ['media/images/options'],
     stores: ['data/sources.json'], heavy: true },
   { id: 'renders', label: 'Finished renders',

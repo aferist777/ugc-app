@@ -13,9 +13,9 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { OBRAZY_DIR, CHARACTERS_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
-const { toDiskWithin, toUrl } = require('../lib/media');
-const { obrazFolderName, obrazAbsFolder } = require('../lib/obrazy-store');
+const { ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { toUrl } = require('../lib/media');
+const { obrazAbsFolder } = require('../lib/obrazy-store');
 const { deleteDraftByObraz } = require('../lib/char-store');
 
 function _safeRel(p) {
@@ -67,30 +67,6 @@ router.get('/obrazy/main-images', (_req, res) => {
     res.json({ success: true, mainImages: out });
   } catch (e) {
     res.json({ success: true, mainImages: {} });
-  }
-});
-
-// ── POST /api/obrazy/delete-file ────────────────────────────────────────────
-// Body: { path } — a web-style path inside media/looks/ or media/characters/. Unlinks the
-// file and its thumbnail. Used by the rerun flow which no longer archives old
-// posevars to editResults[] but simply deletes them. Restricted to those two
-// subtrees so a malformed path can't escape them.
-router.post('/obrazy/delete-file', (req, res) => {
-  try {
-    const p = String(req.body?.path || '');
-    if (!p) return res.status(400).json({ success: false, error: 'path is required' });
-    const abs = toDiskWithin(p.startsWith('/') ? p : '/' + p, [OBRAZY_DIR, CHARACTERS_DIR]);
-    if (!abs) {
-      return res.status(400).json({ success: false, error: 'path must be under media/looks/ or media/characters/' });
-    }
-    if (fs.existsSync(abs)) { try { fs.unlinkSync(abs); } catch {} }
-    // Thumb path: same dir + /thumbs/<basename>.jpg
-    const baseNoExt = path.basename(p).replace(/\.[^.]+$/, '');
-    const thumb = path.join(path.dirname(abs), 'thumbs', baseNoExt + '.jpg');
-    if (fs.existsSync(thumb)) { try { fs.unlinkSync(thumb); } catch {} }
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
   }
 });
 

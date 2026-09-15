@@ -272,21 +272,6 @@ router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
   res.json({ success: true });
 });
 
-// ── GET /api/ffmpeg/body/:jobId — return stored request body ──────────────────
-router.get('/ffmpeg/body/:jobId', (req, res) => {
-  const j = _jobs[req.params.jobId];
-  if (!j) return res.json({ success: false, error: 'job not found' });
-  res.json({ success: true, body: j.body || {} });
-});
-
-// ── PUT /api/ffmpeg/body/:jobId — update stored request body ──────────────────
-router.put('/ffmpeg/body/:jobId', (req, res) => {
-  const j = _jobs[req.params.jobId];
-  if (!j) return res.json({ success: false, error: 'job not found' });
-  j.body = req.body;
-  res.json({ success: true });
-});
-
 // ── GET /api/ffmpeg/preview-proxy?src=<webPath> ───────────────────────────────
 // Lightweight ~480p transcode of a clip for the BROWSER PREVIEW only (the final
 // render still reads the full-res files server-side). Cached on disk keyed by
@@ -473,10 +458,9 @@ router.proxyStatus = proxyStatus;
 // ── THE SWEEP: every film the previews might play, made ahead ──────────────────
 // The birols and hooks libraries, every Merge timeline, every take a Scenarios line has:
 // anything without a proxy at the default quality is queued warm. Once at boot (a little
-// after, so the start is quiet) and every ten minutes after that, so a birol generated on
-// the Birols page or a hook uploaded by hand has its proxy before anyone drops it on a lane -
-// the pages that make files also ask directly (routes/biroly.js, routes/scen3.js,
-// routes/library.js), the sweep is the net under them. Nothing is remade: a cached proxy is
+// after, so the start is quiet) and every ten minutes after that, so a clip added some other
+// way has its proxy before anyone drops it on a lane - the pages that make files also ask
+// directly (routes/clips.js, routes/scen3.js, routes/library.js), the sweep is the net under them. Nothing is remade: a cached proxy is
 // one stat, and the queue itself refuses duplicates.
 const SWEEP_H = 480;
 const SWEEP_EVERY_MS = 10 * 60 * 1000;
@@ -2219,42 +2203,5 @@ function _execFfmpeg(args, jobId) {
     proc.on('error', err => reject(err));
   });
 }
-
-// ── POST /api/ffmpeg/build-ass ────────────────────────────────────────────────
-// Pre-builds a .ass subtitle file and stores it so the next render uses it.
-// Body: { srtSubtitles, srtWords, assSettings, resolution, sessionKey }
-router.post('/ffmpeg/build-ass', (req, res) => {
-  const {
-    srtSubtitles = [],
-    srtWords     = [],
-    assSettings  = {},
-    resolution   = '1080x1920',
-    sessionKey   = 'default',
-  } = req.body;
-
-  const [W, H] = resolution.split('x').map(Number).map(n => (n > 0 ? n : 1080));
-  const activeSubs = Array.isArray(srtSubtitles)
-    ? srtSubtitles.filter(s => s.text && s.end > s.start)
-    : [];
-  const hasContent = activeSubs.length > 0 || (Array.isArray(srtWords) && srtWords.length > 0);
-
-  if (!hasContent) {
-    return res.json({ success: false, error: 'Нет данных субтитров для сборки' });
-  }
-
-  try {
-    const assContent = _buildAssContent(activeSubs, assSettings, W, H, srtWords);
-    // sanitise sessionKey for use as filename
-    const safeName   = sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
-    const fname      = `ass_${safeName}.ass`;
-    const fpath      = path.join(ASS_DIR, fname);
-    fs.writeFileSync(fpath, assContent, 'utf8');
-    console.log(`[ass] built ${fname} (${assContent.length} bytes)`);
-    res.json({ success: true, assFilePath: fpath });
-  } catch (e) {
-    console.error('[ass] build error:', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 module.exports = router;

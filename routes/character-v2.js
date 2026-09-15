@@ -22,13 +22,12 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const path = require('path');
 
 const { MEDIA } = require('../lib/config');
 const {
-  uploadToPublicHost, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, resolveLocalMedia,
+  uploadToPublicHost, callAIVisionWithFallback, parseLooseJson, resolveLocalMedia,
 } = require('../lib/helpers');
-const { matrix, providersFor, submitImage, reasonOf } = require('../lib/img-providers');
+const { reasonOf } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
 const TRACE = require('../lib/cv2-trace');
@@ -36,17 +35,6 @@ const REC = require('../lib/cv2-recovered');
 const WATCH = require('../lib/cv2-watch');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
-
-// Which engines exist, which tiers each speaks and which aggregator can serve them now lives in
-// lib/img-providers.js - one table, shared with the character sheet, so the gear on this page and
-// the sheet behind Save cannot disagree about what is available.
-//
-// Tiers are each model's OWN vocabulary: nano-banana-2 speaks 1K/2K/4K, seedream-4.5 only 2K/4K,
-// gpt-image-2 grades by effort, flux-2-max counts megapixels. Offering a tier a model does not
-// have would be a 422 at submit time, so the page is handed the real list rather than a guess.
-const DEFAULT_T2I = 'z-turbo';          // fast and cheap, and Create runs often
-const DEFAULT_I2I = 'nano-banana-2';    // 3:2, real 1K/2K/4K tiers, already the house edit engine
-const DEFAULT_PROVIDER = 'replicate';   // where every engine here has always been
 
 // Only the two the flow has a meaning for: 3:2 builds the house format, and match_input_image
 // edits a photo where it stands. Anything else would be a request the design cannot honour, so
@@ -165,31 +153,6 @@ router.get('/character-v2/trace/:id', (req, res) => {
       error: 'that call is no longer in memory - only the last ' + TRACE.RING + ' are kept' });
   }
   res.json({ success: true, call: rec });
-});
-
-// ── GET /api/character-v2/attempts ───────────────────────────────────────────
-// The last runs, newest first: every step of every ladder walked since boot, with what
-// each one answered. In memory and lost on restart, deliberately - this is for reading
-// why the last generation went the way it did, not for keeping accounts.
-router.get('/character-v2/attempts', (req, res) => {
-  const op = String((req.query && req.query.op) || '');
-  res.json({ success: true, runs: RUN.recentRuns(L.OPS[op] ? op : null) });
-});
-
-// ── GET /api/character-v2/engines ────────────────────────────────────────────
-// What the gear offers, from the one place that knows. Split by what each engine can actually
-// do, so a select cannot present an engine that will fail the moment it is used - and each
-// engine carries the aggregators that can serve it, because that is the second half of the same
-// question. An engine listing no aggregator for a direction is not listed for that direction.
-router.get('/character-v2/engines', (_req, res) => {
-  const m = matrix();
-  res.json({
-    success: true,
-    providers: m.providers,
-    defaultProvider: DEFAULT_PROVIDER,
-    t2i: { default: DEFAULT_T2I, engines: m.t2i.engines },
-    i2i: { default: DEFAULT_I2I, engines: m.i2i.engines },
-  });
 });
 
 // ── POST /api/character-v2/analyze ───────────────────────────────────────────

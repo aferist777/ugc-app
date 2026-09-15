@@ -58,31 +58,6 @@ function argsFor(graph) {
   return { args };
 }
 
-router.post('/mv3b/plan', (req, res) => {
-  let assPath = null;
-  try {
-    const tl = (req.body || {}).timeline || {};
-    // Written even for a plan, and thrown away straight after: the point of a plan is to show
-    // the command that WOULD run, and one with the caption filter missing would be a different
-    // command from the one it is standing in for.
-    assPath = writeAss(tl, 'plan');
-    const g = buildGraph(tl, { assPath });
-    const built = argsFor(g);
-    res.json({
-      success: true, w: g.w, h: g.h, dur: g.dur,
-      inputs: g.inputs, filter: g.filter, map: g.map,
-      missing: built.missing || [],
-      // The command as it would be run, so what is about to happen can be read rather than
-      // guessed at from a filename.
-      args: built.args || null,
-      captions: assPath
-        ? captionLanes((req.body || {}).timeline || {}).reduce((n, t) => n + ((t.clips || []).length), 0)
-        : 0,
-    });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-  finally { dropAss(assPath); }
-});
-
 // The captions, written where ffmpeg can be pointed at them. A file rather than something
 // passed inline because that is the only thing libass reads - and one per job rather than one
 // shared, so two renders of two projects cannot burn each other's words.

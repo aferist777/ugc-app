@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt, saveDynamicPrompt, deleteDynamicPrompt, hidePrompt } = require('../lib/prompts');
+const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, hidePrompt } = require('../lib/prompts');
 const { callAI } = require('../lib/helpers');
 
 router.get('/prompts', (_req, res) => {
@@ -103,13 +103,6 @@ router.post('/prompts/:key/merge', async (req, res) => {
     console.error('[prompts/merge]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
-});
-
-// ── DELETE /api/prompts/dynamic/:key — delete a dynamic prompt ─────────────────
-router.delete('/prompts/dynamic/:key', (req, res) => {
-  const ok = deleteDynamicPrompt(req.params.key);
-  if (!ok) return res.status(404).json({ success: false, error: 'Промпт не найден или не является динамическим' });
-  res.json({ success: true });
 });
 
 // ── POST /api/prompts/:key/hide — soft-hide a default prompt from dropdowns ────

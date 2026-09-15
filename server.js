@@ -51,18 +51,10 @@ cv2trace.install();
 app.use(cv2trace.middleware);
 // Root → the Character page (each tab is its own URL; Phase 5c).
 app.get('/', (_req, res) => res.redirect('/character'));
-// App shell assets (HTML/JS/CSS in public/) must REVALIDATE every load so a deploy
-// never serves a stale page-router/tabs script mixed with new HTML (which broke
-// tab navigation after the per-tab split). 'no-cache' = use ETag/Last-Modified to
-// revalidate: unchanged files return a cheap 304, changed files return fresh 200.
+// The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
+// stale script: 'no-cache' uses ETag/Last-Modified - an unchanged file is a cheap 304.
 app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res, filePath) => {
-    // midnight.css is render-blocking on every tab page and changes rarely; cache it
-    // briefly (10 min) so tab-to-tab navigation skips the revalidation round-trip that
-    // widened the dark-load window (the anti-FOUC gate already hides the legacy theme).
-    if (filePath.endsWith('midnight.css')) res.setHeader('Cache-Control', 'public, max-age=600');
-    else res.setHeader('Cache-Control', 'no-cache');
-  },
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
 // The library: one mount for media, one for cache - an address mirrors its folder (lib/layout.js).
 app.use('/media',        express.static(MEDIA_DIR));
@@ -76,7 +68,7 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 // <base href="/"> in each page. Some files keep the name of the rebuild that replaced an older
 // page (character-v2.html, merge-v3.html, scenarios-v3.html): renaming them would churn every
 // import path under public/js/ for no gain.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -98,10 +90,10 @@ app.use('/api', require('./routes/sources'));
 app.use('/api', require('./routes/scriptgen'));
 // Library 2's own API: the shelf counts, and the drafts of scripts still being written.
 app.use('/api', require('./routes/library2'));
-app.use('/api', require('./routes/audio'));
+app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
 app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/userdata'));
-app.use('/api', require('./routes/biroly'));
+app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
 // Import / Export. The feature came back, rebuilt: the version this note used to describe

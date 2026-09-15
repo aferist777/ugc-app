@@ -27,7 +27,7 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/studio', '/admin'];
+const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/admin'];
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', '/poses/mirror_full.jpg'];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
@@ -41,7 +41,10 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/api/edit-state'], ['GET', '/api/gen-timings'], ['GET', '/api/hooks/state'],
                  ['GET', '/api/custom-options'], ['POST', '/api/finals/save'], ['GET', '/api/lookbooks'],
                  ['POST', '/api/asset-interact/generate'], ['POST', '/api/mv3/voice/speak'],
-                 ['GET', '/api/mv3/vid/feed'], ['POST', '/api/biroly/gen-broll-prompt'], ['GET', '/merge-v2']];
+                 ['GET', '/api/mv3/vid/feed'], ['POST', '/api/biroly/gen-broll-prompt'], ['GET', '/merge-v2'],
+                 ['GET', '/studio'], ['POST', '/api/studio/gen-object'], ['POST', '/api/generate'],
+                 ['GET', '/api/audio/voices'], ['POST', '/api/biroly/generate'], ['GET', '/api/biroly/state'],
+                 ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

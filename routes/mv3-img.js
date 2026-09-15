@@ -65,21 +65,6 @@ router.get('/mv3/img/matrix', (_req, res) => {
   }
 });
 
-// The almanac whole: one prompting rule set per model, and the instruction each one hands a
-// rewriting agent. Read-only for now; the gear will edit it.
-router.get('/mv3/img/rules', (_req, res) => {
-  try {
-    const R = require('../lib/mv3-prompt-rules');
-    res.json({ success: true, common: R.COMMON, rules: R.listRules() });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// ── Reading what was said ───────────────────────────────────────────────────
-// Its own call rather than a step inside the generation, because it can answer with a QUESTION -
-// and a question is a turn in the thread, not a picture that failed. The panel decides what to
-// do with either.
 // ── What the gear edits ─────────────────────────────────────────────────────
 // The order aggregators are tried in, per engine; which model does the rewriting; and whether a
 // chain may step over an aggregator whose key is known to be down.
@@ -104,6 +89,10 @@ router.put('/mv3/img/settings', (req, res) => {
   }
 });
 
+// ── Reading what was said ───────────────────────────────────────────────────
+// Its own call rather than a step inside the generation, because it can answer with a QUESTION -
+// and a question is a turn in the thread, not a picture that failed. The panel decides what to
+// do with either.
 router.post('/mv3/img/think', async (req, res) => {
   const b = req.body || {};
   try {
@@ -158,16 +147,6 @@ router.post('/mv3/img/gen', async (req, res) => {
   }
 });
 
-router.delete('/mv3/img/item/:id', (req, res) => {
-  try {
-    const ok = GENS.remove(String(req.params.id || ''));
-    if (!ok) return res.status(404).json({ success: false, error: 'no such generation' });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 // ── The thread ──────────────────────────────────────────────────────────────
 // Read whole rather than paged. A project's conversation is bounded by what one person typed
 // into it, and the pictures inside it are thumbnails on demand - so the whole of it costs less
@@ -186,16 +165,6 @@ router.post('/mv3/chat', (req, res) => {
     res.json({ success: true, item: CHAT.add(b) });
   } catch (e) {
     res.status(400).json({ success: false, error: e.message });
-  }
-});
-
-router.delete('/mv3/chat/:id', (req, res) => {
-  try {
-    const ok = CHAT.remove(String(req.params.id || ''));
-    if (!ok) return res.status(404).json({ success: false, error: 'no such message' });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
   }
 });
 
