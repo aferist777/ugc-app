@@ -32,8 +32,10 @@ const {
   LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
   FINALS_DIR,
 } = require('../lib/config');
-const { toUrl } = require('../lib/media');
+const { toUrl, toDiskWithin } = require('../lib/media');
 const LC = require('../lib/library-cats');
+// Where a shelf item's files live - its kind and category's folder - and moving them there.
+const SHELF = require('../lib/shelf-files');
 const VS = require('../lib/voice-shelf');
 const VT = require('../lib/video-thumb');
 const IMG = require('../lib/images-store');
@@ -377,15 +379,29 @@ function _voicesShelf() {
 }
 
 // ── Renders ─────────────────────────────────────────────────────────────────
-// The shelf IS the finals/ directory. No record store behind it, and that is deliberate:
-// a render is kept by its file existing. The export flow deletes the file when you press
-// Cancel on the preview, so "kept" and "on the shelf" cannot drift apart.
+// The shelf IS the renders folder: media/renders/<project folder>/ (and any render still loose at
+// the top). No record store behind it, and that is deliberate: a render is kept by its file
+// existing. The export flow deletes the file when you press Cancel on the preview, so "kept" and
+// "on the shelf" cannot drift apart. An item's id is its path inside the renders folder.
 const VID_RE = /\.(mp4|mov|webm|mkv)$/i;
+
+function _renderFiles() {
+  const dir = FINALS_DIR;
+  const out = [];
+  let ents = [];
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
+  for (const d of ents) {
+    if (d.isFile() && VID_RE.test(d.name)) out.push(d.name);
+    else if (d.isDirectory() && d.name !== 'thumbs') {
+      try { for (const f of fs.readdirSync(path.join(dir, d.name))) if (VID_RE.test(f)) out.push(`${d.name}/${f}`); } catch (e) { /* unreadable */ }
+    }
+  }
+  return out;
+}
 
 function _rendersShelf() {
   const dir = FINALS_DIR;
-  let files = [];
-  try { files = fs.readdirSync(dir).filter(f => VID_RE.test(f)); } catch (e) { return { items: [], filters: [] }; }
+  const files = _renderFiles();
   const items = files
     .map(f => ({ f, m: (() => { try { return fs.statSync(path.join(dir, f)).mtimeMs; } catch (e) { return 0; } })() }))
     .sort((a, b) => b.m - a.m)
@@ -398,7 +414,7 @@ function _rendersShelf() {
         id: f,
         // The output name is `local_<stamp>_<project title>.mp4`; the stamp is noise on a
         // card, and the date is already a column.
-        name: f.replace(/\.[^.]+$/, '').replace(/^local_\d+_/, ''),
+        name: path.posix.basename(f).replace(/\.[^.]+$/, '').replace(/^local_\d+_/, ''),
         kind: 'renders',
         media: url,
         thumb: hasThumb ? turl : null,
@@ -693,8 +709,14 @@ router.patch('/library/item/:kind/:id', (req, res) => {
 
     Object.assign(it, patch);
     store.write(list);
+    // Another category is another folder: the files move there, and every path to them with them.
+    let item = it;
+    if ('categoryId' in patch && SHELF.SHELF_KINDS.includes(kind)) {
+      SHELF.placeRecords([{ kind, rec: it }]);
+      item = store.read().find(x => x && String(x.id) === id) || it;
+    }
     // The page needs this to patch localStorage, so send back what to look for.
-    res.json({ success: true, kind, id, patch, lsKey: store.lsKey });
+    res.json({ success: true, kind, id, patch, item, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -834,8 +856,9 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     if (kind === 'renders') {
       const base = path.basename(id);
       if (!base || !VID_RE.test(base)) return res.status(400).json({ success: false, error: 'not a render' });
-      const abs = path.join(FINALS_DIR, base);
-      if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not found' });
+      // The id is the render's path inside media/renders/ - its project folder and name.
+      const abs = toDiskWithin('/media/renders/' + String(id).replace(/\\/g, '/'), [FINALS_DIR]);
+      if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not found' });
       const url = toUrl(abs);
       if (_unlink(url)) removed.push(base);
       const turl = VT.thumbUrlFor(url);
@@ -945,7 +968,10 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
       if (it.categoryId === UPLOADS_CAT) it.categoryId = '';       // the legacy marker is not a category
       stamp(it);
       src.write(srcList);
-      return res.json({ success: true, kind: to, id, item: it, lsKey: src.lsKey });
+      // Another shelf is another folder.
+      SHELF.placeRecords([{ kind: to, rec: it }]);
+      const placed = src.read().find(x => x && String(x.id) === id) || it;
+      return res.json({ success: true, kind: to, id, item: placed, lsKey: src.lsKey });
     }
 
     // Different stores: build the record the destination expects, then write the
@@ -981,6 +1007,9 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     dstList.unshift(moved);
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
+    // Another shelf is another folder: the files move, the record and every other path follow.
+    SHELF.placeRecords([{ kind: to, rec: moved }]);
+    Object.assign(moved, dst.read().find(x => x && String(x.id) === String(moved.id)) || {});
     // BECOMING A HOOK IS WHEN A HOOK GETS ITS NUMBER. A file uploaded straight onto Hooks is
     // numbered as it is filed (POST /library/media/record); one moved here from Uploads used to
     // wait for the next time a browser pushed the hooks archive - which the Merge page never
@@ -1231,11 +1260,16 @@ router.post('/library/media/record', (req, res) => {
     if ((req.body || {}).trimmable === true) rec.trimmable = true;
     list.unshift(rec);
     store.write(list);
+    // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
+    // category's folder, and anything already pointing at it - an Animate take on a timeline -
+    // follows (lib/shelf-files.js).
+    SHELF.placeRecords([{ kind, rec }]);
+    const item = store.read().find(e => e && e.id === rec.id) || rec;
     // On the shelf means it can land on a lane: its preview proxy is queued now, and a
     // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
-    try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
-    if (kind === 'hooks') { try { require('../lib/hook-ids').assign([videoPath]); } catch (e) {} }
-    res.json({ success: true, item: rec, kind, lsKey: store.lsKey });
+    try { require('./ffmpeg').warmProxies([item.videoPath], 480); } catch (e) {}
+    if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
+    res.json({ success: true, item, kind, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1323,24 +1357,17 @@ router.patch('/library/cats/:id', (req, res) => {
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
     if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
 
-    // A Library category renames in place.
-    if (LC.isOwn(kind, id)) {
-      const cat = LC.rename(kind, id, label);
-      const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);   // refresh the copies
-      return res.json({ success: true, cat, renamed: true, moved, lsKey });
+    // An orphan becomes a real category first, under the name its records carry.
+    if (!LC.isOwn(kind, id)) {
+      const { list, inKind } = _kindRecords(kind);
+      const one = list.find(e => inKind(e) && String(e.categoryId || '') === id);
+      LC.adopt(kind, id, (one && one.categoryLabel) || label);
     }
-
-    // A Birols-tab category is not ours to rename: its entry carries the generator's
-    // systemPrompt and promptVersions, and the Scenarios birols column reads that list's
-    // order. So the rename FORKS — a Library category takes the new name and the clips move
-    // into it, while the Birols tab keeps its category exactly as it was.
-    const { cat, created } = LC.add(kind, label);
+    // The label changes, the folder moves with every path under it, and the copies of the
+    // label on the records are refreshed.
+    const cat = SHELF.renameCategory(kind, id, label);
     const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);
-    // Its clips have left, so it is empty. Hide it until a generation fills it again — at
-    // which point it returns under the generator's own name.
-    let hidden = false;
-    if (LC.isGen(id)) { LC.hide(kind, id); hidden = true; }
-    res.json({ success: true, cat, forked: true, created, moved, hidden, lsKey });
+    res.json({ success: true, cat, renamed: true, moved, lsKey });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
@@ -1352,16 +1379,13 @@ router.post('/library/cats/order', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
-// media=move   (the default) clears the category off its clips, so they land in Uncategorized
+// media=move   (the default) clears the category off its clips, so they land in Uncategorized -
+//              and their files in the kind's nocat/ folder
 // media=delete REMOVES those clips: files unlinked, records dropped. Irreversible, and the
 //              page states the count in the confirmation before it can be chosen.
 //
-// Any chip can go except All and Uncategorized. What "going" means depends on who owns it:
-//   a Library category   is removed from the store
-//   a generator category is HIDDEN — it is not ours to remove, and the Birols generator keeps
-//                        it. Once its clips are resolved it holds nothing, so it drops out of
-//                        the row, and a later generation into it brings it back by itself.
-//   an orphan            needs neither: it exists only because records point at it.
+// Any chip can go except All and Uncategorized. A category is removed from the store and its
+// emptied folder goes; an orphan has nothing stored - it exists only because records point at it.
 router.delete('/library/cats/:id', (req, res) => {
   try {
     const id = String(req.params.id || '');
@@ -1384,15 +1408,21 @@ router.delete('/library/cats/:id', (req, res) => {
       affected = doomed.length;
       lsKey = store.lsKey;
     } else {
+      const { list, inKind } = _kindRecords(kind);
+      const ids = new Set(list.filter(e => inKind(e) && String(e.categoryId || '') === id).map(e => String(e.id)));
       const r = _reassign(kind, id, '', '');
       affected = r.moved;
       lsKey = r.lsKey;
+      // Uncategorized is a folder too: the files go to nocat, and every path to them follows.
+      const { list: now } = _kindRecords(kind);
+      SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
     }
-    // The clips are resolved; now the chip itself.
+    // The clips are resolved; now the chip itself, and its folder.
     let disposition;
+    const folder = (LC.find(kind, id) || {}).folder;
     if (LC.isOwn(kind, id)) { LC.remove(kind, id); disposition = 'removed'; }
-    else if (LC.isGen(id)) { LC.hide(kind, id); disposition = 'hidden'; }
     else { disposition = 'orphan'; }          // nothing to store: it lived on its records alone
+    SHELF.dropEmptyFolder(kind, folder);
     res.json({ success: true, id, kind, mode, affected, removedFiles, sparedFiles, disposition, lsKey });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });

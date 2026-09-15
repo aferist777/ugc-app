@@ -56,7 +56,7 @@ const VID_EXTS  = ['.mp4', '.mov', '.m4v', '.webm'];
 const VID_MIMES = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm'];
 const _refUpload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.clips, { recursive: true }); } catch (e) {} cb(null, MEDIA.clips); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (VID_EXTS.includes(ext) ? ext : '.mp4'));
@@ -92,8 +92,8 @@ function _probe(abs) {
 
 router.post('/video/reference', _refUpload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const videoPath = '/media/clips/' + req.file.filename;
-  const abs = path.join(MEDIA.clips, req.file.filename);
+  let videoPath = '/media/work/' + req.file.filename;
+  const abs = path.join(MEDIA.work, req.file.filename);
   try {
     const meta = await _probe(abs);
     if (!(meta.duration > 0)) throw new Error('that file does not look like a video');
@@ -113,6 +113,8 @@ router.post('/video/reference', _refUpload.single('video'), async (req, res) => 
       }, { timeout: 15000 });
       item = filed.data && filed.data.item;
       lsKey = filed.data && filed.data.lsKey;
+      // Filing moved it to the Uploads shelf's folder.
+      if (item && item.videoPath) { videoPath = item.videoPath; thumbPath = item.thumbPath || thumbPath; }
     } catch (e) {
       // Filing is a convenience; the clip is on disk and usable either way.
       console.warn('[video/reference] could not file it on the shelf:', e.response?.data?.error || e.message);
@@ -261,8 +263,10 @@ function _extract(out) {
 // is a decision the app should not make on its own. The `anim_` prefix is what keeps it out of
 // the Birols orphan recovery - renaming these would start surfacing rejected takes there.
 async function _save(remoteUrl, tag) {
+  // Into media/work/: a take becomes a Birols item - and moves to birols/<engine>/ - only when the
+  // window files it (POST /library/media/record).
   const filename = `anim_${tag}_${Date.now()}.mp4`;
-  const destPath = path.join(MEDIA.clips, filename);
+  const destPath = path.join(MEDIA.work, filename);
   const r = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
   fs.writeFileSync(destPath, Buffer.from(r.data));
   // The concat pipeline cannot decode every profile a model emits; this is the same pass
@@ -270,7 +274,7 @@ async function _save(remoteUrl, tag) {
   // and the normaliser refuses stills.
   try { await normalizeVideoForBrowser(destPath); }
   catch (e) { console.warn('[video/animate] normalize failed:', e.message); }
-  return `/media/clips/${filename}`;
+  return `/media/work/${filename}`;
 }
 
 router.get('/video/animate/status/:taskId', async (req, res) => {

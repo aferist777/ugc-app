@@ -8,7 +8,7 @@ const crypto     = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
-const { ROOT_DIR, MEDIA_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR, CACHE_DIR } = require('../lib/config');
+const { ROOT_DIR, MEDIA_DIR, TEMP_DIR, DATA_DIR, CACHE_DIR } = require('../lib/config');
 const { toDisk, toDiskWithin, toUrl } = require('../lib/media');
 const { normalizeVideoForBrowser } = require('../lib/helpers');
 // The one-frame poster maker the media library uses. Not lib/helpers' createThumbnail - that one
@@ -183,6 +183,8 @@ router.post('/ffmpeg/render', (req, res) => {
     biroSfx              = 'Нет',
     biroSfxVolume        = 0.8,
     outputLabel          = '',
+    // The timeline the render is of: its project folder is the render's folder.
+    projectKey           = '',
     advSettings          = {},
     subtitles            = [],
     srtSubtitles         = [],
@@ -203,7 +205,7 @@ router.post('/ffmpeg/render', (req, res) => {
                          biroAnimation,  biroAnimParams,
                          biroFilter,     biroFilterParams,
                          biroSfx, biroSfxVolume,
-                         outputLabel, advSettings, subtitles, srtSubtitles, srtWords, assSettings,
+                         outputLabel, projectKey, advSettings, subtitles, srtSubtitles, srtWords, assSettings,
                          prebuiltAssPath };
   _jobs[jobId] = { status: 'queued', progressSecs: 0, url: null, error: null, body: bodySnapshot };
   res.json({ success: true, jobId });
@@ -285,7 +287,7 @@ function _proxyCachePath(absSrc, h, rev) {
   const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h + (rev ? '|rev' : '')).digest('hex');
   return path.join(PREVIEW_CACHE_DIR, key + '_' + h + (rev ? '_rev' : '') + '.mp4');
 }
-function _makePreviewProxy(absSrc, outPath, h, rev, low) {
+function _makePreviewProxy(absSrc, outPath, h, rev, low, entry) {
   // Scale the SHORTER side to <h> (portrait 1080x1920 -> hx.., landscape -> ..xh),
   // low bitrate, faststart for progressive seeking. Higher h = sharper + heavier.
   // rev=true also time-reverses video+audio so the preview can play a reversed
@@ -307,6 +309,7 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low) {
   ];
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    if (entry) entry.proc = proc;
     if (low) { try { require('os').setPriority(proc.pid, 10); } catch (e) {} }
     let err = '';
     proc.stderr.on('data', c => { err += c.toString(); });
@@ -326,6 +329,22 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low) {
 // warm moves it to the front. Resolves to the cache path, rejects if ffmpeg could not.
 const _pq = [];                     // the entries waiting, live ones first
 let _pqBusy = false, _pqTimer = null;
+let _pqNow = null;                  // the entry being made right now
+
+// A file about to move (lib/relocate.js): what is queued for it is dropped, and a transcode reading
+// it is stopped - on Windows it would hold the file, and the folder it is in, against the rename.
+// The proxy is made again from the new address when a player next asks for it.
+require('../lib/file-release').onRelease((absPaths) => {
+  const roots = absPaths.map(a => path.resolve(a).toLowerCase());
+  const hit = (e) => { const p = path.resolve(e.abs).toLowerCase(); return roots.some(r => p === r || p.startsWith(r + path.sep)); };
+  for (let i = _pq.length - 1; i >= 0; i--) {
+    if (!hit(_pq[i])) continue;
+    const e = _pq.splice(i, 1)[0];
+    _proxyInflight.delete(e.cachePath);
+    e.reject(new Error('the file moved'));
+  }
+  if (_pqNow && hit(_pqNow) && _pqNow.proc) { try { _pqNow.proc.kill(); } catch (e) { /* gone already */ } }
+});
 
 function _pqPromote(entry) {
   const i = _pq.indexOf(entry);
@@ -363,14 +382,16 @@ function _pumpProxies() {
   }
   _pq.shift();
   _pqBusy = true;
+  _pqNow = next;
   const tmp = next.cachePath + '.tmp.mp4';
   const t0 = Date.now();
-  _makePreviewProxy(next.abs, tmp, next.h, next.rev, !next.live)
+  _makePreviewProxy(next.abs, tmp, next.h, next.rev, !next.live, next)
     .then(() => { fs.renameSync(tmp, next.cachePath); next.resolve(next.cachePath); })
     .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} next.reject(e); })
     .finally(() => {
       _proxyInflight.delete(next.cachePath);
       _pqBusy = false;
+      _pqNow = null;
       console.log(`[proxy] ${next.live ? 'live' : 'warm'} ${path.basename(next.abs)} @${next.h}${next.rev ? ' rev' : ''} in ${((Date.now() - t0) / 1000).toFixed(1)}s` + (_pq.length ? ` · ${_pq.length} waiting` : ''));
       setImmediate(_pumpProxies);
     });
@@ -929,7 +950,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
                                biroAnimation,  biroAnimParams = {},
                                biroFilter = 'none', biroFilterParams = {},
                                biroSfx, biroSfxVolume,
-                               outputLabel, advSettings = {}, subtitles = [],
+                               outputLabel, projectKey = '', advSettings = {}, subtitles = [],
                                srtSubtitles = [], srtWords = [], assSettings = {},
                                prebuiltAssPath = null, jobId }) {
   const {
@@ -1643,9 +1664,12 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     .replace(/[#?&%]/g, '-')          // URL-reserved → hyphen (# breaks <video src>!)
     .replace(/\s+/g, ' ')             // collapse whitespace
     .trim()
-    .slice(0, 100) || 'render';
+    .slice(0, 80) || 'render';
   const outName   = `local_${Date.now()}_${safeLabel}.mp4`;
-  const outPath   = path.join(FINALS_DIR, outName);
+  // media/renders/<project folder>/ (lib/shelf-files.js); 80 characters of label keep the whole
+  // path inside what ffmpeg can open.
+  const outDir    = require('../lib/shelf-files').rendersDir(projectKey).dir;
+  const outPath   = path.join(outDir, outName);
 
   // Hard-cap output to total segment duration so music/sfx never extends the render
   const totalDuration = segs.reduce((acc, s) => acc + s.dur, 0);
@@ -1700,7 +1724,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   // whatever speed the video runs at, so it is appended after the speeding is done.
   const _spd = Math.max(0.25, Math.min(4, parseFloat(advSettings.playbackSpeed) || 1));
   if (Math.abs(_spd - 1) > 0.001) {
-    const tmpSpd = path.join(FINALS_DIR, `tmp_speed_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
+    const tmpSpd = path.join(outDir, `tmp_speed_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
     try {
       // Its own phase, the way normalizing is. It is a second full pass over the output, so
       // the progress seconds restart from zero - a client measuring them against the timeline
@@ -1726,7 +1750,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     if ([5, 10, 20, 30].includes(minutes)) {
       try {
         const tailPath = await _ensureBlackTail(minutes, W, H, FPS, audioBitrate, preset, parseInt(crf) || 23, jobId);
-        const tmpOut   = path.join(FINALS_DIR, `tmp_concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
+        const tmpOut   = path.join(outDir, `tmp_concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
         await _appendBlackTail(outPath, tailPath, tmpOut, jobId);
         try { fs.unlinkSync(outPath); } catch {}
         fs.renameSync(tmpOut, outPath);

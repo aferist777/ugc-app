@@ -25,7 +25,7 @@ const { buildGraph, frame } = require('../lib/mv3b-render');
 const { buildAss, captionLanes } = require('../lib/mv3b-subs');
 
 const router = express.Router();
-const { TEMP_PUBLIC_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { TEMP_PUBLIC_DIR } = require('../lib/config');
 const { toDisk, toUrl } = require('../lib/media');
 
 // The same mapping the static mounts serve, and only where media legitimately lives. A src is a
@@ -92,9 +92,9 @@ router.post('/mv3b/render', (req, res) => {
       return res.status(400).json({ success: false, error: 'these files are not on the disk: ' + built.missing.join(', ') });
     }
 
-    fs.mkdirSync(FINALS, { recursive: true });
+    // Into the folder of the project the timeline belongs to (lib/shelf-files.js).
     const name = 'mv3b_' + Date.now() + '.mp4';
-    const out = path.join(FINALS, name);
+    const out = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
     const args = built.args.concat([out]);
     const job = { id, status: 'running', url: null, error: null, log: '',
                   dur: g.dur, at: 0, startedAt: Date.now() };

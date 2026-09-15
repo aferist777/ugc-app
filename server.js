@@ -156,24 +156,25 @@ const server = app.listen(PORT, '127.0.0.1', () => {
 
   // Defer heavy startup tasks so server is responsive immediately
   setTimeout(() => {
-    // Generate missing thumbnails for all image directories in the background
-    // Per-project mix folders (media/projects/<key>/mixes) hold composited
-    // product images - backfill their thumbs too.
-    let mixDirs = [];
-    try {
-      mixDirs = fs.readdirSync(MEDIA.projects)
-        .map(k => path.join(MEDIA.projects, k, 'mixes'))
-        .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
-    } catch {}
+    // Generate missing thumbnails for all image directories in the background: the asset shelves,
+    // every image category folder (media/images/<category>/) and every project's frames/.
+    const subdirs = (dir, sub) => {
+      try {
+        return fs.readdirSync(dir, { withFileTypes: true })
+          .filter(d => d.isDirectory() && d.name !== 'thumbs' && d.name !== 'preview')
+          .map(d => path.join(dir, d.name, sub || ''))
+          .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+      } catch { return []; }
+    };
     // Each shelf's archive/ sits inside it (media/<kind>/archive).
     const archiveDirs = [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].map(d => path.join(d, 'archive'));
     // Then the thumbnails still at the server's smaller sizes are made again (once per library),
     // and /api/thumb's cache of an earlier size table is cleared.
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-      MEDIA.images,
+      ...subdirs(MEDIA.images),
+      ...subdirs(PROJECTS_DIR, 'frames'),
       ...archiveDirs,
-      ...mixDirs,
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message))
       .then(() => require('./lib/thumb-refresh').run())
       .catch(e => console.warn('[thumbs] refresh failed:', e.message));

@@ -188,7 +188,7 @@ router.delete('/mv3/chat', (req, res) => {
 const EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 const _upload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.images, { recursive: true }); } catch (e) {} cb(null, MEDIA.images); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'mref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
@@ -201,7 +201,7 @@ const _upload = multer({
 
 router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/media/images/' + req.file.filename;
+  const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to the project's category
   const b = req.body || {};
   try {
     // The same category the project's generations use, by the same rule - see catLabelFor.

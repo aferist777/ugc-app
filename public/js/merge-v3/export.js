@@ -220,6 +220,7 @@ export function buildPayload(adv) {
     biroFilter: T.biro.filter || 'none', biroFilterParams: {},
     biroSfx: 'Нет', biroSfxVolume: 0.8,
     outputLabel: Store.title() || 'merge',
+    projectKey: Store.key() || '',
     advSettings: adv,
     subtitles: [],
     srtSubtitles: subs.srtSubtitles,

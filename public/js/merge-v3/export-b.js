@@ -72,7 +72,7 @@ async function _run(box) {
     // to assemble and nothing for it to get wrong.
     const start = await fetch('/api/mv3b/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeline: tl }),
+      body: JSON.stringify({ timeline: tl, key: Store.key() }),
     }).then(r => r.json());
     if (!start || !start.success) throw new Error((start && start.error) || 'refused');
 

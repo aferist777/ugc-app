@@ -19,13 +19,14 @@ const { MEDIA } = require('../lib/config');
 const VT = require('../lib/video-thumb');
 
 // ── Upload: bring a local video into the library ────────────────────────────
-// The file lands in media/clips/ next to every other library clip, and a real thumbnail is made
-// on the way in so the shelf never has to load the video itself to show a poster frame.
+// The file lands in media/work/ and moves to its shelf's folder when POST /library/media/record
+// files it (lib/shelf-files.js). A real thumbnail is made on the way in, beside it, so the shelf
+// never has to load the video itself to show a poster frame.
 const UPL_EXTS  = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
 const UPL_MIMES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
 const _upload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.clips, { recursive: true }); } catch (e) {} cb(null, MEDIA.clips); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (UPL_EXTS.includes(ext) ? ext : '.mp4'));
@@ -101,7 +102,7 @@ router.post('/media/thumb', async (req, res) => {
 
 router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const videoPath = '/media/clips/' + req.file.filename;
+  const videoPath = '/media/work/' + req.file.filename;
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
     || path.basename(req.file.filename, path.extname(req.file.filename));
@@ -110,9 +111,8 @@ router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   let thumbPath = null;
   try { thumbPath = (await VT.makeThumb(videoPath)).thumb; }
   catch (e) { console.warn('[biroly/upload] thumb failed:', e.message); }
-  // The Merge preview's proxy, queued now so the clip plays smoothly the first time it is
-  // dropped on a lane.
-  try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
+  // No proxy warm-up here: the file is about to move to its shelf's folder, and filing it
+  // (POST /library/media/record) queues the proxy from there.
   res.json({ success: true, name, videoPath, thumbPath });
 });
 router.use('/biroly/upload', (err, _req, res, _next) => {

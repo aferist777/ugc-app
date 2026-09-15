@@ -39,7 +39,7 @@ const { buildGraph } = require('../lib/mv3b-render');
 const OWN = require('../lib/ownership');
 
 const router = express.Router();
-const { DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { DATA_DIR } = require('../lib/config');
 const { toDisk, toUrl } = require('../lib/media');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
@@ -114,9 +114,9 @@ function next() {
     return next();
   }
 
-  fs.mkdirSync(FINALS, { recursive: true });
+  // Into the folder of the project the entry's timeline belongs to (lib/shelf-files.js).
   const name = 'mv3q_' + Date.now() + '.mp4';
-  const out = path.join(FINALS, name);
+  const out = path.join(require('../lib/shelf-files').rendersDir(item.key).dir, name);
   _startedAt = Date.now();
   _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let log = '';
@@ -179,7 +179,7 @@ function runTalking(item) {
   const base = 'http://127.0.0.1:' + PORT;
   fetch(base + '/api/ffmpeg/render', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(item.payload),
+    body: JSON.stringify({ ...item.payload, projectKey: item.key }),
   }).then(r => r.json()).then(d => {
     if (!d || !d.success || !d.jobId) throw new Error((d && d.error) || 'the scenario renderer refused it');
     const started = Date.now();

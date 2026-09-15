@@ -783,12 +783,12 @@ const { FINALS_DIR } = require('../lib/config');
 // library already uses, so a render's card looks like every other clip's.
 const { makeThumb, thumbUrlFor } = require('../lib/video-thumb');
 
-// A url like /media/renders/<name>.mp4 -> the absolute path, with nothing able to walk out of
-// the directory.
+// A url like /media/renders/<project>/<name>.mp4 -> the absolute path, with nothing able to walk
+// out of the renders folder.
 function _finalPath(url) {
-  const name = path.basename(String(url || '').split('?')[0]);
-  if (!name || !/\.(mp4|mov|webm|mkv)$/i.test(name)) return null;
-  return path.join(FINALS_DIR, name);
+  const clean = String(url || '').split('?')[0];
+  if (!/\.(mp4|mov|webm|mkv)$/i.test(clean)) return null;
+  return require('../lib/media').toDiskWithin(clean, [FINALS_DIR]);
 }
 
 // ── A finished render: filed, named, kept ────────────────────────────────────
@@ -801,7 +801,7 @@ function _finalPath(url) {
 const MVQ = require('./mv3q');
 const _ROOT_DIR = require('../lib/config').ROOT_DIR;
 const { toUrl } = require('../lib/media');
-const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
+const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100);
 const _thumbAbs = (url) => { try { return path.join(_ROOT_DIR, String(thumbUrlFor(url)).replace(/^\/+/, '')); } catch (e) { return null; } };
 
 router.post('/mv3/render/finish', (req, res) => {
@@ -815,12 +815,14 @@ router.post('/mv3/render/finish', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Renames the file (and its poster) to `name` inside finals/, uniquified. Returns the new url.
+// Renames the file (and its poster) to `name` in its own project folder, uniquified. Returns the
+// new url.
 function _renameFinal(abs, url, name) {
   const want = _safeName(name);
   if (!want || want + '.mp4' === path.basename(abs)) return { abs, url };
-  let target = path.join(FINALS_DIR, want + '.mp4');
-  for (let n = 2; fs.existsSync(target); n++) target = path.join(FINALS_DIR, `${want} (${n}).mp4`);
+  const dir = path.dirname(abs);
+  let target = path.join(dir, want + '.mp4');
+  for (let n = 2; fs.existsSync(target); n++) target = path.join(dir, `${want} (${n}).mp4`);
   fs.renameSync(abs, target);
   const nextUrl = toUrl(target);
   try {
@@ -965,7 +967,7 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
       if (oldLabel !== newLabel && oldLabel !== GENS.LOOSE_CAT) {
         const own = ((LC.read().images || {}).own) || [];
         const cat = own.find(c => c.label === oldLabel);
-        if (cat) { LC.rename('images', cat.id, newLabel); moved = true; }
+        if (cat) { require('../lib/shelf-files').renameCategory('images', cat.id, newLabel); moved = true; }
       }
     } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
 
