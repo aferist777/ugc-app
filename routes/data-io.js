@@ -15,11 +15,18 @@
 // Compressing them again buys a percent or two and turns a disk-speed copy into minutes of
 // CPU. level 0 it is.
 //
-// VERSION 5 IS THE DESKTOP LIBRARY: the zip holds data/ and media/<kind>/ exactly as the library
-// does. An archive from the server version (4 and before: uploads/, finals/, obrazy/ ...) is
-// still taken in - every file is put where lib/layout.js says it lives now, and every path
-// inside its stores is translated the same way, so a timeline imported from the server points
-// at the pictures imported with it.
+// VERSION 6 IS LAYOUT 6: the zip holds data/, projects/ and media/<kind>/ exactly as the library
+// does. Older archives are still taken in: 5 (the desktop library before project folders) and the
+// server version's (4 and before: uploads/, finals/, obrazy/ ..., placed by lib/layout.js).
+//
+// AN IMPORT IS STAGED, THEN MERGED. Each volume unpacks into a staging library of its own set,
+// cache/import/<set>/lib - an older archive translated to layout 5 on the way. Once the volumes
+// chosen are all up, POST /data/import/finish upgrades a staged library that is older than layout
+// 6 (lib/library-upgrade.js) and merges it into this one (lib/library-merge.js): a project or a
+// category this library already has takes the incoming files into its own folder, a new one gets
+// a folder of its own name or "name (2)", and every path in the incoming stores follows. Staged,
+// because both steps need the whole set: the stores that say where a file belongs can sit in
+// another volume than the file.
 const express  = require('express');
 const fs       = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
@@ -32,11 +39,12 @@ const multer   = require('multer');
 
 const router = express.Router();
 const { ROOT_DIR, CACHE_DIR, TEMP_DIR } = require('../lib/config');
-const { KINDS_5, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
+const { KINDS, KINDS_5, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 
 const EXPORT_DIR = path.join(CACHE_DIR, 'exports');
+const IMPORT_DIR = path.join(CACHE_DIR, 'import');
 const KEEP_MS = 24 * 60 * 60 * 1000;
-const VERSION = 5;
+const VERSION = 6;
 
 // How much goes in one volume. A gigabyte is small enough that a failed transfer costs a
 // gigabyte and an unzipper reaches the central directory quickly, and large enough that a
@@ -59,12 +67,20 @@ const VOLUME_BYTES = 1024 * 1024 * 1024;
 // pictures. Take the projects without the media and the other machine gets timelines that
 // point at nothing at all.
 const GROUPS = [
-  { id: 'media', label: 'Media library (pictures, clips, voice, music, video sources)',
-    dirs: ['media/images', 'media/clips', 'media/voice', 'media/audio', 'media/projects', 'media/sources',
+  { id: 'media', label: 'Media library (pictures, b-roll, uploads, work files, voice, music, video sources)',
+    dirs: ['media/images', 'media/birols', 'media/uploads', 'media/work', 'media/voice', 'media/audio', 'media/sources',
            'data/transcripts'],
-    stores: ['data/sources.json', 'data/images.json', 'data/library-cats.json', 'data/suno-lib.json'], heavy: true },
+    stores: ['data/sources.json', 'data/images.json', 'data/biroly.json', 'data/library-cats.json', 'data/suno-lib.json'], heavy: true },
   { id: 'renders', label: 'Finished renders',
     dirs: ['media/renders'], stores: [], heavy: true },
+  // A project's folder holds its voice, frames, clips and timelines; the timelines point at the
+  // shelves.
+  { id: 'projects', label: 'Projects (Scenarios projects with their voice, frames and clips; Merge timelines, generation history)',
+    dirs: ['projects'], stores: ['data/project-list.json', 'data/merge.json', 'data/mv3-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
+    needs: ['media', 'hooks'], heavy: true },
+  { id: 'scenarios', label: 'Scenarios library (scenarios, poses, moods, options)',
+    dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-poses.json', 'data/scen3-moods.json',
+                       'data/scen3-options.json', 'data/scen3-frame-options.json'] },
   { id: 'looks', label: 'Looks',
     dirs: ['media/looks'], stores: ['data/obrazy.json'] },
   { id: 'lookbooks', label: 'Lookbooks',
@@ -75,20 +91,10 @@ const GROUPS = [
     dirs: ['media/characters'], stores: ['data/characters.json'] },
   { id: 'locations', label: 'Locations',
     dirs: ['media/locations'], stores: [] },
-
-  { id: 'merge', label: 'Merge projects (timelines with every overlay, generation history)',
-    dirs: [], stores: ['data/merge-v3.json', 'data/mv3-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
-    needs: ['media'] },
-  { id: 'scen3', label: 'Scenarios v3 (library and projects)',
-    dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-projects.json', 'data/scen3-poses.json',
-                       'data/scen3-moods.json', 'data/scen3-options.json', 'data/scen3-frame-options.json'],
-    needs: ['media'] },
   { id: 'library2', label: 'Library 2 (narrators, script drafts)',
     dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',
     dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },
-  { id: 'biroly', label: 'The b-roll archive (Birols and uploads on the Library shelves)',
-    dirs: [], stores: ['data/biroly.json'] },
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   { id: 'prompts', label: 'Prompt edits',
@@ -334,58 +340,25 @@ router.get('/data/export/:id/part/:n/download', (req, res) => {
 
 // ── Coming back in ──────────────────────────────────────────────────────────
 // ADDITIVE. A re-import must never produce a duplicate and must never remove something that
-// was made locally after the export was taken, so on every conflict the local copy wins. The
-// consequence is worth saying plainly: this can add, it cannot update. `overwrite` is the way
-// out when bringing a newer version across is the actual intention.
-function _merge(local, incoming, overwrite) {
-  const keyOf = (o) => (o && (o.id ?? o.key ?? o.path ?? o.file ?? o.name));
+// was made locally after the export was taken, so on every conflict the local copy wins
+// (lib/library-merge.js). The consequence is worth saying plainly: this can add, it cannot
+// update. `overwrite` is the way out when bringing a newer version across is the intention.
 
-  if (Array.isArray(local) && Array.isArray(incoming)) {
-    const out = local.slice();
-    const seen = new Map();
-    out.forEach((o, i) => { const k = keyOf(o); if (k != null) seen.set(String(k), i); });
-    // Not everything in this app has an id. scen3-options.json is three lists of plain
-    // strings; gen-timings.json is samples with nothing to name them by. Those are matched
-    // on their own value instead, because the alternative is that every re-import doubles
-    // them - which is precisely the duplication this whole rule exists to prevent.
-    const byValue = new Set();
-    for (const o of out) if (keyOf(o) == null) byValue.add(JSON.stringify(o));
-    for (const o of incoming) {
-      const k = keyOf(o);
-      if (k == null) {
-        const sig = JSON.stringify(o);
-        if (!byValue.has(sig)) { byValue.add(sig); out.push(o); }
-        continue;
-      }
-      const at = seen.get(String(k));
-      if (at == null) { seen.set(String(k), out.length); out.push(o); }
-      else if (overwrite) out[at] = o;
-    }
-    return out;
-  }
-  if (local && incoming && typeof local === 'object' && typeof incoming === 'object') {
-    const out = { ...local };
-    for (const [k, v] of Object.entries(incoming)) {
-      if (!(k in out)) out[k] = v;
-      else if (overwrite) out[k] = v;
-      else if (Array.isArray(out[k]) && Array.isArray(v)) out[k] = _merge(out[k], v, false);
-    }
-    return out;
-  }
-  return overwrite ? incoming : (local === undefined ? incoming : local);
-}
+// Stores that belong to the library they are in: never taken from an archive.
+const OWN_STORES = new Set(['moves.json', 'library.json']);
 
-// Where an entry of the archive goes in this library - a path relative to it - or null when it
-// has no place here. Only the paths this app owns: an archive naming ../ or an unknown top
-// directory is a mistake at best, so it is left out rather than trusted.
-function _placeOf(rel, fromServer) {
-  if (rel.split('/').some((s) => s === '' || s === '.' || s === '..')) return null;
-  if (rel.startsWith('data/') && STORES_LEFT_OUT[rel.slice(5)]) return null;
-  if (!fromServer) {
-    const [top, kind] = rel.split('/');
-    return top === 'data' || (top === 'media' && KINDS_5.includes(kind)) ? rel : null;
+// Where an entry of an archive goes in its staging library - a path relative to it - or null when
+// it has no place. Only the paths this app owns: an archive naming ../ or an unknown top directory
+// is a mistake at best, so it is left out rather than trusted.
+function _placeOf(rel, version) {
+  const parts = rel.split('/');
+  if (parts.some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (parts[0] === 'data') return STORES_LEFT_OUT[rel.slice(5)] || OWN_STORES.has(rel.slice(5)) ? null : rel;
+  if (version >= 6) {
+    if (parts[0] === 'projects' && parts.length >= 3) return rel;
+    return parts[0] === 'media' && parts.length >= 3 && KINDS.includes(parts[1]) ? rel : null;
   }
-  if (rel.startsWith('data/')) return rel;
+  if (version === 5) return parts[0] === 'media' && parts.length >= 3 && KINDS_5.includes(parts[1]) ? rel : null;
   const url = '/' + rel;
   if (LEGACY_LEFT_OUT.some(([re]) => re.test(url))) return null;
   const now = fromLegacy(url);
@@ -393,14 +366,29 @@ function _placeOf(rel, fromServer) {
   return now && now.startsWith('/media/') ? now.slice(1) : null;
 }
 
+const _readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
+
+// Staged sets nobody finished go after a day.
+function _sweepStaged() {
+  let sets = [];
+  try { sets = fs.readdirSync(IMPORT_DIR); } catch { return; }
+  for (const s of sets) {
+    const dir = path.join(IMPORT_DIR, s);
+    const state = _readJson(path.join(dir, 'import.json'), null);
+    const at = state && state.touchedAt ? Date.parse(state.touchedAt) : 0;
+    if (!at || Date.now() - at > KEEP_MS) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+  }
+}
+_sweepStaged();
+
 const upload = multer({ dest: TEMP_DIR, limits: { fileSize: 32 * 1024 * 1024 * 1024 } });
 
+// One volume: unpacked into the staging library of its set.
 router.post('/data/import', upload.single('file'), async (req, res) => {
   const tmp = req.file && req.file.path;
   if (!tmp) return res.status(400).json({ success: false, error: 'no file' });
-  const overwrite = String((req.body || {}).overwrite || '') === 'true';
-  // skipped: already here. leftOut: has no place in this library.
-  const report = { jsons: 0, files: 0, skipped: 0, leftOut: 0, groups: [], overwrite, fromServer: false };
+  // leftOut: has no place in a library.
+  const report = { staged: true, files: 0, stores: 0, leftOut: 0, groups: [], part: 1, parts: 1, complete: false, fromServer: false, fromLayout5: false };
   try {
     const zip = await unzipper.Open.file(tmp);
 
@@ -408,37 +396,36 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
     if (!mEntry) throw new Error('not an export of this app: manifest.json is missing');
     const manifest = JSON.parse((await mEntry.buffer()).toString('utf8'));
     if (manifest.app !== 'ugc-app') throw new Error('this archive was not made by ugc-app');
-    report.groups = (manifest.groups || []).map(g => g.id);
-    // Carried straight back so the popup can say "part 3 of 7" against the row, which is how a
-    // person notices that volume 5 never went in. Absent on an archive from before volumes.
-    if (manifest.part) { report.part = manifest.part; report.parts = manifest.parts; }
     if (Number(manifest.version) > VERSION) throw new Error('this archive was made by a newer version of the app');
-    const fromServer = !(Number(manifest.version) >= 5);
-    report.fromServer = fromServer;
+    const version = Number(manifest.version) || 4;
+    report.groups = (manifest.groups || []).map(g => g.id);
+    report.part = Number(manifest.part) || 1;
+    report.parts = Number(manifest.parts) || 1;
+    report.fromServer = version < 5;
+    report.fromLayout5 = version === 5;
+
+    // A set is the export it came from: the volumes of one export share their manifest's time.
+    const key = crypto.createHash('sha1').update(`${manifest.takenAt || tmp}|${version}|${report.parts}`).digest('hex').slice(0, 12);
+    const setDir = path.join(IMPORT_DIR, key);
+    const lib = path.join(setDir, 'lib');
+    const stateFile = path.join(setDir, 'import.json');
+    const state = _readJson(stateFile, null) || { version, parts: report.parts, have: [], takenAt: manifest.takenAt || null, groups: [] };
+    fs.mkdirSync(lib, { recursive: true });
 
     for (const entry of zip.files) {
       if (entry.type !== 'File' || entry.path === 'manifest.json') continue;
-      const place = _placeOf(entry.path.replace(/\\/g, '/'), fromServer);
-      const dest = place && path.resolve(ROOT_DIR, place);
-      if (!dest || !dest.startsWith(path.resolve(ROOT_DIR) + path.sep)) { report.leftOut++; continue; }
+      const place = _placeOf(entry.path.replace(/\\/g, '/'), version);
+      const dest = place && path.resolve(lib, place);
+      if (!dest || !dest.startsWith(path.resolve(lib) + path.sep)) { report.leftOut++; continue; }
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
 
       if (place.startsWith('data/') && place.endsWith('.json')) {
-        let incoming = JSON.parse((await entry.buffer()).toString('utf8'));
-        if (fromServer) incoming = rewriteLegacyValue(incoming);
-        let local = null;
-        try { local = JSON.parse(fs.readFileSync(dest, 'utf8')); } catch {}
-        const merged = local == null ? incoming : _merge(local, incoming, overwrite);
-        fs.mkdirSync(path.dirname(dest), { recursive: true });
-        writeFileAtomic(dest, JSON.stringify(merged, null, 2));
-        report.jsons++;
+        let value = JSON.parse((await entry.buffer()).toString('utf8'));
+        if (report.fromServer) value = rewriteLegacyValue(value);
+        writeFileAtomic(dest, JSON.stringify(value, null, 2));
+        report.stores++;
         continue;
       }
-
-      // A media file's name carries a timestamp or a hash, so one that is already here IS the
-      // same picture. Copying over it would only risk replacing something good with something
-      // half-written - which is also why it is written beside itself first and renamed in.
-      if (fs.existsSync(dest) && !overwrite) { report.skipped++; continue; }
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
       const part = dest + '.part';
       try {
         // pipeline, not pipe: a failure on either side closes both, and it settles once the
@@ -455,10 +442,12 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
       report.files++;
     }
 
-    console.log(`[data-io] imported ${report.jsons} stores, ${report.files} files, ${report.skipped} already here, `
-      + `${report.leftOut} left out${fromServer ? ' (a server-version archive, paths translated)' : ''}`);
-    // Thumbnails in an archive may have been cut at an older, smaller size.
-    if (report.files) require('../lib/thumb-refresh').again();
+    if (!state.have.includes(report.part)) state.have.push(report.part);
+    state.groups = [...new Set([...state.groups, ...report.groups])];
+    state.touchedAt = new Date().toISOString();
+    writeFileAtomic(stateFile, JSON.stringify(state, null, 2));
+    report.complete = state.have.length >= state.parts;
+    console.log(`[data-io] staged part ${report.part} of ${report.parts} (format ${version}): ${report.stores} stores, ${report.files} files, ${report.leftOut} left out`);
     res.json({ success: true, ...report });
   } catch (e) {
     console.error('[data-io] import failed:', e.message);
@@ -466,6 +455,45 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
+});
+
+// Every staged set, merged into the library - a set some of whose volumes never came is merged
+// with what did come, and says so. The staging goes afterwards either way.
+router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) => {
+  const overwrite = !!(req.body && req.body.overwrite);
+  const sets = [];
+  let keys = [];
+  try { keys = fs.readdirSync(IMPORT_DIR); } catch {}
+  for (const key of keys) {
+    const setDir = path.join(IMPORT_DIR, key);
+    const state = _readJson(path.join(setDir, 'import.json'), null);
+    if (!state) { try { fs.rmSync(setDir, { recursive: true, force: true }); } catch {} continue; }
+    const lib = path.join(setDir, 'lib');
+    const r = { takenAt: state.takenAt, format: state.version, parts: state.parts, have: state.have.length, upgraded: false };
+    try {
+      if (state.version < 6) {
+        const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace('[upgrade]', '[data-io] staged set:')) });
+        r.upgraded = !!u.upgraded;
+        r.setAside = u.upgraded ? u.report.unreferenced : 0;
+      }
+      Object.assign(r, require('../lib/library-merge').mergeLibrary(lib, ROOT_DIR, {
+        overwrite, onNewFolder: (url) => require('../lib/moves').forget(url),
+      }));
+      console.log(`[data-io] merged a set of ${r.have}/${r.parts} volume(s), format ${r.format}: ${r.projects} projects `
+        + `(${r.projectsHere} already here), ${r.timelines} timelines, ${r.categories} categories, ${r.files} files `
+        + `(${r.skipped} already here), ${r.stores} stores`);
+    } catch (e) {
+      r.error = e.message;
+      console.error('[data-io] merge failed:', e.stack || e.message);
+    }
+    try { fs.rmSync(setDir, { recursive: true, force: true }); } catch {}
+    sets.push(r);
+  }
+  // Timelines and projects arrived behind the stores' backs.
+  try { require('../lib/merge-store').invalidate(); } catch {}
+  // Thumbnails in an archive may have been cut at an older, smaller size.
+  if (sets.some((s) => s.files)) require('../lib/thumb-refresh').again();
+  res.json({ success: !sets.some((s) => s.error), sets, error: (sets.find((s) => s.error) || {}).error });
 });
 
 module.exports = router;

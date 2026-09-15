@@ -27,6 +27,9 @@ function _el(tag, cls, text) {
   return n;
 }
 
+// A group's name without the explanation in brackets: 'Media library', 'Hooks'.
+const _short = (id) => ((_groups.find(g => g.id === id) || {}).label || id).replace(/\s*\(.*$/, '');
+
 function _picked() {
   return _groups.filter(g => $('dio-g-' + g.id) && $('dio-g-' + g.id).checked);
 }
@@ -75,7 +78,7 @@ function _renderGroups() {
     txt.appendChild(_el('b', null, g.label));
     const sub = _el('i', null,
       `${g.files.toLocaleString()} files · ${MB(g.bytes)}`
-      + (g.needs && g.needs.length ? ' · needs the media library' : ''));
+      + (g.needs && g.needs.length ? ' · needs ' + g.needs.map(_short).join(' and ') : ''));
     txt.appendChild(sub);
     row.appendChild(txt);
 
@@ -194,7 +197,7 @@ async function _startExport() {
     btn.disabled = false;
     if (s.state === 'failed') { $('dio-status').textContent = 'build failed: ' + (s.error || 'unknown'); return; }
     $('dio-status').textContent = `ready in ${_dur(s.elapsedMs)} — ${s.parts.length} volume(s), `
-      + `${MB(s.bytes)} in all. Each one downloads, resumes and imports on its own. Kept for a day.`;
+      + `${MB(s.bytes)} in all. Each one downloads and resumes on its own; bring them in together. Kept for a day.`;
   }, 1000);
 }
 
@@ -257,12 +260,15 @@ async function _runImport(files) {
   const list = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const totalBytes = list.reduce((n, f) => n + f.size, 0);
   let doneBytes = 0;
-  const tally = { jsons: 0, files: 0, skipped: 0, leftOut: 0, failed: 0 };
+  let staged = 0, failed = 0;
+  const overwrite = $('dio-overwrite').checked;
 
   log.innerHTML = '';
   prog.hidden = false;
   barAll.style.width = '0%';
 
+  // First every volume goes up and is unpacked beside the library; nothing in the library changes
+  // yet (routes/data-io.js says why).
   for (let i = 0; i < list.length; i++) {
     const f = list[i];
     st.textContent = `volume ${i + 1} of ${list.length}`;
@@ -273,26 +279,26 @@ async function _runImport(files) {
     log.appendChild(row);
 
     try {
-      const r = await _upload(f, $('dio-overwrite').checked, (loaded, total, finished) => {
+      const r = await _upload(f, overwrite, (loaded, total, finished) => {
         barOne.style.width = Math.round(loaded / total * 100) + '%';
         barAll.style.width = Math.round((doneBytes + loaded) / totalBytes * 100) + '%';
         if (finished) row.lastChild.textContent = 'unpacking…';
       });
-      tally.jsons += r.jsons; tally.files += r.files; tally.skipped += r.skipped; tally.leftOut += r.leftOut || 0;
+      staged++;
       row.className = 'dio-part ok';
       row.firstChild.textContent = '✓';
-      // "Left out" is what has no place in this library: from a server-version archive, its
+      // "Left out" is what has no place in a library: from a server-version archive, its
       // thumbnail cache and the folders the desktop app does not keep.
-      row.lastChild.textContent = `${r.files} added · ${r.skipped} already here`
+      row.lastChild.textContent = `part ${r.part} of ${r.parts} · ${r.files} files, ${r.stores} stores`
         + (r.leftOut ? ` · ${r.leftOut} left out` : '')
         + (r.fromServer ? ' · server version, paths translated' : '')
-        + (r.part ? ` · part ${r.part} of ${r.parts}` : '');
+        + (r.fromLayout5 ? ' · older library, sorted into folders when merged' : '');
     } catch (e) {
-      tally.failed++;
+      failed++;
       row.className = 'dio-part bad';
       row.firstChild.textContent = '✕';
       row.lastChild.textContent = e.message;
-      // One bad volume does not stop the rest: the import adds, so the others still land.
+      // One bad volume does not stop the rest: the others are still merged.
     }
 
     doneBytes += f.size;
@@ -301,11 +307,37 @@ async function _runImport(files) {
 
   now.textContent = '';
   barOne.style.width = '0%';
-  st.textContent = `done — ${tally.files} files added, ${tally.jsons} stores merged, `
-    + `${tally.skipped} already here`
-    + (tally.leftOut ? `, ${tally.leftOut} left out` : '')
-    + (tally.failed ? `, ${tally.failed} volume(s) failed.` : '.')
-    + ($('dio-overwrite').checked ? '' : ' Nothing was overwritten.');
+  if (!staged) {
+    st.textContent = `nothing came in - ${failed} volume(s) failed.`;
+    return;
+  }
+
+  // Then what came up is merged into the library in one go.
+  st.textContent = 'merging into the library…';
+  const row = _logRow('⟳', 'merge', 'working…');
+  log.appendChild(row);
+  let d = null;
+  try {
+    const res = await fetch('/api/data/import/finish', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ overwrite }),
+    });
+    d = await res.json();
+  } catch (e) {
+    d = { success: false, error: e.message, sets: [] };
+  }
+  const sets = (d && d.sets) || [];
+  const sum = (k) => sets.reduce((n, s) => n + (Number(s[k]) || 0), 0);
+  const partial = sets.filter((s) => s.have < s.parts);
+  row.className = 'dio-part ' + (d && d.success ? 'ok' : 'bad');
+  row.firstChild.textContent = d && d.success ? '✓' : '✕';
+  row.lastChild.textContent = d && d.success
+    ? `${sum('projects')} projects added (${sum('projectsHere')} already here) · ${sum('timelines')} timelines · ${sum('categories')} categories`
+    : (d && d.error) || 'the merge failed';
+  st.textContent = `done — ${sum('files')} files added, ${sum('skipped')} already here, ${sum('stores')} stores merged`
+    + (sum('setAside') ? `, ${sum('setAside')} files nothing used left out` : '')
+    + (failed ? `, ${failed} volume(s) failed` : '')
+    + (partial.length ? `. ${partial.map((s) => `${s.have} of ${s.parts} volumes`).join(', ')} came in - import the rest to complete the set` : '')
+    + (overwrite ? '.' : '. Nothing was overwritten.');
   // What an export would take out has just changed.
   _load();
 }

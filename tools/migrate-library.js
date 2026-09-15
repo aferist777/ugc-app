@@ -11,7 +11,12 @@
 
    WHAT IT DOES
      - copies every media file to its folder in media/ (lib/layout.js says which), keeping its
-       modified time - several shelves sort by it;
+       modified time - several shelves sort by it. That is layout 5, the desktop library before
+       project folders: the copy is then upgraded to layout 6 (lib/library-upgrade.js), which
+       sorts it into project, shelf and category folders and sets aside what nothing uses;
+     - into a library that is already layout 6, it goes the way Import does: into a staging
+       library inside it (cache/import/), upgraded there and merged in (lib/library-merge.js) -
+       what the library has already stays, --overwrite-stores lets the incoming stores win;
      - rewrites every server-era path inside the stores it copies (/uploads/x.jpg becomes
        /media/images/x.jpg) - whole values, keys, and paths inside longer strings alike;
      - carries the settings over without the retired keys, and fills empty key fields from the
@@ -39,6 +44,8 @@ const path = require('path');
 const dotenv = require('dotenv');
 const { fromLegacy, rewriteLegacyValue, legacyPathsIn, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 const { writeFileAtomic } = require('../lib/atomic-write');
+const UPGRADE = require('../lib/library-upgrade');
+const { mergeLibrary } = require('../lib/library-merge');
 
 // ── arguments ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -52,6 +59,10 @@ function fail(msg) { console.error(`[migrate] ${msg}`); process.exit(1); }
 if (!FROM || !TO) fail('usage: node tools/migrate-library.js --from <server install> --to <library> [--apply] [--overwrite-stores]');
 const within = (a, b) => a === b || a.startsWith(b + path.sep);
 if (within(TO, FROM) || within(FROM, TO)) fail('--from and --to must be separate folders, neither inside the other');
+// Where the copy is made: the library itself, or - when it is layout 6 already - a staging library
+// inside it, merged in at the end.
+const INTO_LAYOUT_6 = fs.existsSync(TO) && UPGRADE.layoutOf(TO) === 6 && fs.existsSync(path.join(TO, 'data'));
+const LIB = INTO_LAYOUT_6 ? path.join(TO, 'cache', 'import', `migrate-${Date.now()}`, 'lib') : TO;
 if (!fs.existsSync(path.join(FROM, 'data')) || !fs.existsSync(path.join(FROM, 'uploads'))) {
   fail(`${FROM} does not look like a server-era install (no data/ and uploads/ in it)`);
 }
@@ -136,7 +147,7 @@ for (const [dir, prefix] of MEDIA_SOURCES) {
     }
     const to = fromLegacy(url);
     if (!to) { unmapped.push(url); return; }
-    const dest = path.join(TO, ...to.slice(1).split('/'));
+    const dest = path.join(LIB, ...to.slice(1).split('/'));
     copies.push({ src, dest, size: st.size, mtime: st.mtime, url, to });
     const folder = to.split('/').slice(1, 3).join('/');
     const f = perFolder.get(folder) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(folder, f);
@@ -162,7 +173,7 @@ for (const e of fs.readdirSync(DATA, { withFileTypes: true })) {
 for (const d of DATA_DIRS) {
   walkFiles(path.join(DATA, d), (p) => stores.push(path.relative(DATA, p).split(path.sep).join('/')));
 }
-const existingStores = stores.filter((s) => fs.existsSync(path.join(TO, 'data', s)));
+const existingStores = stores.filter((s) => fs.existsSync(path.join(LIB, 'data', s)));
 
 // Paths the old stores ALREADY pointed at nothing with - a deleted file whose record stayed. The
 // check after copying has to tell those apart from anything this run loses.
@@ -190,7 +201,7 @@ for (const rel of stores) {
 
 // ── report the plan ─────────────────────────────────────────────────────────
 say(`[migrate] ${APPLY ? 'APPLYING' : 'dry run'} - from ${FROM}`);
-say(`[migrate]            to ${TO}`);
+say(`[migrate]            to ${TO}${INTO_LAYOUT_6 ? ' (layout 6 already: staged, upgraded and merged in)' : ''}`);
 say('');
 say('media, by folder:');
 let totalBytes = 0;
@@ -208,7 +219,7 @@ say('');
 if (unmapped.length) { say(`NOT MAPPED - ${unmapped.length} files lib/layout.js has no place for:`); unmapped.slice(0, 30).forEach((u) => say(`  ${u}`)); }
 if (collisions.length) { say(`COLLISIONS - ${collisions.length} files would land on the same name:`); collisions.slice(0, 30).forEach((c) => say(`  ${c}`)); }
 if (existingStores.length && !OVERWRITE_STORES) {
-  say(`STORES ALREADY THERE - ${existingStores.length} in ${path.join(TO, 'data')}: ${existingStores.slice(0, 8).join(', ')}${existingStores.length > 8 ? ', ...' : ''}`);
+  say(`STORES ALREADY THERE - ${existingStores.length} in ${path.join(LIB, 'data')}: ${existingStores.slice(0, 8).join(', ')}${existingStores.length > 8 ? ', ...' : ''}`);
   say('  pass --overwrite-stores to replace them');
 }
 const blocked = unmapped.length || collisions.length || (existingStores.length && !OVERWRITE_STORES);
@@ -252,7 +263,7 @@ if (blocked) fail('refusing to apply - see above');
     let value;
     try { value = JSON.parse(fs.readFileSync(src, 'utf8')); }
     catch (e) { say(`  ! ${rel} is not valid JSON (${e.message}) - copied as it was`); value = undefined; }
-    const dest = path.join(TO, 'data', ...rel.split('/'));
+    const dest = path.join(LIB, 'data', ...rel.split('/'));
     if (value === undefined) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); continue; }
     const counter = { n: 0 };
     let next = rewriteLegacyValue(value, counter);
@@ -276,7 +287,7 @@ if (blocked) fail('refusing to apply - see above');
   for (const [rel, value] of written) {
     for (const p of mediaPathsIn(value, [])) {
       paths++;
-      if (fs.existsSync(path.join(TO, ...p.slice(1).split('/')))) continue;
+      if (fs.existsSync(path.join(LIB, ...p.slice(1).split('/')))) continue;
       if (brokenBefore.has(p)) { stillBroken++; continue; }
       if (skippedTo.has(p)) { leftOut++; continue; }
       const l = lost.get(rel) || []; l.push(p); lost.set(rel, l);
@@ -292,6 +303,16 @@ if (blocked) fail('refusing to apply - see above');
   const untranslated = written.map(([rel, value]) => [rel, legacyPathsIn(JSON.stringify(value))]).filter(([, l]) => l.length);
   say(`check: ${untranslated.reduce((n, [, l]) => n + l.length, 0)} server-era paths left untranslated`);
   for (const [rel, l] of untranslated) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
+
+  // Layout 6: sorted into folders, what nothing uses set aside - and merged in when staged.
+  const up = UPGRADE.upgrade(LIB, { log: (s) => say(s) });
+  if (up.upgraded) say(`upgrade: ${up.report.unreferenced} files nothing uses set aside in ${up.backup}; ${up.newlyMissing.length} paths lost by it`);
+  if (INTO_LAYOUT_6) {
+    const m = mergeLibrary(LIB, TO, { overwrite: OVERWRITE_STORES });
+    say(`merged into ${TO}: ${m.projects} projects (${m.projectsHere} already there), ${m.timelines} timelines, `
+      + `${m.categories} categories, ${m.files} files (${m.skipped} already there), ${m.stores} stores`);
+    fs.rmSync(path.dirname(LIB), { recursive: true, force: true });
+  }
 
   const logDir = path.join(TO, 'logs');
   fs.mkdirSync(logDir, { recursive: true });
