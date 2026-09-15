@@ -1,0 +1,298 @@
+'use strict';
+
+/* migrate-library.js - brings a server-era install's library into a desktop-app library.
+
+       node tools/migrate-library.js --from <server install> --to <library>            (a dry run)
+       node tools/migrate-library.js --from <server install> --to <library> --apply
+
+   Without --apply nothing is written anywhere: it says what it would copy, what it leaves behind
+   and why, and whether anything stands in the way. The server install is only ever read, so the
+   old app keeps working while and after this runs.
+
+   WHAT IT DOES
+     - copies every media file to its folder in media/ (lib/layout.js says which), keeping its
+       modified time - several shelves sort by it;
+     - rewrites every server-era path inside the stores it copies (/uploads/x.jpg becomes
+       /media/images/x.jpg) - whole values and paths inside longer strings alike;
+     - carries the settings over without the retired keys, and fills empty key fields from the
+       old install's .env, where the server kept R2 and some others. Values are never printed;
+     - checks, afterwards, that every path the new stores hold is a file that exists, and writes
+       the report to <library>/logs/.
+   Running it again is safe: a file already copied with the same size and time is skipped.
+
+   WHAT IT LEAVES BEHIND, on purpose: data/exports (old export volumes), data/backups, scratch
+   (temp_files, temp_public), logs, vsl/ and the text scenarios/ of the first Scenarios, the
+   thumbnail cache (its keys name the old folders, so none would ever be read), the server's
+   users, session secret and unfinished task queues, the character trace log.
+
+   It refuses to write stores over a library that already has its own - pass --overwrite-stores
+   when replacing them is the intention (a library the app opened once has a few seeded ones). */
+
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+const { fromLegacy, rewriteLegacy } = require('../lib/layout');
+const { writeFileAtomic } = require('../lib/atomic-write');
+
+// ── arguments ───────────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+const FROM = opt('--from') && path.resolve(opt('--from'));
+const TO = opt('--to') && path.resolve(opt('--to'));
+const APPLY = args.includes('--apply');
+const OVERWRITE_STORES = args.includes('--overwrite-stores');
+
+function fail(msg) { console.error(`[migrate] ${msg}`); process.exit(1); }
+if (!FROM || !TO) fail('usage: node tools/migrate-library.js --from <server install> --to <library> [--apply] [--overwrite-stores]');
+const within = (a, b) => a === b || a.startsWith(b + path.sep);
+if (within(TO, FROM) || within(FROM, TO)) fail('--from and --to must be separate folders, neither inside the other');
+if (!fs.existsSync(path.join(FROM, 'data')) || !fs.existsSync(path.join(FROM, 'uploads'))) {
+  fail(`${FROM} does not look like a server-era install (no data/ and uploads/ in it)`);
+}
+
+// ── what is copied ──────────────────────────────────────────────────────────
+// Folder in the server install -> the address prefix its files had.
+const MEDIA_SOURCES = [
+  ['uploads', '/uploads'], ['characters', '/characters'], ['obrazy', '/obrazy'], ['lookbooks', '/lookbooks'],
+  ['environments', '/environments'], ['refs', '/refs'], ['details', '/details'], ['finals', '/finals'],
+  ['hooks', '/hooks'], ['scenes', '/scenes'], ['archive', '/archive'],
+  // Written into public/ while the server ran; the desktop app keeps them in the library.
+  ['public/voice-previews', '/voice-previews'], ['public/models', '/models'],
+];
+const SKIP_MEDIA = [
+  [/^\/uploads\/_thumbs\//, 'thumbnail cache - keyed by the old absolute paths, never read again'],
+  [/^\/uploads\/_poses\//, 'pose previews - made again on demand'],
+  [/^\/uploads\/suno_tmp_/, 'half-finished music merge'],
+  [/\.(part|tmp)$/i, 'unfinished write'],
+];
+// Stores that describe the server itself, not the work in it.
+const SKIP_STORES = {
+  'users.json': 'the server\'s users',
+  'pending-tasks.json': 'unfinished generations - the old server may still be finishing them',
+  'biroly-gen-jobs.json': 'unfinished Birols jobs',
+};
+// Folders inside data/ that are copied whole (and rewritten, being JSON).
+const DATA_DIRS = ['transcripts'];
+const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads', 'data/cop-images',
+  'data/cv2-trace.jsonl', 'data/.session-secret', 'data/.obrazy-migrated', 'temp_files', 'temp_public',
+  'logs', 'vsl', 'scenarios'];
+
+const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl'];
+const ENV_KEYS = {
+  KIE_AI_API_KEY: 'kieApiKey', GROQ_API_KEY: 'groqApiKey', REPLICATE_API_TOKEN: 'replicateApiKey',
+  R2_ACCOUNT_ID: 'r2AccountId', R2_ACCESS_KEY_ID: 'r2AccessKeyId', R2_SECRET_ACCESS_KEY: 'r2SecretAccessKey',
+  R2_BUCKET: 'r2Bucket', R2_PUBLIC_BASE: 'r2PublicBase',
+};
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+const MB = (b) => `${(b / 1048576).toFixed(1)} MB`;
+const lines = [];
+const say = (s = '') => { lines.push(s); console.log(s); };
+
+function walkFiles(root, visit) {
+  let entries;
+  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    const p = path.join(root, e.name);
+    if (e.isDirectory()) walkFiles(p, visit);
+    else if (e.isFile()) visit(p);
+  }
+}
+
+function sizeOf(rel) {
+  const abs = path.join(FROM, rel);
+  if (!fs.existsSync(abs)) return null;
+  if (fs.statSync(abs).isFile()) return fs.statSync(abs).size;
+  let b = 0;
+  walkFiles(abs, (p) => { b += fs.statSync(p).size; });
+  return b;
+}
+
+// Every server-era address in a store, turned into its address now. A string that IS a path is
+// mapped whole, so a file name with a space in it survives; anything else is searched.
+function rewriteValue(v, counter) {
+  if (typeof v === 'string') {
+    const whole = fromLegacy(v);
+    if (whole) { counter.n++; return whole; }
+    const next = rewriteLegacy(v);
+    if (next !== v) counter.n++;
+    return next;
+  }
+  if (Array.isArray(v)) return v.map((x) => rewriteValue(x, counter));
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) out[k] = rewriteValue(x, counter);
+    return out;
+  }
+  return v;
+}
+
+function mediaPathsIn(v, out) {
+  if (typeof v === 'string') {
+    for (const m of v.matchAll(/\/(?:media|cache)\/[^"'\s)\\<>?#]+/g)) out.push(m[0]);
+  } else if (Array.isArray(v)) v.forEach((x) => mediaPathsIn(x, out));
+  else if (v && typeof v === 'object') Object.values(v).forEach((x) => mediaPathsIn(x, out));
+  return out;
+}
+
+// ── plan ────────────────────────────────────────────────────────────────────
+const copies = [];                       // { src, dest, size, mtime, url, to }
+const skipped = new Map();               // reason -> [count, bytes]
+const unmapped = [];
+const perFolder = new Map();             // media/clips -> [count, bytes]
+for (const [dir, prefix] of MEDIA_SOURCES) {
+  walkFiles(path.join(FROM, dir), (src) => {
+    const rel = path.relative(path.join(FROM, dir), src).split(path.sep).join('/');
+    const url = `${prefix}/${rel}`;
+    const st = fs.statSync(src);
+    const skip = SKIP_MEDIA.find(([re]) => re.test(url));
+    if (skip) { const s = skipped.get(skip[1]) || [0, 0]; s[0]++; s[1] += st.size; skipped.set(skip[1], s); return; }
+    const to = fromLegacy(url);
+    if (!to) { unmapped.push(url); return; }
+    const dest = path.join(TO, ...to.slice(1).split('/'));
+    copies.push({ src, dest, size: st.size, mtime: st.mtime, url, to });
+    const folder = to.split('/').slice(1, 3).join('/');
+    const f = perFolder.get(folder) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(folder, f);
+  });
+}
+const byDest = new Map();
+const collisions = [];
+for (const c of copies) {
+  const key = c.dest.toLowerCase();       // Windows and macOS file names ignore case
+  if (byDest.has(key)) collisions.push(`${byDest.get(key).url} and ${c.url} -> ${c.to}`);
+  else byDest.set(key, c);
+}
+
+const stores = [];
+const DATA = path.join(FROM, 'data');
+for (const e of fs.readdirSync(DATA, { withFileTypes: true })) {
+  if (e.isFile() && e.name.endsWith('.json')) {
+    if (SKIP_STORES[e.name]) { const s = skipped.get(`data/${e.name}: ${SKIP_STORES[e.name]}`) || [0, 0]; s[0]++; skipped.set(`data/${e.name}: ${SKIP_STORES[e.name]}`, s); continue; }
+    stores.push(e.name);
+  }
+}
+for (const d of DATA_DIRS) {
+  walkFiles(path.join(DATA, d), (p) => stores.push(path.relative(DATA, p).split(path.sep).join('/')));
+}
+const existingStores = stores.filter((s) => fs.existsSync(path.join(TO, 'data', s)));
+
+// Paths the old stores ALREADY pointed at nothing with - a deleted file whose record stayed. The
+// check after copying has to tell those apart from anything this run loses.
+const OLD_DISK = { 'voice-previews': 'public/voice-previews', models: 'public/models' };
+const LEGACY_RE = /\/(?:uploads|characters|obrazy|lookbooks|environments|refs|details|finals|hooks|models|scenes|archive|voice-previews)\/[^"'\s)\\<>?#]+/g;
+const brokenBefore = new Set();
+for (const rel of stores) {
+  let text = '';
+  try { text = fs.readFileSync(path.join(DATA, ...rel.split('/')), 'utf8'); } catch { continue; }
+  for (const hit of text.match(LEGACY_RE) || []) {
+    const [, top, ...rest] = hit.split('/');
+    if (!fs.existsSync(path.join(FROM, ...(OLD_DISK[top] || top).split('/'), ...rest))) {
+      const to = fromLegacy(hit);
+      if (to) brokenBefore.add(to);
+    }
+  }
+}
+
+// ── report the plan ─────────────────────────────────────────────────────────
+say(`[migrate] ${APPLY ? 'APPLYING' : 'dry run'} - from ${FROM}`);
+say(`[migrate]            to ${TO}`);
+say('');
+say('media, by folder:');
+let totalBytes = 0;
+for (const [f, [n, b]] of [...perFolder.entries()].sort()) { say(`  ${f.padEnd(20)} ${String(n).padStart(6)} files ${MB(b).padStart(11)}`); totalBytes += b; }
+say(`  ${'total'.padEnd(20)} ${String(copies.length).padStart(6)} files ${MB(totalBytes).padStart(11)}`);
+say('');
+say(`stores: ${stores.length} to copy, with their paths rewritten`);
+say(`  ${brokenBefore.size} of the paths in them already point at nothing in the old install (deleted files)`);
+say('');
+say('skipped:');
+for (const [why, [n, b]] of skipped) say(`  ${String(n).padStart(6)} ${b ? MB(b).padStart(10) : ''.padStart(10)}  ${why}`);
+say('left behind:');
+for (const rel of LEFT_BEHIND) { const b = sizeOf(rel); if (b != null) say(`  ${rel.padEnd(28)} ${MB(b)}`); }
+say('');
+if (unmapped.length) { say(`NOT MAPPED - ${unmapped.length} files lib/layout.js has no place for:`); unmapped.slice(0, 30).forEach((u) => say(`  ${u}`)); }
+if (collisions.length) { say(`COLLISIONS - ${collisions.length} files would land on the same name:`); collisions.slice(0, 30).forEach((c) => say(`  ${c}`)); }
+if (existingStores.length && !OVERWRITE_STORES) {
+  say(`STORES ALREADY THERE - ${existingStores.length} in ${path.join(TO, 'data')}: ${existingStores.slice(0, 8).join(', ')}${existingStores.length > 8 ? ', ...' : ''}`);
+  say('  pass --overwrite-stores to replace them');
+}
+const blocked = unmapped.length || collisions.length || (existingStores.length && !OVERWRITE_STORES);
+
+if (!APPLY) {
+  say('');
+  say(blocked ? '[migrate] dry run: fix the above before --apply' : '[migrate] dry run: nothing stands in the way - run again with --apply');
+  process.exit(blocked ? 1 : 0);
+}
+if (blocked) fail('refusing to apply - see above');
+
+// ── apply ───────────────────────────────────────────────────────────────────
+(async () => {
+  const t0 = Date.now();
+  let copied = 0, same = 0, copiedBytes = 0, lastNote = Date.now();
+  for (const c of copies) {
+    try {
+      const st = fs.statSync(c.dest);
+      if (st.size === c.size && Math.abs(st.mtimeMs - c.mtime.getTime()) < 2000) { same++; continue; }
+    } catch { /* not there yet */ }
+    fs.mkdirSync(path.dirname(c.dest), { recursive: true });
+    const part = c.dest + '.part';
+    await fs.promises.copyFile(c.src, part);
+    fs.utimesSync(part, c.mtime, c.mtime);
+    fs.renameSync(part, c.dest);
+    copied++; copiedBytes += c.size;
+    if (Date.now() - lastNote > 5000) {
+      lastNote = Date.now();
+      console.log(`[migrate] ${copied + same}/${copies.length} files, ${MB(copiedBytes)} copied`);
+    }
+  }
+  say('');
+  say(`copied ${copied} files (${MB(copiedBytes)}), ${same} already in place, in ${Math.round((Date.now() - t0) / 1000)}s`);
+
+  // Stores, rewritten.
+  const env = fs.existsSync(path.join(FROM, '.env')) ? dotenv.parse(fs.readFileSync(path.join(FROM, '.env'))) : {};
+  let rewritten = 0;
+  const written = [];
+  for (const rel of stores) {
+    const src = path.join(DATA, ...rel.split('/'));
+    let value;
+    try { value = JSON.parse(fs.readFileSync(src, 'utf8')); }
+    catch (e) { say(`  ! ${rel} is not valid JSON (${e.message}) - copied as it was`); value = undefined; }
+    const dest = path.join(TO, 'data', ...rel.split('/'));
+    if (value === undefined) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); continue; }
+    const counter = { n: 0 };
+    let next = rewriteValue(value, counter);
+    if (rel === 'settings.json') {
+      for (const k of RETIRED_KEYS) delete next[k];
+      const moved = [];
+      for (const [envName, field] of Object.entries(ENV_KEYS)) {
+        if (!String(next[field] || '').trim() && String(env[envName] || '').trim()) { next[field] = env[envName].trim(); moved.push(field); }
+      }
+      if (moved.length) say(`  settings: filled from the old .env - ${moved.join(', ')}`);
+    }
+    writeFileAtomic(dest, JSON.stringify(next, null, 2));
+    rewritten += counter.n;
+    written.push([rel, next]);
+  }
+  say(`stores: ${written.length} written, ${rewritten} paths rewritten`);
+
+  // Check: every path the new stores hold is a file that is there - or was already missing.
+  let paths = 0, stillBroken = 0;
+  const lost = new Map();
+  for (const [rel, value] of written) {
+    for (const p of mediaPathsIn(value, [])) {
+      paths++;
+      if (fs.existsSync(path.join(TO, ...p.slice(1).split('/')))) continue;
+      if (brokenBefore.has(p)) { stillBroken++; continue; }
+      const l = lost.get(rel) || []; l.push(p); lost.set(rel, l);
+    }
+  }
+  const lostCount = [...lost.values()].reduce((n, l) => n + l.length, 0);
+  say(`check: ${paths} paths in the new stores; ${stillBroken} point at nothing as they already did; ${lostCount} LOST by this run`);
+  for (const [rel, l] of lost) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
+
+  const logDir = path.join(TO, 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+  const logFile = path.join(logDir, `migration-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
+  fs.writeFileSync(logFile, lines.join('\n') + '\n');
+  console.log(`[migrate] done - report in ${logFile}`);
+})().catch((e) => fail(e.stack || e.message));
