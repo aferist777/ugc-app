@@ -156,8 +156,8 @@ router.get('/sources/jobs/:jobId', (req, res) => {
 // working cookie jar, and therefore is the link field usable at all. Asked up front rather than
 // discovered by a failed ingest - a text box that always answers "YouTube asked for a login" is
 // a text box that should have been disabled.
-router.get('/sources/ytdlp', (_req, res) => {
-  const found = YTDLP.find();
+router.get('/sources/ytdlp', async (_req, res) => {
+  const found = await YTDLP.find();
   const ck = COOKIES.status();
   res.json({
     success: true,
@@ -165,7 +165,7 @@ router.get('/sources/ytdlp', (_req, res) => {
     cookies: ck,
     // The file route never needs any of this. Links need all of it.
     linksEnabled: !!found && !!ck.present && !!ck.verified,
-    why: !found ? 'yt-dlp is not installed on this machine'
+    why: !found ? 'yt-dlp is missing from this copy of the app'
       : !ck.present ? 'no cookie file yet — YouTube asks a program for a login'
         : !ck.verified ? 'the cookie file has not been checked against YouTube yet' : '',
   });
@@ -221,7 +221,7 @@ const VERIFY_ATTEMPTS = 2;
 
 router.post('/sources/cookies/verify', async (_req, res) => {
   if (!COOKIES.exists()) return res.status(400).json({ success: false, error: 'no cookie file to check' });
-  if (!YTDLP.find()) return res.status(501).json({ success: false, error: 'yt-dlp is not installed' });
+  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
 
   const jar = COOKIES.filePath();
   const seen = [];
@@ -314,15 +314,11 @@ router.post('/sources/upload', (req, res) => {
 // then fetch the video. The metadata comes first on purpose - it is seconds, it catches a
 // playlist, a private video and the bot check, and none of those should leave a half-made
 // record behind.
-router.post('/sources/link', (req, res) => {
+router.post('/sources/link', async (req, res) => {
   const url = String((req.body || {}).url || '').trim();
   if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
-  if (!YTDLP.find()) {
-    return res.status(501).json({ success: false,
-      error: 'yt-dlp was not found on this machine. Install it (pip install yt-dlp), or download '
-        + 'the video yourself and add it with the file upload.' });
-  }
+  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
   // GATED ON A WORKING COOKIE JAR, and the gate is here rather than only in the interface: a
   // link without a session gets the login demand after the metadata call, which reads as the
   // app being broken. Measured on this machine - even the first video ever uploaded to YouTube

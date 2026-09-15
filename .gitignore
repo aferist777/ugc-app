@@ -1,5 +1,8 @@
 node_modules/
 .env
+# Binaries the app ships but does not keep in git: yt-dlp, fetched by tools/fetch-yt-dlp.js.
+# Rooted, so public/vendor/ (three.js, committed) is not caught by it.
+/vendor/
 # The library when the app runs from source (lib/config.js): everything it writes.
 local-data/
 uploads/

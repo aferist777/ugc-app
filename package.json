@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "postinstall": "node tools/fetch-yt-dlp.js --optional"
   },
   "dependencies": {
     "archiver": "^7.0.1",
