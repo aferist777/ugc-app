@@ -8,7 +8,7 @@ const crypto     = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
-const { ROOT_DIR, MEDIA_DIR, TEMP_DIR, DATA_DIR, CACHE_DIR } = require('../lib/config');
+const { ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, TEMP_DIR, DATA_DIR, CACHE_DIR } = require('../lib/config');
 const { toDisk, toDiskWithin, toUrl } = require('../lib/media');
 const { normalizeVideoForBrowser } = require('../lib/helpers');
 // The one-frame poster maker the media library uses. Not lib/helpers' createThumbnail - that one
@@ -282,6 +282,7 @@ try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { r
 const _proxyInflight = new Map();
 
 const PROXY_HEIGHTS = [360, 480, 720];   // selectable preview qualities (shorter side)
+// lib/library-upgrade.js renames proxies by this same key when the upgrade moves their films.
 function _proxyCachePath(absSrc, h, rev) {
   let mtime = 0; try { mtime = Math.floor(fs.statSync(absSrc).mtimeMs); } catch {}
   const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h + (rev ? '|rev' : '')).digest('hex');
@@ -422,7 +423,7 @@ function _proxyAbs(src) {
   const s = String(src || '');
   if (!s) return null;
   if (!/\.(mp4|mov|webm|m4v)$/i.test(s.split('?')[0])) return null;
-  const abs = toDiskWithin(s, [MEDIA_DIR]);
+  const abs = toDiskWithin(s, [MEDIA_DIR, PROJECTS_DIR]);
   return abs && fs.existsSync(abs) ? abs : null;
 }
 
@@ -430,7 +431,7 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
   try {
     const src = String(req.query.src || '');
     if (!toDisk(src)) return res.status(404).end();
-    const abs = toDiskWithin(src, [MEDIA_DIR]);
+    const abs = toDiskWithin(src, [MEDIA_DIR, PROJECTS_DIR]);
     if (!abs) return res.status(403).end();
     if (!fs.existsSync(abs)) return res.status(404).end();
 

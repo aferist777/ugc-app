@@ -32,6 +32,15 @@ const {
   ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, MEDIA, CACHE_DIR,
   LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
 } = require('./lib/config');
+// A library from before layout 6 is upgraded before anything reads a store (lib/library-upgrade.js):
+// files move into project, shelf and category folders, and the stores follow. Stopped halfway,
+// the next start carries on; a failure stops the start rather than open half a library.
+try {
+  require('./lib/library-upgrade').upgrade(ROOT_DIR, { log: (line) => console.log(line) });
+} catch (e) {
+  console.error('[upgrade] the library could not be upgraded:', e.stack || e.message);
+  process.exit(1);
+}
 const { generateMissingThumbs } = require('./lib/helpers');
 // The project list and the folders in projects/ agree before anything reads either: a folder
 // carried over from another library joins the list, a listed folder that is gone leaves it.
