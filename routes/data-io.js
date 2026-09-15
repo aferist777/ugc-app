@@ -1,4 +1,4 @@
-// Import / Export — taking everything out of this install, and putting it into another.
+// Import / Export — taking everything out of this library, and putting it into another.
 //
 // There was a version of this before (kept at data/backups/2026-08-12-data-io.js.removed). It
 // knew thirteen of the thirty-five stores this app now has, and none of the ones the current
@@ -9,26 +9,34 @@
 // broken connection starts the whole thing again, and this bundle runs to gigabytes. Built to
 // disk it is served like any other file, which means Range requests, which means a browser or
 // `curl -C -` picks up at the byte it stopped on. The file is kept for a day so a retry costs
-// nothing.
+// nothing - in cache/exports, since it is only ever a copy of what the library holds.
 //
 // STORED, NOT DEFLATED. Almost every byte here is already-compressed jpg, mp4 or mp3.
 // Compressing them again buys a percent or two and turns a disk-speed copy into minutes of
 // CPU. level 0 it is.
+//
+// VERSION 5 IS THE DESKTOP LIBRARY: the zip holds data/ and media/<kind>/ exactly as the library
+// does. An archive from the server version (4 and before: uploads/, finals/, obrazy/ ...) is
+// still taken in - every file is put where lib/layout.js says it lives now, and every path
+// inside its stores is translated the same way, so a timeline imported from the server points
+// at the pictures imported with it.
 const express  = require('express');
 const fs       = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path     = require('path');
+const { pipeline } = require('stream/promises');
 const crypto   = require('crypto');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
 const multer   = require('multer');
 
 const router = express.Router();
-const { ROOT_DIR, DATA_DIR, TEMP_DIR } = require('../lib/config');
+const { ROOT_DIR, CACHE_DIR, TEMP_DIR } = require('../lib/config');
+const { KINDS, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT } = require('../lib/layout');
 
-const EXPORT_DIR = path.join(DATA_DIR, 'exports');
+const EXPORT_DIR = path.join(CACHE_DIR, 'exports');
 const KEEP_MS = 24 * 60 * 60 * 1000;
-const VERSION = 4;
+const VERSION = 5;
 
 // How much goes in one volume. A gigabyte is small enough that a failed transfer costs a
 // gigabyte and an unzipper reaches the central directory quickly, and large enough that a
@@ -40,103 +48,101 @@ const VERSION = 4;
 const VOLUME_BYTES = 1024 * 1024 * 1024;
 
 // ── What can be taken ───────────────────────────────────────────────────────
-// Directories are relative to the install root, so the same names address the zip and the
-// disk on the way back in. A group is a thing a person would think of as one thing - not a
-// directory and not a file, which is why some carry both and some carry several.
+// Paths are relative to the library, so the same names address the zip and the disk on the way
+// back in. A group is a thing a person would think of as one thing - not a directory and not a
+// file, which is why some carry both and some carry several. `stores` are single files in data/:
+// the JSON stores, and the one cookie file. `except` is a folder inside `dirs` that another group
+// carries, so no file is counted twice.
 //
 // `needs` is a dependency, not a hint: a project stores the PATH of its pictures, never the
 // pictures. Take the projects without the media and the other machine gets timelines that
 // point at nothing at all.
 const GROUPS = [
-  { id: 'media', label: 'Media library (generated pictures, voice mp3s, clips)',
-    dirs: ['uploads'], jsons: [], heavy: true },
-  { id: 'finals', label: 'Finished renders',
-    dirs: ['finals'], jsons: [], heavy: true },
-  { id: 'obrazy', label: 'Looks',
-    dirs: ['obrazy'], jsons: ['data/obrazy.json'] },
+  { id: 'media', label: 'Media library (pictures, clips, voice, music, video sources)',
+    dirs: ['media/images', 'media/clips', 'media/voice', 'media/audio', 'media/projects', 'media/sources',
+           'media/models', 'data/transcripts'],
+    except: ['media/images/options'],
+    stores: ['data/sources.json'], heavy: true },
+  { id: 'renders', label: 'Finished renders',
+    dirs: ['media/renders'], stores: ['data/finals-meta.json'], heavy: true },
+  { id: 'looks', label: 'Looks',
+    dirs: ['media/looks'], stores: ['data/obrazy.json'] },
   { id: 'lookbooks', label: 'Lookbooks',
-    dirs: ['lookbooks'], jsons: ['data/scen3-lookbook-meta.json'] },
+    dirs: ['media/lookbooks'], stores: ['data/scen3-lookbook-meta.json'] },
   { id: 'hooks', label: 'Hooks',
-    dirs: ['hooks'], jsons: ['data/hooks-archive.json'] },
-  { id: 'characters', label: 'Characters (4K sheets, thumbnails, voices)',
-    dirs: ['characters'], jsons: ['data/characters.json', 'data/custom-voices.json', 'data/projects.json'] },
-  { id: 'environments', label: 'Locations',
-    dirs: ['environments'], jsons: [] },
-  { id: 'refs', label: 'References and details',
-    dirs: ['refs', 'details'], jsons: ['data/refs.json', 'data/details-meta.json', 'data/images.json', 'data/library-cats.json'] },
+    dirs: ['media/hooks'], stores: ['data/hooks-archive.json', 'data/hook-ids.json'] },
+  { id: 'characters', label: 'Characters (4K sheets, thumbnails, voices, custom options)',
+    dirs: ['media/characters', 'media/images/options'],
+    stores: ['data/characters.json', 'data/custom-voices.json', 'data/projects.json', 'data/custom-options.json'] },
+  { id: 'locations', label: 'Locations',
+    dirs: ['media/locations'], stores: [] },
+  { id: 'references', label: 'References and details',
+    dirs: ['media/references'], stores: ['data/refs.json', 'data/details-meta.json', 'data/images.json', 'data/library-cats.json'] },
 
-  { id: 'merge', label: 'Merge projects (timelines with every overlay)',
-    dirs: [], jsons: ['data/merge-v3.json'], needs: ['media'] },
-  { id: 'scen3', label: 'Scenarios v3 (library and projects)',
-    dirs: [], jsons: ['data/scen3-scenarios.json', 'data/scen3-projects.json', 'data/scen3-poses.json',
-                      'data/scen3-moods.json', 'data/scen3-options.json', 'data/scen3-frame-options.json'],
+  { id: 'merge', label: 'Merge projects (timelines with every overlay, generation history)',
+    dirs: [], stores: ['data/merge-v3.json', 'data/mv3-gens.json', 'data/mv3-vgens.json', 'data/mv3-chat.json',
+                       'data/mv3-settings.json'],
     needs: ['media'] },
+  { id: 'scen3', label: 'Scenarios v3 (library and projects)',
+    dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-projects.json', 'data/scen3-poses.json',
+                       'data/scen3-moods.json', 'data/scen3-options.json', 'data/scen3-frame-options.json'],
+    needs: ['media'] },
+  { id: 'library2', label: 'Library 2 (narrators, script drafts)',
+    dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',
-    dirs: [], jsons: ['data/voice-shelf.json'], needs: ['media'] },
+    dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },
   { id: 'biroly', label: 'Birols',
-    dirs: [], jsons: ['data/biroly.json', 'data/biroly-vertical-config.json', 'data/biroly-idea-examples.json'] },
+    dirs: [], stores: ['data/biroly.json', 'data/biroly-vertical-config.json', 'data/biroly-idea-examples.json'] },
   { id: 'ui', label: 'Interface state',
-    dirs: [], jsons: ['data/ui-state.json'] },
-  { id: 'legacy', label: 'Legacy (old scenarios, edit sessions, geni, suno, ugc, vsl)',
-    dirs: ['scenarios', 'scenes', 'archive', 'vsl'],
-    jsons: ['data/scenarios-meta.json', 'data/scenarios-v2.json', 'data/edit-state.json',
-            'data/edit-sessions.json', 'data/geni.json', 'data/suno-lib.json',
-            'data/ugc-projects.json', 'data/ugc-ff-timings.json', 'data/gen-timings.json',
-            'data/dialogue-ep-timings.json'] },
+    dirs: [], stores: ['data/ui-state.json'] },
+  { id: 'prompts', label: 'Prompt edits',
+    dirs: [], stores: ['data/prompts.json'] },
+  { id: 'legacy', label: 'Legacy (old scenarios, edit sessions, geni, suno, ugc)',
+    dirs: [],
+    stores: ['data/scenarios-meta.json', 'data/scenarios-v2.json', 'data/scenes.json', 'data/edit-state.json',
+             'data/edit-sessions.json', 'data/geni.json', 'data/suno-lib.json', 'data/toon-characters.json',
+             'data/ugc-projects.json', 'data/ugc-ff-timings.json', 'data/gen-timings.json',
+             'data/dialogue-ep-timings.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
-  { id: 'settings', label: 'Settings and API keys', secret: true,
-    dirs: [], jsons: ['data/settings.json'] },
+  { id: 'settings', label: 'Settings, API keys and the YouTube sign-in', secret: true,
+    dirs: [], stores: ['data/settings.json', 'data/yt-cookies.txt', 'data/yt-cookies.json'] },
 ];
 
-// Deliberately absent: scratch (it lives in the system temp folder, not the library, and
-// rebuilds itself), logs, node_modules, and data/exports itself - an export must never contain
-// the last export. pending-tasks.json and biroly-gen-jobs.json are a queue of unfinished
-// work; on another machine they describe jobs that will never come back.
+// Deliberately absent: cache/ (thumbnails and previews make themselves again, and the export
+// volumes live there - an export must never contain the last export), scratch (the system temp
+// folder), logs, and the queues of unfinished work - pending-tasks.json, biroly-gen-jobs.json,
+// mv3-queue.json, cv2-recovered.json. On another machine those describe jobs that will never
+// come back, or start a render nobody asked that machine for.
 
 const _abs = (rel) => path.join(ROOT_DIR, rel);
 const _exists = (rel) => { try { return fs.existsSync(_abs(rel)); } catch { return false; } };
 
-function _dirSize(rel) {
-  const root = _abs(rel);
-  let bytes = 0, files = 0;
-  const walk = (d) => {
-    let entries = [];
-    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else { try { bytes += fs.statSync(p).size; files++; } catch {} }
-    }
-  };
-  if (fs.existsSync(root)) walk(root);
-  return { bytes, files };
-}
-
-// Every file a group holds, as {rel, abs, size}. The packer needs sizes up front, which is
-// also why the archive is built from an explicit list rather than archive.directory().
-function _listDir(rel, out) {
-  const root = _abs(rel);
+// Every file under a folder, as {rel, abs, size}, leaving out the folders in `except`. The packer
+// needs sizes up front, which is also why the archive is built from an explicit list rather than
+// archive.directory().
+function _listDir(rel, except, out) {
+  const skip = new Set(except.map((e) => path.resolve(_abs(e))));
   const walk = (d) => {
     let entries = [];
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const abs = path.join(d, e.name);
-      if (e.isDirectory()) { walk(abs); continue; }
+      if (e.isDirectory()) { if (!skip.has(path.resolve(abs))) walk(abs); continue; }
       let size = 0;
       try { size = fs.statSync(abs).size; } catch { continue; }
       out.push({ rel: path.relative(ROOT_DIR, abs).replace(/\\/g, '/'), abs, size });
     }
   };
-  if (fs.existsSync(root)) walk(root);
+  if (_exists(rel)) walk(_abs(rel));
   return out;
 }
 
 function _listGroup(g) {
   const out = [];
-  for (const d of g.dirs) if (_exists(d)) _listDir(d, out);
-  for (const j of g.jsons) {
-    if (!_exists(j)) continue;
-    try { out.push({ rel: j, abs: _abs(j), size: fs.statSync(_abs(j)).size }); } catch {}
+  for (const d of g.dirs) _listDir(d, g.except || [], out);
+  for (const s of g.stores) {
+    if (!_exists(s)) continue;
+    try { out.push({ rel: s, abs: _abs(s), size: fs.statSync(_abs(s)).size }); } catch {}
   }
   return out;
 }
@@ -157,13 +163,8 @@ function _packVolumes(files, cap) {
 }
 
 function _measure(g) {
-  let bytes = 0, files = 0;
-  for (const d of g.dirs) { const s = _dirSize(d); bytes += s.bytes; files += s.files; }
-  for (const j of g.jsons) {
-    if (!_exists(j)) continue;
-    try { bytes += fs.statSync(_abs(j)).size; files++; } catch {}
-  }
-  return { bytes, files };
+  const files = _listGroup(g);
+  return { bytes: files.reduce((n, f) => n + f.size, 0), files: files.length };
 }
 
 // ── The catalogue, measured on demand ───────────────────────────────────────
@@ -171,7 +172,7 @@ router.get('/data/groups', (_req, res) => {
   try {
     const groups = GROUPS.map(g => ({
       id: g.id, label: g.label, secret: !!g.secret, heavy: !!g.heavy, needs: g.needs || [],
-      dirs: g.dirs, jsons: g.jsons.filter(_exists),
+      dirs: g.dirs, stores: g.stores.filter(_exists),
       ..._measure(g),
     }));
     res.json({ success: true, version: VERSION, groups });
@@ -190,6 +191,8 @@ function _sweepOld() {
     }
   } catch {}
 }
+// Also once at start: gigabytes of day-old volumes should not wait for the next export to go.
+_sweepOld();
 
 router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
   try {
@@ -214,9 +217,11 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
     const short = id.slice(0, 6);
     const takenAt = new Date().toISOString();
 
-    // Everything that will go in, measured before anything is written.
-    const all = [];
-    for (const g of picked) all.push(..._listGroup(g));
+    // Everything that will go in, measured before anything is written - once each, since two
+    // groups may name the same store.
+    const byRel = new Map();
+    for (const g of picked) for (const f of _listGroup(g)) if (!byRel.has(f.rel)) byRel.set(f.rel, f);
+    const all = [...byRel.values()];
     const volumes = _packVolumes(all, VOLUME_BYTES);
     const pad = (n) => String(n).padStart(2, '0');
 
@@ -237,7 +242,7 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
     _jobs.set(id, job);
 
     const groupsInManifest = picked.map(g => ({
-      id: g.id, label: g.label, dirs: g.dirs, jsons: g.jsons.filter(_exists),
+      id: g.id, label: g.label, dirs: g.dirs, stores: g.stores.filter(_exists),
     }));
 
     // One volume at a time. Running them together would have several archivers competing for
@@ -380,13 +385,33 @@ function _merge(local, incoming, overwrite) {
   return overwrite ? incoming : (local === undefined ? incoming : local);
 }
 
+// Where an entry of the archive goes in this library - a path relative to it - or null when it
+// has no place here. Only the paths this app owns: an archive naming ../ or an unknown top
+// directory is a mistake at best, so it is left out rather than trusted.
+function _placeOf(rel, fromServer) {
+  if (rel.split('/').some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (!fromServer) {
+    const [top, kind] = rel.split('/');
+    return top === 'data' || (top === 'media' && KINDS.includes(kind)) ? rel : null;
+  }
+  // The server kept the renders' records among the renders; here they are a store like the rest.
+  if (rel === 'finals/_meta.json') return 'data/finals-meta.json';
+  if (rel.startsWith('data/')) return rel;
+  const url = '/' + rel;
+  if (LEGACY_LEFT_OUT.some(([re]) => re.test(url))) return null;
+  const now = fromLegacy(url);
+  // A server folder with no place in the desktop library (vsl/, the text scenarios/) stays out.
+  return now && now.startsWith('/media/') ? now.slice(1) : null;
+}
+
 const upload = multer({ dest: TEMP_DIR, limits: { fileSize: 32 * 1024 * 1024 * 1024 } });
 
 router.post('/data/import', upload.single('file'), async (req, res) => {
   const tmp = req.file && req.file.path;
   if (!tmp) return res.status(400).json({ success: false, error: 'no file' });
   const overwrite = String((req.body || {}).overwrite || '') === 'true';
-  const report = { jsons: 0, files: 0, skipped: 0, groups: [], overwrite };
+  // skipped: already here. leftOut: has no place in this library.
+  const report = { jsons: 0, files: 0, skipped: 0, leftOut: 0, groups: [], overwrite, fromServer: false };
   try {
     const zip = await unzipper.Open.file(tmp);
 
@@ -398,22 +423,19 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
     // Carried straight back so the popup can say "part 3 of 7" against the row, which is how a
     // person notices that volume 5 never went in. Absent on an archive from before volumes.
     if (manifest.part) { report.part = manifest.part; report.parts = manifest.parts; }
-
-    // Only the paths this app owns. An archive naming ../ or an unknown top directory is a
-    // mistake at best, so it is refused rather than trusted.
-    const allowed = new Set();
-    for (const g of GROUPS) { for (const d of g.dirs) allowed.add(d); allowed.add('data'); }
+    if (Number(manifest.version) > VERSION) throw new Error('this archive was made by a newer version of the app');
+    const fromServer = !(Number(manifest.version) >= 5);
+    report.fromServer = fromServer;
 
     for (const entry of zip.files) {
       if (entry.type !== 'File' || entry.path === 'manifest.json') continue;
-      const rel = entry.path.replace(/\\/g, '/');
-      const top = rel.split('/')[0];
-      if (!allowed.has(top)) { report.skipped++; continue; }
-      const dest = path.resolve(ROOT_DIR, rel);
-      if (!dest.startsWith(path.resolve(ROOT_DIR) + path.sep)) { report.skipped++; continue; }
+      const place = _placeOf(entry.path.replace(/\\/g, '/'), fromServer);
+      const dest = place && path.resolve(ROOT_DIR, place);
+      if (!dest || !dest.startsWith(path.resolve(ROOT_DIR) + path.sep)) { report.leftOut++; continue; }
 
-      if (rel.startsWith('data/') && rel.endsWith('.json')) {
-        const incoming = JSON.parse((await entry.buffer()).toString('utf8'));
+      if (place.startsWith('data/') && place.endsWith('.json')) {
+        let incoming = JSON.parse((await entry.buffer()).toString('utf8'));
+        if (fromServer) incoming = rewriteLegacyValue(incoming);
         let local = null;
         try { local = JSON.parse(fs.readFileSync(dest, 'utf8')); } catch {}
         const merged = local == null ? incoming : _merge(local, incoming, overwrite);
@@ -425,16 +447,27 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
 
       // A media file's name carries a timestamp or a hash, so one that is already here IS the
       // same picture. Copying over it would only risk replacing something good with something
-      // half-written.
+      // half-written - which is also why it is written beside itself first and renamed in.
       if (fs.existsSync(dest) && !overwrite) { report.skipped++; continue; }
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      await new Promise((ok, bad) => {
-        entry.stream().pipe(fs.createWriteStream(dest)).on('finish', ok).on('error', bad);
-      });
+      const part = dest + '.part';
+      try {
+        // pipeline, not pipe: a failure on either side closes both, and it settles once the
+        // file's handle is shut - the time is set and the file renamed after that.
+        await pipeline(entry.stream(), fs.createWriteStream(part));
+        // The shelves sort by modified time, so a file keeps the one it had.
+        const when = entry.lastModifiedDateTime;
+        if (when instanceof Date && !isNaN(when)) { try { fs.utimesSync(part, when, when); } catch {} }
+        fs.renameSync(part, dest);
+      } catch (e) {
+        try { fs.unlinkSync(part); } catch {}
+        throw e;
+      }
       report.files++;
     }
 
-    console.log(`[data-io] imported ${report.jsons} stores, ${report.files} files, ${report.skipped} skipped`);
+    console.log(`[data-io] imported ${report.jsons} stores, ${report.files} files, ${report.skipped} already here, `
+      + `${report.leftOut} left out${fromServer ? ' (a server-version archive, paths translated)' : ''}`);
     res.json({ success: true, ...report });
   } catch (e) {
     console.error('[data-io] import failed:', e.message);

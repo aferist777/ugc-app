@@ -11,8 +11,10 @@ const router  = express.Router();
 const FormData = require('form-data');
 const { execFile }  = require('child_process');
 const ffmpegPath    = require('ffmpeg-static');
-const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR, DATA_DIR, VOICE_PREVIEWS_DIR } = require('../lib/config');
-const UPLOADS_THUMBS_DIR = path.join(UPLOADS_DIR, 'thumbs');
+const { KIE_BASE, MEDIA, TEMP_DIR, ROOT_DIR, DATA_DIR, VOICE_PREVIEWS_DIR } = require('../lib/config');
+const { toDisk, toDiskWithin } = require('../lib/media');
+// Birol clips' posters: <clip>_thumb.jpg beside the clips, as lib/video-thumb names them.
+const CLIP_THUMBS_DIR = path.join(MEDIA.clips, 'thumbs');
 const {
   kieHeaders, uploadToPublicHost, callAI, callAIVisionWithFallback,
   createGptImage2Task, createGptImage2TextTask,
@@ -51,11 +53,11 @@ async function _replicateVideoStatus(taskId, prefix, res) {
   const remoteUrl = _extract(pred.output);
   if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'Replicate: empty output' });
   const filename = `${prefix}_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
-  const destPath = path.join(UPLOADS_DIR, filename);
+  const destPath = path.join(MEDIA.clips, filename);
   const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
   fs.writeFileSync(destPath, Buffer.from(videoRes.data));
   try { await normalizeVideoForBrowser(destPath); } catch (e) { console.warn('[replicate-video/status] normalize failed:', e.message); }
-  return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+  return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
 }
 
 // Strip long silences from a TTS mp3 file in-place using FFmpeg.
@@ -166,11 +168,11 @@ async function _elevenLabsTts(text, voiceName, ttsParams) {
   );
 
   const filename = `tts_el_${Date.now()}.mp3`;
-  const destPath = path.join(UPLOADS_DIR, filename);
+  const destPath = path.join(MEDIA.voice, filename);
   fs.writeFileSync(destPath, Buffer.from(audioRes.data));
   await stripSilence(destPath);
   console.log(`[elevenlabs/tts] voice=${voiceName} (${voiceId}) model=${modelId} → ${filename}`);
-  return `/uploads/${filename}`;
+  return `/media/voice/${filename}`;
 }
 
 // Send audio buffer directly to Groq Whisper; returns { words: [{word,start,end}], text, duration }
@@ -196,7 +198,7 @@ async function _groqStt(buf, filename, language) {
 }
 
 // ── Audio file upload (music / sfx from user's computer) ─────────────────────
-const AUDIO_DIR = path.join(UPLOADS_DIR, 'audio');
+const AUDIO_DIR = MEDIA.audio;
 if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
 const _audioStorage = multer.diskStorage({
@@ -227,7 +229,7 @@ router.get('/audio/voices', async (req, res) => {
     const previews = {};
 
     for (const v of voices) {
-      const localPath = `/voice-previews/${v.voice_id}.mp3`;
+      const localPath = `/cache/voice-previews/${v.voice_id}.mp3`;
       const destFile  = path.join(VOICE_PREVIEWS_DIR, `${v.voice_id}.mp3`);
       previews[v.voice_id] = localPath;
       if (!fs.existsSync(destFile) && v.preview_url) {
@@ -406,7 +408,7 @@ OUTPUT FORMAT (strict JSON, no markdown, no prose):
 // ── POST /api/audio/voice-design/previews ────────────────────────────────────
 // Body: { voiceDescription, sampleText? }
 // Calls ElevenLabs /v1/text-to-voice/create-previews → returns 3 previews.
-// Each preview is saved locally under voice-previews/preview_<previewId>.mp3 in the library
+// Each preview is saved locally under cache/voice-previews/preview_<previewId>.mp3 in the library
 // so the frontend can play it without re-fetching base64 over the wire.
 // Response: { success, previews: [{ previewId, audioPath, generatedVoiceId, mediaType }] }
 const _voiceDesignSampleText =
@@ -444,7 +446,7 @@ router.post('/audio/voice-design/previews', async (req, res) => {
       return {
         previewId,
         generatedVoiceId: p.generated_voice_id,
-        audioPath: `/voice-previews/${filename}`,
+        audioPath: `/cache/voice-previews/${filename}`,
         mediaType: p.media_type || 'audio/mpeg',
       };
     });
@@ -568,7 +570,7 @@ router.post('/audio/upload-file', _audioUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Нет файла' });
   const origBase = path.basename(req.file.originalname, path.extname(req.file.originalname));
   const name     = ((req.body && req.body.name) || origBase || 'track').slice(0, 60);
-  const webPath  = `/uploads/audio/${req.file.filename}`;
+  const webPath  = `/media/audio/${req.file.filename}`;
   res.json({ success: true, webPath, name, filename: req.file.filename });
 });
 
@@ -720,11 +722,11 @@ router.post('/audio/tts-preview', async (req, res) => {
     if (!audioUrl) return res.status(502).json({ success: false, error: 'Таймаут генерации предпросмотра' });
 
     const filename  = `tts_preview_${Date.now()}.mp3`;
-    const destPath  = path.join(UPLOADS_DIR, filename);
+    const destPath  = path.join(MEDIA.voice, filename);
     const audioRes  = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 30000 });
     fs.writeFileSync(destPath, Buffer.from(audioRes.data));
     await stripSilence(destPath);
-    res.json({ success: true, audioPath: `/uploads/${filename}` });
+    res.json({ success: true, audioPath: `/media/voice/${filename}` });
   } catch (err) {
     console.error('[audio/tts-preview]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
@@ -753,11 +755,11 @@ router.get('/audio/tts/status/:taskId', async (req, res) => {
 
       // Download mp3 to uploads/
       const filename = `tts_${taskId}_${Date.now()}.mp3`;
-      const destPath = path.join(UPLOADS_DIR, filename);
+      const destPath = path.join(MEDIA.voice, filename);
       const audioRes = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 30000 });
       fs.writeFileSync(destPath, Buffer.from(audioRes.data));
       await stripSilence(destPath);
-      return res.json({ success: true, state: 'success', audioPath: `/uploads/${filename}` });
+      return res.json({ success: true, state: 'success', audioPath: `/media/voice/${filename}` });
     }
 
     if (state === 'failed') {
@@ -909,7 +911,7 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
       const remoteUrl = _extract(pred.output);
       if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'Replicate: empty output' });
       const filename = `avatar_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
+      const destPath = path.join(MEDIA.clips, filename);
       const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
       fs.writeFileSync(destPath, Buffer.from(videoRes.data));
       // Normalize to H.264 main + yuv420p + AAC + faststart so the browser
@@ -917,7 +919,7 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
       // with kie.ai-sourced clips without re-encode mismatches.
       try { await normalizeVideoForBrowser(destPath); }
       catch (e) { console.warn('[audio/avatar/status replicate] normalize failed:', e.message); }
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+      return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
     } catch (err) {
       console.error('[audio/avatar/status replicate]', err.response?.data || err.message);
       return res.status(502).json({ success: false, error: err.message });
@@ -942,10 +944,10 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
       if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
 
       const filename = `avatar_${taskId}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
+      const destPath = path.join(MEDIA.clips, filename);
       const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 60000 });
       fs.writeFileSync(destPath, Buffer.from(videoRes.data));
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+      return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
     }
 
     if (state === 'failed') {
@@ -1192,10 +1194,10 @@ router.get('/video/grok-text/status/:taskId', async (req, res) => {
         return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
       }
       const filename = `grok_txt_${taskId}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
+      const destPath = path.join(MEDIA.clips, filename);
       const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 60000 });
       fs.writeFileSync(destPath, Buffer.from(videoRes.data));
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+      return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
     }
 
     // 3. Failure detection — broad match. Only reached when the state is NOT
@@ -1298,13 +1300,13 @@ router.get('/video/p-video/status/:taskId', async (req, res) => {
     const remoteUrl = _extract(pred.output);
     if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'p-video: empty output' });
     const filename = `pvid_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
-    const destPath = path.join(UPLOADS_DIR, filename);
+    const destPath = path.join(MEDIA.clips, filename);
     const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
     fs.writeFileSync(destPath, Buffer.from(videoRes.data));
     // Normalize for browser playback + merge compatibility (see helper docs).
     try { await normalizeVideoForBrowser(destPath); }
     catch (e) { console.warn('[video/p-video/status] normalize failed:', e.message); }
-    return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+    return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
   } catch (err) {
     console.error('[video/p-video/status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });
@@ -1598,10 +1600,10 @@ router.get('/video/grok/status/:taskId', async (req, res) => {
       if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
 
       const filename = `grok_${taskId}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
+      const destPath = path.join(MEDIA.clips, filename);
       const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 60000 });
       fs.writeFileSync(destPath, Buffer.from(videoRes.data));
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+      return res.json({ success: true, state: 'success', videoPath: `/media/clips/${filename}` });
     }
 
     if (state === 'failed') {
@@ -1616,11 +1618,10 @@ router.get('/video/grok/status/:taskId', async (req, res) => {
 });
 
 // ── GET /api/biroly/scan-uploads ─────────────────────────────────────────────
-// Returns grok_*.mp4 videos paired with nearest generated_*.jpg image (by mtime).
-// Pairs where the image was created within 30 min before the video are linked.
+// Returns the grok_*.mp4 videos in media/clips/.
 router.get('/biroly/scan-uploads', (req, res) => {
   try {
-    const allFiles = fs.readdirSync(UPLOADS_DIR);
+    const allFiles = fs.readdirSync(MEDIA.clips);
 
     // Orphan recovery only needs the videos + their mtimes. We intentionally do NOT
     // pair them with generated_* images: that time-window heuristic guessed wrong
@@ -1629,8 +1630,8 @@ router.get('/biroly/scan-uploads', (req, res) => {
     const files = allFiles
       .filter(f => f.startsWith('grok_') && f.endsWith('.mp4'))
       .map(f => {
-        const st = fs.statSync(path.join(UPLOADS_DIR, f));
-        return { file: f, videoPath: `/uploads/${f}`, mtime: st.mtimeMs, imagePath: null, thumbPath: null };
+        const st = fs.statSync(path.join(MEDIA.clips, f));
+        return { file: f, videoPath: `/media/clips/${f}`, mtime: st.mtimeMs, imagePath: null, thumbPath: null };
       })
       .sort((a, b) => b.mtime - a.mtime);
 
@@ -1642,15 +1643,18 @@ router.get('/biroly/scan-uploads', (req, res) => {
 });
 
 // ── DELETE /api/biroly/delete-files ───────────────────────────────────────────
-// Permanently removes a birol's files from UPLOADS_DIR.
-// Body: { imagePath, thumbPath, videoPath } — all optional, must start with /uploads/
+// Permanently removes a birol's files - generated pictures and clips only, never a hook.
+// Body: { imagePath, thumbPath, videoPath } — all optional, must be under /media/clips/ or /media/images/
+const BIROL_FILES = [MEDIA.clips, MEDIA.images];
+const _birolFileThere = (p) => { const abs = p && toDiskWithin(p, BIROL_FILES); return !!abs && fs.existsSync(abs); };
+
 router.post('/biroly/delete-files', (req, res) => {
   const { imagePath, thumbPath, videoPath } = req.body || {};
   const toDelete = [imagePath, thumbPath, videoPath].filter(Boolean);
   const deleted = [];
   for (const p of toDelete) {
-    if (!p.startsWith('/uploads/') || p.includes('..')) continue;
-    const abs = path.join(UPLOADS_DIR, p.replace(/^\/uploads\//, ''));
+    const abs = toDiskWithin(p, BIROL_FILES);
+    if (!abs) continue;
     try { if (fs.existsSync(abs)) { fs.unlinkSync(abs); deleted.push(p); } }
     catch (e) { console.warn('[biroly/delete-files]', p, e.message); }
   }
@@ -1667,10 +1671,8 @@ router.post('/biroly/sync', (req, res) => {
     const toRemove = [];
     for (const item of items) {
       if (item.status === 'generating') continue; // never auto-remove in-progress
-      const hasVideo = item.videoPath && item.videoPath.startsWith('/uploads/')
-        && fs.existsSync(path.join(UPLOADS_DIR, item.videoPath.replace(/^\/uploads\//, '')));
-      const hasImage = item.imagePath && item.imagePath.startsWith('/uploads/')
-        && fs.existsSync(path.join(UPLOADS_DIR, item.imagePath.replace(/^\/uploads\//, '')));
+      const hasVideo = _birolFileThere(item.videoPath);
+      const hasImage = _birolFileThere(item.imagePath);
       // Remove only if BOTH video and image are gone (or never existed)
       const videoExpected = !!item.videoPath;
       const imageExpected = !!item.imagePath;
@@ -1681,10 +1683,10 @@ router.post('/biroly/sync', (req, res) => {
 
     // Also scan for orphan videos not in the client list
     const knownVideos = new Set(items.map(i => i.videoPath).filter(Boolean));
-    const allFiles    = fs.readdirSync(UPLOADS_DIR);
+    const allFiles    = fs.readdirSync(MEDIA.clips);
     const orphans     = allFiles
       .filter(f => f.startsWith('grok_') && f.endsWith('.mp4'))
-      .map(f => `/uploads/${f}`)
+      .map(f => `/media/clips/${f}`)
       .filter(vp => !knownVideos.has(vp));
 
     res.json({ success: true, toRemove, orphans });
@@ -1698,16 +1700,15 @@ router.post('/biroly/sync', (req, res) => {
 // Takes [{id, videoPath}], generates missing thumbnails, returns [{id, thumbPath}].
 router.post('/biroly/refresh-thumbs', async (req, res) => {
   const items = req.body?.items || [];
-  if (!fs.existsSync(UPLOADS_THUMBS_DIR)) fs.mkdirSync(UPLOADS_THUMBS_DIR, { recursive: true });
+  if (!fs.existsSync(CLIP_THUMBS_DIR)) fs.mkdirSync(CLIP_THUMBS_DIR, { recursive: true });
   const results = [];
   for (const { id, videoPath } of items) {
-    if (!videoPath?.startsWith('/uploads/')) continue;
-    const absVideo = path.join(UPLOADS_DIR, videoPath.replace(/^\/uploads\//, ''));
-    if (!fs.existsSync(absVideo)) continue;
+    const absVideo = videoPath && toDiskWithin(videoPath, [MEDIA.clips]);
+    if (!absVideo || !fs.existsSync(absVideo)) continue;
     const baseName      = path.basename(videoPath, path.extname(videoPath));
     const thumbFilename = baseName + '_thumb.jpg';
-    const absThumb      = path.join(UPLOADS_THUMBS_DIR, thumbFilename);
-    const thumbPath     = `/uploads/thumbs/${thumbFilename}`;
+    const absThumb      = path.join(CLIP_THUMBS_DIR, thumbFilename);
+    const thumbPath     = `/media/clips/thumbs/${thumbFilename}`;
     if (!fs.existsSync(absThumb)) {
       const ok = await extractBirolyThumb(absVideo, absThumb);
       if (!ok) continue;
@@ -1721,18 +1722,16 @@ router.post('/biroly/refresh-thumbs', async (req, res) => {
 // Re-checks file existence for one item; extracts thumb if video found.
 router.post('/biroly/check-item', async (req, res) => {
   const { videoPath, imagePath } = req.body || {};
-  const hasVideo = !!(videoPath?.startsWith('/uploads/') &&
-    fs.existsSync(path.join(UPLOADS_DIR, videoPath.replace(/^\/uploads\//, ''))));
-  const hasImage = !!(imagePath?.startsWith('/uploads/') &&
-    fs.existsSync(path.join(UPLOADS_DIR, imagePath.replace(/^\/uploads\//, ''))));
+  const hasVideo = _birolFileThere(videoPath);
+  const hasImage = _birolFileThere(imagePath);
   let thumbPath = null;
   if (hasVideo) {
-    if (!fs.existsSync(UPLOADS_THUMBS_DIR)) fs.mkdirSync(UPLOADS_THUMBS_DIR, { recursive: true });
-    const absVideo      = path.join(UPLOADS_DIR, videoPath.replace(/^\/uploads\//, ''));
+    if (!fs.existsSync(CLIP_THUMBS_DIR)) fs.mkdirSync(CLIP_THUMBS_DIR, { recursive: true });
+    const absVideo      = toDisk(videoPath);
     const baseName      = path.basename(videoPath, path.extname(videoPath));
     const thumbFilename = baseName + '_thumb.jpg';
-    const absThumb      = path.join(UPLOADS_THUMBS_DIR, thumbFilename);
-    thumbPath           = `/uploads/thumbs/${thumbFilename}`;
+    const absThumb      = path.join(CLIP_THUMBS_DIR, thumbFilename);
+    thumbPath           = `/media/clips/thumbs/${thumbFilename}`;
     if (!fs.existsSync(absThumb)) {
       const ok = await extractBirolyThumb(absVideo, absThumb);
       if (!ok) thumbPath = null;
@@ -1742,17 +1741,17 @@ router.post('/biroly/check-item', async (req, res) => {
 });
 
 // ── POST /api/biroly/refresh-all-thumbs ──────────────────────────────────────
-// One-shot: scan all grok_*.mp4 in UPLOADS_DIR, extract missing thumbnails.
+// One-shot: scan all grok_*.mp4 in media/clips/, extract missing thumbnails.
 router.post('/biroly/refresh-all-thumbs', async (req, res) => {
-  if (!fs.existsSync(UPLOADS_THUMBS_DIR)) fs.mkdirSync(UPLOADS_THUMBS_DIR, { recursive: true });
-  const allFiles = fs.readdirSync(UPLOADS_DIR);
+  if (!fs.existsSync(CLIP_THUMBS_DIR)) fs.mkdirSync(CLIP_THUMBS_DIR, { recursive: true });
+  const allFiles = fs.readdirSync(MEDIA.clips);
   const videos   = allFiles.filter(f => f.startsWith('grok_') && f.endsWith('.mp4'));
   let generated  = 0;
   for (const vf of videos) {
-    const absVideo      = path.join(UPLOADS_DIR, vf);
+    const absVideo      = path.join(MEDIA.clips, vf);
     const baseName      = path.basename(vf, '.mp4');
     const thumbFilename = baseName + '_thumb.jpg';
-    const absThumb      = path.join(UPLOADS_THUMBS_DIR, thumbFilename);
+    const absThumb      = path.join(CLIP_THUMBS_DIR, thumbFilename);
     if (fs.existsSync(absThumb)) continue;
     const ok = await extractBirolyThumb(absVideo, absThumb);
     if (ok) generated++;
@@ -1852,8 +1851,7 @@ router.post('/audio/stt', (req, res) => {
 
       // Resolve file path
       let fp = audioPath;
-      if (fp.startsWith('/uploads/')) fp = path.join(UPLOADS_DIR, fp.slice('/uploads/'.length));
-      else if (fp.startsWith('/'))    fp = path.join(ROOT_DIR, fp.replace(/^\//, ''));
+      if (fp.startsWith('/')) fp = toDisk(fp) || fp;
       if (!fs.existsSync(fp)) { console.warn('[stt] file not found:', fp); continue; }
 
       const buf = fs.readFileSync(fp);
@@ -1960,10 +1958,10 @@ router.post('/audio/suno/generate', async (req, res) => {
 // download both, then chain them via acrossfade=d=1 for a ~3-5 minute background
 // track. The crossfade hides the timbre shift between the two variants.
 async function _concatSunoVariants(urlA, urlB, taskId) {
-  const tmpA = path.join(UPLOADS_DIR, `suno_tmp_${taskId}_a.mp3`);
-  const tmpB = path.join(UPLOADS_DIR, `suno_tmp_${taskId}_b.mp3`);
+  const tmpA = path.join(TEMP_DIR, `suno_tmp_${taskId}_a.mp3`);
+  const tmpB = path.join(TEMP_DIR, `suno_tmp_${taskId}_b.mp3`);
   const outName = `suno_${taskId}_${Date.now()}.mp3`;
-  const outPath = path.join(UPLOADS_DIR, outName);
+  const outPath = path.join(MEDIA.audio, outName);
 
   const [resA, resB] = await Promise.all([
     axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 }),
@@ -2026,22 +2024,22 @@ router.get('/audio/suno/status/:taskId', async (req, res) => {
       // If only one variant came back (rare), save it alone — better than failing.
       if (!urlB) {
         const filename = `suno_${taskId}_${Date.now()}.mp3`;
-        const destPath = path.join(UPLOADS_DIR, filename);
+        const destPath = path.join(MEDIA.audio, filename);
         const r = await axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 });
         fs.writeFileSync(destPath, Buffer.from(r.data));
-        return res.json({ success: true, state: 'success', audioPath: `/uploads/${filename}`, concatenated: false });
+        return res.json({ success: true, state: 'success', audioPath: `/media/audio/${filename}`, concatenated: false });
       }
       // Both variants present — concat via crossfade into one 3-5 min track.
       try {
         const outName = await _concatSunoVariants(urlA, urlB, taskId);
-        return res.json({ success: true, state: 'success', audioPath: `/uploads/${outName}`, concatenated: true });
+        return res.json({ success: true, state: 'success', audioPath: `/media/audio/${outName}`, concatenated: true });
       } catch (e) {
         console.error('[audio/suno/status] concat failed, falling back to single track:', e.message);
         const filename = `suno_${taskId}_${Date.now()}.mp3`;
-        const destPath = path.join(UPLOADS_DIR, filename);
+        const destPath = path.join(MEDIA.audio, filename);
         const r = await axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 });
         fs.writeFileSync(destPath, Buffer.from(r.data));
-        return res.json({ success: true, state: 'success', audioPath: `/uploads/${filename}`, concatenated: false });
+        return res.json({ success: true, state: 'success', audioPath: `/media/audio/${filename}`, concatenated: false });
       }
     }
     if (FAILED.includes(status)) return res.json({ success: true, state: 'failed', error: data?.errorMessage || status });
@@ -2102,7 +2100,7 @@ router.post('/audio/sfx/generate', async (req, res) => {
     fs.writeFileSync(destPath, Buffer.from(r.data));
     const name = text.trim().slice(0, 40);
     console.log(`[audio/sfx/generate] "${text.slice(0, 30)}" → ${filename}`);
-    res.json({ success: true, webPath: `/uploads/audio/${filename}`, name });
+    res.json({ success: true, webPath: `/media/audio/${filename}`, name });
   } catch (err) {
     const status = err.response?.status;
     const msg = status === 422 ? 'Invalid request (422): check text length/content' : (err.response?.data ? Buffer.from(err.response.data).toString('utf8').slice(0, 200) : err.message);

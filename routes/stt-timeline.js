@@ -26,11 +26,9 @@ const ffmpegPath = require('ffmpeg-static');
 
 const router = express.Router();
 
-const ROOT_DIR      = require('../lib/config').ROOT_DIR;
-const UPLOADS_DIR   = path.join(ROOT_DIR, 'uploads');
-const FINALS_DIR    = path.join(ROOT_DIR, 'finals');
-const TEMP_DIR      = require('../lib/config').TEMP_DIR;
-const SETTINGS_FILE = path.join(ROOT_DIR, 'data', 'settings.json');
+const { DATA_DIR, TEMP_DIR } = require('../lib/config');
+const { toDisk } = require('../lib/media');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const GROQ_STT_URL  = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
 function _groqKey() {
@@ -43,9 +41,7 @@ function _sttWebToFs(p) {
   if (!p) return null;
   const s = String(p).split('?')[0];
   if (/^https?:\/\//i.test(s)) return null;
-  if (s.startsWith('/uploads/')) return path.join(UPLOADS_DIR, s.slice('/uploads/'.length));
-  if (s.startsWith('/finals/'))  return path.join(FINALS_DIR,  s.slice('/finals/'.length));
-  return path.join(ROOT_DIR, s.replace(/^\//, ''));
+  return toDisk(s);
 }
 
 // ffmpeg atempo covers 0.5..2.0 per stage; chain for extremes (Merge stays in range).

@@ -26,7 +26,7 @@ const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const router  = express.Router();
 
-const { UPLOADS_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { MEDIA, ROOT_DIR, DATA_DIR, TEMP_DIR } = require('../lib/config');
 const { uploadToPublicHost, normalizeVideoForBrowser, noteHostFailure } = require('../lib/helpers');
 const { isFetchFailure } = require('../lib/img-providers');
 const VT = require('../lib/video-thumb');
@@ -56,7 +56,7 @@ const VID_EXTS  = ['.mp4', '.mov', '.m4v', '.webm'];
 const VID_MIMES = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm'];
 const _refUpload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.clips, { recursive: true }); } catch (e) {} cb(null, MEDIA.clips); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (VID_EXTS.includes(ext) ? ext : '.mp4'));
@@ -92,8 +92,8 @@ function _probe(abs) {
 
 router.post('/video/reference', _refUpload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const videoPath = '/uploads/' + req.file.filename;
-  const abs = path.join(UPLOADS_DIR, req.file.filename);
+  const videoPath = '/media/clips/' + req.file.filename;
+  const abs = path.join(MEDIA.clips, req.file.filename);
   try {
     const meta = await _probe(abs);
     if (!(meta.duration > 0)) throw new Error('that file does not look like a video');
@@ -157,7 +157,8 @@ async function _clipUrl(webPath, inS, outS) {
   const dur = b > a ? (b - a) : 0;
   if (!(dur > 0)) throw new Error('choose a segment of the reference clip first');
 
-  const out = path.join(UPLOADS_DIR, 'refcut_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.mp4');
+  // Scratch: the cut only exists to be uploaded for the engine to fetch.
+  const out = path.join(TEMP_DIR, 'refcut_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.mp4');
   await new Promise((resolve, reject) => {
     const proc = spawn(ffmpegPath, [
       '-hide_banner', '-loglevel', 'error',
@@ -261,7 +262,7 @@ function _extract(out) {
 // the Birols orphan recovery - renaming these would start surfacing rejected takes there.
 async function _save(remoteUrl, tag) {
   const filename = `anim_${tag}_${Date.now()}.mp4`;
-  const destPath = path.join(UPLOADS_DIR, filename);
+  const destPath = path.join(MEDIA.clips, filename);
   const r = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
   fs.writeFileSync(destPath, Buffer.from(r.data));
   // The concat pipeline cannot decode every profile a model emits; this is the same pass
@@ -269,7 +270,7 @@ async function _save(remoteUrl, tag) {
   // and the normaliser refuses stills.
   try { await normalizeVideoForBrowser(destPath); }
   catch (e) { console.warn('[video/animate] normalize failed:', e.message); }
-  return `/uploads/${filename}`;
+  return `/media/clips/${filename}`;
 }
 
 router.get('/video/animate/status/:taskId', async (req, res) => {

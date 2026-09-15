@@ -6,7 +6,7 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR, OBRAZY_DIR, MODELS_DIR } = require('../lib/config');
+const { MEDIA, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR, OBRAZY_DIR, MODELS_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
   kieHeaders, getImgVisionModel, parseLooseJson, createTrellisTask, getReplicateRawOutput,
@@ -129,7 +129,7 @@ router.post('/generate', async (req, res) => {
       return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
     }
 
-    addPendingTask(taskId, 'uploads', 'generated', 'generate');
+    addPendingTask(taskId, 'images', 'generated', 'generate');
     res.json({ success: true, taskId, skinTraits, seed });
   } catch (err) {
     console.error('[generate]', err.response?.data || err.message);
@@ -156,7 +156,7 @@ router.get('/status/:taskId', async (req, res) => {
   const provider = (typeof taskId === 'string' && taskId.startsWith('repl:')) ? 'Replicate' : 'kie.ai';
   console.log('[/api/status]', taskId.slice(0, 60), '→', provider);
   try {
-    const result = await resolveTask(taskId, UPLOADS_DIR, 'generated');
+    const result = await resolveTask(taskId, MEDIA.images, 'generated');
     if (result.state === 'success' || result.state === 'failed') removePendingTask(taskId);
     console.log('[/api/status]', taskId.slice(0, 30), 'state:', result.state, result.imagePath || result.error || '');
     return res.json({ success: true, ...result });
@@ -214,7 +214,7 @@ router.get('/random-face', async (_req, res) => {
 });
 
 // Pose Studio: text -> cheap object image -> TRELLIS image-to-3D -> GLB saved under
-// models/ in the library (served at /models/), returned for loading into the 3D scene.
+// media/models/ in the library, returned for loading into the 3D scene.
 // Synchronous (cheap t2i ~10s + TRELLIS ~25s); the client shows a spinner.
 router.post('/studio/gen-object', async (req, res) => {
   const { description } = req.body || {};
@@ -235,7 +235,7 @@ router.post('/studio/gen-object', async (req, res) => {
     const dl = await axios.get(glbUrl, { responseType: 'arraybuffer', timeout: 120000 });
     fs.writeFileSync(dest, Buffer.from(dl.data));
     console.log('[studio/gen-object]', description, '->', name, Math.round(dl.data.length / 1024) + 'KB');
-    res.json({ success: true, glbPath: '/models/' + name, sourceImage: imgUrl });
+    res.json({ success: true, glbPath: '/media/models/' + name, sourceImage: imgUrl });
   } catch (err) {
     console.error('[studio/gen-object]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
@@ -261,7 +261,7 @@ router.post('/studio/generate-frame', async (req, res) => {
       taskId = await createMultiRefEditTask(eng, prompt, [url], ar, Math.floor(Math.random() * 999999999) + 1, {});
     }
     if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
-    addPendingTask(taskId, 'uploads', 'studioframe', 'studio');
+    addPendingTask(taskId, 'images', 'studioframe', 'studio');
     console.log('[studio/generate-frame] engine:', eng, '| taskId:', taskId);
     res.json({ success: true, taskId });
   } catch (err) {
@@ -451,7 +451,7 @@ router.post('/edit-pose/generate', async (req, res) => {
       taskId = await createNanoBananaProTask(finalPrompt, imageUrl, '9:16');
     }
     console.log('[edit-pose] engine:', engine, '| taskId:', taskId);
-    addPendingTask(taskId, 'uploads', 'editpose', 'edit-pose');
+    addPendingTask(taskId, 'images', 'editpose', 'edit-pose');
     res.json({ success: true, taskId });
   } catch (err) {
     console.error('[edit-pose/generate]', err.response?.data || err.message);
@@ -462,7 +462,7 @@ router.post('/edit-pose/generate', async (req, res) => {
 // ── GET /api/edit-pose/status/:taskId ─────────────────────────────────────────
 router.get('/edit-pose/status/:taskId', async (req, res) => {
   try {
-    const result = await resolveTask(req.params.taskId, UPLOADS_DIR, 'editpose');
+    const result = await resolveTask(req.params.taskId, MEDIA.images, 'editpose');
     if (result.state === 'success' || result.state === 'failed') removePendingTask(req.params.taskId);
     res.json({ success: true, ...result });
   } catch (err) {

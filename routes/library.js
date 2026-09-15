@@ -32,6 +32,7 @@ const {
   CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
   FINALS_DIR,
 } = require('../lib/config');
+const { toUrl } = require('../lib/media');
 const LC = require('../lib/library-cats');
 const VS = require('../lib/voice-shelf');
 const VT = require('../lib/video-thumb');
@@ -389,7 +390,8 @@ function _rendersShelf() {
     .map(f => ({ f, m: (() => { try { return fs.statSync(path.join(dir, f)).mtimeMs; } catch (e) { return 0; } })() }))
     .sort((a, b) => b.m - a.m)
     .map(({ f, m }) => {
-      const turl = VT.thumbUrlFor('/finals/' + f);
+      const url = toUrl(path.join(dir, f));
+      const turl = VT.thumbUrlFor(url);
       const tabs = path.join(ROOT_DIR, String(turl).replace(/^\/+/, ''));
       const hasThumb = fs.existsSync(tabs);
       return {
@@ -398,7 +400,7 @@ function _rendersShelf() {
         // card, and the date is already a column.
         name: f.replace(/\.[^.]+$/, '').replace(/^local_\d+_/, ''),
         kind: 'renders',
-        media: '/finals/' + f,
+        media: url,
         thumb: hasThumb ? turl : null,
         meta: { date: m ? new Date(m).toISOString() : null, sizeMb: (() => {
           try { return Math.round(fs.statSync(path.join(dir, f)).size / 1048576); } catch (e) { return null; }
@@ -476,8 +478,8 @@ function _musicShelf() {
 
 const SHELVES = {
   characters:   _charactersShelf,
-  lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
-  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
+  lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR), 'lookbooks'), filters: [] }),
+  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), filters: [] }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
   music:        _musicShelf,
@@ -640,7 +642,7 @@ const RECORD_STORES = {
     // deletion with the folder intact. The url is what the images actually load from.
     folder: (o) => {
       const url = String(o.char || '');
-      const m = url.match(/^\/?obrazy\/([^/]+)\//);
+      const m = url.match(/^\/media\/looks\/([^/]+)\//);
       if (m) return path.join(OBRAZY_DIR, m[1]);
       try { return obrazAbsFolder(o.name || '', o.id); } catch (e) { return null; }
     },
@@ -664,8 +666,8 @@ RECORD_STORES.uploads = RECORD_STORES.birols;
 // Delete-only by design: these filenames are referenced by look records (a look can
 // point at a lookbook image), so renaming the file would silently break them.
 const FILE_SHELVES = {
-  lookbooks:    { dir: LOOKBOOKS_DIR,    url: '/lookbooks' },
-  environments: { dir: ENVIRONMENTS_DIR, url: '/environments' },
+  lookbooks:    { dir: LOOKBOOKS_DIR,    url: toUrl(LOOKBOOKS_DIR) },
+  environments: { dir: ENVIRONMENTS_DIR, url: toUrl(ENVIRONMENTS_DIR) },
 };
 
 router.patch('/library/item/:kind/:id', (req, res) => {
@@ -826,7 +828,7 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     }
 
     // Renders. No record to remove - the file IS the entry - so this unlinks the video and its
-    // poster and nothing else. The finals archive (finals/_meta.json) is left alone on purpose:
+    // poster and nothing else. The finals archive (data/finals-meta.json) is left alone on purpose:
     // GET /api/finals/list already drops entries whose file has gone, so it heals itself rather
     // than needing a second writer here.
     if (kind === 'renders') {
@@ -834,8 +836,9 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       if (!base || !VID_RE.test(base)) return res.status(400).json({ success: false, error: 'not a render' });
       const abs = path.join(FINALS_DIR, base);
       if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not found' });
-      if (_unlink('/finals/' + base)) removed.push(base);
-      const turl = VT.thumbUrlFor('/finals/' + base);
+      const url = toUrl(abs);
+      if (_unlink(url)) removed.push(base);
+      const turl = VT.thumbUrlFor(url);
       if (turl) _unlink(turl);
       return res.json({ success: true, kind, id, removed });
     }

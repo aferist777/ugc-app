@@ -53,7 +53,7 @@ const AGENT = require('../lib/mv3-agent');
 const SET = require('../lib/mv3-settings');
 const IMG = require('../lib/images-store');
 const LC = require('../lib/library-cats');
-const { UPLOADS_DIR } = require('../lib/config');
+const { MEDIA } = require('../lib/config');
 
 // The whole table, shaped for the panel. Built from the same rows that submit, so the panel
 // cannot offer a pairing that fails at submit time.
@@ -219,7 +219,7 @@ router.delete('/mv3/chat', (req, res) => {
 const EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 const _upload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.images, { recursive: true }); } catch (e) {} cb(null, MEDIA.images); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'mref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
@@ -232,7 +232,7 @@ const _upload = multer({
 
 router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/uploads/' + req.file.filename;
+  const imagePath = '/media/images/' + req.file.filename;
   const b = req.body || {};
   try {
     // The same category the project's generations use, by the same rule - see catLabelFor.

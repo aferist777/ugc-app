@@ -6,6 +6,7 @@ const fs      = require('fs');
 const router  = express.Router();
 
 const { LOOKBOOKS_DIR, ENVIRONMENTS_DIR } = require('../lib/config');
+const { toUrl } = require('../lib/media');
 const { uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task,
   createSeedream5LiteTask, createSeedream45Task, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
@@ -29,12 +30,12 @@ function listWithThumbs(dir, urlPrefix) {
 
 // ── List lookbooks ────────────────────────────────────────────────────────────
 router.get('/lookbooks', (_req, res) => {
-  res.json({ success: true, files: listWithThumbs(LOOKBOOKS_DIR, '/lookbooks') });
+  res.json({ success: true, files: listWithThumbs(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR)) });
 });
 
 // ── List environments ─────────────────────────────────────────────────────────
 router.get('/environments', (_req, res) => {
-  res.json({ success: true, files: listWithThumbs(ENVIRONMENTS_DIR, '/environments') });
+  res.json({ success: true, files: listWithThumbs(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR)) });
 });
 
 // ── Generate lookbook (clothing + bg in parallel) ─────────────────────────────

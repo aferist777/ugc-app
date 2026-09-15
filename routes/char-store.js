@@ -188,7 +188,7 @@ function _keepFace(folder, folderNm, buf, previous) {
   const ext  = /^\x89PNG/.test(buf.slice(0, 4).toString('latin1')) ? 'png' : 'jpg';
   const file = 'base_' + Date.now() + '.' + ext;
   fs.writeFileSync(path.join(folder, file), buf);
-  const rel = '/characters/' + folderNm + '/' + file;
+  const rel = '/media/characters/' + folderNm + '/' + file;
   if (previous && previous !== rel) {
     // Only ever the file this record itself pointed at, and only once its replacement is
     // safely on disk.
@@ -282,7 +282,7 @@ router.post('/char-store/create', async (req, res) => {
     if (readyAbs) {
       const file = 'sheet_' + Date.now() + '.jpg';
       fs.copyFileSync(readyAbs, path.join(folder, file));
-      readySheet = '/characters/' + folderNm + '/' + file;
+      readySheet = '/media/characters/' + folderNm + '/' + file;
     }
 
     // The upload is NOT done here. It exists to give an engine a URL to fetch, the engine is

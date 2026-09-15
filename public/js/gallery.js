@@ -130,7 +130,7 @@ function buildArchiveCard(item) {
       // Character tab; these stay safe no-ops on pages that never define them.)
       if (item.path.includes('/characters/'))    window.loadCharacterThumbs?.();
       else if (item.path.includes('/lookbooks/')) window.loadLookbookThumbs?.();
-      else if (item.path.includes('/environments/')) window.loadEnvironmentThumbs?.();
+      else if (item.path.includes('/locations/')) window.loadEnvironmentThumbs?.();
     } catch (err) { setStatus('Error: ' + err.message); }
   });
 

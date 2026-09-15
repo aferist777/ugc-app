@@ -395,7 +395,7 @@ function _imageRefs(rec) {
     if (seen.has(s) || out.length > 12) return;
     let url = '', kind = '';
     if (/^https?:\/\//i.test(s)) { url = s; kind = 'link'; }
-    else if (/^\/?(uploads|characters|lookbooks|environments|archive|presets)\//i.test(s)) {
+    else if (/^\/?(media|cache|presets|poses)\//i.test(s)) {
       url = (s.startsWith('/') ? '' : '/') + s; kind = 'file';
     } else return;
     seen.add(s);

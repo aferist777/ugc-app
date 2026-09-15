@@ -257,7 +257,7 @@ async function _runImport(files) {
   const list = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const totalBytes = list.reduce((n, f) => n + f.size, 0);
   let doneBytes = 0;
-  const tally = { jsons: 0, files: 0, skipped: 0, failed: 0 };
+  const tally = { jsons: 0, files: 0, skipped: 0, leftOut: 0, failed: 0 };
 
   log.innerHTML = '';
   prog.hidden = false;
@@ -278,10 +278,14 @@ async function _runImport(files) {
         barAll.style.width = Math.round((doneBytes + loaded) / totalBytes * 100) + '%';
         if (finished) row.lastChild.textContent = 'unpacking…';
       });
-      tally.jsons += r.jsons; tally.files += r.files; tally.skipped += r.skipped;
+      tally.jsons += r.jsons; tally.files += r.files; tally.skipped += r.skipped; tally.leftOut += r.leftOut || 0;
       row.className = 'dio-part ok';
       row.firstChild.textContent = '✓';
+      // "Left out" is what has no place in this library: from a server-version archive, its
+      // thumbnail cache and the folders the desktop app does not keep.
       row.lastChild.textContent = `${r.files} added · ${r.skipped} already here`
+        + (r.leftOut ? ` · ${r.leftOut} left out` : '')
+        + (r.fromServer ? ' · server version, paths translated' : '')
         + (r.part ? ` · part ${r.part} of ${r.parts}` : '');
     } catch (e) {
       tally.failed++;
@@ -299,6 +303,7 @@ async function _runImport(files) {
   barOne.style.width = '0%';
   st.textContent = `done — ${tally.files} files added, ${tally.jsons} stores merged, `
     + `${tally.skipped} already here`
+    + (tally.leftOut ? `, ${tally.leftOut} left out` : '')
     + (tally.failed ? `, ${tally.failed} volume(s) failed.` : '.')
     + ($('dio-overwrite').checked ? '' : ' Nothing was overwritten.');
   // What an export would take out has just changed.

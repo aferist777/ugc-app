@@ -25,23 +25,14 @@ const { buildGraph, frame } = require('../lib/mv3b-render');
 const { buildAss, captionLanes } = require('../lib/mv3b-subs');
 
 const router = express.Router();
-const { ROOT_DIR: ROOT, APP_DIR, SCRATCH_DIR, TEMP_PUBLIC_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { TEMP_PUBLIC_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { toDisk, toUrl } = require('../lib/media');
 
-// The same mapping express.static does, and only where media legitimately lives. A src is a
+// The same mapping the static mounts serve, and only where media legitimately lives. A src is a
 // web path as the pages already use it, not an invitation to name any file on the disk.
-const ROOTS = ['uploads', 'obrazy', 'characters', 'environments', 'lookbooks',
-               'details', 'refs', 'archive', 'scenes', 'temp_public', 'finals', 'images', 'public'];
-
 function resolveSrc(rel) {
-  const clean = String(rel || '').split('?')[0].replace(/^\/+/, '');
-  if (!clean || clean.includes('..')) return null;
-  const top = clean.split('/')[0];
-  if (!ROOTS.includes(top)) return null;
-  // public/ ships with the program, temp_public is scratch; every other root is in the library.
-  const base = top === 'public' ? APP_DIR : top === 'temp_public' ? SCRATCH_DIR : ROOT;
-  const abs = path.join(base, clean);
-  if (!abs.startsWith(base)) return null;
-  return fs.existsSync(abs) ? abs : null;
+  const abs = toDisk(rel);
+  return abs && fs.existsSync(abs) ? abs : null;
 }
 
 // Every input resolved before a single one is decoded. A graph half-built around a file that
@@ -148,7 +139,7 @@ router.post('/mv3b/render', (req, res) => {
       // The caption file outlives the graph and not the encode: ffmpeg reads it while it runs,
       // so it can only go once the process has closed - either way, finished or failed.
       dropAss(assPath);
-      if (code === 0 && fs.existsSync(out)) { job.status = 'done'; job.url = '/finals/' + name; }
+      if (code === 0 && fs.existsSync(out)) { job.status = 'done'; job.url = toUrl(out); }
       else { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; }
     });
     proc.on('error', (e) => { dropAss(assPath); job.status = 'failed'; job.error = e.message; });

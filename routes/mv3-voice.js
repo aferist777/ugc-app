@@ -36,7 +36,7 @@ const { DATA_DIR } = require('../lib/config');
 const router = express.Router();
 
 const EL_TTS = 'https://api.elevenlabs.io/v1/text-to-speech';
-const VOICE_DIR = path.join(require('../lib/config').UPLOADS_DIR, 'voice');
+const VOICE_DIR = require('../lib/config').MEDIA.voice;
 
 // ONE MODEL, ON PURPOSE. `eleven_v3` also exists and is what the Scenarios read uses, because
 // it PERFORMS bracketed tags - [sighs], [whispering] - and v2 has no idea what they are and
@@ -159,7 +159,7 @@ router.post('/mv3/voice/speak', async (req, res) => {
         fs.writeFileSync(abs, buf);
         await _trim(abs);
         const d = await _dur(abs);
-        takes.push({ path: '/uploads/voice/' + name, dur: Math.round(d * 100) / 100, said });
+        takes.push({ path: '/media/voice/' + name, dur: Math.round(d * 100) / 100, said });
       } catch (e) {
         const why = _why(e);
         console.warn('[mv3/voice] line ' + (i + 1) + ' failed:', why);

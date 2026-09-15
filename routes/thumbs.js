@@ -1,6 +1,6 @@
 'use strict';
 
-// GET /api/thumb?src=/uploads/x.jpg&v=frame
+// GET /api/thumb?src=/media/images/x.jpg&v=frame
 //
 // The one door to a resized image. The pages point an <img> here instead of at the original, and
 // the first request makes the derivative; every request after is a cached file.

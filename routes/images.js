@@ -17,7 +17,7 @@ const path    = require('path');
 const multer  = require('multer');
 const router  = express.Router();
 
-const { UPLOADS_DIR } = require('../lib/config');
+const { MEDIA } = require('../lib/config');
 const IMG = require('../lib/images-store');
 const LC  = require('../lib/library-cats');
 
@@ -29,7 +29,7 @@ const MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 // transparency onto black before anything had a chance to look at it.
 const _upload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.images, { recursive: true }); } catch (e) {} cb(null, MEDIA.images); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       // shot_ rather than img_ for a frame off the preview: the prefix is the only clue on
@@ -47,7 +47,7 @@ const _upload = multer({
 
 router.post('/images/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/uploads/' + req.file.filename;
+  const imagePath = '/media/images/' + req.file.filename;
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
     || path.basename(req.file.originalname, path.extname(req.file.originalname));
@@ -78,7 +78,7 @@ router.use('/images/upload', (err, _req, res, _next) => {
 // with the same name - so this can simply ask for it every time.
 router.post('/images/shot', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/uploads/' + req.file.filename;
+  const imagePath = '/media/images/' + req.file.filename;
   try {
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add(imagePath, {

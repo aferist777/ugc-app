@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { APP_DIR, ROOT_DIR, UPLOADS_DIR } = require('../lib/config');
+const { APP_DIR, ROOT_DIR, POSES_CACHE_DIR } = require('../lib/config');
 require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
@@ -72,7 +72,7 @@ function getRoutes() {
   for (const u of [...PAGES, ...STATICS, ...getRoutes()]) rows.push(['GET', u, await call('GET', u)]);
 
   rows.push(['GET', 'thumb of a shipped preset', await call('GET', '/api/thumb?src=/presets/anatolian-stone.jpg&v=card')]);
-  const previewFile = path.join(UPLOADS_DIR, '_poses', 'preview', 'mirror_full.jpg');
+  const previewFile = path.join(POSES_CACHE_DIR, 'preview', 'mirror_full.jpg');
   const hadPreview = fs.existsSync(previewFile);
   const pv = await call('POST', '/api/scen3/preview1k', { path: '/poses/mirror_full.jpg' });
   rows.push(['POST', 'preview1k of a shipped pose', pv]);

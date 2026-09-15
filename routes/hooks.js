@@ -6,7 +6,8 @@ const fs           = require('fs');
 const multer       = require('multer');
 const router       = express.Router();
 
-const { HOOKS_DIR, HOOKS_THUMB_DIR, UPLOADS_DIR } = require('../lib/config');
+const { HOOKS_DIR, HOOKS_THUMB_DIR, MEDIA } = require('../lib/config');
+const { toDiskWithin } = require('../lib/media');
 const VT = require('../lib/video-thumb');
 const HERMES = 'nousresearch/hermes-4-70b';   // all biroly idea generation runs on Hermes 4
 const { callAI } = require('../lib/helpers');
@@ -191,16 +192,16 @@ router.post('/hooks/upload', upload.single('video'), async (req, res) => {
     || path.basename(filename, path.extname(filename));
 
   let thumbUrl = null;
-  try { thumbUrl = (await VT.makeThumb('/hooks/' + filename)).thumb; }
+  try { thumbUrl = (await VT.makeThumb('/media/hooks/' + filename)).thumb; }
   catch (e) { console.warn('[hooks/upload] thumb failed:', e.message); }
 
   // The hook's permanent number, given the moment the file exists.
-  try { require('../lib/hook-ids').assign(['/hooks/' + filename]); } catch (e) {}
+  try { require('../lib/hook-ids').assign(['/media/hooks/' + filename]); } catch (e) {}
   return res.json({
     success:   true,
     filename,
     name:      safeName,
-    videoPath: `/hooks/${filename}`,
+    videoPath: `/media/hooks/${filename}`,
     thumbPath: thumbUrl,
   });
 });
@@ -417,28 +418,18 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
 // b-roll Ideas popup called, and that popup was deleted in an earlier pass. Verified
 // against every surviving script before cutting.
 
-// Body: { videoPath: '/uploads/grok_txt_xxx.mp4' }
-// Permanently removes a generated biroll mp4 from disk. Used by the Ideas
-// popup's lightbox "🗑 delete" button. Strict path safety: only files inside
-// UPLOADS_DIR can be touched, no directory traversal.
+// Body: { videoPath: '/media/clips/grok_txt_xxx.mp4' }
+// Permanently removes a generated biroll mp4 from disk. Used by the Birols
+// archive's delete. Strict path safety: only files inside media/clips/ can be
+// touched, no directory traversal.
 router.post('/biroly/delete-video', (req, res) => {
   const { videoPath } = req.body || {};
   if (!videoPath || typeof videoPath !== 'string') {
     return res.status(400).json({ success: false, error: 'videoPath required' });
   }
-  if (!videoPath.startsWith('/uploads/')) {
-    return res.status(400).json({ success: false, error: 'only /uploads/ paths allowed' });
-  }
-  const rel = videoPath.slice('/uploads/'.length).replace(/\\/g, '/');
-  if (rel.includes('..')) {
-    return res.status(400).json({ success: false, error: 'invalid path (traversal)' });
-  }
-  const abs = path.join(UPLOADS_DIR, rel);
-  // Final guard: resolved path must live inside UPLOADS_DIR
-  const absNorm = path.resolve(abs);
-  const upNorm  = path.resolve(UPLOADS_DIR);
-  if (!absNorm.startsWith(upNorm + path.sep) && absNorm !== upNorm) {
-    return res.status(400).json({ success: false, error: 'path outside uploads dir' });
+  const absNorm = toDiskWithin(videoPath, [MEDIA.clips]);
+  if (!absNorm) {
+    return res.status(400).json({ success: false, error: 'only /media/clips/ paths allowed' });
   }
   try {
     if (fs.existsSync(absNorm)) {

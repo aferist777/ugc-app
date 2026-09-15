@@ -5,7 +5,8 @@ const path    = require('path');
 const fs      = require('fs');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, GALLERY_MAP } = require('../lib/config');
+const { CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR } = require('../lib/config');
+const { toDisk, toUrl } = require('../lib/media');
 const { createThumbnail } = require('../lib/helpers');
 
 function thumbPath(dir, file) {
@@ -27,8 +28,8 @@ function listImages(dir, urlPrefix) {
       };
     });
 }
-router.get('/gallery/lookbooks',    (_req, res) => res.json({ success: true, files: listImages(LOOKBOOKS_DIR,    '/lookbooks') }));
-router.get('/gallery/environments', (_req, res) => res.json({ success: true, files: listImages(ENVIRONMENTS_DIR, '/environments') }));
+router.get('/gallery/lookbooks',    (_req, res) => res.json({ success: true, files: listImages(LOOKBOOKS_DIR,    toUrl(LOOKBOOKS_DIR)) }));
+router.get('/gallery/environments', (_req, res) => res.json({ success: true, files: listImages(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR)) }));
 
 // ── Delete from gallery — permanent unlink, no archive ───────────────────────
 // Route name kept as /gallery/archive for backward compat with existing UI
@@ -39,13 +40,13 @@ router.get('/gallery/environments', (_req, res) => res.json({ success: true, fil
 router.post('/gallery/archive', (req, res) => {
   const { filePath } = req.body;
   if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
-  const parts = filePath.replace(/^\//, '').split('/');
-  const map = GALLERY_MAP[parts[0]];
-  if (!map || !parts[1]) return res.status(400).json({ success: false, error: 'Неверный путь' });
-  const src   = path.join(map.dir, parts[1]);
+  // A picture straight inside one of the three shelves, never anything deeper or elsewhere.
+  const src = toDisk(filePath);
+  const dir = src && [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].find((d) => path.dirname(src) === path.resolve(d));
+  if (!dir) return res.status(400).json({ success: false, error: 'Неверный путь' });
   if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
   fs.unlinkSync(src);
-  const srcThumb = thumbPath(map.dir, parts[1]);
+  const srcThumb = thumbPath(dir, path.basename(src));
   if (fs.existsSync(srcThumb)) fs.unlinkSync(srcThumb);
   res.json({ success: true });
 });

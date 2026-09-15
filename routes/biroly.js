@@ -18,7 +18,7 @@ const axios   = require('axios');
 const multer  = require('multer');
 const router  = express.Router();
 
-const { DATA_DIR, UPLOADS_DIR } = require('../lib/config');
+const { DATA_DIR, MEDIA } = require('../lib/config');
 const VT = require('../lib/video-thumb');
 const BIROLY_FILE  = path.join(DATA_DIR, 'biroly.json');
 
@@ -57,7 +57,7 @@ const UPL_EXTS  = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
 const UPL_MIMES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
 const _upload = multer({
   storage: multer.diskStorage({
-    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.clips, { recursive: true }); } catch (e) {} cb(null, MEDIA.clips); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (UPL_EXTS.includes(ext) ? ext : '.mp4'));
@@ -135,7 +135,7 @@ router.post('/media/thumb', async (req, res) => {
 
 router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const videoPath = '/uploads/' + req.file.filename;
+  const videoPath = '/media/clips/' + req.file.filename;
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
     || path.basename(req.file.filename, path.extname(req.file.filename));

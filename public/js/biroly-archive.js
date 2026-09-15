@@ -142,7 +142,7 @@ window.getTypeCategories = getTypeCategories;
 window.addTypeCategory = addTypeCategory;
 window.openAddCategoryPopup = openAddCategoryPopup;
 
-// A genuine per-video thumbnail lives in /uploads/thumbs/ and is named
+// A genuine per-video thumbnail lives in a thumbs/ folder beside its clip and is named
 // <videoBase>_thumb.jpg (created by refresh-thumbs from the video's own frame).
 // Anything else (e.g. a generated_* source image that the old time-window
 // heuristic paired with this video) does NOT belong to it and must never be

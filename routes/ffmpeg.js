@@ -8,7 +8,8 @@ const crypto     = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
-const { ROOT_DIR, UPLOADS_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR } = require('../lib/config');
+const { ROOT_DIR, MEDIA_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR, CACHE_DIR } = require('../lib/config');
+const { toDisk, toDiskWithin, toUrl } = require('../lib/media');
 const { normalizeVideoForBrowser } = require('../lib/helpers');
 // The one-frame poster maker the media library uses. Not lib/helpers' createThumbnail - that one
 // is sharp, which reads images and cannot open an mp4.
@@ -74,8 +75,8 @@ async function _normalizeAllInputs(jobId, clipsArrays) {
   }
 }
 
-// Directory for persisted pre-built .ass files
-const ASS_DIR = path.join(DATA_DIR, 'ass_cache');
+// Directory for persisted pre-built .ass files - derived, so cache
+const ASS_DIR = path.join(CACHE_DIR, 'ass');
 if (!fs.existsSync(ASS_DIR)) fs.mkdirSync(ASS_DIR, { recursive: true });
 
 // Directory for cached "black tail" files (silent N-min black-screen segments
@@ -150,9 +151,7 @@ async function _hasAlpha(fp) {
 
 function _webToFs(p) {
   if (!p) return null;
-  if (p.startsWith('/uploads/')) return path.join(UPLOADS_DIR, p.slice('/uploads/'.length));
-  if (p.startsWith('/finals/'))  return path.join(FINALS_DIR,  p.slice('/finals/'.length));
-  return path.join(ROOT_DIR, p.replace(/^\//, ''));
+  return toDisk(p);
 }
 
 // ── POST /api/ffmpeg/render ───────────────────────────────────────────────────
@@ -235,7 +234,7 @@ router.post('/ffmpeg/render', (req, res) => {
 // Failure is swallowed on purpose: a render that cannot be posterised is still a render.
 async function _posterFor(url) {
   try {
-    if (!url || !/^\/finals\//.test(String(url))) return;
+    if (!url || !/^\/media\/renders\//.test(String(url))) return;
     const turl = thumbUrlFor(url);
     const abs = path.join(ROOT_DIR, String(turl).replace(/^\/+/, ''));
     if (fs.existsSync(abs)) return;                 // keep/discard may have made it already
@@ -420,11 +419,8 @@ function _proxyAbs(src) {
   const s = String(src || '');
   if (!s || s.indexOf('/vsl/') === 0) return null;
   if (!/\.(mp4|mov|webm|m4v)$/i.test(s.split('?')[0])) return null;
-  const abs = _webToFs(s);
-  if (!abs || !fs.existsSync(abs)) return null;
-  const absR = path.resolve(abs);
-  const roots = [UPLOADS_DIR, FINALS_DIR, ROOT_DIR].map(r => path.resolve(r));
-  return roots.some(r => absR === r || absR.startsWith(r + path.sep)) ? abs : null;
+  const abs = toDiskWithin(s, [MEDIA_DIR]);
+  return abs && fs.existsSync(abs) ? abs : null;
 }
 
 router.get('/ffmpeg/preview-proxy', async (req, res) => {
@@ -433,11 +429,10 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     // VSL sources are hour-long: transcoding the whole file before responding
     // would stall the preview for many minutes — always serve the original.
     if (src.indexOf('/vsl/') === 0) return res.redirect(302, src);
-    const abs = _webToFs(src);
-    if (!abs || !fs.existsSync(abs)) return res.status(404).end();
-    const absR = path.resolve(abs);
-    const roots = [UPLOADS_DIR, FINALS_DIR, ROOT_DIR].map(r => path.resolve(r));
-    if (!roots.some(r => absR === r || absR.startsWith(r + path.sep))) return res.status(403).end();
+    if (!toDisk(src)) return res.status(404).end();
+    const abs = toDiskWithin(src, [MEDIA_DIR]);
+    if (!abs) return res.status(403).end();
+    if (!fs.existsSync(abs)) return res.status(404).end();
 
     const reqH = parseInt(req.query.h, 10);
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
@@ -1772,7 +1767,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     }
   }
 
-  return `/finals/${outName}`;
+  return toUrl(outPath);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2051,7 +2046,7 @@ async function _smartRenderIfEligible(body) {
       ], jobId);
       try { fs.unlinkSync(listPath); } catch {}
       console.log(`[smart] done → ${outName}`);
-      return `/finals/${outName}`;
+      return toUrl(outPath);
     } finally {
       for (const f of tsFiles) { try { fs.unlinkSync(f); } catch {} }
       if (_jobs[jobId]) _jobs[jobId]._progressBase = 0;

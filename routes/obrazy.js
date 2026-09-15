@@ -13,7 +13,8 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { OBRAZY_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { OBRAZY_DIR, CHARACTERS_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { toDiskWithin, toUrl } = require('../lib/media');
 const { obrazFolderName, obrazAbsFolder } = require('../lib/obrazy-store');
 const { deleteDraftByObraz } = require('../lib/char-store');
 
@@ -42,11 +43,11 @@ function _earliestImageInFolder(absFolder) {
     }
   } catch { return null; }
   if (!earliest) return null;
-  return `/obrazy/${path.basename(absFolder)}/${earliest}`;
+  return toUrl(path.join(absFolder, earliest));
 }
 
 // ── GET /api/obrazy/main-images ─────────────────────────────────────────────
-// Returns { obrazId: '/obrazy/<folder>/<earliest>.jpg', ... } for every obraz
+// Returns { obrazId: '/media/looks/<folder>/<earliest>.jpg', ... } for every obraz
 // in data/obrazy.json. The earliest-by-mtime file inside each obraz folder is
 // treated as the "main look image" — by design the look-image is saved first,
 // the posevars are auto-generated after, so the earliest mtime is always the
@@ -70,21 +71,17 @@ router.get('/obrazy/main-images', (_req, res) => {
 });
 
 // ── POST /api/obrazy/delete-file ────────────────────────────────────────────
-// Body: { path } — a web-style path inside obrazy/ or characters/. Unlinks the
+// Body: { path } — a web-style path inside media/looks/ or media/characters/. Unlinks the
 // file and its thumbnail. Used by the rerun flow which no longer archives old
-// posevars to editResults[] but simply deletes them. Restricted to obrazy/ and
-// characters/ subtrees so a malformed path can't escape the project root.
+// posevars to editResults[] but simply deletes them. Restricted to those two
+// subtrees so a malformed path can't escape them.
 router.post('/obrazy/delete-file', (req, res) => {
   try {
-    const p = String(req.body?.path || '').replace(/^\//, '');
+    const p = String(req.body?.path || '');
     if (!p) return res.status(400).json({ success: false, error: 'path is required' });
-    if (!p.startsWith('obrazy/') && !p.startsWith('characters/')) {
-      return res.status(400).json({ success: false, error: 'path must be under obrazy/ or characters/' });
-    }
-    const abs = path.join(ROOT_DIR, p);
-    const rootResolved = path.resolve(ROOT_DIR);
-    if (!path.resolve(abs).startsWith(rootResolved + path.sep)) {
-      return res.status(400).json({ success: false, error: 'path outside project root' });
+    const abs = toDiskWithin(p.startsWith('/') ? p : '/' + p, [OBRAZY_DIR, CHARACTERS_DIR]);
+    if (!abs) {
+      return res.status(400).json({ success: false, error: 'path must be under media/looks/ or media/characters/' });
     }
     if (fs.existsSync(abs)) { try { fs.unlinkSync(abs); } catch {} }
     // Thumb path: same dir + /thumbs/<basename>.jpg

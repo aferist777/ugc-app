@@ -821,7 +821,7 @@ const { FINALS_DIR } = require('../lib/config');
 // library already uses, so a render's card looks like every other clip's.
 const { makeThumb, thumbUrlFor } = require('../lib/video-thumb');
 
-// A url like /finals/<name>.mp4 -> the absolute path, with nothing able to walk out of
+// A url like /media/renders/<name>.mp4 -> the absolute path, with nothing able to walk out of
 // the directory.
 function _finalPath(url) {
   const name = path.basename(String(url || '').split('?')[0]);
@@ -838,6 +838,7 @@ function _finalPath(url) {
 //            poster), and gets a poster if it has none.
 const MVQ = require('./mv3q');
 const _ROOT_DIR = require('../lib/config').ROOT_DIR;
+const { toUrl } = require('../lib/media');
 const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
 const _thumbAbs = (url) => { try { return path.join(_ROOT_DIR, String(thumbUrlFor(url)).replace(/^\/+/, '')); } catch (e) { return null; } };
 
@@ -859,7 +860,7 @@ function _renameFinal(abs, url, name) {
   let target = path.join(FINALS_DIR, want + '.mp4');
   for (let n = 2; fs.existsSync(target); n++) target = path.join(FINALS_DIR, `${want} (${n}).mp4`);
   fs.renameSync(abs, target);
-  const nextUrl = '/finals/' + path.basename(target);
+  const nextUrl = toUrl(target);
   try {
     const oldT = _thumbAbs(url), newT = _thumbAbs(nextUrl);
     if (oldT && newT && fs.existsSync(oldT)) fs.renameSync(oldT, newT);
@@ -891,7 +892,7 @@ router.post('/mv3/render/discard', (req, res) => {
     try { MVQ.removeByUrl(String((req.body || {}).url || '')); } catch (e) {}
     // Its poster too, if one was made.
     try {
-      const turl = thumbUrlFor('/finals/' + path.basename(abs));
+      const turl = thumbUrlFor(toUrl(abs));
       const tabs = path.join(_ROOT_DIR, String(turl).replace(/^\/+/, ''));
       if (fs.existsSync(tabs)) fs.unlinkSync(tabs);
     } catch (e) {}

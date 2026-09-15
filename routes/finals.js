@@ -22,14 +22,16 @@ function extractThumb(absVideoPath, baseName) {
     ];
     execFile(ffmpegPath, args, { timeout: 15000, windowsHide: true }, err => {
       if (err || !fs.existsSync(absThumb)) { resolve(null); return; }
-      resolve('/finals/' + thumbName);
+      resolve(toUrl(absThumb));
     });
   });
 }
 
 const { ROOT_DIR, FINALS_DIR, DATA_DIR } = require('../lib/config');
+const { toUrl } = require('../lib/media');
 
-const META_FILE     = path.join(FINALS_DIR, '_meta.json');
+// The finished renders' records. A store, so it lives with the stores - finals/_meta.json on the server.
+const META_FILE     = path.join(DATA_DIR, 'finals-meta.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 function _loadSettings() {
@@ -91,7 +93,7 @@ router.post('/finals/save', async (req, res) => {
     const { renderUrl, sessionLabel = 'Финал', projectData, projectId = null } = req.body || {};
     if (!renderUrl) return res.json({ success: false, error: 'renderUrl is required' });
 
-    // renderUrl is like /finals/local_123_label.mp4 — file already exists on disk
+    // renderUrl is like /media/renders/local_123_label.mp4 — file already exists on disk
     const absVideo = path.join(ROOT_DIR, renderUrl.replace(/^\//, ''));
     if (!fs.existsSync(absVideo)) {
       return res.json({ success: false, error: `Файл не найден: ${renderUrl}` });
@@ -114,7 +116,7 @@ router.post('/finals/save', async (req, res) => {
       sessionKey:   projectData?.sessionKey || null,
       projectId:    projectId || null,
       videoFile:    renderUrl,
-      jsonFile:     projectData ? `/finals/${jsonName}` : null,
+      jsonFile:     projectData ? toUrl(absJson) : null,
       thumbFile:    thumbFile || null,
       sessionLabel: sessionLabel || 'Финал',
       savedAt:      new Date().toISOString(),

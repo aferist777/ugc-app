@@ -60,7 +60,7 @@ if (canWrite(LIBRARY)) {
 }
 
 function run() {
-  const profile = path.join(LIBRARY, '.profile', process.platform);
+  const profile = path.join(LIBRARY, 'cache', 'profile', process.platform);
   // The lock file goes in here, and it cannot be made in a folder that does not exist yet - the
   // lock would just fail, and a failed lock reads the same as another copy holding it.
   fs.mkdirSync(profile, { recursive: true });

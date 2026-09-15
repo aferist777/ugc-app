@@ -24,12 +24,9 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const {
-  ROOT_DIR, VOICE_PREVIEWS_DIR, MODELS_DIR,
-  UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
-  ARCHIVE_SUBDIRS,
+  ROOT_DIR, MEDIA_DIR, MEDIA, CACHE_DIR,
+  LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, DETAILS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
 } = require('./lib/config');
-const { runMigrationIfNeeded } = require('./lib/obrazy-store');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
@@ -67,23 +64,12 @@ app.use(express.static(path.join(__dirname, 'public'), {
     else res.setHeader('Cache-Control', 'no-cache');
   },
 }));
-app.use('/uploads',      express.static(UPLOADS_DIR));
-app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));
-app.use('/characters',   express.static(CHARACTERS_DIR));
-app.use('/environments', express.static(ENVIRONMENTS_DIR));
-app.use('/archive',      express.static(ARCHIVE_DIR));
-app.use('/details',      express.static(DETAILS_DIR));
-app.use('/scenes',       express.static(SCENES_DIR));
+// The library: one mount for media, one for cache - an address mirrors its folder (lib/layout.js).
+app.use('/media',        express.static(MEDIA_DIR));
+app.use('/cache',        express.static(CACHE_DIR));
+// Scratch, in the system temp folder.
 app.use('/temp_files',   express.static(TEMP_DIR));
 app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
-app.use('/obrazy',       express.static(OBRAZY_DIR));
-app.use('/refs',         express.static(REFS_DIR));
-app.use('/finals',       express.static(FINALS_DIR));
-app.use('/hooks',        express.static(HOOKS_DIR));
-// Written while the app runs, so served from the library rather than public/ (lib/config.js).
-app.use('/voice-previews', express.static(VOICE_PREVIEWS_DIR));
-app.use('/models',       express.static(MODELS_DIR));
-// /vsl stays gone (Ph15).
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
@@ -185,13 +171,6 @@ app.use('/api', require('./routes/mv3-voice'));
 app.use('/api', require('./routes/mv3-vid'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-// Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
-// .obrazy-migrated flag file is dropped on first successful pass so subsequent
-// boots are no-ops. Skipping startup until this finishes guarantees that the
-// frontend's first /api/userdata/obrazy hit returns the migrated paths.
-try { runMigrationIfNeeded(); }
-catch (e) { console.error('[obrazy-migrate] error:', e.stack || e.message); }
-
 // Loopback only. There is no sign-in any more, so an app listening on every interface would hand
 // its API keys and the whole library to anyone on the same network. The window, and the server's
 // calls to itself, all use 127.0.0.1.
@@ -207,23 +186,21 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   // Defer heavy startup tasks so server is responsive immediately
   setTimeout(() => {
     // Generate missing thumbnails for all image directories in the background
-    const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
-    // Per-project Edit mix folders (uploads/edit/<key>/mixes) hold composited
+    // Per-project mix folders (media/projects/<key>/mixes) hold composited
     // product images shown as thumbnails in the Edit popup — backfill their thumbs.
-    let editMixDirs = [];
+    let mixDirs = [];
     try {
-      const editRoot = path.join(UPLOADS_DIR, 'edit');
-      if (fs.existsSync(editRoot)) {
-        editMixDirs = fs.readdirSync(editRoot)
-          .map(k => path.join(editRoot, k, 'mixes'))
-          .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
-      }
+      mixDirs = fs.readdirSync(MEDIA.projects)
+        .map(k => path.join(MEDIA.projects, k, 'mixes'))
+        .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     } catch {}
+    // Each shelf's archive/ sits inside it (media/<kind>/archive).
+    const archiveDirs = [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].map(d => path.join(d, 'archive'));
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-      UPLOADS_DIR, DETAILS_DIR,
+      MEDIA.images, DETAILS_DIR,
       ...archiveDirs,
-      ...editMixDirs,
+      ...mixDirs,
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
 
     // A picture Merge asked for is watched by the server, not by the page - so a watcher is a

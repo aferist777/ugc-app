@@ -391,38 +391,23 @@ router.delete('/scen3/scenarios/:id', (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 const CFG = require('../lib/config');
-const MOUNTS = {
-  uploads:      CFG.UPLOADS_DIR,
-  characters:   CFG.CHARACTERS_DIR,
-  lookbooks:    CFG.LOOKBOOKS_DIR,
-  environments: CFG.ENVIRONMENTS_DIR,
-  obrazy:       CFG.OBRAZY_DIR,
-  details:      CFG.DETAILS_DIR,
-  refs:         CFG.REFS_DIR,
-  archive:      CFG.ARCHIVE_DIR,
-  scenes:       CFG.SCENES_DIR,
-  finals:       CFG.FINALS_DIR,
-  // mannequins live under the static root, so the served path drops `public/`
-  poses:        path.join(CFG.PUBLIC_DIR, 'poses'),
-};
+const { toDiskWithin, toUrl } = require('../lib/media');
+// The mannequins ship with the program, under the static root; everything else is the library's media.
+const POSES_DIR = path.join(CFG.PUBLIC_DIR, 'poses');
 
-// Map a public /mount/... URL to an absolute file, refusing anything that escapes
-// its mount (so a crafted ../ path cannot reach outside the media folders).
+// Map a public URL to an absolute file, refusing anything outside the media folders and the
+// shipped mannequins (so a crafted ../ path cannot reach anything else).
 // `exts` defaults to stills, which is what every caller but the lipsync render wants —
 // that one also has to hand over an mp3, and widening the default would quietly let any
 // file type through the other paths.
 const MEDIA_IMG = /\.(jpg|jpeg|png|webp)$/i;
 function _resolveMedia(urlPath, exts) {
-  const s = String(urlPath || '').split('?')[0];
-  const m = s.match(/^\/([a-z_]+)\/(.+)$/i);
-  if (!m) return null;
-  const root = MOUNTS[m[1].toLowerCase()];
-  if (!root) return null;
-  const abs = path.resolve(root, m[2]);
-  const rootAbs = path.resolve(root);
-  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return null;
+  const abs = toDiskWithin(String(urlPath || '').split('?')[0], [CFG.MEDIA_DIR, POSES_DIR]);
+  if (!abs) return null;
   if (!(exts || MEDIA_IMG).test(abs)) return null;
-  return { abs, mount: m[1].toLowerCase(), rel: m[2] };
+  const shipped = abs.startsWith(path.resolve(POSES_DIR) + path.sep);
+  const rel = path.relative(shipped ? POSES_DIR : CFG.MEDIA_DIR, abs).split(path.sep).join('/');
+  return { abs, shipped, rel };
 }
 
 const PREVIEW_MAX_PX = 1024;
@@ -444,21 +429,18 @@ async function _makePreview(srcAbs, outAbs) {
   }
 }
 
-// Where the 1K derivative of a mounted file is written, and the URL it answers at: beside its
-// source, in a preview/ folder. The mannequins are the exception - they ship with the program in
-// public/poses, which an update replaces - so theirs are filed in the library, under
-// uploads/_poses/.
+// Where the 1K derivative of a file is written, and the URL it answers at: beside its source, in
+// a preview/ folder. The mannequins are the exception - they ship with the program in public/poses,
+// which an update replaces - so theirs are made again into the library's cache/poses/.
 function _previewTarget(hit) {
   const base = path.basename(hit.rel).replace(/\.[^.]+$/, '') + '.jpg';
-  const dir  = path.dirname(hit.rel);
-  const sub  = dir === '.' ? '' : dir.split(path.sep).join('/');
-  const shipped = hit.mount === 'poses';
-  const mount = shipped ? 'uploads' : hit.mount;
-  const relOut = path.posix.join(shipped ? '_poses' : '', sub, 'preview', base);
-  return { abs: path.resolve(MOUNTS[mount], relOut), url: `/${mount}/${relOut}` };
+  const sub  = path.posix.dirname(hit.rel);
+  const relOut = path.posix.join(sub === '.' ? '' : sub, 'preview', base);
+  const abs = path.resolve(hit.shipped ? CFG.POSES_CACHE_DIR : CFG.MEDIA_DIR, relOut);
+  return { abs, url: toUrl(abs) };
 }
 
-// POST { path } -> { path: '/<mount>/.../preview/<name>.jpg' }
+// POST { path } -> { path: '/media/.../preview/<name>.jpg' }
 // Returns the source path unchanged when it is already small enough to be its
 // own preview, so the client never has to special-case that.
 router.post('/scen3/preview1k', async (req, res) => {
@@ -710,7 +692,7 @@ async function _i2i(engine, prompt, urls, aspect, quality, agg) {
     prompt, image_input: imgs, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
   });
 }
-const _track = (tid, tag) => { try { require('../lib/pending-tasks').addPendingTask(tid, 'uploads', tag, tag); } catch (e) {} };
+const _track = (tid, tag) => { try { require('../lib/pending-tasks').addPendingTask(tid, 'images', tag, tag); } catch (e) {} };
 
 // ── Lookbook generator: three modes, decided by what came in ────────────────
 //   prompt only        -> N distinct prompts -> N text-to-image runs
@@ -1096,10 +1078,10 @@ router.post('/scen3/frame/crop', async (req, res) => {
 
     const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
     const name = `crop_${base}_${Date.now()}.jpg`;
-    const dest = path.join(CFG.UPLOADS_DIR, name);
+    const dest = path.join(CFG.MEDIA.images, name);
     await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
 
-    const finalUrl = '/uploads/' + name;
+    const finalUrl = '/media/images/' + name;
     const preview  = await _framePreview(finalUrl);
     console.log(`[scen3/frame/crop] ${base} ${meta.width}x${meta.height}`
       + ` -> ${w}x${h} at ${left},${top}`);
@@ -1661,7 +1643,7 @@ router.post('/scen3/obraz-save', async (req, res) => {
     const file   = path.basename(hit.abs);
     const destAbs = path.join(folder, file);
     if (!fs.existsSync(destAbs)) fs.copyFileSync(hit.abs, destAbs);
-    const rel = `/obrazy/${path.basename(folder)}/${file}`;
+    const rel = toUrl(destAbs);
 
     // both derived tiers, so the gallery and the centre column are instant
     try { await H.createThumbnail(destAbs, path.join(folder, 'thumbs', file.replace(/\.[^.]+$/, '') + '.jpg')); } catch (e) {}
@@ -1670,7 +1652,7 @@ router.post('/scen3/obraz-save', async (req, res) => {
       if (fs.statSync(destAbs).size / 1024 > PREVIEW_MAX_KB) {
         const outAbs = path.join(folder, 'preview', file.replace(/\.[^.]+$/, '') + '.jpg');
         if (!fs.existsSync(outAbs)) await _makePreview(destAbs, outAbs);
-        preview = `/obrazy/${path.basename(folder)}/preview/${file.replace(/\.[^.]+$/, '')}.jpg`;
+        preview = toUrl(outAbs);
       }
     } catch (e) {}
 
@@ -1718,16 +1700,16 @@ router.post('/scen3/obraz-delete', (req, res) => {
     }
     writeFileAtomic(OBRAZY_JSON, JSON.stringify(next, null, 2));
 
-    // its folder, only if it really sits under obrazy/
+    // its folder, only if it really sits under media/looks/
     let removedDir = null;
     try {
-      const m = String(victim.char || '').match(/^\/obrazy\/([^/]+)\//);
+      const m = String(victim.char || '').match(/^\/media\/looks\/([^/]+)\//);
       if (m) {
         const abs = path.resolve(CFG.OBRAZY_DIR, m[1]);
         const rootAbs = path.resolve(CFG.OBRAZY_DIR);
         if (abs.startsWith(rootAbs + path.sep) && fs.existsSync(abs)) {
           fs.rmSync(abs, { recursive: true, force: true });
-          removedDir = '/obrazy/' + m[1];
+          removedDir = toUrl(abs);
         }
       }
     } catch (e) { console.warn('[scen3/obraz-delete] folder cleanup failed:', e.message); }
@@ -1756,9 +1738,9 @@ router.post('/scen3/finalize', async (req, res) => {
 
     // A generated environment or lookbook is filed into its shared library folder.
     const LIB = kind === 'environment'
-      ? { dir: CFG.ENVIRONMENTS_DIR, mount: '/environments', prefix: 'env_' }
+      ? { dir: CFG.ENVIRONMENTS_DIR, mount: toUrl(CFG.ENVIRONMENTS_DIR), prefix: 'env_' }
       : kind === 'lookbook'
-        ? { dir: CFG.LOOKBOOKS_DIR, mount: '/lookbooks', prefix: 'lb_' }
+        ? { dir: CFG.LOOKBOOKS_DIR, mount: toUrl(CFG.LOOKBOOKS_DIR), prefix: 'lb_' }
         : null;
 
     if (LIB) {
@@ -2164,7 +2146,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
       ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
       : lines.map((_, i) => i).filter(i => needs(lines[i]));
 
-    const dir = path.join(CFG.UPLOADS_DIR, 'voice');
+    const dir = CFG.MEDIA.voice;
     fs.mkdirSync(dir, { recursive: true });
 
     const report = { variant, model, spoken: 0, skipped: [], failed: [] };
@@ -2182,7 +2164,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
         const dur = await _audioDur(abs);
         l.audio = l.audio || { plain: null, tagged: null };
         l.audio[variant] = {
-          path: '/uploads/voice/' + name,
+          path: '/media/voice/' + name,
           dur: Math.round(dur * 100) / 100,
           at: new Date().toISOString(),
           said: text,          // what was actually spoken; the staleness check reads this
@@ -2253,7 +2235,7 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
   if (_watching.has(key)) return;
   _watching.add(key);
 
-  const UPLOADS = CFG.UPLOADS_DIR;
+  const IMAGES = CFG.MEDIA.images;
   const started = Date.now();
   const MAX_MS = 15 * 60 * 1000;
 
@@ -2269,10 +2251,10 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
       return;
     }
     let s = null;
-    try { s = await H.resolveTask(taskId, UPLOADS, 'generated'); } catch (e) { s = null; }
+    try { s = await H.resolveTask(taskId, IMAGES, 'generated'); } catch (e) { s = null; }
 
     if (s && s.state === 'success' && s.imagePath) {
-      const finalUrl = '/uploads/' + path.basename(s.imagePath);
+      const finalUrl = '/media/images/' + path.basename(s.imagePath);
       const preview  = await _framePreview(finalUrl);
       _patchMix(projectId, (mix) => {
         const already = mix.variants.some(v => v.taskId === taskId);
@@ -2347,7 +2329,7 @@ async function _fetchClip(taskId) {
   } catch (e) {}
   if (!url) return { state: 'failed', error: 'the render came back without a video URL' };
 
-  const dir = path.join(CFG.UPLOADS_DIR, 'clips');
+  const dir = CFG.MEDIA.clips;
   fs.mkdirSync(dir, { recursive: true });
   const name = `c${taskId}_${Date.now()}.mp4`;
   const abs = path.join(dir, name);
@@ -2360,7 +2342,7 @@ async function _fetchClip(taskId) {
   catch (e) { console.warn('[scen3/clip] normalize failed:', e.message); }
   // same ffmpeg-header trick the reads use — it reports any container's duration
   return {
-    state: 'success', path: `/uploads/clips/${name}`, dur: await _audioDur(abs),
+    state: 'success', path: `/media/clips/${name}`, dur: await _audioDur(abs),
     thumb: await _clipPoster(abs, name),
   };
 }
@@ -2368,7 +2350,7 @@ async function _fetchClip(taskId) {
 // One frame out of the clip, for the card. Half a second in rather than frame zero: the
 // very first frame of a lipsync render is often mid-blink or still settling.
 async function _clipPoster(absVideo, name) {
-  const dir = path.join(CFG.UPLOADS_DIR, 'clips', 'thumbs');
+  const dir = path.join(CFG.MEDIA.clips, 'thumbs');
   fs.mkdirSync(dir, { recursive: true });
   const out = path.join(dir, name.replace(/\.mp4$/i, '.jpg'));
   const ok = await new Promise(resolve => {
@@ -2381,7 +2363,7 @@ async function _clipPoster(absVideo, name) {
       proc.on('close', (code) => resolve(code === 0 && fs.existsSync(out)));
     } catch (e) { resolve(false); }
   });
-  if (ok) return `/uploads/clips/thumbs/${path.basename(out)}`;
+  if (ok) return `/media/clips/thumbs/${path.basename(out)}`;
   console.warn('[scen3/clip] no poster frame for', name);
   return '';
 }
@@ -3210,11 +3192,11 @@ const FACE_W = 480, FACE_H = 720;
 async function _castFace(sheetPath, charId) {
   const hit = _resolveMedia(sheetPath);
   if (!hit || !fs.existsSync(hit.abs)) return '';
-  const dir = path.join(CFG.UPLOADS_DIR, 'faces');
+  const dir = path.join(CFG.MEDIA.images, 'faces');
   fs.mkdirSync(dir, { recursive: true });
   const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
   const abs = path.join(dir, name);
-  const url = `/uploads/faces/${name}`;
+  const url = `/media/images/faces/${name}`;
   if (fs.existsSync(abs)) return url;
   const meta = await sharp(hit.abs).metadata();
   const w = Math.min(meta.width, Math.round(meta.height * 2 / 3));
@@ -3323,11 +3305,11 @@ router.post('/scen3/voices/take', async (req, res) => {
       console.log('[scen3/voices] already known:', id, '- keeping its demo', knownDemo.split('/').pop());
     } else try {
       const buf = await _speakLine(key, id, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
-      const dir = path.join(CFG.UPLOADS_DIR, 'voice-demos');
+      const dir = path.join(CFG.MEDIA.voice, 'demos');
       fs.mkdirSync(dir, { recursive: true });
       const file = `demo_${id}_${Date.now()}.mp3`;
       fs.writeFileSync(path.join(dir, file), buf);
-      sample = `/uploads/voice-demos/${file}`;
+      sample = `/media/voice/demos/${file}`;
       dur = await _audioDur(path.join(dir, file));
       console.log('[scen3/voices] demo for', id, dur.toFixed(1) + 's', VD.DEMO_WORDS + ' words');
     } catch (e) {

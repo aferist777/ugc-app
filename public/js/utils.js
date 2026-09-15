@@ -58,8 +58,8 @@ refreshBalance();
 setInterval(refreshBalance, 60000);
 
 // ── Thumbnail path helper ─────────────────────────────────────────────────────
-// Given a server image path like "/characters/foo.jpg",
-// returns "/characters/thumbs/foo.jpg" (client uses this for display;
+// Given a server image path like "/media/characters/foo.jpg",
+// returns "/media/characters/thumbs/foo.jpg" (client uses this for display;
 // the full path is used only for the lightbox).
 function toThumbPath(imgPath) {
   if (!imgPath) return imgPath;

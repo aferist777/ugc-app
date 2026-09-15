@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    routes/edit.js — Edit v2 maintenance endpoints.
 
-   DELETE /api/edit/session-files  body: { paths: ["/uploads/…", "/finals/…"] }
-   Deletes a project's generated files. ONLY /uploads/* and /finals/* are
-   touched — library dirs (obrazy, details, characters, …) are never deleted,
+   DELETE /api/edit/session-files  body: { paths: ["/media/clips/…", "/media/renders/…"] }
+   Deletes a project's generated files. ONLY generated media - pictures, clips, voices, audio,
+   project folders and renders - is touched — library kinds (looks, references, characters, …) are never deleted,
    even if a stray path is passed. Includes a path-escape guard. Returns count.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -11,19 +11,16 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { UPLOADS_DIR, FINALS_DIR, DATA_DIR } = require('../lib/config');
+const { MEDIA, DATA_DIR } = require('../lib/config');
+const { toDiskWithin } = require('../lib/media');
+
+// What a session's files can be: everything that was the old uploads/ and finals/.
+const GENERATED = [MEDIA.images, MEDIA.clips, MEDIA.voice, MEDIA.audio, MEDIA.projects, MEDIA.renders];
 const { createThumbnail } = require('../lib/helpers');
 
 function _resolveSafe(url) {
   if (typeof url !== 'string') return null;
-  let base, rest;
-  if (url.startsWith('/uploads/'))      { base = UPLOADS_DIR; rest = url.slice('/uploads/'.length); }
-  else if (url.startsWith('/finals/'))  { base = FINALS_DIR;  rest = url.slice('/finals/'.length); }
-  else return null;
-  const root = path.resolve(base);
-  const abs  = path.resolve(root, rest);
-  if (abs !== root && !abs.startsWith(root + path.sep)) return null; // escape guard
-  return abs;
+  return toDiskWithin(url, GENERATED);   // escape guard included
 }
 
 // ── Sanitizers for per-project folder layout (Phase B) ───────────────────────

@@ -11,13 +11,15 @@
 
    WHAT IT DOES
      - copies every media file to its folder in media/ (lib/layout.js says which), keeping its
-       modified time - several shelves sort by it;
+       modified time - several shelves sort by it; the custom options' pictures (data/cop-images)
+       go to media/images/options/;
      - rewrites every server-era path inside the stores it copies (/uploads/x.jpg becomes
-       /media/images/x.jpg) - whole values and paths inside longer strings alike;
+       /media/images/x.jpg) - whole values, keys, and paths inside longer strings alike; the
+       renders' records (finals/_meta.json) become the store data/finals-meta.json;
      - carries the settings over without the retired keys, and fills empty key fields from the
        old install's .env, where the server kept R2 and some others. Values are never printed;
-     - checks, afterwards, that every path the new stores hold is a file that exists, and writes
-       the report to <library>/logs/.
+     - checks, afterwards, that every path the new stores hold is a file that exists and that no
+       server-era path is left in them, and writes the report to <library>/logs/.
    Running it again is safe: a file already copied with the same size and time is skipped.
 
    WHAT IT LEAVES BEHIND, on purpose: data/exports (old export volumes), data/backups, scratch
@@ -31,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
-const { fromLegacy, rewriteLegacy } = require('../lib/layout');
+const { fromLegacy, rewriteLegacyValue, legacyPathsIn, LEGACY_LEFT_OUT } = require('../lib/layout');
 const { writeFileAtomic } = require('../lib/atomic-write');
 
 // ── arguments ───────────────────────────────────────────────────────────────
@@ -59,12 +61,7 @@ const MEDIA_SOURCES = [
   // Written into public/ while the server ran; the desktop app keeps them in the library.
   ['public/voice-previews', '/voice-previews'], ['public/models', '/models'],
 ];
-const SKIP_MEDIA = [
-  [/^\/uploads\/_thumbs\//, 'thumbnail cache - keyed by the old absolute paths, never read again'],
-  [/^\/uploads\/_poses\//, 'pose previews - made again on demand'],
-  [/^\/uploads\/suno_tmp_/, 'half-finished music merge'],
-  [/\.(part|tmp)$/i, 'unfinished write'],
-];
+const SKIP_MEDIA = LEGACY_LEFT_OUT;
 // Stores that describe the server itself, not the work in it.
 const SKIP_STORES = {
   'users.json': 'the server\'s users',
@@ -73,7 +70,11 @@ const SKIP_STORES = {
 };
 // Folders inside data/ that are copied whole (and rewritten, being JSON).
 const DATA_DIRS = ['transcripts'];
-const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads', 'data/cop-images',
+// Stores the server kept outside data/: where, under the install -> their name in data/ now.
+const OUTSIDE_STORES = { 'finals/_meta.json': 'finals-meta.json' };
+// Pictures the server kept inside data/ -> their folder now. The store names them by id only.
+const DATA_MEDIA = [['data/cop-images', 'media/images/options']];
+const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads',
   'data/cv2-trace.jsonl', 'data/.session-secret', 'data/.obrazy-migrated', 'temp_files', 'temp_public',
   'logs', 'vsl', 'scenarios'];
 
@@ -108,30 +109,14 @@ function sizeOf(rel) {
   return b;
 }
 
-// Every server-era address in a store, turned into its address now. A string that IS a path is
-// mapped whole, so a file name with a space in it survives; anything else is searched.
-function rewriteValue(v, counter) {
-  if (typeof v === 'string') {
-    const whole = fromLegacy(v);
-    if (whole) { counter.n++; return whole; }
-    const next = rewriteLegacy(v);
-    if (next !== v) counter.n++;
-    return next;
-  }
-  if (Array.isArray(v)) return v.map((x) => rewriteValue(x, counter));
-  if (v && typeof v === 'object') {
-    const out = {};
-    for (const [k, x] of Object.entries(v)) out[k] = rewriteValue(x, counter);
-    return out;
-  }
-  return v;
-}
-
+// Every path a store holds, in its values and its keys (some stores are indexed by path). A string
+// that IS a path is taken whole - render names carry spaces; a longer one is searched.
 function mediaPathsIn(v, out) {
   if (typeof v === 'string') {
-    for (const m of v.matchAll(/\/(?:media|cache)\/[^"'\s)\\<>?#]+/g)) out.push(m[0]);
+    if (/^\/(?:media|cache)\//.test(v)) out.push(v.split(/[?#]/)[0]);
+    else for (const m of v.matchAll(/\/(?:media|cache)\/[^"'\s)\\<>?#&]+/g)) out.push(m[0]);
   } else if (Array.isArray(v)) v.forEach((x) => mediaPathsIn(x, out));
-  else if (v && typeof v === 'object') Object.values(v).forEach((x) => mediaPathsIn(x, out));
+  else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => { mediaPathsIn(k, out); mediaPathsIn(x, out); });
   return out;
 }
 
@@ -144,6 +129,7 @@ for (const [dir, prefix] of MEDIA_SOURCES) {
   walkFiles(path.join(FROM, dir), (src) => {
     const rel = path.relative(path.join(FROM, dir), src).split(path.sep).join('/');
     const url = `${prefix}/${rel}`;
+    if (OUTSIDE_STORES[url.slice(1)]) return;   // a store, copied with the stores below
     const st = fs.statSync(src);
     const skip = SKIP_MEDIA.find(([re]) => re.test(url));
     if (skip) { const s = skipped.get(skip[1]) || [0, 0]; s[0]++; s[1] += st.size; skipped.set(skip[1], s); return; }
@@ -155,6 +141,16 @@ for (const [dir, prefix] of MEDIA_SOURCES) {
     const f = perFolder.get(folder) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(folder, f);
   });
 }
+for (const [dir, folder] of DATA_MEDIA) {
+  walkFiles(path.join(FROM, dir), (src) => {
+    const rel = path.relative(path.join(FROM, dir), src).split(path.sep).join('/');
+    const st = fs.statSync(src);
+    const to = `/${folder}/${rel}`;
+    copies.push({ src, dest: path.join(TO, ...to.slice(1).split('/')), size: st.size, mtime: st.mtime, url: `${dir}/${rel}`, to });
+    const key = to.split('/').slice(1, 3).join('/');
+    const f = perFolder.get(key) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(key, f);
+  });
+}
 const byDest = new Map();
 const collisions = [];
 for (const c of copies) {
@@ -163,8 +159,13 @@ for (const c of copies) {
   else byDest.set(key, c);
 }
 
-const stores = [];
+const stores = [];                       // names in data/, the same as on the server unless OUTSIDE_STORES says
 const DATA = path.join(FROM, 'data');
+const storeSource = new Map();           // name in data/ -> where the server kept it, when not data/<name>
+for (const [src, name] of Object.entries(OUTSIDE_STORES)) {
+  if (fs.existsSync(path.join(FROM, ...src.split('/')))) { stores.push(name); storeSource.set(name, path.join(FROM, ...src.split('/'))); }
+}
+const sourceOf = (rel) => storeSource.get(rel) || path.join(DATA, ...rel.split('/'));
 for (const e of fs.readdirSync(DATA, { withFileTypes: true })) {
   if (e.isFile() && e.name.endsWith('.json')) {
     if (SKIP_STORES[e.name]) { const s = skipped.get(`data/${e.name}: ${SKIP_STORES[e.name]}`) || [0, 0]; s[0]++; skipped.set(`data/${e.name}: ${SKIP_STORES[e.name]}`, s); continue; }
@@ -179,12 +180,19 @@ const existingStores = stores.filter((s) => fs.existsSync(path.join(TO, 'data', 
 // Paths the old stores ALREADY pointed at nothing with - a deleted file whose record stayed. The
 // check after copying has to tell those apart from anything this run loses.
 const OLD_DISK = { 'voice-previews': 'public/voice-previews', models: 'public/models' };
-const LEGACY_RE = /\/(?:uploads|characters|obrazy|lookbooks|environments|refs|details|finals|hooks|models|scenes|archive|voice-previews)\/[^"'\s)\\<>?#]+/g;
 const brokenBefore = new Set();
+function legacyPathsInValue(v, out) {
+  if (typeof v === 'string') {
+    if (fromLegacy(v)) out.push(v.split(/[?#]/)[0]);
+    else out.push(...legacyPathsIn(v));
+  } else if (Array.isArray(v)) v.forEach((x) => legacyPathsInValue(x, out));
+  else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => { legacyPathsInValue(k, out); legacyPathsInValue(x, out); });
+  return out;
+}
 for (const rel of stores) {
-  let text = '';
-  try { text = fs.readFileSync(path.join(DATA, ...rel.split('/')), 'utf8'); } catch { continue; }
-  for (const hit of text.match(LEGACY_RE) || []) {
+  let value;
+  try { value = JSON.parse(fs.readFileSync(sourceOf(rel), 'utf8')); } catch { continue; }
+  for (const hit of legacyPathsInValue(value, [])) {
     const [, top, ...rest] = hit.split('/');
     if (!fs.existsSync(path.join(FROM, ...(OLD_DISK[top] || top).split('/'), ...rest))) {
       const to = fromLegacy(hit);
@@ -253,14 +261,14 @@ if (blocked) fail('refusing to apply - see above');
   let rewritten = 0;
   const written = [];
   for (const rel of stores) {
-    const src = path.join(DATA, ...rel.split('/'));
+    const src = sourceOf(rel);
     let value;
     try { value = JSON.parse(fs.readFileSync(src, 'utf8')); }
     catch (e) { say(`  ! ${rel} is not valid JSON (${e.message}) - copied as it was`); value = undefined; }
     const dest = path.join(TO, 'data', ...rel.split('/'));
     if (value === undefined) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); continue; }
     const counter = { n: 0 };
-    let next = rewriteValue(value, counter);
+    let next = rewriteLegacyValue(value, counter);
     if (rel === 'settings.json') {
       for (const k of RETIRED_KEYS) delete next[k];
       const moved = [];
@@ -289,6 +297,12 @@ if (blocked) fail('refusing to apply - see above');
   const lostCount = [...lost.values()].reduce((n, l) => n + l.length, 0);
   say(`check: ${paths} paths in the new stores; ${stillBroken} point at nothing as they already did; ${lostCount} LOST by this run`);
   for (const [rel, l] of lost) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
+
+  // And no server-era path is left in them: one the map had no place for would stay as it was, and
+  // the check above - which looks for the new paths - would never see it.
+  const untranslated = written.map(([rel, value]) => [rel, legacyPathsIn(JSON.stringify(value))]).filter(([, l]) => l.length);
+  say(`check: ${untranslated.reduce((n, [, l]) => n + l.length, 0)} server-era paths left untranslated`);
+  for (const [rel, l] of untranslated) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
 
   const logDir = path.join(TO, 'logs');
   fs.mkdirSync(logDir, { recursive: true });

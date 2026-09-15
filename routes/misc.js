@@ -6,7 +6,7 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, LOGS_DIR, LOG_FILE, UPLOADS_DIR, TEMP_PUBLIC_DIR } = require('../lib/config');
+const { KIE_BASE, LOGS_DIR, LOG_FILE, TEMP_PUBLIC_DIR } = require('../lib/config');
 const { kieHeaders, uploadToPublicHost, createThumbnail } = require('../lib/helpers');
 
 // ── Balance ───────────────────────────────────────────────────────────────────

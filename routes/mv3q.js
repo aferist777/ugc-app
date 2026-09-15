@@ -39,22 +39,13 @@ const { buildGraph } = require('../lib/mv3b-render');
 const OWN = require('../lib/ownership');
 
 const router = express.Router();
-const { ROOT_DIR: ROOT, APP_DIR, SCRATCH_DIR, DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { DATA_DIR, FINALS_DIR: FINALS } = require('../lib/config');
+const { toDisk, toUrl } = require('../lib/media');
 const FILE = path.join(DATA_DIR, 'mv3-queue.json');
 
-const ROOTS = ['uploads', 'obrazy', 'characters', 'environments', 'lookbooks',
-               'details', 'refs', 'archive', 'scenes', 'temp_public', 'finals', 'images', 'public'];
-
 function resolveSrc(rel) {
-  const clean = String(rel || '').split('?')[0].replace(/^\/+/, '');
-  if (!clean || clean.includes('..')) return null;
-  const top = clean.split('/')[0];
-  if (!ROOTS.includes(top)) return null;
-  // public/ ships with the program, temp_public is scratch; every other root is in the library.
-  const base = top === 'public' ? APP_DIR : top === 'temp_public' ? SCRATCH_DIR : ROOT;
-  const abs = path.join(base, clean);
-  if (!abs.startsWith(base)) return null;
-  return fs.existsSync(abs) ? abs : null;
+  const abs = toDisk(rel);
+  return abs && fs.existsSync(abs) ? abs : null;
 }
 
 function read() {
@@ -153,7 +144,7 @@ function next() {
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
-      if (code === 0 && fs.existsSync(out)) { it.status = 'done'; it.url = '/finals/' + name; }
+      if (code === 0 && fs.existsSync(out)) { it.status = 'done'; it.url = toUrl(out); }
       else { it.status = 'failed'; it.error = 'ffmpeg exited ' + code; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }

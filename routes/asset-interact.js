@@ -7,9 +7,10 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const {
-  UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
+  MEDIA, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR, DATA_DIR, PUBLIC_DIR,
 } = require('../lib/config');
+const { toDisk } = require('../lib/media');
 const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
@@ -37,31 +38,13 @@ function resolveSpintax(text) {
   });
 }
 
-// ── Resolve a public URL path (e.g. /characters/foo.jpg) to a filesystem path ─
-// Must include /obrazy/ since character base images + their pose-variations
-// now live in per-obraz folders (obrazy/<slug>_<idShort>/...). Missing this
-// mapping was the cause of the "empty prompt" errors in mix generation —
-// urlToFilePath returned null for /obrazy/... paths, so the pre-analyze
-// endpoint bailed before producing combinedPrompt.
+// ── Resolve a public URL path (e.g. /media/characters/foo.jpg) to a filesystem path ─
+// Every place a picture can come from - the library's media, scratch, the shipped mannequins -
+// is one mapping in lib/media.js. A path it does not know was the cause of the "empty prompt"
+// errors in mix generation once: the pre-analyze endpoint bailed before producing combinedPrompt.
 function urlToFilePath(urlPath) {
   if (!urlPath) return null;
-  const stripped = urlPath.split('?')[0]; // remove ?t=...
-  const map = [
-    ['/characters/',   CHARACTERS_DIR],
-    ['/lookbooks/',    LOOKBOOKS_DIR],
-    ['/environments/', ENVIRONMENTS_DIR],
-    ['/scenes/',       SCENES_DIR],
-    ['/temp_files/',   TEMP_DIR],
-    ['/uploads/',      UPLOADS_DIR],
-    ['/obrazy/',       OBRAZY_DIR],
-    ['/poses/',        path.join(PUBLIC_DIR, 'poses')],
-  ];
-  for (const [prefix, dir] of map) {
-    if (stripped.startsWith(prefix)) {
-      return path.join(dir, stripped.slice(prefix.length));
-    }
-  }
-  return null;
+  return toDisk(urlPath);
 }
 
 // ── POST /api/asset-interact/pre-analyze ─────────────────────────────────────
@@ -273,7 +256,7 @@ router.post('/asset-interact/generate', async (req, res) => {
     const aspectRatio = '9:16';
     const taskId = await createMultiRefEditTask(engine, resolvedPrompt, imageUrls, aspectRatio, seed, engineParams);
     console.log('[asset-interact/generate] engine:', engine, '| taskId:', taskId, '| seed:', seed);
-    addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
+    addPendingTask(taskId, 'images', 'interact', 'asset-interact');
 
     res.json({ success: true, taskId, seed });
   } catch (err) {
@@ -346,7 +329,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
     console.log('[generate-with-analysis] engine:', engine, '| engineParams:', JSON.stringify(engineParams));
     const taskId = await createMultiRefEditTask(engine, generationPrompt, [activeUrl, assetUrl], '9:16', seed, engineParams);
     console.log('[generate-with-analysis] engine:', engine, '| taskId:', taskId);
-    addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
+    addPendingTask(taskId, 'images', 'interact', 'asset-interact');
     res.json({ success: true, taskId, seed });
   } catch (err) {
     console.error('[asset-interact/generate-with-analysis]', err.response?.data || err.message);
@@ -357,7 +340,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
 // ── GET /api/asset-interact/status/:taskId ────────────────────────────────────
 router.get('/asset-interact/status/:taskId', async (req, res) => {
   try {
-    const result = await resolveTask(req.params.taskId, UPLOADS_DIR, 'interact');
+    const result = await resolveTask(req.params.taskId, MEDIA.images, 'interact');
     if (result.state === 'success' || result.state === 'failed') removePendingTask(req.params.taskId);
     res.json({ success: true, ...result });
   } catch (err) { res.status(502).json({ success: false, error: err.message }); }

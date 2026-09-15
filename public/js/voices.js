@@ -15,7 +15,7 @@
 // list any more. Voices created via the Character Edit popup land in the
 // catalog and are appended to window.ELEVENLABS_VOICES on the next reload.
 window.ELEVENLABS_VOICES = [];
-window._elVoicePreviews  = {};   // { voiceId: '/voice-previews/<voiceId>.mp3' }
+window._elVoicePreviews  = {};   // { voiceId: '/cache/voice-previews/<voiceId>.mp3' }
 
 // ── Voices-ready gate ────────────────────────────────────────────────────────
 // Boot-time race condition: loadObrazы / loadScenarioObrazы render plates
