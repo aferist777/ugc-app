@@ -228,7 +228,6 @@ export function buildPayload(adv) {
     srtWords: [],
     assSettings: subs.assSettings,
     prebuiltAssPath: null,
-    smartCopy: false,
   };
 }
 

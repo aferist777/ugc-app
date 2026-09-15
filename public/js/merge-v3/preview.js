@@ -212,11 +212,9 @@ async function _prepare(gated) {
     if (!tr) continue;
     for (const c of (tr.clips || [])) {
       // A still has no proxy - _srcFor hands back the original - and its <img> is fetched
-      // the moment it is drawn; nothing to warm and nothing to prime. A VSL source is
-      // hour-long and served as the original: a HEAD is harmless, an element with preload
-      // on would pull the whole hour, so it is warmed and not primed.
+      // the moment it is drawn; nothing to warm and nothing to prime.
       if (!c.src || isStill(c)) continue;
-      jobs.push({ at: +c.start || 0, scope, c, url: _srcFor(scope, c), vsl: String(c.src).indexOf('/vsl/') === 0 });
+      jobs.push({ at: +c.start || 0, scope, c, url: _srcFor(scope, c) });
     }
   }
   // Main first, then the rest; within each, nearest the playhead first.
@@ -225,7 +223,7 @@ async function _prepare(gated) {
     if (am !== bm) return am ? -1 : 1;
     return Math.abs(a.at - _clock) - Math.abs(b.at - _clock);
   });
-  const toPrime = jobs.filter(j => !j.vsl && !_pool.has(j.c.id)).slice(0, PRIME_MAX);
+  const toPrime = jobs.filter(j => !_pool.has(j.c.id)).slice(0, PRIME_MAX);
   const srcs = [...new Set(jobs.map(j => j.c.src))];
   const st = { proxies: 0, proxiesTotal: 0, frames: 0, framesTotal: toPrime.length };
   if (gated) { _ready = false; _override = false; }
@@ -525,8 +523,7 @@ function _activeClips() {
 // expensive part, not rasterisation. The server already keeps a cached low-res transcode
 // for this (routes/ffmpeg.js, /ffmpeg/preview-proxy), so that is where the picker bites.
 // Music keeps the original: there is no picture to shrink. The endpoint falls back to the
-// original by itself for /vsl/ sources (hour-long, transcoding them would stall) and on any
-// transcode failure, so a proxy URL is never a dead end.
+// original by itself on any transcode failure, so a proxy URL is never a dead end.
 function _srcFor(scope, c) {
   // A clip with a poster has an mp3 for a source. There is no picture in it to shrink, and
   // asking the proxy to transcode one would be a minute of ffmpeg for nothing. A still is

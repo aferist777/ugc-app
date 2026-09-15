@@ -8,10 +8,6 @@
 // already in FINAL-timeline coordinates. Merge keeps only the words over inline-upload
 // spans; talking-head fragments keep their own per-fragment subtitles.
 //
-// This lived in routes/vsl.js and moved here unchanged when VSL was removed (Ph15): it
-// is the one part of that file the creatives flow uses. Kept as its own module rather
-// than folded into routes/audio.js so the port is a move, not a rewrite.
-//
 //   POST /api/stt/timeline      { segments: [{src, crop, speed, dur, voiceOnly}] } -> { jobId }
 //   GET  /api/stt/timeline/:id  -> { state, progress, words }
 // ════════════════════════════════════════════════════════════════════════════

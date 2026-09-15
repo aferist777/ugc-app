@@ -2043,8 +2043,8 @@ const _elKey = () => {
   return String(s.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY || '').trim();
 };
 
-// Duration straight out of ffmpeg's own header dump — no ffprobe dependency, the same
-// trick routes/vsl.js uses for video. The clip length will be read off this later.
+// Duration straight out of ffmpeg's own header dump — no ffprobe dependency. The clip length
+// will be read off this later.
 function _audioDur(file) {
   return new Promise(resolve => {
     let out = '';

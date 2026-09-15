@@ -102,8 +102,7 @@ app.use('/api', require('./routes/char-store'));
 // archive to a file rather than streaming it, so a broken download resumes instead of
 // starting again - the bundle runs to gigabytes.
 app.use('/api', require('./routes/data-io'));
-// Timeline word-timing STT — the one piece of the retired VSL backend the creatives
-// flow uses (inline-upload subtitles); moved out of routes/vsl.js when VSL went (Ph15).
+// Timeline word-timing STT - the words under Merge's inline uploads, for their subtitles.
 app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
