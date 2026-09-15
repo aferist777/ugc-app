@@ -1002,8 +1002,8 @@ export function initMontage(onProjectChange) {
         const { reel } = await saveReel(_proj.id);
         _proj.reel = reel;
         const r = await reelMerge(_proj.id);
-        // Every send makes its own project in Merge, numbered, with the overlays carried
-        // over from the last one - so an earlier cut is never overwritten by a later send.
+        // Every send makes its own project in Merge, numbered, starting clean - so an earlier
+        // cut is never overwritten by a later send.
         // The key travels in the URL and nowhere else: Merge reads ?p= and otherwise opens
         // nothing, so there is no preference to write here.
         _vstatus(`Sent ${r.fragments} clip${r.fragments === 1 ? '' : 's'} to Merge · opening…`);

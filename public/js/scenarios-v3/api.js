@@ -90,11 +90,11 @@ export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { pr
 // One fragment's audio, pulled out of its clip and padded to the clip's length — Merge
 // times a main-track clip by its audio, and drops a cell that has none. Driven one at a
 // time so the footer can count them; idempotent, so a retry is free.
-// Hand the cut to the editor: Merge's own store writes the Main track of the project's timeline
-// and gives back the key to deep-link to.
+// Hand the cut to the editor: Merge makes a new project with the clips and their sound on its main
+// lanes, and gives back the key to deep-link to.
 export const reelMerge       = (projectId) => _post('/api/mv3/import/scen3', { projectId });
-// The same hand-off before any lipsync exists: Main gets each fragment's read with its
-// first frame held over it, so the overlays can be built against the real timing.
+// The same hand-off before any lipsync exists: the new project has the reads alone, one after
+// another on its main audio lane, so it can be built against the real timing.
 export const stillsMerge     = (projectId) => _post('/api/mv3/import/scen3', { projectId, mode: 'stills' });
 // Tiny per-line view of the video work: what is rendering, what failed, what has a clip.
 export const videoState      = (projectId) => _json('/api/scen3/video/state/' + projectId)

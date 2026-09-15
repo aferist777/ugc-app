@@ -1144,8 +1144,12 @@ router.get('/mv3/timeline/:key/source', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── Import a Scenarios cut into the Main track ──────────────────────────────
-   POST /api/mv3/import/scen3 { projectId } -> { success, key, fragments }
+/* ── Import a Scenarios cut as a project ─────────────────────────────────────
+   POST /api/mv3/import/scen3 { projectId, mode: 'video' | 'stills' } -> { success, key, fragments }
+
+   A BLANK PROJECT, the one kind Merge keeps (docs/local-app/PLAN.md, phase 3): the cut on the main
+   lanes and nothing else. 'video' lays each lipsync clip on main video with its own sound as the
+   other half of a pair on main audio; 'stills' lays the reads alone on main audio.
 
    THE LENGTH COMES FROM THE AUDIO, not the video. A generated fragment's video runs past
    the end of the speech and what it does there is hallucination - a face still moving
@@ -1153,16 +1157,10 @@ router.get('/mv3/timeline/:key/source', (req, res) => {
    video is trimmed off. Measured on real data: a line with 6.53s of audio had a 7.20s
    clip, so 0.67s of it was invention.
 
-   EVERY SEND MAKES A NEW PROJECT, numbered. It used to write to one key per scenario and
-   so replaced the Main track of whatever was there - which was right for the case it was
-   written for (regenerate one fragment, send again, keep your overlays) and quietly
-   destructive for the other one: a Main track that had been trimmed, rippled or had
-   library inserts dropped into it was rebuilt from the reel with none of that. Nothing
-   warned, because from the store's point of view an import is an import.
-
-   So: sv3_<id>, then sv3_<id>_2, _3, and the overlays are COPIED FORWARD from the newest
-   sibling. The old project stays exactly as it was, and the new one does not start with an
-   empty Birols lane - which is what made replacing in place attractive in the first place.
+   EVERY SEND MAKES A NEW PROJECT, numbered: sv3_<id>, then sv3_<id>_2, _3. It used to write to
+   one key per scenario and so replaced the cut of whatever was there, trims and inserts and all,
+   with nothing to warn. The earlier projects stay exactly as they were, and nothing is copied
+   from them - the owner's decision: every send starts clean.
    ──────────────────────────────────────────────────────────────────────────── */
 const SCEN3 = require('./scen3');
 const LOUD = require('../lib/loudness');
@@ -1220,14 +1218,13 @@ router.post('/mv3/import/scen3', async (req, res) => {
     const p = (SCEN3.loadProjects() || []).find(x => String(x.id) === id);
     if (!p) return res.status(404).json({ success: false, error: `no scenarios project "${id}"` });
 
-    // Two ways in, and the difference is only what the picture is.
+    // Two ways in, and the difference is only what there is to watch.
     //
     // 'video' is the finished cut: rendered lipsync clips, trimmed to their voice.
-    // 'stills' is the same cut BEFORE any of it has been paid for - each fragment's first
-    // frame held for the length of its read. It exists so the overlays can be built against
-    // the real timing while the lipsync is still an intention: birols land on the words they
-    // are meant to land on, and sending the video afterwards replaces Main and carries every
-    // one of them forward (see the numbering above).
+    // 'stills' is the same cut BEFORE any of it has been paid for: the reads alone, one after
+    // another on the main audio lane, with nothing on the video lanes - the preview is black and
+    // a render is a black film with the voice. It exists so a project can be built against the
+    // real timing while the lipsync is still an intention.
     const mode = String((req.body || {}).mode || 'video') === 'stills' ? 'stills' : 'video';
     const { variant, cut } = mode === 'stills' ? SCEN3.audioCut(p) : SCEN3.cutClips(p);
     if (!cut.length) {
@@ -1245,83 +1242,74 @@ router.post('/mv3/import/scen3', async (req, res) => {
       gainDb: 0,
     }));
     await _levelReads(levels);
-    const gainOf = (i) => (levels[i] && levels[i].gainDb) || 0;
-
-    const clips = [];
-    let at = 0;
-    for (const [_i, it] of (mode === 'stills' ? [] : cut).entries()) {
-      const vidDur = Math.max(0, +(it.clip || {}).dur || 0);
-      const aud = ((it.line || {}).audio || {})[variant] || {};
-      const audDur = Math.max(0, +aud.dur || 0);
-      // The speech decides. Falling back to the video only when there is no audio length
-      // to trust, and never claiming more than the video actually holds.
-      const dur = (audDur > 0) ? Math.min(audDur, vidDur || audDur) : vidDur;
-      if (!(dur > 0)) continue;
+    // The levelling goes INTO the clip's volume here. A blank project has no second number beside
+    // volume for it - and the level a fragment arrives at is exactly what its slider should show.
+    const levelOf = (i) => {
+      const db = (levels[i] && levels[i].gainDb) || 0;
+      return Math.round(Math.min(VOL_MAX, Math.pow(10, db / 20)) * 1000) / 1000;
+    };
+    const r2 = (v) => Math.round(v * 100) / 100;
+    // The line itself, without the performance tags - they are directions, not words.
+    const nameOf = (it) => {
       const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
-      clips.push({
-        id: 'sg' + id.slice(-6) + '_' + it.n,
-        src: it.clip.path,
-        thumb: it.clip.thumb || null,
-        // The line itself, without the performance tags - they are directions, not words.
-        name: said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || ('fragment ' + it.n),
-        libId: null,
-        start: Math.round(at * 100) / 100,
-        dur: Math.round(dur * 100) / 100,
-        srcDur: Math.round((vidDur || dur) * 100) / 100,
-        trimIn: 0,
-        // The hallucinated tail.
-        trimOut: Math.round(Math.max(0, (vidDur || dur) - dur) * 100) / 100,
-        speed: 1,
-        // The fragment's video carries the voice, so Main arrives audible.
-        volume: 1,
-        // What bringing this read up to the loudest one asks for, in dB. Separate from
-        // volume so the slider stays the user's and this stays the measurement's.
-        gainDb: gainOf(_i),
-        reversed: false,
-        transition: null, animation: null, filter: null,
-        cropAlign: null, tx: null, ty: null, tw: null, angle: null,
-        halferPos: null, halferThick: null, halferKeep: null, rotation: null,
-      });
-      at += dur;
-    }
+      return said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || ('fragment ' + it.n);
+    };
+    const fx = { transition: null, animation: null, filter: null };
 
-    // The stills pass. Same shape of clip, same order, same names - what changes is that
-    // `src` is the READ and `poster` is the picture, where a video clip is both at once.
-    // The renderer already knew how to put a voice under a video it does not have; it now
-    // holds the still instead of black (routes/ffmpeg.js, the voiceOnly branch).
-    if (mode === 'stills') {
-      for (const [_i, it] of cut.entries()) {
+    // ── The timeline: a blank project's own lanes ─────────────────────────
+    // docs/local-app/PLAN.md, phase 3: a send is a project in the one editor Merge keeps. The cut
+    // goes on the MAIN lanes, one fragment after another, and nothing else is on the project.
+    const tl = _emptyBlank();
+    const vLane = tl.tracks.find(t => t.id === 'v1');
+    const aLane = tl.tracks.find(t => t.id === 'a1');
+    const tag = id.slice(-6);
+    let at = 0;
+
+    if (mode === 'video') {
+      for (const [i, it] of cut.entries()) {
+        const vidDur = Math.max(0, +(it.clip || {}).dur || 0);
+        const aud = ((it.line || {}).audio || {})[variant] || {};
+        const audDur = Math.max(0, +aud.dur || 0);
+        // The speech decides. Falling back to the video only when there is no audio length
+        // to trust, and never claiming more than the video actually holds.
+        const dur = (audDur > 0) ? Math.min(audDur, vidDur || audDur) : vidDur;
+        if (!(dur > 0)) continue;
+        // A PAIR, as a film dropped on these lanes is: the picture on main video, the same file's
+        // sound on main audio, one piece of media. The lipsync clip carries the voice, so it is
+        // the sound half that is heard; the picture half is silent, as every picture half is.
+        const half = {
+          name: nameOf(it), libId: null,
+          start: r2(at), dur: r2(dur), srcDur: r2(vidDur || dur),
+          // The hallucinated tail: past the end of the speech the face keeps moving with nothing
+          // to say, and it is left off.
+          trimIn: 0, trimOut: r2(Math.max(0, (vidDur || dur) - dur)),
+          speed: 1, reversed: false, ...fx,
+          pairId: 'pg' + tag + '_' + it.n,
+        };
+        vLane.clips.push({ ...half, id: 'sg' + tag + '_' + it.n, src: it.clip.path, thumb: it.clip.thumb || null, volume: 0 });
+        aLane.clips.push({ ...half, id: 'sga' + tag + '_' + it.n, src: it.clip.path, thumb: null, volume: levelOf(i) });
+        at += dur;
+      }
+    } else {
+      for (const [i, it] of cut.entries()) {
         const dur = Math.max(0, +it.audio.dur || 0);
         if (!(dur > 0)) continue;
-        const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
-        clips.push({
-          id: 'sa' + id.slice(-6) + '_' + it.n,
-          src: it.audio.path,
-          poster: it.frame || null,
-          thumb: it.frame || null,
-          name: said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || ('fragment ' + it.n),
-          libId: null,
-          start: Math.round(at * 100) / 100,
-          dur: Math.round(dur * 100) / 100,
-          // The read IS the clip - there is no tail to trim, which is the whole difference
-          // from a generated video.
-          srcDur: Math.round(dur * 100) / 100,
-          trimIn: 0, trimOut: 0,
-          speed: 1,
-          volume: 1,
-          gainDb: gainOf(_i),
-          reversed: false,
-          transition: null, animation: null, filter: null,
-          cropAlign: null, tx: null, ty: null, tw: null, angle: null,
-          halferPos: null, halferThick: null, halferKeep: null, rotation: null,
+        aLane.clips.push({
+          id: 'sa' + tag + '_' + it.n, src: it.audio.path, thumb: null, name: nameOf(it), libId: null,
+          // The read IS the clip - there is no tail to trim, which is the whole difference from a
+          // generated video.
+          start: r2(at), dur: r2(dur), srcDur: r2(dur), trimIn: 0, trimOut: 0,
+          speed: 1, reversed: false, ...fx, volume: levelOf(i), pairId: null,
         });
         at += dur;
       }
     }
+    const fragments = (mode === 'video' ? vLane : aLane).clips.length;
+    const clean = _sanitizeBlank(tl);
 
     // The cut's own films, made into proxies while the project is still being written, so it
     // opens in Merge with its preview already prepared.
-    _warmProxies({ tracks: { seg: { clips } } });
+    _warmProxies(clean);
 
     const cur = _read();
     const now = new Date().toISOString();
@@ -1340,24 +1328,6 @@ router.post('/mv3/import/scen3', async (req, res) => {
     const n = top + 1;
     const key = n === 1 ? base : `${base}_${n}`;
 
-    // The one to copy the overlays from: the most recently touched of this scenario's
-    // projects, which is the one that was being worked on.
-    const prevKey = mine.sort((a, b) =>
-      String(cur.timelines[b].updatedAt || '').localeCompare(String(cur.timelines[a].updatedAt || '')))[0];
-    const prev = prevKey ? cur.timelines[prevKey] : null;
-
-    // A DEEP copy, or the two projects would share the same clip objects and editing one
-    // would edit the other - which is a worse version of the bug this numbering fixes.
-    const tracks = _emptyTimeline().tracks;
-    if (prev) {
-      for (const t of OVERLAY_TRACKS.concat(['music', 'subs'])) {
-        if (prev.tracks[t]) tracks[t] = JSON.parse(JSON.stringify(prev.tracks[t]));
-      }
-    }
-    // Main comes from the reel every time. The track's own settings are carried over -
-    // a speed or a volume set on the spine is a preference, not part of the cut.
-    tracks.seg = Object.assign(_emptyTimeline().tracks.seg, prev ? { ...prev.tracks.seg, clips: [] } : {}, { clips });
-
     cur.timelines[key] = {
       // Said in the title because the picker is where the two are told apart: a stills cut
       // and the video cut of the same script are otherwise the same name on the same day.
@@ -1366,13 +1336,15 @@ router.post('/mv3/import/scen3', async (req, res) => {
            + (n > 1 ? ` (${n})` : ''),
       createdAt: now,
       updatedAt: now,
-      adv: prev ? (prev.adv || null) : null,
+      adv: null,
       owner: OWN.uidOf(req),
       rev: 1,
-      tracks,
+      kind: BLANK_KIND,
+      format: clean.format,
+      tracks: clean.tracks,
     };
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, key, fragments: clips.length, variant });
+    res.json({ success: true, key, fragments, variant });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
