@@ -250,9 +250,10 @@ function _subsStyle(st) {
 // A band percentage: a real number inside its range, or the default when there is none. Null
 // is not a legal answer here the way it is for a PiP rect - a band always has a position, a
 // thickness and a slice, even when nobody has touched them.
+// NULL IS MISSING, not zero: Number(null) is 0, which read an explicit null as "against the bottom".
 const _band = (v, dflt, lo = 0) => {
   const n = Number(v);
-  return Number.isFinite(n) ? Math.max(lo, Math.min(100, n)) : dflt;
+  return (v != null && Number.isFinite(n)) ? Math.max(lo, Math.min(100, n)) : dflt;
 };
 
 function _clipOf(c, isSubs) {
@@ -314,7 +315,9 @@ function _clipOf(c, isSubs) {
       halferPos: _band(c.halferPos, c.halferAlign === 'bottom' ? 0 : 100),
       halferThick: _band(c.halferThick, 40, 5),
       halferKeep: _band(c.halferKeep, c.valign === 'bottom' ? 0 : 100),
-      rotation: [0, 90, 180, 270].includes(+c.rotation) ? +c.rotation : null,
+      // Null stays null - the band's default turn. +null is 0, which is on the list, so every
+      // clip that came back with no rotation left its second save turned upright.
+      rotation: (c.rotation != null && [0, 90, 180, 270].includes(+c.rotation)) ? +c.rotation : null,
       // Per-word timings for karaoke, RELATIVE to the clip's own start. Relative and not
       // absolute so that dragging a caption along the lane keeps its highlight in step -
       // absolute offsets would need rewriting on every move, and one missed rewrite is a
@@ -434,7 +437,15 @@ function _sanitizeBlank(timeline) {
                                fit: c.fit === 'fill' ? 'fill' : null,
                                // Music laid under the rest (public/js/merge-v3/music.js): what
                                // captions made from the sound leave out.
-                               bed: c.bed ? true : null })),
+                               bed: c.bed ? true : null,
+                               // A halfer band (lib/mv3b-render.js). Its numbers - halferPos,
+                               // halferThick, halferKeep, rotation - are _clipOf's already; the
+                               // switch is here because every clip carries those numbers.
+                               halfer: c.halfer ? true : null,
+                               // The five answers the blank panel offers for a filled clip.
+                               // _clipOf keeps the talking-head editor's three, and top and
+                               // bottom came back from a save as nothing.
+                               cropAlign: ['left', 'center', 'right', 'top', 'bottom'].includes(c.cropAlign) ? c.cropAlign : null })),
     };
     // `sizeAuto` is added HERE and not inside _subsStyle, which talking-head projects also go
     // through: it is the flag that says the caption size is still the format's suggestion
@@ -613,7 +624,7 @@ router.put('/mv3/timeline', (req, res) => {
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);
     // The STORED tracks go back, not just the version. _sanitize normalises as it writes -
-    // a missing field becomes an explicit null, rotation null becomes 0 - so what the caller
+    // a missing field becomes an explicit null, a band number its default - so what the caller
     // sent and what is now here are not byte-identical. The caller needs the stored shape to
     // compare against later: a merge that measures "what did I change" against the version it
     // sent would count the normalising itself as a change.

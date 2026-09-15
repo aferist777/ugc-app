@@ -998,6 +998,11 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 }
 .mv3-c-ctl{flex:1 1 auto; min-width:0; display:flex; align-items:center}
 .mv3-c-sep{height:1px; margin:9px 0; background:var(--border-soft)}
+/* A section that opens when it is switched on (the Halfer band on a picture): the caret says
+   whether there is more under the switch. */
+.mv3-c-fold .mv3-c-lbl{color:var(--ink)}
+.mv3-c-fold .mv3-c-lbl::before{content:'\25b8  '; color:var(--muted)}
+.mv3-c-fold.is-open .mv3-c-lbl::before{content:'\25be  '}
 .mv3-c-hint{
   margin:1px 0 6px; padding-left:76px;
   font:400 9.5px/1.4 var(--font); color:var(--muted);
@@ -1498,6 +1503,9 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
   border:1px solid var(--primary); background:var(--primary-soft);
 }
 .mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary)}
+/* A halfer band says so on the clip: on the timeline it looks like any other picture, and on the
+   preview it is a strip rather than the frame. */
+.mv3b-clip.is-halfer .mv3b-clip-t::before{content:'HALFER \00b7  '; color:#ffd400}
 
 /* Ruler and playhead. The row is shorter than a lane - it carries numbers, not clips. */
 .mv3b-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}

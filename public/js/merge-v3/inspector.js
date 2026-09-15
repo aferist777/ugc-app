@@ -732,6 +732,62 @@ function _blankFx(host, c, set) {
   ));
 }
 
+// ── A halfer band ───────────────────────────────────────────────────────────
+// The other editor's Halfers lane as a section on any picture: switched on, the clip is a band
+// across the frame instead of a picture on it. Closed while it is off - its numbers mean nothing
+// to a clip that is not a band - and open while it is on, in place of the framing, placement and
+// effects that do not apply to one (lib/mv3b-render.js renders none of them on a band).
+//
+// The controls and their words are that editor's, so a band brought over from there reads the
+// same here. The defaults are its defaults: against the top, two fifths of the frame, turned 90.
+function _halferRows(host, c, set) {
+  const on = !!c.halfer;
+  const head = C.row('Halfer', C.toggle(on, (v) => set('halfer', v)));
+  head.classList.add('mv3-c-fold');
+  if (on) head.classList.add('is-open');
+  head.title = on ? 'A band across the frame. Switch off to make it a picture again - the band keeps its settings.'
+                  : 'Make this clip a band across the frame, like the Halfers lane in the other editor';
+  host.appendChild(head);
+  if (!on) return;
+
+  const num = (v, dflt) => { const n = Number(v); return (v != null && Number.isFinite(n)) ? n : dflt; };
+  const rot = [0, 90, 180, 270].includes(+c.rotation) && c.rotation != null ? +c.rotation : 90;
+  const sideways = (rot === 90 || rot === 270);
+
+  host.appendChild(C.row('Band', C.slider({
+    min: 0, max: 100, step: 1, value: num(c.halferPos, 100),
+    fmt: (v) => (v >= 99 ? 'top' : v <= 1 ? 'bottom' : v === 50 ? 'middle' : v + '%'),
+    onChange: (v) => set('halferPos', v),
+  })));
+  host.appendChild(C.row('Thickness', C.slider({
+    min: 5, max: 100, step: 1, value: num(c.halferThick, 40),
+    fmt: (v) => (v >= 100 ? 'full frame' : v + '%'),
+    onChange: (v) => set('halferThick', v),
+  })));
+  host.appendChild(C.row('Rotation', C.select([[0, '0\u00b0'], [90, '90\u00b0'], [180, '180\u00b0'], [270, '270\u00b0']],
+    String(rot), (v) => set('rotation', +v))));
+  // The band is covered, never stretched, so there is always a slice to choose - and WHICH WAY it
+  // slides depends on the turn: upright, the spare is above and below; on its side, to the sides.
+  host.appendChild(C.row('Keep', C.slider({
+    min: 0, max: 100, step: 1, value: num(c.halferKeep, 100),
+    fmt: (v) => (v >= 99 ? (sideways ? 'right' : 'top')
+               : v <= 1 ? (sideways ? 'left' : 'bottom')
+               : v === 50 ? 'middle' : v + '%'),
+    onChange: (v) => set('halferKeep', v),
+  })));
+  // Only the edges facing INTO the frame, as a share of the band. Written as a number even at
+  // zero: nothing written is the default softness, and hard has to be something else.
+  host.appendChild(C.row('Soft edge', C.slider({
+    min: 0, max: 40, step: 1, value: c.feather == null ? 3 : Math.round(+c.feather * 100),
+    fmt: (v) => (v <= 0 ? 'hard' : v + '%'),
+    onChange: (v) => set('feather', v / 100),
+  })));
+  host.appendChild(C.hint('A band across the frame: where it sits, how thick it is, and which slice of the '
+    + 'picture survives the crop. ' + (sideways ? 'On its side, so the slice slides left to right.'
+                                              : 'Upright, so the slice slides bottom to top.')
+    + ' No framing, placement or effects while it is a band.'));
+}
+
 // A film. Speed retimes it, reverse runs it backwards, and the level belongs to the sound
 // half rather than to this clip - so that is where the slider writes.
 function _blankFilm(host, track, c, set, pair) {
@@ -759,13 +815,18 @@ function _blankFilm(host, track, c, set, pair) {
   }
 
   _bsep(host);
-  // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
-  // being fitted to anything, so the fit controls would be two settings with nothing to act on.
-  if (_isPlaced(c)) _pipRows(host, track, c);
-  else _frameRows(host, c, set);
+  _halferRows(host, c, set);
 
-  _bsep(host);
-  _blankFx(host, c, set);
+  if (!c.halfer) {
+    _bsep(host);
+    // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
+    // being fitted to anything, so the fit controls would be two settings with nothing to act on.
+    if (_isPlaced(c)) _pipRows(host, track, c);
+    else _frameRows(host, c, set);
+
+    _bsep(host);
+    _blankFx(host, c, set);
+  }
 
   _bsep(host);
   host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
@@ -818,12 +879,19 @@ function _blankStill(host, track, c, set) {
   };
   const placed = _isPlaced(c);
 
-  cell('transition', C.select(C.TRANSITIONS, c.transition || 'none', (v) => set('transition', v)));
-  // No zoom on a placed insert - see the note on _fxTriple.
-  if (!placed) cell('animation', C.select(C.ANIMATIONS, c.animation || 'none', (v) => set('animation', v)));
-  cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set('filter', v)));
+  if (c.halfer) {
+    // A band takes none of these: its settings are the section under the picture.
+    stack.appendChild(C.hint('A halfer band - its settings are below.'));
+  } else {
+    cell('transition', C.select(C.TRANSITIONS, c.transition || 'none', (v) => set('transition', v)));
+    // No zoom on a placed insert - see the note on _fxTriple.
+    if (!placed) cell('animation', C.select(C.ANIMATIONS, c.animation || 'none', (v) => set('animation', v)));
+    cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set('filter', v)));
+  }
 
-  if (placed) {
+  if (c.halfer) {
+    // nothing: no placement or framing on a band
+  } else if (placed) {
     cell('soft edge', C.slider({
       min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
       fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
@@ -846,6 +914,9 @@ function _blankStill(host, track, c, set) {
   side.appendChild(stack);
   top.appendChild(side);
   host.appendChild(top);
+
+  _bsep(host);
+  _halferRows(host, c, set);
 }
 
 // A sound. Its level is the whole of it - and a birol lands here silent, which is what this

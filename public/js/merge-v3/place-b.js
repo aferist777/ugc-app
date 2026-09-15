@@ -11,6 +11,9 @@
      drag a corner        resize about its middle
      drag the knob        turn it
 
+   A HALFER BAND IS PICKED, NOT PLACED. It spans the frame and where it sits is the numbers on its
+   panel, so a click selects it and it has no grips - only an outline to say it is the one picked.
+
    LIFTING IS FREE. A clip that has never been placed is dragged from exactly where it is
    already drawn: the preview hands over the box it used, so the first pixel of the gesture
    moves the picture rather than jumping it somewhere else and then moving it.
@@ -45,7 +48,7 @@ function _target() {
   const one = selectedOne();
   if (!one || !one.clip || one.track.kind !== 'video') return null;
   const r = _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
-  return r ? { track: one.track, clip: one.clip, r } : null;
+  return r && !r.band ? { track: one.track, clip: one.clip, r } : null;
 }
 
 // Canvas pixels, then FRAME pixels: the canvas is drawn at a fixed size and shown at whatever
@@ -128,16 +131,21 @@ function _down(e) {
   if (e.button !== 0 || !_cv || !_api) return;
   const p = _at(e);
 
+  const id = _pick(p);
+  const top = id && _api.rectOf ? _api.rectOf(id) : null;
+
   const t = _target();
   if (t) {
     const part = _partAt(p, t.r);
-    if (part) { _begin(t, p, part, e); e.preventDefault(); return; }
+    // A BAND ON TOP IS PICKED BY CLICKING IT, even over the selected picture: it covers that part
+    // of the frame, so that is what the click is on. The selected picture's grips still come first.
+    const bandOver = part === 'move' && top && top.band && id !== t.clip.id;
+    if (part && !bandOver) { _begin(t, p, part, e); e.preventDefault(); return; }
   }
 
   // Not on the selected one - so pick whatever IS under the pointer, and start moving it in
   // the same motion. Two separate actions to move a picture you can already see is one too
   // many.
-  const id = _pick(p);
   if (!id) return;
   selectClipById(id);
   const t2 = _target();
@@ -151,8 +159,11 @@ function _move(e) {
     const p = _at(e);
     const t = _target();
     const part = t ? _partAt(p, t.r) : '';
-    _cv.style.cursor = part === 'move' ? 'move' : part === 'size' ? 'nwse-resize'
-                     : part === 'turn' ? 'grab' : (_pick(p) ? 'pointer' : '');
+    const id = _pick(p);
+    const top = id && _api.rectOf ? _api.rectOf(id) : null;
+    const bandOver = part === 'move' && top && top.band && id !== t.clip.id;
+    _cv.style.cursor = bandOver ? 'pointer' : part === 'move' ? 'move' : part === 'size' ? 'nwse-resize'
+                     : part === 'turn' ? 'grab' : (id ? 'pointer' : '');
     return;
   }
   const p = _at(e);
@@ -198,6 +209,17 @@ function _up() {
 
 /** The outline and its grips, over whatever has just been drawn. */
 export function paintHandles(ctx) {
+  const one = selectedOne();
+  const br = one && one.track.kind === 'video' && _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
+  if (br && br.band) {
+    ctx.save();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)';
+    ctx.strokeRect(br.dx + 1, br.dy + 1, br.dw - 2, br.dh - 2);
+    ctx.lineWidth = 1.75; ctx.strokeStyle = MARK; ctx.setLineDash([7, 5]);
+    ctx.strokeRect(br.dx + 1, br.dy + 1, br.dw - 2, br.dh - 2);
+    ctx.restore();
+    return;
+  }
   const t = _target();
   if (!t) return;
   const r = t.r;

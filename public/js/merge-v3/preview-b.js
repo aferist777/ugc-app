@@ -3,7 +3,8 @@
 
    The second of two, and separate on purpose. js/merge-v3/preview.js belongs to
    projects that arrive from Scenarios: six fixed lanes, a compositing order held in
-   a constant, and rules keyed off lane NAMES - the halfer band, the read on Main.
+   a constant, and rules keyed off lane NAMES - the read on Main. (A halfer band here is a
+   switch on the clip, not a lane: see _drawBand.)
    None of that is true here, where lanes are made and destroyed by hand and their
    order is a property of the project.
 
@@ -231,6 +232,75 @@ function _place(sw, sh, c) {
            conv: { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 } };
 }
 
+// ── A halfer band ───────────────────────────────────────────────────────────
+// A strip across the whole frame, read exactly as bandGeom() and bandChain() read it in
+// lib/mv3b-render.js: the source turned first (clockwise, 90 unless told otherwise), then scaled
+// to cover the strip, then cut at the render's own offsets - down from the top at 0 and 180,
+// across from the left at 90 and 270 - and the edges facing into the frame faded.
+//
+// COMPOSED ON A SCRATCH CANVAS FIRST, because a fade erases: erasing on the frame itself would
+// cut a hole through the layers below instead of letting them show through.
+//
+// No placement, framing or effects - the render applies none to a band.
+const _bpct = (v, dflt, lo = 0) => {
+  const n = Number(v);
+  return (v != null && Number.isFinite(n)) ? Math.max(lo, Math.min(100, n)) : dflt;
+};
+
+function _bandGeom(c) {
+  let band = Math.round(H * _bpct(c.halferThick, 40, 5) / 100);
+  if (band % 2) band++;
+  band = Math.max(2, Math.min(H, band));
+  const y = Math.round((H - band) * (1 - _bpct(c.halferPos, 100) / 100));
+  const keep = _bpct(c.halferKeep, 100) / 100;
+  const rot = [0, 90, 180, 270].includes(+c.rotation) && c.rotation != null ? +c.rotation : 90;
+  const soft = (c.feather == null || !Number.isFinite(+c.feather)) ? 0.03 : Math.max(0, Math.min(0.4, +c.feather));
+  const fade = soft > 0 ? Math.max(1, Math.round(band * soft)) : 0;
+  return { band, y, keep, rot, fade, softTop: fade > 0 && y > 0, softBot: fade > 0 && y + band < H };
+}
+
+let _bandCv = null;
+
+function _drawBand(el, sw, sh, c) {
+  const b = _bandGeom(c);
+  if (!_bandCv) _bandCv = document.createElement('canvas');
+  if (_bandCv.width !== W || _bandCv.height !== b.band) { _bandCv.width = W; _bandCv.height = b.band; }
+  const g = _bandCv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, W, b.band);
+
+  // The turned source's size, the cover scale, and where the slice starts in it.
+  const side = (b.rot === 90 || b.rot === 270);
+  const rw = side ? sh : sw, rh = side ? sw : sh;
+  const s = Math.max(W / rw, b.band / rh);
+  const RW = rw * s, RH = rh * s;
+  const ox = side ? Math.max(0, RW - W) * b.keep : 0;
+  const oy = side ? 0 : Math.max(0, RH - b.band) * (1 - b.keep);
+  g.translate(-ox, -oy);
+  if (b.rot === 90) { g.translate(RW, 0); g.rotate(Math.PI / 2); }
+  else if (b.rot === 270) { g.translate(0, RH); g.rotate(-Math.PI / 2); }
+  else if (b.rot === 180) { g.translate(RW, RH); g.rotate(Math.PI); }
+  try { g.drawImage(el, 0, 0, sw * s, sh * s); } catch (e) {}
+  g.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (b.softTop || b.softBot) {
+    g.globalCompositeOperation = 'destination-out';
+    const ramp = (y0, y1) => {
+      const grd = g.createLinearGradient(0, y0, 0, y1);
+      grd.addColorStop(0, 'rgba(0,0,0,1)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      return grd;
+    };
+    if (b.softTop) { g.fillStyle = ramp(0, b.fade); g.fillRect(0, 0, W, b.fade); }
+    if (b.softBot) { g.fillStyle = ramp(b.band, b.band - b.fade); g.fillRect(0, b.band - b.fade, W, b.fade); }
+    g.globalCompositeOperation = 'source-over';
+  }
+  try { _ctx.drawImage(_bandCv, 0, b.y); } catch (e) {}
+  // Recorded for picking, and marked: place-b.js selects a band by a click and gives it no grips.
+  return { band: true, dx: 0, dy: b.y, dw: W, dh: b.band, cx: W / 2, cy: b.y + b.band / 2, angle: 0 };
+}
+
 // Where in the FILE a moment of the timeline is. Straightforward forwards; the other way
 // round when the element is holding a pre-reversed proxy.
 //
@@ -319,6 +389,14 @@ function _note(text) {
   _ctx.restore();
 }
 
+// One clip onto the frame: a band, or a picture placed or fitted with its effects.
+function _show(el, sw, sh, c, gaps) {
+  if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
+  const r = _place(sw, sh, c);
+  _rects.set(c.id, r);
+  _blit(el, r, c, gaps);
+}
+
 function _paint() {
   if (!_ctx) return 0;
   _rects.clear();
@@ -372,14 +450,10 @@ function _paint() {
       }
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
       if (!el.videoWidth) continue;               // nothing decoded yet
-      const r = _place(el.videoWidth, el.videoHeight, c);
-      _rects.set(c.id, r);
-      _blit(el, r, c, gaps);
+      _show(el, el.videoWidth, el.videoHeight, c, gaps);
     } else {
       if (!el.naturalWidth) { missing++; continue; }
-      const r = _place(el.naturalWidth, el.naturalHeight, c);
-      _rects.set(c.id, r);
-      _blit(el, r, c, gaps);
+      _show(el, el.naturalWidth, el.naturalHeight, c, gaps);
     }
   }
   // OVER EVERY LAYER, like the render burns them. Captions are not a layer of their own -

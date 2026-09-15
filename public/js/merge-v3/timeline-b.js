@@ -805,7 +805,8 @@ function _lane(t) {
 function _clipEl(t, c) {
   const el = document.createElement('div');
   el.className = 'mv3b-clip is-' + t.kind + (c.pairId ? ' is-paired' : '') +
-                 (t.kind === 'audio' && !(+c.volume) ? ' is-muted' : '');
+                 (t.kind === 'audio' && !(+c.volume) ? ' is-muted' : '') +
+                 (t.kind === 'video' && c.halfer ? ' is-halfer' : '');
   el.dataset.clip = c.id;
   el.dataset.track = t.id;
   el.style.left = (c.start * _zoom()) + 'px';
@@ -1167,7 +1168,8 @@ export function selectedOne() {
 // control that wrote it would look like it worked.
 const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign',
                              'transition', 'animation', 'filter',
-                             'tx', 'ty', 'tw', 'angle', 'feather']);
+                             'tx', 'ty', 'tw', 'angle', 'feather',
+                             'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -1207,10 +1209,18 @@ function _write(c, key, value) {
   }
   if (key === 'angle') { c.angle = (value == null) ? null : Math.max(-180, Math.min(180, +value || 0)); return; }
   if (key === 'feather') { c.feather = (value == null) ? null : Math.max(0, Math.min(0.45, +value || 0)); return; }
+  // All five the panel offers. Only three were let through, so top and bottom quietly wrote
+  // centre - which the preview and the render then showed, as if the choice had been made.
   if (key === 'cropAlign') {
-    c.cropAlign = ['left', 'center', 'right'].indexOf(String(value)) >= 0 ? String(value) : 'center';
+    c.cropAlign = ['left', 'center', 'right', 'top', 'bottom'].indexOf(String(value)) >= 0 ? String(value) : 'center';
     return;
   }
+  // A HALFER BAND (lib/mv3b-render.js bandGeom): a switch and four numbers. The numbers stay on the
+  // clip when the switch goes off, so turning it back on finds the band where it was left.
+  if (key === 'halfer') { c.halfer = value ? true : null; return; }
+  if (key === 'halferPos' || key === 'halferKeep') { c[key] = Math.round(Math.max(0, Math.min(100, +value || 0))); return; }
+  if (key === 'halferThick') { c.halferThick = Math.round(Math.max(5, Math.min(100, +value || 0))); return; }
+  if (key === 'rotation') { c.rotation = [0, 90, 180, 270].indexOf(+value) >= 0 ? +value : 90; return; }
   // THE THREE EFFECTS, taken as names rather than checked against a list. The list lives in
   // two places already - the panel that offers them and the graph that builds them - and a
   // third copy here would be the one that goes stale. An unknown name is harmless by
