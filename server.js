@@ -29,7 +29,7 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const {
-  ROOT_DIR, MEDIA_DIR, MEDIA, CACHE_DIR,
+  ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, MEDIA, CACHE_DIR,
   LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
@@ -44,6 +44,9 @@ app.use((req, _res, next) => { req.user = LOCAL_USER; next(); });
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
+// A save from a page opened before a file moved still carries the old address: rewritten here,
+// before any route reads the body (lib/moves.js).
+app.use('/api', require('./lib/moves').rewriteBodies);
 // The trace. install() puts one interceptor on the default axios instance - which every
 // outgoing call in this app uses - and the middleware opens the context that interceptor
 // checks. Both are no-ops until a request arrives carrying X-CV2-Run, which only the
@@ -61,9 +64,12 @@ app.get('/', (_req, res) => res.redirect('/character'));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
-// The library: one mount for media, one for cache - an address mirrors its folder (lib/layout.js).
+// The library: a mount each for projects, media and cache - an address mirrors its folder
+// (lib/layout.js). A file asked for where it no longer is gets sent where it went (lib/moves.js).
+app.use('/projects',     express.static(PROJECTS_DIR));
 app.use('/media',        express.static(MEDIA_DIR));
 app.use('/cache',        express.static(CACHE_DIR));
+app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
 // Scratch, in the system temp folder.
 app.use('/temp_files',   express.static(TEMP_DIR));
 app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));

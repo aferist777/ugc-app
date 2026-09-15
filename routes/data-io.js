@@ -32,7 +32,7 @@ const multer   = require('multer');
 
 const router = express.Router();
 const { ROOT_DIR, CACHE_DIR, TEMP_DIR } = require('../lib/config');
-const { KINDS, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
+const { KINDS_5, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 
 const EXPORT_DIR = path.join(CACHE_DIR, 'exports');
 const KEEP_MS = 24 * 60 * 60 * 1000;
@@ -383,7 +383,7 @@ function _placeOf(rel, fromServer) {
   if (rel.startsWith('data/') && STORES_LEFT_OUT[rel.slice(5)]) return null;
   if (!fromServer) {
     const [top, kind] = rel.split('/');
-    return top === 'data' || (top === 'media' && KINDS.includes(kind)) ? rel : null;
+    return top === 'data' || (top === 'media' && KINDS_5.includes(kind)) ? rel : null;
   }
   if (rel.startsWith('data/')) return rel;
   const url = '/' + rel;
