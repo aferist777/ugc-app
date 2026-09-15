@@ -37,7 +37,7 @@
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
-const { fromLegacy, rewriteLegacyValue, legacyPathsIn, LEGACY_LEFT_OUT } = require('../lib/layout');
+const { fromLegacy, rewriteLegacyValue, legacyPathsIn, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 const { writeFileAtomic } = require('../lib/atomic-write');
 
 // ── arguments ───────────────────────────────────────────────────────────────
@@ -65,31 +65,9 @@ const MEDIA_SOURCES = [
   // Written into public/ while the server ran. Both are left out now; walked only to say so.
   ['public/voice-previews', '/voice-previews'], ['public/models', '/models'],
 ];
-// Left out on top of lib/layout.js's list (which Import shares).
-const SKIP_MEDIA = [
-  ...LEGACY_LEFT_OUT,
-  [/^\/(refs|details)\//, 'references and details - the feature was removed'],
-  [/^\/models\//, 'Pose Studio 3D models - the page was removed'],
-  [/^\/voice-previews\//, 'voice previews - a cache'],
-  [/^\/finals\/_meta\.json$/, 'the old renders\' records - nothing reads them'],
-];
-const REMOVED_FEATURE = 'a removed feature - nothing in the desktop app reads it';
-const SKIP_STORES = {
-  // The server itself, not the work in it.
-  'users.json': 'the server\'s users',
-  // Queues of unfinished work: on a new library they describe jobs that will never come back.
-  'pending-tasks.json': 'unfinished generations',
-  'biroly-gen-jobs.json': 'unfinished Birols jobs',
-  'mv3-queue.json': 'the render queue',
-  'cv2-recovered.json': 'recovered Character generations not yet looked at',
-  // Stores of features the desktop app no longer has.
-  ...Object.fromEntries([
-    'scenarios-v2.json', 'scenarios-meta.json', 'ugc-projects.json', 'ugc-ff-timings.json', 'dialogue-ep-timings.json',
-    'toon-characters.json', 'edit-state.json', 'edit-sessions.json', 'refs.json', 'details-meta.json', 'scenes.json',
-    'gen-timings.json', 'geni.json', 'projects.json', 'custom-options.json', 'custom-voices.json',
-    'biroly-vertical-config.json', 'biroly-idea-examples.json', 'mv3-vgens.json',
-  ].map((name) => [name, REMOVED_FEATURE])),
-};
+// What is left out, shared with Import: lib/layout.js.
+const SKIP_MEDIA = LEGACY_LEFT_OUT;
+const SKIP_STORES = STORES_LEFT_OUT;
 // Folders inside data/ that are copied whole (and rewritten, being JSON).
 const DATA_DIRS = ['transcripts'];
 const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads', 'data/cop-images',

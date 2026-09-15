@@ -13,14 +13,12 @@ const express = require('express');
 const fs      = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
-const axios   = require('axios');
 const router  = express.Router();
 
 const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
-  uploadToPublicHost, resolveTask, resolveLocalMedia,
-  createMultiRefEditTask, callAIVisionWithFallback,
+  uploadToPublicHost, resolveTask, resolveLocalMedia, callAIVisionWithFallback,
 } = require('../lib/helpers');
 const { reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
@@ -29,7 +27,7 @@ const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
   loadChars, findChar, upsertChar, patchChar, deleteChar,
-  findDraftByObraz, deleteDraftByObraz,
+  findDraftByObraz,
 } = require('../lib/char-store');
 
 // The reference sheet is a long-lived canonical asset, and which engine draws it, through
@@ -208,7 +206,7 @@ function _keepFace(folder, folderNm, buf, previous) {
 // regenerated from what made it.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, imageProvider, sheetQuality, sourceObrazId, realismMarkers, figure } = req.body || {};
+    const { id, name, gender, faceImagePath, faceImageBase64, sourceObrazId, realismMarkers, figure } = req.body || {};
     const asDraft = !!(req.body && req.body.draft);
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
@@ -410,7 +408,7 @@ function _identitySource(c, body) {
 // character was last made with. Returns taskId; the frontend polls ref-status.
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
-    const { charId, imageEngine, imageProvider, sheetQuality } = req.body || {};
+    const { charId } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
     const src = _identitySource(c, req.body);
@@ -606,7 +604,7 @@ async function _retrySheetElsewhere(c, why) {
       // where this one actually got to.
       sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [sub.provider]) },
     });
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId: c.id });
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
     return { taskId: sub.taskId, note };
   } catch (e) {

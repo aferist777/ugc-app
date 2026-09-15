@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 3000;
 
 const {
   ROOT_DIR, MEDIA_DIR, MEDIA, CACHE_DIR,
-  LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, DETAILS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
+  LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
@@ -151,7 +151,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     const archiveDirs = [CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR].map(d => path.join(d, 'archive'));
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-      MEDIA.images, DETAILS_DIR,
+      MEDIA.images,
       ...archiveDirs,
       ...mixDirs,
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));

@@ -32,7 +32,7 @@ const multer   = require('multer');
 
 const router = express.Router();
 const { ROOT_DIR, CACHE_DIR, TEMP_DIR } = require('../lib/config');
-const { KINDS, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT } = require('../lib/layout');
+const { KINDS, fromLegacy, rewriteLegacyValue, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 
 const EXPORT_DIR = path.join(CACHE_DIR, 'exports');
 const KEEP_MS = 24 * 60 * 60 * 1000;
@@ -52,7 +52,8 @@ const VOLUME_BYTES = 1024 * 1024 * 1024;
 // back in. A group is a thing a person would think of as one thing - not a directory and not a
 // file, which is why some carry both and some carry several. `stores` are single files in data/:
 // the JSON stores, and the one cookie file. `except` is a folder inside `dirs` that another group
-// carries, so no file is counted twice.
+// carries, so no file is counted twice. Stores of removed features are in no group
+// (STORES_LEFT_OUT in lib/layout.js).
 //
 // `needs` is a dependency, not a hint: a project stores the PATH of its pictures, never the
 // pictures. Take the projects without the media and the other machine gets timelines that
@@ -61,27 +62,22 @@ const GROUPS = [
   { id: 'media', label: 'Media library (pictures, clips, voice, music, video sources)',
     dirs: ['media/images', 'media/clips', 'media/voice', 'media/audio', 'media/projects', 'media/sources',
            'data/transcripts'],
-    except: ['media/images/options'],
-    stores: ['data/sources.json'], heavy: true },
+    stores: ['data/sources.json', 'data/images.json', 'data/library-cats.json', 'data/suno-lib.json'], heavy: true },
   { id: 'renders', label: 'Finished renders',
-    dirs: ['media/renders'], stores: ['data/finals-meta.json'], heavy: true },
+    dirs: ['media/renders'], stores: [], heavy: true },
   { id: 'looks', label: 'Looks',
     dirs: ['media/looks'], stores: ['data/obrazy.json'] },
   { id: 'lookbooks', label: 'Lookbooks',
     dirs: ['media/lookbooks'], stores: ['data/scen3-lookbook-meta.json'] },
   { id: 'hooks', label: 'Hooks',
     dirs: ['media/hooks'], stores: ['data/hooks-archive.json', 'data/hook-ids.json'] },
-  { id: 'characters', label: 'Characters (4K sheets, thumbnails, voices, custom options)',
-    dirs: ['media/characters', 'media/images/options'],
-    stores: ['data/characters.json', 'data/custom-voices.json', 'data/projects.json', 'data/custom-options.json'] },
+  { id: 'characters', label: 'Characters (4K sheets, thumbnails)',
+    dirs: ['media/characters'], stores: ['data/characters.json'] },
   { id: 'locations', label: 'Locations',
     dirs: ['media/locations'], stores: [] },
-  { id: 'references', label: 'References and details',
-    dirs: ['media/references'], stores: ['data/refs.json', 'data/details-meta.json', 'data/images.json', 'data/library-cats.json'] },
 
   { id: 'merge', label: 'Merge projects (timelines with every overlay, generation history)',
-    dirs: [], stores: ['data/merge-v3.json', 'data/mv3-gens.json', 'data/mv3-vgens.json', 'data/mv3-chat.json',
-                       'data/mv3-settings.json'],
+    dirs: [], stores: ['data/merge-v3.json', 'data/mv3-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
     needs: ['media'] },
   { id: 'scen3', label: 'Scenarios v3 (library and projects)',
     dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-projects.json', 'data/scen3-poses.json',
@@ -91,18 +87,12 @@ const GROUPS = [
     dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',
     dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },
-  { id: 'biroly', label: 'Birols',
-    dirs: [], stores: ['data/biroly.json', 'data/biroly-vertical-config.json', 'data/biroly-idea-examples.json'] },
+  { id: 'biroly', label: 'The b-roll archive (Birols and uploads on the Library shelves)',
+    dirs: [], stores: ['data/biroly.json'] },
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   { id: 'prompts', label: 'Prompt edits',
     dirs: [], stores: ['data/prompts.json'] },
-  { id: 'legacy', label: 'Legacy (old scenarios, edit sessions, geni, suno, ugc)',
-    dirs: [],
-    stores: ['data/scenarios-meta.json', 'data/scenarios-v2.json', 'data/scenes.json', 'data/edit-state.json',
-             'data/edit-sessions.json', 'data/geni.json', 'data/suno-lib.json', 'data/toon-characters.json',
-             'data/ugc-projects.json', 'data/ugc-ff-timings.json', 'data/gen-timings.json',
-             'data/dialogue-ep-timings.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
   { id: 'settings', label: 'Settings, API keys and the YouTube sign-in', secret: true,
     dirs: [], stores: ['data/settings.json', 'data/yt-cookies.txt', 'data/yt-cookies.json'] },
@@ -110,9 +100,9 @@ const GROUPS = [
 
 // Deliberately absent: cache/ (thumbnails and previews make themselves again, and the export
 // volumes live there - an export must never contain the last export), scratch (the system temp
-// folder), logs, and the queues of unfinished work - pending-tasks.json, biroly-gen-jobs.json,
-// mv3-queue.json, cv2-recovered.json. On another machine those describe jobs that will never
-// come back, or start a render nobody asked that machine for.
+// folder), logs, and everything in STORES_LEFT_OUT - the queues of unfinished work among them: on
+// another machine those describe jobs that will never come back, or start a render nobody asked
+// that machine for.
 
 const _abs = (rel) => path.join(ROOT_DIR, rel);
 const _exists = (rel) => { try { return fs.existsSync(_abs(rel)); } catch { return false; } };
@@ -390,12 +380,11 @@ function _merge(local, incoming, overwrite) {
 // directory is a mistake at best, so it is left out rather than trusted.
 function _placeOf(rel, fromServer) {
   if (rel.split('/').some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (rel.startsWith('data/') && STORES_LEFT_OUT[rel.slice(5)]) return null;
   if (!fromServer) {
     const [top, kind] = rel.split('/');
     return top === 'data' || (top === 'media' && KINDS.includes(kind)) ? rel : null;
   }
-  // The server kept the renders' records among the renders; here they are a store like the rest.
-  if (rel === 'finals/_meta.json') return 'data/finals-meta.json';
   if (rel.startsWith('data/')) return rel;
   const url = '/' + rel;
   if (LEGACY_LEFT_OUT.some(([re]) => re.test(url))) return null;

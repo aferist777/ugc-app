@@ -29,7 +29,7 @@ const path    = require('path');
 const router  = express.Router();
 
 const {
-  CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
+  LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
   FINALS_DIR,
 } = require('../lib/config');
 const { toUrl } = require('../lib/media');

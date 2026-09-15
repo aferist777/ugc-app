@@ -27,7 +27,6 @@ const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
 const OWN = require('../lib/ownership');
 
-
 // Only engine offered for now. NOTE: lib/helpers' "…Pro…" helpers are legacy
 // NAMES — they all post to Replicate 'google/nano-banana-2', so nothing here
 // runs a pro model.
@@ -999,23 +998,6 @@ router.get('/scen3/poses', (_req, res) => {
   try { res.json({ success: true, poses: _loadPoses().filter(p => p.active) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
-
-// Fix up a mannequin that came back almost right. Redrawing from the photograph
-// again would re-roll everything; this edits the mannequin itself, so the parts that
-// worked stay put. What must never drift is restated, because an edit prompt that
-// only names the change lets the model quietly re-interpret the rest.
-const MANNEQUIN_EDIT_RULE =
-  'Edit this image of a blue artist mannequin. Change ONLY what the instruction asks for'
-  + ' and keep everything else exactly as it is: the same pose, the same camera angle, the same crop,'
-  + ' the same smooth matte MEDIUM-BLUE material and visible ball joints.'
-  + ' The mannequin has NO face and no facial features of any kind — no eyes, no nose, no mouth, no ears:'
-  + ' the head stays a smooth blank blue ovoid.'
-  + ' It wears NO clothing and carries no accessories — no jacket, no shirt, no watch, nothing draped over it.'
-  + " Its torso is that of a MALE artist's dummy: a flat, broad, square chest with no breasts and no"
-  + ' garment seam across it.'
-  + ' Exactly ONE figure. Plain seamless light-grey studio background, soft even lighting.'
-  + ' No text, no words, no watermark, no logos.'
-  + ' Instruction: ';
 
 // Crop a generated frame into a NEW file. Generation is not always obedient — a
 // half-body request can come back knees-up — and a crop fixes the shot for nothing

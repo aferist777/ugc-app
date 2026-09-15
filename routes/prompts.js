@@ -43,7 +43,6 @@ router.post('/prompts/:key/rename', (req, res) => {
 
 // ── POST /api/prompts/:key/merge — AI-assisted merge of additions into prompt ──
 router.post('/prompts/:key/merge', async (req, res) => {
-  const { key } = req.params;
   const { currentText, additions, fixedPhrases } = req.body;
 
   if (!currentText || !additions?.trim()) {
@@ -53,27 +52,14 @@ router.post('/prompts/:key/merge', async (req, res) => {
   // Extract all {placeholder} keys from the current prompt text
   const placeholders = [...new Set((currentText.match(/\{[^}]+\}/g) || []))];
 
-  // Build human-readable descriptions for placeholders
+  // Human-readable descriptions for the placeholders the live prompts use
   const PLACEHOLDER_DESCS = {
-    '{gender}':    'substituted with the character gender word (e.g. "woman" / "man") — do not remove or rename',
-    '{age}':       'substituted with the character age description (e.g. "28-32 years old") — do not remove or rename',
-    '{name}':      'substituted with the asset/product name — do not remove or rename',
-    '{exhon}':     'substituted with the character description — do not remove or rename',
-    '{activnoe}':  'substituted with the active image description — do not remove or rename',
-    '{charDesc}':  'substituted with the character full description — do not remove or rename',
-    '{presetPrompt}': 'substituted with the user-selected preset prompt text — do not remove or rename',
+    '{USER_TEXT}': 'substituted with what the person typed about the character — do not remove or rename',
+    '{BODY}':      'substituted with the body description read from the reference — do not remove or rename',
   };
   const placeholderLines = placeholders
     .map(ph => `  • ${ph} — ${PLACEHOLDER_DESCS[ph] || 'runtime substitution token, preserve exactly'}`)
     .join('\n');
-
-  const isPoseScene = key.startsWith('param_pose_scene');
-  const isEmotionKey = key.startsWith('emotion_');
-  const domainRule = isPoseScene
-    ? `7. IMPORTANT — This is a POSE prompt. Describe ONLY body position, posture, and gesture. Do NOT add character appearance, facial features, clothing details, background, environment, setting, or lighting — these are added automatically from the reference image.\n`
-    : isEmotionKey
-    ? `7. IMPORTANT — This is a FACIAL EXPRESSION prompt. Describe ONLY the facial expression and emotional look. Do NOT add character appearance, body, clothing, background, or environment — these are added automatically from the reference image.\n`
-    : '';
 
   const metaPrompt =
     `You are a professional AI system prompt engineer.\n\n` +
@@ -90,8 +76,7 @@ router.post('/prompts/:key/merge', async (req, res) => {
     `3. Do NOT remove or weaken the core instructions of the original prompt.\n` +
     `4. Weave the USER ADDITIONS naturally into the flow — no section headers, no bullets, no meta-commentary.\n` +
     `5. The final result must be a single coherent prompt in the same language and style as the original.\n` +
-    `6. Return ONLY the final merged prompt text — no explanations, no labels, no preamble, no quotes.\n` +
-    domainRule;
+    `6. Return ONLY the final merged prompt text — no explanations, no labels, no preamble, no quotes.\n`;
 
   try {
     const merged = await callAI(
