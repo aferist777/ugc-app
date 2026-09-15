@@ -91,10 +91,8 @@ export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { pr
 // times a main-track clip by its audio, and drops a cell that has none. Driven one at a
 // time so the footer can count them; idempotent, so a retry is free.
 export const reelAudio       = (projectId, n) => _post('/api/scen3/reel/audio', { projectId, n });
-// Hand the cut to the editor. Points at Merge v3's own store now: it writes the Main track
-// of the project's timeline and gives back the key to deep-link to. The old
-// /api/scen3/reel/merge still exists and still writes the old Merge's session - /merge is
-// kept as a spare page - but nothing calls it any more.
+// Hand the cut to the editor: Merge's own store writes the Main track of the project's timeline
+// and gives back the key to deep-link to.
 export const reelMerge       = (projectId) => _post('/api/mv3/import/scen3', { projectId });
 // The same hand-off before any lipsync exists: Main gets each fragment's read with its
 // first frame held over it, so the overlays can be built against the real timing.

@@ -35,7 +35,13 @@ const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqAp
 const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
-                 ['POST', '/api/restart'], ['GET', '/birols']];
+                 ['POST', '/api/restart'], ['GET', '/birols'],
+                 // old versions, removed in the cleanup of 2026-09-15 - one route per removed file
+                 ['GET', '/api/balance'], ['POST', '/api/public-host'], ['GET', '/api/recover-tasks'],
+                 ['GET', '/api/edit-state'], ['GET', '/api/gen-timings'], ['GET', '/api/hooks/state'],
+                 ['GET', '/api/custom-options'], ['POST', '/api/finals/save'], ['GET', '/api/lookbooks'],
+                 ['POST', '/api/asset-interact/generate'], ['POST', '/api/mv3/voice/speak'],
+                 ['GET', '/api/mv3/vid/feed'], ['POST', '/api/biroly/gen-broll-prompt'], ['GET', '/merge-v2']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

@@ -20,11 +20,8 @@ const fs      = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const sharp   = require('sharp');
-// Merge hand-off: one audio extractor shared with the old workflow (same output names,
-// so files it already made are reused), and edit.js's own session writer so the shared
-// state file has exactly one implementation of its guards.
+// Merge hand-off: the audio extractor /reel/audio drives, one fragment at a time.
 const AV      = require('../lib/av-extract');
-const EDIT    = require('./edit');
 
 const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
@@ -3414,10 +3411,8 @@ router.post('/scen3/reel/save', (req, res) => {
 });
 
 // ── Hand the cut to Merge ────────────────────────────────────────────────────
-// Merge reads the shared edit-state: ONE session whose cells, in order, become the main
-// track. Both halves of this are server work — ffmpeg has to open every clip, and the
-// write into edit-state.json passes guards (tombstones, rev) that only the file can
-// answer. A page cannot see either without downloading the whole 400KB state.
+// The page saves the reel, extracts each fragment's audio here, then hands the project to Merge
+// through /api/mv3/import/scen3 (routes/mergev3.js).
 
 // One fragment's audio. The page drives this per clip so the footer can count 3/10;
 // extractAudio is idempotent, so a retry or a second pass costs nothing.
@@ -3431,60 +3426,6 @@ router.post('/scen3/reel/audio', async (req, res) => {
     if (!it) return res.status(400).json({ success: false, error: `fragment ${b.n} has no clip in the cut` });
     const { audio, dur, reused } = await AV.extractAudio(it.clip.path);
     res.json({ success: true, n: it.n, audio, dur, reused });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// Build the Merge session and write it. Returns the key the page then deep-links to.
-router.post('/scen3/reel/merge', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const list = _loadProjects();
-    const p = list.find(x => String(x.id) === id);
-    if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
-
-    const { variant, cut } = _cutClips(p);
-    if (!cut.length) return res.status(400).json({ success: false, error: 'no clips to send' });
-
-    const cells = [];
-    for (const it of cut) {
-      // Normally already extracted by /reel/audio above; done here too so this endpoint
-      // is correct on its own and a clip added between the two passes is not skipped.
-      const { audio } = await AV.extractAudio(it.clip.path);
-      const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
-      cells.push({
-        // Merge shows this as the cell's line; the tags are performance marks, not words.
-        line: said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || `fragment ${it.n}`,
-        videoPath: it.clip.path,
-        audioPath: audio,
-      });
-    }
-
-    // The key embeds the project id, so re-sending updates the same Merge project instead
-    // of littering the list with one session per attempt. 'sv3_' and not 'th_': edit-state
-    // already holds keys like th_hands, and a prefix that says which page wrote it is worth
-    // more than a shorter one when reading that file by hand.
-    const key = 'sv3_' + id;
-    const title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || '').trim() || 'talking head'}`;
-    const r = EDIT.putSession(key, { title, inMerge: true, date: new Date().toISOString(), cells });
-    if (!r.ok) {
-      return res.status(409).json({
-        success: false,
-        error: r.reason === 'deleted'
-          ? 'Merge remembers this project being deleted there, so it refuses to take the key back. '
-            + 'Delete the tombstone or send it under a new project.'
-          : r.reason,
-      });
-    }
-
-    const clips = cut.map(c => ({ n: c.n, path: c.clip.path, dur: c.clip.dur }));
-    p.reel = _normReel({ ...(p.reel || {}), clips, variant, at: new Date().toISOString(),
-      mergeKey: key, mergedAt: new Date().toISOString() });
-    p.updatedAt = new Date().toISOString();
-    _saveProjects(list);
-
-    res.json({ success: true, key, cells: cells.length, replaced: r.replaced, reel: p.reel });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

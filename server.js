@@ -71,19 +71,11 @@ app.use('/cache',        express.static(CACHE_DIR));
 app.use('/temp_files',   express.static(TEMP_DIR));
 app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 
-// ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
-// Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
-// the client (public/js/page-router.js) deep-links to the matching tab on load.
-// Relative asset URLs stay correct via <base href="/"> in each page.
-// /character is the v2 page now. The old one is deleted, not parked: it was 3092 lines of HTML
-// plus five scripts nobody else loaded, and keeping a second Character around is how two of
-// them drift apart.
-// The Merge rebuild is now the only Merge, so it answers at /merge - the plain name, since
-// there is nothing left to distinguish it from. The two pages before it, merge.html and
-// merge-v2.html, are deleted along with the twenty-one scripts nobody else loaded, for the same
-// reason the old Character page was: keeping a second editor around is how two of them drift
-// apart. The file is still merge-v3.html; renaming it would churn every import path in
-// public/js/merge-v3/ for no gain. /merge-v3, /merge-v2 and /edit redirect here.
+// ── Pages ───────────────────────────────────────────────────────────────────
+// Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
+// <base href="/"> in each page. Some files keep the name of the rebuild that replaced an older
+// page (character-v2.html, merge-v3.html, scenarios-v3.html): renaming them would churn every
+// import path under public/js/ for no gain.
 const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
@@ -91,31 +83,14 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
     res.sendFile(path.join(__dirname, 'public', file));
   })
 );
-// The Edit tab was removed (Scenarios feeds the Merge timeline now), the two old Merge pages are
-// deleted, and /merge-v3 was the rebuild's development address. All three land on /merge, query
-// string intact - that is how Scenarios' ?p=<key> handover survives someone using an old URL.
-const _q = (req) => (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '');
-app.get('/edit',     (req, res) => res.redirect('/merge' + _q(req)));
-app.get('/merge-v3', (req, res) => res.redirect('/merge' + _q(req)));
-app.get('/merge-v2', (req, res) => res.redirect('/merge' + _q(req)));
-// /scenarios now serves the v3 page (Ph13.4). The old page's sub-modes
-// (/scenarios/ugc_ad, /scenarios/dialogues) are gone with it: v3 is one format, chosen
-// by the Type field. The v3 development URL redirects so old bookmarks still land.
-app.get('/scenarios-v3', (_req, res) => res.redirect('/scenarios'));
-// The development URL of the Character rebuild, kept as a redirect for the same reason: it is
-// the address every note, bookmark and link from its build still uses.
-app.get('/character-v2', (_req, res) => res.redirect('/character'));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
-app.use('/api', require('./routes/lookbook'));
 app.use('/api', require('./routes/gallery'));
-app.use('/api', require('./routes/misc'));
 app.use('/api', require('./routes/prompts'));
-app.use('/api', require('./routes/asset-interact'));
 app.use('/api', require('./routes/settings'));
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
-// how a script is written, routes/audio.js owns who reads it aloud.
+// how a script is written, routes/scen3.js owns who reads it aloud.
 app.use('/api', require('./routes/narrators'));
 // Sources — long videos brought in whole, transcribed, and later mined for topics.
 app.use('/api', require('./routes/sources'));
@@ -123,14 +98,10 @@ app.use('/api', require('./routes/sources'));
 app.use('/api', require('./routes/scriptgen'));
 // Library 2's own API: the shelf counts, and the drafts of scripts still being written.
 app.use('/api', require('./routes/library2'));
-app.use('/api', require('./routes/custom-options'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
-app.use('/api', require('./routes/finals'));
-app.use('/api', require('./routes/hooks'));   // hook upload/delete + the Birols backend
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/biroly'));
-app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
 // Import / Export. The feature came back, rebuilt: the version this note used to describe
@@ -139,8 +110,6 @@ app.use('/api', require('./routes/char-store'));
 // archive to a file rather than streaming it, so a broken download resumes instead of
 // starting again - the bundle runs to gigabytes.
 app.use('/api', require('./routes/data-io'));
-app.use('/api', require('./routes/gen-timings'));
-app.use('/api', require('./routes/edit'));
 // Timeline word-timing STT — the one piece of the retired VSL backend the creatives
 // flow uses (inline-upload subtitles); moved out of routes/vsl.js when VSL went (Ph15).
 app.use('/api', require('./routes/stt-timeline'));
@@ -161,14 +130,6 @@ app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both
 // Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
 // from the Character page's matrix on purpose: the two lists are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
-
-// The read, on Merge's own audio lanes. Only the many-lines-at-once call lives here; the
-// voice catalogue and the library search are the ones every other page already uses.
-app.use('/api', require('./routes/mv3-voice'));
-
-// Clips made inside Merge. The matrix stays where it was - /api/video/engines - because this
-// submits against that same table.
-app.use('/api', require('./routes/mv3-vid'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Loopback only. There is no sign-in any more, so an app listening on every interface would hand
@@ -208,8 +169,6 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // and does. This hands the records their loops back.
     try { require('./lib/mv3-gens').resume(); }
     catch (e) { console.warn('[mv3-gens] could not resume:', e.message); }
-    try { require('./lib/mv3-vgens').resume(); }
-    catch (e) { console.warn('[mv3-vgens] could not resume:', e.message); }
 
     // Recover any unfinished generation tasks from previous session
     recoverPendingTasks()
