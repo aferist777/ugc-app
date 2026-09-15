@@ -84,7 +84,7 @@ function next() {
 // are being asked about.
 async function runBlank(item) {
   // The same preparation Export -> Render uses (lib/mv3b-job.js): captions included.
-  const built = await JOB.prepare(item.timeline, item.id);
+  const built = await JOB.prepare(item.timeline, item.id, item.adv);
   if (built.error) {
     const t = read();
     const it = t.items.find(x => x.id === item.id);
@@ -122,14 +122,32 @@ async function runBlank(item) {
   _proc.on('close', async (code) => {
     _proc = null;
     built.dispose();
-    const ok = code === 0 && fs.existsSync(out);
-    if (ok) await JOB.finish(out);
+    let ok = code === 0 && fs.existsSync(out);
+    let error = ok ? null : 'ffmpeg exited ' + code;
+    let warning = null;
+    if (ok) {
+      // The settings that work on the finished file (lib/render-finish.js), said in the list as
+      // they happen - a ten-minute tail is a wait worth naming.
+      const mark = (phase) => {
+        const t = read();
+        const it = t.items.find(x => x.id === item.id);
+        if (it && it.phase !== phase) { it.phase = phase; it.percent = 0; it.remain = null; write(t); }
+      };
+      try {
+        const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase));
+        if (r && r.warnings && r.warnings.length) warning = r.warnings.join('; ');
+      } catch (e) {
+        try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
+        ok = false; error = e.message;
+      }
+    }
     _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
-      if (ok) { it.status = 'done'; it.url = toUrl(out); }
-      else { it.status = 'failed'; it.error = 'ffmpeg exited ' + code; it.log = log.slice(-800); }
+      it.phase = null;
+      if (ok) { it.status = 'done'; it.url = toUrl(out); it.warning = warning; }
+      else { it.status = 'failed'; it.error = error; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }
     write(t);
@@ -286,6 +304,8 @@ router.post('/mv3q/add', (req, res) => {
       key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
       kind, status: 'queued', addedAt: new Date().toISOString(),
       timeline: kind === 'blank' ? b.timeline : null,
+      // A blank entry's export settings, frozen with its timeline: the render is of what was queued.
+      adv: kind === 'blank' && b.adv && typeof b.adv === 'object' ? b.adv : null,
       payload: kind === 'talking' ? (b.payload || null) : null,
       url: null, error: null,
       owner: OWN.uidOf(req), ownerNick: req.user ? (req.user.nickname || null) : null,

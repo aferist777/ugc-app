@@ -89,6 +89,8 @@ function _row(it, refresh) {
   const running = it.status === 'running';
   const named = it.phase === 'normalizing' ? 'preparing clips…'
               : it.phase === 'speeding' ? 'speeding up…'
+              : it.phase === 'tail' ? 'adding the black tail…'
+              : it.phase === 'poster' ? 'finishing…'
               : null;
   st.textContent = it.status === 'done' ? 'ready'
                  : running
@@ -293,11 +295,11 @@ function _away(e) {
 }
 
 /** Put the open project into the queue. Called by the render window of either workflow. */
-export async function addCurrent() {
+export async function addCurrent(adv) {
   const tl = Store.timeline();
   if (!tl || !Store.hasProject()) return { success: false, error: 'no project open' };
   const body = Store.isBlank()
-    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration() }
+    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration(), adv: adv || Store.adv() || null }
     : { kind: 'talking', key: Store.key(), title: Store.title(), dur: Store.duration() };
   const d = await fetch('/api/mv3q/add', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

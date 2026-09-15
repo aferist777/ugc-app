@@ -1,16 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — exporting a BLANK project.
+   MERGE v3 — exporting a project.
 
-   The third piece of the second workflow, after its timeline and its preview, and separate
-   for the same reason: nothing here touches js/merge-v3/export.js, and that file stands
-   down while a blank project is open. Two handlers on one button would start two encodes of
-   two different graphs.
+   The third piece of the editor, after its timeline and its preview. What the window is for:
+   saying what is about to be made before it is made - shape, length, how many pieces - and the
+   export settings the talking-head editor had and the owner renders with (docs/local-app/PLAN.md,
+   phase 3): the size and quality of the file, a colour correction, a playback speed, and the two
+   extras, minutes of black after the end and a quiet noise under the sound. What each of them does
+   is lib/render-finish.js.
 
-   The window is not a settings panel. There is nothing here to set that is not already set
-   somewhere truer - the frame is the project's, the levels are the clips'. What it is for is
-   the choice between rendering NOW and leaving it for later, and for saying what is about to
-   be made before it is made: shape, length, how many pieces. A render is the one action in
-   this editor that takes minutes, and it deserves a sentence of warning.
+   The settings belong to the PROJECT (POST /api/mv3/adv) and are saved when Render or Add to queue
+   is pressed; the render is made from the numbers on screen, and a queued one keeps them.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -18,6 +17,14 @@ import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
 
 let _busy = false;
+
+// What a project that has never been exported starts from - the numbers the render used before
+// there were settings, so an old project renders as it did.
+const DEFAULTS = {
+  resolution: '', fps: 30, crf: 20, preset: 'veryfast', audioBitrate: '192k',
+  eqBrightness: 0, eqContrast: 1, eqSaturation: 1, eqGamma: 1,
+  playbackSpeed: 1, extra1: 'none', extra2: 'none',
+};
 
 function _say(msg, kind) {
   const el = document.getElementById('mv3-tl-status');
@@ -32,15 +39,54 @@ function _mmss(v) {
   return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
-// The window's body, replaced as the job moves through its states. One element that changes
-// what it says, rather than three that take turns being hidden.
-function _stage(box, build) {
-  if (!box) return;
-  box.textContent = '';
-  build(box);
+function _el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
 }
 
-async function _run(box) {
+function _row(label, control) {
+  const r = _el('div', 'mv3-x-row');
+  r.appendChild(_el('label', null, label));
+  r.appendChild(control);
+  return r;
+}
+
+function _select(opts, value) {
+  const s = document.createElement('select');
+  for (const [v, l] of opts) {
+    const o = document.createElement('option');
+    o.value = String(v); o.textContent = l;
+    s.appendChild(o);
+  }
+  s.value = String(value);
+  if (s.selectedIndex < 0) s.selectedIndex = 0;
+  return s;
+}
+
+function _slider(min, max, step, value, fmt) {
+  const wrap = _el('span', 'mv3-x-sl');
+  const i = document.createElement('input');
+  i.type = 'range'; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(value);
+  const out = _el('span', 'mv3-x-slv', fmt(+value));
+  i.addEventListener('input', () => { out.textContent = fmt(+i.value); });
+  wrap.appendChild(i); wrap.appendChild(out);
+  wrap._input = i;
+  return wrap;
+}
+
+// ── Running the job ─────────────────────────────────────────────────────────
+// The window's body becomes the progress, phase by phase - the film, then what is done to the
+// finished file - and then the result window every render shares.
+const PHASES = {
+  render: 'Rendering',
+  speeding: 'Changing the speed',
+  tail: 'Adding the black tail',
+  poster: 'Finishing',
+};
+
+async function _run(body, adv) {
   if (_busy) return;
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return;
@@ -49,46 +95,33 @@ async function _run(box) {
   const btn = document.getElementById('mv3-export');
   if (btn) btn.disabled = true;
 
-  let bar = null, note = null;
-  _stage(box, (b) => {
-    const h = document.createElement('div');
-    h.className = 'mv3-rhead'; h.textContent = 'Rendering';
-    b.appendChild(h);
-    bar = document.createElement('div');
-    bar.className = 'mv3-rbar';
-    const fill = document.createElement('i');
-    fill.style.width = '0%';
-    bar.appendChild(fill);
-    b.appendChild(bar);
-    note = document.createElement('div');
-    note.className = 'mv3-rsum';
-    note.textContent = 'Starting…';
-    b.appendChild(note);
-  });
+  body.textContent = '';
+  const head = _el('div', 'mv3-rhead', PHASES.render);
+  const bar = _el('div', 'mv3-rbar');
+  const fill = document.createElement('i');
+  fill.style.width = '0%';
+  bar.appendChild(fill);
+  const note = _el('div', 'mv3-rsum', 'Starting…');
+  body.append(head, bar, note);
 
   try {
-    // The timeline goes up as it stands. The server builds the graph from it - the same
-    // module, read the same way as the preview reads it - so there is nothing for this side
-    // to assemble and nothing for it to get wrong.
+    // The timeline and the settings go up as they stand. The server builds the graph from them -
+    // the same module, read the same way as the preview reads it.
     const start = await fetch('/api/mv3b/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeline: tl, key: Store.key() }),
+      body: JSON.stringify({ timeline: tl, key: Store.key(), adv }),
     }).then(r => r.json());
     if (!start || !start.success) throw new Error((start && start.error) || 'refused');
 
-
-    // Polled rather than streamed: an encode of a few seconds answers in a couple of
-    // requests, and a socket for that would be more moving parts than the job has.
     for (;;) {
       await new Promise(r => setTimeout(r, 1200));
       const st = await fetch('/api/mv3b/render/' + encodeURIComponent(start.jobId)).then(r => r.json());
       if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
       if (st.status === 'running') {
-        if (bar && bar.firstElementChild) bar.firstElementChild.style.width = (st.percent || 0) + '%';
-        if (note) {
-          note.textContent = (st.percent || 0) + '%'
-            + (st.remain != null ? ' · about ' + _mmss(st.remain) + ' left' : ' · measuring…');
-        }
+        head.textContent = PHASES[st.phase] || PHASES.render;
+        fill.style.width = (st.percent || 0) + '%';
+        note.textContent = st.phase === 'poster' ? 'Almost done…'
+          : (st.percent || 0) + '%' + (st.remain != null ? ' · about ' + _mmss(st.remain) + ' left' : ' · measuring…');
         continue;
       }
       if (st.status === 'failed') throw new Error(st.error || 'ffmpeg failed');
@@ -96,24 +129,13 @@ async function _run(box) {
       // Done: the window every render shares - playable, named, kept, sent (render-result.js).
       _close();
       showResult({ url: st.url, title: Store.title(), key: Store.key(), fresh: true });
+      if (st.warning) _say('Rendered, but ' + st.warning + '.', 'err');
       return;
     }
   } catch (e) {
-    _stage(box, (b2) => {
-      const h = document.createElement('div');
-      h.className = 'mv3-rhead'; h.textContent = 'Not rendered';
-      b2.appendChild(h);
-      const w = document.createElement('div');
-      w.className = 'mv3-rwarn'; w.textContent = e.message;
-      b2.appendChild(w);
-      const row = document.createElement('div');
-      row.className = 'mv3-rrow';
-      const close = document.createElement('button');
-      close.type = 'button'; close.className = 'mv3-btn sm'; close.textContent = 'Close';
-      close.addEventListener('click', _close);
-      row.appendChild(close);
-      b2.appendChild(row);
-    });
+    body.textContent = '';
+    body.appendChild(_el('div', 'mv3-rhead', 'Not rendered'));
+    body.appendChild(_el('div', 'mv3-rwarn', e.message));
   } finally {
     _busy = false;
     const b = document.getElementById('mv3-export');
@@ -123,8 +145,12 @@ async function _run(box) {
 
 // ── The window ──────────────────────────────────────────────────────────────
 let _ov = null;
+let _esc = null;
 
-function _close() { if (_ov) { _ov.remove(); _ov = null; } }
+function _close() {
+  if (_ov) { _ov.remove(); _ov = null; }
+  if (_esc) { document.removeEventListener('keydown', _esc); _esc = null; }
+}
 
 function _summary(tl) {
   let end = 0, pieces = 0, sounds = 0;
@@ -143,74 +169,143 @@ function _open() {
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return;
   const s = _summary(tl);
+  const adv = { ...DEFAULTS, ...(Store.adv() || {}) };
+  const wide = tl.format === '16:9';
+  const full = wide ? '1920x1080' : '1080x1920';
+  const compact = wide ? '1280x720' : '720x1280';
 
-  _ov = document.createElement('div');
-  _ov.className = 'mv3-rov';
-  const box = document.createElement('div');
-  box.className = 'mv3-rbox';
+  _ov = _el('div', 'mv3-x-ov');
+  const box = _el('div', 'mv3-x');
+  const head = _el('div', 'mv3-x-head');
+  head.appendChild(_el('h3', null, 'Render'));
+  const x = _el('button', 'mv3-x-close', '✕');
+  x.type = 'button';
+  x.addEventListener('click', () => { if (!_busy) _close(); });
+  head.appendChild(x);
+  box.appendChild(head);
 
-  const h = document.createElement('div');
-  h.className = 'mv3-rhead';
-  h.textContent = 'Render';
-  box.appendChild(h);
+  const body = _el('div', 'mv3-x-body');
+  body.appendChild(_el('div', 'mv3-x-sum', (tl.format || '9:16') + ' · ' + s.end.toFixed(1) + 's · '
+    + s.pieces + (s.pieces === 1 ? ' piece of picture' : ' pieces of picture') + ' · '
+    + (s.sounds ? s.sounds + (s.sounds === 1 ? ' sound' : ' sounds') : 'no sound')));
+  if (!s.end) body.appendChild(_el('div', 'mv3-rwarn', 'There is nothing on the timeline to render.'));
 
-  const p = document.createElement('div');
-  p.className = 'mv3-rsum';
-  p.textContent = (tl.format || '9:16') + ' · ' + s.end.toFixed(1) + 's · '
-                + s.pieces + (s.pieces === 1 ? ' piece of picture' : ' pieces of picture') + ' · '
-                + (s.sounds ? s.sounds + (s.sounds === 1 ? ' sound' : ' sounds') : 'no sound');
-  box.appendChild(p);
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Video'));
+  // The frame is the project's; the file may be written smaller, in the same shape.
+  const res = _select([[full, full.replace('x', '×') + ' (the frame)'], [compact, compact.replace('x', '×') + ' (compact)']],
+    adv.resolution === compact ? compact : full);
+  body.appendChild(_row('Size', res));
+  const fps = _select([[24, '24 fps'], [30, '30 fps'], [60, '60 fps']], [24, 30, 60].includes(+adv.fps) ? +adv.fps : 30);
+  body.appendChild(_row('FPS', fps));
+  const crf = _slider(14, 35, 1, adv.crf, v => v.toFixed(0) + (v <= 18 ? ' · large' : v >= 28 ? ' · small' : ''));
+  body.appendChild(_row('Quality (CRF)', crf));
+  const preset = _select([['ultrafast', 'ultrafast (fast, large file)'], ['veryfast', 'veryfast'], ['fast', 'fast (balanced)'],
+    ['medium', 'medium'], ['slow', 'slow (slow, small file)']], adv.preset);
+  body.appendChild(_row('Encoding preset', preset));
 
-  if (!s.end) {
-    const w = document.createElement('div');
-    w.className = 'mv3-rwarn';
-    w.textContent = 'There is nothing on the timeline to render.';
-    box.appendChild(w);
+  // A LAST pass over the finished file: by then the captions are part of the picture and keep pace
+  // with it. The voice keeps its pitch.
+  const spd = _slider(0.5, 2, 0.05, adv.playbackSpeed, v => v.toFixed(2) + 'x');
+  body.appendChild(_row('Playback speed', spd));
+  const spdNote = _el('div', 'mv3-x-note');
+  const showSpd = () => {
+    const v = parseFloat(spd._input.value) || 1;
+    spdNote.textContent = Math.abs(v - 1) < 0.001 ? 'Rendered as edited.'
+      : `The whole film and its captions at ${v.toFixed(2)}x - ${s.end.toFixed(1)}s becomes ${(Math.round(s.end / v * 10) / 10).toFixed(1)}s. The voice keeps its pitch.`;
+  };
+  showSpd();
+  spd._input.addEventListener('input', showSpd);
+  body.appendChild(spdNote);
+
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Audio'));
+  const ab = _select([['128k', '128 kbps'], ['192k', '192 kbps'], ['320k', '320 kbps']], adv.audioBitrate);
+  body.appendChild(_row('Audio bitrate', ab));
+
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Colour correction'));
+  const br = _slider(-0.5, 0.5, 0.02, adv.eqBrightness, v => v.toFixed(2));
+  body.appendChild(_row('Brightness', br));
+  const ct = _slider(0.5, 1.5, 0.05, adv.eqContrast, v => v.toFixed(2));
+  body.appendChild(_row('Contrast', ct));
+  const sa = _slider(0, 2, 0.05, adv.eqSaturation, v => v.toFixed(2));
+  body.appendChild(_row('Saturation', sa));
+  const ga = _slider(0.5, 2, 0.05, adv.eqGamma, v => v.toFixed(2));
+  body.appendChild(_row('Gamma (exposure)', ga));
+
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Extras'));
+  const e1 = _select([['none', '— none —'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
+    ['black20', '+ Black tail 20 min'], ['black30', '+ Black tail 30 min']], adv.extra1);
+  body.appendChild(_row('After the end', e1));
+  const noises = [['none', '— none —']];
+  for (const kind of ['white', 'pink', 'brown']) {
+    for (let i = 1; i <= 5; i++) noises.push(['wn_' + kind + '_' + i, '+ ' + kind[0].toUpperCase() + kind.slice(1) + ' noise ' + i + '%']);
   }
+  const e2 = _select(noises, adv.extra2);
+  body.appendChild(_row('Under the sound', e2));
+  box.appendChild(body);
 
-  const row = document.createElement('div');
-  row.className = 'mv3-rrow';
+  const collect = () => ({
+    resolution: res.value,
+    fps: parseInt(fps.value, 10),
+    crf: parseInt(crf._input.value, 10),
+    preset: preset.value,
+    audioBitrate: ab.value,
+    eqBrightness: parseFloat(br._input.value),
+    eqContrast: parseFloat(ct._input.value),
+    eqSaturation: parseFloat(sa._input.value),
+    eqGamma: parseFloat(ga._input.value),
+    playbackSpeed: parseFloat(spd._input.value) || 1,
+    extra1: e1.value,
+    extra2: e2.value,
+  });
+  const save = async () => {
+    const a = collect();
+    Store.setAdv(a);
+    try {
+      await fetch('/api/mv3/adv', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: Store.key(), adv: a }),
+      });
+    } catch (e) { /* the render still uses what is on screen */ }
+    return a;
+  };
 
-  const cancel = document.createElement('button');
+  const foot = _el('div', 'mv3-x-foot');
+  const cancel = _el('button', 'mv3-c-btn', 'Cancel');
   cancel.type = 'button';
-  cancel.className = 'mv3-btn sm';
-  cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', _close);
-
+  cancel.addEventListener('click', () => { if (!_busy) _close(); });
   // Left of Render, because it is the calmer of the two and the one to reach for when several
   // projects are being set up in a row.
-  const queue = document.createElement('button');
+  const queue = _el('button', 'mv3-c-btn', 'Add to queue');
   queue.type = 'button';
-  queue.className = 'mv3-btn sm';
-  queue.textContent = 'Add to queue';
   queue.disabled = !s.end;
-  queue.title = 'Leave it for later - the queue renders them one after another';
+  queue.title = 'Leave it for later - the queue renders them one after another, with these settings';
   queue.addEventListener('click', async () => {
     queue.disabled = true;
-    const d = await addCurrent();
+    const a = await save();
+    const d = await addCurrent(a);
     _close();
     _say(d && d.success ? 'Added to the queue.' : 'Not queued: ' + ((d && d.error) || 'refused'),
          d && d.success ? '' : 'err');
   });
-
-  const go = document.createElement('button');
+  const go = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
   go.type = 'button';
-  go.className = 'mv3-btn sm primary';
-  go.textContent = 'Render';
   go.disabled = !s.end;
   // The window STAYS. It becomes the progress and then the result: throwing the file at a new
-  // tab leaves nothing behind to say what was made, and the tab is the wrong place to find it
-  // again five minutes later.
-  go.addEventListener('click', () => _run(box));
-
-  row.append(cancel, queue, go);
-  box.appendChild(row);
-  _ov.appendChild(box);
-  _ov.addEventListener('mousedown', (e) => { if (e.target === _ov) _close(); });
-  document.body.appendChild(_ov);
-  document.addEventListener('keydown', function esc(e) {
-    if (e.key === 'Escape') { _close(); document.removeEventListener('keydown', esc); }
+  // tab leaves nothing behind to say what was made.
+  go.addEventListener('click', async () => {
+    go.disabled = true; queue.disabled = true;
+    const a = await save();
+    foot.remove();
+    _run(body, a);
   });
+  foot.append(cancel, queue, go);
+  box.appendChild(foot);
+
+  _ov.appendChild(box);
+  _ov.addEventListener('mousedown', (e) => { if (e.target === _ov && !_busy) _close(); });
+  document.body.appendChild(_ov);
+  _esc = (e) => { if (e.key === 'Escape' && !_busy) _close(); };
+  document.addEventListener('keydown', _esc);
 }
 
 export function initExportB() {

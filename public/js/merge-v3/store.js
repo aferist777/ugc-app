@@ -143,6 +143,9 @@ export function setTitle(t) {
   _emit();
 }
 export function adv() { return _adv; }
+// The export window saves the settings itself (POST /api/mv3/adv) and says so here, so opening it
+// again shows what was just used rather than what the project was loaded with.
+export function setAdv(a) { _adv = (a && typeof a === 'object') ? a : null; }
 
 // The picker's list, newest first. Not cached: it changes when a project is imported from
 // Scenarios by something that is not this page.

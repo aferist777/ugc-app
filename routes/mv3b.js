@@ -7,9 +7,11 @@
    poster afterwards are lib/mv3b-job.js, shared with the render queue (routes/mv3q.js) so the two
    cannot drift apart again.
 
-     POST /api/mv3b/render      { timeline, key } -> { jobId, w, h, dur }, a file in the renders
-                                folder of the project the timeline belongs to
-     GET  /api/mv3b/render/:id  -> status, url, percent, remaining seconds
+     POST /api/mv3b/render      { timeline, key, adv } -> { jobId, w, h, dur }, a file in the renders
+                                folder of the project the timeline belongs to; adv is the export
+                                settings as the window shows them (lib/render-finish.js)
+     GET  /api/mv3b/render/:id  -> status, phase (render | speeding | tail | poster), url, percent,
+                                remaining seconds, and a warning when an extra could not be added
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -28,14 +30,18 @@ router.post('/mv3b/render', async (req, res) => {
   try {
     const tl = (req.body || {}).timeline || {};
     const id = 'j' + Date.now().toString(36);
-    const ready = await JOB.prepare(tl, id);
+    // The settings come with the timeline, as the window showed them - not off the stored project,
+    // which may be a save behind.
+    const ready = await JOB.prepare(tl, id, (req.body || {}).adv);
     if (ready.error) return res.status(400).json({ success: false, error: ready.error });
 
     // Into the folder of the project the timeline belongs to (lib/shelf-files.js).
     const name = 'mv3b_' + Date.now() + '.mp4';
     const out = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
-    const job = { id, status: 'running', url: null, error: null, log: '',
-                  dur: ready.dur, at: 0, startedAt: Date.now() };
+    // `span` is the length the current phase's ffmpeg position counts up to: the film, then the
+    // film at its new speed, then that and the tail.
+    const job = { id, status: 'running', phase: 'render', url: null, error: null, warning: null, log: '',
+                  dur: ready.dur, span: ready.dur, at: 0, startedAt: Date.now(), phaseAt: Date.now() };
     _jobs.set(id, job);
 
     const proc = spawn(ffmpegPath, ready.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
@@ -50,10 +56,22 @@ router.post('/mv3b/render', async (req, res) => {
     });
     proc.on('close', async (code) => {
       ready.dispose();
-      if (code === 0 && fs.existsSync(out)) {
-        await JOB.finish(out);
+      if (code !== 0 || !fs.existsSync(out)) { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
+      const s = ready.settings;
+      const spans = { speeding: ready.dur / s.speed, tail: ready.dur / s.speed + s.tailMinutes * 60 };
+      try {
+        const r = await JOB.finish(out, s, ({ phase, at }) => {
+          const ph = phase === 'speed' ? 'speeding' : phase;
+          if (job.phase !== ph) { job.phase = ph; job.span = spans[ph] || 0; job.phaseAt = Date.now(); }
+          job.at = at;
+        });
+        if (r && r.warnings && r.warnings.length) job.warning = r.warnings.join('; ');
         job.status = 'done'; job.url = toUrl(out);
-      } else { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; }
+      } catch (e) {
+        // Not a render with a setting quietly missing: the file goes, and the reason is said.
+        try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
+        job.status = 'failed'; job.error = e.message;
+      }
     });
     proc.on('error', (e) => { ready.dispose(); job.status = 'failed'; job.error = e.message; });
 
@@ -64,13 +82,13 @@ router.post('/mv3b/render', async (req, res) => {
 router.get('/mv3b/render/:id', (req, res) => {
   const j = _jobs.get(String(req.params.id || ''));
   if (!j) return res.status(404).json({ success: false, error: 'no such job' });
-  const elapsed = (Date.now() - j.startedAt) / 1000;
-  const frac = j.dur > 0 ? Math.max(0, Math.min(1, j.at / j.dur)) : 0;
+  const elapsed = (Date.now() - j.phaseAt) / 1000;
+  const frac = j.span > 0 ? Math.max(0, Math.min(1, j.at / j.span)) : 0;
   // Remaining is only offered once there is something to base it on. An estimate made from
   // the first half-second says a number that will be wrong by a factor of ten, and a wrong
   // number is worse than none - people plan around it.
   const remain = (frac > 0.03 && elapsed > 1.5) ? Math.max(0, elapsed / frac - elapsed) : null;
-  res.json({ success: true, status: j.status, url: j.url, error: j.error,
+  res.json({ success: true, status: j.status, phase: j.phase, url: j.url, error: j.error, warning: j.warning,
              at: Math.round(j.at * 10) / 10, dur: j.dur,
              percent: Math.round(frac * 100), remain: remain == null ? null : Math.round(remain),
              log: j.log.slice(-1200) });
