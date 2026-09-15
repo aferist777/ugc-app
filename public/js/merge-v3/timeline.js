@@ -1202,50 +1202,9 @@ export const isMounted = () => _mounted;
 export function initTimeline() {
   _build();
 
+  // The bar's controls - undo, zoom, FIT, split, the status - are js/merge-v3/bar.js's now.
   const z = document.getElementById('mv3-zoom');
-  if (z) {
-    let saved = null;
-    try { saved = parseInt(localStorage.getItem(LS_ZOOM) || '', 10); } catch (e) {}
-    if (saved && !isNaN(saved)) z.value = String(Math.max(1, Math.min(240, saved)));
-    // input, not change: the ruler has to follow the slider while it is being dragged.
-    z.addEventListener('input', () => {
-      _applyWidths();
-      _centreOnPlayhead();          // the moment you are on is what the zoom is about
-      try { localStorage.setItem(LS_ZOOM, String(_zoom())); } catch (e) {}
-    });
-  }
-
-  const fit = document.getElementById('mv3-fit');
-  if (fit) fit.addEventListener('click', _fit);
-
-  const split = document.getElementById('mv3-split');
-  if (split) {
-    split.addEventListener('click', () => {
-      const r = splitSelected();
-      // A refusal says why in the button's own tooltip and title rather than in an alert:
-      // it is a "not now", not an error.
-      split.title = r.ok ? 'Cut the selected clip at the playhead' : r.why;
-    });
-    // Enabled only when there is something to cut, so the button reports the state instead
-    // of accepting a click and doing nothing.
-    const paint = () => {
-      const s = _sel;
-      let can = false;
-      if (s && s.kind === 'clip') {
-        const tr = (Store.timeline() || { tracks: {} }).tracks[s.scope];
-        const c = tr && tr.clips.find(x => x.id === s.id);
-        if (c) can = (_at - c.start) >= MIN_DUR && (c.start + c.dur - _at) >= MIN_DUR;
-      }
-      split.disabled = !can;
-    };
-    onSelect(paint);
-    Store.onChange(paint);
-    _splitPaint = paint;      // the playhead moves far more often than either of those
-  }
-  // Re-fitting on resize is NOT wired on purpose: FIT is an action, not a mode, and
-  // a window resize silently changing the zoom you chose is worse than a scrollbar.
-
-  _wireHistoryButtons();
+  if (z) z.addEventListener('input', () => { _applyWidths(); _centreOnPlayhead(); });
 
   // Keys are a shortcut for the buttons, never the only way: Delete also lives on the
   // clip itself. Ignored while typing, or a stray Backspace in a field would eat a clip.
@@ -1275,7 +1234,6 @@ export function initTimeline() {
     _dur = d > 0 ? d : PLACEHOLDER_DUR;
     if (_at > _dur) _at = _dur;
     _applyWidths();
-    _paintStatus();
   });
 
   _applyWidths();

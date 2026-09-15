@@ -1478,12 +1478,7 @@ export function initPreview() {
   _quality = DEFAULT_Q;
   const q = document.getElementById('mv3-pv-q');
   if (q) {
-    for (const [v, label] of QUALITIES) {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = label;
-      q.appendChild(o);
-    }
-    q.value = String(_quality);
+    // The options are js/merge-v3/bar.js's.
     q.addEventListener('change', () => {
       _quality = parseInt(q.value, 10) || DEFAULT_Q;
       _applyQuality();
@@ -1497,9 +1492,7 @@ export function initPreview() {
   onSelect(() => _draw());
 
   const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
-  on('mv3-pv-big', _openBig);
   on('mv3-pv-gate-go', () => { _override = true; _gate(false); });
-  on('mv3-pv-shot', _shoot);
   on('mv3-pv-start', () => seek(0));
   on('mv3-pv-back', () => stepFragment(-1));
   on('mv3-pv-play', toggle);

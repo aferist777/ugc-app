@@ -133,13 +133,16 @@ const _rev = (c) => !!(c && c.reversed) && !isStill(c) && _revable(c.src);
 
 function _srcFor(src, rev) {
   if (isStill({ src })) return src;
-  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(src) + '&h=' + _quality()
+  // A screenshot is taken off the original file. Not a reversed one: no element plays a file
+  // backwards, so that frame still comes off the reversed proxy, at its tallest.
+  if (_shooting === 'orig' && !rev) return src;
+  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(src) + '&h=' + (_shooting === 'orig' ? 720 : _quality())
        + (rev ? '&rev=1' : '');
 }
 
 // Keyed by reversal as well as quality: the same file forwards and backwards is two different
 // downloads, and one element cannot hold both.
-const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : _quality() + (rev ? '|rev' : ''));
+const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : (_shooting === 'orig' ? 'orig' : _quality()) + (rev ? '|rev' : ''));
 
 function _el(src, rev) {
   const key = _key(src, rev);
@@ -317,8 +320,10 @@ function _note(text) {
 }
 
 function _paint() {
-  if (!_ctx) return;
+  if (!_ctx) return 0;
   _rects.clear();
+  // Layers under the playhead that had nothing decoded to draw yet - what a screenshot waits on.
+  let missing = 0;
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
   _ctx.fillStyle = SURROUND;
   _ctx.fillRect(0, 0, CW, CH);
@@ -365,12 +370,13 @@ function _paint() {
           el.__fresh = false;
         }
       }
+      if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
       if (!el.videoWidth) continue;               // nothing decoded yet
       const r = _place(el.videoWidth, el.videoHeight, c);
       _rects.set(c.id, r);
       _blit(el, r, c, gaps);
     } else {
-      if (!el.naturalWidth) continue;
+      if (!el.naturalWidth) { missing++; continue; }
       const r = _place(el.naturalWidth, el.naturalHeight, c);
       _rects.set(c.id, r);
       _blit(el, r, c, gaps);
@@ -383,6 +389,8 @@ function _paint() {
   // WHAT IS OUTSIDE THE FRAME, dimmed and edged. It is drawn rather than clipped away because
   // seeing where an insert has got to is the whole reason for the margin - but it must not read
   // as part of the film, and the line is where the film actually ends.
+  // A screenshot is the film and nothing of the editor: no margin, no grips, no notes.
+  if (_shooting) { _sweep(alive); return missing; }
   _ctx.setTransform(1, 0, 0, 1, 0, 0);
   _ctx.fillStyle = OUTSIDE;
   _ctx.fillRect(0, 0, CW, PAD);
@@ -405,6 +413,63 @@ function _paint() {
     if (el.pause && !el.paused && !alive.has(key)) { try { el.pause(); } catch (e) {} }
   }
   _sweep(alive);
+  return missing;
+}
+
+// ── The screenshot ──────────────────────────────────────────────────────────
+// The frame under the playhead at the film's own size (1080 wide for 9:16), drawn by the same
+// code as the preview into a canvas of that size, off the ORIGINAL files - so what is saved is
+// what is on screen, only sharp. The preview's own media and size are put back afterwards.
+//
+// COMPLETENESS BEATS RESOLUTION. A lane whose original has not loaded by the deadline would be
+// missing from the picture, so then the frame is taken again off the proxies the preview already
+// has, at preview size, and the result says so.
+let _shooting = false;
+const FULL = { '9:16': { w: 1080, h: 1920 }, '16:9': { w: 1920, h: 1080 } };
+
+async function _settle(ms) {
+  const until = performance.now() + ms;
+  for (;;) {
+    const missing = _paint();
+    if (!missing) {
+      // One more frame after the decoders say they are ready: the first paint after a seek can
+      // still be the frame before it.
+      await new Promise((r) => setTimeout(r, 120));
+      if (!_paint()) return true;
+    }
+    if (performance.now() > until) return false;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+export async function grabFrame(ms = 12000) {
+  if (!_on || !_ctx || _shooting) return { ok: false };
+  if (_playing) pause();
+  const keep = { W, H, PAD, CW, CH, ctx: _ctx, media: _media };
+  const f = FULL[_fmt()] || FULL['9:16'];
+  const cv = document.createElement('canvas');
+  cv.width = f.w; cv.height = f.h;
+  let full = false, shotMedia = null;
+  try {
+    W = f.w; H = f.h; PAD = 0; CW = f.w; CH = f.h;
+    _ctx = cv.getContext('2d');
+    _shooting = 'orig';
+    _media = shotMedia = new Map();
+    full = await _settle(ms);
+    if (!full) {
+      _shooting = 'proxy';
+      _media = keep.media;
+      await _settle(4000);
+    }
+    const blob = await new Promise((res) => { try { cv.toBlob(res, 'image/png'); } catch (e) { res(null); } });
+    return { ok: !!blob, blob, full, w: f.w, h: f.h, at: _at };
+  } finally {
+    if (shotMedia) for (const [, el] of shotMedia) { try { if (el.pause) el.pause(); el.src = ''; } catch (e) {} }
+    _shooting = false;
+    W = keep.W; H = keep.H; PAD = keep.PAD; CW = keep.CW; CH = keep.CH;
+    _ctx = keep.ctx; _media = keep.media;
+    _repaint();
+  }
 }
 
 // A seek is answered as soon as the element has anything, and again a moment later when the
@@ -693,7 +758,8 @@ export function unmount() {
 export const isMounted = () => _on;
 
 export function initPreviewB() {
-  Store.onChange(() => { if (_on) { _resize(); _repaint(); _clock(); } });
+  // Not while a screenshot is being drawn: that has the frame's size and its own canvas in hand.
+  Store.onChange(() => { if (_on && !_shooting) { _resize(); _repaint(); _clock(); } });
   const q = document.getElementById('mv3-pv-q');
   // A new quality means new files. The old ones are dropped rather than left in the map,
   // where they would be held open for a resolution nothing is going to ask for again.

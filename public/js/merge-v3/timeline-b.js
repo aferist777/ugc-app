@@ -351,7 +351,7 @@ function _paintSel() {
 function _beginBand(e) {
   // Not from the label: that is the track's own handle, and a drag starting there is a
   // mis-aimed click rather than the beginning of a rectangle.
-  if (e.button !== 0 || e.target.closest('.mv3b-clip') || e.target.closest('.mv3b-lbl')) return;
+  if (e.button !== 0 || e.target.closest('.mv3b-clip') || e.target.closest('.mv3b-lbl') || e.target.closest('.mv3b-ruler')) return;
   const host = _host();
   if (!host || !host.contains(e.target)) return;
   const x0 = e.clientX, y0 = e.clientY;
@@ -362,7 +362,7 @@ function _beginBand(e) {
   // seeking to look at the clip you had just picked must not take the Inspector off it.
   // The moment the press becomes a sweep, _moveBand replaces the selection (or adds to it
   // with Shift). Esc clears without sweeping.
-  _band = { x0, y0, el, add: e.shiftKey, moved: false };
+  _band = { x0, y0, el, add: e.shiftKey, moved: false, lane: e.target.closest('.mv3b-lane') };
   e.preventDefault();
 }
 
@@ -401,8 +401,15 @@ function _moveBand(e) {
 
 function _endBand() {
   if (!_band) return;
-  _band.el.remove();
+  const b = _band;
+  b.el.remove();
   _band = null;
+  // Pressed on bare lane and let go without sweeping: that was a seek, to the moment under the
+  // pointer - the selection stays, so looking at a clip you just picked keeps it in the panel.
+  if (!b.moved && b.lane) {
+    const r = b.lane.getBoundingClientRect();
+    _seekTo((b.x0 - r.left) / _zoom());
+  }
 }
 
 // Everything selected, deleted in one go. A pair still goes as a pair - removeClip owns that
@@ -885,8 +892,21 @@ function _ruler(dur) {
   // Pressing the ruler moves the playhead - the same gesture as every other editor, and the
   // only way to reach a moment that has no clip under it.
   lane.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
     const r = lane.getBoundingClientRect();
-    _seekTo((e.clientX - r.left) / _zoom());
+    const to = (x) => _seekTo((x - r.left) / _zoom());
+    to(e.clientX);
+    // HELD, it scrubs: the playhead and the picture follow the pointer until it is let go.
+    document.body.classList.add('mv3-scrubbing');
+    const move = (ev) => to(ev.clientX);
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-scrubbing');
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
   });
   row.appendChild(lane);
   return row;
@@ -902,10 +922,27 @@ function _head(dur) {
 }
 
 let _playhead = 0;
+
+// THE CLOCK ABOVE THE TIMELINE, and the controls that depend on where the playhead is (split).
+// Told on every move, which during playback is every frame - so both are a few assignments.
+const _headSubs = [];
+export function onPlayhead(cb) { if (typeof cb === 'function') _headSubs.push(cb); }
+const _clockText = (t) => {
+  const s = Math.max(0, t), m = Math.floor(s / 60), r = s - m * 60;
+  return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1);
+};
+function _headMoved() {
+  if (!_on) return;
+  const c = document.getElementById('mv3-tl-clock');
+  if (c) c.textContent = _clockText(_playhead);
+  for (const cb of _headSubs) { try { cb(_playhead); } catch (e) {} }
+}
+
 function _seekTo(t) {
   _playhead = Math.max(0, Math.round((+t || 0) * 100) / 100);
   const el = _host() && _host().querySelector('.mv3b-head');
   if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  _headMoved();
   // The preview is the other half of this workflow, and the playhead belongs to both. seek()
   // calls setPlayhead back, which is harmless: it writes the same number this just wrote.
   import('./preview-b.js').then(P => P.seek(_playhead)).catch(() => {});
@@ -930,6 +967,99 @@ export function setPlayhead(t) {
   _playhead = Math.max(0, +t || 0);
   const el = _host() && _host().querySelector('.mv3b-head');
   if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  _headMoved();
+}
+
+// ── FIT ─────────────────────────────────────────────────────────────────────
+// The zoom at which the whole timeline is on screen at once, measured from the scroll box at the
+// moment of asking - the columns beside it and its own height are both draggable. The slider is
+// moved, not just the drawing, and told so, which is what redraws the lanes and remembers it.
+export function fit() {
+  const host = _host();
+  if (!host || !_on) return;
+  const tl = Store.timeline();
+  let end = 0;
+  for (const t of ((tl && tl.tracks) || [])) for (const c of (t.clips || [])) end = Math.max(end, (+c.start) + (+c.dur));
+  const avail = host.clientWidth - GUTTER - 12;
+  if (avail <= 0) return;
+  const z = document.getElementById('mv3-zoom');
+  if (!z) return;
+  z.value = String(Math.max(+z.min || 1, Math.min(+z.max || 240, Math.floor(avail / Math.max(end, 1)))));
+  z.dispatchEvent(new Event('input'));
+  host.scrollLeft = 0;                               // fitted means from the start
+}
+
+// ── Split at the playhead ───────────────────────────────────────────────────
+// One clip becomes two that play the same source without a seam: the second picks up exactly
+// where the first stops. A clip with a sound twin is cut with it, and the two new halves are a
+// pair of their own. A line of captions is cut between its words.
+const MIN_SPLIT = 0.1;
+
+export function canSplit() {
+  if (!_on) return { ok: false, why: 'Nothing to cut here' };
+  const one = selectedOne();
+  if (!one) return { ok: false, why: 'Select one clip to cut it at the playhead' };
+  const s = +one.clip.start, e = s + (+one.clip.dur);
+  if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: 'Put the playhead inside the selected clip' };
+  return { ok: true };
+}
+
+export function splitAtPlayhead() {
+  const can = canSplit();
+  if (!can.ok) return can;
+  const { clip } = selectedOne();
+  const at = _r2(_playhead);
+  let made = null;
+  Store.mutate(tl => {
+    const tracks = tl.tracks || [];
+    const newPair = clip.pairId ? 'p' + _id().slice(1) : null;
+    const cut = (t, c) => {
+      const sp = +c.speed || 1;
+      const left = _r2(at - (+c.start));
+      const right = _r2((+c.start) + (+c.dur) - at);
+      const b = JSON.parse(JSON.stringify(c));
+      b.id = _id();
+      b.start = at;
+      b.dur = right;
+      if (c.reversed) {
+        // Played backwards, the first half on the timeline is the END of the source window.
+        b.trimIn = _r2(+c.trimIn || 0);
+        c.trimIn = _r2((+c.trimIn || 0) + right * sp);
+      } else {
+        b.trimIn = _r2((+c.trimIn || 0) + left * sp);
+      }
+      c.dur = left;
+      if (Array.isArray(c.words) && c.words.length) {
+        const w0 = c.words.filter(w => (+w.s) < left);
+        const w1 = c.words.filter(w => (+w.s) >= left)
+          .map(w => ({ w: w.w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
+        c.words = w0.length ? w0 : null;
+        b.words = w1.length ? w1 : null;
+        if (c.words) c.name = c.words.map(w => w.w).join(' ');
+        if (b.words) b.name = b.words.map(w => w.w).join(' ');
+      }
+      if (newPair && b.pairId) b.pairId = newPair;
+      // Straight after the original: on a video lane the order of the clips is which one shows,
+      // and the second half belongs where the whole clip was.
+      t.clips.splice(t.clips.indexOf(c) + 1, 0, b);
+      if (t.kind === 'audio') t.clips.sort((x, y) => x.start - y.start);
+      return b;
+    };
+    for (const t of tracks) {
+      const c = (t.clips || []).find(x => x.id === clip.id);
+      if (c) { made = cut(t, c).id; break; }
+    }
+    if (clip.pairId) {
+      for (const t of tracks) {
+        const m = (t.clips || []).find(x => x.id !== clip.id && x.pairId === clip.pairId && (+x.start) < at && (+x.start) + (+x.dur) > at);
+        if (m) { cut(t, m); break; }
+      }
+    }
+  });
+  // The second half is selected: after a cut, the part not looked at yet is the one about to be
+  // worked on.
+  if (made) selectClipById(made);
+  return { ok: true };
 }
 
 function _build() {

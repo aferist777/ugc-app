@@ -28,6 +28,7 @@ import { initProjects } from './projects.js';
 import { initOverlays } from './overlays.js';
 import { initExport } from './export.js';
 import * as Store from './store.js';
+import { initBar } from './bar.js';
 
 initNav();
 initLayout();
@@ -42,6 +43,7 @@ initPreview();
 initProjects();
 initOverlays();
 initExport();
+initBar();
 // "The timeline changed - regenerate subtitles", in the top bar. Selecting the subtitle
 // track is all it has to do: the rule below brings the Inspector out for any selection, so
 // the Regenerate button is on screen in one click.
@@ -93,7 +95,8 @@ Store.onChange(() => {
 // is one. The rule lives here, in one list, so a button added later cannot quietly opt out of
 // it - and undo/redo are deliberately NOT in it, because history.js already enables them from
 // the depth of its own stack, which is empty anyway.
-const NEEDS_PROJECT = ['mv3-export', 'mv3-project-del', 'mv3-pull', 'mv3-split'];
+// Split paints itself (js/merge-v3/bar.js): it needs a project AND a clip under the playhead.
+const NEEDS_PROJECT = ['mv3-export', 'mv3-project-del', 'mv3-pull'];
 Store.onChange(() => {
   const has = Store.hasProject();
   // Somebody else's project counts as none for these: rendering writes export settings,
