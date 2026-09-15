@@ -11,21 +11,25 @@
 
    WHAT IT DOES
      - copies every media file to its folder in media/ (lib/layout.js says which), keeping its
-       modified time - several shelves sort by it; the custom options' pictures (data/cop-images)
-       go to media/images/options/;
+       modified time - several shelves sort by it;
      - rewrites every server-era path inside the stores it copies (/uploads/x.jpg becomes
-       /media/images/x.jpg) - whole values, keys, and paths inside longer strings alike; the
-       renders' records (finals/_meta.json) become the store data/finals-meta.json;
+       /media/images/x.jpg) - whole values, keys, and paths inside longer strings alike;
      - carries the settings over without the retired keys, and fills empty key fields from the
        old install's .env, where the server kept R2 and some others. Values are never printed;
      - checks, afterwards, that every path the new stores hold is a file that exists and that no
        server-era path is left in them, and writes the report to <library>/logs/.
    Running it again is safe: a file already copied with the same size and time is skipped.
 
-   WHAT IT LEAVES BEHIND, on purpose: data/exports (old export volumes), data/backups, scratch
-   (temp_files, temp_public), logs, vsl/ and the text scenarios/ of the first Scenarios, the
-   thumbnail cache (its keys name the old folders, so none would ever be read), the server's
-   users, session secret and unfinished task queues, the character trace log.
+   WHAT IT LEAVES BEHIND, on purpose (decided with the owner - docs/local-app/PLAN.md):
+     - what belongs to the server: its users and session secret, logs, scratch (temp_files,
+       temp_public), old export volumes (data/exports), data/backups, the character trace log;
+     - queues of unfinished work: on a new library they describe jobs that will never come back;
+     - features the desktop app no longer has, with their stores and their files: the first
+       Scenarios (scenarios/, scenarios-v2), the old UGC editor, Edit v2, VSL, references and
+       details, Pose Studio's models, the custom options' pictures, the old renders' records
+       (SKIP_MEDIA and SKIP_STORES below);
+     - caches the app makes again: thumbnails, pose previews, voice previews.
+   The check afterwards counts paths into what was left out on purpose apart from paths lost.
 
    It refuses to write stores over a library that already has its own - pass --overwrite-stores
    when replacing them is the intention (a library the app opened once has a few seeded ones). */
@@ -58,23 +62,37 @@ const MEDIA_SOURCES = [
   ['uploads', '/uploads'], ['characters', '/characters'], ['obrazy', '/obrazy'], ['lookbooks', '/lookbooks'],
   ['environments', '/environments'], ['refs', '/refs'], ['details', '/details'], ['finals', '/finals'],
   ['hooks', '/hooks'], ['scenes', '/scenes'], ['archive', '/archive'],
-  // Written into public/ while the server ran; the desktop app keeps them in the library.
+  // Written into public/ while the server ran. Both are left out now; walked only to say so.
   ['public/voice-previews', '/voice-previews'], ['public/models', '/models'],
 ];
-const SKIP_MEDIA = LEGACY_LEFT_OUT;
-// Stores that describe the server itself, not the work in it.
+// Left out on top of lib/layout.js's list (which Import shares).
+const SKIP_MEDIA = [
+  ...LEGACY_LEFT_OUT,
+  [/^\/(refs|details)\//, 'references and details - the feature was removed'],
+  [/^\/models\//, 'Pose Studio 3D models - the page was removed'],
+  [/^\/voice-previews\//, 'voice previews - a cache'],
+  [/^\/finals\/_meta\.json$/, 'the old renders\' records - nothing reads them'],
+];
+const REMOVED_FEATURE = 'a removed feature - nothing in the desktop app reads it';
 const SKIP_STORES = {
+  // The server itself, not the work in it.
   'users.json': 'the server\'s users',
-  'pending-tasks.json': 'unfinished generations - the old server may still be finishing them',
+  // Queues of unfinished work: on a new library they describe jobs that will never come back.
+  'pending-tasks.json': 'unfinished generations',
   'biroly-gen-jobs.json': 'unfinished Birols jobs',
+  'mv3-queue.json': 'the render queue',
+  'cv2-recovered.json': 'recovered Character generations not yet looked at',
+  // Stores of features the desktop app no longer has.
+  ...Object.fromEntries([
+    'scenarios-v2.json', 'scenarios-meta.json', 'ugc-projects.json', 'ugc-ff-timings.json', 'dialogue-ep-timings.json',
+    'toon-characters.json', 'edit-state.json', 'edit-sessions.json', 'refs.json', 'details-meta.json', 'scenes.json',
+    'gen-timings.json', 'geni.json', 'projects.json', 'custom-options.json', 'custom-voices.json',
+    'biroly-vertical-config.json', 'biroly-idea-examples.json', 'mv3-vgens.json',
+  ].map((name) => [name, REMOVED_FEATURE])),
 };
 // Folders inside data/ that are copied whole (and rewritten, being JSON).
 const DATA_DIRS = ['transcripts'];
-// Stores the server kept outside data/: where, under the install -> their name in data/ now.
-const OUTSIDE_STORES = { 'finals/_meta.json': 'finals-meta.json' };
-// Pictures the server kept inside data/ -> their folder now. The store names them by id only.
-const DATA_MEDIA = [['data/cop-images', 'media/images/options']];
-const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads',
+const LEFT_BEHIND = ['data/exports', 'data/backups', 'data/ass_cache', 'data/uploads', 'data/cop-images',
   'data/cv2-trace.jsonl', 'data/.session-secret', 'data/.obrazy-migrated', 'temp_files', 'temp_public',
   'logs', 'vsl', 'scenarios'];
 
@@ -123,32 +141,27 @@ function mediaPathsIn(v, out) {
 // ── plan ────────────────────────────────────────────────────────────────────
 const copies = [];                       // { src, dest, size, mtime, url, to }
 const skipped = new Map();               // reason -> [count, bytes]
+const skippedTo = new Set();             // where the files left out would have gone - for the check
 const unmapped = [];
 const perFolder = new Map();             // media/clips -> [count, bytes]
 for (const [dir, prefix] of MEDIA_SOURCES) {
   walkFiles(path.join(FROM, dir), (src) => {
     const rel = path.relative(path.join(FROM, dir), src).split(path.sep).join('/');
     const url = `${prefix}/${rel}`;
-    if (OUTSIDE_STORES[url.slice(1)]) return;   // a store, copied with the stores below
     const st = fs.statSync(src);
     const skip = SKIP_MEDIA.find(([re]) => re.test(url));
-    if (skip) { const s = skipped.get(skip[1]) || [0, 0]; s[0]++; s[1] += st.size; skipped.set(skip[1], s); return; }
+    if (skip) {
+      const s = skipped.get(skip[1]) || [0, 0]; s[0]++; s[1] += st.size; skipped.set(skip[1], s);
+      const would = fromLegacy(url);
+      if (would) skippedTo.add(would);
+      return;
+    }
     const to = fromLegacy(url);
     if (!to) { unmapped.push(url); return; }
     const dest = path.join(TO, ...to.slice(1).split('/'));
     copies.push({ src, dest, size: st.size, mtime: st.mtime, url, to });
     const folder = to.split('/').slice(1, 3).join('/');
     const f = perFolder.get(folder) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(folder, f);
-  });
-}
-for (const [dir, folder] of DATA_MEDIA) {
-  walkFiles(path.join(FROM, dir), (src) => {
-    const rel = path.relative(path.join(FROM, dir), src).split(path.sep).join('/');
-    const st = fs.statSync(src);
-    const to = `/${folder}/${rel}`;
-    copies.push({ src, dest: path.join(TO, ...to.slice(1).split('/')), size: st.size, mtime: st.mtime, url: `${dir}/${rel}`, to });
-    const key = to.split('/').slice(1, 3).join('/');
-    const f = perFolder.get(key) || [0, 0]; f[0]++; f[1] += st.size; perFolder.set(key, f);
   });
 }
 const byDest = new Map();
@@ -159,13 +172,9 @@ for (const c of copies) {
   else byDest.set(key, c);
 }
 
-const stores = [];                       // names in data/, the same as on the server unless OUTSIDE_STORES says
+const stores = [];                       // paths relative to data/, the same in both libraries
 const DATA = path.join(FROM, 'data');
-const storeSource = new Map();           // name in data/ -> where the server kept it, when not data/<name>
-for (const [src, name] of Object.entries(OUTSIDE_STORES)) {
-  if (fs.existsSync(path.join(FROM, ...src.split('/')))) { stores.push(name); storeSource.set(name, path.join(FROM, ...src.split('/'))); }
-}
-const sourceOf = (rel) => storeSource.get(rel) || path.join(DATA, ...rel.split('/'));
+const sourceOf = (rel) => path.join(DATA, ...rel.split('/'));
 for (const e of fs.readdirSync(DATA, { withFileTypes: true })) {
   if (e.isFile() && e.name.endsWith('.json')) {
     if (SKIP_STORES[e.name]) { const s = skipped.get(`data/${e.name}: ${SKIP_STORES[e.name]}`) || [0, 0]; s[0]++; skipped.set(`data/${e.name}: ${SKIP_STORES[e.name]}`, s); continue; }
@@ -284,18 +293,20 @@ if (blocked) fail('refusing to apply - see above');
   say(`stores: ${written.length} written, ${rewritten} paths rewritten`);
 
   // Check: every path the new stores hold is a file that is there - or was already missing.
-  let paths = 0, stillBroken = 0;
+  let paths = 0, stillBroken = 0, leftOut = 0;
   const lost = new Map();
   for (const [rel, value] of written) {
     for (const p of mediaPathsIn(value, [])) {
       paths++;
       if (fs.existsSync(path.join(TO, ...p.slice(1).split('/')))) continue;
       if (brokenBefore.has(p)) { stillBroken++; continue; }
+      if (skippedTo.has(p)) { leftOut++; continue; }
       const l = lost.get(rel) || []; l.push(p); lost.set(rel, l);
     }
   }
   const lostCount = [...lost.values()].reduce((n, l) => n + l.length, 0);
-  say(`check: ${paths} paths in the new stores; ${stillBroken} point at nothing as they already did; ${lostCount} LOST by this run`);
+  say(`check: ${paths} paths in the new stores; ${stillBroken} point at nothing as they already did; `
+    + `${leftOut} point at files left out on purpose; ${lostCount} LOST by this run`);
   for (const [rel, l] of lost) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
 
   // And no server-era path is left in them: one the map had no place for would stay as it was, and

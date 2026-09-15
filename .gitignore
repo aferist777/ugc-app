@@ -5,6 +5,8 @@ node_modules/
 /vendor/
 # The library when the app runs from source (lib/config.js): everything it writes.
 local-data/
+# The owner's own library, which UGC Studio.cmd opens. Rooted: public/js/library/ is code.
+/library/
 uploads/
 lookbooks/
 characters/
