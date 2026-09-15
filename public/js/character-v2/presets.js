@@ -126,8 +126,8 @@ export function promptText(values) {
 export const WARDROBE = 'Wearing a plain fitted neutral grey crew-neck t-shirt.';
 export const REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
 
-// The whole string that goes to the image model. The page and tools/gen-preset-examples.js both
-// call this, so what a preset's example shows is what generating that preset actually sends -
+// The whole string that goes to the image model. The preset examples in public/presets/ were made
+// from it too, so what a preset's example shows is what generating that preset actually sends -
 // if the two drifted apart, every example would be a promise the page does not keep.
 export function genPrompt(values) {
   return promptText(values) + ' ' + WARDROBE + ' ' + REALISM;

@@ -6,16 +6,19 @@
 //   node tools/warm-thumbs.js          make what is missing
 //   node tools/warm-thumbs.js --dry    say what it would make
 //
+// The library is the one lib/config.js picks: UGC_DATA_DIR when it is set, else local-data/ in the
+// checkout. The cache it fills is that library's cache/thumbs/.
+//
 // It walks the stores rather than the disk: the point is the images the pages DISPLAY, at the
 // sizes they display them. A file nobody shows does not need a thumbnail, and the endpoint would
 // make one on demand anyway if that changed.
 
 const fs = require('fs');
 const path = require('path');
+const { ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
 const { ensureThumb, resolveSrc, thumbPath, VARIANTS } = require('../lib/thumbs');
 
-const ROOT = path.join(__dirname, '..');
-const read = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8')); } catch (e) { return d; } };
+const read = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8')); } catch (e) { return d; } };
 
 // Which sizes each kind of image is actually shown at:
 //   a character sheet     the big view (sheet) and the strip's first cell (strip)
@@ -26,14 +29,14 @@ function targets() {
   const jobs = [];
   const add = (src, vs) => { if (src) for (const v of vs) jobs.push({ src, v }); };
 
-  const chars = read('data/characters.json', []);
+  const chars = read('characters.json', []);
   (Array.isArray(chars) ? chars : []).forEach(c => add(c && c.sheet, ['sheet', 'strip']));
 
-  const obrazy = read('data/obrazy.json', []);
+  const obrazy = read('obrazy.json', []);
   const looks = Array.isArray(obrazy) ? obrazy : (obrazy.obrazy || Object.values(obrazy || {}));
   looks.filter(Boolean).forEach(o => add(o.char, ['strip', 'sheet']));
 
-  const projects = read('data/scen3-projects.json', []);
+  const projects = read('scen3-projects.json', []);
   (Array.isArray(projects) ? projects : []).forEach(p => {
     ((p.mix || {}).variants || []).forEach(v => {
       if (!v) return;
@@ -43,7 +46,7 @@ function targets() {
   });
 
   try {
-    fs.readdirSync(path.join(ROOT, 'public', 'presets'))
+    fs.readdirSync(path.join(PUBLIC_DIR, 'presets'))
       .filter(f => /\.jpe?g$/i.test(f))
       .forEach(f => add('/presets/' + f, ['preset']));
   } catch (e) {}
@@ -62,6 +65,7 @@ function targets() {
 async function main() {
   const dry = process.argv.includes('--dry');
   const jobs = targets();
+  console.log('library: ' + ROOT_DIR);
   console.log(jobs.length + ' image/variant pairs the pages display'
     + (dry ? ' (dry run)' : '') + '\n');
 
@@ -93,7 +97,7 @@ async function main() {
     for (const [v, b] of Object.entries(byVariant)) {
       const kb = (n) => Math.round(n / b.n / 1024) + ' KB';
       console.log('  ' + v.padEnd(7) + b.n + ' made   ' + kb(b.bytes).padStart(7)
-        + '  from ' + kb(b.src).padStart(8) + '   budget ' + (VARIANTS[v].kb ? VARIANTS[v].kb + ' KB' : VARIANTS[v].px + 'px'));
+        + '  from ' + kb(b.src).padStart(8) + '   at ' + VARIANTS[v].px + 'px, quality ' + VARIANTS[v].q);
     }
     console.log('\ncache now holds ' + Math.round(bytes / 1024) + ' KB for these');
   }
