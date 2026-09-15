@@ -38,6 +38,8 @@ const { generateMissingThumbs } = require('./lib/helpers');
 {
   const s = require('./lib/projects-store').sync();
   if (s.added || s.dropped) console.log(`[projects] ${s.added} folder(s) joined the list, ${s.dropped} missing left it`);
+  const m = require('./lib/merge-store').sync();
+  if (m.added) console.log(`[projects] ${m.added} Merge project folder(s) joined the list`);
 }
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 

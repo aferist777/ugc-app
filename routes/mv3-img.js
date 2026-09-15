@@ -229,9 +229,7 @@ router.use('/mv3/img/upload', (err, _req, res, _next) => {
 function _titleOf(key) {
   if (!key) return '';
   try {
-    const { DATA_DIR } = require('../lib/config');
-    const f = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'merge-v3.json'), 'utf8'));
-    const rec = (f.timelines || {})[key];
+    const rec = require('../lib/merge-store').read().timelines[key];
     return (rec && rec.title) || '';
   } catch (e) { return ''; }
 }

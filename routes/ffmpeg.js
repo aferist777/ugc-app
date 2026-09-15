@@ -466,7 +466,7 @@ function _librarySources() {
   for (const e of (_readJson('biroly.json', {}).archive || [])) if (e && e.videoPath && e.status !== 'failed') out.add(String(e.videoPath));
   const hooks = _readJson('hooks-archive.json', []);
   for (const e of (Array.isArray(hooks) ? hooks : [])) if (e && e.videoPath) out.add(String(e.videoPath));
-  const tl = _readJson('merge-v3.json', {}).timelines || {};
+  const tl = require('../lib/merge-store').read().timelines;
   for (const t of Object.values(tl)) {
     const tracks = (t && t.tracks) || {};
     for (const lane of (Array.isArray(tracks) ? tracks : Object.values(tracks))) for (const c of ((lane && lane.clips) || [])) if (c && c.src) out.add(String(c.src));

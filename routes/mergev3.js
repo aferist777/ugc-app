@@ -9,11 +9,12 @@
    every project at once. It did, repeatedly.
 
    So:
-     • the data lives in data/merge-v3.json, not in a browser;
+     • the data lives in the library, not in a browser - each timeline a file in its project's
+       folder, projects/<folder>/merge/<title>.json (lib/merge-store.js);
      • every read carries a `version`, every write must quote the version it is
        replacing, and a write quoting an old one is REFUSED with 409 rather than
        applied. A stale tab loses its write instead of everyone losing their work;
-     • the file is written tmp + rename, so a crash mid-write cannot truncate it.
+     • every file is written atomically, so a crash mid-write cannot truncate one.
 
    MANY TIMELINES, one per project. A project here IS a Scenarios project - its cut is
    what fills the Main track - so the key is `sv3_<scenariosProjectId>` for anything
@@ -51,8 +52,7 @@ const path = require('path');
 const router = express.Router();
 const OWN = require('../lib/ownership');
 
-const { DATA_DIR } = require('../lib/config');
-const FILE = path.join(DATA_DIR, 'merge-v3.json');
+const MSTORE = require('../lib/merge-store');
 
 // The tracks, and their order, are the previous editor's - see js/merge-v3/timeline.js.
 // Named here too because the store must refuse a clip aimed at a track that does not
@@ -145,51 +145,14 @@ const SUBS_STYLE = {
   wrap: true, wordsPerLine: 0, karaoke: false,
 };
 
+// The key a page asks for when it has nothing to ask for and the store is empty.
 const LOCAL_KEY = 'local';
 
-// One project entry. `title` is what the picker shows; `createdAt` is what it sorts by,
-// newest first, so an imported project appears at the top of the list.
-function _wrap(tracksHolder, title, createdAt) {
-  return {
-    title: String(title || 'Untitled').slice(0, 120),
-    createdAt: createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    tracks: (tracksHolder && tracksHolder.tracks) ? tracksHolder.tracks : _emptyTimeline().tracks,
-    // Absent means talking-head - see BLANK_KIND. Never inferred from the shape of `tracks`:
-    // a half-written save would then be able to change what a project IS.
-    kind: (tracksHolder && tracksHolder.kind) || null,
-    // Export settings, per project. The old editor kept these in the clobberable
-    // last-write-wins blob; here they belong to the project like its title does.
-    adv: null,
-  };
-}
-
-// MIGRATION, and it is read-only: the single `timeline` this file used to hold becomes the
-// `local` project, and nothing is written back until the next real save. A migration that
-// rewrites on read would turn any accidental read - a version poll, a stray request - into
-// a write, and there would be no un-migrated file left to compare against if it went wrong.
+// The whole store as one state - { version, updatedAt, timelines, hidden, snapshots, volRule }:
+// frozen overlay arrangements (written only when a render is kept), and which timelines have had
+// their track volumes reset for the master rule. lib/merge-store.js assembles it from the files.
 function _read() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    if (raw && typeof raw === 'object') {
-      let timelines = (raw.timelines && typeof raw.timelines === 'object') ? raw.timelines : null;
-      if (!timelines) {
-        timelines = {};
-        // The old shape. Carried across whole, clips and all.
-        if (raw.timeline && typeof raw.timeline === 'object') {
-          timelines[LOCAL_KEY] = _wrap(raw.timeline, 'Untitled', raw.updatedAt);
-        }
-      }
-      const hidden = Array.isArray(raw.hidden) ? raw.hidden : [];
-      // Frozen overlay arrangements, written only when a render is kept.
-      const snapshots = (raw.snapshots && typeof raw.snapshots === 'object') ? raw.snapshots : {};
-      // Which timelines have had their track volumes reset for the master rule. Read back
-      // rather than rebuilt, or every open would look like the first one.
-      const volRule = (raw.volRule && typeof raw.volRule === 'object') ? raw.volRule : {};
-      return { version: Number(raw.version) || 0, updatedAt: raw.updatedAt || null, timelines, hidden, snapshots, volRule };
-    }
-  } catch (e) { /* absent or unreadable: an empty store is the honest answer */ }
-  return { version: 0, updatedAt: null, timelines: {}, hidden: [], snapshots: {}, volRule: {} };
+  return MSTORE.read();
 }
 
 // Every film a timeline plays, for the proxy warm-up. Both shapes of `tracks`: the
@@ -219,11 +182,10 @@ function _newestKey(timelines) {
 // file-counter days is stale against it - one 409, one merge, and the tab is on the new rule.
 const _revOf = (t) => Number(t && t.rev) || 0;
 
+// Only what changed is written; side data (hidden, snapshots, volRule) a caller leaves out is
+// kept as it was.
 function _write(state) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
-  fs.renameSync(tmp, FILE);
+  MSTORE.write(state);
 }
 
 // Drop anything not in the shape. The page is the only writer today, but a store that
