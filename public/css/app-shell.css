@@ -1,12 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   APP SHELL — the design tokens and the top nav, shared by the pages built new
-   (Scenarios v3, Library). Nothing legacy: no 98.css, no midnight.css, no
-   !important overrides. Loaded BEFORE the page's own stylesheet.
-
-   The top nav moved to css/app-nav.css, which the legacy pages can load too.
+   APP SHELL — the design tokens and the body reset every page shares. Loaded
+   BEFORE the page's own stylesheet; the top nav is css/app-nav.css.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Midnight design tokens (mirrors the :root block of css/midnight.css) ──── */
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root{
   --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
   --ease:cubic-bezier(.22,1,.36,1);

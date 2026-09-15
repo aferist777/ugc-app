@@ -9,7 +9,7 @@
    What it asks:
      - every page, a few shipped assets, and every GET route that takes no parameters;
      - a thumbnail of a shipped preset, and a 1K preview of a shipped mannequin - filed in the
-       library under uploads/_poses/, and removed again at the end if this run made it;
+       library's cache/poses/, and removed again at the end if this run made it;
      - the settings view: no secret and no retired key reaches the page;
      - the routes that were removed still answer 404.
    It spends nothing: no request here starts a generation or a render.
@@ -28,7 +28,8 @@ const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
 const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/admin'];
-const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', '/poses/mirror_full.jpg'];
+const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
+const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl'];
@@ -81,9 +82,9 @@ function getRoutes() {
   for (const u of [...PAGES, ...STATICS, ...getRoutes()]) rows.push(['GET', u, await call('GET', u)]);
 
   rows.push(['GET', 'thumb of a shipped preset', await call('GET', '/api/thumb?src=/presets/anatolian-stone.jpg&v=card')]);
-  const previewFile = path.join(POSES_CACHE_DIR, 'preview', 'mirror_full.jpg');
+  const previewFile = path.join(POSES_CACHE_DIR, 'scen3', 'preview', path.basename(MANNEQUIN));
   const hadPreview = fs.existsSync(previewFile);
-  const pv = await call('POST', '/api/scen3/preview1k', { path: '/poses/mirror_full.jpg' });
+  const pv = await call('POST', '/api/scen3/preview1k', { path: MANNEQUIN });
   rows.push(['POST', 'preview1k of a shipped pose', pv]);
   let pvPath = null;
   try { pvPath = JSON.parse(pv.text).path; } catch (e) { /* reported below as a failed row */ }

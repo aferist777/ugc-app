@@ -846,28 +846,20 @@ router.post('/scen3/frame-options', (req, res) => {
 });
 
 // ── Mannequin poses (v3's own store) ────────────────────────────────────────
-// Its own store from the start rather than sharing the old page's data/ugc-poses.json,
-// which is why deleting that one (Ph16) left this untouched.
-//
-// Each pose belongs to exactly ONE framing group. Records are seeded with their
-// wording only — `file` fills in later, when the grey mannequin for that pose is
-// authored. Until then the pose contributes its description and nothing else,
-// which on its own is the reliable half: static pose wording steers a model far
-// better than motion verbs do.
+// Each pose belongs to exactly ONE framing group. The grey mannequins ship with the program
+// in public/poses/scen3/; `desc` is what the compose prompt reads - a mannequin has no face,
+// so the wording carries the pose, and static pose wording steers a model far better than
+// motion verbs do.
 const POSE_FILE = path.join(DATA_DIR, 'scen3-poses.json');
 
-// `desc` is what the compose prompt reads. `mprompt` is what DRAWS the grey
-// mannequin for that pose — a mannequin has no face, so anything facial stays in
-// `desc` only and `mprompt` carries head and shoulder attitude instead.
 const POSE_SEED = [
-  // Every pose below is REDRAWN from a photograph and its drawn mannequin is named
-  // here explicitly. That is deliberate: the store is reseeded from this array whenever
-  // data/scen3-poses.json is missing, and a seed that omitted `file` silently dropped
-  // eight finished mannequins - the images stayed on disk but the library forgot them.
+  // Every mannequin is named here explicitly. That is deliberate: the store is reseeded from
+  // this array whenever data/scen3-poses.json is missing, and a seed that omitted `file`
+  // silently dropped eight finished mannequins - the images stayed on disk but the library
+  // forgot them.
 
-  // Close-up — self-filming: the arm reaches TOWARD the lens, heavily foreshortened,
-  // and is cut by the frame edge so the hand and phone stay outside the picture. The
-  // left-arm one is the right-arm render mirrored.
+  // Close-up — self-filming: the arm reaches TOWARD the lens and is cut by the frame edge,
+  // so the hand and phone stay outside the picture.
   { id: 'closeup-selfie-r', group: 'closeup', label: 'Selfie, right arm',
     desc: 'filming themselves with the right arm, the arm reaching toward the lens across the lower left of frame, hand and phone outside the picture',
     file:  '/poses/scen3/closeup-selfie-r_replw5r98en2m4_1786200891960.jpg',
@@ -877,84 +869,66 @@ const POSE_SEED = [
     file:  '/poses/scen3/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg',
     thumb: '/poses/scen3/thumbs/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg' },
 
-  // Half body. Text-to-image was tried for this group on the full nano-banana-2 at 2K
-  // with the hardest wording available and failed every time: full-length figures with
-  // a female chest and an implied bra line. A photograph settles body and pose.
+  // Half body.
   { id: 'half-standing', group: 'half-body', label: 'Standing, facing camera',
     desc: 'standing squarely, shoulders level, arms relaxed at the sides, looking into the lens',
-    ref: '/poses/scen3/src/half-standing.png', aspect: '2:3',
     file:  '/poses/scen3/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg',
     thumb: '/poses/scen3/thumbs/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg' },
   { id: 'half-arms-crossed', group: 'half-body', label: 'Standing, arms crossed',
     desc: 'standing with the forearms folded across the chest, shoulders square to the lens',
-    ref: '/poses/scen3/src/half-arms-crossed.png', aspect: '2:3',
     file:  '/poses/scen3/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg',
     thumb: '/poses/scen3/thumbs/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg' },
   { id: 'half-hands-pockets', group: 'half-body', label: 'Hands in pockets',
     desc: 'standing at a slight angle with both hands in the pockets, shoulders loose, weight on one leg',
-    ref: '/poses/scen3/src/half-hands-pockets.png', aspect: '2:3',
     file:  '/poses/scen3/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg',
     thumb: '/poses/scen3/thumbs/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg' },
 
-  // Knees up. `Perched on a stool` was merged into the desk-edge pose - at this crop
-  // the two were the same shot. The first two show no knees at all, which is fine: the
-  // mannequin supplies the BODY and the framing group supplies the crop.
+  // Knees up. The first two show no knees at all, which is fine: the mannequin supplies the
+  // BODY and the framing group supplies the crop.
   { id: 'knees-seated-table', group: 'knees-up', label: 'Seated at a table',
     desc: 'seated behind a table facing the lens, one forearm resting on the tabletop with the hand loosely closed, the other arm raised with the forearm upright and the hand closed at chest height',
-    ref: '/poses/scen3/src/knees-seated-table.png', aspect: '9:16',
     file:  '/poses/scen3/knees-seated-table_tabled_1786278401276.jpg',
     thumb: '/poses/scen3/thumbs/knees-seated-table_tabled_1786278401276.jpg' },
   { id: 'knees-sofa-back', group: 'knees-up', label: 'Sofa, leaning back',
     desc: 'sitting well back into a sofa, reclined against the backrest with both arms raised and bent behind the head, elbows out wide, shoulders relaxed',
-    ref: '/poses/scen3/src/knees-sofa-back.png', aspect: '9:16',
     file:  '/poses/scen3/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg',
     thumb: '/poses/scen3/thumbs/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg' },
   { id: 'knees-desk-edge', group: 'knees-up', label: 'Half-seated on a desk',
     desc: 'half-seated on the front edge of a desk with one hip taking the weight, torso upright and turned slightly toward the lens, arms folded across the chest',
-    ref: '/poses/scen3/src/knees-desk-edge.png', aspect: '9:16',
     file:  '/poses/scen3/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg',
     thumb: '/poses/scen3/thumbs/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg' },
   { id: 'knees-elbows-knees', group: 'knees-up', label: 'Elbows on knees',
     desc: 'seated on a low stool with the knees apart, torso tipped forward toward the lens, both elbows resting on the knees and the fingers interlocked between them',
-    ref: '/poses/scen3/src/knees-elbows-knees.png', aspect: '9:16',
     file:  '/poses/scen3/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg',
     thumb: '/poses/scen3/thumbs/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg' },
   { id: 'knees-wall-shoulder', group: 'knees-up', label: 'Shoulder against a wall',
     desc: 'standing at a slight angle with one shoulder and upper arm resting back against a wall, one hand in the pocket, the other arm raised with the hand up near the shoulder',
-    ref: '/poses/scen3/src/knees-wall-shoulder.png', aspect: '9:16',
     file:  '/poses/scen3/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg',
     thumb: '/poses/scen3/thumbs/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg' },
   { id: 'knees-weight-hip', group: 'knees-up', label: 'Weight on one hip',
     desc: 'standing with the weight thrown onto one leg and that hip pushed out, one hand resting on the hip with the elbow out, the other arm hanging relaxed at the side',
-    ref: '/poses/scen3/src/knees-weight-hip.png', aspect: '9:16',
     file:  '/poses/scen3/knees-weight-hip_cropped_1786277518467.jpg',
     thumb: '/poses/scen3/thumbs/knees-weight-hip_cropped_1786277518467.jpg' },
 
-  // Full height, re-framed to 9:16 so the mannequin is the same shape as the frame it
-  // composes.
+  // Full height, 9:16 - the same shape as the frame the mannequin composes.
   { id: 'full-hands-clasped', group: 'full-height', label: 'Hands clasped in front',
     desc: 'standing upright facing the lens with both hands clasped together low in front of the body, elbows relaxed and close to the sides, feet apart',
-    ref: '/poses/scen3/src/full-hands-clasped.png', aspect: '9:16',
     file:  '/poses/scen3/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg',
     thumb: '/poses/scen3/thumbs/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg' },
   { id: 'full-straight', group: 'full-height', label: 'Standing straight',
     desc: 'standing upright and squarely facing the lens, both arms hanging relaxed at the sides, shoulders level, feet a little apart',
-    ref: '/poses/scen3/src/full-straight.png', aspect: '9:16',
     file:  '/poses/scen3/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg',
     thumb: '/poses/scen3/thumbs/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg' },
   { id: 'full-contrapposto', group: 'full-height', label: 'Contrapposto',
     desc: 'standing in contrapposto with the weight on one leg and the other knee bent and relaxed, that hip pushed out and the shoulders tilted the opposite way, head turned slightly aside',
-    ref: '/poses/scen3/src/full-contrapposto.png', aspect: '9:16',
     file:  '/poses/scen3/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg',
     thumb: '/poses/scen3/thumbs/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg' },
   { id: 'full-turned-back', group: 'full-height', label: 'Looking over the shoulder',
     desc: 'standing with the back to the lens, the torso turned away, the head turned back over one shoulder to look into the camera, arms hanging at the sides',
-    ref: '/poses/scen3/src/full-turned-back.png', aspect: '9:16',
     file:  '/poses/scen3/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg',
     thumb: '/poses/scen3/thumbs/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg' },
-  { id: 'full-mirror-selfie', group: 'full-height', label: 'Mirror selfie', prop: true,
+  { id: 'full-mirror-selfie', group: 'full-height', label: 'Mirror selfie',
     desc: 'standing at a slight angle filming itself in a mirror, one arm raised holding a phone at chest to head height toward the lens, the other arm relaxed, weight on one leg',
-    ref: '/poses/scen3/src/full-mirror-selfie.png', aspect: '9:16',
     file:  '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg',
     thumb: '/poses/scen3/thumbs/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg' },
 ];
@@ -966,15 +940,7 @@ function _normPose(p) {
     group:   String(s.group || '').trim(),
     label:   String(s.label || '').trim(),
     desc:    String(s.desc || '').trim(),
-    mprompt: String(s.mprompt || '').trim(),   // text-to-image path; extra framing note on the ref path
-    ref:      String(s.ref || ''),             // an image to redraw the pose FROM
-    aspect:   String(s.aspect || ''),          // forced output ratio; else measured off the ref
-    flip:     !!s.flip,                        // mirror this pose's own result
-    prop:     !!s.prop,                        // holds an object on purpose; lifts the "nothing in frame" ban
-    // Derive from another pose by mirroring it — costs no generation, and keeps a
-    // left/right pair from ever drifting apart.
-    mirrorOf: String(s.mirrorOf || ''),
-    file:    String(s.file || ''),             // the mannequin, once drawn
+    file:    String(s.file || ''),             // the mannequin
     thumb:   String(s.thumb || ''),
     active:  s.active !== false,
   };

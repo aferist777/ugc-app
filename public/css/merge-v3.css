@@ -1,9 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE v3 — the shell only.
 
-   Nothing legacy: no midnight.css, no 98.css, no !important. Tokens and the reset
-   come from css/app-shell.css, the top bar from css/app-nav.css - the same pair the
-   pages built new (Scenarios v3, Character, Library) load.
+   Tokens and the reset come from css/app-shell.css, the top bar from css/app-nav.css -
+   the same pair every page loads.
 
    Three regions, two draggable sashes, and a left side that holds TWO panels of
    which exactly one is ever open:

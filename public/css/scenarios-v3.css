@@ -1,14 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   SCENARIOS V3 — self-contained stylesheet.
-
-   The page loads NOTHING else: no 98.css, no buttons.css, no midnight.css, no
-   inline <style>, no CSS injected from JS. The midnight design tokens are
-   declared here so v3 keeps the dark look without inheriting the 3300 lines of
-   !important overrides midnight.css needs for the legacy DOM.
+   SCENARIOS V3 — the page's own rules. Tokens and the reset come from
+   css/app-shell.css, the top bar from css/app-nav.css; no inline <style>, no CSS
+   injected from JS.
    ════════════════════════════════════════════════════════════════════════════ */
-
-/* Tokens, the body reset and the top nav now live in css/app-shell.css, which this
-   page loads first and shares with /library. Only page-specific rules are below. */
 
 /* ── Tab bar: scenario type + project picker (belongs to this tab) ────────── */
 .sv3-bar{
