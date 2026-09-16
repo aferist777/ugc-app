@@ -397,6 +397,7 @@ function _paint() {
     _ctx.fillStyle = '#000';
     _ctx.fillRect(0, 0, CW, CH);
     _drawStill();
+    _drawPair();
     return 0;
   }
   _rects.clear();
@@ -681,7 +682,7 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
-  if (!_borrowed) _still = null;
+  if (!_borrowed) { _still = null; _pair = null; }
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   if (_on) _paint();
@@ -698,6 +699,7 @@ export const isBorrowed = () => _borrowed;
  * @param caption  a line under it, for saying WHICH of two similar pictures this is
  */
 export function showStill(src, caption) {
+  _pair = null;
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
@@ -712,6 +714,46 @@ export function showStill(src, caption) {
 }
 
 let _still = null;
+let _pair = null;
+
+/**
+ * Two pictures on the stage, one above the other - what is being combined, before it is.
+ * The dressing asks exactly this question: this person, wearing that; so the person is on
+ * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-frames.js).
+ *
+ * @param top     the picture in the upper half, or '' for an empty half
+ * @param bottom  the picture in the lower half
+ */
+export function showPair(top, bottom) {
+  _still = null;
+  const want = String(top || '') + '|' + String(bottom || '');
+  if (_pair && _pair.key === want) return;
+  _pair = { key: want, top: null, bottom: null };
+  const load = (src, slot) => {
+    if (!src) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => { if (_pair && _pair.key === want) { _pair[slot] = img; if (_on) _paint(); } };
+    img.onerror = () => { /* the other half still says what this is about */ };
+    img.src = src;
+  };
+  load(top, 'top');
+  load(bottom, 'bottom');
+  if (_on) _paint();
+}
+
+// Each picture inside its own half, whole - the point is to SEE both, and cropping either
+// to fill a half would hide the thing being judged.
+function _drawPair() {
+  if (!_pair) return;
+  const halves = [[_pair.top, PAD, H / 2], [_pair.bottom, PAD + H / 2, H / 2]];
+  for (const [img, top, hh] of halves) {
+    if (!img || !img.naturalWidth) continue;
+    const s = Math.min(W / img.naturalWidth, (hh - 8) / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+    _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(top + (hh - h) / 2), w, h);
+  }
+}
 
 function _drawStill() {
   if (!_still) return;

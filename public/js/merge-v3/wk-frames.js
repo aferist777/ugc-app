@@ -187,10 +187,18 @@ export function paint(host, ctx) {
   const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
-  if (_view === 'lookbooks' && chosen) _paintLookbooks(scroll, head, chosen);
-  else { _view = 'cast'; _paintCharacters(scroll, head); }
-  _paintLooks(root, chosen);
-  _showChoice(chosen);
+  if (_view === 'lookbooks' && chosen) {
+    // No drawer here at all. It is the character's wardrobe, and what is being answered on
+    // this face of the panel is which outfit to make the next one from.
+    _paintLookbooks(scroll, head, chosen);
+    _showDressing(chosen);
+  } else {
+    _view = 'cast';
+    _paintCharacters(scroll, head);
+    _paintLooks(root, chosen);
+    _stageButton(null);
+    _showChoice(chosen);
+  }
 }
 
 // ── The shelf of outfits ────────────────────────────────────────────────────
@@ -246,20 +254,39 @@ function _paintLookbooks(host, head, c) {
   }
   host.appendChild(grid);
   if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "new lookbook".'));
+}
 
-  // Under the chosen outfit, and only then: apply is what spends, so it appears when there is
-  // something to spend it on.
-  if (_lbPick) {
-    const row = _el('div', 'mv3-ins-row');
-    const go = _el('button', 'mv3-x-go', _dressing ? 'dressing…' : 'apply');
-    go.type = 'button';
-    go.title = 'Dress ' + c.name + ' in this outfit';
-    go.disabled = _dressing;
-    go.addEventListener('click', () => _apply(c));
-    row.appendChild(go);
-    host.appendChild(row);
-    host.appendChild(_note('The result is saved as a look of ' + c.name + ', and this project uses it.'));
-  }
+// ── What the stage shows while an outfit is being chosen ────────────────────
+// The person on top, the outfit below, and the button that joins them between the two: the
+// dressing IS that sentence, and a button in the panel would be a long way from the thing it
+// acts on. Nothing is under the shelf for the same reason - a row that appears there when an
+// outfit is picked pushes the shelf about while it is being read.
+function _showDressing(c) {
+  _shownFor = '';                              // the casting view will paint its own again
+  PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
+  _stageButton(_lbPick ? {
+    label: _dressing ? 'dressing…' : 'apply',
+    title: 'Dress ' + c.name + ' in this outfit and save it as a look',
+    busy: _dressing,
+    on: () => _apply(c),
+  } : null);
+}
+
+// The button lives in the stage, between the halves. Rebuilt rather than kept: the stage is
+// cleared whenever the preview remounts, and a button that survives its own container is a
+// button that outlives the question it asked.
+function _stageButton(spec) {
+  const stage = document.getElementById('mv3-stage');
+  if (!stage) return;
+  const old = stage.querySelector('.mv3-wk-apply');
+  if (old) old.remove();
+  if (!spec) return;
+  const b = _el('button', 'mv3-wk-apply', spec.label);
+  b.type = 'button';
+  b.title = spec.title || '';
+  b.disabled = !!spec.busy;
+  b.addEventListener('click', spec.on);
+  stage.appendChild(b);
 }
 
 // ── The dressing itself ─────────────────────────────────────────────────────
@@ -291,7 +318,10 @@ async function _apply(c) {
     _view = 'cast';
     _lbPick = '';
     _dressing = false;
-    // Made for this project, so this project wears it.
+    _stageButton(null);
+    // Made for this project, so this project wears it: the panel comes back to the faces with
+    // the drawer open on the character it was made for, the new look selected in it, and that
+    // look on the stage.
     await _patch({ obrazId: String(saved.obrazId || ''), obrazImage: String(saved.path || '') });
     _shownFor = '';
     _showChoice(_chars.find(x => x.id === c.id));

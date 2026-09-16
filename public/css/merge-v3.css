@@ -1566,6 +1566,17 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
+/* The button that joins the two halves of the stage: the person above it, the outfit below.
+   Centred on the seam between them, which is where the sentence it completes is. */
+.mv3-wk-apply{
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:3;
+  padding:6px 18px; border-radius:var(--pill); cursor:pointer;
+  border:1px solid var(--primary); background:var(--primary); color:var(--primary-ink, oklch(.15 0 0));
+  font:700 11px/1 var(--font); letter-spacing:.02em; box-shadow:var(--shadow);
+}
+.mv3-wk-apply:hover{filter:brightness(1.08)}
+.mv3-wk-apply[disabled]{opacity:.6; cursor:default}
+
 /* The one row that spends money sits under what it will spend it on. Scoped: the inspector
    has a .mv3-ins-row of its own, and this is a different thing in a different place. */
 .mv3-wk-frames .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
