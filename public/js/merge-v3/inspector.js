@@ -736,6 +736,9 @@ function render() {
   // button thrown away. Stop it before the rebuild rather than orphan it.
   M.stopPreview();
   host.textContent = '';
+  // A step may lay the panel out itself (js/merge-v3/wk-frames.js); this is where that
+  // arrangement ends, so the next thing to paint gets the ordinary scroll box back.
+  host.className = 'mv3-panel-body';
   // Making a talking-head project takes this panel over: there is nothing selected yet, and
   // the scenario library is what the person is choosing from (js/merge-v3/scen-pick.js).
   if (ScenPick.active()) return ScenPick.paint(host);

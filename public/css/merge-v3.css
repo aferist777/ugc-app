@@ -1519,7 +1519,13 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
    Casting in a 280px column (js/merge-v3/wk-frames.js). Three faces to a row is the
    most that leaves a name legible under them; the enlargement on hover is what makes
    that size enough to choose by. */
-.mv3-wk-bar{display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:9px 9px 5px}
+/* The step lays the panel out itself: a grid that scrolls and a drawer that does not, so the
+   body's own padding and scrolling stand down for it. */
+.mv3-panel-body.is-wk{padding:0; overflow:hidden}
+.mv3-wk-frames{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
+.mv3-ins-head.is-wk{margin:0; padding:9px 9px 6px; gap:8px; align-items:flex-start; flex-wrap:wrap}
+.mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
+.mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
 .mv3-wk-lbl{font:700 8.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(74px, 1fr)); gap:5px; padding:0 9px 4px}
 .mv3-wk-tile{
@@ -1538,18 +1544,31 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
 }
 .mv3-wk-tile.is-on .mv3-wk-name{color:var(--primary)}
 
-/* The looks of the chosen character: one row that scrolls sideways - a wardrobe, not a
-   second grid pushing the rest of the step off the bottom. */
-.mv3-wk-row{display:flex; gap:5px; overflow-x:auto; padding:0 9px 8px; scrollbar-width:thin}
+/* The drawer at the foot of the panel. Shut it is a strip that still names itself; open it
+   stands OVER the faces, because both cannot have the height and the faces are what you
+   scroll. Absolute rather than a third flex row for that reason - a row would push the grid
+   up every time somebody was cast. */
+.mv3-wk-drawer{
+  position:absolute; left:0; right:0; bottom:0; z-index:2; height:24px; overflow:hidden;
+  display:flex; flex-direction:column;
+  background:var(--surface); border-top:1px solid var(--border);
+  transition:height .18s var(--ease);
+}
+.mv3-wk-drawer.is-open{height:112px; box-shadow:0 -10px 24px -14px oklch(0 0 0 / .8)}
+.mv3-wk-strip{display:flex; align-items:center; gap:6px; flex:0 0 auto; height:24px; padding:0 9px}
+/* The looks themselves: one row that scrolls sideways - a wardrobe is a shelf. */
+.mv3-wk-row{display:flex; gap:5px; overflow-x:auto; padding:4px 9px 9px; scrollbar-width:thin}
+/* 16:9, and wide: a look is an outfit on a body, and a tall sliver of one says nothing about
+   which outfit it is. */
 .mv3-wk-look{
-  flex:0 0 auto; width:56px; height:74px; padding:0; cursor:pointer; overflow:hidden;
+  flex:0 0 auto; width:124px; aspect-ratio:16/9; padding:0; cursor:pointer; overflow:hidden;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
 }
 .mv3-wk-look img{width:100%; height:100%; object-fit:cover; display:block}
 .mv3-wk-look:hover{border-color:var(--ink)}
 .mv3-wk-look.is-on{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset}
 .mv3-wk-look.is-add{
-  display:flex; align-items:center; justify-content:center;
+  width:44px; display:flex; align-items:center; justify-content:center;
   color:var(--muted); font:400 18px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-look[disabled]{opacity:.5; cursor:default}

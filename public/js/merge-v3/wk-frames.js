@@ -132,24 +132,37 @@ function _peekShow(tile, c) {
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
+// Two parts, and the lower one is a DRAWER. The faces need the height, the looks need to be
+// big enough to tell apart, and a column 280px wide has not got both - so the looks live at
+// the foot of the panel and open OVER the faces when there is a character to show them for.
+// Shut, they are a strip that still says what it is: an empty band at the bottom of a panel
+// explains nothing, and a row of looks that appears from nowhere is worse.
 export function paint(host, ctx) {
   _ctx = ctx;
   _peekHide();
+  host.classList.add('is-wk');
 
-  const head = _el('div', 'mv3-ins-head');
+  const root = _el('div', 'mv3-wk-frames');
+  host.appendChild(root);
+
+  // The title line carries the filter: both answer "which faces am I looking at", and a
+  // second line of labels would cost the grid a row of them.
+  const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'first frames'));
   txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, and where'));
   head.appendChild(txt);
-  host.appendChild(head);
+  root.appendChild(head);
 
-  if (!ctx.project) { host.appendChild(_note('Reading the project…')); return; }
-  if (_chars === null) { _load(ctx.repaint); host.appendChild(_note('reading the characters…')); return; }
-  if (_state !== 'idle' && _state !== 'loading') host.appendChild(_note(_state, true));
+  if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
+  if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
+  if (_state !== 'idle' && _state !== 'loading') root.appendChild(_note(_state, true));
 
-  _paintCharacters(host);
+  const scroll = _el('div', 'mv3-wk-scroll');
+  root.appendChild(scroll);
+  _paintCharacters(scroll, head);
   const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
-  if (chosen) _paintLooks(host, chosen);
+  _paintLooks(root, chosen);
   _showChoice(chosen);
 }
 
@@ -169,7 +182,7 @@ function _showChoice(chosen) {
   _showInPreview(chosen ? _faceOf(chosen).src : '', cast.characterName || '');
 }
 
-function _paintCharacters(host) {
+function _paintCharacters(host, head) {
   const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
   const castId = String(_casting().characterId || '');
   let shown = _all ? _chars : filterByGender(_chars, want);
@@ -199,7 +212,7 @@ function _paintCharacters(host) {
   } else {
     bar.appendChild(_el('span', 'mv3-sc-meta', _chars.length + ' on the shelf'));
   }
-  host.appendChild(bar);
+  head.appendChild(bar);
 
   if (!shown.length) {
     host.appendChild(_note(_chars.length
@@ -220,11 +233,16 @@ function _paintCharacters(host) {
     tile.addEventListener('mouseleave', _peekHide);
     tile.addEventListener('click', () => {
       _peekHide();
-      // Picking a different character drops the look with it: a look belongs to one
-      // character, and keeping the old id would point the project at someone else's.
-      const same = c.id === String(_casting().characterId || '');
-      _patch(same ? { characterId: c.id, characterName: c.name }
-        : { characterId: c.id, characterName: c.name, obrazId: '', obrazImage: '' });
+      // A second press on the face already cast is how you take it back: the drawer shuts
+      // with it, which is the whole step saying "nobody yet" again.
+      if (c.id === String(_casting().characterId || '')) {
+        _patch({ characterId: '', characterName: '', obrazId: '', obrazImage: '' });
+        _showInPreview('', '');
+        return;
+      }
+      // A look belongs to one character, so changing who is cast drops it rather than
+      // pointing the project at somebody else's wardrobe.
+      _patch({ characterId: c.id, characterName: c.name, obrazId: '', obrazImage: '' });
       _showInPreview(_faceOf(c).src, c.name);
     });
     grid.appendChild(tile);
@@ -232,41 +250,49 @@ function _paintCharacters(host) {
   host.appendChild(grid);
 }
 
-// ── The looks of the chosen character ───────────────────────────────────────
-function _paintLooks(host, c) {
-  const bar = _el('div', 'mv3-wk-bar');
-  bar.appendChild(_el('span', 'mv3-wk-lbl', 'look'));
-  bar.appendChild(_el('span', 'mv3-sc-meta', c.obrazy.length
-    ? c.obrazy.length + ' for ' + c.name
-    : 'none for ' + c.name + ' yet'));
-  host.appendChild(bar);
+// ── The drawer of looks ─────────────────────────────────────────────────────
+// Shut when nobody is cast, open over the faces when somebody is. Its height is the height
+// of what is in it - one row of 16:9 thumbnails, which is the shape that shows an outfit
+// rather than a slice of one.
+function _paintLooks(root, c) {
+  const drawer = _el('div', 'mv3-wk-drawer' + (c ? ' is-open' : ''));
 
-  // One row that scrolls sideways: looks are a shelf of one character's wardrobe, and
-  // a grid of them would push the rest of the step off the bottom of the column.
-  const row = _el('div', 'mv3-wk-row');
-  const add = _el('button', 'mv3-wk-look is-add', '+');
-  add.type = 'button';
-  add.title = 'Make a new look - being built (docs/local-app/PLAN.md, phase C3)';
-  add.disabled = true;
-  row.appendChild(add);
+  const strip = _el('div', 'mv3-wk-strip');
+  strip.appendChild(_el('span', 'mv3-wk-lbl', 'looks'));
+  strip.appendChild(_el('span', 'mv3-sc-meta', c
+    ? (c.obrazy.length ? c.obrazy.length + ' for ' + c.name : 'none for ' + c.name + ' yet')
+    : 'pick a character to see theirs'));
+  drawer.appendChild(strip);
 
-  const pickedId = String(_casting().obrazId || '');
-  for (const o of c.obrazy) {
-    const b = _el('button', 'mv3-wk-look' + (o.id === pickedId ? ' is-on' : ''));
-    b.type = 'button';
-    b.title = o.name || 'look';
-    const img = _el('img');
-    img.alt = '';
-    img.loading = 'lazy';
-    img.src = derived(o.image, 'card');
-    b.appendChild(img);
-    b.addEventListener('click', () => {
-      _patch({ obrazId: o.id, obrazImage: o.image });
-      _showInPreview(o.image, c.name + (o.name ? ' · ' + o.name : ''));
-    });
-    row.appendChild(b);
+  if (c) {
+    // One row that scrolls sideways: a wardrobe is a shelf, and a grid of it would need the
+    // height the faces above are using.
+    const row = _el('div', 'mv3-wk-row');
+    const add = _el('button', 'mv3-wk-look is-add', '+');
+    add.type = 'button';
+    add.title = 'Make a new look - being built (docs/local-app/PLAN.md, phase C3)';
+    add.disabled = true;
+    row.appendChild(add);
+
+    const pickedId = String(_casting().obrazId || '');
+    for (const o of c.obrazy) {
+      const b = _el('button', 'mv3-wk-look' + (o.id === pickedId ? ' is-on' : ''));
+      b.type = 'button';
+      b.title = o.name || 'look';
+      const img = _el('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = derived(o.image, 'card');
+      b.appendChild(img);
+      b.addEventListener('click', () => {
+        _patch({ obrazId: o.id, obrazImage: o.image });
+        _showInPreview(o.image, c.name + (o.name ? ' · ' + o.name : ''));
+      });
+      row.appendChild(b);
+    }
+    drawer.appendChild(row);
   }
-  host.appendChild(row);
+  root.appendChild(drawer);
 }
 
 // ── The stage ───────────────────────────────────────────────────────────────
