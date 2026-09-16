@@ -1544,6 +1544,19 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
 }
 .mv3-wk-tile.is-on .mv3-wk-name{color:var(--primary)}
 
+/* The shelf of outfits, shown in place of the faces while a look is being made. Wider tiles
+   than a face: an outfit is judged by the whole picture, not by a head. */
+.mv3-wk-grid.is-lb{grid-template-columns:repeat(auto-fill, minmax(84px, 1fr))}
+.mv3-wk-tile.is-lb .mv3-wk-face{aspect-ratio:2/3; object-position:center}
+.mv3-wk-tile.is-add{
+  min-height:84px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
+}
+.mv3-wk-tile[disabled]{opacity:.55; cursor:default}
+/* The one row that spends money sits under what it will spend it on. Scoped: the inspector
+   has a .mv3-ins-row of its own, and this is a different thing in a different place. */
+.mv3-wk-frames .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
+
 /* The drawer at the foot of the panel. Shut it is a strip that still names itself; open it
    stands OVER the faces, because both cannot have the height and the faces are what you
    scroll. Absolute rather than a third flex row for that reason - a row would push the grid

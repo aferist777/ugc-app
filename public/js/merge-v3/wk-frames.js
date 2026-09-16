@@ -19,12 +19,24 @@
    (PV.borrow), and at this point the timeline is empty anyway, so the frame that
    would otherwise be black shows the choice being made.
 
-   PHASE SCOPE (docs/local-app/PLAN.md, phase C2). The character and its looks. The
-   "+" that makes a new look is C3, the place is C5, the frames themselves C6.
+   MAKING A LOOK IS THE SAME STEP, not a window over it. "+" in the drawer turns the panel
+   into the lookbook shelf; picking one and pressing apply dresses the character in it. The
+   waiting happens on the STAGE - the blurred overlay with the countdown that the rest of the
+   app uses - because that is where the answer will appear, and because a panel that freezes
+   while a minute passes says nothing about what it is doing.
+
+   The look belongs to the CHARACTER when it is done (obraz-save), not to this project. The
+   project only points at it, so the next talking head cast with the same person finds the
+   wardrobe already there.
+
+   PHASE SCOPE (docs/local-app/PLAN.md, phase C3). The place is C5 and the frames C6; the
+   lookbook GENERATOR behind "new lookbook" is C4, so that button says so for now.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
+import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
+import { startProgress } from '../progress.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
 
@@ -33,6 +45,20 @@ let _state = 'idle';                     // 'idle' | 'loading' | an error to sho
 let _all = false;                        // the gender filter lifted by hand
 let _ctx = null;                         // { project, repaint } from the workshop
 let _saving = false;
+// The panel has two faces: the casting, and the shelf of outfits to make a look from. Not a
+// window over it - a 280px column has no room for a window, and this is the same question
+// ("what does this person wear") one level down.
+let _view = 'cast';                      // 'cast' | 'lookbooks'
+let _lbs = null;                         // the lookbook shelf, read once
+let _lbPick = '';                         // the outfit selected in that shelf
+let _dressing = false;                    // one at a time: it is a minute and it is paid for
+
+// The engine the dressing runs on. The same key the old page's gear writes, so the two agree
+// while both exist (js/scenarios-v3/dress-popup.js, ENGINE_KEY).
+const ENGINE_KEY = 'sv3_engine_v1';
+const _engine = () => {
+  try { return localStorage.getItem(ENGINE_KEY) || ''; } catch (e) { return ''; }
+};
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -158,12 +184,123 @@ export function paint(host, ctx) {
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
   if (_state !== 'idle' && _state !== 'loading') root.appendChild(_note(_state, true));
 
+  const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
-  _paintCharacters(scroll, head);
-  const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
+  if (_view === 'lookbooks' && chosen) _paintLookbooks(scroll, head, chosen);
+  else { _view = 'cast'; _paintCharacters(scroll, head); }
   _paintLooks(root, chosen);
   _showChoice(chosen);
+}
+
+// ── The shelf of outfits ────────────────────────────────────────────────────
+// Two buttons at the top, as agreed: this one, and the generator that makes a lookbook out of
+// a reference and a sentence (C4). The first tile leads to that generator too, because an
+// empty shelf has to offer the way to fill it.
+function _paintLookbooks(host, head, c) {
+  const acts = _el('div', 'mv3-wk-bar');
+  const mk = (label, title, on, primary) => {
+    const b = _el('button', 'mv3-sc-tab' + (primary ? ' is-on' : ''), label);
+    b.type = 'button';
+    b.title = title;
+    if (on) b.addEventListener('click', on); else b.disabled = true;
+    return b;
+  };
+  acts.append(
+    mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
+    mk('new lookbook', 'Make a lookbook from a reference and a sentence - being built (phase C4)', null, false),
+  );
+  const back = _el('button', 'mv3-iconbtn', '\u2715');
+  back.type = 'button';
+  back.title = 'Back to the casting';
+  back.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
+  acts.appendChild(back);
+  head.appendChild(acts);
+
+  if (_lbs === null) {
+    host.appendChild(_note('reading the lookbooks…'));
+    API.lookbooks().then((files) => { _lbs = files; _ctx.repaint(); })
+      .catch((e) => { _lbs = []; _state = 'Could not read the lookbooks: ' + e.message; _ctx.repaint(); });
+    return;
+  }
+
+  const grid = _el('div', 'mv3-wk-grid is-lb');
+  const add = _el('button', 'mv3-wk-tile is-add', '+');
+  add.type = 'button';
+  add.title = 'Make a lookbook - being built (docs/local-app/PLAN.md, phase C4)';
+  add.disabled = true;
+  grid.appendChild(add);
+  for (const p of _lbs) {
+    const path = String((p && p.path) || p || '');
+    if (!path) continue;
+    const tile = _el('button', 'mv3-wk-tile is-lb' + (path === _lbPick ? ' is-on' : ''));
+    tile.type = 'button';
+    tile.title = path.split('/').pop();
+    const img = _el('img', 'mv3-wk-face');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = derived(path, 'card');
+    tile.appendChild(img);
+    tile.addEventListener('click', () => { _lbPick = (_lbPick === path ? '' : path); _ctx.repaint(); });
+    grid.appendChild(tile);
+  }
+  host.appendChild(grid);
+  if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "new lookbook".'));
+
+  // Under the chosen outfit, and only then: apply is what spends, so it appears when there is
+  // something to spend it on.
+  if (_lbPick) {
+    const row = _el('div', 'mv3-ins-row');
+    const go = _el('button', 'mv3-x-go', _dressing ? 'dressing…' : 'apply');
+    go.type = 'button';
+    go.title = 'Dress ' + c.name + ' in this outfit';
+    go.disabled = _dressing;
+    go.addEventListener('click', () => _apply(c));
+    row.appendChild(go);
+    host.appendChild(row);
+    host.appendChild(_note('The result is saved as a look of ' + c.name + ', and this project uses it.'));
+  }
+}
+
+// ── The dressing itself ─────────────────────────────────────────────────────
+// On the stage, because that is where the answer lands. The overlay carries the countdown
+// that learns from the last run of the same job (js/progress.js), so the second dressing
+// already says roughly how long it will take.
+async function _apply(c) {
+  if (_dressing) return;
+  const base = c.sheet || c.face || '';
+  if (!base) { _state = c.name + ' has no reference sheet to dress.'; return _ctx.repaint(); }
+  const lb = _lbPick;
+  _dressing = true;
+  _ctx.repaint();
+
+  const stage = document.getElementById('mv3-stage');
+  const pr = startProgress(stage, { label: 'Dressing ' + c.name, total: 1, estimateMs: 60000 });
+  try {
+    const taskId = await API.dress({ basePath: base, lookbookPath: lb, note: '', engine: _engine() });
+    const done = await API.awaitTask(taskId);
+    const saved = await API.saveLook({
+      charId: c.id, charName: c.name, imagePath: done.imagePath,
+      gender: c.gender || '', lookbookPath: lb, engine: _engine(),
+    });
+    pr.step();
+    pr.finish();
+    // The wardrobe is read again rather than patched by hand: the look is filed by the
+    // server, and what it filed is what should be on screen.
+    _chars = byLooks(await loadCharacters(true));
+    _view = 'cast';
+    _lbPick = '';
+    _dressing = false;
+    // Made for this project, so this project wears it.
+    await _patch({ obrazId: String(saved.obrazId || ''), obrazImage: String(saved.path || '') });
+    _shownFor = '';
+    _showChoice(_chars.find(x => x.id === c.id));
+  } catch (e) {
+    pr.fail((e && e.message) || 'the dressing failed');
+    _dressing = false;
+    _state = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _ctx.repaint();
+  }
 }
 
 // Coming back to a project should look like coming back to it: the stage shows what is cast
@@ -270,8 +407,8 @@ function _paintLooks(root, c) {
     const row = _el('div', 'mv3-wk-row');
     const add = _el('button', 'mv3-wk-look is-add', '+');
     add.type = 'button';
-    add.title = 'Make a new look - being built (docs/local-app/PLAN.md, phase C3)';
-    add.disabled = true;
+    add.title = 'Dress ' + c.name + ' in a lookbook';
+    add.addEventListener('click', () => { _view = 'lookbooks'; _lbPick = ''; _ctx.repaint(); });
     row.appendChild(add);
 
     const pickedId = String(_casting().obrazId || '');

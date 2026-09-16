@@ -59,6 +59,40 @@ export const remove = (id) =>
 /** A project from a scenario: its own copy of the lines, its own name. */
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);
 
+// ── Dressing a character ────────────────────────────────────────────────────
+// A LOOK is made by showing the engine two pictures - this person, that outfit - and filing
+// the answer under the character. The call is the one the old page makes; what is new here is
+// where it is made from.
+
+/** The outfits to dress FROM: every picture on the lookbooks shelf. */
+export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files || []);
+
+/** Start the dressing. Answers a taskId to wait on - engines take a minute. */
+export const dress = (body) => _post('/api/scen3/gen/dress', body).then(d => d.taskId);
+
+/**
+ * File a finished dressing as one of the character's looks. Returns { path, obrazId }: the
+ * look belongs to the CHARACTER from here on, not to the project that asked for it.
+ */
+export const saveLook = (body) => _post('/api/scen3/obraz-save', body);
+
+/**
+ * Poll one task to its end. The generator answers 'success' with a path or 'failed' with a
+ * reason; anything else is still running. A poll that itself fails is not a failure of the
+ * job - the network is allowed one bad answer - so it is skipped, not thrown.
+ */
+export async function awaitTask(taskId, onTick) {
+  for (let i = 0; i < 240; i++) {
+    await new Promise(r => setTimeout(r, 2500));
+    let s = null;
+    try { s = await _json('/api/status/' + encodeURIComponent(taskId)); } catch (e) { continue; }
+    if (onTick) { try { onTick(s); } catch (e) { /* a progress reader */ } }
+    if (s.state === 'success') return s;
+    if (s.state === 'failed') throw new Error(s.error || 'the generation failed');
+  }
+  throw new Error('timed out waiting for the generator');
+}
+
 /**
  * The vertical / product / role values used before. They are collected from saved
  * scenarios rather than kept as a list somebody has to maintain, so this is a set of
