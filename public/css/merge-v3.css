@@ -277,6 +277,18 @@ select.mv3-rr-rf{cursor:pointer}
 .mv3-sash:hover{background:oklch(1 0 0 / .10)}
 .mv3-sash:hover::after{opacity:1}
 .mv3-sash.is-v{width:5px; cursor:col-resize}
+/* WHERE THE TWO SASHES MEET. Each one moves a single edge; this moves both at once, which
+   is the gesture you actually want when the timeline is too short AND the preview too
+   narrow. It rides the vertical sash and is put at the horizontal one's height by
+   js/merge-v3/layout.js, because that height is an inline style nothing else can read. */
+.mv3-sash-x{
+  position:absolute; left:50%; width:15px; height:15px; z-index:6;
+  transform:translate(-50%, -50%); border-radius:50%; cursor:move;
+  background:var(--border); border:2px solid var(--bg);
+  transition:background .12s var(--ease), transform .12s var(--ease);
+}
+.mv3-sash-x:hover{background:var(--primary); transform:translate(-50%, -50%) scale(1.15)}
+body.mv3-resize-xy, body.mv3-resize-xy *{cursor:move !important; user-select:none}
 .mv3-sash.is-v::after{top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px}
 .mv3-sash.is-h{height:5px; cursor:row-resize}
 .mv3-sash.is-h::after{left:50%; top:1.5px; transform:translateX(-50%); height:2px; width:36px}
@@ -1546,10 +1558,11 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
 
 /* The shelf of outfits, shown in place of the faces while a look is being made. Wider tiles
    than a face: an outfit is judged by the whole picture, not by a head. */
-.mv3-wk-grid.is-lb{grid-template-columns:repeat(auto-fill, minmax(84px, 1fr))}
-.mv3-wk-tile.is-lb .mv3-wk-face{aspect-ratio:2/3; object-position:center}
+/* The same size as a face - one grid, one rhythm - and SQUARE, which is the shape a
+   lookbook is generated in. */
+.mv3-wk-tile.is-lb .mv3-wk-face{aspect-ratio:1/1; object-position:center}
 .mv3-wk-tile.is-add{
-  min-height:84px; display:flex; align-items:center; justify-content:center;
+  aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
@@ -1584,6 +1597,8 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   width:44px; display:flex; align-items:center; justify-content:center;
   color:var(--muted); font:400 18px/1 var(--font); border-style:dashed;
 }
+/* The only thing in the drawer: a full thumbnail, not a dash next to nothing. */
+.mv3-wk-look.is-add.is-only{width:124px}
 .mv3-wk-look[disabled]{opacity:.5; cursor:default}
 
 /* The enlargement under the pointer. Fixed to the viewport and parked on the body: the

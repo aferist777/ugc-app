@@ -392,7 +392,11 @@ function _paintCharacters(host, head) {
 // of what is in it - one row of 16:9 thumbnails, which is the shape that shows an outfit
 // rather than a slice of one.
 function _paintLooks(root, c) {
-  const drawer = _el('div', 'mv3-wk-drawer' + (c ? ' is-open' : ''));
+  // Shut while the look is being MADE: the shelf of outfits is the question then, and the
+  // wardrobe underneath it is what the answer will join. It opens again on the way back,
+  // for the same character - that is where the new look will be.
+  const open = !!c && _view !== 'lookbooks';
+  const drawer = _el('div', 'mv3-wk-drawer' + (open ? ' is-open' : ''));
 
   const strip = _el('div', 'mv3-wk-strip');
   strip.appendChild(_el('span', 'mv3-wk-lbl', 'looks'));
@@ -401,11 +405,13 @@ function _paintLooks(root, c) {
     : 'pick a character to see theirs'));
   drawer.appendChild(strip);
 
-  if (c) {
+  if (open) {
     // One row that scrolls sideways: a wardrobe is a shelf, and a grid of it would need the
     // height the faces above are using.
     const row = _el('div', 'mv3-wk-row');
-    const add = _el('button', 'mv3-wk-look is-add', '+');
+    // With no looks yet the "+" is the whole shelf rather than a sliver beside nothing:
+    // an empty drawer with a thin dash in it reads as something broken.
+    const add = _el('button', 'mv3-wk-look is-add' + (c.obrazy.length ? '' : ' is-only'), '+');
     add.type = 'button';
     add.title = 'Dress ' + c.name + ' in a lookbook';
     add.addEventListener('click', () => { _view = 'lookbooks'; _lbPick = ''; _ctx.repaint(); });

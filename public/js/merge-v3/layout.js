@@ -111,6 +111,72 @@ function _wireSash(sash, { axis, sign, get, set, save, reset }) {
   sash.addEventListener('dblclick', () => { reset(); save(); });
 }
 
+// ── The crossing ────────────────────────────────────────────────────────────
+// The two sashes meet at one point, and until now that point belonged to neither: you could
+// widen the column or shorten the timeline, one after the other, but not move the corner they
+// share. This is that corner. It lives on the vertical sash and is kept at the horizontal
+// one's height - both sizes are inline styles, so the only way to know where they cross is
+// to measure it after every change.
+function _placeCross() {
+  const cross = document.getElementById('mv3-sash-x');
+  const v = document.getElementById('mv3-sash-v');
+  const h = document.getElementById('mv3-sash-h');
+  if (!cross || !v || !h) return;
+  const top = h.getBoundingClientRect().top + h.getBoundingClientRect().height / 2
+    - v.getBoundingClientRect().top;
+  cross.style.top = Math.round(top) + 'px';
+}
+
+function _wireCross() {
+  const v = document.getElementById('mv3-sash-v');
+  if (!v || document.getElementById('mv3-sash-x')) return;
+  const cross = document.createElement('div');
+  cross.className = 'mv3-sash-x';
+  cross.id = 'mv3-sash-x';
+  cross.title = 'Drag to resize the column and the timeline at once · double-click to reset both';
+  v.appendChild(cross);
+  _placeCross();
+
+  cross.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();                       // not also a drag of the sash underneath
+    const x0 = e.clientX, y0 = e.clientY;
+    const left0 = _leftNow(), tl0 = _tlNow();
+    document.body.classList.add('mv3-resize-xy');
+    const move = (ev) => {
+      _applyLeft(left0 + (ev.clientX - x0));
+      // The timeline hangs off the bottom, so it GROWS as the pointer goes up.
+      _applyTl(tl0 - (ev.clientY - y0));
+      _placeCross();
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-xy');
+      _save();
+      _placeCross();
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  cross.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    _applyLeft(_defLeft());
+    _applyTl(DEF_TL_H);
+    _save();
+    _placeCross();
+  });
+}
+
+// Both sizes, written together: the crossing moves both, and saving one of them would
+// leave the next reload with half of the arrangement.
+function _save() {
+  try {
+    localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow())));
+    localStorage.setItem(LS_TL_H, String(Math.round(_tlNow())));
+  } catch (e) { /* a private window */ }
+}
+
 export function initLayout() {
   let open = null;
   try { open = localStorage.getItem(LS_OPEN); } catch (e) {}
@@ -129,19 +195,21 @@ export function initLayout() {
 
   _wireSash(document.getElementById('mv3-sash-v'), {
     axis: 'x', sign: 1,
-    get: _leftNow, set: _applyLeft,
-    reset: () => _applyLeft(_defLeft()),
+    get: _leftNow, set: (px) => { _applyLeft(px); _placeCross(); },
+    reset: () => { _applyLeft(_defLeft()); _placeCross(); },
     save: () => { try { localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow()))); } catch (e) {} },
   });
 
   _wireSash(document.getElementById('mv3-sash-h'), {
     axis: 'y', sign: -1,
-    get: _tlNow, set: _applyTl,
-    reset: () => _applyTl(DEF_TL_H),
+    get: _tlNow, set: (px) => { _applyTl(px); _placeCross(); },
+    reset: () => { _applyTl(DEF_TL_H); _placeCross(); },
     save: () => { try { localStorage.setItem(LS_TL_H, String(Math.round(_tlNow()))); } catch (e) {} },
   });
 
+  _wireCross();
+
   // Re-clamp when the window changes, or a size that fitted yesterday's window
-  // squeezes today's preview to nothing.
-  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow()); });
+  // squeezes today's preview to nothing. The crossing follows whatever that leaves.
+  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow()); _placeCross(); });
 }
