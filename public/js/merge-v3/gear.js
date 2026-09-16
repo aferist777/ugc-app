@@ -26,7 +26,10 @@
    added tomorrow would be invisible until somebody edited a setting.
    ════════════════════════════════════════════════════════════════════════════ */
 
+import * as Layers from '../layers.js';
+
 let _root = null;
+let _layer = null;
 let _table = null;      // the matrix: engines, their aggregators, prices
 let _set = null;        // the analyst's chain, skipDown
 let _health = null;
@@ -209,6 +212,7 @@ function build() {
     </div>`;
   document.body.appendChild(back);
   _root = back;
+  _layer = Layers.open(back, { name: 'settings', onEsc: close });
   wire();
   return back;
 }
@@ -275,10 +279,6 @@ function wire() {
     }
   });
 
-  _root.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
-
-  });
 }
 
 // The stylesheet, fetched with the module and not before - and AWAITED, because appending a
@@ -300,6 +300,7 @@ export function close() {
   if (!_root) return;
   try { _root.remove(); } catch (e) {}
   _root = null;
+  if (_layer) { Layers.close(_layer); _layer = null; }
 }
 
 export async function openGear() {

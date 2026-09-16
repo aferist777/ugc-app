@@ -30,6 +30,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
+import * as Layers from '../layers.js';
 import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
          loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
 import { trimmer } from './trim.js';
@@ -313,6 +314,7 @@ function _closeNameBox() {
   _nameBox.el.remove();
   document.removeEventListener('mousedown', _nameBox.away, true);
   document.removeEventListener('keydown', _nameBox.key, true);
+  Layers.close(_nameBox.layer);
   _nameBox = null;
 }
 
@@ -364,12 +366,13 @@ function _askCategoryName(anchor, kind, onMade) {
   ok.addEventListener('click', make);
   no.addEventListener('click', _closeNameBox);
   const away = (e) => { if (!el.contains(e.target)) _closeNameBox(); };
-  // Captured, so Escape closes this box and not the viewer underneath it.
+  // On top of the viewer it was opened over, so Escape closes this box and not that
+  // (js/layers.js). Enter is this box's own and stays here.
   const key = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeNameBox(); }
-    else if (e.key === 'Enter' && document.activeElement === inp) { e.preventDefault(); make(); }
+    if (e.key === 'Enter' && document.activeElement === inp) { e.preventDefault(); make(); }
   };
-  _nameBox = { el, away, key };
+  const layer = Layers.open(el, { name: 'new category', onEsc: _closeNameBox });
+  _nameBox = { el, away, key, layer };
   document.addEventListener('mousedown', away, true);
   document.addEventListener('keydown', key, true);
 }
@@ -462,7 +465,7 @@ function _closePlus() {
   if (!_plus) return;
   _plus.el.remove();
   document.removeEventListener('mousedown', _plus.away, true);
-  document.removeEventListener('keydown', _plus.key, true);
+  Layers.close(_plus.layer);
   window.removeEventListener('scroll', _closePlus, true);
   _plus = null;
 }
@@ -511,10 +514,10 @@ function _plusMenu(anchor) {
   el.style.top = Math.round(below + h <= window.innerHeight - 6 ? below : Math.max(6, r.top - h - 4)) + 'px';
 
   const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closePlus(); };
-  const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); _closePlus(); } };
-  _plus = { el, away, key };
+  // A menu, not a window: Escape closes it first and the page keeps its shortcuts.
+  const layer = Layers.open(el, { modal: false, name: 'add menu', onEsc: _closePlus });
+  _plus = { el, away, layer };
   document.addEventListener('mousedown', away, true);
-  document.addEventListener('keydown', key, true);
   window.addEventListener('scroll', _closePlus, true);
 }
 

@@ -8,9 +8,12 @@
 // <video> keeps the old frame on screen until the new one decodes, and a video element
 // left with a src goes on buffering after it is hidden.
 
+import * as Layers from '../layers.js';
+
 const $ = (sel, root) => (root || document).querySelector(sel);
 
 let _ov = null;
+let _layer = null;
 let _list = [];
 let _at = 0;
 let _onIndex = null;
@@ -170,10 +173,12 @@ export function step(d) {
   _paint();
 }
 
+// Escape is the stack's (js/layers.js) - it belongs to whatever is on top, which may be a
+// box opened over this viewer. The arrows are this viewer's own, and only while it is the
+// top layer.
 function _onKey(e) {
-  if (!_ov) return;
-  if (e.key === 'Escape') { e.preventDefault(); closeViewer(); }
-  else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  if (!_ov || !Layers.topIs(_layer)) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
 }
 
@@ -216,6 +221,7 @@ export function openViewer(items, index, opts) {
   $('[data-x="next"]', ov).addEventListener('click', () => step(1));
   ov.addEventListener('click', (e) => { if (e.target === ov) closeViewer(); });
   document.addEventListener('keydown', _onKey);
+  _layer = Layers.open(ov, { name: 'viewer', onEsc: closeViewer });
 
   _paint();
 }
@@ -232,4 +238,5 @@ export function closeViewer() {
   _actionsFor = () => [];
   _extraRows = null;
   document.removeEventListener('keydown', _onKey);
+  if (_layer) { Layers.close(_layer); _layer = null; }
 }

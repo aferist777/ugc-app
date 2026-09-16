@@ -13,6 +13,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
 
@@ -145,11 +146,11 @@ async function _run(body, adv) {
 
 // ── The window ──────────────────────────────────────────────────────────────
 let _ov = null;
-let _esc = null;
+let _layer = null;
 
 function _close() {
   if (_ov) { _ov.remove(); _ov = null; }
-  if (_esc) { document.removeEventListener('keydown', _esc); _esc = null; }
+  if (_layer) { Layers.close(_layer); _layer = null; }
 }
 
 function _summary(tl) {
@@ -304,8 +305,9 @@ function _open() {
   _ov.appendChild(box);
   _ov.addEventListener('mousedown', (e) => { if (e.target === _ov && !_busy) _close(); });
   document.body.appendChild(_ov);
-  _esc = (e) => { if (e.key === 'Escape' && !_busy) _close(); };
-  document.addEventListener('keydown', _esc);
+  // Escape closes it - unless a render is in flight, when the window stays and the key is
+  // simply eaten: what is on top decides, including deciding to do nothing (js/layers.js).
+  _layer = Layers.open(_ov, { name: 'render', onEsc: () => { if (!_busy) _close(); } });
 }
 
 export function initExportB() {

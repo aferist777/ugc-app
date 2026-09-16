@@ -24,6 +24,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 
 const TRIGGERS = ['AUTH', 'FEAR', 'FOMO', 'SECRET', 'PROOF', 'DESIRE'];
 
@@ -132,8 +133,11 @@ async function partsFromProject(key, title) {
 
 // ── the window ──────────────────────────────────────────────────────────────
 let _ov = null;
-function close() { if (_ov) { _ov.remove(); _ov = null; } document.removeEventListener('keydown', _key); }
-function _key(e) { if (e.key === 'Escape') close(); }
+let _layer = null;
+function close() {
+  if (_ov) { _ov.remove(); _ov = null; }
+  if (_layer) { Layers.close(_layer); _layer = null; }
+}
 
 /**
  * @param {object} o  { url, title, key, queueId?, fresh }
@@ -293,7 +297,7 @@ export async function showResult(o) {
   ov.appendChild(box);
   document.body.appendChild(ov);
   _ov = ov;
-  document.addEventListener('keydown', _key);
+  _layer = Layers.open(ov, { name: 'render result', onEsc: close });
 
   // The name on open: a file already named keeps its name and shows it taken apart; a fresh
   // render gets the parts from the project and the name they compose.

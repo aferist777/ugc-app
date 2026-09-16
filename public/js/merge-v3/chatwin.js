@@ -46,6 +46,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { startInlineProgress, lockControls } from '../progress.js';
+import * as Layers from '../layers.js';
 import { askDelete, closeAsk, note } from './ask.js';
 // Whether a failure is worth a second try - shared with Animate, because the aggregators are
 // the same and so are their bad days.
@@ -994,7 +995,7 @@ export function closeChatWindow() {
   peekHide();
   clearInterval(_timer);
   _timer = 0;
-  document.removeEventListener('keydown', _open.key, true);
+  Layers.close(_open.layer);
   try { _open.ov.remove(); } catch (e) {}
   _open = null;
   _thread = [];
@@ -1182,17 +1183,14 @@ export async function openChatWindow(spec, opts) {
 
   // Escape takes the top thing off: the enlarged picture if one is open, the window otherwise.
   // Closing both at once would shut the window because somebody wanted a peek to go away.
-  const key = (ev) => {
-    if (ev.key !== 'Escape') return;
-    ev.stopPropagation();
-    if (_peek) return peekHide();
-    closeChatWindow();
-  };
-  document.addEventListener('keydown', key, true);
+  const layer = Layers.open(ov, {
+    name: 'pictures',
+    onEsc: () => { if (_peek) peekHide(); else closeChatWindow(); },
+  });
   ov.addEventListener('mousedown', (ev) => { if (ev.target === ov) closeChatWindow(); });
 
   _open = {
-    spec, ov, box, key, left, said, ta, go, nBtn, clip, pen, file,
+    spec, ov, box, layer, left, said, ta, go, nBtn, clip, pen, file,
     // `chat` is the middle column: the peek lines its right edge up with it, so the big version
     // opens over the conversation and never over the library it was taken from.
     chat, thread_, atts_, strip, count, cat, projB, stripProj,

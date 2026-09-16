@@ -19,9 +19,11 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 
 let _pop = null;
+let _layer = null;
 let _timer = 0;
 // The panel refreshes on a beat, and a refresh rebuilds it wholesale. While a question is on
 // screen that would erase the question mid-read - which it did: the confirm appeared and was
@@ -55,6 +57,7 @@ async function _paintBadge() {
 function _close() {
   _asking = false;
   if (_pop) { _pop.remove(); _pop = null; }
+  if (_layer) { Layers.close(_layer); _layer = null; }
   clearInterval(_timer);
   _timer = 0;
 }
@@ -280,6 +283,8 @@ function _open() {
   const r = btn.getBoundingClientRect();
   _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';
   _pop.style.top = Math.round(r.bottom + 6) + 'px';
+  // A panel, not a window: Escape closes it, the page keeps its shortcuts.
+  _layer = Layers.open(_pop, { modal: false, name: 'queue', onEsc: _close });
   _paintList();
   // While it is open it follows the queue: a render finishing behind it should show, not wait
   // for the panel to be closed and opened again.

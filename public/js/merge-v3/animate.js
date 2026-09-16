@@ -38,6 +38,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { startInlineProgress, lockControls } from '../progress.js';
+import * as Layers from '../layers.js';
 // Whether a failure is worth a second try - shared with the picture window.
 import { canRetry } from './retry.js';
 import * as C from './controls.js';
@@ -124,7 +125,7 @@ export async function closeAnimate(force) {
   }
   // A generation that is running is deliberately NOT cancelled here: the job is already
   // paid for, and Replicate will finish it whether or not this window is watching.
-  document.removeEventListener('keydown', _open.key, true);
+  Layers.close(_open.layer);
   try { _open.ov.remove(); } catch (e) {}
   _open = null;
   const had = _shots.length;
@@ -743,9 +744,8 @@ export async function openAnimate(clip) {
   ov.appendChild(box);
   document.body.appendChild(ov);
 
-  const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeAnimate(); } };
-  document.addEventListener('keydown', key, true);
-  _open = { ov, key };
+  const layer = Layers.open(ov, { name: 'animate', onEsc: () => closeAnimate() });
+  _open = { ov, layer };
 
   x.addEventListener('click', () => closeAnimate());
   cancel.addEventListener('click', () => closeAnimate());

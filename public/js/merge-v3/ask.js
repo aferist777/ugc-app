@@ -16,13 +16,15 @@
    did not offer up.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import * as Layers from '../layers.js';
+
 let _ask = null;
 
 export function closeAsk() {
   if (!_ask) return;
   _ask.el.remove();
   document.removeEventListener('mousedown', _ask.away, true);
-  document.removeEventListener('keydown', _ask.key, true);
+  Layers.close(_ask.layer);
   window.removeEventListener('scroll', closeAsk, true);
   _ask = null;
 }
@@ -96,15 +98,11 @@ function _panel(anchor, text, sub, buttons) {
   el.style.top = Math.round(above >= 6 ? above : r.bottom + 6) + 'px';
 
   const away = (e) => { if (!el.contains(e.target)) closeAsk(); };
-  const key = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAsk(); }
-    // Delete and Backspace are wired to the timeline's own delete. With the question open they
-    // would answer it from behind, which is the one thing this is here to stop.
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); }
-  };
-  _ask = { el, away, key };
+  // Modal, which is what keeps the timeline's own Delete from answering this question from
+  // behind - the reason this used to swallow Delete itself (js/layers.js).
+  const layer = Layers.open(el, { name: 'ask', onEsc: closeAsk });
+  _ask = { el, away, layer };
   document.addEventListener('mousedown', away, true);
-  document.addEventListener('keydown', key, true);
   window.addEventListener('scroll', closeAsk, true);
   return made;
 }

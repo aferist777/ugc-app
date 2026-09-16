@@ -10,6 +10,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 import * as History from './history.js';
 import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timeline-b.js';
 import { grabFrame } from './preview-b.js';
@@ -30,6 +31,7 @@ function _history() {
     if (r) { r.disabled = !History.canRedo(); r.title = 'Redo (Ctrl+Y)' + (d.redo ? ' - ' + d.redo : ' - nothing yet'); }
   });
   document.addEventListener('keydown', (e) => {
+    if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
@@ -125,6 +127,7 @@ function _quality() {
 // The SAME stage moved into an overlay and moved back on close - not a second canvas, which would
 // need its own clock and media and drift from this one the first time either stuttered.
 let _bigWrap = null;
+let _bigLayer = null;
 let _stageHome = null;
 
 function _closeBig() {
@@ -133,9 +136,8 @@ function _closeBig() {
   if (stage && _stageHome) _stageHome.insertBefore(stage, _stageHome.firstChild);
   _bigWrap.remove();
   _bigWrap = null;
-  document.removeEventListener('keydown', _bigKey, true);
+  if (_bigLayer) { Layers.close(_bigLayer); _bigLayer = null; }
 }
-function _bigKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeBig(); } }
 
 function _openBig() {
   if (_bigWrap) return _closeBig();
@@ -157,8 +159,9 @@ function _openBig() {
   document.body.appendChild(ov);
   box.appendChild(stage);
   _bigWrap = ov;
-  // Captured, so the Esc that closes this is not also the Esc that clears the selection.
-  document.addEventListener('keydown', _bigKey, true);
+  // Not modal: Escape closes this before anything underneath it, but the transport keys
+  // still work - Space over an enlarged preview means play (js/layers.js).
+  _bigLayer = Layers.open(ov, { modal: false, name: 'big preview', onEsc: _closeBig });
 }
 
 // ── The screenshot ──────────────────────────────────────────────────────────

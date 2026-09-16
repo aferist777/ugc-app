@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
          softened } from './fx-b.js';
 import { paintCaptions, subsTrack, regroup, autoWordsPerLine } from './subs-b.js';
@@ -787,6 +788,9 @@ function _wireTransport() {
   on('mv3-pv-fwd', () => seek(Math.min(duration(), _at + 5)));
   document.addEventListener('keydown', (e) => {
     if (!_on) return;
+    // A window on top owns the keyboard (js/layers.js): with a dialog open, Space is a
+    // space in whatever field is focused, not play.
+    if (Layers.blocked()) return;
     if (e.code !== 'Space') return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))) return;
     e.preventDefault();

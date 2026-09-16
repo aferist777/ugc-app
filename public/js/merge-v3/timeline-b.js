@@ -27,6 +27,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 import { askDelete, closeAsk, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
@@ -1520,6 +1521,7 @@ export function initTimelineB() {
   document.addEventListener('mouseup', _endBand);
   document.addEventListener('keydown', (e) => {
     if (!_on) return;
+    if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
     if (e.key === 'Escape') _clearSel();
     // Not while typing: the inspector has fields, and Delete there means a character.
     if ((e.key === 'Delete' || e.key === 'Backspace') &&
