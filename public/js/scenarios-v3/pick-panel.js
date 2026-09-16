@@ -23,7 +23,7 @@
 // rewrites a path to a neighbouring thumbs/ folder - it returns whatever happens to be there,
 // at whatever weight, and nothing at all when the file was never made.
 
-import { loadCharacters, filterByGender, byLooks } from './chars.js';
+import { loadCharacters, filterByGender, byLooks } from '../chars-store.js';
 
 const CARD = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=card';
 

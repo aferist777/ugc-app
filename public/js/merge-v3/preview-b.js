@@ -396,6 +396,7 @@ function _paint() {
     _ctx.setTransform(1, 0, 0, 1, 0, 0);
     _ctx.fillStyle = '#000';
     _ctx.fillRect(0, 0, CW, CH);
+    _drawStill();
     return 0;
   }
   _rects.clear();
@@ -680,12 +681,58 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
+  if (!_borrowed) _still = null;
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   if (_on) _paint();
 }
 
 export const isBorrowed = () => _borrowed;
+
+/**
+ * Show one picture on the borrowed stage - who was cast, the look being tried, the frame
+ * just made. Letterboxed inside the frame, not cropped: this is a reference being looked
+ * at, and cutting a face in half to fill a 9:16 hole would defeat the point of showing it.
+ *
+ * @param src      the picture, or '' to go back to black
+ * @param caption  a line under it, for saying WHICH of two similar pictures this is
+ */
+export function showStill(src, caption) {
+  if (!src) { _still = null; if (_on) _paint(); return; }
+  const img = new Image();
+  img.decoding = 'async';
+  img.onload = () => { if (_still && _still.src === src) { _still.img = img; if (_on) _paint(); } };
+  // A picture that will not load leaves the caption: the choice was still made, and a
+  // black rectangle with no word on it looks like a failure of the choice rather than
+  // of one file.
+  img.onerror = () => { if (_still && _still.src === src) { _still.img = null; if (_on) _paint(); } };
+  _still = { src, caption: String(caption || ''), img: null };
+  img.src = src;
+  if (_on) _paint();
+}
+
+let _still = null;
+
+function _drawStill() {
+  if (!_still) return;
+  const cap = _still.caption;
+  const img = _still.img;
+  if (img && img.naturalWidth) {
+    const s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+    _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(PAD + (H - h) / 2), w, h);
+  }
+  if (!cap) return;
+  _ctx.font = '600 ' + Math.round(H * 0.022) + 'px Inter, Segoe UI, system-ui, sans-serif';
+  _ctx.textAlign = 'center';
+  _ctx.fillStyle = 'rgba(0,0,0,.55)';
+  const y = PAD + H - Math.round(H * 0.045);
+  const tw = _ctx.measureText(cap).width;
+  _ctx.fillRect(PAD + W / 2 - tw / 2 - 10, y - Math.round(H * 0.028), tw + 20, Math.round(H * 0.04));
+  _ctx.fillStyle = '#fff';
+  _ctx.fillText(cap, PAD + W / 2, y);
+  _ctx.textAlign = 'left';
+}
 
 export function play() {
   if (_borrowed) return;

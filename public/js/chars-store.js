@@ -1,8 +1,10 @@
-// Scenarios v3 — READ-ONLY view of characters, their obrazy and the lookbook
-// library. Characters stay owned by the Character tab and environments by their
-// own backend; v3 never writes here, it only reads and stores chosen ids on the
-// project. Mirrors the joins v2 did in _ugcLoadModels so both pages agree on
-// what a character's looks are.
+// A READ-ONLY view of characters, their looks (obrazy) and the lookbook library, shared by
+// every page that casts one: Scenarios, and the talking-head workshop in Merge.
+//
+// Characters stay owned by the Character tab and environments by their own backend; nothing
+// here writes. What a page does with a choice is store an id on its project. The joins are the
+// ones v2 did in _ugcLoadModels, in one place, so two pages cannot disagree about what a
+// character's looks are.
 
 const _get = (url) => fetch(url).then(r => r.json()).catch(() => null);
 

@@ -16,7 +16,7 @@ import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelMerge, st
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
 import { openVoicePopup } from './voice-popup.js';
-import { thumbImg } from './chars.js';
+import { thumbImg } from '../chars-store.js';
 
 const $ = id => document.getElementById(id);
 

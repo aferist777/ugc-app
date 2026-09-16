@@ -12,7 +12,7 @@
 // This phase is the shell: dressing (Apply / Mix / Re-dress) and creating a
 // lookbook are laid out but disabled; they get wired in the next phase.
 
-import { loadCharacters, loadLookbooks, filterByGender, thumbImg, thumb } from './chars.js';
+import { loadCharacters, loadLookbooks, filterByGender, thumbImg, thumb } from '../chars-store.js';
 import { preview1k, genLookbook, genDress, genMix, finalize, awaitTask, lookbookMeta, obrazSave, obrazDelete } from './api.js';
 import { startProgress, lockControls, freeze } from '../progress.js';
 

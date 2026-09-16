@@ -12,7 +12,7 @@
 // Phase scope: the shell and its persistence. Generation lands next.
 
 import { patchProject } from './projects.js';
-import { thumbImg, derived } from './chars.js';
+import { thumbImg, derived } from '../chars-store.js';
 // The pickers, and the two popups their + opens, are fetched the first time one is asked
 // for. None of them is needed to show a frame - most visits to this popup never open one -
 // and together they are a sizeable share of the page's JavaScript.

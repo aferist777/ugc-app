@@ -167,7 +167,7 @@ export function initWorkshop() {
 // the place where it still lives (docs/local-app/PLAN.md, phases C2-C6). The bridge
 // goes step by step as each is built, and the page it points at goes in phase G.
 const MODULES = {
-  // frames: () => import('./wk-frames.js'),   ← C2
+  frames: () => import('./wk-frames.js'),
   // voice:  () => import('./wk-voice.js'),    ← D
   // video:  () => import('./wk-video.js'),    ← E
 };

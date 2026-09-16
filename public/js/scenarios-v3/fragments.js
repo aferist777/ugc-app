@@ -11,7 +11,7 @@
 // the wording it was saved with.
 
 import { onProjectChange, patchProject, adoptProject, currentProject } from './projects.js';
-import { thumbImg } from './chars.js';
+import { thumbImg } from '../chars-store.js';
 import { speakLines, tagLines, renderClip, cancelClip, videoState } from './api.js';
 import { startProgress } from '../progress.js';
 

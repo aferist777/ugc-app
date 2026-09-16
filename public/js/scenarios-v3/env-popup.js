@@ -10,7 +10,7 @@
 // refined again right away — and a refinement moves the selection onto its result.
 
 import { preview1k, genEnv, finalize, awaitTask } from './api.js';
-import { thumb, thumbImg } from './chars.js';
+import { thumb, thumbImg } from '../chars-store.js';
 import { startProgress, lockControls, freeze } from '../progress.js';
 
 // Two engine settings, mirroring the looks popup: the header gear governs edits to
