@@ -1567,9 +1567,10 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
 /* The button that joins the two halves of the stage: the person above it, the outfit below.
-   Centred on the seam between them, which is where the sentence it completes is. */
+   Just above the outfit rather than astride the seam - sitting on it, the button covered the top
+   edge of the very picture being judged. */
 .mv3-wk-apply{
-  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:3;
+  position:absolute; left:50%; top:50%; transform:translate(-50%, calc(-100% - 7px)); z-index:3;
   padding:6px 18px; border-radius:var(--pill); cursor:pointer;
   border:1px solid var(--primary); background:var(--primary); color:var(--primary-ink, oklch(.15 0 0));
   font:700 11px/1 var(--font); letter-spacing:.02em; box-shadow:var(--shadow);
