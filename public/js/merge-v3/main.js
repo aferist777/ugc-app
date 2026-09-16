@@ -18,6 +18,7 @@ import { initPreviewB, mount as mountPvB } from './preview-b.js';
 import { initExportB } from './export-b.js';
 import { initQueue } from './queue.js';
 import { initInspector } from './inspector.js';
+import { initWorkshop } from './workshop.js';
 import { initProjects } from './projects.js';
 import * as Store from './store.js';
 import { initBar } from './bar.js';
@@ -30,6 +31,9 @@ initPreviewB();
 initExportB();
 initQueue();
 initInspector();
+// Small and always needed - it is what decides whether there are steps at all. The steps
+// themselves are loaded when they are opened.
+initWorkshop();
 initProjects();
 initBar();
 

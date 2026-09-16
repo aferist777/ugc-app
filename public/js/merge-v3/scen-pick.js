@@ -31,6 +31,8 @@ import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { askDelete } from './ask.js';
 import { setOpenColumn } from './layout.js';
+import * as Store from './store.js';
+import * as WK from './workshop.js';
 
 // The two libraries are one store read two ways: a scenario written here has no
 // provenance, one written in Library 2 records what it was written from.
@@ -266,14 +268,22 @@ async function _archive(s, yes) {
 }
 
 // ── Making the project ──────────────────────────────────────────────────────
-// The project takes its own copy of the lines. Opening it is the point of making it, so
-// this goes straight there - in this phase, to the workshop that still lives on its own
-// page (docs/local-app/PLAN.md, phase B).
+// Two things are made, and the second is why a talking-head project is in Merge's picker from
+// the start: the project itself (its own copy of the lines), and the EMPTY timeline it will be
+// assembled into, keyed to it. Without that second one, a project made today would be invisible
+// here until its first assembly, and tomorrow there would be no way back into it.
 async function _use(scenarioId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
     const p = await API.project(scenarioId);
-    location.href = '/scenarios?project=' + encodeURIComponent(p.id);
+    const d = await fetch('/api/mv3/timeline/new', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: p.id }),
+    }).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
+    stop();                               // the picker has done its job
+    await Store.open(d.key);
+    WK.setStep('frames');
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'use'; }
     alert('Could not make the project: ' + e.message);

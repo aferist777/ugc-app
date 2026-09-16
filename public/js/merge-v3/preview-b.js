@@ -389,6 +389,15 @@ function _show(el, sw, sh, c, gaps) {
 
 function _paint() {
   if (!_ctx) return 0;
+  // Lent to the workshop: the stage shows what the step is doing, and at this point in a
+  // talking-head project the timeline is usually empty anyway - a black frame is the honest
+  // picture of it (docs/local-app/PLAN.md, "Мастерская talking head").
+  if (_borrowed) {
+    _ctx.setTransform(1, 0, 0, 1, 0, 0);
+    _ctx.fillStyle = '#000';
+    _ctx.fillRect(0, 0, CW, CH);
+    return 0;
+  }
   _rects.clear();
   // Layers under the playhead that had nothing decoded to draw yet - what a screenshot waits on.
   let missing = 0;
@@ -660,7 +669,26 @@ function _tick() {
   _raf = requestAnimationFrame(_tick);
 }
 
+// ── Lending the stage ───────────────────────────────────────────────────────
+// A build step of the workshop shows its own thing there - a character, a generation, a
+// result - so the transport stands down rather than playing a timeline nobody is looking at.
+// The class is what dims and disables the transport; the guards below are what make it true
+// even for a key press.
+let _borrowed = false;
+
+export function borrow(on) {
+  const want = !!on;
+  if (_borrowed === want) return;
+  _borrowed = want;
+  if (_borrowed) pause();
+  document.body.classList.toggle('mv3-workshop', _borrowed);
+  if (_on) _paint();
+}
+
+export const isBorrowed = () => _borrowed;
+
 export function play() {
+  if (_borrowed) return;
   if (!_on || _playing) return;
   if (_at >= duration()) _at = 0;
   _playing = true;
@@ -680,7 +708,7 @@ export function pause() {
   _syncPlayBtn();
 }
 
-export function toggle() { _playing ? pause() : play(); }
+export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');

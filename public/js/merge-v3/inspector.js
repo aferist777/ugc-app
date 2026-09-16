@@ -25,6 +25,7 @@ import { styleOf, subsTrack as subsTrackB, segmentsFor, groupWords, autoSize,
          autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
 import { askDelete } from './ask.js';
 import * as ScenPick from './scen-pick.js';
+import * as WK from './workshop.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
@@ -738,6 +739,10 @@ function render() {
   // Making a talking-head project takes this panel over: there is nothing selected yet, and
   // the scenario library is what the person is choosing from (js/merge-v3/scen-pick.js).
   if (ScenPick.active()) return ScenPick.paint(host);
+  // A talking-head project is built in a fixed order, and while one of those steps is open
+  // this panel belongs to it - what is selected on the timeline is not what the person is
+  // doing (js/merge-v3/workshop.js).
+  if (WK.active()) return WK.paint(host);
   // A BAND SELECTION OUTRANKS the single one. It is the more deliberate of the two - the
   // single selection is usually just whatever the pointer passed over on the way to drawing
   // the band - and a panel of settings for four clips at once has no honest meaning, so what
@@ -759,10 +764,14 @@ export function initInspector() {
   onSelB(() => {
     // Touching the timeline is leaving the picker: what is selected is what the panel is for.
     if (ScenPick.active() && (oneB() || trackB() || multiB() > 1)) ScenPick.stop();
+    // A build step is NOT left that way: selecting a clip while composing frames is a slip of
+    // the pointer far more often than it is a decision to go and edit the cut.
+    if (WK.active()) return;
     M.resetView();
     render();
   });
   ScenPick.onChange(render);
+  WK.onChange(render);
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);

@@ -609,32 +609,57 @@ router.post('/mv3/render/discard', (req, res) => {
 // Delete one project's timeline. The confirmation is the page's job (the button turns into
 // "really?"), so this just does it - a second confirmation here would be theatre.
 /* ── A project that did not come from Scenarios ──────────────────────────────
-   POST /api/mv3/timeline/new { title } -> { success, key, version }
+   POST /api/mv3/timeline/new { title } | { projectId } -> { success, key, version }
 
    Every project until now arrived with a cut behind it: Scenarios writes sv3_<projectId> and
-   fills the Main track. This makes an empty one, keyed mv3_<stamp> so the origin is readable
-   from the key alone, and the caller opens it and builds the timeline by hand.
+   fills the Main track. This makes an empty one, and there are two ways to be empty:
+
+     { title }      a project of Merge's own, keyed mv3_<stamp> so the origin is readable from
+                    the key alone. The caller opens it and builds the timeline by hand.
+     { projectId }  a TALKING HEAD, keyed sv3_<projectId>. The scenario project already exists
+                    (it was made from a scenario); this gives it the timeline it will be
+                    assembled into, empty, so it is in the picker from the moment it exists
+                    rather than appearing only after the first send.
 
    THE TITLE IS TAKEN, NOT DEFAULTED, and the reason is that nothing in this app can rename a
    project. An "Untitled" made here would stay Untitled forever, so a blank title is refused
-   rather than quietly accepted. */
+   rather than quietly accepted. A talking head has a name already - the project's - so it
+   passes none. */
 router.post('/mv3/timeline/new', (req, res) => {
   try {
-    const title = String((req.body || {}).title || '').trim();
-    if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
-    if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
-
+    const b = req.body || {};
+    const projectId = String(b.projectId == null ? '' : b.projectId).trim();
     const cur = _read();
-    // Two projects with one name are two shelves with one label in the library. The rename
-    // route refuses it; creation has to as well, or the rule only holds half the time.
-    if (_titleTaken(cur.timelines, title, null)) {
-      return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+    let key = '';
+    let title = '';
+
+    if (projectId) {
+      const p = require('../lib/projects-store').get(projectId);
+      if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+      // The FIRST free one, the same way a send numbers them: sv3_<id>, then _2, _3. An empty
+      // timeline made here is the one the first assembly fills, so in practice this is _1.
+      const base = 'sv3_' + projectId;
+      key = base;
+      for (let n = 2; cur.timelines[key]; n++) key = base + '_' + n;
+      // Named after the project and the day, like a send names its cut. Uniqueness is not
+      // checked: for an sv3_ key the folder is the PROJECT's folder (lib/merge-store.js), so
+      // two same-named timelines cannot collide over a folder the way Merge's own do.
+      title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || p.name || '').trim() || 'talking head'}`;
+    } else {
+      title = String(b.title || '').trim();
+      if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
+      if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
+      // Two projects with one name are two shelves with one label in the library. The rename
+      // route refuses it; creation has to as well, or the rule only holds half the time.
+      if (_titleTaken(cur.timelines, title, null)) {
+        return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+      }
+      // The stamp is unique in practice; the loop is for the case it is not (two clicks inside one
+      // millisecond, or a clock that went backwards) so a new project can never land on top of an
+      // existing timeline.
+      key = 'mv3_' + Date.now();
+      for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
     }
-    // The stamp is unique in practice; the loop is for the case it is not (two clicks inside one
-    // millisecond, or a clock that went backwards) so a new project can never land on top of an
-    // existing timeline.
-    let key = 'mv3_' + Date.now();
-    for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
 
     const now = new Date().toISOString();
     cur.timelines[key] = {

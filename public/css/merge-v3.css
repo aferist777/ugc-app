@@ -1496,3 +1496,21 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
   background:var(--bg); color:var(--ink); font:400 11.5px/1.7 var(--font);
 }
 .mv3-sc-lines:focus{outline:1px solid var(--primary); outline-offset:-1px}
+
+/* ── The steps of a talking head ─────────────────────────────────────────────
+   In the inspector's own header, beside its title (js/merge-v3/workshop.js): the panel
+   IS the workshop while one of them is open, and a second header line would cost the
+   list below it the same height on a column that is already narrow. */
+.mv3-wk-steps{display:flex; align-items:center; gap:3px; margin-left:8px; min-width:0; flex-wrap:wrap}
+.mv3-wk-step{
+  padding:2px 7px; border:1px solid transparent; border-radius:999px;
+  background:transparent; color:var(--muted); cursor:pointer;
+  font:600 9px/1.5 var(--font); letter-spacing:.03em; text-transform:uppercase; white-space:nowrap;
+}
+.mv3-wk-step:hover{color:var(--ink)}
+.mv3-wk-step.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
+/* While a build step holds the stage the transport has nothing to drive: the preview is
+   showing that step's work, not the cut. Dimmed and dead rather than hidden - it comes
+   back the moment the timeline step is picked, and a control that vanishes and returns
+   is harder to trust than one that is plainly asleep. */
+body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
