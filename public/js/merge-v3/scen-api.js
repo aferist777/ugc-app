@@ -34,7 +34,7 @@ const _post = (url, body) => _json(url, {
  * provenance. The counts come back whichever side is asked for: a tab that cannot say
  * how many are on the other side is a tab you have to click to understand.
  *
- * @param lib  '' | 'library1' | 'library2'
+ * @param lib  '' | 'library1' | 'library2' | 'archive'
  */
 export const list = (lib) =>
   _json('/api/scen3/scenarios' + (lib ? '?lib=' + encodeURIComponent(lib) : ''))
@@ -45,6 +45,16 @@ export const get = (id) => _json('/api/scen3/scenarios/' + encodeURIComponent(id
 
 /** Create (no id) or update (id). Returns the stored record. */
 export const save = (rec) => _post('/api/scen3/scenarios', rec).then(d => d.scenario);
+
+/**
+ * Archived or back. Sent through the same upsert as any other edit - the server merges what
+ * it is given into the stored record - so this needs no route of its own.
+ */
+export const archive = (id, yes) => save({ id, archived: !!yes });
+
+/** Gone for good: the store has no bin, which is why the panel asks first. */
+export const remove = (id) =>
+  _json('/api/scen3/scenarios/' + encodeURIComponent(id), { method: 'DELETE' });
 
 /** A project from a scenario: its own copy of the lines, its own name. */
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);

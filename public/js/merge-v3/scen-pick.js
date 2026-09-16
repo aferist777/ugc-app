@@ -6,14 +6,18 @@
    will be spoken - so this panel takes the inspector over and shows the scenario
    library: read one, use one, or write one.
 
-   THE TWO BUTTONS ON A ROW ARE NOT THE SAME BUTTON.
+   READING AND USING ARE NOT THE SAME ACT.
 
-     read   opens the text. What you edit here is the LIBRARY scenario, the thing
-            other projects will be made from later. It is not the project's copy of
-            anything, because at this point there is no project.
-     use    makes the project. The lines are copied into it (routes/scen3.js takes a
-            snapshot), so editing the scenario afterwards never reaches it, and the
-            same scenario can be used as many times as you like.
+     the row   opens the text. What you edit there is the LIBRARY scenario, the thing
+               other projects will be made from later. It is not the project's copy of
+               anything, because at this point there is no project.
+     use       makes the project. The lines are copied into it (routes/scen3.js takes a
+               snapshot), so editing the scenario afterwards never reaches it, and the
+               same scenario can be used as many times as you like.
+
+   The rest is on the right-click menu, and the two that change the library are deliberately
+   different weights: ARCHIVE puts a scenario out of the list and can be taken back, DELETE
+   cannot, so it asks first - the same question the timeline asks before dropping a clip.
 
    Nothing here spends anything: a project is a folder and a copy of some text. The
    generating starts in the workshop that opens afterwards.
@@ -25,6 +29,7 @@
 
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
+import { askDelete } from './ask.js';
 import { setOpenColumn } from './layout.js';
 
 // The two libraries are one store read two ways: a scenario written here has no
@@ -33,6 +38,9 @@ const TABS = [
   { id: '', label: 'all' },
   { id: 'library1', label: 'written here' },
   { id: 'library2', label: 'from Library 2' },
+  // Last, and apart from the other three: it is not a narrower view of the library, it is
+  // the pile the library is not showing.
+  { id: 'archive', label: 'archive' },
 ];
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
@@ -113,11 +121,30 @@ function _matches(s) {
 
 // ── The panel ───────────────────────────────────────────────────────────────
 export function paint(host) {
-  const head = _el('div', 'mv3-ins-head');
+  // One row: what this panel is, the button that writes a new one, and the filters. They
+  // belong together - all three are about which scenarios are on screen - and the inspector
+  // is narrow enough that a second row of chips would push the list off the bottom.
+  const head = _el('div', 'mv3-ins-head is-scen');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'New talking head'));
   txt.appendChild(_el('div', 'mv3-ins-sub', 'Pick the script it says'));
   head.appendChild(txt);
+
+  const add = _el('button', 'mv3-sc-new', '+ scenario');
+  add.type = 'button';
+  add.title = 'Write a new scenario';
+  add.addEventListener('click', () => openForm(null));
+  head.appendChild(add);
+
+  for (const tab of TABS) {
+    const b = _el('button', 'mv3-sc-tab' + (tab.id === _lib ? ' is-on' : ''));
+    b.type = 'button';
+    const n = tab.id ? (_counts[tab.id] || 0) : (_counts.all || 0);
+    b.textContent = tab.label + ' · ' + n;
+    b.addEventListener('click', () => { if (_lib !== tab.id) { _lib = tab.id; _load(); } });
+    head.appendChild(b);
+  }
+
   const act = _el('div', 'mv3-ins-head-act');
   const x = _el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
@@ -126,23 +153,6 @@ export function paint(host) {
   act.appendChild(x);
   head.appendChild(act);
   host.appendChild(head);
-
-  // Tabs with their counts, and the one button that makes something new.
-  const tabs = _el('div', 'mv3-sc-tabs');
-  for (const t of TABS) {
-    const b = _el('button', 'mv3-sc-tab' + (t.id === _lib ? ' is-on' : ''));
-    b.type = 'button';
-    const n = t.id ? (_counts[t.id] || 0) : (_counts.all || 0);
-    b.textContent = t.label + ' · ' + n;
-    b.addEventListener('click', () => { if (_lib !== t.id) { _lib = t.id; _load(); } });
-    tabs.appendChild(b);
-  }
-  const add = _el('button', 'mv3-sc-new', '+ scenario');
-  add.type = 'button';
-  add.title = 'Write a new scenario';
-  add.addEventListener('click', () => openForm(null));
-  tabs.appendChild(add);
-  host.appendChild(tabs);
 
   const search = _el('input', 'mv3-sc-search');
   search.type = 'search';
@@ -168,25 +178,91 @@ function _paintList(list) {
     return;
   }
   for (const s of rows) {
-    const row = _el('div', 'mv3-sc-row');
+    const row = _el('div', 'mv3-sc-row' + (s.archived ? ' is-archived' : ''));
+    row.title = 'Open the text. Right-click for the rest.';
     const txt = _el('div', 'mv3-sc-txt');
     txt.appendChild(_el('b', null, s.title || 'untitled'));
     txt.appendChild(_el('span', 'mv3-sc-meta', _meta(s)));
     row.appendChild(txt);
 
+    // One button, and which one depends on where the scenario is: an archived one is not
+    // offered as something to build with until it is back in the library.
     const acts = _el('div', 'mv3-sc-acts');
-    const read = _el('button', 'mv3-sc-btn', 'read');
-    read.type = 'button';
-    read.title = 'Read and edit the text of this scenario';
-    read.addEventListener('click', () => openForm(s));
-    const use = _el('button', 'mv3-sc-btn is-use', 'use');
-    use.type = 'button';
-    use.title = 'Make a project from this scenario and open it';
-    use.addEventListener('click', () => _use(s.id, use));
-    acts.append(read, use);
+    const go = _el('button', 'mv3-sc-btn is-use', s.archived ? 'restore' : 'use');
+    go.type = 'button';
+    go.title = s.archived
+      ? 'Put it back in the library'
+      : 'Make a project from this scenario and open it';
+    go.addEventListener('click', (e) => {
+      e.stopPropagation();                       // the row opens the text; this does not
+      if (s.archived) _archive(s, false); else _use(s.id, go);
+    });
+    acts.appendChild(go);
     row.appendChild(acts);
+
+    row.addEventListener('click', () => openForm(s));
+    row.addEventListener('contextmenu', (e) => { e.preventDefault(); _rowMenu(e, s, row); });
     list.appendChild(row);
   }
+}
+
+// ── The right-click menu ────────────────────────────────────────────────────
+// A menu layer (js/layers.js): Escape closes it and the page keeps its shortcuts. Archived
+// rows get a different set - nothing is built from a scenario that is out of the library.
+let _menu = null;
+
+function _closeMenu() {
+  if (!_menu) return;
+  _menu.el.remove();
+  document.removeEventListener('mousedown', _menu.away, true);
+  Layers.close(_menu.layer);
+  _menu = null;
+}
+
+function _rowMenu(ev, s, row) {
+  _closeMenu();
+  const el = _el('div', 'mv3-plus-menu');
+  const item = (label, sub, on, danger) => {
+    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    b.type = 'button';
+    b.appendChild(_el('span', null, label));
+    if (sub) b.appendChild(_el('small', null, sub));
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
+    el.appendChild(b);
+  };
+
+  item('open', 'read and edit the text', () => openForm(s));
+  if (!s.archived) item('use', 'make a project from it', () => _use(s.id, null));
+  if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
+  else item('archive', 'out of the list, kept', () => _archive(s, true));
+  // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
+  // this runs, and a question hanging off a removed element opens in the corner of the screen.
+  item('delete', 'for good', () => {
+    askDelete(row, 'Delete "' + (s.title || 'untitled') + '"?',
+      'The scenario goes for good. Projects already made from it keep their own copy of the text.',
+      async () => {
+        try { await API.remove(s.id); } catch (e) { alert('Could not delete it: ' + e.message); }
+        _load();
+      });
+  }, true);
+
+  document.body.appendChild(el);
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';
+  el.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, ev.clientY))) + 'px';
+  const away = (e) => { if (!el.contains(e.target)) _closeMenu(); };
+  const layer = Layers.open(el, { modal: false, name: 'scenario menu', onEsc: _closeMenu });
+  _menu = { el, away, layer };
+  // On the next tick: this very right-click is still travelling, and it would close the menu
+  // it just opened.
+  setTimeout(() => document.addEventListener('mousedown', away, true), 0);
+}
+
+// Out of the library or back into it. Same call either way - the server merges the flag into
+// the stored record - and the list is read again so the counts move with it.
+async function _archive(s, yes) {
+  try { await API.archive(s.id, yes); } catch (e) { alert('Could not change it: ' + e.message); }
+  _load();
 }
 
 // ── Making the project ──────────────────────────────────────────────────────

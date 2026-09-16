@@ -69,6 +69,10 @@ function _norm(r, now) {
     // One format, and it is called what the UI calls it. Forced rather than read: this
     // store has never held anything else, and the old `ugc_ad` id died with v2.
     type:      'talking_head',
+    // Out of the way, not gone: a scenario that has been used and is not wanted in the list
+    // any more is archived rather than deleted, because deleting it is the one thing that
+    // cannot be taken back. The list hides these and one filter shows only them.
+    archived:  !!src.archived,
     vertical:  String(src.vertical || ''),
     product:   String(src.product  || ''),
     roles:     Array.isArray(src.roles) ? src.roles.map(x => ({
@@ -225,7 +229,7 @@ const _libOf = s => (s.origin ? 'library2' : 'library1');
 
 const _summary = s => ({
   id: s.id, title: s.title, type: s.type,
-  vertical: s.vertical, product: s.product, roles: s.roles,
+  vertical: s.vertical, product: s.product, roles: s.roles, archived: !!s.archived,
   gender: _genderOf(s),
   lib: _libOf(s),
   // Enough of the provenance for a row to say where it came from, without the hook and the
@@ -253,19 +257,24 @@ router.get('/scen3/scenarios', (req, res) => {
   try {
     const all = _load().slice()
       .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    // Archived ones are not part of "all": the point of archiving is that the list stops
+    // showing them. They come back only when they are what was asked for.
+    const live = all.filter(s => !s.archived);
     const asked = String((req.query && req.query.lib) || '').trim();
     // Only a name we know narrows anything; anything else means all, and the answer says `all`
     // rather than echoing a filter that was not applied.
-    const want = (asked === 'library1' || asked === 'library2') ? asked : '';
-    const list = want ? all.filter(s => _libOf(s) === want) : all;
+    const want = ['library1', 'library2', 'archive'].includes(asked) ? asked : '';
+    const list = want === 'archive' ? all.filter(s => s.archived)
+      : want ? live.filter(s => _libOf(s) === want) : live;
     res.json({
       success: true,
       scenarios: list.map(_summary),
       lib: want || 'all',
       counts: {
-        library1: all.filter(s => _libOf(s) === 'library1').length,
-        library2: all.filter(s => _libOf(s) === 'library2').length,
-        all: all.length,
+        library1: live.filter(s => _libOf(s) === 'library1').length,
+        library2: live.filter(s => _libOf(s) === 'library2').length,
+        all: live.length,
+        archive: all.length - live.length,
       },
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
