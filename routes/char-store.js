@@ -576,8 +576,8 @@ async function _retrySheetElsewhere(c, why) {
     // Replicate takes the job and only discovers a minute later that it cannot read the
     // reference - "HTTPSConnectionPool(host='i.ibb.co') Read timed out" arrives as a FAILED
     // prediction, not as a refused submit. So the same rescue the submit path has belongs here:
-    // move the picture somewhere else before handing it to the next aggregator, or the next one
-    // is being set up to fail the same way.
+    // upload the picture again, under a new key, before handing it to the next aggregator, or
+    // the next one is being set up to fail the same way.
     let imageUrl = job.imageUrl;
     if (isFetchFailure({ message: String(why || '') })) {
       try { imageUrl = (await rehost([imageUrl]))[0] || imageUrl; }

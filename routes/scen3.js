@@ -2330,13 +2330,11 @@ async function _retryClipFetch(projectId, idx, prev) {
   const frame = (_normMix(proj.mix).variants || []).find(v => v.id === prev.fromFrame);
   if (!frame || !frame.path || !prev.fromAudio) return null;
 
-  // Anywhere but the host it just failed to read. Derived from the URL we actually sent, so
-  // this cannot be wrong about which one to avoid.
-  const bad = H.hostOfUrl(prev.audioUrl) || 'catbox.moe';
+  // Both files again, under new keys: there is one host, so the retry that helps is a fresh
+  // upload - a signature with its whole life ahead of it, and a link no cache can hand back cold.
   const imageUrl = await _hostLocal(frame.path, { forceFresh: true, verify: true });
   const audioUrl = await _hostLocal(prev.fromAudio,
-    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i, avoid: [bad] });
-  if (H.hostOfUrl(audioUrl) === bad) return null;      // nowhere else to put it
+    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
 
   const quality = MP.qualityById(prev.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
   const prompt = MP.promptFor(prev.preset);
@@ -2346,10 +2344,10 @@ async function _retryClipFetch(projectId, idx, prev) {
     const l = p.lines[idx];
     if (!l.render || String(l.render.taskId) !== String(prev.taskId)) return false;   // moved on
     l.render = _normRender({ ...prev, taskId, error: '', audioUrl,
-      retry: prev.retry + 1, badHost: bad, startedAt: new Date().toISOString() });
+      retry: prev.retry + 1, startedAt: new Date().toISOString() });
   });
   if (!ok) return null;
-  console.log('[scen3/clip] resubmitted line', idx + 1, 'away from', bad, '->', String(taskId).slice(0, 24));
+  console.log('[scen3/clip] resubmitted line', idx + 1, 'with fresh links ->', String(taskId).slice(0, 24));
   return taskId;
 }
 
@@ -2434,8 +2432,8 @@ function _watchClip(projectId, idx, taskId) {
     if (s && s.state === 'failed') {
       console.warn('[scen3/clip]', taskId.slice(0, 24), 'failed:', s.error || '');
       // The renderer could not READ our files: nothing was rendered and nothing was charged,
-      // so put them on another host and ask again rather than reporting a failure the user
-      // can do nothing about. Once only.
+      // so upload them again and ask again rather than reporting a failure the user can do
+      // nothing about. Once only.
       const now = _lineRenderOf(projectId, idx);
       if (_FETCH_FAIL_RE.test(String(s.error || '')) && now && now.retry < 1
           && String(now.taskId) === String(taskId)) {
@@ -2444,7 +2442,7 @@ function _watchClip(projectId, idx, taskId) {
         catch (e) { console.warn('[scen3/clip] resubmit failed:', e.message); }
         _watching.delete(key);
         if (next) return _watchClip(projectId, idx, next);
-        return stop(String(s.error || 'render failed') + ' - and there was nowhere else to host it');
+        return stop(String(s.error || 'render failed') + ' - and uploading the files again did not help');
       }
       return stop(String(s.error || 'render failed'));
     }
@@ -2765,10 +2763,9 @@ function _normRender(r) {
     startedAt: String(s.startedAt || ''),
     error:     String(s.error || ''),
     // How many times this fragment has been resubmitted after the renderer said it could not
-    // fetch our files, and which host it could not fetch from. On the record rather than in
-    // memory so a restart cannot hand out a fresh set of retries.
+    // fetch our files. On the record rather than in memory so a restart cannot hand out a fresh
+    // set of retries.
     retry:     Math.max(0, parseInt(s.retry, 10) || 0),
-    badHost:   String(s.badHost || ''),
     audioUrl:  String(s.audioUrl || ''),
   };
 }
