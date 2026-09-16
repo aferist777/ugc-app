@@ -31,3 +31,36 @@ body{
   font:13px/1.5 var(--font);
   display:flex; flex-direction:column; overflow:hidden;
 }
+
+/* ── Scrollbars ────────────────────────────────────────────────────────────
+   Every page is dark and the machine's own scrollbars are not: a light grey slab
+   down the side of a black timeline is the one part of the window that looks like
+   somebody else's program.
+
+   `color-scheme` first, and for more than the scrollbars - it is what tells the
+   engine that the controls it draws itself (an open <select>, a date field, the
+   canvas behind the page) belong to a dark window. Anything that is NOT styled
+   below then still comes out dark rather than white.
+
+   Then the bars themselves, in the app's own palette. Deliberately NOT through
+   `scrollbar-color`: setting it makes the engine ignore these rules entirely, and
+   with it there is no rounded thumb, no gutter and no hover.
+
+   The thumb's border is transparent and the background is clipped to the padding
+   box - that is what makes a 10px bar carry a 6px thumb with room either side,
+   instead of a slab that touches the content it is scrolling. */
+:root{color-scheme:dark}
+*::-webkit-scrollbar{width:10px; height:10px}
+/* The track stays the surface it sits on: a lane of its own colour would draw a
+   line down the page that means nothing. */
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{
+  background:var(--border); background-clip:padding-box;
+  border:2px solid transparent; border-radius:var(--pill);
+}
+*::-webkit-scrollbar-thumb:hover{background:var(--muted); background-clip:padding-box}
+/* Being dragged is the one moment the bar is the thing being used, so it takes the
+   colour everything else on this page uses for "this is what you are doing". */
+*::-webkit-scrollbar-thumb:active{background:var(--primary); background-clip:padding-box}
+/* Where a vertical and a horizontal bar meet. Left as the page, not as a grey square. */
+*::-webkit-scrollbar-corner{background:transparent}
