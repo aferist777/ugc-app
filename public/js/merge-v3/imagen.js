@@ -22,7 +22,6 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { openChatWindow, closeChatWindow, attempts, el, money, thumbOf, arOf } from './chatwin.js';
-import { placeClip, playheadAt } from './timeline.js';
 import { openViewer } from '../library/viewer.js';
 import { closeAsk, note } from './ask.js';
 import * as Store from './store.js';
@@ -212,44 +211,22 @@ function _view(g, api) {
 }
 
 // ── Onto the timeline, where the playhead is ────────────────────────────────
-// A picture made here is something to put OVER the film - so it goes on the layer above it, at
-// the moment the playhead is standing on: that is what the playhead is for.
-//
-//   a project made in Merge   the lane directly above main video (made, if there is none), over
-//                             whatever is there already - the one underneath stays
-//                             (js/merge-v3/timeline-b.js placeAbove)
-//   a talking-head project    Birols, the top layer and the lane every b-roll lives on
+// A picture made here is something to put OVER the film - so it goes on the lane directly above
+// main video (made, if there is none), at the moment the playhead is standing on, over whatever
+// is there already: the one underneath stays (js/merge-v3/timeline-b.js placeAbove).
 //
 // It is in the library either way: that happens when the picture is made, not when this is
 // pressed (lib/mv3-gens.js files it on the images shelf under the project's own category).
 async function _place(g, anchor, api) {
   try { await api.ensureProject(); }
   catch (e) { note(anchor, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
-
-  const tl = Store.timeline();
-  if (Store.isBlank()) {
-    const T = await import('./timeline-b.js');
-    const r = T.placeAbove({ src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '', name: (g.prompt || '').slice(0, 60) });
-    if (!r.ok) { note(anchor, 'Not added.', r.why); return; }
-    api.made();
-    note(anchor, 'Added to ' + r.lane + '.', 'At the playhead, ' + r.at.toFixed(1) + 's.');
-    setTimeout(() => closeAsk(), 2400);
-    return;
-  }
-  if (!tl || Array.isArray(tl.tracks) || !tl.tracks.biro) {
-    note(anchor, 'No Birols lane on this project.', 'The picture is in the library - drag it in.');
-    return;
-  }
-
-  const at = playheadAt();
-  placeClip('biro', at, {
-    src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '',
-    name: (g.prompt || '').slice(0, 60), group: 'images', dur: 0,
-  });
+  const T = await import('./timeline-b.js');
+  const r = T.placeAbove({ src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '', name: (g.prompt || '').slice(0, 60) });
+  if (!r.ok) { note(anchor, 'Not added.', r.why); return; }
   api.made();
   // Said, then gone. A confirmation that has to be dismissed is a confirmation that interrupts -
   // and this one is telling somebody that the thing they asked for happened.
-  note(anchor, 'Added to Birols.', 'At the playhead, ' + at.toFixed(1) + 's.');
+  note(anchor, 'Added to ' + r.lane + '.', 'At the playhead, ' + r.at.toFixed(1) + 's.');
   setTimeout(() => closeAsk(), 2400);
 }
 
@@ -432,8 +409,7 @@ const SPEC = {
     use.addEventListener('click', () => { api.attach(g.imagePath, g.prompt || ''); api.repaint(); });
 
     const add = el('button', 'mv3-c-btn', 'to timeline');
-    add.title = Store.isBlank() ? 'Puts it on the lane above main video, at the playhead.'
-                                : 'Puts it on the Birols lane, at the playhead.';
+    add.title = 'Puts it on the lane above main video, at the playhead.';
     add.addEventListener('click', () => _place(g, add, api));
 
     // ANIMATE, the same window a still on the timeline opens - with this picture already in its
@@ -507,9 +483,8 @@ const SPEC = {
 export const closeImagen = closeChatWindow;
 
 /**
- * @param track  the lane it was opened from, kept for the windows that have one to name. The
- *               talking-head timeline does not pass it: there the picture goes on Birols at
- *               the playhead, which is a rule and not a choice. Optional either way.
+ * @param track  the lane it was opened from, kept for the windows that have one to name.
+ *               Optional.
  */
 export async function openImagen(track) {
   let table;

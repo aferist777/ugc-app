@@ -3,19 +3,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — the render queue.
 
-   Shared by both workflows, and the one place they meet. It has to be: a queue that lives
-   in the browser dies with the tab, and "time remaining" after a reload would be invented
-   rather than measured.
+   On the server, because a queue that lives in the browser dies with the tab, and "time
+   remaining" after a reload would be invented rather than measured.
 
-   AN ENTRY CARRIES ITS OWN JOB, not a reference to one. A blank project keeps its timeline;
-   a scenario project keeps the payload its editor would have sent. Two reasons, and both
-   are about being honest to the person who queued it:
+   AN ENTRY CARRIES ITS OWN JOB, not a reference to one: the timeline and the export settings as
+   they were when it was queued. The render is what the person saw when they queued it, not what
+   the project drifted into while five other things rendered ahead of it.
 
-     - the render is what they saw when they queued it, not what the project drifted into
-       while five other things rendered ahead of it;
-     - the two workflows build their jobs differently, and a queue that had to rebuild them
-       would have to know how both work - which is the coupling this whole split exists to
-       avoid.
+   Entries of the talking-head editor, which is gone (docs/local-app/PLAN.md, phase 3), carry that
+   editor's payload and nothing can render it any more: one still waiting fails with the reason,
+   and the project - converted - can be queued again.
 
    The queue runs ONE AT A TIME. Rendering is the heaviest thing this machine does, and four
    at once is four renders that all finish late rather than one that finishes soon.
@@ -36,6 +33,7 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const JOB = require('../lib/mv3b-job');
+const BUSY = require('../lib/render-busy');
 const OWN = require('../lib/ownership');
 
 const router = express.Router();
@@ -55,10 +53,9 @@ function write(s) {
 // ── Running one entry ───────────────────────────────────────────────────────
 let _proc = null;
 let _startedAt = 0;
-// The entry under the encoder, whichever path is encoding it. A blank entry has a local ffmpeg
-// process; a scenario entry is rendered inside routes/ffmpeg.js and only polled from here, so
-// `_proc` alone said "idle" all through a scenario render - every list read then took the
-// running row for a leftover and put it back to queued, and Render all could start it twice.
+// The entry under the encoder. Set before its files are asked about (lib/mv3b-job.js prepare),
+// when there is no process yet - `_proc` alone would say "idle" then, a list read would take the
+// running row for a leftover, and Render all could start it twice.
 let _active = null;
 
 function next() {
@@ -73,10 +70,17 @@ function next() {
   write(s);
   _active = item.id;
 
-  // A scenario entry is handed to the renderer that knows how to read it, over HTTP to this
-  // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
-  // point of the split is that neither render path can reach the other.
-  if (item.kind !== 'blank') return runTalking(item);
+  if (item.kind !== 'blank') {
+    const s2 = read();
+    const it = s2.items.find(x => x.id === item.id);
+    if (it) {
+      it.status = 'failed';
+      it.error = 'queued in the editor that has been removed - open the project and add it to the queue again';
+    }
+    write(s2);
+    _active = null;
+    return next();
+  }
   return runBlank(item);
 }
 
@@ -98,6 +102,7 @@ async function runBlank(item) {
   const name = 'mv3q_' + Date.now() + '.mp4';
   const out = path.join(require('../lib/shelf-files').rendersDir(item.key).dir, name);
   _startedAt = Date.now();
+  const done = BUSY.start();
   _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let log = '';
   _proc.stderr.on('data', d => {
@@ -142,6 +147,7 @@ async function runBlank(item) {
         ok = false; error = e.message;
       }
     }
+    done();
     _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
@@ -156,6 +162,7 @@ async function runBlank(item) {
   });
   _proc.on('error', (e) => {
     _proc = null; _active = null;
+    done();
     built.dispose();
     const t = read();
     const it = t.items.find(x => x.id === item.id);
@@ -165,101 +172,23 @@ async function runBlank(item) {
   });
 }
 
-// The scenario renderer answers with a job id and is polled, so this follows it to the end
-// and records where the file landed - the queue's promise is a finished file, not a started
-// encode.
-function runTalking(item) {
-  const fail = (msg) => {
-    const t = read();
-    const it = t.items.find(x => x.id === item.id);
-    if (it) { it.status = 'failed'; it.error = msg; }
-    write(t);
-    _active = null;
-    next();
-  };
-  if (!item.payload) return fail('this entry carries no render payload');
-
-  const PORT = process.env.PORT || 3000;
-  const base = 'http://127.0.0.1:' + PORT;
-  fetch(base + '/api/ffmpeg/render', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...item.payload, projectKey: item.key }),
-  }).then(r => r.json()).then(d => {
-    if (!d || !d.success || !d.jobId) throw new Error((d && d.error) || 'the scenario renderer refused it');
-    const started = Date.now();
-    const poll = () => {
-      fetch(base + '/api/ffmpeg/status/' + encodeURIComponent(d.jobId)).then(r => r.json()).then(st => {
-        if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
-        // TERMINAL is the short list, and everything else is still working. The scenario
-        // renderer passes through 'normalizing' and 'speeding' on its way to a file, and
-        // treating an unrecognised word as the end marked a perfectly good render as failed -
-        // "ended as speeding". Naming the two states it finishes in, rather than the two it
-        // works in, is the version that survives the next state being added.
-        if (st.status !== 'done' && st.status !== 'cancelled' && !st.error) {
-          const t = read();
-          const it = t.items.find(x => x.id === item.id);
-          if (it) {
-            // progressSecs is how much OUTPUT ffmpeg has written; against the cut's length,
-            // sent along when the entry was queued, that is a real fraction. The phases before
-            // and after the encode report no seconds, so they are named instead of shown as 0%.
-            it.phase = st.status;
-            const dur = +item.dur || 0;
-            if (st.status === 'running' && dur > 0) {
-              const pc = Math.max(0, Math.min(99, Math.round((+st.progressSecs || 0) / dur * 100)));
-              const el = (Date.now() - started) / 1000;
-              it.percent = pc;
-              it.remain = (pc > 3 && el > 1.5) ? Math.round(el / (pc / 100) - el) : null;
-            }
-            write(t);
-          }
-          return setTimeout(poll, 1500);
-        }
-        const t = read();
-        const it = t.items.find(x => x.id === item.id);
-        if (it) {
-          it.tookMs = Date.now() - started;
-          if (st.status === 'done' && st.url) { it.status = 'done'; it.url = st.url; }
-          else if (st.status === 'cancelled') { it.status = 'failed'; it.error = 'cancelled'; }
-          else { it.status = 'failed'; it.error = st.error || ('ended as ' + st.status); }
-        }
-        write(t);
-        _active = null;
-        next();
-      }).catch(e => fail(e.message));
-    };
-    setTimeout(poll, 1200);
-  }).catch(e => fail(e.message));
-}
-
 // What the entry is MADE OF, worked out when it is queued rather than when it is shown. The
 // job is frozen at that moment anyway, so counting it later would describe the project as it
 // is now and label a render that was of something else.
 function summarise(item) {
-  if (item.kind === 'blank') {
-    const t = (item.timeline && item.timeline.tracks) || [];
-    let pieces = 0, sounds = 0, beds = 0;
-    for (const tr of t) {
-      for (const c of (tr.clips || [])) {
-        if (tr.kind === 'video') pieces++;
-        else if (tr.kind === 'audio') { if (c.pairId) sounds++; else beds++; }
-      }
+  const t = (item.timeline && item.timeline.tracks) || [];
+  let pieces = 0, sounds = 0, beds = 0;
+  for (const tr of t) {
+    for (const c of (tr.clips || [])) {
+      if (tr.kind === 'video') pieces++;
+      else if (tr.kind === 'audio') { if (c.pairId) sounds++; else beds++; }
     }
-    const bits = [];
-    if (pieces) bits.push(pieces + (pieces === 1 ? ' clip' : ' clips'));
-    if (sounds) bits.push(sounds + (sounds === 1 ? ' sound' : ' sounds'));
-    if (beds) bits.push(beds + (beds === 1 ? ' bed' : ' beds'));
-    return bits.join(' · ') || 'empty';
   }
-  const p = item.payload || {};
-  const n = (a) => (Array.isArray(a) ? a.length : 0);
   const bits = [];
-  if (n(p.segmentClips)) bits.push(n(p.segmentClips) + ' fragments');
-  if (n(p.clips)) bits.push(n(p.clips) + ' birols');
-  if (n(p.hookClips)) bits.push(n(p.hookClips) + ' hooks');
-  if (n(p.halferClips)) bits.push(n(p.halferClips) + ' halfers');
-  if (n(p.musicClips)) bits.push('music');
-  if (p.segSfx && p.segSfx !== 'Нет') bits.push('sfx');
-  return bits.join(' · ') || 'nothing counted';
+  if (pieces) bits.push(pieces + (pieces === 1 ? ' clip' : ' clips'));
+  if (sounds) bits.push(sounds + (sounds === 1 ? ' sound' : ' sounds'));
+  if (beds) bits.push(beds + (beds === 1 ? ' bed' : ' beds'));
+  return bits.join(' · ') || 'empty';
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
@@ -295,25 +224,23 @@ router.get('/mv3q', (req, res) => {
 router.post('/mv3q/add', (req, res) => {
   try {
     const b = req.body || {};
-    const kind = b.kind === 'blank' ? 'blank' : 'talking';
-    if (kind === 'blank' && !(b.timeline && Array.isArray(b.timeline.tracks))) {
-      return res.status(400).json({ success: false, error: 'a blank entry needs its timeline' });
+    // One kind of entry now: a project's timeline and its export settings.
+    const kind = 'blank';
+    if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
+      return res.status(400).json({ success: false, error: 'an entry needs its timeline' });
     }
     const s = read();
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
       key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
       kind, status: 'queued', addedAt: new Date().toISOString(),
-      timeline: kind === 'blank' ? b.timeline : null,
-      // A blank entry's export settings, frozen with its timeline: the render is of what was queued.
-      adv: kind === 'blank' && b.adv && typeof b.adv === 'object' ? b.adv : null,
-      payload: kind === 'talking' ? (b.payload || null) : null,
+      timeline: b.timeline,
+      // The export settings, frozen with the timeline: the render is of what was queued.
+      adv: b.adv && typeof b.adv === 'object' ? b.adv : null,
       url: null, error: null,
       owner: OWN.uidOf(req), ownerNick: req.user ? (req.user.nickname || null) : null,
       // Starts only when its owner presses Render all - see the header.
       armed: false,
-      // The cut's length in seconds, for the progress bar of a scenario render: the renderer
-      // reports seconds written, and only against a total is that a percentage.
       dur: Number(b.dur) > 0 ? Number(b.dur) : null,
     };
     item.summary = summarise(item);

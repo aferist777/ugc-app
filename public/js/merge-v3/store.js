@@ -9,7 +9,7 @@
 
    How to change anything:
 
-       mutate(t => { t.tracks.biro.clips.push(clip); })
+       mutate(t => { t.tracks.find(x => x.id === 'v2').clips.push(clip); })
 
    mutate() takes a history snapshot BEFORE handing you the draft, applies your change
    to the in-memory copy, redraws, and schedules the save. That ordering is the reason
@@ -99,13 +99,11 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export function timeline() { return _timeline; }
 
-// Which of the two editors this project belongs to. ABSENT MEANS TALKING-HEAD: every
-// project written before blank ones existed is one, and none had to be migrated to stay
-// itself. Read from the timeline rather than kept beside it, so it can never disagree with
-// the data it describes.
+// The kind every project has now - an ordered list of lanes. The talking-head editor's projects
+// were rewritten into it at startup (lib/timeline-convert.js).
 export const BLANK_KIND = 'blank';
-export function kind() { return (_timeline && _timeline.kind) || 'talking'; }
-export function isBlank() { return kind() === BLANK_KIND; }
+export function kind() { return BLANK_KIND; }
+export function isBlank() { return true; }
 export function version() { return _version; }
 export function status() { return _status; }
 export function isReady() { return !!_timeline; }
@@ -272,11 +270,6 @@ const _byId = (clips) => {
 };
 const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-// The lanes whose clip order is the stacking order rather than an incidental sequence.
-// Named here as well as in timeline.js and routes/mergev3.js because all three are places
-// that could otherwise reorder a track without meaning anything by it.
-const OVERLAY_SCOPES = ['biro', 'hook', 'halfer'];
-
 function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
   const out = [];
@@ -307,26 +300,13 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
 
 // Returns the merged timeline plus what arrived from the other device, for the notice.
 function _merge(base, mine, theirs) {
-  if (!base || !theirs) return { timeline: mine, added: 0, removed: 0 };
-  if (Array.isArray(theirs.tracks)) return _mergeBlank(base, mine, theirs);
-  const out = { tracks: {} };
-  let added = 0, removed = 0;
-  for (const scope of Object.keys(theirs.tracks || {})) {
-    const b = (base.tracks && base.tracks[scope]) || { clips: [] };
-    const m = (mine.tracks && mine.tracks[scope]) || { clips: [] };
-    const t = theirs.tracks[scope];
-    const bIds = _byId(b.clips), mIds = _byId(m.clips);
-    for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
-    for (const c of (b.clips || [])) if (!_byId(t.clips).has(c.id) && mIds.has(c.id)) removed++;
-    out.tracks[scope] = _mergeTrack(b, m, t, !OVERLAY_SCOPES.includes(scope));
-  }
-  return { timeline: out, added, removed };
+  if (!base || !theirs || !Array.isArray(theirs.tracks)) return { timeline: mine, added: 0, removed: 0 };
+  return _mergeBlank(base, mine, theirs);
 }
 
-// A blank project's lanes are a LIST, matched by id and never by position, and their order is
-// the layer order. Treating the list as the talking-head object of named lanes is what wiped
-// projects: the lanes came back keyed "0", "1"... with no kind, the page handed the project to
-// the other editor, and the retried save stored no lanes at all.
+// A project's lanes are a LIST, matched by id and never by position, and their order is the
+// layer order. Treating the list as an object of named lanes is what once wiped projects: the
+// lanes came back keyed "0", "1"... with no kind, and the retried save stored no lanes at all.
 //
 // Same rules as a lane's clips: a lane I deleted stays deleted, a lane added elsewhere is kept,
 // a lane of mine they never saw goes back in beside the lane it followed here. Only audio lanes
@@ -459,9 +439,6 @@ export async function save(_merges = 0) {
       // it into the live copy too keeps the two exactly equal, which is what makes the merge's
       // "did I change this clip" comparison mean anything. Skipped if an edit arrived while the
       // save was in flight: that edit is newer than this answer, and the next save adopts.
-      // The KIND is carried over, not rebuilt: a project's type is decided when it is
-      // created and this is only an answer about its tracks. Dropping it here made the page
-      // hand a blank project to the talking-head editor on the first save.
       const stored = d.tracks
         ? { kind: (d.kind !== undefined ? d.kind : (_timeline && _timeline.kind)) || undefined,
             format: (d.format !== undefined ? d.format : (_timeline && _timeline.format)) || undefined,

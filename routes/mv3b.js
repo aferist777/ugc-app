@@ -20,6 +20,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const JOB = require('../lib/mv3b-job');
+const BUSY = require('../lib/render-busy');
 
 const router = express.Router();
 const { toUrl } = require('../lib/media');
@@ -44,6 +45,8 @@ router.post('/mv3b/render', async (req, res) => {
                   dur: ready.dur, span: ready.dur, at: 0, startedAt: Date.now(), phaseAt: Date.now() };
     _jobs.set(id, job);
 
+    // Busy until the finishing passes are over too: a speed pass and a tail are encodes as well.
+    const done = BUSY.start();
     const proc = spawn(ffmpegPath, ready.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     // HOW FAR IT HAS GOT, read off ffmpeg rather than guessed from a stopwatch. It prints the
     // position it has encoded to; against the known length that is real progress, and real
@@ -56,7 +59,7 @@ router.post('/mv3b/render', async (req, res) => {
     });
     proc.on('close', async (code) => {
       ready.dispose();
-      if (code !== 0 || !fs.existsSync(out)) { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
+      if (code !== 0 || !fs.existsSync(out)) { done(); job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
       const s = ready.settings;
       const spans = { speeding: ready.dur / s.speed, tail: ready.dur / s.speed + s.tailMinutes * 60 };
       try {
@@ -72,9 +75,11 @@ router.post('/mv3b/render', async (req, res) => {
         // Not a render with a setting quietly missing: the file goes, and the reason is said.
         try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
         job.status = 'failed'; job.error = e.message;
+      } finally {
+        done();
       }
     });
-    proc.on('error', (e) => { ready.dispose(); job.status = 'failed'; job.error = e.message; });
+    proc.on('error', (e) => { ready.dispose(); done(); job.status = 'failed'; job.error = e.message; });
 
     res.json({ success: true, jobId: id, w: ready.w, h: ready.h, dur: ready.dur });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

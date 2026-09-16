@@ -26,7 +26,6 @@
    panel that opens beside it changes. Ordering by markup would park the spine
    wherever its element happens to sit, which is the right edge half the time.
    ════════════════════════════════════════════════════════════════════════════ */
-
 /* ── The page stack ──────────────────────────────────────────────────────────
    min-height:0 all the way down: a flex child refuses to shrink below its content
    without it, and one long file name in the library would push the timeline off
@@ -63,15 +62,6 @@
   font:600 11px/22px var(--font); cursor:pointer;
 }
 .mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
-/* The one red thing in this bar, and it earns it: what is on screen is no longer what is
-   being said. Parked immediately left of queue, in the path of anybody on their way to
-   render - which is the moment it matters. A button, because it goes somewhere. */
-.mv3-bar-stale{
-  flex:0 0 auto; margin-right:8px; padding:4px 7px;
-  border:1px solid var(--danger); border-radius:var(--r-xs); background:oklch(.42 .16 22 / .14);
-  font:700 10px/1 var(--font); color:var(--danger); white-space:nowrap; cursor:pointer;
-}
-.mv3-bar-stale:hover{background:var(--danger); color:oklch(.99 0 0)}
 /* The owner picker: a name, not a title, so narrower than the project picker beside it - and
    never squeezed: the field it sits in may shrink (min-width:0 above) but the select cannot,
    so a squeezed field would let the select run under the next label. */
@@ -85,75 +75,6 @@
 .mv3-c-btn.danger.is-armed{
   background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0);
 }
-
-/* ── "Pull overlays from" menu ────────────────────────────────────────────────
-   Fixed to the page, not inside the Timeline panel: it opens UPWARD out of a bar that
-   sits below the space it needs, and a panel with its own overflow would clip it. */
-.mv3-pull-menu{
-  position:fixed; z-index:9300; min-width:280px; max-width:420px; max-height:50vh; overflow-y:auto;
-  padding:4px; display:flex; flex-direction:column; gap:2px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.mv3-pull-row{display:flex; align-items:stretch; gap:3px}
-.mv3-pull-take{
-  flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:8px;
-  padding:6px 8px; border:0; border-radius:var(--r-xs);
-  background:transparent; color:var(--ink); cursor:pointer; text-align:left;
-  transition:.1s var(--ease);
-}
-.mv3-pull-take:hover:not([disabled]){background:var(--surface-2)}
-.mv3-pull-take[disabled]{opacity:.5; cursor:default}
-.mv3-pull-name{
-  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:600 11px/1.3 var(--font);
-}
-.mv3-pull-cnt{
-  flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted);
-  font-variant-numeric:tabular-nums; white-space:nowrap;
-}
-/* Hides a source. Muted until hovered, because it is the destructive half of a row whose
-   main job is harmless. */
-.mv3-pull-x{
-  flex:0 0 auto; width:22px; padding:0; border:0; border-radius:var(--r-xs);
-  background:transparent; color:var(--muted); font:600 10px/1 var(--font); cursor:pointer;
-}
-.mv3-pull-x:hover:not([disabled]){background:oklch(.42 .16 22 / .2); color:var(--danger)}
-.mv3-pull-note{padding:7px 9px; font:400 10.5px/1.4 var(--font); color:var(--muted)}
-/* The menu's one filter: the scenario this project came from on the left, the way out of it
-   on the right. Sticky like the footer - with the list scrolled, "which scenario am I
-   looking at" is exactly the question the header answers. */
-.mv3-pull-head{
-  position:sticky; top:-4px; z-index:1;
-  display:flex; align-items:center; gap:10px; padding:5px 8px 6px; margin-bottom:2px;
-  background:var(--surface); border-bottom:1px solid var(--border-soft);
-}
-.mv3-pull-scen{
-  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:700 9.5px/1.3 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
-}
-.mv3-pull-all{
-  flex:0 0 auto; display:flex; align-items:center; gap:4px; cursor:pointer;
-  font:600 10px/1 var(--font); color:var(--muted); white-space:nowrap;
-}
-.mv3-pull-all input{margin:0; cursor:pointer}
-/* Nothing else to reveal: still there, so the list does not change shape between projects. */
-.mv3-pull-all.is-off{opacity:.4; cursor:default}
-.mv3-pull-all.is-off input{cursor:default}
-/* Always the last thing in the panel, and separated from the list because it acts on THIS
-   project while every row above acts on another one. The panel scrolls; this does not go
-   with it - reaching Save should never mean scrolling past ten projects. */
-.mv3-pull-foot{
-  position:sticky; bottom:-4px; margin-top:2px; padding-top:4px;
-  border-top:1px solid var(--border-soft); background:var(--surface);
-}
-.mv3-pull-save{
-  width:100%; padding:7px 9px; border:1px solid var(--border-soft); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 11px/1.2 var(--font);
-  text-align:left; cursor:pointer;
-}
-.mv3-pull-save:hover:not([disabled]){border-color:var(--primary)}
-.mv3-pull-save[disabled]{opacity:.5; cursor:default}
 
 /* ── Export dialog ────────────────────────────────────────────────────────────
    The old editor's sections in the same order, in this page's clothes. One column: the
@@ -210,21 +131,12 @@
   flex:0 0 auto; min-width:34px; text-align:right;
   font:600 10px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums;
 }
-.mv3-x-check{display:flex; align-items:center; gap:6px; padding:3px 0; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer}
-.mv3-x-subs{padding-left:8px; border-left:1px solid var(--border-soft)}
 .mv3-x-note{margin:3px 0 0; font:400 9.5px/1.4 var(--font); color:var(--muted)}
 
 .mv3-x-foot{
   display:flex; align-items:center; gap:7px; flex:0 0 auto;
   padding:9px 13px; background:var(--surface-2); border-top:1px solid var(--border);
 }
-.mv3-x-prog{
-  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font:600 10px/1.3 var(--font); color:var(--muted); font-variant-numeric:tabular-nums;
-}
-.mv3-x-prog.is-bad{color:var(--danger)}
-.mv3-x-prog.is-good{color:var(--success)}
-.mv3-x-prog a{color:var(--success)}
 /* The result view: the video is the content, so the body gives it everything. */
 .mv3-x.is-result{width:min(520px, 94vw)}
 /* The result window: the video on the left, narrow - it is a vertical - with the send tick
@@ -269,33 +181,10 @@ select.mv3-rr-rf{cursor:pointer}
 .mv3-rr-rd{font:10.5px/1.35 var(--font); color:var(--muted); min-width:0}
 @media (max-width:820px){ .mv3-rr{grid-template-columns:1fr} .mv3-rr-left{border-right:0; border-bottom:1px solid var(--border)} .mv3-rr-row{grid-template-columns:100px 1fr} .mv3-rr-rd{grid-column:1 / -1} }
 .mv3-x-body.is-video{padding:0; background:#000; display:flex; align-items:center; justify-content:center}
-.mv3-x-video{width:100%; max-height:70vh; display:block}
-.mv3-x-err{
-  padding:10px 2px; font:400 11px/1.5 var(--font); color:var(--danger); word-break:break-word;
-}
 
 /* ── The small progress window ─────────────────────────────────────────────────
    Deliberately tiny: while a render runs there is nothing to decide except whether to
    stop it, so the window carries a bar, the time left, and that one button. */
-.mv3-sm{
-  width:min(300px, 90vw); padding:14px;
-  display:flex; flex-direction:column; gap:9px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
-  box-shadow:var(--shadow);
-}
-.mv3-sm-t{font:700 11.5px/1 var(--font); color:var(--ink)}
-.mv3-sm-bar{
-  height:6px; border-radius:var(--pill); overflow:hidden;
-  background:var(--surface-2); border:1px solid var(--border);
-}
-.mv3-sm-bar > i{
-  display:block; height:100%; width:0;
-  background:var(--primary); transition:width .4s var(--ease);
-}
-.mv3-sm-line{
-  font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums;
-}
-.mv3-sm .mv3-c-btn{align-self:flex-start}
 
 .mv3-x-go{font-weight:700; color:var(--primary-ink); background:var(--primary); border-color:var(--primary)}
 .mv3-x-go:hover:not([disabled]){background:var(--primary); color:var(--primary-ink); filter:brightness(1.1)}
@@ -309,7 +198,7 @@ select.mv3-rr-rf{cursor:pointer}
 }
 .mv3-big-box{
   height:100%; display:flex; align-items:center; justify-content:center;
-  /* Room on every side for the handle layer, which overhangs the stage. */
+  /* Room on either side, so a 16:9 stage does not run into the edges of the screen. */
   padding:0 6vw;
 }
 .mv3-big-x{
@@ -402,7 +291,7 @@ body.mv3-resize-h, body.mv3-resize-h *{cursor:row-resize !important; user-select
    horizontal sash; the width is the column's, and the lanes scroll inside it. */
 #mv3-timeline{flex:0 0 auto; height:290px; min-width:0}
 
-/* Must match LBL_W in js/merge-v3/timeline.js: the playhead is positioned in px
+/* Must match LBL_W in js/merge-v3/timeline-b.js: the playhead is positioned in px
    from the left edge of the scrolling area, so both sides need the same number. */
 :root{--mv3-lbl-w:78px}
 
@@ -433,34 +322,6 @@ body.mv3-noproject .mv3-tl::after{
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-1);
   font:600 11px/1 var(--font); color:var(--muted);
 }
-.mv3-tl-inner{position:relative; min-width:100%}
-
-/* Six tracks plus a ruler have to leave room for the clips, not just fit: at 34px the
-   rows alone ate 232 of the panel's 290. 24px still takes a clip block comfortably. */
-.mv3-tl-row{display:flex; align-items:stretch; height:24px; border-bottom:1px solid var(--border-soft)}
-.mv3-tl-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}
-
-/* position:sticky rather than a separate label column: the row stays one element, so
-   a row and its label can never drift out of vertical step. */
-.mv3-tl-lbl{
-  position:sticky; left:0; z-index:2;
-  flex:0 0 var(--mv3-lbl-w); width:var(--mv3-lbl-w);
-  display:flex; align-items:center; padding:0 6px;
-  background:var(--surface); border-right:1px solid var(--border);
-  font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
-  color:var(--muted); user-select:none; white-space:nowrap; overflow:hidden;
-}
-.mv3-tl-lbl.is-corner{background:var(--surface-2)}
-.mv3-tl-row:hover .mv3-tl-lbl{color:var(--ink)}
-/* The name is the control for track-wide settings, so it has to look pressable. */
-.mv3-tl-row[data-scope] .mv3-tl-lbl{cursor:pointer}
-/* A selected TRACK lights its whole row - what is being edited is the row. */
-.mv3-tl-row.is-sel .mv3-tl-lbl{color:var(--primary-ink); background:var(--primary)}
-.mv3-tl-row.is-sel .mv3-tl-lane{background:var(--primary-soft)}
-
-/* crosshair, not the text caret this had: pressing a lane seeks, it does not select. */
-.mv3-tl-lane{position:relative; flex:0 0 auto; background:var(--bg); cursor:crosshair}
-.mv3-tl-lane:hover{background:oklch(1 0 0 / .02)}
 
 /* ── Clip blocks ───────────────────────────────────────────────────────────── */
 .mv3-clip{
@@ -473,26 +334,6 @@ body.mv3-noproject .mv3-tl::after{
    is a light outline rather than a hue - a coloured border would read as "this is a
    Hooks clip" on one lane and as selection on another. */
 .mv3-clip.is-sel{outline:2px solid var(--ink); outline-offset:-1px; z-index:2}
-/* The overlay lanes, whose clips may lie on top of one another (OVERLAY_SCOPES in
-   timeline.js). Two blocks of the same colour meeting edge to edge read as one long block,
-   so each casts a shadow to its right and the clip it covers is visible underneath. */
-.mv3-tl-lane[data-scope="biro"] .mv3-clip,
-.mv3-tl-lane[data-scope="hook"] .mv3-clip,
-.mv3-tl-lane[data-scope="halfer"] .mv3-clip{
-  box-shadow:inset 0 0 0 1px oklch(1 0 0 / .14), 2px 0 7px oklch(0 0 0 / .5);
-}
-.mv3-tl-lane[data-scope="biro"] .mv3-clip:hover,
-.mv3-tl-lane[data-scope="hook"] .mv3-clip:hover,
-.mv3-tl-lane[data-scope="halfer"] .mv3-clip:hover{
-  box-shadow:inset 0 0 0 1px oklch(1 0 0 / .34), 2px 0 7px oklch(0 0 0 / .5);
-}
-.mv3-clip-cap{
-  display:block; padding:0 4px; line-height:20px;
-  font:600 9px/20px var(--font); color:oklch(1 0 0 / .92);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  text-shadow:0 1px 2px oklch(0 0 0 / .5);
-  pointer-events:none;                    /* the block itself handles the press */
-}
 
 /* The picture at the top of a still's inspector. This panel has no waveform, no source
    length and no playback to describe, so showing WHICH picture is the most useful thing it
@@ -509,28 +350,11 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-c-still-top{ display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; }
 .mv3-c-still-left{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; gap:6px; }
 .mv3-c-still-left > .mv3-c-still{ margin:0; }
-/* Centred under the picture it acts on. The only control here that makes something new
-   rather than adjusting the clip, so it is deliberately not in the grid of settings. */
-.mv3-c-animate{ align-self:center; min-width:110px; font-weight:700; }
 .mv3-c-still-side{ flex:1 1 50%; min-width:0; }
 /* One column beside the picture rather than two: at half a 240px panel, two controls abreast
    leave no room for either. */
 .mv3-c-still-stack{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .mv3-c-still-stack > .mv3-ins-fx3-cell{ min-width:0; }
-
-/* Six cells, two across: transition + animation, filter + crop, duration + remove. Cells
-   keep their place when a control does not apply - an empty one holds the slot - so the
-   panel does not reshuffle depending on where the picture happens to sit.
-
-   align-items:end so the remove button lines up with the input beside it: its cell has no
-   label above it, and without this it would ride up by the height of one caption. */
-.mv3-c-still-grid{
-  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
-  gap:6px 6px; align-items:end;
-}
-.mv3-c-still-grid .mv3-c-btn{ width:100%; }
-.mv3-c-still-grid .mv3-c-numrow{ display:flex; align-items:center; gap:4px; }
-.mv3-c-still-grid .mv3-c-inp{ min-width:0; flex:1 1 auto; }
 
 .mv3-c-still{
   margin:0 0 8px; padding:6px; border-radius:8px;
@@ -555,34 +379,6 @@ body.mv3-noproject .mv3-tl::after{
    own dark strip. Without it a white name over a pale photograph is unreadable, which is the
    one thing a label must never be. */
 .mv3-clip.is-still{ background-repeat:no-repeat; background-position:center; }
-.mv3-clip.is-still .mv3-clip-cap{
-  background:linear-gradient(oklch(0 0 0 / .62), oklch(0 0 0 / .28) 70%, oklch(0 0 0 / 0));
-  text-shadow:0 1px 3px oklch(0 0 0 / .9);
-}
-
-/* Trim handles. 6px is a hittable edge without eating a short clip: on a 0.5s clip at
-   low zoom the two handles would otherwise be the whole block. */
-.mv3-clip-h{
-  position:absolute; top:0; bottom:0; width:6px; z-index:2; cursor:ew-resize;
-  background:oklch(1 0 0 / .001);         /* invisible, but a hit target */
-}
-.mv3-clip-h.l{left:0}
-.mv3-clip-h.r{right:0}
-.mv3-clip:hover .mv3-clip-h{background:oklch(1 0 0 / .28)}
-
-/* Removes the clip from the TIMELINE only - the library keeps it, which is why this asks
-   nothing on the lanes fed by the library. On Main it opens .mv3-ask instead: that clip is
-   a rendered fragment and the timeline is the only place it exists. */
-.mv3-clip-del{
-  position:absolute; top:1px; right:8px; z-index:3;
-  width:13px; height:13px; padding:0; display:none;
-  align-items:center; justify-content:center;
-  border:0; border-radius:2px; cursor:pointer;
-  background:oklch(0 0 0 / .5); color:oklch(.99 0 0); font:700 8px/1 var(--font);
-}
-.mv3-clip:hover .mv3-clip-del,
-.mv3-clip.is-sel .mv3-clip-del{display:flex}
-.mv3-clip-del:hover{background:var(--danger)}
 
 /* The question a Main clip's X opens. Fixed, because it is anchored to the button in
    viewport coordinates from JS - the lane it belongs to scrolls and would clip it. */
@@ -613,45 +409,14 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-ask-s{display:block; font:400 11px/1.4 var(--font); color:var(--muted); margin-bottom:8px}
 .mv3-ask.has-sub .mv3-ask-r{display:flex; gap:6px; justify-content:flex-end}
 
-/* While a gesture is running the cursor must not flicker into something else over
-   whatever it crosses, and nothing must select. */
-body.mv3-clipmove, body.mv3-clipmove *{cursor:grabbing !important; user-select:none}
-body.mv3-cliptrim, body.mv3-cliptrim *{cursor:ew-resize !important; user-select:none}
-
 /* ── Drop target on a lane ─────────────────────────────────────────────────── */
-.mv3-tl-lane.is-drop{background:var(--primary-soft)}
-/* Where the clip would start. A line, not a ghost block: the drop can slide along the
-   lane to clear whatever it lands on, so a block drawn under the cursor would promise a
-   position the clip does not take. */
-.mv3-drop-mark{
-  position:absolute; top:0; bottom:0; width:2px; z-index:2;
-  background:var(--primary); pointer-events:none;
-}
 
 /* A tile being dragged onto a lane. */
 .mv3-tile.is-dragging{opacity:.4}
 
-/* ── Ruler ─────────────────────────────────────────────────────────────────── */
-.mv3-tl-ruler{position:relative; flex:0 0 auto; background:var(--surface-2); cursor:crosshair}
-.mv3-tick{position:absolute; top:0; bottom:0; width:0; border-left:1px solid var(--border)}
-.mv3-tick span{
-  position:absolute; left:3px; top:3px;
-  font:600 8.5px/1 var(--font); color:var(--muted);
-  font-variant-numeric:tabular-nums; white-space:nowrap;
-}
-
 /* ── Playhead ────────────────────────────────────────────────────────────────
    Spans every row, and is click-through so it never steals a seek from the lane
    underneath it. */
-.mv3-tl-ph{
-  position:absolute; top:0; bottom:0; width:1px; z-index:3;
-  background:var(--danger); pointer-events:none;
-}
-.mv3-tl-ph::before{
-  content:''; position:absolute; top:0; left:-4px;
-  border-left:4.5px solid transparent; border-right:4.5px solid transparent;
-  border-top:6px solid var(--danger);
-}
 /* While scrubbing, the pointer must not turn into a text caret over the lanes. */
 body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-select:none}
 
@@ -698,13 +463,11 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    max-width together let the stage take the height it is given and give back the
    width it does not need. */
 #mv3-preview{flex:1 1 0; min-width:0}
-/* The padding is room for the handle layer to hang outside the frame. */
+/* Padding, so the stage does not sit flush against the panel. */
 .mv3-preview-body{
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
   padding:26px 18px; background:oklch(.13 .012 265);
-  position:relative;          /* the preparing box is laid over it */
 }
-/* overflow stays VISIBLE: the handle layer deliberately overhangs every edge. */
 .mv3-stage{
   height:100%; max-height:100%; max-width:100%; aspect-ratio:9/16;
   position:relative;
@@ -713,26 +476,10 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
   box-shadow:var(--shadow);
 }
 
-/* ── Handle layer ─────────────────────────────────────────────────────────────
-   Bigger than the frame, so an overlay dragged past an edge keeps its grab points -
-   the frame canvas clips anything outside itself, which is exactly when the handles
-   are needed most. The four offsets are OVER_M from js/merge-v3/preview.js (0.11 of
-   the frame WIDTH on every side) expressed against this box:
-
-       left / right = 11%                    -> width  122%
-       top / bottom = 11% x 9/16 = 6.1875%   -> height 112.375%
-
-   because a vertical percentage resolves against the height and the stage is 9:16.
-   Change one side and the other has to follow. */
-#mv3-overlay{
-  position:absolute; left:-11%; width:122%; top:-6.1875%; height:112.375%;
-  z-index:2; cursor:crosshair;
-}
 /* The canvas fills the stage regardless of its backing resolution: quality changes how
-   many pixels are composited, not how big the picture looks. */
-/* crosshair, because pressing the frame picks an overlay rather than selecting anything. */
-#mv3-canvas{width:100%; height:100%; display:block; border-radius:var(--r-sm)}
-/* The blank preview's canvas. Without this it laid itself out at its BACKING size - 540 by
+   many pixels are composited, not how big the picture looks.
+
+   The canvas. Without this it laid itself out at its BACKING size - 540 by
    960 css pixels - and hung off the bottom of the panel, which is what it was doing. The
    backing size is how many pixels it composites into and has nothing to say about how big
    it should be drawn. */
@@ -740,24 +487,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
 /* The stage is 9:16 by default; a blank project may be either, and says which. Set on the
    body element rather than on the stage so one rule can reach it from the mount. */
 body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
-/* While placing an overlay the cursor must not flicker over whatever it crosses. */
-body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:none}
 
-/* The box over the stage while a project is prepared: a bar, the count, and the way past it. */
-.mv3-pv-gate{
-  position:absolute; inset:0; z-index:3;
-  display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .45);
-}
-.mv3-pv-gate-box{
-  min-width:250px; max-width:80%; padding:13px 15px; display:flex; flex-direction:column; gap:8px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
-  font:600 11px/1.3 var(--font); color:var(--ink);
-}
-.mv3-pv-gate-box i{display:block; height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden}
-.mv3-pv-gate-box i s{display:block; height:100%; width:0; background:var(--primary); transition:width .2s var(--ease)}
-.mv3-pv-gate-box span{font-weight:500; color:var(--muted); font-variant-numeric:tabular-nums}
-.mv3-pv-gate-box button{align-self:flex-start}
 .mv3-pv-btn[disabled]{opacity:.4; cursor:default}
 
 /* ── Transport ────────────────────────────────────────────────────────────────
@@ -947,12 +677,6 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
   color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-/* The clip's own name. Wraps rather than ellipsises: a birol name is the only way to
-   tell two clips of the same length apart, so cutting it off defeats the row. */
-.mv3-ins-name{
-  font:600 10.5px/1.35 var(--font); color:var(--accent);
-  margin:-4px 0 9px; word-break:break-word;
-}
 .mv3-ins-row{display:flex; gap:8px; padding:3px 0; font-size:10.5px; line-height:1.4}
 .mv3-ins-k{flex:0 0 76px; color:var(--muted)}
 .mv3-ins-v{flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; font-variant-numeric:tabular-nums}
@@ -968,7 +692,6 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-ins-help{font:400 10.5px/1.5 var(--font); color:var(--muted)}
 .mv3-ins-help ol, .mv3-ins-help ul{margin:0 0 10px; padding-left:16px}
 .mv3-ins-help li{margin:0 0 4px}
-.mv3-ins-keys{margin-top:2px}
 /* The idle panel is now several short lists rather than one. A heading needs air above it,
    or the group above and the group below read as one run-on list. */
 .mv3-ins-help > .mv3-ins-todo-h{margin-top:11px}
@@ -1072,33 +795,6 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   background:var(--surface-2); cursor:pointer;
 }
 .mv3-c-color:disabled{opacity:.4; cursor:not-allowed}
-
-/* The generation outcome, riding beside the button that causes it. Wraps rather than
-   ellipsing: the sentence that matters most - how many captions a rerun would replace -
-   is at its end, and a cut-off warning is not a warning. */
-.mv3-subs-stat{
-  flex:1 1 0; min-width:0;
-  font:400 10px/1.35 var(--font); color:var(--muted);
-}
-
-/* Several controls on one line, each captioned. Aligned on their BOTTOM edge, because the
-   captions are one line and the controls are not all the same height - aligning on the top
-   would step them down the row. */
-.mv3-ins-cells{display:flex; align-items:flex-end; gap:5px; padding:2px 0}
-.mv3-ins-cell{display:flex; flex-direction:column; gap:2px; min-width:0; flex:0 0 auto}
-.mv3-ins-cells .mv3-c-slider{width:100%}
-.mv3-ins-cells .mv3-c-num{min-width:20px; text-align:right}
-.mv3-ins-cells .mv3-c-sw{padding:3px 7px}
-.mv3-ins-cells .mv3-c-color{width:30px; flex:0 0 auto}
-
-/* The caption's own text. A textarea because a caption is a sentence and sometimes two. */
-.mv3-c-ta{
-  width:100%; min-height:52px; padding:5px 6px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:400 11px/1.45 var(--font);
-}
-.mv3-c-ta:focus{outline:1px solid var(--primary); outline-offset:-1px}
 
 .mv3-c-btn{
   padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
@@ -1406,7 +1102,6 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-anim-phint[hidden]{display:none}
 .mv3-anim-row[hidden]{display:none}
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    BLANK-PROJECT TIMELINE (js/merge-v3/timeline-b.js)
 
@@ -1415,8 +1110,8 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
    is how being a pair is shown without drawing anything between them. Subtitles are
    pinned underneath both.
 
-   Its own class prefix throughout. The talking-head timeline draws into the same panel
-   and its rules must not reach in here, or a change meant for one would land in both.
+   Its own class prefix throughout: it was written beside the talking-head timeline, which drew
+   into the same panel, and the names stayed when that editor went.
    ════════════════════════════════════════════════════════════════════════════ */
 /* A column, so the words zone can be pushed to the floor of it. */
 .mv3b-inner{position:relative; min-width:100%; display:flex; flex-direction:column; min-height:100%}
@@ -1444,8 +1139,7 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   position:sticky; left:20px; z-index:2;
   /* The full label width, NOT the width minus the square column. Taking the 20px out of
      the names clipped "main video" to "main vide" - the square is an addition to the left
-     edge, so it widens the gutter rather than eating into it. This timeline has no shared
-     playhead arithmetic to keep in step, unlike the talking-head one. */
+     edge, so it widens the gutter rather than eating into it. */
   flex:0 0 var(--mv3-lbl-w); width:var(--mv3-lbl-w);
   display:flex; align-items:center; padding:0 6px;
   background:var(--surface); border-right:1px solid var(--border);
@@ -1492,19 +1186,13 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 body.mv3b-dragging{cursor:grabbing; user-select:none}
 /* The band. Fixed, because it is drawn against the pointer rather than against a lane that
    scrolls under it. */
-/* The band on the talking-head timeline. Same look as the blank one's - it is the same
-   gesture, and two different-looking rubber bands in one editor would be a puzzle. */
-.mv3-band{
-  position:fixed; z-index:40; pointer-events:none;
-  border:1px solid var(--primary); background:var(--primary-soft);
-}
 .mv3b-band{
   position:fixed; z-index:40; pointer-events:none;
   border:1px solid var(--primary); background:var(--primary-soft);
 }
 /* A video lane is a layer and its clips may lie on top of one another. Two blocks meeting edge
    to edge read as one long block, so each casts a shadow to its right, and the clip it covers
-   shows underneath - as on the talking-head editor's overlay lanes. */
+   shows underneath. */
 .mv3b-clip.is-video{box-shadow:2px 0 7px oklch(0 0 0 / .5)}
 .mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary)}
 .mv3b-clip.is-video.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary), 2px 0 7px oklch(0 0 0 / .5)}
@@ -1549,9 +1237,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3b-sq:hover:not(:disabled){color:var(--ink); border-color:var(--border)}
 .mv3b-sq:disabled{opacity:.35; cursor:default}
-
-
-
 
 /* ── Render queue ────────────────────────────────────────────────────────────
    Shared by both workflows, like the queue itself. */
@@ -1628,18 +1313,11 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qask-r{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
 
 /* ── The render window (blank projects) ─────────────────────────────────────── */
-.mv3-rov{position:fixed; inset:0; z-index:9500; display:grid; place-items:center; background:oklch(0 0 0 / .5)}
-.mv3-rbox{
-  width:330px; padding:14px 15px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
 .mv3-rhead{font:700 11px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px}
 /* What is about to be made, said before it is made. A render takes minutes; a sentence of
    warning is cheap by comparison. */
 .mv3-rsum{font:12px/1.5 var(--font); color:var(--ink); margin-bottom:12px}
 .mv3-rwarn{font:11px/1.45 var(--font); color:var(--danger); margin-bottom:10px}
-.mv3-rrow{display:flex; gap:6px; justify-content:flex-end}
 
 /* Export is the button that MAKES something; the queue beside it only collects. One is blue
    so the two are not a pair of identical words next to each other. */
@@ -1651,7 +1329,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    throwing the file at a new tab and leaving nothing behind. */
 .mv3-rbar{height:6px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin:2px 0 10px}
 .mv3-rbar > i{display:block; height:100%; background:var(--primary); transition:width .3s var(--ease)}
-.mv3-rvid{width:100%; border-radius:var(--r-xs); background:#000; display:block; margin-bottom:10px}
 
 /* ── Animate: the work, step by step ──────────────────────────────────────────
    A video is made in two places - the analyst writes the motion prompt, the aggregator draws

@@ -48,7 +48,13 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/api/audio/voices'], ['POST', '/api/biroly/generate'], ['GET', '/api/biroly/state'],
                  ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules'],
                  // phase 2: the per-clip audio extraction nothing read
-                 ['POST', '/api/scen3/reel/audio']];
+                 ['POST', '/api/scen3/reel/audio'],
+                 // phase 3: the talking-head editor - its render, its progress, and the overlay
+                 // arrangement it handed back to a scenario
+                 ['POST', '/api/ffmpeg/render'], ['GET', '/api/ffmpeg/status/x'],
+                 ['POST', '/api/ffmpeg/cancel/x'], ['GET', '/api/ffmpeg/proxy-status'],
+                 ['GET', '/api/mv3/overlays'], ['GET', '/api/mv3/overlays/x'],
+                 ['POST', '/api/mv3/overlays/hide'], ['POST', '/api/mv3/overlays/save']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

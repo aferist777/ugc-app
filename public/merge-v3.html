@@ -75,14 +75,7 @@
     <span class="mv3-bar-lock" id="mv3-project-lock" hidden></span>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
-    <!-- Raised when a fragment is cut out of Main under captions that already exist: they
-         have been slid along with the picture, but the sentences no longer match the audio.
-         Clicking opens the subtitle track, where the Regenerate button is. Set in
-         js/merge-v3/timeline.js, cleared in js/merge-v3/subtitles.js. -->
-    <button class="mv3-bar-stale" id="mv3-subs-stale" type="button" hidden
-            title="A fragment was removed from Main after these captions were made. Generate them again from the audio.">timeline changed - regenerate subtitles</button>
-    <!-- The old editor's FFmpeg dialog, same sections and same defaults; the payload is
-         built from this store instead of timeline_data_v2. See js/merge-v3/export.js. -->
+    <!-- The render window, with the export settings: js/merge-v3/export-b.js. -->
     <button class="mv3-iconbtn is-text" id="mv3-queue" type="button"
             title="Render queue - projects waiting to be rendered">queue</button>
       <button class="mv3-c-btn mv3-x-open" id="mv3-export" type="button"
@@ -157,10 +150,6 @@
           <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
           <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
                   title="Cut the selected clip at the playhead">split</button>
-          <!-- Opens upward: the list of projects whose overlay arrangement can be pulled in.
-               See js/merge-v3/overlays.js. -->
-          <button class="mv3-iconbtn is-text" id="mv3-pull" type="button"
-                  title="Take the Birols / Hooks / Halfers arrangement from another project">overlays &#9652;</button>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
                is what made the old store's data loss so hard to notice. -->
@@ -175,9 +164,8 @@
             <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>
           </label>
         </div>
-        <!-- Ruler, track rows and playhead are built by js/merge-v3/timeline.js: the row
-             list is one array there, so adding a track is one line rather than markup in
-             two places. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
+        <!-- Ruler, lanes and playhead are built by js/merge-v3/timeline-b.js from the project's
+             list of lanes. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
         <div class="mv3-tl" id="mv3-tl"></div>
       </section>
 
@@ -190,39 +178,28 @@
         <span class="mv3-panel-title">Preview</span>
         <span class="sp"></span>
       </div>
-      <!-- Its own body class: this one centres a 9:16 stage instead of scrolling a list.
-           js/merge-v3/preview.js puts the canvas inside the stage. -->
+      <!-- Its own body class: this one centres the stage instead of scrolling a list.
+           js/merge-v3/preview-b.js puts the canvas inside the stage. -->
       <div class="mv3-preview-body">
         <div class="mv3-stage" id="mv3-stage"></div>
-        <!-- Over the stage while a project is being prepared: its proxies on the server, then a
-             first frame of every clip in the browser (js/merge-v3/preview.js, _prepare). Play is
-             disabled until it goes; the button is for whoever would rather not wait. -->
-        <div class="mv3-pv-gate" id="mv3-pv-gate" hidden>
-          <div class="mv3-pv-gate-box">
-            <b>Preparing the preview</b>
-            <i><s></s></i>
-            <span></span>
-            <button class="mv3-c-btn" id="mv3-pv-gate-go" type="button" title="Play before everything is ready">play anyway</button>
-          </div>
-        </div>
       </div>
       <!-- Transport at the bottom left, and the backing resolution to the right of it.
            Quality changes only how many pixels the canvas composites into - it never
            touches the project or the eventual export. -->
       <div class="mv3-pv-bar">
         <button class="mv3-pv-btn" id="mv3-pv-start" type="button" title="Back to the start">&#9198;</button>
-        <button class="mv3-pv-btn" id="mv3-pv-back" type="button" title="Previous fragment - the start of the Main clip before this one">&#9194;</button>
+        <button class="mv3-pv-btn" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;</button>
         <button class="mv3-pv-btn is-main" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
-        <button class="mv3-pv-btn" id="mv3-pv-fwd" type="button" title="Next fragment - the start of the Main clip after this one">&#9193;</button>
+        <button class="mv3-pv-btn" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;</button>
         <span class="mv3-pv-time" id="mv3-pv-time">0:00.0 / 0:00.0</span>
         <label class="mv3-pv-q" title="Preview resolution - not the export">
           <span>q</span>
           <select id="mv3-pv-q"></select>
         </label>
-        <!-- The same stage, shown big. Not a second canvas - see js/merge-v3/preview.js. -->
+        <!-- The same stage, shown big. Not a second canvas - see js/merge-v3/bar.js. -->
         <button class="mv3-pv-btn" id="mv3-pv-big" type="button" title="Enlarge the preview">&#9974;</button>
-        <!-- Saves the frame under the playhead into the library. Full resolution, not the
-             preview's: js/merge-v3/preview.js switches quality for the length of the capture. -->
+        <!-- Saves the frame under the playhead into the library at the film's own size, drawn off
+             the original files (js/merge-v3/preview-b.js grabFrame). -->
         <button class="mv3-pv-btn" id="mv3-pv-shot" type="button"
                 title="Save this frame to the library (Images / Screenshots)">&#128247;</button>
         <span class="sp"></span>

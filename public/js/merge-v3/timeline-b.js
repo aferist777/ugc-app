@@ -1,16 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the timeline of a BLANK project.
+   MERGE v3 — the timeline.
 
-   The second of two. js/merge-v3/timeline.js belongs to projects that arrive from
-   Scenarios: six fixed tracks, a read on Main that everything else is timed against,
-   and an Overlays panel that hands an arrangement back to the scenario. None of that
-   is true here. A blank project is assembled in Merge from nothing, so its tracks are
-   created and deleted by hand and their order is the layer order.
-
-   The two are deliberately SEPARATE modules rather than one with a switch. The
-   talking-head path is debugged and shipping; a shared file would mean every change
-   made for blank projects is a change to it, and the way that ends is a render that
-   used to work.
+   Merge's one editor (docs/local-app/PLAN.md, phase 3): a project is an ordered list of lanes,
+   created and deleted by hand, and their order is the layer order. A project sent from Scenarios
+   arrives as its cut on the main lanes; the talking-head editor's projects were rewritten into
+   this shape at startup (lib/timeline-convert.js).
 
    How the lanes are arranged, and why it is not decorative:
 
@@ -30,9 +24,6 @@
    are renumbered when a track is deleted, and an audio track added on its own - a music
    bed - has no counterpart above it at all.
 
-   PHASE SCOPE. Lanes can be created and destroyed; clips can be dropped onto them in pairs
-   where the media has a sound, and dragged - along a lane and across lanes, both halves
-   together. The insert rule for main, and trimming, come next.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';

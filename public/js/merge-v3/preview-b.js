@@ -1,19 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the preview of a BLANK project.
+   MERGE v3 — the preview.
 
-   The second of two, and separate on purpose. js/merge-v3/preview.js belongs to
-   projects that arrive from Scenarios: six fixed lanes, a compositing order held in
-   a constant, and rules keyed off lane NAMES - the read on Main. (A halfer band here is a
-   switch on the clip, not a lane: see _drawBand.)
-   None of that is true here, where lanes are made and destroyed by hand and their
-   order is a property of the project.
-
-   Two workflows that must not disturb each other. Nothing in this file is imported
-   by the talking-head preview and nothing here writes to it, so a scenario project
-   keeps working by CONSTRUCTION rather than because the change was tested and seemed
-   fine. That is worth some duplicated code: when the blank timeline has proved
-   itself, the talking-head half goes away entirely, and these copies end rather than
-   have to be reconciled.
+   The frame at the playhead, composited the way lib/mv3b-render.js renders it, and played.
+   Lanes are made and destroyed by hand and their order is a property of the project; a halfer
+   band is a switch on a clip, not a lane (see _drawBand).
 
    LAYER ORDER COMES FROM THE PROJECT. The video lanes are listed top layer first, so
    painting runs through them backwards - main video, then whatever sits above it, in
@@ -21,8 +11,6 @@
    the same way; that is the one thing the two must agree on, or the screen and the
    file will show different pictures.
 
-   PHASE SCOPE. The frame at the playhead: layering, stills and film, letterboxed into
-   a 9:16 stage. Playback and sound come next.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';

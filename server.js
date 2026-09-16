@@ -119,7 +119,7 @@ app.use('/api', require('./routes/scriptgen'));
 // Library 2's own API: the shelf counts, and the drafts of scripts still being written.
 app.use('/api', require('./routes/library2'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
-app.use('/api', require('./routes/ffmpeg'));
+app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
 app.use('/api', require('./routes/obrazy'));

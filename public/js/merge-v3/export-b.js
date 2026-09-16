@@ -3,8 +3,8 @@
 
    The third piece of the editor, after its timeline and its preview. What the window is for:
    saying what is about to be made before it is made - shape, length, how many pieces - and the
-   export settings the talking-head editor had and the owner renders with (docs/local-app/PLAN.md,
-   phase 3): the size and quality of the file, a colour correction, a playback speed, and the two
+   export settings the owner renders with (docs/local-app/PLAN.md, phase 3; they came from the
+   talking-head editor's Export): the size and quality of the file, a colour correction, a playback speed, and the two
    extras, minutes of black after the end and a quiet noise under the sound. What each of them does
    is lib/render-finish.js.
 
@@ -310,5 +310,5 @@ function _open() {
 
 export function initExportB() {
   const b = document.getElementById('mv3-export');
-  if (b) b.addEventListener('click', () => { if (Store.isBlank()) _open(); });
+  if (b) b.addEventListener('click', () => _open());
 }

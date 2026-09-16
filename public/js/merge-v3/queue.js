@@ -298,9 +298,7 @@ function _away(e) {
 export async function addCurrent(adv) {
   const tl = Store.timeline();
   if (!tl || !Store.hasProject()) return { success: false, error: 'no project open' };
-  const body = Store.isBlank()
-    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration(), adv: adv || Store.adv() || null }
-    : { kind: 'talking', key: Store.key(), title: Store.title(), dur: Store.duration() };
+  const body = { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl, dur: Store.duration(), adv: adv || Store.adv() || null };
   const d = await fetch('/api/mv3q/add', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }).then(r => r.json());

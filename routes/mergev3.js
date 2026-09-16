@@ -16,10 +16,10 @@
        applied. A stale tab loses its write instead of everyone losing their work;
      • every file is written atomically, so a crash mid-write cannot truncate one.
 
-   MANY TIMELINES, one per project. A project here IS a Scenarios project - its cut is
-   what fills the Main track - so the key is `sv3_<scenariosProjectId>` for anything
-   that arrived by import. Timelines that predate this (there was one unnamed working
-   timeline) keep their clips under `local`.
+   MANY TIMELINES, one per project, and one kind of project: an ordered list of lanes - video,
+   audio, subtitles, text - made in Merge (`mv3_<stamp>`) or sent from Scenarios
+   (`sv3_<scenariosProjectId>[_n]`). The talking-head editor's six fixed lanes are gone
+   (docs/local-app/PLAN.md, phase 3); lib/timeline-convert.js rewrote its projects at startup.
 
    THE VERSION IS THE PROJECT'S. It was the file's - one counter, written whole - which
    was enough for one editor and wrong for a team: two people on two different projects
@@ -54,23 +54,8 @@ const OWN = require('../lib/ownership');
 
 const MSTORE = require('../lib/merge-store');
 
-// The tracks, and their order, are the previous editor's - see js/merge-v3/timeline.js.
-// Named here too because the store must refuse a clip aimed at a track that does not
-// exist: a typo'd scope would otherwise create a seventh track nothing ever draws.
-const TRACKS = ['biro', 'hook', 'seg', 'halfer', 'music', 'subs'];
-
-// The lanes that hold something laid OVER the cut, as opposed to the cut itself and the
-// two audio-ish lanes. Two things follow from being one of these, and both are here rather
-// than in two lists that could drift apart: an arrangement of them is what the overlay
-// panel copies between projects, and their clips may cover one another - which makes their
-// ORDER the stacking order, and so something the store must not tidy away. Must stay in
-// step with OVERLAY_SCOPES in public/js/merge-v3/timeline.js.
-const OVERLAY_TRACKS = ['biro', 'hook', 'halfer'];
-
-// The two project types. A talking-head project comes from Scenarios and keeps the six fixed
-// tracks; a blank one is made in Merge itself and grows its own. The talking-head kind is the
-// ABSENT value on purpose: every project written before this existed is one, and none of them
-// has to be migrated to stay itself.
+// The kind every project has. Stored on each so a library from before the one editor - whose
+// projects had none - is told apart by lib/timeline-convert.js, which is what rewrites them.
 const BLANK_KIND = 'blank';
 
 // A blank project opens with two pairs and a subtitle lane. Top to bottom is the layer order
@@ -96,38 +81,6 @@ function _emptyBlank() {
       Object.assign(lane('subs', 'subs', 'Subtitles', null, true), { style: { ...SUBS_STYLE } }),
     ],
   };
-}
-
-function _emptyTimeline(kind) {
-  if (String(kind || '') === BLANK_KIND) return _emptyBlank();
-  const tracks = {};
-  for (const t of TRACKS) {
-    tracks[t] = {
-      clips: [],
-      // Track-level settings. null means "never set", which is not the same as 0 or
-      // "none" - the inspector has to be able to tell an untouched track from one
-      // explicitly set to nothing.
-      //
-      // `speed` is remembered even though choosing it writes the value into every clip:
-      // without it the slider would read 1 after a reload while every clip sat at 1.5.
-      //
-      // There is NO separate audio on/off. It used to exist alongside volume and the two
-      // fought: the flag defaulted to off for the overlay tracks, so raising the volume
-      // slider changed a number and produced no sound. Volume is the single control now -
-      // 0 is silent, and silence is the default for anything overlaid.
-      volume: null, speed: null,
-      transition: null, animation: null, filter: null,
-    };
-  }
-  // Subtitle styling belongs to the TRACK: one look for the whole video, which is what a
-  // caption style is. Vocabulary taken from the old libass popup, because libass is what
-  // will burn them.
-  //
-  // tx/ty here is the BASE offset every subtitle gets, and each subtitle carries its own on
-  // top. That is what makes "select the track, drag, they all move" and "select one, drag,
-  // only it moves" the same gesture over two different values.
-  tracks.subs.style = { ...SUBS_STYLE };
-  return { tracks };
 }
 
 const SUBS_STYLE = {
@@ -164,10 +117,10 @@ function _clipSrcs(t) {
   for (const lane of lanes) for (const c of ((lane && lane.clips) || [])) if (c && c.src) out.push(String(c.src));
   return out;
 }
-// Lazily, and never fatal: the proxy maker lives in routes/ffmpeg.js, and an open or an
+// Lazily, and never fatal: the proxy maker lives in routes/proxies.js, and an open or an
 // import must not fail because a warm-up could not start.
 function _warmProxies(t) {
-  try { require('./ffmpeg').warmProxies(_clipSrcs(t), 480); } catch (e) {}
+  try { require('./proxies').warmProxies(_clipSrcs(t), 480); } catch (e) {}
 }
 
 // The project the page should open when it has no preference: the most recently touched.
@@ -204,9 +157,7 @@ const orNull = (v) => (v == null ? null : v);
 // The subtitle look, clamped field by field. Anything unknown is dropped and anything
 // missing falls back to the default, so a half-written style can never reach the renderer.
 //
-// Lifted out of _sanitize because BOTH timeline shapes carry it. A caption style that
-// clamped differently depending on the project type would be a fault nobody would think
-// to look for.
+// The subtitle lane's and each text lane's.
 function _subsStyle(st) {
   st = st || {};
   const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
@@ -330,53 +281,6 @@ function _clipOf(c, isSubs) {
   };
 }
 
-// Both shapes are sanitised here, and which one is used is decided by the project's KIND,
-// never by guessing at the data. A talking-head project keeps the six fixed tracks it has
-// always had; a blank project carries an ordered LIST, because its tracks are created and
-// deleted and their order is the layer order.
-function _sanitize(timeline, kind) {
-  return String(kind || '') === BLANK_KIND ? _sanitizeBlank(timeline) : _sanitizeTalking(timeline);
-}
-
-function _sanitizeTalking(timeline) {
-  const out = _emptyTimeline();
-  const src = (timeline && timeline.tracks) || {};
-  out.tracks.subs.style = _subsStyle(src.subs && src.subs.style);
-  // Raised when a fragment is cut out of Main under captions that already existed: they have
-  // been slid along with the picture, but the sentences no longer match the audio. It is
-  // kept because the warning has to outlive the tab - it is the project that is out of date,
-  // not the session looking at it. Set in public/js/merge-v3/timeline.js, cleared when the
-  // captions are generated again. Everything else on a track is rebuilt from the whitelist
-  // below, which is exactly why this needs a line of its own.
-  out.tracks.subs.stale = !!(src.subs && src.subs.stale);
-
-  for (const t of TRACKS) {
-    const from = src[t] || {};
-    const to = out.tracks[t];
-    to.volume     = from.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +from.volume || 0));
-    to.speed      = from.speed == null ? null : Math.max(0.25, Math.min(2, +from.speed || 1));
-    to.transition = orNull(from.transition);
-    to.animation  = orNull(from.animation);
-    to.filter     = orNull(from.filter);
-
-    // Subtitles are clips too, and they have no video: their content IS their text, which
-    // lives in `name` like every other clip's caption. So the "must have a source" rule
-    // that keeps junk off the video tracks has to make room for them.
-    const clips = Array.isArray(from.clips) ? from.clips : [];
-    to.clips = clips.filter(c => c && c.id && (c.src || (t === 'subs' && c.name)))
-                    .map(c => _clipOf(c, t === 'subs'));
-
-    // Start order, so every reader sees the same sequence without sorting it again. Except
-    // on the lanes whose clips may cover one another, where the order IS the stacking order
-    // - the preview draws a track's clips in it and the renderer chains its overlays in it
-    // (OVERLAY_SCOPES in public/js/merge-v3/timeline.js). Sorting those by start would
-    // restack the picture on every save, and silently: the clips would all still be there,
-    // in the right places, showing the wrong one on top.
-    if (!OVERLAY_TRACKS.includes(t)) to.clips.sort((a, b) => a.start - b.start);
-  }
-  return out;
-}
-
 // A blank project's tracks are a LIST and their order is the layer order, so this must not
 // sort, reorder or dedupe by name. What it does enforce: known kinds only, one subtitle lane,
 // the ceilings, and ids that actually exist - a link pointing at a track that was deleted is
@@ -473,8 +377,7 @@ router.get('/mv3/timelines', (req, res) => {
     const list = Object.keys(s.timelines).map(key => {
       const t = s.timelines[key];
       let clips = 0;
-      if (Array.isArray(t.tracks)) for (const tr of t.tracks) clips += ((tr && tr.clips) || []).length;
-      else for (const k of TRACKS) clips += ((t.tracks && t.tracks[k] && t.tracks[k].clips) || []).length;
+      for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
                kind: t.kind || null, clips, rev: _revOf(t), ...OWN.ownerView(t) };
     }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
@@ -485,37 +388,6 @@ router.get('/mv3/timelines', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── One-time: neutralise the track volumes written under the old rule ───────
-// A track's volume used to be a FALLBACK - it applied only to clips that carried none - and
-// since every clip is created carrying one, it applied to nothing. Values were dialled into
-// it and did nothing, which is the fault this change fixes.
-//
-// It is now a MASTER and multiplies, so those same dead values would come alive on the next
-// open: one project holds seg=0.079, which is -22 dB, and it would drop that whole cut to a
-// whisper without anyone touching it. Cleared once per timeline, stamped so it happens once,
-// and safe to clear precisely because they were doing nothing.
-const VOL_RULE = 2;
-
-// The stamp lives on the STATE, not on the timeline. _sanitize rebuilds a timeline from a
-// fixed shape every time the page saves, so a marker written inside one is dropped on the
-// next write - and a migration that forgets it has run would clear the master volume the
-// user had just set, every time they reopened the project.
-function _migrateVolumes(state, key) {
-  const t = state.timelines[key];
-  if (!t) return false;
-  // Blank projects were born after the master-volume rule and have nothing to undo.
-  if (Array.isArray(t.tracks)) return false;
-  state.volRule = state.volRule || {};
-  if (state.volRule[key] === VOL_RULE) return false;
-  let touched = false;
-  for (const k of TRACKS) {
-    const tr = t.tracks && t.tracks[k];
-    if (tr && tr.volume != null) { tr.volume = null; touched = true; }
-  }
-  state.volRule[key] = VOL_RULE;
-  return true;                 // always write: the stamp itself has to persist
-}
-
 router.get('/mv3/timeline', (req, res) => {
   try {
     const s = _read();
@@ -523,11 +395,10 @@ router.get('/mv3/timeline', (req, res) => {
     // would make the page's first load depend on it already knowing what exists.
     let key = String(req.query.key || '');
     if (!key || !s.timelines[key]) key = _newestKey(s.timelines) || LOCAL_KEY;
-    const t = s.timelines[key];
-    // Done on the way OUT, so a project is only touched when it is actually opened.
-    if (t && _migrateVolumes(s, key)) {
-      try { _write(s); console.log('[mv3] track volumes on', key, 'reset to unity for the new master rule'); } catch (e) {}
-    }
+    let t = s.timelines[key];
+    // One still in the talking-head shape (nothing should be: the upgrade rewrites them at start)
+    // is shown rewritten rather than handed to an editor that cannot read it; its next save stores it.
+    if (t && !Array.isArray(t.tracks)) t = require('../lib/timeline-convert').convert({ key, ...t }, { root: require('../lib/config').ROOT_DIR }) || t;
     // The proxies this project's preview will ask for, started now - before the page has even
     // drawn its lanes - one ffmpeg at a time, so the first play is not the first transcode.
     if (t) _warmProxies(t);
@@ -536,7 +407,7 @@ router.get('/mv3/timeline', (req, res) => {
       title: t ? t.title : 'Untitled',
       ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
-      timeline: t ? { kind: t.kind || null, format: t.format || null, tracks: t.tracks } : _emptyTimeline(),
+      timeline: t ? { kind: BLANK_KIND, format: t.format || '9:16', tracks: t.tracks } : _emptyBlank(),
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -545,7 +416,7 @@ router.get('/mv3/timeline', (req, res) => {
 // for one to be chosen, and the page needs the same track shape the real ones have - built
 // here rather than client-side so there is one definition of it.
 router.get('/mv3/blank', (req, res) => {
-  try { res.json({ success: true, timeline: _emptyTimeline(req.query.kind) }); }
+  try { res.json({ success: true, timeline: _emptyBlank() }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -562,11 +433,6 @@ router.get('/mv3/timeline/version', (req, res) => {
     res.json({ success: true, version: _revOf(t), key });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
-
-// What a timeline says it is, for the one case where nothing else can say: a write that has to
-// create the record it is writing to. Anything unrecognised is a talking-head project, which is
-// what every project was before blank ones existed.
-const _kindOf = (tl) => ((tl && tl.kind === BLANK_KIND) ? BLANK_KIND : null);
 
 router.put('/mv3/timeline', (req, res) => {
   try {
@@ -588,16 +454,17 @@ router.put('/mv3/timeline', (req, res) => {
       return res.status(409).json({
         success: false, error: 'stale version', expected: _revOf(prev), got: claimed,
         version: _revOf(prev), key,
-        timeline: { kind: prev.kind || null, format: prev.format || null, tracks: prev.tracks },
+        timeline: { kind: BLANK_KIND, format: prev.format || '9:16', tracks: prev.tracks },
       });
     }
-    // A blank project's lanes are a list. Anything else sent for one is a page that has lost track
-    // of what it holds, and storing it would store no lanes at all - refused, not saved.
+    // A project's lanes are a list. Anything else is a page that has lost track of what it holds,
+    // and storing it would store no lanes at all - refused, not saved.
     const incoming = (req.body || {}).timeline;
-    if (((prev && prev.kind) || _kindOf(incoming)) === BLANK_KIND && !Array.isArray(incoming && incoming.tracks)) {
+    if (!Array.isArray(incoming && incoming.tracks)) {
       return res.status(400).json({ success: false, error: 'this project keeps its lanes as a list - the edit was not saved, reload the project' });
     }
     const now = new Date().toISOString();
+    const clean = _sanitizeBlank(incoming);
     cur.timelines[key] = {
       title: prev ? prev.title : 'Untitled',
       createdAt: prev ? (prev.createdAt || now) : now,
@@ -608,18 +475,9 @@ router.put('/mv3/timeline', (req, res) => {
       // saves there have been, which is the number the next one must quote.
       owner: prev ? (prev.owner || null) : OWN.uidOf(req),
       rev: _revOf(prev) + 1,
-      // Read off what is already stored, NOT off the request. A project's type is decided
-      // when it is created and never again: a client able to send its own kind could turn a
-      // talking-head project into a blank one and drop every track in it on one bad save.
-      //
-      // WITH NOTHING STORED there is nothing to protect, and the old rule did harm instead:
-      // a write for a key that no longer exists - a project deleted while it was still open,
-      // with one save left in the air - recreated it as a talking-head project whatever it had
-      // been, so a blank timeline came back with somebody else's six lanes and none of its own.
-      // Creating is the one moment the request is allowed to say what this is.
-      kind: prev ? (prev.kind || null) : (_kindOf((req.body || {}).timeline) || null),
-      format: _sanitize((req.body || {}).timeline, prev ? prev.kind : _kindOf((req.body || {}).timeline)).format || null,
-      tracks: _sanitize((req.body || {}).timeline, prev ? prev.kind : _kindOf((req.body || {}).timeline)).tracks,
+      kind: BLANK_KIND,
+      format: clean.format,
+      tracks: clean.tracks,
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);
@@ -628,9 +486,6 @@ router.put('/mv3/timeline', (req, res) => {
     // sent and what is now here are not byte-identical. The caller needs the stored shape to
     // compare against later: a merge that measures "what did I change" against the version it
     // sent would count the normalising itself as a change.
-    // The kind goes back with the tracks. The client rebuilds its copy from this answer, and
-    // a reply that named only the tracks left it holding a timeline with no type - which
-    // silently handed the project to the other editor on the very first save.
     res.json({ success: true, version: cur.timelines[key].rev, updatedAt: now, key,
                kind: cur.timelines[key].kind || null, format: cur.timelines[key].format || null,
                tracks: cur.timelines[key].tracks });
@@ -654,144 +509,11 @@ router.post('/mv3/adv', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── Reusing an overlay arrangement ──────────────────────────────────────────
-   The set of Birols / Hooks / Halfers you placed over one project, offered as something to
-   pull into another. Same clips, same order, same seconds.
-
-   READ FROM THE PROJECTS THEMSELVES, not from a separate snapshot store. The snapshot was
-   asked for as something written "after the project is rendered" - and there is no render
-   yet, so a store fed only by export would leave this dropdown empty and the feature dead
-   on arrival. Pulling live from a project's own tracks needs no new storage and answers the
-   same question today. A project can additionally PIN its arrangement - Save in the panel -
-   and a pinned set takes precedence for that project, so it stops drifting as editing goes
-   on. Pinning was once done automatically whenever a render was kept, which pinned
-   arrangements nobody chose and then outranked their own later edits; it is a deliberate
-   act now.
-
-   The ✕ hides a project from the list rather than deleting anything: the project itself is
-   still there, it just stops being offered as a source.
-   ──────────────────────────────────────────────────────────────────────────── */
-
-// What a project offers as a source: its FROZEN snapshot if a render of it was kept,
-// otherwise its live tracks. A rendered arrangement should stop drifting as you carry on
-// editing the project - that is the whole point of freezing it at the render.
-function _sourceTracks(cur, key) {
-  const snap = cur.snapshots && cur.snapshots[key];
-  if (snap && snap.tracks) return { tracks: snap.tracks, frozen: true, at: snap.at || null };
-  const t = cur.timelines[key];
-  return { tracks: (t && t.tracks) || {}, frozen: false, at: t ? t.updatedAt : null };
-}
-
-/* WHICH SCENARIO EACH ARRANGEMENT BELONGS TO.
-   A birol is cut against a particular script, so an arrangement built for another scenario
-   is timed against speech this project never says. The menu therefore opens on the projects
-   that came from the SAME scenario - usually the earlier sends of this very cut, sv3_<id>_2
-   and _3 - and keeps the rest behind a tick. Everything is still offered; it is the default
-   that changes.
-
-   `?for=<key>` names the project the menu was opened from, and the answer says which
-   scenario that is, so the browser has something to filter by without knowing any of the
-   rules below. _scenBehind is the same resolver the render window uses (key, then the copy
-   chain, then the title), and it is given the scenarios ONCE: left to itself it reads them
-   off disk per call, which over a list this size is one file read per row. */
-router.get('/mv3/overlays', (req, res) => {
-  try {
-    const cur = _read();
-    const hidden = new Set(Array.isArray(cur.hidden) ? cur.hidden : []);
-    const scens = SCEN3.loadProjects() || [];
-    const scenOf = (key) => {
-      const hit = _scenBehind(cur.timelines, key, scens);
-      return hit ? { id: String(hit.p.id), name: String(hit.p.name || hit.p.title || '') } : null;
-    };
-    const list = Object.keys(cur.timelines).map(key => {
-      const t = cur.timelines[key];
-      const src = _sourceTracks(cur, key);
-      const per = {};
-      let total = 0;
-      for (const k of OVERLAY_TRACKS) {
-        const n = ((src.tracks[k] && src.tracks[k].clips) || []).length;
-        per[k] = n; total += n;
-      }
-      return { key, title: t.title || 'Untitled', per, total, frozen: src.frozen, updatedAt: t.updatedAt || null };
-    })
-      // Only projects that actually have an arrangement to give, and only ones not hidden.
-      .filter(x => x.total > 0 && !hidden.has(x.key))
-      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
-      // Resolved AFTER the filter, so nothing is worked out for a row nobody will see.
-      .map(x => Object.assign(x, { scen: scenOf(x.key) }));
-    const forKey = String(req.query.for || '');
-    const on = forKey ? scenOf(forKey) : null;
-    res.json({ success: true, list, for: on ? { key: forKey, id: on.id, name: on.name } : null });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-router.post('/mv3/overlays/hide', (req, res) => {
-  try {
-    const key = String((req.body || {}).key || '');
-    if (!key) return res.status(400).json({ success: false, error: 'key is required' });
-    const cur = _read();
-    const hidden = new Set(Array.isArray(cur.hidden) ? cur.hidden : []);
-    hidden.add(key);
-    const now = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: [...hidden], snapshots: cur.snapshots });
-    res.json({ success: true, version: cur.version + 1 });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// The tracks to apply when a source is picked. Resolved here rather than by fetching the
-// other project's timeline, so the client cannot accidentally pull live tracks from a
-// project that has pinned an arrangement.
-// Pin THIS project's arrangement, on purpose. A snapshot outranks the live timeline in
-// _sourceTracks, which is the whole point: after saving, editing the timeline no longer
-// changes what other projects pull from it. Saving again overwrites - there is one pinned
-// arrangement per project, not a history, because "which of the six" is a question the
-// panel would then have to answer on every row.
-router.post('/mv3/overlays/save', (req, res) => {
-  try {
-    const key = String((req.body || {}).key || '');
-    const cur = _read();
-    const t = cur.timelines[key];
-    if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
-
-    const tracks = {};
-    let total = 0;
-    for (const k of OVERLAY_TRACKS) {
-      tracks[k] = JSON.parse(JSON.stringify(t.tracks[k] || _emptyTimeline().tracks[k]));
-      total += ((tracks[k] && tracks[k].clips) || []).length;
-    }
-    // Saving an empty arrangement would pin "nothing" over a timeline that may later have
-    // something, which reads as the feature being broken rather than as a choice.
-    if (!total) return res.status(400).json({ success: false, error: 'there are no overlays on this timeline to save' });
-
-    cur.snapshots = cur.snapshots || {};
-    cur.snapshots[key] = { title: t.title || 'Untitled', at: new Date().toISOString(), tracks };
-    const now = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, key, total, at: cur.snapshots[key].at });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-router.get('/mv3/overlays/:key', (req, res) => {
-  try {
-    const cur = _read();
-    const key = String(req.params.key || '');
-    if (!cur.timelines[key] && !(cur.snapshots || {})[key]) {
-      return res.status(404).json({ success: false, error: `no project "${key}"` });
-    }
-    const src = _sourceTracks(cur, key);
-    const tracks = {};
-    for (const k of OVERLAY_TRACKS) tracks[k] = src.tracks[k] || _emptyTimeline().tracks[k];
-    res.json({ success: true, key, frozen: src.frozen, at: src.at, tracks });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 /* ── Keeping or discarding a render ──────────────────────────────────────────
    The render lands in finals/ the moment ffmpeg finishes, which is BEFORE you have
    looked at it. So:
 
-     keep     makes its thumbnail and FREEZES this project's overlay arrangement, which
-              is the moment the user chose to treat this cut as finished;
+     keep     makes its thumbnail;
      discard  deletes the file.
 
    The renders shelf in the Library is the finals/ directory itself, so discarding really
@@ -914,9 +636,6 @@ router.post('/mv3/timeline/new', (req, res) => {
     let key = 'mv3_' + Date.now();
     for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
 
-    // Made in Merge means blank-type, unless the caller asks for the other. This is the one
-    // place a kind is chosen.
-    const kind = String((req.body || {}).kind || BLANK_KIND) === BLANK_KIND ? BLANK_KIND : null;
     const now = new Date().toISOString();
     cur.timelines[key] = {
       title,
@@ -925,9 +644,9 @@ router.post('/mv3/timeline/new', (req, res) => {
       adv: null,
       owner: OWN.uidOf(req),
       rev: 1,
-      kind,
-      format: _emptyTimeline(kind).format || null,
-      tracks: _emptyTimeline(kind).tracks,
+      kind: BLANK_KIND,
+      format: '9:16',
+      tracks: _emptyBlank().tracks,
     };
     const version = cur.version + 1;
     _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
@@ -1014,8 +733,8 @@ router.delete('/mv3/timeline/:key', (req, res) => {
    POST /api/mv3/timeline/:key/copy -> { success, key, title }
 
    The one way to work on a project that is not yours. Everything the project is comes
-   across - tracks, export settings, kind and format, the pinned overlay arrangement if it
-   has one - and the copy is the caller's from its first second: their name on it, rev 1,
+   across - tracks, export settings, format - and the copy is the caller's from its first second:
+   their name on it, rev 1,
    nothing shared with the original but the media files, which neither project writes to.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/mv3/timeline/:key/copy', (req, res) => {
@@ -1043,22 +762,14 @@ router.post('/mv3/timeline/:key/copy', (req, res) => {
       adv: deep(from.adv),
       owner: OWN.uidOf(req),
       rev: 1,
-      kind: from.kind || null,
-      format: from.format || null,
+      kind: BLANK_KIND,
+      format: from.format || '9:16',
       // Where it came from. The result window walks this back to the Scenarios record the
       // import was made from - see /mv3/timeline/:key/source below.
       from: src,
-      tracks: deep(from.tracks) || _emptyTimeline(from.kind).tracks,
+      tracks: Array.isArray(from.tracks) ? deep(from.tracks) : _emptyBlank().tracks,
     };
-    // The pinned arrangement follows, or the copy would offer a live one where the original
-    // offers a frozen one. The volume-rule stamp follows for the opposite reason: without it
-    // the copy's first open would "migrate" it and quietly reset its track volumes.
-    cur.snapshots = cur.snapshots || {};
-    if (cur.snapshots[src]) cur.snapshots[key] = { ...deep(cur.snapshots[src]), title };
-    cur.volRule = cur.volRule || {};
-    if (cur.volRule[src] != null) cur.volRule[key] = cur.volRule[src];
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden,
-             snapshots: cur.snapshots, volRule: cur.volRule });
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
     res.json({ success: true, key, title });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1105,24 +816,24 @@ function _scenBehind(timelines, key, loaded) {
 }
 
 // THE HOOK THAT NAMES THE RENDER. The Meta pattern carries a hook id (…_AUTH_H03_…) and
-// it is the hook the video OPENS with: the clip on the Hooks lane pinned to the very start
-// of the timeline. One that begins a moment later is an insert, not the hook the creative
-// is built on, so only the first frames count - anything within a frame of zero at 30 fps.
-// No such clip, or a hook with no number, and the field keeps its Hxx placeholder.
+// it is the hook the video OPENS with: a clip on a video lane starting at the very start of the
+// timeline whose file has a hook number (lib/hook-ids.js). One that begins a moment later is an
+// insert, not the hook the creative is built on, so only the first frames count - anything within
+// a frame of zero at 30 fps. The top layer wins when two qualify. None, and the field keeps its
+// Hxx placeholder.
 const HOOK_AT_START = 0.04;
 function _openingHookId(t) {
-  const tracks = (t && t.tracks) || {};
-  const lane = Array.isArray(tracks) ? tracks.find(x => x && x.kind === 'hook') : tracks.hook;
-  const clips = (lane && lane.clips) || [];
-  let first = null;
-  for (const c of clips) {
-    if (!c || !c.src) continue;
-    const at = +c.start || 0;
-    if (at > HOOK_AT_START) continue;
-    if (!first || at < ((+first.start) || 0)) first = c;
+  const lanes = (Array.isArray(t && t.tracks) ? t.tracks : []).filter(x => x && x.kind === 'video');
+  let ids;
+  try { ids = require('../lib/hook-ids'); } catch (e) { return null; }
+  for (const lane of lanes) {
+    for (const c of ((lane && lane.clips) || [])) {
+      if (!c || !c.src || (+c.start || 0) > HOOK_AT_START) continue;
+      const id = ids.idFor(c.src);
+      if (id) return id;
+    }
   }
-  if (!first) return null;
-  try { return require('../lib/hook-ids').idFor(first.src); } catch (e) { return null; }
+  return null;
 }
 
 router.get('/mv3/timeline/:key/source', (req, res) => {

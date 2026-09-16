@@ -716,7 +716,7 @@ export async function openAnimate(clip) {
     if (clip.id && keep[0]) {
       try {
         const Store = await import('./store.js');
-        const T = Store.isBlank() ? await import('./timeline-b.js') : await import('./timeline.js');
+        const T = await import('./timeline-b.js');
         // Its real length and whether it has sound, off the file: the length asked of the model is
         // not always the length it made, and a clip with sound arrives with its sound twin.
         const pr = await fetch('/api/media/probe?src=' + encodeURIComponent(keep[0].videoPath))

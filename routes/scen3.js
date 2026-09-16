@@ -2427,7 +2427,7 @@ function _watchClip(projectId, idx, taskId) {
       });
       console.log('[scen3/clip]', taskId.slice(0, 24), '-> filed on line', idx + 1);
       // The preview's proxy, made now rather than on the first play in Merge.
-      try { require('./ffmpeg').warmProxies([s.path], 480); } catch (e) {}
+      try { require('./proxies').warmProxies([s.path], 480); } catch (e) {}
       _watching.delete(key);
       return;
     }

@@ -149,7 +149,7 @@ export async function showResult(o) {
     try {
       const d = await fetch('/api/mv3/render/finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: o.url, key: o.key || Store.key(), title: o.title || Store.title(), kind: Store.isBlank() ? 'blank' : 'talking', dur: Store.duration() }),
+        body: JSON.stringify({ url: o.url, key: o.key || Store.key(), title: o.title || Store.title(), kind: 'blank', dur: Store.duration() }),
       }).then(r => r.json());
       if (d && d.success) state.queueId = d.queueId;
     } catch (e) {}

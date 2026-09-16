@@ -816,7 +816,7 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
     store.write(list);
 
     // Ready for a lane, and a hook is still the same hook.
-    try { require('./ffmpeg').warmProxies([videoPath], 480); } catch (e) {}
+    try { require('./proxies').warmProxies([videoPath], 480); } catch (e) {}
     // A hook keeps its number; a hook that somehow never had one is numbered now, rather than a
     // trim being the thing that leaves it without.
     if (kind === 'hooks') {
@@ -1267,7 +1267,7 @@ router.post('/library/media/record', (req, res) => {
     const item = store.read().find(e => e && e.id === rec.id) || rec;
     // On the shelf means it can land on a lane: its preview proxy is queued now, and a
     // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
-    try { require('./ffmpeg').warmProxies([item.videoPath], 480); } catch (e) {}
+    try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
     if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
     res.json({ success: true, item, kind, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

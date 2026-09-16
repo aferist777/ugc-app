@@ -1,32 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the inspector. Phase I1: the frame and the facts.
+   MERGE v3 — the inspector.
 
-   Three states, and which one is showing is decided entirely by the selection:
+   Three states, and which one is showing is decided entirely by the selection on the timeline
+   (js/merge-v3/timeline-b.js):
 
-     nothing        how to work the editor
-     a track        what applies to the whole track, and to how many clips
-     a clip         that clip's own numbers
+     nothing        how the timeline works
+     a lane         what applies to the whole lane
+     a clip         that clip's own settings; several clips - removing them
 
-   The controls themselves land in the next phases. What is here already is every
-   read-only fact, because those are derivable today and a panel that shows real
-   numbers is checkable in a way an empty box is not.
-
-   ONE THING WORTH KNOWING BEFORE THE CONTROLS ARRIVE. Track settings will be a
-   STAMP, not an inherited default: choosing a value on a track writes it into every
-   clip on that track, overwriting whatever each clip had. That is what was asked
-   for, it is what the old editor did, and it destroys per-clip work in one click -
-   which is why the two history buttons in the timeline header were built first and
-   why the count below says out loud how many clips a track setting would rewrite.
+   Lane settings are a STAMP, not an inherited default: choosing a value on a lane writes it
+   into every clip on it, overwriting whatever each clip had. The undo arrow is the way back.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { onSelect, selected, clearSelection, setClipDur, removeClip as cutClip,
-         multiCount as multiA, deleteMulti as deleteMultiA } from './timeline.js';
 import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
          onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
          removeClip as removeB, mateOf as mateB, selectedTrack as trackB,
          setClipFields as setManyB,
-         setTrackField as setTB, removeTrack as removeTrackB, playhead as playheadB,
+         removeTrack as removeTrackB, playhead as playheadB,
          stampTrack as stampB, resetTrack as resetTrackB,
          addCaption as addCapB, setCaptions as setCapsB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB } from './timeline-b.js';
@@ -34,15 +25,8 @@ import { styleOf, subsTrack as subsTrackB, segmentsFor, groupWords, autoSize,
          autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
 import { askDelete } from './ask.js';
 import { isStill } from './store.js';
-import { openAnimate } from './animate.js';
 import * as C from './controls.js';
 import * as M from './music.js';
-import * as Subs from './subtitles.js';
-
-// Which tracks will take effects at all. Halfers is not an omission: the renderer
-// ignores effects on halfer bands, so offering them would be a control that does
-// nothing. Music and Subtitles get their own panels later.
-const FX_TRACKS = new Set(['seg', 'biro', 'hook']);
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 
@@ -69,8 +53,7 @@ function _title(text, sub, right) {
   return wrap;
 }
 
-// A read-only fact. The controls will replace some of these in the next phases; the
-// ones that stay are the ones there is nothing to set.
+// A read-only fact: a label and what it says.
 function _fact(k, v) {
   const row = _el('div', 'mv3-ins-row');
   row.appendChild(_el('span', 'mv3-ins-k', k));
@@ -101,545 +84,6 @@ function _fxTriple(tr, an, fi, onTr, onAn, onFi, skipAnim) {
   return wrap;
 }
 
-function _todo(items) {
-  const box = _el('div', 'mv3-ins-todo');
-  box.appendChild(_el('div', 'mv3-ins-todo-h', 'Controls landing here'));
-  const ul = _el('ul');
-  for (const it of items) ul.appendChild(_el('li', null, it));
-  box.appendChild(ul);
-  return box;
-}
-
-const _sec = (t) => (Math.round(t * 100) / 100).toFixed(2) + 's';
-const _r2 = (v) => Math.round(v * 100) / 100;
-const MIN_DUR = 0.1;
-
-// ── Writing a track setting ─────────────────────────────────────────────────
-// THE STAMP. The value is remembered on the track AND written into every clip on it.
-// Two things about this, both deliberate:
-//
-//   • it touches ONLY this track's clips. The old editor's stamp looped over birols
-//     AND hooks together, so choosing a transition on Birols silently rewrote the
-//     hook clips as well;
-//   • it is irreversible per clip - whatever each clip had is gone. That is what the
-//     stamp means, it is what was asked for, and it is why Store.mutate takes a history
-//     snapshot first: the undo arrow is the way back.
-function _stamp(scope, field, value) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (!tr) return;
-    tr[field] = value;
-    for (const c of tr.clips) c[field] = value;
-  });
-}
-
-// A track-level value that is NOT stamped: the effective volume is clip ?? track ?? 1,
-// so the track is a real fallback here and a per-clip volume keeps overriding it. That
-// is how the old editor behaved for volume alone, and it is the better shape - kept
-// rather than "fixed" into a stamp for consistency's sake.
-function _setTrackOnly(scope, field, value) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (tr) tr[field] = value;
-  });
-}
-
-// ── Speed ───────────────────────────────────────────────────────────────────
-// "Same content, faster = shorter": the source segment in play is [trimIn, srcDur -
-// trimOut] and speed only changes how long it takes. So dur is re-derived and the trims
-// stay put.
-//
-// Unless the neighbour is in the way. Slowing a clip down needs more room on the
-// timeline, and there may not be any - in that case the length stops at the gap and the
-// tail is trimmed instead, because pushing the next clip along would move work the user
-// placed by hand.
-function _applySpeed(c, nextStart, speed) {
-  const src = +c.srcDur || 0;
-  const segLen = src > 0
-    ? Math.max(0, src - (+c.trimIn || 0) - (+c.trimOut || 0))
-    : (+c.dur || 0) * (+c.speed || 1);
-  const natural = segLen > 0 ? (segLen / speed) : (+c.dur || 0);
-  const room = (nextStart === Infinity) ? Infinity : (nextStart - c.start);
-  const dur = Math.max(MIN_DUR, Math.min(natural, room));
-  c.speed = speed;
-  c.dur = _r2(dur);
-  // Only a CLAMPED clip needs its out-point moved - it is showing less of the source than it
-  // asked for. An unclamped one already spans exactly the slice it had, and recomputing the
-  // trim from a duration that has just been rounded shaves a hundredth off the tail on every
-  // single change, which accumulates into a visibly cut fragment.
-  if (src > 0 && dur < natural - 0.001) {
-    c.trimOut = Math.max(0, _r2(src - (+c.trimIn || 0) - c.dur * speed));
-  }
-}
-
-// ── Re-timing the spine: GONE WITH MAIN'S SPEED ─────────────────────────────
-// _stampSpeed, _retimeSpine, _repack, _timeMapper and _remapPinned lived here. All five
-// existed to keep the spine end to end after a Main fragment changed length, and to drag
-// every pinned overlay, caption and word timing along with it. Nothing changes a Main
-// fragment's length that way any more, so all five were unreachable.
-//
-// Deleted rather than left dormant: what they did was rewrite five tracks and every word
-// timing in one go, and code that destructive should not be sitting one call away from
-// being used again by accident. Git has it if Main ever gets a speed back.
-
-// ── Writing one clip ────────────────────────────────────────────────────────
-function _patchClip(scope, id, patch) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    const c = tr && tr.clips.find(x => x.id === id);
-    if (c) Object.assign(c, patch);
-  });
-}
-
-// The nearest clip start after this one, which is how far it may grow.
-function _nextStartFor(clips, c) {
-  let next = Infinity;
-  const ce = (+c.start) + (+c.dur);
-  for (const o of clips) {
-    if (o.id === c.id) continue;
-    const s = +o.start;
-    if (s >= ce - 0.001 && s < next) next = s;
-  }
-  return next;
-}
-
-// Overlay lanes only - Main has no speed control any more. There is no spine to close up
-// here: a clip sits at the moment it was put, and its neighbour is the limit on how far it
-// may grow.
-function _setClipSpeed(scope, id, speed) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    const c = tr && tr.clips.find(x => x.id === id);
-    if (!c) return;
-    _applySpeed(c, _nextStartFor(tr.clips, c), speed);
-  });
-}
-
-function _removeClip(scope, id) {
-  // Deselect first: leaving the selection pointing at a clip that no longer exists would
-  // leave the panel on its "clip is gone" state instead of returning to the help.
-  clearSelection();
-  // The timeline owns what removing a clip MEANS - on Main that includes closing the gap
-  // behind it and everything pinned to the picture sliding with it.
-  cutClip(scope, id);
-}
-
-// Clears the track's OWN settings and the fields the stamp writes. It deliberately does
-// NOT touch speed, trims or positions: those are edits made by hand with the mouse, and
-// wiping them from a button called "reset track" would be exactly the kind of surprise
-// the stamp warning above exists to prevent.
-function _resetTrack(scope) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (!tr) return;
-    for (const f of ['volume', 'transition', 'animation', 'filter']) tr[f] = null;
-    for (const c of tr.clips) {
-      for (const f of ['transition', 'animation', 'filter']) c[f] = null;
-    }
-  });
-}
-
-// ── Nothing selected ────────────────────────────────────────────────────────
-// Not a manual. Dragging, trimming, zooming and undo are what every editor does and what
-// anyone opening this already knows - listing them spent the panel on the reader's existing
-// knowledge. What is here instead is the handful of things this editor does that another
-// one does not, and the parts of those that cannot be guessed by looking: what a run costs,
-// what is kept, what is only a hint.
-function _renderIdle(host) {
-  host.appendChild(_title('Nothing selected', 'What this editor can do'));
-  const help = _el('div', 'mv3-ins-help');
-
-  const block = (heading, lines) => {
-    help.appendChild(_el('div', 'mv3-ins-todo-h', heading));
-    const ul = _el('ul');
-    for (const s of lines) ul.appendChild(_el('li', null, s));
-    help.appendChild(ul);
-  };
-
-  block('Turn a picture into a clip', [
-    'Drop a still on a track, write a sentence about how it should move, choose a length.',
-    'Runs collect in a strip along the bottom. Only the ones you tick reach the library - '
-      + 'making four and keeping one is the normal shape of this.',
-    'The picture is not used up. You get a new birol beside it, tied to the frame it grew from.',
-  ]);
-
-  block('Motion control', [
-    'Some models take a second input: a clip whose movement is copied. The person in your '
-      + 'picture does what the person in the clip does.',
-    'Pick the stretch first, with the two handles. It keeps playing while the generation runs.',
-    'These are the only models sold by the second, so the price appears once there is a '
-      + 'stretch to multiply by.',
-  ]);
-
-  block('Subtitles from what was said', [
-    'Generated from the Main track, word by word - the karaoke uses the times the words were '
-      + 'actually spoken, not a guess from how long each line is.',
-    'Drag the track to move them all; drag one caption to move only that one.',
-  ]);
-
-  block('Music to a length', [
-    'The style is prose, not a form: the chips are the prompt.',
-    'BPM is a strong hint rather than a setting - a track can come back near it, not on it.',
-  ]);
-
-  // One line of the ordinary kept, because it is the only ordinary thing here that destroys
-  // work: a track setting is not a default that clips inherit.
-  const note = _el('div', 'mv3-ins-note',
-    'Track settings are a stamp: choosing one overwrites that value on every clip in the track.');
-  help.appendChild(note);
-
-  host.appendChild(help);
-}
-
-// Soft edges. Only ever offered to a PLACED insert: a clip covering the whole frame has no
-// edge of its own to dissolve - the only edges it has are the frame's, and fading those
-// would be a vignette, which is a different control that already exists as a filter.
-//
-// A fraction of the insert's shorter side rather than pixels, so the number means the same
-// thing on the preview canvas and in the render, which are different sizes.
-function _featherRow(c, set) {
-  return C.row('Soft edge', C.slider({
-    min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
-    fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
-    onChange: (v) => set({ feather: v <= 0.005 ? null : v }),
-  }));
-}
-
-// ── A track ─────────────────────────────────────────────────────────────────
-function _renderTrack(host, scope) {
-  const t = Store.timeline();
-  const track = t && t.tracks && t.tracks[scope];
-
-  // Music has its own panel and never had a header. The destination is stated rather than
-  // assumed: a blank project's panel points the same module at one of ITS lanes, and a stale
-  // pointer would put this project's music somewhere else entirely.
-  if (scope === 'music') { M.setMusicDest(null); M.renderMusicTrack(host, track); return; }
-
-  // No header. It restated the track you had just clicked and the length you can read off
-  // the timeline, over the one column that is short of room.
-  const sep = () => host.appendChild(_el('div', 'mv3-c-sep'));
-
-  // Everything about how captions look belongs to this track, so this is where it lives.
-  // Generate used to ride in the header; with that gone it takes a row of its own.
-  if (scope === 'subs') {
-    host.appendChild(Subs.genRow());
-    sep();
-    Subs.renderSubsTrack(host);
-    return;
-  }
-
-  // Main: one speed for every segment. Not offered on the insert tracks, where speed is
-  // a per-clip decision (an insert is placed at a moment, not part of a spine).
-  // NO SPEED ON MAIN, neither here nor on its clips. Retiming the spine stretches the read
-  // away from the voice it was transcribed against, so the subtitles come out against
-  // timings that no longer exist - and Main is the one track that carries the voice.
-  //
-  // The whole video's pace is set at the other end instead: Export has a playback speed
-  // that runs over the finished file, after the captions are burnt in. Same result, and it
-  // cannot desynchronise anything.
-
-  // There is no audio on/off beside this. It used to be here and it fought the slider:
-  // the flag defaulted to off for every overlay track, so raising the volume produced a
-  // stored number and no sound. Volume alone now - 0 is silent.
-  const volDflt = scope === 'seg' ? 1 : 0;
-  host.appendChild(C.row('Volume', C.volume(
-    track.volume != null ? track.volume : volDflt,
-    (v) => _setTrackOnly(scope, 'volume', v),
-  )));
-  host.appendChild(C.hint('Master for this track: every clip on it is multiplied by this. '
-    + '0 dB leaves them exactly as each one is set.'));
-
-  if (FX_TRACKS.has(scope)) {
-    sep();
-    host.appendChild(_fxTriple(
-      track.transition || 'none', track.animation || 'none', track.filter || 'none',
-      (v) => _stamp(scope, 'transition', v), (v) => _stamp(scope, 'animation', v), (v) => _stamp(scope, 'filter', v),
-    ));
-    host.appendChild(C.hint('Choosing one of these writes it into every clip on the track.'));
-  } else if (scope === 'halfer') {
-    host.appendChild(C.hint('No transition, animation or filter: the renderer ignores effects on halfer bands.'));
-  }
-
-  sep();
-  host.appendChild(C.row('', C.button('Reset track', () => _resetTrack(scope), {
-    title: 'Clears this track\'s volume and effects, and the same fields on its clips. Speed, trims and positions are left alone.',
-  })));
-
-  // Named rather than quietly missing, so the gap is visible.
-  host.appendChild(_todo([
-    'SFX and its volume - its list comes from the old editor\'s audio library, and it only sounds at export',
-    'Nothing renders these settings yet: there is no preview and no export in merge-v3',
-  ]));
-}
-
-// ── A clip ──────────────────────────────────────────────────────────────────
-// Where a picture lands when it is placed by one click rather than dragged: a little in
-// from the top-left corner, at just over a third of the width. Small enough to read as an
-// inset over the frame, big enough to see - and the drag handles take over from there.
-const PIP_DROP = { tx: 0.05, ty: 0.05, tw: 0.38 };
-
-function _renderStillClip(host, scope, id, c, set) {
-  // TWO COLUMNS ACROSS THE TOP. The picture takes half the panel - enough to recognise
-  // what this clip is, which is the question a still's inspector mostly answers - and the
-  // settings that belong to it sit in the other half rather than under it, where the
-  // picture would have pushed them off the fold.
-  const top = _el('div', 'mv3-c-still-top');
-  const left = _el('div', 'mv3-c-still-left');
-  const fig = _el('div', 'mv3-c-still');
-  if (c.thumb) {
-    const img = document.createElement('img');
-    img.src = c.thumb;
-    img.alt = c.name || '';
-    fig.appendChild(img);
-  }
-  left.appendChild(fig);
-  // Directly under the picture it acts on, and centred: this is the one thing here that
-  // makes something NEW rather than adjusting the clip, so it stands apart from the grid of
-  // settings instead of queueing at the bottom of it.
-  const animate = C.button('Animate', () => openAnimate(c), {
-    title: 'Generate a video from this picture. The one you save replaces the picture here, '
-         + 'and it lands in Birols as well.',
-  });
-  animate.classList.add('mv3-c-animate');
-  left.appendChild(animate);
-  top.appendChild(left);
-
-  // Two across, filled row by row:
-  //
-  //     transition | animation
-  //     filter     | placement          (Place as inset, or Full frame once it is placed)
-  //     duration   | crop
-  //     remove     |
-  //
-  // A labelled cell rather than a label-and-control row, because at a quarter of the
-  // panel's width a label beside its control leaves no room for the control.
-  const grid = _el('div', 'mv3-c-still-grid');
-  const cell = (label, control) => {
-    const box = _el('div', 'mv3-ins-fx3-cell');
-    box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
-    if (control) { control.title = control.title || label; box.appendChild(control); }
-    grid.appendChild(box);
-    return box;
-  };
-  // An empty cell rather than none, so the grid keeps its shape when a control does not
-  // apply: Duration stays bottom-left whether or not this clip can be cropped, and the eye
-  // learns where things are on a panel it opens all day.
-  const gap = () => grid.appendChild(_el('div', 'mv3-ins-fx3-cell'));
-
-  const placed = (c.tw != null || c.angle);
-  const canCrop = scope !== 'seg' && scope !== 'halfer' && !placed;
-
-  if (FX_TRACKS.has(scope)) {
-    cell('transition', C.select(C.TRANSITIONS, c.transition || 'none', (v) => set({ transition: v })));
-    cell('animation', C.select(C.ANIMATIONS, c.animation || 'none', (v) => set({ animation: v })));
-    cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set({ filter: v })));
-  } else { gap(); gap(); gap(); }
-
-  // Placement, beside filter. Only the overlay lanes can place a picture on the frame: in
-  // the sequence it IS the frame, and in a band the geometry is the band's.
-  if (scope === 'seg' || scope === 'halfer') { gap(); }
-  else if (placed) {
-    cell('placement', C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
-      title: 'Drop the placement and cover the whole frame again' }));
-  } else {
-    // One click, because a picture laid over a shot is usually WANTED as an inset, and
-    // dragging one out of a full-frame cover is a fiddly way to ask for that. Dragging
-    // still works and still wins - this only sets a starting point.
-    cell('placement', C.button('Place as inset', () => set(PIP_DROP), {
-      title: 'Put the picture in the corner at about a third of the width, then drag it on the preview' }));
-  }
-
-  // The one number a still really has. It cannot be trimmed against a source - there is
-  // none - so on Main this ripples the rest of the sequence exactly as dragging its edge
-  // does; setClipDur owns that rule so the two cannot drift apart.
-  cell('duration', C.number({
-    value: +c.dur || 0, min: 0.1, max: 600, step: 0.5, suffix: 's',
-    onChange: (v) => setClipDur(scope, id, v),
-  }));
-
-  // Under the placement it belongs to, because the two are one question: covering the frame
-  // means a picture that is not 9:16 is cover-cropped, and which side survives is a choice.
-  // Placed, the whole picture is on screen and there is nothing to crop away - so this cell
-  // empties the moment the one above it says "Full frame".
-  if (canCrop) {
-    cell('crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
-      c.cropAlign || 'center', (v) => set({ cropAlign: v })));
-  } else { gap(); }
-
-  // Its own row, left column. Destructive, so it does not sit shoulder to shoulder with a
-  // setting you might be reaching for. Just "Remove": the cell is a quarter of the panel
-  // wide, and the tooltip carries what the long label used to say. The full-width button on
-  // the video panel keeps its longer wording - it has the room.
-  cell('', C.button('Remove', () => _removeClip(scope, id), {
-    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
-  }));
-  gap();
-
-  const side = _el('div', 'mv3-c-still-side');
-  side.appendChild(grid);
-  top.appendChild(side);
-  host.appendChild(top);
-
-  // NOTHING BELOW THE TWO COLUMNS. Four hints used to sit here - what the effects apply to,
-  // where the picture sits on the frame, what happens to a cut-out's transparency. Every one
-  // of them described a state the panel already shows: the placement cell says "Full frame"
-  // or "Place as inset", the transparency is visible through the chequerboard behind the
-  // picture. They were paragraphs restating the controls above them, and on a panel this
-  // small that is the difference between fitting and scrolling.
-}
-
-function _renderClip(host, scope, id) {
-  const t = Store.timeline();
-  const track = t && t.tracks && t.tracks[scope];
-  const c = track && (track.clips || []).find(x => x.id === id);
-  if (!c) {
-    // The clip went away - deleted here, or by another tab whose version won.
-    host.appendChild(_title('Clip is gone', 'It was removed from the timeline.'));
-    return;
-  }
-  // No header. Which clip is selected is visible on the timeline, and its start, end and
-  // length are readable off the ruler - two rows spent restating the thing you just clicked,
-  // in the one column that is short of room.
-  const sep = () => host.appendChild(_el('div', 'mv3-c-sep'));
-  const set = (patch) => _patchClip(scope, id, patch);
-  sep();
-
-  // A caption is words: its own text and where it sits, nothing else. Speed, volume and
-  // effects would all be settings with nothing to act on.
-  if (scope === 'subs') { Subs.renderSubClip(host, c); return; }
-
-  // A music clip is sound: no crop, no picture-in-picture, no visual effects.
-  if (scope === 'music') {
-    M.renderMusicClip(host, id, c,
-      (v) => _setClipSpeed(scope, id, v),
-      set,
-      () => _removeClip(scope, id));
-    return;
-  }
-
-  // A PICTURE, and the panel is chosen by WHAT THE CLIP IS rather than which lane it sits
-  // on. Everything below this line assumes a film: speed retimes a source, volume is its
-  // sound, reversed plays it backwards, and a trim picks a stretch out of it. A still has
-  // none of those - it has one frame and a length the timeline gave it - so offering them
-  // would be four controls that quietly do nothing.
-  if (isStill(c)) { _renderStillClip(host, scope, id, c, set); return; }
-
-  // Overlay lanes only - see the note on the track panel. A fragment of the read keeps the
-  // length its voice gave it.
-  if (scope !== 'seg') {
-    host.appendChild(C.row('Speed', C.slider({
-      min: 0.25, max: 2, step: 0.05, value: c.speed || 1, fmt: C.times,
-      onChange: (v) => _setClipSpeed(scope, id, v),
-    })));
-  }
-
-  // Volume is the whole of this clip's audio: muted is silent, and a clip dropped onto an
-  // overlay track arrives muted. The track value is only a fallback for a clip that somehow
-  // has none - every clip is created carrying its own.
-  const volDflt = scope === 'seg' ? 1 : 0;
-  const trackVol = track.volume != null ? track.volume : volDflt;
-  // The clip's own level, in dB. Following the track was tried and taken out again: what it
-  // bought was a master slider, and what it cost was reading a clip's level off its own
-  // panel. Levels are set here, by hand, one clip at a time.
-  host.appendChild(C.row('Volume', C.volume(
-    c.volume != null ? c.volume : trackVol,
-    (v) => set({ volume: v }),
-  )));
-
-  host.appendChild(C.row('Reversed', C.toggle(!!c.reversed, (on) => set({ reversed: on }))));
-
-  sep();
-  // A halfer is a BAND until it is dragged on the preview, and a rectangle afterwards. The
-  // two have nothing in common: a band has an edge to stick to, a width it cannot choose and
-  // a feather; a placed insert has none of those. So the panel shows one set or the other,
-  // never both, and there is a way back.
-  if (scope === 'halfer') {
-    // Three numbers and a quarter turn. There is no second shape to switch into any more: a
-    // halfer used to become a free-floating rectangle the moment it was dragged, which meant
-    // every setting here had to be hidden while it wore the other form, and the two shapes
-    // shared nothing but the clip they were made from.
-    const num = (v, dflt) => { const n = Number(v); return Number.isFinite(n) ? n : dflt; };
-    // The old words are the defaults, so a band saved before this opens exactly where it sat.
-    const pos   = num(c.halferPos,   c.halferAlign === 'bottom' ? 0 : 100);
-    const thick = num(c.halferThick, 40);
-    const keep  = num(c.halferKeep,  c.valign === 'bottom' ? 0 : 100);
-    const rot   = c.rotation == null ? 90 : +c.rotation;
-    const sideways = (rot === 90 || rot === 270);
-
-    host.appendChild(C.row('Band', C.slider({
-      min: 0, max: 100, step: 1, value: pos,
-      // The three positions worth naming say their name; everything between is a number.
-      fmt: (v) => (v >= 99 ? 'top' : v <= 1 ? 'bottom' : v === 50 ? 'middle' : v + '%'),
-      onChange: (v) => set({ halferPos: v }),
-    })));
-    host.appendChild(C.row('Thickness', C.slider({
-      min: 5, max: 100, step: 1, value: thick,
-      fmt: (v) => (v >= 100 ? 'full frame' : v + '%'),
-      onChange: (v) => set({ halferThick: v }),
-    })));
-    host.appendChild(C.row('Rotation', C.select([[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']],
-      String(rot), (v) => set({ rotation: +v }))));
-    // The band is covered, not stretched, at every angle now, so there is always a slice to
-    // choose. WHICH WAY it slides depends on the turn: at 0 and 180 the source stands upright
-    // and the spare height is above and below it; at 90 and 270 it lies across the band and
-    // the spare width is to the left and right.
-    host.appendChild(C.row('Keep', C.slider({
-      min: 0, max: 100, step: 1, value: keep,
-      fmt: (v) => (v >= 99 ? (sideways ? 'right' : 'top')
-                 : v <= 1 ? (sideways ? 'left' : 'bottom')
-                 : v === 50 ? 'middle' : v + '%'),
-      onChange: (v) => set({ halferKeep: v }),
-    })));
-    // Back where it belongs. A band's soft edge is not the all-round fade a placed insert
-    // gets - it softens the edges facing INTO the frame, which is why it lives here and not
-    // in _featherRow with the other one. Written as a number even at zero: null means
-    // 'never set' and that is the one value which has to keep meaning the default.
-    host.appendChild(C.row('Soft edge', C.slider({
-      min: 0, max: 40, step: 1, value: c.feather == null ? 3 : Math.round(c.feather * 100),
-      fmt: (v) => (v <= 0 ? 'hard' : v + '%'),
-      onChange: (v) => set({ feather: v / 100 }),
-    })));
-    host.appendChild(C.hint('A band across the frame: where it sits, how thick it is, and which'
-      + ' slice of the picture survives the crop. '
-      + (sideways ? 'Turned on its side, so the slice slides left to right.'
-                  : 'Upright, so the slice slides bottom to top.')));
-  } else {
-    // No crop on a Main fragment: it IS the frame, generated at 9:16 already, so there is
-    // no wider source to choose a slice of. The control only means something for an
-    // overlay laid over that frame.
-    if (scope !== 'seg') {
-      host.appendChild(C.row('Crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
-        c.cropAlign || 'center', (v) => set({ cropAlign: v }))));
-    }
-
-    // NO PiP FIELDS. Position, size and rotation are dragged on the preview: click the
-    // element, then move it, pull a corner, or turn the handle above it. Typing
-    // percentages to place a picture-in-picture was guessing at a thing already on screen.
-    // "Full frame" stays here, because dragging back to exactly full is the one move the
-    // mouse cannot make.
-    if (c.tw != null || c.angle) {
-      host.appendChild(_featherRow(c, set));
-      host.appendChild(C.row('', C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
-        title: 'Drop the placement and cover the whole frame again',
-      })));
-      host.appendChild(C.hint('Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '') + '.'));
-    }
-  }
-
-  if (FX_TRACKS.has(scope)) {
-    sep();
-    host.appendChild(_fxTriple(
-      c.transition || 'none', c.animation || 'none', c.filter || 'none',
-      (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
-    ));
-  }
-
-  sep();
-  host.appendChild(C.row('', C.button('Remove from timeline', () => _removeClip(scope, id), {
-    danger: true, title: 'Takes the clip off the timeline. The library keeps the file.',
-  })));
-}
-
 // NOT WHILE A CONTROL IS BEING HELD. The panel is rebuilt wholesale, so a repaint that
 // lands mid-gesture replaces the very slider under the pointer with a new element - the
 // drag then continues against a detached node. Observed, not theorised: a repaint
@@ -651,18 +95,14 @@ function _renderClip(host, scope, id) {
 let _held = false;
 let _pending = false;
 
-// ── A clip in a blank project ─────────────────────────────────────────
-// The same controls as the other workflow's panel, built from the same primitives in
-// controls.js, so the two cannot drift into looking like different programs.
+// ── A clip ────────────────────────────────────────────────────────────────
+// Built from the primitives in controls.js.
 //
-// CUT TO WHAT THIS RENDERER ACTUALLY READS. Every control here has its filter in
+// CUT TO WHAT THE RENDERER ACTUALLY READS. Every control here has its filter in
 // lib/mv3b-render.js and its arithmetic in preview-b.js - speed, reverse, how a clip meets
-// the frame, level. A control the export ignored would be worse than a missing one: the
-// missing one is visible, and the ignored one is only discovered by watching the file.
-//
-// Deliberately NOT here yet: the transition/animation/filter triple. That is a whole effect
-// engine, it lives in routes/ffmpeg.js for the other workflow, and this one has no copy of
-// it. Next phase.
+// the frame, level, the three effects. A control the export ignored would be worse than a
+// missing one: the missing one is visible, and the ignored one is only discovered by watching
+// the file.
 const _bsep = (host) => host.appendChild(_el('div', 'mv3-c-sep'));
 
 const FITS = [['fit', 'Fit'], ['fill', 'Fill']];
@@ -717,9 +157,7 @@ function _frameRows(host, c, set) {
   }
 }
 
-// Transition, animation and filter - the same three, in the same words, as the other panel,
-// because they are the same three effects: lib/mv3b-render.js builds them from the values
-// routes/ffmpeg.js already knew how to build.
+// Transition, animation and filter - the values lib/mv3b-render.js builds them from.
 //
 // Two of the twenty cannot be drawn on a canvas - glitch's noise and sharpen's convolution -
 // and the preview says so on itself while they are chosen rather than letting them turn up
@@ -1235,9 +673,7 @@ function _renderBlankClip(host, { track, clip }) {
   return _blankFilm(host, track, clip, set, pair);
 }
 
-// Nothing selected, in a blank project. The other workflow's help is about birols, motion
-// control and subtitles generated from a read - none of which this one has - so it gets its
-// own, and it is the few rules here that cannot be guessed by looking.
+// Nothing selected: the few rules here that cannot be guessed by looking.
 function _renderBlankIdle(host) {
   host.appendChild(_title('Nothing selected', 'How this timeline works'));
   const help = _el('div', 'mv3-ins-help');
@@ -1286,9 +722,8 @@ function _renderMany(host, n) {
                 + 'What can be done to all of them is remove them.';
   host.appendChild(p);
 
-  host.appendChild(C.row('', C.button('Delete ' + n + ' clips', () => {
-    if (blankMounted()) deleteMultiB(); else deleteMultiA();
-  }, { danger: true, title: 'Also on the Delete key' })));
+  host.appendChild(C.row('', C.button('Delete ' + n + ' clips', () => deleteMultiB(),
+    { danger: true, title: 'Also on the Delete key' })));
 }
 
 function render() {
@@ -1303,30 +738,21 @@ function render() {
   // single selection is usually just whatever the pointer passed over on the way to drawing
   // the band - and a panel of settings for four clips at once has no honest meaning, so what
   // it offers is the one thing that does: getting rid of them.
-  const many = blankMounted() ? multiB() : multiA();
+  const many = multiB();
   if (many > 1) return _renderMany(host, many);
-  // A blank project keeps its own selection, because it keeps its own timeline. Asking the
-  // talking-head module what is selected would always answer nothing here.
-  if (blankMounted()) {
-    const one = oneB();
-    if (one) return _renderBlankClip(host, one);
-    const tr = trackB();
-    return tr ? _renderBlankTrack(host, tr) : _renderBlankIdle(host);
-  }
-
-  const sel = selected();
-  if (!sel) return _renderIdle(host);
-  if (sel.kind === 'track') return _renderTrack(host, sel.scope);
-  return _renderClip(host, sel.scope, sel.id);
+  if (!blankMounted()) return _renderBlankIdle(host);
+  const one = oneB();
+  if (one) return _renderBlankClip(host, one);
+  const tr = trackB();
+  return tr ? _renderBlankTrack(host, tr) : _renderBlankIdle(host);
 }
 
 export function initInspector() {
   // Selecting something is what OPENS a panel, as opposed to the store change below which
   // only refreshes the one already open. The Music panel remembers which of its two halves
-  // was last in front, and this is where that memory is allowed to expire.
-  onSelect(() => { M.resetView(); render(); });
-  // The blank timeline's band changes nothing in the store, so it has to say so itself.
-  onSelB(() => render());
+  // was last in front, and this is where that memory is allowed to expire. The band changes
+  // nothing in the store, so the timeline says so itself.
+  onSelB(() => { M.resetView(); render(); });
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);

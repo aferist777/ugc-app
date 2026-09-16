@@ -65,33 +65,15 @@ function _probeAudio(src) {
 }
 const FALLBACK_DUR = 30;
 
-// WHERE MUSIC LANDS. The talking-head timeline has exactly one lane for it, called `music`;
-// a blank project has up to four audio lanes and this panel is opened on one of them. So the
-// destination is TOLD rather than assumed - and telling it nothing means the old one, which is
-// what keeps the scenario editor behaving exactly as it did.
-//
-// The two timelines also hold their tracks differently - one an object of named lanes, the
-// other a list - so the lookup answers for both shapes.
+// WHERE MUSIC LANDS. A project has up to four audio lanes and this panel is opened on one of
+// them, so the destination is TOLD rather than assumed.
 let _dest = null;
 
 export function setMusicDest(trackId) { _dest = trackId || null; }
 
 function _lane(tl) {
-  if (!tl || !tl.tracks) return null;
-  if (_dest) return Array.isArray(tl.tracks) ? tl.tracks.find(t => t && t.id === _dest) : null;
-  return Array.isArray(tl.tracks) ? null : tl.tracks.music;
-}
-
-// Music is placed AFTER whatever is already on the lane, never on top of it: two
-// overlapping backing tracks is not a thing anyone wants, and the lane is the one place
-// where "append" is the only sensible drop.
-function _endOfLane(clips) {
-  let end = 0;
-  for (const c of (clips || [])) {
-    const e = (+c.start || 0) + (+c.dur || 0);
-    if (e > end) end = e;
-  }
-  return Math.round(end * 100) / 100;
+  if (!tl || !Array.isArray(tl.tracks) || !_dest) return null;
+  return tl.tracks.find(t => t && t.id === _dest) || null;
 }
 
 // How long the video actually is: every track except this one. Measuring the music lane
@@ -99,12 +81,10 @@ function _endOfLane(clips) {
 // the next bed longer again, and a two-minute ad would grow a five-minute score.
 function _videoLength() {
   const tl = Store.timeline();
-  if (!tl || !tl.tracks) return 0;
-  const lanes = Array.isArray(tl.tracks) ? tl.tracks : Object.keys(tl.tracks).map(k => ({ id: k, ...tl.tracks[k] }));
-  const skip = _dest || 'music';
+  if (!tl || !Array.isArray(tl.tracks)) return 0;
   let end = 0;
-  for (const t of lanes) {
-    if (t.id === skip) continue;
+  for (const t of tl.tracks) {
+    if (t.id === _dest) continue;
     for (const c of (t.clips || [])) {
       const e = (+c.start || 0) + (+c.dur || 0);
       if (e > end) end = e;
@@ -131,16 +111,10 @@ async function _add(url, title, opts) {
     const tr = _lane(tl);
     if (!tr) return;
     if (!Array.isArray(tr.clips)) tr.clips = [];
-    // WHERE IT STARTS depends on whose lane this is.
-    //
-    // The talking-head timeline has ONE music lane and nothing else goes on it, so a second
-    // track tops the bed up: it starts where the last one ended rather than laying a whole
-    // new one over it.
-    //
-    // A blank project's audio lanes carry everything - a birol's sound, a voice, a bed - so
-    // music laid there starts at nought and runs UNDER what is already on the lane. They are
-    // mixed, not replaced, and the lane draws it first, beneath the rest.
-    let at = _dest ? 0 : _endOfLane(tr.clips);
+    // FROM NOUGHT, UNDER what is already on the lane: audio lanes carry everything - a birol's
+    // sound, a voice, a bed - and they are mixed, not replaced; the lane draws the bed first,
+    // beneath the rest.
+    let at = 0;
     // Up to the end of the video, counting from wherever this one begins. `once` is the clip
     // panel's Repeat, which promises one copy and means it.
     let left = once ? full : (want > 0 ? Math.max(0, want - at) : full);
@@ -164,15 +138,12 @@ async function _add(url, title, opts) {
         // A BED, said on the clip: on a blank project's audio lane it sits among voices and sounds,
         // and the one thing that must tell them apart is the transcriber - captions made from the
         // sound are made from the voice, never from the music under it (subs-b.js).
-        bed: _dest ? true : undefined,
+        bed: true,
       });
       at = r2(at + dur);
       left = r2(left - dur);
     }
-    // The talking-head lane holds nothing but music, so there is nothing to go under: it keeps
-    // arriving at the end, where it always did.
-    if (_dest) tr.clips.unshift(...made);
-    else tr.clips.push(...made);
+    tr.clips.unshift(...made);
   });
 }
 
