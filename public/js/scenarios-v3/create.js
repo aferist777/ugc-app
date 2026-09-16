@@ -14,7 +14,7 @@ import { createCombo } from './combo.js';
 import { makeArmable } from './arm.js';
 
 const DRAFT_KEY  = 'sv3_draft_v1';   // mirrored server-side by storage-sync.js
-const MIN_LINES  = 5;
+const MIN_LINES  = 3;   // the server's minimum (routes/scen3.js)
 const DRAFT_WAIT = 400;
 
 const $ = id => document.getElementById(id);
@@ -71,7 +71,7 @@ function _updateGate() {
   let reason = '';
   if (!title)             reason = 'A title is required.';
   else if (n < MIN_LINES) reason = `At least ${MIN_LINES} lines are needed — currently ${n}.`;
-  else if (!gender)       reason = 'The narrator gender is required.';
+
 
   btn.disabled = !!reason;
   if (wrap) wrap.title = reason || `Save this scenario (${n} lines)`;

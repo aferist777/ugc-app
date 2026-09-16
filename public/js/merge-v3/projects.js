@@ -20,6 +20,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import * as Layers from '../layers.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 function _own() { return document.getElementById('mv3-owner'); }
@@ -193,7 +194,11 @@ export function initProjects() {
 function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
-  b.addEventListener('click', async () => {
+  // Two kinds of project, so the button asks which. A blank project is an empty timeline and
+  // is made here; a talking head starts from a scenario, and that picker takes over the
+  // inspector (js/merge-v3/scen-pick.js) - the project itself is made when one is used.
+  b.addEventListener('click', () => _kindMenu(b));
+  _newBlank = async () => {
     const today = new Date().toISOString().slice(0, 10);
     const title = prompt('Name for the new project:', today + ' - ');
     if (title === null) return;                       // cancelled, not an empty name
@@ -219,7 +224,53 @@ function _wireNew() {
     } finally {
       b.disabled = false;
     }
+  };
+}
+
+// The menu itself: a layer like the library's "+" (js/layers.js), so Escape closes it and the
+// page keeps its shortcuts.
+let _newBlank = null;
+let _kindPop = null;
+
+function _closeKind() {
+  if (!_kindPop) return;
+  _kindPop.el.remove();
+  document.removeEventListener('mousedown', _kindPop.away, true);
+  Layers.close(_kindPop.layer);
+  _kindPop = null;
+}
+
+function _kindMenu(anchor) {
+  if (_kindPop) { _closeKind(); return; }             // the same press closes it again
+  const el = document.createElement('div');
+  el.className = 'mv3-plus-menu';
+  const item = (label, sub, on) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mv3-plus-item';
+    const t = document.createElement('span');
+    t.textContent = label;
+    btn.appendChild(t);
+    const s = document.createElement('small');
+    s.textContent = sub;
+    btn.appendChild(s);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); _closeKind(); on(); });
+    el.appendChild(btn);
+  };
+  item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
+  item('talking head', 'from a scenario - pick or write one', async () => {
+    const P = await import('./scen-pick.js');
+    P.start();
   });
+
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - el.offsetWidth - 6, r.left))) + 'px';
+  el.style.top = Math.round(r.bottom + 4) + 'px';
+  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeKind(); };
+  const layer = Layers.open(el, { modal: false, name: 'new project', onEsc: _closeKind });
+  _kindPop = { el, away, layer };
+  document.addEventListener('mousedown', away, true);
 }
 
 // ── Rename ──────────────────────────────────────────────────────────────────

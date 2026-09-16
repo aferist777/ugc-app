@@ -24,6 +24,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
 import { styleOf, subsTrack as subsTrackB, segmentsFor, groupWords, autoSize,
          autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
 import { askDelete } from './ask.js';
+import * as ScenPick from './scen-pick.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
@@ -734,6 +735,9 @@ function render() {
   // button thrown away. Stop it before the rebuild rather than orphan it.
   M.stopPreview();
   host.textContent = '';
+  // Making a talking-head project takes this panel over: there is nothing selected yet, and
+  // the scenario library is what the person is choosing from (js/merge-v3/scen-pick.js).
+  if (ScenPick.active()) return ScenPick.paint(host);
   // A BAND SELECTION OUTRANKS the single one. It is the more deliberate of the two - the
   // single selection is usually just whatever the pointer passed over on the way to drawing
   // the band - and a panel of settings for four clips at once has no honest meaning, so what
@@ -752,7 +756,13 @@ export function initInspector() {
   // only refreshes the one already open. The Music panel remembers which of its two halves
   // was last in front, and this is where that memory is allowed to expire. The band changes
   // nothing in the store, so the timeline says so itself.
-  onSelB(() => { M.resetView(); render(); });
+  onSelB(() => {
+    // Touching the timeline is leaving the picker: what is selected is what the panel is for.
+    if (ScenPick.active() && (oneB() || trackB() || multiB() > 1)) ScenPick.stop();
+    M.resetView();
+    render();
+  });
+  ScenPick.onChange(render);
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);

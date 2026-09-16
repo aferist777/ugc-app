@@ -38,9 +38,12 @@ const OPT_FILE = path.join(DATA_DIR, 'scen3-options.json');
 const PROJECTS = require('../lib/projects-store');
 
 // Minimum usable scenario length, enforced on both ends (the client greys out
-// Save below this, the server refuses it).
-const MIN_LINES = 5;
-// The narrator's gender is required: it is what the character picker filters on.
+// Save below this, the server refuses it). Three: fewer than that is a note, not an ad,
+// and five turned out to refuse scenarios the owner actually wanted.
+const MIN_LINES = 3;
+// The narrator's gender when the scenario states one. It is OPTIONAL: it narrows the
+// character picker, and a scenario that does not say offers every character instead
+// (filterByGender in the casting). Refusing to save without it bought nothing.
 const GENDERS = ['male', 'female'];
 
 function _read(file) {
@@ -307,9 +310,6 @@ router.post('/scen3/scenarios', (req, res) => {
     if (filled < MIN_LINES) {
       return res.status(400).json({ success: false, error: `at least ${MIN_LINES} lines are required (got ${filled})` });
     }
-    if (!GENDERS.includes(_genderOf(rec))) {
-      return res.status(400).json({ success: false, error: 'narrator gender is required' });
-    }
     list.unshift(rec);
     _save(list);
     _harvest(rec);
@@ -317,9 +317,9 @@ router.post('/scen3/scenarios', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Creating a scenario from inside the server, for routes/scriptgen.js. The SAME three gates and
-// the same normaliser as the endpoint above: a title, at least MIN_LINES filled lines, and a
-// narrator gender. Exported rather than duplicated because a second writer would be a second
+// Creating a scenario from inside the server, for routes/scriptgen.js. The SAME gates and the
+// same normaliser as the endpoint above: a title and at least MIN_LINES filled lines. Exported
+// rather than duplicated because a second writer would be a second
 // opinion about what a scenario is - and rather than reached over HTTP, because a request from
 // this process to this process is only a new way for it to fail.
 router.createScenario = function createScenario(body) {
@@ -330,7 +330,6 @@ router.createScenario = function createScenario(body) {
   if (!String(b.title || '').trim()) throw new Error('title is required');
   const filled = rec.lines.filter(l => l.text.trim()).length;
   if (filled < MIN_LINES) throw new Error(`at least ${MIN_LINES} lines are required (got ${filled})`);
-  if (!GENDERS.includes(_genderOf(rec))) throw new Error('narrator gender is required (male or female)');
   list.unshift(rec);
   _save(list);
   _harvest(rec);
@@ -2900,10 +2899,9 @@ router.post('/scen3/projects', (req, res) => {
 
     const scen = _load().find(x => String(x.id) === String(b.scenarioId || ''));
     if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
-    const gender = _genderOf(scen);
-    if (!GENDERS.includes(gender)) {
-      return res.status(400).json({ success: false, error: 'the scenario has no narrator gender — set it on the scenario first' });
-    }
+    // '' when the scenario does not say, and that is allowed: the casting then offers
+    // every character rather than none.
+    const gender = GENDERS.includes(_genderOf(scen)) ? _genderOf(scen) : '';
 
     const day = now.slice(0, 10);
     const rec = _normProject({

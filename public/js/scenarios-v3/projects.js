@@ -164,6 +164,12 @@ export async function reloadProjects(selectedId) {
     _status('Could not load projects: ' + e.message, 'err');
   }
   let want = selectedId;
+  // ?project=<id> wins over the remembered one: Merge sends a project here by address when
+  // a talking-head project has just been made from a scenario (docs/local-app/PLAN.md,
+  // phase B). Temporary - it goes when this page does.
+  if (want == null) {
+    try { want = new URLSearchParams(location.search).get('project') || null; } catch (e) {}
+  }
   if (want == null) { try { want = localStorage.getItem(LAST_KEY); } catch (e) {} }
   _renderSelect(want);
 }
