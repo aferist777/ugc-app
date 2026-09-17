@@ -1566,6 +1566,40 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
+/* Where you are inside the step, under the chips. The band keeps its height when there is
+   nothing in it: a header that grows as you go one level deeper moves everything below it at
+   the moment it is being read. */
+.mv3-wk-where{display:flex; align-items:center; gap:4px; min-height:17px; padding:0 9px 3px}
+.mv3-wk-crumb{
+  padding:1px 6px; border:0; background:transparent; cursor:pointer;
+  color:var(--muted); font:600 8.5px/1.5 var(--font); letter-spacing:.04em; text-transform:uppercase;
+}
+.mv3-wk-crumb:hover{color:var(--ink)}
+/* The bracket. Each crumb after the first hangs off the one before it by a corner, which is
+   the shape of "this came out of that". */
+.mv3-wk-crumb + .mv3-wk-crumb{
+  border-left:1px solid var(--border); border-bottom:1px solid var(--border);
+  border-bottom-left-radius:4px; padding-left:8px; margin-left:1px;
+}
+.mv3-wk-crumb.is-here{color:var(--primary); cursor:default}
+
+/* The sentence and its button, at the foot of the panel across both halves. */
+.mv3-wk-foot{flex:0 0 auto; border-top:1px solid var(--border); background:var(--surface); padding:7px 9px 9px}
+.mv3-wk-foot .mv3-sc-lines.is-short{margin:0; width:100%; min-height:56px}
+/* The button under the field and at its right edge, the width of the word: a full-width
+   button reads as the only thing to do, and this is the last of several. */
+.mv3-wk-footrow{display:flex; align-items:center; gap:8px; margin-top:6px}
+.mv3-wk-create{
+  margin-left:auto; padding:5px 16px; border-radius:var(--pill); cursor:pointer;
+  border:1px solid var(--primary); background:var(--primary); color:var(--primary-ink, oklch(.15 0 0));
+  font:700 10.5px/1 var(--font); letter-spacing:.03em;
+  transition:filter .12s var(--ease), opacity .12s var(--ease);
+}
+.mv3-wk-create:hover:not([disabled]){filter:brightness(1.1)}
+.mv3-wk-create[disabled]{opacity:.45; cursor:default; background:transparent; color:var(--muted); border-color:var(--border)}
+/* What is missing, said beside the button rather than after pressing it. */
+.mv3-wk-mode.is-why{color:var(--gold)}
+
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls
    between them makes it two. */

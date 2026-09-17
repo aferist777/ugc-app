@@ -194,6 +194,7 @@ export function paint(host, ctx) {
   txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, and where'));
   head.appendChild(txt);
   root.appendChild(head);
+  _paintWhere(root);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
@@ -203,7 +204,7 @@ export function paint(host, ctx) {
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
   if (_view === 'newlb' && chosen) {
-    _paintNewLookbook(scroll, head, chosen);
+    _paintNewLookbook(scroll, head, chosen, root);
   } else if (_view === 'lookbooks' && chosen) {
     // No drawer here at all. It is the character's wardrobe, and what is being answered on
     // this face of the panel is which outfit to make the next one from.
@@ -216,6 +217,38 @@ export function paint(host, ctx) {
     _stageButton(null);
     _showChoice(chosen);
   }
+}
+
+// ── Where you are inside the step ───────────────────────────────────────────
+// The chips in the panel's own header say which STEP is open; this says where inside it, and
+// the bracket under the two says that the second belongs to the first. It is drawn even when
+// there is nothing to say - an empty band the exact height of a full one - because a header
+// that grows when you go one level deeper moves everything below it at the moment you are
+// reading it.
+const WHERE = {
+  cast: 'character',
+  lookbooks: 'looks',
+  newlb: 'new lookbook',
+};
+
+function _paintWhere(root) {
+  const bar = _el('div', 'mv3-wk-where');
+  if (_view !== 'cast') {
+    const back = _el('button', 'mv3-wk-crumb', WHERE.cast);
+    back.type = 'button';
+    back.title = 'Back to choosing who says it';
+    back.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
+    bar.appendChild(back);
+    if (_view === 'newlb') {
+      const mid = _el('button', 'mv3-wk-crumb', WHERE.lookbooks);
+      mid.type = 'button';
+      mid.title = 'Back to the shelf of outfits';
+      mid.addEventListener('click', () => { _view = 'lookbooks'; _ctx.repaint(); });
+      bar.appendChild(mid);
+    }
+    bar.appendChild(_el('span', 'mv3-wk-crumb is-here', WHERE[_view]));
+  }
+  root.appendChild(bar);
 }
 
 // ── The shelf of outfits ────────────────────────────────────────────────────
@@ -313,13 +346,51 @@ function _mode() {
   if (_lbNote.trim()) return 'draw';
   return '';
 }
+
+// WORDS ALONE HAVE TO BE WORDS. With a picture in the field the sentence is an edit - "red
+// shoes" is a complete instruction - but with nothing else to go on, a handful of characters
+// is not an outfit, and the twenty below is the owner's number.
+//
+// The nonsense test is deliberately shallow and LOCAL: it catches a fist on the keyboard for
+// free and instantly. Anything subtler - a real sentence about nothing, a shopping list, a
+// question - is the agent's to refuse, and it does that before an image is paid for
+// (routes/scen3.js, _readLookbookIdea).
+const MIN_WORDS_ALONE = 20;
+
+function _nonsense(s) {
+  const t = String(s || '').trim().toLowerCase();
+  if (!t) return false;
+  const letters = t.replace(/[^a-zа-яё]/gi, '');
+  if (!letters) return true;                               // digits and punctuation only
+  if (/^(.)\1+$/.test(letters)) return true;               // one character, held down
+  const vowels = (letters.match(/[aeiouyаеёиоуыэюя]/gi) || []).length;
+  if (vowels / letters.length < 0.15) return true;         // no vowels worth the name
+  const words = t.split(/\s+/).filter(Boolean);
+  // One long unbroken run of letters is a keyboard, not a sentence.
+  if (words.length === 1 && letters.length >= 12) return true;
+  return false;
+}
+
+// What stops the button, in words. Empty means nothing does.
+function _why() {
+  const base = !!(_ref || _refLb);
+  const note = _lbNote.trim();
+  if (!base && !note) return 'a photo or a sentence';
+  if (!base) {
+    if (note.length < MIN_WORDS_ALONE) return (MIN_WORDS_ALONE - note.length) + ' more characters';
+    if (_nonsense(note)) return 'that is not a description';
+  } else if (note && _nonsense(note)) {
+    return 'that is not a description';
+  }
+  return '';
+}
 const _MODE_LABEL = {
   edit: 'read the photo and apply the words',
   extract: 'take the outfit out of the photo',
   draw: 'draw it from the words',
 };
 
-function _paintNewLookbook(host, head, c) {
+function _paintNewLookbook(host, head, c, root) {
   host.classList.add('is-split');
   const acts = _el('div', 'mv3-wk-bar');
   const back = _el('button', 'mv3-sc-tab', 'create look');
@@ -395,30 +466,33 @@ function _paintNewLookbook(host, head, c) {
   });
   right.append(drop, pick);
 
-  const note = _el('textarea', 'mv3-sc-lines is-short');
-  note.placeholder = 'What should the outfit be? A sentence is enough - "cream linen shirt, wide navy trousers".';
-  note.value = _lbNote;
-  note.addEventListener('input', () => {
-    _lbNote = note.value;
-    const b = host.querySelector('.mv3-x-go');
-    const m = _mode();
-    if (b) { b.disabled = !m || _making; b.textContent = _making ? 'making…' : (m ? 'make it' : 'a photo or a sentence'); }
-    const h = host.querySelector('.mv3-wk-mode');
-    if (h) h.textContent = m ? _MODE_LABEL[m] : '';
-  });
-  right.appendChild(note);
-
-  const row = _el('div', 'mv3-ins-row');
-  const go = _el('button', 'mv3-x-go', _making ? 'making…' : (_mode() ? 'make it' : 'a photo or a sentence'));
-  go.type = 'button';
-  go.disabled = !_mode() || _making;
-  go.title = 'This spends credits';
-  go.addEventListener('click', () => _make(c));
-  row.appendChild(go);
-  row.appendChild(_el('span', 'mv3-wk-mode mv3-sc-meta', _mode() ? _MODE_LABEL[_mode()] : ''));
-  right.appendChild(row);
-  right.appendChild(_note('It joins the shelf on the left, and this character can be dressed in it straight away.'));
   host.appendChild(right);
+
+  // The sentence and its button at the FOOT of the panel, across both halves: what is written
+  // there applies to whatever is in the field above, and it is the last thing done before
+  // spending - so it sits where the hand ends up, not in the middle of a column that scrolls.
+  const foot = _el('div', 'mv3-wk-foot');
+  const note = _el('textarea', 'mv3-sc-lines is-short');
+  note.placeholder = 'What should it be? With a photo, say what to change - "shoes to white Nike trainers".';
+  note.value = _lbNote;
+  const row = _el('div', 'mv3-wk-footrow');
+  const hint = _el('span', 'mv3-wk-mode mv3-sc-meta');
+  const go = _el('button', 'mv3-wk-create', 'create');
+  go.type = 'button';
+  const sync = () => {
+    const why = _why();
+    go.disabled = !!why || _making;
+    go.textContent = _making ? 'making…' : 'create';
+    go.title = why ? why : 'Make it - this spends credits';
+    hint.textContent = _making ? '' : (why || (_mode() ? _MODE_LABEL[_mode()] : ''));
+    hint.classList.toggle('is-why', !!why);
+  };
+  note.addEventListener('input', () => { _lbNote = note.value; sync(); });
+  go.addEventListener('click', () => _make(c));
+  row.append(hint, go);
+  foot.append(note, row);
+  sync();
+  root.appendChild(foot);
 
   // The stage shows who it is for, and only that: what is being made is already in the field
   // on the right, and a second copy of it on the stage would say nothing new.
@@ -547,7 +621,9 @@ async function _make(c) {
     const done = await API.awaitTask(id);
     // Until it is filed it is a scratch file with no shelf; filing gives it the path the
     // shelf and the dressing both use.
-    const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '');
+    const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '', {
+      description: r.description || '', prompt: (r.prompts || [])[0] || '',
+    });
     pr.step();
     pr.finish();
     // The shelf on the left gains a tile and the maker stays where it is: one lookbook is
@@ -560,9 +636,12 @@ async function _make(c) {
     _making = false;
     _ctx.repaint();
   } catch (e) {
-    pr.fail((e && e.message) || 'the lookbook failed');
+    const msg = (e && e.message) || 'unknown';
+    pr.fail(msg);
     _making = false;
-    _state = 'The lookbook failed: ' + ((e && e.message) || 'unknown');
+    // A refusal from the agent is not a failure of the machinery - it is an answer about what
+    // was asked for, and it reads better as that than as an error.
+    _state = /not (a|an)|nothing|gibberish|describe/i.test(msg) ? msg : 'The lookbook failed: ' + msg;
     _ctx.repaint();
   }
 }

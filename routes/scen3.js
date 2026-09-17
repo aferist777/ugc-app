@@ -468,16 +468,30 @@ router.post('/scen3/preview1k', async (req, res) => {
 const H = require('../lib/helpers');
 
 // Knolling discipline — the part that makes every garment separately visible.
+//
+// TWO RULES EARNED THE CAPITALS. Every item appears ONCE: the models like to show the same
+// trousers folded and again unfolded, and a lookbook with one garment twice reads as two
+// garments. And NO PERSON: a costume drawn on somebody is a picture of that somebody, and
+// what gets worn later is the character already cast. A mannequin is allowed only where a
+// costume cannot be understood flat - a mascot suit, a full-body character costume - and
+// then a plain featureless one.
 const KNOLL_TAIL =
   ' Top-down orthographic view, camera directly overhead. Knolling layout: every garment and accessory laid out completely flat,'
   + ' grouped by type, edges parallel or at right angles, evenly spaced, NOTHING overlapping or tucked behind another item —'
   + ' each piece fully visible and uncropped, both shoes and both socks shown as a pair.'
-  + ' Plain neutral light-grey studio background, soft even lighting, sharp focus, high detail.'
-  + ' No person, no body parts, no mannequin, no hanger, no text, no labels, no watermark. 1:1 square.';
+  + ' Show each item EXACTLY ONCE: no duplicates, no second view of the same garment, no folded and unfolded version of one item,'
+  + ' no alternative colourways, no detail insets.'
+  + ' Pure white seamless background (#FFFFFF), soft even lighting, no shadows on the background, sharp focus, high detail.'
+  + ' NO PERSON and no body parts of any kind. No hanger, no text, no labels, no watermark. 1:1 square.';
 
-const EXTRACT_HEAD =
-  'Faithfully reproduce every clothing item and accessory worn by the person in the reference photo —'
-  + ' exact same colours, patterns, prints, fabrics, cuts and designs. Nothing invented, nothing omitted.';
+// A mascot or full-body costume cannot be read flat - it is one shell, and laid out it looks
+// like a heap. That is the one case where something wears it, and it is a plain mannequin.
+const MASCOT_TAIL =
+  ' Show the costume as a single complete piece, standing, worn by a plain featureless neutral-grey mannequin'
+  + ' with no face, no hair and no skin detail — the mannequin is there only to show how the costume sits, and must not read as a person.'
+  + ' Full length, nothing cropped, front view. Show it EXACTLY ONCE: one costume, no second view, no duplicates, no detail insets.'
+  + ' Pure white seamless background (#FFFFFF), soft even lighting, sharp focus, high detail.'
+  + ' No text, no labels, no watermark. 1:1 square.';
 
 // Dressing keeps the sheet's composition; only the clothes may change.
 const DRESS_LOCK =
@@ -495,36 +509,77 @@ const _ask = (messages) => H.callAIVisionWithFallback(messages, {
   ladder: require('../lib/cv2-ladders').getLadder('vision'), timeout: 60000,
 });
 
-// N DISTINCT prompts, all inside what the user actually asked for.
-async function _variantPrompts(userPrompt, n) {
-  if (n <= 1) return [userPrompt];
-  const ask = `You are a fashion prompt writer. The user described an outfit to generate: "${userPrompt}". `
-    + `Produce ${n} DISTINCT prompts, each describing ONE complete cohesive outfit that stays inside the user's idea `
-    + `but varies the pieces, colours and styling so the ${n} options feel clearly different. `
-    + `Reply as strict JSON only: {"prompts":["..."]} with exactly ${n} strings, each <= 60 words, no numbering.`;
-  try {
-    const raw = await _ask([{ role: 'user', content: ask }]);
-    const j = H.parseLooseJson(raw);
-    if (j && Array.isArray(j.prompts) && j.prompts.length) {
-      return j.prompts.slice(0, n).map(String);
-    }
-  } catch (e) { console.warn('[scen3/gen] variant prompts failed:', e.message); }
-  return Array.from({ length: n }, () => userPrompt);   // fallback: engine seed varies the output
+/**
+ * THE ONE CALL THAT DECIDES WHAT A LOOKBOOK IS.
+ *
+ * It is given whatever the person gave - a picture, a sentence, or both - and answers with
+ * JSON: either { ok:false, why } when there is nothing to make, or { ok:true, kind, prompt,
+ * description } when there is.
+ *
+ * Three things it is told that are worth stating here, because each of them is a bug we would
+ * otherwise ship:
+ *
+ *   NOT EVERY PICTURE HAS CLOTHES IN IT. A train, a bird, a building: the answer is a costume
+ *   OF that thing, not a refusal and not a picture of the thing. Only a photo of somebody
+ *   dressed means "reproduce this outfit".
+ *
+ *   GIBBERISH IS REFUSED HERE, before an image is paid for. This call costs a fraction of a
+ *   cent; the picture is the expensive half.
+ *
+ *   THE DESCRIPTION IS LONG ON PURPOSE (200+ words, English). It is what the dressing will be
+ *   told later - where the sleeves end, what the shoes are, how the head piece sits - so it
+ *   has to name the parts, not admire them.
+ */
+async function _readLookbookIdea(note, imageUrl) {
+  const rules = [
+    'You are preparing a CLOTHING LOOKBOOK: a flat product-style picture of one outfit or costume, made to be worn later by a character.',
+    'Decide first whether there is something to make.',
+    'If the text is gibberish, a random string, a test, or says nothing about clothing, a costume or a look, answer {"ok":false,"why":"..."} - one short sentence, addressed to the person.',
+    'If a picture is given, it always gives you something: a person wearing clothes means REPRODUCE that outfit; anything else - an object, an animal, a vehicle, a building, a plant, a character - means INVENT a wearable full-body costume of it (a mascot-style costume) that a person could actually wear.',
+    'When both a picture and a text are given, the text is a change to make to what the picture shows.',
+    'Then answer with JSON only: {"ok":true,"kind":"outfit"|"costume","prompt":"...","description":"..."}',
+    'kind is "costume" for mascot suits, full-body character costumes and cosplay shells; "outfit" for ordinary clothing.',
+    'prompt: an image-generation prompt for the picture itself, 120-220 words, garment by garment - every item, its colour, fabric, cut, fastenings, trims, shoes and accessories. Name each item ONCE. Describe ONLY the clothing or costume: no person, no face, no body, no pose, no scene, no background - those are added separately.',
+    'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
+  ].join(' ');
+  const ask = rules
+    + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
+    + (imageUrl ? ' Judge the picture as well.' : ' There is no picture.');
+  const content = imageUrl
+    ? [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: imageUrl } }]
+    : ask;
+  const rawOut = await _ask([{ role: 'user', content }]);
+  const text = String(rawOut || '').trim();
+  // Models wrap JSON in prose or fences often enough that fishing the object out is the rule,
+  // not the fallback.
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('the agent did not answer with a plan');
+  let plan;
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  if (!plan || plan.ok === false) {
+    const why = String((plan && plan.why) || 'that does not describe an outfit').trim();
+    return { ok: false, why };
+  }
+  const prompt = String(plan.prompt || '').trim();
+  if (!prompt) throw new Error('the agent wrote no prompt');
+  return {
+    ok: true,
+    kind: plan.kind === 'costume' ? 'costume' : 'outfit',
+    prompt,
+    description: String(plan.description || '').trim(),
+  };
 }
 
-// Photo + the user's note -> read the photo, apply the note, return ONE ready
-// generation prompt. The same model does both steps.
-async function _composeFromPhoto(note, imageUrl) {
-  const ask = 'Look at the photo and describe the outfit the person is wearing, then apply these changes: "'
-    + note + '". Reply with ONE image-generation prompt (<= 90 words) describing the RESULTING outfit garment by garment '
-    + '(each item, its colour, fabric and cut). Describe only clothing and accessories — no person, no pose, no background. '
-    + 'Reply with the prompt text only, no preamble, no quotes.';
-  const raw = await _ask([{
-    role: 'user',
-    content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: imageUrl } }],
-  }]);
-  return String(raw || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
-}
+// ── The picture itself ──────────────────────────────────────────────────────
+// gpt-image-2.5 sunburst, chosen by the owner for lookbooks: 2K, square, opaque. White is
+// asked for in the PROMPT - the model's own background setting only offers transparent or
+// opaque, and "opaque" is not a colour.
+const LB_MODEL_I2I = 'gpt-image-2-5-sunburst-image-to-image';
+const LB_MODEL_T2I = 'gpt-image-2-5-sunburst-text-to-image';
+
+const _lbTask = (prompt, urls) => (urls && urls.length
+  ? _kieTask(LB_MODEL_I2I, { prompt, input_urls: urls, aspect_ratio: '1:1', resolution: '2K', background: 'opaque' })
+  : _kieTask(LB_MODEL_T2I, { prompt, aspect_ratio: '1:1', resolution: '2K', background: 'opaque' }));
 
 // ── Lookbook gender ─────────────────────────────────────────────────────────
 // Which gender an outfit suits, judged from the INPUT (the description and/or the
@@ -717,26 +772,15 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
       photoUrl = await _hostLocal(ref, { verify: true });
     }
 
-    const taskIds = [];
-    let mode, prompts;
+    // The agent goes first, and it is the cheap half: if what it is given is not something to
+    // wear, nothing is generated and nothing is spent.
+    const plan = await _readLookbookIdea(note, photoUrl);
+    if (!plan.ok) return res.status(400).json({ success: false, error: plan.why, refused: true });
 
-    if (photoUrl && note) {
-      mode = 'edit';
-      const composed = await _composeFromPhoto(note, photoUrl);
-      prompts = [composed + KNOLL_TAIL];
-      taskIds.push(await _i2i(eng, prompts[0], [photoUrl], '1:1'));
-    } else if (photoUrl) {
-      mode = 'extract';
-      prompts = [EXTRACT_HEAD + KNOLL_TAIL];
-      taskIds.push(await _i2i(eng, prompts[0], [photoUrl], '1:1'));
-    } else {
-      mode = 'scratch';
-      const variants = await _variantPrompts(note, n);
-      prompts = variants.map(p => 'Create a clothing lookbook: ' + p + KNOLL_TAIL);
-      for (const p of prompts) taskIds.push(await _t2i(eng, p));
-    }
-
-    const ids = taskIds.filter(Boolean);
+    const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
+    const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
+    const id = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
+    const ids = [id].filter(Boolean);
     if (!ids.length) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
     ids.forEach(t => _track(t, 'lbcand'));
 
@@ -744,8 +788,13 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
     // the client gets the gender back long before the first image lands.
     const gender = await _detectGender(note, photoUrl);
 
-    console.log(`[scen3/gen/lookbook] mode=${mode} engine=${eng} tasks=${ids.length} gender=${gender || 'unknown'}`);
-    res.json({ success: true, mode, taskIds: ids, prompts, gender });
+    console.log(`[scen3/gen/lookbook] mode=${mode} kind=${plan.kind} tasks=${ids.length} gender=${gender || 'unknown'}`);
+    res.json({
+      success: true, mode, kind: plan.kind, taskIds: ids, prompts: [prompt], gender,
+      // Written now, filed with the picture when it lands: the description belongs to the
+      // lookbook, and the dressing will be given it rather than only the image.
+      description: plan.description,
+    });
   } catch (e) {
     console.error('[scen3/gen/lookbook]', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -1705,11 +1754,21 @@ router.post('/scen3/finalize', async (req, res) => {
     }
 
     if (kind === 'lookbook') {
-      // record the gender the caller resolved in parallel with the generation
+      // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
+      // long description the agent wrote, filed here because this is where the picture gets
+      // its final path - the key everything else refers to it by. A lookbook made before this
+      // existed simply has no entry, and behaves as it always did.
       const gender = String(b.gender || '').toLowerCase();
-      if (GENDER_VALUES.includes(gender)) {
+      const description = String(b.description || '').trim();
+      const prompt = String(b.prompt || '').trim();
+      if (GENDER_VALUES.includes(gender) || description) {
         const m = _lbMeta();
-        m[finalUrl] = { gender, at: new Date().toISOString() };
+        m[finalUrl] = {
+          ...(GENDER_VALUES.includes(gender) ? { gender } : {}),
+          ...(description ? { description } : {}),
+          ...(prompt ? { prompt } : {}),
+          at: new Date().toISOString(),
+        };
         _lbMetaSave(m);
       }
     }
