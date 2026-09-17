@@ -67,6 +67,14 @@ export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId
 /** The outfits to dress FROM: every picture on the lookbooks shelf. */
 export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files || []);
 
+/**
+ * What is known ABOUT those pictures, keyed by path: the gender the outfit suits, and - for
+ * one made since the agent started writing them - the long description of what it is. A
+ * lookbook from before has no entry at all, which is why every reader treats a missing one
+ * as "nothing known" rather than as an error.
+ */
+export const lookbookMeta = () => _json('/api/scen3/lookbook-meta').then(d => d.meta || {});
+
 /** Start the dressing. Answers a taskId to wait on - engines take a minute. */
 export const dress = (body) => _post('/api/scen3/gen/dress', body).then(d => d.taskId);
 

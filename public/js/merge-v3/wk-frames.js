@@ -194,7 +194,6 @@ export function paint(host, ctx) {
   txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, and where'));
   head.appendChild(txt);
   root.appendChild(head);
-  _paintWhere(root);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
@@ -204,7 +203,7 @@ export function paint(host, ctx) {
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
   if (_view === 'newlb' && chosen) {
-    _paintNewLookbook(scroll, head, chosen, root);
+    _paintNewLookbook(scroll, head, chosen);
   } else if (_view === 'lookbooks' && chosen) {
     // No drawer here at all. It is the character's wardrobe, and what is being answered on
     // this face of the panel is which outfit to make the next one from.
@@ -220,35 +219,29 @@ export function paint(host, ctx) {
 }
 
 // ── Where you are inside the step ───────────────────────────────────────────
-// The chips in the panel's own header say which STEP is open; this says where inside it, and
-// the bracket under the two says that the second belongs to the first. It is drawn even when
-// there is nothing to say - an empty band the exact height of a full one - because a header
-// that grows when you go one level deeper moves everything below it at the moment you are
-// reading it.
+// The step chip in the panel header says WHICH step is open; these say where inside it. They
+// are drawn by the workshop, under that chip and bracketed to it, so the two read as one thing
+// at two depths (js/merge-v3/workshop.js, _paintChips).
 const WHERE = {
   cast: 'character',
   lookbooks: 'looks',
   newlb: 'new lookbook',
 };
 
-function _paintWhere(root) {
-  const bar = _el('div', 'mv3-wk-where');
-  if (_view !== 'cast') {
-    const back = _el('button', 'mv3-wk-crumb', WHERE.cast);
-    back.type = 'button';
-    back.title = 'Back to choosing who says it';
-    back.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
-    bar.appendChild(back);
-    if (_view === 'newlb') {
-      const mid = _el('button', 'mv3-wk-crumb', WHERE.lookbooks);
-      mid.type = 'button';
-      mid.title = 'Back to the shelf of outfits';
-      mid.addEventListener('click', () => { _view = 'lookbooks'; _ctx.repaint(); });
-      bar.appendChild(mid);
-    }
-    bar.appendChild(_el('span', 'mv3-wk-crumb is-here', WHERE[_view]));
-  }
-  root.appendChild(bar);
+/** The path from the top of the step to where you are - the workshop paints it. */
+export function crumbs() {
+  if (_view === 'cast') return [];
+  const out = [{ id: 'cast', label: WHERE.cast }];
+  if (_view === 'newlb') out.push({ id: 'lookbooks', label: WHERE.lookbooks });
+  out.push({ id: _view, label: WHERE[_view], here: true });
+  return out;
+}
+
+/** Pressing one of them. */
+export function goCrumb(id) {
+  if (!WHERE[id] || id === _view) return;
+  _view = id;
+  _ctx.repaint();
 }
 
 // ── The shelf of outfits ────────────────────────────────────────────────────
@@ -278,6 +271,7 @@ function _paintLookbooks(host, head, c) {
 
   if (_lbs === null) {
     host.appendChild(_note('reading the lookbooks…'));
+    _needLbMeta();
     API.lookbooks().then((files) => { _lbs = files; _ctx.repaint(); })
       .catch((e) => { _lbs = []; _state = 'Could not read the lookbooks: ' + e.message; _ctx.repaint(); });
     return;
@@ -390,7 +384,7 @@ const _MODE_LABEL = {
   draw: 'draw it from the words',
 };
 
-function _paintNewLookbook(host, head, c, root) {
+function _paintNewLookbook(host, head, c) {
   host.classList.add('is-split');
   const acts = _el('div', 'mv3-wk-bar');
   const back = _el('button', 'mv3-sc-tab', 'create look');
@@ -413,6 +407,7 @@ function _paintNewLookbook(host, head, c, root) {
   const left = _el('div', 'mv3-wk-half is-shelf');
   if (_lbs === null) {
     left.appendChild(_note('reading the lookbooks…'));
+    _needLbMeta();
     API.lookbooks().then((files) => { _lbs = files; _ctx.repaint(); })
       .catch((e) => { _lbs = []; _state = 'Could not read the lookbooks: ' + e.message; _ctx.repaint(); });
   } else if (!_lbs.length) {
@@ -468,9 +463,9 @@ function _paintNewLookbook(host, head, c, root) {
 
   host.appendChild(right);
 
-  // The sentence and its button at the FOOT of the panel, across both halves: what is written
-  // there applies to whatever is in the field above, and it is the last thing done before
-  // spending - so it sits where the hand ends up, not in the middle of a column that scrolls.
+  // The sentence and its button at the foot of the RIGHT half - under the field they are about.
+  // The left half is the shelf being drawn from, and a sentence stretched under it would look
+  // like it applied to the shelf.
   const foot = _el('div', 'mv3-wk-foot');
   const note = _el('textarea', 'mv3-sc-lines is-short');
   note.placeholder = 'What should it be? With a photo, say what to change - "shoes to white Nike trainers".';
@@ -492,7 +487,7 @@ function _paintNewLookbook(host, head, c, root) {
   row.append(hint, go);
   foot.append(note, row);
   sync();
-  root.appendChild(foot);
+  right.appendChild(foot);
 
   // The stage shows who it is for, and only that: what is being made is already in the field
   // on the right, and a second copy of it on the stage would say nothing new.
@@ -527,9 +522,26 @@ function _lbTile(path, on, pick) {
 }
 
 // The viewer the Library uses, so a lookbook is looked at the same way wherever it is met -
-// and it is where its description will be read once there is one (phase C4c).
+// with, in the column beside it, what the agent wrote about it when it was made. One made
+// before that existed has nothing to say, and says nothing rather than saying "unknown".
 function _openLb(path) {
-  openViewer([{ id: path, name: path.split('/').pop(), kind: 'lookbooks', media: path }], 0);
+  const meta = (_lbMetaMap && _lbMetaMap[path]) || {};
+  const rows = [];
+  if (meta.description) rows.push(['description', meta.description]);
+  if (meta.gender) rows.push(['suits', meta.gender]);
+  openViewer(
+    [{ id: path, name: path.split('/').pop(), kind: 'lookbooks', media: path }], 0,
+    rows.length ? { extraRows: () => rows } : undefined,
+  );
+}
+
+// Read once beside the shelf itself: both answer "what is on this shelf", and a second
+// request per tile would be a request per tile.
+let _lbMetaMap = null;
+function _needLbMeta() {
+  if (_lbMetaMap) return;
+  _lbMetaMap = {};
+  API.lookbookMeta().then((m) => { _lbMetaMap = m || {}; }).catch(() => { /* nothing known */ });
 }
 
 function _lbMenu(ev, tile, path) {

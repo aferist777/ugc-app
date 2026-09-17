@@ -125,7 +125,27 @@ function _paintChips() {
     b.textContent = s.label;
     b.title = s.title;
     b.addEventListener('click', () => setStep(s.id));
-    bar.appendChild(b);
+    // The open step may have places INSIDE it. They hang under its chip, bracketed to it, so
+    // the pair reads as one thing at two depths rather than as two rows of tabs.
+    const crumbs = (s.id === _step && _loaded[_step] && typeof _loaded[_step].crumbs === 'function')
+      ? (_loaded[_step].crumbs() || []) : [];
+    if (!crumbs.length) { bar.appendChild(b); continue; }
+    const wrap = document.createElement('div');
+    wrap.className = 'mv3-wk-stepwrap';
+    wrap.appendChild(b);
+    const subs = document.createElement('div');
+    subs.className = 'mv3-wk-subs';
+    for (const c of crumbs) {
+      const sb = document.createElement('button');
+      sb.type = 'button';
+      sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : '');
+      sb.textContent = c.label;
+      sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
+      if (!c.here) sb.addEventListener('click', () => { _loaded[_step].goCrumb(c.id); });
+      subs.appendChild(sb);
+    }
+    wrap.appendChild(subs);
+    bar.appendChild(wrap);
   }
 }
 
@@ -174,6 +194,8 @@ const MODULES = {
 const _loaded = {};
 
 export function paint(host) {
+  // The chips carry the step's own crumbs, and those change as the step changes what it shows.
+  _paintChips();
   const spec = STEPS.find(s => s.id === _step);
   const load = MODULES[_step];
 

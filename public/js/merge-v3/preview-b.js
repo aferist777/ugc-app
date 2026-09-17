@@ -396,8 +396,12 @@ function _paint() {
     _ctx.setTransform(1, 0, 0, 1, 0, 0);
     _ctx.fillStyle = '#000';
     _ctx.fillRect(0, 0, CW, CH);
+    _ctx.save();
+    _ctx.translate(_view.x, _view.y);
+    _ctx.scale(_view.z, _view.z);
     _drawStill();
     _drawPair();
+    _ctx.restore();
     return 0;
   }
   _rects.clear();
@@ -685,7 +689,62 @@ export function borrow(on) {
   if (!_borrowed) { _still = null; _pair = null; }
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
+  _view = { z: 1, x: 0, y: 0 };
+  // The stage stops being a 9:16 window and becomes the whole panel: nothing here is a frame
+  // of the film, and a reference being judged should use the room there is.
+  _fit();
   if (_on) _paint();
+}
+
+// ── Moving around a reference ───────────────────────────────────────────────
+// A touchpad pinch arrives as a wheel event with ctrlKey set, and two fingers arrive as a
+// wheel with deltas - so one listener covers both, and the mouse gets the same gestures with
+// Ctrl held. Double-click puts it back. The numbers live here and are thrown away the moment
+// the stage goes back to the timeline: this is a way of looking, not a setting.
+let _view = { z: 1, x: 0, y: 0 };
+const ZOOM_MIN = 0.2, ZOOM_MAX = 8;
+
+function _wireZoom(cv) {
+  cv.addEventListener('wheel', (e) => {
+    if (!_borrowed) return;
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      // Around the pointer, so the thing being looked at stays under it.
+      const r = cv.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width * CW;
+      const py = (e.clientY - r.top) / r.height * CH;
+      const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _view.z * Math.exp(-e.deltaY / 240)));
+      const k = next / _view.z;
+      _view.x = px - (px - _view.x) * k;
+      _view.y = py - (py - _view.y) * k;
+      _view.z = next;
+    } else {
+      _view.x -= e.deltaX;
+      _view.y -= e.deltaY;
+    }
+    _paint();
+  }, { passive: false });
+  cv.addEventListener('dblclick', () => {
+    if (!_borrowed) return;
+    _view = { z: 1, x: 0, y: 0 };
+    _paint();
+  });
+}
+
+// The canvas takes the panel's own size while the workshop holds it, in real pixels, so a
+// picture enlarged four times is still sharp.
+function _fit() {
+  const stage = document.getElementById(STAGE);
+  if (!_cv || !stage) return;
+  const r = stage.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  CW = Math.max(1, Math.round(r.width * dpr));
+  CH = Math.max(1, Math.round(r.height * dpr));
+  _cv.width = CW;
+  _cv.height = CH;
+  PAD = 0;
+  W = CW;
+  H = CH;
 }
 
 export const isBorrowed = () => _borrowed;
@@ -849,6 +908,7 @@ function _wireFormat() {
 }
 
 function _resize() {
+  if (_borrowed) return _fit();
   const f = FORMATS[_fmt()];
   W = f.w; H = f.h;
   PAD = Math.round(Math.min(W, H) * PAD_FRAC);
@@ -877,6 +937,7 @@ export function mount() {
   _resize();
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.
+  _wireZoom(_cv);
   wirePlace(_cv, {
     rectOf: (id) => _rects.get(id),
     rects: () => _rects,
@@ -943,6 +1004,9 @@ export const isMounted = () => _on;
 export function initPreviewB() {
   // Not while a screenshot is being drawn: that has the frame's size and its own canvas in hand.
   Store.onChange(() => { if (_on && !_shooting) { _resize(); _repaint(); _clock(); } });
+  // A dragged sash changes the surface the workshop is drawing on, and nothing else would
+  // notice: the timeline's own frame is a fixed size, this one is the panel.
+  window.addEventListener('resize', () => { if (_on && _borrowed) { _resize(); _paint(); } });
   const q = document.getElementById('mv3-pv-q');
   // A new quality means new files. The old ones are dropped rather than left in the map,
   // where they would be held open for a resolution nothing is going to ask for again.

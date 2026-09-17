@@ -225,6 +225,11 @@ select.mv3-rr-rf{cursor:pointer}
   display:flex; align-items:center; gap:9px; flex:0 0 auto; overflow:hidden;
   padding:7px 11px; background:var(--surface); border-bottom:1px solid var(--border-soft);
 }
+/* The inspector's header carries the step chips, and the open step may hang its own crumbs
+   under them. The room is kept whether or not it does: a header that grows when you go a
+   level deeper moves the whole panel at the moment it is being read. */
+#mv3-inspector .mv3-panel-head{min-height:52px; align-items:flex-start}
+#mv3-inspector .mv3-panel-title{line-height:20px}
 /* The title gives way first: it is a label, and the shelf buttons beside it are
    controls. min-width:0 is what actually lets a flex item shrink far enough to
    ellipsise - without it the text sets its own floor and pushes the buttons out. */
@@ -1526,6 +1531,11 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    back the moment the timeline step is picked, and a control that vanishes and returns
    is harder to trust than one that is plainly asleep. */
 body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
+/* While the workshop holds the stage there is no 9:16 window to keep: nothing on it is a
+   frame of the film, so the reference being judged gets the whole panel, and the gestures
+   that move it (js/merge-v3/preview-b.js) have room to move in. */
+body.mv3-workshop .mv3-stage{aspect-ratio:auto !important; width:100%; height:100%; border-radius:var(--r-sm)}
+body.mv3-workshop .mv3-preview-body{padding:10px}
 
 /* ── The workshop's first step ───────────────────────────────────────────────
    Casting in a 280px column (js/merge-v3/wk-frames.js). Three faces to a row is the
@@ -1566,25 +1576,29 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
-/* Where you are inside the step, under the chips. The band keeps its height when there is
-   nothing in it: a header that grows as you go one level deeper moves everything below it at
-   the moment it is being read. */
-.mv3-wk-where{display:flex; align-items:center; gap:4px; min-height:17px; padding:0 9px 3px}
-.mv3-wk-crumb{
-  padding:1px 6px; border:0; background:transparent; cursor:pointer;
-  color:var(--muted); font:600 8.5px/1.5 var(--font); letter-spacing:.04em; text-transform:uppercase;
-}
-.mv3-wk-crumb:hover{color:var(--ink)}
-/* The bracket. Each crumb after the first hangs off the one before it by a corner, which is
-   the shape of "this came out of that". */
-.mv3-wk-crumb + .mv3-wk-crumb{
+/* WHERE YOU ARE INSIDE THE OPEN STEP: under that step's chip, bracketed to it, so the two read
+   as one thing at two depths instead of as two rows of tabs. The header is given this height
+   from the start (see .mv3-panel-head below), so nothing moves when they appear. */
+.mv3-wk-stepwrap{display:flex; flex-direction:column; align-items:flex-start; gap:2px}
+.mv3-wk-subs{display:flex; align-items:center; gap:3px; padding-left:9px; position:relative}
+/* The bracket itself: a corner from the chip above down to the first sub-step. */
+.mv3-wk-subs::before{
+  content:''; position:absolute; left:3px; top:-2px; bottom:50%; width:6px;
   border-left:1px solid var(--border); border-bottom:1px solid var(--border);
-  border-bottom-left-radius:4px; padding-left:8px; margin-left:1px;
+  border-bottom-left-radius:4px;
 }
-.mv3-wk-crumb.is-here{color:var(--primary); cursor:default}
+.mv3-wk-sub{
+  padding:1px 6px; border:1px solid transparent; border-radius:var(--r-xs);
+  background:transparent; color:var(--muted); cursor:pointer;
+  font:600 8.5px/1.5 var(--font); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap;
+}
+.mv3-wk-sub:hover{color:var(--ink)}
+/* Dotted, not filled: it says "you are here", and a second solid chip beside a solid step
+   chip would read as a second choice of the same weight. */
+.mv3-wk-sub.is-here{border-style:dashed; border-color:var(--primary); color:var(--primary); cursor:default}
 
 /* The sentence and its button, at the foot of the panel across both halves. */
-.mv3-wk-foot{flex:0 0 auto; border-top:1px solid var(--border); background:var(--surface); padding:7px 9px 9px}
+.mv3-wk-foot{flex:0 0 auto; margin-top:auto; border-top:1px solid var(--border); background:var(--surface); padding:7px 9px 9px}
 .mv3-wk-foot .mv3-sc-lines.is-short{margin:0; width:100%; min-height:56px}
 /* The button under the field and at its right edge, the width of the word: a full-width
    button reads as the only thing to do, and this is the last of several. */

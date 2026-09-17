@@ -493,10 +493,60 @@ const MASCOT_TAIL =
   + ' Pure white seamless background (#FFFFFF), soft even lighting, sharp focus, high detail.'
   + ' No text, no labels, no watermark. 1:1 square.';
 
-// Dressing keeps the sheet's composition; only the clothes may change.
+// Dressing keeps the sheet's composition; only what is worn may change.
 const DRESS_LOCK =
   ' Keep the SAME person, the SAME face, the SAME body, the SAME pose, the SAME framing, crop and background exactly as in the source image.'
-  + ' Change ONLY the clothing. Do not add text, logos or watermarks.';
+  + ' Change ONLY what the person is wearing. Do not add text, logos or watermarks.';
+
+// A MASCOT SUIT IS NOT CLOTHING. It is a shell with its own size and shape, and the person
+// goes inside it: the head is inside the head, the arms are inside the arms, and the body it
+// ends up with is the COSTUME's body, not theirs. Told nothing, the engine paints the picture
+// onto the person like a printed leotard - which is exactly what the owner saw.
+const COSTUME_LOCK =
+  ' The person is INSIDE the costume, wearing it as a full-body suit: it has its own volume and proportions,'
+  + ' thick and padded where the reference is thick, and it does NOT follow the body underneath.'
+  + ' Do not paint the costume onto the skin, do not make it skin-tight, do not turn it into a printed bodysuit or leotard.'
+  + ' Keep the SAME framing, crop, camera and background as the source image, and keep the pose readable.'
+  + ' If the costume has a head or mask, it covers the head; show the person face only where the costume has an opening for it.'
+  + ' Do not add text, logos or watermarks.';
+
+/**
+ * WHAT IS BEING PUT ON, decided by looking at both pictures at once.
+ *
+ * The lookbook is a flat picture, sometimes on a plain mannequin. Only the agent can tell a
+ * padded mascot shell from a jacket and trousers, and the two need opposite instructions - so
+ * it is asked, and it also writes the sentence that does the dressing. When the lookbook was
+ * made here it already carries a description of itself (scen3-lookbook-meta.json); that is
+ * handed over too, because words about the inside of a costume survive being photographed
+ * flat and a picture of it does not.
+ */
+async function _readDressing(personUrl, outfitUrl, note, described) {
+  const ask = [
+    'Two pictures: IMAGE 1 is a reference sheet of a person, IMAGE 2 is an outfit laid out flat or shown on a plain mannequin.',
+    'The mannequin, if there is one, is not part of the outfit - it stands in for the person, and the person from IMAGE 1 takes its place.',
+    'First decide what IMAGE 2 is: "outfit" for ordinary clothing, or "costume" for a mascot suit, a full-body character costume, a cosplay shell or an inflatable - anything the wearer gets inside rather than puts on.',
+    'Then write ONE image-generation prompt, 80-160 words, telling the model to dress the person from IMAGE 1 in it.',
+    'Describe the garments or the costume part by part, naming colours, materials and how each part sits on the body. Name each item once.',
+    'For a costume, say plainly that the person is inside it, that it keeps its own bulk and proportions and does not follow the body underneath, and where the person face shows.',
+    'Never describe the background, the camera or the pose - those stay as they are in IMAGE 1.',
+    'Answer with JSON only: {"kind":"outfit"|"costume","prompt":"..."}',
+  ].join(' ')
+    + (described ? ' What IMAGE 2 is, as recorded when it was made: "' + String(described).slice(0, 1500) + '".' : '')
+    + (note ? ' The person also asked for: "' + note + '".' : '');
+  const content = [
+    { type: 'text', text: ask },
+    { type: 'image_url', image_url: { url: personUrl } },
+    { type: 'image_url', image_url: { url: outfitUrl } },
+  ];
+  const rawOut = await _ask([{ role: 'user', content }]);
+  const m = String(rawOut || '').match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('the agent did not say how to dress this');
+  let plan;
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  const prompt = String((plan && plan.prompt) || '').trim();
+  if (!prompt) throw new Error('the agent wrote no prompt');
+  return { kind: plan.kind === 'costume' ? 'costume' : 'outfit', prompt };
+}
 
 // The same ladder the Character page reads photos with, instead of a cascade of this
 // popup's own. One place decides which models look at an image, and every step listed
@@ -1559,21 +1609,31 @@ router.post('/scen3/gen/dress', async (req, res) => {
 
     const urls = [await _hostLocal(base)];
     let prompt;
+    let kind = 'outfit';
     if (lb) {
       urls.push(await _hostLocal(lb));
-      prompt = 'Dress the person from IMAGE 1 in the outfit shown in IMAGE 2. Reproduce that outfit faithfully — same garments, colours, patterns, fabrics and cuts.'
-        + (note ? ' Also apply these clothing-only adjustments: ' + note + '.' : '') + DRESS_LOCK;
+      // The agent reads both pictures before anything is generated: a mascot shell and a
+      // jacket need opposite instructions, and only looking at them can tell which is which.
+      const plan = await _readDressing(urls[0], urls[1], note, (_lbMeta()[lb] || {}).description);
+      kind = plan.kind;
+      prompt = plan.prompt + (kind === 'costume' ? COSTUME_LOCK : DRESS_LOCK);
     } else {
       prompt = 'Re-dress the person in the image according to this note: ' + note + '.' + DRESS_LOCK;
     }
 
     // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
     const aspect = (await _ratioOf(base)) || 'match_input_image';
-    const tid = await _i2i(eng, prompt, urls, aspect);
+    // The same model the lookbooks are made with, on the owner's instruction. 2K: the result
+    // is a reference sheet that every frame of the ad is built from, so it is the one picture
+    // in the chain that must not be soft.
+    const tid = await _kieTask(LB_MODEL_I2I, {
+      prompt, input_urls: urls, aspect_ratio: aspect === 'match_input_image' ? 'auto' : aspect,
+      resolution: '2K', background: 'opaque',
+    });
     if (!tid) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
     _track(tid, 'dressed');
-    console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} engine=${eng} refs=${urls.length}`);
-    res.json({ success: true, mode: lb ? 'apply' : 'redress', taskId: tid, prompt });
+    console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length}`);
+    res.json({ success: true, mode: lb ? 'apply' : 'redress', kind, taskId: tid, prompt });
   } catch (e) {
     console.error('[scen3/gen/dress]', e.message);
     res.status(500).json({ success: false, error: e.message });
