@@ -792,6 +792,17 @@ export const isBorrowed = () => _borrowed;
  * @param caption  a line under it, for saying WHICH of two similar pictures this is
  */
 export function showStill(src, caption) {
+  // The same picture again is not a new one - a panel repaints after every save. It keeps
+  // where it was pushed and how far it was pinched, and it is not loaded a second time.
+  if (src && _still && _still.src === src && _still.img) {
+    _still.caption = String(caption || '');
+    if (_on) _paint();
+    return;
+  }
+  // A NEW picture arrives fitted and in the middle. The view is how the last one was being
+  // looked at - after a sash drag it holds the shift that kept THAT one centred - and applied
+  // to this one it would only push it off to the side.
+  _view = { z: 1, x: 0, y: 0 };
   _pair = null;
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
@@ -821,6 +832,8 @@ export function showPair(top, bottom) {
   _still = null;
   const want = String(top || '') + '|' + String(bottom || '');
   if (_pair && _pair.key === want) return;
+  // A new pair starts fitted and centred, for the reason a new still does (showStill).
+  _view = { z: 1, x: 0, y: 0 };
   _pair = { key: want, top: null, bottom: null };
   const load = (src, slot) => {
     if (!src) return;
