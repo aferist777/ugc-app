@@ -105,6 +105,7 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
 );
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api', require('./routes/alerts'));   // the journal of generations behind the Alerts button
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/prompts'));
