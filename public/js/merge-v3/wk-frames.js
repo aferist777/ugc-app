@@ -592,7 +592,7 @@ function _paintNewLookbook(host, head, c) {
 
   // RIGHT: what is being made. The field takes a picture from this computer, and doing that
   // drops whatever was chosen on the left.
-  const right = _el('div', 'mv3-wk-half');
+  const right = _el('div', 'mv3-wk-half is-make');
   const baseSrc = _ref ? _ref.dataUrl : (_refLb ? derived(_refLb, 'card') : '');
   const drop = _el('div', 'mv3-wk-drop' + (baseSrc ? ' is-full' : ''));
   drop.title = 'Drop a photo here, or click to choose one from this computer';

@@ -145,13 +145,23 @@ function _paintChips() {
       wrap.appendChild(arrow);
       const sb = document.createElement('button');
       sb.type = 'button';
-      sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : '');
+      // Passed through: dashed. Where you are: lit, nothing more (css/merge-v3.css).
+      sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : ' is-trail');
       sb.textContent = c.label;
       sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
       if (!c.here) sb.addEventListener('click', () => { _loaded[_step].goCrumb(c.id); });
       wrap.appendChild(sb);
     }
     bar.appendChild(wrap);
+  }
+  // A route longer than the panel is wide scrolls sideways (css/merge-v3.css), and its END is
+  // where you are - so that is the part kept in view. The start is a flick away; the current
+  // place hidden past the edge would be the one word on the row that could not be read.
+  bar.scrollLeft = 0;
+  const here = bar.querySelector('.mv3-wk-sub.is-here');
+  if (here) {
+    const over = here.getBoundingClientRect().right - bar.getBoundingClientRect().right;
+    if (over > 0) bar.scrollLeft = Math.ceil(over) + 2;
   }
 }
 

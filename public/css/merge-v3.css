@@ -1581,24 +1581,39 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
-/* WHERE YOU ARE INSIDE THE OPEN STEP: beside that step's chip, in the same row, with a bracket
-   drawn UNDER the pair - the shape that says the second belongs to the first. In the row and
+/* WHERE YOU ARE INSIDE THE OPEN STEP: after that step's chip, in the same row. In the row and
    not under it, because a second line would make the header taller the moment you went one
-   level deeper, and move everything below it while it was being read. */
-.mv3-wk-stepwrap{display:flex; align-items:center; gap:3px; flex:0 0 auto}
+   level deeper, and move everything below it while it was being read.
+   THE WHOLE ROUTE IS ONE THING. The step chip and every place after it sit on a shared tint,
+   so the step reads as a block from its name down to wherever you are in it. Arrow and chip
+   are spaced alike and tight - equal gaps are what make it read as one sequence and not as
+   chips that happen to have arrows near them. */
+/* No vertical padding: the step chip is the tallest thing in the row and the tint is exactly
+   its height, so going a level deeper adds a tail to the pill and never a pixel to the header.
+   None on the left either - the chip's own outline IS the start of the pill. The 2px on the
+   right is the gap again, which puts the last word as far from the end as the first. */
+.mv3-wk-stepwrap{
+  display:flex; align-items:center; gap:2px; flex:0 0 auto;
+  padding:0 2px 0 0; border-radius:999px; background:var(--primary-soft);
+}
 /* Between the places on the route: what led to what, read left to right. */
-.mv3-wk-arrow{color:var(--muted); font:600 10px/1 var(--font); opacity:.7; padding:0 1px}
+.mv3-wk-arrow{color:var(--primary); font:600 9px/1 var(--font); opacity:.75; padding:0; margin:0}
+/* Every place on the route is LIT - it is the path you took. */
 .mv3-wk-sub{
-  padding:1px 6px; border:1px solid transparent; border-radius:var(--r-xs);
-  background:transparent; color:var(--muted); cursor:pointer;
+  padding:1px 5px; border:1px solid transparent; border-radius:999px;
+  background:transparent; color:var(--primary); cursor:pointer;
   font:600 8.5px/1.5 var(--font); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap;
 }
 .mv3-wk-sub:hover{color:var(--ink)}
-/* Dotted, not filled: it says "you are here", and a second solid chip beside a solid step
-   chip would read as a second choice of the same weight. */
-.mv3-wk-sub.is-here{border-style:dashed; border-color:var(--primary); color:var(--primary); cursor:default}
+/* The places already passed through keep a dashed outline - the trail. The one you are on is
+   lit and nothing more: the step chip at the start has the solid outline, the trail is dashed,
+   and where you stand needs no box to be found, because it is where the trail ends. */
+.mv3-wk-sub.is-trail{border-style:dashed; border-color:var(--primary)}
+.mv3-wk-sub.is-here{cursor:default}
 
-/* The sentence and its button, at the foot of the panel across both halves. */
+/* The sentence and its button, at the foot of the right half and ON the panel's bottom edge:
+   the half that holds it gives up the padding every other half keeps under its content. */
+.mv3-wk-half.is-make{padding-bottom:0}
 .mv3-wk-foot{flex:0 0 auto; margin-top:auto; border-top:1px solid var(--border); background:var(--surface); padding:7px 9px 9px}
 .mv3-wk-foot .mv3-sc-lines.is-short{margin:0; width:100%; min-height:56px}
 /* The button under the field and at its right edge, the width of the word: a full-width
@@ -1617,22 +1632,35 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 
 /* ── The hub of first frames ────────────────────────────────────────────────
    Left: the two sources as pictures, each a door into its branch. Right: what to do next. */
-.mv3-wk-half.is-sources{gap:8px; padding:8px 7px; border-right:1px solid var(--border-soft); overflow-y:auto}
+/* The sources column is at most 300px wide whatever the sash does, and the two pictures share
+   its HEIGHT - they always fit in the hub without scrolling. The rest of the width is the
+   conversation with the agent, which needs it more than a bigger thumbnail does. (300 is a
+   first number, to be tuned once the chat is in.) */
+.mv3-wk-half.is-sources{
+  flex:0 0 min(300px, 46%); gap:6px; padding:7px; overflow:hidden;
+  border-right:1px solid var(--border-soft);
+}
 .mv3-wk-source{
-  position:relative; display:flex; flex-direction:column; gap:4px; padding:6px; cursor:pointer; text-align:left;
+  position:relative; flex:1 1 0; min-height:0;
+  display:flex; flex-direction:column; gap:3px; padding:5px; cursor:pointer; text-align:left;
   border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface); color:var(--muted);
 }
 .mv3-wk-source:hover{border-color:var(--primary)}
 .mv3-wk-source.is-full{border-style:solid}
-.mv3-wk-source img{width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center; border-radius:var(--r-xs); display:block; background:var(--bg)}
+/* Contained, not cropped: the box takes whatever height the column gives it, and the picture
+   is shown whole inside it - it is how the person recognises what they chose. */
+.mv3-wk-source img{
+  flex:1 1 auto; min-height:0; width:100%; height:100%;
+  object-fit:contain; object-position:center; border-radius:var(--r-xs); display:block; background:var(--bg);
+}
 .mv3-wk-source img.is-left{object-position:left center}
 .mv3-wk-source-empty{
-  display:flex; align-items:center; justify-content:center; aspect-ratio:16/9;
+  flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center;
   font:600 11px/1.3 var(--font); color:var(--muted);
 }
-.mv3-wk-source-cap{font:600 9.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mv3-wk-source-cap{flex:0 0 auto; font:600 9.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 
-.mv3-wk-half.is-guide{padding:9px 10px; overflow-y:auto}
+.mv3-wk-half.is-guide{flex:1 1 auto; min-width:0; padding:9px 10px; overflow-y:auto}
 .mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
 .mv3-wk-guide-p.is-soon{color:var(--muted); font-style:italic}
@@ -1643,7 +1671,10 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls
    between them makes it two. */
-.mv3-wk-scroll.is-split{display:flex; gap:0; align-items:stretch}
+/* The halves reach the panel's bottom edge. The 26px the scroll keeps free at its foot is for
+   the drawer's strip, and a split face has no drawer - kept, it was a dead band under the hub
+   and it held the lookbook maker's sentence off the edge it belongs on. */
+.mv3-wk-scroll.is-split{display:flex; gap:0; align-items:stretch; padding-bottom:0}
 .mv3-wk-half{flex:1 1 50%; min-width:0; display:flex; flex-direction:column; padding-bottom:8px}
 .mv3-wk-half.is-shelf{border-right:1px solid var(--border-soft); overflow-y:auto}
 .mv3-wk-half.is-shelf .mv3-wk-grid{grid-template-columns:repeat(auto-fill, minmax(62px, 1fr)); padding:8px 7px}
