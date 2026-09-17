@@ -88,10 +88,22 @@ export function setStep(id) {
   _repaint();
 }
 
+// ?step= in the address, which is how the Alerts list takes somebody back to the place a
+// generation was started from (js/alerts-bell.js). It is read once, when the project is adopted,
+// and it beats what was remembered - it is the more recent instruction of the two.
+function _urlStep() {
+  try {
+    const s = new URLSearchParams(location.search).get('step') || '';
+    return STEPS.some(x => x.id === s) ? s : '';
+  } catch (e) { return ''; }
+}
+
 // Which step an opened project lands on. A project with a cut on its timeline is one
 // being edited, so it opens on the timeline; an empty one has nothing to edit yet and
 // opens where the work starts. A remembered choice beats both.
 function _firstStep() {
+  const asked = _urlStep();
+  if (asked) return asked;
   const seen = _remembered();
   if (seen && STEPS.some(s => s.id === seen)) return seen;
   const tl = Store.timeline();
@@ -237,7 +249,13 @@ export function paint(host) {
     // (lib/alerts.js); `reloadProject` is for the things the SERVER writes into the project while
     // a step is open - a finished look goes straight into the casting (lib/gen-jobs.js), and the
     // panel has to read it back rather than trust the copy it was painted from.
-    if (mod) return mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload });
+    if (mod) {
+      mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload });
+      // Again, because the step may have changed where it is WHILE painting - an address asking for
+      // a level it cannot open (a lookbook with nobody cast) lands on the one it can, and the route
+      // in the header has to say the place that is actually on screen.
+      return _paintChips();
+    }
     host.appendChild(_note('opening ' + spec.label + '…'));
     load().then((m) => { _loaded[_step] = m; _repaint(); })
       .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });

@@ -25,6 +25,8 @@ let _extraRows = null;
 let _underStage = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
+// A track has nothing to look at, so it gets a player on the stage instead of a broken picture.
+const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac)(\?|$)/i;
 
 function _fmtDate(s) {
   if (!s) return '';
@@ -67,6 +69,14 @@ function _paint() {
       if (extra) { stage.classList.add('has-under'); stage.appendChild(extra); }
       else stage.classList.remove('has-under');
     }
+  } else if (AUDIO_RE.test(String(it.media || ''))) {
+    const a = document.createElement('audio');
+    a.className = 'lib-view-audio';
+    a.src = it.media;
+    a.controls = true;
+    a.autoplay = true;
+    stage.appendChild(a);
+    stage.classList.remove('has-under');
   } else {
     const img = document.createElement('img');
     img.className = 'lib-view-media';
@@ -226,7 +236,7 @@ export function openViewer(items, index, opts) {
 export function closeViewer() {
   if (!_ov) return;
   // stop any playback before the node goes, or Chrome keeps buffering a detached video
-  _ov.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) {} v.removeAttribute('src'); v.load(); });
+  _ov.querySelectorAll('video, audio').forEach(v => { try { v.pause(); } catch (e) {} v.removeAttribute('src'); v.load(); });
   _ov.remove();
   _ov = null;
   _list = [];

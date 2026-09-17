@@ -60,3 +60,84 @@
   font:700 12px/26px var(--font);
 }
 .lib-switch select:hover{ border-color:var(--primary); }
+
+/* ── Alerts ──────────────────────────────────────────────────────────────────
+   What is being generated, on every page (js/alerts-bell.js). Left of Library because it is a
+   reading about work in flight, not a place to go; the count on it is the same red as the render
+   queue's, so two numbers about waiting work look like the same kind of thing. */
+.sv3-nav .sv3-alerts{
+  position:relative; display:flex; align-items:center; gap:5px; flex:0 0 auto;
+  margin-right:2px; padding:5px 10px; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); font:600 12px/1 var(--font); transition:.12s var(--ease);
+}
+.sv3-nav .sv3-alerts:hover{ color:var(--ink); background:var(--surface-2); }
+.sv3-nav .sv3-alerts.is-on{ color:var(--ink); border-color:var(--border); background:var(--surface-2); }
+.sv3-nav .sv3-alerts.has-running{ color:var(--ink); }
+.sv3-al-count{ display:none; }
+.sv3-alerts.has-running .sv3-al-count{
+  display:inline-block; min-width:15px; height:15px; padding:0 4px; border-radius:var(--pill);
+  background:var(--danger); color:#fff; font:700 9px/15px var(--font); text-align:center;
+}
+/* Something finished while you were looking elsewhere. It goes out when the list is opened. */
+.sv3-alerts.has-done::after{
+  content:''; position:absolute; top:4px; right:5px; width:7px; height:7px;
+  border-radius:50%; background:var(--ok, #3fbf7f);
+}
+
+.sv3-al-menu{
+  position:fixed; z-index:120; width:360px; max-height:min(70vh, 520px); overflow:auto;
+  display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.sv3-al-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border); }
+.sv3-al-head .sp{ flex:1; }
+.sv3-al-h{ font:700 11px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.sv3-al-clear{
+  padding:3px 8px; cursor:pointer; background:none; border:1px solid var(--border);
+  border-radius:var(--pill); color:var(--muted); font:600 10px/1.3 var(--font);
+}
+.sv3-al-clear:hover{ color:var(--ink); border-color:var(--ink); }
+.sv3-al-list{ display:flex; flex-direction:column; }
+.sv3-al-empty{ padding:14px 12px; color:var(--muted); font:400 11px/1.5 var(--font); }
+
+.sv3-al-row{
+  display:flex; align-items:center; gap:8px; padding:7px 10px;
+  border-bottom:1px solid var(--border-soft);
+}
+.sv3-al-row.is-linked{ cursor:pointer; }
+.sv3-al-row.is-linked:hover{ background:var(--surface-2); }
+.sv3-al-row.is-failed{ background:color-mix(in oklab, var(--danger) 10%, transparent); }
+.sv3-al-row.is-failed .sv3-al-title{ color:var(--danger); }
+.sv3-al-mark{ flex:0 0 auto; width:16px; text-align:center; color:var(--primary); font-size:12px; }
+.sv3-al-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.sv3-al-title{ font:600 11.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sv3-al-where{ font:400 10px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sv3-al-state{ flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); }
+.sv3-al-acts{ flex:0 0 auto; display:flex; gap:4px; }
+.sv3-al-act{
+  padding:3px 8px; cursor:pointer; background:none; border:1px solid var(--border);
+  border-radius:var(--pill); color:var(--muted); font:600 10px/1.3 var(--font); white-space:nowrap;
+}
+.sv3-al-act:hover{ color:var(--ink); border-color:var(--ink); }
+/* Asked before it spends: the second press on the same button is the answer. */
+.sv3-al-act.is-armed{ color:var(--gold); border-color:var(--gold); }
+
+/* A finished generation says so once, wherever you are. Under the button it belongs to. */
+.sv3-toasts{
+  position:fixed; top:46px; right:12px; z-index:130;
+  display:flex; flex-direction:column; gap:6px; pointer-events:none;
+}
+.sv3-toast{
+  pointer-events:auto; display:flex; align-items:center; gap:8px; width:300px; padding:8px 10px;
+  cursor:pointer; background:var(--surface); border:1px solid var(--primary); border-radius:var(--r-sm);
+  box-shadow:var(--shadow); transition:opacity .25s var(--ease), transform .25s var(--ease);
+}
+.sv3-toast.is-failed{ border-color:var(--danger); }
+.sv3-toast.is-going{ opacity:0; transform:translateY(-6px); }
+.sv3-toast-mark{ flex:0 0 auto; width:16px; text-align:center; color:var(--primary); }
+.sv3-toast.is-failed .sv3-toast-mark{ color:var(--danger); }
+
+/* A track has nothing to look at: the viewer gives it a player instead of a picture. */
+.lib-view-audio{ width:min(560px, 80%); }

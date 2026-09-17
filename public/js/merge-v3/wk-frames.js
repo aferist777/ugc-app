@@ -69,7 +69,20 @@ let _saving = false;
 //   hub
 //   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
 //   └── env  ── newenv                  the environment, making one
-let _view = 'hub';
+//
+// ?view= in the address opens one of them directly: that is how the Alerts list takes somebody
+// back to the place a generation was started from (js/alerts-bell.js). Read once, when this module
+// is first loaded - which is when the step is opened. Checked against this list rather than
+// against WHERE below it: that one is declared further down, and reading it here would be reading
+// it before it exists.
+const VIEWS = ['hub', 'cast', 'lookbooks', 'newlb', 'env', 'newenv'];
+function _urlView() {
+  try {
+    const v = new URLSearchParams(location.search).get('view') || '';
+    return VIEWS.includes(v) ? v : '';
+  } catch (e) { return ''; }
+}
+let _view = _urlView() || 'hub';
 // What the next lookbook is made FROM: either a file the person chose here, or one the
 // library already holds. Never both - choosing on one side clears the other, because the
 // question "what is this based on" has one answer.

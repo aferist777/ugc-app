@@ -9,6 +9,8 @@
 //     light the wrong one the day that changes.
 //   • the Admin entry, on a page whose strip leaves it out.
 
+import { mountAlerts } from './alerts-bell.js';
+
 function _lightCurrent(nav) {
   const here = location.pathname.replace(/\/+$/, '') || '/';
   let best = null, bestLen = -1;
@@ -41,4 +43,7 @@ export function initNav() {
   if (!nav) return;
   _adminLink(nav);
   _lightCurrent(nav);
+  // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
+  // the list is the same wherever you are standing.
+  mountAlerts(nav);
 }
