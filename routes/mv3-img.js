@@ -138,6 +138,8 @@ router.post('/mv3/img/gen', async (req, res) => {
       prompt: b.prompt, said: b.said, aspect: b.aspect, quality: b.quality,
       // Local library paths. Made reachable from the outside on the way through - see _hostRefs.
       refs: b.refs,
+      // Where the page asked from, so the Alerts list can take somebody back to it.
+      where: b.where,
     });
     res.json({ success: true, item: rec });
   } catch (e) {

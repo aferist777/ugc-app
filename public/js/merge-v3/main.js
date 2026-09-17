@@ -37,6 +37,20 @@ initWorkshop();
 initProjects();
 initBar();
 
+// ?open=pictures in the address, which is how the Alerts list takes somebody back to the window a
+// picture was asked for in (js/alerts-bell.js). Once, when the project it names has opened.
+(() => {
+  let want = '';
+  try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
+  if (want !== 'pictures') return;
+  let opened = false;
+  Store.onChange(() => {
+    if (opened || !Store.key()) return;
+    opened = true;
+    import('./imagen.js').then(m => m.openImagen()).catch(() => { /* no picture model configured */ });
+  });
+})();
+
 // Selecting anything brings the Inspector out - the left pair is a switch, so the Library folds
 // to its spine by the same rule that already governs them.
 //

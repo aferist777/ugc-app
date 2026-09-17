@@ -359,6 +359,14 @@ const SPEC = {
       prompt: payload.prompt, said: payload.text,
       aspect: payload.aspect || _ui.ar, quality: payload.quality || _ui.q.value,
       refs: payload.refs,
+      // Where this was asked from, for the Alerts list (js/alerts-bell.js): the project, and the
+      // pictures window inside it.
+      where: {
+        page: 'merge',
+        href: '/merge?p=' + encodeURIComponent(api.project || '') + '&open=pictures',
+        label: 'Merge · ' + (Store.title() || 'project') + ' · pictures',
+        spot: { key: String(api.project || ''), view: 'pictures' },
+      },
     };
     // One request per picture, so one refusal costs one picture rather than the batch - and each
     // gets its own walk down the ladder.
