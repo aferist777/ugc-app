@@ -225,11 +225,12 @@ select.mv3-rr-rf{cursor:pointer}
   display:flex; align-items:center; gap:9px; flex:0 0 auto; overflow:hidden;
   padding:7px 11px; background:var(--surface); border-bottom:1px solid var(--border-soft);
 }
-/* The inspector's header carries the step chips, and the open step may hang its own crumbs
-   under them. The room is kept whether or not it does: a header that grows when you go a
-   level deeper moves the whole panel at the moment it is being read. */
-#mv3-inspector .mv3-panel-head{min-height:52px; align-items:flex-start}
-#mv3-inspector .mv3-panel-title{line-height:20px}
+/* The inspector's header carries the step chips and, when the open step has places inside it,
+   its sub-steps in the SAME row. One line, so the header is the height it has always been -
+   the bracket under the pair is drawn inside that line and costs nothing. */
+#mv3-inspector .mv3-panel-head{align-items:center}
+/* The word stays whole: it is the name of the panel, and the chips beside it can scroll. */
+#mv3-inspector .mv3-panel-title{flex:0 0 auto}
 /* The title gives way first: it is a label, and the shelf buttons beside it are
    controls. min-width:0 is what actually lets a flex item shrink far enough to
    ellipsise - without it the text sets its own floor and pushes the buttons out. */
@@ -1518,7 +1519,11 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    In the inspector's own header, beside its title (js/merge-v3/workshop.js): the panel
    IS the workshop while one of them is open, and a second header line would cost the
    list below it the same height on a column that is already narrow. */
-.mv3-wk-steps{display:flex; align-items:center; gap:3px; margin-left:8px; min-width:0; flex-wrap:wrap}
+/* One line, always. When the open step adds its own sub-steps the row can run out of
+   width, and WRAPPING would make the header taller exactly when you go a level deeper - so it
+   scrolls sideways instead, without a bar of its own to take up the height it just saved. */
+.mv3-wk-steps{display:flex; align-items:center; gap:3px; margin-left:8px; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none}
+.mv3-wk-steps::-webkit-scrollbar{display:none}
 .mv3-wk-step{
   padding:2px 7px; border:1px solid transparent; border-radius:999px;
   background:transparent; color:var(--muted); cursor:pointer;
@@ -1576,17 +1581,18 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
-/* WHERE YOU ARE INSIDE THE OPEN STEP: under that step's chip, bracketed to it, so the two read
-   as one thing at two depths instead of as two rows of tabs. The header is given this height
-   from the start (see .mv3-panel-head below), so nothing moves when they appear. */
-.mv3-wk-stepwrap{display:flex; flex-direction:column; align-items:flex-start; gap:2px}
-.mv3-wk-subs{display:flex; align-items:center; gap:3px; padding-left:9px; position:relative}
-/* The bracket itself: a corner from the chip above down to the first sub-step. */
-.mv3-wk-subs::before{
-  content:''; position:absolute; left:3px; top:-2px; bottom:50%; width:6px;
-  border-left:1px solid var(--border); border-bottom:1px solid var(--border);
-  border-bottom-left-radius:4px;
+/* WHERE YOU ARE INSIDE THE OPEN STEP: beside that step's chip, in the same row, with a bracket
+   drawn UNDER the pair - the shape that says the second belongs to the first. In the row and
+   not under it, because a second line would make the header taller the moment you went one
+   level deeper, and move everything below it while it was being read. */
+.mv3-wk-stepwrap{display:flex; align-items:center; gap:3px; position:relative}
+/* The bracket: a flat-bottomed staple under the chip and its sub-steps. */
+.mv3-wk-stepwrap::after{
+  content:''; position:absolute; left:4px; right:4px; bottom:-4px; height:4px;
+  border:1px solid var(--border); border-top:0;
+  border-bottom-left-radius:3px; border-bottom-right-radius:3px;
 }
+.mv3-wk-subs{display:flex; align-items:center; gap:3px}
 .mv3-wk-sub{
   padding:1px 6px; border:1px solid transparent; border-radius:var(--r-xs);
   background:transparent; color:var(--muted); cursor:pointer;

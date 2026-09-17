@@ -690,8 +690,11 @@ export function borrow(on) {
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
+  if (_still) _still.box = null;
+  if (_pair) _pair.boxes = null;
   // The stage stops being a 9:16 window and becomes the whole panel: nothing here is a frame
   // of the film, and a reference being judged should use the room there is.
+  CW = 0; CH = 0;
   _fit();
   if (_on) _paint();
 }
@@ -702,6 +705,7 @@ export function borrow(on) {
 // Ctrl held. Double-click puts it back. The numbers live here and are thrown away the moment
 // the stage goes back to the timeline: this is a way of looking, not a setting.
 let _view = { z: 1, x: 0, y: 0 };
+let _ro = null;
 const ZOOM_MIN = 0.2, ZOOM_MAX = 8;
 
 function _wireZoom(cv) {
@@ -724,27 +728,57 @@ function _wireZoom(cv) {
     }
     _paint();
   }, { passive: false });
-  cv.addEventListener('dblclick', () => {
-    if (!_borrowed) return;
-    _view = { z: 1, x: 0, y: 0 };
-    _paint();
-  });
+  cv.addEventListener('dblclick', () => { if (_borrowed) _centre(); });
 }
 
 // The canvas takes the panel's own size while the workshop holds it, in real pixels, so a
 // picture enlarged four times is still sharp.
+//
+// DRAGGING THE SASH MUST NOT RESIZE THE PICTURE. The surface is what got wider; the reference
+// on it is the same reference, and re-fitting it to every intermediate width makes it breathe
+// in and out under the hand. So the canvas is re-made at the new size and the view is shifted
+// by half the difference - the picture keeps its pixels and stays where it was, relative to
+// the middle. What it is NOT is stretched: the canvas always carries exactly as many pixels as
+// the box it is shown in, which is the only way a canvas avoids being squashed by CSS.
 function _fit() {
   const stage = document.getElementById(STAGE);
   if (!_cv || !stage) return;
   const r = stage.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  CW = Math.max(1, Math.round(r.width * dpr));
-  CH = Math.max(1, Math.round(r.height * dpr));
+  const w = Math.max(1, Math.round(r.width * dpr));
+  const h = Math.max(1, Math.round(r.height * dpr));
+  if (w === CW && h === CH && _cv.width === w) return;
+  if (CW && CH && (_still || _pair)) {
+    _view.x += (w - CW) / 2;
+    _view.y += (h - CH) / 2;
+  }
+  CW = w;
+  CH = h;
   _cv.width = CW;
   _cv.height = CH;
   PAD = 0;
   W = CW;
   H = CH;
+}
+
+// Where a picture sits on the surface, decided ONCE - when it arrives, and again when it is
+// asked to be centred. Everything after that is the view moving over it, so nothing about the
+// panel's size can change the picture's own size.
+function _layout(img) {
+  if (!img || !img.naturalWidth) return null;
+  const s = Math.min(CW / img.naturalWidth, CH / img.naturalHeight);
+  const w = Math.round(img.naturalWidth * s);
+  const h = Math.round(img.naturalHeight * s);
+  return { w, h, x: Math.round((CW - w) / 2), y: Math.round((CH - h) / 2) };
+}
+
+// Put it back in the middle at its natural fit - the one gesture that undoes any amount of
+// pushing and pinching.
+function _centre() {
+  _view = { z: 1, x: 0, y: 0 };
+  if (_still && _still.img) _still.box = _layout(_still.img);
+  if (_pair) _pair.boxes = null;
+  if (_on) _paint();
 }
 
 export const isBorrowed = () => _borrowed;
@@ -762,7 +796,7 @@ export function showStill(src, caption) {
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
-  img.onload = () => { if (_still && _still.src === src) { _still.img = img; if (_on) _paint(); } };
+  img.onload = () => { if (_still && _still.src === src) { _still.img = img; _still.box = null; if (_on) _paint(); } };
   // A picture that will not load leaves the caption: the choice was still made, and a
   // black rectangle with no word on it looks like a failure of the choice rather than
   // of one file.
@@ -792,7 +826,7 @@ export function showPair(top, bottom) {
     if (!src) return;
     const img = new Image();
     img.decoding = 'async';
-    img.onload = () => { if (_pair && _pair.key === want) { _pair[slot] = img; if (_on) _paint(); } };
+    img.onload = () => { if (_pair && _pair.key === want) { _pair[slot] = img; _pair.boxes = null; if (_on) _paint(); } };
     img.onerror = () => { /* the other half still says what this is about */ };
     img.src = src;
   };
@@ -805,13 +839,16 @@ export function showPair(top, bottom) {
 // to fill a half would hide the thing being judged.
 function _drawPair() {
   if (!_pair) return;
-  const halves = [[_pair.top, PAD, H / 2], [_pair.bottom, PAD + H / 2, H / 2]];
-  for (const [img, top, hh] of halves) {
-    if (!img || !img.naturalWidth) continue;
-    const s = Math.min(W / img.naturalWidth, (hh - 8) / img.naturalHeight);
-    const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
-    _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(top + (hh - h) / 2), w, h);
+  if (!_pair.boxes) {
+    // Both halves measured once, against the surface as it was then.
+    _pair.boxes = [[_pair.top, PAD, H / 2], [_pair.bottom, PAD + H / 2, H / 2]].map(([img, top, hh]) => {
+      if (!img || !img.naturalWidth) return null;
+      const s = Math.min(W / img.naturalWidth, (hh - 8) / img.naturalHeight);
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      return { img, x: Math.round(PAD + (W - w) / 2), y: Math.round(top + (hh - h) / 2), w, h };
+    });
   }
+  for (const b of _pair.boxes) if (b) _ctx.drawImage(b.img, b.x, b.y, b.w, b.h);
 }
 
 function _drawStill() {
@@ -819,9 +856,16 @@ function _drawStill() {
   const cap = _still.caption;
   const img = _still.img;
   if (img && img.naturalWidth) {
-    const s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
-    const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
-    _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(PAD + (H - h) / 2), w, h);
+    // Fitted once, when it arrived. From then on it is a thing lying on the surface, and the
+    // surface is what the sash resizes.
+    if (!_still.box) _still.box = _layout(img);
+    const b = _still.box;
+    if (_borrowed) _ctx.drawImage(img, b.x, b.y, b.w, b.h);
+    else {
+      const s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(PAD + (H - h) / 2), w, h);
+    }
   }
   if (!cap) return;
   _ctx.font = '600 ' + Math.round(H * 0.022) + 'px Inter, Segoe UI, system-ui, sans-serif';
@@ -938,6 +982,14 @@ export function mount() {
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.
   _wireZoom(_cv);
+  // The sash changes the panel without touching the window, so the only way to hear about it
+  // is to watch the stage itself. Without this the canvas keeps its old pixel count in a box
+  // of a new shape, and the browser squashes what is on it.
+  if (window.ResizeObserver && !_ro) {
+    _ro = new ResizeObserver(() => { if (_on && _borrowed) { _fit(); _paint(); } });
+    const stage = document.getElementById(STAGE);
+    if (stage) _ro.observe(stage);
+  }
   wirePlace(_cv, {
     rectOf: (id) => _rects.get(id),
     rects: () => _rects,
