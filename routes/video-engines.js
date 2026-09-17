@@ -209,20 +209,41 @@ router.post('/video/think', async (req, res) => {
   }
 });
 
-router.post('/video/animate', async (req, res) => {
+// The asking itself, as a function: the server asks again when somebody presses retry in the
+// Alerts list, and that has to be the same request.
+async function _submitAnimate(b) {
   const { engine, provider, prompt, imagePath, imageUrl: direct,
-          videoPath, videoIn, videoOut, params = {} } = req.body || {};
+          videoPath, videoIn, videoOut, params = {} } = b || {};
+  const imageUrl = direct || await _publicUrl(imagePath);
+  // The motion reference, cut to the chosen segment first. The models take 3-30s and the
+  // whole file is usually longer, so what goes out is the piece rather than the source -
+  // and it is what the price was quoted on.
+  let videoUrl = null;
+  if (videoPath) videoUrl = await _clipUrl(videoPath, videoIn, videoOut);
+  const out = await VP.submitVideo({ engine, provider, prompt, imageUrl, videoUrl, params });
+  console.log('[video/animate]', out.engine, 'via', out.provider,
+    (out.duration == null ? 'clip-length' : out.duration + 's'), '->', out.taskId);
+  return out;
+}
+
+router.post('/video/animate', async (req, res) => {
+  const b = req.body || {};
   try {
-    const imageUrl = direct || await _publicUrl(imagePath);
-    // The motion reference, cut to the chosen segment first. The models take 3-30s and the
-    // whole file is usually longer, so what goes out is the piece rather than the source -
-    // and it is what the price was quoted on.
-    let videoUrl = null;
-    if (videoPath) videoUrl = await _clipUrl(videoPath, videoIn, videoOut);
-    const out = await VP.submitVideo({ engine, provider, prompt, imageUrl, videoUrl, params });
-    console.log('[video/animate]', out.engine, 'via', out.provider,
-      (out.duration == null ? 'clip-length' : out.duration + 's'), '->', out.taskId);
-    res.json({ success: true, ...out });
+    const out = await _submitAnimate(b);
+    // FROM MERGE: a row in the journal, and the server sees it through. The window still watches
+    // it as well, which costs nothing - the download happens once whoever asks.
+    let alertId = '';
+    if (b.where) {
+      try {
+        alertId = require('../lib/gen-jobs').submitted({
+          kind: 'video', what: 'animate',
+          title: 'Clip · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+          where: b.where, engine: out.engine || b.engine, taskIds: [out.taskId],
+          job: { type: 'animate', params: { request: { ...b, where: null } } },
+        }).id;
+      } catch (e) { console.warn('[video/animate] could not write the alert:', e.message); }
+    }
+    res.json({ success: true, ...out, alertId });
   } catch (err) {
     // Replicate hides the useful half in `detail`; kie in `msg`. Surfacing the raw message
     // instead would show "Request failed with status code 422" and nothing about which field.
@@ -254,8 +275,13 @@ function _extract(out) {
 async function _save(remoteUrl, tag) {
   // Into media/work/: a take becomes a Birols item - and moves to birols/<engine>/ - only when the
   // window files it (POST /library/media/record).
-  const filename = `anim_${tag}_${Date.now()}.mp4`;
+  //
+  // NAMED AFTER THE TASK, and reused if it is already here. This answer is asked for twice now -
+  // by the window that is watching and by the server's own runner (lib/gen-jobs.js) - and a name
+  // with the clock in it turned every extra reading into another copy of the same clip.
+  const filename = `anim_${tag}.mp4`;
   const destPath = path.join(MEDIA.work, filename);
+  if (fs.existsSync(destPath)) return `/media/work/${filename}`;
   const r = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
   fs.writeFileSync(destPath, Buffer.from(r.data));
   // The concat pipeline cannot decode every profile a model emits; this is the same pass
@@ -266,59 +292,96 @@ async function _save(remoteUrl, tag) {
   return `/media/work/${filename}`;
 }
 
+// WHERE THE ANSWER ABOUT ONE CLIP COMES FROM, whoever is asking: the window that is watching it,
+// or the server's own runner (lib/gen-jobs.js) for somebody who has walked away. Downloading is
+// idempotent (see _save), so both may ask and only one file lands.
+async function _pollVideo(taskId) {
+  // ── Replicate ──
+  if (taskId.startsWith('repl:')) {
+    const id = taskId.slice(5);
+    const key = (_settings().replicateApiKey || '').trim();
+    if (!key) return { state: 'failed', error: 'Replicate token is not configured' };
+    const pred = (await axios.get(`https://api.replicate.com/v1/predictions/${id}`, {
+      headers: { Authorization: 'Bearer ' + key }, timeout: 15000,
+    })).data;
+    if (pred?.status === 'failed' || pred?.status === 'canceled') {
+      const why = String(pred?.error || pred?.status);
+      // A failure to READ the inputs is not a failure of the model, and a different prompt
+      // will not fix it: the files are uploaded again, under new keys, the next time Animate
+      // is pressed - which is the same rescue the image path makes for itself.
+      //
+      // Not resubmitted here on its own: a retry is a charge, and a charge is the user's to
+      // make. What this does is say which press would help.
+      if (isFetchFailure({ message: why })) {
+        return {
+          state: 'failed',
+          error: 'the model could not download the files we gave it.'
+            + ' Press Animate again - they will be uploaded again.',
+        };
+      }
+      return { state: 'failed', error: why };
+    }
+    if (pred?.status !== 'succeeded') return { state: 'pending' };
+    const url = _extract(pred.output);
+    if (!url) return { state: 'failed', error: 'the model returned no video' };
+    return { state: 'success', videoPath: await _save(url, 'repl' + id.slice(-8)) };
+  }
+
+  // ── kie.ai ──
+  const data = (await axios.get(`${KIE_BASE}/api/v1/jobs/recordInfo`, {
+    params: { taskId }, headers: _kieHeaders(), timeout: 15000,
+  })).data?.data;
+  const state = data?.state;
+  if (state === 'fail' || state === 'failed') {
+    return { state: 'failed', error: data?.failMsg || data?.failCode || 'the model refused it' };
+  }
+  if (state !== 'success') return { state: 'pending' };
+  let url = null;
+  try {
+    const parsed = JSON.parse(data.resultJson);
+    url = (parsed.resultUrls && parsed.resultUrls[0]) || parsed.video_url || parsed.url || null;
+  } catch (e) {}
+  if (!url) return { state: 'failed', error: 'the model returned no video' };
+  return { state: 'success', videoPath: await _save(url, 'kie' + String(taskId).slice(-8)) };
+}
+
 router.get('/video/animate/status/:taskId', async (req, res) => {
   const taskId = String(req.params.taskId || '');
   if (!taskId) return res.status(400).json({ success: false, error: 'taskId required' });
   try {
-    // ── Replicate ──
-    if (taskId.startsWith('repl:')) {
-      const id = taskId.slice(5);
-      const key = (_settings().replicateApiKey || '').trim();
-      if (!key) return res.json({ success: true, state: 'failed', error: 'Replicate token is not configured' });
-      const pred = (await axios.get(`https://api.replicate.com/v1/predictions/${id}`, {
-        headers: { Authorization: 'Bearer ' + key }, timeout: 15000,
-      })).data;
-      if (pred?.status === 'failed' || pred?.status === 'canceled') {
-        const why = String(pred?.error || pred?.status);
-        // A failure to READ the inputs is not a failure of the model, and a different prompt
-        // will not fix it: the files are uploaded again, under new keys, the next time Animate
-        // is pressed - which is the same rescue the image path makes for itself.
-        //
-        // Not resubmitted here on its own: a retry is a charge, and a charge is the user's to
-        // make. What this does is say which press would help.
-        if (isFetchFailure({ message: why })) {
-          return res.json({ success: true, state: 'failed',
-            error: 'the model could not download the files we gave it.'
-              + ' Press Animate again - they will be uploaded again.' });
-        }
-        return res.json({ success: true, state: 'failed', error: why });
-      }
-      if (pred?.status !== 'succeeded') return res.json({ success: true, state: 'pending' });
-      const url = _extract(pred.output);
-      if (!url) return res.json({ success: true, state: 'failed', error: 'the model returned no video' });
-      return res.json({ success: true, state: 'success', videoPath: await _save(url, 'repl' + id.slice(-8)) });
-    }
-
-    // ── kie.ai ──
-    const data = (await axios.get(`${KIE_BASE}/api/v1/jobs/recordInfo`, {
-      params: { taskId }, headers: _kieHeaders(), timeout: 15000,
-    })).data?.data;
-    const state = data?.state;
-    if (state === 'fail' || state === 'failed') {
-      return res.json({ success: true, state: 'failed', error: data?.failMsg || data?.failCode || 'the model refused it' });
-    }
-    if (state !== 'success') return res.json({ success: true, state: 'pending' });
-    let url = null;
-    try {
-      const parsed = JSON.parse(data.resultJson);
-      url = (parsed.resultUrls && parsed.resultUrls[0]) || parsed.video_url || parsed.url || null;
-    } catch (e) {}
-    if (!url) return res.json({ success: true, state: 'failed', error: 'the model returned no video' });
-    return res.json({ success: true, state: 'success', videoPath: await _save(url, 'kie' + String(taskId).slice(-8)) });
+    res.json({ success: true, ...(await _pollVideo(taskId)) });
   } catch (err) {
     console.error('[video/animate/status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });
   }
 });
+
+// ── Alerts ──────────────────────────────────────────────────────────────────
+// A clip asked for in Merge is a row in the journal, and the server sees it through: the window
+// may be closed, the page may be left, and the clip still lands in media/work where the window
+// will find it again (docs/local-app/PLAN.md, "Alerts"). What is NOT done here is filing it in the
+// library - which take is worth keeping is a judgement made after looking at them, and that is
+// what Save in the window is for.
+const JOBS = require('../lib/gen-jobs');
+
+JOBS.register('animate', {
+  timeoutMs: 30 * 60 * 1000,
+  poll: (rec) => _pollVideo(rec.taskIds[0]),
+  file: async (rec, out) => {
+    const r = ((rec.job || {}).params || {}).request || {};
+    return {
+      path: out.videoPath, media: 'video',
+      // What the window needs to put it back on the strip when it is opened again.
+      prompt: String(r.prompt || ''), said: String(r.said || ''), src: String(r.imagePath || ''),
+      engine: String(r.engine || ''), provider: String(r.provider || ''),
+      duration: (r.params && r.params.duration) || null,
+    };
+  },
+  submit: async (request) => {
+    const out = await _submitAnimate(request || {});
+    return { taskId: out.taskId };
+  },
+});
+
 
 module.exports = router;

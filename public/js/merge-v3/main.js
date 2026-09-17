@@ -42,12 +42,19 @@ initBar();
 (() => {
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
-  if (want !== 'pictures') return;
+  if (want !== 'pictures' && want !== 'animate') return;
+  let src = '';
+  try { src = new URLSearchParams(location.search).get('src') || ''; } catch (e) { src = ''; }
   let opened = false;
   Store.onChange(() => {
     if (opened || !Store.key()) return;
     opened = true;
-    import('./imagen.js').then(m => m.openImagen()).catch(() => { /* no picture model configured */ });
+    if (want === 'pictures') {
+      import('./imagen.js').then(m => m.openImagen()).catch(() => { /* no picture model configured */ });
+      return;
+    }
+    // Animate is about one picture, so the address carries which.
+    if (src) import('./animate.js').then(m => m.openAnimate({ src })).catch(() => { /* no engine */ });
   });
 })();
 

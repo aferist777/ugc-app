@@ -42,6 +42,7 @@ import * as Layers from '../layers.js';
 // Whether a failure is worth a second try - shared with the picture window.
 import { canRetry } from './retry.js';
 import * as C from './controls.js';
+import * as Store from './store.js';
 
 // The matrix, fetched once per page and shared by every opening of this window. It changes
 // only when the server does, and re-asking on each open would put a round trip in front of a
@@ -654,6 +655,28 @@ export async function openAnimate(clip) {
   }
   _paintStrip();
   _paintSave();
+
+  // CLIPS THIS PICTURE ALREADY HAS. The server sees a clip through whether or not this window is
+  // open (routes/video-engines.js, the journal), so opening it again finds what was made while it
+  // was closed instead of losing it. Nothing is filed by this: they land on the strip, unticked,
+  // exactly where the run that made them would have put them.
+  (async () => {
+    try {
+      const d = await fetch('/api/alerts').then(r => r.json());
+      const mine = (d.items || []).filter(r => r.what === 'animate' && r.state === 'done'
+        && r.result && r.result.path && String(r.result.src || '') === String(clip.src || ''));
+      const have = new Set(_shots.map(s => s.videoPath));
+      for (const r of mine.slice().reverse()) {
+        if (have.has(r.result.path)) continue;
+        _shots.push({
+          videoPath: r.result.path, thumbPath: null, prompt: r.result.prompt || '',
+          engine: r.result.engine || '', provider: r.result.provider || '',
+          duration: r.result.duration || 0, keep: false, saved: false,
+        });
+      }
+      if (_shots.length) { _showShot(_shots.length - 1); _paintSave(); }
+    } catch (e) { /* the strip is fine without them */ }
+  })();
   // LAST, not where they are defined: between them these two reach the prompt hint, the
   // duration row, the parameters and the Animate button, and the button is built with the
   // footer at the end. Called any earlier they would read a const that does not exist yet.
@@ -889,6 +912,16 @@ async function _run(ui, opts) {
         imagePath: clip.src,
         ...(refNow ? { videoPath: refNow.videoPath, videoIn: refNow.in, videoOut: refNow.out } : {}),
         params: { ...valuesOf(), duration: parseInt(dur.value, 10) },
+        // Where it was asked from, for the Alerts list (js/alerts-bell.js). The server sees the
+        // clip through whether or not this window is still open; the address opens the window on
+        // the same picture.
+        where: {
+          page: 'merge',
+          href: '/merge?p=' + encodeURIComponent(Store.key() || '')
+            + '&open=animate&src=' + encodeURIComponent(clip.src || ''),
+          label: 'Merge · ' + (Store.title() || 'project') + ' · animate',
+          spot: { key: String(Store.key() || ''), view: 'animate' },
+        },
       }),
     }).then(r => r.json());
     if (!start || !start.success || !start.taskId) throw new Error((start && start.error) || 'the model refused the job');
