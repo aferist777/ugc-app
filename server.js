@@ -196,6 +196,12 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     try { require('./lib/mv3-gens').resume(); }
     catch (e) { console.warn('[mv3-gens] could not resume:', e.message); }
 
+    // The same for everything in the Alerts journal: a generation the app was closed in the middle
+    // of is picked up here, filed when it lands, and the list says so (lib/gen-jobs.js). After the
+    // routes have been mounted, so every kind of job is known by now.
+    try { require('./lib/gen-jobs').resume(); }
+    catch (e) { console.warn('[gen-jobs] could not resume:', e.message); }
+
     // Recover any unfinished generation tasks from previous session
     recoverPendingTasks()
       .then(recovered => {

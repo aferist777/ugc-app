@@ -9,6 +9,7 @@
 
 import * as Layers from '../layers.js';
 import { openViewer } from '../library/viewer.js';
+import { startProgress } from '../progress.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -117,6 +118,46 @@ export function showPicture({ src, name, rows, from }) {
     [{ id: src, name: name || '', kind: 'picture', media: src, meta: from ? { refImage: from } : {} }], 0,
     { extraRows: () => extra },
   );
+}
+
+// ── The waiting animation belongs to the PLACE ──────────────────────────────
+// Not to the click that started it. The generation itself is the server's (docs/local-app/PLAN.md,
+// "Alerts"): the overlay on the stage is only how a panel says that something of ITS OWN is
+// running. So whichever place is painted attaches it - with the job's real elapsed time, so coming
+// back mid-generation shows a countdown that is still telling the truth - and a place that is left
+// takes its overlay with it, because a countdown lying on somebody else's stage is about nothing.
+let _held = null;                            // { place, pr }
+
+export function holdProgress(place, spec) {
+  if (_held && _held.place === place) return _held.pr;
+  onlyHere(null);
+  const stage = document.getElementById('mv3-stage');
+  if (!stage) return null;
+  const s = spec || {};
+  const pr = startProgress(stage, {
+    label: s.label || 'Making it', total: 1,
+    startedAt: s.startedAt || 0, estimateMs: s.estimateMs || 90000,
+  });
+  _held = { place, pr };
+  return pr;
+}
+
+/** The place being painted says so; an overlay belonging to anywhere else goes quietly. */
+export function onlyHere(place) {
+  if (!_held || _held.place === place) return;
+  try { _held.pr.detach(); } catch (e) { /* it was already gone */ }
+  _held = null;
+}
+
+/** It came, or it did not. Without a message the countdown is banked as a real duration. */
+export function endProgress(place, error) {
+  if (!_held || _held.place !== place) return;
+  const pr = _held.pr;
+  _held = null;
+  try {
+    if (error) pr.fail(error);
+    else { pr.step(); pr.finish(); }
+  } catch (e) { /* the stage was rebuilt under it */ }
 }
 
 // ── The menu on a tile ──────────────────────────────────────────────────────

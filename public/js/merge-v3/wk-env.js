@@ -24,9 +24,11 @@
 import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
-import { startProgress } from '../progress.js';
 import { derived } from '../chars-store.js';
-import { el, MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu } from './wk-maker.js';
+import {
+  el, MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
+  holdProgress, endProgress,
+} from './wk-maker.js';
 
 let _envs = null;                  // the shelf; read when first needed, again after every change
 let _loading = false;
@@ -39,6 +41,15 @@ const _picked = new Set();
 let _making = false;
 let _made = '';                    // the last one made here, standing on the stage with "use"
 let _said = '';                    // the agent's answer or what failed, said above the sentence
+let _lookedForRunning = false;     // the journal has been asked once whether something of ours runs
+
+const LABEL = {
+  picked: 'Making the place you picked',
+  edit: 'Changing the environment',
+  draw: 'Drawing the place',
+  photo: 'Reading the photo',
+  photoWords: 'Reading the photo',
+};
 
 const _pathOf = (p) => String((p && p.path) || p || '');
 const _nameOf = (path) => String(path || '').split('/').pop();
@@ -147,6 +158,8 @@ function _askDelete(anchor, path, api) {
 export function paintShelf(host, head, api) {
   _bar(head, api, 'env');
   api.stageButton(null);
+  // Leaving the maker forgets what it found there: coming back asks the journal again.
+  _lookedForRunning = false;
   if (_envs === null) {
     host.appendChild(api.note('reading the environments…'));
     _needEnvs(api);
@@ -210,6 +223,7 @@ function _why() {
 export function paintMaker(host, head, api) {
   host.classList.add('is-split');
   _bar(head, api, 'newenv');
+  _pickUpRunning(api);
 
   // LEFT: the shelf a base is drawn from. What is made joins it, so the pile grows while you work.
   const left = el('div', 'mv3-wk-half is-shelf');
@@ -332,15 +346,13 @@ async function _make(api) {
   _made = '';
   _said = '';
   api.repaint();
+  holdProgress('newenv', { label: LABEL[mode] || 'Making the place', estimateMs: 120000 });
 
-  const stage = document.getElementById('mv3-stage');
-  const pr = startProgress(stage, {
-    label: mode === 'picked' ? 'Making the place you picked'
-      : mode === 'edit' ? 'Changing the environment'
-        : mode === 'draw' ? 'Drawing the place' : 'Reading the photo',
-    total: 1, estimateMs: 120000,
-  });
-  const body = { prompt: _note.trim(), choices: [..._picked] };
+  const body = {
+    prompt: _note.trim(), choices: [..._picked],
+    refName: _ref ? _ref.name : '',
+    title: 'Environment', where: api.where('newenv'),
+  };
   if (_ref) {
     if (_ref.token) body.refToken = _ref.token;
     else body.imageBase64 = _ref.dataUrl;
@@ -365,7 +377,7 @@ async function _make(api) {
     if (r.choose) {
       // Nothing was made and nothing spent: the agent is asking which place. Not a duration worth
       // learning either, so the overlay is let go rather than finished.
-      pr.detach();
+      endProgress('newenv', '');
       _options = r.options || [];
       _optionsWhy = r.why || '';
       _picked.clear();
@@ -373,30 +385,57 @@ async function _make(api) {
       api.repaint();
       return;
     }
-
-    const done = await API.awaitTask(r.taskId);
-    // Filing it gives it the path the shelf and the project use - and files the photo it was made
-    // from in the library (Images / uploads_environments).
-    const filed = await API.fileAs(done.imagePath, 'environment', '', {
-      description: r.description || '', prompt: r.prompt || '',
-      refToken: _ref ? (_ref.token || '') : '', refName: _ref ? _ref.name : '',
-    });
-    pr.step();
-    pr.finish();
-    _envs = await API.environments().catch(() => _envs);
-    _made = String(filed.path || '');
-    _base = _made;                                 // the next change builds on it
-    _ref = null;
-    _note = '';
-    _forget();
-    _making = false;
-    api.repaint();
+    // From here the server owns it: it waits, files the place on the shelf with its description and
+    // the photo it came from, and writes the answer into the journal. This only watches.
+    await _followMake(api, r.alertId);
   } catch (e) {
     const msg = (e && e.message) || 'unknown';
-    pr.fail(msg);
+    endProgress('newenv', msg);
     _making = false;
     // An agent that refused has answered the question, and it reads better as that than as an error.
     _said = e && e.refused ? msg : 'The environment failed: ' + msg;
     api.repaint();
   }
+}
+
+// Watching one row of the journal to its end. Started by `create`, and again by the panel itself
+// when it finds a row of its own already running - after a reload, or after somebody walked away
+// and came back.
+async function _followMake(api, id) {
+  try {
+    const rec = await API.follow(id);
+    endProgress('newenv');
+    _envs = await API.environments().catch(() => _envs);
+    _made = String((rec.result || {}).path || '');
+    _base = _made;                                 // the next change builds on it
+    _ref = null;
+    _note = '';
+    _forget();
+  } catch (e) {
+    const msg = (e && e.message) || 'unknown';
+    endProgress('newenv', msg);
+    _said = 'The environment failed: ' + msg;
+  }
+  _making = false;
+  api.repaint();
+}
+
+// Is something of ours already running? Asked once per visit to the maker: the journal knows, and
+// the page may have been reloaded since it was started.
+function _pickUpRunning(api) {
+  if (_lookedForRunning || _making) return;
+  _lookedForRunning = true;
+  API.alerts().then((d) => {
+    const key = api.key();
+    const mine = (d.items || []).find(r => r.state === 'running' && r.what === 'environment'
+      && r.where && r.where.spot && r.where.spot.key === key && r.where.spot.view === 'newenv');
+    if (!mine || _making) return;
+    _making = true;
+    api.repaint();
+    holdProgress('newenv', {
+      label: 'Making the place', estimateMs: 120000,
+      startedAt: Date.parse(mine.startedAt) || 0,
+    });
+    _followMake(api, mine.id);
+  }).catch(() => { /* the list is not the work: without it the panel simply shows nothing */ });
 }

@@ -808,28 +808,38 @@ const _track = (tid, tag, projectId) => {
 //   prompt only        -> N distinct prompts -> N text-to-image runs
 //   photo only         -> extract the outfit as it is
 //   photo + prompt     -> read the photo against the note, then generate
-router.post('/scen3/gen/lookbook', async (req, res) => {
-  let refToken = '';
-  try {
-    const b = req.body || {};
-    const note = String(b.prompt || '').trim();
-    const b64  = String(b.imageBase64 || '');
-    // A picture the library already holds - another lookbook, used as the base for this one.
-    // Sent as a PATH rather than as bytes: it is on this disk, and pulling it through the
-    // browser as base64 only to upload it again would be a round trip for nothing.
-    const ref  = String(b.imagePath || '').trim();
-    const n    = Math.max(1, Math.min(5, parseInt(b.count, 10) || 1));
-    const eng  = _engineOf(b);
-    if (!note && !b64 && !ref) return res.status(400).json({ success: false, error: 'describe an outfit or add a photo' });
+// The route's own work, as a function. A generation started from Merge is seen through by the
+// server (lib/gen-jobs.js) and "try again" has to ask for exactly the same thing, so what the route
+// does has to be callable without a request. It answers what was submitted, and what filing the
+// result will need later; the agent's refusal is thrown with `refused` on it, because that is an
+// answer to the person rather than a fault.
+async function _submitLookbook(b) {
+  const note = String(b.prompt || '').trim();
+  const b64  = String(b.imageBase64 || '');
+  // A picture the library already holds - another lookbook, used as the base for this one.
+  // Sent as a PATH rather than as bytes: it is on this disk, and pulling it through the
+  // browser as base64 only to upload it again would be a round trip for nothing.
+  const ref  = String(b.imagePath || '').trim();
+  let refToken = String(b.refToken || '').trim();
+  if (!note && !b64 && !ref && !refToken) {
+    throw Object.assign(new Error('describe an outfit or add a photo'), { status: 400 });
+  }
 
-    // The engines fetch their references over the internet, so either way the picture goes to
-    // R2 first - ours, the one host (lib/helpers.js, uploadToPublicHost). A photo brought from
-    // this computer is also kept under a token until the lookbook exists, and then filed in the
-    // library (_fileRef, at finalize).
-    let photoUrl = '';
+  // The engines fetch their references over the internet, so either way the picture goes to
+  // R2 first - ours, the one host (lib/helpers.js, uploadToPublicHost). A photo brought from
+  // this computer is also kept under a token until the lookbook exists, and then filed in the
+  // library (_fileRef). The token instead of the bytes is that same photo again - which is what
+  // a second attempt sends.
+  let photoUrl = '';
+  let fresh = false;
+  try {
     if (b64) {
-      try { const up = await _takeUpload(b64); refToken = up.token; photoUrl = up.url; }
-      catch (e) { return res.status(e.status || 500).json({ success: false, error: e.message }); }
+      fresh = true;
+      const up = await _takeUpload(b64);
+      refToken = up.token;
+      photoUrl = up.url;
+    } else if (refToken) {
+      photoUrl = (await _reuseUpload(refToken)).url;
     } else if (ref) {
       photoUrl = await _hostLocal(ref, { verify: true });
     }
@@ -837,35 +847,50 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
     // The agent goes first, and it is the cheap half: if what it is given is not something to
     // wear, nothing is generated and nothing is spent.
     const plan = await _readLookbookIdea(note, photoUrl);
-    if (!plan.ok) {
-      if (refToken) _unstash(refToken);
-      return res.status(400).json({ success: false, error: plan.why, refused: true });
-    }
+    if (!plan.ok) throw Object.assign(new Error(plan.why), { status: 400, refused: true });
 
     const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
     const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
-    const id = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
-    const ids = [id].filter(Boolean);
-    if (!ids.length) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    ids.forEach(t => _track(t, 'lbcand'));
+    const taskId = await _lbTask(prompt, photoUrl ? [photoUrl] : []);
+    if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
 
-    // Tasks are already submitted, so this ~2s call overlaps with rendering and
-    // the client gets the gender back long before the first image lands.
+    // The task is already submitted, so this ~2s call overlaps with the rendering.
     const gender = await _detectGender(note, photoUrl);
-
-    console.log(`[scen3/gen/lookbook] mode=${mode} kind=${plan.kind} tasks=${ids.length} gender=${gender || 'unknown'}`);
-    res.json({
-      success: true, mode, kind: plan.kind, taskIds: ids, prompts: [prompt], gender,
-      // Written now, filed with the picture when it lands: the description belongs to the
-      // lookbook, and the dressing will be given it rather than only the image.
+    console.log(`[scen3/gen/lookbook] mode=${mode} kind=${plan.kind} gender=${gender || 'unknown'}`);
+    return {
+      taskId, mode, kind: plan.kind, prompt, gender, refToken,
       description: plan.description,
-      // The photo brought for it, to be filed in the library once the lookbook is.
-      refToken,
+      engine: LB_MODEL_I2I,
+      // What filing it will need when it lands - the same fields the old page sends to finalize.
+      file: {
+        gender, prompt, description: plan.description, refToken,
+        refName: String(b.refName || ''),
+      },
+    };
+  } catch (e) {
+    // A photo brought in THIS call and not got past it is not kept; one sent by its token stays,
+    // because whoever holds the token may try again with it.
+    if (fresh && refToken) _unstash(refToken);
+    throw e;
+  }
+}
+
+router.post('/scen3/gen/lookbook', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await _submitLookbook(b);
+    // FROM MERGE (`where` says which panel): it becomes a row in Alerts, the server sees it
+    // through, and the page only follows the record. The old Scenarios page sends no `where` and
+    // is answered exactly as before - it files its own results.
+    if (b.where) return res.json({ success: true, alertId: _journal('lookbook', 'image', out, b).id, mode: out.mode, kind: out.kind, refToken: out.refToken });
+    _track(out.taskId, 'lbcand');
+    res.json({
+      success: true, mode: out.mode, kind: out.kind, taskIds: [out.taskId], prompts: [out.prompt],
+      gender: out.gender, description: out.description, refToken: out.refToken,
     });
   } catch (e) {
-    if (refToken) _unstash(refToken);
     console.error('[scen3/gen/lookbook]', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    res.status(e.status || 500).json({ success: false, error: e.message, ...(e.refused ? { refused: true } : {}) });
   }
 });
 
@@ -1768,22 +1793,21 @@ async function _fileRef(token, kind, name) {
 //
 // `choices` present - even empty - says the page can show a choice of places. Absent (the old
 // Scenarios popup) the agent picks a place itself.
-router.post('/scen3/gen/env', async (req, res) => {
+async function _submitEnv(b) {
   let token = '';
-  let fresh = false;                             // the photo came in THIS request
-  try {
-    const b = req.body || {};
-    const note = String(b.prompt || '').trim();
-    const saved = String(b.imagePath || b.basePath || '').trim();
-    const canChoose = Array.isArray(b.choices);
-    const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
-    if (!note && !b.imageBase64 && !b.refToken && !saved) {
-      return res.status(400).json({ success: false, error: 'describe a place or add a photo' });
-    }
-    if (saved && !note && !b.imageBase64 && !b.refToken) {
-      return res.status(400).json({ success: false, error: 'say what to change in this environment' });
-    }
+  let fresh = false;                             // the photo came in THIS call
+  const note = String(b.prompt || '').trim();
+  const saved = String(b.imagePath || b.basePath || '').trim();
+  const canChoose = Array.isArray(b.choices);
+  const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
+  if (!note && !b.imageBase64 && !b.refToken && !saved) {
+    throw Object.assign(new Error('describe a place or add a photo'), { status: 400 });
+  }
+  if (saved && !note && !b.imageBase64 && !b.refToken) {
+    throw Object.assign(new Error('say what to change in this environment'), { status: 400 });
+  }
 
+  try {
     // The picture, and where it came from: a photo brought now, the same photo again, or an
     // environment already on the shelf.
     let url = '';
@@ -1808,11 +1832,11 @@ router.post('/scen3/gen/env', async (req, res) => {
     const plan = await _readEnvironmentIdea({ note, imageUrl: url, source, shape, choices, canChoose });
     if (!plan.ok) {
       if (token) _unstash(token);
-      return res.status(400).json({ success: false, error: plan.why, refused: true });
+      throw Object.assign(new Error(plan.why), { status: 400, refused: true });
     }
     if (plan.choose) {
       console.log(`[scen3/gen/env] choose: ${plan.options.length} places offered`);
-      return res.json({ success: true, choose: true, why: plan.why, options: plan.options, refToken: token });
+      return { choose: true, why: plan.why, options: plan.options, refToken: token };
     }
 
     // A place picked for a picture that had none keeps the picture only for its atmosphere.
@@ -1822,17 +1846,37 @@ router.post('/scen3/gen/env', async (req, res) => {
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
       + ENV_TAIL;
     const taskId = await _envTask(prompt, url ? [url] : []);
-    if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    _track(taskId, 'env');
+    if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
     console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
       + (shape && shape.extend && mode !== 'picked' ? ` extend=${shape.extend}` : '') + (choices.length ? ` picked=${choices.length}` : ''));
-    res.json({ success: true, mode, taskId, prompt, description: plan.description, refToken: token });
+    return {
+      taskId, mode, prompt, description: plan.description, refToken: token,
+      engine: url ? LB_MODEL_I2I : LB_MODEL_T2I,
+      file: { description: plan.description, prompt, refToken: token, refName: String(b.refName || '') },
+    };
   } catch (e) {
-    // A photo brought in this request and not got past it is not kept. One sent back by its token
-    // stays: the page may try again with it.
+    // A photo brought in this call and not got past it is not kept. One sent back by its token
+    // stays: whoever holds the token may try again with it.
     if (fresh && token) _unstash(token);
+    throw e;
+  }
+}
+
+router.post('/scen3/gen/env', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await _submitEnv(b);
+    // A choice of places is not a generation: nothing was submitted and nothing is journalled.
+    if (out.choose) return res.json({ success: true, choose: true, why: out.why, options: out.options, refToken: out.refToken });
+    if (b.where) return res.json({ success: true, alertId: _journal('environment', 'image', out, b).id, mode: out.mode, refToken: out.refToken });
+    _track(out.taskId, 'env');
+    res.json({ success: true, mode: out.mode, taskId: out.taskId, prompt: out.prompt, description: out.description, refToken: out.refToken });
+  } catch (e) {
     console.error('[scen3/gen/env]', e.message);
-    res.status(e.status || 500).json({ success: false, error: e.message, ...(e.gone ? { gone: true } : {}) });
+    res.status(e.status || 500).json({
+      success: false, error: e.message,
+      ...(e.refused ? { refused: true } : {}), ...(e.gone ? { gone: true } : {}),
+    });
   }
 });
 
@@ -1841,52 +1885,161 @@ router.get('/scen3/env-meta', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── Dressing: Apply one lookbook onto the sheet, or Re-dress the shown image ──
-router.post('/scen3/gen/dress', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const base = String(b.basePath || '').trim();       // the image being dressed
-    const lb   = String(b.lookbookPath || '').trim();   // optional lookbook reference
-    const note = String(b.note || '').trim();           // optional clothing-only steering
-    const eng  = _engineOf(b);
-    if (!base) return res.status(400).json({ success: false, error: 'basePath is required' });
-    if (!lb && !note) return res.status(400).json({ success: false, error: 'pick a lookbook or write a note' });
+// ── Alerts: the server sees a generation through ────────────────────────────
+// A generation started from Merge becomes a row in the journal (lib/alerts.js), and the runner
+// (lib/gen-jobs.js) waits for it, files the result and writes the answer back into the row. The
+// page that asked only follows the row, so leaving the page loses nothing - which is the whole
+// point (docs/local-app/PLAN.md, "Alerts").
+//
+// `where` is what the panel says about itself - the project, the step, the level inside it - and
+// its ABSENCE is what tells these routes they are talking to the old Scenarios page. That page
+// files its own results and is not journalled: it is being removed whole (PLAN, phase G) and is
+// not touched.
+const JOBS = require('../lib/gen-jobs');
 
-    const urls = [await _hostLocal(base)];
-    let prompt;
-    let kind = 'outfit';
-    if (lb) {
-      urls.push(await _hostLocal(lb));
-      // The agent reads both pictures before anything is generated: a mascot shell and a
-      // jacket need opposite instructions, and only looking at them can tell which is which.
-      const plan = await _readDressing(urls[0], urls[1], note, (_lbMeta()[lb] || {}).description);
-      kind = plan.kind;
-      prompt = plan.prompt + (kind === 'costume' ? COSTUME_LOCK : DRESS_LOCK);
-    } else {
-      prompt = 'Re-dress the person in the image according to this note: ' + note + '.' + DRESS_LOCK;
+const WHAT_TITLE = { lookbook: 'Lookbook', look: 'Look', environment: 'Environment' };
+
+// What a second attempt would send: the same request, without the photo's bytes - the token is
+// that same photo, still in scratch.
+const _retryRequest = (b, out) => ({
+  ...b, imageBase64: '', refToken: String((out && out.refToken) || b.refToken || ''),
+});
+
+function _journal(type, kind, out, b) {
+  return JOBS.submitted({
+    kind,
+    what: type,
+    title: String(b.title || '').trim() || WHAT_TITLE[type] || type,
+    where: b.where,
+    engine: out.engine || '',
+    taskIds: [out.taskId],
+    job: { type, params: { request: _retryRequest(b, out), file: out.file || {} } },
+  });
+}
+
+// The look a project asked for is written into that project's casting here, because by the time it
+// lands the page that asked may be closed. Merged into whatever the casting says by then.
+function _patchCasting(projectId, patch) {
+  const list = _loadProjects();
+  const i = list.findIndex(x => String(x.id) === String(projectId));
+  if (i < 0) return null;
+  const now = new Date().toISOString();
+  list[i] = _normProject({ ...list[i], casting: { ...(list[i].casting || {}), ...patch }, updatedAt: now }, now);
+  _saveProjects(list);
+  return list[i];
+}
+
+// The three kinds Merge starts, and what finishing each one means. The waiting is the same for all
+// three - ask kie about the task, and the answer lands in media/work.
+const _pollTask = (rec) => H.resolveTask(rec.taskIds[0], CFG.MEDIA.work, 'generated');
+const _fileParams = (rec) => ((rec.job || {}).params || {}).file || {};
+
+JOBS.register('lookbook', {
+  poll: _pollTask,
+  file: async (rec, landed) => {
+    const filed = await _fileGenerated('lookbook', landed.imagePath, _fileParams(rec));
+    return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
+  },
+  submit: async (request) => {
+    const out = await _submitLookbook(request);
+    return { taskId: out.taskId, engine: out.engine, file: out.file };
+  },
+});
+
+JOBS.register('environment', {
+  poll: _pollTask,
+  file: async (rec, landed) => {
+    const filed = await _fileGenerated('environment', landed.imagePath, _fileParams(rec));
+    return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
+  },
+  submit: async (request) => {
+    const out = await _submitEnv(request);
+    // A picture with no place in it asks a question instead of making anything, and a question
+    // cannot be answered without the person.
+    if (out.choose) throw new Error('that picture has no place in it - pick one on the page');
+    return { taskId: out.taskId, engine: out.engine, file: out.file };
+  },
+});
+
+JOBS.register('look', {
+  poll: _pollTask,
+  file: async (rec, landed) => {
+    const p = _fileParams(rec);
+    const saved = await _saveObraz({ ...p, imagePath: landed.imagePath });
+    // Dressed for a project, so that project wears it - even with nobody looking.
+    if (p.projectId) {
+      try { _patchCasting(p.projectId, { obrazId: String(saved.obrazId), obrazImage: saved.path }); }
+      catch (e) { console.warn('[scen3] could not put the look on the project:', e.message); }
     }
+    return { path: saved.path, preview: saved.preview, obrazId: saved.obrazId, media: 'image' };
+  },
+  submit: async (request) => {
+    const out = await _submitDress(request);
+    return { taskId: out.taskId, engine: out.engine, file: out.file };
+  },
+});
 
-    // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
-    const aspect = (await _ratioOf(base)) || 'match_input_image';
-    // The same model the lookbooks are made with, on the owner's instruction. 4K by default
-    // (the owner, 2026-09-17): the result is a reference sheet that every frame of the ad is
-    // built from, so it is the one picture in the chain that must not be soft - and the model's
-    // "2K" is 2048 on the LONG side, which leaves a 16:9 sheet 2048x1152 and the portrait on it
-    // a few hundred pixels wide.
-    const tid = await _kieTask(LB_MODEL_I2I, {
-      prompt, input_urls: urls, aspect_ratio: aspect === 'match_input_image' ? 'auto' : aspect,
-      resolution: DRESS_RES, background: 'opaque',
-    });
-    if (!tid) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    _track(tid, 'dressed');
-    console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
+// ── Dressing: Apply one lookbook onto the sheet, or Re-dress the shown image ──
+async function _submitDress(b) {
+  const base = String(b.basePath || '').trim();       // the image being dressed
+  const lb   = String(b.lookbookPath || '').trim();   // optional lookbook reference
+  const note = String(b.note || '').trim();           // optional clothing-only steering
+  if (!base) throw Object.assign(new Error('basePath is required'), { status: 400 });
+  if (!lb && !note) throw Object.assign(new Error('pick a lookbook or write a note'), { status: 400 });
+
+  const urls = [await _hostLocal(base)];
+  let prompt;
+  let kind = 'outfit';
+  if (lb) {
+    urls.push(await _hostLocal(lb));
+    // The agent reads both pictures before anything is generated: a mascot shell and a
+    // jacket need opposite instructions, and only looking at them can tell which is which.
+    const plan = await _readDressing(urls[0], urls[1], note, (_lbMeta()[lb] || {}).description);
+    kind = plan.kind;
+    prompt = plan.prompt + (kind === 'costume' ? COSTUME_LOCK : DRESS_LOCK);
+  } else {
+    prompt = 'Re-dress the person in the image according to this note: ' + note + '.' + DRESS_LOCK;
+  }
+
+  // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
+  const aspect = (await _ratioOf(base)) || 'match_input_image';
+  // The same model the lookbooks are made with, on the owner's instruction. 4K by default
+  // (the owner, 2026-09-17): the result is a reference sheet that every frame of the ad is
+  // built from, so it is the one picture in the chain that must not be soft - and the model's
+  // "2K" is 2048 on the LONG side, which leaves a 16:9 sheet 2048x1152 and the portrait on it
+  // a few hundred pixels wide.
+  const taskId = await _kieTask(LB_MODEL_I2I, {
+    prompt, input_urls: urls, aspect_ratio: aspect === 'match_input_image' ? 'auto' : aspect,
+    resolution: DRESS_RES, background: 'opaque',
+  });
+  if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
+  console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
+  return {
+    taskId, kind, prompt, mode: lb ? 'apply' : 'redress',
     // WHICH ENGINE MADE IT, for the look's record. The pages still send their own engine setting
     // when they save the look, and that setting has not decided anything here since the dressing
     // moved to this model - a look recorded as nano-banana-2 was not made by it.
-    res.json({ success: true, mode: lb ? 'apply' : 'redress', kind, taskId: tid, prompt, engine: LB_MODEL_I2I });
+    engine: LB_MODEL_I2I,
+    // A dressed picture is filed as a LOOK on the character, and when the dressing was asked for
+    // by a project, that project wears it from then on.
+    file: {
+      charId: String(b.charId || ''), charName: String(b.charName || 'look'),
+      gender: String(b.gender || ''), lookbookPath: lb, engine: LB_MODEL_I2I,
+      projectId: String(b.projectId || ''),
+    },
+  };
+}
+
+router.post('/scen3/gen/dress', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await _submitDress(b);
+    if (b.where) return res.json({ success: true, alertId: _journal('look', 'image', out, b).id, mode: out.mode, kind: out.kind });
+    _track(out.taskId, 'dressed');
+    res.json({ success: true, mode: out.mode, kind: out.kind, taskId: out.taskId, prompt: out.prompt, engine: out.engine });
   } catch (e) {
     console.error('[scen3/gen/dress]', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    res.status(e.status || 500).json({ success: false, error: e.message });
   }
 });
 
@@ -1924,68 +2077,74 @@ router.post('/scen3/gen/mix', async (req, res) => {
 const OBRAZY_JSON = path.join(DATA_DIR, 'obrazy.json');
 const OStore = require('../lib/obrazy-store');
 
-router.post('/scen3/obraz-save', async (req, res) => {
-  try {
-    const b        = req.body || {};
-    const charId   = String(b.charId || '');
-    const charName = String(b.charName || 'look');
-    const src      = String(b.imagePath || '');
-    if (!charId) return res.status(400).json({ success: false, error: 'charId is required' });
+// Filing a dressed picture as a look. A FUNCTION, not only a route: when the dressing is started
+// from Merge the server finishes it itself (lib/gen-jobs.js), and that path must file it exactly
+// the way the page used to (docs/local-app/PLAN.md, "Alerts").
+async function _saveObraz(b) {
+  const charId   = String(b.charId || '');
+  const charName = String(b.charName || 'look');
+  const src      = String(b.imagePath || '');
+  if (!charId) throw Object.assign(new Error('charId is required'), { status: 400 });
 
-    const hit = _resolveMedia(src);
-    if (!hit || !fs.existsSync(hit.abs)) return res.status(400).json({ success: false, error: 'image not found' });
+  const hit = _resolveMedia(src);
+  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('image not found'), { status: 400 });
 
     // Refuse to touch the library if it exists but cannot be parsed — appending
     // to a fresh array would silently wipe every obraz the user owns.
-    let list = [];
-    if (fs.existsSync(OBRAZY_JSON)) {
-      const parsed = _read(OBRAZY_JSON);
-      if (!Array.isArray(parsed)) {
-        return res.status(500).json({ success: false, error: 'obrazy.json is unreadable — refusing to write' });
-      }
-      list = parsed;
+  let list = [];
+  if (fs.existsSync(OBRAZY_JSON)) {
+    const parsed = _read(OBRAZY_JSON);
+    if (!Array.isArray(parsed)) {
+      throw Object.assign(new Error('obrazy.json is unreadable - refusing to write'), { status: 500 });
     }
+    list = parsed;
+  }
 
-    const id   = String(Date.now());
-    const name = `${charName} - look ${new Date().toISOString().slice(0, 10)}`;
-    const folder = OStore.obrazAbsFolder(name, id);
-    fs.mkdirSync(folder, { recursive: true });
+  const id   = String(Date.now());
+  const name = `${charName} - look ${new Date().toISOString().slice(0, 10)}`;
+  const folder = OStore.obrazAbsFolder(name, id);
+  fs.mkdirSync(folder, { recursive: true });
 
-    const file   = path.basename(hit.abs);
-    const destAbs = path.join(folder, file);
-    if (!fs.existsSync(destAbs)) fs.copyFileSync(hit.abs, destAbs);
-    const rel = toUrl(destAbs);
+  const file   = path.basename(hit.abs);
+  const destAbs = path.join(folder, file);
+  if (!fs.existsSync(destAbs)) fs.copyFileSync(hit.abs, destAbs);
+  const rel = toUrl(destAbs);
 
-    // both derived tiers, so the gallery and the centre column are instant
-    try { await H.createThumbnail(destAbs, path.join(folder, 'thumbs', file.replace(/\.[^.]+$/, '') + '.jpg')); } catch (e) {}
-    let preview = rel;
-    try {
-      if (await needsPreview(destAbs)) {
-        const outAbs = path.join(folder, 'preview', file.replace(/\.[^.]+$/, '') + '.jpg');
-        if (!fs.existsSync(outAbs)) await makePreview(destAbs, outAbs);
-        preview = toUrl(outAbs);
-      }
-    } catch (e) {}
+  // both derived tiers, so the gallery and the centre column are instant
+  try { await H.createThumbnail(destAbs, path.join(folder, 'thumbs', file.replace(/\.[^.]+$/, '') + '.jpg')); } catch (e) {}
+  let preview = rel;
+  try {
+    if (await needsPreview(destAbs)) {
+      const outAbs = path.join(folder, 'preview', file.replace(/\.[^.]+$/, '') + '.jpg');
+      if (!fs.existsSync(outAbs)) await makePreview(destAbs, outAbs);
+      preview = toUrl(outAbs);
+    }
+  } catch (e) {}
 
-    list.unshift({
-      id, charId, name,
-      char: rel,
-      variations: [rel],
-      pool: [{ file: rel, card: 1, final: true }],
-      gender: String(b.gender || ''),
-      lb: b.lookbookPath || null,
-      env: null,
-      imageEngine: String(b.engine || DEFAULT_ENGINE),
-      date: new Date().toISOString(),
-      seed: null, slotTasks: {}, projectId: null, voice: null,
-    });
-    writeFileAtomic(OBRAZY_JSON, JSON.stringify(list, null, 2));
-    console.log(`[scen3/obraz-save] char=${charId} obraz=${id} -> ${rel} (library now ${list.length})`);
+  list.unshift({
+    id, charId, name,
+    char: rel,
+    variations: [rel],
+    pool: [{ file: rel, card: 1, final: true }],
+    gender: String(b.gender || ''),
+    lb: b.lookbookPath || null,
+    env: null,
+    imageEngine: String(b.engine || DEFAULT_ENGINE),
+    date: new Date().toISOString(),
+    seed: null, slotTasks: {}, projectId: null, voice: null,
+  });
+  writeFileAtomic(OBRAZY_JSON, JSON.stringify(list, null, 2));
+  console.log(`[scen3/obraz-save] char=${charId} obraz=${id} -> ${rel} (library now ${list.length})`);
+  return { obrazId: id, path: rel, preview };
+}
 
-    res.json({ success: true, obrazId: id, path: rel, preview });
+router.post('/scen3/obraz-save', async (req, res) => {
+  try {
+    const out = await _saveObraz(req.body || {});
+    res.json({ success: true, ...out });
   } catch (e) {
     console.error('[scen3/obraz-save]', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    res.status(e.status || 500).json({ success: false, error: e.message });
   }
 });
 
@@ -2037,93 +2196,101 @@ router.post('/scen3/obraz-delete', (req, res) => {
 // The shared /api/status poller drops the result into uploads/. This copies a
 // lookbook candidate into the lookbook base, and builds the preview for
 // whatever came out, so the popup never has to fetch a full-size file.
+// Filing a finished picture where it belongs: a lookbook or an environment onto its shelf, with its
+// description, the photo it was made from and a preview for the centre column. A FUNCTION for the
+// same reason _saveObraz is one - a generation started in Merge is finished by the server
+// (lib/gen-jobs.js), and it has to be filed exactly as the page used to file it.
+async function _fileGenerated(kind, src, b) {
+  const hit = _resolveMedia(src);
+  if (!hit || !fs.existsSync(hit.abs)) throw Object.assign(new Error('result not found'), { status: 400 });
+
+  let finalUrl = src;
+
+  // A generated environment or lookbook is filed into its shared library folder.
+  const LIB = kind === 'environment'
+    ? { dir: CFG.ENVIRONMENTS_DIR, mount: toUrl(CFG.ENVIRONMENTS_DIR), prefix: 'env_' }
+    : kind === 'lookbook'
+      ? { dir: CFG.LOOKBOOKS_DIR, mount: toUrl(CFG.LOOKBOOKS_DIR), prefix: 'lb_' }
+      : null;
+
+  if (LIB) {
+    const name = LIB.prefix + path.basename(hit.abs).replace(/\.[^.]+$/, '') + '.jpg';
+    const dest = path.resolve(LIB.dir, name);
+    fs.mkdirSync(LIB.dir, { recursive: true });
+    if (!fs.existsSync(dest)) fs.copyFileSync(hit.abs, dest);
+    finalUrl = LIB.mount + '/' + name;
+    try { await H.createThumbnail(dest, path.resolve(LIB.dir, 'thumbs', name)); } catch (e) {}
+  }
+
+  // The photo it was made from, now that there is something made from it: into Images, and its
+  // address beside the description, so the viewer can say what this came from.
+  let from = '';
+  if (LIB && b.refToken) {
+    try { from = await _fileRef(String(b.refToken), kind, String(b.refName || '')); }
+    catch (e) { console.warn('[scen3/finalize] could not file the reference:', e.message); }
+  }
+
+  if (kind === 'lookbook') {
+    // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
+    // long description the agent wrote, filed here because this is where the picture gets
+    // its final path - the key everything else refers to it by. A lookbook made before this
+    // existed simply has no entry, and behaves as it always did.
+    const gender = String(b.gender || '').toLowerCase();
+    const description = String(b.description || '').trim();
+    const prompt = String(b.prompt || '').trim();
+    if (GENDER_VALUES.includes(gender) || description || from) {
+      const m = _lbMeta();
+      m[finalUrl] = {
+        ...(GENDER_VALUES.includes(gender) ? { gender } : {}),
+        ...(description ? { description } : {}),
+        ...(prompt ? { prompt } : {}),
+        ...(from ? { from } : {}),
+        at: new Date().toISOString(),
+      };
+      _lbMetaSave(m);
+    }
+  }
+
+  if (kind === 'environment') {
+    // The same for a place: what the agent wrote about it is what the first frames will be
+    // composed from later, and it is filed under the path the shelf knows it by.
+    const description = String(b.description || '').trim();
+    const prompt = String(b.prompt || '').trim();
+    if (description || prompt || from) {
+      const m = SHELF_META.read('environments');
+      m[finalUrl] = {
+        ...(description ? { description } : {}),
+        ...(prompt ? { prompt } : {}),
+        ...(from ? { from } : {}),
+        at: new Date().toISOString(),
+      };
+      SHELF_META.write('environments', m);
+    }
+  }
+
+  // the preview for the centre column
+  let previewUrl = finalUrl;
+  try {
+    const fh = _resolveMedia(finalUrl);
+    if (fh && await needsPreview(fh.abs)) {
+      const out = _previewTarget(fh);
+      if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
+      previewUrl = out.url;
+    }
+  } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
+
+  return { path: finalUrl, preview: previewUrl, ...(from ? { from } : {}) };
+}
+
+// The route is the old Scenarios page, which still files its own results.
 router.post('/scen3/finalize', async (req, res) => {
   try {
-    const b    = req.body || {};
-    const src  = String(b.path || '');
-    const kind = String(b.kind || '');
-    const hit  = _resolveMedia(src);
-    if (!hit || !fs.existsSync(hit.abs)) return res.status(400).json({ success: false, error: 'result not found' });
-
-    let finalUrl = src;
-
-    // A generated environment or lookbook is filed into its shared library folder.
-    const LIB = kind === 'environment'
-      ? { dir: CFG.ENVIRONMENTS_DIR, mount: toUrl(CFG.ENVIRONMENTS_DIR), prefix: 'env_' }
-      : kind === 'lookbook'
-        ? { dir: CFG.LOOKBOOKS_DIR, mount: toUrl(CFG.LOOKBOOKS_DIR), prefix: 'lb_' }
-        : null;
-
-    if (LIB) {
-      const name = LIB.prefix + path.basename(hit.abs).replace(/\.[^.]+$/, '') + '.jpg';
-      const dest = path.resolve(LIB.dir, name);
-      fs.mkdirSync(LIB.dir, { recursive: true });
-      if (!fs.existsSync(dest)) fs.copyFileSync(hit.abs, dest);
-      finalUrl = LIB.mount + '/' + name;
-      try { await H.createThumbnail(dest, path.resolve(LIB.dir, 'thumbs', name)); } catch (e) {}
-    }
-
-    // The photo it was made from, now that there is something made from it: into Images, and its
-    // address beside the description, so the viewer can say what this came from.
-    let from = '';
-    if (LIB && b.refToken) {
-      try { from = await _fileRef(String(b.refToken), kind, String(b.refName || '')); }
-      catch (e) { console.warn('[scen3/finalize] could not file the reference:', e.message); }
-    }
-
-    if (kind === 'lookbook') {
-      // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
-      // long description the agent wrote, filed here because this is where the picture gets
-      // its final path - the key everything else refers to it by. A lookbook made before this
-      // existed simply has no entry, and behaves as it always did.
-      const gender = String(b.gender || '').toLowerCase();
-      const description = String(b.description || '').trim();
-      const prompt = String(b.prompt || '').trim();
-      if (GENDER_VALUES.includes(gender) || description || from) {
-        const m = _lbMeta();
-        m[finalUrl] = {
-          ...(GENDER_VALUES.includes(gender) ? { gender } : {}),
-          ...(description ? { description } : {}),
-          ...(prompt ? { prompt } : {}),
-          ...(from ? { from } : {}),
-          at: new Date().toISOString(),
-        };
-        _lbMetaSave(m);
-      }
-    }
-
-    if (kind === 'environment') {
-      // The same for a place: what the agent wrote about it is what the first frames will be
-      // composed from later, and it is filed under the path the shelf knows it by.
-      const description = String(b.description || '').trim();
-      const prompt = String(b.prompt || '').trim();
-      if (description || prompt || from) {
-        const m = SHELF_META.read('environments');
-        m[finalUrl] = {
-          ...(description ? { description } : {}),
-          ...(prompt ? { prompt } : {}),
-          ...(from ? { from } : {}),
-          at: new Date().toISOString(),
-        };
-        SHELF_META.write('environments', m);
-      }
-    }
-
-    // the preview for the centre column
-    let previewUrl = finalUrl;
-    try {
-      const fh = _resolveMedia(finalUrl);
-      if (fh && await needsPreview(fh.abs)) {
-        const out = _previewTarget(fh);
-        if (!fs.existsSync(out.abs)) await makePreview(fh.abs, out.abs);
-        previewUrl = out.url;
-      }
-    } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
-
-    res.json({ success: true, path: finalUrl, preview: previewUrl, ...(from ? { from } : {}) });
+    const body = req.body || {};
+    const out = await _fileGenerated(String(body.kind || ''), String(body.path || ''), body);
+    res.json({ success: true, ...out });
   } catch (e) {
     console.error('[scen3/finalize]', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    res.status(e.status || 500).json({ success: false, error: e.message });
   }
 });
 
@@ -3300,8 +3467,16 @@ router.post('/scen3/projects', (req, res) => {
       const i = list.findIndex(x => String(x.id) === String(b.id));
       if (i < 0) return res.status(404).json({ success: false, error: 'not found' });
       if (!OWN.canEdit(list[i], req.user)) return OWN.refuse(res, list[i]);
+      // CASTING IS MERGED, not replaced. The server can write a finished look into it while a page
+      // is open (lib/gen-jobs.js), and that page's next save - which carries its own older copy of
+      // the casting - must not put the old one back. Every caller sends the keys it changed.
+      const casting = (b.casting && typeof b.casting === 'object')
+        ? { ...(list[i].casting || {}), ...b.casting } : undefined;
       // The owner is pinned like the id: a save cannot hand a project to somebody else.
-      const merged = _normProject({ ...list[i], ...b, id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt }, now);
+      const merged = _normProject({
+        ...list[i], ...b, ...(casting ? { casting } : {}),
+        id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
+      }, now);
       merged.updatedAt = now;
       list[i] = merged;
       _saveProjects(list);

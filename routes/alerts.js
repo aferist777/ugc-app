@@ -49,6 +49,17 @@ router.post('/alerts/notified', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Try again, with the same request - and it spends again, so the page asks before it calls this.
+// The record keeps its row: the failed one turns back into a running one.
+router.post('/alerts/:id/retry', async (req, res) => {
+  try {
+    const rec = await require('../lib/gen-jobs').retry(req.params.id);
+    res.json({ success: true, item: ALERTS.view(rec) });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
 router.post('/alerts/clear', (_req, res) => {
   try {
     const n = ALERTS.clearFinished();

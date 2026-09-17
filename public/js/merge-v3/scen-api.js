@@ -81,32 +81,42 @@ export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files
 export const lookbookMeta = () => _json('/api/scen3/lookbook-meta').then(d => d.meta || {});
 
 /**
- * Start the dressing. Answers { taskId, engine }: the task to wait on - engines take a minute -
- * and the model the server actually used, which is what the look should be recorded as.
+ * Start the dressing. Answers `{ alertId }`: the server dresses, files the look under the
+ * character and - when a project asked for it - puts it on that project. Follow the row.
  */
-export const dress = (body) => _post('/api/scen3/gen/dress', body).then(d => ({ taskId: d.taskId, engine: d.engine || '' }));
+export const dress = (body) => _post('/api/scen3/gen/dress', body);
+
+// ── Following a generation ──────────────────────────────────────────────────
+// Nothing here waits on a provider any more. A generation started from Merge is a row in the
+// Alerts journal, the SERVER waits for it and files the result, and the page follows the row
+// (docs/local-app/PLAN.md, "Alerts"). So leaving the panel - or the page - loses nothing, and
+// coming back finds either the finished thing or the same row still running.
+
+/** One row of the journal. */
+export const alert = (id) => _json('/api/alerts/' + encodeURIComponent(id)).then(d => d.item);
+
+/** Every row, with the counts the button shows. */
+export const alerts = () => _json('/api/alerts');
 
 /**
- * File a finished dressing as one of the character's looks. Returns { path, obrazId }: the
- * look belongs to the CHARACTER from here on, not to the project that asked for it.
+ * Follow a row to its end. Answers the finished record; throws with the journal's own wording
+ * when it failed. A reading that fails is not a failure of the generation - the next one asks
+ * again - so it is skipped rather than thrown.
+ *
+ * @param onTick  called with the record on every reading, for a panel that shows progress
  */
-export const saveLook = (body) => _post('/api/scen3/obraz-save', body);
-
-/**
- * Poll one task to its end. The generator answers 'success' with a path or 'failed' with a
- * reason; anything else is still running. A poll that itself fails is not a failure of the
- * job - the network is allowed one bad answer - so it is skipped, not thrown.
- */
-export async function awaitTask(taskId, onTick) {
-  for (let i = 0; i < 240; i++) {
-    await new Promise(r => setTimeout(r, 2500));
-    let s = null;
-    try { s = await _json('/api/status/' + encodeURIComponent(taskId)); } catch (e) { continue; }
-    if (onTick) { try { onTick(s); } catch (e) { /* a progress reader */ } }
-    if (s.state === 'success') return s;
-    if (s.state === 'failed') throw new Error(s.error || 'the generation failed');
+export async function follow(id, onTick) {
+  for (let i = 0; i < 900; i++) {
+    let rec = null;
+    try { rec = await alert(id); } catch (e) { rec = null; }
+    if (rec) {
+      if (onTick) { try { onTick(rec); } catch (e) { /* a progress reader */ } }
+      if (rec.state === 'done') return rec;
+      if (rec.state === 'failed') throw new Error(rec.error || 'the generation failed');
+    }
+    await new Promise(r => setTimeout(r, 2000));
   }
-  throw new Error('timed out waiting for the generator');
+  throw new Error('gave up following this generation');
 }
 
 // ── Making a lookbook ───────────────────────────────────────────────────────
@@ -114,7 +124,7 @@ export async function awaitTask(taskId, onTick) {
 // a photo alone EXTRACTS the outfit from it, a sentence alone draws one from nothing, and
 // both together read the photo and apply the sentence to it. The answer is a task to wait on.
 
-/** @returns { mode, taskIds, gender, description, refToken } */
+/** @returns { alertId, mode, kind, refToken } - the server files it; follow the row. */
 export const makeLookbook = (body) => _post('/api/scen3/gen/lookbook', body);
 
 // ── Making an environment ───────────────────────────────────────────────────
@@ -130,16 +140,10 @@ export const envMeta = () => _json('/api/scen3/env-meta').then(d => d.meta || {}
 
 /**
  * @param body { prompt, imageBase64 | refToken | imagePath, choices }
- * @returns { choose, why, options, refToken } or { mode, taskId, prompt, description, refToken }
+ * @returns { choose, why, options, refToken } when it wants a place picked first, and
+ *          { alertId, mode, refToken } when it submitted one - the server files it.
  */
 export const makeEnvironment = (body) => _post('/api/scen3/gen/env', body);
-
-/**
- * File a finished generation into a shared library - a lookbook here - and get back the path
- * it was filed under. Until this runs the picture is a scratch file with no shelf.
- */
-export const fileAs = (path, kind, gender, extra) =>
-  _post('/api/scen3/finalize', { path, kind, gender, ...(extra || {}) });
 
 /**
  * The vertical / product / role values used before. They are collected from saved

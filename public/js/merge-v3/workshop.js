@@ -192,6 +192,22 @@ async function _adopt() {
   }
 }
 
+/** Read the project again - it may have been written to by something other than this panel. */
+async function _reload() {
+  if (!_pid) return null;
+  try {
+    const d = await fetch('/api/scen3/projects/' + encodeURIComponent(_pid)).then(r => r.json());
+    if (d && d.success && _pid === projectIdOf(Store.key() || '')) {
+      _project = d.project;
+      _repaint();
+      return _project;
+    }
+  } catch (e) {
+    console.warn('[workshop] could not read the project again:', e.message);
+  }
+  return null;
+}
+
 export function initWorkshop() {
   Store.onChange(_adopt);
   _adopt();
@@ -217,7 +233,11 @@ export function paint(host) {
 
   if (load) {
     const mod = _loaded[_step];
-    if (mod) return mod.paint(host, { project: _project, repaint: _repaint });
+    // `key` is the open timeline, which is how a generation started here says where it came from
+    // (lib/alerts.js); `reloadProject` is for the things the SERVER writes into the project while
+    // a step is open - a finished look goes straight into the casting (lib/gen-jobs.js), and the
+    // panel has to read it back rather than trust the copy it was painted from.
+    if (mod) return mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload });
     host.appendChild(_note('opening ' + spec.label + '…'));
     load().then((m) => { _loaded[_step] = m; _repaint(); })
       .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });

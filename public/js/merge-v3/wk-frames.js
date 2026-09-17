@@ -47,9 +47,11 @@ import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store
 import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
-import { startProgress } from '../progress.js';
 import * as ENV from './wk-env.js';
-import { MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu } from './wk-maker.js';
+import {
+  MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
+  holdProgress, endProgress, onlyHere,
+} from './wk-maker.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
 
@@ -79,13 +81,6 @@ let _lbs = null;                         // the lookbook shelf, read once
 let _lbPick = '';                         // the outfit selected in that shelf
 let _dressing = false;                    // one at a time: it is a minute and it is paid for
 
-// The engine the dressing runs on. The same key the old page's gear writes, so the two agree
-// while both exist (js/scenarios-v3/dress-popup.js, ENGINE_KEY).
-const ENGINE_KEY = 'sv3_engine_v1';
-const _engine = () => {
-  try { return localStorage.getItem(ENGINE_KEY) || ''; } catch (e) { return ''; }
-};
-
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -114,6 +109,9 @@ async function _load(repaint) {
 // Straight to the project and straight away: a casting choice is one click and the
 // next thing the person does is act on it, so a debounce here would only be a window
 // in which the two disagree.
+// ONLY WHAT CHANGED goes up, and the server merges it into the casting as it stands
+// (routes/scen3.js): a finished look is written into the project by the server while this panel is
+// open, and sending the whole casting from here would put this panel's older copy back over it.
 async function _patch(casting) {
   if (!_ctx || !_ctx.project) return;
   const next = { ..._casting(), ...casting };
@@ -123,7 +121,7 @@ async function _patch(casting) {
   try {
     const r = await fetch('/api/scen3/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: _ctx.project.id, casting: next }),
+      body: JSON.stringify({ id: _ctx.project.id, casting }),
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     _ctx.project = r.project;
@@ -213,6 +211,12 @@ export function paint(host, ctx) {
   const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
+  // The waiting animation stays with the place that started the generation: painting another one
+  // takes it off the stage (js/merge-v3/wk-maker.js). The server keeps working either way.
+  onlyHere(_view);
+  // Arriving somewhere is when to ask the journal whether something of that place is running;
+  // a repaint is not.
+  if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
   if (_view === 'hub') {
     _paintHub(scroll, chosen);
   } else if (_view === 'env') {
@@ -327,10 +331,27 @@ function _guide(host, haveWho, haveWhere) {
 // ── The environment branch ──────────────────────────────────────────────────
 // Its own module (js/merge-v3/wk-env.js). This is everything it may reach in here: the casting
 // and the way to save it, where to go next, the stage's button, and who the place is for.
+// Where a generation was started, as the Alerts list needs it: the address that opens this very
+// place again, a line a person can read, and the place itself - so the panel can ask the journal
+// "is one of these running rows mine?" (lib/alerts.js).
+function _where(view) {
+  const key = (_ctx && _ctx.key) || '';
+  const p = (_ctx && _ctx.project) || {};
+  const name = String(p.title || p.name || 'talking head');
+  return {
+    page: 'merge',
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=frames&view=' + encodeURIComponent(view),
+    label: 'Merge · ' + name + ' · first frames' + (WHERE[view] ? ' › ' + WHERE[view] : ''),
+    spot: { key, step: 'frames', view },
+  };
+}
+
 function _envApi(chosen) {
   return {
     casting: _casting,
     patch: _patch,
+    key: () => (_ctx && _ctx.key) || '',
+    where: _where,
     go: (view) => { _view = view; _ctx.repaint(); },
     repaint: () => _ctx.repaint(),
     stageButton: _stageButton,
@@ -385,6 +406,13 @@ export function goCrumb(id) {
 // a reference and a sentence (C4). The first tile leads to that generator too, because an
 // empty shelf has to offer the way to fill it.
 function _paintLookbooks(host, head, c) {
+  _pickUpRunning('look', 'lookbooks', (rec) => {
+    if (_dressing) return;
+    _dressing = true;
+    _ctx.repaint();
+    holdProgress('lookbooks', { label: 'Dressing ' + c.name, estimateMs: 90000, startedAt: Date.parse(rec.startedAt) || 0 });
+    _followDress(rec.id, c.id);
+  });
   const acts = _el('div', 'mv3-wk-bar');
   const mk = (label, title, on, primary) => {
     const b = _el('button', 'mv3-sc-tab' + (primary ? ' is-on' : ''), label);
@@ -503,6 +531,13 @@ let _lbSaid = '';
 
 function _paintNewLookbook(host, head, c) {
   host.classList.add('is-split');
+  _pickUpRunning('lookbook', 'newlb', (rec) => {
+    if (_making) return;
+    _making = true;
+    _ctx.repaint();
+    holdProgress('newlb', { label: 'Making the lookbook', estimateMs: 45000, startedAt: Date.parse(rec.startedAt) || 0 });
+    _followLb(rec.id);
+  });
   const acts = _el('div', 'mv3-wk-bar');
   const back = _el('button', 'mv3-sc-tab', 'create look');
   back.type = 'button';
@@ -678,56 +713,74 @@ function _askDeleteLb(anchor, path) {
     });
 }
 
+const LB_LABEL = {
+  extract: 'Taking the outfit out of the photo',
+  edit: 'Reading the photo and your words',
+  draw: 'Drawing the outfit',
+};
+
 async function _make(c) {
   const mode = _mode();
   if (!mode || _making || _why()) return;
   _making = true;
   _lbSaid = '';
   _ctx.repaint();
-  const stage = document.getElementById('mv3-stage');
-  const pr = startProgress(stage, {
-    label: mode === 'extract' ? 'Taking the outfit out of the photo'
-      : mode === 'edit' ? 'Reading the photo and your words' : 'Drawing the outfit',
-    total: 1, estimateMs: 45000,
-  });
+  holdProgress('newlb', { label: LB_LABEL[mode] || 'Making the lookbook', estimateMs: 45000 });
   try {
     const r = await API.makeLookbook({
       prompt: _lbNote.trim(),
       imageBase64: _ref ? _ref.dataUrl : '',
       imagePath: _ref ? '' : _refLb,
-      count: 1,
-      engine: _engine(),
+      refName: _ref ? _ref.name : '',
+      title: 'Lookbook', where: _where('newlb'),
     });
-    const id = (r.taskIds || [])[0];
-    if (!id) throw new Error('the engine did not accept the task');
-    const done = await API.awaitTask(id);
-    // Until it is filed it is a scratch file with no shelf; filing gives it the path the
-    // shelf and the dressing both use - and puts the photo it was made from in the library
-    // (Images / uploads_lookbooks).
-    const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '', {
-      description: r.description || '', prompt: (r.prompts || [])[0] || '',
-      refToken: r.refToken || '', refName: _ref ? _ref.name : '',
-    });
-    pr.step();
-    pr.finish();
-    // The shelf on the left gains a tile and the maker stays where it is: one lookbook is
-    // rarely the end of it, and being thrown back to the casting after each would make a
-    // second one a journey.
-    _lbs = await API.lookbooks();
-    _refLb = String(filed.path || '');
-    _ref = null;
-    _lbNote = '';
-    _making = false;
-    _ctx.repaint();
+    // The server files it - onto the shelf, with its description and the photo it was made from
+    // (Images / uploads_lookbooks) - and this follows the journal row it wrote.
+    await _followLb(r.alertId);
   } catch (e) {
     const msg = (e && e.message) || 'unknown';
-    pr.fail(msg);
+    endProgress('newlb', msg);
     _making = false;
     // A refusal from the agent is not a failure of the machinery - it is an answer about what
     // was asked for, and it reads better as that than as an error.
     _lbSaid = e && e.refused ? msg : 'The lookbook failed: ' + msg;
     _ctx.repaint();
   }
+}
+
+async function _followLb(id) {
+  try {
+    const rec = await API.follow(id);
+    endProgress('newlb');
+    // The shelf on the left gains a tile and the maker stays where it is: one lookbook is
+    // rarely the end of it, and being thrown back to the casting after each would make a
+    // second one a journey.
+    _lbs = await API.lookbooks().catch(() => _lbs);
+    _refLb = String((rec.result || {}).path || '');
+    _ref = null;
+    _lbNote = '';
+  } catch (e) {
+    const msg = (e && e.message) || 'unknown';
+    endProgress('newlb', msg);
+    _lbSaid = 'The lookbook failed: ' + msg;
+  }
+  _making = false;
+  _ctx.repaint();
+}
+
+// Something of this panel's own may be running already - started before a reload, or before
+// somebody walked off and came back. The journal knows; asked once per visit to each maker.
+let _lookedFor = {};
+let _lastView = '';
+function _pickUpRunning(what, view, follow) {
+  if (_lookedFor[view]) return;
+  _lookedFor[view] = true;
+  API.alerts().then((d) => {
+    const key = (_ctx && _ctx.key) || '';
+    const mine = (d.items || []).find(r => r.state === 'running' && r.what === what
+      && r.where && r.where.spot && r.where.spot.key === key && r.where.spot.view === view);
+    if (mine) follow(mine);
+  }).catch(() => { /* without the list the panel simply shows nothing running */ });
 }
 
 // ── The dressing itself ─────────────────────────────────────────────────────
@@ -742,32 +795,44 @@ async function _apply(c) {
   _dressing = true;
   _ctx.repaint();
 
-  const stage = document.getElementById('mv3-stage');
-  const pr = startProgress(stage, { label: 'Dressing ' + c.name, total: 1, estimateMs: 60000 });
+  holdProgress('lookbooks', { label: 'Dressing ' + c.name, estimateMs: 90000 });
   try {
-    const job = await API.dress({ basePath: base, lookbookPath: lb, note: '', engine: _engine() });
-    const done = await API.awaitTask(job.taskId);
-    const saved = await API.saveLook({
-      charId: c.id, charName: c.name, imagePath: done.imagePath,
-      gender: c.gender || '', lookbookPath: lb, engine: job.engine || _engine(),
+    // The server dresses, files the look under the character and - because this one was asked for
+    // by a project - puts it on that project, whether or not anybody is still looking.
+    const r = await API.dress({
+      basePath: base, lookbookPath: lb, note: '',
+      charId: c.id, charName: c.name, gender: c.gender || '',
+      projectId: String((_ctx.project || {}).id || ''),
+      title: 'Look · ' + c.name, where: _where('lookbooks'),
     });
-    pr.step();
-    pr.finish();
-    // The wardrobe is read again rather than patched by hand: the look is filed by the
-    // server, and what it filed is what should be on screen.
+    await _followDress(r.alertId, c.id);
+  } catch (e) {
+    endProgress('lookbooks', (e && e.message) || 'the dressing failed');
+    _dressing = false;
+    _state = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _ctx.repaint();
+  }
+}
+
+async function _followDress(id, charId) {
+  try {
+    await API.follow(id);
+    endProgress('lookbooks');
+    // The wardrobe and the project are read again rather than patched by hand: the server filed
+    // the look and wrote it into the casting, and what it wrote is what should be on screen.
     _chars = byLooks(await loadCharacters(true));
+    await _ctx.reloadProject();
+    // The panel comes back to the faces with the drawer open on the character it was made for,
+    // the new look selected in it, and that look on the stage.
     _view = 'cast';
     _lbPick = '';
     _dressing = false;
     _stageButton(null);
-    // Made for this project, so this project wears it: the panel comes back to the faces with
-    // the drawer open on the character it was made for, the new look selected in it, and that
-    // look on the stage.
-    await _patch({ obrazId: String(saved.obrazId || ''), obrazImage: String(saved.path || '') });
     _shownFor = '';
-    _showChoice(_chars.find(x => x.id === c.id));
+    _showChoice(_chars.find(x => x.id === charId));
+    _ctx.repaint();
   } catch (e) {
-    pr.fail((e && e.message) || 'the dressing failed');
+    endProgress('lookbooks', (e && e.message) || 'the dressing failed');
     _dressing = false;
     _state = 'The dressing failed: ' + ((e && e.message) || 'unknown');
     _ctx.repaint();
