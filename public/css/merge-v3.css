@@ -1585,14 +1585,9 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
    drawn UNDER the pair - the shape that says the second belongs to the first. In the row and
    not under it, because a second line would make the header taller the moment you went one
    level deeper, and move everything below it while it was being read. */
-.mv3-wk-stepwrap{display:flex; align-items:center; gap:3px; position:relative}
-/* The bracket: a flat-bottomed staple under the chip and its sub-steps. */
-.mv3-wk-stepwrap::after{
-  content:''; position:absolute; left:4px; right:4px; bottom:-4px; height:4px;
-  border:1px solid var(--border); border-top:0;
-  border-bottom-left-radius:3px; border-bottom-right-radius:3px;
-}
-.mv3-wk-subs{display:flex; align-items:center; gap:3px}
+.mv3-wk-stepwrap{display:flex; align-items:center; gap:3px; flex:0 0 auto}
+/* Between the places on the route: what led to what, read left to right. */
+.mv3-wk-arrow{color:var(--muted); font:600 10px/1 var(--font); opacity:.7; padding:0 1px}
 .mv3-wk-sub{
   padding:1px 6px; border:1px solid transparent; border-radius:var(--r-xs);
   background:transparent; color:var(--muted); cursor:pointer;
@@ -1619,6 +1614,31 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-create[disabled]{opacity:.45; cursor:default; background:transparent; color:var(--muted); border-color:var(--border)}
 /* What is missing, said beside the button rather than after pressing it. */
 .mv3-wk-mode.is-why{color:var(--gold)}
+
+/* ── The hub of first frames ────────────────────────────────────────────────
+   Left: the two sources as pictures, each a door into its branch. Right: what to do next. */
+.mv3-wk-half.is-sources{gap:8px; padding:8px 7px; border-right:1px solid var(--border-soft); overflow-y:auto}
+.mv3-wk-source{
+  position:relative; display:flex; flex-direction:column; gap:4px; padding:6px; cursor:pointer; text-align:left;
+  border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface); color:var(--muted);
+}
+.mv3-wk-source:hover{border-color:var(--primary)}
+.mv3-wk-source.is-full{border-style:solid}
+.mv3-wk-source img{width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center; border-radius:var(--r-xs); display:block; background:var(--bg)}
+.mv3-wk-source img.is-left{object-position:left center}
+.mv3-wk-source-empty{
+  display:flex; align-items:center; justify-content:center; aspect-ratio:16/9;
+  font:600 11px/1.3 var(--font); color:var(--muted);
+}
+.mv3-wk-source-cap{font:600 9.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+.mv3-wk-half.is-guide{padding:9px 10px; overflow-y:auto}
+.mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
+.mv3-wk-guide-p.is-soon{color:var(--muted); font-style:italic}
+.mv3-wk-guide-list{margin:0; padding-left:17px; display:flex; flex-direction:column; gap:6px; font:400 11px/1.45 var(--font); color:var(--ink)}
+/* Done steps stay in the list, struck and dimmed: the order is part of the explanation. */
+.mv3-wk-guide-list li.is-done{color:var(--muted); text-decoration:line-through}
 
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls

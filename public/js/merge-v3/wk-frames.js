@@ -56,7 +56,13 @@ let _saving = false;
 // The panel has two faces: the casting, and the shelf of outfits to make a look from. Not a
 // window over it - a 280px column has no room for a window, and this is the same question
 // ("what does this person wear") one level down.
-let _view = 'cast';                      // 'cast' | 'lookbooks' | 'newlb'
+// Where in the step the panel is. The hub is the top of it; the rest are branches under the
+// two things a first frame is made from:
+//
+//   hub
+//   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
+//   └── env  ── newenv                  the environment, making one
+let _view = 'hub';
 // What the next lookbook is made FROM: either a file the person chose here, or one the
 // library already holds. Never both - choosing on one side clears the other, because the
 // question "what is this based on" has one answer.
@@ -202,7 +208,11 @@ export function paint(host, ctx) {
   const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
-  if (_view === 'newlb' && chosen) {
+  if (_view === 'hub') {
+    _paintHub(scroll, chosen);
+  } else if (_view === 'env' || _view === 'newenv') {
+    _paintEnvironments(scroll, head);
+  } else if (_view === 'newlb' && chosen) {
     _paintNewLookbook(scroll, head, chosen);
   } else if (_view === 'lookbooks' && chosen) {
     // No drawer here at all. It is the character's wardrobe, and what is being answered on
@@ -218,6 +228,150 @@ export function paint(host, ctx) {
   }
 }
 
+// ── The hub ─────────────────────────────────────────────────────────────────
+// What a first frame is made of, and what to do about it. On the left the two sources as
+// pictures - the character in the look it will wear, the place it will stand in - each one a
+// door into its own branch. On the right what happens next: the explanation while either is
+// missing, and the conversation with the agent that makes the frames once both are there.
+function _paintHub(host, chosen) {
+  host.classList.add('is-split');
+  const cast = _casting();
+
+  const left = _el('div', 'mv3-wk-half is-sources');
+  left.appendChild(_source({
+    label: 'character',
+    // The 4K reference in the look it will wear, which is the picture every frame is made
+    // from. Without a look, the character as they are; without a character, nothing yet.
+    src: cast.obrazImage || (chosen ? _faceOf(chosen).src : ''),
+    left: !cast.obrazImage && chosen ? _faceOf(chosen).left : false,
+    caption: cast.characterName ? cast.characterName + (cast.obrazImage ? '' : ' - no look yet') : '',
+    empty: 'Who is speaking?',
+    go: () => { _view = 'cast'; _ctx.repaint(); },
+  }));
+  left.appendChild(_source({
+    label: 'environment',
+    src: cast.locationImage || '',
+    caption: '',
+    empty: 'Where are they?',
+    go: () => { _view = 'env'; _ctx.repaint(); },
+  }));
+  host.appendChild(left);
+
+  const right = _el('div', 'mv3-wk-half is-guide');
+  const haveWho = !!cast.obrazImage;
+  const haveWhere = !!cast.locationImage;
+  if (haveWho && haveWhere) {
+    // The agent's side of the step. It is built next (docs/local-app/PLAN.md, the hub phases);
+    // until then the space says what it will hold rather than standing empty.
+    right.appendChild(_el('div', 'mv3-wk-guide-h', 'Ready for first frames'));
+    right.appendChild(_el('p', 'mv3-wk-guide-p',
+      'The character and the environment are set. This is where you will ask the agent for the frames the video opens on - one, or several - and see them on the stage.'));
+    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'The conversation with the agent is the next thing being built.'));
+  } else {
+    _guide(right, haveWho, haveWhere);
+  }
+  host.appendChild(right);
+
+  // The stage shows what the hub is made of: the character in the look on top, the place
+  // below - the two halves every frame is composed from.
+  _stageButton(null);
+  _shownFor = '';
+  if (cast.obrazImage || cast.locationImage) {
+    PV.showPair(cast.obrazImage ? derived(cast.obrazImage, 'main') : '',
+      cast.locationImage ? derived(cast.locationImage, 'main') : '');
+  } else {
+    PV.showStill('', '');
+  }
+}
+
+function _source(o) {
+  const box = _el('button', 'mv3-wk-source' + (o.src ? ' is-full' : ''));
+  box.type = 'button';
+  box.title = o.src ? 'Change the ' + o.label : 'Choose the ' + o.label;
+  box.appendChild(_el('span', 'mv3-wk-lbl', o.label));
+  if (o.src) {
+    const img = _el('img', o.left ? 'is-left' : '');
+    img.alt = '';
+    img.src = derived(o.src, 'card');
+    box.appendChild(img);
+    if (o.caption) box.appendChild(_el('span', 'mv3-wk-source-cap', o.caption));
+  } else {
+    box.appendChild(_el('span', 'mv3-wk-source-empty', o.empty));
+  }
+  box.addEventListener('click', o.go);
+  return box;
+}
+
+// What to do, said in the order it is done, and narrowed as it gets done: a list of five
+// things where two are finished is a list you have to read to find the next one.
+function _guide(host, haveWho, haveWhere) {
+  host.appendChild(_el('div', 'mv3-wk-guide-h', 'Making a talking head'));
+  host.appendChild(_el('p', 'mv3-wk-guide-p',
+    'Four steps, in this order. FIRST FRAMES: who is speaking, where, and the picture the video opens on. VOICE: the script read aloud. VIDEO: each line animated to its read. TIMELINE: the finished cut, to edit and render.'));
+  host.appendChild(_el('div', 'mv3-wk-guide-h', 'Now'));
+  const ol = _el('ol', 'mv3-wk-guide-list');
+  const li = (text, done) => { const e = _el('li', done ? 'is-done' : '', text); ol.appendChild(e); };
+  li('Choose who is speaking: click the character field. Pick a look for them, or dress them in a lookbook - or make a new lookbook first.', haveWho);
+  li('Choose where: click the environment field and pick a place.', haveWhere);
+  li('With both set, ask the agent for the first frames.', false);
+  host.appendChild(ol);
+}
+
+// ── The environment branch ──────────────────────────────────────────────────
+// Simpler than the character's, on purpose: a place has no wardrobe. The saved environments as
+// tiles, and picking one is the answer - it is written to the project and the panel goes back
+// to the hub. Making a new one (create environment) comes next.
+let _envs = null;
+
+function _paintEnvironments(host, head) {
+  const acts = _el('div', 'mv3-wk-bar');
+  const x = _el('button', 'mv3-iconbtn', '\u2715');
+  x.type = 'button';
+  x.title = 'Back to first frames';
+  x.addEventListener('click', () => { _view = 'hub'; _ctx.repaint(); });
+  acts.appendChild(x);
+  head.appendChild(acts);
+
+  if (_envs === null) {
+    host.appendChild(_note('reading the environments…'));
+    fetch('/api/gallery/environments').then(r => r.json())
+      .then((d) => { _envs = (d && d.files) || []; _ctx.repaint(); })
+      .catch((e) => { _envs = []; _state = 'Could not read the environments: ' + e.message; _ctx.repaint(); });
+    return;
+  }
+
+  const grid = _el('div', 'mv3-wk-grid is-lb');
+  const add = _el('button', 'mv3-wk-tile is-add', '+');
+  add.type = 'button';
+  add.title = 'Create an environment - being built next';
+  add.disabled = true;
+  grid.appendChild(add);
+  const current = String(_casting().locationImage || '');
+  for (const p of _envs) {
+    const path = String((p && p.path) || p || '');
+    if (!path) continue;
+    const tile = _el('button', 'mv3-wk-tile is-lb' + (path === current ? ' is-on' : ''));
+    tile.type = 'button';
+    tile.title = path.split('/').pop();
+    const img = _el('img', 'mv3-wk-face');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = derived(path, 'card');
+    tile.appendChild(img);
+    tile.addEventListener('click', async () => {
+      // A bare path out of the gallery with no record behind it, so no id - the same
+      // convention the old page kept (js/scenarios-v3/mix-popup.js).
+      await _patch({ locationId: '', locationImage: path });
+      _view = 'hub';
+      _ctx.repaint();
+    });
+    grid.appendChild(tile);
+  }
+  host.appendChild(grid);
+  if (!_envs.length) host.appendChild(_note('No environments yet - making one comes next.'));
+  PV.showStill(current ? derived(current, 'main') : '', current ? 'current environment' : '');
+}
+
 // ── Where you are inside the step ───────────────────────────────────────────
 // The step chip in the panel header says WHICH step is open; these say where inside it. They
 // are drawn by the workshop, under that chip and bracketed to it, so the two read as one thing
@@ -225,22 +379,32 @@ export function paint(host, ctx) {
 const WHERE = {
   cast: 'character',
   lookbooks: 'looks',
-  newlb: 'new lookbook',
+  newlb: 'create lookbook',
+  env: 'environment',
+  newenv: 'create environment',
+};
+// Each place, and the places above it. The header draws this as a route with arrows, so what
+// led to what is read left to right.
+const PATH = {
+  hub: [],
+  cast: ['cast'],
+  lookbooks: ['cast', 'lookbooks'],
+  newlb: ['cast', 'lookbooks', 'newlb'],
+  env: ['env'],
+  newenv: ['env', 'newenv'],
 };
 
-/** The path from the top of the step to where you are - the workshop paints it. */
+/** The route from the top of the step to where you are - the workshop paints it. */
 export function crumbs() {
-  if (_view === 'cast') return [];
-  const out = [{ id: 'cast', label: WHERE.cast }];
-  if (_view === 'newlb') out.push({ id: 'lookbooks', label: WHERE.lookbooks });
-  out.push({ id: _view, label: WHERE[_view], here: true });
-  return out;
+  return (PATH[_view] || []).map((id, i, all) => ({ id, label: WHERE[id], here: i === all.length - 1 }));
 }
 
-/** Pressing one of them. */
+/** Pressing one of them - or the step's own chip, which is the hub. */
 export function goCrumb(id) {
-  if (!WHERE[id] || id === _view) return;
-  _view = id;
+  const want = id === 'hub' ? 'hub' : id;
+  if (want !== 'hub' && !WHERE[want]) return;
+  if (want === _view) return;
+  _view = want;
   _ctx.repaint();
 }
 
@@ -259,7 +423,7 @@ function _paintLookbooks(host, head, c) {
   };
   acts.append(
     mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
-    mk('new lookbook', 'Make one from a photo and a sentence',
+    mk('create lookbook', 'Make one from a photo and a sentence',
       () => { _view = 'newlb'; _ctx.repaint(); }, false),
   );
   const back = _el('button', 'mv3-iconbtn', '\u2715');
@@ -292,7 +456,7 @@ function _paintLookbooks(host, head, c) {
     }));
   }
   host.appendChild(grid);
-  if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "new lookbook".'));
+  if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "create lookbook".'));
 }
 
 // ── What the stage shows while an outfit is being chosen ────────────────────
@@ -391,7 +555,7 @@ function _paintNewLookbook(host, head, c) {
   back.type = 'button';
   back.title = 'Back to the shelf of outfits';
   back.addEventListener('click', () => { _view = 'lookbooks'; _ctx.repaint(); });
-  const here = _el('button', 'mv3-sc-tab is-on', 'new lookbook');
+  const here = _el('button', 'mv3-sc-tab is-on', 'create lookbook');
   here.type = 'button';
   here.disabled = true;
   const x = _el('button', 'mv3-iconbtn', '\u2715');
@@ -826,9 +990,12 @@ function _paintLooks(root, c) {
       img.loading = 'lazy';
       img.src = derived(o.image, 'card');
       b.appendChild(img);
-      b.addEventListener('click', () => {
-        _patch({ obrazId: o.id, obrazImage: o.image });
-        _showInPreview(o.image, c.name + (o.name ? ' · ' + o.name : ''));
+      b.addEventListener('click', async () => {
+        await _patch({ obrazId: o.id, obrazImage: o.image });
+        // The look is the end of this branch: the character field in the hub now holds the
+        // person in what they will wear, and the next question is where.
+        _view = 'hub';
+        _ctx.repaint();
       });
       row.appendChild(b);
     }

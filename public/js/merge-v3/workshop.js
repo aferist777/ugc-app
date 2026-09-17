@@ -124,27 +124,33 @@ function _paintChips() {
     b.className = 'mv3-wk-step' + (s.id === _step ? ' is-on' : '');
     b.textContent = s.label;
     b.title = s.title;
-    b.addEventListener('click', () => setStep(s.id));
-    // The open step may have places INSIDE it. They hang under its chip, bracketed to it, so
-    // the pair reads as one thing at two depths rather than as two rows of tabs.
+    // Pressing the open step's own chip goes back to the top of it.
+    b.addEventListener('click', () => {
+      if (s.id === _step && _loaded[_step] && typeof _loaded[_step].goCrumb === 'function') _loaded[_step].goCrumb('hub');
+      else setStep(s.id);
+    });
+    // The open step may have places INSIDE it. They follow its chip in the same row as a ROUTE -
+    // step, arrow, place, arrow, place - so what led to what reads left to right, and the
+    // header stays one line however deep the route goes.
     const crumbs = (s.id === _step && _loaded[_step] && typeof _loaded[_step].crumbs === 'function')
       ? (_loaded[_step].crumbs() || []) : [];
     if (!crumbs.length) { bar.appendChild(b); continue; }
     const wrap = document.createElement('div');
     wrap.className = 'mv3-wk-stepwrap';
     wrap.appendChild(b);
-    const subs = document.createElement('div');
-    subs.className = 'mv3-wk-subs';
     for (const c of crumbs) {
+      const arrow = document.createElement('span');
+      arrow.className = 'mv3-wk-arrow';
+      arrow.textContent = '\u2192';
+      wrap.appendChild(arrow);
       const sb = document.createElement('button');
       sb.type = 'button';
       sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : '');
       sb.textContent = c.label;
       sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
       if (!c.here) sb.addEventListener('click', () => { _loaded[_step].goCrumb(c.id); });
-      subs.appendChild(sb);
+      wrap.appendChild(sb);
     }
-    wrap.appendChild(subs);
     bar.appendChild(wrap);
   }
 }
