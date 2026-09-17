@@ -223,7 +223,11 @@ export function paint(host, ctx) {
   txt.appendChild(_el('div', 'mv3-ins-title', 'setting & voice'));
   txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, and how it is read'));
   head.appendChild(txt);
-  root.appendChild(head);
+  // ON A SPLIT FACE THE TITLE BELONGS TO THE LEFT COLUMN (owner, 2026-09-18): it names the two
+  // pictures under it, and the right half - the voice and the script - starts at the panel's own
+  // top edge instead of a hand's width below it.
+  const split = _view === 'hub' || _view === 'voice';
+  if (!split) root.appendChild(head);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
@@ -242,7 +246,7 @@ export function paint(host, ctx) {
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
   if (_view === 'hub') {
-    _paintHub(scroll, chosen);
+    _paintHub(scroll, chosen, head);
   } else if (_view === 'env') {
     ENV.paintShelf(scroll, head, _envApi(chosen));
   } else if (_view === 'newenv') {
@@ -250,7 +254,7 @@ export function paint(host, ctx) {
   } else if (_view === 'voice' && chosen) {
     _stageButton(null);
     _showChoice(chosen);
-    VOICE.paintPicker(scroll, head, _voiceApi(chosen));
+    _paintVoice(scroll, chosen, head);
   } else if (_view === 'newlb' && chosen) {
     _paintNewLookbook(scroll, head, chosen);
   } else if (_view === 'lookbooks' && chosen) {
@@ -272,11 +276,13 @@ export function paint(host, ctx) {
 // pictures - the character in the look it will wear, the place it will stand in - each one a
 // door into its own branch. On the right what happens next: the explanation while either is
 // missing, and the read - the voice and the lines - once both are there.
-function _paintHub(host, chosen) {
-  host.classList.add('is-split');
+// The left column of every split face: the title, and the two pictures the project is set with.
+// One builder, because the voice level shows exactly the same column - who is speaking and where
+// they stand belong beside the voice they are read in (owner, 2026-09-18).
+function _sources(head, chosen) {
   const cast = _casting();
-
   const left = _el('div', 'mv3-wk-half is-sources');
+  if (head) left.appendChild(head);
   left.appendChild(_source({
     label: 'character',
     // The 4K reference in the look it will wear, which is the picture every frame is made
@@ -294,9 +300,30 @@ function _paintHub(host, chosen) {
     empty: 'Where are they?',
     go: () => { _view = 'env'; _ctx.repaint(); },
   }));
-  host.appendChild(left);
+  return left;
+}
+
+// The voice level, one step under the hub: the same two pictures on the left, and on the right
+// the voices this character has and the library to take another from.
+function _paintVoice(host, chosen, head) {
+  host.classList.add('is-split');
+  host.appendChild(_sources(head, chosen));
+  const right = _el('div', 'mv3-wk-half is-guide');
+  host.appendChild(right);
+  VOICE.paintPicker(right, _voiceApi(chosen));
+}
+
+function _paintHub(host, chosen, head) {
+  host.classList.add('is-split');
+  const cast = _casting();
+
+  host.appendChild(_sources(head, chosen));
 
   const right = _el('div', 'mv3-wk-half is-guide');
+  // Hung in the panel BEFORE it is filled: the voice level puts the list back where it was
+  // standing (js/merge-v3/wk-voice.js), and a column that is not in the document yet cannot be
+  // scrolled - the offset would be dropped and the list would jump to the top on every read.
+  host.appendChild(right);
   const haveWho = !!cast.obrazImage;
   const haveWhere = !!cast.locationImage;
   if (haveWho && haveWhere && chosen) {
@@ -305,7 +332,6 @@ function _paintHub(host, chosen) {
   } else {
     _guide(right, haveWho, haveWhere);
   }
-  host.appendChild(right);
 
   // The stage shows what the hub is made of: the character in the look on top, the place
   // below - the two halves every frame is composed from.

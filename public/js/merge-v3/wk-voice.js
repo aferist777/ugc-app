@@ -52,6 +52,34 @@ let _rbad = false;
 let _audio = null;
 let _playing = '';
 
+// WHERE THE PANEL WAS SCROLLED TO. A finished read repaints the whole step, and a rebuilt column
+// starts at the top - so a batch of twelve lines threw the list back to line one every few seconds
+// (owner, 2026-09-18). The offset is remembered here and put back after the paint.
+let _scrollAt = { hub: 0, voice: 0 };
+let _face = 'hub';                      // which of the two is on screen, so the offset goes in its own slot
+const _col = () => document.querySelector('.mv3-wk-half.is-guide');
+
+// EVERY REPAINT GOES THROUGH HERE. A repaint rebuilds the column, and a rebuilt column starts at
+// the top - so reading twelve lines threw the list back to line one every few seconds (owner,
+// 2026-09-18). Where it stood is read off the live column at the moment it is thrown away, not
+// from a scroll event: the event arrives after the frame, which is too late when the rebuild is
+// in the same tick.
+function _repaint(api) {
+  const col = _col();
+  if (col) _scrollAt[_face] = col.scrollTop;
+  api.repaint();
+}
+
+function _putScroll(host, where) {
+  _face = where;
+  const at = _scrollAt[where] || 0;
+  if (!at) return;
+  // Straight away, not on the next frame: a second repaint can land in the same tick - a read
+  // starts one and finishes another - and it would read this column back at zero and remember
+  // THAT. The column is already in the panel by now (js/merge-v3/wk-setting.js).
+  host.scrollTop = at;
+}
+
 function _play(src) {
   if (!src) return;
   if (!_audio) {
@@ -111,7 +139,9 @@ export function paintHub(host, api) {
   if (!mine.length) {
     host.appendChild(el('p', 'mv3-wk-guide-p',
       (rec.name || 'This character') + ' has no voice yet. Every line is read in it, so it is chosen once and stays with the character.'));
-    host.appendChild(_pick(api, 'choose a voice'));
+    const foot = el('div', 'mv3-wk-vfoot');
+    foot.appendChild(_pick(api, 'choose a voice'));
+    host.appendChild(foot);
     return;
   }
 
@@ -128,6 +158,8 @@ export function paintHub(host, api) {
   sel.disabled = !!_busy;
   sel.addEventListener('change', () => _star(api, sel.value));
   row.appendChild(sel);
+  // The way to another voice sits in the same row, right of the choice it changes (owner).
+  row.appendChild(_pick(api, 'change'));
   host.appendChild(row);
 
   if (now) host.appendChild(el('div', 'mv3-wk-vsub', _sub(now) || 'no tags'));
@@ -135,8 +167,8 @@ export function paintHub(host, api) {
   // What the sub-level had to say - a voice taken, or one that could not be - is said ONCE
   // here, on the way back, and then let go: it is news about what just happened, not a label.
   if (_said) { host.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
-  host.appendChild(_pick(api, 'another voice'));
   paintReads(host, api);
+  _putScroll(host, 'hub');
 }
 
 function _pick(api, label) {
@@ -144,14 +176,12 @@ function _pick(api, label) {
   b.type = 'button';
   b.title = 'The saved voices, and the ElevenLabs library';
   b.addEventListener('click', () => api.go('voice'));
-  const row = el('div', 'mv3-wk-vfoot');
-  row.appendChild(b);
-  return row;
+  return b;
 }
 
 // ── The sub-level ───────────────────────────────────────────────────────────
-function _bar(head, api) {
-  const acts = el('div', 'mv3-wk-bar');
+function _bar(host, api) {
+  const acts = el('div', 'mv3-wk-bar is-own');
   const tab = el('button', 'mv3-sc-tab is-on', 'voice');
   tab.type = 'button';
   tab.disabled = true;
@@ -162,11 +192,11 @@ function _bar(head, api) {
   x.title = 'Back to setting & voice';
   x.addEventListener('click', () => api.go('hub'));
   acts.appendChild(x);
-  head.appendChild(acts);
+  host.appendChild(acts);
 }
 
-export function paintPicker(host, head, api) {
-  _bar(head, api);
+export function paintPicker(host, api) {
+  _bar(host, api);
   const rec = api.char();
   if (!rec) { host.appendChild(api.note('reading the character…')); return; }
   if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
@@ -244,12 +274,12 @@ export function paintPicker(host, head, api) {
 
   if (!_asked) {
     host.appendChild(api.note('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.'));
-    return;
+    return _putScroll(host, 'voice');
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
     host.appendChild(api.note(_busy === 'search' ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
-    return;
+    return _putScroll(host, 'voice');
   }
   const have = new Set(mine.map(v => String(v.voiceId)));
   for (const v of found) {
@@ -284,6 +314,7 @@ export function paintPicker(host, head, api) {
   pager.appendChild(el('span', 'mv3-wk-vcount', total + ' voices · page ' + _page + ' of ' + pages));
   step('›', _page + 1, _page < pages || (_res && _res.hasMore));
   host.appendChild(pager);
+  _putScroll(host, 'voice');
 }
 
 // ── What it does ────────────────────────────────────────────────────────────
@@ -303,7 +334,7 @@ async function _search(api, page) {
   _asked = true;
   _page = Math.max(1, page || 1);
   _said = ''; _bad = false;
-  api.repaint();
+  _repaint(api);
   try {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(_q)) if (String(v || '').trim()) p.set(k, String(v).trim());
@@ -318,7 +349,7 @@ async function _search(api, page) {
     _bad = true;
   }
   _busy = '';
-  api.repaint();
+  _repaint(api);
 }
 
 // The voice of the character, from one they already have. `voices` is untouched - this says
@@ -327,7 +358,7 @@ async function _star(api, voiceId) {
   if (_busy || !voiceId) return;
   _busy = 'star';
   _said = ''; _bad = false;
-  api.repaint();
+  _repaint(api);
   try {
     await api.patchChar({ voice: String(voiceId) });
   } catch (e) {
@@ -335,7 +366,7 @@ async function _star(api, voiceId) {
     _bad = true;
   }
   _busy = '';
-  api.repaint();
+  _repaint(api);
 }
 
 // Taking ADDS the voice to the account - ElevenLabs answers voice_not_found for a library id
@@ -346,7 +377,7 @@ async function _take(api, card) {
   if (_busy) return;
   _busy = 'take:' + card.voice_id;
   _said = ''; _bad = false;
-  api.repaint();
+  _repaint(api);
   try {
     const t = await (await fetch('/api/scen3/voices/take', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -378,7 +409,7 @@ async function _take(api, card) {
     _bad = true;
   }
   _busy = '';
-  api.repaint();
+  _repaint(api);
 }
 
 // ── The script, line by line ────────────────────────────────────────────────
@@ -404,35 +435,34 @@ export function paintReads(host, api) {
   if (!_active(rec)) return;
 
   const left = lines.filter(_needs).length;
-  const head = el('div', 'mv3-wk-vhead is-lib', 'The script');
-  const cnt = el('span', 'mv3-wk-vcount is-head', left
-    ? left + ' of ' + lines.length + (left === 1 ? ' line to read' : ' lines to read')
-    : 'every line is read');
-  head.appendChild(cnt);
+  const head = el('div', 'mv3-wk-vhead is-lib is-row', 'The script');
+  const acts = el('div', 'mv3-wk-vheadacts');
+  // How many of them are read, in the heading itself (owner): the first thing looked for is
+  // whether the script is done, and "9/14" answers that without counting rows.
+  acts.appendChild(el('span', 'mv3-wk-vcount', (lines.length - left) + '/' + lines.length));
+  head.appendChild(acts);
   host.appendChild(head);
 
   lines.forEach((l, i) => host.appendChild(_line(api, l, i)));
 
   if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
 
-  const foot = el('div', 'mv3-wk-vfoot');
-  if (left) {
+  {
     // The second press is the confirmation (decided with the owner): a batch is the one thing
     // here that spends real money, and it says how much before it does.
-    const all = el('button', 'mv3-wk-vmore' + (_armed ? ' is-armed' : ''),
+    const all = el('button', 'mv3-wk-vmore is-small' + (_armed ? ' is-armed' : ''),
       _batch ? 'reading ' + _batch.done + ' of ' + _batch.total + '…'
         : _armed ? 'read ' + left + (left === 1 ? ' line?' : ' lines?') : 'read all');
     all.type = 'button';
     all.title = _armed ? 'Press again to read them' : 'Read every line that needs it';
     all.disabled = !!_batch || _reading >= 0;
     all.addEventListener('click', () => {
-      if (!_armed) { _armed = true; api.repaint(); return; }
+      if (!_armed) { _armed = true; _repaint(api); return; }
       _armed = false;
       _readAll(api);
     });
-    foot.appendChild(all);
+    acts.appendChild(all);
   }
-  host.appendChild(foot);
 }
 
 function _line(api, l, i) {
@@ -440,12 +470,17 @@ function _line(api, l, i) {
   const take = _take0(l);
 
   const top = el('div', 'mv3-wk-lrow');
-  top.appendChild(el('span', 'mv3-wk-lnum', String(i + 1)));
+  // The number over the length, exactly as tall as the play button beside them (owner): the
+  // duration used to sit on a line of its own under the row and made every read fragment taller.
+  const meta = el('div', 'mv3-wk-lmeta');
+  meta.appendChild(el('span', 'mv3-wk-lnum', String(i + 1)));
+  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
+  top.appendChild(meta);
   top.appendChild(_playBtn((take && take.path) || '', 'this line'));
 
   const words = el('div', 'mv3-wk-ltext', String(l.text || ''));
   words.title = 'Change the words';
-  words.addEventListener('click', () => { _edit = i; _draft = String(l.text || ''); _rsaid = ''; api.repaint(); });
+  words.addEventListener('click', () => { _edit = i; _draft = String(l.text || ''); _rsaid = ''; _repaint(api); });
   top.appendChild(words);
 
   const go = el('button', 'mv3-wk-vuse', _reading === i ? '…' : _unread(l) ? 'read' : 'again');
@@ -456,10 +491,8 @@ function _line(api, l, i) {
   top.appendChild(go);
   row.appendChild(top);
 
-  if (take && take.dur) {
-    const sub = el('div', 'mv3-wk-lsub', _stale(l) ? 'stale - the words have changed since' : take.dur.toFixed(1) + 's');
-    row.appendChild(sub);
-  }
+  // Only the staleness needs a line of its own now - it is a sentence, not a number.
+  if (_stale(l)) row.appendChild(el('div', 'mv3-wk-lsub', 'stale - the words have changed since'));
   // Back to what was spoken: the other way to end a staleness, and the cheap one.
   if (_stale(l) && _edit !== i) {
     const back = el('button', 'mv3-wk-lback', 'put the words back');
@@ -476,7 +509,7 @@ function _line(api, l, i) {
     box.rows = 3;
     box.addEventListener('input', () => { _draft = box.value; });
     box.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); _edit = -1; api.repaint(); }
+      if (e.key === 'Escape') { e.stopPropagation(); _edit = -1; _repaint(api); }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _saveText(api, i, _draft); }
     });
     row.appendChild(box);
@@ -487,7 +520,7 @@ function _line(api, l, i) {
     save.addEventListener('click', () => _saveText(api, i, _draft));
     const drop = el('button', 'mv3-wk-vuse', 'cancel');
     drop.type = 'button';
-    drop.addEventListener('click', () => { _edit = -1; api.repaint(); });
+    drop.addEventListener('click', () => { _edit = -1; _repaint(api); });
     acts.append(save, drop);
     row.appendChild(acts);
     setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
@@ -498,10 +531,10 @@ function _line(api, l, i) {
 // ── What it does ────────────────────────────────────────────────────────────
 async function _saveText(api, i, text) {
   const words = String(text || '').trim();
-  if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return api.repaint(); }
+  if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return _repaint(api); }
   _edit = -1;
   _rsaid = ''; _rbad = false;
-  api.repaint();
+  _repaint(api);
   try {
     const d = await (await fetch('/api/scen3/projects/' + encodeURIComponent(api.projectId()) + '/line', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -513,7 +546,7 @@ async function _saveText(api, i, text) {
     _rsaid = 'Could not save the words: ' + e.message;
     _rbad = true;
   }
-  api.repaint();
+  _repaint(api);
 }
 
 // One line, spoken now. The server writes the take into the project itself, so what comes back
@@ -526,7 +559,7 @@ async function _read(api, i, inBatch) {
   _reading = i;
   _rsaid = ''; _rbad = false;
   _armed = false;
-  api.repaint();
+  _repaint(api);
   let ok = false;
   try {
     const d = await (await fetch('/api/scen3/voice/speak', {
@@ -543,7 +576,7 @@ async function _read(api, i, inBatch) {
     _rbad = true;
   }
   _reading = -1;
-  api.repaint();
+  _repaint(api);
   return ok;
 }
 
@@ -554,15 +587,15 @@ async function _readAll(api) {
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
-  api.repaint();
+  _repaint(api);
   for (const i of want) {
     const ok = await _read(api, i, true);
     if (!ok) break;
     _batch.done++;
-    api.repaint();
+    _repaint(api);
   }
   _batch = null;
-  api.repaint();
+  _repaint(api);
 }
 
 /** Coming back to the hub leaves the search behind, but not what was said about the last take. */
