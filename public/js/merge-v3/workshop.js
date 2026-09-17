@@ -26,13 +26,21 @@
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
 
-// `timeline` last and apart: the other three build the project, it edits the result.
+// `timeline` last and apart: the other two build the project, it edits the result.
+//
+// THREE STEPS, NOT FOUR (decided with the owner 2026-09-18, docs/local-app/PLAN.md "Setting &
+// voice"). The read used to be a step of its own and the clips another, but a clip is made FROM a
+// frame and a read of one line and lasts exactly as long as that read - so the voice belongs with
+// the character and the place that are chosen for it, and the frame belongs with the clip it opens.
 const STEPS = [
-  { id: 'frames', label: 'first frames', title: 'Who says it, where, and the first frame of each fragment' },
-  { id: 'voice', label: 'voice', title: 'The read: voice, tags, moods' },
-  { id: 'video', label: 'video', title: 'The clips, fragment by fragment' },
+  { id: 'setting', label: 'setting & voice', title: 'Who says it, where, and how it is read' },
+  { id: 'fragments', label: 'fragments', title: 'The opening frame and the clip of each fragment' },
   { id: 'timeline', label: 'timeline', title: 'The timeline itself, and whatever is selected on it' },
 ];
+// What a step used to be called, so an address in an old journal row and a step remembered in this
+// browser still land somewhere (lib/alerts.js, and `mv3_step_v1` below).
+const WAS = { frames: 'setting', voice: 'setting', video: 'fragments' };
+const _stepId = (id) => { const s = WAS[String(id || '')] || String(id || ''); return STEPS.some(x => x.id === s) ? s : ''; };
 const KEY = 'mv3_step_v1';               // { <timeline key>: <step id> }
 
 let _key = '';                           // the open timeline's key
@@ -75,7 +83,7 @@ function _remember(id) {
 }
 
 function _remembered() {
-  try { return (JSON.parse(localStorage.getItem(KEY) || '{}') || {})[_key] || ''; } catch (e) { return ''; }
+  try { return _stepId((JSON.parse(localStorage.getItem(KEY) || '{}') || {})[_key] || ''); } catch (e) { return ''; }
 }
 
 export function setStep(id) {
@@ -93,8 +101,7 @@ export function setStep(id) {
 // and it beats what was remembered - it is the more recent instruction of the two.
 function _urlStep() {
   try {
-    const s = new URLSearchParams(location.search).get('step') || '';
-    return STEPS.some(x => x.id === s) ? s : '';
+    return _stepId(new URLSearchParams(location.search).get('step') || '');
   } catch (e) { return ''; }
 }
 
@@ -105,10 +112,10 @@ function _firstStep() {
   const asked = _urlStep();
   if (asked) return asked;
   const seen = _remembered();
-  if (seen && STEPS.some(s => s.id === seen)) return seen;
+  if (seen) return seen;
   const tl = Store.timeline();
   const has = !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
-  return has ? 'timeline' : 'frames';
+  return has ? 'timeline' : 'setting';
 }
 
 // ── The chips, in the panel's own header ────────────────────────────────────
@@ -231,9 +238,8 @@ export function initWorkshop() {
 // the place where it still lives (docs/local-app/PLAN.md, phases C2-C6). The bridge
 // goes step by step as each is built, and the page it points at goes in phase G.
 const MODULES = {
-  frames: () => import('./wk-frames.js'),
-  // voice:  () => import('./wk-voice.js'),    ← D
-  // video:  () => import('./wk-video.js'),    ← E
+  setting: () => import('./wk-setting.js'),
+  // fragments: () => import('./wk-fragments.js'),    ← F
 };
 const _loaded = {};
 

@@ -283,7 +283,7 @@ async function _use(scenarioId, btn) {
     if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
     stop();                               // the picker has done its job
     await Store.open(d.key);
-    WK.setStep('frames');
+    WK.setStep('setting');
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'use'; }
     alert('Could not make the project: ' + e.message);

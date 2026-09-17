@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — where a first frame is set: the environments shelf, and the maker of new ones.
 
-   The branch under first frames that is not the character (docs/local-app/PLAN.md, "create
+   The branch under setting & voice that is not the character (docs/local-app/PLAN.md, "create
    environment"):
 
      environment          the saved places. Picking one sets the project in it.
@@ -89,7 +89,7 @@ function _bar(head, api, here) {
   );
   const x = el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
-  x.title = 'Back to first frames';
+  x.title = 'Back to setting & voice';
   x.addEventListener('click', () => api.go('hub'));
   acts.appendChild(x);
   head.appendChild(acts);
@@ -136,7 +136,7 @@ async function _open(path) {
 function _askDelete(anchor, path, api) {
   const current = String(api.casting().locationImage || '') === path;
   askDelete(anchor, 'Delete "' + _nameOf(path) + '"?',
-    current ? 'It is where this project is set: the environment field on first frames will be empty again.'
+    current ? 'It is where this project is set: the environment field on setting & voice will be empty again.'
       : 'The picture goes from the shelf for good.',
     async () => {
       try {
@@ -323,7 +323,7 @@ export function paintMaker(host, head, api) {
     PV.showStill(derived(_made, 'main'), 'new environment');
     api.stageButton({
       label: 'use', cls: 'is-foot', busy: _making,
-      title: 'Set this project in it, and go back to first frames',
+      title: 'Set this project in it, and go back to setting & voice',
       on: async () => {
         const path = _made;
         _made = '';

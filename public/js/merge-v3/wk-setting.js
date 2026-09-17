@@ -1,13 +1,18 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the workshop's first step: WHO says it, WHERE, and the first frame.
+   MERGE — the workshop's first step: WHO says it, WHERE, and HOW IT IS READ.
 
    Loaded when the step is opened (js/merge-v3/workshop.js), because this is the
    heaviest part of the page and most visits never come here.
 
    The step is a stack that reveals itself as it is answered: pick a character and
    that character's looks appear under it; pick a look and the place is asked for;
-   and so on to the frames. A question you have not reached yet is not on screen -
+   and so on to the voice. A question you have not reached yet is not on screen -
    the column is 280px wide and a form of everything at once is unreadable in it.
+
+   THE READ BELONGS HERE (decided with the owner 2026-09-18, docs/local-app/PLAN.md
+   "Setting & voice"): a voice is a property of the character speaking, not a stage
+   of its own, and the frames it used to precede are made in `fragments` now, where
+   each clip is built from a frame and the read of one line.
 
    WHAT IS SAVED. Only ids, and on the scenario project, where casting has always
    lived: characterId / characterName, then obrazId / obrazImage, then the location
@@ -40,7 +45,8 @@
    and this file only decides when it is showing. What the two makers share (the picture field,
    the twenty-character rule, the tile menu) is js/merge-v3/wk-maker.js.
 
-   PHASE SCOPE (docs/local-app/PLAN.md, phase C4). The place is C5 and the frames C6.
+   PHASE SCOPE (docs/local-app/PLAN.md, phases C4, C5 and V1). The voice is V2-V3; the frames
+   are not made here at all any more - they are phase F, in `fragments`.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
@@ -64,7 +70,7 @@ let _saving = false;
 // window over it - a 280px column has no room for a window, and this is the same question
 // ("what does this person wear") one level down.
 // Where in the step the panel is. The hub is the top of it; the rest are branches under the
-// two things a first frame is made from:
+// two things the setting is made of:
 //
 //   hub
 //   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
@@ -205,15 +211,15 @@ export function paint(host, ctx) {
   _peekHide();
   host.classList.add('is-wk');
 
-  const root = _el('div', 'mv3-wk-frames');
+  const root = _el('div', 'mv3-wk-setting');
   host.appendChild(root);
 
   // The title line carries the filter: both answer "which faces am I looking at", and a
   // second line of labels would cost the grid a row of them.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
-  txt.appendChild(_el('div', 'mv3-ins-title', 'first frames'));
-  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, and where'));
+  txt.appendChild(_el('div', 'mv3-ins-title', 'setting & voice'));
+  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, and how it is read'));
   head.appendChild(txt);
   root.appendChild(head);
 
@@ -256,7 +262,7 @@ export function paint(host, ctx) {
 // What a first frame is made of, and what to do about it. On the left the two sources as
 // pictures - the character in the look it will wear, the place it will stand in - each one a
 // door into its own branch. On the right what happens next: the explanation while either is
-// missing, and the conversation with the agent that makes the frames once both are there.
+// missing, and the read - the voice and the lines - once both are there.
 function _paintHub(host, chosen) {
   host.classList.add('is-split');
   const cast = _casting();
@@ -285,12 +291,12 @@ function _paintHub(host, chosen) {
   const haveWho = !!cast.obrazImage;
   const haveWhere = !!cast.locationImage;
   if (haveWho && haveWhere) {
-    // The agent's side of the step. It is built next (docs/local-app/PLAN.md, the hub phases);
+    // The read's side of the step. It is built next (docs/local-app/PLAN.md, phases V2-V3);
     // until then the space says what it will hold rather than standing empty.
-    right.appendChild(_el('div', 'mv3-wk-guide-h', 'Ready for first frames'));
+    right.appendChild(_el('div', 'mv3-wk-guide-h', 'The read'));
     right.appendChild(_el('p', 'mv3-wk-guide-p',
-      'The character and the environment are set. This is where you will ask the agent for the frames the video opens on - one, or several - and see them on the stage.'));
-    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'The conversation with the agent is the next thing being built.'));
+      'The character and the environment are set. This is where the voice this character speaks in is chosen, and where the script is read aloud, line by line.'));
+    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'The voice is the next thing being built.'));
   } else {
     _guide(right, haveWho, haveWhere);
   }
@@ -331,13 +337,13 @@ function _source(o) {
 function _guide(host, haveWho, haveWhere) {
   host.appendChild(_el('div', 'mv3-wk-guide-h', 'Making a talking head'));
   host.appendChild(_el('p', 'mv3-wk-guide-p',
-    'Four steps, in this order. FIRST FRAMES: who is speaking, where, and the picture the video opens on. VOICE: the script read aloud. VIDEO: each line animated to its read. TIMELINE: the finished cut, to edit and render.'));
+    'Three steps, in this order. SETTING & VOICE: who is speaking, where, and the voice the script is read in. FRAGMENTS: the picture each fragment opens on, and the clip animated to its read. TIMELINE: the finished cut, to edit and render.'));
   host.appendChild(_el('div', 'mv3-wk-guide-h', 'Now'));
   const ol = _el('ol', 'mv3-wk-guide-list');
   const li = (text, done) => { const e = _el('li', done ? 'is-done' : '', text); ol.appendChild(e); };
   li('Choose who is speaking: click the character field. Pick a look for them, or dress them in a lookbook - or make a new lookbook first.', haveWho);
   li('Choose where: click the environment field and pick a place - or create one.', haveWhere);
-  li('With both set, ask the agent for the first frames.', false);
+  li('With both set, give the character a voice and read the script.', false);
   host.appendChild(ol);
 }
 
@@ -353,9 +359,9 @@ function _where(view) {
   const name = String(p.title || p.name || 'talking head');
   return {
     page: 'merge',
-    href: '/merge?p=' + encodeURIComponent(key) + '&step=frames&view=' + encodeURIComponent(view),
-    label: 'Merge · ' + name + ' · first frames' + (WHERE[view] ? ' › ' + WHERE[view] : ''),
-    spot: { key, step: 'frames', view },
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=setting&view=' + encodeURIComponent(view),
+    label: 'Merge · ' + name + ' · setting & voice' + (WHERE[view] ? ' › ' + WHERE[view] : ''),
+    spot: { key, step: 'setting', view },
   };
 }
 

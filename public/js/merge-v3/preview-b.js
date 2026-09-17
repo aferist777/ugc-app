@@ -823,7 +823,7 @@ let _pair = null;
 /**
  * Two pictures on the stage, one above the other - what is being combined, before it is.
  * The dressing asks exactly this question: this person, wearing that; so the person is on
- * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-frames.js).
+ * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-setting.js).
  *
  * @param top     the picture in the upper half, or '' for an empty half
  * @param bottom  the picture in the lower half

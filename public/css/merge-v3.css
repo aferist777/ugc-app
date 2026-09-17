@@ -1543,13 +1543,13 @@ body.mv3-workshop .mv3-stage{aspect-ratio:auto !important; width:100%; height:10
 body.mv3-workshop .mv3-preview-body{padding:10px}
 
 /* ── The workshop's first step ───────────────────────────────────────────────
-   Casting in a 280px column (js/merge-v3/wk-frames.js). Three faces to a row is the
+   Casting in a 280px column (js/merge-v3/wk-setting.js). Three faces to a row is the
    most that leaves a name legible under them; the enlargement on hover is what makes
    that size enough to choose by. */
 /* The step lays the panel out itself: a grid that scrolls and a drawer that does not, so the
    body's own padding and scrolling stand down for it. */
 .mv3-panel-body.is-wk{padding:0; overflow:hidden}
-.mv3-wk-frames{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
+.mv3-wk-setting{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
 .mv3-ins-head.is-wk{margin:0; padding:9px 9px 6px; gap:8px; align-items:flex-start; flex-wrap:wrap}
 .mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
 .mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
@@ -1642,7 +1642,7 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-choice-why{margin:0 0 5px; font:400 10.5px/1.45 var(--font); color:var(--ink)}
 .mv3-wk-chips{display:flex; flex-wrap:wrap; gap:4px}
 
-/* ── The hub of first frames ────────────────────────────────────────────────
+/* ── The hub of setting & voice ───────────────────────────────────────────────────────────────
    Left: the two sources as pictures, each a door into its branch. Right: what to do next. */
 /* The sources column is at most 300px wide whatever the sash does, and the two pictures share
    its HEIGHT - they always fit in the hub without scrolling. The rest of the width is the
@@ -1743,7 +1743,7 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 
 /* The one row that spends money sits under what it will spend it on. Scoped: the inspector
    has a .mv3-ins-row of its own, and this is a different thing in a different place. */
-.mv3-wk-frames .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
+.mv3-wk-setting .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
 
 /* The drawer at the foot of the panel. Shut it is a strip that still names itself; open it
    stands OVER the faces, because both cannot have the height and the faces are what you
