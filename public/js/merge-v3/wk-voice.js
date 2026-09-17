@@ -36,6 +36,17 @@ let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
 let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: '' };
 
+// The reads. One line at a time, even for "read all": the call takes a line and answers when it
+// has been spoken, so asking for them one by one is the same money and a panel that says how far
+// it has got instead of freezing for a minute.
+let _reading = -1;                      // the line being spoken now, -1 for none
+let _batch = null;                      // { done, total } while every stale line is being read
+let _armed = false;                     // "read all" has been pressed once and is asking
+let _edit = -1;                         // the line whose words are open for editing
+let _draft = '';
+let _rsaid = '';                        // what the reads block has to say, and whether it is bad
+let _rbad = false;
+
 // One player for the whole panel: two voices at once is not a comparison, it is noise. The row
 // that owns the sound is remembered so a repaint can put the pause sign back where it was.
 let _audio = null;
@@ -125,6 +136,7 @@ export function paintHub(host, api) {
   // here, on the way back, and then let go: it is news about what just happened, not a label.
   if (_said) { host.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
   host.appendChild(_pick(api, 'another voice'));
+  paintReads(host, api);
 }
 
 function _pick(api, label) {
@@ -366,6 +378,190 @@ async function _take(api, card) {
     _bad = true;
   }
   _busy = '';
+  api.repaint();
+}
+
+// ── The script, line by line ────────────────────────────────────────────────
+// A take is STALE when the words are no longer the ones that were spoken - the server keeps what
+// it said in each take (routes/scen3.js, /scen3/voice/speak) - so nothing has to be marked by
+// hand, and editing a line makes its read stale by itself.
+//
+// The read is the standard one: eleven_multilingual_v2, no tags, no parameters (decided with the
+// owner; moods and tags are a conversation of their own). That is what a project with no voice
+// settings gets, and none are set here.
+const _take0 = (l) => ((l && l.audio) || {}).plain || null;
+const _stale = (l) => { const t = _take0(l); return !!(t && t.path && t.said !== String(l.text || '')); };
+const _unread = (l) => { const t = _take0(l); return !(t && t.path); };
+const _needs = (l) => _unread(l) || _stale(l);
+
+export function paintReads(host, api) {
+  const p = api.project() || {};
+  const lines = Array.isArray(p.lines) ? p.lines : [];
+  if (!lines.length) return;
+
+  // Without a voice there is nothing to read WITH, and the block above already says so.
+  const rec = api.char();
+  if (!_active(rec)) return;
+
+  const left = lines.filter(_needs).length;
+  const head = el('div', 'mv3-wk-vhead is-lib', 'The script');
+  const cnt = el('span', 'mv3-wk-vcount is-head', left
+    ? left + ' of ' + lines.length + (left === 1 ? ' line to read' : ' lines to read')
+    : 'every line is read');
+  head.appendChild(cnt);
+  host.appendChild(head);
+
+  lines.forEach((l, i) => host.appendChild(_line(api, l, i)));
+
+  if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
+
+  const foot = el('div', 'mv3-wk-vfoot');
+  if (left) {
+    // The second press is the confirmation (decided with the owner): a batch is the one thing
+    // here that spends real money, and it says how much before it does.
+    const all = el('button', 'mv3-wk-vmore' + (_armed ? ' is-armed' : ''),
+      _batch ? 'reading ' + _batch.done + ' of ' + _batch.total + '…'
+        : _armed ? 'read ' + left + (left === 1 ? ' line?' : ' lines?') : 'read all');
+    all.type = 'button';
+    all.title = _armed ? 'Press again to read them' : 'Read every line that needs it';
+    all.disabled = !!_batch || _reading >= 0;
+    all.addEventListener('click', () => {
+      if (!_armed) { _armed = true; api.repaint(); return; }
+      _armed = false;
+      _readAll(api);
+    });
+    foot.appendChild(all);
+  }
+  host.appendChild(foot);
+}
+
+function _line(api, l, i) {
+  const row = el('div', 'mv3-wk-line' + (_stale(l) ? ' is-stale' : '') + (_reading === i ? ' is-doing' : ''));
+  const take = _take0(l);
+
+  const top = el('div', 'mv3-wk-lrow');
+  top.appendChild(el('span', 'mv3-wk-lnum', String(i + 1)));
+  top.appendChild(_playBtn((take && take.path) || '', 'this line'));
+
+  const words = el('div', 'mv3-wk-ltext', String(l.text || ''));
+  words.title = 'Change the words';
+  words.addEventListener('click', () => { _edit = i; _draft = String(l.text || ''); _rsaid = ''; api.repaint(); });
+  top.appendChild(words);
+
+  const go = el('button', 'mv3-wk-vuse', _reading === i ? '…' : _unread(l) ? 'read' : 'again');
+  go.type = 'button';
+  go.title = _unread(l) ? 'Read this line' : 'Read it again, in place of the take it has';
+  go.disabled = _reading >= 0 || !!_batch;
+  go.addEventListener('click', () => _read(api, i));
+  top.appendChild(go);
+  row.appendChild(top);
+
+  if (take && take.dur) {
+    const sub = el('div', 'mv3-wk-lsub', _stale(l) ? 'stale - the words have changed since' : take.dur.toFixed(1) + 's');
+    row.appendChild(sub);
+  }
+  // Back to what was spoken: the other way to end a staleness, and the cheap one.
+  if (_stale(l) && _edit !== i) {
+    const back = el('button', 'mv3-wk-lback', 'put the words back');
+    back.type = 'button';
+    back.title = 'Restore the line to what the take says';
+    back.disabled = _reading >= 0 || !!_batch;
+    back.addEventListener('click', () => _saveText(api, i, take.said));
+    row.appendChild(back);
+  }
+
+  if (_edit === i) {
+    const box = el('textarea', 'mv3-wk-ledit');
+    box.value = _draft;
+    box.rows = 3;
+    box.addEventListener('input', () => { _draft = box.value; });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); _edit = -1; api.repaint(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _saveText(api, i, _draft); }
+    });
+    row.appendChild(box);
+    const acts = el('div', 'mv3-wk-vfoot');
+    const save = el('button', 'mv3-wk-vuse', 'save');
+    save.type = 'button';
+    save.title = 'Save the words (Ctrl+Enter)';
+    save.addEventListener('click', () => _saveText(api, i, _draft));
+    const drop = el('button', 'mv3-wk-vuse', 'cancel');
+    drop.type = 'button';
+    drop.addEventListener('click', () => { _edit = -1; api.repaint(); });
+    acts.append(save, drop);
+    row.appendChild(acts);
+    setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
+  }
+  return row;
+}
+
+// ── What it does ────────────────────────────────────────────────────────────
+async function _saveText(api, i, text) {
+  const words = String(text || '').trim();
+  if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return api.repaint(); }
+  _edit = -1;
+  _rsaid = ''; _rbad = false;
+  api.repaint();
+  try {
+    const d = await (await fetch('/api/scen3/projects/' + encodeURIComponent(api.projectId()) + '/line', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: i, text: words }),
+    })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    api.setProject(d.project);
+  } catch (e) {
+    _rsaid = 'Could not save the words: ' + e.message;
+    _rbad = true;
+  }
+  api.repaint();
+}
+
+// One line, spoken now. The server writes the take into the project itself, so what comes back
+// is the project as it now stands - which is what the panel paints from.
+// `inBatch` is how "read all" gets past the guard that stops a second read starting on top of one
+// already running: the batch IS that runner, and without it the first line of a batch refuses
+// itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
+async function _read(api, i, inBatch) {
+  if (_reading >= 0 || (_batch && !inBatch)) return false;
+  _reading = i;
+  _rsaid = ''; _rbad = false;
+  _armed = false;
+  api.repaint();
+  let ok = false;
+  try {
+    const d = await (await fetch('/api/scen3/voice/speak', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: api.projectId(), only: [i] }),
+    })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    const bad = ((d.report || {}).failed || [])[0];
+    if (bad) throw new Error(bad.error || 'the line was not read');
+    api.setProject(d.project);
+    ok = true;
+  } catch (e) {
+    _rsaid = 'Line ' + (i + 1) + ' was not read: ' + e.message;
+    _rbad = true;
+  }
+  _reading = -1;
+  api.repaint();
+  return ok;
+}
+
+// Every line that needs it, one after another, so the panel can say how far it has got. It stops
+// at the first failure: twelve identical refusals say nothing the first one did not.
+async function _readAll(api) {
+  const p = api.project() || {};
+  const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
+  if (!want.length) return;
+  _batch = { done: 0, total: want.length };
+  api.repaint();
+  for (const i of want) {
+    const ok = await _read(api, i, true);
+    if (!ok) break;
+    _batch.done++;
+    api.repaint();
+  }
+  _batch = null;
   api.repaint();
 }
 

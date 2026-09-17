@@ -300,9 +300,8 @@ function _paintHub(host, chosen) {
   const haveWho = !!cast.obrazImage;
   const haveWhere = !!cast.locationImage;
   if (haveWho && haveWhere && chosen) {
-    // The read's side of the step: the voice now (V2), the lines under it next (V3).
+    // The read's side of the step: the voice, and the script read in it (V2, V3).
     VOICE.paintHub(right, _voiceApi(chosen));
-    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'Reading the script line by line is the next thing being built.'));
   } else {
     _guide(right, haveWho, haveWhere);
   }
@@ -377,6 +376,12 @@ function _where(view) {
 function _voiceApi(chosen) {
   return {
     char: () => chosen || null,
+    project: () => (_ctx && _ctx.project) || null,
+    projectId: () => String(((_ctx && _ctx.project) || {}).id || ''),
+    // INTO the record, not over it. The workshop hands this panel its own copy of the project on
+    // every paint (js/merge-v3/workshop.js), so a replacement here would last exactly until the
+    // next repaint and then be the old one again.
+    setProject: (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); },
     go: (view) => { _view = view; _ctx.repaint(); },
     repaint: () => _ctx.repaint(),
     note: _note,

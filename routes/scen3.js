@@ -3523,6 +3523,41 @@ router.delete('/scen3/projects/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── The words of ONE line ───────────────────────────────────────────────
+   POST /api/scen3/projects/:id/line  { index, text } -> { success, project }
+
+   The words are edited where the read is (docs/local-app/PLAN.md, phase V3): a line is judged by
+   how it sounds, so the place to change it is beside the take of it. Deliberately not a save of
+   the whole project - a page holding its own copy of the lines would put that copy's `audio` back
+   over whatever a read had just written into them, and a read is the thing most likely to be
+   running while somebody types.
+
+   Nothing is done to the take here. It goes stale by itself, because stale means "the words are
+   no longer the ones that were spoken" - each take keeps its `said` - and that comparison is made
+   wherever the line is shown. Putting the text back to what was said is how a line stops being
+   stale: the same call, with those words.
+   ───────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/projects/:id/line', (req, res) => {
+  try {
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === String(req.params.id));
+    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+
+    const lines = (proj.lines || []).map(_normLine);
+    const i = parseInt((req.body || {}).index, 10);
+    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
+    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+
+    lines[i].text = text;
+    proj.lines = lines;
+    proj.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(proj) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 /* ── A copy of somebody's project, owned by whoever asked ────────────────────
    POST /api/scen3/projects/:id/copy -> { success, project }
 
