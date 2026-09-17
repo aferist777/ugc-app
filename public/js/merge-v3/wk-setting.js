@@ -54,6 +54,7 @@ import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
 import * as ENV from './wk-env.js';
+import * as VOICE from './wk-voice.js';
 import {
   MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
   holdProgress, endProgress, onlyHere,
@@ -74,14 +75,15 @@ let _saving = false;
 //
 //   hub
 //   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
-//   └── env  ── newenv                  the environment, making one
+//   ├── env  ── newenv                  the environment, making one
+//   └── voice                           the voice this character is read in
 //
 // ?view= in the address opens one of them directly: that is how the Alerts list takes somebody
 // back to the place a generation was started from (js/alerts-bell.js). Read once, when this module
 // is first loaded - which is when the step is opened. Checked against this list rather than
 // against WHERE below it: that one is declared further down, and reading it here would be reading
 // it before it exists.
-const VIEWS = ['hub', 'cast', 'lookbooks', 'newlb', 'env', 'newenv'];
+const VIEWS = ['hub', 'cast', 'lookbooks', 'newlb', 'env', 'newenv', 'voice'];
 function _urlView() {
   try {
     const v = new URLSearchParams(location.search).get('view') || '';
@@ -233,6 +235,9 @@ export function paint(host, ctx) {
   // The waiting animation stays with the place that started the generation: painting another one
   // takes it off the stage (js/merge-v3/wk-maker.js). The server keeps working either way.
   onlyHere(_view);
+  // The sample a voice was being listened to stops when the panel leaves that level: a voice
+  // still talking over the environments is a sound with nothing on screen to explain it.
+  if (_view !== 'voice') VOICE.leave();
   // Arriving somewhere is when to ask the journal whether something of that place is running;
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
@@ -242,6 +247,10 @@ export function paint(host, ctx) {
     ENV.paintShelf(scroll, head, _envApi(chosen));
   } else if (_view === 'newenv') {
     ENV.paintMaker(scroll, head, _envApi(chosen));
+  } else if (_view === 'voice' && chosen) {
+    _stageButton(null);
+    _showChoice(chosen);
+    VOICE.paintPicker(scroll, head, _voiceApi(chosen));
   } else if (_view === 'newlb' && chosen) {
     _paintNewLookbook(scroll, head, chosen);
   } else if (_view === 'lookbooks' && chosen) {
@@ -290,13 +299,10 @@ function _paintHub(host, chosen) {
   const right = _el('div', 'mv3-wk-half is-guide');
   const haveWho = !!cast.obrazImage;
   const haveWhere = !!cast.locationImage;
-  if (haveWho && haveWhere) {
-    // The read's side of the step. It is built next (docs/local-app/PLAN.md, phases V2-V3);
-    // until then the space says what it will hold rather than standing empty.
-    right.appendChild(_el('div', 'mv3-wk-guide-h', 'The read'));
-    right.appendChild(_el('p', 'mv3-wk-guide-p',
-      'The character and the environment are set. This is where the voice this character speaks in is chosen, and where the script is read aloud, line by line.'));
-    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'The voice is the next thing being built.'));
+  if (haveWho && haveWhere && chosen) {
+    // The read's side of the step: the voice now (V2), the lines under it next (V3).
+    VOICE.paintHub(right, _voiceApi(chosen));
+    right.appendChild(_el('p', 'mv3-wk-guide-p is-soon', 'Reading the script line by line is the next thing being built.'));
   } else {
     _guide(right, haveWho, haveWhere);
   }
@@ -365,6 +371,31 @@ function _where(view) {
   };
 }
 
+// THE VOICE LEVEL (js/merge-v3/wk-voice.js). All it may reach in here is the character whose
+// voice it is and the one door that edits a character - the Character page's own endpoint, so a
+// voice taken here is on that page the moment it is taken and the two cannot disagree.
+function _voiceApi(chosen) {
+  return {
+    char: () => chosen || null,
+    go: (view) => { _view = view; _ctx.repaint(); },
+    repaint: () => _ctx.repaint(),
+    note: _note,
+    patchChar: async (fields) => {
+      const d = await fetch('/api/char-store/' + encodeURIComponent(chosen.id), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
+      }).then(r => r.json());
+      if (!d || !d.success) throw new Error((d && d.error) || 'the character could not be updated');
+      // The record this panel holds is the one js/chars-store.js cached for every page that casts
+      // somebody, so it is updated in place rather than re-read: a second read of forty-odd
+      // characters to learn one field that just came back in the answer.
+      const rec = d.char || {};
+      chosen.voice = rec.voice || '';
+      chosen.voices = Array.isArray(rec.voices) ? rec.voices : [];
+      return rec;
+    },
+  };
+}
+
 function _envApi(chosen) {
   return {
     casting: _casting,
@@ -390,6 +421,7 @@ function _envApi(chosen) {
 // at two depths (js/merge-v3/workshop.js, _paintChips).
 const WHERE = {
   cast: 'character',
+  voice: 'voice',
   lookbooks: 'looks',
   newlb: 'create lookbook',
   env: 'environment',
@@ -404,6 +436,7 @@ const PATH = {
   newlb: ['cast', 'lookbooks', 'newlb'],
   env: ['env'],
   newenv: ['env', 'newenv'],
+  voice: ['voice'],
 };
 
 /** The route from the top of the step to where you are - the workshop paints it. */

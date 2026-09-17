@@ -142,6 +142,12 @@ export async function loadCharacters(force) {
     // which is the one thing you are looking for when picking who to cast. Not everyone has
     // one, so the sheet remains the fallback.
     face:   c.baseFace || '',
+    // THE VOICE they are read in, and every voice they have. Kept here because the workshop's
+    // voice level (js/merge-v3/wk-voice.js) asks the same question this store already answers for
+    // looks: what does this character come with. Read-only like the rest - it is the Character
+    // page's endpoint that writes them, and this copy is updated from what that endpoint returns.
+    voice:  c.voice || '',
+    voices: Array.isArray(c.voices) ? c.voices : [],
     obrazy: byChar[String(c.id)] || [],
   }));
   return _chars;
