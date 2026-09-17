@@ -697,17 +697,24 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
     const b = req.body || {};
     const note = String(b.prompt || '').trim();
     const b64  = String(b.imageBase64 || '');
+    // A picture the library already holds - another lookbook, used as the base for this one.
+    // Sent as a PATH rather than as bytes: it is on this disk, and pulling it through the
+    // browser as base64 only to upload it again would be a round trip for nothing.
+    const ref  = String(b.imagePath || '').trim();
     const n    = Math.max(1, Math.min(5, parseInt(b.count, 10) || 1));
     const eng  = _engineOf(b);
-    if (!note && !b64) return res.status(400).json({ success: false, error: 'describe an outfit or add a photo' });
+    if (!note && !b64 && !ref) return res.status(400).json({ success: false, error: 'describe an outfit or add a photo' });
 
-    // photo paths need a public URL first
+    // The engines fetch their references over the internet, so either way the picture goes to
+    // R2 first - ours, the one host (lib/helpers.js, uploadToPublicHost).
     let photoUrl = '';
     if (b64) {
       const raw = b64.replace(/^data:image\/[a-z+]+;base64,/i, '');
       const buf = Buffer.from(raw, 'base64');
       if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable photo' });
       photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg' });
+    } else if (ref) {
+      photoUrl = await _hostLocal(ref, { verify: true });
     }
 
     const taskIds = [];

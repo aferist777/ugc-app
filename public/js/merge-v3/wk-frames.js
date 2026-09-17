@@ -41,6 +41,9 @@
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
 import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
+import { askDelete } from './ask.js';
+import * as Layers from '../layers.js';
+import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
@@ -54,7 +57,11 @@ let _saving = false;
 // window over it - a 280px column has no room for a window, and this is the same question
 // ("what does this person wear") one level down.
 let _view = 'cast';                      // 'cast' | 'lookbooks' | 'newlb'
-let _ref = null;                          // { name, dataUrl } - the picture to take the outfit from
+// What the next lookbook is made FROM: either a file the person chose here, or one the
+// library already holds. Never both - choosing on one side clears the other, because the
+// question "what is this based on" has one answer.
+let _ref = null;                          // { name, dataUrl } - a picture from this computer
+let _refLb = '';                          // ...or the path of a lookbook already on the shelf
 let _lbNote = '';                         // what is wanted, in words
 let _making = false;
 let _lbs = null;                         // the lookbook shelf, read once
@@ -252,16 +259,10 @@ function _paintLookbooks(host, head, c) {
   for (const p of _lbs) {
     const path = String((p && p.path) || p || '');
     if (!path) continue;
-    const tile = _el('button', 'mv3-wk-tile is-lb' + (path === _lbPick ? ' is-on' : ''));
-    tile.type = 'button';
-    tile.title = path.split('/').pop();
-    const img = _el('img', 'mv3-wk-face');
-    img.alt = '';
-    img.loading = 'lazy';
-    img.src = derived(path, 'card');
-    tile.appendChild(img);
-    tile.addEventListener('click', () => { _lbPick = (_lbPick === path ? '' : path); _ctx.repaint(); });
-    grid.appendChild(tile);
+    grid.appendChild(_lbTile(path, path === _lbPick, () => {
+      _lbPick = (_lbPick === path ? '' : path);
+      _ctx.repaint();
+    }));
   }
   host.appendChild(grid);
   if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "new lookbook".'));
@@ -306,8 +307,9 @@ function _stageButton(spec) {
 // one, and both together read the photo and apply the sentence to it. So the button says
 // which of the three is about to happen instead of a flat "generate".
 function _mode() {
-  if (_ref && _lbNote.trim()) return 'edit';
-  if (_ref) return 'extract';
+  const base = !!(_ref || _refLb);
+  if (base && _lbNote.trim()) return 'edit';
+  if (base) return 'extract';
   if (_lbNote.trim()) return 'draw';
   return '';
 }
@@ -318,6 +320,7 @@ const _MODE_LABEL = {
 };
 
 function _paintNewLookbook(host, head, c) {
+  host.classList.add('is-split');
   const acts = _el('div', 'mv3-wk-bar');
   const back = _el('button', 'mv3-sc-tab', 'create look');
   back.type = 'button';
@@ -333,22 +336,48 @@ function _paintNewLookbook(host, head, c) {
   acts.append(back, here, x);
   head.appendChild(acts);
 
-  // The reference. A drop target that is also a file picker, because both are how a picture
-  // arrives from a folder, and it shows what it holds rather than a file name.
-  const drop = _el('div', 'mv3-wk-drop' + (_ref ? ' is-full' : ''));
-  drop.title = 'Drop a photo here, or click to choose one';
-  if (_ref) {
+  // LEFT: the shelf this one is drawn from. Picking a lookbook here puts it in the field on
+  // the right as the base - which is what "make another one like that, but ..." means - and
+  // the new lookbook joins this same shelf when it is done, so the pile grows while you work.
+  const left = _el('div', 'mv3-wk-half is-shelf');
+  if (_lbs === null) {
+    left.appendChild(_note('reading the lookbooks…'));
+    API.lookbooks().then((files) => { _lbs = files; _ctx.repaint(); })
+      .catch((e) => { _lbs = []; _state = 'Could not read the lookbooks: ' + e.message; _ctx.repaint(); });
+  } else if (!_lbs.length) {
+    left.appendChild(_note('No lookbooks yet. The first one is made on the right.'));
+  } else {
+    const grid = _el('div', 'mv3-wk-grid is-lb');
+    for (const p of _lbs) {
+      const path = String((p && p.path) || p || '');
+      if (path) grid.appendChild(_lbTile(path, path === _refLb, () => {
+        _refLb = (_refLb === path ? '' : path);
+        if (_refLb) _ref = null;                 // one base, not two
+        _ctx.repaint();
+      }));
+    }
+    left.appendChild(grid);
+  }
+  host.appendChild(left);
+
+  // RIGHT: what is being made. The field takes a picture from this computer, and doing that
+  // drops whatever was chosen on the left.
+  const right = _el('div', 'mv3-wk-half');
+  const baseSrc = _ref ? _ref.dataUrl : (_refLb ? derived(_refLb, 'card') : '');
+  const drop = _el('div', 'mv3-wk-drop' + (baseSrc ? ' is-full' : ''));
+  drop.title = 'Drop a photo here, or click to choose one from this computer';
+  if (baseSrc) {
     const img = _el('img');
     img.alt = '';
-    img.src = _ref.dataUrl;
+    img.src = baseSrc;
     drop.appendChild(img);
     const clear = _el('button', 'mv3-wk-dropx', '\u2715');
     clear.type = 'button';
-    clear.title = 'Take the photo off';
-    clear.addEventListener('click', (e) => { e.stopPropagation(); _ref = null; _ctx.repaint(); });
+    clear.title = 'Take it off';
+    clear.addEventListener('click', (e) => { e.stopPropagation(); _ref = null; _refLb = ''; _ctx.repaint(); });
     drop.appendChild(clear);
   } else {
-    drop.appendChild(_el('span', null, 'drop a photo of the outfit, or click'));
+    drop.appendChild(_el('span', null, 'a photo from this computer, or pick a lookbook on the left'));
   }
   const pick = _el('input');
   pick.type = 'file';
@@ -364,7 +393,7 @@ function _paintNewLookbook(host, head, c) {
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) _takeRef(f);
   });
-  host.append(drop, pick);
+  right.append(drop, pick);
 
   const note = _el('textarea', 'mv3-sc-lines is-short');
   note.placeholder = 'What should the outfit be? A sentence is enough - "cream linen shirt, wide navy trousers".';
@@ -377,7 +406,7 @@ function _paintNewLookbook(host, head, c) {
     const h = host.querySelector('.mv3-wk-mode');
     if (h) h.textContent = m ? _MODE_LABEL[m] : '';
   });
-  host.appendChild(note);
+  right.appendChild(note);
 
   const row = _el('div', 'mv3-ins-row');
   const go = _el('button', 'mv3-x-go', _making ? 'making…' : (_mode() ? 'make it' : 'a photo or a sentence'));
@@ -387,15 +416,98 @@ function _paintNewLookbook(host, head, c) {
   go.addEventListener('click', () => _make(c));
   row.appendChild(go);
   row.appendChild(_el('span', 'mv3-wk-mode mv3-sc-meta', _mode() ? _MODE_LABEL[_mode()] : ''));
-  host.appendChild(row);
-  host.appendChild(_note('It joins the lookbook shelf, and this character can be dressed in it straight away.'));
+  right.appendChild(row);
+  right.appendChild(_note('It joins the shelf on the left, and this character can be dressed in it straight away.'));
+  host.appendChild(right);
 
-  // The stage keeps showing who it is for; the reference, once there, is what the outfit
-  // will come from, so the two stand together the same way they will when it is applied.
+  // The stage shows who it is for, and only that: what is being made is already in the field
+  // on the right, and a second copy of it on the stage would say nothing new.
   _shownFor = '';
-  if (_ref) PV.showPair(derived(_faceOf(c).src, 'main'), _ref.dataUrl);
-  else PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
+  PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
   _stageButton(null);
+}
+
+// ── One tile on a lookbook shelf ────────────────────────────────────────────
+// Used by both shelves - the one that picks what to WEAR and the one that picks what a new
+// lookbook is BASED on - because a lookbook is the same thing on either, and so is getting
+// rid of one. The cross asks first; deleting is the only act here that cannot be undone.
+function _lbTile(path, on, pick) {
+  const tile = _el('button', 'mv3-wk-tile is-lb' + (on ? ' is-on' : ''));
+  tile.type = 'button';
+  tile.title = path.split('/').pop();
+  const img = _el('img', 'mv3-wk-face');
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = derived(path, 'card');
+  tile.appendChild(img);
+
+  const x = _el('button', 'mv3-wk-tilex', '\u2715');
+  x.type = 'button';
+  x.title = 'Delete this lookbook';
+  x.addEventListener('click', (e) => { e.stopPropagation(); _askDeleteLb(tile, path); });
+  tile.appendChild(x);
+
+  tile.addEventListener('click', pick);
+  tile.addEventListener('contextmenu', (e) => { e.preventDefault(); _lbMenu(e, tile, path); });
+  return tile;
+}
+
+// The viewer the Library uses, so a lookbook is looked at the same way wherever it is met -
+// and it is where its description will be read once there is one (phase C4c).
+function _openLb(path) {
+  openViewer([{ id: path, name: path.split('/').pop(), kind: 'lookbooks', media: path }], 0);
+}
+
+function _lbMenu(ev, tile, path) {
+  _closeMenu();
+  const el = _el('div', 'mv3-plus-menu');
+  const item = (label, sub, on, danger) => {
+    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
+    b.type = 'button';
+    b.appendChild(_el('span', null, label));
+    if (sub) b.appendChild(_el('small', null, sub));
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
+    el.appendChild(b);
+  };
+  item('open', 'look at it, full size', () => _openLb(path));
+  item('delete', 'for good', () => _askDeleteLb(tile, path), true);
+
+  document.body.appendChild(el);
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';
+  el.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, ev.clientY))) + 'px';
+  const away = (e) => { if (!el.contains(e.target)) _closeMenu(); };
+  const layer = Layers.open(el, { modal: false, name: 'lookbook menu', onEsc: _closeMenu });
+  _menu = { el, away, layer };
+  setTimeout(() => document.addEventListener('mousedown', away, true), 0);
+}
+
+let _menu = null;
+function _closeMenu() {
+  if (!_menu) return;
+  _menu.el.remove();
+  document.removeEventListener('mousedown', _menu.away, true);
+  Layers.close(_menu.layer);
+  _menu = null;
+}
+
+function _askDeleteLb(anchor, path) {
+  const name = path.split('/').pop();
+  askDelete(anchor, 'Delete "' + name + '"?',
+    'The picture goes from the shelf for good. Looks already made from it keep what they are.',
+    async () => {
+      try {
+        const r = await fetch('/api/library/item/lookbooks/' + encodeURIComponent(name), { method: 'DELETE' })
+          .then(x => x.json());
+        if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+      } catch (e) {
+        _state = 'Could not delete it: ' + e.message;
+      }
+      _lbs = await API.lookbooks().catch(() => _lbs);
+      if (_lbPick === path) _lbPick = '';
+      if (_refLb === path) _refLb = '';
+      _ctx.repaint();
+    });
 }
 
 // Read once, kept as a data URL: it is what the server wants (imageBase64), and holding the
@@ -403,7 +515,11 @@ function _paintNewLookbook(host, head, c) {
 function _takeRef(file) {
   if (!file || !/^image\//.test(file.type)) return;
   const fr = new FileReader();
-  fr.onload = () => { _ref = { name: file.name, dataUrl: String(fr.result || '') }; _ctx.repaint(); };
+  fr.onload = () => {
+    _ref = { name: file.name, dataUrl: String(fr.result || '') };
+    _refLb = '';                               // a picture from this computer wins the field
+    _ctx.repaint();
+  };
   fr.readAsDataURL(file);
 }
 
@@ -422,6 +538,7 @@ async function _make(c) {
     const r = await API.makeLookbook({
       prompt: _lbNote.trim(),
       imageBase64: _ref ? _ref.dataUrl : '',
+      imagePath: _ref ? '' : _refLb,
       count: 1,
       engine: _engine(),
     });
@@ -433,14 +550,14 @@ async function _make(c) {
     const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '');
     pr.step();
     pr.finish();
+    // The shelf on the left gains a tile and the maker stays where it is: one lookbook is
+    // rarely the end of it, and being thrown back to the casting after each would make a
+    // second one a journey.
     _lbs = await API.lookbooks();
-    _lbPick = String(filed.path || '');
+    _refLb = String(filed.path || '');
     _ref = null;
     _lbNote = '';
     _making = false;
-    // Straight to the shelf with it chosen: it was made to be worn, and apply is one press
-    // away on the stage.
-    _view = 'lookbooks';
     _ctx.repaint();
   } catch (e) {
     pr.fail((e && e.message) || 'the lookbook failed');

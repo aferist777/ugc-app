@@ -1566,6 +1566,25 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
+/* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
+   because picking a base and describing the change are one act, and a column that scrolls
+   between them makes it two. */
+.mv3-wk-scroll.is-split{display:flex; gap:0; align-items:stretch}
+.mv3-wk-half{flex:1 1 50%; min-width:0; display:flex; flex-direction:column; padding-bottom:8px}
+.mv3-wk-half.is-shelf{border-right:1px solid var(--border-soft); overflow-y:auto}
+.mv3-wk-half.is-shelf .mv3-wk-grid{grid-template-columns:repeat(auto-fill, minmax(62px, 1fr)); padding:8px 7px}
+/* The cross on a tile. Shown on hover only - a grid of forty crosses is a grid that looks
+   like it is about to lose something. */
+.mv3-wk-tilex{
+  position:absolute; top:3px; right:3px; width:17px; height:17px; padding:0; z-index:2; opacity:0;
+  border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
+  background:var(--surface); color:var(--muted); font:600 9px/1 var(--font);
+  transition:opacity .12s var(--ease);
+}
+.mv3-wk-tile{position:relative}
+.mv3-wk-tile:hover .mv3-wk-tilex{opacity:1}
+.mv3-wk-tilex:hover{color:var(--danger); border-color:var(--danger)}
+
 /* Where the reference for a new lookbook lands. A drop target that is also a picker, and
    once it holds something it shows the picture rather than a file name - the picture is the
    thing being judged. */
