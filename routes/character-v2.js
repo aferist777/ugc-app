@@ -25,7 +25,7 @@ const fs = require('fs');
 
 const { MEDIA } = require('../lib/config');
 const {
-  uploadToPublicHost, callAIVisionWithFallback, parseLooseJson, resolveLocalMedia,
+  uploadToPublicHost, callAIVisionWithFallback, parseLooseJson, resolveLocalMedia, resolveTask,
 } = require('../lib/helpers');
 const { reasonOf } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
@@ -198,6 +198,26 @@ router.post('/character-v2/analyze', async (req, res) => {
   }
 });
 
+// ── Alerts ──────────────────────────────────────────────────────────────────
+// A portrait is watched by the server already (lib/cv2-watch.js). The job reads that answer, and
+// falls back to resolving the task itself - which is what the watcher cannot do after a restart,
+// because its loop lives in memory and the row does not.
+const JOBS = require('../lib/gen-jobs');
+
+JOBS.register('portrait', {
+  timeoutMs: 20 * 60 * 1000,
+  poll: async (rec) => {
+    const seen = WATCH.peek(rec.taskIds[0]);
+    if (seen && seen.state === 'success') return { state: 'success', imagePath: seen.imagePath };
+    if (seen && (seen.state === 'failed' || seen.state === 'gaveup')) {
+      return { state: 'failed', error: seen.error || 'it did not come' };
+    }
+    return await resolveTask(rec.taskIds[0], MEDIA.work, 'generated');
+  },
+  file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
+  submit: async (request) => ({ taskId: (await _submitPortrait(request || {})).taskId }),
+});
+
 // ── POST /api/character-v2/generate ──────────────────────────────────────────
 // Body: { prompt, engine?, quality?, aspect?, and optionally imageUrl | imageBase64 | imagePath }
 // -> { taskId }, which the page polls through the shared GET /api/status/:taskId
@@ -206,11 +226,12 @@ router.post('/character-v2/analyze', async (req, res) => {
 // a text-to-image. Both live here rather than in the older character-creator route because that
 // one hands every engine a fixed 9:16 - correct for the page it was written for, and the exact
 // opposite of what this one needs.
-router.post('/character-v2/generate', async (req, res) => {
-  try {
-    const b = req.body || {};
+// The asking itself, as a function: the server asks again when somebody presses retry in the
+// Alerts list, and that has to be the same request.
+async function _submitPortrait(b) {
+  {
     const prompt = String(b.prompt || '').trim();
-    if (!prompt) return res.status(400).json({ success: false, error: 'prompt is required' });
+    if (!prompt) throw Object.assign(new Error('prompt is required'), { status: 400 });
 
     const hasRef = !!(b.imageUrl || b.imageBase64 || b.imagePath);
     const dir = hasRef ? 'i2i' : 't2i';
@@ -235,9 +256,30 @@ router.post('/character-v2/generate', async (req, res) => {
     // generation. Now the page's poll only READS what the watcher already found.
     WATCH.watch(sub.taskId, MEDIA.work, 'generated');
     console.log('[cv2/generate]', dir, sub.engine, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
+    return { taskId: sub.taskId, engine: sub.engine, provider: sub.provider, quality: sub.quality, aspect, steps: sub.steps };
+  }
+}
+
+router.post('/character-v2/generate', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const sub = await _submitPortrait(b);
+    // FROM THE CHARACTER PAGE: a row in the journal. The server already watches this one to the
+    // end (WATCH.watch below); the row is what makes it visible from anywhere else.
+    let alertId = '';
+    if (b.where) {
+      try {
+        alertId = JOBS.submitted({
+          kind: 'image', what: 'portrait',
+          title: 'Portrait · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+          where: b.where, engine: sub.engine, taskIds: [sub.taskId],
+          job: { type: 'portrait', params: { request: { ...b, where: null } } },
+        }).id;
+      } catch (e) { console.warn('[cv2/generate] could not write the alert:', e.message); }
+    }
     res.json({
-      success: true, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
-      quality: sub.quality, aspect,
+      success: true, alertId, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
+      quality: sub.quality, aspect: sub.aspect,
       // Which step answered, so the page can say "Replicate refused, OpenRouter drew it"
       // rather than reporting a result with no history.
       steps: sub.steps,

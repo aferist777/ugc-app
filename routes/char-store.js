@@ -97,7 +97,7 @@ async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
 // The taskId is patched onto the char as soon as it is submitted, so the actor
 // popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
 // failed sheet stays null and can be regenerated from the popup.
-async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
+async function _kickoffSheets(charId, faceBuffer, sheetOpts, alert) {
   try {
     // Hosted here rather than in the request. Verified, because an engine handed a link it
     // cannot read fails ten seconds after being charged, and a presigned link has an expiry of
@@ -113,6 +113,8 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
     // the walk possible - a task that is accepted and then fails resumes below the steps that
     // have already had their turn, without asking the framing agent anything again.
     patchChar(charId, _sheetPatch(sub, prompt, imageUrl));
+    // And into the Alerts list, so the page can be left while it draws (lib/gen-jobs.js).
+    _journalSheet(charId, sub.taskId, (alert || {}).where, (alert || {}).name);
     console.log('[char-store] sheet submitted', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
   } catch (e) {
     // Written onto the character, not just into the log. This runs in the background, so the page
@@ -331,7 +333,8 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure })
+    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure },
+      { where: req.body && req.body.where, name: (findChar(charId) || {}).name })
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -458,6 +461,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
         const sub = await _sheetTaskRetry(prompt, imageUrl, 'regen', charId);
         addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
         patchChar(charId, _sheetPatch(sub, prompt, imageUrl));   // supersedes the last attempt
+        _journalSheet(charId, sub.taskId, req.body && req.body.where, (findChar(charId) || {}).name);
         console.log('[char-store/regen-ref]', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
       } catch (e) {
         const why = reasonOf(e);
@@ -617,45 +621,98 @@ async function _retrySheetElsewhere(c, why) {
 // Resolves a reference-sheet task into the char's folder and patches the
 // matching field on success. Legacy kinds portrait|tpose stay resolvable so
 // pre-rebuild polls / records don't break.
+// RESOLVING ONE SHEET, whoever is asking: the page that is watching it, or the server's own
+// runner (lib/gen-jobs.js) for somebody who has closed it. Everything that used to happen only
+// while the page polled - filing the picture into the character's folder, patching the record, and
+// the walk to the next aggregator when a task is accepted and then fails - happens here, so it
+// happens either way.
+async function _resolveSheet(taskId, charId, kind) {
+  const field = (kind === 'tpose') ? 'tpose' : (kind === 'portrait') ? 'portrait' : 'sheet';
+  const c = charId ? findChar(charId) : null;
+  if (!c) throw Object.assign(new Error('char not found'), { status: 404 });
+
+  const folder = charAbsFolderRec(c);
+  if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+
+  const result = await resolveTask(taskId, folder, field);
+  if (result.state === 'success') {
+    patchChar(charId, {
+      [field]: result.imagePath, [field + 'Task']: null, sheetError: null, sheetNote: null, sheetJob: null,
+    });
+    removePendingTask(taskId);
+  } else if (result.state === 'failed') {
+    removePendingTask(taskId);
+
+    // A task can be accepted and fail LATER - ModelRateLimitError arrives a minute after the
+    // submit was taken happily. That failure is exactly as recoverable as one at submit time,
+    // and the caller is still sitting here waiting, so it is retried on the next aggregator
+    // rather than reported. sheetJob carries everything needed for that: the same prompt, the
+    // same reference, and who has already been asked.
+    const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
+    if (next) return { state: 'pending', taskId: next.taskId, note: next.note };
+
+    // Kept on the record as well as answered here: whoever opens this character next deserves
+    // to know why it has no sheet, not just that it has none.
+    patchChar(charId, {
+      [field + 'Task']: null, sheetJob: null,
+      sheetError: String(result.error || 'the generation failed'),
+    });
+  }
+  return result;
+}
+
 router.get('/char-store/ref-status/:taskId', async (req, res) => {
   try {
-    const { charId, kind } = req.query;
-    const field = (kind === 'tpose') ? 'tpose' : (kind === 'portrait') ? 'portrait' : 'sheet';
-    const c = charId ? findChar(charId) : null;
-    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
-
-    const folder = charAbsFolderRec(c);
-    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
-
-    const result = await resolveTask(req.params.taskId, folder, field);
-    if (result.state === 'success') {
-      patchChar(charId, {
-        [field]: result.imagePath, [field + 'Task']: null, sheetError: null, sheetNote: null, sheetJob: null,
-      });
-      removePendingTask(req.params.taskId);
-    } else if (result.state === 'failed') {
-      removePendingTask(req.params.taskId);
-
-      // A task can be accepted and fail LATER - ModelRateLimitError arrives a minute after the
-      // submit was taken happily. That failure is exactly as recoverable as one at submit time,
-      // and the caller is still sitting here waiting, so it is retried on the next aggregator
-      // rather than reported. sheetJob carries everything needed for that: the same prompt, the
-      // same reference, and who has already been asked.
-      const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
-      if (next) return res.json({ success: true, state: 'pending', taskId: next.taskId, note: next.note });
-
-      // Kept on the record as well as answered here: whoever opens this character next deserves
-      // to know why it has no sheet, not just that it has none.
-      patchChar(charId, {
-        [field + 'Task']: null, sheetJob: null,
-        sheetError: String(result.error || 'the generation failed'),
-      });
-    }
-    res.json({ success: true, ...result });
+    const out = await _resolveSheet(req.params.taskId, req.query.charId, req.query.kind);
+    res.json({ success: true, ...out });
   } catch (err) {
-    res.status(502).json({ success: false, error: err.message });
+    res.status(err.status || 502).json({ success: false, error: err.message });
   }
 });
+
+// ── Alerts ──────────────────────────────────────────────────────────────────
+// A sheet is the picture every frame of every ad is later built from, and it takes minutes. The
+// row in the journal is what makes it safe to walk away from (docs/local-app/PLAN.md, "Alerts").
+const JOBS = require('../lib/gen-jobs');
+
+JOBS.register('sheet', {
+  timeoutMs: 30 * 60 * 1000,
+  poll: (rec) => _resolveSheet(rec.taskIds[0], ((rec.job || {}).params || {}).charId, 'sheet'),
+  file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
+  // Asked for again: the same prompt and the same reference, from the top of the ladder.
+  submit: async (request) => {
+    const c = findChar(String((request || {}).charId || ''));
+    const job = c && c.sheetJob;
+    if (!job || !job.prompt || !job.imageUrl) {
+      throw new Error('ask for this one from the Character page - what it was made from is gone');
+    }
+    const sub = await RUN.runImageLadder('sheet', { prompt: job.prompt, imageUrls: [job.imageUrl], aspect: '16:9' });
+    patchChar(c.id, {
+      sheetTask: sub.taskId, imageProvider: sub.provider, imageEngine: sub.engine,
+      sheetError: null, sheetNote: null, sheetJob: { ...job, tried: [sub.provider] },
+    });
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId: c.id });
+    return { taskId: sub.taskId };
+  },
+});
+
+// The row itself, written when a sheet is submitted. The page says where it asked
+// from; without that, nothing is journalled.
+function _journalSheet(charId, taskId, where, name) {
+  if (!where || !taskId) return '';
+  try {
+    return JOBS.submitted({
+      kind: 'image', what: 'sheet',
+      title: 'Sheet · ' + String(name || 'character').slice(0, 60),
+      where, taskIds: [taskId],
+      job: { type: 'sheet', params: { charId: String(charId) } },
+    }).id;
+  } catch (e) {
+    console.warn('[char-store] could not write the alert:', e.message);
+    return '';
+  }
+}
+
 
 // ── PATCH /api/char-store/:id ────────────────────────────────────────────
 // Body may contain { name, gender, voice, notes }. Folder is NOT renamed on a

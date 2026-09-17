@@ -266,7 +266,19 @@ async function _generate(panel, foot, redraw) {
     const title = _titleOf();
     const d = await fetch('/api/audio/suno/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ style, title, targetDuration: _videoLength() }),
+      body: JSON.stringify({
+        style, title, targetDuration: _videoLength(),
+        // Where it was asked from, for the Alerts list (js/alerts-bell.js). Five minutes is long
+        // enough to walk away from, and the server files the track either way.
+        // The music lane is part of the timeline rather than a window of its own, so the address
+        // is the project: opening it puts the track where it belongs in view.
+        where: {
+          page: 'merge',
+          href: '/merge?p=' + encodeURIComponent(Store.key() || ''),
+          label: 'Merge · ' + (Store.title() || 'project') + ' · music',
+          spot: { key: String(Store.key() || ''), view: 'music' },
+        },
+      }),
     }).then(r => r.json());
     if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'kie.ai refused the job');
 

@@ -11,6 +11,13 @@
 // it is not built yet, so an empty column never reads as a broken one.
 
 import { initNav } from '../app-nav.js';
+
+// WHERE A GENERATION ON THIS PAGE WAS ASKED FROM, for the Alerts list (js/alerts-bell.js). The page
+// itself is the place: which character is open is chosen inside it, not by address.
+const _whereHere = (what) => ({
+  page: 'character', href: '/character',
+  label: 'Character · ' + what, spot: { view: what },
+});
 import * as CreatePanel from './create-panel.js';
 import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './presets.js';
 import { genName } from './schema.js';
@@ -431,6 +438,7 @@ async function _fromText(text, pr, { convert, report }) {
     body: JSON.stringify({
       prompt, imageUrl: a.imageUrl,
       aspect: convert ? '3:2' : 'match_input_image',
+      where: _whereHere('portrait'),
     }),
   })).json();
   if (!g || !g.success) throw new Error((g && g.error) || 'the engine refused the prompt');
@@ -539,6 +547,7 @@ function _genSheet() {
       if (_face.base64) body.faceImageBase64 = _face.base64;
       else if (_face.path) body.faceImagePath = _face.path;
     }
+    body.where = _whereHere('sheet');
     const r = await (await fetch('/api/char-store/regen-ref', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })).json();
@@ -835,6 +844,7 @@ function _toggleDraft(i) {
       figure: v.figure || '',
     };
     if (v.base64) body.faceImageBase64 = v.base64; else body.faceImagePath = v.path;
+    body.where = _whereHere('sheet');
     const d = await (await fetch('/api/char-store/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })).json();
@@ -1601,7 +1611,7 @@ function boot() {
       // No reference image, so the route reads this as text-to-image and fixes the aspect at 3:2
       // itself - there is nothing to match against. No engine either: which one draws it is the
       // create ladder's decision, made on the server.
-      body: JSON.stringify({ prompt: genPrompt(values) }),
+      body: JSON.stringify({ prompt: genPrompt(values), where: _whereHere('portrait') }),
     })).json();
     if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
     genOpts.detail = _pickDetail(r);
@@ -1860,6 +1870,7 @@ function boot() {
         if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
         // No engine travels with the save: the sheet this kicks off walks the sheet ladder,
         // exactly as Regenerate does. One list, both paths.
+        body.where = _whereHere('sheet');
         const r = await (await fetch('/api/char-store/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         })).json();
