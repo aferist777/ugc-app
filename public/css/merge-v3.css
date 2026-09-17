@@ -1566,6 +1566,28 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
 }
 .mv3-wk-tile[disabled]{opacity:.55; cursor:default}
+/* Where the reference for a new lookbook lands. A drop target that is also a picker, and
+   once it holds something it shows the picture rather than a file name - the picture is the
+   thing being judged. */
+.mv3-wk-drop{
+  position:relative; margin:8px 9px 0; min-height:96px; display:flex; align-items:center;
+  justify-content:center; text-align:center; cursor:pointer; overflow:hidden;
+  border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface);
+  color:var(--muted); font:400 10px/1.4 var(--font); padding:10px;
+}
+.mv3-wk-drop:hover, .mv3-wk-drop.is-over{border-color:var(--primary); color:var(--ink)}
+.mv3-wk-drop.is-full{padding:0; border-style:solid}
+.mv3-wk-drop img{width:100%; max-height:190px; object-fit:contain; display:block}
+.mv3-wk-dropx{
+  position:absolute; top:5px; right:5px; width:20px; height:20px; padding:0; z-index:2;
+  border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
+  background:var(--surface); color:var(--muted); font:600 10px/1 var(--font);
+}
+.mv3-wk-dropx:hover{color:var(--ink); border-color:var(--ink)}
+/* The sentence. Shorter than the scenario's box: this is a line about clothes, not a script. */
+.mv3-sc-lines.is-short{min-height:74px; margin:8px 9px 0; width:calc(100% - 18px); font-size:11px}
+.mv3-wk-mode{flex:1 1 auto; min-width:0}
+
 /* The button that joins the two halves of the stage: the person above it, the outfit below.
    Just above the outfit rather than astride the seam - sitting on it, the button covered the top
    edge of the very picture being judged. */

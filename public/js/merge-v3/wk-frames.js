@@ -29,8 +29,13 @@
    project only points at it, so the next talking head cast with the same person finds the
    wardrobe already there.
 
-   PHASE SCOPE (docs/local-app/PLAN.md, phase C3). The place is C5 and the frames C6; the
-   lookbook GENERATOR behind "new lookbook" is C4, so that button says so for now.
+   MAKING A LOOKBOOK is the third face of the panel: a reference to take an outfit from, a
+   sentence about what is wanted, or both - the server decides what that means (extract the
+   outfit, draw one, or read the photo and apply the sentence). Deliberately not the old
+   generator: no count, no variants, no gallery of candidates. One picture, made to be worn
+   by the character already standing in the panel.
+
+   PHASE SCOPE (docs/local-app/PLAN.md, phase C4). The place is C5 and the frames C6.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
@@ -48,7 +53,10 @@ let _saving = false;
 // The panel has two faces: the casting, and the shelf of outfits to make a look from. Not a
 // window over it - a 280px column has no room for a window, and this is the same question
 // ("what does this person wear") one level down.
-let _view = 'cast';                      // 'cast' | 'lookbooks'
+let _view = 'cast';                      // 'cast' | 'lookbooks' | 'newlb'
+let _ref = null;                          // { name, dataUrl } - the picture to take the outfit from
+let _lbNote = '';                         // what is wanted, in words
+let _making = false;
 let _lbs = null;                         // the lookbook shelf, read once
 let _lbPick = '';                         // the outfit selected in that shelf
 let _dressing = false;                    // one at a time: it is a minute and it is paid for
@@ -187,7 +195,9 @@ export function paint(host, ctx) {
   const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
-  if (_view === 'lookbooks' && chosen) {
+  if (_view === 'newlb' && chosen) {
+    _paintNewLookbook(scroll, head, chosen);
+  } else if (_view === 'lookbooks' && chosen) {
     // No drawer here at all. It is the character's wardrobe, and what is being answered on
     // this face of the panel is which outfit to make the next one from.
     _paintLookbooks(scroll, head, chosen);
@@ -216,7 +226,8 @@ function _paintLookbooks(host, head, c) {
   };
   acts.append(
     mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
-    mk('new lookbook', 'Make a lookbook from a reference and a sentence - being built (phase C4)', null, false),
+    mk('new lookbook', 'Make one from a photo and a sentence',
+      () => { _view = 'newlb'; _ctx.repaint(); }, false),
   );
   const back = _el('button', 'mv3-iconbtn', '\u2715');
   back.type = 'button';
@@ -235,8 +246,8 @@ function _paintLookbooks(host, head, c) {
   const grid = _el('div', 'mv3-wk-grid is-lb');
   const add = _el('button', 'mv3-wk-tile is-add', '+');
   add.type = 'button';
-  add.title = 'Make a lookbook - being built (docs/local-app/PLAN.md, phase C4)';
-  add.disabled = true;
+  add.title = 'Make a lookbook from a photo and a sentence';
+  add.addEventListener('click', () => { _view = 'newlb'; _ctx.repaint(); });
   grid.appendChild(add);
   for (const p of _lbs) {
     const path = String((p && p.path) || p || '');
@@ -287,6 +298,156 @@ function _stageButton(spec) {
   b.disabled = !!spec.busy;
   b.addEventListener('click', spec.on);
   stage.appendChild(b);
+}
+
+// ── Making a lookbook ───────────────────────────────────────────────────────
+// Two fields and one button. What they mean together is the server's rule, and it is worth
+// stating where it is read: a photo alone takes the outfit OUT of it, a sentence alone draws
+// one, and both together read the photo and apply the sentence to it. So the button says
+// which of the three is about to happen instead of a flat "generate".
+function _mode() {
+  if (_ref && _lbNote.trim()) return 'edit';
+  if (_ref) return 'extract';
+  if (_lbNote.trim()) return 'draw';
+  return '';
+}
+const _MODE_LABEL = {
+  edit: 'read the photo and apply the words',
+  extract: 'take the outfit out of the photo',
+  draw: 'draw it from the words',
+};
+
+function _paintNewLookbook(host, head, c) {
+  const acts = _el('div', 'mv3-wk-bar');
+  const back = _el('button', 'mv3-sc-tab', 'create look');
+  back.type = 'button';
+  back.title = 'Back to the shelf of outfits';
+  back.addEventListener('click', () => { _view = 'lookbooks'; _ctx.repaint(); });
+  const here = _el('button', 'mv3-sc-tab is-on', 'new lookbook');
+  here.type = 'button';
+  here.disabled = true;
+  const x = _el('button', 'mv3-iconbtn', '\u2715');
+  x.type = 'button';
+  x.title = 'Back to the casting';
+  x.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
+  acts.append(back, here, x);
+  head.appendChild(acts);
+
+  // The reference. A drop target that is also a file picker, because both are how a picture
+  // arrives from a folder, and it shows what it holds rather than a file name.
+  const drop = _el('div', 'mv3-wk-drop' + (_ref ? ' is-full' : ''));
+  drop.title = 'Drop a photo here, or click to choose one';
+  if (_ref) {
+    const img = _el('img');
+    img.alt = '';
+    img.src = _ref.dataUrl;
+    drop.appendChild(img);
+    const clear = _el('button', 'mv3-wk-dropx', '\u2715');
+    clear.type = 'button';
+    clear.title = 'Take the photo off';
+    clear.addEventListener('click', (e) => { e.stopPropagation(); _ref = null; _ctx.repaint(); });
+    drop.appendChild(clear);
+  } else {
+    drop.appendChild(_el('span', null, 'drop a photo of the outfit, or click'));
+  }
+  const pick = _el('input');
+  pick.type = 'file';
+  pick.accept = 'image/*';
+  pick.hidden = true;
+  pick.addEventListener('change', () => { if (pick.files && pick.files[0]) _takeRef(pick.files[0]); });
+  drop.addEventListener('click', () => pick.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-over');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) _takeRef(f);
+  });
+  host.append(drop, pick);
+
+  const note = _el('textarea', 'mv3-sc-lines is-short');
+  note.placeholder = 'What should the outfit be? A sentence is enough - "cream linen shirt, wide navy trousers".';
+  note.value = _lbNote;
+  note.addEventListener('input', () => {
+    _lbNote = note.value;
+    const b = host.querySelector('.mv3-x-go');
+    const m = _mode();
+    if (b) { b.disabled = !m || _making; b.textContent = _making ? 'making…' : (m ? 'make it' : 'a photo or a sentence'); }
+    const h = host.querySelector('.mv3-wk-mode');
+    if (h) h.textContent = m ? _MODE_LABEL[m] : '';
+  });
+  host.appendChild(note);
+
+  const row = _el('div', 'mv3-ins-row');
+  const go = _el('button', 'mv3-x-go', _making ? 'making…' : (_mode() ? 'make it' : 'a photo or a sentence'));
+  go.type = 'button';
+  go.disabled = !_mode() || _making;
+  go.title = 'This spends credits';
+  go.addEventListener('click', () => _make(c));
+  row.appendChild(go);
+  row.appendChild(_el('span', 'mv3-wk-mode mv3-sc-meta', _mode() ? _MODE_LABEL[_mode()] : ''));
+  host.appendChild(row);
+  host.appendChild(_note('It joins the lookbook shelf, and this character can be dressed in it straight away.'));
+
+  // The stage keeps showing who it is for; the reference, once there, is what the outfit
+  // will come from, so the two stand together the same way they will when it is applied.
+  _shownFor = '';
+  if (_ref) PV.showPair(derived(_faceOf(c).src, 'main'), _ref.dataUrl);
+  else PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
+  _stageButton(null);
+}
+
+// Read once, kept as a data URL: it is what the server wants (imageBase64), and holding the
+// File itself would mean reading it again on every repaint.
+function _takeRef(file) {
+  if (!file || !/^image\//.test(file.type)) return;
+  const fr = new FileReader();
+  fr.onload = () => { _ref = { name: file.name, dataUrl: String(fr.result || '') }; _ctx.repaint(); };
+  fr.readAsDataURL(file);
+}
+
+async function _make(c) {
+  const mode = _mode();
+  if (!mode || _making) return;
+  _making = true;
+  _ctx.repaint();
+  const stage = document.getElementById('mv3-stage');
+  const pr = startProgress(stage, {
+    label: mode === 'extract' ? 'Taking the outfit out of the photo'
+      : mode === 'edit' ? 'Reading the photo and your words' : 'Drawing the outfit',
+    total: 1, estimateMs: 45000,
+  });
+  try {
+    const r = await API.makeLookbook({
+      prompt: _lbNote.trim(),
+      imageBase64: _ref ? _ref.dataUrl : '',
+      count: 1,
+      engine: _engine(),
+    });
+    const id = (r.taskIds || [])[0];
+    if (!id) throw new Error('the engine did not accept the task');
+    const done = await API.awaitTask(id);
+    // Until it is filed it is a scratch file with no shelf; filing gives it the path the
+    // shelf and the dressing both use.
+    const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '');
+    pr.step();
+    pr.finish();
+    _lbs = await API.lookbooks();
+    _lbPick = String(filed.path || '');
+    _ref = null;
+    _lbNote = '';
+    _making = false;
+    // Straight to the shelf with it chosen: it was made to be worn, and apply is one press
+    // away on the stage.
+    _view = 'lookbooks';
+    _ctx.repaint();
+  } catch (e) {
+    pr.fail((e && e.message) || 'the lookbook failed');
+    _making = false;
+    _state = 'The lookbook failed: ' + ((e && e.message) || 'unknown');
+    _ctx.repaint();
+  }
 }
 
 // ── The dressing itself ─────────────────────────────────────────────────────

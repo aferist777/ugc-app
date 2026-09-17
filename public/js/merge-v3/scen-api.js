@@ -93,6 +93,20 @@ export async function awaitTask(taskId, onTick) {
   throw new Error('timed out waiting for the generator');
 }
 
+// ── Making a lookbook ───────────────────────────────────────────────────────
+// One route, three ways of asking, and which one it is depends only on what is filled in:
+// a photo alone EXTRACTS the outfit from it, a sentence alone draws one from nothing, and
+// both together read the photo and apply the sentence to it. The answer is a task to wait on.
+
+/** @returns { mode, taskIds, gender } */
+export const makeLookbook = (body) => _post('/api/scen3/gen/lookbook', body);
+
+/**
+ * File a finished generation into a shared library - a lookbook here - and get back the path
+ * it was filed under. Until this runs the picture is a scratch file with no shelf.
+ */
+export const fileAs = (path, kind, gender) => _post('/api/scen3/finalize', { path, kind, gender });
+
 /**
  * The vertical / product / role values used before. They are collected from saved
  * scenarios rather than kept as a list somebody has to maintain, so this is a set of
