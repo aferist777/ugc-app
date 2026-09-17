@@ -846,6 +846,10 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       if (!fs.existsSync(path.join(shelf.dir, base))) return res.status(404).json({ success: false, error: 'not found' });
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
+      // What the agent wrote about it goes with it (lib/shelf-meta.js) - an entry for a picture
+      // that no longer exists is only something a later picture of the same name could inherit.
+      try { require('../lib/shelf-meta').drop(kind, `${shelf.url}/${base}`); }
+      catch (e) { console.warn('[library] could not drop the description of', base, e.message); }
       return res.json({ success: true, kind, id, removed });
     }
 

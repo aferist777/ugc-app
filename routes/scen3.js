@@ -652,17 +652,13 @@ const _lbTask = (prompt, urls) => (urls && urls.length
 // a v3-owned side file keyed by public path — the shared lookbook backend has no
 // metadata of its own and is not touched. Lookbooks that predate this stay
 // unknown on purpose and are always visible.
-const LBMETA_FILE = path.join(DATA_DIR, 'scen3-lookbook-meta.json');
+// The store itself is lib/shelf-meta.js - shared with the environments, and with the Library's
+// delete, which drops a picture's entry together with the picture.
+const SHELF_META = require('../lib/shelf-meta');
 const GENDER_VALUES = ['male', 'female', 'unisex'];
 
-function _lbMeta() {
-  const d = _read(LBMETA_FILE);
-  return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {};
-}
-function _lbMetaSave(m) {
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
-  writeFileAtomic(LBMETA_FILE, JSON.stringify(m, null, 2));
-}
+const _lbMeta = () => SHELF_META.read('lookbooks');
+const _lbMetaSave = (m) => SHELF_META.write('lookbooks', m);
 
 async function _detectGender(note, photoUrl) {
   const ask = 'Which gender is this outfit meant for? Answer with exactly one word: male, female, or unisex. '
@@ -813,6 +809,7 @@ const _track = (tid, tag, projectId) => {
 //   photo only         -> extract the outfit as it is
 //   photo + prompt     -> read the photo against the note, then generate
 router.post('/scen3/gen/lookbook', async (req, res) => {
+  let refToken = '';
   try {
     const b = req.body || {};
     const note = String(b.prompt || '').trim();
@@ -826,13 +823,13 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
     if (!note && !b64 && !ref) return res.status(400).json({ success: false, error: 'describe an outfit or add a photo' });
 
     // The engines fetch their references over the internet, so either way the picture goes to
-    // R2 first - ours, the one host (lib/helpers.js, uploadToPublicHost).
+    // R2 first - ours, the one host (lib/helpers.js, uploadToPublicHost). A photo brought from
+    // this computer is also kept under a token until the lookbook exists, and then filed in the
+    // library (_fileRef, at finalize).
     let photoUrl = '';
     if (b64) {
-      const raw = b64.replace(/^data:image\/[a-z+]+;base64,/i, '');
-      const buf = Buffer.from(raw, 'base64');
-      if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable photo' });
-      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg' });
+      try { const up = await _takeUpload(b64); refToken = up.token; photoUrl = up.url; }
+      catch (e) { return res.status(e.status || 500).json({ success: false, error: e.message }); }
     } else if (ref) {
       photoUrl = await _hostLocal(ref, { verify: true });
     }
@@ -840,7 +837,10 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
     // The agent goes first, and it is the cheap half: if what it is given is not something to
     // wear, nothing is generated and nothing is spent.
     const plan = await _readLookbookIdea(note, photoUrl);
-    if (!plan.ok) return res.status(400).json({ success: false, error: plan.why, refused: true });
+    if (!plan.ok) {
+      if (refToken) _unstash(refToken);
+      return res.status(400).json({ success: false, error: plan.why, refused: true });
+    }
 
     const mode = photoUrl ? (note ? 'edit' : 'extract') : 'draw';
     const prompt = plan.prompt + (plan.kind === 'costume' ? MASCOT_TAIL : KNOLL_TAIL);
@@ -859,8 +859,11 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
       // Written now, filed with the picture when it lands: the description belongs to the
       // lookbook, and the dressing will be given it rather than only the image.
       description: plan.description,
+      // The photo brought for it, to be filed in the library once the lookbook is.
+      refToken,
     });
   } catch (e) {
+    if (refToken) _unstash(refToken);
     console.error('[scen3/gen/lookbook]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
@@ -1523,92 +1526,319 @@ router.post('/scen3/gen/frame', async (req, res) => {
 });
 
 // ── Environments ────────────────────────────────────────────────────────────
-// Four modes, decided by what came in:
-//   prompt only            -> draw a new location from the description
-//   basePath + prompt      -> refine that saved location (original untouched)
-//   photo only             -> pull the location out of the photo, emptied of people
-//   photo + prompt         -> read the photo against the note first, then generate
-// Everything renders 2:3 and lands in the shared environments/ folder. v3 keeps its
-// own prompts so routes/lookbook.js — and the tabs using it — stay as they are.
-const ENV_ASPECT = '2:3';
+// ONE place, photographed empty, that a person is later put into to speak to the camera. Made
+// the way a lookbook is: the agent reads what it was given first, and only then is a picture
+// paid for (docs/local-app/PLAN.md, "create environment").
+//
+// 3:2 AND 4K, on the owner's instruction (2026-09-17). An environment is not one frame but a set
+// to take frames FROM: a wide room gives several different vertical 9:16 frames - by the window,
+// in the middle, by the wall - with the same place and the same light, so the fragments of a
+// video stop looking identical. 4K keeps a vertical slice of it sharp: "4K" is 4096 on the long
+// side, so a full-height 9:16 cut of a 3:2 picture is still about 1536x2731.
+const ENV_ASPECT = '3:2';
+const ENV_RES = '4K';
+const ENV_RATIO = 3 / 2;
 
-const ENV_EMPTY_RULE =
-  ' Render it as an EMPTY location background: a photorealistic real-world environment with NO people,'
-  + ' no characters, no text, no watermark. Natural coherent lighting and depth, and leave clear foreground'
-  + ' space where a person could later stand.'
-  + ' 2:3 VERTICAL full-frame composition — fill the entire frame edge to edge, no borders, no letterboxing.'
-  + ' High detail, sharp focus.';
+// Said after whatever the agent wrote, so no rewrite of the words can lose it. The EMPTY rule is
+// the one in capitals: a person left in the place is a second person in every frame made from it.
+const ENV_TAIL =
+  ' A real photograph of a real place, as taken on a modern smartphone: natural light, true colours, real materials with their wear'
+  + ' and lived-in detail - not a 3D render, not an illustration, not a stock or showroom look.'
+  + ' The place is EMPTY: NO people, no body parts, no reflections or silhouettes of people, no mannequins, no text, no logos, no watermark.'
+  + ' Camera at chest height, natural perspective.'
+  + ' 3:2 landscape, filling the whole frame edge to edge, no borders.';
 
-const ENV_REFINE_RULE =
-  ' Apply that change to THIS environment image while keeping it an EMPTY location background: photorealistic,'
-  + ' NO people, no characters, no text, no watermark. Preserve the overall place unless the instruction says'
-  + ' otherwise, keep the lighting coherent and leave clear foreground space.'
-  + ' 2:3 VERTICAL full-frame composition — fill the entire frame, no borders, no letterboxing.';
+// Changing an environment already made: the rest of it is the thing being kept.
+const ENV_KEEP =
+  ' Keep the SAME place as in the picture - the same architecture, furniture, materials, colours, light and camera -'
+  + ' and change only what the prompt asks for.';
 
-const ENV_EXTRACT_HEAD =
-  'Extract and faithfully reconstruct the background environment from the reference photo — same location,'
-  + ' same architecture, furniture and decor, same colours, same lighting, same atmosphere.'
-  + ' Remove every person and every foreground subject so the place is left empty.';
+// A picture with no place in it lends its atmosphere, not its contents: without this the model
+// puts the cup it was shown on every table of the café it was asked for.
+const ENV_MOOD_ONLY =
+  ' The picture given is a reference for atmosphere only - its palette, light, mood and style.'
+  + ' Do not reproduce it, and do not put what it shows into the place.';
 
-// Photo + note: read the photo, apply the note, return one ready prompt.
-async function _composeEnvFromPhoto(note, imageUrl) {
-  const ask = 'Look at the photo and describe the LOCATION shown in it, then apply these changes: "'
-    + note + '". Reply with ONE image-generation prompt (<= 90 words) describing the resulting place — '
-    + 'architecture, furniture, materials, colours, light, time of day, mood. Describe only the empty location, '
-    + 'never any person. Reply with the prompt text only, no preamble, no quotes.';
-  const raw = await _ask([{
-    role: 'user',
-    content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: imageUrl } }],
-  }]);
-  return String(raw || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
+// Where a picture has to be continued to become 3:2, measured rather than guessed. Nothing to
+// continue within 5% of the shape: a picture that close is re-framed, not extended.
+function _envShape(w, h) {
+  if (!(w > 0 && h > 0)) return { w: 0, h: 0, extend: '' };
+  const r = w / h;
+  const extend = r < ENV_RATIO * 0.95 ? 'left and right' : r > ENV_RATIO * 1.05 ? 'top and bottom' : '';
+  return { w, h, extend };
 }
 
-router.post('/scen3/gen/env', async (req, res) => {
+// A phone photo's pixels are often stored on their side with a tag saying which way is up.
+async function _sizeOf(input) {
   try {
-    const b    = req.body || {};
+    const m = await sharp(input).metadata();
+    const turned = (m.orientation || 1) >= 5;
+    return turned ? { w: m.height || 0, h: m.width || 0 } : { w: m.width || 0, h: m.height || 0 };
+  } catch (e) {
+    return { w: 0, h: 0 };
+  }
+}
+
+/**
+ * THE CALL THAT DECIDES WHAT AN ENVIRONMENT IS.
+ *
+ * Given whatever the person gave - a photo they brought, an environment already made, a sentence,
+ * the places they picked - it answers with JSON, one of three:
+ *
+ *   { ok:false, why }                       nothing to make: said to the person, nothing is paid
+ *   { ok:true, choose:true, why, options }  a picture with no place in it, and the panel can ask:
+ *                                           a handful of places to pick from, and still nothing paid
+ *   { ok:true, prompt, description }        the place, as a prompt and as a description
+ *
+ * WHY IT ASKS INSTEAD OF INVENTING. A cup, a logo or a drawing suits a dozen places, and which one
+ * the agent would reach for is exactly the unpredictable part (the owner, 2026-09-17). So it names
+ * a few; the person picks any number; this is called again with those, and only that call writes
+ * a prompt. A page that cannot show the choice (the old Scenarios popup) does not offer it, and
+ * then the agent picks the single best place itself.
+ *
+ * CONTINUING A PICTURE. The model has no mask, so "extend this" is said in words - and said
+ * briefly: the part of the picture that exists is kept as it is, and it goes on in the same style,
+ * light and perspective. The agent is not asked to describe the new part at length; the more it
+ * invents there in words, the more the model redraws what was already right.
+ */
+async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, canChoose }) {
+  const picked = (choices || []).filter(Boolean);
+  const rules = [
+    'You are preparing an ENVIRONMENT for a UGC-style video: one real place, photographed empty, that a person will later be put into to speak to the camera.',
+    'Decide first whether there is something to make.',
+    'Refuse only when there is no picture and the text is gibberish, a random string, a test, or says nothing about a place, a setting or an atmosphere: answer {"ok":false,"why":"..."} - one short sentence addressed to the person.',
+  ];
+  if (source === 'photo' && !picked.length) {
+    rules.push('The picture is a photo the person brought. If it shows a place - indoors or outdoors, with or without people - the place to make is THAT place: the same architecture, furniture, materials, colours and light, with every person and everything they hold removed and the space behind them filled in naturally.');
+    rules.push(canChoose
+      ? 'If it shows NO place at all - an object or a product on a plain background, an animal, a drawing, a logo, a pattern - do not choose a place yourself: answer {"ok":true,"choose":true,"why":"...","options":["...","..."]} with 5 short, clearly different, concrete places, 2 to 6 words each, that would suit what the picture shows and its colours, mood, style and era. "why" is one short sentence telling the person the picture has no place in it.'
+      : 'If it shows NO place at all - an object on a plain background, an animal, a drawing, a logo - invent the ONE place that suits it best, its colours, mood, style and era.');
+  }
+  if (source === 'saved') {
+    rules.push('The picture is an environment already made. The text is a change to make to it; everything the text does not mention stays exactly as it is.');
+  }
+  if (picked.length) {
+    rules.push('The person picked ' + (picked.length > 1 ? 'these places' : 'this place') + ': ' + picked.map(p => '"' + p + '"').join(', ') + '. Make ONE coherent place out of what they picked.'
+      + (imageUrl ? ' Carry the atmosphere of the picture into it - its palette, light, mood, style and era - but not what the picture shows.' : ''));
+  }
+  if (note && source === 'photo') rules.push('The text is a change to make to the place.');
+  rules.push('Then answer with JSON only: {"ok":true,"prompt":"...","description":"..."}');
+  rules.push('prompt: an image-generation prompt, 120-200 words, for a real photograph of the place: what it is, then the foreground, middle ground and background, left and right - objects, materials and colours - and the light: where it comes from, how soft, how warm, what time of day. The place is EMPTY: no people, no body parts, no mannequins, no text, logos or watermarks. Leave open floor space in several parts of the scene - left, centre and right - where a person could stand or sit facing the camera: the picture will be cut into several vertical frames.');
+  if (shape && shape.extend && source !== '' && !picked.length) {
+    rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
+  }
+  rules.push('description: 150 words or more, English, for whoever will later compose frames in this place: what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
+
+  const ask = rules.join(' ')
+    + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
+    + (imageUrl ? ' Judge the picture as well.' : ' There is no picture.');
+  const content = imageUrl
+    ? [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: imageUrl } }]
+    : ask;
+  const rawOut = await _ask([{ role: 'user', content }]);
+  const m = String(rawOut || '').match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('the agent did not answer with a plan');
+  let plan;
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  if (!plan || plan.ok === false) {
+    return { ok: false, why: String((plan && plan.why) || 'that does not describe a place').trim() };
+  }
+  if (plan.choose) {
+    const options = (Array.isArray(plan.options) ? plan.options : [])
+      .map(o => String(o || '').trim()).filter(Boolean).slice(0, 6);
+    // Asked when it may not be - or asked with nothing to pick from. Either way there is no
+    // place to make and no question the panel can put, so it is said as a failure.
+    if (!canChoose || !options.length) throw new Error('the agent could not decide what place to make');
+    return { ok: true, choose: true, why: String(plan.why || '').trim(), options };
+  }
+  const prompt = String(plan.prompt || '').trim();
+  if (!prompt) throw new Error('the agent wrote no prompt');
+  return { ok: true, prompt, description: String(plan.description || '').trim() };
+}
+
+const _envTask = (prompt, urls) => (urls.length
+  ? _kieTask(LB_MODEL_I2I, { prompt, input_urls: urls, aspect_ratio: ENV_ASPECT, resolution: ENV_RES, background: 'opaque' })
+  : _kieTask(LB_MODEL_T2I, { prompt, aspect_ratio: ENV_ASPECT, resolution: ENV_RES, background: 'opaque' }));
+
+// ── The picture somebody brought ────────────────────────────────────────────
+// A photo uploaded into a maker is kept for two reasons: a second pass must not send it again
+// (the environment's choice of places), and once something has been MADE from it, it is filed in
+// the library - Images, under uploads_lookbooks or uploads_environments (the owner, 2026-09-17).
+// Until then it waits in scratch, outside the library, under a token the page holds: a photo that
+// came to nothing is not the library's business. Scratch is swept of anything a day old.
+const REF_DIR = path.join(CFG.TEMP_DIR, 'maker-refs');
+const REF_TTL_MS = 24 * 3600 * 1000;
+const REF_CATS = { lookbook: 'uploads_lookbooks', environment: 'uploads_environments' };
+const _refUrls = new Map();                        // token -> its public URL, while this server runs
+const _refOk = (t) => /^[a-f0-9]{20}$/.test(String(t || ''));
+
+function _stashRef(buf, ext) {
+  fs.mkdirSync(REF_DIR, { recursive: true });
+  for (const f of fs.readdirSync(REF_DIR)) {
+    try { if (Date.now() - fs.statSync(path.join(REF_DIR, f)).mtimeMs > REF_TTL_MS) fs.unlinkSync(path.join(REF_DIR, f)); } catch (e) {}
+  }
+  const token = require('crypto').randomBytes(10).toString('hex');
+  fs.writeFileSync(path.join(REF_DIR, token + '.' + ext), buf);
+  return token;
+}
+
+function _stashed(token) {
+  if (!_refOk(token) || !fs.existsSync(REF_DIR)) return '';
+  const f = fs.readdirSync(REF_DIR).find(n => n.startsWith(token + '.'));
+  return f ? path.join(REF_DIR, f) : '';
+}
+
+function _unstash(token) {
+  const f = _stashed(token);
+  if (f) { try { fs.unlinkSync(f); } catch (e) {} }
+  _refUrls.delete(token);
+}
+
+// A data URL from the page -> the bytes, what they are, and a token for them.
+async function _takeUpload(dataUrl) {
+  const raw = String(dataUrl || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  const buf = Buffer.from(raw, 'base64');
+  if (!buf.length) throw Object.assign(new Error('unreadable photo'), { status: 400 });
+  let fmt = '';
+  try { fmt = (await sharp(buf).metadata()).format || ''; } catch (e) {}
+  if (!fmt) throw Object.assign(new Error('that file is not a picture'), { status: 400 });
+  const ext = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif', heif: 'heic', avif: 'avif', tiff: 'tif' }[fmt] || 'jpg';
+  const token = _stashRef(buf, ext);
+  let url = '';
+  try {
+    url = await H.uploadToPublicHost(buf, { ext });
+  } catch (e) {
+    _unstash(token);                               // nobody holds the token yet: it would only wait for the sweep
+    throw e;
+  }
+  _refUrls.set(token, url);
+  return { token, url, buf };
+}
+
+// The same photo again, by its token: the URL it already has, or the file sent up once more.
+async function _reuseUpload(token) {
+  const file = _stashed(token);
+  if (!file) throw Object.assign(new Error('the photo is no longer here - add it again'), { status: 400, gone: true });
+  const buf = fs.readFileSync(file);
+  let url = _refUrls.get(token);
+  if (!url) {
+    url = await H.uploadToPublicHost(buf, { ext: path.extname(file).slice(1) || 'jpg' });
+    _refUrls.set(token, url);
+  }
+  return { token, url, buf };
+}
+
+// File it in Images, once something exists that was made from it. The same photo twice is one
+// picture on the shelf: it is recognised by its bytes, not its name.
+async function _fileRef(token, kind, name) {
+  const src = _stashed(token);
+  const label = REF_CATS[kind];
+  if (!src || !label) return '';
+  const IMG = require('../lib/images-store');
+  const LC = require('../lib/library-cats');
+  const buf = fs.readFileSync(src);
+  const sha1 = require('crypto').createHash('sha1').update(buf).digest('hex');
+  const { cat } = LC.add('images', label);
+  let out = '';
+  const same = IMG.read().find(e => e && e.categoryId === cat.id && e.meta && e.meta.sha1 === sha1);
+  const sameHit = same && _resolveMedia(same.imagePath);
+  if (sameHit && fs.existsSync(sameHit.abs)) {
+    out = same.imagePath;
+  } else {
+    // Scratch can be on another drive than the library: COPY in, never rename.
+    const file = 'ref_' + Date.now() + '_' + token.slice(0, 6) + path.extname(src);
+    fs.mkdirSync(CFG.MEDIA.work, { recursive: true });
+    fs.copyFileSync(src, path.join(CFG.MEDIA.work, file));
+    const clean = String(name || '').replace(/\.[^.]+$/, '').replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim().slice(0, 120);
+    const { item } = await IMG.add(toUrl(path.join(CFG.MEDIA.work, file)), {
+      name: clean || label, source: 'upload', categoryId: cat.id, categoryLabel: cat.label,
+      meta: { sha1, made: kind },
+    });
+    out = item.imagePath;
+  }
+  _unstash(token);
+  return out;
+}
+
+//   POST /api/scen3/gen/env
+//     { prompt, imageBase64 | refToken | imagePath (basePath), choices? }
+//   -> 400 { error, refused }                           the agent said there is nothing to make
+//   -> 200 { choose:true, why, options, refToken }      pick places first; nothing was paid for
+//   -> 200 { mode, taskId, prompt, description, refToken }
+//
+// `choices` present - even empty - says the page can show a choice of places. Absent (the old
+// Scenarios popup) the agent picks a place itself.
+router.post('/scen3/gen/env', async (req, res) => {
+  let token = '';
+  let fresh = false;                             // the photo came in THIS request
+  try {
+    const b = req.body || {};
     const note = String(b.prompt || '').trim();
-    const b64  = String(b.imageBase64 || '');
-    const base = String(b.basePath || '').trim();
-    const eng  = _engineOf(b);
-    if (!note && !b64) return res.status(400).json({ success: false, error: 'describe a location or add a photo' });
-
-    let photoUrl = '';
-    if (b64) {
-      const raw = b64.replace(/^data:image\/[a-z+]+;base64,/i, '');
-      const buf = Buffer.from(raw, 'base64');
-      if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable photo' });
-      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg' });
+    const saved = String(b.imagePath || b.basePath || '').trim();
+    const canChoose = Array.isArray(b.choices);
+    const choices = canChoose ? b.choices.map(c => String(c || '').trim()).filter(Boolean).slice(0, 6) : [];
+    if (!note && !b.imageBase64 && !b.refToken && !saved) {
+      return res.status(400).json({ success: false, error: 'describe a place or add a photo' });
+    }
+    if (saved && !note && !b.imageBase64 && !b.refToken) {
+      return res.status(400).json({ success: false, error: 'say what to change in this environment' });
     }
 
-    let mode, prompt, taskId;
-
-    if (photoUrl && note) {
-      mode = 'extract-edit';
-      prompt = (await _composeEnvFromPhoto(note, photoUrl)) + ENV_EMPTY_RULE;
-      taskId = await _i2i(eng, prompt, [photoUrl], ENV_ASPECT);
-    } else if (photoUrl) {
-      mode = 'extract';
-      prompt = ENV_EXTRACT_HEAD + ENV_EMPTY_RULE;
-      taskId = await _i2i(eng, prompt, [photoUrl], ENV_ASPECT);
-    } else if (base) {
-      mode = 'refine';
-      const url = await _hostLocal(base);
-      prompt = note + ENV_REFINE_RULE;
-      taskId = await _i2i(eng, prompt, [url], ENV_ASPECT);
-    } else {
-      mode = 'scratch';
-      prompt = note + ENV_EMPTY_RULE;
-      taskId = await _t2i(eng, prompt, ENV_ASPECT);
+    // The picture, and where it came from: a photo brought now, the same photo again, or an
+    // environment already on the shelf.
+    let url = '';
+    let source = '';
+    let shape = null;
+    if (b.imageBase64 || b.refToken) {
+      fresh = !!b.imageBase64;
+      const up = fresh ? await _takeUpload(b.imageBase64) : await _reuseUpload(String(b.refToken));
+      token = up.token;
+      url = up.url;
+      source = 'photo';
+      const s = await _sizeOf(up.buf);
+      shape = _envShape(s.w, s.h);
+    } else if (saved) {
+      url = await _hostLocal(saved, { verify: true });
+      source = 'saved';
+      const hit = _resolveMedia(saved);
+      const s = hit ? await _sizeOf(hit.abs) : { w: 0, h: 0 };
+      shape = _envShape(s.w, s.h);
     }
 
+    const plan = await _readEnvironmentIdea({ note, imageUrl: url, source, shape, choices, canChoose });
+    if (!plan.ok) {
+      if (token) _unstash(token);
+      return res.status(400).json({ success: false, error: plan.why, refused: true });
+    }
+    if (plan.choose) {
+      console.log(`[scen3/gen/env] choose: ${plan.options.length} places offered`);
+      return res.json({ success: true, choose: true, why: plan.why, options: plan.options, refToken: token });
+    }
+
+    // A place picked for a picture that had none keeps the picture only for its atmosphere.
+    const mode = choices.length ? 'picked' : source === 'saved' ? 'edit' : source === 'photo' ? 'photo' : 'draw';
+    const prompt = plan.prompt
+      + (mode === 'edit' ? ENV_KEEP : '')
+      + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
+      + ENV_TAIL;
+    const taskId = await _envTask(prompt, url ? [url] : []);
     if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
     _track(taskId, 'env');
-    console.log(`[scen3/gen/env] mode=${mode} engine=${eng} aspect=${ENV_ASPECT}`);
-    res.json({ success: true, mode, taskId, prompt });
+    console.log(`[scen3/gen/env] mode=${mode} aspect=${ENV_ASPECT} res=${ENV_RES}`
+      + (shape && shape.extend && mode !== 'picked' ? ` extend=${shape.extend}` : '') + (choices.length ? ` picked=${choices.length}` : ''));
+    res.json({ success: true, mode, taskId, prompt, description: plan.description, refToken: token });
   } catch (e) {
+    // A photo brought in this request and not got past it is not kept. One sent back by its token
+    // stays: the page may try again with it.
+    if (fresh && token) _unstash(token);
     console.error('[scen3/gen/env]', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    res.status(e.status || 500).json({ success: false, error: e.message, ...(e.gone ? { gone: true } : {}) });
   }
+});
+
+router.get('/scen3/env-meta', (_req, res) => {
+  try { res.json({ success: true, meta: SHELF_META.read('environments') }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── Dressing: Apply one lookbook onto the sheet, or Re-dress the shown image ──
@@ -1833,6 +2063,14 @@ router.post('/scen3/finalize', async (req, res) => {
       try { await H.createThumbnail(dest, path.resolve(LIB.dir, 'thumbs', name)); } catch (e) {}
     }
 
+    // The photo it was made from, now that there is something made from it: into Images, and its
+    // address beside the description, so the viewer can say what this came from.
+    let from = '';
+    if (LIB && b.refToken) {
+      try { from = await _fileRef(String(b.refToken), kind, String(b.refName || '')); }
+      catch (e) { console.warn('[scen3/finalize] could not file the reference:', e.message); }
+    }
+
     if (kind === 'lookbook') {
       // The gender the caller resolved in parallel with the generation, and WHAT THIS IS: the
       // long description the agent wrote, filed here because this is where the picture gets
@@ -1841,15 +2079,33 @@ router.post('/scen3/finalize', async (req, res) => {
       const gender = String(b.gender || '').toLowerCase();
       const description = String(b.description || '').trim();
       const prompt = String(b.prompt || '').trim();
-      if (GENDER_VALUES.includes(gender) || description) {
+      if (GENDER_VALUES.includes(gender) || description || from) {
         const m = _lbMeta();
         m[finalUrl] = {
           ...(GENDER_VALUES.includes(gender) ? { gender } : {}),
           ...(description ? { description } : {}),
           ...(prompt ? { prompt } : {}),
+          ...(from ? { from } : {}),
           at: new Date().toISOString(),
         };
         _lbMetaSave(m);
+      }
+    }
+
+    if (kind === 'environment') {
+      // The same for a place: what the agent wrote about it is what the first frames will be
+      // composed from later, and it is filed under the path the shelf knows it by.
+      const description = String(b.description || '').trim();
+      const prompt = String(b.prompt || '').trim();
+      if (description || prompt || from) {
+        const m = SHELF_META.read('environments');
+        m[finalUrl] = {
+          ...(description ? { description } : {}),
+          ...(prompt ? { prompt } : {}),
+          ...(from ? { from } : {}),
+          at: new Date().toISOString(),
+        };
+        SHELF_META.write('environments', m);
       }
     }
 
@@ -1864,7 +2120,7 @@ router.post('/scen3/finalize', async (req, res) => {
       }
     } catch (e) { console.warn('[scen3/finalize] preview failed:', e.message); }
 
-    res.json({ success: true, path: finalUrl, preview: previewUrl });
+    res.json({ success: true, path: finalUrl, preview: previewUrl, ...(from ? { from } : {}) });
   } catch (e) {
     console.error('[scen3/finalize]', e.message);
     res.status(500).json({ success: false, error: e.message });

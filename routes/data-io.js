@@ -91,7 +91,7 @@ const GROUPS = [
   { id: 'characters', label: 'Characters (4K sheets, thumbnails)',
     dirs: ['media/characters'], stores: ['data/characters.json'] },
   { id: 'locations', label: 'Locations',
-    dirs: ['media/locations'], stores: [] },
+    dirs: ['media/locations'], stores: ['data/scen3-env-meta.json'] },
   { id: 'library2', label: 'Library 2 (narrators, script drafts)',
     dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',

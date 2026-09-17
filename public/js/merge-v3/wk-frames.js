@@ -35,6 +35,11 @@
    generator: no count, no variants, no gallery of candidates. One picture, made to be worn
    by the character already standing in the panel.
 
+   THE PLACE is its own module (js/merge-v3/wk-env.js): the environments shelf and the maker of
+   new ones. It is handed what it needs from here - the casting, the way to save it, the stage -
+   and this file only decides when it is showing. What the two makers share (the picture field,
+   the twenty-character rule, the tile menu) is js/merge-v3/wk-maker.js.
+
    PHASE SCOPE (docs/local-app/PLAN.md, phase C4). The place is C5 and the frames C6.
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -42,9 +47,9 @@ import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store
 import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
-import * as Layers from '../layers.js';
-import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
+import * as ENV from './wk-env.js';
+import { MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu } from './wk-maker.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
 
@@ -210,8 +215,10 @@ export function paint(host, ctx) {
   root.appendChild(scroll);
   if (_view === 'hub') {
     _paintHub(scroll, chosen);
-  } else if (_view === 'env' || _view === 'newenv') {
-    _paintEnvironments(scroll, head);
+  } else if (_view === 'env') {
+    ENV.paintShelf(scroll, head, _envApi(chosen));
+  } else if (_view === 'newenv') {
+    ENV.paintMaker(scroll, head, _envApi(chosen));
   } else if (_view === 'newlb' && chosen) {
     _paintNewLookbook(scroll, head, chosen);
   } else if (_view === 'lookbooks' && chosen) {
@@ -312,64 +319,29 @@ function _guide(host, haveWho, haveWhere) {
   const ol = _el('ol', 'mv3-wk-guide-list');
   const li = (text, done) => { const e = _el('li', done ? 'is-done' : '', text); ol.appendChild(e); };
   li('Choose who is speaking: click the character field. Pick a look for them, or dress them in a lookbook - or make a new lookbook first.', haveWho);
-  li('Choose where: click the environment field and pick a place.', haveWhere);
+  li('Choose where: click the environment field and pick a place - or create one.', haveWhere);
   li('With both set, ask the agent for the first frames.', false);
   host.appendChild(ol);
 }
 
 // ── The environment branch ──────────────────────────────────────────────────
-// Simpler than the character's, on purpose: a place has no wardrobe. The saved environments as
-// tiles, and picking one is the answer - it is written to the project and the panel goes back
-// to the hub. Making a new one (create environment) comes next.
-let _envs = null;
-
-function _paintEnvironments(host, head) {
-  const acts = _el('div', 'mv3-wk-bar');
-  const x = _el('button', 'mv3-iconbtn', '\u2715');
-  x.type = 'button';
-  x.title = 'Back to first frames';
-  x.addEventListener('click', () => { _view = 'hub'; _ctx.repaint(); });
-  acts.appendChild(x);
-  head.appendChild(acts);
-
-  if (_envs === null) {
-    host.appendChild(_note('reading the environments…'));
-    fetch('/api/gallery/environments').then(r => r.json())
-      .then((d) => { _envs = (d && d.files) || []; _ctx.repaint(); })
-      .catch((e) => { _envs = []; _state = 'Could not read the environments: ' + e.message; _ctx.repaint(); });
-    return;
-  }
-
-  const grid = _el('div', 'mv3-wk-grid is-lb');
-  const add = _el('button', 'mv3-wk-tile is-add', '+');
-  add.type = 'button';
-  add.title = 'Create an environment - being built next';
-  add.disabled = true;
-  grid.appendChild(add);
-  const current = String(_casting().locationImage || '');
-  for (const p of _envs) {
-    const path = String((p && p.path) || p || '');
-    if (!path) continue;
-    const tile = _el('button', 'mv3-wk-tile is-lb' + (path === current ? ' is-on' : ''));
-    tile.type = 'button';
-    tile.title = path.split('/').pop();
-    const img = _el('img', 'mv3-wk-face');
-    img.alt = '';
-    img.loading = 'lazy';
-    img.src = derived(path, 'card');
-    tile.appendChild(img);
-    tile.addEventListener('click', async () => {
-      // A bare path out of the gallery with no record behind it, so no id - the same
-      // convention the old page kept (js/scenarios-v3/mix-popup.js).
-      await _patch({ locationId: '', locationImage: path });
-      _view = 'hub';
-      _ctx.repaint();
-    });
-    grid.appendChild(tile);
-  }
-  host.appendChild(grid);
-  if (!_envs.length) host.appendChild(_note('No environments yet - making one comes next.'));
-  PV.showStill(current ? derived(current, 'main') : '', current ? 'current environment' : '');
+// Its own module (js/merge-v3/wk-env.js). This is everything it may reach in here: the casting
+// and the way to save it, where to go next, the stage's button, and who the place is for.
+function _envApi(chosen) {
+  return {
+    casting: _casting,
+    patch: _patch,
+    go: (view) => { _view = view; _ctx.repaint(); },
+    repaint: () => _ctx.repaint(),
+    stageButton: _stageButton,
+    note: _note,
+    // The character in the look they will wear there; without a look, the character as they are.
+    who: () => {
+      const cast = _casting();
+      if (cast.obrazImage) return { src: cast.obrazImage, caption: cast.characterName || '' };
+      return chosen ? { src: _faceOf(chosen).src, caption: chosen.name } : { src: '', caption: '' };
+    },
+  };
 }
 
 // ── Where you are inside the step ───────────────────────────────────────────
@@ -484,7 +456,7 @@ function _stageButton(spec) {
   const old = stage.querySelector('.mv3-wk-apply');
   if (old) old.remove();
   if (!spec) return;
-  const b = _el('button', 'mv3-wk-apply', spec.label);
+  const b = _el('button', 'mv3-wk-apply' + (spec.cls ? ' ' + spec.cls : ''), spec.label);
   b.type = 'button';
   b.title = spec.title || '';
   b.disabled = !!spec.busy;
@@ -505,39 +477,16 @@ function _mode() {
   return '';
 }
 
-// WORDS ALONE HAVE TO BE WORDS. With a picture in the field the sentence is an edit - "red
-// shoes" is a complete instruction - but with nothing else to go on, a handful of characters
-// is not an outfit, and the twenty below is the owner's number.
-//
-// The nonsense test is deliberately shallow and LOCAL: it catches a fist on the keyboard for
-// free and instantly. Anything subtler - a real sentence about nothing, a shopping list, a
-// question - is the agent's to refuse, and it does that before an image is paid for
-// (routes/scen3.js, _readLookbookIdea).
-const MIN_WORDS_ALONE = 20;
-
-function _nonsense(s) {
-  const t = String(s || '').trim().toLowerCase();
-  if (!t) return false;
-  const letters = t.replace(/[^a-zа-яё]/gi, '');
-  if (!letters) return true;                               // digits and punctuation only
-  if (/^(.)\1+$/.test(letters)) return true;               // one character, held down
-  const vowels = (letters.match(/[aeiouyаеёиоуыэюя]/gi) || []).length;
-  if (vowels / letters.length < 0.15) return true;         // no vowels worth the name
-  const words = t.split(/\s+/).filter(Boolean);
-  // One long unbroken run of letters is a keyboard, not a sentence.
-  if (words.length === 1 && letters.length >= 12) return true;
-  return false;
-}
-
-// What stops the button, in words. Empty means nothing does.
+// What stops the button, in words. Empty means nothing does. The twenty characters and the
+// keyboard-mess test are the rule both makers share (js/merge-v3/wk-maker.js).
 function _why() {
   const base = !!(_ref || _refLb);
   const note = _lbNote.trim();
   if (!base && !note) return 'a photo or a sentence';
   if (!base) {
     if (note.length < MIN_WORDS_ALONE) return (MIN_WORDS_ALONE - note.length) + ' more characters';
-    if (_nonsense(note)) return 'that is not a description';
-  } else if (note && _nonsense(note)) {
+    if (nonsense(note)) return 'that is not a description';
+  } else if (note && nonsense(note)) {
     return 'that is not a description';
   }
   return '';
@@ -547,6 +496,10 @@ const _MODE_LABEL = {
   extract: 'take the outfit out of the photo',
   draw: 'draw it from the words',
 };
+
+// The agent's refusal or what failed, said above the sentence it is about - not at the top of the
+// panel, where it stayed after the person had long moved on.
+let _lbSaid = '';
 
 function _paintNewLookbook(host, head, c) {
   host.classList.add('is-split');
@@ -558,7 +511,7 @@ function _paintNewLookbook(host, head, c) {
   const here = _el('button', 'mv3-sc-tab is-on', 'create lookbook');
   here.type = 'button';
   here.disabled = true;
-  const x = _el('button', 'mv3-iconbtn', '\u2715');
+  const x = _el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
   x.title = 'Back to the casting';
   x.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
@@ -583,6 +536,7 @@ function _paintNewLookbook(host, head, c) {
       if (path) grid.appendChild(_lbTile(path, path === _refLb, () => {
         _refLb = (_refLb === path ? '' : path);
         if (_refLb) _ref = null;                 // one base, not two
+        _lbSaid = '';
         _ctx.repaint();
       }));
     }
@@ -590,47 +544,29 @@ function _paintNewLookbook(host, head, c) {
   }
   host.appendChild(left);
 
-  // RIGHT: what is being made. The field takes a picture from this computer, and doing that
-  // drops whatever was chosen on the left.
+  // RIGHT: what is being made. The field takes a picture from this computer, which drops whatever
+  // was chosen on the left - and, holding a picture, it opens that picture large when clicked.
   const right = _el('div', 'mv3-wk-half is-make');
-  const baseSrc = _ref ? _ref.dataUrl : (_refLb ? derived(_refLb, 'card') : '');
-  const drop = _el('div', 'mv3-wk-drop' + (baseSrc ? ' is-full' : ''));
-  drop.title = 'Drop a photo here, or click to choose one from this computer';
-  if (baseSrc) {
-    const img = _el('img');
-    img.alt = '';
-    img.src = baseSrc;
-    drop.appendChild(img);
-    const clear = _el('button', 'mv3-wk-dropx', '\u2715');
-    clear.type = 'button';
-    clear.title = 'Take it off';
-    clear.addEventListener('click', (e) => { e.stopPropagation(); _ref = null; _refLb = ''; _ctx.repaint(); });
-    drop.appendChild(clear);
-  } else {
-    drop.appendChild(_el('span', null, 'a photo from this computer, or pick a lookbook on the left'));
-  }
-  const pick = _el('input');
-  pick.type = 'file';
-  pick.accept = 'image/*';
-  pick.hidden = true;
-  pick.addEventListener('change', () => { if (pick.files && pick.files[0]) _takeRef(pick.files[0]); });
-  drop.addEventListener('click', () => pick.click());
-  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
-  drop.addEventListener('drop', (e) => {
-    e.preventDefault();
-    drop.classList.remove('is-over');
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) _takeRef(f);
+  const { drop, input } = dropField({
+    src: _ref ? _ref.dataUrl : (_refLb ? derived(_refLb, 'card') : ''),
+    empty: 'a photo from this computer, or pick a lookbook on the left',
+    onFile: (file) => {
+      readPicture(file)
+        .then((p) => { _ref = p; _refLb = ''; _lbSaid = ''; _ctx.repaint(); })
+        .catch((e) => { _lbSaid = e.message; _ctx.repaint(); });
+    },
+    onClear: () => { _ref = null; _refLb = ''; _lbSaid = ''; _ctx.repaint(); },
+    onOpen: () => (_ref ? showPicture({ src: _ref.dataUrl, name: _ref.name }) : _openLb(_refLb)),
   });
-  right.append(drop, pick);
-
+  right.append(drop, input);
   host.appendChild(right);
 
   // The sentence and its button at the foot of the RIGHT half - under the field they are about.
   // The left half is the shelf being drawn from, and a sentence stretched under it would look
   // like it applied to the shelf.
   const foot = _el('div', 'mv3-wk-foot');
+  const said = _lbSaid ? _el('div', 'mv3-wk-said', _lbSaid) : null;
+  if (said) foot.appendChild(said);
   const note = _el('textarea', 'mv3-sc-lines is-short');
   note.placeholder = 'What should it be? With a photo, say what to change - "shoes to white Nike trainers".';
   note.value = _lbNote;
@@ -646,7 +582,12 @@ function _paintNewLookbook(host, head, c) {
     hint.textContent = _making ? '' : (why || (_mode() ? _MODE_LABEL[_mode()] : ''));
     hint.classList.toggle('is-why', !!why);
   };
-  note.addEventListener('input', () => { _lbNote = note.value; sync(); });
+  note.addEventListener('input', () => {
+    _lbNote = note.value;
+    // Typing answers whatever was said, and it goes without a repaint that would lose the cursor.
+    if (said && said.isConnected) { said.remove(); _lbSaid = ''; }
+    sync();
+  });
   go.addEventListener('click', () => _make(c));
   row.append(hint, go);
   foot.append(note, row);
@@ -674,20 +615,27 @@ function _lbTile(path, on, pick) {
   img.src = derived(path, 'card');
   tile.appendChild(img);
 
-  const x = _el('button', 'mv3-wk-tilex', '\u2715');
+  const x = _el('button', 'mv3-wk-tilex', '✕');
   x.type = 'button';
   x.title = 'Delete this lookbook';
   x.addEventListener('click', (e) => { e.stopPropagation(); _askDeleteLb(tile, path); });
   tile.appendChild(x);
 
   tile.addEventListener('click', pick);
-  tile.addEventListener('contextmenu', (e) => { e.preventDefault(); _lbMenu(e, tile, path); });
+  tile.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    tileMenu(e, [
+      { label: 'open', sub: 'look at it, full size', on: () => _openLb(path) },
+      { label: 'delete', sub: 'for good', on: () => _askDeleteLb(tile, path), danger: true },
+    ], 'lookbook menu');
+  });
   return tile;
 }
 
 // The viewer the Library uses, so a lookbook is looked at the same way wherever it is met -
-// with, in the column beside it, what the agent wrote about it when it was made. One made
-// before that existed has nothing to say, and says nothing rather than saying "unknown".
+// with, in the column beside it, what the agent wrote about it when it was made and the photo it
+// was made from. One made before that existed has nothing to say, and says nothing rather than
+// saying "unknown".
 //
 // READ AGAIN AT EVERY OPEN. The shelf's copy is taken the first time the shelf is read, and the
 // lookbook most likely to be opened is the one just made - after that copy, so it opened with
@@ -695,13 +643,11 @@ function _lbTile(path, on, pick) {
 async function _openLb(path) {
   try { _lbMetaMap = (await API.lookbookMeta()) || {}; } catch (e) { /* what was known before */ }
   const meta = (_lbMetaMap && _lbMetaMap[path]) || {};
-  const rows = [];
-  if (meta.description) rows.push(['description', meta.description]);
-  if (meta.gender) rows.push(['suits', meta.gender]);
-  openViewer(
-    [{ id: path, name: path.split('/').pop(), kind: 'lookbooks', media: path }], 0,
-    rows.length ? { extraRows: () => rows } : undefined,
-  );
+  showPicture({
+    src: path, name: path.split('/').pop(),
+    rows: [['description', meta.description], ['suits', meta.gender]],
+    from: meta.from,
+  });
 }
 
 // Read once beside the shelf itself: both answer "what is on this shelf", and a second
@@ -711,39 +657,6 @@ function _needLbMeta() {
   if (_lbMetaMap) return;
   _lbMetaMap = {};
   API.lookbookMeta().then((m) => { _lbMetaMap = m || {}; }).catch(() => { /* nothing known */ });
-}
-
-function _lbMenu(ev, tile, path) {
-  _closeMenu();
-  const el = _el('div', 'mv3-plus-menu');
-  const item = (label, sub, on, danger) => {
-    const b = _el('button', 'mv3-plus-item' + (danger ? ' is-danger' : ''));
-    b.type = 'button';
-    b.appendChild(_el('span', null, label));
-    if (sub) b.appendChild(_el('small', null, sub));
-    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
-    el.appendChild(b);
-  };
-  item('open', 'look at it, full size', () => _openLb(path));
-  item('delete', 'for good', () => _askDeleteLb(tile, path), true);
-
-  document.body.appendChild(el);
-  const w = el.offsetWidth, h = el.offsetHeight;
-  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, ev.clientX))) + 'px';
-  el.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, ev.clientY))) + 'px';
-  const away = (e) => { if (!el.contains(e.target)) _closeMenu(); };
-  const layer = Layers.open(el, { modal: false, name: 'lookbook menu', onEsc: _closeMenu });
-  _menu = { el, away, layer };
-  setTimeout(() => document.addEventListener('mousedown', away, true), 0);
-}
-
-let _menu = null;
-function _closeMenu() {
-  if (!_menu) return;
-  _menu.el.remove();
-  document.removeEventListener('mousedown', _menu.away, true);
-  Layers.close(_menu.layer);
-  _menu = null;
 }
 
 function _askDeleteLb(anchor, path) {
@@ -765,23 +678,11 @@ function _askDeleteLb(anchor, path) {
     });
 }
 
-// Read once, kept as a data URL: it is what the server wants (imageBase64), and holding the
-// File itself would mean reading it again on every repaint.
-function _takeRef(file) {
-  if (!file || !/^image\//.test(file.type)) return;
-  const fr = new FileReader();
-  fr.onload = () => {
-    _ref = { name: file.name, dataUrl: String(fr.result || '') };
-    _refLb = '';                               // a picture from this computer wins the field
-    _ctx.repaint();
-  };
-  fr.readAsDataURL(file);
-}
-
 async function _make(c) {
   const mode = _mode();
-  if (!mode || _making) return;
+  if (!mode || _making || _why()) return;
   _making = true;
+  _lbSaid = '';
   _ctx.repaint();
   const stage = document.getElementById('mv3-stage');
   const pr = startProgress(stage, {
@@ -801,9 +702,11 @@ async function _make(c) {
     if (!id) throw new Error('the engine did not accept the task');
     const done = await API.awaitTask(id);
     // Until it is filed it is a scratch file with no shelf; filing gives it the path the
-    // shelf and the dressing both use.
+    // shelf and the dressing both use - and puts the photo it was made from in the library
+    // (Images / uploads_lookbooks).
     const filed = await API.fileAs(done.imagePath, 'lookbook', r.gender || '', {
       description: r.description || '', prompt: (r.prompts || [])[0] || '',
+      refToken: r.refToken || '', refName: _ref ? _ref.name : '',
     });
     pr.step();
     pr.finish();
@@ -822,7 +725,7 @@ async function _make(c) {
     _making = false;
     // A refusal from the agent is not a failure of the machinery - it is an answer about what
     // was asked for, and it reads better as that than as an error.
-    _state = /not (a|an)|nothing|gibberish|describe/i.test(msg) ? msg : 'The lookbook failed: ' + msg;
+    _lbSaid = e && e.refused ? msg : 'The lookbook failed: ' + msg;
     _ctx.repaint();
   }
 }

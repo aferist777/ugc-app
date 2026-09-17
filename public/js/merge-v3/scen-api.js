@@ -21,7 +21,12 @@ async function _json(url, opt) {
   const r = await fetch(url, opt);
   let d = null;
   try { d = await r.json(); } catch (e) { /* a 500 with an HTML body */ }
-  if (!r.ok || !d || d.success === false) throw new Error((d && d.error) || `${r.status} ${r.statusText}`);
+  if (!r.ok || !d || d.success === false) {
+    // What kind of "no" it was travels with it: an agent that REFUSED has answered, and a photo
+    // that is GONE from the server's scratch can simply be sent again.
+    throw Object.assign(new Error((d && d.error) || `${r.status} ${r.statusText}`),
+      { status: r.status, refused: !!(d && d.refused), gone: !!(d && d.gone) });
+  }
   return d;
 }
 const _post = (url, body) => _json(url, {
@@ -109,8 +114,25 @@ export async function awaitTask(taskId, onTick) {
 // a photo alone EXTRACTS the outfit from it, a sentence alone draws one from nothing, and
 // both together read the photo and apply the sentence to it. The answer is a task to wait on.
 
-/** @returns { mode, taskIds, gender } */
+/** @returns { mode, taskIds, gender, description, refToken } */
 export const makeLookbook = (body) => _post('/api/scen3/gen/lookbook', body);
+
+// ── Making an environment ───────────────────────────────────────────────────
+// The saved places, what the agent wrote about each, and the maker. The maker can answer in
+// two ways: a task to wait on, or - for a picture with no place in it - a few places to pick
+// from, with nothing generated yet (routes/scen3.js, POST /scen3/gen/env).
+
+/** Every picture on the environments shelf. */
+export const environments = () => _json('/api/gallery/environments').then(d => d.files || []);
+
+/** { "<path>": { description, prompt, from, at } } - an environment made before has no entry. */
+export const envMeta = () => _json('/api/scen3/env-meta').then(d => d.meta || {});
+
+/**
+ * @param body { prompt, imageBase64 | refToken | imagePath, choices }
+ * @returns { choose, why, options, refToken } or { mode, taskId, prompt, description, refToken }
+ */
+export const makeEnvironment = (body) => _post('/api/scen3/gen/env', body);
 
 /**
  * File a finished generation into a shared library - a lookbook here - and get back the path
