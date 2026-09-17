@@ -433,7 +433,7 @@ async function _onApply() {
       // dressed looks join the character's own library
       const saved = await obrazSave({
         charId: _sel.id, charName: _sel.name, imagePath: s.imagePath,
-        gender: _sel.gender || '', lookbookPath: mode === 'apply' ? _selectedLbs[0] : '', engine: _engine(),
+        gender: _sel.gender || '', lookbookPath: mode === 'apply' ? _selectedLbs[0] : '', engine: r.engine || _engine(),
       });
       pr.step(); pr.finish();
 

@@ -75,8 +75,11 @@ export const lookbooks = () => _json('/api/gallery/lookbooks').then(d => d.files
  */
 export const lookbookMeta = () => _json('/api/scen3/lookbook-meta').then(d => d.meta || {});
 
-/** Start the dressing. Answers a taskId to wait on - engines take a minute. */
-export const dress = (body) => _post('/api/scen3/gen/dress', body).then(d => d.taskId);
+/**
+ * Start the dressing. Answers { taskId, engine }: the task to wait on - engines take a minute -
+ * and the model the server actually used, which is what the look should be recorded as.
+ */
+export const dress = (body) => _post('/api/scen3/gen/dress', body).then(d => ({ taskId: d.taskId, engine: d.engine || '' }));
 
 /**
  * File a finished dressing as one of the character's looks. Returns { path, obrazId }: the

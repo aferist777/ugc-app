@@ -121,8 +121,6 @@ function _paint() {
     info.insertBefore(row, info.firstChild);
   }
 
-  const open = $('[data-x="open"]', _ov);
-  open.href = it.media || '#';
   _paintActions(it);
   if (typeof _onIndex === 'function') _onIndex(_at, it);
 }
@@ -203,7 +201,6 @@ export function openViewer(items, index, opts) {
         <span class="lib-view-count"></span>
         <span class="sp"></span>
         <span class="lib-view-acts"></span>
-        <a class="lib-btn" data-x="open" target="_blank" rel="noopener" title="Open the file in a new tab">Open</a>
         <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
       </div>
       <div class="lib-view-body">

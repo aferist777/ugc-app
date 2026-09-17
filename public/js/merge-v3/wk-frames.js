@@ -688,7 +688,12 @@ function _lbTile(path, on, pick) {
 // The viewer the Library uses, so a lookbook is looked at the same way wherever it is met -
 // with, in the column beside it, what the agent wrote about it when it was made. One made
 // before that existed has nothing to say, and says nothing rather than saying "unknown".
-function _openLb(path) {
+//
+// READ AGAIN AT EVERY OPEN. The shelf's copy is taken the first time the shelf is read, and the
+// lookbook most likely to be opened is the one just made - after that copy, so it opened with
+// an empty column. One small local request per open is the price of never being stale.
+async function _openLb(path) {
+  try { _lbMetaMap = (await API.lookbookMeta()) || {}; } catch (e) { /* what was known before */ }
   const meta = (_lbMetaMap && _lbMetaMap[path]) || {};
   const rows = [];
   if (meta.description) rows.push(['description', meta.description]);
@@ -837,11 +842,11 @@ async function _apply(c) {
   const stage = document.getElementById('mv3-stage');
   const pr = startProgress(stage, { label: 'Dressing ' + c.name, total: 1, estimateMs: 60000 });
   try {
-    const taskId = await API.dress({ basePath: base, lookbookPath: lb, note: '', engine: _engine() });
-    const done = await API.awaitTask(taskId);
+    const job = await API.dress({ basePath: base, lookbookPath: lb, note: '', engine: _engine() });
+    const done = await API.awaitTask(job.taskId);
     const saved = await API.saveLook({
       charId: c.id, charName: c.name, imagePath: done.imagePath,
-      gender: c.gender || '', lookbookPath: lb, engine: _engine(),
+      gender: c.gender || '', lookbookPath: lb, engine: job.engine || _engine(),
     });
     pr.step();
     pr.finish();

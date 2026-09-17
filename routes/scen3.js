@@ -486,9 +486,17 @@ const KNOLL_TAIL =
 
 // A mascot or full-body costume cannot be read flat - it is one shell, and laid out it looks
 // like a heap. That is the one case where something wears it, and it is a plain mannequin.
+//
+// THE FACE OPENING IS OPEN. Real mascot suits hide the wearer behind a dark one-way mesh, and
+// the agent knows it: left alone it draws one, the dressing then puts the character's face
+// BEHIND it, and at the size a sheet is rendered the mesh reads as grain all over the face
+// (the owner's bus costume, 2026-09-17). The person in this costume speaks to the camera.
+const NO_MESH =
+  ' The face opening is OPEN: no mesh, no net, no screen, no grille, no glass, no visor, no veil and no tinted panel across it.';
 const MASCOT_TAIL =
   ' Show the costume as a single complete piece, standing, worn by a plain featureless neutral-grey mannequin'
   + ' with no face, no hair and no skin detail — the mannequin is there only to show how the costume sits, and must not read as a person.'
+  + NO_MESH + ' The mannequin head shows through it freely.'
   + ' Full length, nothing cropped, front view. Show it EXACTLY ONCE: one costume, no second view, no duplicates, no detail insets.'
   + ' Pure white seamless background (#FFFFFF), soft even lighting, sharp focus, high detail.'
   + ' No text, no labels, no watermark. 1:1 square.';
@@ -496,7 +504,8 @@ const MASCOT_TAIL =
 // Dressing keeps the sheet's composition; only what is worn may change.
 const DRESS_LOCK =
   ' Keep the SAME person, the SAME face, the SAME body, the SAME pose, the SAME framing, crop and background exactly as in the source image.'
-  + ' Change ONLY what the person is wearing. Do not add text, logos or watermarks.';
+  + ' Change ONLY what the person is wearing. Nothing covers the face: no mesh, no net, no veil, no visor, no screen over it.'
+  + ' Do not add text, logos or watermarks.';
 
 // A MASCOT SUIT IS NOT CLOTHING. It is a shell with its own size and shape, and the person
 // goes inside it: the head is inside the head, the arms are inside the arms, and the body it
@@ -507,7 +516,8 @@ const COSTUME_LOCK =
   + ' thick and padded where the reference is thick, and it does NOT follow the body underneath.'
   + ' Do not paint the costume onto the skin, do not make it skin-tight, do not turn it into a printed bodysuit or leotard.'
   + ' Keep the SAME framing, crop, camera and background as the source image, and keep the pose readable.'
-  + ' If the costume has a head or mask, it covers the head; show the person face only where the costume has an opening for it.'
+  + ' The person face shows in the costume face opening - the SAME face as in the source image, fully visible, sharp and unobstructed.'
+  + ' There is NO mesh, net, screen, grille, glass, visor, veil or tinted panel over the face: where the costume reference has one, that part is an open hole.'
   + ' Do not add text, logos or watermarks.';
 
 /**
@@ -528,6 +538,7 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
     'Then write ONE image-generation prompt, 80-160 words, telling the model to dress the person from IMAGE 1 in it.',
     'Describe the garments or the costume part by part, naming colours, materials and how each part sits on the body. Name each item once.',
     'For a costume, say plainly that the person is inside it, that it keeps its own bulk and proportions and does not follow the body underneath, and where the person face shows.',
+    'The face always shows fully, uncovered, in an OPEN face opening - never behind mesh, a net, a screen, glass, a visor or a veil. If IMAGE 2 or its description puts one there, write that the opening is open instead.',
     'Never describe the background, the camera or the pose - those stay as they are in IMAGE 1.',
     'Answer with JSON only: {"kind":"outfit"|"costume","prompt":"..."}',
   ].join(' ')
@@ -591,6 +602,7 @@ async function _readLookbookIdea(note, imageUrl) {
     'kind is "costume" for mascot suits, full-body character costumes and cosplay shells; "outfit" for ordinary clothing.',
     'prompt: an image-generation prompt for the picture itself, 120-220 words, garment by garment - every item, its colour, fabric, cut, fastenings, trims, shoes and accessories. Name each item ONCE. Describe ONLY the clothing or costume: no person, no face, no body, no pose, no scene, no background - those are added separately.',
     'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
+    'A costume ALWAYS leaves the wearer face uncovered in an open face opening, in the prompt and in the description alike: never mesh, a net, a screen, glass, a visor or a veil over it. Whoever wears it will speak to the camera, and the face has to be seen.',
   ].join(' ');
   const ask = rules
     + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
@@ -626,6 +638,9 @@ async function _readLookbookIdea(note, imageUrl) {
 // opaque, and "opaque" is not a colour.
 const LB_MODEL_I2I = 'gpt-image-2-5-sunburst-image-to-image';
 const LB_MODEL_T2I = 'gpt-image-2-5-sunburst-text-to-image';
+// A dressed look is rendered at 4K (see /scen3/gen/dress). Lookbooks stay at 2K: a flat outfit
+// on white is read for what it is, not looked into.
+const DRESS_RES = '4K';
 
 const _lbTask = (prompt, urls) => (urls && urls.length
   ? _kieTask(LB_MODEL_I2I, { prompt, input_urls: urls, aspect_ratio: '1:1', resolution: '2K', background: 'opaque' })
@@ -1623,17 +1638,22 @@ router.post('/scen3/gen/dress', async (req, res) => {
 
     // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
     const aspect = (await _ratioOf(base)) || 'match_input_image';
-    // The same model the lookbooks are made with, on the owner's instruction. 2K: the result
-    // is a reference sheet that every frame of the ad is built from, so it is the one picture
-    // in the chain that must not be soft.
+    // The same model the lookbooks are made with, on the owner's instruction. 4K by default
+    // (the owner, 2026-09-17): the result is a reference sheet that every frame of the ad is
+    // built from, so it is the one picture in the chain that must not be soft - and the model's
+    // "2K" is 2048 on the LONG side, which leaves a 16:9 sheet 2048x1152 and the portrait on it
+    // a few hundred pixels wide.
     const tid = await _kieTask(LB_MODEL_I2I, {
       prompt, input_urls: urls, aspect_ratio: aspect === 'match_input_image' ? 'auto' : aspect,
-      resolution: '2K', background: 'opaque',
+      resolution: DRESS_RES, background: 'opaque',
     });
     if (!tid) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
     _track(tid, 'dressed');
-    console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length}`);
-    res.json({ success: true, mode: lb ? 'apply' : 'redress', kind, taskId: tid, prompt });
+    console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
+    // WHICH ENGINE MADE IT, for the look's record. The pages still send their own engine setting
+    // when they save the look, and that setting has not decided anything here since the dressing
+    // moved to this model - a look recorded as nano-banana-2 was not made by it.
+    res.json({ success: true, mode: lb ? 'apply' : 'redress', kind, taskId: tid, prompt, engine: LB_MODEL_I2I });
   } catch (e) {
     console.error('[scen3/gen/dress]', e.message);
     res.status(500).json({ success: false, error: e.message });
