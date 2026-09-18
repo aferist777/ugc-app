@@ -22,6 +22,11 @@ async function _json(url, opt) {
   let d = null;
   try { d = await r.json(); } catch (e) { /* a 500 with an HTML body */ }
   if (!r.ok || !d || d.success === false) {
+    // A 404 with no JSON is a route the running server does not have: the page is newer than the
+    // app that serves it (right after an update, before a restart). Said as that.
+    if (!d && r.status === 404) {
+      throw Object.assign(new Error('This is newer than the running app - close UGC Studio and open it again to finish the update.'), { status: 404 });
+    }
     // What kind of "no" it was travels with it: an agent that REFUSED has answered, and a photo
     // that is GONE from the server's scratch can simply be sent again.
     throw Object.assign(new Error((d && d.error) || `${r.status} ${r.statusText}`),

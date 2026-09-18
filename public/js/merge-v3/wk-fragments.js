@@ -171,10 +171,18 @@ const _poseById = (id) => ((_kit && _kit.poses) || []).find(x => x.id === id) ||
 function _adopt(r) {
   if (r && r.project && _ctx && _ctx.project) Object.assign(_ctx.project, r.project);
 }
+// A page NEWER than the running server is a real case here: the app serves these files from disk as
+// they are now, but its routes are the ones it started with. Right after an update a button can call
+// a route the running server does not have yet, and the answer is an HTML 404 page - which is said
+// as what it is, not as a JSON parse error.
 async function _post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(x => x.json());
-  if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let r = null;
+  try { r = await res.json(); } catch (e) { r = null; }
+  if (!r) {
+    throw new Error(res.status === 404 ? 'This is newer than the running app - close UGC Studio and open it again to finish the update.' : 'the server answered ' + res.status + ' ' + res.statusText);
+  }
+  if (!r.success) throw new Error(r.error || 'refused');
   return r;
 }
 
