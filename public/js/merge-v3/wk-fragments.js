@@ -31,7 +31,9 @@ const CEILING_FALLBACK = 30;
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
 
 let _ctx = null;
-let _open = -1;                           // the open line, 0-based; -1 until the project is known
+// The open line, 0-based. -1 is NONE open - the right column then speaks for every fragment at
+// once (owner, 2026-09-18). null is "not decided yet", before the project is known.
+let _open = null;
 let _key = '';                            // the project it belongs to
 let _asked = _urlLine();                  // ?line=N (1-based) - how the Alerts list comes back here
 let _kit = null;                          // tiers and motion presets, read once
@@ -50,12 +52,17 @@ function _urlLine() {
 function _remember() {
   try {
     const all = JSON.parse(localStorage.getItem(KEY) || '{}');
-    all[_key] = _open;
+    all[_key] = _open < 0 ? 'all' : _open;
     localStorage.setItem(KEY, JSON.stringify(all));
   } catch (e) { /* a private window */ }
 }
+// What was open when this project was last left: a line, 'all', or - never been here - the first.
 function _remembered() {
-  try { const v = (JSON.parse(localStorage.getItem(KEY) || '{}') || {})[_key]; return Number.isInteger(v) ? v : -1; } catch (e) { return -1; }
+  try {
+    const v = (JSON.parse(localStorage.getItem(KEY) || '{}') || {})[_key];
+    if (v === 'all') return -1;
+    return Number.isInteger(v) && v >= 0 ? v : 0;
+  } catch (e) { return 0; }
 }
 
 // ── What a line has ─────────────────────────────────────────────────────────
@@ -173,10 +180,10 @@ export function paint(host, ctx) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the first.
-  if (_key !== ctx.key) { _key = ctx.key; _open = -1; _listAt = 0; }
-  if (_open < 0) _open = _asked >= 0 ? _asked : _remembered();
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; }
+  if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
-  if (!(_open >= 0 && _open < lines.length)) _open = 0;
+  if (_open >= lines.length) _open = lines.length ? 0 : -1;
 
   const scroll = el('div', 'mv3-wk-scroll is-split');
   root.appendChild(scroll);
@@ -196,8 +203,9 @@ export function paint(host, ctx) {
     return;
   }
   if (missing.length) _gate(right, missing);
+  else if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
-  _stage(p, lines[_open], _open);
+  _stage(p, _open < 0 ? null : lines[_open], _open);
 }
 
 function _note(text, bad) {
@@ -236,20 +244,8 @@ function _controls(host, lines, missing) {
   const blocked = missing.length > 0;
   const v = _video();
 
-  // The way clips are made. Seedance is visible so it is known to be coming, and not pressable.
-  const modes = el('div', 'mv3-wk-fmodes');
-  const kling = el('button', 'mv3-sc-tab is-on', 'kling avatar');
-  kling.type = 'button';
-  kling.disabled = true;
-  kling.title = 'One clip per line: the frame speaks the read';
-  const seed = el('button', 'mv3-sc-tab is-soon', 'seedance 2.0 mini · soon');
-  seed.type = 'button';
-  seed.disabled = true;
-  seed.title = 'In development: one wide shot over several lines, as one clip';
-  modes.append(kling, seed);
-  host.appendChild(modes);
-
-  // The tier and the motion, for every clip of the project.
+  // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
+  // in the list so it is known to be coming, and cannot be picked yet.
   const sets = el('div', 'mv3-wk-fsets');
   const tier = el('select', 'mv3-wk-vsel is-small is-tier');
   tier.title = 'How sharp the clips are, and what a second of them costs';
@@ -261,7 +257,24 @@ function _controls(host, lines, missing) {
   }
   tier.disabled = _saving || !_kit;
   tier.addEventListener('change', () => _saveVideo({ quality: tier.value }));
-  const motion = el('select', 'mv3-wk-vsel is-small');
+  const model = el('select', 'mv3-wk-vsel is-small is-model');
+  model.title = 'How clips are made';
+  const kling = el('option', '', 'kling avatar');
+  kling.value = 'kling';
+  kling.title = 'One clip per line: the frame speaks the read';
+  const seed = el('option', '', 'seedance 2.0 mini · soon');
+  seed.value = 'seedance';
+  seed.disabled = true;
+  seed.title = 'In development: one wide shot over several lines, as one clip';
+  model.append(kling, seed);
+  model.value = 'kling';
+  model.disabled = _saving;
+  sets.append(tier, model);
+  host.appendChild(sets);
+
+  // The motion, for every clip of the project - its own row, so its name can be read.
+  const moves = el('div', 'mv3-wk-fsets');
+  const motion = el('select', 'mv3-wk-vsel is-small is-wide');
   const preset = ((_kit && _kit.presets) || []).find(x => x.id === v.preset);
   motion.title = preset ? preset.note : 'How the person moves while speaking - one for the whole script';
   for (const m of (_kit && _kit.presets) || []) {
@@ -272,8 +285,8 @@ function _controls(host, lines, missing) {
   }
   motion.disabled = _saving || !_kit;
   motion.addEventListener('change', () => _saveVideo({ preset: motion.value }));
-  sets.append(tier, motion);
-  host.appendChild(sets);
+  moves.appendChild(motion);
+  host.appendChild(moves);
 
   // What is done to all of them at once - here so its place is known; they come with their phases.
   const acts = el('div', 'mv3-wk-facts');
@@ -335,14 +348,47 @@ function _row(p, l, i) {
   dot(_clipState(l), 'clip');
   row.appendChild(dots);
 
-  row.title = 'Fragment ' + (i + 1);
+  row.title = i === _open ? 'Fragment ' + (i + 1) + ' - press again to see all fragments' : 'Fragment ' + (i + 1);
+  // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
-    if (_open === i) return;
-    _open = i;
+    _open = _open === i ? -1 : i;
     _remember();
     _ctx.repaint();
   });
   return row;
+}
+
+// ── The right column with no fragment open: all of them ─────────────────────
+// What is shared by every clip will live here (owner, 2026-09-18) - which settings exactly is still
+// to be decided, and one idea is drawing first frames by hand, once, for several lines at a time
+// instead of one per fragment. For now it says where the script stands.
+function _all(host, p, lines) {
+  const n = lines.length;
+  const read = lines.filter(l => _readState(l) === 'ok').length;
+  const framed = lines.filter(l => _frameOf(p, l)).length;
+  const clipped = lines.filter(l => _clipState(l) === 'ok').length;
+  const secs = lines.reduce((a, l) => a + (((_take(l) || {}).dur) || 0), 0);
+
+  const top = el('div', 'mv3-wk-fhead');
+  top.appendChild(el('span', 'mv3-wk-ftitle', 'all fragments'));
+  top.appendChild(el('span', 'mv3-wk-vsub', n + (n === 1 ? ' line' : ' lines') + (secs ? ' · ' + secs.toFixed(1) + ' s read' : '')));
+  host.appendChild(top);
+
+  const stat = el('div', 'mv3-wk-fstats');
+  const cell = (label, done) => {
+    const c = el('div', 'mv3-wk-fstat' + (done === n ? ' is-done' : ''));
+    c.appendChild(el('div', 'mv3-wk-fstat-n', done + '/' + n));
+    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
+    stat.appendChild(c);
+  };
+  cell('read', read);
+  cell('frames', framed);
+  cell('clips', clipped);
+  host.appendChild(stat);
+
+  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'For every clip'));
+  host.appendChild(el('div', 'mv3-wk-fsoon', 'Settings shared by every fragment will be here - which ones is still to be decided. One idea: drawing first frames by hand, once, for several lines at a time instead of one per fragment.'));
+  host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
 // ── The right column: the open fragment ─────────────────────────────────────
@@ -443,17 +489,16 @@ function _fragment(host, p, l, i) {
 // The open fragment: its clip when it has one (the poster, until the clips phase plays it), else
 // its frame; with neither, what the frame will be made of - the person in their look over the place.
 function _stage(p, l, i) {
-  if (!l) { PV.showStill('', ''); return; }
+  const cast = p.casting || {};
+  const pair = () => (cast.obrazImage || cast.locationImage
+    ? PV.showPair(cast.obrazImage ? derived(cast.obrazImage, 'main') : '', cast.locationImage ? derived(cast.locationImage, 'main') : '')
+    : PV.showStill('', ''));
+  if (!l) { pair(); return; }
   const c = _clipOf(l);
   if (c && c.thumb) { PV.showStill(c.thumb, 'fragment ' + (i + 1) + ' · clip'); return; }
   const fr = _frameOf(p, l);
   if (fr) { PV.showStill(derived(fr.preview || fr.path, 'main'), 'fragment ' + (i + 1)); return; }
-  const cast = p.casting || {};
-  if (cast.obrazImage || cast.locationImage) {
-    PV.showPair(cast.obrazImage ? derived(cast.obrazImage, 'main') : '', cast.locationImage ? derived(cast.locationImage, 'main') : '');
-  } else {
-    PV.showStill('', '');
-  }
+  pair();
 }
 
 /** Leaving the step stops the read that was playing. */

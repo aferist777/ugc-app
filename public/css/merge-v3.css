@@ -1971,3 +1971,14 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-fstale{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--warn, oklch(.72 .15 75))}
 /* The tier is short and fixed; the motion preset gets what is left of the row, so its name is read. */
 .mv3-wk-vsel.is-small.is-tier{flex:0 0 auto; width:auto}
+/* The model takes what the tier leaves of its row; the motion has a row of its own. */
+.mv3-wk-vsel.is-small.is-model{flex:1 1 auto}
+.mv3-wk-vsel.is-small.is-wide{flex:1 1 100%}
+/* No fragment open: where the whole script stands, three numbers across. */
+.mv3-wk-fstats{display:flex; gap:6px; margin:4px 0 2px}
+.mv3-wk-fstat{
+  flex:1 1 0; padding:7px 8px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface);
+}
+.mv3-wk-fstat.is-done{border-color:var(--success, oklch(.72 .15 150))}
+.mv3-wk-fstat-n{font:700 15px/1.1 var(--font); color:var(--ink)}
+.mv3-wk-fstat-l{margin-top:2px; font:600 9px/1.2 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
