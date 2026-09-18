@@ -1910,3 +1910,64 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-lnum{font:600 9.5px/1.25 var(--font); color:var(--muted)}
 .mv3-wk-ldur{font:400 8.5px/1.25 var(--font); color:var(--muted); opacity:.8}
 .mv3-wk-line.is-stale .mv3-wk-ldur{color:var(--warn, oklch(.72 .15 75)); opacity:1}
+
+/* ── Fragments (js/merge-v3/wk-fragments.js) ───────────────────────────────────────────────────
+   The setting step's two columns again: the script on the left, the open fragment on the right. */
+.mv3-wk-frags{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
+.mv3-wk-half.is-frags{
+  flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; padding:9px 7px 0;
+  display:flex; flex-direction:column; gap:6px; border-right:1px solid var(--border-soft);
+}
+.mv3-wk-half.is-frags > *{flex:0 0 auto}
+.mv3-wk-half.is-frags .mv3-ins-head.is-wk{padding:0 0 2px; margin:0}
+.mv3-wk-fmodes, .mv3-wk-fsets, .mv3-wk-facts{display:flex; flex-wrap:wrap; gap:4px}
+.mv3-sc-tab.is-soon{opacity:.5}
+.mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
+/* The script scrolls; everything above it stays. */
+.mv3-wk-half.is-frags > .mv3-wk-flist{flex:1 1 auto; min-height:0; overflow-y:auto; margin:2px -7px 0 0; padding:0 7px 8px 0}
+.mv3-wk-frow{
+  display:flex; align-items:center; gap:7px; width:100%; padding:5px 6px; margin:0 0 4px; text-align:left; cursor:pointer;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--ink);
+}
+.mv3-wk-frow:hover{border-color:var(--border)}
+.mv3-wk-frow.is-open{border-color:var(--primary)}
+.mv3-wk-fthumb{
+  flex:0 0 auto; width:22px; height:39px; border-radius:3px; overflow:hidden; background:var(--bg);
+  border:1px solid var(--border-soft);
+}
+.mv3-wk-fthumb.is-empty{border:1px dashed var(--border)}
+.mv3-wk-fthumb img{width:100%; height:100%; object-fit:cover; display:block}
+.mv3-wk-ftext{
+  flex:1 1 auto; min-width:0; font:400 10.5px/1.4 var(--font); color:var(--ink);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+/* Three marks: the read, the frame, the clip - green done, amber stale, hollow not yet. */
+.mv3-wk-fdots{flex:0 0 auto; display:flex; gap:3px}
+.mv3-wk-fdot{width:7px; height:7px; border-radius:50%; border:1px solid var(--border)}
+.mv3-wk-fdot.is-ok{background:var(--success, oklch(.72 .15 150)); border-color:var(--success, oklch(.72 .15 150))}
+.mv3-wk-fdot.is-stale{background:var(--warn, oklch(.72 .15 75)); border-color:var(--warn, oklch(.72 .15 75))}
+/* The open fragment. */
+.mv3-wk-fhead{display:flex; align-items:center; gap:7px; margin:2px 0 4px}
+.mv3-wk-ftitle{font:700 12px/1.2 var(--font); color:var(--ink)}
+.mv3-wk-flink{
+  margin-left:auto; padding:0; border:0; background:none; cursor:pointer;
+  font:600 10px/1.2 var(--font); color:var(--muted);
+}
+.mv3-wk-vfoot .mv3-wk-flink{margin-left:8px}
+.mv3-wk-flink:hover{color:var(--primary)}
+.mv3-wk-fwords{margin:0 0 6px; font:400 11.5px/1.5 var(--font); color:var(--ink)}
+.mv3-wk-fsets.is-shot{margin:0 0 4px}
+.mv3-wk-fsoon{margin:3px 0 4px; font:400 10px/1.45 var(--font); color:var(--muted); font-style:italic}
+.mv3-wk-fframe-row{display:flex; gap:10px; align-items:flex-start}
+.mv3-wk-fframe{
+  flex:0 0 auto; width:84px; height:149px; border-radius:var(--r-sm); overflow:hidden; background:var(--bg);
+  border:1px solid var(--border-soft); display:flex; align-items:center; justify-content:center;
+}
+.mv3-wk-fframe.is-empty{border:1px dashed var(--border); color:var(--muted); font:600 9.5px/1 var(--font)}
+.mv3-wk-fframe img{width:100%; height:100%; object-fit:cover; display:block}
+.mv3-wk-fside{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:4px}
+.mv3-wk-vmore[disabled]{opacity:.55; cursor:default}
+.mv3-wk-vmore.is-go{border-color:var(--primary); color:var(--primary)}
+.mv3-wk-fstale{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--warn, oklch(.72 .15 75))}
+/* The tier is short and fixed; the motion preset gets what is left of the row, so its name is read. */
+.mv3-wk-vsel.is-small.is-tier{flex:0 0 auto; width:auto}

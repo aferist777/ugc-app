@@ -3410,6 +3410,10 @@ const VOICE_PROVIDERS = ['elevenlabs'];
 const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   return {
+    // Which way the fragments step makes its clips (docs/local-app/PLAN.md, fragments): one clip per
+    // line through Kling avatar, or - not built yet - one wide shot over several lines through
+    // Seedance. Kling until the other exists.
+    mode:    s.mode === 'seedance' ? 'seedance' : 'kling',
     model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
     quality: MP.qualityById(s.quality) ? s.quality : MP.DEFAULT_QUALITY,
@@ -3525,9 +3529,13 @@ router.post('/scen3/projects', (req, res) => {
       // the casting - must not put the old one back. Every caller sends the keys it changed.
       const casting = (b.casting && typeof b.casting === 'object')
         ? { ...(list[i].casting || {}), ...b.casting } : undefined;
+      // The clip settings are merged the same way: a page changing the tier sends the tier, and
+      // the preset it did not touch stays what it is on disk rather than what the page last saw.
+      const video = (b.video && typeof b.video === 'object')
+        ? { ...(list[i].video || {}), ...b.video } : undefined;
       // The owner is pinned like the id: a save cannot hand a project to somebody else.
       const merged = _normProject({
-        ...list[i], ...b, ...(casting ? { casting } : {}),
+        ...list[i], ...b, ...(casting ? { casting } : {}), ...(video ? { video } : {}),
         id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;

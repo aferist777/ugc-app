@@ -1071,5 +1071,9 @@ function _note(text, bad) {
   return _el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), text);
 }
 
-/** Painted over? Drop the enlargement with it. */
-export function leave() { _peekHide(); }
+/** Painted over, or the step is left (js/merge-v3/workshop.js, setStep): drop the enlargement,
+ *  and stop a voice sample that was playing. */
+export function leave() {
+  _peekHide();
+  VOICE.leave();
+}

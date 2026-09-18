@@ -89,6 +89,9 @@ function _remembered() {
 export function setStep(id) {
   if (!STEPS.some(s => s.id === id)) return;
   if (_step === id) return;
+  // The step being left lets go of what it was doing on its own - a read still playing.
+  const was = _loaded[_step];
+  if (was && typeof was.leave === 'function') { try { was.leave(); } catch (e) { /* it is going anyway */ } }
   _step = id;
   _remember(id);
   _paintChips();
@@ -239,7 +242,7 @@ export function initWorkshop() {
 // goes step by step as each is built, and the page it points at goes in phase G.
 const MODULES = {
   setting: () => import('./wk-setting.js'),
-  // fragments: () => import('./wk-fragments.js'),    ← F
+  fragments: () => import('./wk-fragments.js'),
 };
 const _loaded = {};
 
@@ -256,7 +259,7 @@ export function paint(host) {
     // a step is open - a finished look goes straight into the casting (lib/gen-jobs.js), and the
     // panel has to read it back rather than trust the copy it was painted from.
     if (mod) {
-      mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload });
+      mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload, goStep: setStep });
       // Again, because the step may have changed where it is WHILE painting - an address asking for
       // a level it cannot open (a lookbook with nobody cast) lands on the one it can, and the route
       // in the header has to say the place that is actually on screen.
