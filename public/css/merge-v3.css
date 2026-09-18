@@ -1982,3 +1982,29 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-fstat.is-done{border-color:var(--success, oklch(.72 .15 150))}
 .mv3-wk-fstat-n{font:700 15px/1.1 var(--font); color:var(--ink)}
 .mv3-wk-fstat-l{margin-top:2px; font:600 9px/1.2 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+
+/* F2 - the shot and the animation prompt of a fragment. */
+.mv3-wk-fsets.is-shot{align-items:center}
+.mv3-wk-vsel.is-small.is-framing{flex:0 0 auto}
+.mv3-wk-vsel.is-small.is-pose{flex:1 1 140px}
+.mv3-wk-vsel.is-small.is-camera{flex:0 0 auto}
+/* The mannequin of the chosen pose, beside its dropdown: the choice seen, not only named. */
+.mv3-wk-fman{
+  flex:0 0 auto; width:26px; height:40px; border-radius:3px; overflow:hidden; background:var(--bg);
+  border:1px solid var(--border-soft);
+}
+.mv3-wk-fman.is-empty{border-style:dashed}
+.mv3-wk-fman img{width:100%; height:100%; object-fit:cover; display:block}
+.mv3-wk-flabel{margin:6px 0 3px; font:700 8.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.mv3-wk-flabel.is-row{display:flex; align-items:center; gap:8px}
+.mv3-wk-flabel .mv3-wk-flink{margin-left:0; text-transform:none; letter-spacing:0}
+.mv3-wk-fedited{color:var(--warn, oklch(.72 .15 75)); text-transform:none; letter-spacing:0; font-weight:600}
+.mv3-wk-ftext-in{
+  width:100%; padding:5px 7px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
+  font:400 11px/1.45 var(--font);
+}
+.mv3-wk-ftext-in:focus{outline:none; border-color:var(--primary)}
+.mv3-wk-ftext-in[disabled]{opacity:.6}
+.mv3-wk-fwhy{margin:4px 0 2px; font:400 10px/1.45 var(--font); color:var(--muted); font-style:italic}
+.mv3-wk-vmore.is-busy{border-color:var(--primary); color:var(--primary)}

@@ -2410,6 +2410,8 @@ router.get('/scen3/motion-presets', (_req, res) => {
     models: MP.VIDEO_MODELS,
     qualities: MP.VIDEO_QUALITIES,
     defaultQuality: MP.DEFAULT_QUALITY,
+    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label })),
+    defaultMood: MP.DEFAULT_MOOD,
   });
 });
 
@@ -3354,6 +3356,9 @@ function _normLine(l) {
     // whole project. Per line it could drift, and two lines showing different takes
     // of the same read has no meaning.
     frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
+    // How this line is filmed and how the person moves on it - the directing agent's reading (the
+    // fragments step, docs/local-app/PLAN.md F2), or null until the script has been read.
+    shot:    _normShot(s.shot),
     audio:   { plain: _normTake((s.audio || {}).plain), tagged: _normTake((s.audio || {}).tagged) },
     // Clips are a LIST per variant, one per first frame. A read has a single take because
     // the words have one right sounding of them, but a fragment can legitimately have a
@@ -3373,6 +3378,28 @@ function _normLine(l) {
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.
     render:  _normRender(s.render),
+  };
+}
+
+// A line's shot. `said` and `mood` are what it was read FROM: a line whose words or whose video's mood
+// have changed since is stale, which is worked out wherever it is shown rather than stored.
+// `motion` is the animation prompt that goes to Kling; `motionAgent` is the agent's own last text
+// for it, kept so a prompt edited by hand survives a new reading and can still be put back.
+function _normShot(sh) {
+  if (!sh || typeof sh !== 'object') return null;
+  const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  return {
+    framing:      str(sh.framing, 40),
+    poseId:       str(sh.poseId, 80),
+    camera:       str(sh.camera, 40),
+    direction:    str(sh.direction, 700),
+    why:          str(sh.why, 300),
+    motion:       str(sh.motion, 900),
+    motionAgent:  str(sh.motionAgent, 900),
+    motionEdited: !!sh.motionEdited,
+    said:         String(sh.said || ''),
+    mood:         str(sh.mood, 40),
+    at:           str(sh.at, 40),
   };
 }
 
@@ -3414,6 +3441,9 @@ const _normVideo = (v) => {
     // line through Kling avatar, or - not built yet - one wide shot over several lines through
     // Seedance. Kling until the other exists.
     mode:    s.mode === 'seedance' ? 'seedance' : 'kling',
+    // The emotion of the whole video (lib/motion-presets.js, MOODS): what the directing agent reads
+    // every shot and animation prompt from.
+    mood:    MP.moodById(s.mood) ? s.mood : MP.DEFAULT_MOOD,
     model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
     quality: MP.qualityById(s.quality) ? s.quality : MP.DEFAULT_QUALITY,
@@ -3616,6 +3646,213 @@ router.post('/scen3/projects/:id/line', (req, res) => {
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, project: _projFull(proj) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE DIRECTING AGENT (the fragments step, docs/local-app/PLAN.md F2)
+//
+// Reads the whole script at once - rhythm is a property of the sequence, not of a line - with the
+// person in their look, the place, and the mood of the video, and for every line chooses a shot
+// size, a pose and a camera FROM THE CATALOGUE, writes the direction of the frame and the animation
+// prompt for Kling, and says why in one line. The owner asked for a director, not a dice: so the
+// rules below are the craft, spelled out, and the server checks whatever comes back against the
+// catalogue before a word of it is stored.
+// ════════════════════════════════════════════════════════════════════════════
+
+const FRAG_BATCH = 5;                     // lines per reading (the owner)
+
+function _scriptCatalogue() {
+  const fo = _loadFrameOpts();
+  const poses = _loadPoses().filter(p => p.active);
+  return { framings: fo.framings, cameras: fo.cameras, poses };
+}
+
+// A choice checked against the catalogue: a shot size that exists, a pose OF that shot size, a camera
+// that exists. What does not fit is replaced by the nearest sensible thing, never refused - a
+// reading of twelve lines is not thrown away for one wrong id.
+function _fitShot(pick, cat) {
+  const f = cat.framings.find(x => x.id === String(pick.framing || '')) || cat.framings.find(x => x.id === 'half-body') || cat.framings[0];
+  const inGroup = cat.poses.filter(p => p.group === f.id);
+  const pose = inGroup.find(p => p.id === String(pick.poseId || pick.pose || '')) || inGroup[0] || null;
+  const cam = cat.cameras.find(x => x.id === String(pick.camera || '')) || cat.cameras.find(x => x.id === 'nat-50') || cat.cameras[0];
+  return { framing: f.id, poseId: pose ? pose.id : '', camera: cam.id };
+}
+
+async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, current }) {
+  const cat = _scriptCatalogue();
+  const moodRec = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
+  const want = (only && only.length) ? only : lines.map((_, i) => i);
+  const rules = [
+    'You are the DIRECTOR and the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a phone camera in one real place, line by line. Every line of the script becomes ONE shot - one clip, cut to the next.',
+    'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet: a portrait and the full body from the front, the side and the back). IMAGE 2 is the place, photographed empty.',
+    'For every line you decide HOW IT IS FILMED - the shot size, the pose, the camera and the direction of the first frame - and HOW THE PERSON MOVES while saying it - the animation prompt. Choose deliberately; every choice has a reason you can state.',
+    '',
+    'THE MOOD OF THE VIDEO is "' + moodRec.label + '": ' + moodRec.guide + ' The mood colours everything - the energy of the poses, the size of the gestures, the expressions, the animation prompts.',
+    '',
+    'THE CRAFT:',
+    '1. Meaning first. The shot serves what the line DOES. A hook, a surprising claim or a call to action: closer and livelier. An explanation, a list or proof: steadier, with room for the hands. Something personal or vulnerable: closer and softer. Doubt or an objection: a guarded pose. The payoff or relief: an open posture.',
+    '2. Rhythm. Two neighbouring lines never share the same shot size AND the same pose - a change between lines is a cut, and cuts hold a viewer. But do not jump every line: build the video from two or three shot sizes, move between them with purpose, and come back to a home shot.',
+    '3. Physically possible HERE. Look at IMAGE 2. A seated pose only where there is something to sit on; a pose against a wall only where there is a free wall; a table or a desk only if the place has one. The person stays in the same place with the same light in every line.',
+    '4. The camera means something. Phone selfie is a direct, intimate talk to the viewer and goes only with the selfie poses. 50mm natural is the neutral default. 85mm portrait is for emotional close lines. Phone rear cam or 35mm documentary feel like somebody else is filming. Webcam is a desk confession. Do not change the camera between neighbouring lines unless the change means something.',
+    '5. The DIRECTION is the first frame, frozen: where the body, the hands and the head are and the expression at the moment the line begins - one or two concrete sentences, physically possible in this place, consistent with the pose. In the FRAME the person does NOT have to look into the lens: they can be caught mid-thought.',
+    '6. The MOTION is the animation prompt for a talking-head avatar model, 25 to 45 words, in this order: what they feel, the expression, the head, the hands, the gaze. It starts from the moment the direction describes. The model keeps the person where the frame put them and hears ONLY expression, head and hands: never write camera moves, zooms, cuts, walking, standing up, turning around, objects or scene changes.',
+    '7. The GAZE lives in the motion: the person speaks into the lens. Looking away is RARE - at most one or two lines in the whole video, only where the words ask for it (remembering, hesitating), and the eyes come back to the lens within the line.',
+    '8. No product in hand, nothing held unless the pose itself holds a phone.',
+    '9. Everything you write is in English, whatever the language of the script.',
+    '',
+    'THE CATALOGUE - choose ONLY from these ids.',
+    'Shot sizes: ' + cat.framings.map(f => f.id + ' (' + f.label + ': ' + f.crop + ')').join('; ') + '.',
+    'Poses - each belongs to ONE shot size, and a pose may only be used with its own shot size: ' + cat.poses.map(p => p.id + ' [' + p.group + '] ' + p.label + ' - ' + p.desc).join('; ') + '.',
+    'Cameras: ' + cat.cameras.map(c => c.id + ' (' + c.label + ': ' + c.summary + ')').join('; ') + '.',
+    'Examples of good animation prompts, for their shape and vocabulary only: ' + MP.MOTION_PRESETS.map(m => '"' + m.prompt + '"').join(' | '),
+    '',
+    placeNote ? 'What is known about the place: ' + placeNote : '',
+    'THE SCRIPT:',
+    ...lines.map((t, i) => (i + 1) + '. ' + t),
+  ];
+  if (only && only.length && current) {
+    const planned = lines.map((_, i) => (current[i] && !want.includes(i)) ? (i + 1) + ': ' + current[i].framing + ' / ' + current[i].poseId + ' / ' + current[i].camera : '').filter(Boolean);
+    if (planned.length) rules.push('The other lines are already planned like this - keep the rhythm with them: ' + planned.join('; ') + '.');
+  }
+  rules.push('Plan the lines ' + want.map(i => i + 1).join(', ') + '.');
+  rules.push('Answer with JSON only: {"lines":[{"n":<line number>,"framing":"<shot size id>","pose":"<pose id>","camera":"<camera id>","direction":"...","motion":"...","why":"<one short sentence>"}]}');
+
+  const content = [
+    { type: 'text', text: rules.filter(x => x !== null).join('\n') },
+    { type: 'image_url', image_url: { url: lookUrl } },
+    { type: 'image_url', image_url: { url: placeUrl } },
+  ];
+  const raw = await _ask([{ role: 'user', content }]);
+  const m = String(raw || '').match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('the agent did not answer with a plan');
+  let plan;
+  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  const out = new Map();
+  for (const r of (Array.isArray(plan && plan.lines) ? plan.lines : [])) {
+    const i = parseInt(r && r.n, 10) - 1;
+    if (!want.includes(i) || out.has(i)) continue;
+    const fit = _fitShot({ framing: r.framing, poseId: r.pose || r.poseId, camera: r.camera }, cat);
+    out.set(i, {
+      ...fit,
+      direction: String(r.direction || '').trim(),
+      motion: String(r.motion || '').trim(),
+      why: String(r.why || '').trim(),
+    });
+  }
+  if (!out.size) throw new Error('the agent planned none of the lines');
+  return out;
+}
+
+/* ── The agent reads the script ──────────────────────────────────────────────
+   POST /api/scen3/fragments/read  { projectId, only } -> { success, project, planned }
+
+   FIVE LINES AT A TIME (the owner, 2026-09-18): all of a script in one answer is a lot for one call.
+   The page sends the batches one after another; each sees the whole script and the lines already
+   planned - fresh ones, read for these words and this mood - so the rhythm holds across a batch's
+   edge. One line is "read again" the same way. Not an Alerts row: an agent's answer in seconds, the
+   way a voice is (decided with the owner).
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/read', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const cast = _normCasting(proj.casting);
+    if (!cast.obrazImage || !cast.locationImage) {
+      return res.status(400).json({ success: false, error: 'cast the character in a look and set the place first' });
+    }
+    const lines = (proj.lines || []).map(_normLine);
+    const words = lines.map(l => l.text);
+    if (!words.some(w => w.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
+    const only = [...new Set((Array.isArray(b.only) ? b.only : []).map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))];
+    if (!only.length) return res.status(400).json({ success: false, error: 'say which lines to read' });
+    if (only.length > FRAG_BATCH) return res.status(400).json({ success: false, error: 'at most ' + FRAG_BATCH + ' lines at a time' });
+    const mood = _normVideo(proj.video).mood;
+
+    const [lookUrl, placeUrl] = await Promise.all([
+      _hostLocal(cast.obrazImage, { verify: true }),
+      _hostLocal(cast.locationImage, { verify: true }),
+    ]);
+    const placeNote = String(((SHELF_META.read('environments') || {})[cast.locationImage] || {}).description || '').slice(0, 1600);
+    // The context is what is planned AND still true: a shot read for other words or another mood
+    // would pull the rhythm towards a video that is no longer this one.
+    const planned = await _readScript({
+      mood, lines: words, only, lookUrl, placeUrl, placeNote,
+      current: lines.map(l => (l.shot && l.shot.said === l.text && l.shot.mood === mood) ? l.shot : null),
+    });
+
+    // Written in one burst against the project as it is NOW, touching only the shots: a read or a
+    // clip that landed while the agent was thinking stays. The words recorded are the ones the agent
+    // read - if they were edited meanwhile, the line is rightly stale.
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === id);
+    if (!p) return res.status(404).json({ success: false, error: 'the project went away' });
+    p.lines = (p.lines || []).map(_normLine);
+    const at = new Date().toISOString();
+    for (const [i, got] of planned) {
+      if (!p.lines[i]) continue;
+      const was = p.lines[i].shot;
+      const keepHand = !!(was && was.motionEdited && was.motion);
+      p.lines[i].shot = _normShot({
+        framing: got.framing, poseId: got.poseId, camera: got.camera,
+        direction: got.direction, why: got.why,
+        motion: keepHand ? was.motion : got.motion,
+        motionAgent: got.motion,
+        motionEdited: keepHand,
+        said: words[i], mood, at,
+      });
+    }
+    p.updatedAt = at;
+    _saveProjects(list);
+    console.log('[scen3/fragments/read] ' + id + ' mood=' + mood + ' planned ' + planned.size + ' of ' + lines.length);
+    res.json({ success: true, project: _projFull(p), planned: [...planned.keys()].map(i => i + 1) });
+  } catch (e) {
+    console.error('[scen3/fragments/read]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+/* ── One shot changed by hand ────────────────────────────────────────────────
+   POST /api/scen3/fragments/shot  { projectId, line, patch: { framing?, poseId?, camera?,
+                                     direction?, motion?, useAgentMotion? } } -> { success, project }
+
+   The same catalogue check as the agent's. A choice made by hand is made for the words as they are
+   now and the mood as it is now, so it is fresh; an animation prompt written by hand is marked so
+   a new reading leaves it alone, and useAgentMotion puts the agent's back.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/shot', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.lines = (p.lines || []).map(_normLine);
+    const i = parseInt(b.line, 10);
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const patch = (b.patch && typeof b.patch === 'object') ? b.patch : {};
+    const was = p.lines[i].shot || {};
+    const next = { ...was };
+    if ('framing' in patch) next.framing = String(patch.framing || '');
+    if ('poseId' in patch) next.poseId = String(patch.poseId || '');
+    if ('camera' in patch) next.camera = String(patch.camera || '');
+    Object.assign(next, _fitShot(next, _scriptCatalogue()));
+    if ('direction' in patch) next.direction = String(patch.direction || '');
+    if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
+    else if ('motion' in patch) {
+      next.motion = String(patch.motion || '');
+      next.motionEdited = next.motion.trim() !== String(was.motionAgent || '').trim();
+    }
+    next.said = p.lines[i].text;
+    next.mood = _normVideo(p.video).mood;
+    next.at = new Date().toISOString();
+    p.lines[i].shot = _normShot(next);
+    p.updatedAt = next.at;
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -4233,9 +4470,10 @@ function _audioCut(p) {
 router.cutClips = _cutClips;
 // The prompt blocks, for tools that must send exactly what the app sends (a model comparison is
 // worthless if the bench says something the routes do not).
+router.FRAG_BATCH = FRAG_BATCH;
 router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL };
 // ...and the two agents that write the long half of those prompts, for the same reason.
-router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea };
+router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, readScript: _readScript };
 router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 

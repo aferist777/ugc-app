@@ -8,13 +8,17 @@
    is shot, the frame, the clip. The list never goes away while a fragment is open: the script is
    one thing, and judging a line means seeing the ones around it.
 
-   PHASE F1 - THE SHELL. Nothing here generates yet. The controls stand where they will work, so the
-   step can be judged as it will look; each says which phase brings it (F2 the agent's reading of
-   the script, F3 the frames, F4 the clips).
+   PHASE F1 - THE SHELL, and F2 - THE READING. The directing agent (routes/scen3.js, _readScript)
+   reads the script five lines at a time against the MOOD of the video - the emotion the person
+   picks once - and gives every line its shot size, pose, camera, the direction of its first frame
+   and its animation prompt for Kling. All of it can be changed by hand; an animation prompt
+   written by hand survives the next reading. Frames (F3) and clips (F4) are still to come; their
+   controls stand where they will work and say which phase brings them.
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
-   scenario project's, as they have always been (routes/scen3.js). The only things written from here
-   are the clip settings - the tier, the motion, the mode - on `project.video`, merged on the server.
+   scenario project's, as they have always been (routes/scen3.js). Written from here: the clip
+   settings - the tier, the mood, the mode - on `project.video`, merged on the server; and each
+   line's `shot`, through its own two routes, which touch nothing else of the line.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as PV from './preview-b.js';
@@ -41,6 +45,12 @@ let _kitState = 'idle';
 let _saving = false;
 let _said = '';
 let _listAt = 0;                          // where the list stood, put back after every repaint
+// The reading. The server takes at most five lines a call (the owner); the page walks the script in
+// those steps and says how far it has got.
+const BATCH = 5;
+let _reading = null;                      // { from, to, total } for the script, { line } for one
+let _readErr = '';
+const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
 
 function _urlLine() {
   try {
@@ -127,11 +137,90 @@ function _playBtn(src, what) {
 function _loadKit(repaint) {
   if (_kitState !== 'idle') return;
   _kitState = 'loading';
-  fetch('/api/scen3/motion-presets').then(r => r.json()).then((d) => {
-    _kit = (d && d.success) ? d : { presets: [], qualities: [] };
+  const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
+  Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-options')]).then(([m, p, f]) => {
+    const opts = (f && f.options) || {};
+    _kit = {
+      qualities: (m && m.qualities) || [],
+      moods: (m && m.moods) || [],
+      poses: (p && p.poses) || [],
+      framings: opts.framings || [],
+      cameras: opts.cameras || [],
+    };
     _kitState = 'done';
-  }).catch(() => { _kit = { presets: [], qualities: [] }; _kitState = 'done'; })
-    .finally(() => repaint());
+  }).finally(() => repaint());
+}
+const _poseById = (id) => ((_kit && _kit.poses) || []).find(x => x.id === id) || null;
+
+// Take the project the server answered with INTO the record the workshop holds (js/merge-v3/
+// workshop.js hands the same object to every paint), not over it.
+function _adopt(r) {
+  if (r && r.project && _ctx && _ctx.project) Object.assign(_ctx.project, r.project);
+}
+async function _post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(x => x.json());
+  if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+  return r;
+}
+
+// ── The reading ─────────────────────────────────────────────────────────────
+// A shot is stale when it was read for other words or for another mood of the video.
+function _shotState(l) {
+  const sh = l && l.shot;
+  if (!sh || !sh.framing) return 'none';
+  return (sh.said === _words(l) && sh.mood === (_video().mood || '')) ? 'ok' : 'stale';
+}
+
+async function _readScript() {
+  const p = _ctx && _ctx.project;
+  const n = ((p && p.lines) || []).length;
+  if (!p || !n || _reading) return;
+  _readErr = '';
+  for (let k = 0; k < n; k += BATCH) {
+    const only = [];
+    for (let j = k; j < Math.min(n, k + BATCH); j++) only.push(j);
+    _reading = { from: k + 1, to: k + only.length, total: n };
+    _ctx.repaint();
+    try {
+      _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only }));
+    } catch (e) {
+      _readErr = 'The agent could not read lines ' + (k + 1) + '–' + (k + only.length) + ': ' + e.message;
+      break;
+    }
+  }
+  _reading = null;
+  _ctx.repaint();
+}
+
+async function _readLine(i) {
+  const p = _ctx && _ctx.project;
+  if (!p || _reading) return;
+  _readErr = '';
+  _reading = { line: i };
+  _ctx.repaint();
+  try {
+    _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only: [i] }));
+  } catch (e) {
+    _readErr = 'The agent could not read line ' + (i + 1) + ': ' + e.message;
+  }
+  _reading = null;
+  _ctx.repaint();
+}
+
+// A change by hand: shown at once, then the server's answer - which is also where a pose that does
+// not belong to a new shot size is replaced by one that does.
+async function _saveShot(i, patch) {
+  const p = _ctx && _ctx.project;
+  if (!p || !p.lines[i]) return;
+  p.lines[i].shot = { ...(p.lines[i].shot || {}), ...patch };
+  _ctx.repaint();
+  try {
+    _adopt(await _post('/api/scen3/fragments/shot', { projectId: p.id, line: i, patch }));
+  } catch (e) {
+    _readErr = 'Could not save it: ' + e.message;
+  }
+  _ctx.repaint();
 }
 const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
 const _tier = () => ((_kit && _kit.qualities) || []).find(q => q.id === _video().quality) || ((_kit && _kit.qualities) || [])[0] || null;
@@ -272,28 +361,33 @@ function _controls(host, lines, missing) {
   sets.append(tier, model);
   host.appendChild(sets);
 
-  // The motion, for every clip of the project - its own row, so its name can be read.
-  const moves = el('div', 'mv3-wk-fsets');
-  const motion = el('select', 'mv3-wk-vsel is-small is-wide');
-  const preset = ((_kit && _kit.presets) || []).find(x => x.id === v.preset);
-  motion.title = preset ? preset.note : 'How the person moves while speaking - one for the whole script';
-  for (const m of (_kit && _kit.presets) || []) {
-    const o = el('option', '', 'motion: ' + m.label);
+  // THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
+  // (owner, 2026-09-18). The agent reads every shot and animation prompt from it; changing it makes
+  // every reading stale.
+  const moods = el('div', 'mv3-wk-fsets');
+  const mood = el('select', 'mv3-wk-vsel is-small is-wide');
+  mood.title = 'The emotion of the whole video: the agent shoots and animates every line from it';
+  for (const m of (_kit && _kit.moods) || []) {
+    const o = el('option', '', 'mood: ' + m.label);
     o.value = m.id;
-    if (m.id === v.preset) o.selected = true;
-    motion.appendChild(o);
+    if (m.id === v.mood) o.selected = true;
+    mood.appendChild(o);
   }
-  motion.disabled = _saving || !_kit;
-  motion.addEventListener('change', () => _saveVideo({ preset: motion.value }));
-  moves.appendChild(motion);
-  host.appendChild(moves);
+  mood.disabled = _saving || !_kit || !!_reading;
+  mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
+  moods.appendChild(mood);
+  host.appendChild(moods);
 
   // What is done to all of them at once - here so its place is known; they come with their phases.
   const acts = el('div', 'mv3-wk-facts');
-  const read = el('button', 'mv3-wk-vmore is-small', 'read the script');
+  const r = _reading;
+  const read = el('button', 'mv3-wk-vmore is-small' + (r && r.total ? ' is-busy' : ''),
+    r && r.total ? 'reading lines ' + r.from + '–' + r.to + ' of ' + r.total + '…' : 'read the script');
   read.type = 'button';
-  read.disabled = true;
-  read.title = blocked ? 'Needs the setting first' : 'The agent reads every line - comes in the next phase (F2)';
+  read.disabled = blocked || !!r || !lines.length;
+  read.title = blocked ? 'Needs the setting first'
+    : 'The agent plans every line - shot, pose, camera, direction, animation - five lines at a time';
+  read.addEventListener('click', () => _readScript());
   const noFrame = lines.filter(l => !_frameOf(_ctx.project, l)).length;
   const frames = el('button', 'mv3-wk-vmore is-small', noFrame ? 'make ' + noFrame + ' frame' + (noFrame === 1 ? '' : 's') : 'every line has a frame');
   frames.type = 'button';
@@ -302,6 +396,7 @@ function _controls(host, lines, missing) {
   acts.append(read, frames);
   host.appendChild(acts);
   if (_said) host.appendChild(_note(_said, true));
+  if (_readErr) host.appendChild(_note(_readErr, true));
 }
 
 function _list(host, p, lines) {
@@ -340,10 +435,11 @@ function _row(p, l, i) {
   const dots = el('div', 'mv3-wk-fdots');
   const dot = (state, what) => {
     const d = el('span', 'mv3-wk-fdot is-' + state);
-    d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'stale' ? 'the words changed since' : 'not yet');
+    d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
   dot(_readState(l), 'read');
+  dot(_shotState(l), 'shot');
   dot(fr ? 'ok' : 'none', 'frame');
   dot(_clipState(l), 'clip');
   row.appendChild(dots);
@@ -365,6 +461,7 @@ function _row(p, l, i) {
 function _all(host, p, lines) {
   const n = lines.length;
   const read = lines.filter(l => _readState(l) === 'ok').length;
+  const shots = lines.filter(l => _shotState(l) === 'ok').length;
   const framed = lines.filter(l => _frameOf(p, l)).length;
   const clipped = lines.filter(l => _clipState(l) === 'ok').length;
   const secs = lines.reduce((a, l) => a + (((_take(l) || {}).dur) || 0), 0);
@@ -382,6 +479,7 @@ function _all(host, p, lines) {
     stat.appendChild(c);
   };
   cell('read', read);
+  cell('shots', shots);
   cell('frames', framed);
   cell('clips', clipped);
   host.appendChild(stat);
@@ -409,17 +507,7 @@ function _fragment(host, p, l, i) {
   host.appendChild(el('div', 'mv3-wk-fwords', '“' + (_words(l) || '…') + '”'));
   if (rs === 'stale') host.appendChild(_note('The words changed after this line was read - read it again in setting & voice.', true));
 
-  // SHOT - how the line is filmed. The agent's reading fills these (F2); they stand here now.
-  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'Shot'));
-  const shot = el('div', 'mv3-wk-fsets is-shot');
-  for (const label of ['shot size', 'pose', 'camera']) {
-    const s = el('select', 'mv3-wk-vsel is-small');
-    s.disabled = true;
-    s.appendChild(el('option', '', label));
-    shot.appendChild(s);
-  }
-  host.appendChild(shot);
-  host.appendChild(el('div', 'mv3-wk-fsoon', 'The agent reads the script and fills these - shot size, the pose for it, the camera and what the person does on this line. Next phase (F2).'));
+  _shotBlock(host, l, i);
 
   // FRAME - the picture the line opens on.
   host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'Frame'));
@@ -445,8 +533,9 @@ function _fragment(host, p, l, i) {
   fbox.appendChild(fside);
   host.appendChild(fbox);
 
-  // CLIP - the frame speaking the read. Why it cannot be made yet is said on the button itself.
+  // CLIP - the frame speaking the read. The animation prompt first: it is what Kling is told.
   host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'Clip'));
+  _motionField(host, l, i);
   const tier = _tier();
   let label;
   let why = '';
@@ -483,6 +572,115 @@ function _fragment(host, p, l, i) {
   } else {
     host.appendChild(el('div', 'mv3-wk-fsoon', 'No clips yet. Made with Kling avatar in phase F4; the clip then plays on the stage.'));
   }
+}
+
+// SHOT - how the line is filmed: the agent's choice, every part of it changeable by hand.
+function _shotBlock(host, l, i) {
+  const sh = l.shot || null;
+  const st = _shotState(l);
+  const busy = !!_reading;
+  const mine = _reading && _reading.line === i;
+
+  const headRow = el('div', 'mv3-wk-vhead is-lib is-row', 'Shot');
+  const acts = el('div', 'mv3-wk-vheadacts');
+  const again = el('button', 'mv3-wk-vmore is-small', mine ? 'reading…' : (sh ? 'read again' : 'read this line'));
+  again.type = 'button';
+  again.disabled = busy || !!_missing(_ctx.project).length;
+  again.title = 'The agent plans this line again, keeping the rhythm with the others';
+  again.addEventListener('click', () => _readLine(i));
+  acts.appendChild(again);
+  headRow.appendChild(acts);
+  host.appendChild(headRow);
+
+  const cat = _kit || { framings: [], poses: [], cameras: [] };
+  const pick = (cls, title, items, value, label, onChange) => {
+    const sel = el('select', 'mv3-wk-vsel is-small ' + cls);
+    sel.title = title;
+    if (!value) { const o = el('option', '', label); o.value = ''; o.disabled = true; o.selected = true; sel.appendChild(o); }
+    for (const it of items) {
+      const o = el('option', '', it.label);
+      o.value = it.id;
+      if (it.title) o.title = it.title;
+      if (it.id === value) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.disabled = busy || !_kit;
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  };
+  const framing = (sh && sh.framing) || '';
+  const row1 = el('div', 'mv3-wk-fsets is-shot');
+  row1.appendChild(pick('is-framing', 'How much of the person is in the frame', cat.framings, framing, 'shot size',
+    (v) => _saveShot(i, { framing: v })));
+  // Only the poses of this shot size: each mannequin belongs to exactly one.
+  const poses = cat.poses.filter(p => !framing || p.group === framing).map(p => ({ id: p.id, label: p.label, title: p.desc }));
+  row1.appendChild(pick('is-pose', 'The body position - one of the mannequins of this shot size', poses, (sh && sh.poseId) || '', 'pose',
+    (v) => _saveShot(i, { poseId: v })));
+  const pose = sh ? _poseById(sh.poseId) : null;
+  const man = el('div', 'mv3-wk-fman' + (pose ? '' : ' is-empty'));
+  if (pose && pose.thumb) {
+    const img = el('img');
+    img.alt = '';
+    img.src = pose.thumb;
+    man.title = pose.label + ' - ' + pose.desc;
+    man.appendChild(img);
+  }
+  row1.appendChild(man);
+  host.appendChild(row1);
+  const row2 = el('div', 'mv3-wk-fsets is-shot');
+  row2.appendChild(pick('is-camera', 'The lens and how it renders', cat.cameras.map(c => ({ id: c.id, label: c.label, title: c.summary })),
+    (sh && sh.camera) || '', 'camera', (v) => _saveShot(i, { camera: v })));
+  host.appendChild(row2);
+
+  host.appendChild(el('div', 'mv3-wk-flabel', 'direction'));
+  host.appendChild(_textField(i, 'direction', (sh && sh.direction) || '', 2,
+    'The first frame, frozen: where the body, the hands and the head are, and the expression as the line begins',
+    (v) => _saveShot(i, { direction: v })));
+  if (sh && sh.why) host.appendChild(el('div', 'mv3-wk-fwhy', sh.why));
+  if (st === 'stale') host.appendChild(_note('The words or the mood of the video changed since this line was read - read it again.', true));
+  if (!sh) host.appendChild(el('div', 'mv3-wk-fsoon', 'Not read yet: "read the script" plans every line, or read this one alone. Anything here can also be set by hand.'));
+}
+
+// The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
+// Written by the agent; a version written by hand stays through the next reading, and the agent's
+// own is one press away.
+function _motionField(host, l, i) {
+  const sh = l.shot || null;
+  const lab = el('div', 'mv3-wk-flabel is-row');
+  lab.appendChild(el('span', '', 'animation prompt'));
+  if (sh && sh.motionEdited) {
+    lab.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
+    if (sh.motionAgent) {
+      const back = el('button', 'mv3-wk-flink', 'use the agent’s');
+      back.type = 'button';
+      back.title = sh.motionAgent;
+      back.disabled = !!_reading;
+      back.addEventListener('click', () => { delete _drafts[i + ':motion']; _saveShot(i, { useAgentMotion: true }); });
+      lab.appendChild(back);
+    }
+  }
+  host.appendChild(lab);
+  host.appendChild(_textField(i, 'motion', (sh && sh.motion) || '', 3,
+    'How the person moves while speaking - the expression, the head, the hands, the gaze. Kling hears nothing else.',
+    (v) => _saveShot(i, { motion: v })));
+}
+
+// A text field that survives a repaint (what is typed is kept by line and field) and saves when the
+// person leaves it, not on every key.
+function _textField(i, field, value, rows, placeholder, save) {
+  const k = i + ':' + field;
+  const box = el('textarea', 'mv3-wk-ftext-in');
+  box.rows = rows;
+  box.placeholder = placeholder;
+  box.value = k in _drafts ? _drafts[k] : value;
+  box.disabled = !!_reading;
+  box.addEventListener('input', () => { _drafts[k] = box.value; });
+  box.addEventListener('change', () => {
+    const v = box.value;
+    delete _drafts[k];
+    if (v.trim() !== String(value || '').trim()) save(v);
+  });
+  return box;
 }
 
 // ── The stage ───────────────────────────────────────────────────────────────
