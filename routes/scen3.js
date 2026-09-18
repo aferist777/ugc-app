@@ -668,18 +668,25 @@ async function _readLookbookIdea(note, imageUrl) {
 }
 
 // ── The picture itself ──────────────────────────────────────────────────────
-// gpt-image-2.5 sunburst, chosen by the owner for lookbooks: 2K, square, opaque. White is
-// asked for in the PROMPT - the model's own background setting only offers transparent or
-// opaque, and "opaque" is not a colour.
-const LB_MODEL_I2I = 'gpt-image-2-5-sunburst-image-to-image';
-const LB_MODEL_T2I = 'gpt-image-2-5-sunburst-text-to-image';
-// A dressed look is rendered at 4K (see /scen3/gen/dress). Lookbooks stay at 2K: a flat outfit
-// on white is read for what it is, not looked into.
+// NANO-BANANA-2 MAKES ALL THREE - the lookbook, the look and the environment - the owner's decision
+// after the A/B of 2026-09-18 (docs/local-app/PLAN.md, "Модель для картинок мастерской"). The
+// gpt-image-2.5 that made them before is gone from the workshop: its "4K" is an upscale in the
+// pixels - halos, over-sharpened edges, surfaces that melt, the textures the owner saw swim - and
+// its honest 2K is too small, while nano-banana-2 kept natural texture at both sizes.
+//
+// Through the dispatch every other picture on this page already uses (_t2i / _i2i, on kie): this
+// model takes its references as `image_input`, and a wrong name there is accepted and quietly
+// ignored - the picture comes back made from the words alone.
+const IMG_ENGINE = 'nano-banana-2';
+// A dressed look at 4K: it is the reference every frame of the ad is built from, and nano's 4K is
+// the character sheet's own size (5504 on the long side), so the face on it loses nothing. A
+// lookbook at 2K: a flat outfit on white is read for what it is, not looked into.
 const DRESS_RES = '4K';
+const LB_RES = '2K';
 
 const _lbTask = (prompt, urls) => (urls && urls.length
-  ? _kieTask(LB_MODEL_I2I, { prompt, input_urls: urls, aspect_ratio: '1:1', resolution: '2K', background: 'opaque' })
-  : _kieTask(LB_MODEL_T2I, { prompt, aspect_ratio: '1:1', resolution: '2K', background: 'opaque' }));
+  ? _i2i(IMG_ENGINE, prompt, urls, '1:1', LB_RES)
+  : _t2i(IMG_ENGINE, prompt, '1:1', LB_RES));
 
 // ── Lookbook gender ─────────────────────────────────────────────────────────
 // Which gender an outfit suits, judged from the INPUT (the description and/or the
@@ -895,7 +902,7 @@ async function _submitLookbook(b) {
     return {
       taskId, mode, kind: plan.kind, prompt, gender, refToken,
       description: plan.description,
-      engine: LB_MODEL_I2I,
+      engine: IMG_ENGINE,
       // What filing it will need when it lands - the same fields the old page sends to finalize.
       file: {
         gender, prompt, description: plan.description, refToken,
@@ -1590,13 +1597,16 @@ router.post('/scen3/gen/frame', async (req, res) => {
 // the way a lookbook is: the agent reads what it was given first, and only then is a picture
 // paid for (docs/local-app/PLAN.md, "create environment").
 //
-// 3:2 AND 4K, on the owner's instruction (2026-09-17). An environment is not one frame but a set
-// to take frames FROM: a wide room gives several different vertical 9:16 frames - by the window,
-// in the middle, by the wall - with the same place and the same light, so the fragments of a
-// video stop looking identical. 4K keeps a vertical slice of it sharp: "4K" is 4096 on the long
-// side, so a full-height 9:16 cut of a 3:2 picture is still about 1536x2731.
+// 3:2, on the owner's instruction (2026-09-17). An environment is not one frame but a set to take
+// frames FROM: a wide room gives several different vertical 9:16 frames - by the window, in the
+// middle, by the wall - with the same place and the same light, so the fragments of a video stop
+// looking identical.
+//
+// 2K since the A/B of 2026-09-18 (the owner): nano-banana-2's 2K is 2528x1696 and clean at 100%.
+// A frame is DRAWN with the environment as its reference (the fragments phase), not cut out of it,
+// so the place has to be right more than it has to be enormous.
 const ENV_ASPECT = '3:2';
-const ENV_RES = '4K';
+const ENV_RES = '2K';
 const ENV_RATIO = 3 / 2;
 
 // Said after whatever the agent wrote, so no rewrite of the words can lose it. The EMPTY rule is
@@ -1732,8 +1742,8 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
 }
 
 const _envTask = (prompt, urls) => (urls.length
-  ? _kieTask(LB_MODEL_I2I, { prompt, input_urls: urls, aspect_ratio: ENV_ASPECT, resolution: ENV_RES, background: 'opaque' })
-  : _kieTask(LB_MODEL_T2I, { prompt, aspect_ratio: ENV_ASPECT, resolution: ENV_RES, background: 'opaque' }));
+  ? _i2i(IMG_ENGINE, prompt, urls, ENV_ASPECT, ENV_RES)
+  : _t2i(IMG_ENGINE, prompt, ENV_ASPECT, ENV_RES));
 
 // ── The picture somebody brought ────────────────────────────────────────────
 // A photo uploaded into a maker is kept for two reasons: a second pass must not send it again
@@ -1901,7 +1911,7 @@ async function _submitEnv(b) {
       + (shape && shape.extend && mode !== 'picked' ? ` extend=${shape.extend}` : '') + (choices.length ? ` picked=${choices.length}` : ''));
     return {
       taskId, mode, prompt, description: plan.description, refToken: token,
-      engine: url ? LB_MODEL_I2I : LB_MODEL_T2I,
+      engine: IMG_ENGINE,
       file: { description: plan.description, prompt, refToken: token, refName: String(b.refName || '') },
     };
   } catch (e) {
@@ -2053,28 +2063,21 @@ async function _submitDress(b) {
 
   // keep the output in the base image's shape (a 16:9 sheet must stay 16:9)
   const aspect = (await _ratioOf(base)) || 'match_input_image';
-  // The same model the lookbooks are made with, on the owner's instruction. 4K by default
-  // (the owner, 2026-09-17): the result is a reference sheet that every frame of the ad is
-  // built from, so it is the one picture in the chain that must not be soft - and the model's
-  // "2K" is 2048 on the LONG side, which leaves a 16:9 sheet 2048x1152 and the portrait on it
-  // a few hundred pixels wide.
-  const taskId = await _kieTask(LB_MODEL_I2I, {
-    prompt, input_urls: urls, aspect_ratio: aspect === 'match_input_image' ? 'auto' : aspect,
-    resolution: DRESS_RES, background: 'opaque',
-  });
+  // 4K (the owner): the result is a reference sheet every frame of the ad is built from, so it is
+  // the one picture in the chain that must not be soft. kie calls "follow the input" `auto`.
+  const taskId = await _i2i(IMG_ENGINE, prompt, urls, aspect === 'match_input_image' ? 'auto' : aspect, DRESS_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
   console.log(`[scen3/gen/dress] ${lb ? 'apply' : 're-dress'} kind=${kind} refs=${urls.length} res=${DRESS_RES}`);
   return {
     taskId, kind, prompt, mode: lb ? 'apply' : 'redress',
-    // WHICH ENGINE MADE IT, for the look's record. The pages still send their own engine setting
-    // when they save the look, and that setting has not decided anything here since the dressing
-    // moved to this model - a look recorded as nano-banana-2 was not made by it.
-    engine: LB_MODEL_I2I,
+    // WHICH ENGINE MADE IT, for the look's record - said by the route that made it, not by the
+    // engine setting a page may still send when it saves the look.
+    engine: IMG_ENGINE,
     // A dressed picture is filed as a LOOK on the character, and when the dressing was asked for
     // by a project, that project wears it from then on.
     file: {
       charId: String(b.charId || ''), charName: String(b.charName || 'look'),
-      gender: String(b.gender || ''), lookbookPath: lb, engine: LB_MODEL_I2I,
+      gender: String(b.gender || ''), lookbookPath: lb, engine: IMG_ENGINE,
       projectId: String(b.projectId || ''),
     },
   };
