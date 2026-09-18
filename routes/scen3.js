@@ -467,6 +467,34 @@ router.post('/scen3/preview1k', async (req, res) => {
 
 const H = require('../lib/helpers');
 
+// THE REALISM MARKERS (owner, 2026-09-18 - research in docs/local-app/PLAN.md, "Модель для
+// картинок мастерской"). What the sources agree on: say "photorealistic" and describe a PHOTOGRAPH
+// being taken; name the material, finish and wear of what is in it rather than piling up quality
+// words; no staging, no grading. Nothing here says 8K, ultra-detailed or hyperrealistic, on
+// purpose - those buy a rendered look, not detail. Each block is said AFTER whatever the agent
+// wrote, so no rewording of the agent's part can lose it.
+//
+// Fabric, for a flat outfit on white: the weave shows under low side light, and a faint contact
+// shadow is what makes a garment lie ON the white instead of floating in front of it.
+const TEXTILE_REAL =
+  ' Photorealistic studio product photograph of real garments: soft, low side light that brings out the texture of every fabric -'
+  + ' the weave, the knit, the grain of leather, the pile of fleece - and a faint natural contact shadow under each item on the white.'
+  + ' Seams, stitching, buttons, zips and other hardware in sharp focus; the fabric lies with its real weight and a few natural soft creases,'
+  + ' never stiff, glossy or plastic. Not a 3D render, not an illustration.';
+
+// A person, dressed or composed into a place: the waxy, retouched skin is what reads as a render.
+const PERSON_REAL =
+  ' The result is a photorealistic photograph of a real person, like the source image: real skin with visible pores, fine lines and'
+  + ' natural unevenness, unretouched and unsmoothed, never waxy or plastic; soft natural light and true colours as in the source image.'
+  + ' The clothes are real fabric with visible weave or knit, seams, stitching and natural creases where the body bends, hanging with real weight.'
+  + ' Not a 3D render, not CGI, not a game character, not an illustration.';
+
+// A mascot shell is an object too: foam, fur and felt have a surface, and a face in it is still skin.
+const COSTUME_REAL =
+  ' The result is a photorealistic photograph: the costume is a real physical object - real foam, felt, fur or fabric with visible texture,'
+  + ' seams and slight wear - and the face in its opening is real skin with pores, unretouched. Soft natural light and true colours as in the'
+  + ' source image. Not a 3D render, not CGI, not a game asset, not an illustration.';
+
 // Knolling discipline — the part that makes every garment separately visible.
 //
 // TWO RULES EARNED THE CAPITALS. Every item appears ONCE: the models like to show the same
@@ -481,7 +509,8 @@ const KNOLL_TAIL =
   + ' each piece fully visible and uncropped, both shoes and both socks shown as a pair.'
   + ' Show each item EXACTLY ONCE: no duplicates, no second view of the same garment, no folded and unfolded version of one item,'
   + ' no alternative colourways, no detail insets.'
-  + ' Pure white seamless background (#FFFFFF), soft even lighting, no shadows on the background, sharp focus, high detail.'
+  + ' Pure white seamless background (#FFFFFF).'
+  + TEXTILE_REAL
   + ' NO PERSON and no body parts of any kind. No hanger, no text, no labels, no watermark. 1:1 square.';
 
 // A mascot or full-body costume cannot be read flat - it is one shell, and laid out it looks
@@ -498,13 +527,16 @@ const MASCOT_TAIL =
   + ' with no face, no hair and no skin detail — the mannequin is there only to show how the costume sits, and must not read as a person.'
   + NO_MESH + ' The mannequin head shows through it freely.'
   + ' Full length, nothing cropped, front view. Show it EXACTLY ONCE: one costume, no second view, no duplicates, no detail insets.'
-  + ' Pure white seamless background (#FFFFFF), soft even lighting, sharp focus, high detail.'
+  + ' Pure white seamless background (#FFFFFF).'
+  + ' Photorealistic studio product photograph of a real physical costume: soft, low side light that brings out the texture of the foam,'
+  + ' felt, fur or fabric, visible seams and stitching, a faint natural contact shadow on the white. Not a 3D render, not an illustration.'
   + ' No text, no labels, no watermark. 1:1 square.';
 
 // Dressing keeps the sheet's composition; only what is worn may change.
 const DRESS_LOCK =
   ' Keep the SAME person, the SAME face, the SAME body, the SAME pose, the SAME framing, crop and background exactly as in the source image.'
   + ' Change ONLY what the person is wearing. Nothing covers the face: no mesh, no net, no veil, no visor, no screen over it.'
+  + PERSON_REAL
   + ' Do not add text, logos or watermarks.';
 
 // A MASCOT SUIT IS NOT CLOTHING. It is a shell with its own size and shape, and the person
@@ -518,6 +550,7 @@ const COSTUME_LOCK =
   + ' Keep the SAME framing, crop, camera and background as the source image, and keep the pose readable.'
   + ' The person face shows in the costume face opening - the SAME face as in the source image, fully visible, sharp and unobstructed.'
   + ' There is NO mesh, net, screen, grille, glass, visor, veil or tinted panel over the face: where the costume reference has one, that part is an open hole.'
+  + COSTUME_REAL
   + ' Do not add text, logos or watermarks.';
 
 /**
@@ -537,6 +570,7 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
     'First decide what IMAGE 2 is: "outfit" for ordinary clothing, or "costume" for a mascot suit, a full-body character costume, a cosplay shell or an inflatable - anything the wearer gets inside rather than puts on.',
     'Then write ONE image-generation prompt, 80-160 words, telling the model to dress the person from IMAGE 1 in it.',
     'Describe the garments or the costume part by part, naming colours, materials and how each part sits on the body. Name each item once.',
+    'Name the fabric of every garment concretely - its fibre and its weave or knit (cotton twill, linen, fine rib knit, denim, wool felt, faux fur) and whether it is matte or has a sheen - because the result is a photograph of real clothes on a real person.',
     'For a costume, say plainly that the person is inside it, that it keeps its own bulk and proportions and does not follow the body underneath, and where the person face shows.',
     'The face always shows fully, uncovered, in an OPEN face opening - never behind mesh, a net, a screen, glass, a visor or a veil. If IMAGE 2 or its description puts one there, write that the opening is open instead.',
     'Never describe the background, the camera or the pose - those stay as they are in IMAGE 1.',
@@ -601,6 +635,7 @@ async function _readLookbookIdea(note, imageUrl) {
     'Then answer with JSON only: {"ok":true,"kind":"outfit"|"costume","prompt":"...","description":"..."}',
     'kind is "costume" for mascot suits, full-body character costumes and cosplay shells; "outfit" for ordinary clothing.',
     'prompt: an image-generation prompt for the picture itself, 120-220 words, garment by garment - every item, its colour, fabric, cut, fastenings, trims, shoes and accessories. Name each item ONCE. Describe ONLY the clothing or costume: no person, no face, no body, no pose, no scene, no background - those are added separately.',
+    'Name the fabric of every item concretely - its fibre and its weave or knit (heavyweight cotton twill, washed linen with natural slubs, fine merino rib knit, raw indigo denim, full-grain leather, wool felt, faux fur) and its finish (matte, brushed, glossy, with a soft sheen) - because the picture is a photograph of real garments, and a fabric that is not named comes out as plastic.',
     'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
     'A costume ALWAYS leaves the wearer face uncovered in an open face opening, in the prompt and in the description alike: never mesh, a net, a screen, glass, a visor or a veil over it. Whoever wears it will speak to the camera, and the face has to be seen.',
   ].join(' ');
@@ -1566,11 +1601,22 @@ const ENV_RATIO = 3 / 2;
 
 // Said after whatever the agent wrote, so no rewrite of the words can lose it. The EMPTY rule is
 // the one in capitals: a person left in the place is a second person in every frame made from it.
+//
+// The research behind every clause (PLAN, "Модель для картинок мастерской"): a PHOTOGRAPH being
+// taken - where the camera stands and with what lens, verticals straight - because camera words
+// steer realism better than quality words; the light of the place itself and no grading, because
+// staged light is the showroom look; and SURFACES, because a wide scene is exactly where a model
+// trades texture for mood unless it is told what each surface is made of. "As taken on a
+// smartphone" is gone: a phone's own processing smooths fine texture away, which is the very fault
+// the owner saw - textures that swim.
 const ENV_TAIL =
-  ' A real photograph of a real place, as taken on a modern smartphone: natural light, true colours, real materials with their wear'
-  + ' and lived-in detail - not a 3D render, not an illustration, not a stock or showroom look.'
+  ' Photorealistic photograph of a real place, taken handheld at chest height with a 28mm lens, vertical lines straight, natural perspective.'
+  + ' The light is the light of the place itself - daylight from its windows or openings, or its own lamps - with true colours,'
+  + ' soft natural shadows and no colour grading.'
+  + ' Every surface shows its real material in crisp, natural detail: the grain of wood, the weave of fabric, the pores of stone and'
+  + ' concrete, the grout between tiles, with everyday wear - scuffs, dust, faded and uneven patches. Unstaged and lived-in;'
+  + ' not a 3D render, not CGI, not an illustration, not a showroom or stock photo.'
   + ' The place is EMPTY: NO people, no body parts, no reflections or silhouettes of people, no mannequins, no text, no logos, no watermark.'
-  + ' Camera at chest height, natural perspective.'
   + ' 3:2 landscape, filling the whole frame edge to edge, no borders.';
 
 // Changing an environment already made: the rest of it is the thing being kept.
@@ -1648,7 +1694,11 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
   }
   if (note && source === 'photo') rules.push('The text is a change to make to the place.');
   rules.push('Then answer with JSON only: {"ok":true,"prompt":"...","description":"..."}');
-  rules.push('prompt: an image-generation prompt, 120-200 words, for a real photograph of the place: what it is, then the foreground, middle ground and background, left and right - objects, materials and colours - and the light: where it comes from, how soft, how warm, what time of day. The place is EMPTY: no people, no body parts, no mannequins, no text, logos or watermarks. Leave open floor space in several parts of the scene - left, centre and right - where a person could stand or sit facing the camera: the picture will be cut into several vertical frames.');
+  rules.push('prompt: an image-generation prompt, 150-230 words, for a real photograph of the place: what it is, then the foreground, middle ground and background, left and right - objects, materials and colours - and the light: where it comes from, how soft, how warm, what time of day. The place is EMPTY: no people, no body parts, no mannequins, no text, logos or watermarks. Leave open floor space in several parts of the scene - left, centre and right - where a person could stand or sit facing the camera: the picture will be cut into several vertical frames.');
+  // The one lever every source agrees on, and the one this agent is best placed to pull: it is the
+  // agent that says what the surfaces ARE. A wide scene told only "wood" and "tiles" comes back
+  // with textures that swim.
+  rules.push('In the prompt, name the MATERIAL, the FINISH and the WEAR of every large surface - floor, walls, ceiling if seen, furniture, fabrics - concretely: not "wood" but "worn white-oak boards with visible grain and a few scuffs", not "tiles" but "matte grey ceramic tiles with darker grout lines". Everyday imperfections belong in it: dust, scuffs, fingerprints, creased fabric, faded paint. Write flowing sentences in order, not a list of keywords, and never use words like 8K, ultra-detailed, hyperrealistic or masterpiece.');
   if (shape && shape.extend && source !== '' && !picked.length) {
     rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
   }
@@ -4170,6 +4220,11 @@ function _audioCut(p) {
 }
 
 router.cutClips = _cutClips;
+// The prompt blocks, for tools that must send exactly what the app sends (a model comparison is
+// worthless if the bench says something the routes do not).
+router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL };
+// ...and the two agents that write the long half of those prompts, for the same reason.
+router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea };
 router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 
