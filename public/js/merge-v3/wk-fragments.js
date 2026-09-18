@@ -419,17 +419,9 @@ function _row(p, l, i) {
   meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
 
+  // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
+  // and the row is read for its words.
   const fr = _frameOf(p, l);
-  const thumb = el('div', 'mv3-wk-fthumb' + (fr ? '' : ' is-empty'));
-  if (fr) {
-    const img = el('img');
-    img.alt = '';
-    img.loading = 'lazy';
-    img.src = derived(fr.preview || fr.path, 'card');
-    thumb.appendChild(img);
-  }
-  row.appendChild(thumb);
-
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
 
   const dots = el('div', 'mv3-wk-fdots');
@@ -490,6 +482,13 @@ function _all(host, p, lines) {
 }
 
 // ── The right column: the open fragment ─────────────────────────────────────
+// Laid out the way the owner drew it (2026-09-19), as a grid of two rows:
+//
+//   | shot: size, pose, camera, direction |  mannequin  |  frame  + make frame |
+//   | animation prompt                                  |  clip   + make clip  |
+//
+// The frame and the clip share a column, so the two pictures of a fragment - what it opens on and
+// what it becomes - stand one above the other.
 function _fragment(host, p, l, i) {
   const take = _take(l);
   const rs = _readState(l);
@@ -507,60 +506,18 @@ function _fragment(host, p, l, i) {
   host.appendChild(el('div', 'mv3-wk-fwords', '“' + (_words(l) || '…') + '”'));
   if (rs === 'stale') host.appendChild(_note('The words changed after this line was read - read it again in setting & voice.', true));
 
-  _shotBlock(host, l, i);
+  const grid = el('div', 'mv3-wk-fgrid');
+  host.appendChild(grid);
+  grid.appendChild(_shotCol(l, i));
+  grid.appendChild(_poseCol(l));
+  grid.appendChild(_frameCol(p, l));
+  grid.appendChild(_motionCol(l, i));
+  grid.appendChild(_clipCol(p, l, rs, take));
 
-  // FRAME - the picture the line opens on.
-  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'Frame'));
-  const fr = _frameOf(p, l);
-  const fbox = el('div', 'mv3-wk-fframe-row');
-  const frame = el('div', 'mv3-wk-fframe' + (fr ? '' : ' is-empty'));
-  if (fr) {
-    const img = el('img');
-    img.alt = '';
-    img.src = derived(fr.preview || fr.path, 'card');
-    frame.appendChild(img);
-  } else {
-    frame.appendChild(el('span', '', 'no frame'));
-  }
-  fbox.appendChild(frame);
-  const fside = el('div', 'mv3-wk-fside');
-  const make = el('button', 'mv3-wk-vmore', (fr ? 'again' : 'make frame') + ' · ' + _money(FRAME_PRICE));
-  make.type = 'button';
-  make.disabled = true;
-  make.title = 'nano-banana-2, 2K - comes with the frames (F3)';
-  fside.appendChild(make);
-  fside.appendChild(el('div', 'mv3-wk-fsoon', fr ? 'A frame this line already had.' : 'Drawn from the pose, the person in their look and the place. Phase F3.'));
-  fbox.appendChild(fside);
-  host.appendChild(fbox);
-
-  // CLIP - the frame speaking the read. The animation prompt first: it is what Kling is told.
-  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'Clip'));
-  _motionField(host, l, i);
-  const tier = _tier();
-  let label;
-  let why = '';
-  if (rs !== 'ok') { label = 'read this line first'; why = 'A clip is as long as its read: make or refresh the read in setting & voice.'; }
-  else if (!fr) { label = 'make a frame first'; why = 'The clip is the frame speaking.'; }
-  else if (take.dur > _ceiling()) { label = 'too long for Kling (' + take.dur.toFixed(1) + ' s)'; why = 'Kling avatar takes up to ' + _ceiling() + ' s: split the line.'; }
-  else label = 'make clip · ' + take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…');
-  const clipBtn = el('button', 'mv3-wk-vmore' + (rs === 'ok' && fr ? ' is-go' : ''), label);
-  clipBtn.type = 'button';
-  clipBtn.disabled = true;
-  clipBtn.title = 'Kling avatar - comes with the clips (F4)';
-  const crow = el('div', 'mv3-wk-vfoot');
-  crow.appendChild(clipBtn);
-  if (rs !== 'ok') {
-    const back = el('button', 'mv3-wk-flink', 'setting & voice →');
-    back.type = 'button';
-    back.addEventListener('click', () => _ctx.goStep('setting'));
-    crow.appendChild(back);
-  }
-  host.appendChild(crow);
-  if (why) host.appendChild(el('div', 'mv3-wk-fsoon', why));
-
-  // The takes a line already has - projects made on the old page can carry some.
+  // Every take the line has, under the grid - projects made on the old page can carry some.
   const clips = ((l.video || {}).plain || []);
   if (clips.length) {
+    host.appendChild(el('div', 'mv3-wk-flabel', 'takes'));
     const now = _clipOf(l);
     for (const c of clips.slice().reverse()) {
       const r = el('div', 'mv3-wk-vrow' + (now && c.id === now.id ? ' is-on' : ''));
@@ -569,32 +526,35 @@ function _fragment(host, p, l, i) {
       if (now && c.id === now.id) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
       host.appendChild(r);
     }
-  } else {
-    host.appendChild(el('div', 'mv3-wk-fsoon', 'No clips yet. Made with Kling avatar in phase F4; the clip then plays on the stage.'));
   }
 }
 
-// SHOT - how the line is filmed: the agent's choice, every part of it changeable by hand.
-function _shotBlock(host, l, i) {
+// A column's heading: a small label, and - on the shot - the one action it has.
+function _colHead(label, action) {
+  const h = el('div', 'mv3-wk-flabel is-row');
+  h.appendChild(el('span', '', label));
+  if (action) h.appendChild(action);
+  return h;
+}
+
+// SHOT - how the line is filmed, in one column: the three choices, then the direction.
+function _shotCol(l, i) {
+  const col = el('div', 'mv3-wk-fcol is-shot');
   const sh = l.shot || null;
   const st = _shotState(l);
   const busy = !!_reading;
   const mine = _reading && _reading.line === i;
 
-  const headRow = el('div', 'mv3-wk-vhead is-lib is-row', 'Shot');
-  const acts = el('div', 'mv3-wk-vheadacts');
   const again = el('button', 'mv3-wk-vmore is-small', mine ? 'reading…' : (sh ? 'read again' : 'read this line'));
   again.type = 'button';
   again.disabled = busy || !!_missing(_ctx.project).length;
   again.title = 'The agent plans this line again, keeping the rhythm with the others';
   again.addEventListener('click', () => _readLine(i));
-  acts.appendChild(again);
-  headRow.appendChild(acts);
-  host.appendChild(headRow);
+  col.appendChild(_colHead('shot', again));
 
   const cat = _kit || { framings: [], poses: [], cameras: [] };
-  const pick = (cls, title, items, value, label, onChange) => {
-    const sel = el('select', 'mv3-wk-vsel is-small ' + cls);
+  const pick = (title, items, value, label, onChange) => {
+    const sel = el('select', 'mv3-wk-vsel is-small is-col');
     sel.title = title;
     if (!value) { const o = el('option', '', label); o.value = ''; o.disabled = true; o.selected = true; sel.appendChild(o); }
     for (const it of items) {
@@ -609,60 +569,135 @@ function _shotBlock(host, l, i) {
     return sel;
   };
   const framing = (sh && sh.framing) || '';
-  const row1 = el('div', 'mv3-wk-fsets is-shot');
-  row1.appendChild(pick('is-framing', 'How much of the person is in the frame', cat.framings, framing, 'shot size',
+  col.appendChild(pick('How much of the person is in the frame', cat.framings, framing, 'shot size',
     (v) => _saveShot(i, { framing: v })));
   // Only the poses of this shot size: each mannequin belongs to exactly one.
   const poses = cat.poses.filter(p => !framing || p.group === framing).map(p => ({ id: p.id, label: p.label, title: p.desc }));
-  row1.appendChild(pick('is-pose', 'The body position - one of the mannequins of this shot size', poses, (sh && sh.poseId) || '', 'pose',
+  col.appendChild(pick('The body position - one of the mannequins of this shot size', poses, (sh && sh.poseId) || '', 'pose',
     (v) => _saveShot(i, { poseId: v })));
-  const pose = sh ? _poseById(sh.poseId) : null;
-  const man = el('div', 'mv3-wk-fman' + (pose ? '' : ' is-empty'));
-  if (pose && pose.thumb) {
-    const img = el('img');
-    img.alt = '';
-    img.src = pose.thumb;
-    man.title = pose.label + ' - ' + pose.desc;
-    man.appendChild(img);
-  }
-  row1.appendChild(man);
-  host.appendChild(row1);
-  const row2 = el('div', 'mv3-wk-fsets is-shot');
-  row2.appendChild(pick('is-camera', 'The lens and how it renders', cat.cameras.map(c => ({ id: c.id, label: c.label, title: c.summary })),
+  col.appendChild(pick('The lens and how it renders', cat.cameras.map(c => ({ id: c.id, label: c.label, title: c.summary })),
     (sh && sh.camera) || '', 'camera', (v) => _saveShot(i, { camera: v })));
-  host.appendChild(row2);
 
-  host.appendChild(el('div', 'mv3-wk-flabel', 'direction'));
-  host.appendChild(_textField(i, 'direction', (sh && sh.direction) || '', 2,
+  col.appendChild(el('div', 'mv3-wk-flabel', 'direction'));
+  col.appendChild(_textField(i, 'direction', (sh && sh.direction) || '', 3,
     'The first frame, frozen: where the body, the hands and the head are, and the expression as the line begins',
     (v) => _saveShot(i, { direction: v })));
-  if (sh && sh.why) host.appendChild(el('div', 'mv3-wk-fwhy', sh.why));
-  if (st === 'stale') host.appendChild(_note('The words or the mood of the video changed since this line was read - read it again.', true));
-  if (!sh) host.appendChild(el('div', 'mv3-wk-fsoon', 'Not read yet: "read the script" plans every line, or read this one alone. Anything here can also be set by hand.'));
+  if (sh && sh.why) col.appendChild(el('div', 'mv3-wk-fwhy', sh.why));
+  if (st === 'stale') col.appendChild(_note('The words or the mood of the video changed since this line was read - read it again.', true));
+  if (!sh) col.appendChild(el('div', 'mv3-wk-fsoon', 'Not read yet: "read the script" plans every line, or read this one alone. Anything here can also be set by hand.'));
+  return col;
+}
+
+// The mannequin of the chosen pose, as tall as the frame beside it: the body the frame will copy.
+function _poseCol(l) {
+  const col = el('div', 'mv3-wk-fcol is-media');
+  col.appendChild(_colHead('pose'));
+  const sh = l.shot || null;
+  const pose = sh ? _poseById(sh.poseId) : null;
+  const box = el('div', 'mv3-wk-fmedia is-pose' + (pose ? '' : ' is-empty'));
+  if (pose && (pose.thumb || pose.file)) {
+    const img = el('img');
+    img.alt = '';
+    img.src = pose.thumb || pose.file;
+    box.title = pose.label + ' - ' + pose.desc;
+    box.appendChild(img);
+  } else {
+    box.appendChild(el('span', '', 'no pose'));
+  }
+  col.appendChild(box);
+  if (pose) col.appendChild(el('div', 'mv3-wk-fcap', pose.label));
+  return col;
+}
+
+// FRAME - the picture the line opens on, and the button that makes it.
+function _frameCol(p, l) {
+  const col = el('div', 'mv3-wk-fcol is-media');
+  col.appendChild(_colHead('frame'));
+  const fr = _frameOf(p, l);
+  const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty'));
+  if (fr) {
+    const img = el('img');
+    img.alt = '';
+    img.src = derived(fr.preview || fr.path, 'card');
+    box.appendChild(img);
+  } else {
+    box.appendChild(el('span', '', 'no frame'));
+  }
+  col.appendChild(box);
+  const make = el('button', 'mv3-wk-vmore is-small is-media', fr ? 'again' : 'make frame');
+  make.type = 'button';
+  make.disabled = true;
+  make.title = 'nano-banana-2, 2K - comes with the frames (F3)';
+  col.appendChild(make);
+  col.appendChild(el('div', 'mv3-wk-fcap', _money(FRAME_PRICE) + ' · phase F3'));
+  return col;
 }
 
 // The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
 // Written by the agent; a version written by hand stays through the next reading, and the agent's
 // own is one press away.
-function _motionField(host, l, i) {
+function _motionCol(l, i) {
+  const col = el('div', 'mv3-wk-fcol is-motion');
   const sh = l.shot || null;
-  const lab = el('div', 'mv3-wk-flabel is-row');
-  lab.appendChild(el('span', '', 'animation prompt'));
+  let action = null;
   if (sh && sh.motionEdited) {
-    lab.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
+    action = el('span', 'mv3-wk-fedited-row');
+    action.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
     if (sh.motionAgent) {
       const back = el('button', 'mv3-wk-flink', 'use the agent’s');
       back.type = 'button';
       back.title = sh.motionAgent;
       back.disabled = !!_reading;
       back.addEventListener('click', () => { delete _drafts[i + ':motion']; _saveShot(i, { useAgentMotion: true }); });
-      lab.appendChild(back);
+      action.appendChild(back);
     }
   }
-  host.appendChild(lab);
-  host.appendChild(_textField(i, 'motion', (sh && sh.motion) || '', 3,
+  col.appendChild(_colHead('animation prompt', action));
+  const box = _textField(i, 'motion', (sh && sh.motion) || '', 7,
     'How the person moves while speaking - the expression, the head, the hands, the gaze. Kling hears nothing else.',
-    (v) => _saveShot(i, { motion: v })));
+    (v) => _saveShot(i, { motion: v }));
+  box.classList.add('is-tall');
+  col.appendChild(box);
+  return col;
+}
+
+// CLIP - the frame speaking the read, in the frame's column. What stops it, or what it costs, is
+// said under the button.
+function _clipCol(p, l, rs, take) {
+  const col = el('div', 'mv3-wk-fcol is-media');
+  col.appendChild(_colHead('clip'));
+  const c = _clipOf(l);
+  const box = el('div', 'mv3-wk-fmedia' + (c && c.thumb ? '' : ' is-empty'));
+  if (c && c.thumb) {
+    const img = el('img');
+    img.alt = '';
+    img.src = c.thumb;
+    box.appendChild(img);
+  } else {
+    box.appendChild(el('span', '', 'no clip'));
+  }
+  col.appendChild(box);
+  const fr = _frameOf(p, l);
+  const tier = _tier();
+  let cap;
+  let ready = false;
+  if (rs !== 'ok') cap = 'read this line first';
+  else if (!fr) cap = 'make a frame first';
+  else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
+  else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…'); }
+  const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''), c ? 'again' : 'make clip');
+  make.type = 'button';
+  make.disabled = true;
+  make.title = 'Kling avatar - comes with the clips (F4)';
+  col.appendChild(make);
+  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'), cap));
+  if (rs !== 'ok') {
+    const back = el('button', 'mv3-wk-flink is-cap', 'setting & voice →');
+    back.type = 'button';
+    back.addEventListener('click', () => _ctx.goStep('setting'));
+    col.appendChild(back);
+  }
+  return col;
 }
 
 // A text field that survives a repaint (what is typed is kept by line and field) and saves when the
