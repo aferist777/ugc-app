@@ -3197,6 +3197,12 @@ function _normMix(m) {
         ? { x: +v.crop.x || 0, y: +v.crop.y || 0, w: +v.crop.w || 0, h: +v.crop.h || 0 } : null,
       size:    (v && v.size && typeof v.size === 'object')
         ? { w: +v.size.w || 0, h: +v.size.h || 0 } : null,
+      // A frame drawn for ONE line by the fragments step says which, and what it was drawn from -
+      // the shot size, the pose and the camera - so a line can list its own frames and a frame
+      // can say what it is. Frames from the old pool have neither.
+      line:    Number.isInteger(v && v.line) ? v.line : null,
+      from:    (v && v.from && typeof v.from === 'object')
+        ? { framing: String(v.from.framing || ''), poseId: String(v.from.poseId || ''), camera: String(v.from.camera || '') } : null,
     })).filter(v => v.id && v.path) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
@@ -3223,6 +3229,9 @@ function _normProject(p, now) {
     owner:      src.owner ? String(src.owner) : null,
     casting:    _normCasting(src.casting),
     mix:        _normMix(src.mix),
+    // How the look and the place read, for the frames of the fragments step: the person to keep,
+    // the place, its light. Read once for a look and a place, and again only when either changes.
+    frameRef:   _normFrameRef(src.frameRef),
     name:       String(src.name || '').trim() || 'untitled project',
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
     type:       'talking_head',
@@ -3378,6 +3387,16 @@ function _normLine(l) {
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.
     render:  _normRender(s.render),
+  };
+}
+
+function _normFrameRef(r) {
+  if (!r || typeof r !== 'object' || !r.look || !r.place) return null;
+  const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  return {
+    look: String(r.look), place: String(r.place),
+    character: str(r.character, 1500), environment: str(r.environment, 1500), lighting: str(r.lighting, 1200),
+    at: str(r.at, 40),
   };
 }
 
@@ -3854,6 +3873,232 @@ router.post('/scen3/fragments/shot', (req, res) => {
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE FRAME OF A FRAGMENT (the fragments step, docs/local-app/PLAN.md F3)
+//
+// The picture a line opens on: the person in their look, standing in the place, in the pose and the
+// moment the directing agent chose for this line. nano-banana-2 at 2K on kie (the owner, after the
+// A/B), in the timeline's shape, with three references in a fixed order - the mannequin of the pose,
+// the look, the place - and the prompt in the order the old "Build mix" proved: the crop first, then
+// the rule for the references, the camera, the body, the moment, the person, the place, the light.
+//
+// NO GAZE RULE (the owner): in a frame the person does not have to look into the lens - they can be
+// caught mid-thought. Where the eyes go is the moment's business, and the animation prompt brings
+// them to the lens while the line is spoken.
+//
+// The server sees it through: a row in Alerts, and the runner downloads the frame once into the
+// project's frames/, adds it to the project's frames and makes it the line's.
+// ════════════════════════════════════════════════════════════════════════════
+
+const FRAG_FRAME_ENGINE = 'nano-banana-2';
+const FRAG_FRAME_RES = '2K';
+const FRAG_FORMATS = ['9:16', '16:9'];
+
+// The references rule, for a frame of a fragment. Written from FRAME_RULE_POSED, with the one change
+// the owner asked for: the eyes are the moment's, not a rule's.
+const FRAG_RULE_POSED =
+  'Create ONE photorealistic photograph of ONE real person.'
+  + ' IMAGE 1 is a blue artist mannequin and it defines the BODY: reproduce its pose, the tilt and'
+  + ' rotation of its head, its shoulder line, the direction and foreshortening of its arms, and the camera'
+  + ' angle - exactly, including any arm that reaches toward the lens and runs out past the edge of the frame.'
+  + ' The mannequin has no eyes: where the person looks and what their face does is the MOMENT described below.'
+  + ' Take the POSE from it, never the crop: the mannequin is photographed at its own shot size, and the'
+  + ' SHOT SIZE stated above wins over it.'
+  + ' Never render the mannequin itself: no blue material, no ball joints, no seams, no blank faceless head,'
+  + ' no grey studio backdrop.'
+  + ' IMAGE 2 is a character reference sheet - take ONLY the person from it and keep the same face, hair,'
+  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
+  + ' more than ONE person in the result.'
+  + ' IMAGE 3 is the location - keep its architecture, furniture, colours and depth, and put the person in it.'
+  + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
+
+// For a pose whose mannequin is missing: two references, the body in words.
+const FRAG_RULE_PLAIN =
+  'Create ONE photorealistic photograph: the person from IMAGE 1, in the location from IMAGE 2.'
+  + ' IMAGE 1 is a character reference sheet - take ONLY the person from it and keep the same face, hair,'
+  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
+  + ' more than ONE person in the result.'
+  + ' IMAGE 2 is the location - keep its architecture, furniture, colours and depth.'
+  + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
+
+// The person belongs to the place: the light that falls on them is the place's light (the owner's
+// realism marker for frames, beside the person one of S1).
+const FRAG_LIGHT_MATCH =
+  ' The light on the person is the light of the location: the same direction, softness, colour temperature'
+  + ' and shadows, so the person is lit by that room and not by a studio.';
+
+// How the look and the place read - the person to keep, the place, its light - asked once for a look
+// and a place and kept on the project, so every frame of the video describes them the same way.
+async function _frameRef(projectId, cast) {
+  const p = PROJECTS.get(projectId);
+  const have = p && _normFrameRef(p.frameRef);
+  if (have && have.look === cast.obrazImage && have.place === cast.locationImage) return have;
+  const [lookUrl, placeUrl] = await Promise.all([_hostLocal(cast.obrazImage), _hostLocal(cast.locationImage)]);
+  const ask = 'IMAGE 1 is a character reference sheet, IMAGE 2 is an empty location.'
+    + ' Answer in exactly the labelled blocks below, each on its own line, each one plain sentences'
+    + ' with no lists and no extra headings.'
+    + '\nCHARACTER: describe the person on the sheet - face, hair, build, skin tone and the clothing they'
+    + ' are wearing, as the traits to preserve.'
+    + '\nENVIRONMENT: describe the location - what kind of place it is, its architecture, surfaces, colours'
+    + ' and depth, and in one clause where in the frame there is clear space for a person.'
+    + '\nLIGHTING: describe the location\'s light precisely enough to composite a person into it convincingly -'
+    + ' where the key light comes from, hard or soft, its colour temperature and any cast, how strong the'
+    + ' ambient fill is, the character and direction of the shadows, and what time of day it reads as.';
+  const raw = _cleanText(await _ask([{ role: 'user', content: [
+    { type: 'text', text: ask },
+    { type: 'image_url', image_url: { url: lookUrl } },
+    { type: 'image_url', image_url: { url: placeUrl } },
+  ] }]));
+  const blocks = _splitBlocks(raw);
+  const ref = _normFrameRef({
+    look: cast.obrazImage, place: cast.locationImage,
+    character: blocks.character, environment: blocks.environment, lighting: blocks.lighting,
+    at: new Date().toISOString(),
+  });
+  // Kept on the project in one burst, touching nothing else.
+  const list = _loadProjects();
+  const q = list.find(x => String(x.id) === String(projectId));
+  if (q) { q.frameRef = ref; _saveProjects(list); }
+  console.log('[scen3/fragments/frame] read the look and the place: character ' + ref.character.length + 'ch, environment '
+    + ref.environment.length + 'ch, lighting ' + ref.lighting.length + 'ch');
+  return ref;
+}
+
+async function _submitFragFrame(b) {
+  const id = String(b.projectId || '').trim();
+  const proj = _loadProjects().find(p => String(p.id) === id);
+  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  const cast = _normCasting(proj.casting);
+  if (!cast.obrazImage || !cast.locationImage) {
+    throw Object.assign(new Error('cast the character in a look and set the place first'), { status: 400 });
+  }
+  const lines = (proj.lines || []).map(_normLine);
+  const i = parseInt(b.line, 10);
+  if (!(i >= 0 && i < lines.length)) throw Object.assign(new Error('no such line'), { status: 400 });
+  const sh = lines[i].shot;
+  if (!sh || !sh.framing) throw Object.assign(new Error('this line has no shot yet - read it first'), { status: 400 });
+  const aspect = FRAG_FORMATS.includes(b.format) ? b.format : '9:16';
+
+  const cat = _scriptCatalogue();
+  const framing = cat.framings.find(f => f.id === sh.framing) || null;
+  const pose = cat.poses.find(p => p.id === sh.poseId) || null;
+  const cam = cat.cameras.find(c => c.id === sh.camera) || null;
+  const posePath = _poseImageFor(sh.poseId, sh.framing);
+
+  const ref = await _frameRef(id, cast);
+  const urls = [];
+  if (posePath) urls.push(await _hostLocal(posePath));
+  urls.push(await _hostLocal(cast.obrazImage), await _hostLocal(cast.locationImage));
+
+  const parts = [];
+  if (framing && framing.crop) {
+    parts.push('SHOT SIZE - the most important constraint, obey it before anything else: ' + framing.crop
+      + '. Frame the person exactly this way and do not pull back to fit more of the body in.');
+  }
+  parts.push(posePath ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
+  if (cam) parts.push('Camera: ' + cam.prompt + '.');
+  if (pose && pose.desc) parts.push('Body position to reproduce - the person is ' + pose.desc + '.');
+  if (sh.direction) parts.push('THE MOMENT - the instant this line begins: ' + sh.direction);
+  if (ref.character) parts.push('The person to keep: ' + ref.character);
+  if (ref.environment) parts.push('The location: ' + ref.environment);
+  if (ref.lighting) parts.push('Match the location lighting exactly - ' + ref.lighting);
+  const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
+
+  const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
+  if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
+  console.log('[scen3/fragments/frame] line ' + (i + 1) + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
+    + ' refs=' + urls.length + ' pose=' + (pose ? pose.id + (posePath ? '+img' : '') : '-') + ' cam=' + (cam ? cam.id : '-'));
+  return {
+    taskId, engine: FRAG_FRAME_ENGINE, prompt,
+    file: { projectId: id, line: i, prompt, shotAt: sh.at, framing: sh.framing, poseId: sh.poseId, camera: sh.camera },
+  };
+}
+
+/* ── A frame for one line ────────────────────────────────────────────────────
+   POST /api/scen3/fragments/frame  { projectId, line, format?, where } -> { success, alertId, taskId }
+
+   Always a journal row (only the fragments step calls this): the runner downloads the frame into the
+   project's frames/, adds it to the project's frames and makes it the line's.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/frame', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const proj = _loadProjects().find(p => String(p.id) === String(b.projectId || ''));
+    if (proj && !OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const out = await _submitFragFrame(b);
+    const line = parseInt(b.line, 10);
+    const rec = JOBS.submitted({
+      kind: 'image', what: 'frame',
+      title: 'Frame · line ' + (line + 1),
+      where: b.where || null,
+      engine: out.engine,
+      taskIds: [out.taskId],
+      job: { type: 'frame', params: { request: { projectId: b.projectId, line, format: b.format }, file: out.file } },
+    });
+    res.json({ success: true, alertId: rec.id, taskId: out.taskId });
+  } catch (e) {
+    console.error('[scen3/fragments/frame]', e.message);
+    res.status(e.status || 500).json({ success: false, error: e.message });
+  }
+});
+
+/* ── Which of a line's frames it opens on ────────────────────────────────────
+   POST /api/scen3/fragments/pick-frame  { projectId, line, frameId } -> { success, project }
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/pick-frame', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.lines = (p.lines || []).map(_normLine);
+    const i = parseInt(b.line, 10);
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const v = _normMix(p.mix).variants.find(x => x.id === String(b.frameId || ''));
+    if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
+    p.lines[i].frameId = v.id;
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The runner's side: wait for kie, land the picture in the project's frames/ once, make its preview,
+// add it to the project's frames and make it the line's frame - in one burst against the project as
+// it is by then.
+JOBS.register('frame', {
+  timeoutMs: 15 * 60 * 1000,
+  poll: (rec) => {
+    const p = _fileParams(rec);
+    return H.resolveTask(rec.taskIds[0], PROJECTS.dirOf(p.projectId, 'frames'), 'frame_l' + (Number(p.line) + 1));
+  },
+  file: async (rec, landed) => {
+    const p = _fileParams(rec);
+    const preview = await _framePreview(landed.imagePath);
+    const list = _loadProjects();
+    const proj = list.find(x => String(x.id) === String(p.projectId));
+    if (!proj) throw new Error('the project is gone');
+    proj.mix = _normMix(proj.mix);
+    proj.lines = (proj.lines || []).map(_normLine);
+    const line = Number(p.line);
+    const variant = {
+      id: 'f' + Date.now(), path: landed.imagePath, preview, prompt: p.prompt || '',
+      at: new Date().toISOString(), taskId: rec.taskIds[0],
+      line, from: { framing: p.framing || '', poseId: p.poseId || '', camera: p.camera || '' },
+    };
+    if (!proj.mix.variants.some(v => v.taskId === variant.taskId)) proj.mix.variants.unshift(variant);
+    if (proj.lines[line]) proj.lines[line].frameId = variant.id;
+    proj.updatedAt = variant.at;
+    _saveProjects(list);
+    return { path: landed.imagePath, preview, frameId: variant.id, line, media: 'image' };
+  },
+  submit: async (request) => {
+    const out = await _submitFragFrame(request);
+    return { taskId: out.taskId, engine: out.engine, file: out.file };
+  },
 });
 
 /* ── A copy of somebody's project, owned by whoever asked ────────────────────

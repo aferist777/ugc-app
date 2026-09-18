@@ -1985,7 +1985,7 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 
 /* The open fragment as a grid (owner, 2026-09-19): the shot column, the mannequin, the frame; under
    them the animation prompt, and the clip in the frame's column. */
-.mv3-wk-fgrid{display:grid; grid-template-columns:minmax(0,1fr) 110px 110px; column-gap:12px; row-gap:14px; align-items:start; margin-top:4px}
+.mv3-wk-fgrid{display:grid; grid-template-columns:minmax(0,1fr) 92px 92px; column-gap:12px; row-gap:14px; align-items:start; margin-top:4px}
 .mv3-wk-fcol{min-width:0; display:flex; flex-direction:column; gap:5px}
 .mv3-wk-fcol.is-motion{grid-column:1 / span 2}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
@@ -1993,7 +1993,7 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-vsel.is-small.is-col{flex:0 0 auto; width:100%}
 /* The frame, the mannequin and the clip: one size, 9:16, so they line up. */
 .mv3-wk-fmedia{
-  width:110px; height:196px; border-radius:var(--r-sm); overflow:hidden; background:var(--bg);
+  width:92px; height:164px; border-radius:var(--r-sm); overflow:hidden; background:var(--bg);
   border:1px solid var(--border-soft); display:flex; align-items:center; justify-content:center;
 }
 .mv3-wk-fmedia.is-empty{border-style:dashed; border-color:var(--border); color:var(--muted); font:600 9.5px/1 var(--font)}
@@ -2003,5 +2003,18 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-fcap{font:400 9.5px/1.35 var(--font); color:var(--muted); text-align:center}
 .mv3-wk-fcap.is-why{color:var(--warn, oklch(.72 .15 75))}
 .mv3-wk-flink.is-cap{margin:0; align-self:center}
-.mv3-wk-ftext-in.is-tall{min-height:196px}
+.mv3-wk-ftext-in.is-tall{min-height:164px}
 .mv3-wk-fedited-row{display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0}
+
+/* F3 - a frame being drawn, and the line's other frames to pick from. */
+.mv3-wk-fdot.is-busy{background:var(--primary); border-color:var(--primary); animation:mv3-wk-pulse 1.1s ease-in-out infinite}
+@keyframes mv3-wk-pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.mv3-wk-fmedia.is-busy{border-color:var(--primary); border-style:solid}
+.mv3-wk-fmedia:not(.is-empty){cursor:zoom-in}
+.mv3-wk-fstrip{display:flex; flex-wrap:wrap; gap:3px; justify-content:center}
+.mv3-wk-fvar{
+  width:20px; height:36px; padding:0; border-radius:3px; overflow:hidden; cursor:pointer;
+  border:1px solid var(--border-soft); background:var(--bg);
+}
+.mv3-wk-fvar.is-on{border-color:var(--primary); cursor:default}
+.mv3-wk-fvar img{width:100%; height:100%; object-fit:cover; display:block}

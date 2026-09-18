@@ -12,8 +12,14 @@
    reads the script five lines at a time against the MOOD of the video - the emotion the person
    picks once - and gives every line its shot size, pose, camera, the direction of its first frame
    and its animation prompt for Kling. All of it can be changed by hand; an animation prompt
-   written by hand survives the next reading. Frames (F3) and clips (F4) are still to come; their
-   controls stand where they will work and say which phase brings them.
+   written by hand survives the next reading.
+
+   F3 - THE FRAMES. A frame is drawn for one line from its shot (routes/scen3.js, fragments/frame):
+   nano-banana-2 at 2K in the timeline's shape. It is a row in Alerts from the moment it is asked
+   for, and the SERVER files it into the project and makes it the line's - this panel only follows
+   the row, so leaving loses nothing and coming back finds it still drawing or done. "again" adds
+   a frame beside the one the line has; the line opens on whichever is picked. The clips (F4) are
+   still to come.
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
    scenario project's, as they have always been (routes/scen3.js). Written from here: the clip
@@ -22,8 +28,10 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as PV from './preview-b.js';
+import * as Store from './store.js';
+import * as API from './scen-api.js';
 import { derived } from '../chars-store.js';
-import { el } from './wk-maker.js';
+import { el, holdProgress, endProgress, onlyHere, showPicture } from './wk-maker.js';
 
 // What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
 // button so nothing is spent on a surprise; the frame route will answer with the real price (F3).
@@ -51,6 +59,12 @@ const BATCH = 5;
 let _reading = null;                      // { from, to, total } for the script, { line } for one
 let _readErr = '';
 const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
+// Frames being drawn, by line: { alertId, startedAt } - from this panel or found in the journal.
+const _drawing = new Map();
+let _armedFrames = false;                 // "make N frames" pressed once and asking
+let _submitting = null;                   // { done, total } while a batch of frames is being asked for
+let _lookedAt = '';                       // the project the journal was last asked about
+const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 function _urlLine() {
   try {
@@ -208,6 +222,95 @@ async function _readLine(i) {
   _ctx.repaint();
 }
 
+// ── The frames ──────────────────────────────────────────────────────────────
+// Where a frame was asked from, for the Alerts list: the address that opens this very fragment.
+function _where(i) {
+  const key = (_ctx && _ctx.key) || '';
+  const p = (_ctx && _ctx.project) || {};
+  return {
+    page: 'merge',
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=fragments&line=' + (i + 1),
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragments › line ' + (i + 1),
+    spot: { key, step: 'fragments', view: 'frag', line: i },
+  };
+}
+const _format = () => { try { const t = Store.timeline(); return (t && t.format) || '9:16'; } catch (e) { return '9:16'; } };
+
+async function _makeFrame(i) {
+  const p = _ctx && _ctx.project;
+  if (!p || _drawing.has(i)) return;
+  _readErr = '';
+  _drawing.set(i, { alertId: '', startedAt: Date.now() });
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/fragments/frame', { projectId: p.id, line: i, format: _format(), where: _where(i) });
+    _drawing.set(i, { alertId: r.alertId, startedAt: Date.now() });
+    _follow(i, r.alertId);
+  } catch (e) {
+    _drawing.delete(i);
+    _readErr = 'Line ' + (i + 1) + ': the frame was not asked for - ' + e.message;
+    if (_open === i) endProgress('frame:' + i, e.message);
+  }
+  _ctx.repaint();
+}
+
+// The row is the truth: whatever happened to the page in between, it says done or failed.
+async function _follow(i, alertId) {
+  try {
+    await API.follow(alertId);
+    if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
+    if (_open === i) endProgress('frame:' + i);
+  } catch (e) {
+    _readErr = 'Line ' + (i + 1) + ': ' + e.message;
+    if (_open === i) endProgress('frame:' + i, e.message);
+  }
+  _drawing.delete(i);
+  if (_ctx) _ctx.repaint();
+}
+
+// Every line that has a shot and no frame, asked for one after another; the drawing itself happens
+// on the server, in parallel. Pressed twice (owner): the first press says how many and how much.
+async function _makeMissing(lines) {
+  const want = lines.map((l, i) => (_shotState(l) !== 'none' && !_frameOf(_ctx.project, l) && !_drawing.has(i)) ? i : -1).filter(i => i >= 0);
+  if (!want.length) return;
+  _submitting = { done: 0, total: want.length };
+  _ctx.repaint();
+  for (const i of want) {
+    await _makeFrame(i);
+    _submitting.done++;
+    _ctx.repaint();
+  }
+  _submitting = null;
+  _ctx.repaint();
+}
+
+// Coming back to the step, or to the page: any frame of this project still drawing is found in the
+// journal and followed again, with its real start time.
+function _pickUpDrawing() {
+  const key = (_ctx && _ctx.key) || '';
+  if (!key || _lookedAt === key) return;
+  _lookedAt = key;
+  API.alerts().then((d) => {
+    for (const r of (d && d.items) || []) {
+      const spot = (r.where && r.where.spot) || {};
+      if (r.state !== 'running' || r.what !== 'frame' || spot.key !== key) continue;
+      const i = Number(spot.line);
+      if (!Number.isInteger(i) || _drawing.has(i)) continue;
+      _drawing.set(i, { alertId: r.id, startedAt: Date.parse(r.startedAt) || Date.now() });
+      _follow(i, r.id);
+    }
+    if (_ctx) _ctx.repaint();
+  }).catch(() => { /* without the list, nothing shows as drawing */ });
+}
+
+async function _pickFrame(i, frameId) {
+  const p = _ctx && _ctx.project;
+  if (!p) return;
+  try { _adopt(await _post('/api/scen3/fragments/pick-frame', { projectId: p.id, line: i, frameId })); }
+  catch (e) { _readErr = 'Could not pick that frame: ' + e.message; }
+  _ctx.repaint();
+}
+
 // A change by hand: shown at once, then the server's answer - which is also where a pose that does
 // not belong to a new shot size is replaced by one that does.
 async function _saveShot(i, patch) {
@@ -282,6 +385,7 @@ export function paint(host, ctx) {
   const right = el('div', 'mv3-wk-half is-guide is-frag');
   scroll.appendChild(right);
 
+  _pickUpDrawing();
   const missing = _missing(p);
   _controls(left, lines, missing);
   _list(left, p, lines);
@@ -295,6 +399,12 @@ export function paint(host, ctx) {
   else if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
   _stage(p, _open < 0 ? null : lines[_open], _open);
+  // The countdown belongs to the fragment being drawn, and only while it is the one open.
+  const place = _open >= 0 && _drawing.has(_open) ? 'frame:' + _open : null;
+  onlyHere(place);
+  if (place) {
+    holdProgress(place, { label: 'Drawing the frame of line ' + (_open + 1), estimateMs: FRAME_ESTIMATE_MS, startedAt: _drawing.get(_open).startedAt });
+  }
 }
 
 function _note(text, bad) {
@@ -388,11 +498,22 @@ function _controls(host, lines, missing) {
   read.title = blocked ? 'Needs the setting first'
     : 'The agent plans every line - shot, pose, camera, direction, animation - five lines at a time';
   read.addEventListener('click', () => _readScript());
-  const noFrame = lines.filter(l => !_frameOf(_ctx.project, l)).length;
-  const frames = el('button', 'mv3-wk-vmore is-small', noFrame ? 'make ' + noFrame + ' frame' + (noFrame === 1 ? '' : 's') : 'every line has a frame');
+  // Only lines that have a shot can be drawn; the others are counted apart so the number is honest.
+  const ready = lines.filter((l, i) => _shotState(l) !== 'none' && !_frameOf(_ctx.project, l) && !_drawing.has(i)).length;
+  const sub = _submitting;
+  const frames = el('button', 'mv3-wk-vmore is-small' + (_armedFrames ? ' is-armed' : '') + (sub ? ' is-busy' : ''),
+    sub ? 'asking ' + sub.done + ' of ' + sub.total + '…'
+      : _armedFrames ? ready + ' frame' + (ready === 1 ? '' : 's') + ' · ' + _money(ready * FRAME_PRICE) + '?'
+        : ready ? 'make ' + ready + ' frame' + (ready === 1 ? '' : 's') : (_drawing.size ? 'drawing ' + _drawing.size + '…' : 'no frames to make'));
   frames.type = 'button';
-  frames.disabled = true;
-  frames.title = blocked ? 'Needs the setting first' : 'Every missing frame at once, ' + _money(noFrame * FRAME_PRICE) + ' - comes with the frames (F3)';
+  frames.disabled = blocked || !ready || !!sub || !!_reading;
+  frames.title = blocked ? 'Needs the setting first'
+    : 'Every line that has a shot and no frame - nano-banana-2, 2K, ' + _money(FRAME_PRICE) + ' each. Press again to confirm.';
+  frames.addEventListener('click', () => {
+    if (!_armedFrames) { _armedFrames = true; _ctx.repaint(); return; }
+    _armedFrames = false;
+    _makeMissing(lines);
+  });
   acts.append(read, frames);
   host.appendChild(acts);
   if (_said) host.appendChild(_note(_said, true));
@@ -427,12 +548,12 @@ function _row(p, l, i) {
   const dots = el('div', 'mv3-wk-fdots');
   const dot = (state, what) => {
     const d = el('span', 'mv3-wk-fdot is-' + state);
-    d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
+    d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
   dot(_readState(l), 'read');
   dot(_shotState(l), 'shot');
-  dot(fr ? 'ok' : 'none', 'frame');
+  dot(_drawing.has(i) ? 'busy' : fr ? 'ok' : 'none', 'frame');
   dot(_clipState(l), 'clip');
   row.appendChild(dots);
 
@@ -510,7 +631,7 @@ function _fragment(host, p, l, i) {
   host.appendChild(grid);
   grid.appendChild(_shotCol(l, i));
   grid.appendChild(_poseCol(l));
-  grid.appendChild(_frameCol(p, l));
+  grid.appendChild(_frameCol(p, l, i));
   grid.appendChild(_motionCol(l, i));
   grid.appendChild(_clipCol(p, l, rs, take));
 
@@ -609,28 +730,63 @@ function _poseCol(l) {
   return col;
 }
 
-// FRAME - the picture the line opens on, and the button that makes it.
-function _frameCol(p, l) {
+// FRAME - the picture the line opens on, the button that makes it, and the line's other frames.
+function _frameCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('frame'));
   const fr = _frameOf(p, l);
-  const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty'));
+  const busy = _drawing.has(i);
+  const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty') + (busy ? ' is-busy' : ''));
   if (fr) {
     const img = el('img');
     img.alt = '';
     img.src = derived(fr.preview || fr.path, 'card');
     box.appendChild(img);
+    box.title = 'Open it large';
+    box.addEventListener('click', () => showPicture({ src: fr.path, name: 'frame of line ' + (i + 1), rows: fr.from ? [['drawn from', _fromText(fr.from)]] : [] }));
   } else {
-    box.appendChild(el('span', '', 'no frame'));
+    box.appendChild(el('span', '', busy ? 'drawing…' : 'no frame'));
   }
   col.appendChild(box);
-  const make = el('button', 'mv3-wk-vmore is-small is-media', fr ? 'again' : 'make frame');
+  const noShot = _shotState(l) === 'none';
+  const make = el('button', 'mv3-wk-vmore is-small is-media' + (busy ? ' is-busy' : ''), busy ? 'drawing…' : fr ? 'again' : 'make frame');
   make.type = 'button';
-  make.disabled = true;
-  make.title = 'nano-banana-2, 2K - comes with the frames (F3)';
+  make.disabled = busy || noShot || !!_missing(_ctx.project).length || !!_reading;
+  make.title = noShot ? 'Read the line first: the frame is drawn from its shot'
+    : 'nano-banana-2, 2K - ' + (fr ? 'another frame beside this one' : 'the frame this line opens on');
+  make.addEventListener('click', () => {
+    if (_open === i) holdProgress('frame:' + i, { label: 'Drawing the frame of line ' + (i + 1), estimateMs: FRAME_ESTIMATE_MS });
+    _makeFrame(i);
+  });
   col.appendChild(make);
-  col.appendChild(el('div', 'mv3-wk-fcap', _money(FRAME_PRICE) + ' · phase F3'));
+  col.appendChild(el('div', 'mv3-wk-fcap' + (noShot ? ' is-why' : ''), noShot ? 'read the line first' : _money(FRAME_PRICE)));
+  // The frames this line has had: pick the one it opens on.
+  const mine = (((p.mix || {}).variants) || []).filter(v => v.line === i);
+  if (mine.length > 1) {
+    const strip = el('div', 'mv3-wk-fstrip');
+    for (const v of mine.slice(0, 6)) {
+      const t = el('button', 'mv3-wk-fvar' + (fr && v.id === fr.id ? ' is-on' : ''));
+      t.type = 'button';
+      t.title = v.from ? _fromText(v.from) : 'a frame of this line';
+      const img = el('img');
+      img.alt = '';
+      img.src = derived(v.preview || v.path, 'card');
+      t.appendChild(img);
+      if (!(fr && v.id === fr.id)) t.addEventListener('click', () => _pickFrame(i, v.id));
+      strip.appendChild(t);
+    }
+    col.appendChild(strip);
+  }
   return col;
+}
+
+// What a frame was drawn from, in words.
+function _fromText(from) {
+  const cat = _kit || { framings: [], cameras: [] };
+  const f = (cat.framings.find(x => x.id === from.framing) || {}).label || from.framing;
+  const pz = (_poseById(from.poseId) || {}).label || from.poseId;
+  const c = (cat.cameras.find(x => x.id === from.camera) || {}).label || from.camera;
+  return [f, pz, c].filter(Boolean).join(' · ');
 }
 
 // The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
