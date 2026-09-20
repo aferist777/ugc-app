@@ -524,9 +524,16 @@ function _paintLookbooks(host, head, c) {
   for (const p of _lbs) {
     const path = String((p && p.path) || p || '');
     if (!path) continue;
+    // The first press picks the outfit; `apply` then stands on the picked tile itself (owner,
+    // 2026-09-21) - the act on the thing it acts on, not on the stage across the window.
     grid.appendChild(_lbTile(path, path === _lbPick, () => {
       _lbPick = (_lbPick === path ? '' : path);
       _ctx.repaint();
+    }, {
+      label: _dressing ? 'dressing…' : 'apply',
+      title: 'Dress ' + c.name + ' in this outfit and save it as a look',
+      busy: _dressing,
+      on: () => _apply(c),
     }));
   }
   host.appendChild(grid);
@@ -534,18 +541,13 @@ function _paintLookbooks(host, head, c) {
 }
 
 // ── What the stage shows while an outfit is being chosen ────────────────────
-// The person on top, the outfit below, and the button that joins them between the two: the
-// dressing IS that sentence, and a button in the panel would be a long way from the thing it
-// acts on. Nothing is under the shelf for the same reason - a row that appears there when an
-// outfit is picked pushes the shelf about while it is being read.
+// The person on top, the outfit below: the dressing IS that sentence, shown before it is paid
+// for. The stage has no button here - `apply` is on the picked tile - so the two pictures are
+// all that is on it. Nothing is under the shelf either: a row that appears there when an outfit
+// is picked pushes the shelf about while it is being read.
 function _showDressing(c) {
   PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
-  _stageButton(_lbPick ? {
-    label: _dressing ? 'dressing…' : 'apply',
-    title: 'Dress ' + c.name + ' in this outfit and save it as a look',
-    busy: _dressing,
-    on: () => _apply(c),
-  } : null);
+  _stageButton(null);
 }
 
 // The button lives in the stage, between the halves. Rebuilt rather than kept: the stage is
@@ -712,7 +714,9 @@ function _paintNewLookbook(host, head, c) {
 // Used by both shelves - the one that picks what to WEAR and the one that picks what a new
 // lookbook is BASED on - because a lookbook is the same thing on either, and so is getting
 // rid of one. The cross asks first; deleting is the only act here that cannot be undone.
-function _lbTile(path, on, pick) {
+// `act` is the button the PICKED tile carries - the dressing shelf's `apply`; the other shelf
+// has none, picking there is the whole act.
+function _lbTile(path, on, pick, act) {
   const tile = _el('button', 'mv3-wk-tile is-lb' + (on ? ' is-on' : ''));
   tile.type = 'button';
   tile.title = path.split('/').pop();
@@ -727,6 +731,15 @@ function _lbTile(path, on, pick) {
   x.title = 'Delete this lookbook';
   x.addEventListener('click', (e) => { e.stopPropagation(); _askDeleteLb(tile, path); });
   tile.appendChild(x);
+
+  if (on && act) {
+    const b = _el('button', 'mv3-wk-tileact', act.label);
+    b.type = 'button';
+    b.title = act.title || '';
+    b.disabled = !!act.busy;
+    b.addEventListener('click', (e) => { e.stopPropagation(); act.on(); });
+    tile.appendChild(b);
+  }
 
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {
