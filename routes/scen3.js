@@ -1122,16 +1122,31 @@ const POSE_SEED = [
     thumb: '/poses/scen3/thumbs/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg' },
 ];
 
+// A mannequin that only makes sense with a thing of the PLACE - a seat, a table, a wall. The
+// mannequin carries its own studio prop, and the picture that comes back sits at the mannequin's
+// table rather than the place's; so in the fragments step these are not offered as mannequins at
+// all - a pose that touches the place is written in words against the map of that place (the
+// owner, 2026-09-20: a prop belongs to the place, not to a doll).
+const POSE_NEEDS = {
+  'knees-seated-table': 'a table with a seat',
+  'knees-sofa-back':    'a sofa or a deep seat',
+  'knees-desk-edge':    'a desk or a counter at hip height',
+  'knees-elbows-knees': 'a seat',
+  'knees-wall-shoulder': 'a free wall beside the person',
+};
+
 function _normPose(p) {
   const s = p || {};
+  const id = String(s.id || '').trim();
   return {
-    id:      String(s.id || '').trim(),
+    id,
     group:   String(s.group || '').trim(),
     label:   String(s.label || '').trim(),
     desc:    String(s.desc || '').trim(),
     file:    String(s.file || ''),             // the mannequin
     thumb:   String(s.thumb || ''),
     active:  s.active !== false,
+    needs:   POSE_NEEDS[id] || '',
   };
 }
 
@@ -2010,6 +2025,9 @@ JOBS.register('environment', {
   poll: _pollTask,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('environment', landed.imagePath, _fileParams(rec));
+    // Mapped now, from the picture that landed, so the fragments step finds the map ready. Not
+    // awaited: the row says "done" when the picture is on the shelf, and the map is seconds behind.
+    _placeMap(filed.path).catch(e => console.warn('[scen3/place-map] could not map the new place:', e.message));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
   },
   submit: async (request) => {
@@ -3396,8 +3414,21 @@ function _normFrameRef(r) {
   return {
     look: String(r.look), place: String(r.place),
     character: str(r.character, 1500), environment: str(r.environment, 1500), lighting: str(r.lighting, 1200),
+    // The outfit part by part, as the lookbook it was made from describes it - where every sleeve
+    // and hem ends. The most exact words about the clothes there are.
+    outfit: str(r.outfit, 1500),
     at: str(r.at, 40),
   };
+}
+
+// The description the lookbook carries, when the look was dressed from one made here.
+function _outfitOf(lookPath) {
+  try {
+    const list = _read(OBRAZY_JSON);
+    const rec = (Array.isArray(list) ? list : []).find(o => o && String(o.char || '') === String(lookPath || ''));
+    const lb = rec && rec.lb ? String(rec.lb) : '';
+    return lb ? String((_lbMeta()[lb] || {}).description || '').trim() : '';
+  } catch (e) { return ''; }
 }
 
 // A line's shot. `said` and `mood` are what it was read FROM: a line whose words or whose video's mood
@@ -3411,6 +3442,11 @@ function _normShot(sh) {
     framing:      str(sh.framing, 40),
     poseId:       str(sh.poseId, 80),
     camera:       str(sh.camera, 40),
+    // A pose written in words instead of a mannequin: the line touches the place (sits on its seat,
+    // leans on its parapet), and no doll knows this place. poseId is empty then.
+    poseText:     str(sh.poseText, 700),
+    // Where in the place the person is for this shot, and the camera against them.
+    placement:    str(sh.placement, 600),
     direction:    str(sh.direction, 700),
     why:          str(sh.why, 300),
     motion:       str(sh.motion, 900),
@@ -3418,6 +3454,9 @@ function _normShot(sh) {
     motionEdited: !!sh.motionEdited,
     said:         String(sh.said || ''),
     mood:         str(sh.mood, 40),
+    // The place and the look this was planned FOR: a plan made for another terrace is stale.
+    place:        String(sh.place || ''),
+    look:         String(sh.look || ''),
     at:           str(sh.at, 40),
   };
 }
@@ -3681,6 +3720,71 @@ router.post('/scen3/projects/:id/line', (req, res) => {
 
 const FRAG_BATCH = 5;                     // lines per reading (the owner)
 
+// ── The map of a place ──────────────────────────────────────────────────────
+// Three texts travel with an environment (scen3-env-meta.json): what it is (written when it is
+// made), its MAP - the camera of the photograph, where a person can physically stand or sit and
+// what is in front of and behind them, the foreground and its height against a standing person,
+// which shot sizes the place affords, what it has to lean or sit on - and what MOVES in it, for the
+// video models that hear such things (Seedance, Animate; whether Kling avatar does is measured in
+// F4). All three are read from the PICTURE, not from a prompt: the maker's prompt describes what was
+// asked for, the map describes what came. New environments are mapped by the server the moment they
+// land; older ones on their first use in the fragments step.
+const PLACE_SHOTS = ['closeup', 'half-body', 'knees-up', 'full-height'];
+
+function _normPlaceMap(g) {
+  if (!g || typeof g !== 'object') return null;
+  const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const affords = {};
+  for (const k of PLACE_SHOTS) affords[k] = !(g.affords && typeof g.affords === 'object') || g.affords[k] !== false;
+  const has = {};
+  for (const k of ['wall', 'table', 'seat', 'counter']) has[k] = !!(g.has && g.has[k]);
+  return {
+    camera: str(g.camera, 300), where: str(g.where, 500), foreground: str(g.foreground, 400),
+    affords, has, lean: str(g.lean, 300), summary: str(g.summary, 500), at: str(g.at, 40),
+  };
+}
+
+async function _readPlaceMap(placePath) {
+  const url = await _hostLocal(placePath);
+  const ask = [
+    'This is a photograph of a place where a person will later be filmed speaking to a camera - the camera on the same floor as them, at chest height, the person standing or sitting where the place allows.',
+    'Read the PICTURE, not what the place is usually like. Answer with JSON only:',
+    '{"camera":"from where and how the photograph is taken - the height of the camera, the angle (level, looking down, looking up), how wide",',
+    ' "where":"where exactly a person would physically stand or sit for such a camera, what is directly in front of them and behind them, and whether the floor they stand on is IN the picture",',
+    ' "foreground":"what is between the camera and that person - a parapet, a table, a counter, plants - and how high each is against a standing person (knee, hip, waist, chest)",',
+    ' "affords":{"closeup":true|false,"half-body":true|false,"knees-up":true|false,"full-height":true|false},',
+    ' "has":{"wall":true|false,"table":true|false,"seat":true|false,"counter":true|false},',
+    ' "lean":"what a person could lean, sit or rest an arm on, and at what height - or none",',
+    ' "summary":"the place in two plain sentences, for a director",',
+    ' "motion":"what moves in this place in a video - leaves in the wind, a curtain, light on water, distant traffic - one or two sentences a video model would follow, or none"}',
+    'A shot size is afforded only when the picture can hold it honestly: full-height needs the floor the person stands on to be in the picture; knees-up needs room below the hips; a view from a height over a railing or parapet affords only what shows the person from the waist up behind it. "has" means a thing the person could actually use in THIS picture: a wall to lean on beside them, a table, a seat, a counter.',
+  ].join('\n');
+  const raw = await _ask([{ role: 'user', content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url } }] }]);
+  const m = String(raw || '').match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('the agent did not map the place');
+  let g;
+  try { g = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  const geometry = _normPlaceMap({ ...g, at: new Date().toISOString() });
+  const motion = String(g.motion || '').trim().slice(0, 400);
+  return { geometry, motion };
+}
+
+// The map of a place: from the shelf, or read now and kept there. `refresh` reads it again.
+async function _placeMap(placePath, refresh) {
+  const key = String(placePath || '');
+  if (!key) return null;
+  const all = SHELF_META.read('environments');
+  const have = all[key] && _normPlaceMap(all[key].geometry);
+  if (have && !refresh) return have;
+  const { geometry, motion } = await _readPlaceMap(key);
+  const again = SHELF_META.read('environments');
+  again[key] = { ...(again[key] || {}), geometry, motion };
+  SHELF_META.write('environments', again);
+  console.log('[scen3/place-map] ' + key.split('/').pop() + ': affords ' + PLACE_SHOTS.filter(k => geometry.affords[k]).join(', ')
+    + ' | has ' + (Object.keys(geometry.has).filter(k => geometry.has[k]).join(', ') || 'nothing') + ' | motion ' + motion.length + 'ch');
+  return geometry;
+}
+
 function _scriptCatalogue() {
   const fo = _loadFrameOpts();
   const poses = _loadPoses().filter(p => p.active);
@@ -3690,18 +3794,32 @@ function _scriptCatalogue() {
 // A choice checked against the catalogue: a shot size that exists, a pose OF that shot size, a camera
 // that exists. What does not fit is replaced by the nearest sensible thing, never refused - a
 // reading of twelve lines is not thrown away for one wrong id.
-function _fitShot(pick, cat) {
-  const f = cat.framings.find(x => x.id === String(pick.framing || '')) || cat.framings.find(x => x.id === 'half-body') || cat.framings[0];
-  const inGroup = cat.poses.filter(p => p.group === f.id);
-  const pose = inGroup.find(p => p.id === String(pick.poseId || pick.pose || '')) || inGroup[0] || null;
+// The shot sizes a place allows, closest first - the order a forbidden one is replaced in.
+const _allowedShots = (map) => PLACE_SHOTS.filter(k => !map || map.affords[k]);
+
+function _fitShot(pick, cat, map) {
+  const allowed = _allowedShots(map);
+  let fid = String(pick.framing || '');
+  if (!cat.framings.some(x => x.id === fid) || !allowed.includes(fid)) fid = allowed.includes('half-body') ? 'half-body' : (allowed[0] || 'half-body');
+  const f = cat.framings.find(x => x.id === fid) || cat.framings[0];
   const cam = cat.cameras.find(x => x.id === String(pick.camera || '')) || cat.cameras.find(x => x.id === 'nat-50') || cat.cameras[0];
-  return { framing: f.id, poseId: pose ? pose.id : '', camera: cam.id };
+  const wantId = String(pick.poseId || pick.pose || '');
+  const text = String(pick.poseText || '').trim();
+  // A pose in words, when the line touches the place. Kept as words: no mannequin fits it.
+  if (wantId === 'text' || (!wantId && text)) return { framing: f.id, poseId: '', poseText: text, camera: cam.id };
+  // A mannequin: of this shot size, and one that needs nothing of the place.
+  const body = cat.poses.filter(p => p.group === f.id && !p.needs);
+  const pose = body.find(p => p.id === wantId) || body[0] || null;
+  return { framing: f.id, poseId: pose ? pose.id : '', poseText: pose ? '' : text, camera: cam.id };
 }
 
-async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, current }) {
+async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, current, map }) {
   const cat = _scriptCatalogue();
   const moodRec = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
   const want = (only && only.length) ? only : lines.map((_, i) => i);
+  const allowed = _allowedShots(map);
+  const bodyPoses = cat.poses.filter(p => !p.needs && allowed.includes(p.group));
+  const hasThings = map ? Object.keys(map.has).filter(k => map.has[k]) : [];
   const rules = [
     'You are the DIRECTOR and the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a phone camera in one real place, line by line. Every line of the script becomes ONE shot - one clip, cut to the next.',
     'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet: a portrait and the full body from the front, the side and the back). IMAGE 2 is the place, photographed empty.',
@@ -3712,17 +3830,22 @@ async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, cu
     'THE CRAFT:',
     '1. Meaning first. The shot serves what the line DOES. A hook, a surprising claim or a call to action: closer and livelier. An explanation, a list or proof: steadier, with room for the hands. Something personal or vulnerable: closer and softer. Doubt or an objection: a guarded pose. The payoff or relief: an open posture.',
     '2. Rhythm. Two neighbouring lines never share the same shot size AND the same pose - a change between lines is a cut, and cuts hold a viewer. But do not jump every line: build the video from two or three shot sizes, move between them with purpose, and come back to a home shot.',
-    '3. Physically possible HERE. Look at IMAGE 2. A seated pose only where there is something to sit on; a pose against a wall only where there is a free wall; a table or a desk only if the place has one. The person stays in the same place with the same light in every line.',
+    '3. Physically possible HERE - the map of the place below is the truth, and IMAGE 2 confirms it. The person stays in the same place with the same light in every line.',
     '4. The camera means something. Phone selfie is a direct, intimate talk to the viewer and goes only with the selfie poses. 50mm natural is the neutral default. 85mm portrait is for emotional close lines. Phone rear cam or 35mm documentary feel like somebody else is filming. Webcam is a desk confession. Do not change the camera between neighbouring lines unless the change means something.',
     '5. The DIRECTION is the first frame, frozen: where the body, the hands and the head are and the expression at the moment the line begins - one or two concrete sentences, physically possible in this place, consistent with the pose. In the FRAME the person does NOT have to look into the lens: they can be caught mid-thought.',
+    '5b. The PLACEMENT is where exactly the person is in this place for this shot: what they stand or sit on, what is directly in front of them and behind them, how far from the camera, and the camera\'s height against them - one or two sentences, consistent with the map and with the camera the place was photographed with. It is what stops a person from standing on a parapet.',
     '6. The MOTION is the animation prompt for a talking-head avatar model, 25 to 45 words, in this order: what they feel, the expression, the head, the hands, the gaze. It starts from the moment the direction describes. The model keeps the person where the frame put them and hears ONLY expression, head and hands: never write camera moves, zooms, cuts, walking, standing up, turning around, objects or scene changes.',
     '7. The GAZE lives in the motion: the person speaks into the lens. Looking away is RARE - at most one or two lines in the whole video, only where the words ask for it (remembering, hesitating), and the eyes come back to the lens within the line.',
     '8. No product in hand, nothing held unless the pose itself holds a phone.',
     '9. Everything you write is in English, whatever the language of the script.',
     '',
+    'THE PLACE, read from its picture: ' + (map ? map.summary : '(not mapped - judge IMAGE 2)') + (map ? ' Camera of the picture: ' + map.camera + ' Where a person is: ' + map.where + ' In front of them: ' + map.foreground + ' To lean, sit or rest on: ' + (map.lean || 'nothing') + '.' : ''),
+    'SHOT SIZES THIS PLACE AFFORDS: ' + allowed.join(', ') + '. ' + (allowed.length < PLACE_SHOTS.length ? 'The others are FORBIDDEN here - a full-height shot needs the floor the person stands on to be in the picture, and it is not. ' : '') + 'It has: ' + (hasThings.length ? hasThings.join(', ') : 'no wall to lean on, no table, no seat, no counter') + '.',
+    '',
+    'TWO WAYS TO POSE A LINE. (a) A MANNEQUIN from the catalogue below - a body pose that touches nothing; it is drawn from a picture of the pose, so the body comes out exactly. (b) A POSE IN WORDS, when the line should touch the place - sit on its seat, lean on its parapet or wall, rest an arm on its counter - and ONLY when the map says the place has that thing. For (b) answer "pose":"text" and write "poseText" for an image model, not for a reader: the stance and which leg carries the weight, the angle of the torso to the camera, each arm and hand and what it touches, the rotation and tilt of the head, the height of the camera. Never a pose in words that needs a thing the place does not have.',
     'THE CATALOGUE - choose ONLY from these ids.',
-    'Shot sizes: ' + cat.framings.map(f => f.id + ' (' + f.label + ': ' + f.crop + ')').join('; ') + '.',
-    'Poses - each belongs to ONE shot size, and a pose may only be used with its own shot size: ' + cat.poses.map(p => p.id + ' [' + p.group + '] ' + p.label + ' - ' + p.desc).join('; ') + '.',
+    'Shot sizes: ' + cat.framings.filter(f => allowed.includes(f.id)).map(f => f.id + ' (' + f.label + ': ' + f.crop + ')').join('; ') + '.',
+    'Mannequin poses - each belongs to ONE shot size, and may only be used with its own shot size: ' + bodyPoses.map(p => p.id + ' [' + p.group + '] ' + p.label + ' - ' + p.desc).join('; ') + '.',
     'Cameras: ' + cat.cameras.map(c => c.id + ' (' + c.label + ': ' + c.summary + ')').join('; ') + '.',
     'Examples of good animation prompts, for their shape and vocabulary only: ' + MP.MOTION_PRESETS.map(m => '"' + m.prompt + '"').join(' | '),
     '',
@@ -3731,11 +3854,11 @@ async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, cu
     ...lines.map((t, i) => (i + 1) + '. ' + t),
   ];
   if (only && only.length && current) {
-    const planned = lines.map((_, i) => (current[i] && !want.includes(i)) ? (i + 1) + ': ' + current[i].framing + ' / ' + current[i].poseId + ' / ' + current[i].camera : '').filter(Boolean);
+    const planned = lines.map((_, i) => (current[i] && !want.includes(i)) ? (i + 1) + ': ' + current[i].framing + ' / ' + (current[i].poseId || 'in words') + ' / ' + current[i].camera : '').filter(Boolean);
     if (planned.length) rules.push('The other lines are already planned like this - keep the rhythm with them: ' + planned.join('; ') + '.');
   }
   rules.push('Plan the lines ' + want.map(i => i + 1).join(', ') + '.');
-  rules.push('Answer with JSON only: {"lines":[{"n":<line number>,"framing":"<shot size id>","pose":"<pose id>","camera":"<camera id>","direction":"...","motion":"...","why":"<one short sentence>"}]}');
+  rules.push('Answer with JSON only: {"lines":[{"n":<line number>,"framing":"<shot size id>","pose":"<mannequin pose id, or text>","poseText":"<the pose in words when pose is text, else empty>","camera":"<camera id>","placement":"...","direction":"...","motion":"...","why":"<one short sentence>"}]}');
 
   const content = [
     { type: 'text', text: rules.filter(x => x !== null).join('\n') },
@@ -3751,9 +3874,10 @@ async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, cu
   for (const r of (Array.isArray(plan && plan.lines) ? plan.lines : [])) {
     const i = parseInt(r && r.n, 10) - 1;
     if (!want.includes(i) || out.has(i)) continue;
-    const fit = _fitShot({ framing: r.framing, poseId: r.pose || r.poseId, camera: r.camera }, cat);
+    const fit = _fitShot({ framing: r.framing, poseId: r.pose || r.poseId, poseText: r.poseText, camera: r.camera }, cat, map);
     out.set(i, {
       ...fit,
+      placement: String(r.placement || '').trim(),
       direction: String(r.direction || '').trim(),
       motion: String(r.motion || '').trim(),
       why: String(r.why || '').trim(),
@@ -3796,11 +3920,13 @@ router.post('/scen3/fragments/read', async (req, res) => {
       _hostLocal(cast.locationImage, { verify: true }),
     ]);
     const placeNote = String(((SHELF_META.read('environments') || {})[cast.locationImage] || {}).description || '').slice(0, 1600);
-    // The context is what is planned AND still true: a shot read for other words or another mood
-    // would pull the rhythm towards a video that is no longer this one.
+    // The map of the place: from the shelf, or - an older environment - read now and kept.
+    const map = await _placeMap(cast.locationImage);
+    const fresh = (l) => l.shot && l.shot.said === l.text && l.shot.mood === mood
+      && (!l.shot.place || l.shot.place === cast.locationImage) && (!l.shot.look || l.shot.look === cast.obrazImage);
     const planned = await _readScript({
-      mood, lines: words, only, lookUrl, placeUrl, placeNote,
-      current: lines.map(l => (l.shot && l.shot.said === l.text && l.shot.mood === mood) ? l.shot : null),
+      mood, lines: words, only, lookUrl, placeUrl, placeNote, map,
+      current: lines.map(l => (fresh(l) ? l.shot : null)),
     });
 
     // Written in one burst against the project as it is NOW, touching only the shots: a read or a
@@ -3816,18 +3942,21 @@ router.post('/scen3/fragments/read', async (req, res) => {
       const was = p.lines[i].shot;
       const keepHand = !!(was && was.motionEdited && was.motion);
       p.lines[i].shot = _normShot({
-        framing: got.framing, poseId: got.poseId, camera: got.camera,
-        direction: got.direction, why: got.why,
+        framing: got.framing, poseId: got.poseId, poseText: got.poseText, camera: got.camera,
+        placement: got.placement, direction: got.direction, why: got.why,
         motion: keepHand ? was.motion : got.motion,
         motionAgent: got.motion,
         motionEdited: keepHand,
-        said: words[i], mood, at,
+        said: words[i], mood, place: cast.locationImage, look: cast.obrazImage, at,
       });
     }
     p.updatedAt = at;
     _saveProjects(list);
     console.log('[scen3/fragments/read] ' + id + ' mood=' + mood + ' planned ' + planned.size + ' of ' + lines.length);
-    res.json({ success: true, project: _projFull(p), planned: [...planned.keys()].map(i => i + 1) });
+    // The lines asked for and not planned: the agent skips one now and then - a line that is only
+    // about the video itself, say - and the page has to be able to say which.
+    const skipped = only.filter(i => !planned.has(i)).map(i => i + 1);
+    res.json({ success: true, project: _projFull(p), planned: [...planned.keys()].map(i => i + 1), skipped });
   } catch (e) {
     console.error('[scen3/fragments/read]', e.message);
     res.status(502).json({ success: false, error: e.message });
@@ -3842,7 +3971,7 @@ router.post('/scen3/fragments/read', async (req, res) => {
    now and the mood as it is now, so it is fresh; an animation prompt written by hand is marked so
    a new reading leaves it alone, and useAgentMotion puts the agent's back.
    ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/fragments/shot', (req, res) => {
+router.post('/scen3/fragments/shot', async (req, res) => {
   try {
     const b = req.body || {};
     const list = _loadProjects();
@@ -3853,12 +3982,19 @@ router.post('/scen3/fragments/shot', (req, res) => {
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
     const patch = (b.patch && typeof b.patch === 'object') ? b.patch : {};
+    const cast = _normCasting(p.casting);
     const was = p.lines[i].shot || {};
     const next = { ...was };
     if ('framing' in patch) next.framing = String(patch.framing || '');
     if ('poseId' in patch) next.poseId = String(patch.poseId || '');
+    if ('poseText' in patch) next.poseText = String(patch.poseText || '');
     if ('camera' in patch) next.camera = String(patch.camera || '');
-    Object.assign(next, _fitShot(next, _scriptCatalogue()));
+    // A pose chosen as "in words" with nothing written yet stays in words, empty, until it is.
+    if (next.poseId === 'text') { next.poseId = ''; next.poseText = next.poseText || ' '; }
+    const map = cast.locationImage ? await _placeMap(cast.locationImage).catch(() => null) : null;
+    Object.assign(next, _fitShot(next, _scriptCatalogue(), map));
+    next.poseText = String(next.poseText || '').trim();
+    if ('placement' in patch) next.placement = String(patch.placement || '');
     if ('direction' in patch) next.direction = String(patch.direction || '');
     if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
     else if ('motion' in patch) {
@@ -3867,6 +4003,8 @@ router.post('/scen3/fragments/shot', (req, res) => {
     }
     next.said = p.lines[i].text;
     next.mood = _normVideo(p.video).mood;
+    next.place = cast.locationImage;
+    next.look = cast.obrazImage;
     next.at = new Date().toISOString();
     p.lines[i].shot = _normShot(next);
     p.updatedAt = next.at;
@@ -3916,12 +4054,19 @@ const FRAG_RULE_POSED =
 
 // For a pose whose mannequin is missing: two references, the body in words.
 const FRAG_RULE_PLAIN =
-  'Create ONE photorealistic photograph: the person from IMAGE 1, in the location from IMAGE 2.'
+  'Create ONE photorealistic photograph: the person from IMAGE 1, in the location from IMAGE 2, in the body position described below - reproduce that position exactly.'
   + ' IMAGE 1 is a character reference sheet - take ONLY the person from it and keep the same face, hair,'
   + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
   + ' more than ONE person in the result.'
   + ' IMAGE 2 is the location - keep its architecture, furniture, colours and depth.'
   + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
+
+// The clothes are what the picture shows - said after the outfit, so no reading can lengthen a sleeve
+// (the owner's first frames, 2026-09-19: "military-style jacket" grew a sleeve to the wrist where an
+// arm was half hidden, while the lookbook said short and cropped).
+const OUTFIT_LOCK =
+  ' The clothes are EXACTLY as on IMAGE 2: every sleeve ends where it ends there, every hem sits where it sits there,'
+  + ' what is bare there stays bare, what is open stays open. Add nothing, lengthen nothing, close nothing.';
 
 // The person belongs to the place: the light that falls on them is the place's light (the owner's
 // realism marker for frames, beside the person one of S1).
@@ -3939,10 +4084,15 @@ async function _frameRef(projectId, cast) {
   const ask = 'IMAGE 1 is a character reference sheet, IMAGE 2 is an empty location.'
     + ' Answer in exactly the labelled blocks below, each on its own line, each one plain sentences'
     + ' with no lists and no extra headings.'
-    + '\nCHARACTER: describe the person on the sheet - face, hair, build, skin tone and the clothing they'
-    + ' are wearing, as the traits to preserve.'
+    + '\nCHARACTER: describe the person on the sheet - face, hair, build, skin tone - and then the clothes'
+    + ' exactly as they are IN THE PICTURE, garment by garment: what it is, its colour and fabric, and precisely'
+    + ' where it ENDS on the body - the sleeves (none, short above the elbow, to the elbow, long to the wrist),'
+    + ' the hem of the top or jacket (cropped above the waist, at the waist, at the hip), the trousers, the'
+    + ' shoes - what skin is bare, and whether it is worn open or closed. Describe what the picture shows,'
+    + ' never what that kind of garment usually has.'
     + '\nENVIRONMENT: describe the location - what kind of place it is, its architecture, surfaces, colours'
-    + ' and depth, and in one clause where in the frame there is clear space for a person.'
+    + ' and depth - and where a person would physically stand or sit for a camera on the same floor as'
+    + ' them, what is in front of them and behind them, and whether that floor is in the picture.'
     + '\nLIGHTING: describe the location\'s light precisely enough to composite a person into it convincingly -'
     + ' where the key light comes from, hard or soft, its colour temperature and any cast, how strong the'
     + ' ambient fill is, the character and direction of the shadows, and what time of day it reads as.';
@@ -3955,6 +4105,7 @@ async function _frameRef(projectId, cast) {
   const ref = _normFrameRef({
     look: cast.obrazImage, place: cast.locationImage,
     character: blocks.character, environment: blocks.environment, lighting: blocks.lighting,
+    outfit: _outfitOf(cast.obrazImage),
     at: new Date().toISOString(),
   });
   // Kept on the project in one burst, touching nothing else.
@@ -3983,11 +4134,14 @@ async function _submitFragFrame(b) {
 
   const cat = _scriptCatalogue();
   const framing = cat.framings.find(f => f.id === sh.framing) || null;
-  const pose = cat.poses.find(p => p.id === sh.poseId) || null;
+  const pose = sh.poseId ? (cat.poses.find(p => p.id === sh.poseId) || null) : null;
   const cam = cat.cameras.find(c => c.id === sh.camera) || null;
-  const posePath = _poseImageFor(sh.poseId, sh.framing);
+  const posePath = sh.poseId ? _poseImageFor(sh.poseId, sh.framing) : '';
+  const poseWords = pose && pose.desc ? pose.desc : String(sh.poseText || '').trim();
 
   const ref = await _frameRef(id, cast);
+  const map = await _placeMap(cast.locationImage).catch(() => null);
+  const placement = String(sh.placement || '').trim() || (map ? map.where : '');
   const urls = [];
   if (posePath) urls.push(await _hostLocal(posePath));
   urls.push(await _hostLocal(cast.obrazImage), await _hostLocal(cast.locationImage));
@@ -3998,21 +4152,23 @@ async function _submitFragFrame(b) {
       + '. Frame the person exactly this way and do not pull back to fit more of the body in.');
   }
   parts.push(posePath ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
+  if (placement) parts.push('WHERE THE PERSON IS in the location: ' + placement);
   if (cam) parts.push('Camera: ' + cam.prompt + '.');
-  if (pose && pose.desc) parts.push('Body position to reproduce - the person is ' + pose.desc + '.');
+  if (poseWords) parts.push('Body position to reproduce - the person is ' + poseWords + '.');
   if (sh.direction) parts.push('THE MOMENT - the instant this line begins: ' + sh.direction);
   if (ref.character) parts.push('The person to keep: ' + ref.character);
+  if (ref.outfit) parts.push('THE OUTFIT, part by part, as it was made: ' + ref.outfit);
   if (ref.environment) parts.push('The location: ' + ref.environment);
   if (ref.lighting) parts.push('Match the location lighting exactly - ' + ref.lighting);
-  const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
+  const prompt = parts.join(' ') + OUTFIT_LOCK + FRAG_LIGHT_MATCH + PERSON_REAL;
 
   const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
   console.log('[scen3/fragments/frame] line ' + (i + 1) + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
-    + ' refs=' + urls.length + ' pose=' + (pose ? pose.id + (posePath ? '+img' : '') : '-') + ' cam=' + (cam ? cam.id : '-'));
+    + ' refs=' + urls.length + ' pose=' + (pose ? pose.id + (posePath ? '+img' : '') : (poseWords ? 'words' : '-')) + ' cam=' + (cam ? cam.id : '-'));
   return {
     taskId, engine: FRAG_FRAME_ENGINE, prompt,
-    file: { projectId: id, line: i, prompt, shotAt: sh.at, framing: sh.framing, poseId: sh.poseId, camera: sh.camera },
+    file: { projectId: id, line: i, prompt, shotAt: sh.at, framing: sh.framing, poseId: sh.poseId, poseText: sh.poseText || '', camera: sh.camera },
   };
 }
 
@@ -4716,9 +4872,9 @@ router.cutClips = _cutClips;
 // The prompt blocks, for tools that must send exactly what the app sends (a model comparison is
 // worthless if the bench says something the routes do not).
 router.FRAG_BATCH = FRAG_BATCH;
-router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL };
+router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL, OUTFIT_LOCK };
 // ...and the two agents that write the long half of those prompts, for the same reason.
-router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, readScript: _readScript };
+router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, readScript: _readScript, readPlaceMap: _readPlaceMap, placeMap: _placeMap };
 router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 

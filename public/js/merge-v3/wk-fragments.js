@@ -191,7 +191,12 @@ async function _post(url, body) {
 function _shotState(l) {
   const sh = l && l.shot;
   if (!sh || !sh.framing) return 'none';
-  return (sh.said === _words(l) && sh.mood === (_video().mood || '')) ? 'ok' : 'stale';
+  const cast = (_ctx && _ctx.project && _ctx.project.casting) || {};
+  // A plan made for another place or another look is a plan for another video. Shots from before
+  // the place was recorded on them carry no place, and are left as they are.
+  const samePlace = !sh.place || sh.place === String(cast.locationImage || '');
+  const sameLook = !sh.look || sh.look === String(cast.obrazImage || '');
+  return (sh.said === _words(l) && sh.mood === (_video().mood || '') && samePlace && sameLook) ? 'ok' : 'stale';
 }
 
 async function _readScript() {
@@ -199,18 +204,22 @@ async function _readScript() {
   const n = ((p && p.lines) || []).length;
   if (!p || !n || _reading) return;
   _readErr = '';
+  const skipped = [];
   for (let k = 0; k < n; k += BATCH) {
     const only = [];
     for (let j = k; j < Math.min(n, k + BATCH); j++) only.push(j);
     _reading = { from: k + 1, to: k + only.length, total: n };
     _ctx.repaint();
     try {
-      _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only }));
+      const r = await _post('/api/scen3/fragments/read', { projectId: p.id, only });
+      _adopt(r);
+      for (const x of r.skipped || []) skipped.push(x);
     } catch (e) {
       _readErr = 'The agent could not read lines ' + (k + 1) + '–' + (k + only.length) + ': ' + e.message;
       break;
     }
   }
+  if (skipped.length && !_readErr) _readErr = 'The agent left line' + (skipped.length > 1 ? 's ' : ' ') + skipped.join(', ') + ' unplanned - read ' + (skipped.length > 1 ? 'them' : 'it') + ' alone, or plan by hand.';
   _reading = null;
   _ctx.repaint();
 }
@@ -222,7 +231,9 @@ async function _readLine(i) {
   _reading = { line: i };
   _ctx.repaint();
   try {
-    _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only: [i] }));
+    const r = await _post('/api/scen3/fragments/read', { projectId: p.id, only: [i] });
+    _adopt(r);
+    if ((r.skipped || []).length) _readErr = 'The agent left line ' + (i + 1) + ' unplanned - plan it by hand, or word the line differently.';
   } catch (e) {
     _readErr = 'The agent could not read line ' + (i + 1) + ': ' + e.message;
   }
@@ -700,19 +711,37 @@ function _shotCol(l, i) {
   const framing = (sh && sh.framing) || '';
   col.appendChild(pick('How much of the person is in the frame', cat.framings, framing, 'shot size',
     (v) => _saveShot(i, { framing: v })));
-  // Only the poses of this shot size: each mannequin belongs to exactly one.
-  const poses = cat.poses.filter(p => !framing || p.group === framing).map(p => ({ id: p.id, label: p.label, title: p.desc }));
-  col.appendChild(pick('The body position - one of the mannequins of this shot size', poses, (sh && sh.poseId) || '', 'pose',
-    (v) => _saveShot(i, { poseId: v })));
+  // The mannequins of this shot size that touch nothing of the place - and "in words", for a pose
+  // that does (sits on its seat, leans on its parapet): no doll knows this place.
+  const inWords = !!(sh && !sh.poseId && sh.poseText);
+  const poses = cat.poses.filter(p => !p.needs && (!framing || p.group === framing)).map(p => ({ id: p.id, label: p.label, title: p.desc }));
+  // A mannequin that needs the place, chosen before there was a map: still shown as what the line
+  // has, and not offered otherwise - a pose that touches the place is written in words now.
+  const held = sh && sh.poseId ? _poseById(sh.poseId) : null;
+  if (held && held.needs) poses.unshift({ id: held.id, label: held.label + ' (needs ' + held.needs + ')', title: 'Chosen before the place was mapped - pick "in words" to pose it for this place' });
+  poses.push({ id: 'text', label: 'in words…', title: 'A pose written for this place, in words - when it should touch a seat, a parapet, a counter' });
+  col.appendChild(pick('The body position - a mannequin of this shot size, or in words', poses, inWords ? 'text' : ((sh && sh.poseId) || ''), 'pose',
+    (v) => _saveShot(i, v === 'text'
+      ? { poseId: 'text', poseText: (sh && sh.poseText) || (sh && sh.direction) || 'standing, facing the camera, weight on both feet' }
+      : { poseId: v })));
+  if (inWords) {
+    col.appendChild(_textField(i, 'poseText', sh.poseText, 3,
+      'The pose for an image model: the stance and which leg carries the weight, the torso\'s angle to the camera, each arm and hand and what it touches, the head, the camera height',
+      (v) => _saveShot(i, { poseText: v })));
+  }
   col.appendChild(pick('The lens and how it renders', cat.cameras.map(c => ({ id: c.id, label: c.label, title: c.summary })),
     (sh && sh.camera) || '', 'camera', (v) => _saveShot(i, { camera: v })));
 
+  col.appendChild(el('div', 'mv3-wk-flabel', 'placement'));
+  col.appendChild(_textField(i, 'placement', (sh && sh.placement) || '', 2,
+    'Where in the place the person is for this shot: what they stand or sit on, what is in front and behind, the camera against them',
+    (v) => _saveShot(i, { placement: v })));
   col.appendChild(el('div', 'mv3-wk-flabel', 'direction'));
   col.appendChild(_textField(i, 'direction', (sh && sh.direction) || '', 3,
     'The first frame, frozen: where the body, the hands and the head are, and the expression as the line begins',
     (v) => _saveShot(i, { direction: v })));
   if (sh && sh.why) col.appendChild(el('div', 'mv3-wk-fwhy', sh.why));
-  if (st === 'stale') col.appendChild(_note('The words or the mood of the video changed since this line was read - read it again.', true));
+  if (st === 'stale') col.appendChild(_note('The words, the mood, the place or the look changed since this line was planned - read it again.', true));
   if (!sh) col.appendChild(el('div', 'mv3-wk-fsoon', 'Not read yet: "read the script" plans every line, or read this one alone. Anything here can also be set by hand.'));
   return col;
 }
@@ -722,19 +751,23 @@ function _poseCol(l) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('pose'));
   const sh = l.shot || null;
-  const pose = sh ? _poseById(sh.poseId) : null;
-  const box = el('div', 'mv3-wk-fmedia is-pose' + (pose ? '' : ' is-empty'));
+  const pose = sh && sh.poseId ? _poseById(sh.poseId) : null;
+  const words = !!(sh && !sh.poseId && sh.poseText);
+  const box = el('div', 'mv3-wk-fmedia is-pose' + (pose ? '' : ' is-empty') + (words ? ' is-words' : ''));
   if (pose && (pose.thumb || pose.file)) {
     const img = el('img');
     img.alt = '';
     img.src = pose.thumb || pose.file;
     box.title = pose.label + ' - ' + pose.desc;
     box.appendChild(img);
+  } else if (words) {
+    box.title = sh.poseText;
+    box.appendChild(el('span', 'mv3-wk-fwords-pose', sh.poseText));
   } else {
     box.appendChild(el('span', '', 'no pose'));
   }
   col.appendChild(box);
-  if (pose) col.appendChild(el('div', 'mv3-wk-fcap', pose.label));
+  col.appendChild(el('div', 'mv3-wk-fcap', pose ? pose.label : (words ? 'in words' : '')));
   return col;
 }
 
