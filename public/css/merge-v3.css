@@ -2018,6 +2018,3 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 }
 .mv3-wk-fvar.is-on{border-color:var(--primary); cursor:default}
 .mv3-wk-fvar img{width:100%; height:100%; object-fit:cover; display:block}
-/* A pose in words stands where the mannequin would: the words themselves, small, in the same box. */
-.mv3-wk-fmedia.is-words{border-style:solid; border-color:var(--border); align-items:flex-start; padding:5px}
-.mv3-wk-fwords-pose{font:400 8.5px/1.35 var(--font); color:var(--ink); overflow:hidden; display:-webkit-box; -webkit-line-clamp:11; -webkit-box-orient:vertical; text-align:left}
