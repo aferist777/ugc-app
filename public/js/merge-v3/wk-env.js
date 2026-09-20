@@ -17,12 +17,15 @@
      a picture with no place       the agent names a few places; the person picks any number and
                                    presses create again; the picture lends only its atmosphere
 
-   What is made lands on the shelf, becomes the base for the next change, and stands on the stage
-   with "use" - the one click that sets the project in it and goes back to the hub.
+   What is made lands on the shelf, becomes the base for the next change, and goes ON TRIAL on the
+   stage - the lower half shows it with `select` under it, the one click that sets the project in
+   it and goes back to the hub. A tile pressed on the shelf goes on trial the same way; nothing here
+   writes into the project by itself (decided with the owner 2026-09-21, docs/local-app/PLAN.md
+   "Сцена, setup и таймлайн-зеркало"). The stage itself is painted by the step
+   (js/merge-v3/wk-setting.js, _stage); this module only says what is on trial.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
-import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
 import { derived } from '../chars-store.js';
 import {
@@ -39,7 +42,7 @@ let _options = null;               // the places offered for a picture with no p
 let _optionsWhy = '';
 const _picked = new Set();
 let _making = false;
-let _made = '';                    // the last one made here, standing on the stage with "use"
+let _made = '';                    // the last one made here, on trial on the stage with `select`
 let _said = '';                    // the agent's answer or what failed, said above the sentence
 let _lookedForRunning = false;     // the journal has been asked once whether something of ours runs
 
@@ -145,6 +148,7 @@ function _askDelete(anchor, path, api) {
         if (!r || !r.success) throw new Error((r && r.error) || 'refused');
         if (_base === path) { _base = ''; _forget(); }
         if (_made === path) _made = '';
+        if (api.trying() === path) api.tryPlace('');
         if (current) await api.patch({ locationId: '', locationImage: '' });
       } catch (e) {
         _said = 'Could not delete it: ' + e.message;
@@ -157,7 +161,6 @@ function _askDelete(anchor, path, api) {
 // ── The shelf ───────────────────────────────────────────────────────────────
 export function paintShelf(host, head, api) {
   _bar(head, api, 'env');
-  api.stageButton(null);
   // Leaving the maker forgets what it found there: coming back asks the journal again.
   _lookedForRunning = false;
   if (_envs === null) {
@@ -167,6 +170,7 @@ export function paintShelf(host, head, api) {
   }
   if (_said) host.appendChild(api.note(_said, true));
   const current = String(api.casting().locationImage || '');
+  const trial = String(api.trying() || '');
   const grid = el('div', 'mv3-wk-grid is-env');
   const add = el('button', 'mv3-wk-tile is-add', '+');
   add.type = 'button';
@@ -176,16 +180,15 @@ export function paintShelf(host, head, api) {
   for (const p of _envs) {
     const path = _pathOf(p);
     if (!path) continue;
-    grid.appendChild(_tile(path, path === current, async () => {
-      // A bare path out of the shelf with no record behind it, so no id - the convention the
-      // old page kept (js/scenarios-v3/mix-popup.js).
-      await api.patch({ locationId: '', locationImage: path });
-      api.go('hub');
+    // Lit: the one on trial, else the one the project is set in. A press puts a place on trial on
+    // the stage - `select` there writes it - and a second press on the same tile takes it off again.
+    grid.appendChild(_tile(path, path === (trial || current), () => {
+      api.tryPlace(path === trial ? '' : path);
+      api.repaint();
     }, api));
   }
   host.appendChild(grid);
   if (!_envs.length) host.appendChild(api.note('No environments yet - the + makes the first one.'));
-  PV.showStill(current ? derived(current, 'main') : '', current ? 'current environment' : '');
 }
 
 // ── The maker ───────────────────────────────────────────────────────────────
@@ -317,26 +320,10 @@ export function paintMaker(host, head, api) {
   sync();
   right.appendChild(foot);
 
-  // THE STAGE. The place just made, with the button that uses it; before that, who the place is
-  // for - the character in the look they will wear in it.
-  if (_made) {
-    PV.showStill(derived(_made, 'main'), 'new environment');
-    api.stageButton({
-      label: 'use', cls: 'is-foot', busy: _making,
-      title: 'Set this project in it, and go back to setting & voice',
-      on: async () => {
-        const path = _made;
-        _made = '';
-        api.stageButton(null);
-        await api.patch({ locationId: '', locationImage: path });
-        api.go('hub');
-      },
-    });
-  } else {
-    api.stageButton(null);
-    const who = api.who();
-    PV.showStill(who.src ? derived(who.src, 'main') : '', who.caption || '');
-  }
+  // THE STAGE shows the place just made, on trial with `select` under it - unless it is already
+  // the project's, in which case it is simply there. The step paints the stage right after this
+  // (js/merge-v3/wk-setting.js, _stage), so the trial is only stated here, not painted.
+  if (_made && _made !== String(api.casting().locationImage || '') && api.trying() !== _made) api.tryPlace(_made);
 }
 
 async function _make(api) {

@@ -1531,6 +1531,9 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-wk-step:hover{color:var(--ink)}
 .mv3-wk-step.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
+/* The timeline chip waits for the reads (js/merge-v3/workshop.js): dead until then, its tooltip
+   says how far the script is. */
+.mv3-wk-step[disabled]{opacity:.45; cursor:default; color:var(--muted)}
 /* While a build step holds the stage the transport has nothing to drive: the preview is
    showing that step's work, not the cut. Dimmed and dead rather than hidden - it comes
    back the moment the timeline step is picked, and a control that vanishes and returns
@@ -1541,6 +1544,12 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
    that move it (js/merge-v3/preview-b.js) have room to move in. */
 body.mv3-workshop .mv3-stage{aspect-ratio:auto !important; width:100%; height:100%; border-radius:var(--r-sm)}
 body.mv3-workshop .mv3-preview-body{padding:10px}
+/* THE LOCK. While a build step is open the timeline and the Library are not where the work is
+   (js/merge-v3/layout.js, lock): blurred and dimmed, and inert - they take no pointer and no
+   keyboard. The timeline step lifts it (decided with the owner 2026-09-21). */
+body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
+  filter:blur(3px) saturate(.7); opacity:.5; pointer-events:none; user-select:none;
+}
 
 /* ── The workshop's first step ───────────────────────────────────────────────
    Casting in a 280px column (js/merge-v3/wk-setting.js). Three faces to a row is the
@@ -1643,42 +1652,12 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-chips{display:flex; flex-wrap:wrap; gap:4px}
 
 /* ── The hub of setting & voice ───────────────────────────────────────────────────────────────
-   Left: the two sources as pictures, each a door into its branch. Right: what to do next. */
-/* The sources column is at most 300px wide whatever the sash does, and the two pictures share
-   its HEIGHT - they always fit in the hub without scrolling. The rest of the width is the
-   conversation with the agent, which needs it more than a bigger thumbnail does. (300 is a
-   first number, to be tuned once the chat is in.) */
-.mv3-wk-half.is-sources{
-  flex:0 0 min(300px, 46%); gap:6px; padding:7px; overflow:hidden;
-  border-right:1px solid var(--border-soft);
-}
-.mv3-wk-source{
-  position:relative; flex:1 1 0; min-height:0;
-  display:flex; flex-direction:column; gap:3px; padding:5px; cursor:pointer; text-align:left;
-  border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface); color:var(--muted);
-}
-.mv3-wk-source:hover{border-color:var(--primary)}
-.mv3-wk-source.is-full{border-style:solid}
-/* Contained, not cropped: the box takes whatever height the column gives it, and the picture
-   is shown whole inside it - it is how the person recognises what they chose. */
-.mv3-wk-source img{
-  flex:1 1 auto; min-height:0; width:100%; height:100%;
-  object-fit:contain; object-position:center; border-radius:var(--r-xs); display:block; background:var(--bg);
-}
-.mv3-wk-source img.is-left{object-position:left center}
-.mv3-wk-source-empty{
-  flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center;
-  font:600 11px/1.3 var(--font); color:var(--muted);
-}
-.mv3-wk-source-cap{flex:0 0 auto; font:600 9.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-
-.mv3-wk-half.is-guide{flex:1 1 auto; min-width:0; padding:9px 10px; overflow-y:auto}
+   One column: the voice and the script read in it (js/merge-v3/wk-voice.js). Who and where are on
+   the stage (decided with the owner 2026-09-21). The column is the step's own scroll box with room
+   at its edges - it is read, not tiled - and the voice level is laid out the same way. */
+.mv3-wk-scroll.is-col{padding:9px 10px 26px}
 .mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
-.mv3-wk-guide-p.is-soon{color:var(--muted); font-style:italic}
-.mv3-wk-guide-list{margin:0; padding-left:17px; display:flex; flex-direction:column; gap:6px; font:400 11px/1.45 var(--font); color:var(--ink)}
-/* Done steps stay in the list, struck and dimmed: the order is part of the explanation. */
-.mv3-wk-guide-list li.is-done{color:var(--muted); text-decoration:line-through}
 
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls
@@ -1885,18 +1864,7 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
 .mv3-wk-vmore.is-armed{border-color:var(--warn, oklch(.72 .15 75)); color:var(--warn, oklch(.72 .15 75))}
 .mv3-wk-vcount.is-head{margin-left:7px; text-transform:none; letter-spacing:0}
 
-/* The guide half is a flex COLUMN, so anything in it is shrinkable by default - and a one-line
-   div (a voice's tags, a line's duration) is the first thing a full column squashes to nothing.
-   Everything in here keeps its own height and the column scrolls instead. */
-.mv3-wk-half.is-guide > *{flex:0 0 auto}
-
-/* ── The owner's pass over the voice level, 2026-09-18 ─────────────────────────────────────────
-   The title belongs to the column it names. Inside the sources column it is a block of its own
-   and the two pictures share what is left; the right half then starts at the panel's top edge. */
-.mv3-wk-half.is-sources .mv3-ins-head.is-wk{flex:0 0 auto; padding:0 0 7px; margin:0}
-.mv3-wk-half.is-sources{padding-top:9px}
-/* The voice level is the same two columns as the hub, so its own bar lives in the right half
-   rather than in the header it no longer has. */
+/* The voice level's own bar - its tab and the way back - stands at the top of its column. */
 .mv3-wk-bar.is-own{margin:0 0 7px; display:flex; align-items:center; gap:5px}
 /* A heading that carries controls: the name on the left, the count and the button on the right. */
 .mv3-wk-vhead.is-row{display:flex; align-items:center; gap:8px}

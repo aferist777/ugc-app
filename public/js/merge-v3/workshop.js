@@ -17,6 +17,11 @@
    visits to Merge open none of them. `timeline` is not a module: it IS the inspector
    as it has always been, which is why it is the step an old project opens on.
 
+   WHILE A BUILD STEP IS OPEN THE TIMELINE AND THE LIBRARY ARE LOCKED (js/merge-v3/layout.js):
+   the cut is laid from the fragments later, so until then both are blurred and inert. The
+   `timeline` chip itself waits for the reads - every line spoken, or a cut already there
+   (decided with the owner 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
+
    WHAT IS STORED WHERE. What has been CHOSEN - the character, the look, the place,
    the frames - is the scenario project and lives on the server, where it always has.
    Which step is open is not work: it is remembered per project in this browser, so
@@ -25,6 +30,8 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
+import { lock } from './layout.js';
+import { isRead } from './scen-api.js';
 
 // `timeline` last and apart: the other two build the project, it edits the result.
 //
@@ -71,8 +78,35 @@ export function project() { return _project; }
 export function onChange(fn) { _onChange = fn; }
 
 const _repaint = () => { if (_onChange) _onChange(); };
-// The stage belongs to a build step while one is open, and to the timeline otherwise.
-const _lend = () => PV.borrow(active());
+// The stage belongs to a build step while one is open, and to the timeline otherwise - and the
+// timeline and the Library the other way round: locked while a step is open (js/merge-v3/layout.js).
+const _lend = () => { PV.borrow(active()); lock(active()); };
+
+// THE TIMELINE STEP WAITS FOR THE READS (decided with the owner 2026-09-21): the cut is laid from
+// the fragments, and it is laid once every line is read - so the chip is dead until then, with the
+// count on it. A project that already has a cut of its own on the timeline - sent from Scenarios
+// before any of this - keeps its chip: there is something there to edit. The cells the fragments
+// will lay themselves (`frag`, docs/local-app/PLAN.md, phase T') are not such a cut.
+function _readCount() {
+  const lines = (_project && Array.isArray(_project.lines)) ? _project.lines : [];
+  return { read: lines.filter(isRead).length, total: lines.length };
+}
+function _hasCut() {
+  const tl = Store.timeline();
+  return !!(tl && (tl.tracks || []).some(t => (t.clips || []).some(c => c && c.frag == null)));
+}
+function _mayEdit() {
+  if (_hasCut()) return true;
+  if (!_project) return false;
+  const n = _readCount();
+  return n.read === n.total;
+}
+
+// The step being left lets go of what it was doing on its own - a read still playing.
+function _leave() {
+  const was = _loaded[_step];
+  if (was && typeof was.leave === 'function') { try { was.leave(); } catch (e) { /* it is going anyway */ } }
+}
 
 function _remember(id) {
   try {
@@ -89,9 +123,8 @@ function _remembered() {
 export function setStep(id) {
   if (!STEPS.some(s => s.id === id)) return;
   if (_step === id) return;
-  // The step being left lets go of what it was doing on its own - a read still playing.
-  const was = _loaded[_step];
-  if (was && typeof was.leave === 'function') { try { was.leave(); } catch (e) { /* it is going anyway */ } }
+  if (id === 'timeline' && !_mayEdit()) return;
+  _leave();
   _step = id;
   _remember(id);
   _paintChips();
@@ -110,15 +143,11 @@ function _urlStep() {
 
 // Which step an opened project lands on. A project with a cut on its timeline is one
 // being edited, so it opens on the timeline; an empty one has nothing to edit yet and
-// opens where the work starts. A remembered choice beats both.
+// opens where the work starts. A remembered choice beats both - unless it is the timeline
+// and the timeline is not open to this project yet (its chip says why).
 function _firstStep() {
-  const asked = _urlStep();
-  if (asked) return asked;
-  const seen = _remembered();
-  if (seen) return seen;
-  const tl = Store.timeline();
-  const has = !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
-  return has ? 'timeline' : 'setting';
+  const want = _urlStep() || _remembered() || (_hasCut() ? 'timeline' : 'setting');
+  return want === 'timeline' && !_mayEdit() ? 'setting' : want;
 }
 
 // ── The chips, in the panel's own header ────────────────────────────────────
@@ -146,6 +175,12 @@ function _paintChips() {
     b.className = 'mv3-wk-step' + (s.id === _step ? ' is-on' : '');
     b.textContent = s.label;
     b.title = s.title;
+    if (s.id === 'timeline' && !_mayEdit()) {
+      // Dead until every line is read, and it says how far that is.
+      const n = _readCount();
+      b.disabled = true;
+      b.title = _project ? 'Read every line first · ' + n.read + '/' + n.total : 'Reading the project…';
+    }
     // Pressing the open step's own chip goes back to the top of it.
     b.addEventListener('click', () => {
       if (s.id === _step && _loaded[_step] && typeof _loaded[_step].goCrumb === 'function') _loaded[_step].goCrumb('hub');
@@ -194,7 +229,9 @@ async function _adopt() {
   _key = key;
   _pid = projectIdOf(key);
   _project = null;
-  _step = _pid ? _firstStep() : 'timeline';
+  // Where a talking head lands is decided once its record is here (below): whether the timeline
+  // may open depends on its reads. Until then the panel says it is reading the project.
+  _step = _pid ? 'setting' : 'timeline';
   _paintChips();
   _lend();
   _repaint();
@@ -205,6 +242,8 @@ async function _adopt() {
     // one's record into the second one's panel.
     if (d && d.success && _pid === projectIdOf(Store.key() || '')) {
       _project = d.project;
+      const first = _firstStep();
+      if (first !== _step) { _leave(); _step = first; _paintChips(); _lend(); }
       _repaint();
     }
   } catch (e) {

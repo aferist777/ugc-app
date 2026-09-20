@@ -24,6 +24,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { el } from './wk-maker.js';
+import { isRead } from './scen-api.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -57,7 +58,9 @@ let _playing = '';
 // (owner, 2026-09-18). The offset is remembered here and put back after the paint.
 let _scrollAt = { hub: 0, voice: 0 };
 let _face = 'hub';                      // which of the two is on screen, so the offset goes in its own slot
-const _col = () => document.querySelector('.mv3-wk-half.is-guide');
+// The column that scrolls is the step's own scroll box: the hub and the voice level are one column
+// each, now that who and where are on the stage (js/merge-v3/wk-setting.js).
+const _col = () => document.querySelector('.mv3-wk-scroll');
 
 // EVERY REPAINT GOES THROUGH HERE. A repaint rebuilds the column, and a rebuilt column starts at
 // the top - so reading twelve lines threw the list back to line one every few seconds (owner,
@@ -423,7 +426,9 @@ async function _take(api, card) {
 const _take0 = (l) => ((l && l.audio) || {}).plain || null;
 const _stale = (l) => { const t = _take0(l); return !!(t && t.path && t.said !== String(l.text || '')); };
 const _unread = (l) => { const t = _take0(l); return !(t && t.path); };
-const _needs = (l) => _unread(l) || _stale(l);
+// Unread or stale - the one rule, shared with the timeline chip that waits for every line
+// (js/merge-v3/scen-api.js).
+const _needs = (l) => !isRead(l);
 
 export function paintReads(host, api) {
   const p = api.project() || {};

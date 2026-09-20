@@ -69,6 +69,17 @@ export const remove = (id) =>
 /** A project from a scenario: its own copy of the lines, its own name. */
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);
 
+/**
+ * Is this line READ - its plain take there, and spoken from the words the line has now? `said` is
+ * written with the take (routes/scen3.js, /scen3/voice/speak), so editing a line makes its read
+ * stale by itself. One rule for the counter on the script (js/merge-v3/wk-voice.js) and for the
+ * timeline chip, which waits for every line (js/merge-v3/workshop.js).
+ */
+export const isRead = (l) => {
+  const t = ((l && l.audio) || {}).plain;
+  return !!(t && t.path && t.said === String((l && l.text) || ''));
+};
+
 // ── Dressing a character ────────────────────────────────────────────────────
 // A LOOK is made by showing the engine two pictures - this person, that outfit - and filing
 // the answer under the character. The call is the one the old page makes; what is new here is

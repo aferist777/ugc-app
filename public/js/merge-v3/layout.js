@@ -74,11 +74,39 @@ function _tlNow() {
   return el ? el.getBoundingClientRect().height : DEF_TL_H;
 }
 
+// ── The lock ────────────────────────────────────────────────────────────────
+// While a talking head is being BUILT - a step of the workshop is open (js/merge-v3/workshop.js) -
+// the timeline and the Library are not where the work is: the cut is laid from the fragments
+// later, and until then a clip dragged in from the Library would be a clip on a timeline nobody is
+// editing. So both are locked: blurred (css/merge-v3.css, body.mv3-locked), inert to the pointer
+// and the keyboard, and the Library column cannot be opened - the inspector is what is open,
+// whichever column was before. The timeline step lifts it (decided with the owner 2026-09-21,
+// docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
+let _locked = false;
+
+export function lock(on) {
+  const want = !!on;
+  if (want === _locked) return;
+  _locked = want;
+  document.body.classList.toggle('mv3-locked', want);
+  for (const id of ['mv3-timeline', 'mv3-library']) {
+    const el = document.getElementById(id);
+    if (el) el.inert = want;
+  }
+  if (want) setOpenColumn('inspector');
+}
+
+/** Is the lock on? The timeline's own keys ask before they act (js/merge-v3/timeline-b.js). */
+export const locked = () => _locked;
+
 // ── Which of the two left panels is open ───────────────────────────────────
 // Exactly one, always. There is deliberately no "both closed" state: the pair is
 // a switch, and a switch with an off position would just be a third layout to
 // keep working.
 export function setOpenColumn(which) {
+  // Not the Library while the lock is on: it is inert, and a column of greyed shelves in front of
+  // the inspector would be the panel the person cannot use in place of the one they can.
+  if (which === 'library' && _locked) return;
   document.querySelectorAll('.mv3-col').forEach(c => {
     c.classList.toggle('is-collapsed', c.dataset.col !== which);
   });

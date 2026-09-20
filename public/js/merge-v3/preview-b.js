@@ -393,6 +393,9 @@ function _paint() {
   // talking-head project the timeline is usually empty anyway - a black frame is the honest
   // picture of it (docs/local-app/PLAN.md, "Мастерская talking head").
   if (_borrowed) {
+    // No clip is drawn, so none is under the pointer: the gesture layer (js/merge-v3/place-b.js)
+    // must not find the timeline's last rectangles under a press on the stage's halves.
+    _rects.clear();
     _ctx.setTransform(1, 0, 0, 1, 0, 0);
     _ctx.fillStyle = '#000';
     _ctx.fillRect(0, 0, CW, CH);
@@ -729,6 +732,19 @@ function _wireZoom(cv) {
     _paint();
   }, { passive: false });
   cv.addEventListener('dblclick', () => { if (_borrowed) _centre(); });
+  // A half of the pair is a DOOR (showPair's onPick). The click is taken to the surface - back
+  // through the shift and the zoom - and the half is read off where it lands there, so a reference
+  // pushed up close opens what is under the pointer and not what is under the panel's middle.
+  const pick = (e) => {
+    if (!_borrowed || !_pair || !_pair.onPick) return;
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const py = (e.clientY - r.top) / r.height * CH;
+    const sy = (py - _view.y) / _view.z;
+    _pair.onPick(sy < PAD + H / 2 ? 'top' : 'bottom', e);
+  };
+  cv.addEventListener('click', pick);
+  cv.addEventListener('contextmenu', pick);
 }
 
 // The canvas takes the panel's own size while the workshop holds it, in real pixels, so a
@@ -820,21 +836,43 @@ export function showStill(src, caption) {
 let _still = null;
 let _pair = null;
 
+// One half of the pair, as showPair takes it: a bare address (the fragments step, whose pair has
+// no words and no doors), or the whole description of what the half shows and says.
+function _halfSpec(x) {
+  if (x && typeof x === 'object') {
+    return { src: String(x.src || ''), caption: String(x.caption || ''), empty: String(x.empty || '') };
+  }
+  return { src: String(x || ''), caption: '', empty: '' };
+}
+
 /**
  * Two pictures on the stage, one above the other - what is being combined, before it is.
  * The dressing asks exactly this question: this person, wearing that; so the person is on
  * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-setting.js).
+ * The setting step shows its casting the same way - who on top, where below - and there each
+ * half is also a DOOR: what an empty half says, and what a press on it opens, come with it.
  *
- * @param top     the picture in the upper half, or '' for an empty half
- * @param bottom  the picture in the lower half
+ * @param top     the upper half: an address, '' for an empty half, or { src, caption, empty } -
+ *                the caption under the picture, and what the half says while it has none
+ * @param bottom  the lower half, the same way
+ * @param onPick  (half, event) for a click or a context menu on a half - 'top' | 'bottom' - or
+ *                nothing, for a pair that is only looked at
  */
-export function showPair(top, bottom) {
+export function showPair(top, bottom, onPick) {
   _still = null;
-  const want = String(top || '') + '|' + String(bottom || '');
-  if (_pair && _pair.key === want) return;
+  const a = _halfSpec(top), b = _halfSpec(bottom);
+  const want = a.src + '|' + b.src;
+  if (_pair && _pair.key === want) {
+    // The same pictures again - a panel repaints after every save. The words on them and the
+    // doors may have changed; the pictures keep where they were pushed and pinched.
+    _pair.spec = [a, b];
+    _pair.onPick = onPick || null;
+    if (_on) _paint();
+    return;
+  }
   // A new pair starts fitted and centred, for the reason a new still does (showStill).
   _view = { z: 1, x: 0, y: 0 };
-  _pair = { key: want, top: null, bottom: null };
+  _pair = { key: want, top: null, bottom: null, spec: [a, b], onPick: onPick || null };
   const load = (src, slot) => {
     if (!src) return;
     const img = new Image();
@@ -843,8 +881,8 @@ export function showPair(top, bottom) {
     img.onerror = () => { /* the other half still says what this is about */ };
     img.src = src;
   };
-  load(top, 'top');
-  load(bottom, 'bottom');
+  load(a.src, 'top');
+  load(b.src, 'bottom');
   if (_on) _paint();
 }
 
@@ -862,6 +900,44 @@ function _drawPair() {
     });
   }
   for (const b of _pair.boxes) if (b) _ctx.drawImage(b.img, b.x, b.y, b.w, b.h);
+  // What each half SAYS: a caption under its picture, or - with no picture - what the half is
+  // waiting for, inside a dashed frame that reads as a field to be filled.
+  const spec = _pair.spec || [];
+  [[PAD, H / 2], [PAD + H / 2, H / 2]].forEach(([top, hh], i) => {
+    const s = spec[i];
+    if (!s) return;
+    if (s.src) { if (s.caption) _caption(s.caption, top + hh, hh); return; }
+    if (!s.empty) return;
+    const inset = Math.round(Math.min(W, hh) * 0.06);
+    _ctx.save();
+    _ctx.setLineDash([8, 7]);
+    _ctx.lineWidth = 2;
+    _ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    _ctx.strokeRect(PAD + inset, top + inset, W - 2 * inset, hh - 2 * inset);
+    _ctx.restore();
+    _ctx.font = '600 ' + Math.round(Math.min(W, H) * 0.045) + 'px Inter, Segoe UI, system-ui, sans-serif';
+    _ctx.textAlign = 'center';
+    _ctx.textBaseline = 'middle';
+    _ctx.fillStyle = 'rgba(255,255,255,.5)';
+    _ctx.fillText(s.empty, PAD + W / 2, top + hh / 2);
+    _ctx.textBaseline = 'alphabetic';
+    _ctx.textAlign = 'left';
+  });
+}
+
+// A line of words in a dark pill, low in the band it belongs to: a still's caption at the foot of
+// the frame, a half's under its picture. Sized by the frame, so the two read alike.
+function _caption(cap, bottom, hh) {
+  const size = Math.round(Math.min(H * 0.022, hh * 0.05));
+  _ctx.font = '600 ' + size + 'px Inter, Segoe UI, system-ui, sans-serif';
+  _ctx.textAlign = 'center';
+  _ctx.fillStyle = 'rgba(0,0,0,.55)';
+  const y = bottom - Math.round(size * 2);
+  const tw = _ctx.measureText(cap).width;
+  _ctx.fillRect(PAD + W / 2 - tw / 2 - 10, y - Math.round(size * 1.3), tw + 20, Math.round(size * 1.8));
+  _ctx.fillStyle = '#fff';
+  _ctx.fillText(cap, PAD + W / 2, y);
+  _ctx.textAlign = 'left';
 }
 
 function _drawStill() {
@@ -880,16 +956,7 @@ function _drawStill() {
       _ctx.drawImage(img, Math.round(PAD + (W - w) / 2), Math.round(PAD + (H - h) / 2), w, h);
     }
   }
-  if (!cap) return;
-  _ctx.font = '600 ' + Math.round(H * 0.022) + 'px Inter, Segoe UI, system-ui, sans-serif';
-  _ctx.textAlign = 'center';
-  _ctx.fillStyle = 'rgba(0,0,0,.55)';
-  const y = PAD + H - Math.round(H * 0.045);
-  const tw = _ctx.measureText(cap).width;
-  _ctx.fillRect(PAD + W / 2 - tw / 2 - 10, y - Math.round(H * 0.028), tw + 20, Math.round(H * 0.04));
-  _ctx.fillStyle = '#fff';
-  _ctx.fillText(cap, PAD + W / 2, y);
-  _ctx.textAlign = 'left';
+  if (cap) _caption(cap, PAD + H, H);
 }
 
 export function play() {

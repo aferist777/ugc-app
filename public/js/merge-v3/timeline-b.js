@@ -31,6 +31,7 @@ import * as Layers from '../layers.js';
 import { askDelete, closeAsk, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
+import { locked } from './layout.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -1522,6 +1523,7 @@ export function initTimelineB() {
   document.addEventListener('keydown', (e) => {
     if (!_on) return;
     if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
+    if (locked()) return;                  // a talking head is being built: the timeline is asleep (js/merge-v3/layout.js)
     if (e.key === 'Escape') _clearSel();
     // Not while typing: the inspector has fields, and Delete there means a character.
     if ((e.key === 'Delete' || e.key === 'Backspace') &&

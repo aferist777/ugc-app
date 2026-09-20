@@ -4,10 +4,19 @@
    Loaded when the step is opened (js/merge-v3/workshop.js), because this is the
    heaviest part of the page and most visits never come here.
 
-   The step is a stack that reveals itself as it is answered: pick a character and
-   that character's looks appear under it; pick a look and the place is asked for;
-   and so on to the voice. A question you have not reached yet is not on screen -
-   the column is 280px wide and a form of everything at once is unreadable in it.
+   THE STAGE IS WHERE THE CHOOSING HAPPENS (decided with the owner 2026-09-21,
+   docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало"). The preview is lent to this
+   step while it is open (PV.borrow) and shows two halves: who on top, where below. Each
+   half is a door - a press on it opens the shelf it is filled from, in this panel - and
+   each is a field: empty, it says what it is waiting for. A tile on a shelf writes
+   nothing: it puts a TRIAL on the stage - the character's 4K sheet, a look, a place - and
+   the `select` button on the stage is what writes it into the project. Leaving the shelf
+   without pressing it puts the stage back to what is written.
+
+   THE PANEL holds what is not a picture: the voice and the script read in it (the hub),
+   and the shelves the halves open onto - the characters with their looks, the lookbooks,
+   the environments. A shelf you have not opened is not on screen: the column is narrow,
+   and a form of everything at once is unreadable in it.
 
    THE READ BELONGS HERE (decided with the owner 2026-09-18, docs/local-app/PLAN.md
    "Setting & voice"): a voice is a property of the character speaking, not a stage
@@ -19,10 +28,6 @@
    pair (routes/scen3.js, _normCasting). Nothing here owns a character or a look -
    they belong to the Character tab and to the looks library, and this only points
    at them.
-
-   THE PREVIEW SHOWS WHO IS PICKED. The stage is lent to this step while it is open
-   (PV.borrow), and at this point the timeline is empty anyway, so the frame that
-   would otherwise be black shows the choice being made.
 
    MAKING A LOOK IS THE SAME STEP, not a window over it. "+" in the drawer turns the panel
    into the lookbook shelf; picking one and pressing apply dresses the character in it. The
@@ -101,6 +106,11 @@ let _making = false;
 let _lbs = null;                         // the lookbook shelf, read once
 let _lbPick = '';                         // the outfit selected in that shelf
 let _dressing = false;                    // one at a time: it is a minute and it is paid for
+// What is ON TRIAL on the stage - shown there in place of what the project says, until `select`
+// writes it or the shelf is left. A look is tried on its character, so trying one sets both; a
+// character alone is tried as their 4K sheet and is never written bare (a frame needs a look).
+let _try = { char: null, look: null, place: '' };
+const _noTry = () => { _try = { char: null, look: null, place: '' }; };
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -223,17 +233,15 @@ export function paint(host, ctx) {
   txt.appendChild(_el('div', 'mv3-ins-title', 'setting & voice'));
   txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, and how it is read'));
   head.appendChild(txt);
-  // ON A SPLIT FACE THE TITLE BELONGS TO THE LEFT COLUMN (owner, 2026-09-18): it names the two
-  // pictures under it, and the right half - the voice and the script - starts at the panel's own
-  // top edge instead of a hand's width below it.
-  const split = _view === 'hub' || _view === 'voice';
-  if (!split) root.appendChild(head);
+  root.appendChild(head);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
   if (_state !== 'idle' && _state !== 'loading') root.appendChild(_note(_state, true));
 
-  const chosen = _chars.find(c => c.id === String(_casting().characterId || ''));
+  const chosen = _castChar();
+  // The character a shelf is about: the one on trial, else the one cast.
+  const who = _try.char || chosen;
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
   // The waiting animation stays with the place that started the generation: painting another one
@@ -245,137 +253,124 @@ export function paint(host, ctx) {
   // Arriving somewhere is when to ask the journal whether something of that place is running;
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
+  // The stage is painted AFTER the panel, from the same state (this file, _stage): a shelf may
+  // put something on trial while it paints, and the stage has to show it.
   if (_view === 'hub') {
-    _paintHub(scroll, chosen, head);
+    _paintHub(scroll, chosen);
+    _stage(chosen);
   } else if (_view === 'env') {
-    ENV.paintShelf(scroll, head, _envApi(chosen));
+    ENV.paintShelf(scroll, head, _envApi());
+    _stage(chosen);
   } else if (_view === 'newenv') {
-    ENV.paintMaker(scroll, head, _envApi(chosen));
+    ENV.paintMaker(scroll, head, _envApi());
+    _stage(chosen);
   } else if (_view === 'voice' && chosen) {
-    _stageButton(null);
-    _showChoice(chosen);
-    _paintVoice(scroll, chosen, head);
-  } else if (_view === 'newlb' && chosen) {
-    _paintNewLookbook(scroll, head, chosen);
-  } else if (_view === 'lookbooks' && chosen) {
+    scroll.classList.add('is-col');
+    VOICE.paintPicker(scroll, _voiceApi(chosen));
+    _stage(chosen);
+  } else if (_view === 'newlb' && who) {
+    _paintNewLookbook(scroll, head, who);
+  } else if (_view === 'lookbooks' && who) {
     // No drawer here at all. It is the character's wardrobe, and what is being answered on
     // this face of the panel is which outfit to make the next one from.
-    _paintLookbooks(scroll, head, chosen);
-    _showDressing(chosen);
+    _paintLookbooks(scroll, head, who);
+    _showDressing(who);
   } else {
     _view = 'cast';
     _paintCharacters(scroll, head);
-    _paintLooks(root, chosen);
-    _stageButton(null);
-    _showChoice(chosen);
+    _paintLooks(root, who);
+    _stage(chosen);
   }
+}
+
+const _castChar = () => (_chars || []).find(c => c.id === String(_casting().characterId || '')) || null;
+
+// Every move inside the step goes through here. Arriving at the hub is leaving a shelf, and a
+// trial left on the stage would be a picture the project does not have - so it goes; the maker of
+// environments starts clean for the same reason.
+function _go(view) {
+  if (view === 'hub' || view === 'newenv') _noTry();
+  _view = view;
+  _ctx.repaint();
 }
 
 // ── The hub ─────────────────────────────────────────────────────────────────
-// What a first frame is made of, and what to do about it. On the left the two sources as
-// pictures - the character in the look it will wear, the place it will stand in - each one a
-// door into its own branch. On the right what happens next: the explanation while either is
-// missing, and the read - the voice and the lines - once both are there.
-// The left column of every split face: the title, and the two pictures the project is set with.
-// One builder, because the voice level shows exactly the same column - who is speaking and where
-// they stand belong beside the voice they are read in (owner, 2026-09-18).
-function _sources(head, chosen) {
+// The read's side of the step: the voice this character speaks in, and the script read in it (V2,
+// V3). Who and where are on the stage, not here - the panel is one column, and what else it will
+// hold is the next phase's question (docs/local-app/PLAN.md, phase M).
+function _paintHub(host, chosen) {
+  host.classList.add('is-col');
+  if (chosen) VOICE.paintHub(host, _voiceApi(chosen));
+  else host.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
+}
+
+// ── The stage ───────────────────────────────────────────────────────────────
+// Two halves, always the same two: who on top, where below. Each shows the trial when there is
+// one and what the project says when there is not; each is a door into its shelf; and under a
+// trial stands the one button that writes it.
+// What the upper half shows and says: the trial first, then what is written.
+function _whoHalf(chosen) {
   const cast = _casting();
-  const left = _el('div', 'mv3-wk-half is-sources');
-  if (head) left.appendChild(head);
-  left.appendChild(_source({
-    label: 'character',
-    // The 4K reference in the look it will wear, which is the picture every frame is made
-    // from. Without a look, the character as they are; without a character, nothing yet.
-    src: cast.obrazImage || (chosen ? _faceOf(chosen).src : ''),
-    left: !cast.obrazImage && chosen ? _faceOf(chosen).left : false,
-    caption: cast.characterName ? cast.characterName + (cast.obrazImage ? '' : ' - no look yet') : '',
-    empty: 'Who is speaking?',
-    go: () => { _view = 'cast'; _ctx.repaint(); },
-  }));
-  left.appendChild(_source({
-    label: 'environment',
-    src: cast.locationImage || '',
-    caption: '',
-    empty: 'Where are they?',
-    go: () => { _view = 'env'; _ctx.repaint(); },
-  }));
-  return left;
+  const tc = _try.char, tl = _try.look;
+  if (tl && tc) return { src: tl.image, caption: tc.name + ' · ' + (tl.name || 'look') };
+  if (tc) return { src: tc.sheet || tc.face || '', caption: tc.name + ' · reference' };
+  if (cast.obrazImage) return { src: cast.obrazImage, caption: cast.characterName || '' };
+  if (chosen) return { src: _faceOf(chosen).src, caption: chosen.name + ' · no look yet' };
+  return { src: '', caption: '' };
 }
-
-// The voice level, one step under the hub: the same two pictures on the left, and on the right
-// the voices this character has and the library to take another from.
-function _paintVoice(host, chosen, head) {
-  host.classList.add('is-split');
-  host.appendChild(_sources(head, chosen));
-  const right = _el('div', 'mv3-wk-half is-guide');
-  host.appendChild(right);
-  VOICE.paintPicker(right, _voiceApi(chosen));
-}
-
-function _paintHub(host, chosen, head) {
-  host.classList.add('is-split');
+// ...and the lower. A place on trial has no caption: `select` stands at the foot of the half,
+// exactly where the caption would be, and says what the picture is about.
+function _whereHalf() {
   const cast = _casting();
+  if (_try.place) return { src: _try.place, caption: '' };
+  return { src: cast.locationImage || '', caption: cast.locationImage ? 'environment' : '' };
+}
 
-  host.appendChild(_sources(head, chosen));
-
-  const right = _el('div', 'mv3-wk-half is-guide');
-  // Hung in the panel BEFORE it is filled: the voice level puts the list back where it was
-  // standing (js/merge-v3/wk-voice.js), and a column that is not in the document yet cannot be
-  // scrolled - the offset would be dropped and the list would jump to the top on every read.
-  host.appendChild(right);
-  const haveWho = !!cast.obrazImage;
-  const haveWhere = !!cast.locationImage;
-  if (haveWho && haveWhere && chosen) {
-    // The read's side of the step: the voice, and the script read in it (V2, V3).
-    VOICE.paintHub(right, _voiceApi(chosen));
+function _stage(chosen) {
+  const who = _whoHalf(chosen), where = _whereHalf();
+  PV.showPair(
+    { src: who.src ? derived(who.src, 'main') : '', caption: who.caption, empty: 'choose a character' },
+    { src: where.src ? derived(where.src, 'main') : '', caption: where.caption, empty: 'choose an environment' },
+    _pick,
+  );
+  // `select` under the trial: on the seam for a look (it is about the picture above), at the
+  // foot for a place.
+  if (_try.look && _try.char) {
+    _stageButton({ label: 'select', title: 'Cast ' + _try.char.name + ' in this look', busy: _saving, on: _select });
+  } else if (_try.place) {
+    _stageButton({ label: 'select', cls: 'is-foot', title: 'Set this project in this environment', busy: _saving, on: _select });
   } else {
-    _guide(right, haveWho, haveWhere);
-  }
-
-  // The stage shows what the hub is made of: the character in the look on top, the place
-  // below - the two halves every frame is composed from.
-  _stageButton(null);
-  _shownFor = '';
-  if (cast.obrazImage || cast.locationImage) {
-    PV.showPair(cast.obrazImage ? derived(cast.obrazImage, 'main') : '',
-      cast.locationImage ? derived(cast.locationImage, 'main') : '');
-  } else {
-    PV.showStill('', '');
+    _stageButton(null);
   }
 }
 
-function _source(o) {
-  const box = _el('button', 'mv3-wk-source' + (o.src ? ' is-full' : ''));
-  box.type = 'button';
-  box.title = o.src ? 'Change the ' + o.label : 'Choose the ' + o.label;
-  box.appendChild(_el('span', 'mv3-wk-lbl', o.label));
-  if (o.src) {
-    const img = _el('img', o.left ? 'is-left' : '');
-    img.alt = '';
-    img.src = derived(o.src, 'card');
-    box.appendChild(img);
-    if (o.caption) box.appendChild(_el('span', 'mv3-wk-source-cap', o.caption));
-  } else {
-    box.appendChild(_el('span', 'mv3-wk-source-empty', o.empty));
+// A half of the stage was pressed. The left button opens its shelf; the right one offers the
+// picture itself, full size, the way a tile does.
+function _pick(half, ev) {
+  if (ev && ev.type === 'contextmenu') {
+    const src = half === 'top' ? _whoHalf(_castChar()).src : _whereHalf().src;
+    if (!src) return;
+    tileMenu(ev, [{ label: 'open', sub: 'look at it, full size', on: () => showPicture({ src, name: src.split('/').pop() }) }],
+      half === 'top' ? 'character menu' : 'environment menu');
+    return;
   }
-  box.addEventListener('click', o.go);
-  return box;
+  _go(half === 'top' ? 'cast' : 'env');
 }
 
-// What to do, said in the order it is done, and narrowed as it gets done: a list of five
-// things where two are finished is a list you have to read to find the next one.
-function _guide(host, haveWho, haveWhere) {
-  host.appendChild(_el('div', 'mv3-wk-guide-h', 'Making a talking head'));
-  host.appendChild(_el('p', 'mv3-wk-guide-p',
-    'Three steps, in this order. SETTING & VOICE: who is speaking, where, and the voice the script is read in. FRAGMENTS: the picture each fragment opens on, and the clip animated to its read. TIMELINE: the finished cut, to edit and render.'));
-  host.appendChild(_el('div', 'mv3-wk-guide-h', 'Now'));
-  const ol = _el('ol', 'mv3-wk-guide-list');
-  const li = (text, done) => { const e = _el('li', done ? 'is-done' : '', text); ol.appendChild(e); };
-  li('Choose who is speaking: click the character field. Pick a look for them, or dress them in a lookbook - or make a new lookbook first.', haveWho);
-  li('Choose where: click the environment field and pick a place - or create one.', haveWhere);
-  li('With both set, give the character a voice and read the script.', false);
-  host.appendChild(ol);
+// The one write: the trial becomes the casting. A look is written with its character - it belongs
+// to them - and the shelf is left for the hub, where the voice is the next question.
+async function _select() {
+  const t = _try;
+  if (t.look && t.char) {
+    _noTry();
+    await _patch({ characterId: t.char.id, characterName: t.char.name, obrazId: t.look.id, obrazImage: t.look.image });
+  } else if (t.place) {
+    _noTry();
+    await _patch({ locationId: '', locationImage: t.place });
+  } else {
+    return;
+  }
+  _go('hub');
 }
 
 // ── The environment branch ──────────────────────────────────────────────────
@@ -408,7 +403,7 @@ function _voiceApi(chosen) {
     // every paint (js/merge-v3/workshop.js), so a replacement here would last exactly until the
     // next repaint and then be the old one again.
     setProject: (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); },
-    go: (view) => { _view = view; _ctx.repaint(); },
+    go: _go,
     repaint: () => _ctx.repaint(),
     note: _note,
     patchChar: async (fields) => {
@@ -427,22 +422,20 @@ function _voiceApi(chosen) {
   };
 }
 
-function _envApi(chosen) {
+function _envApi() {
   return {
     casting: _casting,
     patch: _patch,
     key: () => (_ctx && _ctx.key) || '',
     where: _where,
-    go: (view) => { _view = view; _ctx.repaint(); },
+    go: _go,
     repaint: () => _ctx.repaint(),
-    stageButton: _stageButton,
     note: _note,
-    // The character in the look they will wear there; without a look, the character as they are.
-    who: () => {
-      const cast = _casting();
-      if (cast.obrazImage) return { src: cast.obrazImage, caption: cast.characterName || '' };
-      return chosen ? { src: _faceOf(chosen).src, caption: chosen.name } : { src: '', caption: '' };
-    },
+    // The place on trial on the stage: a tile pressed on the shelf, or the one the maker just made;
+    // '' takes it off. Stated only - the stage is painted by the step right after the shelf - and
+    // written into the project by `select` on the stage (this file, _select).
+    tryPlace: (path) => { _try.place = String(path || ''); },
+    trying: () => _try.place,
   };
 }
 
@@ -480,8 +473,7 @@ export function goCrumb(id) {
   const want = id === 'hub' ? 'hub' : id;
   if (want !== 'hub' && !WHERE[want]) return;
   if (want === _view) return;
-  _view = want;
-  _ctx.repaint();
+  _go(want);
 }
 
 // ── The shelf of outfits ────────────────────────────────────────────────────
@@ -494,7 +486,7 @@ function _paintLookbooks(host, head, c) {
     _dressing = true;
     _ctx.repaint();
     holdProgress('lookbooks', { label: 'Dressing ' + c.name, estimateMs: 90000, startedAt: Date.parse(rec.startedAt) || 0 });
-    _followDress(rec.id, c.id);
+    _followDress(rec.id);
   });
   const acts = _el('div', 'mv3-wk-bar');
   const mk = (label, title, on, primary) => {
@@ -506,13 +498,12 @@ function _paintLookbooks(host, head, c) {
   };
   acts.append(
     mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
-    mk('create lookbook', 'Make one from a photo and a sentence',
-      () => { _view = 'newlb'; _ctx.repaint(); }, false),
+    mk('create lookbook', 'Make one from a photo and a sentence', () => _go('newlb'), false),
   );
   const back = _el('button', 'mv3-iconbtn', '\u2715');
   back.type = 'button';
   back.title = 'Back to the casting';
-  back.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
+  back.addEventListener('click', () => _go('cast'));
   acts.appendChild(back);
   head.appendChild(acts);
 
@@ -528,7 +519,7 @@ function _paintLookbooks(host, head, c) {
   const add = _el('button', 'mv3-wk-tile is-add', '+');
   add.type = 'button';
   add.title = 'Make a lookbook from a photo and a sentence';
-  add.addEventListener('click', () => { _view = 'newlb'; _ctx.repaint(); });
+  add.addEventListener('click', () => _go('newlb'));
   grid.appendChild(add);
   for (const p of _lbs) {
     const path = String((p && p.path) || p || '');
@@ -548,7 +539,6 @@ function _paintLookbooks(host, head, c) {
 // acts on. Nothing is under the shelf for the same reason - a row that appears there when an
 // outfit is picked pushes the shelf about while it is being read.
 function _showDressing(c) {
-  _shownFor = '';                              // the casting view will paint its own again
   PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
   _stageButton(_lbPick ? {
     label: _dressing ? 'dressing…' : 'apply',
@@ -625,14 +615,14 @@ function _paintNewLookbook(host, head, c) {
   const back = _el('button', 'mv3-sc-tab', 'create look');
   back.type = 'button';
   back.title = 'Back to the shelf of outfits';
-  back.addEventListener('click', () => { _view = 'lookbooks'; _ctx.repaint(); });
+  back.addEventListener('click', () => _go('lookbooks'));
   const here = _el('button', 'mv3-sc-tab is-on', 'create lookbook');
   here.type = 'button';
   here.disabled = true;
   const x = _el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
   x.title = 'Back to the casting';
-  x.addEventListener('click', () => { _view = 'cast'; _ctx.repaint(); });
+  x.addEventListener('click', () => _go('cast'));
   acts.append(back, here, x);
   head.appendChild(acts);
 
@@ -706,7 +696,7 @@ function _paintNewLookbook(host, head, c) {
     if (said && said.isConnected) { said.remove(); _lbSaid = ''; }
     sync();
   });
-  go.addEventListener('click', () => _make(c));
+  go.addEventListener('click', _make);
   row.append(hint, go);
   foot.append(note, row);
   sync();
@@ -714,7 +704,6 @@ function _paintNewLookbook(host, head, c) {
 
   // The stage shows who it is for, and only that: what is being made is already in the field
   // on the right, and a second copy of it on the stage would say nothing new.
-  _shownFor = '';
   PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
   _stageButton(null);
 }
@@ -802,7 +791,7 @@ const LB_LABEL = {
   draw: 'Drawing the outfit',
 };
 
-async function _make(c) {
+async function _make() {
   const mode = _mode();
   if (!mode || _making || _why()) return;
   _making = true;
@@ -888,7 +877,7 @@ async function _apply(c) {
       projectId: String((_ctx.project || {}).id || ''),
       title: 'Look · ' + c.name, where: _where('lookbooks'),
     });
-    await _followDress(r.alertId, c.id);
+    await _followDress(r.alertId);
   } catch (e) {
     endProgress('lookbooks', (e && e.message) || 'the dressing failed');
     _dressing = false;
@@ -897,7 +886,7 @@ async function _apply(c) {
   }
 }
 
-async function _followDress(id, charId) {
+async function _followDress(id) {
   try {
     await API.follow(id);
     endProgress('lookbooks');
@@ -905,14 +894,14 @@ async function _followDress(id, charId) {
     // the look and wrote it into the casting, and what it wrote is what should be on screen.
     _chars = byLooks(await loadCharacters(true));
     await _ctx.reloadProject();
-    // The panel comes back to the faces with the drawer open on the character it was made for,
-    // the new look selected in it, and that look on the stage.
+    // The panel comes back to the faces with the drawer open on the character it was made for and
+    // the new look lit in it. A look made for this project is chosen by it (decided with the owner
+    // 2026-09-21): the server wrote it into the casting, so the trial is over and the stage shows
+    // what is written - no `select` to press.
     _view = 'cast';
     _lbPick = '';
     _dressing = false;
-    _stageButton(null);
-    _shownFor = '';
-    _showChoice(_chars.find(x => x.id === charId));
+    _noTry();
     _ctx.repaint();
   } catch (e) {
     endProgress('lookbooks', (e && e.message) || 'the dressing failed');
@@ -922,33 +911,19 @@ async function _followDress(id, charId) {
   }
 }
 
-// Coming back to a project should look like coming back to it: the stage shows what is cast
-// without anything being clicked. Tracked by what it is showing, so a repaint - and there is
-// one after every save - does not re-load the same picture.
-let _shownFor = '';
-function _showChoice(chosen) {
-  const cast = _casting();
-  const id = String(cast.obrazId || cast.characterId || '');
-  if (id === _shownFor) return;
-  _shownFor = id;
-  if (!id) return _showInPreview('', '');
-  if (cast.obrazImage) {
-    return _showInPreview(cast.obrazImage, (cast.characterName || '') + (chosen ? '' : ' · look'));
-  }
-  _showInPreview(chosen ? _faceOf(chosen).src : '', cast.characterName || '');
-}
-
 function _paintCharacters(host, head) {
   const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
   const castId = String(_casting().characterId || '');
+  const tryId = _try.char ? _try.char.id : '';
   let shown = _all ? _chars : filterByGender(_chars, want);
   // WHOEVER IS CAST IS ALWAYS ON SCREEN, filter or no filter. A scenario that says female and
   // a project cast with a man is a deliberate choice somebody made; hiding him leaves the panel
   // claiming nobody is cast while the project says otherwise, and the way back is a chip the
-  // person has no reason to press.
-  if (castId && !shown.some(c => c.id === castId)) {
-    const cast = _chars.find(c => c.id === castId);
-    if (cast) shown = [cast].concat(shown);
+  // person has no reason to press. The one on trial likewise: their looks are in the drawer.
+  for (const id of [castId, tryId]) {
+    if (!id || shown.some(c => c.id === id)) continue;
+    const c = _chars.find(x => x.id === id);
+    if (c) shown = [c].concat(shown);
   }
 
   const bar = _el('div', 'mv3-wk-bar');
@@ -978,9 +953,10 @@ function _paintCharacters(host, head) {
   }
 
   const grid = _el('div', 'mv3-wk-grid');
-  const pickedId = castId;
+  // Lit: the one on trial, else the one cast.
+  const onId = tryId || castId;
   for (const c of shown) {
-    const tile = _el('button', 'mv3-wk-tile' + (c.id === pickedId ? ' is-on' : ''));
+    const tile = _el('button', 'mv3-wk-tile' + (c.id === onId ? ' is-on' : ''));
     tile.type = 'button';
     tile.title = c.name + (c.obrazy.length ? ' · ' + c.obrazy.length + ' looks' : ' · no looks yet');
     tile.appendChild(_tileImg(c));
@@ -989,17 +965,11 @@ function _paintCharacters(host, head) {
     tile.addEventListener('mouseleave', _peekHide);
     tile.addEventListener('click', () => {
       _peekHide();
-      // A second press on the face already cast is how you take it back: the drawer shuts
-      // with it, which is the whole step saying "nobody yet" again.
-      if (c.id === String(_casting().characterId || '')) {
-        _patch({ characterId: '', characterName: '', obrazId: '', obrazImage: '' });
-        _showInPreview('', '');
-        return;
-      }
-      // A look belongs to one character, so changing who is cast drops it rather than
-      // pointing the project at somebody else's wardrobe.
-      _patch({ characterId: c.id, characterName: c.name, obrazId: '', obrazImage: '' });
-      _showInPreview(_faceOf(c).src, c.name);
+      // On trial: the 4K sheet on the stage and this character's looks in the drawer. Nothing is
+      // written until one of the looks is pressed and selected - a person is cast in a look,
+      // never bare, because that look is what every frame is made from.
+      _try = { char: c, look: null, place: _try.place };
+      _ctx.repaint();
     });
     grid.appendChild(tile);
   }
@@ -1033,10 +1003,13 @@ function _paintLooks(root, c) {
     const add = _el('button', 'mv3-wk-look is-add' + (c.obrazy.length ? '' : ' is-only'), '+');
     add.type = 'button';
     add.title = 'Dress ' + c.name + ' in a lookbook';
-    add.addEventListener('click', () => { _view = 'lookbooks'; _lbPick = ''; _ctx.repaint(); });
+    add.addEventListener('click', () => { _lbPick = ''; _go('lookbooks'); });
     row.appendChild(add);
 
-    const pickedId = String(_casting().obrazId || '');
+    // Lit: the look on trial, else - for the character who is cast - the look they are cast in.
+    const cast = _casting();
+    const pickedId = _try.look ? _try.look.id
+      : (String(cast.characterId || '') === c.id ? String(cast.obrazId || '') : '');
     for (const o of c.obrazy) {
       const b = _el('button', 'mv3-wk-look' + (o.id === pickedId ? ' is-on' : ''));
       b.type = 'button';
@@ -1046,11 +1019,9 @@ function _paintLooks(root, c) {
       img.loading = 'lazy';
       img.src = derived(o.image, 'card');
       b.appendChild(img);
-      b.addEventListener('click', async () => {
-        await _patch({ obrazId: o.id, obrazImage: o.image });
-        // The look is the end of this branch: the character field in the hub now holds the
-        // person in what they will wear, and the next question is where.
-        _view = 'hub';
+      b.addEventListener('click', () => {
+        // On trial, on the stage, with `select` under it (this file, _stage) - that is the write.
+        _try = { char: c, look: o, place: _try.place };
         _ctx.repaint();
       });
       row.appendChild(b);
@@ -1060,20 +1031,14 @@ function _paintLooks(root, c) {
   root.appendChild(drawer);
 }
 
-// ── The stage ───────────────────────────────────────────────────────────────
-// What the preview shows while this step is open. The timeline is empty at this point
-// in a project's life, so the stage is free for the thing being decided.
-function _showInPreview(src, caption) {
-  PV.showStill(derived(src, 'main'), caption || '');
-}
-
 function _note(text, bad) {
   return _el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), text);
 }
 
 /** Painted over, or the step is left (js/merge-v3/workshop.js, setStep): drop the enlargement,
- *  and stop a voice sample that was playing. */
+ *  stop a voice sample that was playing, and forget what was on trial - it was never written. */
 export function leave() {
   _peekHide();
   VOICE.leave();
+  _noTry();
 }
