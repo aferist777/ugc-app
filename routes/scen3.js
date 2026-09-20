@@ -3212,12 +3212,12 @@ function _normMix(m) {
         ? { x: +v.crop.x || 0, y: +v.crop.y || 0, w: +v.crop.w || 0, h: +v.crop.h || 0 } : null,
       size:    (v && v.size && typeof v.size === 'object')
         ? { w: +v.size.w || 0, h: +v.size.h || 0 } : null,
-      // A frame drawn for ONE line by the fragments step says which, and what it was drawn from -
-      // the shot size, the pose and the camera - so a line can list its own frames and a frame
-      // can say what it is. Frames from the old pool have neither.
-      line:    Number.isInteger(v && v.line) ? v.line : null,
-      from:    (v && v.from && typeof v.from === 'object')
-        ? { framing: String(v.from.framing || ''), poseId: String(v.from.poseId || ''), camera: String(v.from.camera || '') } : null,
+      // A frame of a SET (docs/local-app/PLAN.md, phase W2) says which set, which shot size and its
+      // number in it - so the pool keeps the order the frames were asked in, and the lines take
+      // from it in turn. Frames from the old pool have none of it and simply come first.
+      set:     String((v && v.set) || ''),
+      framing: String((v && v.framing) || ''),
+      n:       Number.isInteger(v && v.n) ? v.n : 0,
     })).filter(v => v.id && v.path) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
@@ -3415,19 +3415,16 @@ function _normFrameRef(r) {
   };
 }
 
-// A line's shot. `said` and `mood` are what it was read FROM: a line whose words or whose video's mood
-// have changed since is stale, which is worked out wherever it is shown rather than stored.
-// `motion` is the animation prompt that goes to Kling; `motionAgent` is the agent's own last text
-// for it, kept so a prompt edited by hand survives a new reading and can still be put back.
+// A line's animation: the prompt that goes to the video model (`motion`), the agent's own last text
+// for it (`motionAgent`, so a prompt edited by hand survives a new pass and can be put back), and
+// what it was written FROM - the words and the mood - so a line whose words or whose video's mood
+// changed since is stale, which is worked out wherever it is shown rather than stored. The shot
+// size, the pose and the camera of a frame used to live here too (F2); the frames are a set for the
+// whole video now (docs/local-app/PLAN.md, phase W2), and a line only says which one it opens on.
 function _normShot(sh) {
   if (!sh || typeof sh !== 'object') return null;
   const str = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
   return {
-    framing:      str(sh.framing, 40),
-    poseId:       str(sh.poseId, 80),
-    camera:       str(sh.camera, 40),
-    direction:    str(sh.direction, 700),
-    why:          str(sh.why, 300),
     motion:       str(sh.motion, 900),
     motionAgent:  str(sh.motionAgent, 900),
     motionEdited: !!sh.motionEdited,
@@ -3481,6 +3478,11 @@ const _normVideo = (v) => {
     model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
     quality: MP.qualityById(s.quality) ? s.quality : MP.DEFAULT_QUALITY,
+    // The set of first frames (docs/local-app/PLAN.md, phase W2): the shot size it is made in (the
+    // ids of FRAME_SETS below), how many, and what the person asked for in words.
+    framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : 'half',
+    frames:  Math.max(1, Math.min(5, parseInt(s.frames, 10) || 4)),
+    wish:    String(s.wish || '').slice(0, 600),
   };
 };
 const _normVoice = (v) => {
@@ -3691,179 +3693,13 @@ router.post('/scen3/projects/:id/line', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// THE DIRECTING AGENT (the fragments step, docs/local-app/PLAN.md F2)
-//
-// Reads the whole script at once - rhythm is a property of the sequence, not of a line - with the
-// person in their look, the place, and the mood of the video, and for every line chooses a shot
-// size, a pose and a camera FROM THE CATALOGUE, writes the direction of the frame and the animation
-// prompt for Kling, and says why in one line. The owner asked for a director, not a dice: so the
-// rules below are the craft, spelled out, and the server checks whatever comes back against the
-// catalogue before a word of it is stored.
-// ════════════════════════════════════════════════════════════════════════════
+/* ── A line's animation prompt, by hand ──────────────────────────────────────
+   POST /api/scen3/fragments/shot  { projectId, line, patch: { motion?, useAgentMotion? } }
+                                   -> { success, project }
 
-const FRAG_BATCH = 5;                     // lines per reading (the owner)
-
-function _scriptCatalogue() {
-  const fo = _loadFrameOpts();
-  const poses = _loadPoses().filter(p => p.active);
-  return { framings: fo.framings, cameras: fo.cameras, poses };
-}
-
-// A choice checked against the catalogue: a shot size that exists, a pose OF that shot size, a camera
-// that exists. What does not fit is replaced by the nearest sensible thing, never refused - a
-// reading of twelve lines is not thrown away for one wrong id.
-function _fitShot(pick, cat) {
-  const f = cat.framings.find(x => x.id === String(pick.framing || '')) || cat.framings.find(x => x.id === 'half-body') || cat.framings[0];
-  const inGroup = cat.poses.filter(p => p.group === f.id);
-  const pose = inGroup.find(p => p.id === String(pick.poseId || pick.pose || '')) || inGroup[0] || null;
-  const cam = cat.cameras.find(x => x.id === String(pick.camera || '')) || cat.cameras.find(x => x.id === 'nat-50') || cat.cameras[0];
-  return { framing: f.id, poseId: pose ? pose.id : '', camera: cam.id };
-}
-
-async function _readScript({ mood, lines, only, lookUrl, placeUrl, placeNote, current }) {
-  const cat = _scriptCatalogue();
-  const moodRec = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
-  const want = (only && only.length) ? only : lines.map((_, i) => i);
-  const rules = [
-    'You are the DIRECTOR and the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a phone camera in one real place, line by line. Every line of the script becomes ONE shot - one clip, cut to the next.',
-    'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet: a portrait and the full body from the front, the side and the back). IMAGE 2 is the place, photographed empty.',
-    'For every line you decide HOW IT IS FILMED - the shot size, the pose, the camera and the direction of the first frame - and HOW THE PERSON MOVES while saying it - the animation prompt. Choose deliberately; every choice has a reason you can state.',
-    '',
-    'THE MOOD OF THE VIDEO is "' + moodRec.label + '": ' + moodRec.guide + ' The mood colours everything - the energy of the poses, the size of the gestures, the expressions, the animation prompts.',
-    '',
-    'THE CRAFT:',
-    '1. Meaning first. The shot serves what the line DOES. A hook, a surprising claim or a call to action: closer and livelier. An explanation, a list or proof: steadier, with room for the hands. Something personal or vulnerable: closer and softer. Doubt or an objection: a guarded pose. The payoff or relief: an open posture.',
-    '2. Rhythm. Two neighbouring lines never share the same shot size AND the same pose - a change between lines is a cut, and cuts hold a viewer. But do not jump every line: build the video from two or three shot sizes, move between them with purpose, and come back to a home shot.',
-    '3. Physically possible HERE. Look at IMAGE 2. A seated pose only where there is something to sit on; a pose against a wall only where there is a free wall; a table or a desk only if the place has one. The person stays in the same place with the same light in every line.',
-    '4. The camera means something. Phone selfie is a direct, intimate talk to the viewer and goes only with the selfie poses. 50mm natural is the neutral default. 85mm portrait is for emotional close lines. Phone rear cam or 35mm documentary feel like somebody else is filming. Webcam is a desk confession. Do not change the camera between neighbouring lines unless the change means something.',
-    '5. The DIRECTION is the first frame, frozen: where the body, the hands and the head are and the expression at the moment the line begins - one or two concrete sentences, physically possible in this place, consistent with the pose. In the FRAME the person does NOT have to look into the lens: they can be caught mid-thought.',
-    '6. The MOTION is the animation prompt for a talking-head avatar model, 25 to 45 words, in this order: what they feel, the expression, the head, the hands, the gaze. It starts from the moment the direction describes. The model keeps the person where the frame put them and hears ONLY expression, head and hands: never write camera moves, zooms, cuts, walking, standing up, turning around, objects or scene changes.',
-    '7. The GAZE lives in the motion: the person speaks into the lens. Looking away is RARE - at most one or two lines in the whole video, only where the words ask for it (remembering, hesitating), and the eyes come back to the lens within the line.',
-    '8. No product in hand, nothing held unless the pose itself holds a phone.',
-    '9. Everything you write is in English, whatever the language of the script.',
-    '',
-    'THE CATALOGUE - choose ONLY from these ids.',
-    'Shot sizes: ' + cat.framings.map(f => f.id + ' (' + f.label + ': ' + f.crop + ')').join('; ') + '.',
-    'Poses - each belongs to ONE shot size, and a pose may only be used with its own shot size: ' + cat.poses.map(p => p.id + ' [' + p.group + '] ' + p.label + ' - ' + p.desc).join('; ') + '.',
-    'Cameras: ' + cat.cameras.map(c => c.id + ' (' + c.label + ': ' + c.summary + ')').join('; ') + '.',
-    'Examples of good animation prompts, for their shape and vocabulary only: ' + MP.MOTION_PRESETS.map(m => '"' + m.prompt + '"').join(' | '),
-    '',
-    placeNote ? 'What is known about the place: ' + placeNote : '',
-    'THE SCRIPT:',
-    ...lines.map((t, i) => (i + 1) + '. ' + t),
-  ];
-  if (only && only.length && current) {
-    const planned = lines.map((_, i) => (current[i] && !want.includes(i)) ? (i + 1) + ': ' + current[i].framing + ' / ' + current[i].poseId + ' / ' + current[i].camera : '').filter(Boolean);
-    if (planned.length) rules.push('The other lines are already planned like this - keep the rhythm with them: ' + planned.join('; ') + '.');
-  }
-  rules.push('Plan the lines ' + want.map(i => i + 1).join(', ') + '.');
-  rules.push('Answer with JSON only: {"lines":[{"n":<line number>,"framing":"<shot size id>","pose":"<pose id>","camera":"<camera id>","direction":"...","motion":"...","why":"<one short sentence>"}]}');
-
-  const content = [
-    { type: 'text', text: rules.filter(x => x !== null).join('\n') },
-    { type: 'image_url', image_url: { url: lookUrl } },
-    { type: 'image_url', image_url: { url: placeUrl } },
-  ];
-  const raw = await _ask([{ role: 'user', content }]);
-  const m = String(raw || '').match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('the agent did not answer with a plan');
-  let plan;
-  try { plan = JSON.parse(m[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
-  const out = new Map();
-  for (const r of (Array.isArray(plan && plan.lines) ? plan.lines : [])) {
-    const i = parseInt(r && r.n, 10) - 1;
-    if (!want.includes(i) || out.has(i)) continue;
-    const fit = _fitShot({ framing: r.framing, poseId: r.pose || r.poseId, camera: r.camera }, cat);
-    out.set(i, {
-      ...fit,
-      direction: String(r.direction || '').trim(),
-      motion: String(r.motion || '').trim(),
-      why: String(r.why || '').trim(),
-    });
-  }
-  if (!out.size) throw new Error('the agent planned none of the lines');
-  return out;
-}
-
-/* ── The agent reads the script ──────────────────────────────────────────────
-   POST /api/scen3/fragments/read  { projectId, only } -> { success, project, planned }
-
-   FIVE LINES AT A TIME (the owner, 2026-09-18): all of a script in one answer is a lot for one call.
-   The page sends the batches one after another; each sees the whole script and the lines already
-   planned - fresh ones, read for these words and this mood - so the rhythm holds across a batch's
-   edge. One line is "read again" the same way. Not an Alerts row: an agent's answer in seconds, the
-   way a voice is (decided with the owner).
-   ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/fragments/read', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const cast = _normCasting(proj.casting);
-    if (!cast.obrazImage || !cast.locationImage) {
-      return res.status(400).json({ success: false, error: 'cast the character in a look and set the place first' });
-    }
-    const lines = (proj.lines || []).map(_normLine);
-    const words = lines.map(l => l.text);
-    if (!words.some(w => w.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
-    const only = [...new Set((Array.isArray(b.only) ? b.only : []).map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))];
-    if (!only.length) return res.status(400).json({ success: false, error: 'say which lines to read' });
-    if (only.length > FRAG_BATCH) return res.status(400).json({ success: false, error: 'at most ' + FRAG_BATCH + ' lines at a time' });
-    const mood = _normVideo(proj.video).mood;
-
-    const [lookUrl, placeUrl] = await Promise.all([
-      _hostLocal(cast.obrazImage, { verify: true }),
-      _hostLocal(cast.locationImage, { verify: true }),
-    ]);
-    const placeNote = String(((SHELF_META.read('environments') || {})[cast.locationImage] || {}).description || '').slice(0, 1600);
-    // The context is what is planned AND still true: a shot read for other words or another mood
-    // would pull the rhythm towards a video that is no longer this one.
-    const planned = await _readScript({
-      mood, lines: words, only, lookUrl, placeUrl, placeNote,
-      current: lines.map(l => (l.shot && l.shot.said === l.text && l.shot.mood === mood) ? l.shot : null),
-    });
-
-    // Written in one burst against the project as it is NOW, touching only the shots: a read or a
-    // clip that landed while the agent was thinking stays. The words recorded are the ones the agent
-    // read - if they were edited meanwhile, the line is rightly stale.
-    const list = _loadProjects();
-    const p = list.find(x => String(x.id) === id);
-    if (!p) return res.status(404).json({ success: false, error: 'the project went away' });
-    p.lines = (p.lines || []).map(_normLine);
-    const at = new Date().toISOString();
-    for (const [i, got] of planned) {
-      if (!p.lines[i]) continue;
-      const was = p.lines[i].shot;
-      const keepHand = !!(was && was.motionEdited && was.motion);
-      p.lines[i].shot = _normShot({
-        framing: got.framing, poseId: got.poseId, camera: got.camera,
-        direction: got.direction, why: got.why,
-        motion: keepHand ? was.motion : got.motion,
-        motionAgent: got.motion,
-        motionEdited: keepHand,
-        said: words[i], mood, at,
-      });
-    }
-    p.updatedAt = at;
-    _saveProjects(list);
-    console.log('[scen3/fragments/read] ' + id + ' mood=' + mood + ' planned ' + planned.size + ' of ' + lines.length);
-    res.json({ success: true, project: _projFull(p), planned: [...planned.keys()].map(i => i + 1) });
-  } catch (e) {
-    console.error('[scen3/fragments/read]', e.message);
-    res.status(502).json({ success: false, error: e.message });
-  }
-});
-
-/* ── One shot changed by hand ────────────────────────────────────────────────
-   POST /api/scen3/fragments/shot  { projectId, line, patch: { framing?, poseId?, camera?,
-                                     direction?, motion?, useAgentMotion? } } -> { success, project }
-
-   The same catalogue check as the agent's. A choice made by hand is made for the words as they are
-   now and the mood as it is now, so it is fresh; an animation prompt written by hand is marked so
-   a new reading leaves it alone, and useAgentMotion puts the agent's back.
+   A prompt written by hand is marked so a new pass (the video stage, phase W3) leaves it alone, and
+   useAgentMotion puts the agent's back. Written for the words as they are now and the mood as it is
+   now, so it is fresh.
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/fragments/shot', (req, res) => {
   try {
@@ -3878,11 +3714,6 @@ router.post('/scen3/fragments/shot', (req, res) => {
     const patch = (b.patch && typeof b.patch === 'object') ? b.patch : {};
     const was = p.lines[i].shot || {};
     const next = { ...was };
-    if ('framing' in patch) next.framing = String(patch.framing || '');
-    if ('poseId' in patch) next.poseId = String(patch.poseId || '');
-    if ('camera' in patch) next.camera = String(patch.camera || '');
-    Object.assign(next, _fitShot(next, _scriptCatalogue()));
-    if ('direction' in patch) next.direction = String(patch.direction || '');
     if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
     else if ('motion' in patch) {
       next.motion = String(patch.motion || '');
@@ -3899,28 +3730,52 @@ router.post('/scen3/fragments/shot', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// THE FRAME OF A FRAGMENT (the fragments step, docs/local-app/PLAN.md F3)
+// THE FIRST FRAMES - a SET for the whole video (the setup step, docs/local-app/PLAN.md, phase W2)
 //
-// The picture a line opens on: the person in their look, standing in the place, in the pose and the
-// moment the directing agent chose for this line. nano-banana-2 at 2K on kie (the owner, after the
-// A/B), in the timeline's shape, with three references in a fixed order - the mannequin of the pose,
-// the look, the place - and the prompt in the order the old "Build mix" proved: the crop first, then
-// the rule for the references, the camera, the body, the moment, the person, the place, the light.
+// Not a frame per line (F3, gone with the directing agent of F2): ONE shot size, chosen by the
+// person - selfie, half body, full body - and N variations of it, the same person in the same place
+// and the same base pose with a different MOMENT in each: the head, the hands, the face. A vision
+// agent writes the moments from the look, the place, the mannequin, the mood and whatever the person
+// asked for; every moment is then one frame on kie - nano-banana-2 at 2K (the owner, after the A/B),
+// in the timeline's shape, the references in a fixed order: the mannequin, the look, the place - a
+// row in Alerts of its own, drawn side by side with the others, and the runner files it into the
+// project's frames. That pool is what the lines take their frames from, in turn
+// (js/merge-v3/wk-fragments.js, _frameFor); no line is written by a frame - which one a line opens
+// on is a rule, until the person picks one by hand (pick-frame).
 //
 // NO GAZE RULE (the owner): in a frame the person does not have to look into the lens - they can be
 // caught mid-thought. Where the eyes go is the moment's business, and the animation prompt brings
 // them to the lens while the line is spoken.
-//
-// The server sees it through: a row in Alerts, and the runner downloads the frame once into the
-// project's frames/, adds it to the project's frames and makes it the line's.
 // ════════════════════════════════════════════════════════════════════════════
 
 const FRAG_FRAME_ENGINE = 'nano-banana-2';
 const FRAG_FRAME_RES = '2K';
 const FRAG_FORMATS = ['9:16', '16:9'];
+const FRAME_SET_MAX = 5;
 
-// The references rule, for a frame of a fragment. Written from FRAME_RULE_POSED, with the one change
-// the owner asked for: the eyes are the moment's, not a rule's.
+// The three shot sizes a set is made in (the owner, 2026-09-21). `poseId` is the mannequin that sets
+// the base body and the camera angle (data/scen3-poses.json, its `group`); `camera` the lens from
+// the frame options; `rule` is what the engine and the agent are told first; `about` the one line
+// under the menu.
+const FRAME_SETS = [
+  { id: 'selfie', label: 'selfie', group: 'closeup', poseId: 'closeup-selfie-r', camera: 'phone-selfie',
+    about: 'Filmed at arm’s length: the phone in one outstretched hand, the face and the shoulders close, straight to the viewer.',
+    rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.' },
+  { id: 'half', label: 'half body', group: 'half-body', poseId: 'half-standing', camera: 'nat-50',
+    about: 'From the waist up, somebody else holding the camera: room for the hands, the place behind.',
+    rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.' },
+  { id: 'full', label: 'full body', group: 'full-height', poseId: 'full-straight', camera: 'phone-rear',
+    about: 'Head to toe, standing in the place: the whole figure, the floor under their feet.',
+    rule: 'FULL BODY, the whole figure from head to toe: standing on the floor of the place, filmed from a natural distance, the person in the middle of the frame with the place around them, the feet and the floor in the frame.' },
+];
+const _frameSet = (id) => FRAME_SETS.find(s => s.id === String(id || '')) || null;
+
+router.get('/scen3/frame-sets', (_req, res) => {
+  res.json({ success: true, max: FRAME_SET_MAX, sets: FRAME_SETS.map(s => ({ id: s.id, label: s.label, about: s.about, poseId: s.poseId })) });
+});
+
+// The references rule, for a frame of the set. Written from FRAME_RULE_POSED, with the one change the
+// owner asked for: the eyes are the moment's, not a rule's.
 const FRAG_RULE_POSED =
   'Create ONE photorealistic photograph of ONE real person.'
   + ' IMAGE 1 is a blue artist mannequin and it defines the BODY: reproduce its pose, the tilt and'
@@ -3984,12 +3839,51 @@ async function _frameRef(projectId, cast) {
   const list = _loadProjects();
   const q = list.find(x => String(x.id) === String(projectId));
   if (q) { q.frameRef = ref; _saveProjects(list); }
-  console.log('[scen3/fragments/frame] read the look and the place: character ' + ref.character.length + 'ch, environment '
+  console.log('[scen3/frames] read the look and the place: character ' + ref.character.length + 'ch, environment '
     + ref.environment.length + 'ch, lighting ' + ref.lighting.length + 'ch');
   return ref;
 }
 
-async function _submitFragFrame(b) {
+// The moments: N variations of the one shot, written by the agent that sees the look, the place and
+// the mannequin. Two or three sentences each about the body, the hands, the head and the face at
+// the frozen instant - never about the camera, the place or the clothes, which are fixed.
+async function _planFrames({ n, set, mood, wish, ref, lookUrl, placeUrl, poseUrl }) {
+  const m = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
+  const text = [
+    'You are the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a camera in one real place. You are planning the FIRST FRAMES - the still pictures the clips of the video start from: one shot size, and ' + n + ' variations of it.',
+    'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet). IMAGE 2 is the place, photographed empty.'
+      + (poseUrl ? ' IMAGE 3 is a blue mannequin: the base body position and the camera angle of this shot size.' : ''),
+    'THE SHOT SIZE: ' + set.rule,
+    'THE MOOD OF THE VIDEO is "' + m.label + '". The face: ' + m.face + ' The body: ' + m.gestures,
+    ref.environment ? 'THE PLACE, as read: ' + ref.environment : '',
+    wish ? 'WHAT THE PERSON MAKING THE VIDEO ASKS FOR - follow it in every variation: ' + wish : '',
+    'Write ' + n + ' variations of this ONE shot: the same person, the same place, the same shot size and the same base pose, and in each a DIFFERENT moment - the tilt and the turn of the head, what the hands do'
+      + (set.id === 'selfie' ? ' (the hand with the phone stays where it is; the other hand is free)' : '')
+      + ', the expression, where the eyes go (into the lens, or caught mid-thought), the weight of the body. Every moment physically possible in this place and true to the mood, and the variations clearly different from one another.',
+    'A moment is two or three concrete sentences describing that frozen instant: the body, the hands, the head, the face. Nothing about the camera, the place or the clothes - those are fixed. Everything in English.',
+    'Answer with JSON only: {"frames":[{"n":1,"moment":"..."},{"n":2,"moment":"..."}]} - exactly ' + n + ' entries.',
+  ].filter(Boolean).join('\n');
+  const content = [
+    { type: 'text', text },
+    { type: 'image_url', image_url: { url: lookUrl } },
+    { type: 'image_url', image_url: { url: placeUrl } },
+  ];
+  if (poseUrl) content.push({ type: 'image_url', image_url: { url: poseUrl } });
+  const raw = await _ask([{ role: 'user', content }]);
+  const mt = String(raw || '').match(/\{[\s\S]*\}/);
+  if (!mt) throw new Error('the agent did not answer with the frames');
+  let plan;
+  try { plan = JSON.parse(mt[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+  const moments = (Array.isArray(plan && plan.frames) ? plan.frames : [])
+    .map(f => String((f && f.moment) || '').trim()).filter(Boolean);
+  if (!moments.length) throw new Error('the agent planned no frames');
+  // Fewer than asked is the set that came; more is the first n.
+  return moments.slice(0, n);
+}
+
+// One frame of the set, on kie. What it is made of - the moment, the shot size, its number in the
+// set - travels with the journal row, so "try again" makes the same frame again (lib/gen-jobs.js).
+async function _submitSetFrame(b) {
   const id = String(b.projectId || '').trim();
   const proj = _loadProjects().find(p => String(p.id) === id);
   if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
@@ -3997,33 +3891,24 @@ async function _submitFragFrame(b) {
   if (!cast.obrazImage || !cast.locationImage) {
     throw Object.assign(new Error('cast the character in a look and set the place first'), { status: 400 });
   }
-  const lines = (proj.lines || []).map(_normLine);
-  const i = parseInt(b.line, 10);
-  if (!(i >= 0 && i < lines.length)) throw Object.assign(new Error('no such line'), { status: 400 });
-  const sh = lines[i].shot;
-  if (!sh || !sh.framing) throw Object.assign(new Error('this line has no shot yet - read it first'), { status: 400 });
+  const set = _frameSet(b.set);
+  if (!set) throw Object.assign(new Error('no such shot size'), { status: 400 });
+  const moment = String(b.moment || '').trim();
+  const n = Math.max(1, parseInt(b.n, 10) || 1);
   const aspect = FRAG_FORMATS.includes(b.format) ? b.format : '9:16';
 
-  const cat = _scriptCatalogue();
-  const framing = cat.framings.find(f => f.id === sh.framing) || null;
-  const pose = cat.poses.find(p => p.id === sh.poseId) || null;
-  const cam = cat.cameras.find(c => c.id === sh.camera) || null;
-  const posePath = _poseImageFor(sh.poseId, sh.framing);
-
+  const pose = _poseFor(set.poseId, set.group);
+  const cam = _loadFrameOpts().cameras.find(c => c.id === set.camera) || null;
   const ref = await _frameRef(id, cast);
   const urls = [];
-  if (posePath) urls.push(await _hostLocal(posePath));
+  if (pose) urls.push(await _hostLocal(pose.file));
   urls.push(await _hostLocal(cast.obrazImage), await _hostLocal(cast.locationImage));
 
-  const parts = [];
-  if (framing && framing.crop) {
-    parts.push('SHOT SIZE - the most important constraint, obey it before anything else: ' + framing.crop
-      + '. Frame the person exactly this way and do not pull back to fit more of the body in.');
-  }
-  parts.push(posePath ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
+  const parts = ['SHOT SIZE - the most important constraint, obey it before anything else: ' + set.rule];
+  parts.push(pose ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
   if (cam) parts.push('Camera: ' + cam.prompt + '.');
-  if (pose && pose.desc) parts.push('Body position to reproduce - the person is ' + pose.desc + '.');
-  if (sh.direction) parts.push('THE MOMENT - the instant this line begins: ' + sh.direction);
+  if (pose && pose.desc) parts.push('Base body position - the person is ' + pose.desc + '.');
+  if (moment) parts.push('THE MOMENT - this frozen instant: ' + moment);
   if (ref.character) parts.push('The person to keep: ' + ref.character);
   if (ref.environment) parts.push('The location: ' + ref.environment);
   if (ref.lighting) parts.push('Match the location lighting exactly - ' + ref.lighting);
@@ -4031,44 +3916,75 @@ async function _submitFragFrame(b) {
 
   const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
   if (!taskId) throw Object.assign(new Error('the engine did not accept the task'), { status: 502 });
-  console.log('[scen3/fragments/frame] line ' + (i + 1) + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
-    + ' refs=' + urls.length + ' pose=' + (pose ? pose.id + (posePath ? '+img' : '') : '-') + ' cam=' + (cam ? cam.id : '-'));
+  console.log('[scen3/frames] ' + set.id + ' ' + n + ' ' + FRAG_FRAME_ENGINE + ' ' + FRAG_FRAME_RES + ' ' + aspect
+    + ' refs=' + urls.length + (pose ? ' +mannequin' : ''));
   return {
     taskId, engine: FRAG_FRAME_ENGINE, prompt,
-    file: { projectId: id, line: i, prompt, shotAt: sh.at, framing: sh.framing, poseId: sh.poseId, camera: sh.camera },
+    file: { projectId: id, set: String(b.setId || ''), framing: set.id, n, prompt, moment },
   };
 }
 
-/* ── A frame for one line ────────────────────────────────────────────────────
-   POST /api/scen3/fragments/frame  { projectId, line, format?, where } -> { success, alertId, taskId }
+/* ── The set: plan the moments, ask for every frame ─────────────────────────
+   POST /api/scen3/frames/plan  { projectId, set, n, wish?, format?, where }
+                                -> { success, setId, alerts: [{ alertId, taskId, n }] }
 
-   Always a journal row (only the fragments step calls this): the runner downloads the frame into the
-   project's frames/, adds it to the project's frames and makes it the line's.
+   One agent call for the moments, then a journal row per frame, asked for one after another - kie
+   draws them side by side. The runner files each into the project's frames as it comes.
    ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/fragments/frame', async (req, res) => {
+router.post('/scen3/frames/plan', async (req, res) => {
   try {
     const b = req.body || {};
-    const proj = _loadProjects().find(p => String(p.id) === String(b.projectId || ''));
-    if (proj && !OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const out = await _submitFragFrame(b);
-    const line = parseInt(b.line, 10);
-    const rec = JOBS.submitted({
-      kind: 'image', what: 'frame',
-      title: 'Frame · line ' + (line + 1),
-      where: b.where || null,
-      engine: out.engine,
-      taskIds: [out.taskId],
-      job: { type: 'frame', params: { request: { projectId: b.projectId, line, format: b.format }, file: out.file } },
-    });
-    res.json({ success: true, alertId: rec.id, taskId: out.taskId });
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const cast = _normCasting(proj.casting);
+    if (!cast.obrazImage || !cast.locationImage) {
+      return res.status(400).json({ success: false, error: 'cast the character in a look and set the place first' });
+    }
+    const set = _frameSet(b.set);
+    if (!set) return res.status(400).json({ success: false, error: 'no such shot size' });
+    const n = Math.max(1, Math.min(FRAME_SET_MAX, parseInt(b.n, 10) || 4));
+    const wish = String(b.wish || '').trim().slice(0, 600);
+    const mood = _normVideo(proj.video).mood;
+
+    const ref = await _frameRef(id, cast);
+    const pose = _poseFor(set.poseId, set.group);
+    const [lookUrl, placeUrl, poseUrl] = await Promise.all([
+      _hostLocal(cast.obrazImage, { verify: true }),
+      _hostLocal(cast.locationImage, { verify: true }),
+      pose ? _hostLocal(pose.file) : Promise.resolve(''),
+    ]);
+    const moments = await _planFrames({ n, set, mood, wish, ref, lookUrl, placeUrl, poseUrl });
+
+    const setId = 's' + Date.now();
+    const alerts = [];
+    for (let k = 0; k < moments.length; k++) {
+      const request = { projectId: id, set: set.id, setId, n: k + 1, moment: moments[k], format: b.format };
+      const out = await _submitSetFrame(request);
+      const rec = JOBS.submitted({
+        kind: 'image', what: 'frame',
+        title: 'Frame · ' + set.label + ' ' + (k + 1) + '/' + moments.length,
+        where: b.where || null,
+        engine: out.engine,
+        taskIds: [out.taskId],
+        job: { type: 'frame', params: { request, file: out.file } },
+      });
+      alerts.push({ alertId: rec.id, taskId: out.taskId, n: k + 1 });
+    }
+    console.log('[scen3/frames/plan] ' + id + ' ' + set.id + ' x' + moments.length + ' mood=' + mood);
+    res.json({ success: true, setId, alerts });
   } catch (e) {
-    console.error('[scen3/fragments/frame]', e.message);
-    res.status(e.status || 500).json({ success: false, error: e.message });
+    console.error('[scen3/frames/plan]', e.message);
+    res.status(e.status || 502).json({ success: false, error: e.message });
   }
 });
 
-/* ── Which of a line's frames it opens on ────────────────────────────────────
+/* ── Which frame a line opens on ─────────────────────────────────────────────
    POST /api/scen3/fragments/pick-frame  { projectId, line, frameId } -> { success, project }
+
+   A frame of the pool, picked by hand; '' hands the line back to the rule - the pool in turn
+   (js/merge-v3/wk-fragments.js, _frameFor).
    ──────────────────────────────────────────────────────────────────────────── */
 router.post('/scen3/fragments/pick-frame', (req, res) => {
   try {
@@ -4080,23 +3996,28 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     p.lines = (p.lines || []).map(_normLine);
     const i = parseInt(b.line, 10);
     if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
-    const v = _normMix(p.mix).variants.find(x => x.id === String(b.frameId || ''));
-    if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
-    p.lines[i].frameId = v.id;
+    const want = String(b.frameId || '');
+    if (want) {
+      const v = _normMix(p.mix).variants.find(x => x.id === want);
+      if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
+      p.lines[i].frameId = v.id;
+    } else {
+      p.lines[i].frameId = '';
+    }
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// The runner's side: wait for kie, land the picture in the project's frames/ once, make its preview,
-// add it to the project's frames and make it the line's frame - in one burst against the project as
-// it is by then.
+// The runner's side: wait for kie, land the picture in the project's frames/ once, make its preview
+// and add it to the project's frames - in one burst against the project as it is by then. No line is
+// touched: the lines take from the pool by the rule.
 JOBS.register('frame', {
   timeoutMs: 15 * 60 * 1000,
   poll: (rec) => {
     const p = _fileParams(rec);
-    return H.resolveTask(rec.taskIds[0], PROJECTS.dirOf(p.projectId, 'frames'), 'frame_l' + (Number(p.line) + 1));
+    return H.resolveTask(rec.taskIds[0], PROJECTS.dirOf(p.projectId, 'frames'), 'frame_' + (p.framing || 'set') + '_' + (Number(p.n) || 1));
   },
   file: async (rec, landed) => {
     const p = _fileParams(rec);
@@ -4105,21 +4026,20 @@ JOBS.register('frame', {
     const proj = list.find(x => String(x.id) === String(p.projectId));
     if (!proj) throw new Error('the project is gone');
     proj.mix = _normMix(proj.mix);
-    proj.lines = (proj.lines || []).map(_normLine);
-    const line = Number(p.line);
     const variant = {
-      id: 'f' + Date.now(), path: landed.imagePath, preview, prompt: p.prompt || '',
+      // Several frames of one set are filed in the same tick, so the clock alone is not an id.
+      id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      path: landed.imagePath, preview, prompt: p.prompt || '',
       at: new Date().toISOString(), taskId: rec.taskIds[0],
-      line, from: { framing: p.framing || '', poseId: p.poseId || '', camera: p.camera || '' },
+      set: String(p.set || ''), framing: String(p.framing || ''), n: Number(p.n) || 0,
     };
     if (!proj.mix.variants.some(v => v.taskId === variant.taskId)) proj.mix.variants.unshift(variant);
-    if (proj.lines[line]) proj.lines[line].frameId = variant.id;
     proj.updatedAt = variant.at;
     _saveProjects(list);
-    return { path: landed.imagePath, preview, frameId: variant.id, line, media: 'image' };
+    return { path: landed.imagePath, preview, frameId: variant.id, set: variant.set, n: variant.n, media: 'image' };
   },
   submit: async (request) => {
-    const out = await _submitFragFrame(request);
+    const out = await _submitSetFrame(request);
     return { taskId: out.taskId, engine: out.engine, file: out.file };
   },
 });
@@ -4738,10 +4658,10 @@ function _audioCut(p) {
 router.cutClips = _cutClips;
 // The prompt blocks, for tools that must send exactly what the app sends (a model comparison is
 // worthless if the bench says something the routes do not).
-router.FRAG_BATCH = FRAG_BATCH;
 router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL };
-// ...and the two agents that write the long half of those prompts, for the same reason.
-router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, readScript: _readScript };
+// ...and the agents that write the long half of those prompts, for the same reason.
+router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, planFrames: _planFrames };
+router.FRAME_SETS = FRAME_SETS;
 router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 

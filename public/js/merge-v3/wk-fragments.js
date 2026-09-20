@@ -4,33 +4,35 @@
    "Сцена, setup и таймлайн-зеркало").
 
    The hub of the setup step (js/merge-v3/wk-setup.js), painted into its panel. Two columns: on
-   the left the voice the script is read in and the whole script, one row per line with what it
-   has - the read, the shot, the frame, the clip; on the right the line that is open, with
-   everything made for it - or, with none open, the settings of the whole video and where the
-   script stands. The list never goes away while a line is open: the script is one thing, and
-   judging a line means seeing the ones around it. Who and where are on the stage, not here.
+   the left the whole script, one row per line with what it has - the read, the frame, the clip;
+   on the right the line that is open, with everything made for it - or, with none open, the
+   GENERAL ZONE: the counters, the one mood, and the three stages of the whole video in gold,
+   voice, first frames, video, each with its own `generate` (phase W). The list never goes away
+   while a line is open: the script is one thing, and judging a line means seeing the ones around
+   it. Who and where are on the stage, not here.
 
-   THE READ (V3, moved in here in M). A line is spoken from the open line's own button; its words
-   can be changed there too, and a take made of other words is stale until the line is read again
-   or the words are put back. The speaking itself is js/merge-v3/wk-voice.js.
+   THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
+   button - tagged by the mood first - and its words can be changed there too, tags and all; a take
+   made of other words is stale until the line is read again or the words are put back. The
+   speaking itself is js/merge-v3/wk-voice.js.
 
-   THE READING (F2). The directing agent (routes/scen3.js, _readScript) reads the script five
-   lines at a time against the MOOD of the video - the emotion the person picks once - and gives
-   every line its shot size, pose, camera, the direction of its first frame and its animation
-   prompt for Kling. All of it can be changed by hand; an animation prompt written by hand
-   survives the next reading.
+   THE FIRST FRAMES (W2) are a SET for the whole video, not a frame per line: one shot size the
+   person picks - selfie, half body, full body - and N variations of it, planned by an agent from
+   the look, the place, the mood and the person's own words, drawn side by side on kie
+   (routes/scen3.js, frames/plan). Every frame is a row in Alerts from the moment it is asked for,
+   and the SERVER files it into the project's pool - this panel only follows the rows, so leaving
+   loses nothing. THE LINES TAKE FROM THE POOL IN TURN (_frameFor): the first line the first frame,
+   the second the second, round again - until a line is given a frame by hand, which it keeps.
 
-   THE FRAMES (F3). A frame is drawn for one line from its shot (routes/scen3.js, fragments/frame):
-   nano-banana-2 at 2K in the timeline's shape. It is a row in Alerts from the moment it is asked
-   for, and the SERVER files it into the project and makes it the line's - this panel only follows
-   the row, so leaving loses nothing and coming back finds it still drawing or done. "again" adds
-   a frame beside the one the line has; the line opens on whichever is picked. The clips (F4) are
-   still to come.
+   THE ANIMATION of a line - the prompt the video model hears - is written by the video stage (W3)
+   and edited here; a prompt written by hand survives the next pass. The clips (F4) are still to
+   come.
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
-   scenario project's, as they have always been (routes/scen3.js). Written from here: the clip
-   settings - the tier, the mood, the mode - on `project.video`, merged on the server; each line's
-   `shot`, through its own two routes, which touch nothing else of the line; and a line's words.
+   scenario project's, as they have always been (routes/scen3.js). Written from here: the video's
+   settings - the tier, the mood, the set - on `project.video`, merged on the server; a line's
+   animation prompt and its frame, through their own routes, which touch nothing else of the line;
+   and a line's words.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -41,7 +43,7 @@ import { derived } from '../chars-store.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture } from './wk-maker.js';
 
 // What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
-// button so nothing is spent on a surprise; the frame route will answer with the real price (F3).
+// button so nothing is spent on a surprise.
 const FRAME_PRICE = 0.06;
 // The one ceiling a read has for Kling avatar, from the tier (lib/motion-presets.js) - read from
 // the kit when it has arrived, this only until then.
@@ -58,22 +60,19 @@ let _editWords = -1;                      // the line whose words are open for e
 let _wordsDraft = '';
 let _key = '';                            // the project it belongs to
 let _asked = _urlLine();                  // ?line=N (1-based) - how the Alerts list comes back here
-let _kit = null;                          // tiers and motion presets, read once
+let _kit = null;                          // tiers, moods, the mannequins and the shot sizes of a set, read once
 let _kitState = 'idle';
 let _saving = false;
 let _said = '';
 let _listAt = 0;                          // where the list stood, put back after every repaint
-// The reading. The server takes at most five lines a call (the owner); the page walks the script in
-// those steps and says how far it has got.
-const BATCH = 5;
-let _reading = null;                      // { from, to, total } for the script, { line } for one
 let _readErr = '';
 const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
-// Frames being drawn, by line: { alertId, startedAt } - from this panel or found in the journal.
+// Frames of the set being drawn, by journal row: { startedAt, n } - asked from here or found in the journal.
 const _drawing = new Map();
-let _armedFrames = false;                 // "make N frames" pressed once and asking
-let _submitting = null;                   // { done, total } while a batch of frames is being asked for
+let _planning = false;                    // the agent is writing the moments of a set
+let _armedSet = false;                    // the set's `generate` pressed once and asking
 let _lookedAt = '';                       // the project the journal was last asked about
+let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 function _urlLine() {
@@ -110,7 +109,30 @@ function _readState(l) {
   if (!take || !take.path) return 'none';
   return take.said === said ? 'ok' : 'stale';
 }
-const _frameOf = (p, l) => (((p && p.mix) || {}).variants || []).find(v => v.id === String((l && l.frameId) || '')) || null;
+// THE POOL, in the order the frames were asked for: the sets as they came, and inside a set by
+// number - not by the moment each landed, which is whichever kie finished first. The server lists
+// newest first; the rule reads oldest first, so the first line gets the first frame of the first set.
+function _pool(p) {
+  const all = (((p && p.mix) || {}).variants || []).slice();
+  const start = {};
+  for (const v of all) {
+    if (!v.set) continue;
+    if (!start[v.set] || String(v.at || '') < start[v.set]) start[v.set] = String(v.at || '');
+  }
+  const key = (v) => (v.set ? start[v.set] : String(v.at || ''));
+  return all.sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0) || String(a.at || '').localeCompare(String(b.at || '')));
+}
+// The frame a line opens on: the one picked by hand when there is one, else the pool in turn -
+// line 1 frame A, line 2 frame B, round again (decided with the owner 2026-09-21).
+function _frameFor(p, l, i) {
+  const pool = _pool(p);
+  const picked = l && l.frameId ? pool.find(v => v.id === String(l.frameId)) : null;
+  if (picked) return { v: picked, auto: false };
+  if (!pool.length) return { v: null, auto: true };
+  return { v: pool[i % pool.length], auto: true };
+}
+/** The rule, for a stand to check (the timeline mirror will read the same rule, phase T'). */
+export const frameFor = _frameFor;
 function _clipOf(l) {
   const clips = ((l && l.video) || {}).plain || [];
   if (!clips.length) return null;
@@ -159,19 +181,18 @@ function _playBtn(src, what) {
   return b;
 }
 
-// ── The kit: tiers and motion presets ───────────────────────────────────────
+// ── The kit: tiers, moods, the mannequins and the shot sizes of a set ───────
 function _loadKit(repaint) {
   if (_kitState !== 'idle') return;
   _kitState = 'loading';
   const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
-  Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-options')]).then(([m, p, f]) => {
-    const opts = (f && f.options) || {};
+  Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-sets')]).then(([m, p, s]) => {
     _kit = {
       qualities: (m && m.qualities) || [],
       moods: (m && m.moods) || [],
       poses: (p && p.poses) || [],
-      framings: opts.framings || [],
-      cameras: opts.cameras || [],
+      sets: (s && s.sets) || [],
+      setMax: (s && s.max) || 5,
     };
     _kitState = 'done';
   }).finally(() => repaint());
@@ -198,110 +219,54 @@ async function _post(url, body) {
   return r;
 }
 
-// ── The reading ─────────────────────────────────────────────────────────────
-// A shot is stale when it was read for other words or for another mood of the video.
-function _shotState(l) {
-  const sh = l && l.shot;
-  if (!sh || !sh.framing) return 'none';
-  return (sh.said === _words(l) && sh.mood === (_video().mood || '')) ? 'ok' : 'stale';
-}
-
-async function _readScript() {
-  const p = _ctx && _ctx.project;
-  const n = ((p && p.lines) || []).length;
-  if (!p || !n || _reading) return;
-  _readErr = '';
-  for (let k = 0; k < n; k += BATCH) {
-    const only = [];
-    for (let j = k; j < Math.min(n, k + BATCH); j++) only.push(j);
-    _reading = { from: k + 1, to: k + only.length, total: n };
-    _ctx.repaint();
-    try {
-      _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only }));
-    } catch (e) {
-      _readErr = 'The agent could not read lines ' + (k + 1) + '–' + (k + only.length) + ': ' + e.message;
-      break;
-    }
-  }
-  _reading = null;
-  _ctx.repaint();
-}
-
-async function _readLine(i) {
-  const p = _ctx && _ctx.project;
-  if (!p || _reading) return;
-  _readErr = '';
-  _reading = { line: i };
-  _ctx.repaint();
-  try {
-    _adopt(await _post('/api/scen3/fragments/read', { projectId: p.id, only: [i] }));
-  } catch (e) {
-    _readErr = 'The agent could not read line ' + (i + 1) + ': ' + e.message;
-  }
-  _reading = null;
-  _ctx.repaint();
-}
-
-// ── The frames ──────────────────────────────────────────────────────────────
-// Where a frame was asked from, for the Alerts list: the address that opens this very fragment.
-function _where(i) {
+// ── The set of first frames ─────────────────────────────────────────────────
+// Where the set was asked from, for the Alerts list: the general zone of this project.
+function _where() {
   const key = (_ctx && _ctx.key) || '';
   const p = (_ctx && _ctx.project) || {};
   return {
     page: 'merge',
-    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · setup › line ' + (i + 1),
-    spot: { key, step: 'setup', view: 'frag', line: i },
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup',
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · setup › first frames',
+    spot: { key, step: 'setup', view: 'frames' },
   };
 }
 const _format = () => { try { const t = Store.timeline(); return (t && t.format) || '9:16'; } catch (e) { return '9:16'; } };
 
-async function _makeFrame(i) {
+// `generate` of the first frames field: the agent plans N moments of the chosen shot size, the
+// server asks kie for every one, and this follows the rows. Pressed twice (owner): the first press
+// says how many and how much.
+async function _makeSet() {
   const p = _ctx && _ctx.project;
-  if (!p || _drawing.has(i)) return;
+  if (!p || _planning) return;
+  const v = _video();
   _readErr = '';
-  _drawing.set(i, { alertId: '', startedAt: Date.now() });
+  _planning = true;
   _ctx.repaint();
   try {
-    const r = await _post('/api/scen3/fragments/frame', { projectId: p.id, line: i, format: _format(), where: _where(i) });
-    _drawing.set(i, { alertId: r.alertId, startedAt: Date.now() });
-    _follow(i, r.alertId);
+    const r = await _post('/api/scen3/frames/plan', { projectId: p.id, set: v.framing, n: v.frames, wish: v.wish, format: _format(), where: _where() });
+    for (const a of r.alerts || []) {
+      _drawing.set(a.alertId, { startedAt: Date.now(), n: a.n });
+      _follow(a.alertId);
+    }
   } catch (e) {
-    _drawing.delete(i);
-    _readErr = 'Line ' + (i + 1) + ': the frame was not asked for - ' + e.message;
-    if (_open === i) endProgress('frame:' + i, e.message);
+    _readErr = 'The frames were not asked for: ' + e.message;
   }
+  _planning = false;
   _ctx.repaint();
 }
 
 // The row is the truth: whatever happened to the page in between, it says done or failed.
-async function _follow(i, alertId) {
+async function _follow(alertId) {
   try {
     await API.follow(alertId);
     if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
-    if (_open === i) endProgress('frame:' + i);
   } catch (e) {
-    _readErr = 'Line ' + (i + 1) + ': ' + e.message;
-    if (_open === i) endProgress('frame:' + i, e.message);
+    _readErr = 'A frame failed: ' + e.message;
   }
-  _drawing.delete(i);
+  _drawing.delete(alertId);
+  if (!_drawing.size) endProgress('frames', _readErr ? _readErr : undefined);
   if (_ctx) _ctx.repaint();
-}
-
-// Every line that has a shot and no frame, asked for one after another; the drawing itself happens
-// on the server, in parallel. Pressed twice (owner): the first press says how many and how much.
-async function _makeMissing(lines) {
-  const want = lines.map((l, i) => (_shotState(l) !== 'none' && !_frameOf(_ctx.project, l) && !_drawing.has(i)) ? i : -1).filter(i => i >= 0);
-  if (!want.length) return;
-  _submitting = { done: 0, total: want.length };
-  _ctx.repaint();
-  for (const i of want) {
-    await _makeFrame(i);
-    _submitting.done++;
-    _ctx.repaint();
-  }
-  _submitting = null;
-  _ctx.repaint();
 }
 
 // Coming back to the step, or to the page: any frame of this project still drawing is found in the
@@ -313,16 +278,15 @@ function _pickUpDrawing() {
   API.alerts().then((d) => {
     for (const r of (d && d.items) || []) {
       const spot = (r.where && r.where.spot) || {};
-      if (r.state !== 'running' || r.what !== 'frame' || spot.key !== key) continue;
-      const i = Number(spot.line);
-      if (!Number.isInteger(i) || _drawing.has(i)) continue;
-      _drawing.set(i, { alertId: r.id, startedAt: Date.parse(r.startedAt) || Date.now() });
-      _follow(i, r.id);
+      if (r.state !== 'running' || r.what !== 'frame' || spot.key !== key || _drawing.has(r.id)) continue;
+      _drawing.set(r.id, { startedAt: Date.parse(r.startedAt) || Date.now(), n: 0 });
+      _follow(r.id);
     }
     if (_ctx) _ctx.repaint();
   }).catch(() => { /* without the list, nothing shows as drawing */ });
 }
 
+// A frame of the pool for this line, by hand - or '' to hand the line back to the rule.
 async function _pickFrame(i, frameId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
@@ -331,8 +295,7 @@ async function _pickFrame(i, frameId) {
   _ctx.repaint();
 }
 
-// A change by hand: shown at once, then the server's answer - which is also where a pose that does
-// not belong to a new shot size is replaced by one that does.
+// A change by hand: shown at once, then the server's answer.
 async function _saveShot(i, patch) {
   const p = _ctx && _ctx.project;
   if (!p || !p.lines[i]) return;
@@ -410,11 +373,12 @@ export function paint(host, ctx, api) {
   }
   if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
-  // The countdown belongs to the fragment being drawn, and only while it is the one open.
-  const place = _open >= 0 && _drawing.has(_open) ? 'frame:' + _open : null;
+  // The countdown belongs to the set being drawn, on the stage of the general zone.
+  const place = _open < 0 && _drawing.size ? 'frames' : null;
   onlyHere(place);
   if (place) {
-    holdProgress(place, { label: 'Drawing the frame of line ' + (_open + 1), estimateMs: FRAME_ESTIMATE_MS, startedAt: _drawing.get(_open).startedAt });
+    const first = [..._drawing.values()].reduce((a, d) => Math.min(a, d.startedAt), Date.now());
+    holdProgress(place, { label: 'Drawing ' + _drawing.size + (_drawing.size === 1 ? ' frame' : ' frames'), estimateMs: FRAME_ESTIMATE_MS, startedAt: first });
   }
 }
 
@@ -452,7 +416,7 @@ function _all(host, p, lines) {
   _counters(host, p, lines);
   _mood(host);
   _stageVoice(host, p, lines);
-  _stageFrames(host, p, lines);
+  _stageFrames(host, p);
   _stageVideo(host);
   host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
@@ -495,7 +459,16 @@ function _counters(host, p, lines) {
     stat.appendChild(c);
   };
   cell('read', lines.filter(isRead).length);
-  cell('frames', lines.filter(l => _frameOf(p, l)).length);
+  // The frames are a set, not a line each: what the pool holds over what was asked for - the
+  // dropdown's number, or more once the pool has grown past it (owner, 2026-09-21).
+  {
+    const have = _pool(p).length;
+    const asked = Math.max(have + _drawing.size, _video().frames || 0);
+    const c = el('div', 'mv3-wk-fstat' + (have >= asked ? ' is-done' : ''));
+    c.appendChild(el('div', 'mv3-wk-fstat-n', have + '/' + asked));
+    c.appendChild(el('div', 'mv3-wk-fstat-l', 'frames'));
+    stat.appendChild(c);
+  }
   cell('clips', lines.filter(l => _clipState(l) === 'ok').length);
   top.appendChild(stat);
   const all = el('button', 'mv3-wk-gen mv3-wk-genall', 'generate all');
@@ -523,7 +496,7 @@ function _mood(host) {
     if (m.id === v.mood) { o.selected = true; now = m; }
     mood.appendChild(o);
   }
-  mood.disabled = _saving || !_kit || !!_reading;
+  mood.disabled = _saving || !_kit;
   mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
   row.appendChild(mood);
   box.appendChild(row);
@@ -561,41 +534,107 @@ function _stageVoice(host, p, lines) {
   });
 }
 
-// FIRST FRAMES - its own stage comes in W2 (a set of frames for the whole video, chosen by shot
-// size). Until then the field holds what F2 and F3 built: the reading of the script and a frame
-// per line.
-function _stageFrames(host, p, lines) {
-  const { body, foot } = _stage(host, 'first frames', 'under development', true);
-  const missing = _missing(p);
+// FIRST FRAMES - a set for the whole video (owner, 2026-09-21): the shot size with its mannequin and
+// its line, how many, what the person asks for in words, and the pool as it stands - every frame a
+// door to the stage. `generate` plans the moments and asks for the frames; the lines take from the
+// pool in turn.
+function _stageFrames(host, p) {
+  const { body, foot } = _stage(host, 'first frames', 'a set for the whole video');
+  const v = _video();
+  const missing = _missing(p).filter(m => m !== 'a voice');
   const blocked = missing.length > 0;
-  const acts = el('div', 'mv3-wk-facts');
-  const r = _reading;
-  const read = el('button', 'mv3-wk-vmore is-small' + (r && r.total ? ' is-busy' : ''),
-    r && r.total ? 'reading lines ' + r.from + '–' + r.to + ' of ' + r.total + '…' : 'read the script');
-  read.type = 'button';
-  read.disabled = blocked || !!r || !lines.length;
-  read.title = blocked ? 'Still missing: ' + missing.join(', ')
-    : 'The agent plans every line - shot, pose, camera, direction, animation - five lines at a time';
-  read.addEventListener('click', () => _readScript());
-  // Only lines that have a shot can be drawn; the others are counted apart so the number is honest.
-  const ready = lines.filter((l, i) => _shotState(l) !== 'none' && !_frameOf(p, l) && !_drawing.has(i)).length;
-  const sub = _submitting;
-  const frames = el('button', 'mv3-wk-vmore is-small' + (_armedFrames ? ' is-armed' : '') + (sub ? ' is-busy' : ''),
-    sub ? 'asking ' + sub.done + ' of ' + sub.total + '…'
-      : _armedFrames ? ready + ' frame' + (ready === 1 ? '' : 's') + ' · ' + _money(ready * FRAME_PRICE) + '?'
-        : ready ? 'make ' + ready + ' frame' + (ready === 1 ? '' : 's') : (_drawing.size ? 'drawing ' + _drawing.size + '…' : 'no frames to make'));
-  frames.type = 'button';
-  frames.disabled = blocked || !ready || !!sub || !!_reading;
-  frames.title = blocked ? 'Still missing: ' + missing.join(', ')
-    : 'Every line that has a shot and no frame - nano-banana-2, 2K, ' + _money(FRAME_PRICE) + ' each. Press again to confirm.';
-  frames.addEventListener('click', () => {
-    if (!_armedFrames) { _armedFrames = true; _ctx.repaint(); return; }
-    _armedFrames = false;
-    _makeMissing(lines);
+  const set = ((_kit && _kit.sets) || []).find(s => s.id === v.framing) || null;
+
+  // The shot size, its mannequin beside it, and how many.
+  const row = el('div', 'mv3-wk-fsetrow');
+  const pose = set ? _poseById(set.poseId) : null;
+  const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
+  if (pose && (pose.thumb || pose.file)) {
+    const img = el('img');
+    img.alt = '';
+    img.src = pose.thumb || pose.file;
+    pic.title = pose.label + ' - ' + pose.desc;
+    pic.appendChild(img);
+  }
+  row.appendChild(pic);
+  const col = el('div', 'mv3-wk-fsetcol');
+  const sets = el('div', 'mv3-wk-fsets');
+  const framing = el('select', 'mv3-wk-vsel is-small is-model');
+  framing.title = 'The shot size every frame of the set is made in';
+  for (const s of (_kit && _kit.sets) || []) {
+    const o = el('option', '', s.label);
+    o.value = s.id;
+    if (s.id === v.framing) o.selected = true;
+    framing.appendChild(o);
+  }
+  framing.disabled = _saving || !_kit || _planning;
+  framing.addEventListener('change', () => _saveVideo({ framing: framing.value }));
+  const count = el('select', 'mv3-wk-vsel is-small is-tier');
+  count.title = 'How many variations of the shot';
+  for (let k = 1; k <= ((_kit && _kit.setMax) || 5); k++) {
+    const o = el('option', '', k + (k === 1 ? ' frame' : ' frames'));
+    o.value = String(k);
+    if (k === v.frames) o.selected = true;
+    count.appendChild(o);
+  }
+  count.disabled = _saving || !_kit || _planning;
+  count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
+  sets.append(framing, count);
+  col.appendChild(sets);
+  if (set && set.about) col.appendChild(el('div', 'mv3-wk-mood-about', set.about));
+  row.appendChild(col);
+  body.appendChild(row);
+
+  // What the person asks for, in words - kept on the project, so it is still there tomorrow.
+  const wish = el('textarea', 'mv3-wk-ftext-in');
+  wish.rows = 2;
+  wish.placeholder = 'Anything the frames should have - "arms crossed", "looking off to the left", "holding the mug"…';
+  wish.value = 'wish' in _drafts ? _drafts.wish : (v.wish || '');
+  wish.disabled = _planning;
+  wish.addEventListener('input', () => { _drafts.wish = wish.value; });
+  wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
+  body.appendChild(wish);
+
+  // The pool: `+` for a frame of one's own (its window comes later), then every frame as it came.
+  // A frame pressed goes on the stage; pressed again, the stage shows the casting pair.
+  const strip = el('div', 'mv3-wk-fset');
+  const add = el('button', 'mv3-wk-fsetfr is-add', '+');
+  add.type = 'button';
+  add.disabled = true;
+  add.title = 'A frame of your own, from the picture window - under development';
+  strip.appendChild(add);
+  for (const fr of _pool(p)) {
+    const b = el('button', 'mv3-wk-fsetfr' + (fr.id === _setPick ? ' is-on' : ''));
+    b.type = 'button';
+    b.title = (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '') + 'press to see it on the stage; right-click to open it large';
+    const img = el('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = derived(fr.preview || fr.path, 'card');
+    b.appendChild(img);
+    b.addEventListener('click', () => { _setPick = _setPick === fr.id ? '' : fr.id; _ctx.repaint(); });
+    b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }); });
+    strip.appendChild(b);
+  }
+  for (let k = 0; k < _drawing.size; k++) strip.appendChild(el('div', 'mv3-wk-fsetfr is-busy', 'drawing…'));
+  body.appendChild(strip);
+
+  // `generate`: the price first, the set on the second press.
+  const n = v.frames || 4;
+  const busy = _planning || _drawing.size > 0;
+  _genButton(foot, {
+    label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',
+    cap: blocked ? 'still missing: ' + missing.join(', ') : busy ? '' : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
+    disabled: blocked || busy || !_kit,
+    title: blocked ? 'Still missing: ' + missing.join(', ')
+      : 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn - nano-banana-2, 2K, '
+        + _money(FRAME_PRICE) + ' each. Press again to confirm.',
+    on: () => {
+      if (!_armedSet) { _armedSet = true; _ctx.repaint(); return; }
+      _armedSet = false;
+      _makeSet();
+    },
   });
-  acts.append(read, frames);
-  body.appendChild(acts);
-  _genButton(foot, { disabled: true, title: 'Comes with the first frames stage (W2): a set of frames for the whole video, by shot size' });
 }
 
 // VIDEO - the model and the tier now; the animation prompts and the clips come with their stages
@@ -658,7 +697,7 @@ function _row(p, l, i) {
 
   // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
   // and the row is read for its words.
-  const fr = _frameOf(p, l);
+  const fr = _frameFor(p, l, i).v;
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
 
   const dots = el('div', 'mv3-wk-fdots');
@@ -668,8 +707,7 @@ function _row(p, l, i) {
     dots.appendChild(d);
   };
   dot(VOICE.reading().line === i ? 'busy' : _readState(l), 'read');
-  dot(_shotState(l), 'shot');
-  dot(_drawing.has(i) ? 'busy' : fr ? 'ok' : 'none', 'frame');
+  dot(fr ? 'ok' : 'none', 'frame');
   dot(_clipState(l), 'clip');
   row.appendChild(dots);
 
@@ -684,13 +722,11 @@ function _row(p, l, i) {
 }
 
 // ── The right column: the open fragment ─────────────────────────────────────
-// Laid out the way the owner drew it (2026-09-19), as a grid of two rows:
+// A grid of two rows, the animation prompt down the left, the two pictures of a fragment - what it
+// opens on and what it becomes - one above the other on the right:
 //
-//   | shot: size, pose, camera, direction |  mannequin  |  frame  + make frame |
-//   | animation prompt                                  |  clip   + make clip  |
-//
-// The frame and the clip share a column, so the two pictures of a fragment - what it opens on and
-// what it becomes - stand one above the other.
+//   | animation prompt  |  frame  (from the pool, or picked) |
+//   |                   |  clip   + make clip                |
 function _fragment(host, p, l, i) {
   const take = _take(l);
   const rs = _readState(l);
@@ -758,11 +794,9 @@ function _fragment(host, p, l, i) {
 
   const grid = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid);
-  grid.appendChild(_shotCol(l, i));
-  grid.appendChild(_poseCol(l));
-  grid.appendChild(_frameCol(p, l, i));
   grid.appendChild(_motionCol(l, i));
-  grid.appendChild(_clipCol(p, l, rs, take));
+  grid.appendChild(_frameCol(p, l, i));
+  grid.appendChild(_clipCol(p, l, i, rs, take));
 
   // Every take the line has, under the grid - projects made on the old page can carry some.
   const clips = ((l.video || {}).plain || []);
@@ -787,135 +821,44 @@ function _colHead(label, action) {
   return h;
 }
 
-// SHOT - how the line is filmed, in one column: the three choices, then the direction.
-function _shotCol(l, i) {
-  const col = el('div', 'mv3-wk-fcol is-shot');
-  const sh = l.shot || null;
-  const st = _shotState(l);
-  const busy = !!_reading;
-  const mine = _reading && _reading.line === i;
-
-  const again = el('button', 'mv3-wk-vmore is-small', mine ? 'reading…' : (sh ? 'read again' : 'read this line'));
-  again.type = 'button';
-  again.disabled = busy || !!_missing(_ctx.project).length;
-  again.title = 'The agent plans this line again, keeping the rhythm with the others';
-  again.addEventListener('click', () => _readLine(i));
-  col.appendChild(_colHead('shot', again));
-
-  const cat = _kit || { framings: [], poses: [], cameras: [] };
-  const pick = (title, items, value, label, onChange) => {
-    const sel = el('select', 'mv3-wk-vsel is-small is-col');
-    sel.title = title;
-    if (!value) { const o = el('option', '', label); o.value = ''; o.disabled = true; o.selected = true; sel.appendChild(o); }
-    for (const it of items) {
-      const o = el('option', '', it.label);
-      o.value = it.id;
-      if (it.title) o.title = it.title;
-      if (it.id === value) o.selected = true;
-      sel.appendChild(o);
-    }
-    sel.disabled = busy || !_kit;
-    sel.addEventListener('change', () => onChange(sel.value));
-    return sel;
-  };
-  const framing = (sh && sh.framing) || '';
-  col.appendChild(pick('How much of the person is in the frame', cat.framings, framing, 'shot size',
-    (v) => _saveShot(i, { framing: v })));
-  // Only the poses of this shot size: each mannequin belongs to exactly one.
-  const poses = cat.poses.filter(p => !framing || p.group === framing).map(p => ({ id: p.id, label: p.label, title: p.desc }));
-  col.appendChild(pick('The body position - one of the mannequins of this shot size', poses, (sh && sh.poseId) || '', 'pose',
-    (v) => _saveShot(i, { poseId: v })));
-  col.appendChild(pick('The lens and how it renders', cat.cameras.map(c => ({ id: c.id, label: c.label, title: c.summary })),
-    (sh && sh.camera) || '', 'camera', (v) => _saveShot(i, { camera: v })));
-
-  col.appendChild(el('div', 'mv3-wk-flabel', 'direction'));
-  col.appendChild(_textField(i, 'direction', (sh && sh.direction) || '', 3,
-    'The first frame, frozen: where the body, the hands and the head are, and the expression as the line begins',
-    (v) => _saveShot(i, { direction: v })));
-  if (sh && sh.why) col.appendChild(el('div', 'mv3-wk-fwhy', sh.why));
-  if (st === 'stale') col.appendChild(_note('The words or the mood of the video changed since this line was read - read it again.', true));
-  if (!sh) col.appendChild(el('div', 'mv3-wk-fsoon', 'Not read yet: "read the script" plans every line, or read this one alone. Anything here can also be set by hand.'));
-  return col;
-}
-
-// The mannequin of the chosen pose, as tall as the frame beside it: the body the frame will copy.
-function _poseCol(l) {
-  const col = el('div', 'mv3-wk-fcol is-media');
-  col.appendChild(_colHead('pose'));
-  const sh = l.shot || null;
-  const pose = sh ? _poseById(sh.poseId) : null;
-  const box = el('div', 'mv3-wk-fmedia is-pose' + (pose ? '' : ' is-empty'));
-  if (pose && (pose.thumb || pose.file)) {
-    const img = el('img');
-    img.alt = '';
-    img.src = pose.thumb || pose.file;
-    box.title = pose.label + ' - ' + pose.desc;
-    box.appendChild(img);
-  } else {
-    box.appendChild(el('span', '', 'no pose'));
-  }
-  col.appendChild(box);
-  if (pose) col.appendChild(el('div', 'mv3-wk-fcap', pose.label));
-  return col;
-}
-
-// FRAME - the picture the line opens on, the button that makes it, and the line's other frames.
+// FRAME - the picture the line opens on: the pool's, in turn, or the one picked by hand; and the
+// pool under it to pick from. Pressing the picked one again hands the line back to the rule.
 function _frameCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('frame'));
-  const fr = _frameOf(p, l);
-  const busy = _drawing.has(i);
-  const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty') + (busy ? ' is-busy' : ''));
+  const { v: fr, auto } = _frameFor(p, l, i);
+  const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty'));
   if (fr) {
     const img = el('img');
     img.alt = '';
     img.src = derived(fr.preview || fr.path, 'card');
     box.appendChild(img);
     box.title = 'Open it large';
-    box.addEventListener('click', () => showPicture({ src: fr.path, name: 'frame of line ' + (i + 1), rows: fr.from ? [['drawn from', _fromText(fr.from)]] : [] }));
+    box.addEventListener('click', () => showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }));
   } else {
-    box.appendChild(el('span', '', busy ? 'drawing…' : 'no frame'));
+    box.appendChild(el('span', '', _drawing.size ? 'drawing…' : 'no frames yet'));
   }
   col.appendChild(box);
-  const noShot = _shotState(l) === 'none';
-  const make = el('button', 'mv3-wk-vmore is-small is-media' + (busy ? ' is-busy' : ''), busy ? 'drawing…' : fr ? 'again' : 'make frame');
-  make.type = 'button';
-  make.disabled = busy || noShot || !!_missing(_ctx.project).length || !!_reading;
-  make.title = noShot ? 'Read the line first: the frame is drawn from its shot'
-    : 'nano-banana-2, 2K - ' + (fr ? 'another frame beside this one' : 'the frame this line opens on');
-  make.addEventListener('click', () => {
-    if (_open === i) holdProgress('frame:' + i, { label: 'Drawing the frame of line ' + (i + 1), estimateMs: FRAME_ESTIMATE_MS });
-    _makeFrame(i);
-  });
-  col.appendChild(make);
-  col.appendChild(el('div', 'mv3-wk-fcap' + (noShot ? ' is-why' : ''), noShot ? 'read the line first' : _money(FRAME_PRICE)));
-  // The frames this line has had: pick the one it opens on.
-  const mine = (((p.mix || {}).variants) || []).filter(v => v.line === i);
-  if (mine.length > 1) {
+  col.appendChild(el('div', 'mv3-wk-fcap', fr ? (auto ? 'from the set, in turn' : 'picked by hand') : 'the set is made in the general zone'));
+  const pool = _pool(p);
+  if (pool.length > 1) {
     const strip = el('div', 'mv3-wk-fstrip');
-    for (const v of mine.slice(0, 6)) {
-      const t = el('button', 'mv3-wk-fvar' + (fr && v.id === fr.id ? ' is-on' : ''));
+    for (const v of pool.slice(0, 10)) {
+      const on = !!(fr && v.id === fr.id);
+      const t = el('button', 'mv3-wk-fvar' + (on ? ' is-on' : ''));
       t.type = 'button';
-      t.title = v.from ? _fromText(v.from) : 'a frame of this line';
+      t.title = on ? (auto ? 'This line’s turn - press to keep it by hand' : 'Picked by hand - press to hand the line back to the rule')
+        : 'Open this line on this frame';
       const img = el('img');
       img.alt = '';
       img.src = derived(v.preview || v.path, 'card');
       t.appendChild(img);
-      if (!(fr && v.id === fr.id)) t.addEventListener('click', () => _pickFrame(i, v.id));
+      t.addEventListener('click', () => _pickFrame(i, on ? (auto ? v.id : '') : v.id));
       strip.appendChild(t);
     }
     col.appendChild(strip);
   }
   return col;
-}
-
-// What a frame was drawn from, in words.
-function _fromText(from) {
-  const cat = _kit || { framings: [], cameras: [] };
-  const f = (cat.framings.find(x => x.id === from.framing) || {}).label || from.framing;
-  const pz = (_poseById(from.poseId) || {}).label || from.poseId;
-  const c = (cat.cameras.find(x => x.id === from.camera) || {}).label || from.camera;
-  return [f, pz, c].filter(Boolean).join(' · ');
 }
 
 // The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
@@ -932,7 +875,6 @@ function _motionCol(l, i) {
       const back = el('button', 'mv3-wk-flink', 'use the agent’s');
       back.type = 'button';
       back.title = sh.motionAgent;
-      back.disabled = !!_reading;
       back.addEventListener('click', () => { delete _drafts[i + ':motion']; _saveShot(i, { useAgentMotion: true }); });
       action.appendChild(back);
     }
@@ -948,7 +890,7 @@ function _motionCol(l, i) {
 
 // CLIP - the frame speaking the read, in the frame's column. What stops it, or what it costs, is
 // said under the button.
-function _clipCol(p, l, rs, take) {
+function _clipCol(p, l, i, rs, take) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('clip'));
   const c = _clipOf(l);
@@ -962,12 +904,12 @@ function _clipCol(p, l, rs, take) {
     box.appendChild(el('span', '', 'no clip'));
   }
   col.appendChild(box);
-  const fr = _frameOf(p, l);
+  const fr = _frameFor(p, l, i).v;
   const tier = _tier();
   let cap;
   let ready = false;
   if (rs !== 'ok') cap = 'read this line first';
-  else if (!fr) cap = 'make a frame first';
+  else if (!fr) cap = 'make the frames first';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…'); }
   const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''), c ? 'again' : 'make clip');
@@ -994,7 +936,6 @@ function _textField(i, field, value, rows, placeholder, save) {
   box.rows = rows;
   box.placeholder = placeholder;
   box.value = k in _drafts ? _drafts[k] : value;
-  box.disabled = !!_reading;
   box.addEventListener('input', () => { _drafts[k] = box.value; });
   box.addEventListener('change', () => {
     const v = box.value;
@@ -1011,10 +952,14 @@ function _textField(i, field, value, rows, placeholder, save) {
 export function openPicture(p) {
   const lines = (p && Array.isArray(p.lines)) ? p.lines : [];
   const l = _open >= 0 ? lines[_open] : null;
-  if (!l) return null;
+  if (!l) {
+    // No line open: a frame of the pool pressed in the general zone, if one is.
+    const fr = _setPick ? _pool(p).find(v => v.id === _setPick) : null;
+    return fr ? { src: derived(fr.preview || fr.path, 'main'), caption: 'frame' + (fr.n ? ' ' + fr.n : '') } : null;
+  }
   const c = _clipOf(l);
   if (c && c.thumb) return { src: c.thumb, caption: 'fragment ' + (_open + 1) + ' · clip' };
-  const fr = _frameOf(p, l);
+  const fr = _frameFor(p, l, _open).v;
   if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'fragment ' + (_open + 1) };
   return null;
 }
