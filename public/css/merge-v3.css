@@ -1552,13 +1552,13 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 }
 
 /* ── The workshop's first step ───────────────────────────────────────────────
-   Casting in a 280px column (js/merge-v3/wk-setting.js). Three faces to a row is the
+   Casting in a 280px column (js/merge-v3/wk-setup.js). Three faces to a row is the
    most that leaves a name legible under them; the enlargement on hover is what makes
    that size enough to choose by. */
 /* The step lays the panel out itself: a grid that scrolls and a drawer that does not, so the
    body's own padding and scrolling stand down for it. */
 .mv3-panel-body.is-wk{padding:0; overflow:hidden}
-.mv3-wk-setting{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
+.mv3-wk-setup{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
 .mv3-ins-head.is-wk{margin:0; padding:9px 9px 6px; gap:8px; align-items:flex-start; flex-wrap:wrap}
 .mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
 .mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
@@ -1669,6 +1669,11 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
    the stage (decided with the owner 2026-09-21). The column is the step's own scroll box with room
    at its edges - it is read, not tiled - and the voice level is laid out the same way. */
 .mv3-wk-scroll.is-col{padding:9px 10px 26px}
+/* The right column of the script (js/merge-v3/wk-fragments.js, .is-guide.is-frag) is a flex COLUMN
+   with room at its edges, and everything in it keeps its own height - a one-line div or a textarea
+   is the first thing a full column squashes to nothing - while the column scrolls instead. */
+.mv3-wk-half.is-guide{flex:1 1 auto; min-width:0; padding:9px 10px; overflow-y:auto}
+.mv3-wk-half.is-guide > *{flex:0 0 auto}
 .mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
 
@@ -1718,7 +1723,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-sc-lines.is-short{min-height:74px; margin:8px 9px 0; width:calc(100% - 18px); font-size:11px}
 .mv3-wk-mode{flex:1 1 auto; min-width:0}
 
-/* The stage's one button - `select`, under what is on trial (js/merge-v3/wk-setting.js, _stage).
+/* The stage's one button - `select`, under what is on trial (js/merge-v3/wk-setup.js, _stage).
    For a look it stands just above the seam rather than astride it: sitting on the seam, it covered
    the top edge of the picture below. */
 .mv3-wk-apply{
@@ -1734,7 +1739,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 
 /* The one row that spends money sits under what it will spend it on. Scoped: the inspector
    has a .mv3-ins-row of its own, and this is a different thing in a different place. */
-.mv3-wk-setting .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
+.mv3-wk-setup .mv3-ins-row{display:flex; align-items:center; gap:7px; padding:6px 9px 0}
 
 /* The drawer at the foot of the panel. Shut it is a strip that still names itself; open it
    stands OVER the faces, because both cannot have the height and the faces are what you
@@ -1843,45 +1848,32 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-vpage[disabled]{opacity:.35; cursor:default}
 .mv3-wk-vcount{font:400 9.5px/1.3 var(--font); color:var(--muted)}
 
-/* The script under the voice: a line is its number, its take, its words and the one button
-   that reads it. The words are the widest thing in the row because they are what is judged. */
-.mv3-wk-line{
-  padding:5px 6px; margin:0 0 4px;
-  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface);
-}
-.mv3-wk-line.is-stale{border-color:var(--warn, oklch(.72 .15 75))}
-.mv3-wk-line.is-doing{border-color:var(--primary)}
-.mv3-wk-lrow{display:flex; align-items:center; gap:7px}
-.mv3-wk-ltext{
-  flex:1 1 auto; min-width:0; cursor:text;
-  font:400 11px/1.4 var(--font); color:var(--ink);
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-}
-.mv3-wk-ltext:hover{color:var(--primary)}
-.mv3-wk-lsub{margin:3px 0 0 31px; font:400 9.5px/1.3 var(--font); color:var(--muted)}
-.mv3-wk-line.is-stale .mv3-wk-lsub{color:var(--warn, oklch(.72 .15 75))}
+/* The words of the open line, put back or edited (js/merge-v3/wk-fragments.js, the right column). */
 .mv3-wk-lback{
-  margin:4px 0 0 31px; padding:2px 8px; cursor:pointer;
+  margin:2px 0 8px; padding:2px 8px; cursor:pointer; align-self:flex-start;
   border:1px solid var(--border); border-radius:var(--pill); background:var(--bg); color:var(--muted);
   font:600 9.5px/1.2 var(--font);
 }
 .mv3-wk-lback:hover{border-color:var(--primary); color:var(--primary)}
+.mv3-wk-lback[disabled]{opacity:.5; cursor:default}
 .mv3-wk-ledit{
-  width:100%; margin:5px 0 0; padding:5px 6px; resize:vertical;
+  width:100%; margin:0 0 4px; padding:5px 6px; resize:vertical;
   border:1px solid var(--primary); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
   font:400 11px/1.45 var(--font);
 }
 .mv3-wk-ledit:focus{outline:none}
+.mv3-wk-fwords.is-edit{cursor:text}
+.mv3-wk-fwords.is-edit:hover{color:var(--primary)}
+.mv3-wk-vfoot.is-tight{margin:0 0 8px; gap:6px}
 /* Armed: the second press is the one that spends. Same shape, so the button does not jump. */
 .mv3-wk-vmore.is-armed{border-color:var(--warn, oklch(.72 .15 75)); color:var(--warn, oklch(.72 .15 75))}
-.mv3-wk-vcount.is-head{margin-left:7px; text-transform:none; letter-spacing:0}
 
 /* The voice level's own bar - its tab and the way back - stands at the top of its column. */
 .mv3-wk-bar.is-own{margin:0 0 7px; display:flex; align-items:center; gap:5px}
-/* A heading that carries controls: the name on the left, the count and the button on the right. */
-.mv3-wk-vhead.is-row{display:flex; align-items:center; gap:8px}
-.mv3-wk-vheadacts{margin-left:auto; display:flex; align-items:center; gap:7px}
 .mv3-wk-vmore.is-small{padding:2px 9px; font-size:9.5px}
+/* The reads at the right end of the voice row: how far the script is, and "read all". */
+.mv3-wk-fread{margin-left:auto; display:flex; align-items:center; gap:6px; flex:0 0 auto}
+.mv3-wk-vsub.is-grow{flex:1 1 auto; white-space:normal}
 /* The number and the length of the take, stacked to exactly the play button's height. */
 .mv3-wk-lmeta{
   flex:0 0 auto; width:24px; height:24px; display:flex; flex-direction:column;
@@ -1889,17 +1881,18 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 }
 .mv3-wk-lnum{font:600 9.5px/1.25 var(--font); color:var(--muted)}
 .mv3-wk-ldur{font:400 8.5px/1.25 var(--font); color:var(--muted); opacity:.8}
-.mv3-wk-line.is-stale .mv3-wk-ldur{color:var(--warn, oklch(.72 .15 75)); opacity:1}
 
-/* ── Fragments (js/merge-v3/wk-fragments.js) ───────────────────────────────────────────────────
-   The setting step's two columns again: the script on the left, the open fragment on the right. */
-.mv3-wk-frags{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
+/* ── The script (js/merge-v3/wk-fragments.js) ──────────────────────────────────────────────────
+   The hub of the setup step, two columns: the voice and the script on the left, the open fragment
+   - or the whole video's settings - on the right. */
 .mv3-wk-half.is-frags{
   flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; padding:9px 7px 0;
   display:flex; flex-direction:column; gap:6px; border-right:1px solid var(--border-soft);
 }
 .mv3-wk-half.is-frags > *{flex:0 0 auto}
-.mv3-wk-half.is-frags .mv3-ins-head.is-wk{padding:0 0 2px; margin:0}
+/* The read's play button in a row is smaller than the voice's: the row is read for its words. */
+.mv3-wk-frow .mv3-wk-vplay{width:20px; height:20px; font-size:8px}
+.mv3-wk-vuse.is-right{margin-left:auto}
 .mv3-wk-fmodes, .mv3-wk-fsets, .mv3-wk-facts{display:flex; flex-wrap:wrap; gap:4px}
 .mv3-sc-tab.is-soon{opacity:.5}
 .mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}

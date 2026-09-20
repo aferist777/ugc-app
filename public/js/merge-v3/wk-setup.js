@@ -1,5 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the workshop's first step: WHO says it, WHERE, and HOW IT IS READ.
+   MERGE — the workshop's one step, SETUP: who says it, where, in what voice, and the
+   frame and the clip of every fragment.
 
    Loaded when the step is opened (js/merge-v3/workshop.js), because this is the
    heaviest part of the page and most visits never come here.
@@ -13,15 +14,17 @@
    the `select` button on the stage is what writes it into the project. Leaving the shelf
    without pressing it puts the stage back to what is written.
 
-   THE PANEL holds what is not a picture: the voice and the script read in it (the hub),
-   and the shelves the halves open onto - the characters with their looks, the lookbooks,
-   the environments. A shelf you have not opened is not on screen: the column is narrow,
-   and a form of everything at once is unreadable in it.
+   THE PANEL IS THE SCRIPT (the hub of this step - js/merge-v3/wk-fragments.js, decided
+   with the owner 2026-09-21, phase M): the voice it is read in over one list of lines,
+   each with its read, its shot, its frame and its clip; on the right the open line, or
+   the settings of the whole video. The shelves the halves open onto - the characters
+   with their looks, the lookbooks, the environments, the voices - take the panel whole
+   while they are open and give it back with their ✕. A shelf you have not opened is not
+   on screen: the column is narrow, and a form of everything at once is unreadable in it.
 
-   THE READ BELONGS HERE (decided with the owner 2026-09-18, docs/local-app/PLAN.md
-   "Setting & voice"): a voice is a property of the character speaking, not a stage
-   of its own, and the frames it used to precede are made in `fragments` now, where
-   each clip is built from a frame and the read of one line.
+   THE READ BELONGS TO THE CHARACTER (decided with the owner 2026-09-18): a voice is a
+   property of the one speaking, not a stage of its own - js/merge-v3/wk-voice.js keeps
+   the voices and speaks the lines; this file only decides when its faces are showing.
 
    WHAT IS SAVED. Only ids, and on the scenario project, where casting has always
    lived: characterId / characterName, then obrazId / obrazImage, then the location
@@ -50,8 +53,7 @@
    and this file only decides when it is showing. What the two makers share (the picture field,
    the twenty-character rule, the tile menu) is js/merge-v3/wk-maker.js.
 
-   PHASE SCOPE (docs/local-app/PLAN.md, phases C4, C5 and V1). The voice is V2-V3; the frames
-   are not made here at all any more - they are phase F, in `fragments`.
+   Built in phases C4, C5, V1-V3, F1-F3, S and M (docs/local-app/PLAN.md).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
@@ -60,6 +62,7 @@ import * as PV from './preview-b.js';
 import { askDelete } from './ask.js';
 import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
+import * as FRAG from './wk-fragments.js';
 import {
   MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
   holdProgress, endProgress, onlyHere,
@@ -75,10 +78,10 @@ let _saving = false;
 // The panel has two faces: the casting, and the shelf of outfits to make a look from. Not a
 // window over it - a 280px column has no room for a window, and this is the same question
 // ("what does this person wear") one level down.
-// Where in the step the panel is. The hub is the top of it; the rest are branches under the
-// two things the setting is made of:
+// Where in the step the panel is. The hub is the script (js/merge-v3/wk-fragments.js); the rest
+// are the shelves it opens onto:
 //
-//   hub
+//   hub                                 the voice, the lines, the open line
 //   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
 //   ├── env  ── newenv                  the environment, making one
 //   └── voice                           the voice this character is read in
@@ -223,15 +226,15 @@ export function paint(host, ctx) {
   _peekHide();
   host.classList.add('is-wk');
 
-  const root = _el('div', 'mv3-wk-setting');
+  const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
   // The title line carries the filter: both answer "which faces am I looking at", and a
   // second line of labels would cost the grid a row of them.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
-  txt.appendChild(_el('div', 'mv3-ins-title', 'setting & voice'));
-  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, and how it is read'));
+  txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
+  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, in what voice - and the frame and the clip of each fragment'));
   head.appendChild(txt);
   root.appendChild(head);
 
@@ -245,18 +248,21 @@ export function paint(host, ctx) {
   const scroll = _el('div', 'mv3-wk-scroll');
   root.appendChild(scroll);
   // The waiting animation stays with the place that started the generation: painting another one
-  // takes it off the stage (js/merge-v3/wk-maker.js). The server keeps working either way.
-  onlyHere(_view);
+  // takes it off the stage (js/merge-v3/wk-maker.js). The server keeps working either way. The
+  // hub's own overlay - a frame being drawn - is the script pane's to keep or drop.
+  if (_view !== 'hub') onlyHere(_view);
   // The sample a voice was being listened to stops when the panel leaves that level: a voice
-  // still talking over the environments is a sound with nothing on screen to explain it.
+  // still talking over the environments is a sound with nothing on screen to explain it. The
+  // reads playing in the script stop the same way.
   if (_view !== 'voice') VOICE.leave();
+  if (_view !== 'hub') FRAG.leave();
   // Arriving somewhere is when to ask the journal whether something of that place is running;
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
   // The stage is painted AFTER the panel, from the same state (this file, _stage): a shelf may
   // put something on trial while it paints, and the stage has to show it.
   if (_view === 'hub') {
-    _paintHub(scroll, chosen);
+    FRAG.paint(scroll, ctx, _fragApi(chosen));
     _stage(chosen);
   } else if (_view === 'env') {
     ENV.paintShelf(scroll, head, _envApi());
@@ -294,14 +300,16 @@ function _go(view) {
   _ctx.repaint();
 }
 
-// ── The hub ─────────────────────────────────────────────────────────────────
-// The read's side of the step: the voice this character speaks in, and the script read in it (V2,
-// V3). Who and where are on the stage, not here - the panel is one column, and what else it will
-// hold is the next phase's question (docs/local-app/PLAN.md, phase M).
-function _paintHub(host, chosen) {
-  host.classList.add('is-col');
-  if (chosen) VOICE.paintHub(host, _voiceApi(chosen));
-  else host.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
+// ── The hub: the script ─────────────────────────────────────────────────────
+// Painted by js/merge-v3/wk-fragments.js. What it may reach in here: the character cast (the
+// voice row is theirs), the voice module's api (the row and the reads speak through it), and the
+// way to the shelves.
+function _fragApi(chosen) {
+  return {
+    char: () => chosen || null,
+    voiceApi: () => _voiceApi(chosen),
+    go: _go,
+  };
 }
 
 // ── The stage ───────────────────────────────────────────────────────────────
@@ -327,6 +335,14 @@ function _whereHalf() {
 }
 
 function _stage(chosen) {
+  // A line open in the script with a clip or a frame shows THAT: it is what is being judged. The
+  // doors are back the moment the line is closed (a second press on its row).
+  const pic = _view === 'hub' ? FRAG.openPicture(_ctx.project) : null;
+  if (pic) {
+    PV.showStill(pic.src, pic.caption);
+    _stageButton(null);
+    return;
+  }
   const who = _whoHalf(chosen), where = _whereHalf();
   PV.showPair(
     { src: who.src ? derived(who.src, 'main') : '', caption: who.caption, empty: 'choose a character' },
@@ -385,9 +401,9 @@ function _where(view) {
   const name = String(p.title || p.name || 'talking head');
   return {
     page: 'merge',
-    href: '/merge?p=' + encodeURIComponent(key) + '&step=setting&view=' + encodeURIComponent(view),
-    label: 'Merge · ' + name + ' · setting & voice' + (WHERE[view] ? ' › ' + WHERE[view] : ''),
-    spot: { key, step: 'setting', view },
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&view=' + encodeURIComponent(view),
+    label: 'Merge · ' + name + ' · setup' + (WHERE[view] ? ' › ' + WHERE[view] : ''),
+    spot: { key, step: 'setup', view },
   };
 }
 
@@ -1049,9 +1065,11 @@ function _note(text, bad) {
 }
 
 /** Painted over, or the step is left (js/merge-v3/workshop.js, setStep): drop the enlargement,
- *  stop a voice sample that was playing, and forget what was on trial - it was never written. */
+ *  stop a voice sample or a read that was playing, and forget what was on trial - it was never
+ *  written. */
 export function leave() {
   _peekHide();
   VOICE.leave();
+  FRAG.leave();
   _noTry();
 }

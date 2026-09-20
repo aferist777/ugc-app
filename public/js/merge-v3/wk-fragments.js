@@ -1,20 +1,26 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the workshop's second step: the FRAME and the CLIP of every line
-   (docs/local-app/PLAN.md, "Fragments — полный план по фазам").
+   MERGE — the script of a talking head, line by line: the READ, the FRAME and the CLIP of
+   every line (docs/local-app/PLAN.md, "Fragments — полный план по фазам", and phase M of
+   "Сцена, setup и таймлайн-зеркало").
 
-   Loaded when the step is opened (js/merge-v3/workshop.js). Two columns, the way the setting step
-   is laid out: on the left the whole script, one row per line with what it has - the read, the
-   frame, the clip; on the right the line that is open, with the three things made for it - how it
-   is shot, the frame, the clip. The list never goes away while a fragment is open: the script is
-   one thing, and judging a line means seeing the ones around it.
+   The hub of the setup step (js/merge-v3/wk-setup.js), painted into its panel. Two columns: on
+   the left the voice the script is read in and the whole script, one row per line with what it
+   has - the read, the shot, the frame, the clip; on the right the line that is open, with
+   everything made for it - or, with none open, the settings of the whole video and where the
+   script stands. The list never goes away while a line is open: the script is one thing, and
+   judging a line means seeing the ones around it. Who and where are on the stage, not here.
 
-   PHASE F1 - THE SHELL, and F2 - THE READING. The directing agent (routes/scen3.js, _readScript)
-   reads the script five lines at a time against the MOOD of the video - the emotion the person
-   picks once - and gives every line its shot size, pose, camera, the direction of its first frame
-   and its animation prompt for Kling. All of it can be changed by hand; an animation prompt
-   written by hand survives the next reading.
+   THE READ (V3, moved in here in M). A line is spoken from the open line's own button; its words
+   can be changed there too, and a take made of other words is stale until the line is read again
+   or the words are put back. The speaking itself is js/merge-v3/wk-voice.js.
 
-   F3 - THE FRAMES. A frame is drawn for one line from its shot (routes/scen3.js, fragments/frame):
+   THE READING (F2). The directing agent (routes/scen3.js, _readScript) reads the script five
+   lines at a time against the MOOD of the video - the emotion the person picks once - and gives
+   every line its shot size, pose, camera, the direction of its first frame and its animation
+   prompt for Kling. All of it can be changed by hand; an animation prompt written by hand
+   survives the next reading.
+
+   THE FRAMES (F3). A frame is drawn for one line from its shot (routes/scen3.js, fragments/frame):
    nano-banana-2 at 2K in the timeline's shape. It is a row in Alerts from the moment it is asked
    for, and the SERVER files it into the project and makes it the line's - this panel only follows
    the row, so leaving loses nothing and coming back finds it still drawing or done. "again" adds
@@ -23,13 +29,13 @@
 
    WHAT IS READ, NOT OWNED. The lines, their reads and any frames and clips already made are the
    scenario project's, as they have always been (routes/scen3.js). Written from here: the clip
-   settings - the tier, the mood, the mode - on `project.video`, merged on the server; and each
-   line's `shot`, through its own two routes, which touch nothing else of the line.
+   settings - the tier, the mood, the mode - on `project.video`, merged on the server; each line's
+   `shot`, through its own two routes, which touch nothing else of the line; and a line's words.
    ════════════════════════════════════════════════════════════════════════════ */
 
-import * as PV from './preview-b.js';
 import * as Store from './store.js';
 import * as API from './scen-api.js';
+import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture } from './wk-maker.js';
 
@@ -43,9 +49,12 @@ const CEILING_FALLBACK = 30;
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
 
 let _ctx = null;
+let _api = null;                          // what the step lends: the character cast, the voice, the shelves
 // The open line, 0-based. -1 is NONE open - the right column then speaks for every fragment at
 // once (owner, 2026-09-18). null is "not decided yet", before the project is known.
 let _open = null;
+let _editWords = -1;                      // the line whose words are open for editing, in the right column
+let _wordsDraft = '';
 let _key = '';                            // the project it belongs to
 let _asked = _urlLine();                  // ?line=N (1-based) - how the Alerts list comes back here
 let _kit = null;                          // tiers and motion presets, read once
@@ -129,16 +138,17 @@ function _play(src) {
   _audio.src = src;
   _audio.play().catch(() => { _playing = ''; _mark(); });
 }
+// Only the reads' buttons: the voice row's demo has a player of its own (js/merge-v3/wk-voice.js).
 function _mark() {
   const on = _audio && !_audio.paused ? _playing : '';
-  document.querySelectorAll('.mv3-wk-frags .mv3-wk-vplay').forEach((b) => {
+  document.querySelectorAll('.mv3-wk-vplay.is-read').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
     b.textContent = is ? '❚❚' : '▶';
     b.classList.toggle('is-playing', !!is);
   });
 }
 function _playBtn(src, what) {
-  const b = el('button', 'mv3-wk-vplay', '▶');
+  const b = el('button', 'mv3-wk-vplay is-read', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
@@ -237,9 +247,9 @@ function _where(i) {
   const p = (_ctx && _ctx.project) || {};
   return {
     page: 'merge',
-    href: '/merge?p=' + encodeURIComponent(key) + '&step=fragments&line=' + (i + 1),
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragments › line ' + (i + 1),
-    spot: { key, step: 'fragments', view: 'frag', line: i },
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · setup › line ' + (i + 1),
+    spot: { key, step: 'setup', view: 'frag', line: i },
   };
 }
 const _format = () => { try { const t = Store.timeline(); return (t && t.format) || '9:16'; } catch (e) { return '9:16'; } };
@@ -361,52 +371,45 @@ async function _saveVideo(patch) {
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
-export function paint(host, ctx) {
+// `host` is the step's scroll box, under its title; `api` is what the step lends - the character
+// cast (the voice row is theirs), the voice module's api, and the way to the shelves.
+export function paint(host, ctx, api) {
   _ctx = ctx;
-  host.classList.add('is-wk');
-  const root = el('div', 'mv3-wk-frags');
-  host.appendChild(root);
-
-  const head = el('div', 'mv3-ins-head is-wk');
-  const txt = el('div', 'mv3-ins-head-txt');
-  txt.appendChild(el('div', 'mv3-ins-title', 'fragments'));
-  txt.appendChild(el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'The frame and the clip of each fragment'));
-  head.appendChild(txt);
-
+  _api = api;
   const p = ctx.project;
-  if (!p) { root.appendChild(head); root.appendChild(_note('Reading the project…')); return; }
+  if (!p) { host.appendChild(_note('Reading the project…')); return; }
   if (_kit === null) _loadKit(ctx.repaint);
   const lines = Array.isArray(p.lines) ? p.lines : [];
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the first.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; }
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
 
-  const scroll = el('div', 'mv3-wk-scroll is-split');
-  root.appendChild(scroll);
+  host.classList.add('is-split');
   const left = el('div', 'mv3-wk-half is-frags');
-  scroll.appendChild(left);
-  left.appendChild(head);
+  host.appendChild(left);
   const right = el('div', 'mv3-wk-half is-guide is-frag');
-  scroll.appendChild(right);
+  host.appendChild(right);
 
   _pickUpDrawing();
   const missing = _missing(p);
-  _controls(left, lines, missing);
+  // The voice over the script - or, with nobody cast yet, the one door that matters. The script
+  // is shown either way: it is the project, and it is read before anything is chosen.
+  if (api.char()) VOICE.paintRow(left, api.voiceApi());
+  else left.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
   _list(left, p, lines);
 
+  _notes(right);
   if (!lines.length) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
-    PV.showStill('', '');
     return;
   }
   if (missing.length) _gate(right, missing);
-  else if (_open < 0) _all(right, p, lines);
+  else if (_open < 0) _all(right, p, lines, missing);
   else _fragment(right, p, lines[_open], _open);
-  _stage(p, _open < 0 ? null : lines[_open], _open);
   // The countdown belongs to the fragment being drawn, and only while it is the one open.
   const place = _open >= 0 && _drawing.has(_open) ? 'frame:' + _open : null;
   onlyHere(place);
@@ -421,8 +424,16 @@ function _note(text, bad) {
   return d;
 }
 
+// What the panel has to say - a save that failed, an agent that could not read a line - at the top
+// of the right column, whichever face it wears.
+function _notes(host) {
+  if (_said) host.appendChild(_note(_said, true));
+  if (_readErr) host.appendChild(_note(_readErr, true));
+}
+
 // What the step cannot work without: the person in a look, the place, and the voice they are read
-// in. Anything missing is named, and the way back is one button.
+// in. Anything missing is named, with the way to it: the halves of the stage for who and where,
+// the voices shelf for the voice.
 function _missing(p) {
   const cast = p.casting || {};
   const out = [];
@@ -437,16 +448,22 @@ function _gate(host, missing) {
   host.appendChild(el('p', 'mv3-wk-guide-p',
     'Frames and clips are made from the person in their look, standing in the place, speaking in their voice. Still missing: '
     + missing.join(', ') + '.'));
-  const b = el('button', 'mv3-wk-vmore', 'setting & voice');
-  b.type = 'button';
-  b.title = 'Back to the step where these are chosen';
-  b.addEventListener('click', () => _ctx.goStep('setting'));
-  const row = el('div', 'mv3-wk-vfoot');
-  row.appendChild(b);
-  host.appendChild(row);
+  if (missing.includes('a character in a look')) host.appendChild(el('p', 'mv3-wk-guide-p', 'The character and the look: press the upper half of the stage.'));
+  if (missing.includes('an environment')) host.appendChild(el('p', 'mv3-wk-guide-p', 'The environment: press the lower half of the stage.'));
+  if (missing.includes('a voice')) {
+    const b = el('button', 'mv3-wk-vmore', 'choose a voice');
+    b.type = 'button';
+    b.title = 'The saved voices, and the ElevenLabs library';
+    b.addEventListener('click', () => _api.go('voice'));
+    const row = el('div', 'mv3-wk-vfoot');
+    row.appendChild(b);
+    host.appendChild(row);
+  }
 }
 
-// ── The left column: the settings of the whole project, and the script ─────
+// ── The settings of the whole video, and what is done to every line at once ──
+// In the right column when no line is open (owner, 2026-09-21): the list is the script and
+// nothing else.
 function _controls(host, lines, missing) {
   const blocked = missing.length > 0;
   const v = _video();
@@ -524,8 +541,6 @@ function _controls(host, lines, missing) {
   });
   acts.append(read, frames);
   host.appendChild(acts);
-  if (_said) host.appendChild(_note(_said, true));
-  if (_readErr) host.appendChild(_note(_readErr, true));
 }
 
 function _list(host, p, lines) {
@@ -547,6 +562,9 @@ function _row(p, l, i) {
   meta.appendChild(el('span', 'mv3-wk-lnum', String(i + 1)));
   meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
+  // The read, playable from the row (owner, 2026-09-21): hearing a line is how it is judged, and
+  // the row is where the eye already is.
+  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
 
   // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
   // and the row is read for its words.
@@ -559,7 +577,7 @@ function _row(p, l, i) {
     d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
-  dot(_readState(l), 'read');
+  dot(VOICE.reading().line === i ? 'busy' : _readState(l), 'read');
   dot(_shotState(l), 'shot');
   dot(_drawing.has(i) ? 'busy' : fr ? 'ok' : 'none', 'frame');
   dot(_clipState(l), 'clip');
@@ -575,11 +593,11 @@ function _row(p, l, i) {
   return row;
 }
 
-// ── The right column with no fragment open: all of them ─────────────────────
-// What is shared by every clip will live here (owner, 2026-09-18) - which settings exactly is still
-// to be decided, and one idea is drawing first frames by hand, once, for several lines at a time
-// instead of one per fragment. For now it says where the script stands.
-function _all(host, p, lines) {
+// ── The right column with no fragment open: the whole video ─────────────────
+// What is shared by every clip - the tier, the model, the mood - and what is done to every line at
+// once; then where the script stands. (One idea still open, owner 2026-09-18: drawing first frames
+// by hand, once, for several lines at a time instead of one per fragment.)
+function _all(host, p, lines, missing) {
   const n = lines.length;
   const read = lines.filter(l => _readState(l) === 'ok').length;
   const shots = lines.filter(l => _shotState(l) === 'ok').length;
@@ -591,6 +609,8 @@ function _all(host, p, lines) {
   top.appendChild(el('span', 'mv3-wk-ftitle', 'all fragments'));
   top.appendChild(el('span', 'mv3-wk-vsub', n + (n === 1 ? ' line' : ' lines') + (secs ? ' · ' + secs.toFixed(1) + ' s read' : '')));
   host.appendChild(top);
+
+  _controls(host, lines, missing);
 
   const stat = el('div', 'mv3-wk-fstats');
   const cell = (label, done) => {
@@ -604,9 +624,6 @@ function _all(host, p, lines) {
   cell('frames', framed);
   cell('clips', clipped);
   host.appendChild(stat);
-
-  host.appendChild(el('div', 'mv3-wk-vhead is-lib', 'For every clip'));
-  host.appendChild(el('div', 'mv3-wk-fsoon', 'Settings shared by every fragment will be here - which ones is still to be decided. One idea: drawing first frames by hand, once, for several lines at a time instead of one per fragment.'));
   host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
@@ -621,19 +638,62 @@ function _all(host, p, lines) {
 function _fragment(host, p, l, i) {
   const take = _take(l);
   const rs = _readState(l);
+  const va = _api.voiceApi();
+  const speaking = VOICE.reading();
+  const busyRead = speaking.line >= 0 || !!speaking.batch;
 
   const top = el('div', 'mv3-wk-fhead');
   top.appendChild(el('span', 'mv3-wk-ftitle', 'fragment ' + (i + 1)));
   top.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
   top.appendChild(el('span', 'mv3-wk-vsub', take && take.dur ? take.dur.toFixed(1) + ' s' : 'not read'));
-  const edit = el('button', 'mv3-wk-flink', 'edit words →');
-  edit.type = 'button';
-  edit.title = 'The words are edited beside the voice, in setting & voice';
-  edit.addEventListener('click', () => _ctx.goStep('setting'));
-  top.appendChild(edit);
+  // The read of this line, from here (V3's list, folded in): spoken now, or again in place of the
+  // take it has.
+  const read = el('button', 'mv3-wk-vuse is-right', speaking.line === i ? '…' : rs === 'none' ? 'read' : 'read again');
+  read.type = 'button';
+  read.title = !_api.char() ? 'Choose who is speaking first' : rs === 'none' ? 'Read this line' : 'Read it again, in place of the take it has';
+  read.disabled = busyRead || !_api.char();
+  read.addEventListener('click', () => VOICE.readLine(va, i));
+  top.appendChild(read);
   host.appendChild(top);
-  host.appendChild(el('div', 'mv3-wk-fwords', '“' + (_words(l) || '…') + '”'));
-  if (rs === 'stale') host.appendChild(_note('The words changed after this line was read - read it again in setting & voice.', true));
+
+  // The words: pressed, they open for editing. A take made of other words is stale until the line
+  // is read again - or the words are put back, which is the cheap way.
+  if (_editWords === i) {
+    const box = el('textarea', 'mv3-wk-ledit is-frag');
+    box.value = _wordsDraft;
+    box.rows = 3;
+    box.addEventListener('input', () => { _wordsDraft = box.value; });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); _editWords = -1; _ctx.repaint(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _saveWords(va, i); }
+    });
+    host.appendChild(box);
+    const acts = el('div', 'mv3-wk-vfoot is-tight');
+    const save = el('button', 'mv3-wk-vuse', 'save');
+    save.type = 'button';
+    save.title = 'Save the words (Ctrl+Enter)';
+    save.addEventListener('click', () => _saveWords(va, i));
+    const drop = el('button', 'mv3-wk-vuse', 'cancel');
+    drop.type = 'button';
+    drop.addEventListener('click', () => { _editWords = -1; _ctx.repaint(); });
+    acts.append(save, drop);
+    host.appendChild(acts);
+    setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
+  } else {
+    const words = el('div', 'mv3-wk-fwords is-edit', '“' + (_words(l) || '…') + '”');
+    words.title = 'Change the words';
+    words.addEventListener('click', () => { _editWords = i; _wordsDraft = _words(l); _ctx.repaint(); });
+    host.appendChild(words);
+  }
+  if (rs === 'stale') {
+    host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
+    const back = el('button', 'mv3-wk-lback is-frag', 'put the words back');
+    back.type = 'button';
+    back.title = 'Restore the line to what the take says';
+    back.disabled = busyRead;
+    back.addEventListener('click', () => VOICE.saveText(va, i, take.said));
+    host.appendChild(back);
+  }
 
   const grid = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid);
@@ -855,13 +915,14 @@ function _clipCol(p, l, rs, take) {
   make.title = 'Kling avatar - comes with the clips (F4)';
   col.appendChild(make);
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'), cap));
-  if (rs !== 'ok') {
-    const back = el('button', 'mv3-wk-flink is-cap', 'setting & voice →');
-    back.type = 'button';
-    back.addEventListener('click', () => _ctx.goStep('setting'));
-    col.appendChild(back);
-  }
   return col;
+}
+
+// The words of the open line, saved from the editor above the grid.
+async function _saveWords(va, i) {
+  const text = _wordsDraft;
+  _editWords = -1;
+  await VOICE.saveText(va, i, text);
 }
 
 // A text field that survives a repaint (what is typed is kept by line and field) and saves when the
@@ -882,20 +943,19 @@ function _textField(i, field, value, rows, placeholder, save) {
   return box;
 }
 
-// ── The stage ───────────────────────────────────────────────────────────────
+// ── The stage's picture ─────────────────────────────────────────────────────
 // The open fragment: its clip when it has one (the poster, until the clips phase plays it), else
-// its frame; with neither, what the frame will be made of - the person in their look over the place.
-function _stage(p, l, i) {
-  const cast = p.casting || {};
-  const pair = () => (cast.obrazImage || cast.locationImage
-    ? PV.showPair(cast.obrazImage ? derived(cast.obrazImage, 'main') : '', cast.locationImage ? derived(cast.locationImage, 'main') : '')
-    : PV.showStill('', ''));
-  if (!l) { pair(); return; }
+// its frame. With neither - or with no fragment open - nothing: the step then shows the casting
+// pair with its doors (js/merge-v3/wk-setup.js, _stage).
+export function openPicture(p) {
+  const lines = (p && Array.isArray(p.lines)) ? p.lines : [];
+  const l = _open >= 0 ? lines[_open] : null;
+  if (!l) return null;
   const c = _clipOf(l);
-  if (c && c.thumb) { PV.showStill(c.thumb, 'fragment ' + (i + 1) + ' · clip'); return; }
+  if (c && c.thumb) return { src: c.thumb, caption: 'fragment ' + (_open + 1) + ' · clip' };
   const fr = _frameOf(p, l);
-  if (fr) { PV.showStill(derived(fr.preview || fr.path, 'main'), 'fragment ' + (i + 1)); return; }
-  pair();
+  if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'fragment ' + (_open + 1) };
+  return null;
 }
 
 /** Leaving the step stops the read that was playing. */

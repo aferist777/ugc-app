@@ -22,7 +22,7 @@
    it and goes back to the hub. A tile pressed on the shelf goes on trial the same way; nothing here
    writes into the project by itself (decided with the owner 2026-09-21, docs/local-app/PLAN.md
    "Сцена, setup и таймлайн-зеркало"). The stage itself is painted by the step
-   (js/merge-v3/wk-setting.js, _stage); this module only says what is on trial.
+   (js/merge-v3/wk-setup.js, _stage); this module only says what is on trial.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
@@ -322,7 +322,7 @@ export function paintMaker(host, head, api) {
 
   // THE STAGE shows the place just made, on trial with `select` under it - unless it is already
   // the project's, in which case it is simply there. The step paints the stage right after this
-  // (js/merge-v3/wk-setting.js, _stage), so the trial is only stated here, not painted.
+  // (js/merge-v3/wk-setup.js, _stage), so the trial is only stated here, not painted.
   if (_made && _made !== String(api.casting().locationImage || '') && api.trying() !== _made) api.tryPlace(_made);
 }
 

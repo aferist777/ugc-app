@@ -1,10 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — the workshop of a TALKING HEAD project.
 
-   A talking head is not assembled by hand: it is built in a fixed order - who says
-   it and where, then the first frame of each fragment, then the read, then the
-   clips - and only then is there a timeline to edit. That order used to be a page of
-   its own; it is this panel now (docs/local-app/PLAN.md, "Мастерская talking head").
+   A talking head is not assembled by hand: it is BUILT - who says it, where, in what
+   voice, and the frame and the clip of every fragment - and only then is there a
+   timeline to edit. That building used to be a page of its own, then three steps of
+   this panel; it is ONE step now, `setup`, with `timeline` beside it (decided with the
+   owner 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало", phase M).
 
    WHICH PROJECTS. Only those with a scenario behind them, and the key says so: a cut
    sent from Scenarios, and now a project made from a scenario here, is keyed
@@ -33,20 +34,19 @@ import * as PV from './preview-b.js';
 import { lock } from './layout.js';
 import { isRead } from './scen-api.js';
 
-// `timeline` last and apart: the other two build the project, it edits the result.
+// `timeline` last and apart: `setup` builds the project, it edits the result.
 //
-// THREE STEPS, NOT FOUR (decided with the owner 2026-09-18, docs/local-app/PLAN.md "Setting &
-// voice"). The read used to be a step of its own and the clips another, but a clip is made FROM a
-// frame and a read of one line and lasts exactly as long as that read - so the voice belongs with
-// the character and the place that are chosen for it, and the frame belongs with the clip it opens.
+// TWO STEPS (decided with the owner 2026-09-21). The casting, the voice and the fragments were
+// three steps once, then two; but the character and the place are chosen on the stage now, and
+// what is left of "setting" is the voice - one row over the script, which is what the fragments
+// are. So the whole build is one step, and the chip's short name carries the long one as its tip.
 const STEPS = [
-  { id: 'setting', label: 'setting & voice', title: 'Who says it, where, and how it is read' },
-  { id: 'fragments', label: 'fragments', title: 'The opening frame and the clip of each fragment' },
-  { id: 'timeline', label: 'timeline', title: 'The timeline itself, and whatever is selected on it' },
+  { id: 'setup', label: 'setup', title: 'talking head setup - who says it, where, in what voice; the frame and the clip of each fragment' },
+  { id: 'timeline', label: 'timeline', title: 'timeline edit - the cut, and whatever is selected on it' },
 ];
 // What a step used to be called, so an address in an old journal row and a step remembered in this
 // browser still land somewhere (lib/alerts.js, and `mv3_step_v1` below).
-const WAS = { frames: 'setting', voice: 'setting', video: 'fragments' };
+const WAS = { setting: 'setup', fragments: 'setup', frames: 'setup', voice: 'setup', video: 'setup' };
 const _stepId = (id) => { const s = WAS[String(id || '')] || String(id || ''); return STEPS.some(x => x.id === s) ? s : ''; };
 const KEY = 'mv3_step_v1';               // { <timeline key>: <step id> }
 
@@ -146,8 +146,8 @@ function _urlStep() {
 // opens where the work starts. A remembered choice beats both - unless it is the timeline
 // and the timeline is not open to this project yet (its chip says why).
 function _firstStep() {
-  const want = _urlStep() || _remembered() || (_hasCut() ? 'timeline' : 'setting');
-  return want === 'timeline' && !_mayEdit() ? 'setting' : want;
+  const want = _urlStep() || _remembered() || (_hasCut() ? 'timeline' : 'setup');
+  return want === 'timeline' && !_mayEdit() ? 'setup' : want;
 }
 
 // ── The chips, in the panel's own header ────────────────────────────────────
@@ -231,7 +231,7 @@ async function _adopt() {
   _project = null;
   // Where a talking head lands is decided once its record is here (below): whether the timeline
   // may open depends on its reads. Until then the panel says it is reading the project.
-  _step = _pid ? 'setting' : 'timeline';
+  _step = _pid ? 'setup' : 'timeline';
   _paintChips();
   _lend();
   _repaint();
@@ -275,13 +275,11 @@ export function initWorkshop() {
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
-// Each step is its own module and arrives when it is first opened. Until a step has
-// one, this is what it shows: what the step will be, and the way to do that work in
-// the place where it still lives (docs/local-app/PLAN.md, phases C2-C6). The bridge
-// goes step by step as each is built, and the page it points at goes in phase G.
+// The build step is its own module and arrives when it is first opened - it is the biggest thing
+// on this page. `timeline` has none: it IS the inspector as it has always been, and the inspector
+// never asks this panel to paint it (js/merge-v3/inspector.js, WK.active()).
 const MODULES = {
-  setting: () => import('./wk-setting.js'),
-  fragments: () => import('./wk-fragments.js'),
+  setup: () => import('./wk-setup.js'),
 };
 const _loaded = {};
 
@@ -290,56 +288,22 @@ export function paint(host) {
   _paintChips();
   const spec = STEPS.find(s => s.id === _step);
   const load = MODULES[_step];
-
-  if (load) {
-    const mod = _loaded[_step];
-    // `key` is the open timeline, which is how a generation started here says where it came from
-    // (lib/alerts.js); `reloadProject` is for the things the SERVER writes into the project while
-    // a step is open - a finished look goes straight into the casting (lib/gen-jobs.js), and the
-    // panel has to read it back rather than trust the copy it was painted from.
-    if (mod) {
-      mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload, goStep: setStep });
-      // Again, because the step may have changed where it is WHILE painting - an address asking for
-      // a level it cannot open (a lookbook with nobody cast) lands on the one it can, and the route
-      // in the header has to say the place that is actually on screen.
-      return _paintChips();
-    }
-    host.appendChild(_note('opening ' + spec.label + '…'));
-    load().then((m) => { _loaded[_step] = m; _repaint(); })
-      .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });
-    return;
+  if (!load) return;
+  const mod = _loaded[_step];
+  // `key` is the open timeline, which is how a generation started here says where it came from
+  // (lib/alerts.js); `reloadProject` is for the things the SERVER writes into the project while
+  // the step is open - a finished look goes straight into the casting (lib/gen-jobs.js), and the
+  // panel has to read it back rather than trust the copy it was painted from.
+  if (mod) {
+    mod.paint(host, { project: _project, repaint: _repaint, key: _key, reloadProject: _reload });
+    // Again, because the step may have changed where it is WHILE painting - an address asking for
+    // a level it cannot open (a lookbook with nobody cast) lands on the one it can, and the route
+    // in the header has to say the place that is actually on screen.
+    return _paintChips();
   }
-
-  const head = document.createElement('div');
-  head.className = 'mv3-ins-head';
-  const txt = document.createElement('div');
-  txt.className = 'mv3-ins-head-txt';
-  const t = document.createElement('div');
-  t.className = 'mv3-ins-title';
-  t.textContent = spec.label;
-  const sub = document.createElement('div');
-  sub.className = 'mv3-ins-sub';
-  sub.textContent = spec.title;
-  txt.append(t, sub);
-  head.appendChild(txt);
-  host.appendChild(head);
-
-  host.appendChild(_note(_project
-    ? 'This step is being built here. Until it is, the work happens in the old workshop.'
-    : 'Reading the project…'));
-
-  if (_project) {
-    const go = document.createElement('button');
-    go.type = 'button';
-    go.className = 'mv3-c-btn';
-    go.textContent = 'open the old workshop';
-    go.title = 'The Scenarios page, on this project';
-    go.addEventListener('click', () => { location.href = '/scenarios?project=' + encodeURIComponent(_pid); });
-    const row = document.createElement('div');
-    row.className = 'mv3-ins-row';
-    row.appendChild(go);
-    host.appendChild(row);
-  }
+  host.appendChild(_note('opening ' + spec.label + '…'));
+  load().then((m) => { _loaded[_step] = m; _repaint(); })
+    .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });
 }
 
 function _note(text, bad) {

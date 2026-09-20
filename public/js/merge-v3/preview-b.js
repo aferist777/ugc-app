@@ -848,7 +848,7 @@ function _halfSpec(x) {
 /**
  * Two pictures on the stage, one above the other - what is being combined, before it is.
  * The dressing asks exactly this question: this person, wearing that; so the person is on
- * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-setting.js).
+ * top, the outfit below, and the button that joins them sits between (js/merge-v3/wk-setup.js).
  * The setting step shows its casting the same way - who on top, where below - and there each
  * half is also a DOOR: what an empty half says, and what a press on it opens, come with it.
  *

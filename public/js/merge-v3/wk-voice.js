@@ -4,10 +4,16 @@
 
    Two faces, and they are the same question one level apart:
 
-     the hub's right half   which voice this character speaks in, chosen from the ones they
-                            already have - a demo to listen to and a dropdown to change it
-     voice                  the sub-level: the saved voices in full, and under them the
-                            ElevenLabs shared library with its filters, to take a new one
+     the row over the script   which voice this character speaks in, chosen from the ones they
+                               already have - a demo to listen to and a dropdown to change it -
+                               and, at its right end, the reads: how far the script is and the
+                               button that reads what needs it (js/merge-v3/wk-fragments.js)
+     voice                     the sub-level: the saved voices in full, and under them the
+                               ElevenLabs shared library with its filters, to take a new one
+
+   THE READS ARE SPOKEN FROM HERE (readLine, readAll, saveText): the fragments pane shows each
+   line and its buttons, and this module is what those buttons call - a take is the voice's
+   business, whichever panel asks for it.
 
    A VOICE BELONGS TO THE CHARACTER, not to this project (decided with the owner): changing the
    voice here is ADDING one to that character. `voices` is everything they have, `voice` is the
@@ -43,9 +49,7 @@ let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_ca
 let _reading = -1;                      // the line being spoken now, -1 for none
 let _batch = null;                      // { done, total } while every stale line is being read
 let _armed = false;                     // "read all" has been pressed once and is asking
-let _edit = -1;                         // the line whose words are open for editing
-let _draft = '';
-let _rsaid = '';                        // what the reads block has to say, and whether it is bad
+let _rsaid = '';                        // what the reads have to say, and whether it is bad
 let _rbad = false;
 
 // One player for the whole panel: two voices at once is not a comparison, it is noise. The row
@@ -53,35 +57,9 @@ let _rbad = false;
 let _audio = null;
 let _playing = '';
 
-// WHERE THE PANEL WAS SCROLLED TO. A finished read repaints the whole step, and a rebuilt column
-// starts at the top - so a batch of twelve lines threw the list back to line one every few seconds
-// (owner, 2026-09-18). The offset is remembered here and put back after the paint.
-let _scrollAt = { hub: 0, voice: 0 };
-let _face = 'hub';                      // which of the two is on screen, so the offset goes in its own slot
-// The column that scrolls is the step's own scroll box: the hub and the voice level are one column
-// each, now that who and where are on the stage (js/merge-v3/wk-setting.js).
-const _col = () => document.querySelector('.mv3-wk-scroll');
-
-// EVERY REPAINT GOES THROUGH HERE. A repaint rebuilds the column, and a rebuilt column starts at
-// the top - so reading twelve lines threw the list back to line one every few seconds (owner,
-// 2026-09-18). Where it stood is read off the live column at the moment it is thrown away, not
-// from a scroll event: the event arrives after the frame, which is too late when the rebuild is
-// in the same tick.
-function _repaint(api) {
-  const col = _col();
-  if (col) _scrollAt[_face] = col.scrollTop;
-  api.repaint();
-}
-
-function _putScroll(host, where) {
-  _face = where;
-  const at = _scrollAt[where] || 0;
-  if (!at) return;
-  // Straight away, not on the next frame: a second repaint can land in the same tick - a read
-  // starts one and finishes another - and it would read this column back at zero and remember
-  // THAT. The column is already in the panel by now (js/merge-v3/wk-setting.js).
-  host.scrollTop = at;
-}
+// A repaint is the step's: the list the reads change lives in the fragments pane, which keeps its
+// own scroll offset across repaints (js/merge-v3/wk-fragments.js, _listAt).
+const _repaint = (api) => api.repaint();
 
 function _play(src) {
   if (!src) return;
@@ -99,9 +77,11 @@ function _play(src) {
 
 // The buttons follow the SOUND, not the click: a sample that will not play must not leave a
 // pause sign standing over silence.
+// Only the voices' buttons: the reads in the script have a player of their own
+// (js/merge-v3/wk-fragments.js, .is-read).
 function _mark() {
   const on = !!(_audio && !_audio.paused) ? _playing : '';
-  document.querySelectorAll('.mv3-wk-vplay').forEach((b) => {
+  document.querySelectorAll('.mv3-wk-vplay:not(.is-read)').forEach((b) => {
     const is = b.dataset.src && b.dataset.src === on;
     b.textContent = is ? '❚❚' : '▶';
     b.classList.toggle('is-playing', !!is);
@@ -128,50 +108,66 @@ const _active = (rec) => {
   return _saved(rec).find(v => String(v.voiceId) === id) || null;
 };
 
-// ── The hub's right half ────────────────────────────────────────────────────
+// ── The row over the script ─────────────────────────────────────────────────
 // The character has a voice or they have not, and both answers lead to the same place: the
 // sub-level where voices are chosen. The dropdown is only for the ones already theirs - picking
-// a NEW one is a search, not a choice from a list.
-export function paintHub(host, api) {
+// a NEW one is a search, not a choice from a list. At the row's right end, the reads: how far the
+// script is ("9/14") and the one button that reads every line that needs it.
+export function paintRow(host, api) {
   const rec = api.char();
-  host.appendChild(el('div', 'mv3-wk-guide-h', 'The voice'));
   if (!rec) { host.appendChild(api.note('reading the character…')); return; }
-
+  const p = api.project() || {};
+  const lines = Array.isArray(p.lines) ? p.lines : [];
   const mine = _saved(rec);
   const now = _active(rec);
-  if (!mine.length) {
-    host.appendChild(el('p', 'mv3-wk-guide-p',
-      (rec.name || 'This character') + ' has no voice yet. Every line is read in it, so it is chosen once and stays with the character.'));
-    const foot = el('div', 'mv3-wk-vfoot');
-    foot.appendChild(_pick(api, 'choose a voice'));
-    host.appendChild(foot);
-    return;
-  }
 
   const row = el('div', 'mv3-wk-vrow is-now');
-  row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
-  const sel = el('select', 'mv3-wk-vsel');
-  sel.title = 'The voice every line is read in';
-  for (const v of mine) {
-    const o = el('option', '', v.name || v.voiceId);
-    o.value = v.voiceId;
-    if (now && v.voiceId === now.voiceId) o.selected = true;
-    sel.appendChild(o);
+  if (!mine.length) {
+    row.appendChild(el('span', 'mv3-wk-vsub is-grow', (rec.name || 'This character') + ' has no voice yet - every line is read in it'));
+    row.appendChild(_pick(api, 'choose a voice'));
+  } else {
+    row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
+    const sel = el('select', 'mv3-wk-vsel');
+    sel.title = 'The voice every line is read in' + (now ? ' · ' + (_sub(now) || 'no tags') : '');
+    for (const v of mine) {
+      const o = el('option', '', v.name || v.voiceId);
+      o.value = v.voiceId;
+      if (now && v.voiceId === now.voiceId) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.disabled = !!_busy;
+    sel.addEventListener('change', () => _star(api, sel.value));
+    row.appendChild(sel);
+    // The way to another voice sits in the same row, right of the choice it changes (owner).
+    row.appendChild(_pick(api, 'change'));
   }
-  sel.disabled = !!_busy;
-  sel.addEventListener('change', () => _star(api, sel.value));
-  row.appendChild(sel);
-  // The way to another voice sits in the same row, right of the choice it changes (owner).
-  row.appendChild(_pick(api, 'change'));
+  // The second press is the confirmation (decided with the owner): a batch is the one thing here
+  // that spends real money, and it says how much before it does.
+  if (lines.length && now) {
+    const left = lines.filter(_needs).length;
+    const acts = el('span', 'mv3-wk-fread');
+    acts.appendChild(el('span', 'mv3-wk-vcount', (lines.length - left) + '/' + lines.length));
+    const all = el('button', 'mv3-wk-vmore is-small' + (_armed ? ' is-armed' : ''),
+      _batch ? 'reading ' + _batch.done + ' of ' + _batch.total + '…'
+        : _armed ? 'read ' + left + (left === 1 ? ' line?' : ' lines?') : 'read all');
+    all.type = 'button';
+    all.title = left ? (_armed ? 'Press again to read them' : 'Read every line that needs it') : 'Every line is read';
+    all.disabled = !!_batch || _reading >= 0 || !left;
+    all.addEventListener('click', () => {
+      if (!_armed) { _armed = true; _repaint(api); return; }
+      _armed = false;
+      readAll(api);
+    });
+    acts.appendChild(all);
+    row.appendChild(acts);
+  }
   host.appendChild(row);
 
-  if (now) host.appendChild(el('div', 'mv3-wk-vsub', _sub(now) || 'no tags'));
-  if (!now) host.appendChild(api.note('None of them is set as the voice - pick one above.', true));
+  if (mine.length && !now) host.appendChild(api.note('None of them is set as the voice - pick one above.', true));
   // What the sub-level had to say - a voice taken, or one that could not be - is said ONCE
   // here, on the way back, and then let go: it is news about what just happened, not a label.
   if (_said) { host.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
-  paintReads(host, api);
-  _putScroll(host, 'hub');
+  if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
 }
 
 function _pick(api, label) {
@@ -192,7 +188,7 @@ function _bar(host, api) {
   acts.appendChild(tab);
   const x = el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
-  x.title = 'Back to setting & voice';
+  x.title = 'Back to the script';
   x.addEventListener('click', () => api.go('hub'));
   acts.appendChild(x);
   host.appendChild(acts);
@@ -277,12 +273,12 @@ export function paintPicker(host, api) {
 
   if (!_asked) {
     host.appendChild(api.note('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.'));
-    return _putScroll(host, 'voice');
+    return;
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
     host.appendChild(api.note(_busy === 'search' ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
-    return _putScroll(host, 'voice');
+    return;
   }
   const have = new Set(mine.map(v => String(v.voiceId)));
   for (const v of found) {
@@ -317,7 +313,6 @@ export function paintPicker(host, api) {
   pager.appendChild(el('span', 'mv3-wk-vcount', total + ' voices · page ' + _page + ' of ' + pages));
   step('›', _page + 1, _page < pages || (_res && _res.hasMore));
   host.appendChild(pager);
-  _putScroll(host, 'voice');
 }
 
 // ── What it does ────────────────────────────────────────────────────────────
@@ -415,129 +410,25 @@ async function _take(api, card) {
   _repaint(api);
 }
 
-// ── The script, line by line ────────────────────────────────────────────────
+// ── The reads ───────────────────────────────────────────────────────────────
 // A take is STALE when the words are no longer the ones that were spoken - the server keeps what
 // it said in each take (routes/scen3.js, /scen3/voice/speak) - so nothing has to be marked by
-// hand, and editing a line makes its read stale by itself.
+// hand, and editing a line makes its read stale by itself. Unread or stale is the one rule,
+// shared with the timeline chip that waits for every line (js/merge-v3/scen-api.js).
 //
 // The read is the standard one: eleven_multilingual_v2, no tags, no parameters (decided with the
 // owner; moods and tags are a conversation of their own). That is what a project with no voice
 // settings gets, and none are set here.
-const _take0 = (l) => ((l && l.audio) || {}).plain || null;
-const _stale = (l) => { const t = _take0(l); return !!(t && t.path && t.said !== String(l.text || '')); };
-const _unread = (l) => { const t = _take0(l); return !(t && t.path); };
-// Unread or stale - the one rule, shared with the timeline chip that waits for every line
-// (js/merge-v3/scen-api.js).
 const _needs = (l) => !isRead(l);
 
-export function paintReads(host, api) {
-  const p = api.project() || {};
-  const lines = Array.isArray(p.lines) ? p.lines : [];
-  if (!lines.length) return;
+/** Which line is being spoken (-1 for none), and the batch "read all" is walking, if any. */
+export const reading = () => ({ line: _reading, batch: _batch });
 
-  // Without a voice there is nothing to read WITH, and the block above already says so.
-  const rec = api.char();
-  if (!_active(rec)) return;
-
-  const left = lines.filter(_needs).length;
-  const head = el('div', 'mv3-wk-vhead is-lib is-row', 'The script');
-  const acts = el('div', 'mv3-wk-vheadacts');
-  // How many of them are read, in the heading itself (owner): the first thing looked for is
-  // whether the script is done, and "9/14" answers that without counting rows.
-  acts.appendChild(el('span', 'mv3-wk-vcount', (lines.length - left) + '/' + lines.length));
-  head.appendChild(acts);
-  host.appendChild(head);
-
-  lines.forEach((l, i) => host.appendChild(_line(api, l, i)));
-
-  if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
-
-  {
-    // The second press is the confirmation (decided with the owner): a batch is the one thing
-    // here that spends real money, and it says how much before it does.
-    const all = el('button', 'mv3-wk-vmore is-small' + (_armed ? ' is-armed' : ''),
-      _batch ? 'reading ' + _batch.done + ' of ' + _batch.total + '…'
-        : _armed ? 'read ' + left + (left === 1 ? ' line?' : ' lines?') : 'read all');
-    all.type = 'button';
-    all.title = _armed ? 'Press again to read them' : 'Read every line that needs it';
-    all.disabled = !!_batch || _reading >= 0;
-    all.addEventListener('click', () => {
-      if (!_armed) { _armed = true; _repaint(api); return; }
-      _armed = false;
-      _readAll(api);
-    });
-    acts.appendChild(all);
-  }
-}
-
-function _line(api, l, i) {
-  const row = el('div', 'mv3-wk-line' + (_stale(l) ? ' is-stale' : '') + (_reading === i ? ' is-doing' : ''));
-  const take = _take0(l);
-
-  const top = el('div', 'mv3-wk-lrow');
-  // The number over the length, exactly as tall as the play button beside them (owner): the
-  // duration used to sit on a line of its own under the row and made every read fragment taller.
-  const meta = el('div', 'mv3-wk-lmeta');
-  meta.appendChild(el('span', 'mv3-wk-lnum', String(i + 1)));
-  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
-  top.appendChild(meta);
-  top.appendChild(_playBtn((take && take.path) || '', 'this line'));
-
-  const words = el('div', 'mv3-wk-ltext', String(l.text || ''));
-  words.title = 'Change the words';
-  words.addEventListener('click', () => { _edit = i; _draft = String(l.text || ''); _rsaid = ''; _repaint(api); });
-  top.appendChild(words);
-
-  const go = el('button', 'mv3-wk-vuse', _reading === i ? '…' : _unread(l) ? 'read' : 'again');
-  go.type = 'button';
-  go.title = _unread(l) ? 'Read this line' : 'Read it again, in place of the take it has';
-  go.disabled = _reading >= 0 || !!_batch;
-  go.addEventListener('click', () => _read(api, i));
-  top.appendChild(go);
-  row.appendChild(top);
-
-  // Only the staleness needs a line of its own now - it is a sentence, not a number.
-  if (_stale(l)) row.appendChild(el('div', 'mv3-wk-lsub', 'stale - the words have changed since'));
-  // Back to what was spoken: the other way to end a staleness, and the cheap one.
-  if (_stale(l) && _edit !== i) {
-    const back = el('button', 'mv3-wk-lback', 'put the words back');
-    back.type = 'button';
-    back.title = 'Restore the line to what the take says';
-    back.disabled = _reading >= 0 || !!_batch;
-    back.addEventListener('click', () => _saveText(api, i, take.said));
-    row.appendChild(back);
-  }
-
-  if (_edit === i) {
-    const box = el('textarea', 'mv3-wk-ledit');
-    box.value = _draft;
-    box.rows = 3;
-    box.addEventListener('input', () => { _draft = box.value; });
-    box.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); _edit = -1; _repaint(api); }
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _saveText(api, i, _draft); }
-    });
-    row.appendChild(box);
-    const acts = el('div', 'mv3-wk-vfoot');
-    const save = el('button', 'mv3-wk-vuse', 'save');
-    save.type = 'button';
-    save.title = 'Save the words (Ctrl+Enter)';
-    save.addEventListener('click', () => _saveText(api, i, _draft));
-    const drop = el('button', 'mv3-wk-vuse', 'cancel');
-    drop.type = 'button';
-    drop.addEventListener('click', () => { _edit = -1; _repaint(api); });
-    acts.append(save, drop);
-    row.appendChild(acts);
-    setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
-  }
-  return row;
-}
-
-// ── What it does ────────────────────────────────────────────────────────────
-async function _saveText(api, i, text) {
+/** The words of a line, changed. What the take said stays with the take, which is what makes
+ *  the line stale until it is read again - or the words are put back. */
+export async function saveText(api, i, text) {
   const words = String(text || '').trim();
   if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return _repaint(api); }
-  _edit = -1;
   _rsaid = ''; _rbad = false;
   _repaint(api);
   try {
@@ -559,7 +450,7 @@ async function _saveText(api, i, text) {
 // `inBatch` is how "read all" gets past the guard that stops a second read starting on top of one
 // already running: the batch IS that runner, and without it the first line of a batch refuses
 // itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
-async function _read(api, i, inBatch) {
+export async function readLine(api, i, inBatch) {
   if (_reading >= 0 || (_batch && !inBatch)) return false;
   _reading = i;
   _rsaid = ''; _rbad = false;
@@ -587,14 +478,14 @@ async function _read(api, i, inBatch) {
 
 // Every line that needs it, one after another, so the panel can say how far it has got. It stops
 // at the first failure: twelve identical refusals say nothing the first one did not.
-async function _readAll(api) {
+export async function readAll(api) {
   const p = api.project() || {};
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
   _repaint(api);
   for (const i of want) {
-    const ok = await _read(api, i, true);
+    const ok = await readLine(api, i, true);
     if (!ok) break;
     _batch.done++;
     _repaint(api);

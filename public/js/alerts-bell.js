@@ -192,7 +192,7 @@ function _open(rec) {
   }).catch(() => { window.open(path, '_blank'); });
 }
 
-// The address of a place is read when its page loads (js/merge-v3/workshop.js and wk-setting.js),
+// The address of a place is read when its page loads (js/merge-v3/workshop.js and wk-setup.js),
 // so standing on that address already and pressing the row means: go there again.
 function _goTo(href) {
   if (href === location.pathname + location.search) location.reload();
