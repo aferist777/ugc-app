@@ -2410,7 +2410,7 @@ router.get('/scen3/motion-presets', (_req, res) => {
     models: MP.VIDEO_MODELS,
     qualities: MP.VIDEO_QUALITIES,
     defaultQuality: MP.DEFAULT_QUALITY,
-    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label })),
+    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about })),
     defaultMood: MP.DEFAULT_MOOD,
   });
 });
@@ -2551,8 +2551,17 @@ router.post('/scen3/voice/tag', async (req, res) => {
     if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
 
     const voice = _normVoice(proj.voice);
-    const mood = _loadMoods().find(m => m.id === voice.mood);
-    if (!mood) return res.status(400).json({ success: false, error: 'pick a mood first' });
+    // TWO CALLERS. Merge sends the mood of the VIDEO (lib/motion-presets.js - one vocabulary for
+    // the read, the frames and the animation; docs/local-app/PLAN.md, phase W) and reads with v3
+    // only: every line touched gets its words back as `tagged`, marked or not, so the tagged read
+    // IS the read, and the project is switched to it. The Scenarios page sends no mood and keeps
+    // its own list and its own rule - a line without tags stays plain - until phase G removes it.
+    const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
+    const merge = !!vm;
+    const mood = merge
+      ? { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags }
+      : _loadMoods().find(m => m.id === voice.mood);
+    if (!mood) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'pick a mood first' });
 
     // `only` re-tags just those lines, leaving every approved line untouched. Sent
     // empty (or absent) it is a full pass over the script.
@@ -2598,15 +2607,21 @@ router.post('/scen3/voice/tag', async (req, res) => {
       const kept = _keepAllowedTags(cand, mood.tags);
       if (kept.dropped.length) report.dropped.push({ line: i + 1, tags: [...new Set(kept.dropped)] });
       const has = /\[[^\]]*\]/.test(kept.text);
-      l.tagged = has ? kept.text : '';
+      l.tagged = (has || merge) ? kept.text : '';
       if (has) report.tagged++; else report.plain++;
     });
 
     proj.lines = lines;
-    // The take on show follows the work: after a pass that produced tags, the tagged
-    // read is what the user asked to see.
     proj.voice = voice;
-    if (report.tagged > 0 && lines.some(l => l.tagged)) proj.voice.variant = 'tagged';
+    if (merge) {
+      // v3 from here on: the tagged read is what the counters read and what every line is spoken from.
+      proj.voice.tagsOn = true;
+      proj.voice.variant = 'tagged';
+    } else if (report.tagged > 0 && lines.some(l => l.tagged)) {
+      // The take on show follows the work: after a pass that produced tags, the tagged read is
+      // what the user asked to see.
+      proj.voice.variant = 'tagged';
+    }
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
     console.log(`[scen3/voice/tag] ${id} mood=${mood.id}`
@@ -3660,6 +3675,14 @@ router.post('/scen3/projects/:id/line', (req, res) => {
     const text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
     if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
 
+    // The words with their [tags], when the page edits those too (Merge, phase W). Kept only when
+    // the words in it are these words: tags belong to the words they sit between. Sent nothing, a
+    // change of words drops the old tags - they were made for other words - and the next read tags
+    // the line again.
+    const tagged = (req.body || {}).tagged == null ? null : String((req.body || {}).tagged).trim();
+    if (tagged !== null || text !== lines[i].text) {
+      lines[i].tagged = (tagged !== null && _words(tagged) === _words(text)) ? tagged : '';
+    }
     lines[i].text = text;
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();

@@ -255,7 +255,7 @@ export function paint(host, ctx) {
   // still talking over the environments is a sound with nothing on screen to explain it. The
   // reads playing in the script stop the same way.
   if (_view !== 'voice') VOICE.leave();
-  if (_view !== 'hub') FRAG.leave();
+  if (_view !== 'hub' && _view !== 'voice') FRAG.leave();
   // Arriving somewhere is when to ask the journal whether something of that place is running;
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
@@ -271,8 +271,8 @@ export function paint(host, ctx) {
     ENV.paintMaker(scroll, head, _envApi());
     _stage(chosen);
   } else if (_view === 'voice' && chosen) {
-    scroll.classList.add('is-col');
-    VOICE.paintPicker(scroll, _voiceApi(chosen));
+    // The voices are chosen in the right column, beside the script (owner, 2026-09-21).
+    FRAG.paint(scroll, ctx, _fragApi(chosen));
     _stage(chosen);
   } else if (_view === 'newlb' && who) {
     _paintNewLookbook(scroll, head, who);
@@ -309,6 +309,8 @@ function _fragApi(chosen) {
     char: () => chosen || null,
     voiceApi: () => _voiceApi(chosen),
     go: _go,
+    // 'hub' or 'voice': the right column is the script's, or the voices being chosen.
+    view: () => _view,
   };
 }
 
@@ -337,7 +339,7 @@ function _whereHalf() {
 function _stage(chosen) {
   // A line open in the script with a clip or a frame shows THAT: it is what is being judged. The
   // doors are back the moment the line is closed (a second press on its row).
-  const pic = _view === 'hub' ? FRAG.openPicture(_ctx.project) : null;
+  const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
     PV.showStill(pic.src, pic.caption);
     _stageButton(null);
@@ -419,6 +421,8 @@ function _voiceApi(chosen) {
     // every paint (js/merge-v3/workshop.js), so a replacement here would last exactly until the
     // next repaint and then be the old one again.
     setProject: (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); },
+    // The mood of the video - the tagger marks the script up by it (lib/motion-presets.js).
+    mood: () => String((((_ctx && _ctx.project) || {}).video || {}).mood || ''),
     go: _go,
     repaint: () => _ctx.repaint(),
     note: _note,

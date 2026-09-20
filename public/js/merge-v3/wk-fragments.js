@@ -35,6 +35,7 @@
 
 import * as Store from './store.js';
 import * as API from './scen-api.js';
+import { takeOf, isRead } from './scen-api.js';
 import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture } from './wk-maker.js';
@@ -100,13 +101,14 @@ function _remembered() {
 
 // ── What a line has ─────────────────────────────────────────────────────────
 // The same rules the server applies when it builds the cut (routes/scen3.js, _cutClips): a read or a
-// clip made from words that have since been edited is not this line's any more.
+// clip made from words that have since been edited is not this line's any more. The read is the
+// take the line is read BY - tagged when the line has tags (js/merge-v3/scen-api.js, takeOf).
 const _words = (l) => String((l && l.text) || '');
-const _take = (l) => ((l && l.audio) || {}).plain || null;
+const _take = (l) => takeOf(l).take;
 function _readState(l) {
-  const t = _take(l);
-  if (!t || !t.path) return 'none';
-  return t.said === _words(l) ? 'ok' : 'stale';
+  const { take, said } = takeOf(l);
+  if (!take || !take.path) return 'none';
+  return take.said === said ? 'ok' : 'stale';
 }
 const _frameOf = (p, l) => (((p && p.mix) || {}).variants || []).find(v => v.id === String((l && l.frameId) || '')) || null;
 function _clipOf(l) {
@@ -395,20 +397,18 @@ export function paint(host, ctx, api) {
   host.appendChild(right);
 
   _pickUpDrawing();
-  const missing = _missing(p);
-  // The voice over the script - or, with nobody cast yet, the one door that matters. The script
-  // is shown either way: it is the project, and it is read before anything is chosen.
-  if (api.char()) VOICE.paintRow(left, api.voiceApi());
-  else left.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
+  // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
+  // on the right, with everything else that is set once for the whole video.
   _list(left, p, lines);
 
+  // The right column: the voices being chosen, the open line, or the whole video.
+  if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   _notes(right);
   if (!lines.length) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
     return;
   }
-  if (missing.length) _gate(right, missing);
-  else if (_open < 0) _all(right, p, lines, missing);
+  if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
   // The countdown belongs to the fragment being drawn, and only while it is the one open.
   const place = _open >= 0 && _drawing.has(_open) ? 'frame:' + _open : null;
@@ -431,9 +431,8 @@ function _notes(host) {
   if (_readErr) host.appendChild(_note(_readErr, true));
 }
 
-// What the step cannot work without: the person in a look, the place, and the voice they are read
-// in. Anything missing is named, with the way to it: the halves of the stage for who and where,
-// the voices shelf for the voice.
+// What the frames and the clips cannot be made without: the person in a look, the place, and the
+// voice they are read in. Named on the buttons that need them.
 function _missing(p) {
   const cast = p.casting || {};
   const out = [];
@@ -443,31 +442,167 @@ function _missing(p) {
   return out;
 }
 
-function _gate(host, missing) {
-  host.appendChild(el('div', 'mv3-wk-guide-h', 'Not yet'));
-  host.appendChild(el('p', 'mv3-wk-guide-p',
-    'Frames and clips are made from the person in their look, standing in the place, speaking in their voice. Still missing: '
-    + missing.join(', ') + '.'));
-  if (missing.includes('a character in a look')) host.appendChild(el('p', 'mv3-wk-guide-p', 'The character and the look: press the upper half of the stage.'));
-  if (missing.includes('an environment')) host.appendChild(el('p', 'mv3-wk-guide-p', 'The environment: press the lower half of the stage.'));
-  if (missing.includes('a voice')) {
-    const b = el('button', 'mv3-wk-vmore', 'choose a voice');
-    b.type = 'button';
-    b.title = 'The saved voices, and the ElevenLabs library';
-    b.addEventListener('click', () => _api.go('voice'));
-    const row = el('div', 'mv3-wk-vfoot');
-    row.appendChild(b);
-    host.appendChild(row);
-  }
+// ── The general zone: the whole video, in three stages ──────────────────────
+// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W.) Over everything the counters
+// and the one mood every stage reads from; then three fields in gold, one above the other - voice,
+// first frames, video - each with its own `generate` at the foot, and `generate all` to run them in
+// turn. In W1 the voice field is whole; the other two hold what F2 and F3 built until their own
+// stages come (W2, W3).
+function _all(host, p, lines) {
+  _counters(host, p, lines);
+  _mood(host);
+  _stageVoice(host, p, lines);
+  _stageFrames(host, p, lines);
+  _stageVideo(host);
+  host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
-// ── The settings of the whole video, and what is done to every line at once ──
-// In the right column when no line is open (owner, 2026-09-21): the list is the script and
-// nothing else.
-function _controls(host, lines, missing) {
-  const blocked = missing.length > 0;
-  const v = _video();
+// One field: a gold frame, a head, a body and a foot with the stage's own `generate`.
+function _stage(host, name, sub, soon) {
+  const box = el('div', 'mv3-wk-stage' + (soon ? ' is-soon' : ''));
+  const head = el('div', 'mv3-wk-stage-head');
+  head.appendChild(el('span', '', name));
+  if (sub) head.appendChild(el('span', 'mv3-wk-vsub', sub));
+  box.appendChild(head);
+  const body = el('div', 'mv3-wk-stage-body');
+  box.appendChild(body);
+  const foot = el('div', 'mv3-wk-stage-foot');
+  box.appendChild(foot);
+  host.appendChild(box);
+  return { body, foot };
+}
 
+function _genButton(foot, spec) {
+  if (spec.cap) foot.appendChild(el('span', 'mv3-wk-vsub', spec.cap));
+  const b = el('button', 'mv3-wk-gen', spec.label || 'generate');
+  b.type = 'button';
+  b.title = spec.title || '';
+  b.disabled = !!spec.disabled;
+  if (spec.on) b.addEventListener('click', spec.on);
+  foot.appendChild(b);
+  return b;
+}
+
+// Where the script stands: read, frames, clips - and the chain that runs every stage in turn.
+function _counters(host, p, lines) {
+  const n = lines.length;
+  const top = el('div', 'mv3-wk-ftop');
+  const stat = el('div', 'mv3-wk-fstats');
+  const cell = (label, done) => {
+    const c = el('div', 'mv3-wk-fstat' + (done === n ? ' is-done' : ''));
+    c.appendChild(el('div', 'mv3-wk-fstat-n', done + '/' + n));
+    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
+    stat.appendChild(c);
+  };
+  cell('read', lines.filter(isRead).length);
+  cell('frames', lines.filter(l => _frameOf(p, l)).length);
+  cell('clips', lines.filter(l => _clipState(l) === 'ok').length);
+  top.appendChild(stat);
+  const all = el('button', 'mv3-wk-gen mv3-wk-genall', 'generate all');
+  all.type = 'button';
+  all.disabled = true;
+  all.title = 'Every stage in turn - the voice and the frames together, the video after both. Comes with the video stage (W3).';
+  top.appendChild(all);
+  host.appendChild(top);
+}
+
+// THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
+// (owner, 2026-09-18) and the one vocabulary every stage reads from (2026-09-21): the tags of the
+// read, the expression in the frames, the movement in the clips. Its one line under the menu says
+// what the choice means.
+function _mood(host) {
+  const v = _video();
+  const box = el('div', 'mv3-wk-mood');
+  const row = el('div', 'mv3-wk-fsets');
+  const mood = el('select', 'mv3-wk-vsel is-small is-wide');
+  mood.title = 'The emotion of the whole video: the read, the frames and the clips all follow it';
+  let now = null;
+  for (const m of (_kit && _kit.moods) || []) {
+    const o = el('option', '', 'mood: ' + m.label);
+    o.value = m.id;
+    if (m.id === v.mood) { o.selected = true; now = m; }
+    mood.appendChild(o);
+  }
+  mood.disabled = _saving || !_kit || !!_reading;
+  mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
+  row.appendChild(mood);
+  box.appendChild(row);
+  if (now && now.about) box.appendChild(el('div', 'mv3-wk-mood-about', now.about));
+  host.appendChild(box);
+}
+
+// VOICE - the first stage, the one the timeline waits for: the character's voice, and `generate`,
+// which tags the script by the mood and reads every line that needs it (ElevenLabs v3).
+function _stageVoice(host, p, lines) {
+  const { body, foot } = _stage(host, 'voice', 'ElevenLabs v3 · tags by the mood');
+  const rec = _api.char();
+  if (!rec) {
+    body.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
+  } else {
+    VOICE.paintRow(body, _api.voiceApi());
+  }
+  const g = VOICE.reading();
+  const busy = g.tagging || g.line >= 0 || !!g.batch;
+  const has = !!(rec && VOICE.hasVoice(rec));
+  // What the button will do: the lines still to tag, and the lines still to read.
+  const untagged = lines.filter(l => !String(l.tagged || '').trim()).length;
+  const unread = lines.filter(l => !isRead(l)).length;
+  const will = lines.filter(l => !String(l.tagged || '').trim() || !isRead(l)).length;
+  const label = g.tagging ? 'tagging…'
+    : g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
+      : g.line >= 0 ? 'reading…' : 'generate';
+  _genButton(foot, {
+    label,
+    cap: !rec || !has || !lines.length ? '' : busy ? '' : will ? will + (will === 1 ? ' line' : ' lines') + (untagged ? ' · tags first' : '') : 'every line is read',
+    disabled: !rec || !has || busy || !lines.length || !will,
+    title: !rec ? 'Choose who is speaking first' : !has ? 'Give the character a voice first' : !will ? 'Every line is tagged and read'
+      : 'Tags by the mood where they are missing (' + untagged + '), then every line that needs reading (' + unread + ') - ElevenLabs v3',
+    on: () => VOICE.generate(_api.voiceApi()),
+  });
+}
+
+// FIRST FRAMES - its own stage comes in W2 (a set of frames for the whole video, chosen by shot
+// size). Until then the field holds what F2 and F3 built: the reading of the script and a frame
+// per line.
+function _stageFrames(host, p, lines) {
+  const { body, foot } = _stage(host, 'first frames', 'under development', true);
+  const missing = _missing(p);
+  const blocked = missing.length > 0;
+  const acts = el('div', 'mv3-wk-facts');
+  const r = _reading;
+  const read = el('button', 'mv3-wk-vmore is-small' + (r && r.total ? ' is-busy' : ''),
+    r && r.total ? 'reading lines ' + r.from + '–' + r.to + ' of ' + r.total + '…' : 'read the script');
+  read.type = 'button';
+  read.disabled = blocked || !!r || !lines.length;
+  read.title = blocked ? 'Still missing: ' + missing.join(', ')
+    : 'The agent plans every line - shot, pose, camera, direction, animation - five lines at a time';
+  read.addEventListener('click', () => _readScript());
+  // Only lines that have a shot can be drawn; the others are counted apart so the number is honest.
+  const ready = lines.filter((l, i) => _shotState(l) !== 'none' && !_frameOf(p, l) && !_drawing.has(i)).length;
+  const sub = _submitting;
+  const frames = el('button', 'mv3-wk-vmore is-small' + (_armedFrames ? ' is-armed' : '') + (sub ? ' is-busy' : ''),
+    sub ? 'asking ' + sub.done + ' of ' + sub.total + '…'
+      : _armedFrames ? ready + ' frame' + (ready === 1 ? '' : 's') + ' · ' + _money(ready * FRAME_PRICE) + '?'
+        : ready ? 'make ' + ready + ' frame' + (ready === 1 ? '' : 's') : (_drawing.size ? 'drawing ' + _drawing.size + '…' : 'no frames to make'));
+  frames.type = 'button';
+  frames.disabled = blocked || !ready || !!sub || !!_reading;
+  frames.title = blocked ? 'Still missing: ' + missing.join(', ')
+    : 'Every line that has a shot and no frame - nano-banana-2, 2K, ' + _money(FRAME_PRICE) + ' each. Press again to confirm.';
+  frames.addEventListener('click', () => {
+    if (!_armedFrames) { _armedFrames = true; _ctx.repaint(); return; }
+    _armedFrames = false;
+    _makeMissing(lines);
+  });
+  acts.append(read, frames);
+  body.appendChild(acts);
+  _genButton(foot, { disabled: true, title: 'Comes with the first frames stage (W2): a set of frames for the whole video, by shot size' });
+}
+
+// VIDEO - the model and the tier now; the animation prompts and the clips come with their stages
+// (W3, F4).
+function _stageVideo(host) {
+  const { body, foot } = _stage(host, 'video', 'under development', true);
+  const v = _video();
   // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
   // in the list so it is known to be coming, and cannot be picked yet.
   const sets = el('div', 'mv3-wk-fsets');
@@ -494,53 +629,8 @@ function _controls(host, lines, missing) {
   model.value = 'kling';
   model.disabled = _saving;
   sets.append(tier, model);
-  host.appendChild(sets);
-
-  // THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
-  // (owner, 2026-09-18). The agent reads every shot and animation prompt from it; changing it makes
-  // every reading stale.
-  const moods = el('div', 'mv3-wk-fsets');
-  const mood = el('select', 'mv3-wk-vsel is-small is-wide');
-  mood.title = 'The emotion of the whole video: the agent shoots and animates every line from it';
-  for (const m of (_kit && _kit.moods) || []) {
-    const o = el('option', '', 'mood: ' + m.label);
-    o.value = m.id;
-    if (m.id === v.mood) o.selected = true;
-    mood.appendChild(o);
-  }
-  mood.disabled = _saving || !_kit || !!_reading;
-  mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
-  moods.appendChild(mood);
-  host.appendChild(moods);
-
-  // What is done to all of them at once - here so its place is known; they come with their phases.
-  const acts = el('div', 'mv3-wk-facts');
-  const r = _reading;
-  const read = el('button', 'mv3-wk-vmore is-small' + (r && r.total ? ' is-busy' : ''),
-    r && r.total ? 'reading lines ' + r.from + '–' + r.to + ' of ' + r.total + '…' : 'read the script');
-  read.type = 'button';
-  read.disabled = blocked || !!r || !lines.length;
-  read.title = blocked ? 'Needs the setting first'
-    : 'The agent plans every line - shot, pose, camera, direction, animation - five lines at a time';
-  read.addEventListener('click', () => _readScript());
-  // Only lines that have a shot can be drawn; the others are counted apart so the number is honest.
-  const ready = lines.filter((l, i) => _shotState(l) !== 'none' && !_frameOf(_ctx.project, l) && !_drawing.has(i)).length;
-  const sub = _submitting;
-  const frames = el('button', 'mv3-wk-vmore is-small' + (_armedFrames ? ' is-armed' : '') + (sub ? ' is-busy' : ''),
-    sub ? 'asking ' + sub.done + ' of ' + sub.total + '…'
-      : _armedFrames ? ready + ' frame' + (ready === 1 ? '' : 's') + ' · ' + _money(ready * FRAME_PRICE) + '?'
-        : ready ? 'make ' + ready + ' frame' + (ready === 1 ? '' : 's') : (_drawing.size ? 'drawing ' + _drawing.size + '…' : 'no frames to make'));
-  frames.type = 'button';
-  frames.disabled = blocked || !ready || !!sub || !!_reading;
-  frames.title = blocked ? 'Needs the setting first'
-    : 'Every line that has a shot and no frame - nano-banana-2, 2K, ' + _money(FRAME_PRICE) + ' each. Press again to confirm.';
-  frames.addEventListener('click', () => {
-    if (!_armedFrames) { _armedFrames = true; _ctx.repaint(); return; }
-    _armedFrames = false;
-    _makeMissing(lines);
-  });
-  acts.append(read, frames);
-  host.appendChild(acts);
+  body.appendChild(sets);
+  _genButton(foot, { disabled: true, title: 'Comes with the video stage (W3): the animation of the person and of the place, then the clips (F4)' });
 }
 
 function _list(host, p, lines) {
@@ -593,40 +683,6 @@ function _row(p, l, i) {
   return row;
 }
 
-// ── The right column with no fragment open: the whole video ─────────────────
-// What is shared by every clip - the tier, the model, the mood - and what is done to every line at
-// once; then where the script stands. (One idea still open, owner 2026-09-18: drawing first frames
-// by hand, once, for several lines at a time instead of one per fragment.)
-function _all(host, p, lines, missing) {
-  const n = lines.length;
-  const read = lines.filter(l => _readState(l) === 'ok').length;
-  const shots = lines.filter(l => _shotState(l) === 'ok').length;
-  const framed = lines.filter(l => _frameOf(p, l)).length;
-  const clipped = lines.filter(l => _clipState(l) === 'ok').length;
-  const secs = lines.reduce((a, l) => a + (((_take(l) || {}).dur) || 0), 0);
-
-  const top = el('div', 'mv3-wk-fhead');
-  top.appendChild(el('span', 'mv3-wk-ftitle', 'all fragments'));
-  top.appendChild(el('span', 'mv3-wk-vsub', n + (n === 1 ? ' line' : ' lines') + (secs ? ' · ' + secs.toFixed(1) + ' s read' : '')));
-  host.appendChild(top);
-
-  _controls(host, lines, missing);
-
-  const stat = el('div', 'mv3-wk-fstats');
-  const cell = (label, done) => {
-    const c = el('div', 'mv3-wk-fstat' + (done === n ? ' is-done' : ''));
-    c.appendChild(el('div', 'mv3-wk-fstat-n', done + '/' + n));
-    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
-    stat.appendChild(c);
-  };
-  cell('read', read);
-  cell('shots', shots);
-  cell('frames', framed);
-  cell('clips', clipped);
-  host.appendChild(stat);
-  host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
-}
-
 // ── The right column: the open fragment ─────────────────────────────────────
 // Laid out the way the owner drew it (2026-09-19), as a grid of two rows:
 //
@@ -640,24 +696,29 @@ function _fragment(host, p, l, i) {
   const rs = _readState(l);
   const va = _api.voiceApi();
   const speaking = VOICE.reading();
-  const busyRead = speaking.line >= 0 || !!speaking.batch;
+  const busyRead = speaking.tagging || speaking.line >= 0 || !!speaking.batch;
+  const rec = _api.char();
+  const canRead = !!(rec && VOICE.hasVoice(rec));
 
   const top = el('div', 'mv3-wk-fhead');
   top.appendChild(el('span', 'mv3-wk-ftitle', 'fragment ' + (i + 1)));
   top.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
   top.appendChild(el('span', 'mv3-wk-vsub', take && take.dur ? take.dur.toFixed(1) + ' s' : 'not read'));
   // The read of this line, from here (V3's list, folded in): spoken now, or again in place of the
-  // take it has.
+  // take it has - tagged by the mood first when it has no tags yet (ElevenLabs v3).
   const read = el('button', 'mv3-wk-vuse is-right', speaking.line === i ? '…' : rs === 'none' ? 'read' : 'read again');
   read.type = 'button';
-  read.title = !_api.char() ? 'Choose who is speaking first' : rs === 'none' ? 'Read this line' : 'Read it again, in place of the take it has';
-  read.disabled = busyRead || !_api.char();
+  read.title = !rec ? 'Choose who is speaking first' : !canRead ? 'Give the character a voice first'
+    : rs === 'none' ? 'Read this line' : 'Read it again, in place of the take it has';
+  read.disabled = busyRead || !canRead;
   read.addEventListener('click', () => VOICE.readLine(va, i));
   top.appendChild(read);
   host.appendChild(top);
 
-  // The words: pressed, they open for editing. A take made of other words is stale until the line
-  // is read again - or the words are put back, which is the cheap way.
+  // The words - with their [tags] once the line has them - pressed, open for editing. A take made
+  // of other words is stale until the line is read again - or the words are put back, which is
+  // the cheap way.
+  const shown = String(l.tagged || '').trim() || _words(l);
   if (_editWords === i) {
     const box = el('textarea', 'mv3-wk-ledit is-frag');
     box.value = _wordsDraft;
@@ -680,9 +741,9 @@ function _fragment(host, p, l, i) {
     host.appendChild(acts);
     setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
   } else {
-    const words = el('div', 'mv3-wk-fwords is-edit', '“' + (_words(l) || '…') + '”');
-    words.title = 'Change the words';
-    words.addEventListener('click', () => { _editWords = i; _wordsDraft = _words(l); _ctx.repaint(); });
+    const words = el('div', 'mv3-wk-fwords is-edit', '“' + (shown || '…') + '”');
+    words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');
+    words.addEventListener('click', () => { _editWords = i; _wordsDraft = shown; _ctx.repaint(); });
     host.appendChild(words);
   }
   if (rs === 'stale') {

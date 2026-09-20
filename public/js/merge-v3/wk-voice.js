@@ -4,16 +4,19 @@
 
    Two faces, and they are the same question one level apart:
 
-     the row over the script   which voice this character speaks in, chosen from the ones they
-                               already have - a demo to listen to and a dropdown to change it -
-                               and, at its right end, the reads: how far the script is and the
-                               button that reads what needs it (js/merge-v3/wk-fragments.js)
-     voice                     the sub-level: the saved voices in full, and under them the
-                               ElevenLabs shared library with its filters, to take a new one
+     the voice row      which voice this character speaks in, chosen from the ones they already
+                        have - a demo to listen to and a dropdown to change it - at the top of the
+                        voice field of the setup (js/merge-v3/wk-fragments.js)
+     voice              the sub-level: the saved voices in full, and under them the ElevenLabs
+                        shared library with its filters, to take a new one; painted into the right
+                        column beside the script
 
-   THE READS ARE SPOKEN FROM HERE (readLine, readAll, saveText): the fragments pane shows each
-   line and its buttons, and this module is what those buttons call - a take is the voice's
-   business, whichever panel asks for it.
+   THE READS ARE SPOKEN FROM HERE (generate, readLine, readAll, saveText): the fragments pane shows
+   the lines and their buttons, and this module is what those buttons call - a take is the voice's
+   business, whichever panel asks for it. ONE MODEL, ElevenLabs v3 with tags (decided with the owner
+   2026-09-21, docs/local-app/PLAN.md, phase W): a line is tagged by the mood of the video before it is
+   read, the words with their tags are what the take says, and a project read with v2 before that
+   keeps those reads until a line is read again.
 
    A VOICE BELONGS TO THE CHARACTER, not to this project (decided with the owner): changing the
    voice here is ADDING one to that character. `voices` is everything they have, `voice` is the
@@ -30,7 +33,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { el } from './wk-maker.js';
-import { isRead } from './scen-api.js';
+import { isRead, plainWords } from './scen-api.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -48,7 +51,7 @@ let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_ca
 // it has got instead of freezing for a minute.
 let _reading = -1;                      // the line being spoken now, -1 for none
 let _batch = null;                      // { done, total } while every stale line is being read
-let _armed = false;                     // "read all" has been pressed once and is asking
+let _tagging = false;                   // the tagger is marking the script up
 let _rsaid = '';                        // what the reads have to say, and whether it is bad
 let _rbad = false;
 
@@ -108,16 +111,13 @@ const _active = (rec) => {
   return _saved(rec).find(v => String(v.voiceId) === id) || null;
 };
 
-// ── The row over the script ─────────────────────────────────────────────────
+// ── The voice row ───────────────────────────────────────────────────────────
 // The character has a voice or they have not, and both answers lead to the same place: the
 // sub-level where voices are chosen. The dropdown is only for the ones already theirs - picking
-// a NEW one is a search, not a choice from a list. At the row's right end, the reads: how far the
-// script is ("9/14") and the one button that reads every line that needs it.
+// a NEW one is a search, not a choice from a list.
 export function paintRow(host, api) {
   const rec = api.char();
   if (!rec) { host.appendChild(api.note('reading the character…')); return; }
-  const p = api.project() || {};
-  const lines = Array.isArray(p.lines) ? p.lines : [];
   const mine = _saved(rec);
   const now = _active(rec);
 
@@ -141,26 +141,6 @@ export function paintRow(host, api) {
     // The way to another voice sits in the same row, right of the choice it changes (owner).
     row.appendChild(_pick(api, 'change'));
   }
-  // The second press is the confirmation (decided with the owner): a batch is the one thing here
-  // that spends real money, and it says how much before it does.
-  if (lines.length && now) {
-    const left = lines.filter(_needs).length;
-    const acts = el('span', 'mv3-wk-fread');
-    acts.appendChild(el('span', 'mv3-wk-vcount', (lines.length - left) + '/' + lines.length));
-    const all = el('button', 'mv3-wk-vmore is-small' + (_armed ? ' is-armed' : ''),
-      _batch ? 'reading ' + _batch.done + ' of ' + _batch.total + '…'
-        : _armed ? 'read ' + left + (left === 1 ? ' line?' : ' lines?') : 'read all');
-    all.type = 'button';
-    all.title = left ? (_armed ? 'Press again to read them' : 'Read every line that needs it') : 'Every line is read';
-    all.disabled = !!_batch || _reading >= 0 || !left;
-    all.addEventListener('click', () => {
-      if (!_armed) { _armed = true; _repaint(api); return; }
-      _armed = false;
-      readAll(api);
-    });
-    acts.appendChild(all);
-    row.appendChild(acts);
-  }
   host.appendChild(row);
 
   if (mine.length && !now) host.appendChild(api.note('None of them is set as the voice - pick one above.', true));
@@ -169,6 +149,9 @@ export function paintRow(host, api) {
   if (_said) { host.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
   if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
 }
+
+/** Does the character have a voice to read in? The field's `generate` waits for one. */
+export const hasVoice = (rec) => !!_active(rec);
 
 function _pick(api, label) {
   const b = el('button', 'mv3-wk-vmore', label);
@@ -420,21 +403,27 @@ async function _take(api, card) {
 // owner; moods and tags are a conversation of their own). That is what a project with no voice
 // settings gets, and none are set here.
 const _needs = (l) => !isRead(l);
+const _tagged = (l) => !!String((l && l.tagged) || '').trim();
 
-/** Which line is being spoken (-1 for none), and the batch "read all" is walking, if any. */
-export const reading = () => ({ line: _reading, batch: _batch });
+/** What the reads are doing: the tagger at work, the line being spoken (-1 for none), and the
+ *  batch "generate" is walking, if any. */
+export const reading = () => ({ tagging: _tagging, line: _reading, batch: _batch });
 
-/** The words of a line, changed. What the take said stays with the take, which is what makes
- *  the line stale until it is read again - or the words are put back. */
+/** The words of a line, changed - with their [tags] when the line has tags, which the server keeps
+ *  as long as the words in them are these words. What the take said stays with the take, which is
+ *  what makes the line stale until it is read again - or the words are put back. */
 export async function saveText(api, i, text) {
-  const words = String(text || '').trim();
+  const raw = String(text || '').trim();
+  const words = plainWords(raw);
   if (!words) { _rsaid = 'A line cannot be empty.'; _rbad = true; return _repaint(api); }
+  const p = api.project() || {};
+  const l = (Array.isArray(p.lines) ? p.lines : [])[i];
   _rsaid = ''; _rbad = false;
   _repaint(api);
   try {
     const d = await (await fetch('/api/scen3/projects/' + encodeURIComponent(api.projectId()) + '/line', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index: i, text: words }),
+      body: JSON.stringify(_tagged(l) ? { index: i, text: words, tagged: raw } : { index: i, text: words }),
     })).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     api.setProject(d.project);
@@ -445,8 +434,50 @@ export async function saveText(api, i, text) {
   _repaint(api);
 }
 
-// One line, spoken now. The server writes the take into the project itself, so what comes back
-// is the project as it now stands - which is what the panel paints from.
+// ── The tags ────────────────────────────────────────────────────────────────
+// The tagger marks the script up by the mood of the video (routes/scen3.js, /scen3/voice/tag): the
+// whole script when nothing is tagged yet - the arc is a property of the sequence - and only the
+// lines that lack tags when some are, so what was approved stays as it is. The server switches the
+// project to the tagged read as it does.
+async function _tag(api, only) {
+  const body = { projectId: api.projectId(), mood: api.mood() };
+  if (only && only.length) body.only = only;
+  const d = await (await fetch('/api/scen3/voice/tag', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })).json();
+  if (!d || !d.success) throw new Error((d && d.error) || 'the tagging failed');
+  api.setProject(d.project);
+  return d.report || {};
+}
+
+/**
+ * The voice field's `generate` (decided with the owner 2026-09-21): the tags where they are
+ * missing, then every line that needs reading, one after another - no second press, the read is
+ * credits rather than dollars.
+ */
+export async function generate(api) {
+  if (_tagging || _reading >= 0 || _batch) return;
+  const p = api.project() || {};
+  const lines = Array.isArray(p.lines) ? p.lines : [];
+  const untagged = lines.map((l, i) => (_tagged(l) ? -1 : i)).filter(i => i >= 0);
+  _tagging = true;
+  _rsaid = ''; _rbad = false;
+  _repaint(api);
+  try {
+    if (untagged.length) await _tag(api, untagged.length === lines.length ? [] : untagged);
+  } catch (e) {
+    _tagging = false;
+    _rsaid = 'The tagging failed: ' + e.message;
+    _rbad = true;
+    return _repaint(api);
+  }
+  _tagging = false;
+  await readAll(api);
+}
+
+// One line, spoken now - tagged first if it has no tags yet, because every read is v3 with tags.
+// The server writes the take into the project itself, so what comes back is the project as it now
+// stands - which is what the panel paints from.
 // `inBatch` is how "read all" gets past the guard that stops a second read starting on top of one
 // already running: the batch IS that runner, and without it the first line of a batch refuses
 // itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
@@ -454,10 +485,12 @@ export async function readLine(api, i, inBatch) {
   if (_reading >= 0 || (_batch && !inBatch)) return false;
   _reading = i;
   _rsaid = ''; _rbad = false;
-  _armed = false;
   _repaint(api);
   let ok = false;
   try {
+    const p = api.project() || {};
+    const l = (Array.isArray(p.lines) ? p.lines : [])[i];
+    if (l && !_tagged(l)) await _tag(api, [i]);
     const d = await (await fetch('/api/scen3/voice/speak', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: api.projectId(), only: [i] }),
@@ -477,7 +510,8 @@ export async function readLine(api, i, inBatch) {
 }
 
 // Every line that needs it, one after another, so the panel can say how far it has got. It stops
-// at the first failure: twelve identical refusals say nothing the first one did not.
+// at the first failure: twelve identical refusals say nothing the first one did not. A line whose
+// tags were dropped with an edit is tagged again on its way (readLine).
 export async function readAll(api) {
   const p = api.project() || {};
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);

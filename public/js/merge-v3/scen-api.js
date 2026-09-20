@@ -70,15 +70,33 @@ export const remove = (id) =>
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);
 
 /**
- * Is this line READ - its plain take there, and spoken from the words the line has now? `said` is
+ * The take a line is read BY now, and the words it should have said. A line with its words
+ * marked up ([tags]) is read by its tagged take - ElevenLabs v3 performs the tags; one without, by
+ * the plain take. Which is how a project read before the tags keeps its reads until a line is read
+ * again (decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W).
+ */
+export const takeOf = (l) => {
+  const a = (l && l.audio) || {};
+  const tagged = String((l && l.tagged) || '').trim();
+  return tagged
+    ? { take: a.tagged || null, said: tagged }
+    : { take: a.plain || null, said: String((l && l.text) || '') };
+};
+
+/**
+ * Is this line READ - its take there, and spoken from the words the line has now? `said` is
  * written with the take (routes/scen3.js, /scen3/voice/speak), so editing a line makes its read
- * stale by itself. One rule for the counter on the script (js/merge-v3/wk-voice.js) and for the
- * timeline chip, which waits for every line (js/merge-v3/workshop.js).
+ * stale by itself. One rule for the counters (js/merge-v3/wk-fragments.js), the voice stage
+ * (js/merge-v3/wk-voice.js) and the timeline chip, which waits for every line (js/merge-v3/workshop.js).
  */
 export const isRead = (l) => {
-  const t = ((l && l.audio) || {}).plain;
-  return !!(t && t.path && t.said === String((l && l.text) || ''));
+  const { take, said } = takeOf(l);
+  return !!(take && take.path && take.said === said);
 };
+
+/** The words without their [tags] - what the line says, whatever the read performs. */
+export const plainWords = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ')
+  .replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();
 
 // ── Dressing a character ────────────────────────────────────────────────────
 // A LOOK is made by showing the engine two pictures - this person, that outfit - and filing
