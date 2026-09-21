@@ -217,6 +217,13 @@ function _clipOf(c, isSubs) {
       // preview draws it and the renderer holds it for the length of the read. Null on
       // everything else, where the source carries its own picture.
       poster:  c.poster ? String(c.poster) : null,
+      // WHOSE CELL THIS IS (phase T'). A number is the line of the scenario project this cell
+      // mirrors: the workshop lays those itself and takes them away again (lib/frag-mirror.js).
+      // null is the person's own - dropped from the library, trimmed, moved - and nothing but
+      // their own hand ever touches it. Without this field surviving the normaliser the mirror
+      // could not tell the two apart, and would either overwrite somebody's work or grow a
+      // second copy of the script every time it ran.
+      frag:    Number.isFinite(+c.frag) && +c.frag > 0 ? Math.round(+c.frag) : null,
       name:    String(c.name || '').slice(0, 200),
       libId:   c.libId ? String(c.libId) : null,
       start:   Math.max(0, num(c.start, 0)),
@@ -1021,6 +1028,9 @@ router.post('/mv3/import/scen3', async (req, res) => {
           trimIn: 0, trimOut: r2(Math.max(0, (vidDur || dur) - dur)),
           speed: 1, reversed: false, ...fx,
           pairId: 'pg' + tag + '_' + it.n,
+          // The line this cell is (phase T'): a send from Scenarios stamps them the same way the
+          // workshop's mirror does, so both kinds of project read alike.
+          frag: it.n,
         };
         vLane.clips.push({ ...half, id: 'sg' + tag + '_' + it.n, src: it.clip.path, thumb: it.clip.thumb || null, volume: 0 });
         aLane.clips.push({ ...half, id: 'sga' + tag + '_' + it.n, src: it.clip.path, thumb: null, volume: levelOf(i) });
@@ -1035,7 +1045,7 @@ router.post('/mv3/import/scen3', async (req, res) => {
           // The read IS the clip - there is no tail to trim, which is the whole difference from a
           // generated video.
           start: r2(at), dur: r2(dur), srcDur: r2(dur), trimIn: 0, trimOut: 0,
-          speed: 1, reversed: false, ...fx, volume: levelOf(i), pairId: null,
+          speed: 1, reversed: false, ...fx, volume: levelOf(i), pairId: null, frag: it.n,
         });
         at += dur;
       }

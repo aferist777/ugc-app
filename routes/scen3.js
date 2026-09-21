@@ -2017,6 +2017,9 @@ const JOBS = require('../lib/gen-jobs');
 // fragment already running, and - when a clip is re-asked with fresh links - which task the record
 // is now following (lib/alerts.js).
 const ALERTS = require('../lib/alerts');
+// The project's own timeline is a mirror of its lines (lib/frag-mirror.js, phase T'): every
+// place below that changes what a line HAS asks for it to be laid again.
+const MIRROR = require('../lib/frag-mirror');
 
 const WHAT_TITLE = { lookbook: 'Lookbook', look: 'Look', environment: 'Environment' };
 
@@ -2822,6 +2825,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a read
     console.log(`[scen3/voice/speak] ${id} ${model} ${variant} spoken=${report.spoken}`
       + ` skipped=${report.skipped.length} failed=${report.failed.length}`);
     res.json({ success: true, project: _projFull(proj), report });
@@ -3773,6 +3777,7 @@ router.post('/scen3/projects/:id/line', (req, res) => {
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): the words of a line
     res.json({ success: true, project: _projFull(proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4144,6 +4149,7 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     }
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame picked by hand
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4359,6 +4365,7 @@ router.post('/scen3/frames/ban', (req, res) => {
     }
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame switched off
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4384,6 +4391,7 @@ router.post('/scen3/frames/order', (req, res) => {
     p.mix.order = want;
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): the order of the frames
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4432,6 +4440,7 @@ JOBS.register('frame', {
     if (!proj.mix.variants.some(v => v.taskId === variant.taskId)) proj.mix.variants.unshift(variant);
     proj.updatedAt = variant.at;
     _saveProjects(list);
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a frame filed
     return { path: landed.imagePath, preview, frameId: variant.id, set: variant.set, n: variant.n, media: 'image' };
   },
   submit: async (request) => {
@@ -4465,6 +4474,7 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
     p.lines[i].pick = { ...(p.lines[i].pick || {}), [variant]: want };
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a clip picked
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4627,6 +4637,7 @@ JOBS.register('clip', {
     line.render = null;
     proj.updatedAt = clip.at;
     _saveProjects(list);
+    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a clip filed
     // The preview's proxy, made now rather than on the first play in Merge.
     try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
     return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
@@ -5257,5 +5268,10 @@ router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _read
 router.FRAME_SETS = FRAME_SETS;
 router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
+// The frame rule, for the timeline mirror (lib/frag-mirror.js): the pool in the order the frames
+// stand in, and which of them a line opens on. One rule, read by the page, by the agent that writes
+// the animation prompts and by the cut on the timeline.
+router.framePool = _framePool;
+router.frameOfLine = _frameOfLine;
 
 module.exports = router;

@@ -501,8 +501,15 @@ async function _checkRemote() {
   if (!d || !d.success || d.key !== _key) return;
   if (_same(d.timeline, _base)) { _version = d.version; return; }   // someone else's project
 
+  // WHO CHANGED IT. A talking head lays its own fragments on the timeline (lib/frag-mirror.js,
+  // phase T'): a read spoken or a clip filed re-lays the cells that carry `frag`, and that is not
+  // "another device" - it is this project's own script arriving. Told apart by looking at what
+  // actually differs: if every cell the person owns is untouched, it was the workshop.
+  const mirrored = _fragOnly(_base, d.timeline);
   if (_dirty) {
-    _status = 'Changed on another device - your edit will be merged in when it saves.';
+    _status = mirrored
+      ? 'The fragments were laid again - it will merge in when your edit saves.'
+      : 'Changed on another device - your edit will be merged in when it saves.';
     _emit();
     return;
   }
@@ -512,8 +519,28 @@ async function _checkRemote() {
   _title = d.title || _title;
   _adv = d.adv || _adv;
   _bindHistory();
-  _status = 'Changed on another device - this is the current version.';
+  _status = mirrored
+    ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
+    : 'Changed on another device - this is the current version.';
   _emit();
+}
+
+// Is the difference between two versions of a project ONLY in the cells the workshop owns? The
+// person's cells - everything without `frag` - are compared lane by lane; a change anywhere in
+// them means somebody edited the project, whatever else moved with it.
+function _fragOnly(base, theirs) {
+  const lanes = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []);
+  const a = lanes(base), b = lanes(theirs);
+  if (!a.length || a.length !== b.length) return false;
+  let mirrorMoved = false;
+  for (let i = 0; i < a.length; i++) {
+    const mine = (a[i].clips || []).filter(c => !(Number(c && c.frag) > 0));
+    const yours = (b[i].clips || []).filter(c => !(Number(c && c.frag) > 0));
+    if (!_same(mine, yours)) return false;
+    if (!_same((a[i].clips || []).filter(c => Number(c && c.frag) > 0),
+      (b[i].clips || []).filter(c => Number(c && c.frag) > 0))) mirrorMoved = true;
+  }
+  return mirrorMoved;
 }
 
 try {
