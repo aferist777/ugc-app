@@ -675,12 +675,86 @@ function _counters(host, p, lines) {
   cell(s.frames + '/' + s.framesAsked, 'frames', s.framesDone, 'Frames in the pool, of the set asked for');
   cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
   top.appendChild(stat);
-  const all = el('button', 'mv3-wk-gen mv3-wk-genall', 'generate all');
-  all.type = 'button';
-  all.disabled = true;
-  all.title = 'Every stage in turn - the voice and the frames together, the video after both. Comes with the video stage (W3).';
-  top.appendChild(all);
+  _chainButton(top, p, lines);
   host.appendChild(top);
+}
+
+// ── `generate all`: every stage in one press (phase W3c) ────────────────────
+// The voice and the frames do not depend on each other and go TOGETHER; the video waits for both,
+// because an animation prompt is written from the frames the lines open on. What the chain will
+// spend is said before it starts and confirmed by a second press - the frames are dollars (the
+// reads and the prompts are credits), and a set is only drawn when there is none.
+let _chain = '';                          // '' | 'voice+frames' | 'video'
+let _chainArmed = false;
+
+function _chainWork(p, lines) {
+  const missing = _missing(p);
+  const pool = _pool(p).length;
+  const v = _video();
+  const voice = _canRead() ? lines.filter(l => !String(l.tagged || '').trim() || !isRead(l)).length : 0;
+  const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 4) : 0;
+  // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
+  // (frames above) can give it one.
+  const video = (!missing.length && (pool || frames)) ? lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length : 0;
+  return { missing, voice, frames, video, pool, anything: voice + frames + video > 0 };
+}
+
+function _chainButton(host, p, lines) {
+  const w = _chainWork(p, lines);
+  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing;
+  const price = w.frames ? _money(w.frames * FRAME_PRICE) : '';
+  const b = el('button', 'mv3-wk-gen mv3-wk-genall',
+    _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video…'
+      : _chainArmed ? (price ? price + ' · go?' : 'go?') : 'generate all');
+  b.type = 'button';
+  b.disabled = busy || !lines.length || (!w.anything && !_chainArmed);
+  b.title = w.missing.length
+    ? 'The frames and the video need ' + w.missing.join(' and ') + ' - the voice can be read without them'
+    : !w.anything ? 'Everything that can be made is made'
+      : 'In one press: ' + [
+        w.voice ? w.voice + (w.voice === 1 ? ' line read' : ' lines read') : '',
+        w.frames ? w.frames + ' frames drawn · ' + price : '',
+        w.video ? w.video + (w.video === 1 ? ' animation prompt' : ' animation prompts') : '',
+      ].filter(Boolean).join(', ') + '. The voice and the frames together, the video after both.'
+      + (price ? ' Press again to confirm - the frames cost money.' : '');
+  b.addEventListener('click', () => {
+    if (price && !_chainArmed) { _chainArmed = true; _ctx.repaint(); return; }
+    _chainArmed = false;
+    _generateAll(p, lines);
+  });
+  host.appendChild(b);
+}
+
+// Waiting for the frames to LAND, not just to be asked for: the video stage writes from them.
+async function _untilDrawn() {
+  for (let k = 0; k < 1200 && _drawing.size; k++) await new Promise(r => setTimeout(r, 500));
+}
+
+async function _generateAll(p, lines) {
+  if (_chain) return;
+  const w = _chainWork(p, lines);
+  if (!w.anything) return;
+  _readErr = '';
+  _chain = 'voice+frames';
+  _ctx.repaint();
+  try {
+    await Promise.all([
+      w.voice ? VOICE.generate(_api.voiceApi()) : Promise.resolve(),
+      w.frames ? _makeSet().then(_untilDrawn) : Promise.resolve(),
+    ]);
+    // A stage that failed says so in its own field; the chain stops rather than writing prompts for
+    // frames that never arrived.
+    if (_readErr || !_pool(_ctx.project).length) { _chain = ''; return _ctx.repaint(); }
+    _chain = 'video';
+    _ctx.repaint();
+    const now = _ctx.project;
+    const after = _chainWork(now, Array.isArray(now.lines) ? now.lines : lines);
+    if (after.video) await _writeVideo(now);
+  } catch (e) {
+    _readErr = 'The chain stopped: ' + e.message;
+  }
+  _chain = '';
+  _ctx.repaint();
 }
 
 // THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
@@ -762,6 +836,9 @@ function _stageFrames(host, p) {
 
   // The shot size, its mannequin beside it - as tall as the menus and the wishes together - and
   // how many.
+  // The menus on the LEFT and the mannequin on the RIGHT (the owner, 2026-09-21), and the menus
+  // wear short names so three of them fit a narrow column: the shot size with how many beside it,
+  // the spread rule under them.
   const row = el('div', 'mv3-wk-fsetrow');
   const pose = set ? _poseById(set.poseId) : null;
   const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
@@ -772,12 +849,9 @@ function _stageFrames(host, p) {
     pic.title = pose.label + ' - ' + pose.desc;
     pic.appendChild(img);
   }
-  row.appendChild(pic);
   const col = el('div', 'mv3-wk-fsetcol');
   const sets = el('div', 'mv3-wk-fsets');
-  // Three menus in a narrow column: the shot size takes its own line, the rule and the count share
-  // the next one - the rule left of the count, which is what it acts on.
-  const framing = el('select', 'mv3-wk-vsel is-small is-wide');
+  const framing = el('select', 'mv3-wk-vsel is-small is-model');
   framing.title = 'The shot size every frame of the set is made in';
   for (const s of (_kit && _kit.sets) || []) {
     const o = el('option', '', s.label);
@@ -787,12 +861,13 @@ function _stageFrames(host, p) {
   }
   framing.disabled = _saving || !_kit || _planning;
   framing.addEventListener('change', () => _saveVideo({ framing: framing.value }));
-  // HOW THE LINES TAKE FROM THE SET (the owner, 2026-09-21), left of how many there are: in turn,
-  // or one drawn for each line. Either way a frame picked by hand on a fragment stays that line's.
+  // HOW THE LINES TAKE FROM THE SET (the owner, 2026-09-21): the pool in turn, or one drawn for
+  // each line. The options are named by the rule itself - `cycle` and `random` - because that is
+  // what they are called everywhere else, including in the project's own field.
   const spread = el('select', 'mv3-wk-vsel is-small is-model');
-  spread.title = 'How the fragments take their frames from the set';
-  for (const [id, label] of [['cycle', 'in turn'], ['random', 'at random']]) {
-    const o = el('option', '', label);
+  spread.title = 'How the fragments take their frames from the set: cycle - the pool in turn; random - one drawn for each fragment';
+  for (const id of ['cycle', 'random']) {
+    const o = el('option', '', id);
     o.value = id;
     if ((v.spread || 'cycle') === id) o.selected = true;
     spread.appendChild(o);
@@ -800,17 +875,20 @@ function _stageFrames(host, p) {
   spread.disabled = _saving || _planning;
   spread.addEventListener('change', () => _saveVideo({ spread: spread.value }));
   const count = el('select', 'mv3-wk-vsel is-small is-tier');
-  count.title = 'How many variations of the shot';
+  count.title = 'How many variations of the shot the set holds';
   for (let k = 1; k <= ((_kit && _kit.setMax) || 5); k++) {
-    const o = el('option', '', k + (k === 1 ? ' frame' : ' frames'));
+    const o = el('option', '', '× ' + k);
     o.value = String(k);
     if (k === v.frames) o.selected = true;
     count.appendChild(o);
   }
   count.disabled = _saving || !_kit || _planning;
   count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
-  sets.append(framing, spread, count);
-  col.appendChild(sets);
+  // The shot size with how many of it beside it; the spread rule under them.
+  sets.append(framing, count);
+  const rule = el('div', 'mv3-wk-fsets');
+  rule.appendChild(spread);
+  col.append(sets, rule);
   // What the person asks for, in words - kept on the project, so it is still there tomorrow. Its
   // foot is the mannequin's foot: the two are one block (the owner, 2026-09-21).
   const wish = el('textarea', 'mv3-wk-ftext-in is-wish');
@@ -821,7 +899,7 @@ function _stageFrames(host, p) {
   wish.addEventListener('input', () => { _drafts.wish = wish.value; });
   wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
   col.appendChild(wish);
-  row.appendChild(col);
+  row.append(col, pic);
   body.appendChild(row);
 
   // The pool, the full width under the block: `+` for a frame of one's own (its window comes

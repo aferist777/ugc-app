@@ -2029,6 +2029,8 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
    the wishes - one block, the mannequin as tall as the two together (the owner, 2026-09-21) - and
    the pool as a strip under it, the full width, every frame a door to the stage. */
 .mv3-wk-fsetrow{display:flex; gap:9px; align-items:stretch}
+/* The mannequin stands on the RIGHT of the menus (the owner, 2026-09-21), as tall as they are
+   together with the wishes under them. */
 .mv3-wk-fpose{flex:0 0 auto; width:54px; min-height:92px; border-radius:var(--r-xs); overflow:hidden; background:#dfe3e8; border:1px solid var(--border-soft)}
 .mv3-wk-fpose.is-empty{background:var(--bg)}
 .mv3-wk-fpose img{width:100%; height:100%; object-fit:cover; object-position:center top; display:block}

@@ -3832,6 +3832,12 @@ const FRAG_FRAME_ENGINE = 'nano-banana-2';
 const FRAG_FRAME_RES = '2K';
 const FRAG_FORMATS = ['9:16', '16:9'];
 const FRAME_SET_MAX = 5;
+// How generations of a project's own pictures leave here: five together, then a second's pause,
+// then five more (the owner, 2026-09-21). The engine takes a burst well enough, but a set - and,
+// when they come, the clips of a whole script - is a queue rather than a shout.
+const SUBMIT_BATCH = 5;
+const SUBMIT_GAP_MS = 1000;
+const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 
 // The three shot sizes a set is made in (the owner, 2026-09-21). `poseId` is the mannequin that sets
 // the base body and the camera angle (data/scen3-poses.json, its `group`); `camera` the lens from
@@ -4074,12 +4080,20 @@ router.post('/scen3/frames/plan', async (req, res) => {
     ]);
     const moments = await _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, poseUrl });
 
-    // Every frame asked for at once (the owner): the references were hosted once above and ride
-    // along; the retry of one frame (the row's "try again") carries its own request without them.
+    // FIVE AT A TIME, a second apart (the owner, 2026-09-21). Every frame of a batch goes together -
+    // the references were hosted once above and ride along - and the next batch waits a second, so a
+    // set larger than a handful does not arrive at the engine as one burst. The retry of a single
+    // frame (the row's "try again") carries its own request without them.
     const setId = 's' + Date.now();
     const refs = { look: lookUrl, place: placeUrl, pose: poseUrl };
-    const outs = await Promise.all(moments.map((moment, k) =>
-      _submitSetFrame({ projectId: id, set: set.id, setId, n: k + 1, moment, format: b.format, refs })));
+    const outs = [];
+    for (let at = 0; at < moments.length; at += SUBMIT_BATCH) {
+      if (at) await _wait(SUBMIT_GAP_MS);
+      const batch = moments.slice(at, at + SUBMIT_BATCH);
+      const done = await Promise.all(batch.map((moment, k) =>
+        _submitSetFrame({ projectId: id, set: set.id, setId, n: at + k + 1, moment, format: b.format, refs })));
+      outs.push(...done);
+    }
     const alerts = outs.map((out, k) => {
       const request = { projectId: id, set: set.id, setId, n: k + 1, moment: moments[k], format: b.format };
       const rec = JOBS.submitted({
