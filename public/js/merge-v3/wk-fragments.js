@@ -42,7 +42,7 @@ import * as API from './scen-api.js';
 import { takeOf, isRead } from './scen-api.js';
 import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
-import { el, holdProgress, endProgress, onlyHere, showPicture } from './wk-maker.js';
+import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 
 // What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
 // button so nothing is spent on a surprise.
@@ -222,12 +222,22 @@ export const frameFor = _frameFor;
 // given by the rule as often as one picked by hand (phase F4; before the clips existed this read
 // `frameId`, which is empty for every line the pool serves in turn, and would have called every
 // such line clip-less for ever).
+// WHICH VARIANT THIS PROJECT IS IN. A project read with tags (every Merge project since W1) keeps
+// its clips under `tagged` and remembers the words WITH the tags in them; a project read before
+// that keeps them under `plain`. The server files by this rule and the timeline mirror lays by it,
+// and this panel used to read `plain` and compare against the untagged words - so a clip that had
+// been made, filed, journalled and laid on the timeline was invisible in the fragment that paid
+// for it (the owner, 2026-09-22). One rule now, in all three places.
+const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged' : 'plain');
+const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
+const _clipsOf = (p, l) => (((l && l.video) || {})[_variant(p)] || []);
+
 function _clipOf(p, l, i) {
-  const clips = ((l && l.video) || {}).plain || [];
+  const clips = _clipsOf(p, l);
   if (!clips.length) return null;
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   if (!fr) return null;
-  const picked = clips.find(c => c.id === String(((l.pick || {}).plain) || ''));
+  const picked = clips.find(c => c.id === String(((l.pick || {})[_variant(p)]) || ''));
   if (picked && picked.fromFrame === fr) return picked;
   const mine = clips.filter(c => c.fromFrame === fr);
   return mine.length ? mine[mine.length - 1] : null;
@@ -235,7 +245,7 @@ function _clipOf(p, l, i) {
 function _clipState(p, l, i) {
   const c = _clipOf(p, l, i);
   if (!c) return 'none';
-  return c.said === _words(l) ? 'ok' : 'stale';
+  return c.said === _saidOf(p, l) ? 'ok' : 'stale';
 }
 
 // ── One player for the panel ────────────────────────────────────────────────
@@ -508,6 +518,43 @@ async function _pickFrame(i, frameId) {
 }
 
 // The ✕ / ✓ in the corner of a frame in the general zone: out of the rotation, and back into it.
+// ── Reframing a first frame (phase V9) ──────────────────────────────────────
+// A first frame is what a clip is made of, so cutting in closer - or off to one side - is done
+// where the frame is being looked at: on the stage (the owner, 2026-09-22). The selection is drawn
+// on the preview canvas (js/merge-v3/preview-b.js, cropOn); this side only says which frame is
+// being reframed, in what SHAPE, and sends the rectangle. The shape is the project's own format,
+// locked: a frame of any other shape reaches the renderer with bars down its sides.
+//
+// The cut is filed by the SERVER, into the set and into the project's folder, because the page does
+// not own the project - and a cut filed by the page would be lost by walking away from it.
+let _cropOn = '';                         // the frame being reframed, by id
+let _cropBusy = false;
+
+function _formatAspect(p) {
+  const f = String((((p || {}).mix || {}).settings || {}).format || '9:16');
+  const m = f.match(/^(\d+)\s*:\s*(\d+)$/);
+  return m && +m[2] ? (+m[1]) / (+m[2]) : 9 / 16;
+}
+
+async function _cropApply(p, fr, rect) {
+  if (!rect || _cropBusy) return;
+  _cropBusy = true;
+  _said = '';
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/frames/crop', { projectId: p.id, frameId: fr.id, rect });
+    _adopt(r);
+    _cropOn = '';
+    // The cut is what is on the stage now: it is what was just made, and its picture is a new
+    // address, so the selection goes with the old one.
+    if (r.frameId) _setPick = r.frameId;
+  } catch (e) {
+    _said = 'The frame was not cropped: ' + e.message;
+  }
+  _cropBusy = false;
+  _ctx.repaint();
+}
+
 async function _banFrame(p, frameId, banned) {
   try { _adopt(await _post('/api/scen3/frames/ban', { projectId: p.id, frameId, banned })); }
   catch (e) { _readErr = 'Could not switch that frame: ' + e.message; }
@@ -576,7 +623,7 @@ export function paint(host, ctx, api) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _zoneWas = {}; _tipHide(); }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _zoneWas = {}; _rightAt.clear(); _tipHide(); }
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
@@ -586,6 +633,7 @@ export function paint(host, ctx, api) {
   host.appendChild(left);
   const right = el('div', 'mv3-wk-half is-guide is-frag');
   host.appendChild(right);
+  _keepScroll(right, 'r' + _open + ':' + api.view());
 
   _pickUpDrawing();
   _pickUpClips();
@@ -617,6 +665,19 @@ export function paint(host, ctx, api) {
     const first = [..._drawing.values()].reduce((a, d) => Math.min(a, d.startedAt), Date.now());
     holdProgress(place, { label: 'Drawing ' + _drawing.size + (_drawing.size === 1 ? ' frame' : ' frames'), estimateMs: FRAME_ESTIMATE_MS, startedAt: first });
   }
+}
+
+// WHERE THE RIGHT COLUMN STOOD (the owner, 2026-09-22). Every repaint rebuilds the column, and a
+// rebuilt column starts at the top - so picking a frame variant near the bottom threw the person
+// back to the heading. The offset is remembered per FACE (the general zone, each fragment, the
+// voice picker): moving to another fragment should start at its top, coming back to the same one
+// should not. Put back after the paint, which is a microtask away and before anything is drawn.
+const _rightAt = new Map();
+function _keepScroll(box, key) {
+  softScroll(box);                          // a gentler wheel in setup (V5)
+  box.addEventListener('scroll', () => { _rightAt.set(key, box.scrollTop); }, { passive: true });
+  const was = _rightAt.get(key) || 0;
+  if (was) queueMicrotask(() => { if (box.isConnected) box.scrollTop = was; });
 }
 
 function _note(text, bad) {
@@ -656,7 +717,6 @@ function _all(host, p, lines) {
   _stageVoice(host, p, lines);
   _stageFrames(host, p);
   _stageVideo(host, p, lines);
-  host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
 // One zone: a gold frame, a head that opens and shuts it, and - open - a body and a foot with the
@@ -769,7 +829,11 @@ function _chainWork(p, lines) {
 
 function _chainButton(host, p, lines) {
   const w = _chainWork(p, lines);
-  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing || _clipping.size > 0;
+  // A clip already running does NOT hold this shut (V4, the owner 2026-09-22): clips are per
+  // fragment and the planner steps over the ones in flight, so the rest can be started while one
+  // renders. What does hold it shut is work that is one-at-a-time - a chain, the reads, the
+  // planner, a set being drawn, the writer.
+  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing;
   // What the whole run costs, as far as it can be known before it starts: the frames of a set that
   // is not there yet, and the clips of the fragments that could be clipped this moment. The clips
   // of lines this run will read are paid for when the video stage gets to them and are named then.
@@ -888,6 +952,16 @@ function _stageVoice(host, p, lines) {
   });
 }
 
+// A menu with its name to the left of it, and the name carries the explanation. A `label` rather
+// than a `span`, so pressing the word opens the menu.
+function _labelled(word, sel, tip, tight) {
+  const box = el('label', 'mv3-wk-fsetlab' + (tight ? ' is-tight' : ''));
+  box.title = tip;
+  box.appendChild(el('span', 'mv3-wk-fsetlabw', word));
+  box.appendChild(sel);
+  return box;
+}
+
 // FIRST FRAMES - a set for the whole video (owner, 2026-09-21): the shot size with its mannequin
 // beside its menus and the wishes, how many, and the pool as it stands under them, the full width -
 // every frame a door to the stage. `generate` plans the moments and asks for every frame at once;
@@ -958,10 +1032,16 @@ function _stageFrames(host, p) {
   }
   count.disabled = _saving || !_kit || _planning;
   count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
-  // The shot size with how many of it beside it; the spread rule under them.
-  sets.append(framing, count);
+  // EACH MENU WEARS ITS NAME (the owner, 2026-09-22): three short menus side by side said nothing
+  // about themselves, and one of them - how the fragments take their frames - had no name anywhere.
+  // One word to the left of each, and the word carries the explanation on hover.
+  sets.append(
+    _labelled('shot', framing, 'Shot size - how much of the person is in frame. Every frame of the set is made in it.'),
+    _labelled('amount', count, 'How many variations of that shot the set holds. The fragments share them.', true),
+  );
   const rule = el('div', 'mv3-wk-fsets');
-  rule.appendChild(spread);
+  rule.appendChild(_labelled('spread', spread,
+    'How the fragments take their frames from the set: cycle - the pool in turn; random - one drawn for each fragment.'));
   col.append(sets, rule);
   // What the person asks for, in words - kept on the project, so it is still there tomorrow. Its
   // foot is the mannequin's foot: the two are one block (the owner, 2026-09-21).
@@ -976,15 +1056,11 @@ function _stageFrames(host, p) {
   row.append(col, pic);
   body.appendChild(row);
 
-  // The pool, the full width under the block: `+` for a frame of one's own (its window comes
-  // later), then every frame as it came. A frame pressed goes on the stage; pressed again, the
-  // stage shows the casting pair.
+  // The pool, the full width under the block: every frame as it came. A frame pressed goes on the
+  // stage; pressed again, the stage shows the casting pair.
   const strip = el('div', 'mv3-wk-fset');
-  const add = el('button', 'mv3-wk-fsetfr is-add', '+');
-  add.type = 'button';
-  add.disabled = true;
-  add.title = 'A frame of your own, from the picture window - under development';
-  strip.appendChild(add);
+  // No `+` tile (the owner, 2026-09-22): it stood there switched off, promising a frame of one's
+  // own that nothing behind it could make. The strip is what was drawn, and nothing else.
   const hidden = _off(p);
   const shown = _poolAll(p);
   for (const fr of shown) {
@@ -1128,16 +1204,19 @@ function _stageVideo(host, p, lines) {
   const willWrite = lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
   const clips = _clipWork(p, lines);
   const clipCost = clips.reduce((a, x) => a + x.cost, 0);
-  const busy = !!_writing || _envWriting || _clipping.size > 0;
+  // A clip in flight does not shut this button (V4): the planner skips the fragments that are
+  // already being made, so `generate` here starts the others.
+  const busy = !!_writing || _envWriting;
   // The clips are the dollars in this zone, so the button shows the price and waits for a second
   // press when there are any - the words before them are credits and go on the first.
   const armed = _armedVideo && clips.length > 0;
   _genButton(foot, {
     label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
       : _writing === 'lines' ? 'writing…'
-        : _writing === 'clips' || _clipping.size ? 'clips ' + (lines.filter((l, i) => _clipState(p, l, i) === 'ok').length) + '/' + lines.length + '…'
+        : _writing === 'clips' ? 'clips ' + (lines.filter((l, i) => _clipState(p, l, i) === 'ok').length) + '/' + lines.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
     cap: busy ? '' : [
+      _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
       !motion ? 'the place' : '',
       willWrite ? willWrite + (willWrite === 1 ? ' prompt' : ' prompts') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
@@ -1156,11 +1235,19 @@ function _stageVideo(host, p, lines) {
 }
 
 function _list(host, p, lines) {
+  // HOW THE TWO COLUMNS WORK, said over the list they are about (the owner, 2026-09-22). It used to
+  // sit in grey italics at the foot of the general zone, where somebody scrolling the stages never
+  // reached it; here it is the first thing above the script, and it changes with where you are.
+  const hint = el('div', 'mv3-wk-fhint', _open < 0
+    ? 'Pick a fragment to work on it.'
+    : 'Press fragment ' + (_open + 1) + ' again to come back to the whole video.');
+  host.appendChild(hint);
   const list = el('div', 'mv3-wk-flist');
   host.appendChild(list);
   lines.forEach((l, i) => list.appendChild(_row(p, l, i)));
   // Where it stood before this paint - a repaint rebuilds the column, and a rebuilt column starts
   // at the top. The column is in the panel by now, so the offset takes.
+  softScroll(list);                         // a gentler wheel in setup (V5)
   list.addEventListener('scroll', () => { _listAt = list.scrollTop; }, { passive: true });
   if (_listAt) list.scrollTop = _listAt;
 }
@@ -1327,7 +1414,7 @@ function _fragment(host, p, l, i) {
 
   // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
   // and one of them is the fragment's (F4). Pressing a row makes it that one.
-  const clips = ((l.video || {}).plain || []);
+  const clips = _clipsOf(p, l);
   if (clips.length) {
     host.appendChild(el('div', 'mv3-wk-flabel', 'takes'));
     const now = _clipOf(p, l, i);
@@ -1344,7 +1431,7 @@ function _fragment(host, p, l, i) {
         r.appendChild(img);
       }
       r.appendChild(el('span', 'mv3-wk-vname', 'take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
-      if (c.said !== _words(l)) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
+      if (c.said !== _saidOf(p, l)) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
       if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
       if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
       host.appendChild(r);
@@ -1399,7 +1486,7 @@ function _colHead(label, action) {
 function _frameCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('frame'));
-  const { v: fr, auto } = _frameFor(p, l, i);
+  const { v: fr } = _frameFor(p, l, i);
   const box = el('div', 'mv3-wk-fmedia' + (fr ? '' : ' is-empty'));
   if (fr) {
     const img = el('img');
@@ -1412,7 +1499,9 @@ function _frameCol(p, l, i) {
     box.appendChild(el('span', '', _drawing.size ? 'drawing…' : 'no frames yet'));
   }
   col.appendChild(box);
-  col.appendChild(el('div', 'mv3-wk-fcap', fr ? (auto ? 'from the set, in turn' : 'picked by hand') : 'the set is made in the general zone'));
+  // No caption under the picture (the owner, 2026-09-22): whether the frame came from the rule or
+  // was picked by hand is already said on the picker bar right below it, and said twice it was just
+  // noise. With no frames at all there is nothing to say either - the empty box says it.
   return col;
 }
 
@@ -1545,7 +1634,14 @@ async function _makeClip(p, i) {
 
 async function _followClip(i, alertId) {
   try {
-    await API.follow(alertId);
+    // The row says what it is doing (V2): the two analyses before the render, then the render. The
+    // fragment repeats it under its button rather than sitting on "making…" for half a minute.
+    await API.follow(alertId, (rec) => {
+      const at = _clipping.get(i);
+      if (!at || at.stage === (rec.stage || '')) return;
+      _clipping.set(i, { ...at, stage: rec.stage || '' });
+      if (_ctx) _ctx.repaint();
+    });
     if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
   } catch (e) {
     _readErr = 'Fragment ' + (i + 1) + ': the clip failed - ' + e.message;
@@ -1577,7 +1673,7 @@ function _pickUpClips() {
       const spot = (r.where && r.where.spot) || {};
       const i = (Number(spot.line) || 0) - 1;
       if (r.state !== 'running' || r.what !== 'clip' || spot.key !== key || i < 0 || _clipping.has(i)) continue;
-      _clipping.set(i, { alertId: r.id, startedAt: Date.parse(r.startedAt) || Date.now() });
+      _clipping.set(i, { alertId: r.id, startedAt: Date.parse(r.startedAt) || Date.now(), stage: r.stage || '' });
       _followClip(i, r.id);
     }
     if (_ctx) _ctx.repaint();
@@ -1641,8 +1737,11 @@ function _clipCol(p, l, i, rs, take) {
     _makeClip(p, i);
   });
   col.appendChild(make);
+  // While it runs, the caption is the journal's own stage - "analysis 1/2 - the place", then
+  // "rendering" - so the half-minute before anything is sent to Kling is not silence (V2).
+  const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'),
-    busy ? 'making the clip…' : (ready && needsWords) ? 'analysis, then ' + cap : cap));
+    busy ? (stage || 'making the clip…') : (ready && needsWords) ? 'analysis, then ' + cap : cap));
   return col;
 }
 
@@ -1684,9 +1783,28 @@ export function openPicture(p) {
     if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
   }
   if (!l) {
-    // No line open: a frame of the pool pressed in the general zone, if one is.
-    const fr = _setPick ? _pool(p).find(v => v.id === _setPick) : null;
-    return fr ? { src: derived(fr.preview || fr.path, 'main'), caption: 'frame' + (fr.n ? ' ' + fr.n : '') } : null;
+    // No line open: a frame of the pool pressed in the general zone, if one is. The WHOLE strip is
+    // searched, switched-off frames included - a dimmed frame pressed is still a frame being looked
+    // at, and it can be reframed like any other.
+    const fr = _setPick ? _poolAll(p).find(v => v.id === _setPick) : null;
+    if (!fr) return null;
+    // Being reframed: the selection on the picture, and `apply` / `cancel` along its foot. Otherwise
+    // the one act a frame has on the stage - `crop`.
+    const cut = _cropOn === fr.id;
+    return {
+      src: derived(fr.preview || fr.path, 'main'),
+      caption: cut ? '' : 'frame' + (fr.n ? ' ' + fr.n : ''),
+      crop: cut ? { aspect: _formatAspect(p) } : null,
+      actions: cut
+        ? [
+          { label: _cropBusy ? 'cutting…' : 'apply', go: true, busy: _cropBusy,
+            title: 'Cut the picture to the selection. The cut joins the set, beside this frame, and is saved in the project.',
+            on: (rect) => _cropApply(p, fr, rect) },
+          { label: 'cancel', busy: _cropBusy, title: 'Leave the frame as it is', on: () => { _cropOn = ''; _ctx.repaint(); } },
+        ]
+        : [{ label: 'crop', title: 'Reframe this picture - drag a selection, and the cut joins the set as a frame of its own. It keeps the format of the project.',
+          on: () => { _cropOn = fr.id; _ctx.repaint(); } }],
+    };
   }
   const c = _clipOf(p, l, _open);
   if (c && c.thumb) return { src: c.thumb, caption: 'fragment ' + (_open + 1) + ' · clip' };

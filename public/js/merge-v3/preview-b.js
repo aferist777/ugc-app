@@ -689,7 +689,7 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
-  if (!_borrowed) { _still = null; _pair = null; }
+  if (!_borrowed) { _still = null; _pair = null; _crop = null; }
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
@@ -820,6 +820,7 @@ export function showStill(src, caption) {
   // to this one it would only push it off to the side.
   _view = { z: 1, x: 0, y: 0 };
   _pair = null;
+  _crop = null;                             // another picture is not the one being cropped (V9)
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
@@ -835,6 +836,226 @@ export function showStill(src, caption) {
 
 let _still = null;
 let _pair = null;
+
+// ── Cropping the picture on the stage (phase V9) ────────────────────────────
+// A first frame is what a clip is MADE of, so reframing it - closer in, off to one side - is a
+// thing that belongs on the stage where the frame is being looked at (the owner, 2026-09-22). The
+// selection is kept in FRACTIONS of the picture, never in pixels of the canvas: the stage is
+// zoomed and pushed about, and a rectangle in screen numbers would slide off the thing it is about.
+// It is also locked to one ASPECT - the project's format - because a frame of another shape reaches
+// the renderer with bars down its sides.
+//
+// The panel owns the buttons (js/merge-v3/wk-fragments.js); this file owns the rectangle, the
+// gestures and the drawing, and hands the rectangle over when asked.
+let _crop = null;                           // { aspect, rect: {x,y,w,h} } - fractions of the picture
+const CROP_MIN = 1 / 3;                     // the server's own floor, so the hand cannot ask for less
+const HANDLE = 9;                           // the corner grips, in screen pixels
+
+// THE SHAPE, IN FRACTIONS. A locked aspect is about PIXELS, and the rectangle is kept as fractions
+// of the picture, so the two are tied by one number: with the picture iw x ih and the wanted shape
+// A = width/height, a selection of fraction width w has fraction height w * k, where k = iw/(A*ih).
+// For a 9:16 picture cropped to 9:16 that k is 1 and the selection is square in fraction space -
+// which is exactly right, and the reason the number is written down rather than guessed at.
+function _cropK(aspect) {
+  const img = (_still && _still.img) || {};
+  const iw = img.naturalWidth || 0, ih = img.naturalHeight || 0;
+  if (!aspect || !iw || !ih) return 0;
+  return iw / (aspect * ih);
+}
+
+// The largest rectangle of that shape the picture holds, centred - what a crop opens on. The whole
+// picture, when the shapes agree.
+function _cropFull(aspect) {
+  const k = _cropK(aspect);
+  if (!k) return { x: 0, y: 0, w: 1, h: 1 };
+  const w = Math.min(1, 1 / k), h = w * k;
+  return { x: (1 - w) / 2, y: (1 - h) / 2, w, h };
+}
+
+// A size the hand asked for, made legal: of the locked shape, inside the picture, and at least a
+// third of each side - the server's own floor, below which there are no pixels left to animate.
+function _cropSize(wWant, hWant, aspect) {
+  const k = _cropK(aspect);
+  if (!k) {
+    return { w: Math.max(CROP_MIN, Math.min(1, wWant)), h: Math.max(CROP_MIN, Math.min(1, hWant)) };
+  }
+  const wMax = Math.min(1, 1 / k);
+  const wMin = Math.min(wMax, Math.max(CROP_MIN, CROP_MIN / k));
+  const w = Math.max(wMin, Math.min(wMax, wWant));
+  return { w, h: w * k };
+}
+
+// A rectangle grown from a corner that must not move: the one opposite the grip being dragged, or
+// the point a new selection was started at.
+function _cropFrom(fixX, fixY, east, south, wWant, hWant, aspect) {
+  const { w, h } = _cropSize(wWant, hWant, aspect);
+  const x = east ? fixX : fixX - w;
+  const y = south ? fixY : fixY - h;
+  return {
+    w, h,
+    x: Math.max(0, Math.min(x, 1 - w)),
+    y: Math.max(0, Math.min(y, 1 - h)),
+  };
+}
+
+/** Begin - or keep - a selection over the still on the stage. `aspect` is width/height, 0 for free. */
+export function cropOn(aspect) {
+  const a = Number(aspect) || 0;
+  if (_crop && _crop.aspect === a) return;
+  _crop = { aspect: a, rect: _cropFull(a) };
+  if (_on) _paint();
+}
+
+/** Put the selection away. */
+export function cropOff() {
+  if (!_crop) return;
+  _crop = null;
+  if (_on) _paint();
+}
+
+export const cropping = () => !!_crop;
+
+/** The selection as fractions of the picture, for the server to cut by, or null. */
+export const cropRect = () => (_crop ? { ...(_crop.rect) } : null);
+
+// A press, a drag and a release on the stage while a selection is up. A corner grip resizes from
+// the opposite corner; inside moves the whole rectangle; anywhere else starts a new one from that
+// point. The aspect holds through all three.
+let _cropDrag = null;
+
+const _clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+// Canvas point -> the surface the picture lies on, back through the shift and the zoom.
+function _cropSurface(cv, e) {
+  const r = cv.getBoundingClientRect();
+  return {
+    x: ((e.clientX - r.left) / r.width * CW - _view.x) / _view.z,
+    y: ((e.clientY - r.top) / r.height * CH - _view.y) / _view.z,
+  };
+}
+
+// ...and on to a fraction of the picture. The picture's box on the surface is what showStill
+// measured; with no box there is nothing to crop.
+function _cropFrac(cv, e) {
+  const box = _still && _still.box;
+  if (!box || !box.w || !box.h) return null;
+  const s = _cropSurface(cv, e);
+  return { x: (s.x - box.x) / box.w, y: (s.y - box.y) / box.h };
+}
+
+function _cropGrip(rect, f, tol) {
+  const corners = [['nw', rect.x, rect.y], ['ne', rect.x + rect.w, rect.y],
+    ['sw', rect.x, rect.y + rect.h], ['se', rect.x + rect.w, rect.y + rect.h]];
+  for (const [id, cx, cy] of corners) {
+    if (Math.abs(f.x - cx) <= tol.x && Math.abs(f.y - cy) <= tol.y) return id;
+  }
+  return '';
+}
+
+function _wireCrop(cv) {
+  cv.addEventListener('pointerdown', (e) => {
+    if (!_borrowed || !_crop || e.button !== 0) return;
+    const f = _cropFrac(cv, e);
+    if (!f) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const box = _still.box;
+    const tol = { x: (HANDLE * 1.6) / (box.w * _view.z), y: (HANDLE * 1.6) / (box.h * _view.z) };
+    const r = _crop.rect;
+    const grip = _cropGrip(r, f, tol);
+    // A selection that fills the picture has nowhere to move to, and it is what a crop opens on -
+    // so a drag inside THAT one draws a new selection instead of shoving at a wall.
+    const canMove = r.w < 0.999 || r.h < 0.999;
+    const inside = f.x > r.x && f.x < r.x + r.w && f.y > r.y && f.y < r.y + r.h;
+    if (grip) _cropDrag = { how: 'grip', grip, from: f, rect: { ...r } };
+    else if (inside && canMove) _cropDrag = { how: 'move', from: f, rect: { ...r } };
+    else _cropDrag = { how: 'new', from: f, rect: { ...r } };
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* older engines */ }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!_cropDrag || !_crop) return;
+    const f = _cropFrac(cv, e);
+    if (!f) return;
+    e.preventDefault();
+    const a = _crop.aspect;
+    const d = _cropDrag;
+    if (d.how === 'move') {
+      const w = d.rect.w, h = d.rect.h;
+      _crop.rect = {
+        x: Math.max(0, Math.min(d.rect.x + (f.x - d.from.x), 1 - w)),
+        y: Math.max(0, Math.min(d.rect.y + (f.y - d.from.y), 1 - h)), w, h,
+      };
+    } else if (d.how === 'grip') {
+      // The corner OPPOSITE the grip is the one that stays.
+      const east = d.grip === 'ne' || d.grip === 'se';
+      const south = d.grip === 'se' || d.grip === 'sw';
+      const fixX = east ? d.rect.x : d.rect.x + d.rect.w;
+      const fixY = south ? d.rect.y : d.rect.y + d.rect.h;
+      _crop.rect = _cropFrom(fixX, fixY, east, south,
+        Math.abs(_clamp01(f.x) - fixX), Math.abs(_clamp01(f.y) - fixY), a);
+    } else {
+      // A new selection grows from where the press landed.
+      _crop.rect = _cropFrom(d.from.x, d.from.y, _clamp01(f.x) >= d.from.x, _clamp01(f.y) >= d.from.y,
+        Math.abs(_clamp01(f.x) - d.from.x), Math.abs(_clamp01(f.y) - d.from.y), a);
+    }
+    _paint();
+  });
+  const done = (e) => {
+    if (!_cropDrag) return;
+    _cropDrag = null;
+    try { cv.releasePointerCapture(e.pointerId); } catch (err) { /* older engines */ }
+  };
+  cv.addEventListener('pointerup', done);
+  cv.addEventListener('pointercancel', done);
+}
+
+// The selection over the picture: everything outside it dimmed, a white frame, four corner grips,
+// and the size it will come out at. Drawn in SURFACE numbers, inside the same transform the
+// picture is drawn in, so it stays glued to the picture through any zoom; the frame and the grips
+// are divided by the zoom, so they are the same thickness on screen at any magnification.
+function _drawCrop() {
+  if (!_crop || !_still || !_still.box) return;
+  const b = _still.box, r = _crop.rect;
+  const x = b.x + r.x * b.w, y = b.y + r.y * b.h, w = r.w * b.w, h = r.h * b.h;
+  _ctx.save();
+  _ctx.fillStyle = 'rgba(0,0,0,.55)';
+  _ctx.fillRect(b.x, b.y, b.w, y - b.y);
+  _ctx.fillRect(b.x, y + h, b.w, b.y + b.h - (y + h));
+  _ctx.fillRect(b.x, y, x - b.x, h);
+  _ctx.fillRect(x + w, y, b.x + b.w - (x + w), h);
+  const line = 1.5 / _view.z;
+  _ctx.strokeStyle = '#fff';
+  _ctx.lineWidth = line;
+  _ctx.strokeRect(x, y, w, h);
+  // The thirds, faint: the one guide that helps a person place a face in a frame.
+  _ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  _ctx.lineWidth = line * 0.7;
+  _ctx.beginPath();
+  for (let k = 1; k < 3; k++) {
+    _ctx.moveTo(x + (w * k) / 3, y); _ctx.lineTo(x + (w * k) / 3, y + h);
+    _ctx.moveTo(x, y + (h * k) / 3); _ctx.lineTo(x + w, y + (h * k) / 3);
+  }
+  _ctx.stroke();
+  const g = HANDLE / _view.z;
+  _ctx.fillStyle = '#fff';
+  for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    _ctx.fillRect(cx - g / 2, cy - g / 2, g, g);
+  }
+  const img = _still.img;
+  if (img && img.naturalWidth) {
+    const size = Math.round(r.w * img.naturalWidth) + ' x ' + Math.round(r.h * img.naturalHeight);
+    const fs = Math.max(10, Math.round(11 / _view.z));
+    _ctx.font = '600 ' + fs + 'px Inter, Segoe UI, system-ui, sans-serif';
+    _ctx.fillStyle = 'rgba(0,0,0,.6)';
+    const tw = _ctx.measureText(size).width;
+    _ctx.fillRect(x + w / 2 - tw / 2 - 6 / _view.z, y + h - fs * 2, tw + 12 / _view.z, fs * 1.6);
+    _ctx.fillStyle = '#fff';
+    _ctx.textAlign = 'center';
+    _ctx.fillText(size, x + w / 2, y + h - fs * 0.85);
+    _ctx.textAlign = 'left';
+  }
+  _ctx.restore();
+}
 
 // One half of the pair, as showPair takes it: a bare address (the fragments step, whose pair has
 // no words and no doors), or the whole description of what the half shows and says.
@@ -860,6 +1081,7 @@ function _halfSpec(x) {
  */
 export function showPair(top, bottom, onPick) {
   _still = null;
+  _crop = null;
   const a = _halfSpec(top), b = _halfSpec(bottom);
   const want = a.src + '|' + b.src;
   if (_pair && _pair.key === want) {
@@ -957,6 +1179,7 @@ function _drawStill() {
     }
   }
   if (cap) _caption(cap, PAD + H, H);
+  _drawCrop();
 }
 
 export function play() {
@@ -1062,6 +1285,7 @@ export function mount() {
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.
   _wireZoom(_cv);
+  _wireCrop(_cv);
   // The sash changes the panel without touching the window, so the only way to hear about it
   // is to watch the stage itself. Without this the canvas keeps its old pixel count in a box
   // of a new shape, and the browser squashes what is on it.

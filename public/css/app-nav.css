@@ -114,6 +114,8 @@
 .sv3-al-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .sv3-al-title{ font:600 11.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sv3-al-where{ font:400 10px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* While it runs and says what it is doing - the analyses a clip makes before it renders. */
+.sv3-al-where.is-stage{ color:var(--gold, #d8b45a); }
 .sv3-al-state{ flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); }
 .sv3-al-acts{ flex:0 0 auto; display:flex; gap:4px; }
 .sv3-al-act{

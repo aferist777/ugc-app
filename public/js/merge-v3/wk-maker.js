@@ -18,6 +18,30 @@ export const el = (tag, cls, text) => {
   return e;
 };
 
+// ── A gentler wheel ─────────────────────────────────────────────────────────
+// A touchpad in this window moves the workshop a long way for a short gesture: the panel is a tall
+// column of small rows, and one flick jumps past the whole thing (the owner, 2026-09-22). So the
+// boxes that scroll in `setup` take the wheel themselves and move by a fraction of what was asked.
+//
+// Only a wheel in PIXELS is touched (`deltaMode` 0 - a touchpad and every modern mouse), never a
+// zoom gesture, and never a wheel at either end of the box: there the event is left alone, so the
+// page behind can scroll instead of the gesture dying here. Trackpad inertia is traded for an even
+// step - that is the point of it.
+const WHEEL_EASE = 0.4;
+
+export function softScroll(box, factor) {
+  const k = factor || WHEEL_EASE;
+  box.addEventListener('wheel', (e) => {
+    if (e.deltaMode !== 0 || e.ctrlKey || !e.deltaY) return;
+    const max = box.scrollHeight - box.clientHeight;
+    if (max <= 0) return;
+    const at = box.scrollTop;
+    if ((e.deltaY < 0 && at <= 0) || (e.deltaY > 0 && at >= max - 0.5)) return;
+    e.preventDefault();
+    box.scrollTop = Math.max(0, Math.min(max, at + e.deltaY * k));
+  }, { passive: false });
+}
+
 // ── Words that are words ────────────────────────────────────────────────────
 // With a picture in the field the sentence is an edit - "red shoes" is a complete instruction -
 // but with nothing else to go on, a handful of characters describes nothing, and twenty is the

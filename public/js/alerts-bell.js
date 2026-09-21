@@ -97,10 +97,15 @@ function _row(rec) {
 
   const main = _el('span', 'sv3-al-main');
   main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || 'generation'));
+  // Under the title: what went wrong, or - while it runs and says so - what it is doing right now.
+  // A clip spends half a minute having the place and the fragment looked at before anything is
+  // sent to a renderer, and a row that only said "Clip - fragment 3" looked stuck (the owner,
+  // 2026-09-22). Otherwise, where it was started from.
+  const stage = _running(rec) ? String(rec.stage || '') : '';
   const under = rec.state === 'failed'
     ? (rec.error || 'it did not come')
-    : ((rec.where && rec.where.label) || '');
-  main.appendChild(_el('span', 'sv3-al-where', under));
+    : (stage || (rec.where && rec.where.label) || '');
+  main.appendChild(_el('span', 'sv3-al-where' + (stage ? ' is-stage' : ''), under));
   row.appendChild(main);
 
   row.appendChild(_el('span', 'sv3-al-state',

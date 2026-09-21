@@ -67,7 +67,7 @@ import * as VOICE from './wk-voice.js';
 import * as FRAG from './wk-fragments.js';
 import {
   MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
-  holdProgress, endProgress, onlyHere,
+  holdProgress, endProgress, onlyHere, softScroll,
 } from './wk-maker.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
@@ -249,6 +249,7 @@ export function paint(host, ctx) {
   // The character a shelf is about: the one on trial, else the one cast.
   const who = _try.char || chosen;
   const scroll = _el('div', 'mv3-wk-scroll');
+  softScroll(scroll);                       // a touchpad moves this step too far per flick (V5)
   root.appendChild(scroll);
   // The waiting animation stays with the place that started the generation: painting another one
   // takes it off the stage (js/merge-v3/wk-maker.js). The server keeps working either way. The
@@ -346,9 +347,15 @@ function _stage(chosen) {
   const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
     PV.showStill(pic.src, pic.caption);
+    // A picture that can be REFRAMED brings a selection with it (V9): the panel says the shape - the
+    // project's format - and this puts the frame on the stage and the acts along its foot. The order
+    // matters: `showStill` with a new picture drops any selection, so the crop is asked for after it.
+    if (pic.crop) PV.cropOn(pic.crop.aspect); else PV.cropOff();
     _stageClears('', '');
+    _stageActs(pic.actions);
     return;
   }
+  PV.cropOff();
   const who = _whoHalf(chosen), where = _whereHalf();
   PV.showPair(
     { src: who.src ? derived(who.src, 'main') : '', caption: who.caption, empty: 'choose a character' },
@@ -386,7 +393,7 @@ function _stageClears(top, bottom) {
   const stage = document.getElementById('mv3-stage');
   if (!stage) return;
   // An older paint's button, if the stage kept one: this step has none now.
-  stage.querySelectorAll('.mv3-wk-clear, .mv3-wk-apply').forEach(x => x.remove());
+  stage.querySelectorAll('.mv3-wk-clear, .mv3-wk-apply, .mv3-wk-sacts').forEach(x => x.remove());
   const cast = _casting();
   const mk = (half, what, title) => {
     const b = _el('button', 'mv3-wk-clear' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
@@ -406,6 +413,27 @@ function _stageClears(top, bottom) {
       ? 'Take this place off the stage - nothing has been written yet'
       : 'Take the environment off this project');
   }
+}
+
+// WHAT CAN BE DONE TO THE PICTURE ON THE STAGE, in a row along its foot (V9). The panel decides
+// what those acts are - it knows which picture this is and what state it is in - and each is handed
+// the selection as it stands, so `apply` does not have to reach into the preview for it.
+function _stageActs(acts) {
+  const stage = document.getElementById('mv3-stage');
+  if (!stage) return;
+  stage.querySelectorAll('.mv3-wk-sacts').forEach(x => x.remove());
+  const list = Array.isArray(acts) ? acts.filter(Boolean) : [];
+  if (!list.length) return;
+  const bar = _el('div', 'mv3-wk-sacts');
+  for (const a of list) {
+    const b = _el('button', 'mv3-wk-sact' + (a.go ? ' is-go' : ''), a.label);
+    b.type = 'button';
+    if (a.title) b.title = a.title;
+    b.disabled = !!a.busy;
+    b.addEventListener('click', (e) => { e.stopPropagation(); a.on(PV.cropRect()); });
+    bar.appendChild(b);
+  }
+  stage.appendChild(bar);
 }
 
 // A half of the stage was pressed. The left button opens its shelf; the right one offers the

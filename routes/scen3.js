@@ -4426,6 +4426,93 @@ router.post('/scen3/frames/order', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── A frame cropped, and filed as a frame (phase V9) ────────────────────────
+   POST /api/scen3/frames/crop  { projectId, frameId, rect: {x,y,w,h} } -> { success, project, frameId }
+
+   The person reframes a first frame on the stage and the cut lands in the SET, beside the frames it
+   was cut from, in the project's own folder (the owner, 2026-09-22). The page does not own the
+   project, so it does not file anything: it sends the rectangle it drew and gets the project back.
+
+   The rectangle arrives as FRACTIONS of the picture, so the page never has to know the real pixel
+   size or how the stage letterboxes it - it is drawing on a canvas that is zoomed and pushed about.
+   The selection is locked to the project's format on the page; the check here is only the honest
+   minimum - a third of each side - because below that there are no pixels left to make a clip from.
+
+   The cut keeps its source's PLACE in the set: the same set, shot size and number, and the same
+   moment - it is the same instant of the video, framed closer - so the pool keeps its order and the
+   agent that writes the animation still knows what this frame is of. `croppedFrom` is the source's
+   file, which is also what stops a delete taking a file another frame is made of.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/frames/crop', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.mix = _normMix(p.mix);
+    const src = p.mix.variants.find(x => x.id === String(b.frameId || ''));
+    if (!src) return res.status(404).json({ success: false, error: 'no such frame' });
+    const hit = _resolveMedia(src.path);
+    if (!hit || !fs.existsSync(hit.abs)) {
+      return res.status(400).json({ success: false, error: 'the frame is missing: ' + src.path });
+    }
+    const r = b.rect || {};
+    const fx = Number(r.x), fy = Number(r.y), fw = Number(r.w), fh = Number(r.h);
+    if (![fx, fy, fw, fh].every(Number.isFinite)) {
+      return res.status(400).json({ success: false, error: 'rect must be {x,y,w,h} as fractions of the frame' });
+    }
+    if (fw < CROP_MIN - 1e-6 || fh < CROP_MIN - 1e-6) {
+      return res.status(400).json({ success: false,
+        error: 'the selection must cover at least a third of the frame - got '
+          + Math.round(fw * 100) + '% x ' + Math.round(fh * 100) + '%' });
+    }
+    const meta = await sharp(hit.abs).metadata();
+    if (!meta.width || !meta.height) return res.status(500).json({ success: false, error: 'could not measure the frame' });
+    // Fractions -> pixels, then clamped so rounding can never ask for a pixel that is not there
+    // (sharp throws on an extract that leaves the image).
+    const left = Math.max(0, Math.min(Math.round(fx * meta.width), meta.width - 1));
+    const top = Math.max(0, Math.min(Math.round(fy * meta.height), meta.height - 1));
+    const w = Math.max(1, Math.min(Math.round(fw * meta.width), meta.width - left));
+    const h = Math.max(1, Math.min(Math.round(fh * meta.height), meta.height - top));
+
+    const dir = PROJECTS.dirOf(p.id, 'frames');
+    fs.mkdirSync(dir, { recursive: true });
+    const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
+    const dest = path.join(dir, 'crop_' + base + '_' + Date.now() + '.jpg');
+    await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
+    const url = toUrl(dest);
+    const preview = await _framePreview(url);
+
+    const variant = {
+      id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      path: url, preview, prompt: src.prompt || '',
+      at: new Date().toISOString(), taskId: '',
+      croppedFrom: src.path,
+      crop: { x: fx, y: fy, w: fw, h: fh },
+      size: { w, h },
+      set: src.set || '', framing: src.framing || '', n: src.n || 0,
+      moment: src.moment || '',
+    };
+    p.mix.variants.push(variant);
+    // A set that was dragged into an order keeps it, and the cut stands right behind what it was cut
+    // from rather than at the tail: it is the same moment.
+    if (Array.isArray(p.mix.order) && p.mix.order.length) {
+      const at = p.mix.order.indexOf(String(src.id));
+      p.mix.order.splice(at < 0 ? p.mix.order.length : at + 1, 0, variant.id);
+    }
+    p.updatedAt = variant.at;
+    _saveProjects(list);
+    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame added
+    console.log('[scen3/frames/crop] ' + base + ' ' + meta.width + 'x' + meta.height
+      + ' -> ' + w + 'x' + h + ' at ' + left + ',' + top);
+    res.json({ success: true, project: _projFull(p), frameId: variant.id });
+  } catch (e) {
+    console.error('[scen3/frames/crop]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 router.post('/scen3/frames/prompt', (req, res) => {
   try {
     const b = req.body || {};
@@ -4569,31 +4656,44 @@ function _clipPlan(proj, i) {
 //
 // In that ORDER and not in parallel: the line's prompt is written with the place's motion inside it,
 // so a line analysed first would be written about a place nobody had looked at yet.
-async function _readyForClip(id, i) {
+//
+// `onStage` is how the journal row says what is happening while nothing has been sent to a renderer
+// yet (the owner, 2026-09-22): the steps are counted first, so the row says "analysis 1/2 - the
+// place" only when there really are two of them.
+async function _readyForClip(id, i, onStage) {
+  const say = typeof onStage === 'function' ? onStage : () => {};
   const proj = _loadProjects().find(p => String(p.id) === id);
   if (!proj) return;
   const place = _normCasting(proj.casting).locationImage;
-  if (place && !_envMotionOf(place)) {
-    try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/clip] the place was not analysed:', e.message); }
-  }
   const line = (proj.lines || []).map(_normLine)[i];
   const stale = !line || !line.shot || !line.shot.motion || String(line.shot.said || '') !== String(line.text || '');
-  if (stale && !(line && line.shot && line.shot.motionEdited)) {
+  const wantPlace = !!(place && !_envMotionOf(place));
+  const wantLine = stale && !(line && line.shot && line.shot.motionEdited);
+  const n = (wantPlace ? 1 : 0) + (wantLine ? 1 : 0);
+  let at = 0;
+  if (wantPlace) {
+    say('analysis ' + (++at) + '/' + n + ' · the place');
+    try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/clip] the place was not analysed:', e.message); }
+  }
+  if (wantLine) {
+    say('analysis ' + (++at) + '/' + n + ' · this fragment');
     try { await _writePrompts(id, [i]); } catch (e) { console.warn('[scen3/clip] the animation was not written:', e.message); }
   }
 }
 
 // One clip on kie. The picture and the sound go up FRESH every time: kie fetches them itself, and a
 // link that has been sitting around comes back as "fetch failed" long after the money is committed.
-async function _submitClip(b) {
+async function _submitClip(b, onStage) {
+  const say = typeof onStage === 'function' ? onStage : () => {};
   const id = String(b.projectId || '').trim();
   {
     const first = _loadProjects().find(p => String(p.id) === id);
     const i0 = parseInt(b.line, 10);
     // Only when there is something to render at all: an analysis for a fragment that will be
     // refused anyway is a call nobody asked for.
-    if (first && !_clipPlan(first, i0).skipped) await _readyForClip(id, i0);
+    if (first && !_clipPlan(first, i0).skipped) await _readyForClip(id, i0, say);
   }
+  say('rendering');
   const proj = _loadProjects().find(p => String(p.id) === id);
   if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
   const i = parseInt(b.line, 10);
@@ -4636,20 +4736,40 @@ router.post('/scen3/fragments/clip', async (req, res) => {
       && String(r.job.params.file.projectId) === id && Number(r.job.params.file.line) === i);
     if (running) return res.json({ success: true, skipped: 'this fragment is already being made' });
 
+    // THE ROW IS WRITTEN FIRST, before any agent is asked anything (the owner, 2026-09-22). A clip
+    // begins with up to two analyses, and for the half-minute they take the person used to see
+    // nothing but a spinner on the button. Now the journal has the row from the press, with no task
+    // number yet and the stage saying what is being looked at; the row is also what stops a second
+    // press starting the same fragment twice, and what puts the waiting back after a reload.
     const request = { projectId: id, line: i };
-    const out = await _submitClip(request);
     const rec = JOBS.submitted({
       kind: 'video', what: 'clip',
       title: 'Clip · fragment ' + (i + 1),
       where: b.where || null,
-      engine: out.engine,
-      taskIds: [out.taskId],
-      job: { type: 'clip', params: { request, file: out.file } },
+      stage: 'getting ready',
+      taskIds: [],
+      job: { type: 'clip', params: { request, file: { projectId: id, line: i } } },
     });
-    res.json({ success: true, alertId: rec.id, taskId: out.taskId });
+    res.json({ success: true, alertId: rec.id });
+
+    // And the rest happens without the page: the analyses, the hosting and the task go on here, and
+    // whatever comes of them is written into that row. The page follows the row, so a closed tab
+    // loses nothing - and an answer that waited for all of this would be a minute of silence.
+    _submitClip(request, (s) => ALERTS.update(rec.id, { stage: s }))
+      .then((out) => {
+        ALERTS.update(rec.id, {
+          taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
+          job: { type: 'clip', params: { request, file: out.file } },
+        });
+        console.log('[scen3/clip] fragment ' + (i + 1) + ' -> ' + String(out.taskId).slice(0, 24));
+      })
+      .catch((e) => {
+        console.error('[scen3/fragments/clip]', e.message);
+        ALERTS.fail(rec.id, e.message);
+      });
   } catch (e) {
     console.error('[scen3/fragments/clip]', e.message);
-    res.status(e.status || 502).json({ success: false, error: e.message });
+    if (!res.headersSent) res.status(e.status || 502).json({ success: false, error: e.message });
   }
 });
 
@@ -4660,6 +4780,9 @@ router.post('/scen3/fragments/clip', async (req, res) => {
 JOBS.register('clip', {
   timeoutMs: 15 * 60 * 1000,
   poll: async (rec) => {
+    // Nothing to poll yet: the row was written at the press and the analyses are still running
+    // (the stage says which). The runner simply looks again next tick.
+    if (!rec.taskIds || !rec.taskIds[0]) return { state: 'pending' };
     const p = _fileParams(rec);
     const s = await _fetchClip(rec.taskIds[0], p.projectId);
     if (s.state !== 'failed') return s;
@@ -4667,7 +4790,7 @@ JOBS.register('clip', {
     if (!_FETCH_FAIL_RE.test(String(s.error || '')) || tries >= 1) return s;
     // Nothing rendered, nothing charged: fresh links and one more ask.
     try {
-      const again = await _submitClip(rec.job.params.request);
+      const again = await _submitClip(rec.job.params.request, (st) => ALERTS.update(rec.id, { stage: st }));
       ALERTS.update(rec.id, { job: { ...rec.job, params: { ...rec.job.params, refetch: tries + 1, file: again.file } } });
       console.log('[scen3/clip] re-asked with fresh links ->', String(again.taskId).slice(0, 24));
       return { state: 'pending', taskId: again.taskId };
@@ -4704,8 +4827,8 @@ JOBS.register('clip', {
     try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
     return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
   },
-  submit: async (request) => {
-    const out = await _submitClip(request);
+  submit: async (request, rec) => {
+    const out = await _submitClip(request, rec ? (s) => ALERTS.update(rec.id, { stage: s }) : null);
     return { taskId: out.taskId, engine: out.engine, file: out.file };
   },
 });
