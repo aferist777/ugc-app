@@ -404,6 +404,7 @@ function _paint() {
     _ctx.scale(_view.z, _view.z);
     _drawStill();
     _drawPair();
+    _drawFilm();
     _ctx.restore();
     return 0;
   }
@@ -689,12 +690,13 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
-  if (!_borrowed) { _still = null; _pair = null; _crop = null; }
+  if (!_borrowed) { _still = null; _pair = null; _crop = null; _filmStop(); }
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
   if (_still) _still.box = null;
   if (_pair) _pair.boxes = null;
+  if (_film) _film.box = null;
   // The stage stops being a 9:16 window and becomes the whole panel: nothing here is a frame
   // of the film, and a reference being judged should use the room there is.
   CW = 0; CH = 0;
@@ -736,6 +738,8 @@ function _wireZoom(cv) {
   // through the shift and the zoom - and the half is read off where it lands there, so a reference
   // pushed up close opens what is under the pointer and not what is under the panel's middle.
   const pick = (e) => {
+    // A film on the stage is played and paused by pressing it (X4).
+    if (_borrowed && _film && e.type === 'click') { filmPlay(); return; }
     if (!_borrowed || !_pair || !_pair.onPick) return;
     e.preventDefault();
     const r = cv.getBoundingClientRect();
@@ -794,6 +798,7 @@ function _centre() {
   _view = { z: 1, x: 0, y: 0 };
   if (_still && _still.img) _still.box = _layout(_still.img);
   if (_pair) _pair.boxes = null;
+  if (_film) _film.box = null;
   if (_on) _paint();
 }
 
@@ -810,7 +815,7 @@ export const isBorrowed = () => _borrowed;
 export function showStill(src, caption) {
   // The same picture again is not a new one - a panel repaints after every save. It keeps
   // where it was pushed and how far it was pinched, and it is not loaded a second time.
-  if (src && _still && _still.src === src && _still.img) {
+  if (src && _still && _still.src === src && _still.img && !_film) {
     _still.caption = String(caption || '');
     if (_on) _paint();
     return;
@@ -821,6 +826,7 @@ export function showStill(src, caption) {
   _view = { z: 1, x: 0, y: 0 };
   _pair = null;
   _crop = null;                             // another picture is not the one being cropped (V9)
+  _filmStop();                              // ...and a picture is not a film (X4)
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
@@ -836,6 +842,127 @@ export function showStill(src, caption) {
 
 let _still = null;
 let _pair = null;
+
+// ── A CLIP PLAYING ON THE STAGE (phase X4) ──────────────────────────────────
+// The third thing the borrowed stage can show, beside one picture and a pair of them: a film, with
+// its own sound. The fragment's clip used to open in a window over everything (the owner,
+// 2026-09-22: "clicking the clip should play it in the preview"), which meant leaving the panel to
+// watch four seconds of video.
+//
+// It is NOT the timeline's transport - that belongs to the film being cut, and it stays down while
+// the workshop holds the stage. This is one video element, drawn on the canvas frame by frame,
+// which a click starts and stops. Sound is on: a talking head with the sound off is half of it.
+let _film = null;                           // { src, el, caption, playing }
+let _filmRaf = 0;
+
+function _filmStop() {
+  if (!_film) return;
+  try { _film.el.pause(); _film.el.src = ''; _film.el.remove(); } catch (e) { /* it is going anyway */ }
+  if (_filmRaf) { cancelAnimationFrame(_filmRaf); _filmRaf = 0; }
+  _film = null;
+}
+
+// While it plays, the canvas is redrawn every frame; while it is paused, the last frame stands.
+function _filmTick() {
+  _filmRaf = 0;
+  if (!_film || !_film.playing || !_borrowed) return;
+  _paint();
+  _filmRaf = requestAnimationFrame(_filmTick);
+}
+
+/**
+ * Play a film on the borrowed stage.
+ * @param src      the clip, or '' to take it off
+ * @param caption  a line under it, as a still has
+ */
+export function showFilm(src, caption) {
+  if (!src) return _filmStop();
+  if (_film && _film.src === src) {
+    _film.caption = String(caption || '');
+    if (_on) _paint();
+    return;
+  }
+  _filmStop();
+  _still = null;
+  _pair = null;
+  _crop = null;
+  _view = { z: 1, x: 0, y: 0 };
+  const el = document.createElement('video');
+  el.playsInline = true;
+  el.preload = 'auto';
+  el.crossOrigin = 'anonymous';
+  // IN the page, though nothing sees it: what is on screen is the canvas this is drawn onto. A
+  // media element left detached is decoded at the browser's discretion, and a picture that stops
+  // advancing when the window is busy is not a preview.
+  el.style.cssText = 'position:absolute;width:1px;height:1px;left:0;bottom:0;opacity:0;pointer-events:none';
+  const stage = document.getElementById(STAGE);
+  if (stage) stage.appendChild(el);
+  el.src = src;
+  _film = { src, el, caption: String(caption || ''), playing: false, box: null };
+  // It starts by itself: pressing the clip IS the ask to see it. A browser that refuses to play
+  // with sound before it has been clicked leaves the first frame up, and the next click plays it.
+  el.addEventListener('loadeddata', () => {
+    if (!_film || _film.el !== el) return;
+    _film.box = null;
+    if (_on) _paint();
+    filmPlay(true);
+  });
+  el.addEventListener('ended', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });
+  el.addEventListener('error', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });
+  if (_on) _paint();
+}
+
+/** Play or pause the film on the stage. Without an argument, the other one. */
+export function filmPlay(want) {
+  if (!_film) return;
+  const play = want === undefined ? !_film.playing : !!want;
+  if (play) {
+    const p = _film.el.play();
+    if (p && p.catch) p.catch(() => { if (_film) { _film.playing = false; _paint(); } });
+    _film.playing = true;
+    if (!_filmRaf) _filmRaf = requestAnimationFrame(_filmTick);
+  } else {
+    try { _film.el.pause(); } catch (e) { /* nothing to pause */ }
+    _film.playing = false;
+  }
+  if (_on) _paint();
+}
+
+export const filming = () => !!_film;
+
+// Letterboxed like a still, measured once, with the one control it has drawn on it: a triangle
+// while it is stopped, nothing while it plays.
+function _drawFilm() {
+  if (!_film) return;
+  const v = _film.el;
+  if (v.videoWidth) {
+    if (!_film.box) {
+      const s = Math.min(CW / v.videoWidth, CH / v.videoHeight);
+      const w = Math.round(v.videoWidth * s), h = Math.round(v.videoHeight * s);
+      _film.box = { w, h, x: Math.round((CW - w) / 2), y: Math.round((CH - h) / 2) };
+    }
+    const b = _film.box;
+    try { _ctx.drawImage(v, b.x, b.y, b.w, b.h); } catch (e) { /* a frame not decoded yet */ }
+    if (!_film.playing) {
+      const r = Math.round(Math.min(b.w, b.h) * 0.11);
+      _ctx.save();
+      _ctx.globalAlpha = 0.82;
+      _ctx.fillStyle = 'rgba(0,0,0,.45)';
+      _ctx.beginPath();
+      _ctx.arc(b.x + b.w / 2, b.y + b.h / 2, r, 0, Math.PI * 2);
+      _ctx.fill();
+      _ctx.fillStyle = '#fff';
+      _ctx.beginPath();
+      _ctx.moveTo(b.x + b.w / 2 - r * 0.3, b.y + b.h / 2 - r * 0.45);
+      _ctx.lineTo(b.x + b.w / 2 + r * 0.5, b.y + b.h / 2);
+      _ctx.lineTo(b.x + b.w / 2 - r * 0.3, b.y + b.h / 2 + r * 0.45);
+      _ctx.closePath();
+      _ctx.fill();
+      _ctx.restore();
+    }
+  }
+  if (_film.caption) _caption(_film.caption, PAD + H, H);
+}
 
 // ── Cropping the picture on the stage (phase V9) ────────────────────────────
 // A first frame is what a clip is MADE of, so reframing it - closer in, off to one side - is a
@@ -1082,9 +1209,10 @@ function _halfSpec(x) {
 export function showPair(top, bottom, onPick) {
   _still = null;
   _crop = null;
+  _filmStop();
   const a = _halfSpec(top), b = _halfSpec(bottom);
   const want = a.src + '|' + b.src;
-  if (_pair && _pair.key === want) {
+  if (_pair && _pair.key === want && !_film) {
     // The same pictures again - a panel repaints after every save. The words on them and the
     // doors may have changed; the pictures keep where they were pushed and pinched.
     _pair.spec = [a, b];

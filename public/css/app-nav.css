@@ -113,6 +113,14 @@
 .sv3-al-mark{ flex:0 0 auto; width:16px; text-align:center; color:var(--primary); font-size:12px; }
 .sv3-al-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .sv3-al-title{ font:600 11.5px/1.3 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* How long is left, left of the Alerts button (X3). Quiet: it is a number to glance at, not a
+   thing to press. */
+.sv3-al-wait{
+  align-self:center; margin-right:6px; padding:3px 8px; border-radius:999px; white-space:nowrap;
+  border:1px solid var(--border-soft); background:var(--surface);
+  font:600 10px/1.2 var(--font); color:var(--muted);
+}
+.sv3-al-wait[hidden]{display:none}
 .sv3-al-where{ font:400 10px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* While it runs and says what it is doing - the analyses a clip makes before it renders. */
 .sv3-al-where.is-stage{ color:var(--gold, #d8b45a); }

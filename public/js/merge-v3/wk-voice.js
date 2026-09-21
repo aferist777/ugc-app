@@ -52,12 +52,9 @@ let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
 let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: '' };
 
-// The reads. THREE LINES AT A TIME for "generate" (the owner, 2026-09-21): one call carries a
-// chunk, the server speaks its lines together and writes the project once, and half a second
-// later the next chunk goes - so the panel says how far it has got instead of freezing for a
-// minute, and the script is read in a third of the time.
-const CHUNK = 3;
-const CHUNK_GAP_MS = 500;
+// The reads. "generate" hands the WHOLE script to the server and watches it (phase X2, readAll
+// below); what is left here is the one-line read of a fragment's own button, which answers with the
+// take and so can be awaited.
 let _reading = [];                      // the lines being spoken now
 let _batch = null;                      // { done, total } while every stale line is being read
 let _tagging = false;                   // the tagger is marking the script up
@@ -573,26 +570,81 @@ async function _speak(api, lines, inBatch) {
 /** One line, spoken now - from the open fragment's own button. */
 export const readLine = (api, i) => _speak(api, [i], false);
 
-// Every line that needs it, three at a time with half a second between the chunks (the owner,
-// 2026-09-21), so the panel can say how far it has got. It stops at the first chunk that fails:
-// twelve identical refusals say nothing the first one did not.
+// EVERY LINE THAT NEEDS IT, READ BY THE SERVER (phase X2, the owner 2026-09-22). The page used to
+// send three lines and wait for them before sending three more, which meant the run belonged to the
+// page: walking away from it left the rest of the script unread. Now one call hands the whole list
+// over (routes/scen3.js, /scen3/voice/speak-all), the server starts a line a second without waiting
+// for the ones already going, and this only WATCHES - bringing the takes in as they land, so the
+// script fills in under the pointer. Closing the app still stops it; what was already spoken stays.
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
+const WATCH_MS = 1500;
+
 export async function readAll(api) {
   const p = api.project() || {};
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
+  _rsaid = ''; _rbad = false;
   _repaint(api);
-  for (let at = 0; at < want.length; at += CHUNK) {
-    if (at) await _wait(CHUNK_GAP_MS);
-    const chunk = want.slice(at, at + CHUNK);
-    const ok = await _speak(api, chunk, true);
-    if (!ok) break;
-    _batch.done += chunk.length;
+  try {
+    const d = await (await fetch('/api/scen3/voice/speak-all', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: api.projectId() }),
+    })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (d.queued) _batch = { done: 0, total: d.queued };
     _repaint(api);
+    await _watchRead(api);
+  } catch (e) {
+    _rsaid = 'Not read: ' + e.message;
+    _rbad = true;
   }
   _batch = null;
   _repaint(api);
+}
+
+// A read already going when the panel opened - started before a reload, or from another tab. The
+// server owns it, so there is always something to come back to.
+let _lookedRead = '';
+export async function pickUpRead(api) {
+  const id = api.projectId();
+  if (!id || _lookedRead === id) return;
+  _lookedRead = id;
+  try {
+    const d = await (await fetch('/api/scen3/voice/state?projectId=' + encodeURIComponent(api.projectId()))).json();
+    const st = d && d.state;
+    if (!st || !st.running || _batch) return;
+    _batch = { done: st.done + st.skipped.length, total: st.total };
+    _repaint(api);
+    await _watchRead(api);
+    _batch = null;
+    _repaint(api);
+  } catch (e) { /* without the state, nothing shows as running */ }
+}
+
+// Watch the server read, until it says it has stopped. A reading that fails is not the read failing
+// - the next one asks again - so it is skipped rather than thrown.
+async function _watchRead(api) {
+  for (let k = 0; k < 1200; k++) {
+    await _wait(WATCH_MS);
+    let st = null;
+    try {
+      const d = await (await fetch('/api/scen3/voice/state?projectId=' + encodeURIComponent(api.projectId()))).json();
+      st = d && d.state;
+    } catch (e) { continue; }
+    if (!st) return;
+    _batch = { done: st.done + st.skipped.length, total: st.total };
+    if (api.reload) { try { await api.reload(); } catch (e) { /* the next tick tries again */ } }
+    _repaint(api);
+    if (st.running) continue;
+    const bad = st.failed || [];
+    if (bad.length) {
+      _rsaid = (bad.length === 1 ? 'Line ' + bad[0].line : bad.length + ' lines')
+        + ' not read: ' + (bad[0].error || 'refused');
+      _rbad = true;
+    }
+    return;
+  }
 }
 
 /** Coming back to the hub leaves the search behind, but not what was said about the last take. */

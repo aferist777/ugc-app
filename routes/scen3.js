@@ -2684,24 +2684,29 @@ router.post('/scen3/voice/tag', async (req, res) => {
       if (has) report.tagged++; else report.plain++;
     });
 
-    proj.lines = lines;
-    proj.voice = voice;
-    if (merge) {
-      // v3 from here on: the tagged read is what the counters read and what every line is spoken from.
-      proj.voice.tagsOn = true;
-      proj.voice.variant = 'tagged';
-    } else if (report.tagged > 0 && lines.some(l => l.tagged)) {
-      // The take on show follows the work: after a pass that produced tags, the tagged read is
-      // what the user asked to see.
-      proj.voice.variant = 'tagged';
-    }
-    proj.updatedAt = new Date().toISOString();
-    _saveProjects(list);
+    // The tagger thought for a while, and reads and clips write this project meanwhile (phase X0):
+    // the record is read AGAIN and only the tags of the lines this pass touched are put on it.
+    const saved = PROJECTS.apply(id, (fresh) => {
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      for (const i of touch) if (fresh.lines[i]) fresh.lines[i].tagged = lines[i].tagged;
+      fresh.voice = _normVoice({ ...(fresh.voice || {}), ...voice });
+      if (merge) {
+        // v3 from here on: the tagged read is what the counters read and what every line is spoken from.
+        fresh.voice.tagsOn = true;
+        fresh.voice.variant = 'tagged';
+      } else if (report.tagged > 0 && lines.some(l => l.tagged)) {
+        // The take on show follows the work: after a pass that produced tags, the tagged read is
+        // what the user asked to see.
+        fresh.voice.variant = 'tagged';
+      }
+      fresh.updatedAt = new Date().toISOString();
+    });
+    const out = saved || proj;
     console.log(`[scen3/voice/tag] ${id} mood=${mood.id}`
       + (partial ? ` only=${only.map(i => i + 1).join(',')}` : ' full')
       + ` tagged=${report.tagged} plain=${report.plain}`
       + ` rejected=${report.rejected.length} droppedTags=${report.dropped.length}`);
-    res.json({ success: true, project: _projFull(proj), report });
+    res.json({ success: true, project: _projFull(out), report });
   } catch (e) {
     console.error('[scen3/voice/tag]', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -2757,91 +2762,202 @@ async function _speakLine(key, voiceId, model, text, params) {
   return Buffer.from(r.data);
 }
 
+/* ── The read, and who drives it (phase X2) ─────────────────────────────
+   POST /api/scen3/voice/speak      { projectId, only? }  -> { success, project, report }
+   POST /api/scen3/voice/speak-all  { projectId }         -> { success, queued, state }
+   GET  /api/scen3/voice/state      ?projectId=           -> { success, state }
+
+   The page used to drive the whole script: three lines per call, and the next three only after the
+   previous three had answered. Leaving the page mid-read left the rest unread, and the same shape
+   in the clips is what lost the owner four fragments (PLAN, phase X). So the SERVER reads the
+   script now: `speak-all` works out what needs reading, answers at once, and starts one line a
+   second without waiting for the ones already going. The page follows `state`.
+
+   Reads are NOT in the journal (decided in phase A: a dozen quick rows would bury the things worth
+   waiting for, and phase X3 measures the wait from that journal). The progress lives in memory and
+   the truth lives in the project, so closing the app mid-read keeps every take already spoken and
+   simply leaves the rest unread - one press finishes them.
+   ─────────────────────────────────────────────────────────────────────────── */
+const READ_GAP_MS = 1000;
+const _reads = new Map();                 // projectId -> { total, done, skipped, failed, running }
+
+// What ElevenLabs actually said, when it said no: the body of its answer beats "Request failed".
+const _elError = (e) => (e.response && e.response.data
+  ? Buffer.from(e.response.data).toString('utf8').slice(0, 200)
+  : (e.message || String(e)));
+
+const _readTextOf = (l, variant) => (variant === 'tagged' ? (l.tagged || '') : (l.text || ''));
+// A take is stale when the words it was made from are no longer the words on the line.
+const _readNeeds = (l, variant) => {
+  const t = (l.audio || {})[variant];
+  return !t || !t.path || t.said !== _readTextOf(l, variant);
+};
+
+// Everything one read of this project needs, worked out once.
+function _readCtx(proj) {
+  const voice = _normVoice(proj.voice);
+  const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
+  return {
+    id: String(proj.id),
+    lines: (proj.lines || []).map(_normLine),
+    voice,
+    variant,
+    model: voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN,
+    // The cast character's voice when they have one; the project's own pick before a character is
+    // cast, or for a character without a voice (phase W2.5). One ad, one voice, and the same rule
+    // the page shows (_castVoice). Saying plainly what is missing beats a 404 from ElevenLabs.
+    cast: _castVoice(proj),
+    dir: PROJECTS.dirOf(proj.id, 'voice'),
+  };
+}
+
+// ONE LINE SPOKEN AND FILED. ElevenLabs takes seconds, and nothing of this project is written while
+// it speaks: the take goes on in a single tick afterwards (lib/projects-store.js, `apply`). That is
+// what lets ten of these run at once without losing each other's takes.
+async function _speakOne(key, ctx, i) {
+  const line = ctx.lines[i] || {};
+  const text = _readTextOf(line, ctx.variant);
+  if (!text.trim()) return { skipped: true };
+  const buf = await _speakLine(key, ctx.cast.id, ctx.model, text, ctx.voice.ttsParams);
+  const name = `v${ctx.id}_${i + 1}_${ctx.variant}_${Date.now()}.mp3`;
+  const abs = path.join(ctx.dir, name);
+  fs.writeFileSync(abs, buf);
+  const dur = await _audioDur(abs);
+  const take = {
+    path: toUrl(abs),
+    dur: Math.round(dur * 100) / 100,
+    at: new Date().toISOString(),
+    said: text,                           // what was actually spoken; the staleness check reads this
+  };
+  const saved = PROJECTS.apply(ctx.id, (fresh) => {
+    fresh.lines = (fresh.lines || []).map(_normLine);
+    const l = fresh.lines[i];
+    if (!l) return;
+    l.audio = l.audio || { plain: null, tagged: null };
+    l.audio[ctx.variant] = take;
+    fresh.updatedAt = take.at;
+  });
+  if (saved) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T')
+  return { take };
+}
+
+// Which lines a read is about: the ones named, or every one that needs it. Without an explicit
+// `only` nobody pays twice for the same words.
+function _readWanted(ctx, only) {
+  if (Array.isArray(only)) {
+    return [...new Set(only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < ctx.lines.length))]
+      .sort((a, c) => a - c);
+  }
+  return ctx.lines.map((_, i) => i).filter(i => _readNeeds(ctx.lines[i], ctx.variant));
+}
+
+// The project as it is NOW - with every take these reads filed - for the page to paint from.
+const _projNow = (id) => {
+  const p = _loadProjects().find(x => String(x.id) === String(id));
+  return p ? _projFull(p) : null;
+};
+
+// The lines this call is about, spoken together and answered for: one press of a fragment's own
+// button, or an explicit list.
 router.post('/scen3/voice/speak', async (req, res) => {
   try {
     const b  = req.body || {};
     const id = String(b.projectId || '').trim();
     if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
-
     const key = _elKey();
     if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
-
-    const list = _loadProjects();
-    const proj = list.find(p => String(p.id) === id);
+    const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
-    const lines = (proj.lines || []).map(_normLine);
-    const voice = _normVoice(proj.voice);
-    const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
-    const model = voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN;
+    const ctx = _readCtx(proj);
+    if (!ctx.cast.has) return res.status(400).json({ success: false, error: ctx.cast.reason });
+    const only = _readWanted(ctx, b.only);
 
-    // The cast character's voice when they have one; the project's own pick before a character
-    // is cast, or for a character without a voice (phase W2.5). One ad, one voice, and the same
-    // rule the page shows (_castVoice). Saying plainly what is missing beats a 404 from ElevenLabs.
-    const cv = _castVoice(proj);
-    if (!cv.has) return res.status(400).json({ success: false, error: cv.reason });
-    const voiceId = cv.id;
-
-    // A take is stale when the words it was made from are no longer the words on the
-    // line. Without an explicit `only`, this endpoint voices exactly what needs it and
-    // silently leaves the rest alone: nobody should pay twice for the same line.
-    const textOf = (l) => (variant === 'tagged' ? (l.tagged || '') : (l.text || ''));
-    const needs = (l) => {
-      const t = (l.audio || {})[variant];
-      return !t || !t.path || t.said !== textOf(l);
-    };
-    const only = Array.isArray(b.only)
-      ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
-      : lines.map((_, i) => i).filter(i => needs(lines[i]));
-
-    const dir = PROJECTS.dirOf(id, 'voice');
-
-    const report = { variant, model, spoken: 0, skipped: [], failed: [] };
-    // The lines of one call are spoken TOGETHER (the owner, 2026-09-21: three at a time from the
-    // page), and the project is written once when all have answered - three calls at once would
-    // race for the project file and lose each other's takes.
+    const report = { variant: ctx.variant, model: ctx.model, spoken: 0, skipped: [], failed: [] };
     await Promise.all(only.map(async (i) => {
-      const l = lines[i];
-      // the take on show is what gets spoken; a tagged take that is not there falls
-      // back to nothing rather than silently voicing the other variant
-      const text = textOf(l);
-      if (!text.trim()) { report.skipped.push(i + 1); return; }
       try {
-        const buf = await _speakLine(key, voiceId, model, text, voice.ttsParams);
-        const name = `v${id}_${i + 1}_${variant}_${Date.now()}.mp3`;
-        const abs = path.join(dir, name);
-        fs.writeFileSync(abs, buf);
-        const dur = await _audioDur(abs);
-        l.audio = l.audio || { plain: null, tagged: null };
-        l.audio[variant] = {
-          path: toUrl(abs),
-          dur: Math.round(dur * 100) / 100,
-          at: new Date().toISOString(),
-          said: text,          // what was actually spoken; the staleness check reads this
-        };
-        report.spoken++;
+        const out = await _speakOne(key, ctx, i);
+        if (out.skipped) report.skipped.push(i + 1); else report.spoken++;
       } catch (e) {
-        const body = e.response && e.response.data
-          ? Buffer.from(e.response.data).toString('utf8').slice(0, 200) : (e.message || String(e));
-        console.warn(`[scen3/voice/speak] line ${i + 1} failed:`, body);
-        report.failed.push({ line: i + 1, error: body });
+        const why = _elError(e);
+        console.warn(`[scen3/voice/speak] line ${i + 1} failed:`, why);
+        report.failed.push({ line: i + 1, error: why });
       }
     }));
     report.skipped.sort((a, c) => a - c);
     report.failed.sort((a, c) => a.line - c.line);
-
-    proj.lines = lines;
-    proj.updatedAt = new Date().toISOString();
-    _saveProjects(list);
-    MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a read
-    console.log(`[scen3/voice/speak] ${id} ${model} ${variant} spoken=${report.spoken}`
+    console.log(`[scen3/voice/speak] ${id} ${ctx.model} ${ctx.variant} spoken=${report.spoken}`
       + ` skipped=${report.skipped.length} failed=${report.failed.length}`);
-    res.json({ success: true, project: _projFull(proj), report });
+    res.json({ success: true, project: _projNow(id), report });
   } catch (e) {
     console.error('[scen3/voice/speak]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
+});
+
+// THE WHOLE SCRIPT, READ BY THE SERVER. One line a second, and none of them waits for another.
+async function _readQueue(key, ctx, only) {
+  const st = _reads.get(ctx.id);
+  const going = [];
+  for (const i of only) {
+    if (going.length) await _wait(READ_GAP_MS);
+    going.push(_speakOne(key, ctx, i).then(
+      (out) => { if (out.skipped) st.skipped.push(i + 1); else st.done++; },
+      (e) => {
+        const why = _elError(e);
+        console.warn(`[scen3/voice/speak-all] line ${i + 1} failed:`, why);
+        st.failed.push({ line: i + 1, error: why });
+      },
+    ));
+  }
+  await Promise.all(going);
+  st.running = false;
+  st.endedAt = new Date().toISOString();
+  console.log(`[scen3/voice/speak-all] ${ctx.id} done=${st.done}`
+    + ` skipped=${st.skipped.length} failed=${st.failed.length}`);
+}
+
+router.post('/scen3/voice/speak-all', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    const key = _elKey();
+    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const now = _reads.get(id);
+    if (now && now.running) return res.json({ success: true, queued: 0, already: true, state: now });
+
+    const ctx = _readCtx(proj);
+    if (!ctx.cast.has) return res.status(400).json({ success: false, error: ctx.cast.reason });
+    const only = _readWanted(ctx, b.only);
+    if (!only.length) return res.json({ success: true, queued: 0, state: null });
+
+    const st = {
+      total: only.length, done: 0, skipped: [], failed: [], running: true,
+      startedAt: new Date().toISOString(), endedAt: null, variant: ctx.variant,
+    };
+    _reads.set(id, st);
+    res.json({ success: true, queued: only.length, lines: only.map(i => i + 1), state: st });
+    _readQueue(key, ctx, only).catch((e) => {
+      st.running = false;
+      st.error = e.message;
+      console.error('[scen3/voice/speak-all]', e.message);
+    });
+  } catch (e) {
+    console.error('[scen3/voice/speak-all]', e.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// How far the read has got. In memory on purpose: it is about a RUN, not about the project, and a
+// run does not survive the app being closed - what it had already spoken does.
+router.get('/scen3/voice/state', (req, res) => {
+  const id = String(req.query.projectId || '').trim();
+  res.json({ success: true, state: (id && _reads.get(id)) || null });
 });
 
 // ── server-side frame watcher ───────────────────────────────────────────────
@@ -4240,13 +4356,32 @@ const MOTION_RULES =
   + ' does while speaking: the expression, the brows and the eyes, the head, the hands, the weight of'
   + ' the body. Present tense, plain sentences, 2 to 4 of them, no lists. Do NOT write the words they'
   + ' say, do not mention the script, the camera operator, cuts, zooms or any camera move, and do not'
-  + ' add objects, people or light that are not already in the frame.';
+  + ' add objects, people or light that are not already in the frame.'
+  // WHERE THE EYES GO (the owner, 2026-09-22). This is somebody talking TO the person watching, and
+  // a gaze that wanders reads as a person talking to somebody off to the side. The glance away is
+  // allowed because a face that never blinks its attention reads as a recital - but it is a beat,
+  // and the eyes come back.
+  + ' THE GAZE: the person is speaking into the lens and holds it. Now and then, where a thought'
+  + ' turns or a phrase lands, the eyes flick away for a beat and come straight back to the lens.'
+  + ' They never settle anywhere else and never address anyone off camera.';
 // The one shot size that has a hand in the shot: it is holding the phone, and it must not wander.
 const MOTION_SELFIE =
   ' THIS IS A SELFIE: the arm holding the phone stays where it is for the whole clip - it does not'
   + ' lower, change hands or leave the frame - so the free hand is the only one that gestures, and'
   + ' every gesture stays inside a selfie\'s narrow frame. End each prompt with: subtle handheld'
   + ' camera shake.';
+
+// IS THIS LINE'S ANIMATION PROMPT STILL GOOD? Three ways it is not: it was never written, the words
+// have changed since it was, or - phase X6 - the place's own movement is not in it. The last one is
+// what makes a prompt written before the place was analysed, or before somebody changed how the
+// place moves, get written again: what goes to the renderer is ONE text, and half of it being out
+// of date is not a prompt.
+function _motionStale(line, envMotion) {
+  const shot = line && line.shot;
+  if (!shot || !shot.motion) return true;
+  if (String(shot.said || '') !== String((line && line.text) || '')) return true;
+  return !!envMotion && String(shot.motion).indexOf(envMotion) < 0;
+}
 
 /**
  * Write the animation prompts of a project's lines. The route below is one caller; a clip about
@@ -4265,16 +4400,17 @@ async function _writePrompts(id, want) {
     const mood = MP.moodById(video.mood) || MP.MOODS[0];
     const set = _frameSet(video.framing) || _frameSet('half');
 
-    // Which lines this touches: the ones named, or every line that has no prompt or whose words
-    // have changed since the one it has was written - and never one edited by hand unless named.
-    const stale = (l) => !l.shot || !l.shot.motion || String(l.shot.said || '') !== String(l.text || '');
+    // The place's own movement. It is written once per PLACE and belongs to the place, not to this
+    // project (phase W3a) - and since X6 it is also part of every line's prompt, which is why it is
+    // read before the lines are chosen.
+    const envMotion = _envMotionOf(_normCasting(proj.casting).locationImage);
+
+    // Which lines this touches: the ones named, or every line whose prompt is stale - and never one
+    // edited by hand unless named.
     const only = Array.isArray(want)
       ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
-      : lines.map((_, i) => i).filter(i => stale(lines[i]) && !(lines[i].shot && lines[i].shot.motionEdited));
+      : lines.map((_, i) => i).filter(i => _motionStale(lines[i], envMotion) && !(lines[i].shot && lines[i].shot.motionEdited));
     if (!only.length) return { project: proj, report: { written: 0, skipped: [] } };
-
-    // The place's own movement, so the clip keeps the background alive (phase W3a).
-    const envMotion = String((SHELF_META.read('environments')[_normCasting(proj.casting).locationImage] || {}).motion || '');
 
     // The frames themselves, in the order the lines take them: the agent writes movement that starts
     // from a body it can see, not from a description of one.
@@ -4324,22 +4460,37 @@ async function _writePrompts(id, want) {
 
     const now = new Date().toISOString();
     const report = { written: 0, skipped: [] };
+    const write = {};                     // line -> the shot to put on it
     for (const i of only) {
       const hit = got.find(x => (parseInt(x && x.n, 10) || 0) === i + 1);
-      const motion = _cleanText((hit && hit.motion) || '').slice(0, 900);
-      if (!motion) { report.skipped.push(i + 1); continue; }
-      lines[i].shot = _normShot({
+      const said = _cleanText((hit && hit.motion) || '').slice(0, 900);
+      if (!said) { report.skipped.push(i + 1); continue; }
+      // ONE TEXT, THE PERSON AND THE PLACE (the owner, 2026-09-22). The agent is told how the place
+      // moves and told not to describe it again, so what it writes is the person alone - and the
+      // renderer was never hearing about the background at all. The place's own sentence is added
+      // here, word for word as it stands on the place, so the field in the fragment shows exactly
+      // what is sent and editing that field edits the whole of it.
+      const motion = envMotion && said.indexOf(envMotion) < 0 ? said + ' ' + envMotion : said;
+      write[i] = _normShot({
         motion, motionAgent: motion, motionEdited: false,
         said: String(lines[i].text || ''), mood: mood.id, at: now,
       });
       report.written++;
     }
-    proj.lines = lines;
-    proj.updatedAt = now;
-    _saveProjects(list);
+    // The agent took half a minute to answer, and other things write this project while it thinks
+    // (phase X0: ten clips and ten reads go at once now). So the record is read AGAIN here and only
+    // the lines this call is about are touched - the copy read before the agent was asked would
+    // carry back whatever landed meanwhile and undo it.
+    const saved = PROJECTS.apply(id, (fresh) => {
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      for (const [k, shot] of Object.entries(write)) {
+        if (fresh.lines[k]) fresh.lines[k].shot = shot;
+      }
+      fresh.updatedAt = now;
+    });
     console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + set.id + ' frames=' + shown.length
       + ' written=' + report.written + ' skipped=' + report.skipped.length);
-    return { project: proj, report };
+    return { project: saved || proj, report };
   }
 }
 
@@ -4494,19 +4645,23 @@ router.post('/scen3/frames/crop', async (req, res) => {
       set: src.set || '', framing: src.framing || '', n: src.n || 0,
       moment: src.moment || '',
     };
-    p.mix.variants.push(variant);
-    // A set that was dragged into an order keeps it, and the cut stands right behind what it was cut
-    // from rather than at the tail: it is the same moment.
-    if (Array.isArray(p.mix.order) && p.mix.order.length) {
-      const at = p.mix.order.indexOf(String(src.id));
-      p.mix.order.splice(at < 0 ? p.mix.order.length : at + 1, 0, variant.id);
-    }
-    p.updatedAt = variant.at;
-    _saveProjects(list);
-    MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a frame added
+    // Cutting the picture and making its preview took a moment, and other things write this project
+    // (phase X0). Read it again and add the frame to the set AS IT IS NOW.
+    const saved = PROJECTS.apply(p.id, (fresh) => {
+      fresh.mix = _normMix(fresh.mix);
+      fresh.mix.variants.push(variant);
+      // A set that was dragged into an order keeps it, and the cut stands right behind what it was
+      // cut from rather than at the tail: it is the same moment.
+      if (Array.isArray(fresh.mix.order) && fresh.mix.order.length) {
+        const at = fresh.mix.order.indexOf(String(src.id));
+        fresh.mix.order.splice(at < 0 ? fresh.mix.order.length : at + 1, 0, variant.id);
+      }
+      fresh.updatedAt = variant.at;
+    });
+    MIRROR.touch(p.id, { project: saved || p });   // the timeline mirrors the lines (T'): a frame added
     console.log('[scen3/frames/crop] ' + base + ' ' + meta.width + 'x' + meta.height
       + ' -> ' + w + 'x' + h + ' at ' + left + ',' + top);
-    res.json({ success: true, project: _projFull(p), frameId: variant.id });
+    res.json({ success: true, project: _projFull(saved || p), frameId: variant.id });
   } catch (e) {
     console.error('[scen3/frames/crop]', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -4666,8 +4821,11 @@ async function _readyForClip(id, i, onStage) {
   if (!proj) return;
   const place = _normCasting(proj.casting).locationImage;
   const line = (proj.lines || []).map(_normLine)[i];
-  const stale = !line || !line.shot || !line.shot.motion || String(line.shot.said || '') !== String(line.text || '');
   const wantPlace = !!(place && !_envMotionOf(place));
+  // The same staleness rule the writer uses (X6), so a prompt written before the place was analysed
+  // is written again before this clip is paid for. A place about to be analysed for the FIRST time
+  // makes every prompt stale by definition: its sentence cannot be in any of them yet.
+  const stale = !line || wantPlace || _motionStale(line, _envMotionOf(place));
   const wantLine = stale && !(line && line.shot && line.shot.motionEdited);
   const n = (wantPlace ? 1 : 0) + (wantLine ? 1 : 0);
   let at = 0;
@@ -4770,6 +4928,113 @@ router.post('/scen3/fragments/clip', async (req, res) => {
   } catch (e) {
     console.error('[scen3/fragments/clip]', e.message);
     if (!res.headersSent) res.status(e.status || 502).json({ success: false, error: e.message });
+  }
+});
+
+/* ── EVERY CLIP OF A PROJECT, ASKED FOR BY THE SERVER (phase X1) ───────────────
+   POST /api/scen3/fragments/clips  { projectId, key, again? }
+       -> { success, queued: [{ line, alertId }], skipped: [{ line, why }] }
+
+   WHY THIS EXISTS. The page used to walk the fragments itself: five at once, and the next five only
+   after all five had LANDED - four or five minutes later. The owner pressed `generate all` on a
+   script of ten, five clips were made, and the other four were never asked for, because by then the
+   page that was holding the loop had gone (PLAN, phase X). A run that belongs to a page is lost
+   with the page; that is the rule the journal was built on, and this is the clips obeying it.
+
+   So: one call works out what can be made, writes a journal row for every one of them AT ONCE - so
+   the whole list is visible from the press - answers, and then sends them one a second without
+   waiting for any to finish. A fragment that refuses (no words, no frame, a stale read, a read
+   longer than the model takes) is named in `skipped` and stepped over; one that is already being
+   made is left alone; one that already has its clip is not paid for twice unless `again` says so.
+
+   A FAILURE STOPS NOTHING (decided with the owner 2026-09-22). A render that fails is already paid
+   for and says nothing about its neighbours, so it fails its own row and the rest go on. Nor does
+   the queue lock anything: a fragment's own button stays live throughout, and the only bar is the
+   old one - one clip per fragment at a time.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+// Does this fragment already have its clip - a take made from the frame it opens on, of the words
+// it says now? The same question the panel asks (js/merge-v3/wk-fragments.js, _clipState), asked
+// here because the server is the one deciding what to pay for.
+function _clipDone(proj, i) {
+  const plan = _clipPlan(proj, i);
+  if (plan.skipped) return false;
+  const takes = (plan.line.video || {})[plan.variant] || [];
+  return takes.some(c => c && c.path && c.fromFrame === plan.frame.id && c.said === plan.said);
+}
+
+// Where a clip was asked from, for the Alerts list: this fragment of this project. The page sends
+// the open timeline's key and the row is addressed from it, so every row of a queue points at its
+// own fragment (js/merge-v3/wk-fragments.js, _whereLine says the same thing for one clip).
+const _whereClip = (key, title, i) => ({
+  page: 'merge',
+  href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
+  label: 'Merge \u00b7 ' + title + ' \u00b7 fragment ' + (i + 1),
+  spot: { key, step: 'setup', line: i + 1 },
+});
+
+// The queue itself: a start a second, and nobody waits for anybody. What comes of each start is
+// written into the row it belongs to - the task number and "rendering", or the failure.
+async function _clipQueue(queued) {
+  for (let k = 0; k < queued.length; k++) {
+    if (k) await _wait(SUBMIT_GAP_MS);
+    const q = queued[k];
+    _submitClip(q.request, (st) => ALERTS.update(q.alertId, { stage: st }))
+      .then((out) => {
+        ALERTS.update(q.alertId, {
+          taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
+          job: { type: 'clip', params: { request: q.request, file: out.file } },
+        });
+        console.log('[scen3/clips] fragment ' + q.line + ' -> ' + String(out.taskId).slice(0, 24));
+      })
+      .catch((e) => {
+        console.error('[scen3/clips] fragment ' + q.line + ':', e.message);
+        ALERTS.fail(q.alertId, e.message);
+      });
+  }
+}
+
+router.post('/scen3/fragments/clips', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const key = String(b.key || '');
+    const title = String(proj.name || proj.title || 'talking head');
+    const lines = (proj.lines || []).map(_normLine);
+
+    // The journal is what says a fragment is already being made - not a flag on the project - so a
+    // second press, a reload or another tab cannot start the same one twice.
+    const busy = new Set(ALERTS.list()
+      .filter(r => r.state === 'running' && r.what === 'clip' && r.job && r.job.params && r.job.params.file
+        && String(r.job.params.file.projectId) === id)
+      .map(r => Number(r.job.params.file.line)));
+
+    const queued = [], skipped = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
+      const plan = _clipPlan(proj, i);
+      if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
+      if (!b.again && _clipDone(proj, i)) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
+      const request = { projectId: id, line: i };
+      const rec = JOBS.submitted({
+        kind: 'video', what: 'clip',
+        title: 'Clip \u00b7 fragment ' + (i + 1),
+        where: _whereClip(key, title, i),
+        stage: 'getting ready',
+        taskIds: [],
+        job: { type: 'clip', params: { request, file: { projectId: id, line: i } } },
+      });
+      queued.push({ line: i + 1, alertId: rec.id, request });
+    }
+    console.log('[scen3/clips] ' + id + ' queued=' + queued.length + ' skipped=' + skipped.length);
+    res.json({ success: true, queued: queued.map(q => ({ line: q.line, alertId: q.alertId })), skipped });
+    if (queued.length) _clipQueue(queued).catch(e => console.error('[scen3/clips]', e.message));
+  } catch (e) {
+    console.error('[scen3/fragments/clips]', e.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
   }
 });
 

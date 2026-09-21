@@ -25,8 +25,10 @@ let _btn = null;
 let _menu = null;
 let _layer = null;
 let _timer = null;
+let _tick = null;
 let _items = [];
 let _counts = { running: 0, unseen: 0 };
+let _wait = null;                           // the chip that says how long is left (X3)
 let _armed = null;                          // the retry waiting for a second press
 let _audio = null;
 
@@ -78,6 +80,64 @@ function _ago(iso) {
 
 const _running = (r) => r.state === 'running';
 const _canOpen = (r) => r.state === 'done' && r.result && r.result.path;
+
+// ── HOW LONG IS LEFT (phase X3, the owner 2026-09-22) ───────────────────────
+// A chip to the left of the button, whenever something is running. What it says is the wait: the
+// LONGEST of what is still going, not the sum, because generations run side by side - ten clips
+// started a second apart are done when the slowest is done, not ten times later.
+//
+// It does not guess. The journal keeps what finished, with the moment each started and the moment
+// it landed, so the average of the last few of the SAME kind is what a new one of that kind is
+// expected to take. Only before there is any history at all does a built-in number stand in, and it
+// is replaced the first time something of that kind finishes. Every poll recomputes it, so it ticks
+// down by itself and jumps the moment a fragment lands.
+const KEEP_FOR_AVERAGE = 6;
+const GUESS_MS = { clip: 5 * 60000, frame: 90000, lookbook: 60000, environment: 60000, music: 2 * 60000 };
+const GUESS_OTHER_MS = 2 * 60000;
+
+function _typical(what) {
+  const past = [];
+  for (const r of _items) {
+    if (r.what !== what || r.state !== 'done' || !r.doneAt) continue;
+    const ms = Date.parse(r.doneAt) - Date.parse(r.startedAt);
+    if (ms > 0) past.push(ms);
+    if (past.length >= KEEP_FOR_AVERAGE) break;
+  }
+  if (!past.length) return GUESS_MS[what] || GUESS_OTHER_MS;
+  return past.reduce((a, x) => a + x, 0) / past.length;
+}
+
+// The wait, in milliseconds, or 0 when nothing is running.
+function _leftMs() {
+  const now = Date.now();
+  let most = 0;
+  for (const r of _items) {
+    if (!_running(r)) continue;
+    const left = _typical(r.what) - (now - (Date.parse(r.startedAt) || now));
+    most = Math.max(most, left);
+  }
+  return Math.max(0, most);
+}
+
+// Rounded the way somebody reads a wait: seconds while it is seconds, then minutes.
+function _leftSays(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return '~' + Math.max(5, Math.round(s / 5) * 5) + 's left';
+  const m = Math.round(s / 60);
+  if (m < 60) return '~' + m + ' min left';
+  return '~' + Math.floor(m / 60) + ' h ' + (m % 60) + ' min left';
+}
+
+function _paintWait() {
+  if (!_wait) return;
+  const n = _counts.running || 0;
+  if (!n) { _wait.hidden = true; _wait.textContent = ''; return; }
+  const ms = _leftMs();
+  _wait.hidden = false;
+  _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
+  _wait.title = n + (n === 1 ? ' generation is running' : ' generations are running side by side')
+    + '. The wait is the longest of them, from how long the last ones of the same kind took.';
+}
 
 // ── the button ──────────────────────────────────────────────────────────────
 function _paintButton() {
@@ -274,6 +334,7 @@ async function _poll() {
   _items = d.items || [];
   _counts = d.counts || { running: 0, unseen: 0 };
   _paintButton();
+  _paintWait();
   if (_menu) _paintMenu();
 
   const fresh = _items.filter(r => r.state !== 'running' && !r.notified);
@@ -293,11 +354,20 @@ export function mountAlerts(nav) {
   _btn.appendChild(_el('span', null, 'Alerts'));
   _btn.appendChild(_el('span', 'sv3-al-count'));
   _btn.addEventListener('click', _toggle);
-  nav.insertBefore(_btn, nav.querySelector('a[href="/library"]'));
+  const at = nav.querySelector('a[href="/library"]');
+  // The wait stands to the LEFT of the button, so the two read as one thing: what is running, and
+  // how long it has to go (the owner, 2026-09-22).
+  _wait = _el('span', 'sv3-al-wait');
+  _wait.hidden = true;
+  nav.insertBefore(_wait, at);
+  nav.insertBefore(_btn, at);
   _paintButton();
   _poll();
   _timer = setInterval(_poll, POLL_MS);
+  // The journal is read every few seconds; the wait is recomputed every second from what was read,
+  // so it counts down smoothly instead of stepping.
+  _tick = setInterval(_paintWait, 1000);
   // A window that is not looked at still has work going on in it; the app keeps polling on
   // purpose (desktop/main.js turns background throttling off for the same reason).
-  window.addEventListener('beforeunload', () => clearInterval(_timer));
+  window.addEventListener('beforeunload', () => { clearInterval(_timer); clearInterval(_tick); });
 }

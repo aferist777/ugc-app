@@ -86,6 +86,12 @@ let _picking = false;                     // the open fragment's frame list is d
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
 let _lookedAt = '';                       // the project the journal was last asked about
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
+// WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING (phase X4, the owner 2026-09-22): its clip, playing,
+// or its frame. The clip when there is one, because that is the thing that was just made; pressing
+// the frame moves the stage to it, and pressing the clip brings it back. Forgotten when another
+// fragment is opened - each is looked at on its own terms.
+let _stagePick = '';                      // '' | 'clip' | 'frame'
+let _stageFor = -2;                       // the fragment _stagePick belongs to
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 function _urlLine() {
@@ -429,10 +435,8 @@ async function _saveEnvMotion(p, motion) {
 // stale (F4). The first two are credits; the clips are dollars, which is why the zone asks a second
 // press when there are any.
 let _writing = '';                        // 'place' | 'lines' | 'clips' | ''
-// Five clips at a time, a second apart - the same rule the frames leave by (routes/scen3.js,
-// SUBMIT_BATCH). A batch is awaited whole: these are two-minute renders, not submissions.
-const CLIP_BATCH = 5;
-const CLIP_GAP_MS = 1000;
+// How fast they leave is the SERVER's business now (phase X1): one a second, and it does not wait
+// for any of them. The page only asks for the list and follows the rows.
 
 // Can this line be clipped at all, and what would it cost? The same ladder the server refuses by
 // (routes/scen3.js, _clipPlan), so the page never asks for what will be turned down.
@@ -455,11 +459,24 @@ function _clipWork(p, lines) {
   return out;
 }
 
-async function _makeClips(p, want) {
-  for (let at = 0; at < want.length; at += CLIP_BATCH) {
-    if (at) await new Promise(r => setTimeout(r, CLIP_GAP_MS));
-    await Promise.all(want.slice(at, at + CLIP_BATCH).map(x => _makeClip(_ctx.project || p, x.i)));
-    if (_readErr) return;                 // one failure is enough to stop paying for more
+// EVERY FRAGMENT AT ONCE, ASKED FOR BY THE SERVER (phase X1, the owner 2026-09-22). This used to
+// send five and then WAIT for all five to land before sending five more, which put the run inside
+// the page: leaving it left the rest of the script unmade, and that is exactly what happened to the
+// owner's ten-line project. Now one call hands the whole list over (routes/scen3.js,
+// /scen3/fragments/clips), every fragment gets its journal row from the press, and the server sends
+// them a second apart without waiting for any. The panel adopts the rows and shows each fragment
+// waiting, the same way it does after a reload.
+async function _makeClips(p) {
+  try {
+    const r = await _post('/api/scen3/fragments/clips', { projectId: p.id, key: (_ctx && _ctx.key) || '' });
+    _lookedClips = '';                    // adopt the rows this call just made
+    _pickUpClips();
+    const queued = (r.queued || []).length;
+    // Nothing went: say the first real reason rather than leaving a button that did nothing.
+    const why = (r.skipped || []).find(x => !/already/.test(String(x.why || '')));
+    if (!queued && why) _readErr = 'Fragment ' + why.line + ': ' + why.why;
+  } catch (e) {
+    _readErr = 'The clips were not asked for: ' + e.message;
   }
 }
 
@@ -491,7 +508,7 @@ async function _writeVideo(p, opts) {
     if (want.length) {
       _writing = 'clips';
       _ctx.repaint();
-      await _makeClips(now, want);
+      await _makeClips(now);
     }
   }
   _writing = '';
@@ -627,6 +644,7 @@ export function paint(host, ctx, api) {
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
+  if (_stageFor !== _open) { _stageFor = _open; _stagePick = ''; }
 
   host.classList.add('is-split');
   const left = el('div', 'mv3-wk-half is-frags');
@@ -637,6 +655,7 @@ export function paint(host, ctx, api) {
 
   _pickUpDrawing();
   _pickUpClips();
+  VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint (X2)
   // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
   // on the right, with everything else that is set once for the whole video.
   _list(left, p, lines);
@@ -1493,8 +1512,12 @@ function _frameCol(p, l, i) {
     img.alt = '';
     img.src = derived(fr.preview || fr.path, 'card');
     box.appendChild(img);
-    box.title = 'Open it large';
-    box.addEventListener('click', () => showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }));
+    box.title = 'Show it on the stage; right-click to open it large';
+    box.addEventListener('click', () => { _stagePick = 'frame'; _ctx.repaint(); });
+    box.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] });
+    });
   } else {
     box.appendChild(el('span', '', _drawing.size ? 'drawing…' : 'no frames yet'));
   }
@@ -1705,8 +1728,14 @@ function _clipCol(p, l, i, rs, take) {
     box.appendChild(el('span', '', 'no clip'));
   }
   if (c && c.thumb) {
-    box.title = 'Open it large';
-    box.addEventListener('click', () => showPicture({ src: c.thumb, name: 'clip of fragment ' + (i + 1), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] }));
+    // Pressed, it PLAYS on the stage (X4) - a four-second clip is not worth a window over the whole
+    // panel. The window is still there on the right button, for looking at one frame of it closely.
+    box.title = 'Play it on the stage; right-click to open it large';
+    box.addEventListener('click', () => { _stagePick = 'clip'; _ctx.repaint(); });
+    box.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showPicture({ src: c.thumb, name: 'clip of fragment ' + (i + 1), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] });
+    });
   }
   col.appendChild(box);
   const fr = _frameFor(p, l, i).v;
@@ -1807,9 +1836,12 @@ export function openPicture(p) {
     };
   }
   const c = _clipOf(p, l, _open);
-  if (c && c.thumb) return { src: c.thumb, caption: 'fragment ' + (_open + 1) + ' · clip' };
   const fr = _frameFor(p, l, _open).v;
-  if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'fragment ' + (_open + 1) };
+  const name = 'fragment ' + (_open + 1);
+  // The clip, as a film with its own sound, unless the frame was asked for (X4).
+  if (c && c.path && _stagePick !== 'frame') return { film: c.path, caption: name + ' · clip' };
+  if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: name + (c ? ' · frame' : '') };
+  if (c && c.thumb) return { src: c.thumb, caption: name + ' · clip' };
   return null;
 }
 

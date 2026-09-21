@@ -346,7 +346,9 @@ function _stage(chosen) {
   // doors are back the moment the line is closed (a second press on its row).
   const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
-    PV.showStill(pic.src, pic.caption);
+    // A clip PLAYS here (X4); everything else is a picture.
+    if (pic.film) PV.showFilm(pic.film, pic.caption);
+    else PV.showStill(pic.src, pic.caption);
     // A picture that can be REFRAMED brings a selection with it (V9): the panel says the shape - the
     // project's format - and this puts the frame on the stage and the acts along its foot. The order
     // matters: `showStill` with a new picture drops any selection, so the crop is asked for after it.
@@ -512,6 +514,9 @@ function _voiceApi(chosen) {
     },
     go: _go,
     repaint: () => _ctx.repaint(),
+    // The SERVER writes the takes now (phase X2), so the panel has to read the project back to see
+    // them arrive rather than trust the answer to its own call.
+    reload: () => (_ctx.reloadProject ? _ctx.reloadProject() : Promise.resolve()),
     note: _note,
     patchChar: async (fields) => {
       const d = await fetch('/api/char-store/' + encodeURIComponent(chosen.id), {
