@@ -2703,20 +2703,12 @@ router.post('/scen3/voice/speak', async (req, res) => {
     const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
     const model = voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN;
 
-    // The cast character's voice, and only that. There is no chooser and no override:
-    // one ad, one voice. Saying so plainly beats a 404 from ElevenLabs.
-    const chars = _read(path.join(DATA_DIR, 'characters.json'));
-    const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
-    const cast = _normCasting(proj.casting);
-    const ch = arr.find(c => String(c.id) === cast.characterId)
-            || arr.find(c => String(c.name) === cast.characterName);
-    const voiceId = String((ch && ch.voice) || '').trim();
-    if (!voiceId) {
-      return res.status(400).json({ success: false,
-        error: cast.characterName
-          ? `"${cast.characterName}" has no voice saved — set one in the Character tab`
-          : 'cast a character first: the read uses its voice' });
-    }
+    // The cast character's voice when they have one; the project's own pick before a character
+    // is cast, or for a character without a voice (phase W2.5). One ad, one voice, and the same
+    // rule the page shows (_castVoice). Saying plainly what is missing beats a 404 from ElevenLabs.
+    const cv = _castVoice(proj);
+    if (!cv.has) return res.status(400).json({ success: false, error: cv.reason });
+    const voiceId = cv.id;
 
     // A take is stale when the words it was made from are no longer the words on the
     // line. Without an explicit `only`, this endpoint voices exactly what needs it and
@@ -2733,12 +2725,15 @@ router.post('/scen3/voice/speak', async (req, res) => {
     const dir = PROJECTS.dirOf(id, 'voice');
 
     const report = { variant, model, spoken: 0, skipped: [], failed: [] };
-    for (const i of only) {
+    // The lines of one call are spoken TOGETHER (the owner, 2026-09-21: three at a time from the
+    // page), and the project is written once when all have answered - three calls at once would
+    // race for the project file and lose each other's takes.
+    await Promise.all(only.map(async (i) => {
       const l = lines[i];
       // the take on show is what gets spoken; a tagged take that is not there falls
       // back to nothing rather than silently voicing the other variant
       const text = textOf(l);
-      if (!text.trim()) { report.skipped.push(i + 1); continue; }
+      if (!text.trim()) { report.skipped.push(i + 1); return; }
       try {
         const buf = await _speakLine(key, voiceId, model, text, voice.ttsParams);
         const name = `v${id}_${i + 1}_${variant}_${Date.now()}.mp3`;
@@ -2759,7 +2754,9 @@ router.post('/scen3/voice/speak', async (req, res) => {
         console.warn(`[scen3/voice/speak] line ${i + 1} failed:`, body);
         report.failed.push({ line: i + 1, error: body });
       }
-    }
+    }));
+    report.skipped.sort((a, c) => a - c);
+    report.failed.sort((a, c) => a.line - c.line);
 
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
@@ -3492,9 +3489,15 @@ const _normVoice = (v) => {
     // Which service speaks the lines. Every field below belongs to it, so a second
     // provider brings its own set rather than borrowing these.
     provider:  VOICE_PROVIDERS.includes(s.provider) ? s.provider : 'elevenlabs',
-    // No voice field: the read always uses the CAST CHARACTER's voice. With no way to
-    // switch, a take can never have been made with a different voice, so nothing has
-    // to be keyed by voice and no take can go stale for that reason.
+    // The read uses the CAST CHARACTER's voice when there is one. Before a character is cast
+    // the project may choose a voice of its own (the owner, 2026-09-21, phase W2.5): `pick` is
+    // that voice - the entry the picker took, as a character's voice list keeps it - and the
+    // read falls back to it. A character with a saved voice wins the moment they are cast.
+    pick:      (s.pick && typeof s.pick === 'object' && s.pick.voiceId) ? {
+      voiceId: String(s.pick.voiceId), name: String(s.pick.name || ''), sample: String(s.pick.sample || ''),
+      gender: String(s.pick.gender || ''), age: String(s.pick.age || ''), accent: String(s.pick.accent || ''),
+      descriptive: String(s.pick.descriptive || ''), language: String(s.pick.language || ''),
+    } : null,
     tagsOn:    !!s.tagsOn,                  // off -> v2, on -> v3 with tags
     mood:      String(s.mood || ''),        // which mood's tag set the tagger may use
     // The one switch. It decides what the cards show, what Voice all produces, and
@@ -3527,14 +3530,18 @@ const _projSummary = p => ({
 // ten failures without ever naming the cause.
 function _castVoice(p) {
   const cast = _normCasting((p || {}).casting);
-  if (!cast.characterId && !cast.characterName) return { has: false, reason: 'no character cast yet' };
+  // The project's own pick reads when there is no character to read for, or the character has
+  // no voice of their own (phase W2.5).
+  const pick = _normVoice((p || {}).voice).pick;
+  const own = pick ? { has: true, id: pick.voiceId, character: '', index: 1, count: 1, own: true, name: pick.name } : null;
+  if (!cast.characterId && !cast.characterName) return own || { has: false, reason: 'no character cast yet' };
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
   const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
   const ch = arr.find(c => String(c.id) === cast.characterId)
           || arr.find(c => String(c.name) === cast.characterName);
-  if (!ch) return { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
+  if (!ch) return own || { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
   const id = String(ch.voice || '').trim();
-  if (!id) return { has: false, reason: `"${ch.name}" has no voice saved — set one in the Character tab` };
+  if (!id) return own || { has: false, reason: `"${ch.name}" has no voice saved — set one in the Character tab` };
   // The voice is NAMED after the character plus its number in that character's list, because
   // "Adrian - Cinematic Deep Male" says nothing about whose voice it is while a project is
   // being read. An id not in the list yet still counts as the first one.
@@ -3599,9 +3606,13 @@ router.post('/scen3/projects', (req, res) => {
       // the preset it did not touch stays what it is on disk rather than what the page last saw.
       const video = (b.video && typeof b.video === 'object')
         ? { ...(list[i].video || {}), ...b.video } : undefined;
+      // And the voice settings: the page picks a voice for the project (`pick`) while the tagger
+      // and the reads write the rest on the server.
+      const voice = (b.voice && typeof b.voice === 'object')
+        ? { ...(list[i].voice || {}), ...b.voice } : undefined;
       // The owner is pinned like the id: a save cannot hand a project to somebody else.
       const merged = _normProject({
-        ...list[i], ...b, ...(casting ? { casting } : {}), ...(video ? { video } : {}),
+        ...list[i], ...b, ...(casting ? { casting } : {}), ...(video ? { video } : {}), ...(voice ? { voice } : {}),
         id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;
@@ -3900,9 +3911,12 @@ async function _submitSetFrame(b) {
   const pose = _poseFor(set.poseId, set.group);
   const cam = _loadFrameOpts().cameras.find(c => c.id === set.camera) || null;
   const ref = await _frameRef(id, cast);
+  // The references, hosted once for a whole set by the plan and handed in (`refs`); a frame made
+  // again on its own hosts them itself.
+  const refs = (b.refs && typeof b.refs === 'object') ? b.refs : {};
   const urls = [];
-  if (pose) urls.push(await _hostLocal(pose.file));
-  urls.push(await _hostLocal(cast.obrazImage), await _hostLocal(cast.locationImage));
+  if (pose) urls.push(refs.pose || await _hostLocal(pose.file));
+  urls.push(refs.look || await _hostLocal(cast.obrazImage), refs.place || await _hostLocal(cast.locationImage));
 
   const parts = ['SHOT SIZE - the most important constraint, obey it before anything else: ' + set.rule];
   parts.push(pose ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
@@ -3957,11 +3971,14 @@ router.post('/scen3/frames/plan', async (req, res) => {
     ]);
     const moments = await _planFrames({ n, set, mood, wish, ref, lookUrl, placeUrl, poseUrl });
 
+    // Every frame asked for at once (the owner): the references were hosted once above and ride
+    // along; the retry of one frame (the row's "try again") carries its own request without them.
     const setId = 's' + Date.now();
-    const alerts = [];
-    for (let k = 0; k < moments.length; k++) {
+    const refs = { look: lookUrl, place: placeUrl, pose: poseUrl };
+    const outs = await Promise.all(moments.map((moment, k) =>
+      _submitSetFrame({ projectId: id, set: set.id, setId, n: k + 1, moment, format: b.format, refs })));
+    const alerts = outs.map((out, k) => {
       const request = { projectId: id, set: set.id, setId, n: k + 1, moment: moments[k], format: b.format };
-      const out = await _submitSetFrame(request);
       const rec = JOBS.submitted({
         kind: 'image', what: 'frame',
         title: 'Frame · ' + set.label + ' ' + (k + 1) + '/' + moments.length,
@@ -3970,8 +3987,8 @@ router.post('/scen3/frames/plan', async (req, res) => {
         taskIds: [out.taskId],
         job: { type: 'frame', params: { request, file: out.file } },
       });
-      alerts.push({ alertId: rec.id, taskId: out.taskId, n: k + 1 });
-    }
+      return { alertId: rec.id, taskId: out.taskId, n: k + 1 };
+    });
     console.log('[scen3/frames/plan] ' + id + ' ' + set.id + ' x' + moments.length + ' mood=' + mood);
     res.json({ success: true, setId, alerts });
   } catch (e) {

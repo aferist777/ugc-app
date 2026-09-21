@@ -229,13 +229,15 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // The title line carries the filter: both answer "which faces am I looking at", and a
-  // second line of labels would cost the grid a row of them.
+  // The title line carries where the script stands - read, frames, clips - and `generate all`,
+  // whatever face the panel wears (the owner, 2026-09-21): the counters are the one thing worth
+  // seeing from every shelf. A shelf's own bar joins the line, or wraps under it when it is tight.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
-  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, in what voice - and the frame and the clip of each fragment'));
+  txt.title = 'Who says it, where, in what voice - and the frame and the clip of each fragment';
   head.appendChild(txt);
+  if (ctx.project) FRAG.paintCounters(head, ctx, _saving);
   root.appendChild(head);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
@@ -270,8 +272,9 @@ export function paint(host, ctx) {
   } else if (_view === 'newenv') {
     ENV.paintMaker(scroll, head, _envApi());
     _stage(chosen);
-  } else if (_view === 'voice' && chosen) {
-    // The voices are chosen in the right column, beside the script (owner, 2026-09-21).
+  } else if (_view === 'voice') {
+    // The voices are chosen in the right column, beside the script (owner, 2026-09-21) - with
+    // nobody cast too: the project then takes a voice of its own (js/merge-v3/wk-voice.js).
     FRAG.paint(scroll, ctx, _fragApi(chosen));
     _stage(chosen);
   } else if (_view === 'newlb' && who) {
@@ -343,6 +346,7 @@ function _stage(chosen) {
   if (pic) {
     PV.showStill(pic.src, pic.caption);
     _stageButton(null);
+    _stageClears(false, false);
     return;
   }
   const who = _whoHalf(chosen), where = _whereHalf();
@@ -360,6 +364,37 @@ function _stage(chosen) {
   } else {
     _stageButton(null);
   }
+  // The cross in the corner of a half that holds something WRITTEN takes it off the project (the
+  // owner, 2026-09-21). In the corner of the half, not of the picture - the picture moves under the
+  // zoom, the cross does not - and gone while the half shows a trial: `select` is the question then.
+  const cast = _casting();
+  _stageClears(!!(cast.characterId || cast.obrazImage) && !_try.char, !!cast.locationImage && !_try.place);
+}
+
+// The written choice of a half, taken off: the character with their look, or the place. The
+// frames and the reads already made stay what they are - they are files - and nothing else moves.
+function _clearHalf(half) {
+  if (_saving) return;
+  _noTry();
+  if (half === 'top') _patch({ characterId: '', characterName: '', obrazId: '', obrazImage: '' });
+  else _patch({ locationId: '', locationImage: '' });
+}
+
+function _stageClears(top, bottom) {
+  const stage = document.getElementById('mv3-stage');
+  if (!stage) return;
+  stage.querySelectorAll('.mv3-wk-clear').forEach(x => x.remove());
+  const cast = _casting();
+  const mk = (half, title) => {
+    const b = _el('button', 'mv3-wk-clear' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
+    b.type = 'button';
+    b.title = title;
+    b.disabled = _saving;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half); });
+    stage.appendChild(b);
+  };
+  if (top) mk('top', 'Take ' + (cast.characterName || 'the character') + ' off this project');
+  if (bottom) mk('bottom', 'Take the environment off this project');
 }
 
 // A half of the stage was pressed. The left button opens its shelf; the right one offers the
@@ -411,8 +446,10 @@ function _where(view) {
 
 // THE VOICE LEVEL (js/merge-v3/wk-voice.js). All it may reach in here is the character whose
 // voice it is and the one door that edits a character - the Character page's own endpoint, so a
-// voice taken here is on that page the moment it is taken and the two cannot disagree.
+// voice taken here is on that page the moment it is taken and the two cannot disagree - and,
+// with nobody cast, the project's own voice (`voice.pick`, routes/scen3.js).
 function _voiceApi(chosen) {
+  const setProject = (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); };
   return {
     char: () => chosen || null,
     project: () => (_ctx && _ctx.project) || null,
@@ -420,9 +457,20 @@ function _voiceApi(chosen) {
     // INTO the record, not over it. The workshop hands this panel its own copy of the project on
     // every paint (js/merge-v3/workshop.js), so a replacement here would last exactly until the
     // next repaint and then be the old one again.
-    setProject: (p) => { if (_ctx && _ctx.project && p) Object.assign(_ctx.project, p); },
+    setProject,
     // The mood of the video - the tagger marks the script up by it (lib/motion-presets.js).
     mood: () => String((((_ctx && _ctx.project) || {}).video || {}).mood || ''),
+    // The project's own voice, and the way to set one: what the reads use while nobody with a
+    // voice of their own is cast.
+    pick: () => ((((_ctx && _ctx.project) || {}).voice || {}).pick) || null,
+    setPick: async (entry) => {
+      const r = await fetch('/api/scen3/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: _ctx.project.id, voice: { pick: entry || null } }),
+      }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+      setProject(r.project);
+    },
     go: _go,
     repaint: () => _ctx.repaint(),
     note: _note,
@@ -568,6 +616,7 @@ function _paintLookbooks(host, head, c) {
 function _showDressing(c) {
   PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
   _stageButton(null);
+  _stageClears(false, false);
 }
 
 // The button lives in the stage, between the halves. Rebuilt rather than kept: the stage is
@@ -728,6 +777,7 @@ function _paintNewLookbook(host, head, c) {
   // on the right, and a second copy of it on the stage would say nothing new.
   PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
   _stageButton(null);
+  _stageClears(false, false);
 }
 
 // ── One tile on a lookbook shelf ────────────────────────────────────────────

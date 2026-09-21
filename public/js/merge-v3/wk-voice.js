@@ -24,6 +24,12 @@
    (PATCH /api/char-store/:id) - so a voice taken here is on the Character page the moment it
    is taken, and the two cannot disagree.
 
+   BEFORE THERE IS A CHARACTER the project may choose a voice of its own (the owner, 2026-09-21,
+   phase W2.5): `choose a voice` opens the same library, and the voice taken is written on the
+   project (`voice.pick`, routes/scen3.js) - the reads use it until a character with a voice of
+   their own is cast, and a character's voice wins the moment they are. A character without one
+   reads in the project's pick too.
+
    TAKING IS THE ONLY PAID THING HERE, and it is small: the account gains a voice slot and the
    server records our own 30-second demo with it (routes/scen3.js, /scen3/voices/take). A voice
    the library already holds keeps the demo it has and costs nothing. Searching and listening to
@@ -46,10 +52,13 @@ let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
 let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: '' };
 
-// The reads. One line at a time, even for "read all": the call takes a line and answers when it
-// has been spoken, so asking for them one by one is the same money and a panel that says how far
-// it has got instead of freezing for a minute.
-let _reading = -1;                      // the line being spoken now, -1 for none
+// The reads. THREE LINES AT A TIME for "generate" (the owner, 2026-09-21): one call carries a
+// chunk, the server speaks its lines together and writes the project once, and half a second
+// later the next chunk goes - so the panel says how far it has got instead of freezing for a
+// minute, and the script is read in a third of the time.
+const CHUNK = 3;
+const CHUNK_GAP_MS = 500;
+let _reading = [];                      // the lines being spoken now
 let _batch = null;                      // { done, total } while every stale line is being read
 let _tagging = false;                   // the tagger is marking the script up
 let _rsaid = '';                        // what the reads have to say, and whether it is bad
@@ -114,16 +123,29 @@ const _active = (rec) => {
 // ── The voice row ───────────────────────────────────────────────────────────
 // The character has a voice or they have not, and both answers lead to the same place: the
 // sub-level where voices are chosen. The dropdown is only for the ones already theirs - picking
-// a NEW one is a search, not a choice from a list.
+// a NEW one is a search, not a choice from a list. With nobody cast, or a character with no
+// voice of their own, the row is the project's own pick - or the way to one.
 export function paintRow(host, api) {
   const rec = api.char();
-  if (!rec) { host.appendChild(api.note('reading the character…')); return; }
+  const pick = api.pick();
   const mine = _saved(rec);
   const now = _active(rec);
 
   const row = el('div', 'mv3-wk-vrow is-now');
-  if (!mine.length) {
-    row.appendChild(el('span', 'mv3-wk-vsub is-grow', (rec.name || 'This character') + ' has no voice yet - every line is read in it'));
+  if (!mine.length && pick) {
+    // The project's own voice: one, so a name rather than a menu of one.
+    row.appendChild(_playBtn(pick.sample || '', 'our own demo'));
+    const txt = el('div', 'mv3-wk-vtxt');
+    txt.appendChild(el('div', 'mv3-wk-vname', pick.name || pick.voiceId));
+    txt.appendChild(el('div', 'mv3-wk-vsub', rec
+      ? 'the project’s voice - ' + (rec.name || 'the character') + ' has none of their own'
+      : 'the project’s voice - a character with one of their own will speak in theirs'));
+    row.appendChild(txt);
+    row.appendChild(_pick(api, 'change'));
+  } else if (!mine.length) {
+    row.appendChild(el('span', 'mv3-wk-vsub is-grow', rec
+      ? (rec.name || 'This character') + ' has no voice yet - every line is read in it'
+      : 'No voice yet - choose one for the project, or a character who has one'));
     row.appendChild(_pick(api, 'choose a voice'));
   } else {
     row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
@@ -150,8 +172,12 @@ export function paintRow(host, api) {
   if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
 }
 
-/** Does the character have a voice to read in? The field's `generate` waits for one. */
+/** Does the character have a voice to read in? */
 export const hasVoice = (rec) => !!_active(rec);
+/** Is there a voice to read in at all - the character's, or the project's own pick? The field's
+ *  `generate` and every read button wait for one. The server applies the same rule
+ *  (routes/scen3.js, _castVoice). */
+export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 
 function _pick(api, label) {
   const b = el('button', 'mv3-wk-vmore', label);
@@ -180,15 +206,35 @@ function _bar(host, api) {
 export function paintPicker(host, api) {
   _bar(host, api);
   const rec = api.char();
-  if (!rec) { host.appendChild(api.note('reading the character…')); return; }
   if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
 
   const mine = _saved(rec);
-  const now = String(rec.voice || '');
+  const now = String((rec && rec.voice) || '');
+  const own = api.pick();
 
-  host.appendChild(el('div', 'mv3-wk-vhead', mine.length
-    ? (rec.name || 'This character') + '’s voices'
-    : (rec.name || 'This character') + ' has no voice yet'));
+  if (rec) {
+    host.appendChild(el('div', 'mv3-wk-vhead', mine.length
+      ? (rec.name || 'This character') + '’s voices'
+      : (rec.name || 'This character') + ' has no voice yet'));
+  } else {
+    host.appendChild(el('div', 'mv3-wk-vhead', own ? 'The project’s voice' : 'No voice yet'));
+  }
+  // The project's own pick, when it is what the reads use: no character, or one without a voice.
+  if (own && !mine.length) {
+    const row = el('div', 'mv3-wk-vrow is-on');
+    row.appendChild(_playBtn(own.sample || '', 'our own demo'));
+    const txt = el('div', 'mv3-wk-vtxt');
+    txt.appendChild(el('div', 'mv3-wk-vname', own.name || own.voiceId));
+    txt.appendChild(el('div', 'mv3-wk-vsub', _sub(own) || 'no tags'));
+    row.appendChild(txt);
+    row.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
+    host.appendChild(row);
+    host.appendChild(api.note(rec
+      ? 'Every line is read in it until ' + (rec.name || 'the character') + ' is given a voice of their own.'
+      : 'Every line is read in it. A character cast with a voice of their own speaks in theirs.'));
+  } else if (!rec && !own) {
+    host.appendChild(api.note('Take one from the library below - it becomes the project’s voice. A character cast later with a voice of their own speaks in theirs.'));
+  }
   for (const v of mine) {
     const row = el('div', 'mv3-wk-vrow' + (String(v.voiceId) === now ? ' is-on' : ''));
     row.appendChild(_playBtn(v.sample || '', 'our own demo'));
@@ -273,9 +319,10 @@ export function paintPicker(host, api) {
     row.appendChild(txt);
     const take = el('button', 'mv3-wk-vuse', _busy === 'take:' + v.voice_id ? '…' : 'take');
     take.type = 'button';
-    take.title = have.has(String(v.voice_id))
-      ? 'This character already has it - taking it again only makes it their voice'
-      : 'Add it to the account and to this character';
+    take.title = !rec ? 'Add it to the account and make it the project’s voice'
+      : have.has(String(v.voice_id))
+        ? 'This character already has it - taking it again only makes it their voice'
+        : 'Add it to the account and to this character';
     take.disabled = !!_busy;
     take.addEventListener('click', () => _take(api, v));
     row.appendChild(take);
@@ -352,8 +399,8 @@ async function _star(api, voiceId) {
 
 // Taking ADDS the voice to the account - ElevenLabs answers voice_not_found for a library id
 // that is not in it - and the account-side id it hands back is the one that goes on the
-// character. It becomes the voice straight away: the one just chosen on purpose is the one
-// meant to be used.
+// character, or on the project when nobody is cast. It becomes the voice straight away: the one
+// just chosen on purpose is the one meant to be used.
 async function _take(api, card) {
   if (_busy) return;
   _busy = 'take:' + card.voice_id;
@@ -366,14 +413,24 @@ async function _take(api, card) {
     })).json();
     if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
 
-    const rec = api.char() || {};
-    const all = _saved(rec);
-    const had = all.some(v => String(v.voiceId) === String(t.voiceId));
+    const rec = api.char();
     const entry = {
       voiceId: t.voiceId, name: t.name || card.name, gender: card.gender || '',
       age: card.age || '', accent: card.accent || '', descriptive: card.descriptive || '',
-      sample: t.sample || '', dur: t.dur || 0,
+      language: card.language || '', sample: t.sample || '', dur: t.dur || 0,
     };
+    if (!rec) {
+      // Nobody cast: the project's own voice (routes/scen3.js, voice.pick).
+      await api.setPick(entry);
+      _said = t.reused ? 'Already in the library, so its demo was kept. It is the project’s voice now.'
+        : t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.'
+          : 'Taken - it is the project’s voice now.';
+      _bad = false;
+      _busy = '';
+      return _repaint(api);
+    }
+    const all = _saved(rec);
+    const had = all.some(v => String(v.voiceId) === String(t.voiceId));
     await api.patchChar({
       voice: t.voiceId,
       voices: all.filter(v => String(v.voiceId) !== String(t.voiceId)).concat([entry]),
@@ -405,9 +462,9 @@ async function _take(api, card) {
 const _needs = (l) => !isRead(l);
 const _tagged = (l) => !!String((l && l.tagged) || '').trim();
 
-/** What the reads are doing: the tagger at work, the line being spoken (-1 for none), and the
- *  batch "generate" is walking, if any. */
-export const reading = () => ({ tagging: _tagging, line: _reading, batch: _batch });
+/** What the reads are doing: the tagger at work, the lines being spoken (none, one, or a chunk
+ *  of three), and the batch "generate" is walking, if any. */
+export const reading = () => ({ tagging: _tagging, lines: _reading, busy: _tagging || _reading.length > 0 || !!_batch, batch: _batch });
 
 /** The words of a line, changed - with their [tags] when the line has tags, which the server keeps
  *  as long as the words in them are these words. What the take said stays with the take, which is
@@ -456,7 +513,7 @@ async function _tag(api, only) {
  * credits rather than dollars.
  */
 export async function generate(api) {
-  if (_tagging || _reading >= 0 || _batch) return;
+  if (_tagging || _reading.length || _batch) return;
   const p = api.project() || {};
   const lines = Array.isArray(p.lines) ? p.lines : [];
   const untagged = lines.map((l, i) => (_tagged(l) ? -1 : i)).filter(i => i >= 0);
@@ -475,53 +532,63 @@ export async function generate(api) {
   await readAll(api);
 }
 
-// One line, spoken now - tagged first if it has no tags yet, because every read is v3 with tags.
-// The server writes the take into the project itself, so what comes back is the project as it now
-// stands - which is what the panel paints from.
-// `inBatch` is how "read all" gets past the guard that stops a second read starting on top of one
-// already running: the batch IS that runner, and without it the first line of a batch refuses
+// A chunk of lines, spoken now in one call - tagged first where they have no tags yet, because
+// every read is v3 with tags. The server speaks them together, writes their takes into the
+// project itself and answers with the project as it now stands - which is what the panel paints
+// from. `inBatch` is how "generate" gets past the guard that stops a second read starting on top
+// of one already running: the batch IS that runner, and without it its first chunk refuses
 // itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
-export async function readLine(api, i, inBatch) {
-  if (_reading >= 0 || (_batch && !inBatch)) return false;
-  _reading = i;
+async function _speak(api, lines, inBatch) {
+  if (_reading.length || (_batch && !inBatch)) return false;
+  _reading = lines.slice();
   _rsaid = ''; _rbad = false;
   _repaint(api);
   let ok = false;
   try {
     const p = api.project() || {};
-    const l = (Array.isArray(p.lines) ? p.lines : [])[i];
-    if (l && !_tagged(l)) await _tag(api, [i]);
+    const all = Array.isArray(p.lines) ? p.lines : [];
+    const untagged = lines.filter(i => all[i] && !_tagged(all[i]));
+    if (untagged.length) await _tag(api, untagged);
     const d = await (await fetch('/api/scen3/voice/speak', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: api.projectId(), only: [i] }),
+      body: JSON.stringify({ projectId: api.projectId(), only: lines }),
     })).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    const bad = ((d.report || {}).failed || [])[0];
-    if (bad) throw new Error(bad.error || 'the line was not read');
     api.setProject(d.project);
+    const bad = ((d.report || {}).failed || []);
+    if (bad.length) {
+      throw new Error((bad.length === 1 ? 'line ' + bad[0].line : 'lines ' + bad.map(b => b.line).join(', '))
+        + ' - ' + (bad[0].error || 'not read'));
+    }
     ok = true;
   } catch (e) {
-    _rsaid = 'Line ' + (i + 1) + ' was not read: ' + e.message;
+    _rsaid = (lines.length === 1 ? 'Line ' + (lines[0] + 1) + ' was not read: ' : 'Not read: ') + e.message;
     _rbad = true;
   }
-  _reading = -1;
+  _reading = [];
   _repaint(api);
   return ok;
 }
 
-// Every line that needs it, one after another, so the panel can say how far it has got. It stops
-// at the first failure: twelve identical refusals say nothing the first one did not. A line whose
-// tags were dropped with an edit is tagged again on its way (readLine).
+/** One line, spoken now - from the open fragment's own button. */
+export const readLine = (api, i) => _speak(api, [i], false);
+
+// Every line that needs it, three at a time with half a second between the chunks (the owner,
+// 2026-09-21), so the panel can say how far it has got. It stops at the first chunk that fails:
+// twelve identical refusals say nothing the first one did not.
+const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 export async function readAll(api) {
   const p = api.project() || {};
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
   _repaint(api);
-  for (const i of want) {
-    const ok = await readLine(api, i, true);
+  for (let at = 0; at < want.length; at += CHUNK) {
+    if (at) await _wait(CHUNK_GAP_MS);
+    const chunk = want.slice(at, at + CHUNK);
+    const ok = await _speak(api, chunk, true);
     if (!ok) break;
-    _batch.done++;
+    _batch.done += chunk.length;
     _repaint(api);
   }
   _batch = null;

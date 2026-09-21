@@ -6,10 +6,12 @@
    The hub of the setup step (js/merge-v3/wk-setup.js), painted into its panel. Two columns: on
    the left the whole script, one row per line with what it has - the read, the frame, the clip;
    on the right the line that is open, with everything made for it - or, with none open, the
-   GENERAL ZONE: the counters, the one mood, and the three stages of the whole video in gold,
-   voice, first frames, video, each with its own `generate` (phase W). The list never goes away
-   while a line is open: the script is one thing, and judging a line means seeing the ones around
-   it. Who and where are on the stage, not here.
+   GENERAL ZONE: the one mood, and the three zones of the whole video in gold, voice, first
+   frames, video, each a drawer with its own `generate` (phase W; open and shut, by hand or by
+   itself when its work is done or cannot start - W2.5). The counters - read, frames, clips - and
+   `generate all` stand in the step's title line, whatever the panel shows (paintCounters). The
+   list never goes away while a line is open: the script is one thing, and judging a line means
+   seeing the ones around it. Who and where are on the stage, not here.
 
    THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
    button - tagged by the mood first - and its words can be changed there too, tags and all; a take
@@ -50,6 +52,8 @@ const FRAME_PRICE = 0.06;
 const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
+const ZKEY = 'mv3_zones_v1';             // { <timeline key>: { voice, frames, video } } - a zone opened or shut by hand
+const TIP_MS = 320;                      // hover before a row's whole text appears
 
 let _ctx = null;
 let _api = null;                          // what the step lends: the character cast, the voice, the shelves
@@ -89,13 +93,48 @@ function _remember() {
     localStorage.setItem(KEY, JSON.stringify(all));
   } catch (e) { /* a private window */ }
 }
-// What was open when this project was last left: a line, 'all', or - never been here - the first.
+// What was open when this project was last left: a line, 'all', or - never been here - the
+// general zone (the owner, 2026-09-21): a new talking head starts with the settings of the whole
+// video, not with its first line.
 function _remembered() {
   try {
     const v = (JSON.parse(localStorage.getItem(KEY) || '{}') || {})[_key];
     if (v === 'all') return -1;
-    return Number.isInteger(v) && v >= 0 ? v : 0;
-  } catch (e) { return 0; }
+    return Number.isInteger(v) && v >= 0 ? v : -1;
+  } catch (e) { return -1; }
+}
+
+// ── The zones of the general zone, open or shut ─────────────────────────────
+// Each stage is a drawer (the owner, 2026-09-21): open while there is work in it, shut by itself
+// once its work is done - every line read, the set drawn - or while it cannot be worked (no
+// character in a look, no environment), and open or shut by hand, which is remembered per project.
+// A zone that finishes lets go of the hand's choice: "done" shuts it whatever it was.
+let _zoneWas = {};                        // { <zone>: done } as last painted, to catch the finish
+function _zoneChoice() {
+  try { return (JSON.parse(localStorage.getItem(ZKEY) || '{}') || {})[_key] || {}; } catch (e) { return {}; }
+}
+function _setZone(id, open) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ZKEY) || '{}') || {};
+    all[_key] = { ...(all[_key] || {}), [id]: !!open };
+    localStorage.setItem(ZKEY, JSON.stringify(all));
+  } catch (e) { /* a private window */ }
+}
+function _forgetZone(id) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ZKEY) || '{}') || {};
+    if (all[_key] && id in all[_key]) { delete all[_key][id]; localStorage.setItem(ZKEY, JSON.stringify(all)); }
+  } catch (e) { /* a private window */ }
+}
+// Open or shut, for this paint. Blocked is shut, and not to be opened; done is shut unless opened
+// by hand AFTER it was done; otherwise the hand's choice, else open.
+function _zoneOpen(id, done, blocked) {
+  if (blocked) return false;
+  if (done && _zoneWas[id] === false) _forgetZone(id);    // just finished: it shuts, whatever the hand said
+  _zoneWas[id] = !!done;
+  const choice = _zoneChoice();
+  if (typeof choice[id] === 'boolean') return choice[id];
+  return !done;
 }
 
 // ── What a line has ─────────────────────────────────────────────────────────
@@ -347,8 +386,8 @@ export function paint(host, ctx, api) {
   const lines = Array.isArray(p.lines) ? p.lines : [];
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
-  // project was left, then the first.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; }
+  // project was left, then the general zone.
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _zoneWas = {}; _tipHide(); }
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
@@ -395,45 +434,59 @@ function _notes(host) {
   if (_readErr) host.appendChild(_note(_readErr, true));
 }
 
-// What the frames and the clips cannot be made without: the person in a look, the place, and the
-// voice they are read in. Named on the buttons that need them.
+// What the frames and the clips cannot be made without: the person in a look and the place. Named
+// on the zones that wait for them.
 function _missing(p) {
   const cast = p.casting || {};
   const out = [];
   if (!cast.obrazImage) out.push('a character in a look');
   if (!cast.locationImage) out.push('an environment');
-  if (!(p.castVoice && p.castVoice.has)) out.push('a voice');
   return out;
 }
+// Is there a voice to read in - the character's, or the project's own pick? The same rule the
+// server applies (routes/scen3.js, _castVoice), read here from what the panel holds, because a
+// voice just taken is on the character record and the project copy before either is read again.
+const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 
 // ── The general zone: the whole video, in three stages ──────────────────────
-// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W.) Over everything the counters
-// and the one mood every stage reads from; then three fields in gold, one above the other - voice,
-// first frames, video - each with its own `generate` at the foot, and `generate all` to run them in
-// turn. In W1 the voice field is whole; the other two hold what F2 and F3 built until their own
-// stages come (W2, W3).
+// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W.) The one mood every stage
+// reads from, in gold; then three zones in gold, one above the other - voice, first frames, video -
+// each a drawer with its own `generate` at the foot. The counters and `generate all` stand in the
+// panel's header, whatever the panel shows (W2.5).
 function _all(host, p, lines) {
-  _counters(host, p, lines);
   _mood(host);
   _stageVoice(host, p, lines);
   _stageFrames(host, p);
-  _stageVideo(host);
+  _stageVideo(host, p);
   host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
-// One field: a gold frame, a head, a body and a foot with the stage's own `generate`.
-function _stage(host, name, sub, soon) {
-  const box = el('div', 'mv3-wk-stage' + (soon ? ' is-soon' : ''));
+// One zone: a gold frame, a head that opens and shuts it, and - open - a body and a foot with the
+// zone's own `generate`. `spec`: name, sub (what it is, while open), summary (where it stands, while
+// shut), done, blocked with its why, soon (under development: dashed).
+function _stage(host, id, spec) {
+  const open = _zoneOpen(id, !!spec.done, !!spec.blocked);
+  // Blocked outranks done: a pool made before the character was taken off is not a zone at rest.
+  const done = !!spec.done && !spec.blocked;
+  const box = el('div', 'mv3-wk-stage' + (spec.soon ? ' is-soon' : '') + (open ? '' : ' is-closed')
+    + (spec.blocked ? ' is-blocked' : '') + (done ? ' is-done' : ''));
   const head = el('div', 'mv3-wk-stage-head');
-  head.appendChild(el('span', '', name));
+  head.appendChild(el('span', '', spec.name));
+  if (done) head.appendChild(el('span', 'mv3-wk-zdone', '✓'));
+  const sub = spec.blocked ? 'needs ' + spec.why : (open ? spec.sub : spec.summary) || '';
   if (sub) head.appendChild(el('span', 'mv3-wk-vsub', sub));
+  const chev = el('span', 'mv3-wk-zchev', spec.blocked ? '' : open ? '▾' : '▸');
+  head.appendChild(chev);
+  head.title = spec.blocked ? 'Still missing: ' + spec.why : open ? 'Shut this zone' : 'Open this zone';
+  if (!spec.blocked) head.addEventListener('click', () => { _setZone(id, !open); _ctx.repaint(); });
   box.appendChild(head);
+  host.appendChild(box);
+  if (!open) return { open, body: null, foot: null };
   const body = el('div', 'mv3-wk-stage-body');
   box.appendChild(body);
   const foot = el('div', 'mv3-wk-stage-foot');
   box.appendChild(foot);
-  host.appendChild(box);
-  return { body, foot };
+  return { open, body, foot };
 }
 
 function _genButton(foot, spec) {
@@ -447,42 +500,55 @@ function _genButton(foot, spec) {
   return b;
 }
 
-// Where the script stands: read, frames, clips - and the chain that runs every stage in turn.
-function _counters(host, p, lines) {
-  const n = lines.length;
-  const top = el('div', 'mv3-wk-ftop');
-  const stat = el('div', 'mv3-wk-fstats');
-  const cell = (label, done) => {
-    const c = el('div', 'mv3-wk-fstat' + (done === n ? ' is-done' : ''));
-    c.appendChild(el('div', 'mv3-wk-fstat-n', done + '/' + n));
-    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
+// Where the script stands. The frames are a set, not a line each: what the pool holds over what
+// was asked for - the dropdown's number, or more once the pool has grown past it (owner,
+// 2026-09-21); "done" is a pool at least that big with nothing still drawing.
+function _standing(p) {
+  const lines = Array.isArray(p.lines) ? p.lines : [];
+  const have = _pool(p).length;
+  const asked = Math.max(have + _drawing.size, ((p.video || {}).frames) || 0);
+  return {
+    n: lines.length,
+    read: lines.filter(isRead).length,
+    frames: have, framesAsked: asked, framesDone: have >= asked && !_drawing.size && have > 0,
+    clips: lines.filter(l => _clipState(l) === 'ok').length,
+  };
+}
+
+/**
+ * The counters - read, frames, clips - and `generate all`, in the step's own title line, whatever
+ * the panel shows (the owner, 2026-09-21): `5/8 read · 4/4 frames · 0/8 clips`, the chain at the
+ * right. Painted by the step (js/merge-v3/wk-setup.js) before this module paints anything.
+ */
+export function paintCounters(host, ctx, saving) {
+  _ctx = ctx;
+  const p = ctx.project;
+  if (!p) return;
+  const s = _standing(p);
+  const stat = el('div', 'mv3-wk-hstats');
+  const cell = (num, label, done, title) => {
+    const c = el('span', 'mv3-wk-hstat' + (done ? ' is-done' : ''));
+    c.appendChild(el('b', '', num));
+    c.appendChild(document.createTextNode(' ' + label));
+    c.title = title;
     stat.appendChild(c);
   };
-  cell('read', lines.filter(isRead).length);
-  // The frames are a set, not a line each: what the pool holds over what was asked for - the
-  // dropdown's number, or more once the pool has grown past it (owner, 2026-09-21).
-  {
-    const have = _pool(p).length;
-    const asked = Math.max(have + _drawing.size, _video().frames || 0);
-    const c = el('div', 'mv3-wk-fstat' + (have >= asked ? ' is-done' : ''));
-    c.appendChild(el('div', 'mv3-wk-fstat-n', have + '/' + asked));
-    c.appendChild(el('div', 'mv3-wk-fstat-l', 'frames'));
-    stat.appendChild(c);
-  }
-  cell('clips', lines.filter(l => _clipState(l) === 'ok').length);
-  top.appendChild(stat);
+  cell(s.read + '/' + s.n, 'read', s.n > 0 && s.read === s.n, 'Lines read, of all the lines');
+  cell(s.frames + '/' + s.framesAsked, 'frames', s.framesDone, 'Frames in the pool, of the set asked for');
+  cell(s.clips + '/' + s.n, 'clips', s.n > 0 && s.clips === s.n, 'Lines with a clip, of all the lines');
+  if (saving) stat.appendChild(el('span', 'mv3-wk-hstat is-note', 'saving…'));
+  host.appendChild(stat);
   const all = el('button', 'mv3-wk-gen mv3-wk-genall', 'generate all');
   all.type = 'button';
   all.disabled = true;
   all.title = 'Every stage in turn - the voice and the frames together, the video after both. Comes with the video stage (W3).';
-  top.appendChild(all);
-  host.appendChild(top);
+  host.appendChild(all);
 }
 
 // THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
 // (owner, 2026-09-18) and the one vocabulary every stage reads from (2026-09-21): the tags of the
 // read, the expression in the frames, the movement in the clips. Its one line under the menu says
-// what the choice means.
+// what the choice means. In a gold frame like the zones (W2.5): it is a setting of the whole video.
 function _mood(host) {
   const v = _video();
   const box = el('div', 'mv3-wk-mood');
@@ -504,48 +570,58 @@ function _mood(host) {
   host.appendChild(box);
 }
 
-// VOICE - the first stage, the one the timeline waits for: the character's voice, and `generate`,
-// which tags the script by the mood and reads every line that needs it (ElevenLabs v3).
+// VOICE - the first zone, the one the timeline waits for: the voice the script is read in - the
+// character's, or the project's own before there is a character - and `generate`, which tags the
+// script by the mood and reads every line that needs it, three at a time (ElevenLabs v3). Shut by
+// itself once every line is read.
 function _stageVoice(host, p, lines) {
-  const { body, foot } = _stage(host, 'voice', 'ElevenLabs v3 · tags by the mood');
-  const rec = _api.char();
-  if (!rec) {
-    body.appendChild(_note('Choose who is speaking: press the upper half of the stage.'));
-  } else {
-    VOICE.paintRow(body, _api.voiceApi());
-  }
   const g = VOICE.reading();
-  const busy = g.tagging || g.line >= 0 || !!g.batch;
-  const has = !!(rec && VOICE.hasVoice(rec));
+  const read = lines.filter(isRead).length;
+  const done = lines.length > 0 && read === lines.length && !g.busy;
+  const { open, body, foot } = _stage(host, 'voice', {
+    name: 'voice', sub: 'ElevenLabs v3 · tags by the mood', done,
+    summary: read + '/' + lines.length + ' read',
+  });
+  if (!open) return;
+  VOICE.paintRow(body, _api.voiceApi());
+  const has = _canRead();
   // What the button will do: the lines still to tag, and the lines still to read.
   const untagged = lines.filter(l => !String(l.tagged || '').trim()).length;
   const unread = lines.filter(l => !isRead(l)).length;
   const will = lines.filter(l => !String(l.tagged || '').trim() || !isRead(l)).length;
   const label = g.tagging ? 'tagging…'
     : g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
-      : g.line >= 0 ? 'reading…' : 'generate';
+      : g.lines.length ? 'reading…' : 'generate';
   _genButton(foot, {
     label,
-    cap: !rec || !has || !lines.length ? '' : busy ? '' : will ? will + (will === 1 ? ' line' : ' lines') + (untagged ? ' · tags first' : '') : 'every line is read',
-    disabled: !rec || !has || busy || !lines.length || !will,
-    title: !rec ? 'Choose who is speaking first' : !has ? 'Give the character a voice first' : !will ? 'Every line is tagged and read'
-      : 'Tags by the mood where they are missing (' + untagged + '), then every line that needs reading (' + unread + ') - ElevenLabs v3',
+    cap: !has || !lines.length ? '' : g.busy ? '' : will ? will + (will === 1 ? ' line' : ' lines') + (untagged ? ' · tags first' : '') + ' · three at a time' : 'every line is read',
+    disabled: !has || g.busy || !lines.length || !will,
+    title: !has ? 'Choose a voice first - a character with one, or one for the project' : !will ? 'Every line is tagged and read'
+      : 'Tags by the mood where they are missing (' + untagged + '), then every line that needs reading (' + unread + '), three at a time - ElevenLabs v3',
     on: () => VOICE.generate(_api.voiceApi()),
   });
 }
 
-// FIRST FRAMES - a set for the whole video (owner, 2026-09-21): the shot size with its mannequin and
-// its line, how many, what the person asks for in words, and the pool as it stands - every frame a
-// door to the stage. `generate` plans the moments and asks for the frames; the lines take from the
-// pool in turn.
+// FIRST FRAMES - a set for the whole video (owner, 2026-09-21): the shot size with its mannequin
+// beside its menus and the wishes, how many, and the pool as it stands under them, the full width -
+// every frame a door to the stage. `generate` plans the moments and asks for every frame at once;
+// the lines take from the pool in turn. Shut while there is no one in a look and no place to draw
+// them in, and by itself once the set is drawn.
 function _stageFrames(host, p) {
-  const { body, foot } = _stage(host, 'first frames', 'a set for the whole video');
   const v = _video();
-  const missing = _missing(p).filter(m => m !== 'a voice');
+  const missing = _missing(p);
   const blocked = missing.length > 0;
-  const set = ((_kit && _kit.sets) || []).find(s => s.id === v.framing) || null;
+  const s = _standing(p);
+  const { open, body, foot } = _stage(host, 'frames', {
+    name: 'first frames', sub: 'a set for the whole video', done: s.framesDone,
+    blocked, why: missing.join(' and '),
+    summary: s.frames + (s.frames === 1 ? ' frame' : ' frames') + ' in the pool' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
+  });
+  if (!open) return;
+  const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
 
-  // The shot size, its mannequin beside it, and how many.
+  // The shot size, its mannequin beside it - as tall as the menus and the wishes together - and
+  // how many.
   const row = el('div', 'mv3-wk-fsetrow');
   const pose = set ? _poseById(set.poseId) : null;
   const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
@@ -581,22 +657,22 @@ function _stageFrames(host, p) {
   count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
   sets.append(framing, count);
   col.appendChild(sets);
-  if (set && set.about) col.appendChild(el('div', 'mv3-wk-mood-about', set.about));
-  row.appendChild(col);
-  body.appendChild(row);
-
-  // What the person asks for, in words - kept on the project, so it is still there tomorrow.
-  const wish = el('textarea', 'mv3-wk-ftext-in');
-  wish.rows = 2;
+  // What the person asks for, in words - kept on the project, so it is still there tomorrow. Its
+  // foot is the mannequin's foot: the two are one block (the owner, 2026-09-21).
+  const wish = el('textarea', 'mv3-wk-ftext-in is-wish');
+  wish.rows = 3;
   wish.placeholder = 'Anything the frames should have - "arms crossed", "looking off to the left", "holding the mug"…';
   wish.value = 'wish' in _drafts ? _drafts.wish : (v.wish || '');
   wish.disabled = _planning;
   wish.addEventListener('input', () => { _drafts.wish = wish.value; });
   wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
-  body.appendChild(wish);
+  col.appendChild(wish);
+  row.appendChild(col);
+  body.appendChild(row);
 
-  // The pool: `+` for a frame of one's own (its window comes later), then every frame as it came.
-  // A frame pressed goes on the stage; pressed again, the stage shows the casting pair.
+  // The pool, the full width under the block: `+` for a frame of one's own (its window comes
+  // later), then every frame as it came. A frame pressed goes on the stage; pressed again, the
+  // stage shows the casting pair.
   const strip = el('div', 'mv3-wk-fset');
   const add = el('button', 'mv3-wk-fsetfr is-add', '+');
   add.type = 'button';
@@ -624,11 +700,10 @@ function _stageFrames(host, p) {
   const busy = _planning || _drawing.size > 0;
   _genButton(foot, {
     label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',
-    cap: blocked ? 'still missing: ' + missing.join(', ') : busy ? '' : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
-    disabled: blocked || busy || !_kit,
-    title: blocked ? 'Still missing: ' + missing.join(', ')
-      : 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn - nano-banana-2, 2K, '
-        + _money(FRAME_PRICE) + ' each. Press again to confirm.',
+    cap: busy ? '' : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
+    disabled: busy || !_kit,
+    title: 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn at once - nano-banana-2, 2K, '
+      + _money(FRAME_PRICE) + ' each. Press again to confirm.',
     on: () => {
       if (!_armedSet) { _armedSet = true; _ctx.repaint(); return; }
       _armedSet = false;
@@ -638,9 +713,15 @@ function _stageFrames(host, p) {
 }
 
 // VIDEO - the model and the tier now; the animation prompts and the clips come with their stages
-// (W3, F4).
-function _stageVideo(host) {
-  const { body, foot } = _stage(host, 'video', 'under development', true);
+// (W3, F4). Shut, like the frames, while there is nobody in a look and no place.
+function _stageVideo(host, p) {
+  const missing = _missing(p);
+  const { open, body, foot } = _stage(host, 'video', {
+    name: 'video', sub: 'under development', soon: true,
+    blocked: missing.length > 0, why: missing.join(' and '),
+    summary: 'under development',
+  });
+  if (!open) return;
   const v = _video();
   // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
   // in the list so it is known to be coming, and cannot be picked yet.
@@ -706,19 +787,51 @@ function _row(p, l, i) {
     d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
-  dot(VOICE.reading().line === i ? 'busy' : _readState(l), 'read');
+  dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
   dot(fr ? 'ok' : 'none', 'frame');
   dot(_clipState(l), 'clip');
   row.appendChild(dots);
 
-  row.title = i === _open ? 'Fragment ' + (i + 1) + ' - press again to see all fragments' : 'Fragment ' + (i + 1);
+  // The whole text under the pointer (the owner, 2026-09-21): the row clips it to two lines, and a
+  // line is judged by all of its words. Beside the row, 200px wide, gone when the pointer goes.
+  row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, l, i), TIP_MS); });
+  row.addEventListener('mouseleave', _tipHide);
   // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
+    _tipHide();
     _open = _open === i ? -1 : i;
     _remember();
     _ctx.repaint();
   });
   return row;
+}
+
+// ── The whole text of a row, under the pointer ──────────────────────────────
+// Not a layer (js/layers.js): it takes no keyboard and answers no question. Parked on the body,
+// because the list scrolls and clips its children; beside the row on the side with room.
+let _tip = null;
+let _tipT = 0;
+function _tipHide() {
+  clearTimeout(_tipT);
+  if (!_tip) return;
+  _tip.remove();
+  window.removeEventListener('scroll', _tipHide, true);
+  _tip = null;
+}
+function _tipShow(row, l, i) {
+  _tipHide();
+  if (!row.isConnected) return;
+  const tip = el('div', 'mv3-wk-ftip');
+  tip.appendChild(el('div', 'mv3-wk-ftip-t', _words(l) || '(no words)'));
+  tip.appendChild(el('div', 'mv3-wk-ftip-n', 'fragment ' + (i + 1) + (i === _open ? ' · press again for the whole video' : ' · press to open')));
+  document.body.appendChild(tip);
+  const r = row.getBoundingClientRect();
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  const left = r.right + 8 + w <= window.innerWidth - 6 ? r.right + 8 : Math.max(6, r.left - w - 8);
+  tip.style.left = Math.round(left) + 'px';
+  tip.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, r.top - 4))) + 'px';
+  _tip = tip;
+  window.addEventListener('scroll', _tipHide, true);
 }
 
 // ── The right column: the open fragment ─────────────────────────────────────
@@ -732,9 +845,8 @@ function _fragment(host, p, l, i) {
   const rs = _readState(l);
   const va = _api.voiceApi();
   const speaking = VOICE.reading();
-  const busyRead = speaking.tagging || speaking.line >= 0 || !!speaking.batch;
-  const rec = _api.char();
-  const canRead = !!(rec && VOICE.hasVoice(rec));
+  const busyRead = speaking.busy;
+  const canRead = _canRead();
 
   const top = el('div', 'mv3-wk-fhead');
   top.appendChild(el('span', 'mv3-wk-ftitle', 'fragment ' + (i + 1)));
@@ -742,9 +854,9 @@ function _fragment(host, p, l, i) {
   top.appendChild(el('span', 'mv3-wk-vsub', take && take.dur ? take.dur.toFixed(1) + ' s' : 'not read'));
   // The read of this line, from here (V3's list, folded in): spoken now, or again in place of the
   // take it has - tagged by the mood first when it has no tags yet (ElevenLabs v3).
-  const read = el('button', 'mv3-wk-vuse is-right', speaking.line === i ? '…' : rs === 'none' ? 'read' : 'read again');
+  const read = el('button', 'mv3-wk-vuse is-right', speaking.lines.includes(i) ? '…' : rs === 'none' ? 'read' : 'read again');
   read.type = 'button';
-  read.title = !rec ? 'Choose who is speaking first' : !canRead ? 'Give the character a voice first'
+  read.title = !canRead ? 'Choose a voice first - a character with one, or one for the project'
     : rs === 'none' ? 'Read this line' : 'Read it again, in place of the take it has';
   read.disabled = busyRead || !canRead;
   read.addEventListener('click', () => VOICE.readLine(va, i));
@@ -964,7 +1076,8 @@ export function openPicture(p) {
   return null;
 }
 
-/** Leaving the step stops the read that was playing. */
+/** Leaving the step stops the read that was playing, and drops the text under the pointer. */
 export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
+  _tipHide();
 }
