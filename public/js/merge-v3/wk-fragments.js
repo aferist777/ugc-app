@@ -330,6 +330,13 @@ function _pickUpDrawing() {
   }).catch(() => { /* without the list, nothing shows as drawing */ });
 }
 
+// Is the line's animation written, and written for the words it has now? The same shape as a read:
+// a prompt made from other words is stale until it is written again (phase W3b).
+const _animated = (l) => {
+  const sh = (l && l.shot) || null;
+  return !!(sh && sh.motion && String(sh.said || '') === String((l && l.text) || ''));
+};
+
 // ── How the place moves (phase W3a) ─────────────────────────────────────────
 // One or two sentences about what is alive in the background - a curtain, steam, traffic far
 // behind. It is the PLACE's, not the project's (the owner, 2026-09-21): every talking head filmed
@@ -358,6 +365,32 @@ async function _saveEnvMotion(p, motion) {
     _readErr = 'The animation of the place was not written: ' + e.message;
   }
   _envWriting = false;
+  _ctx.repaint();
+}
+
+// The video zone's `generate` (phase W3b): the place, if it has nothing written yet, and then the
+// animation of every line that needs one - one call for the whole script, so the movement carries
+// the arc of it. Credits, not dollars: no second press.
+let _writing = '';                        // 'place' | 'lines' | ''
+async function _writeVideo(p) {
+  if (_writing || _envWriting) return;
+  _readErr = '';
+  if (!_envMotion(p)) {
+    _writing = 'place';
+    await _saveEnvMotion(p, null);
+    if (_readErr) { _writing = ''; return _ctx.repaint(); }
+  }
+  _writing = 'lines';
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/video/prompts', { projectId: p.id });
+    _adopt(r);
+    const skipped = ((r.report || {}).skipped || []).length;
+    if (skipped) _readErr = 'The agent left ' + skipped + (skipped === 1 ? ' line' : ' lines') + ' without a prompt - press generate again.';
+  } catch (e) {
+    _readErr = 'The animation was not written: ' + e.message;
+  }
+  _writing = '';
   _ctx.repaint();
 }
 
@@ -504,7 +537,7 @@ function _all(host, p, lines) {
   _mood(host);
   _stageVoice(host, p, lines);
   _stageFrames(host, p);
-  _stageVideo(host, p);
+  _stageVideo(host, p, lines);
   host.appendChild(el('div', 'mv3-wk-fsoon', 'Pick a fragment on the left to work on it; press it again to come back here.'));
 }
 
@@ -757,18 +790,20 @@ function _stageFrames(host, p) {
   });
 }
 
-// VIDEO - the model and the tier, and how the PLACE moves (W3a); the animation of the person, line
-// by line, comes with W3b and the clips with F4. Shut until there is a FIRST FRAME to animate (the
-// owner, 2026-09-21): a clip is made from a frame, so before the set exists this zone has nothing
-// to be about.
-function _stageVideo(host, p) {
+// VIDEO - the model and the tier, how the PLACE moves (W3a) and the animation of the PERSON, line
+// by line (W3b); the clips themselves come with F4. Shut until there is a FIRST FRAME to animate
+// (the owner, 2026-09-21): a clip is made from a frame, so before the set exists this zone has
+// nothing to be about.
+function _stageVideo(host, p, lines) {
   const missing = _missing(p);
   const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
   const motion = _envMotion(p);
+  const written = lines.filter(_animated).length;
+  const done = !!motion && lines.length > 0 && written === lines.length;
   const { open, body, foot } = _stage(host, 'video', {
-    name: 'video', sub: 'the place, then the person', soon: true,
+    name: 'video', sub: 'the place, then the person', soon: true, done,
     blocked: !!why, why,
-    summary: motion ? 'the place animates' : 'no animation yet',
+    summary: written + '/' + lines.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
   if (!open) return;
   _needEnvMeta();
@@ -820,13 +855,20 @@ function _stageVideo(host, p) {
   body.appendChild(env);
   body.appendChild(el('div', 'mv3-wk-fwhy', 'It belongs to the place: every video filmed here animates the same way.'));
 
+  // `generate`: the place first when it has nothing written, then the animation of every line that
+  // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no
+  // second press to confirm, as with the reads.
+  const willWrite = lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
+  const busy = !!_writing || _envWriting;
   _genButton(foot, {
-    label: _envWriting ? 'writing…' : motion ? 'write it again' : 'generate',
-    cap: _envWriting ? '' : motion ? 'the place is written' : 'the place first',
-    disabled: _envWriting || !_place(p),
-    title: 'The agent looks at the place and writes what moves in it by itself. The animation of the person,'
-      + ' line by line, comes with the next step (W3b), and the clips with F4.',
-    on: () => _saveEnvMotion(p, null),
+    label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…' : done ? 'write it again' : 'generate',
+    cap: busy ? '' : !motion ? 'the place, then ' + lines.length + (lines.length === 1 ? ' line' : ' lines')
+      : willWrite ? willWrite + (willWrite === 1 ? ' line' : ' lines') : 'every line is animated',
+    disabled: busy || !_place(p) || !lines.length || (!!motion && !willWrite),
+    title: (motion ? 'The agent looks at the frames' : 'The agent looks at the place and writes what moves in it by itself, then at the frames')
+      + ' and writes how the person moves while they say each line - the expression, the head, the hands, the gaze.'
+      + ' A prompt edited by hand is left alone. The clips themselves come with F4.',
+    on: () => _writeVideo(p),
   });
 }
 
@@ -1105,10 +1147,18 @@ function _motionCol(l, i, hasFrame) {
     col.appendChild(dead);
     return col;
   }
-  if (sh && sh.motionEdited) {
+  // What is worth knowing about this prompt before it is read: written by hand, or written for
+  // words the line no longer says (phase W3b - the same staleness the read has).
+  const staleWords = !!(sh && sh.motion && !_animated(l));
+  if ((sh && sh.motionEdited) || staleWords) {
     action = el('span', 'mv3-wk-fedited-row');
-    action.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
-    if (sh.motionAgent) {
+    if (sh && sh.motionEdited) action.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
+    if (staleWords) {
+      const s = el('span', 'mv3-wk-fstale', 'the words changed');
+      s.title = 'It was written for: “' + String(sh.said || '').slice(0, 120) + '”';
+      action.appendChild(s);
+    }
+    if (sh && sh.motionEdited && sh.motionAgent) {
       const back = el('button', 'mv3-wk-flink', 'use the agent’s');
       back.type = 'button';
       back.title = sh.motionAgent;

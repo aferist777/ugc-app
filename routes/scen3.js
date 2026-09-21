@@ -3272,6 +3272,11 @@ function _normMix(m) {
       set:     String((v && v.set) || ''),
       framing: String((v && v.framing) || ''),
       n:       Number.isInteger(v && v.n) ? v.n : 0,
+      // The one sentence that makes this frame different from the others in its set - the head,
+      // the hands, the gaze at that instant. Written by the agent that planned the set (phase W2)
+      // and read by the one that writes the animation prompts (W3b), which is what a clip made from
+      // this frame has to continue. Frames drawn before it carry none and are read from the picture.
+      moment:  String((v && v.moment) || ''),
     })).filter(v => v.id && v.path) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
@@ -4084,6 +4089,153 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── The animation of the person, line by line ───────────────────────────────
+   POST /api/scen3/video/prompts  { projectId, only? } -> { success, project, report }
+
+   What the person DOES while a line is spoken - the expression, the head, the hands, the gaze -
+   written for every line at once by one agent that sees the set of first frames (phase W3b). It is
+   what the clip of that line is made from (F4): Kling hears the frame, the read and this, and
+   nothing else.
+
+   ONE CALL FOR THE WHOLE SCRIPT, not one per line: the lines are an arc - the doubt at the top, the
+   turn in the middle, the recommendation at the end - and an agent that sees them together writes
+   movement that carries that arc instead of eight unrelated performances.
+
+   A prompt EDITED BY HAND is not overwritten unless its line is named in `only`: the person fixed
+   it on purpose (the same rule the frame's own prompt follows). A prompt written for words that
+   have since changed is stale, and the page says so - it is rewritten the next time this runs.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+// The pool, in the order the frames were asked for, and which frame a line opens on: the SAME rule
+// the panel paints by (js/merge-v3/wk-fragments.js, _pool and _frameFor). Both sides need it - the
+// panel to show it, the agent to write for it - so it is written here as the one rule and read
+// there as the one picture.
+function _framePool(p) {
+  const all = (_normMix((p || {}).mix).variants || []).slice();
+  const start = {};
+  for (const v of all) {
+    if (!v.set) continue;
+    if (!start[v.set] || String(v.at || '') < start[v.set]) start[v.set] = String(v.at || '');
+  }
+  const key = (v) => (v.set ? start[v.set] : String(v.at || ''));
+  return all.sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0)
+    || String(a.at || '').localeCompare(String(b.at || '')));
+}
+function _frameOfLine(pool, line, i) {
+  if (!pool.length) return null;
+  const picked = line && line.frameId ? pool.find(v => v.id === String(line.frameId)) : null;
+  return picked || pool[i % pool.length];
+}
+
+// What every animation prompt must obey, whatever the line says. The person is already IN the
+// frame: the clip continues that instant, it does not stage a new one.
+const MOTION_RULES =
+  'RULES for every prompt: the clip CONTINUES the frame the line opens on - the same person, the same'
+  + ' clothes, the same place, the same shot size and camera position. Describe ONLY what the person'
+  + ' does while speaking: the expression, the brows and the eyes, the head, the hands, the weight of'
+  + ' the body. Present tense, plain sentences, 2 to 4 of them, no lists. Do NOT write the words they'
+  + ' say, do not mention the script, the camera operator, cuts, zooms or any camera move, and do not'
+  + ' add objects, people or light that are not already in the frame.';
+// The one shot size that has a hand in the shot: it is holding the phone, and it must not wander.
+const MOTION_SELFIE =
+  ' THIS IS A SELFIE: the arm holding the phone stays where it is for the whole clip - it does not'
+  + ' lower, change hands or leave the frame - so the free hand is the only one that gestures, and'
+  + ' every gesture stays inside a selfie\'s narrow frame. End each prompt with: subtle handheld'
+  + ' camera shake.';
+
+router.post('/scen3/video/prompts', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const list = _loadProjects();
+    const proj = list.find(x => String(x.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+
+    const lines = (proj.lines || []).map(_normLine);
+    if (!lines.length) return res.status(400).json({ success: false, error: 'this project has no lines' });
+    const pool = _framePool(proj);
+    if (!pool.length) return res.status(400).json({ success: false, error: 'make the first frames first: a clip is made from one' });
+    const video = _normVideo(proj.video);
+    const mood = MP.moodById(video.mood) || MP.MOODS[0];
+    const set = _frameSet(video.framing) || _frameSet('half');
+
+    // Which lines this touches: the ones named, or every line that has no prompt or whose words
+    // have changed since the one it has was written - and never one edited by hand unless named.
+    const stale = (l) => !l.shot || !l.shot.motion || String(l.shot.said || '') !== String(l.text || '');
+    const only = Array.isArray(b.only)
+      ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
+      : lines.map((_, i) => i).filter(i => stale(lines[i]) && !(lines[i].shot && lines[i].shot.motionEdited));
+    if (!only.length) return res.json({ success: true, project: _projFull(proj), report: { written: 0, skipped: [] } });
+
+    // The place's own movement, so the clip keeps the background alive (phase W3a).
+    const envMotion = String((SHELF_META.read('environments')[_normCasting(proj.casting).locationImage] || {}).motion || '');
+
+    // The frames themselves, in the order the lines take them: the agent writes movement that starts
+    // from a body it can see, not from a description of one.
+    const shown = pool.slice(0, FRAME_SET_MAX);
+    const urls = await Promise.all(shown.map(v => _hostLocal(v.preview || v.path)));
+    const where = (i) => {
+      const fr = _frameOfLine(pool, lines[i], i);
+      const at = shown.findIndex(v => v.id === (fr || {}).id);
+      return { fr, at };
+    };
+
+    const ask = 'You are directing a talking-head video: one person, one place, one shot size, spoken'
+      + ' straight to camera. IMAGE 1' + (shown.length > 1 ? ' to ' + shown.length : '') + ' are the first'
+      + ' frames of this video - the instants the lines open on.'
+      + '\n\nTHE FEEL OF THE WHOLE VIDEO: ' + mood.label + '. ' + mood.brief
+      + '\nTHE FACE: ' + mood.face
+      + '\nTHE BODY: ' + mood.gestures
+      + '\nTHE SHOT: ' + set.rule
+      + (envMotion ? '\nTHE PLACE MOVES BY ITSELF: ' + envMotion + ' - let it, but do not describe it again.' : '')
+      + '\n\n' + MOTION_RULES + (set.id === 'selfie' ? MOTION_SELFIE : '')
+      + '\n\nThe lines, in order. Each says which frame it opens on and what is happening in that frame.'
+      + ' The script is one arc: write the movement of each line as its place in that arc, not as a'
+      + ' performance of its own.\n'
+      + only.map((i) => {
+        const w = where(i);
+        return '[' + (i + 1) + '] frame ' + (w.at >= 0 ? 'IMAGE ' + (w.at + 1) : 'unknown')
+          + ((w.fr && w.fr.moment) ? ' (' + w.fr.moment + ')' : '')
+          + ' | "' + String(lines[i].text || '').replace(/\s+/g, ' ').trim() + '"';
+      }).join('\n')
+      + '\n\nAnswer with JSON and nothing else: {"lines":[{"n":<the number in brackets>,"motion":"..."}]}'
+      + ' - exactly ' + only.length + ' entr' + (only.length === 1 ? 'y' : 'ies') + ', one per line above.';
+
+    const content = [{ type: 'text', text: ask }];
+    for (const url of urls) content.push({ type: 'image_url', image_url: { url } });
+    const raw = await _ask([{ role: 'user', content }]);
+    const mt = String(raw || '').match(/\{[\s\S]*\}/);
+    if (!mt) throw new Error('the agent did not answer with the prompts');
+    let parsed;
+    try { parsed = JSON.parse(mt[0]); } catch (e) { throw new Error('the agent answered with something unreadable'); }
+    const got = (parsed && Array.isArray(parsed.lines)) ? parsed.lines : [];
+    if (!got.length) throw new Error('the agent wrote nothing usable');
+
+    const now = new Date().toISOString();
+    const report = { written: 0, skipped: [] };
+    for (const i of only) {
+      const hit = got.find(x => (parseInt(x && x.n, 10) || 0) === i + 1);
+      const motion = _cleanText((hit && hit.motion) || '').slice(0, 900);
+      if (!motion) { report.skipped.push(i + 1); continue; }
+      lines[i].shot = _normShot({
+        motion, motionAgent: motion, motionEdited: false,
+        said: String(lines[i].text || ''), mood: mood.id, at: now,
+      });
+      report.written++;
+    }
+    proj.lines = lines;
+    proj.updatedAt = now;
+    _saveProjects(list);
+    console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + set.id + ' frames=' + shown.length
+      + ' written=' + report.written + ' skipped=' + report.skipped.length);
+    res.json({ success: true, project: _projFull(proj), report });
+  } catch (e) {
+    console.error('[scen3/video/prompts]', e.message);
+    res.status(e.status || 502).json({ success: false, error: e.message });
+  }
+});
+
 /* ── The prompt a frame was drawn from ───────────────────────────────────────
    POST /api/scen3/frames/prompt  { projectId, frameId, prompt } -> { success, project }
 
@@ -4131,6 +4283,7 @@ JOBS.register('frame', {
       path: landed.imagePath, preview, prompt: p.prompt || '',
       at: new Date().toISOString(), taskId: rec.taskIds[0],
       set: String(p.set || ''), framing: String(p.framing || ''), n: Number(p.n) || 0,
+      moment: String(p.moment || ''),
     };
     if (!proj.mix.variants.some(v => v.taskId === variant.taskId)) proj.mix.variants.unshift(variant);
     proj.updatedAt = variant.at;
