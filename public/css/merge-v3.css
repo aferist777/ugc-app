@@ -2083,6 +2083,13 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-ftext-in.is-tall{min-height:164px}
 .mv3-wk-fedited-row{display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0}
 
+/* The clips a fragment has, under its grid (phase F4): a row per take, with its poster, and the
+   one it is set to marked. A row is a button - pressing it makes that take the fragment's clip. */
+.mv3-wk-vrow.is-take{width:100%; cursor:pointer; text-align:left; color:var(--ink); font:inherit}
+.mv3-wk-vrow.is-take:hover{border-color:var(--primary)}
+.mv3-wk-vrow.is-take.is-on{cursor:default}
+.mv3-wk-vshot{flex:0 0 auto; width:34px; height:60px; object-fit:cover; border-radius:var(--r-xs); display:block; background:var(--bg)}
+
 /* WHICH FRAME A FRAGMENT OPENS ON (js/merge-v3/wk-fragments.js, _pickRow): a thin bar the width of
    the fragment between the frame row and the clip row, and under it - open - the frames of the set
    one under the other. A frame pressed there goes on the stage and carries `select` in its middle:

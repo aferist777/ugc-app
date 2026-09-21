@@ -2013,6 +2013,10 @@ router.post('/scen3/env/motion', async (req, res) => {
 // files its own results and is not journalled: it is being removed whole (PLAN, phase G) and is
 // not touched.
 const JOBS = require('../lib/gen-jobs');
+// The journal itself, for the two questions the routes ask of it directly: is a clip of this
+// fragment already running, and - when a clip is re-asked with fresh links - which task the record
+// is now following (lib/alerts.js).
+const ALERTS = require('../lib/alerts');
 
 const WHAT_TITLE = { lookbook: 'Lookbook', look: 'Look', environment: 'Environment' };
 
@@ -4432,6 +4436,203 @@ JOBS.register('frame', {
   },
   submit: async (request) => {
     const out = await _submitSetFrame(request);
+    return { taskId: out.taskId, engine: out.engine, file: out.file };
+  },
+});
+
+/* ── Which take of a fragment is ITS clip ────────────────────────────────────
+   POST /api/scen3/fragments/pick-clip  { projectId, line, clipId } -> { success, project }
+
+   A fragment can have several clips - one per frame it has been tried on - and this says which of
+   them is the fragment's. The same shape as pick-frame: '' hands it back to the newest of the
+   current frame.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/pick-clip', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.lines = (p.lines || []).map(_normLine);
+    const i = parseInt(b.line, 10);
+    if (!(i >= 0 && i < p.lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
+    const want = String(b.clipId || '');
+    if (want && !(p.lines[i].video[variant] || []).some(c => c.id === want)) {
+      return res.status(404).json({ success: false, error: 'no such clip on this fragment' });
+    }
+    p.lines[i].pick = { ...(p.lines[i].pick || {}), [variant]: want };
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── THE CLIP OF A FRAGMENT (phase F4) ───────────────────────────────────────
+   POST /api/scen3/fragments/clip  { projectId, line, where } -> { success, alertId, taskId }
+                                                              -> { success, skipped: '<why>' }
+
+   The frame of the line speaks its read: Kling avatar hears the picture, the take and the
+   animation prompt (W3b), and nothing else. This is the journalled path - a row in Alerts from the
+   moment it is asked for, and the SERVER sees it through (lib/gen-jobs.js): it polls kie, downloads
+   the clip once into the project's clips/, makes a poster, normalises it for the browser, measures
+   it and files it as a take of that line. Leaving the page loses nothing.
+
+   The Scenarios page keeps its own route (/scen3/video/render) with its own watcher until phase G;
+   the machinery below - the refusals, the hosting, the fetch of a finished clip - is shared with it
+   rather than copied.
+
+   EVERY REFUSAL IS BEFORE THE MONEY. What cannot be rendered is said plainly - no words, no frame,
+   no read, a read that no longer matches the words, a read longer than the model takes - and
+   answered as `skipped`, not as an error: a chain walking eight lines must be able to step over one.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+// What a clip of this line would be made of, or why it cannot be. One reading, used by the route,
+// by "try again" and by the price the page shows.
+function _clipPlan(proj, i) {
+  const lines = (proj.lines || []).map(_normLine);
+  const line = lines[i];
+  if (!line) return { skipped: 'no such fragment' };
+  const video = _normVideo(proj.video);
+  const voice = _normVoice(proj.voice);
+  const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
+  const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
+  const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
+  if (!said.trim()) return { skipped: 'this fragment has no words' };
+  const frame = _frameOfLine(_framePool(proj), line, i, video.spread, proj.id);
+  if (!frame || !frame.path) return { skipped: 'no first frame for this fragment' };
+  const take = (line.audio || {})[variant];
+  if (!take || !take.path) return { skipped: 'this fragment is not read yet' };
+  if (take.said !== said) return { skipped: 'the read is of other words - read it again' };
+  if (take.dur > quality.maxAudioSec) {
+    return { skipped: 'the read is ' + take.dur.toFixed(1) + 's and the model takes ' + quality.maxAudioSec + 's at most' };
+  }
+  return {
+    variant, quality, said, frame, take, line,
+    // The animation prompt of this line (W3b) is what Kling is told. A line that has none - a
+    // project made before the video zone - falls back to the old motion preset rather than refusing
+    // to render at all.
+    prompt: String((line.shot || {}).motion || '').trim() || MP.promptFor(video.preset),
+    motionFrom: (line.shot || {}).motion ? 'line' : 'preset',
+  };
+}
+
+// One clip on kie. The picture and the sound go up FRESH every time: kie fetches them itself, and a
+// link that has been sitting around comes back as "fetch failed" long after the money is committed.
+async function _submitClip(b) {
+  const id = String(b.projectId || '').trim();
+  const proj = _loadProjects().find(p => String(p.id) === id);
+  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  const i = parseInt(b.line, 10);
+  const plan = _clipPlan(proj, i);
+  if (plan.skipped) throw Object.assign(new Error(plan.skipped), { status: 400 });
+
+  const imageUrl = await _hostLocal(plan.frame.path, { forceFresh: true, verify: true });
+  const audioUrl = await _hostLocal(plan.take.path,
+    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
+  const taskId = await _kieTask(plan.quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt: plan.prompt });
+  if (!taskId) throw Object.assign(new Error('the renderer did not accept the task'), { status: 502 });
+  console.log('[scen3/clip] line ' + (i + 1) + ' ' + plan.quality.id + ' ' + plan.take.dur.toFixed(1) + 's'
+    + ' motion=' + plan.motionFrom + ' -> ' + String(taskId).slice(0, 24));
+  return {
+    taskId, engine: plan.quality.model,
+    file: {
+      projectId: id, line: i, variant: plan.variant, said: plan.said,
+      fromFrame: plan.frame.id, fromAudio: plan.take.path,
+      quality: plan.quality.id, preset: _normVideo(proj.video).preset,
+      dur: plan.take.dur,
+    },
+  };
+}
+
+router.post('/scen3/fragments/clip', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const i = parseInt(b.line, 10);
+    const plan = _clipPlan(proj, i);
+    if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
+    // One clip per fragment at a time: the journal is asked rather than a flag on the project, so a
+    // reload or a second tab cannot start the same clip twice.
+    const running = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
+      && r.job && r.job.params && r.job.params.file
+      && String(r.job.params.file.projectId) === id && Number(r.job.params.file.line) === i);
+    if (running) return res.json({ success: true, skipped: 'this fragment is already being made' });
+
+    const request = { projectId: id, line: i };
+    const out = await _submitClip(request);
+    const rec = JOBS.submitted({
+      kind: 'video', what: 'clip',
+      title: 'Clip · fragment ' + (i + 1),
+      where: b.where || null,
+      engine: out.engine,
+      taskIds: [out.taskId],
+      job: { type: 'clip', params: { request, file: out.file } },
+    });
+    res.json({ success: true, alertId: rec.id, taskId: out.taskId });
+  } catch (e) {
+    console.error('[scen3/fragments/clip]', e.message);
+    res.status(e.status || 502).json({ success: false, error: e.message });
+  }
+});
+
+// The runner's side. `poll` is the same reader the old watcher uses, so a clip lands the same way it
+// always has: downloaded once, normalised, postered, measured. A "fetch failed" from kie means the
+// task never started and nothing was charged - the files are re-hosted and the task asked again,
+// once, exactly as the Scenarios path does.
+JOBS.register('clip', {
+  timeoutMs: 15 * 60 * 1000,
+  poll: async (rec) => {
+    const p = _fileParams(rec);
+    const s = await _fetchClip(rec.taskIds[0], p.projectId);
+    if (s.state !== 'failed') return s;
+    const tries = Number((rec.job.params || {}).refetch || 0);
+    if (!_FETCH_FAIL_RE.test(String(s.error || '')) || tries >= 1) return s;
+    // Nothing rendered, nothing charged: fresh links and one more ask.
+    try {
+      const again = await _submitClip(rec.job.params.request);
+      ALERTS.update(rec.id, { job: { ...rec.job, params: { ...rec.job.params, refetch: tries + 1, file: again.file } } });
+      console.log('[scen3/clip] re-asked with fresh links ->', String(again.taskId).slice(0, 24));
+      return { state: 'pending', taskId: again.taskId };
+    } catch (e) {
+      return { state: 'failed', error: s.error + ' (and the retry failed: ' + e.message + ')' };
+    }
+  },
+  file: async (rec, landed) => {
+    const p = _fileParams(rec);
+    const list = _loadProjects();
+    const proj = list.find(x => String(x.id) === String(p.projectId));
+    if (!proj) throw new Error('the project is gone');
+    proj.lines = (proj.lines || []).map(_normLine);
+    const line = proj.lines[Number(p.line)];
+    if (!line) throw new Error('that fragment is gone');
+    const clip = _normTake({
+      path: landed.path, dur: landed.dur, thumb: landed.thumb, at: new Date().toISOString(),
+      said: p.said, fromAudio: p.fromAudio, fromFrame: p.fromFrame,
+      preset: p.preset, quality: p.quality,
+    });
+    // A new TAKE, not a replacement: earlier ones stay browsable, and the fresh one is what the
+    // fragment is set to - it is what was just paid for.
+    const variant = p.variant === 'tagged' ? 'tagged' : 'plain';
+    const takes = Array.isArray(line.video[variant]) ? line.video[variant] : [];
+    const at = takes.findIndex(x => x.id === clip.id);
+    if (at >= 0) takes[at] = clip; else takes.push(clip);
+    line.video[variant] = takes;
+    line.pick = { ...(line.pick || {}), [variant]: clip.id };
+    line.render = null;
+    proj.updatedAt = clip.at;
+    _saveProjects(list);
+    // The preview's proxy, made now rather than on the first play in Merge.
+    try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
+    return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
+  },
+  submit: async (request) => {
+    const out = await _submitClip(request);
     return { taskId: out.taskId, engine: out.engine, file: out.file };
   },
 });

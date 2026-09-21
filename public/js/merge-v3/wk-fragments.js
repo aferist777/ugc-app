@@ -80,6 +80,7 @@ let _envMeta = null;
 let _envWriting = false;
 let _planning = false;                    // the agent is writing the moments of a set
 let _armedSet = false;                    // the set's `generate` pressed once and asking
+let _armedVideo = false;                  // ...and the video zone's, which pays for the clips
 let _dragging = '';                       // the frame being dragged along the strip
 let _picking = false;                     // the open fragment's frame list is down
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
@@ -217,17 +218,22 @@ function _frameFor(p, l, i) {
 }
 /** The rule, for a stand to check (the timeline mirror will read the same rule, phase T'). */
 export const frameFor = _frameFor;
-function _clipOf(l) {
+// THE CLIP OF A LINE is the one made from the frame the line OPENS ON - which is the frame it was
+// given by the rule as often as one picked by hand (phase F4; before the clips existed this read
+// `frameId`, which is empty for every line the pool serves in turn, and would have called every
+// such line clip-less for ever).
+function _clipOf(p, l, i) {
   const clips = ((l && l.video) || {}).plain || [];
   if (!clips.length) return null;
-  const fr = String(l.frameId || '');
+  const fr = String((_frameFor(p, l, i).v || {}).id || '');
+  if (!fr) return null;
   const picked = clips.find(c => c.id === String(((l.pick || {}).plain) || ''));
   if (picked && picked.fromFrame === fr) return picked;
   const mine = clips.filter(c => c.fromFrame === fr);
   return mine.length ? mine[mine.length - 1] : null;
 }
-function _clipState(l) {
-  const c = _clipOf(l);
+function _clipState(p, l, i) {
+  const c = _clipOf(p, l, i);
   if (!c) return 'none';
   return c.said === _words(l) ? 'ok' : 'stale';
 }
@@ -408,27 +414,75 @@ async function _saveEnvMotion(p, motion) {
   _ctx.repaint();
 }
 
-// The video zone's `generate` (phase W3b): the place, if it has nothing written yet, and then the
-// animation of every line that needs one - one call for the whole script, so the movement carries
-// the arc of it. Credits, not dollars: no second press.
-let _writing = '';                        // 'place' | 'lines' | ''
-async function _writeVideo(p) {
+// The video zone's `generate`: the place, if it has nothing written yet (W3a), the animation of
+// every line that needs one (W3b), and then the CLIPS of the lines that have none or whose clip is
+// stale (F4). The first two are credits; the clips are dollars, which is why the zone asks a second
+// press when there are any.
+let _writing = '';                        // 'place' | 'lines' | 'clips' | ''
+// Five clips at a time, a second apart - the same rule the frames leave by (routes/scen3.js,
+// SUBMIT_BATCH). A batch is awaited whole: these are two-minute renders, not submissions.
+const CLIP_BATCH = 5;
+const CLIP_GAP_MS = 1000;
+
+// Can this line be clipped at all, and what would it cost? The same ladder the server refuses by
+// (routes/scen3.js, _clipPlan), so the page never asks for what will be turned down.
+function _clipReady(p, l, i) {
+  const take = _take(l);
+  const tier = _tier();
+  if (_readState(l) !== 'ok' || !take) return null;
+  if (!_frameFor(p, l, i).v) return null;
+  if (take.dur > _ceiling()) return null;
+  return { dur: take.dur, cost: tier ? take.dur * tier.pricePerSec : 0 };
+}
+function _clipWork(p, lines) {
+  const out = [];
+  lines.forEach((l, i) => {
+    if (_clipping.has(i)) return;
+    if (_clipState(p, l, i) === 'ok') return;
+    const can = _clipReady(p, l, i);
+    if (can) out.push({ i, cost: can.cost });
+  });
+  return out;
+}
+
+async function _makeClips(p, want) {
+  for (let at = 0; at < want.length; at += CLIP_BATCH) {
+    if (at) await new Promise(r => setTimeout(r, CLIP_GAP_MS));
+    await Promise.all(want.slice(at, at + CLIP_BATCH).map(x => _makeClip(_ctx.project || p, x.i)));
+    if (_readErr) return;                 // one failure is enough to stop paying for more
+  }
+}
+
+async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
+  const withClips = !!(opts && opts.clips);
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
     await _saveEnvMotion(p, null);
     if (_readErr) { _writing = ''; return _ctx.repaint(); }
   }
-  _writing = 'lines';
-  _ctx.repaint();
-  try {
-    const r = await _post('/api/scen3/video/prompts', { projectId: p.id });
-    _adopt(r);
-    const skipped = ((r.report || {}).skipped || []).length;
-    if (skipped) _readErr = 'The agent left ' + skipped + (skipped === 1 ? ' line' : ' lines') + ' without a prompt - press generate again.';
-  } catch (e) {
-    _readErr = 'The animation was not written: ' + e.message;
+  const lines = Array.isArray(p.lines) ? p.lines : [];
+  if (lines.some(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion))) {
+    _writing = 'lines';
+    _ctx.repaint();
+    try {
+      const r = await _post('/api/scen3/video/prompts', { projectId: p.id });
+      _adopt(r);
+      const skipped = ((r.report || {}).skipped || []).length;
+      if (skipped) _readErr = 'The agent left ' + skipped + (skipped === 1 ? ' line' : ' lines') + ' without a prompt - press generate again.';
+    } catch (e) {
+      _readErr = 'The animation was not written: ' + e.message;
+    }
+  }
+  if (withClips && !_readErr) {
+    const now = _ctx.project || p;
+    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines);
+    if (want.length) {
+      _writing = 'clips';
+      _ctx.repaint();
+      await _makeClips(now, want);
+    }
   }
   _writing = '';
   _ctx.repaint();
@@ -534,6 +588,7 @@ export function paint(host, ctx, api) {
   host.appendChild(right);
 
   _pickUpDrawing();
+  _pickUpClips();
   // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
   // on the right, with everything else that is set once for the whole video.
   _list(left, p, lines);
@@ -551,9 +606,14 @@ export function paint(host, ctx, api) {
   if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
   // The countdown belongs to the set being drawn, on the stage of the general zone.
-  const place = _open < 0 && _drawing.size ? 'frames' : null;
+  // The countdown belongs to whatever is being made where you are looking: the clip of the open
+  // fragment, or - with no fragment open - the set being drawn in the general zone.
+  const mine = _open >= 0 ? _clipping.get(_open) : null;
+  const place = mine ? 'clip' : (_open < 0 && _drawing.size ? 'frames' : null);
   onlyHere(place);
-  if (place) {
+  if (place === 'clip') {
+    holdProgress(place, { label: 'Making the clip', estimateMs: CLIP_ESTIMATE_MS, startedAt: mine.startedAt });
+  } else if (place) {
     const first = [..._drawing.values()].reduce((a, d) => Math.min(a, d.startedAt), Date.now());
     holdProgress(place, { label: 'Drawing ' + _drawing.size + (_drawing.size === 1 ? ' frame' : ' frames'), estimateMs: FRAME_ESTIMATE_MS, startedAt: first });
   }
@@ -651,7 +711,7 @@ function _standing(p) {
     n: lines.length,
     read: lines.filter(isRead).length,
     frames: have, framesAsked: asked, framesDone: have >= asked && !_drawing.size && have > 0,
-    clips: lines.filter(l => _clipState(l) === 'ok').length,
+    clips: lines.filter((l, i) => _clipState(p, l, i) === 'ok').length,
   };
 }
 
@@ -696,15 +756,27 @@ function _chainWork(p, lines) {
   // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
   // (frames above) can give it one.
   const video = (!missing.length && (pool || frames)) ? lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length : 0;
-  return { missing, voice, frames, video, pool, anything: voice + frames + video > 0 };
+  // The clips of the lines that can be clipped NOW. Lines that only become clippable during the
+  // chain - read in this very run, or opening on a frame drawn in it - are counted when the video
+  // stage is reached, not here: their price cannot be known before they exist.
+  const clips = (!missing.length && pool) ? _clipWork(p, lines) : [];
+  const clipCost = clips.reduce((a, x) => a + x.cost, 0);
+  return {
+    missing, voice, frames, video, pool, clips: clips.length, clipCost,
+    anything: voice + frames + video + clips.length > 0,
+  };
 }
 
 function _chainButton(host, p, lines) {
   const w = _chainWork(p, lines);
-  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing;
-  const price = w.frames ? _money(w.frames * FRAME_PRICE) : '';
+  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing || _clipping.size > 0;
+  // What the whole run costs, as far as it can be known before it starts: the frames of a set that
+  // is not there yet, and the clips of the fragments that could be clipped this moment. The clips
+  // of lines this run will read are paid for when the video stage gets to them and are named then.
+  const dollars = (w.frames ? w.frames * FRAME_PRICE : 0) + (w.clipCost || 0);
+  const price = dollars ? _money(dollars) : '';
   const b = el('button', 'mv3-wk-gen mv3-wk-genall',
-    _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video…'
+    _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video, clips…'
       : _chainArmed ? (price ? price + ' · go?' : 'go?') : 'generate all');
   b.type = 'button';
   b.disabled = busy || !lines.length || (!w.anything && !_chainArmed);
@@ -713,10 +785,11 @@ function _chainButton(host, p, lines) {
     : !w.anything ? 'Everything that can be made is made'
       : 'In one press: ' + [
         w.voice ? w.voice + (w.voice === 1 ? ' line read' : ' lines read') : '',
-        w.frames ? w.frames + ' frames drawn · ' + price : '',
+        w.frames ? w.frames + ' frames drawn · ' + _money(w.frames * FRAME_PRICE) : '',
         w.video ? w.video + (w.video === 1 ? ' animation prompt' : ' animation prompts') : '',
-      ].filter(Boolean).join(', ') + '. The voice and the frames together, the video after both.'
-      + (price ? ' Press again to confirm - the frames cost money.' : '');
+        w.clips ? w.clips + (w.clips === 1 ? ' clip' : ' clips') + ' · ' + _money(w.clipCost) : '',
+      ].filter(Boolean).join(', ') + '. The voice and the frames together, then the video and the clips.'
+      + (price ? ' Press again to confirm - the frames and the clips cost money.' : '');
   b.addEventListener('click', () => {
     if (price && !_chainArmed) { _chainArmed = true; _ctx.repaint(); return; }
     _chainArmed = false;
@@ -747,9 +820,10 @@ async function _generateAll(p, lines) {
     if (_readErr || !_pool(_ctx.project).length) { _chain = ''; return _ctx.repaint(); }
     _chain = 'video';
     _ctx.repaint();
+    // The last stage is the whole video zone: the place, the animation prompts, and then the clips
+    // of every fragment that can have one - including the lines this very run has just read.
     const now = _ctx.project;
-    const after = _chainWork(now, Array.isArray(now.lines) ? now.lines : lines);
-    if (after.video) await _writeVideo(now);
+    await _writeVideo(now, { clips: true });
   } catch (e) {
     _readErr = 'The chain stopped: ' + e.message;
   }
@@ -1052,16 +1126,32 @@ function _stageVideo(host, p, lines) {
   // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no
   // second press to confirm, as with the reads.
   const willWrite = lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
-  const busy = !!_writing || _envWriting;
+  const clips = _clipWork(p, lines);
+  const clipCost = clips.reduce((a, x) => a + x.cost, 0);
+  const busy = !!_writing || _envWriting || _clipping.size > 0;
+  // The clips are the dollars in this zone, so the button shows the price and waits for a second
+  // press when there are any - the words before them are credits and go on the first.
+  const armed = _armedVideo && clips.length > 0;
   _genButton(foot, {
-    label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…' : done ? 'write it again' : 'generate',
-    cap: busy ? '' : !motion ? 'the place, then ' + lines.length + (lines.length === 1 ? ' line' : ' lines')
-      : willWrite ? willWrite + (willWrite === 1 ? ' line' : ' lines') : 'every line is animated',
-    disabled: busy || !_place(p) || !lines.length || (!!motion && !willWrite),
-    title: (motion ? 'The agent looks at the frames' : 'The agent looks at the place and writes what moves in it by itself, then at the frames')
-      + ' and writes how the person moves while they say each line - the expression, the head, the hands, the gaze.'
-      + ' A prompt edited by hand is left alone. The clips themselves come with F4.',
-    on: () => _writeVideo(p),
+    label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
+      : _writing === 'lines' ? 'writing…'
+        : _writing === 'clips' || _clipping.size ? 'clips ' + (lines.filter((l, i) => _clipState(p, l, i) === 'ok').length) + '/' + lines.length + '…'
+          : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+    cap: busy ? '' : [
+      !motion ? 'the place' : '',
+      willWrite ? willWrite + (willWrite === 1 ? ' prompt' : ' prompts') : '',
+      clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
+    ].filter(Boolean).join(' · ') || 'everything is made',
+    disabled: busy || !_place(p) || !lines.length || (!!motion && !willWrite && !clips.length),
+    title: 'The place, then how the person moves on every line, then the clips of the fragments that'
+      + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
+      + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
+      + (clips.length ? ' Press again to confirm.' : ''),
+    on: () => {
+      if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
+      _armedVideo = false;
+      _writeVideo(p, { clips: true });
+    },
   });
 }
 
@@ -1101,7 +1191,7 @@ function _row(p, l, i) {
   };
   dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
   dot(fr ? 'ok' : 'none', 'frame');
-  dot(_clipState(l), 'clip');
+  dot(_clipping.has(i) ? 'busy' : _clipState(p, l, i), 'clip');
   row.appendChild(dots);
 
   // The whole text under the pointer (the owner, 2026-09-21): the row clips it to two lines, and a
@@ -1235,16 +1325,28 @@ function _fragment(host, p, l, i) {
   grid2.appendChild(_clipCol(p, l, i, rs, take));
   grid2.appendChild(_motionCol(l, i, hasFrame));
 
-  // Every take the line has, under the grid - projects made on the old page can carry some.
+  // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
+  // and one of them is the fragment's (F4). Pressing a row makes it that one.
   const clips = ((l.video || {}).plain || []);
   if (clips.length) {
     host.appendChild(el('div', 'mv3-wk-flabel', 'takes'));
-    const now = _clipOf(l);
+    const now = _clipOf(p, l, i);
     for (const c of clips.slice().reverse()) {
-      const r = el('div', 'mv3-wk-vrow' + (now && c.id === now.id ? ' is-on' : ''));
+      const on = !!(now && c.id === now.id);
+      const r = el('button', 'mv3-wk-vrow is-take' + (on ? ' is-on' : ''));
+      r.type = 'button';
+      r.title = on ? 'This is the fragment\'s clip' : 'Make this the fragment\'s clip';
+      if (c.thumb) {
+        const img = el('img', 'mv3-wk-vshot');
+        img.alt = '';
+        img.loading = 'lazy';
+        img.src = c.thumb;
+        r.appendChild(img);
+      }
       r.appendChild(el('span', 'mv3-wk-vname', 'take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
       if (c.said !== _words(l)) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
-      if (now && c.id === now.id) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
+      if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
+      if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
       host.appendChild(r);
     }
   }
@@ -1412,12 +1514,91 @@ function _motionCol(l, i, hasFrame) {
   return col;
 }
 
+// ── The clip of a fragment (phase F4) ───────────────────────────────────────
+// The frame speaks the read: the picture, the take and the line's animation prompt go to Kling and
+// the SERVER sees it through (routes/scen3.js, /scen3/fragments/clip). This panel only asks and
+// follows the row, which is why walking away loses nothing.
+const _clipping = new Map();              // line -> { alertId, startedAt }
+let _armedClip = -1;                      // the line whose `make clip` was pressed once
+const CLIP_ESTIMATE_MS = 150000;
+
+async function _makeClip(p, i) {
+  if (_clipping.has(i)) return;
+  _readErr = '';
+  _clipping.set(i, { alertId: '', startedAt: Date.now() });
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/fragments/clip', { projectId: p.id, line: i, where: _whereLine(i) });
+    if (r.skipped) {
+      _readErr = 'Fragment ' + (i + 1) + ': ' + r.skipped;
+      _clipping.delete(i);
+      return _ctx.repaint();
+    }
+    _clipping.set(i, { alertId: r.alertId, startedAt: Date.now() });
+    await _followClip(i, r.alertId);
+  } catch (e) {
+    _readErr = 'The clip was not asked for: ' + e.message;
+    _clipping.delete(i);
+    _ctx.repaint();
+  }
+}
+
+async function _followClip(i, alertId) {
+  try {
+    await API.follow(alertId);
+    if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
+  } catch (e) {
+    _readErr = 'Fragment ' + (i + 1) + ': the clip failed - ' + e.message;
+  }
+  _clipping.delete(i);
+  if (!_clipping.size) endProgress('clip', _readErr ? _readErr : undefined);
+  if (_ctx) _ctx.repaint();
+}
+
+// Where a clip was asked from, for the Alerts list: this fragment of this project.
+function _whereLine(i) {
+  const key = (_ctx && _ctx.key) || '';
+  const p = (_ctx && _ctx.project) || {};
+  return {
+    page: 'merge',
+    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + (i + 1),
+    spot: { key, step: 'setup', line: i + 1 },
+  };
+}
+
+// A clip of this project already running - started before a reload, or from another tab.
+function _pickUpClips() {
+  const key = (_ctx && _ctx.key) || '';
+  if (!key || _lookedClips === key) return;
+  _lookedClips = key;
+  API.alerts().then((d) => {
+    for (const r of (d && d.items) || []) {
+      const spot = (r.where && r.where.spot) || {};
+      const i = (Number(spot.line) || 0) - 1;
+      if (r.state !== 'running' || r.what !== 'clip' || spot.key !== key || i < 0 || _clipping.has(i)) continue;
+      _clipping.set(i, { alertId: r.id, startedAt: Date.parse(r.startedAt) || Date.now() });
+      _followClip(i, r.id);
+    }
+    if (_ctx) _ctx.repaint();
+  }).catch(() => { /* without the list, nothing shows as running */ });
+}
+let _lookedClips = '';
+
+async function _pickClip(i, clipId) {
+  const p = _ctx && _ctx.project;
+  if (!p) return;
+  try { _adopt(await _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId })); }
+  catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
+  _ctx.repaint();
+}
+
 // CLIP - the frame speaking the read, in the frame's column. What stops it, or what it costs, is
 // said under the button.
 function _clipCol(p, l, i, rs, take) {
   const col = el('div', 'mv3-wk-fcol is-media');
   col.appendChild(_colHead('clip'));
-  const c = _clipOf(l);
+  const c = _clipOf(p, l, i);
   const box = el('div', 'mv3-wk-fmedia' + (c && c.thumb ? '' : ' is-empty'));
   if (c && c.thumb) {
     const img = el('img');
@@ -1427,21 +1608,37 @@ function _clipCol(p, l, i, rs, take) {
   } else {
     box.appendChild(el('span', '', 'no clip'));
   }
+  if (c && c.thumb) {
+    box.title = 'Open it large';
+    box.addEventListener('click', () => showPicture({ src: c.thumb, name: 'clip of fragment ' + (i + 1), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] }));
+  }
   col.appendChild(box);
   const fr = _frameFor(p, l, i).v;
   const tier = _tier();
+  const busy = _clipping.has(i);
   let cap;
   let ready = false;
   if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…'); }
-  const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''), c ? 'again' : 'make clip');
+  const price = ready && tier ? _money(take.dur * tier.pricePerSec) : '';
+  // The one paid press in a fragment: the price first, the clip on the second press.
+  const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
+    busy ? 'making…' : _armedClip === i ? price + '?' : c ? 'again' : 'make clip');
   make.type = 'button';
-  make.disabled = true;
-  make.title = 'Kling avatar - comes with the clips (F4)';
+  make.disabled = !ready || busy;
+  make.title = !ready ? cap
+    : 'Kling avatar: this frame speaks this read, moving as the animation prompt says'
+      + ((l.shot || {}).motion ? '' : ' - this fragment has no prompt yet, so the old motion preset stands in')
+      + '. ' + take.dur.toFixed(1) + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
+  make.addEventListener('click', () => {
+    if (_armedClip !== i) { _armedClip = i; _ctx.repaint(); return; }
+    _armedClip = -1;
+    _makeClip(p, i);
+  });
   col.appendChild(make);
-  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'), cap));
+  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'), busy ? 'making the clip…' : cap));
   return col;
 }
 
@@ -1487,7 +1684,7 @@ export function openPicture(p) {
     const fr = _setPick ? _pool(p).find(v => v.id === _setPick) : null;
     return fr ? { src: derived(fr.preview || fr.path, 'main'), caption: 'frame' + (fr.n ? ' ' + fr.n : '') } : null;
   }
-  const c = _clipOf(l);
+  const c = _clipOf(p, l, _open);
   if (c && c.thumb) return { src: c.thumb, caption: 'fragment ' + (_open + 1) + ' · clip' };
   const fr = _frameFor(p, l, _open).v;
   if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'fragment ' + (_open + 1) };
