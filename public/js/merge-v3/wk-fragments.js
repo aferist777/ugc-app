@@ -983,13 +983,14 @@ function _fragment(host, p, l, i) {
 
   // Two rows, and each is a picture with the words it is made of beside it (the owner, 2026-09-21):
   // the frame with the prompt it was drawn from, the clip with the animation prompt it will be made
-  // from.
+  // from. The pictures on the left, the words to their right (the owner's second look at it).
+  const hasFrame = !!_frameFor(p, l, i).v;
   const grid = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid);
-  grid.appendChild(_framePromptCol(p, l, i));
   grid.appendChild(_frameCol(p, l, i));
-  grid.appendChild(_motionCol(l, i));
+  grid.appendChild(_framePromptCol(p, l, i));
   grid.appendChild(_clipCol(p, l, i, rs, take));
+  grid.appendChild(_motionCol(l, i, hasFrame));
 
   // Every take the line has, under the grid - projects made on the old page can carry some.
   const clips = ((l.video || {}).plain || []);
@@ -1015,18 +1016,29 @@ function _framePromptCol(p, l, i) {
   const col = el('div', 'mv3-wk-fcol is-prompt');
   const { v: fr } = _frameFor(p, l, i);
   col.appendChild(_colHead('frame prompt'));
-  if (!fr) {
-    col.appendChild(el('div', 'mv3-wk-fwhy', _drawing.size
-      ? 'the set is being drawn…'
-      : 'The set of first frames is made in the general zone - press this fragment again to get there.'));
-    return col;
-  }
-  const box = _textField('f', fr.id, fr.prompt || '', 7,
-    'This frame was drawn before the prompt was kept with it.',
-    (v) => _saveFramePrompt(p, fr.id, v));
+  // The field stands there whether or not there is a frame (the owner, 2026-09-21), so the fragment
+  // has the same shape from the first look; with no picture beside it there is nothing to edit, and
+  // it says what is missing instead of pretending to take words.
+  const box = fr
+    ? _textField('f', fr.id, fr.prompt || '', 7,
+      'This frame was drawn before the prompt was kept with it.',
+      (v) => _saveFramePrompt(p, fr.id, v))
+    : _dead(7, _drawing.size
+      ? 'The set is being drawn - the prompt of this line’s frame appears with the picture.'
+      : 'No frame yet. The set of first frames is made in the general zone - press this fragment again to get there.');
   box.classList.add('is-tall');
   col.appendChild(box);
   return col;
+}
+
+// A field that is only there to say what will be in it: same box, same height, no typing.
+function _dead(rows, placeholder) {
+  const box = el('textarea', 'mv3-wk-ftext-in');
+  box.rows = rows;
+  box.placeholder = placeholder;
+  box.value = '';
+  box.disabled = true;
+  return box;
 }
 
 // A column's heading: a small label, and - on the shot - the one action it has.
@@ -1080,10 +1092,19 @@ function _frameCol(p, l, i) {
 // The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
 // Written by the agent; a version written by hand stays through the next reading, and the agent's
 // own is one press away.
-function _motionCol(l, i) {
+function _motionCol(l, i, hasFrame) {
   const col = el('div', 'mv3-wk-fcol is-motion');
   const sh = l.shot || null;
   let action = null;
+  // Nothing to animate until the line has a frame to animate FROM (the owner, 2026-09-21): the
+  // field is there, says so, and takes no words yet.
+  if (!hasFrame) {
+    col.appendChild(_colHead('animation prompt'));
+    const dead = _dead(7, 'The clip is made from the frame: this fills in once this line has one.');
+    dead.classList.add('is-tall');
+    col.appendChild(dead);
+    return col;
+  }
   if (sh && sh.motionEdited) {
     action = el('span', 'mv3-wk-fedited-row');
     action.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));

@@ -2015,8 +2015,8 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 
 /* The open fragment as a grid of two rows, and each row is a picture with the words it is made of
    beside it (the owner, 2026-09-21): the frame with the prompt it was drawn from, the clip with the
-   animation prompt it will be made from. */
-.mv3-wk-fgrid{display:grid; grid-template-columns:minmax(0,1fr) 92px; column-gap:12px; row-gap:14px; align-items:start; margin-top:4px}
+   animation prompt it will be made from. Pictures on the left, words to their right. */
+.mv3-wk-fgrid{display:grid; grid-template-columns:92px minmax(0,1fr); column-gap:12px; row-gap:14px; align-items:start; margin-top:4px}
 .mv3-wk-fcol{min-width:0; display:flex; flex-direction:column; gap:5px}
 /* The prompt of a frame is long - the shot size, the mannequin, the look, the place, the light - so
    it scrolls inside the height of its picture instead of pushing the clip row down the column. */
