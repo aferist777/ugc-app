@@ -1913,9 +1913,13 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* ── The script (js/merge-v3/wk-fragments.js) ──────────────────────────────────────────────────
    The hub of the setup step, two columns: the voice and the script on the left, the open fragment
    - or the whole video's settings - on the right. */
+/* The script stands in a gold frame of its own (the owner, 2026-09-21), like the zones across from
+   it: it is the one thing on this step that is set once and read all the way through. The frame is
+   inside the column's own padding, and the list scrolls inside it. */
 .mv3-wk-half.is-frags{
-  flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; padding:9px 7px 0;
-  display:flex; flex-direction:column; gap:6px; border-right:1px solid var(--border-soft);
+  flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; margin:2px 0 8px 9px; padding:8px 7px 8px;
+  display:flex; flex-direction:column; gap:6px;
+  border:1px solid var(--gold); border-radius:var(--r-sm);
 }
 .mv3-wk-half.is-frags > *{flex:0 0 auto}
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */

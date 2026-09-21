@@ -3833,13 +3833,19 @@ const FRAME_SET_MAX = 5;
 const FRAME_SETS = [
   { id: 'selfie', label: 'selfie', group: 'closeup', poseId: 'closeup-selfie-r', camera: 'phone-selfie',
     about: 'Filmed at arm’s length: the phone in one outstretched hand, the face and the shoulders close, straight to the viewer.',
-    rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.' },
+    rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.',
+    // What a MOMENT may be about: only what this shot size actually shows. A moment that describes
+    // the stance of a body the frame cuts off is a moment that pulls the picture wider (the owner,
+    // 2026-09-21: a half-body set came out full height).
+    visible: 'the head, the face, the eyes, the shoulders and the free hand when it comes up near the face - never the legs, the feet, the floor or the whole stance' },
   { id: 'half', label: 'half body', group: 'half-body', poseId: 'half-standing', camera: 'nat-50',
     about: 'From the waist up, somebody else holding the camera: room for the hands, the place behind.',
-    rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.' },
+    rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.',
+    visible: 'the head, the face, the eyes, the shoulders, the arms and both hands - never the legs, the feet, the floor, or how the weight sits on the feet' },
   { id: 'full', label: 'full body', group: 'full-height', poseId: 'full-straight', camera: 'phone-rear',
     about: 'Head to toe, standing in the place: the whole figure, the floor under their feet.',
-    rule: 'FULL BODY, the whole figure from head to toe: standing on the floor of the place, filmed from a natural distance, the person in the middle of the frame with the place around them, the feet and the floor in the frame.' },
+    rule: 'FULL BODY, the whole figure from head to toe: standing on the floor of the place, filmed from a natural distance, the person in the middle of the frame with the place around them, the feet and the floor in the frame.',
+    visible: 'the whole figure - the head, the face, the arms and hands, the stance, the weight on the feet and the floor under them' },
 ];
 const _frameSet = (id) => FRAME_SETS.find(s => s.id === String(id || '')) || null;
 
@@ -3855,14 +3861,21 @@ const FRAG_RULE_POSED =
   + ' rotation of its head, its shoulder line, the direction and foreshortening of its arms, and the camera'
   + ' angle - exactly, including any arm that reaches toward the lens and runs out past the edge of the frame.'
   + ' The mannequin has no eyes: where the person looks and what their face does is the MOMENT described below.'
-  + ' Take the POSE from it, never the crop: the mannequin is photographed at its own shot size, and the'
-  + ' SHOT SIZE stated above wins over it.'
+  // The mannequin of a SET is chosen FOR its shot size (the set's poseId), so its crop is the crop we
+  // want. The rule used to say the opposite - take the pose, never the crop - which was written when
+  // the mannequin's own framing had nothing to do with the shot; with three references, two of them
+  // wide, that sentence was an invitation to pull back, and the sets came out full height.
+  + ' IMAGE 1 IS ALSO THE FRAMING: it is photographed at exactly the shot size of the picture you are'
+  + ' making, so show the same amount of the body as it shows - not one part more - and keep the camera'
+  + ' at the same height and the same distance.'
   + ' Never render the mannequin itself: no blue material, no ball joints, no seams, no blank faceless head,'
   + ' no grey studio backdrop.'
-  + ' IMAGE 2 is a character reference sheet - take ONLY the person from it and keep the same face, hair,'
-  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
-  + ' more than ONE person in the result.'
-  + ' IMAGE 3 is the location - keep its architecture, furniture, colours and depth, and put the person in it.'
+  + ' IMAGE 2 is a character reference sheet, several full-length views side by side. Take from it the'
+  + ' face, the hair, the skin and the clothes - and NOTHING else: never its framing, never its'
+  + ' full-length view, never its plain backdrop, never its panels or borders, and never more than ONE'
+  + ' person in the result.'
+  + ' IMAGE 3 is the location, photographed empty and wide: take its architecture, furniture, colours and'
+  + ' depth as the background behind the person, and never its camera distance - the framing is IMAGE 1\'s.'
   + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
 
 // For a pose whose mannequin is missing: two references, the body in words.
@@ -3920,20 +3933,25 @@ async function _frameRef(projectId, cast) {
 // The moments: N variations of the one shot, written by the agent that sees the look, the place and
 // the mannequin. Two or three sentences each about the body, the hands, the head and the face at
 // the frozen instant - never about the camera, the place or the clothes, which are fixed.
-async function _planFrames({ n, set, mood, wish, ref, lookUrl, placeUrl, poseUrl }) {
+async function _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, poseUrl }) {
   const m = MP.moodById(mood) || MP.moodById(MP.DEFAULT_MOOD);
   const text = [
     'You are the DIRECTOR OF PHOTOGRAPHY of a UGC talking-head video ad: one real person speaks to a camera in one real place. You are planning the FIRST FRAMES - the still pictures the clips of the video start from: one shot size, and ' + n + ' variations of it.',
     'IMAGE 1 is the person, in the look they wear for the whole video (a reference sheet). IMAGE 2 is the place, photographed empty.'
-      + (poseUrl ? ' IMAGE 3 is a blue mannequin: the base body position and the camera angle of this shot size.' : ''),
+      + (poseUrl ? ' IMAGE 3 is a blue mannequin, photographed at exactly this shot size: the base body position, the camera angle, and how much of the body the frame holds.' : ''),
     'THE SHOT SIZE: ' + set.rule,
+    // The mannequin in words as well as in the picture (the owner, 2026-09-21): the moments are
+    // written FROM this pose, and an agent that has read it does not plan around a body the frame
+    // does not show.
+    (poseUrl && pose && pose.desc) ? 'THE BASE POSE, the one every variation keeps: the person is ' + pose.desc + '.' : '',
+    'WHAT A MOMENT MAY DESCRIBE - only what this shot size actually shows: ' + set.visible + '.',
     'THE MOOD OF THE VIDEO is "' + m.label + '". The face: ' + m.face + ' The body: ' + m.gestures,
     ref.environment ? 'THE PLACE, as read: ' + ref.environment : '',
     wish ? 'WHAT THE PERSON MAKING THE VIDEO ASKS FOR - follow it in every variation: ' + wish : '',
     'Write ' + n + ' variations of this ONE shot: the same person, the same place, the same shot size and the same base pose, and in each a DIFFERENT moment - the tilt and the turn of the head, what the hands do'
       + (set.id === 'selfie' ? ' (the hand with the phone stays where it is; the other hand is free)' : '')
-      + ', the expression, where the eyes go (into the lens, or caught mid-thought), the weight of the body. Every moment physically possible in this place and true to the mood, and the variations clearly different from one another.',
-    'A moment is two or three concrete sentences describing that frozen instant: the body, the hands, the head, the face. Nothing about the camera, the place or the clothes - those are fixed. Everything in English.',
+      + ', the expression, where the eyes go (into the lens, or caught mid-thought). Every moment physically possible in this place and true to the mood, and the variations clearly different from one another.',
+    'A moment is two or three concrete sentences describing that frozen instant: the head, the face, the hands, the upper body. Nothing about the camera, the framing, the place or the clothes - those are fixed. Everything in English.',
     'Answer with JSON only: {"frames":[{"n":1,"moment":"..."},{"n":2,"moment":"..."}]} - exactly ' + n + ' entries.',
   ].filter(Boolean).join('\n');
   const content = [
@@ -3988,6 +4006,9 @@ async function _submitSetFrame(b) {
   if (ref.character) parts.push('The person to keep: ' + ref.character);
   if (ref.environment) parts.push('The location: ' + ref.environment);
   if (ref.lighting) parts.push('Match the location lighting exactly - ' + ref.lighting);
+  // The shot size again, at the end. It is the first thing said and the last: between them stand two
+  // wide references and a paragraph of likeness, and what a model keeps is what it read last.
+  parts.push('FRAMING CHECK, the last word on it: ' + set.rule);
   const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
 
   const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
@@ -4031,7 +4052,7 @@ router.post('/scen3/frames/plan', async (req, res) => {
       _hostLocal(cast.locationImage, { verify: true }),
       pose ? _hostLocal(pose.file) : Promise.resolve(''),
     ]);
-    const moments = await _planFrames({ n, set, mood, wish, ref, lookUrl, placeUrl, poseUrl });
+    const moments = await _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, poseUrl });
 
     // Every frame asked for at once (the owner): the references were hosted once above and ride
     // along; the retry of one frame (the row's "try again") carries its own request without them.
