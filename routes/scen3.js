@@ -1945,6 +1945,63 @@ router.get('/scen3/env-meta', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+/* ── How a place MOVES ───────────────────────────────────────────────────────
+   POST /api/scen3/env/motion  { path, motion? } -> { success, path, entry }
+
+   The one or two sentences that say what is alive in the background of a shot filmed here - a
+   curtain breathing, steam off a cup, leaves, traffic far behind, light shifting. It belongs to the
+   PLACE and not to a project (the owner, 2026-09-21): every talking head set here animates the same
+   way, so it lives beside the picture in scen3-env-meta.json and every project reads it.
+
+   With `motion` in the body it is written as given - that is the field being edited by hand. Without
+   it the agent looks at the picture and writes one, which is what the video zone's `generate` does.
+   People and camera moves are deliberately out: the person is animated by the line's own prompt, and
+   a camera move would fight the shot size the frames were drawn in.
+   ──────────────────────────────────────────────────────────────────────────── */
+const ENV_MOTION_ASK =
+  'This is an empty location - a place a person will be filmed standing or sitting in, talking to the'
+  + ' camera. In ONE or TWO sentences, say what MOVES in it by itself while that is filmed: the things'
+  + ' in the background and the air and light around them - a curtain lifting, steam rising, leaves or'
+  + ' branches, water, traffic or people far behind a window, dust in a sunbeam, a screen flickering.'
+  + ' Only what is actually visible in this picture, and only small ambient movement that could run'
+  + ' under a few seconds of speech. Do NOT mention the person, their face, hands or clothes, and do'
+  + ' NOT describe any camera movement, cut or zoom. Plain sentences, no list, no heading.';
+
+router.post('/scen3/env/motion', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const url = String(b.path || '').trim();
+    if (!url) return res.status(400).json({ success: false, error: 'path is required' });
+    // The picture has to be one on the environments shelf: the store is keyed by address, and an
+    // entry under an address that is not a place would never be read by anything.
+    const hit = _resolveMedia(url);
+    if (!hit || !fs.existsSync(hit.abs)) return res.status(404).json({ success: false, error: 'no such picture' });
+    if (!hit.abs.startsWith(path.resolve(CFG.ENVIRONMENTS_DIR) + path.sep)) {
+      return res.status(400).json({ success: false, error: 'that picture is not an environment' });
+    }
+
+    let motion = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
+    if (motion === null) {
+      const imageUrl = await _hostLocal(url);
+      motion = _cleanText(await _ask([{ role: 'user', content: [
+        { type: 'text', text: ENV_MOTION_ASK },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ] }])).slice(0, 600);
+      if (!motion) throw new Error('the agent said nothing about this place');
+      console.log('[scen3/env/motion] ' + path.basename(hit.abs) + ' -> ' + motion.length + 'ch');
+    }
+
+    const meta = SHELF_META.read('environments');
+    const entry = { ...(meta[url] || {}), motion, motionAt: new Date().toISOString() };
+    meta[url] = entry;
+    SHELF_META.write('environments', meta);
+    res.json({ success: true, path: url, entry });
+  } catch (e) {
+    console.error('[scen3/env/motion]', e.message);
+    res.status(e.status || 502).json({ success: false, error: e.message });
+  }
+});
+
 // ── Alerts: the server sees a generation through ────────────────────────────
 // A generation started from Merge becomes a row in the journal (lib/alerts.js), and the runner
 // (lib/gen-jobs.js) waits for it, files the result and writes the answer back into the row. The
@@ -4021,6 +4078,31 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
     } else {
       p.lines[i].frameId = '';
     }
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── The prompt a frame was drawn from ───────────────────────────────────────
+   POST /api/scen3/frames/prompt  { projectId, frameId, prompt } -> { success, project }
+
+   Every frame of a set keeps the prompt it was made from, and the open fragment shows it beside the
+   picture (the owner, 2026-09-21). It is EDITABLE there: the picture on screen does not change - it
+   is already drawn - but what is written here is what a later redraw of this frame will be asked
+   for, so a wording somebody fixed by hand is not lost.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/frames/prompt', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.mix = _normMix(p.mix);
+    const v = p.mix.variants.find(x => x.id === String(b.frameId || ''));
+    if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
+    v.prompt = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 4000);
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });

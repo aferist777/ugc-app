@@ -73,6 +73,11 @@ let _readErr = '';
 const _drafts = {};                       // text being typed, by "<line>:<field>" - a repaint keeps it
 // Frames of the set being drawn, by journal row: { startedAt, n } - asked from here or found in the journal.
 const _drawing = new Map();
+// What is known about the places on the shelf, by address (routes/scen3.js, /scen3/env-meta): the
+// description, and - phase W3a - how the place MOVES. Read once and again after it is written; the
+// animation belongs to the place, so it is the same map for every project.
+let _envMeta = null;
+let _envWriting = false;
 let _planning = false;                    // the agent is writing the moments of a set
 let _armedSet = false;                    // the set's `generate` pressed once and asking
 let _lookedAt = '';                       // the project the journal was last asked about
@@ -323,6 +328,45 @@ function _pickUpDrawing() {
     }
     if (_ctx) _ctx.repaint();
   }).catch(() => { /* without the list, nothing shows as drawing */ });
+}
+
+// ── How the place moves (phase W3a) ─────────────────────────────────────────
+// One or two sentences about what is alive in the background - a curtain, steam, traffic far
+// behind. It is the PLACE's, not the project's (the owner, 2026-09-21): every talking head filmed
+// here animates the same way, so it is written beside the picture and read from there.
+function _needEnvMeta() {
+  if (_envMeta !== null) return;
+  _envMeta = {};                                   // once, even if it fails: no retry storm
+  API.envMeta().then((m) => { _envMeta = m || {}; if (_ctx) _ctx.repaint(); }).catch(() => { /* nothing known */ });
+}
+const _place = (p) => String(((p || {}).casting || {}).locationImage || '');
+const _envMotion = (p) => String(((_envMeta || {})[_place(p)] || {}).motion || '');
+
+// Written by hand, or by the agent when `motion` is not given. Either way the answer is the entry
+// the store now holds, and the map is put right without reading the whole shelf again.
+async function _saveEnvMotion(p, motion) {
+  const path = _place(p);
+  if (!path || _envWriting) return;
+  _envWriting = true;
+  _readErr = '';
+  _ctx.repaint();
+  try {
+    const body = motion == null ? { path } : { path, motion };
+    const r = await _post('/api/scen3/env/motion', body);
+    _envMeta = { ...(_envMeta || {}), [path]: r.entry || {} };
+  } catch (e) {
+    _readErr = 'The animation of the place was not written: ' + e.message;
+  }
+  _envWriting = false;
+  _ctx.repaint();
+}
+
+// The prompt a frame was drawn from, edited by hand: the picture does not change - it is drawn -
+// but a redraw of this frame will be asked for what is written here.
+async function _saveFramePrompt(p, frameId, prompt) {
+  try { _adopt(await _post('/api/scen3/frames/prompt', { projectId: p.id, frameId, prompt })); }
+  catch (e) { _readErr = 'The prompt was not saved: ' + e.message; }
+  _ctx.repaint();
 }
 
 // A frame of the pool for this line, by hand - or '' to hand the line back to the rule.
@@ -713,18 +757,21 @@ function _stageFrames(host, p) {
   });
 }
 
-// VIDEO - the model and the tier now; the animation prompts and the clips come with their stages
-// (W3, F4). Shut until there is a FIRST FRAME to animate (the owner, 2026-09-21): a clip is made
-// from a frame, so before the set exists this zone has nothing to be about.
+// VIDEO - the model and the tier, and how the PLACE moves (W3a); the animation of the person, line
+// by line, comes with W3b and the clips with F4. Shut until there is a FIRST FRAME to animate (the
+// owner, 2026-09-21): a clip is made from a frame, so before the set exists this zone has nothing
+// to be about.
 function _stageVideo(host, p) {
   const missing = _missing(p);
   const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
+  const motion = _envMotion(p);
   const { open, body, foot } = _stage(host, 'video', {
-    name: 'video', sub: 'under development', soon: true,
+    name: 'video', sub: 'the place, then the person', soon: true,
     blocked: !!why, why,
-    summary: 'under development',
+    summary: motion ? 'the place animates' : 'no animation yet',
   });
   if (!open) return;
+  _needEnvMeta();
   const v = _video();
   // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
   // in the list so it is known to be coming, and cannot be picked yet.
@@ -753,7 +800,34 @@ function _stageVideo(host, p) {
   model.disabled = _saving;
   sets.append(tier, model);
   body.appendChild(sets);
-  _genButton(foot, { disabled: true, title: 'Comes with the video stage (W3): the animation of the person and of the place, then the clips (F4)' });
+
+  // HOW THE PLACE MOVES. One field, because it is one sentence about one picture - and it is the
+  // picture's, not this project's: what is written here is what every talking head filmed in this
+  // place will animate by.
+  body.appendChild(el('div', 'mv3-wk-flabel', 'environment animation'));
+  const env = el('textarea', 'mv3-wk-ftext-in');
+  env.rows = 2;
+  env.placeholder = _envWriting ? 'the agent is looking at the place…'
+    : 'What moves in the background by itself - a curtain, steam, leaves, traffic far behind. Write it, or press generate.';
+  env.value = 'env' in _drafts ? _drafts.env : motion;
+  env.disabled = _envWriting;
+  env.addEventListener('input', () => { _drafts.env = env.value; });
+  env.addEventListener('change', () => {
+    const w = env.value;
+    delete _drafts.env;
+    if (w.trim() !== motion.trim()) _saveEnvMotion(p, w.trim());
+  });
+  body.appendChild(env);
+  body.appendChild(el('div', 'mv3-wk-fwhy', 'It belongs to the place: every video filmed here animates the same way.'));
+
+  _genButton(foot, {
+    label: _envWriting ? 'writing…' : motion ? 'write it again' : 'generate',
+    cap: _envWriting ? '' : motion ? 'the place is written' : 'the place first',
+    disabled: _envWriting || !_place(p),
+    title: 'The agent looks at the place and writes what moves in it by itself. The animation of the person,'
+      + ' line by line, comes with the next step (W3b), and the clips with F4.',
+    on: () => _saveEnvMotion(p, null),
+  });
 }
 
 function _list(host, p, lines) {
@@ -907,10 +981,14 @@ function _fragment(host, p, l, i) {
     host.appendChild(back);
   }
 
+  // Two rows, and each is a picture with the words it is made of beside it (the owner, 2026-09-21):
+  // the frame with the prompt it was drawn from, the clip with the animation prompt it will be made
+  // from.
   const grid = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid);
-  grid.appendChild(_motionCol(l, i));
+  grid.appendChild(_framePromptCol(p, l, i));
   grid.appendChild(_frameCol(p, l, i));
+  grid.appendChild(_motionCol(l, i));
   grid.appendChild(_clipCol(p, l, i, rs, take));
 
   // Every take the line has, under the grid - projects made on the old page can carry some.
@@ -926,6 +1004,29 @@ function _fragment(host, p, l, i) {
       host.appendChild(r);
     }
   }
+}
+
+// THE PROMPT THIS FRAME WAS DRAWN FROM, beside the picture it made (the owner, 2026-09-21): what
+// the engine was actually told - the shot size, the mannequin, the look and the place, and the one
+// moment that makes this frame different from the others in the set. Editable, for now: the picture
+// is already drawn and does not change, but a redraw of this frame is asked for what is written
+// here (routes/scen3.js, /scen3/frames/prompt).
+function _framePromptCol(p, l, i) {
+  const col = el('div', 'mv3-wk-fcol is-prompt');
+  const { v: fr } = _frameFor(p, l, i);
+  col.appendChild(_colHead('frame prompt'));
+  if (!fr) {
+    col.appendChild(el('div', 'mv3-wk-fwhy', _drawing.size
+      ? 'the set is being drawn…'
+      : 'The set of first frames is made in the general zone - press this fragment again to get there.'));
+    return col;
+  }
+  const box = _textField('f', fr.id, fr.prompt || '', 7,
+    'This frame was drawn before the prompt was kept with it.',
+    (v) => _saveFramePrompt(p, fr.id, v));
+  box.classList.add('is-tall');
+  col.appendChild(box);
+  return col;
 }
 
 // A column's heading: a small label, and - on the shot - the one action it has.
@@ -996,7 +1097,8 @@ function _motionCol(l, i) {
   }
   col.appendChild(_colHead('animation prompt', action));
   const box = _textField(i, 'motion', (sh && sh.motion) || '', 7,
-    'How the person moves while speaking - the expression, the head, the hands, the gaze. Kling hears nothing else.',
+    'How the person moves while speaking - the expression, the head, the hands, the gaze. Written for every'
+    + ' line by the video zone; Kling hears nothing else.',
     (v) => _saveShot(i, { motion: v }));
   box.classList.add('is-tall');
   col.appendChild(box);
