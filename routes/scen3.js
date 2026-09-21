@@ -1967,6 +1967,28 @@ const ENV_MOTION_ASK =
   + ' under a few seconds of speech. Do NOT mention the person, their face, hands or clothes, and do'
   + ' NOT describe any camera movement, cut or zoom. Plain sentences, no list, no heading.';
 
+// Writing a place's motion down, and having the agent write one. Wanted in two places: by the
+// route below, and by a clip about to be made in a place nobody has looked at yet (phase U4) -
+// a fragment's own `make clip` must not render before that analysis exists.
+function _keepEnvMotion(url, motion) {
+  const meta = SHELF_META.read('environments');
+  const entry = { ...(meta[url] || {}), motion: String(motion || ''), motionAt: new Date().toISOString() };
+  meta[url] = entry;
+  SHELF_META.write('environments', meta);
+  return entry;
+}
+const _envMotionOf = (url) => String((SHELF_META.read('environments')[String(url || '')] || {}).motion || '');
+async function _askEnvMotion(url) {
+  const imageUrl = await _hostLocal(url);
+  const motion = _cleanText(await _ask([{ role: 'user', content: [
+    { type: 'text', text: ENV_MOTION_ASK },
+    { type: 'image_url', image_url: { url: imageUrl } },
+  ] }])).slice(0, 600);
+  if (!motion) throw new Error('the agent said nothing about this place');
+  console.log('[scen3/env/motion] ' + String(url).split('/').pop() + ' -> ' + motion.length + 'ch');
+  return _keepEnvMotion(url, motion);
+}
+
 router.post('/scen3/env/motion', async (req, res) => {
   try {
     const b = req.body || {};
@@ -1980,21 +2002,8 @@ router.post('/scen3/env/motion', async (req, res) => {
       return res.status(400).json({ success: false, error: 'that picture is not an environment' });
     }
 
-    let motion = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
-    if (motion === null) {
-      const imageUrl = await _hostLocal(url);
-      motion = _cleanText(await _ask([{ role: 'user', content: [
-        { type: 'text', text: ENV_MOTION_ASK },
-        { type: 'image_url', image_url: { url: imageUrl } },
-      ] }])).slice(0, 600);
-      if (!motion) throw new Error('the agent said nothing about this place');
-      console.log('[scen3/env/motion] ' + path.basename(hit.abs) + ' -> ' + motion.length + 'ch');
-    }
-
-    const meta = SHELF_META.read('environments');
-    const entry = { ...(meta[url] || {}), motion, motionAt: new Date().toISOString() };
-    meta[url] = entry;
-    SHELF_META.write('environments', meta);
+    const given = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
+    const entry = given === null ? await _askEnvMotion(url) : _keepEnvMotion(url, given);
     res.json({ success: true, path: url, entry });
   } catch (e) {
     console.error('[scen3/env/motion]', e.message);
@@ -3658,6 +3667,10 @@ router.get('/scen3/projects/:id', (req, res) => {
   try {
     const p = _loadProjects().find(x => String(x.id) === String(req.params.id));
     if (!p) return res.status(404).json({ success: false, error: 'not found' });
+    // Opening a project is when the timeline catches up with what was made before the mirror
+    // existed, or while this app was not running (phase U1). It asks a cheap question first and
+    // lays nothing unless the answer differs from what is there.
+    MIRROR.catchUp(p.id, { project: p });
     res.json({ success: true, project: _projFull(p) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4235,19 +4248,19 @@ const MOTION_SELFIE =
   + ' every gesture stays inside a selfie\'s narrow frame. End each prompt with: subtle handheld'
   + ' camera shake.';
 
-router.post('/scen3/video/prompts', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const list = _loadProjects();
-    const proj = list.find(x => String(x.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-
+/**
+ * Write the animation prompts of a project's lines. The route below is one caller; a clip about
+ * to be rendered is the other, asking for the one line it is about (phase U4).
+ */
+async function _writePrompts(id, want) {
+  const list = _loadProjects();
+  const proj = list.find(x => String(x.id) === id);
+  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  {
     const lines = (proj.lines || []).map(_normLine);
-    if (!lines.length) return res.status(400).json({ success: false, error: 'this project has no lines' });
+    if (!lines.length) throw Object.assign(new Error('this project has no lines'), { status: 400 });
     const pool = _framePool(proj);
-    if (!pool.length) return res.status(400).json({ success: false, error: 'make the first frames first: a clip is made from one' });
+    if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip is made from one'), { status: 400 });
     const video = _normVideo(proj.video);
     const mood = MP.moodById(video.mood) || MP.MOODS[0];
     const set = _frameSet(video.framing) || _frameSet('half');
@@ -4255,17 +4268,22 @@ router.post('/scen3/video/prompts', async (req, res) => {
     // Which lines this touches: the ones named, or every line that has no prompt or whose words
     // have changed since the one it has was written - and never one edited by hand unless named.
     const stale = (l) => !l.shot || !l.shot.motion || String(l.shot.said || '') !== String(l.text || '');
-    const only = Array.isArray(b.only)
-      ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
+    const only = Array.isArray(want)
+      ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
       : lines.map((_, i) => i).filter(i => stale(lines[i]) && !(lines[i].shot && lines[i].shot.motionEdited));
-    if (!only.length) return res.json({ success: true, project: _projFull(proj), report: { written: 0, skipped: [] } });
+    if (!only.length) return { project: proj, report: { written: 0, skipped: [] } };
 
     // The place's own movement, so the clip keeps the background alive (phase W3a).
     const envMotion = String((SHELF_META.read('environments')[_normCasting(proj.casting).locationImage] || {}).motion || '');
 
     // The frames themselves, in the order the lines take them: the agent writes movement that starts
     // from a body it can see, not from a description of one.
-    const shown = pool.slice(0, FRAME_SET_MAX);
+    // For the whole script the agent sees the set; for ONE line it sees that line's frame and
+    // nothing else - the other frames are not about it, and hosting them would be attention paid
+    // to a picture the answer has to ignore.
+    const shown = (Array.isArray(want) && want.length === 1)
+      ? [_frameOfLine(pool, lines[only[0]], only[0], _normVideo(proj.video).spread, id)].filter(Boolean)
+      : pool.slice(0, FRAME_SET_MAX);
     const urls = await Promise.all(shown.map(v => _hostLocal(v.preview || v.path)));
     const where = (i) => {
       const fr = _frameOfLine(pool, lines[i], i, video.spread, id);
@@ -4321,7 +4339,19 @@ router.post('/scen3/video/prompts', async (req, res) => {
     _saveProjects(list);
     console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + set.id + ' frames=' + shown.length
       + ' written=' + report.written + ' skipped=' + report.skipped.length);
-    res.json({ success: true, project: _projFull(proj), report });
+    return { project: proj, report };
+  }
+}
+
+router.post('/scen3/video/prompts', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(x => String(x.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const out = await _writePrompts(id, b.only);
+    res.json({ success: true, project: _projFull(out.project), report: out.report });
   } catch (e) {
     console.error('[scen3/video/prompts]', e.message);
     res.status(e.status || 502).json({ success: false, error: e.message });
@@ -4528,10 +4558,42 @@ function _clipPlan(proj, i) {
   };
 }
 
+// WHAT A CLIP NEEDS WRITTEN FIRST (phase U4, the owner 2026-09-22). A clip is the frame moving as
+// the animation prompt says, in a place that moves as its own prompt says - so before any money is
+// committed, both are made sure of:
+//
+//   the place     one analysis per PLACE, ever. Written into the shelf beside the picture, so the
+//                 second fragment here - and every other project in this place - finds it done.
+//   the line      one analysis for this line, seeing the frame it opens on, its words, the mood,
+//                 the shot size rule and the place's motion.
+//
+// In that ORDER and not in parallel: the line's prompt is written with the place's motion inside it,
+// so a line analysed first would be written about a place nobody had looked at yet.
+async function _readyForClip(id, i) {
+  const proj = _loadProjects().find(p => String(p.id) === id);
+  if (!proj) return;
+  const place = _normCasting(proj.casting).locationImage;
+  if (place && !_envMotionOf(place)) {
+    try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/clip] the place was not analysed:', e.message); }
+  }
+  const line = (proj.lines || []).map(_normLine)[i];
+  const stale = !line || !line.shot || !line.shot.motion || String(line.shot.said || '') !== String(line.text || '');
+  if (stale && !(line && line.shot && line.shot.motionEdited)) {
+    try { await _writePrompts(id, [i]); } catch (e) { console.warn('[scen3/clip] the animation was not written:', e.message); }
+  }
+}
+
 // One clip on kie. The picture and the sound go up FRESH every time: kie fetches them itself, and a
 // link that has been sitting around comes back as "fetch failed" long after the money is committed.
 async function _submitClip(b) {
   const id = String(b.projectId || '').trim();
+  {
+    const first = _loadProjects().find(p => String(p.id) === id);
+    const i0 = parseInt(b.line, 10);
+    // Only when there is something to render at all: an analysis for a fragment that will be
+    // refused anyway is a call nobody asked for.
+    if (first && !_clipPlan(first, i0).skipped) await _readyForClip(id, i0);
+  }
   const proj = _loadProjects().find(p => String(p.id) === id);
   if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
   const i = parseInt(b.line, 10);

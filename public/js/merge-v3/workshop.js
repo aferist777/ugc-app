@@ -91,15 +91,19 @@ function _readCount() {
   const lines = (_project && Array.isArray(_project.lines)) ? _project.lines : [];
   return { read: lines.filter(isRead).length, total: lines.length };
 }
+// IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first read has been laid on it
+// (the owner, 2026-09-22): a cut of two fragments is a cut, and waiting for the last line before
+// letting anybody look at it helps nobody. Anything on any lane counts - the mirror's cells
+// (lib/frag-mirror.js) and whatever the person put there themselves.
 function _hasCut() {
   const tl = Store.timeline();
-  return !!(tl && (tl.tracks || []).some(t => (t.clips || []).some(c => c && c.frag == null)));
+  return !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
 }
 function _mayEdit() {
   if (_hasCut()) return true;
-  if (!_project) return false;
-  const n = _readCount();
-  return n.read === n.total;
+  // Before the page has the timeline in hand, the project's own reads answer the same question:
+  // one read means the mirror has something to lay, and the chip should not be dead.
+  return !!(_project && _readCount().read > 0);
 }
 
 // The step being left lets go of what it was doing on its own - a read still playing.
@@ -176,10 +180,15 @@ function _paintChips() {
     b.textContent = s.label;
     b.title = s.title;
     if (s.id === 'timeline' && !_mayEdit()) {
-      // Dead until every line is read, and it says how far that is.
+      // Dead until there is something on the timeline - the first read is enough - and it says
+      // how far the script has got.
       const n = _readCount();
       b.disabled = true;
-      b.title = _project ? 'Read every line first · ' + n.read + '/' + n.total : 'Reading the project…';
+      b.title = _project ? 'Read a fragment first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
+        : 'Reading the project…';
+    } else if (s.id === 'timeline' && _project) {
+      const n = _readCount();
+      b.title = s.title + ' · ' + n.read + '/' + n.total + ' read';
     }
     // Pressing the open step's own chip goes back to the top of it.
     b.addEventListener('click', () => {

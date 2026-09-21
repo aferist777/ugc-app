@@ -1628,17 +1628,21 @@ function _clipCol(p, l, i, rs, take) {
     busy ? 'making…' : _armedClip === i ? price + '?' : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
+  // What the press will actually do: with nothing written yet it is two analyses and then the
+  // clip, and that is worth saying before it takes half a minute (phase U4).
+  const needsWords = !_animated(l) || !_envMotion(p);
   make.title = !ready ? cap
-    : 'Kling avatar: this frame speaks this read, moving as the animation prompt says'
-      + ((l.shot || {}).motion ? '' : ' - this fragment has no prompt yet, so the old motion preset stands in')
-      + '. ' + take.dur.toFixed(1) + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
+    : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
+      + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
+      + take.dur.toFixed(1) + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
   make.addEventListener('click', () => {
     if (_armedClip !== i) { _armedClip = i; _ctx.repaint(); return; }
     _armedClip = -1;
     _makeClip(p, i);
   });
   col.appendChild(make);
-  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'), busy ? 'making the clip…' : cap));
+  col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'),
+    busy ? 'making the clip…' : (ready && needsWords) ? 'analysis, then ' + cap : cap));
   return col;
 }
 
