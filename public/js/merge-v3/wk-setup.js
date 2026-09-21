@@ -11,8 +11,10 @@
    half is a door - a press on it opens the shelf it is filled from, in this panel - and
    each is a field: empty, it says what it is waiting for. A tile on a shelf writes
    nothing: it puts a TRIAL on the stage - the character's 4K sheet, a look, a place - and
-   the `select` button on the stage is what writes it into the project. Leaving the shelf
-   without pressing it puts the stage back to what is written.
+   `select`, which stands ON the picked tile, is what writes it into the project. Leaving
+   the shelf without pressing it puts the stage back to what is written. Each half of the
+   stage carries a CROSS while it holds anything: over a trial it takes the trial off the
+   stage, over a written choice it takes that choice off the project.
 
    THE PANEL IS THE SCRIPT (the hub of this step - js/merge-v3/wk-fragments.js, decided
    with the owner 2026-09-21, phase M): the voice it is read in over one list of lines,
@@ -229,15 +231,14 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // The title line carries where the script stands - read, frames, clips - and `generate all`,
-  // whatever face the panel wears (the owner, 2026-09-21): the counters are the one thing worth
-  // seeing from every shelf. A shelf's own bar joins the line, or wraps under it when it is tight.
+  // The title line says what this step IS, and nothing else (the owner, 2026-09-21): where the
+  // script stands belongs over the script, and stands there (js/merge-v3/wk-fragments.js,
+  // _counters). A shelf hangs its own bar on the right of this line.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
-  txt.title = 'Who says it, where, in what voice - and the frame and the clip of each fragment';
+  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, in what voice - and the frame and the clip of each fragment'));
   head.appendChild(txt);
-  if (ctx.project) FRAG.paintCounters(head, ctx, _saving);
   root.appendChild(head);
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
@@ -345,8 +346,7 @@ function _stage(chosen) {
   const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
     PV.showStill(pic.src, pic.caption);
-    _stageButton(null);
-    _stageClears(false, false);
+    _stageClears('', '');
     return;
   }
   const who = _whoHalf(chosen), where = _whereHalf();
@@ -355,26 +355,28 @@ function _stage(chosen) {
     { src: where.src ? derived(where.src, 'main') : '', caption: where.caption, empty: 'choose an environment' },
     _pick,
   );
-  // `select` under the trial: on the seam for a look (it is about the picture above), at the
-  // foot for a place.
-  if (_try.look && _try.char) {
-    _stageButton({ label: 'select', title: 'Cast ' + _try.char.name + ' in this look', busy: _saving, on: _select });
-  } else if (_try.place) {
-    _stageButton({ label: 'select', cls: 'is-foot', title: 'Set this project in this environment', busy: _saving, on: _select });
-  } else {
-    _stageButton(null);
-  }
-  // The cross in the corner of a half that holds something WRITTEN takes it off the project (the
-  // owner, 2026-09-21). In the corner of the half, not of the picture - the picture moves under the
-  // zoom, the cross does not - and gone while the half shows a trial: `select` is the question then.
+  // THE STAGE HAS NO BUTTON ANY MORE (the owner, 2026-09-21): `select` stands on the picked look
+  // and on the picked environment, the act on the thing it acts on. What the stage carries is a
+  // CROSS in the corner of each half that holds something - a trial, which it takes back off the
+  // stage, or a written choice, which it takes off the project. In the corner of the half, not of
+  // the picture: the picture moves under the zoom, the cross does not.
   const cast = _casting();
-  _stageClears(!!(cast.characterId || cast.obrazImage) && !_try.char, !!cast.locationImage && !_try.place);
+  _stageClears(
+    _try.char ? 'trial' : (cast.characterId || cast.obrazImage) ? 'cast' : '',
+    _try.place ? 'trial' : cast.locationImage ? 'cast' : '',
+  );
 }
 
-// The written choice of a half, taken off: the character with their look, or the place. The
-// frames and the reads already made stay what they are - they are files - and nothing else moves.
-function _clearHalf(half) {
+// A half's cross. A TRIAL is only taken off the stage - nothing was written, and the shelf stays
+// open for the next try. A WRITTEN choice is taken off the project; the frames and the reads
+// already made stay what they are - they are files - and nothing else moves.
+function _clearHalf(half, what) {
   if (_saving) return;
+  if (what === 'trial') {
+    if (half === 'top') _try = { char: null, look: null, place: _try.place };
+    else _try = { char: _try.char, look: _try.look, place: '' };
+    return _ctx.repaint();
+  }
   _noTry();
   if (half === 'top') _patch({ characterId: '', characterName: '', obrazId: '', obrazImage: '' });
   else _patch({ locationId: '', locationImage: '' });
@@ -383,18 +385,27 @@ function _clearHalf(half) {
 function _stageClears(top, bottom) {
   const stage = document.getElementById('mv3-stage');
   if (!stage) return;
-  stage.querySelectorAll('.mv3-wk-clear').forEach(x => x.remove());
+  // An older paint's button, if the stage kept one: this step has none now.
+  stage.querySelectorAll('.mv3-wk-clear, .mv3-wk-apply').forEach(x => x.remove());
   const cast = _casting();
-  const mk = (half, title) => {
+  const mk = (half, what, title) => {
     const b = _el('button', 'mv3-wk-clear' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
     b.type = 'button';
     b.title = title;
     b.disabled = _saving;
-    b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); _clearHalf(half, what); });
     stage.appendChild(b);
   };
-  if (top) mk('top', 'Take ' + (cast.characterName || 'the character') + ' off this project');
-  if (bottom) mk('bottom', 'Take the environment off this project');
+  if (top) {
+    mk('top', top, top === 'trial'
+      ? 'Take ' + ((_try.char && _try.char.name) || 'them') + ' off the stage - nothing has been written yet'
+      : 'Take ' + (cast.characterName || 'the character') + ' off this project');
+  }
+  if (bottom) {
+    mk('bottom', bottom, bottom === 'trial'
+      ? 'Take this place off the stage - nothing has been written yet'
+      : 'Take the environment off this project');
+  }
 }
 
 // A half of the stage was pressed. The left button opens its shelf; the right one offers the
@@ -501,9 +512,12 @@ function _envApi() {
     note: _note,
     // The place on trial on the stage: a tile pressed on the shelf, or the one the maker just made;
     // '' takes it off. Stated only - the stage is painted by the step right after the shelf - and
-    // written into the project by `select` on the stage (this file, _select).
+    // written into the project by `select`, which stands ON the picked tile (the owner,
+    // 2026-09-21) and is this same one write.
     tryPlace: (path) => { _try.place = String(path || ''); },
     trying: () => _try.place,
+    select: _select,
+    saving: () => _saving,
   };
 }
 
@@ -615,25 +629,7 @@ function _paintLookbooks(host, head, c) {
 // is picked pushes the shelf about while it is being read.
 function _showDressing(c) {
   PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
-  _stageButton(null);
-  _stageClears(false, false);
-}
-
-// The button lives in the stage, between the halves. Rebuilt rather than kept: the stage is
-// cleared whenever the preview remounts, and a button that survives its own container is a
-// button that outlives the question it asked.
-function _stageButton(spec) {
-  const stage = document.getElementById('mv3-stage');
-  if (!stage) return;
-  const old = stage.querySelector('.mv3-wk-apply');
-  if (old) old.remove();
-  if (!spec) return;
-  const b = _el('button', 'mv3-wk-apply' + (spec.cls ? ' ' + spec.cls : ''), spec.label);
-  b.type = 'button';
-  b.title = spec.title || '';
-  b.disabled = !!spec.busy;
-  b.addEventListener('click', spec.on);
-  stage.appendChild(b);
+  _stageClears('', '');
 }
 
 // ── Making a lookbook ───────────────────────────────────────────────────────
@@ -776,8 +772,7 @@ function _paintNewLookbook(host, head, c) {
   // The stage shows who it is for, and only that: what is being made is already in the field
   // on the right, and a second copy of it on the stage would say nothing new.
   PV.showStill(derived(_faceOf(c).src, 'main'), c.name);
-  _stageButton(null);
-  _stageClears(false, false);
+  _stageClears('', '');
 }
 
 // ── One tile on a lookbook shelf ────────────────────────────────────────────
@@ -1091,10 +1086,12 @@ function _paintLooks(root, c) {
 
     // Lit: the look on trial, else - for the character who is cast - the look they are cast in.
     const cast = _casting();
+    const onTrial = !!(_try.look && _try.char && _try.char.id === c.id);
     const pickedId = _try.look ? _try.look.id
       : (String(cast.characterId || '') === c.id ? String(cast.obrazId || '') : '');
     for (const o of c.obrazy) {
-      const b = _el('button', 'mv3-wk-look' + (o.id === pickedId ? ' is-on' : ''));
+      const on = o.id === pickedId;
+      const b = _el('button', 'mv3-wk-look' + (on ? ' is-on' : ''));
       b.type = 'button';
       b.title = o.name || 'look';
       const img = _el('img');
@@ -1102,9 +1099,21 @@ function _paintLooks(root, c) {
       img.loading = 'lazy';
       img.src = derived(o.image, 'card');
       b.appendChild(img);
+      // `select` STANDS ON THE PICKED LOOK (the owner, 2026-09-21), not on the stage across the
+      // window: the act belongs on the thing it acts on. Until it is pressed nothing is written,
+      // and leaving the shelf drops the trial.
+      if (on && onTrial) {
+        const sel = _el('button', 'mv3-wk-tileact is-look', 'select');
+        sel.type = 'button';
+        sel.title = 'Cast ' + c.name + ' in this look';
+        sel.disabled = _saving;
+        sel.addEventListener('click', (e) => { e.stopPropagation(); _select(); });
+        b.appendChild(sel);
+      }
       b.addEventListener('click', () => {
-        // On trial, on the stage, with `select` under it (this file, _stage) - that is the write.
-        _try = { char: c, look: o, place: _try.place };
+        // On trial, on the stage. `select` on this tile is the write; a second press on the tile
+        // it is already on takes the trial off again.
+        _try = (on && onTrial) ? { char: c, look: null, place: _try.place } : { char: c, look: o, place: _try.place };
         _ctx.repaint();
       });
       row.appendChild(b);

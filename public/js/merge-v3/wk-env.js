@@ -18,8 +18,9 @@
                                    presses create again; the picture lends only its atmosphere
 
    What is made lands on the shelf, becomes the base for the next change, and goes ON TRIAL on the
-   stage - the lower half shows it with `select` under it, the one click that sets the project in
-   it and goes back to the hub. A tile pressed on the shelf goes on trial the same way; nothing here
+   lower half of the stage. `select` STANDS ON THE PICKED TILE (the owner, 2026-09-21) - the one
+   click that sets the project in that place and goes back to the hub - and the stage's own cross
+   takes the trial back off. A tile pressed on the shelf goes on trial the same way; nothing here
    writes into the project by itself (decided with the owner 2026-09-21, docs/local-app/PLAN.md
    "Сцена, setup и таймлайн-зеркало"). The stage itself is painted by the step
    (js/merge-v3/wk-setup.js, _stage); this module only says what is on trial.
@@ -100,8 +101,9 @@ function _bar(head, api, here) {
 
 // ── One place on a shelf ────────────────────────────────────────────────────
 // Landscape, the shape they are made in now; an older upright one is shown whole inside it
-// rather than cut down to a strip. The cross and the menu are the lookbook tile's.
-function _tile(path, on, pick, api) {
+// rather than cut down to a strip. The cross and the menu are the lookbook tile's, and so is
+// `act` - the button the PICKED tile carries, which here is `select`.
+function _tile(path, on, pick, api, act) {
   const tile = el('button', 'mv3-wk-tile is-env' + (on ? ' is-on' : ''));
   tile.type = 'button';
   tile.title = _nameOf(path);
@@ -116,6 +118,15 @@ function _tile(path, on, pick, api) {
   x.title = 'Delete this environment';
   x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(tile, path, api); });
   tile.appendChild(x);
+
+  if (act) {
+    const b = el('button', 'mv3-wk-tileact', act.label);
+    b.type = 'button';
+    b.title = act.title || '';
+    b.disabled = !!act.busy;
+    b.addEventListener('click', (e) => { e.stopPropagation(); act.on(); });
+    tile.appendChild(b);
+  }
 
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {
@@ -181,11 +192,14 @@ export function paintShelf(host, head, api) {
     const path = _pathOf(p);
     if (!path) continue;
     // Lit: the one on trial, else the one the project is set in. A press puts a place on trial on
-    // the stage - `select` there writes it - and a second press on the same tile takes it off again.
+    // the stage and `select` on the tile itself (the owner, 2026-09-21) - that is the write; a
+    // second press on the same tile takes the trial off again.
     grid.appendChild(_tile(path, path === (trial || current), () => {
       api.tryPlace(path === trial ? '' : path);
       api.repaint();
-    }, api));
+    }, api, path === trial ? {
+      label: 'select', title: 'Set this project in this environment', busy: api.saving(), on: () => api.select(),
+    } : null));
   }
   host.appendChild(grid);
   if (!_envs.length) host.appendChild(api.note('No environments yet - the + makes the first one.'));
@@ -237,15 +251,20 @@ export function paintMaker(host, head, api) {
     left.appendChild(api.note('No environments yet. The first one is made on the right.'));
   } else {
     const grid = el('div', 'mv3-wk-grid is-env');
+    const here = String(api.casting().locationImage || '');
     for (const p of _envs) {
       const path = _pathOf(p);
       if (!path) continue;
+      // The one just made is on trial on the stage, and carries the `select` that sets the project
+      // in it - the same button the shelf's picked tile has, in the place where the answer landed.
       grid.appendChild(_tile(path, path === _base && !_ref, () => {
         _base = (_base === path ? '' : path);
         if (_base) _ref = null;                    // one base, not two
         _forget();
         api.repaint();
-      }, api));
+      }, api, (path === _made && path !== here) ? {
+        label: 'select', title: 'Set this project in this environment', busy: api.saving(), on: () => api.select(),
+      } : null));
     }
     left.appendChild(grid);
   }

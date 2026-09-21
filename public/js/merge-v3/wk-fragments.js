@@ -8,10 +8,10 @@
    on the right the line that is open, with everything made for it - or, with none open, the
    GENERAL ZONE: the one mood, and the three zones of the whole video in gold, voice, first
    frames, video, each a drawer with its own `generate` (phase W; open and shut, by hand or by
-   itself when its work is done or cannot start - W2.5). The counters - read, frames, clips - and
-   `generate all` stand in the step's title line, whatever the panel shows (paintCounters). The
-   list never goes away while a line is open: the script is one thing, and judging a line means
-   seeing the ones around it. Who and where are on the stage, not here.
+   itself when its work is done or cannot start - W2.5). Over the right column, whatever it shows,
+   the counters - read, frames, clips - and `generate all` (_counters). The list never goes away
+   while a line is open: the script is one thing, and judging a line means seeing the ones around
+   it. Who and where are on the stage, not here.
 
    THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
    button - tagged by the mood first - and its words can be changed there too, tags and all; a take
@@ -403,7 +403,10 @@ export function paint(host, ctx, api) {
   // on the right, with everything else that is set once for the whole video.
   _list(left, p, lines);
 
-  // The right column: the voices being chosen, the open line, or the whole video.
+  // The right column: the voices being chosen, the open line, or the whole video. Where the whole
+  // script stands is over it in every case (the owner, 2026-09-21) - it is the one thing that is
+  // about all of them at once.
+  _counters(right, p, lines);
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   _notes(right);
   if (!lines.length) {
@@ -515,34 +518,32 @@ function _standing(p) {
   };
 }
 
-/**
- * The counters - read, frames, clips - and `generate all`, in the step's own title line, whatever
- * the panel shows (the owner, 2026-09-21): `5/8 read · 4/4 frames · 0/8 clips`, the chain at the
- * right. Painted by the step (js/merge-v3/wk-setup.js) before this module paints anything.
- */
-export function paintCounters(host, ctx, saving) {
-  _ctx = ctx;
-  const p = ctx.project;
-  if (!p) return;
+// The counters, over the right column whatever it shows (the owner, 2026-09-21): three boxes -
+// read, frames, clips - with the count and its name side by side, and `generate all` at the right
+// of the row. Over the column and not in the step's title line, because the title line says what
+// the step is.
+function _counters(host, p, lines) {
   const s = _standing(p);
-  const stat = el('div', 'mv3-wk-hstats');
+  const top = el('div', 'mv3-wk-ftop');
+  const stat = el('div', 'mv3-wk-fstats');
   const cell = (num, label, done, title) => {
-    const c = el('span', 'mv3-wk-hstat' + (done ? ' is-done' : ''));
-    c.appendChild(el('b', '', num));
-    c.appendChild(document.createTextNode(' ' + label));
+    const c = el('div', 'mv3-wk-fstat' + (done ? ' is-done' : ''));
+    c.appendChild(el('div', 'mv3-wk-fstat-n', num));
+    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
     c.title = title;
     stat.appendChild(c);
   };
-  cell(s.read + '/' + s.n, 'read', s.n > 0 && s.read === s.n, 'Lines read, of all the lines');
+  const n = lines.length;
+  cell(s.read + '/' + n, 'read', n > 0 && s.read === n, 'Lines read, of all the lines');
   cell(s.frames + '/' + s.framesAsked, 'frames', s.framesDone, 'Frames in the pool, of the set asked for');
-  cell(s.clips + '/' + s.n, 'clips', s.n > 0 && s.clips === s.n, 'Lines with a clip, of all the lines');
-  if (saving) stat.appendChild(el('span', 'mv3-wk-hstat is-note', 'saving…'));
-  host.appendChild(stat);
+  cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
+  top.appendChild(stat);
   const all = el('button', 'mv3-wk-gen mv3-wk-genall', 'generate all');
   all.type = 'button';
   all.disabled = true;
   all.title = 'Every stage in turn - the voice and the frames together, the video after both. Comes with the video stage (W3).';
-  host.appendChild(all);
+  top.appendChild(all);
+  host.appendChild(top);
 }
 
 // THE MOOD OF THE VIDEO - the emotion of the whole thing, the one choice the person makes here
@@ -713,12 +714,14 @@ function _stageFrames(host, p) {
 }
 
 // VIDEO - the model and the tier now; the animation prompts and the clips come with their stages
-// (W3, F4). Shut, like the frames, while there is nobody in a look and no place.
+// (W3, F4). Shut until there is a FIRST FRAME to animate (the owner, 2026-09-21): a clip is made
+// from a frame, so before the set exists this zone has nothing to be about.
 function _stageVideo(host, p) {
   const missing = _missing(p);
+  const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
   const { open, body, foot } = _stage(host, 'video', {
     name: 'video', sub: 'under development', soon: true,
-    blocked: missing.length > 0, why: missing.join(' and '),
+    blocked: !!why, why,
     summary: 'under development',
   });
   if (!open) return;
