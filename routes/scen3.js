@@ -3278,6 +3278,9 @@ function _normMix(m) {
       // this frame has to continue. Frames drawn before it carry none and are read from the picture.
       moment:  String((v && v.moment) || ''),
     })).filter(v => v.id && v.path) : [],
+    // The order the frames were dragged into (the owner, 2026-09-21), by id. A frame not named
+    // here - a new one - keeps its natural place, after the ones that were arranged.
+    order: Array.isArray(s.order) ? s.order.map(String).filter(Boolean) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
     pending: _normPending(s.pending),
@@ -3542,6 +3545,10 @@ const _normVideo = (v) => {
     framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : 'half',
     frames:  Math.max(1, Math.min(5, parseInt(s.frames, 10) || 4)),
     wish:    String(s.wish || '').slice(0, 600),
+    // How the lines take frames from that set (the owner, 2026-09-21): the pool in turn, or a
+    // frame drawn for each line - drawn once and always the same one, so a repaint does not
+    // reshuffle the video (_frameOfLine).
+    spread:  s.spread === 'random' ? 'random' : 'cycle',
   };
 };
 const _normVoice = (v) => {
@@ -4147,7 +4154,7 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
 function _framePool(p) {
   const mix = _normMix((p || {}).mix);
   // A frame the person switched OFF is out of the rotation (the owner, 2026-09-21): it stays in the
-  // project, dimmed at the head of the strip, and nothing takes it until it is switched back on.
+  // project, dimmed at the tail of the strip, and nothing takes it until it is switched back on.
   const off = new Set((mix.banned || []).map(String));
   const all = (mix.variants || []).filter(v => !off.has(String(v.id))).slice();
   const start = {};
@@ -4155,14 +4162,37 @@ function _framePool(p) {
     if (!v.set) continue;
     if (!start[v.set] || String(v.at || '') < start[v.set]) start[v.set] = String(v.at || '');
   }
+  // A hand-made order wins over the order they were asked in: the person dragged them into it.
+  const hand = (mix.order || []).map(String);
+  const at = (v) => hand.indexOf(String(v.id));
   const key = (v) => (v.set ? start[v.set] : String(v.at || ''));
-  return all.sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0)
-    || String(a.at || '').localeCompare(String(b.at || '')));
+  return all.sort((a, b) => {
+    const ia = at(a), ib = at(b);
+    if (ia >= 0 || ib >= 0) return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib);
+    return key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0)
+      || String(a.at || '').localeCompare(String(b.at || ''));
+  });
 }
-function _frameOfLine(pool, line, i) {
+// Which frame a line opens on. The same two rules the page paints by (js/merge-v3/wk-fragments.js,
+// _frameFor): the pool IN TURN, or one DRAWN for the line - drawn from the line's number and the
+// project's id, so it is the same frame every time it is asked and the video does not reshuffle
+// itself between two looks at it.
+// FNV-1a with a final avalanche. A plain rolling hash will not do here: the strings differ by one
+// character at the end, so `h * 31 + code` moves the result by exactly one and every modulo of it
+// comes out a shifted cycle - which is what the first version of this drew, to nobody's surprise
+// but mine. The page draws with the same function (js/merge-v3/wk-fragments.js, _seed).
+function _seed(s) {
+  let h = 2166136261 >>> 0;
+  for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
+  return h >>> 0;
+}
+function _frameOfLine(pool, line, i, spread, projectId) {
   if (!pool.length) return null;
   const picked = line && line.frameId ? pool.find(v => v.id === String(line.frameId)) : null;
-  return picked || pool[i % pool.length];
+  if (picked) return picked;
+  if (spread === 'random') return pool[_seed(String(projectId || '') + ':' + i) % pool.length];
+  return pool[i % pool.length];
 }
 
 // What every animation prompt must obey, whatever the line says. The person is already IN the
@@ -4214,7 +4244,7 @@ router.post('/scen3/video/prompts', async (req, res) => {
     const shown = pool.slice(0, FRAME_SET_MAX);
     const urls = await Promise.all(shown.map(v => _hostLocal(v.preview || v.path)));
     const where = (i) => {
-      const fr = _frameOfLine(pool, lines[i], i);
+      const fr = _frameOfLine(pool, lines[i], i, video.spread, id);
       const at = shown.findIndex(v => v.id === (fr || {}).id);
       return { fr, at };
     };
@@ -4309,6 +4339,31 @@ router.post('/scen3/frames/ban', (req, res) => {
       p.lines = (p.lines || []).map(_normLine);
       for (const l of p.lines) if (String(l.frameId || '') === id) l.frameId = '';
     }
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── The order the frames stand in ───────────────────────────────────────────
+   POST /api/scen3/frames/order  { projectId, order: [frameId, ...] } -> { success, project }
+
+   The strip is dragged into the order the person wants (the owner, 2026-09-21), and that order is
+   what "the pool in turn" then means. Ids that are not in the list - a frame made after the
+   dragging - keep their natural place behind the arranged ones.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/frames/order', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.mix = _normMix(p.mix);
+    const have = new Set(p.mix.variants.map(v => String(v.id)));
+    const want = [...new Set((Array.isArray(b.order) ? b.order : []).map(String))].filter(id => have.has(id));
+    if (!want.length) return res.status(400).json({ success: false, error: 'no frames in that order' });
+    p.mix.order = want;
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });

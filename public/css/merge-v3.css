@@ -2040,7 +2040,10 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
   flex:0 0 auto; width:56px; height:100px; padding:0; border-radius:var(--r-xs); overflow:hidden; cursor:pointer;
   border:1px solid var(--border-soft); background:var(--bg); color:var(--muted); font:600 9.5px/1.2 var(--font);
 }
-/* A frame switched off: dimmed where it stands, at the head of the strip, and no fragment takes it.
+/* Dragged into order: the one being carried fades, the one it would land on lights its left edge. */
+.mv3-wk-fsetfr.is-dragging{opacity:.4}
+.mv3-wk-fsetfr.is-over{box-shadow:-3px 0 0 0 var(--gold)}
+/* A frame switched off: dimmed where it stands, at the tail of the strip, and no fragment takes it.
    The ✕ in its corner is what switched it off; the ✓ in the same corner brings it back. */
 .mv3-wk-fsetfr.is-off img{filter:brightness(.32) saturate(.5)}
 .mv3-wk-fsetfr.is-off{border-style:dashed}
@@ -2092,9 +2095,11 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-fpick.is-open{border-color:var(--gold); color:var(--gold)}
 .mv3-wk-fpick-t{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-wk-fpick-c{flex:0 0 auto; opacity:.8}
+/* The list runs SIDEWAYS (the owner, 2026-09-21): a column of frames pushed the clip row off the
+   panel, and a set is read across, like the strip it comes from. */
 .mv3-wk-fpicklist{
-  margin:4px 0 0; padding:5px; max-height:330px; overflow-y:auto;
-  display:flex; flex-direction:column; align-items:center; gap:6px;
+  margin:4px 0 0; padding:5px; overflow-x:auto; overflow-y:hidden;
+  display:flex; align-items:center; gap:6px; scrollbar-width:thin;
   border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface);
 }
 .mv3-wk-fpickrow{position:relative; width:104px; flex:0 0 auto}
@@ -2109,7 +2114,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* `select` in the middle of the frame being looked at. */
 .mv3-wk-tileact.is-pick{top:50%; bottom:auto; transform:translate(-50%, -50%)}
 .mv3-wk-fpickrule{
-  width:104px; padding:5px 6px; cursor:pointer; border-radius:var(--r-xs);
+  flex:0 0 auto; width:76px; align-self:stretch; padding:5px 6px; cursor:pointer; border-radius:var(--r-xs);
   border:1px dashed var(--border); background:var(--bg); color:var(--muted); font:600 9.5px/1.3 var(--font);
 }
 .mv3-wk-fpickrule:hover{border-color:var(--primary); color:var(--primary)}

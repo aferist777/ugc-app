@@ -80,6 +80,7 @@ let _envMeta = null;
 let _envWriting = false;
 let _planning = false;                    // the agent is writing the moments of a set
 let _armedSet = false;                    // the set's `generate` pressed once and asking
+let _dragging = '';                       // the frame being dragged along the strip
 let _picking = false;                     // the open fragment's frame list is down
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
 let _lookedAt = '';                       // the project the journal was last asked about
@@ -158,37 +159,61 @@ function _readState(l) {
 // THE POOL, in the order the frames were asked for: the sets as they came, and inside a set by
 // number - not by the moment each landed, which is whichever kie finished first. The server lists
 // newest first; the rule reads oldest first, so the first line gets the first frame of the first set.
-function _order(list) {
+function _order(list, hand) {
   const start = {};
   for (const v of list) {
     if (!v.set) continue;
     if (!start[v.set] || String(v.at || '') < start[v.set]) start[v.set] = String(v.at || '');
   }
+  // The order the strip was dragged into wins (routes/scen3.js, /scen3/frames/order); a frame made
+  // after the dragging has no place in it and keeps its natural one, behind them.
+  const at = (v) => (hand || []).indexOf(String(v.id));
   const key = (v) => (v.set ? start[v.set] : String(v.at || ''));
-  return list.slice().sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0) || String(a.at || '').localeCompare(String(b.at || '')));
+  return list.slice().sort((a, b) => {
+    const ia = at(a), ib = at(b);
+    if (ia >= 0 || ib >= 0) return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib);
+    return key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0) || String(a.at || '').localeCompare(String(b.at || ''));
+  });
 }
+const _handOrder = (p) => ((((p || {}).mix) || {}).order || []).map(String);
 // A frame switched OFF (the ✕ on its thumbnail, the owner 2026-09-21) is out of the rotation: it is
 // still in the project and still on the strip, but no line takes it. `mix.banned` holds them - the
 // list that already meant "hidden in this project" (routes/scen3.js, _frameState).
 const _off = (p) => new Set(((((p || {}).mix) || {}).banned || []).map(String));
 function _pool(p) {
   const hidden = _off(p);
-  return _order((((p && p.mix) || {}).variants || []).filter(v => !hidden.has(String(v.id))));
+  return _order((((p && p.mix) || {}).variants || []).filter(v => !hidden.has(String(v.id))), _handOrder(p));
 }
-// Everything the strip shows: the switched-off ones first, out of the way, then the pool in turn.
+// Everything the strip shows: the pool in its order, then the switched-off ones at the tail, out of
+// the way (the owner, 2026-09-21).
 function _poolAll(p) {
   const hidden = _off(p);
   const all = ((p && p.mix) || {}).variants || [];
-  return _order(all.filter(v => hidden.has(String(v.id)))).concat(_pool(p));
+  return _pool(p).concat(_order(all.filter(v => hidden.has(String(v.id))), _handOrder(p)));
 }
-// The frame a line opens on: the one picked by hand when there is one, else the pool in turn -
-// line 1 frame A, line 2 frame B, round again (decided with the owner 2026-09-21).
+// The frame a line opens on: the one picked by hand when there is one, else by the rule the person
+// chose for the whole video (decided with the owner 2026-09-21) - the pool IN TURN (line 1 frame A,
+// line 2 frame B, round again) or one DRAWN for the line. The draw is made from the line's number
+// and the project's id, never from chance: the same line must open on the same frame every time it
+// is looked at, or the video would reshuffle itself between two glances. The server draws the same
+// way (routes/scen3.js, _frameOfLine).
+// FNV-1a with a final avalanche, the same function the server draws with (routes/scen3.js, _seed).
+// A rolling hash is no good here: these strings differ by one character at the end, so every modulo
+// of it comes out as a shifted cycle - which is not a draw at all.
+function _seed(s) {
+  let h = 2166136261 >>> 0;
+  for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
+  return h >>> 0;
+}
 function _frameFor(p, l, i) {
   const pool = _pool(p);
   const picked = l && l.frameId ? pool.find(v => v.id === String(l.frameId)) : null;
   if (picked) return { v: picked, auto: false };
   if (!pool.length) return { v: null, auto: true };
-  return { v: pool[i % pool.length], auto: true };
+  const spread = String(((p || {}).video || {}).spread || 'cycle');
+  const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + i) % pool.length : i % pool.length;
+  return { v: pool[at], auto: true };
 }
 /** The rule, for a stand to check (the timeline mirror will read the same rule, phase T'). */
 export const frameFor = _frameFor;
@@ -432,6 +457,15 @@ async function _pickFrame(i, frameId) {
 async function _banFrame(p, frameId, banned) {
   try { _adopt(await _post('/api/scen3/frames/ban', { projectId: p.id, frameId, banned })); }
   catch (e) { _readErr = 'Could not switch that frame: ' + e.message; }
+  _ctx.repaint();
+}
+
+// The strip dragged into another order (the owner, 2026-09-21). What is sent is the WHOLE strip as
+// it now reads, switched-off frames included: the order is the strip's, not the pool's, so turning
+// a frame back on does not drop it somewhere unexpected.
+async function _saveOrder(p, ids) {
+  try { _adopt(await _post('/api/scen3/frames/order', { projectId: p.id, order: ids })); }
+  catch (e) { _readErr = 'Could not move that frame: ' + e.message; }
   _ctx.repaint();
 }
 
@@ -741,7 +775,9 @@ function _stageFrames(host, p) {
   row.appendChild(pic);
   const col = el('div', 'mv3-wk-fsetcol');
   const sets = el('div', 'mv3-wk-fsets');
-  const framing = el('select', 'mv3-wk-vsel is-small is-model');
+  // Three menus in a narrow column: the shot size takes its own line, the rule and the count share
+  // the next one - the rule left of the count, which is what it acts on.
+  const framing = el('select', 'mv3-wk-vsel is-small is-wide');
   framing.title = 'The shot size every frame of the set is made in';
   for (const s of (_kit && _kit.sets) || []) {
     const o = el('option', '', s.label);
@@ -751,6 +787,18 @@ function _stageFrames(host, p) {
   }
   framing.disabled = _saving || !_kit || _planning;
   framing.addEventListener('change', () => _saveVideo({ framing: framing.value }));
+  // HOW THE LINES TAKE FROM THE SET (the owner, 2026-09-21), left of how many there are: in turn,
+  // or one drawn for each line. Either way a frame picked by hand on a fragment stays that line's.
+  const spread = el('select', 'mv3-wk-vsel is-small is-model');
+  spread.title = 'How the fragments take their frames from the set';
+  for (const [id, label] of [['cycle', 'in turn'], ['random', 'at random']]) {
+    const o = el('option', '', label);
+    o.value = id;
+    if ((v.spread || 'cycle') === id) o.selected = true;
+    spread.appendChild(o);
+  }
+  spread.disabled = _saving || _planning;
+  spread.addEventListener('change', () => _saveVideo({ spread: spread.value }));
   const count = el('select', 'mv3-wk-vsel is-small is-tier');
   count.title = 'How many variations of the shot';
   for (let k = 1; k <= ((_kit && _kit.setMax) || 5); k++) {
@@ -761,7 +809,7 @@ function _stageFrames(host, p) {
   }
   count.disabled = _saving || !_kit || _planning;
   count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
-  sets.append(framing, count);
+  sets.append(framing, spread, count);
   col.appendChild(sets);
   // What the person asks for, in words - kept on the project, so it is still there tomorrow. Its
   // foot is the mannequin's foot: the two are one block (the owner, 2026-09-21).
@@ -786,10 +834,39 @@ function _stageFrames(host, p) {
   add.title = 'A frame of your own, from the picture window - under development';
   strip.appendChild(add);
   const hidden = _off(p);
-  for (const fr of _poolAll(p)) {
+  const shown = _poolAll(p);
+  for (const fr of shown) {
     const gone = hidden.has(String(fr.id));
     const b = el('button', 'mv3-wk-fsetfr' + (fr.id === _setPick ? ' is-on' : '') + (gone ? ' is-off' : ''));
     b.type = 'button';
+    // DRAGGED INTO ORDER (the owner, 2026-09-21): pick a frame up and drop it where it belongs.
+    // What the strip reads when the drag ends is the order that is saved, and "the pool in turn"
+    // then means this order.
+    b.draggable = true;
+    b.dataset.frame = fr.id;
+    b.addEventListener('dragstart', (e) => {
+      _dragging = fr.id;
+      b.classList.add('is-dragging');
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', fr.id); } catch (err) { /* older engines */ }
+    });
+    b.addEventListener('dragend', () => { _dragging = ''; b.classList.remove('is-dragging'); strip.querySelectorAll('.is-over').forEach(x => x.classList.remove('is-over')); });
+    b.addEventListener('dragover', (e) => {
+      if (!_dragging || _dragging === fr.id) return;
+      e.preventDefault();
+      b.classList.add('is-over');
+    });
+    b.addEventListener('dragleave', () => b.classList.remove('is-over'));
+    b.addEventListener('drop', (e) => {
+      e.preventDefault();
+      b.classList.remove('is-over');
+      const from = _dragging;
+      _dragging = '';
+      if (!from || from === fr.id) return;
+      const ids = shown.map(x => String(x.id)).filter(id => id !== from);
+      const at = ids.indexOf(String(fr.id));
+      ids.splice(at < 0 ? ids.length : at, 0, from);
+      _saveOrder(p, ids);
+    });
     b.title = (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
       + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
     const img = el('img');
