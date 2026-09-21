@@ -80,6 +80,8 @@ let _envMeta = null;
 let _envWriting = false;
 let _planning = false;                    // the agent is writing the moments of a set
 let _armedSet = false;                    // the set's `generate` pressed once and asking
+let _picking = false;                     // the open fragment's frame list is down
+let _pickView = '';                       // ...and the frame being looked at in it, on the stage
 let _lookedAt = '';                       // the project the journal was last asked about
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
@@ -156,15 +158,28 @@ function _readState(l) {
 // THE POOL, in the order the frames were asked for: the sets as they came, and inside a set by
 // number - not by the moment each landed, which is whichever kie finished first. The server lists
 // newest first; the rule reads oldest first, so the first line gets the first frame of the first set.
-function _pool(p) {
-  const all = (((p && p.mix) || {}).variants || []).slice();
+function _order(list) {
   const start = {};
-  for (const v of all) {
+  for (const v of list) {
     if (!v.set) continue;
     if (!start[v.set] || String(v.at || '') < start[v.set]) start[v.set] = String(v.at || '');
   }
   const key = (v) => (v.set ? start[v.set] : String(v.at || ''));
-  return all.sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0) || String(a.at || '').localeCompare(String(b.at || '')));
+  return list.slice().sort((a, b) => key(a).localeCompare(key(b)) || (a.n || 0) - (b.n || 0) || String(a.at || '').localeCompare(String(b.at || '')));
+}
+// A frame switched OFF (the ✕ on its thumbnail, the owner 2026-09-21) is out of the rotation: it is
+// still in the project and still on the strip, but no line takes it. `mix.banned` holds them - the
+// list that already meant "hidden in this project" (routes/scen3.js, _frameState).
+const _off = (p) => new Set(((((p || {}).mix) || {}).banned || []).map(String));
+function _pool(p) {
+  const hidden = _off(p);
+  return _order((((p && p.mix) || {}).variants || []).filter(v => !hidden.has(String(v.id))));
+}
+// Everything the strip shows: the switched-off ones first, out of the way, then the pool in turn.
+function _poolAll(p) {
+  const hidden = _off(p);
+  const all = ((p && p.mix) || {}).variants || [];
+  return _order(all.filter(v => hidden.has(String(v.id)))).concat(_pool(p));
 }
 // The frame a line opens on: the one picked by hand when there is one, else the pool in turn -
 // line 1 frame A, line 2 frame B, round again (decided with the owner 2026-09-21).
@@ -406,8 +421,17 @@ async function _saveFramePrompt(p, frameId, prompt) {
 async function _pickFrame(i, frameId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
+  _picking = false;
+  _pickView = '';
   try { _adopt(await _post('/api/scen3/fragments/pick-frame', { projectId: p.id, line: i, frameId })); }
   catch (e) { _readErr = 'Could not pick that frame: ' + e.message; }
+  _ctx.repaint();
+}
+
+// The ✕ / ✓ in the corner of a frame in the general zone: out of the rotation, and back into it.
+async function _banFrame(p, frameId, banned) {
+  try { _adopt(await _post('/api/scen3/frames/ban', { projectId: p.id, frameId, banned })); }
+  catch (e) { _readErr = 'Could not switch that frame: ' + e.message; }
   _ctx.repaint();
 }
 
@@ -545,7 +569,9 @@ function _all(host, p, lines) {
 // zone's own `generate`. `spec`: name, sub (what it is, while open), summary (where it stands, while
 // shut), done, blocked with its why, soon (under development: dashed).
 function _stage(host, id, spec) {
-  const open = _zoneOpen(id, !!spec.done, !!spec.blocked);
+  // `keepOpen`: a zone that is finished but still the thing being looked at (the frames). It gets
+  // its tick, and it stays open until somebody shuts it.
+  const open = _zoneOpen(id, !!spec.done && !spec.keepOpen, !!spec.blocked);
   // Blocked outranks done: a pool made before the character was taken off is not a zone at rest.
   const done = !!spec.done && !spec.blocked;
   const box = el('div', 'mv3-wk-stage' + (spec.soon ? ' is-soon' : '') + (open ? '' : ' is-closed')
@@ -690,8 +716,10 @@ function _stageFrames(host, p) {
   const missing = _missing(p);
   const blocked = missing.length > 0;
   const s = _standing(p);
+  // The frames zone does NOT shut itself when a set finishes (the owner, 2026-09-21): the frames
+  // are what is looked at the moment they arrive. It opens and shuts by hand like the others.
   const { open, body, foot } = _stage(host, 'frames', {
-    name: 'first frames', sub: 'a set for the whole video', done: s.framesDone,
+    name: 'first frames', sub: 'a set for the whole video', done: s.framesDone, keepOpen: true,
     blocked, why: missing.join(' and '),
     summary: s.frames + (s.frames === 1 ? ' frame' : ' frames') + ' in the pool' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
   });
@@ -757,15 +785,25 @@ function _stageFrames(host, p) {
   add.disabled = true;
   add.title = 'A frame of your own, from the picture window - under development';
   strip.appendChild(add);
-  for (const fr of _pool(p)) {
-    const b = el('button', 'mv3-wk-fsetfr' + (fr.id === _setPick ? ' is-on' : ''));
+  const hidden = _off(p);
+  for (const fr of _poolAll(p)) {
+    const gone = hidden.has(String(fr.id));
+    const b = el('button', 'mv3-wk-fsetfr' + (fr.id === _setPick ? ' is-on' : '') + (gone ? ' is-off' : ''));
     b.type = 'button';
-    b.title = (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '') + 'press to see it on the stage; right-click to open it large';
+    b.title = (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
+      + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';
     img.src = derived(fr.preview || fr.path, 'card');
     b.appendChild(img);
+    // The ✕ in the corner takes a frame out of the rotation; the ✓ in the same corner brings it
+    // back (the owner, 2026-09-21). A switched-off frame is dimmed and stands first, out of the way.
+    const sw = el('button', 'mv3-wk-fsetx' + (gone ? ' is-back' : ''), gone ? '✓' : '✕');
+    sw.type = 'button';
+    sw.title = gone ? 'Use this frame again' : 'Do not use this frame in any fragment';
+    sw.addEventListener('click', (e) => { e.stopPropagation(); _banFrame(p, fr.id, !gone); });
+    b.appendChild(sw);
     b.addEventListener('click', () => { _setPick = _setPick === fr.id ? '' : fr.id; _ctx.repaint(); });
     b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }); });
     strip.appendChild(b);
@@ -919,6 +957,8 @@ function _row(p, l, i) {
   row.addEventListener('click', () => {
     _tipHide();
     _open = _open === i ? -1 : i;
+    _picking = false;
+    _pickView = '';
     _remember();
     _ctx.repaint();
   });
@@ -1031,8 +1071,14 @@ function _fragment(host, p, l, i) {
   host.appendChild(grid);
   grid.appendChild(_frameCol(p, l, i));
   grid.appendChild(_framePromptCol(p, l, i));
-  grid.appendChild(_clipCol(p, l, i, rs, take));
-  grid.appendChild(_motionCol(l, i, hasFrame));
+  // The frame picker stands between the two rows: it is about the frame above it.
+  const pickHost = el('div', 'mv3-wk-fpickwrap');
+  host.appendChild(pickHost);
+  _pickRow(pickHost, p, l, i);
+  const grid2 = el('div', 'mv3-wk-fgrid');
+  host.appendChild(grid2);
+  grid2.appendChild(_clipCol(p, l, i, rs, take));
+  grid2.appendChild(_motionCol(l, i, hasFrame));
 
   // Every take the line has, under the grid - projects made on the old page can carry some.
   const clips = ((l.video || {}).plain || []);
@@ -1110,25 +1156,60 @@ function _frameCol(p, l, i) {
   }
   col.appendChild(box);
   col.appendChild(el('div', 'mv3-wk-fcap', fr ? (auto ? 'from the set, in turn' : 'picked by hand') : 'the set is made in the general zone'));
-  const pool = _pool(p);
-  if (pool.length > 1) {
-    const strip = el('div', 'mv3-wk-fstrip');
-    for (const v of pool.slice(0, 10)) {
-      const on = !!(fr && v.id === fr.id);
-      const t = el('button', 'mv3-wk-fvar' + (on ? ' is-on' : ''));
-      t.type = 'button';
-      t.title = on ? (auto ? 'This line’s turn - press to keep it by hand' : 'Picked by hand - press to hand the line back to the rule')
-        : 'Open this line on this frame';
-      const img = el('img');
-      img.alt = '';
-      img.src = derived(v.preview || v.path, 'card');
-      t.appendChild(img);
-      t.addEventListener('click', () => _pickFrame(i, on ? (auto ? v.id : '') : v.id));
-      strip.appendChild(t);
-    }
-    col.appendChild(strip);
-  }
   return col;
+}
+
+// WHICH FRAME THIS LINE OPENS ON (the owner, 2026-09-21): a thin bar the width of the fragment,
+// under the frame and its prompt. Pressed, it drops a list of the frames of the set, one under the
+// other; a frame pressed in the list goes onto the stage, and `select` appears in the middle of it -
+// that press is what writes it onto the line. The rule (the pool in turn) is the first row.
+function _pickRow(host, p, l, i) {
+  const pool = _pool(p);
+  if (!pool.length) return;
+  const { v: fr, auto } = _frameFor(p, l, i);
+  const bar = el('button', 'mv3-wk-fpick' + (_picking ? ' is-open' : ''));
+  bar.type = 'button';
+  bar.title = 'Which frame this fragment opens on';
+  bar.appendChild(el('span', 'mv3-wk-fpick-t', fr
+    ? (auto ? 'frame ' + (pool.findIndex(v => v.id === fr.id) + 1) + ' of ' + pool.length + ' · from the set, in turn' : 'frame picked by hand')
+    : 'no frame yet'));
+  bar.appendChild(el('span', 'mv3-wk-fpick-c', _picking ? '▴' : '▾'));
+  bar.addEventListener('click', () => { _picking = !_picking; _pickView = ''; _ctx.repaint(); });
+  host.appendChild(bar);
+  if (!_picking) return;
+
+  const list = el('div', 'mv3-wk-fpicklist');
+  // The rule itself, as the first choice: hand the line back to "the pool in turn".
+  if (!auto) {
+    const back = el('button', 'mv3-wk-fpickrule');
+    back.type = 'button';
+    back.textContent = 'back to the rule - the set in turn';
+    back.addEventListener('click', () => _pickFrame(i, ''));
+    list.appendChild(back);
+  }
+  for (const v of pool) {
+    const row = el('div', 'mv3-wk-fpickrow' + (fr && v.id === fr.id ? ' is-on' : '') + (v.id === _pickView ? ' is-seen' : ''));
+    const shot = el('button', 'mv3-wk-fpickshot');
+    shot.type = 'button';
+    shot.title = 'Look at it on the stage';
+    const img = el('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = derived(v.preview || v.path, 'card');
+    shot.appendChild(img);
+    shot.addEventListener('click', () => { _pickView = _pickView === v.id ? '' : v.id; _ctx.repaint(); });
+    row.appendChild(shot);
+    if (v.id === _pickView) {
+      const sel = el('button', 'mv3-wk-tileact is-pick', fr && v.id === fr.id ? 'this one' : 'select');
+      sel.type = 'button';
+      sel.title = 'Open this fragment on this frame';
+      sel.disabled = !!(fr && v.id === fr.id && !auto);
+      sel.addEventListener('click', (e) => { e.stopPropagation(); _pickFrame(i, v.id); });
+      row.appendChild(sel);
+    }
+    list.appendChild(row);
+  }
+  host.appendChild(list);
 }
 
 // The animation prompt: what Kling is told about the expression, the head, the hands and the gaze.
@@ -1240,6 +1321,12 @@ function _textField(i, field, value, rows, placeholder, save) {
 export function openPicture(p) {
   const lines = (p && Array.isArray(p.lines)) ? p.lines : [];
   const l = _open >= 0 ? lines[_open] : null;
+  // A frame being looked at in the picker wins while the list is down: that is the question on
+  // screen (the owner, 2026-09-21).
+  if (l && _picking && _pickView) {
+    const fr = _pool(p).find(v => v.id === _pickView);
+    if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
+  }
   if (!l) {
     // No line open: a frame of the pool pressed in the general zone, if one is.
     const fr = _setPick ? _pool(p).find(v => v.id === _setPick) : null;

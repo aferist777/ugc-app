@@ -3834,6 +3834,9 @@ const FRAME_SETS = [
   { id: 'selfie', label: 'selfie', group: 'closeup', poseId: 'closeup-selfie-r', camera: 'phone-selfie',
     about: 'Filmed at arm’s length: the phone in one outstretched hand, the face and the shoulders close, straight to the viewer.',
     rule: 'A SELFIE, the head and the shoulders close to the camera: the person films themselves with the phone in one outstretched hand - that arm reaches toward the lens and runs out past the edge of the frame - talking straight to the viewer; a phone’s wide-angle look with slight distortion at the edges. Frame it exactly this way and do not pull back to fit more of the body in.',
+    // Where the frame CUTS. A shot size said as a name is a suggestion; said as what is outside the
+    // picture it is a rule (the owner, 2026-09-21: half-body sets kept coming out head to toe).
+    cut: 'The bottom edge of the picture cuts across the middle of the chest. The waist, the hips, the legs, the feet and the floor are NOT in the picture at all.',
     // What a MOMENT may be about: only what this shot size actually shows. A moment that describes
     // the stance of a body the frame cuts off is a moment that pulls the picture wider (the owner,
     // 2026-09-21: a half-body set came out full height).
@@ -3841,10 +3844,12 @@ const FRAME_SETS = [
   { id: 'half', label: 'half body', group: 'half-body', poseId: 'half-standing', camera: 'nat-50',
     about: 'From the waist up, somebody else holding the camera: room for the hands, the place behind.',
     rule: 'HALF BODY, from the waist up: filmed by somebody else at a natural distance, both hands free and inside the frame, the place visible behind and around the person. Frame it exactly this way - not closer, and not the whole figure.',
+    cut: 'The bottom edge of the picture cuts at the waist, just below the belt. The hips, the legs, the knees, the feet and the floor are NOT in the picture at all.',
     visible: 'the head, the face, the eyes, the shoulders, the arms and both hands - never the legs, the feet, the floor, or how the weight sits on the feet' },
   { id: 'full', label: 'full body', group: 'full-height', poseId: 'full-straight', camera: 'phone-rear',
     about: 'Head to toe, standing in the place: the whole figure, the floor under their feet.',
     rule: 'FULL BODY, the whole figure from head to toe: standing on the floor of the place, filmed from a natural distance, the person in the middle of the frame with the place around them, the feet and the floor in the frame.',
+    cut: 'The whole figure is inside the picture: the head with room above it, and the feet with the floor under them.',
     visible: 'the whole figure - the head, the face, the arms and hands, the stance, the weight on the feet and the floor under them' },
 ];
 const _frameSet = (id) => FRAME_SETS.find(s => s.id === String(id || '')) || null;
@@ -3855,28 +3860,32 @@ router.get('/scen3/frame-sets', (_req, res) => {
 
 // The references rule, for a frame of the set. Written from FRAME_RULE_POSED, with the one change the
 // owner asked for: the eyes are the moment's, not a rule's.
+// THIS IS AN EDIT, NOT A COMPOSITION (the owner, 2026-09-21, after two sets came out head to toe with
+// a face that was not the character's).
+//
+// Asked to build a picture out of three references, the model composes freely and the shot size is
+// one sentence against three pictures - it lost every time. Asked to EDIT the first picture, it
+// keeps that picture's frame: what changes is what it is told to change. So the mannequin, which is
+// the only reference photographed at the shot size we want, is the picture being edited; the person
+// is painted onto it and the place behind it. The references are named by what they are as well as
+// by their place, because we cannot see the order the model reads them in.
 const FRAG_RULE_POSED =
-  'Create ONE photorealistic photograph of ONE real person.'
-  + ' IMAGE 1 is a blue artist mannequin and it defines the BODY: reproduce its pose, the tilt and'
-  + ' rotation of its head, its shoulder line, the direction and foreshortening of its arms, and the camera'
-  + ' angle - exactly, including any arm that reaches toward the lens and runs out past the edge of the frame.'
-  + ' The mannequin has no eyes: where the person looks and what their face does is the MOMENT described below.'
-  // The mannequin of a SET is chosen FOR its shot size (the set's poseId), so its crop is the crop we
-  // want. The rule used to say the opposite - take the pose, never the crop - which was written when
-  // the mannequin's own framing had nothing to do with the shot; with three references, two of them
-  // wide, that sentence was an invitation to pull back, and the sets came out full height.
-  + ' IMAGE 1 IS ALSO THE FRAMING: it is photographed at exactly the shot size of the picture you are'
-  + ' making, so show the same amount of the body as it shows - not one part more - and keep the camera'
-  + ' at the same height and the same distance.'
-  + ' Never render the mannequin itself: no blue material, no ball joints, no seams, no blank faceless head,'
-  + ' no grey studio backdrop.'
-  + ' IMAGE 2 is a character reference sheet, several full-length views side by side. Take from it the'
-  + ' face, the hair, the skin and the clothes - and NOTHING else: never its framing, never its'
-  + ' full-length view, never its plain backdrop, never its panels or borders, and never more than ONE'
-  + ' person in the result.'
-  + ' IMAGE 3 is the location, photographed empty and wide: take its architecture, furniture, colours and'
-  + ' depth as the background behind the person, and never its camera distance - the framing is IMAGE 1\'s.'
-  + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
+  'EDIT THE FIRST PICTURE. It is a photograph of a blue artist mannequin, and it is already framed'
+  + ' exactly as the result must be framed: keep its crop, its camera height, angle and distance, how'
+  + ' much of the body is inside the picture, and where the figure stands in the frame. Do not zoom out,'
+  + ' do not add space below, do not reframe it in any way.'
+  + ' TURN THE MANNEQUIN INTO A REAL PERSON: the person on the reference sheet (the large portrait with'
+  + ' several full-length views beside it) - exactly that face, those features and proportions, that'
+  + ' hair, that skin, and the clothes they are wearing in it. Nothing of the mannequin may be left:'
+  + ' no blue material, no ball joints, no seams, no faceless head. One person in the picture and no'
+  + ' other. Take nothing else from the sheet: not its framing, not its full-length views, not its'
+  + ' white backdrop.'
+  + ' REPLACE THE GREY STUDIO BACKDROP with the empty place in the last picture: its architecture,'
+  + ' furniture, colours and depth behind the person, and its light falling on them. Keep the camera'
+  + ' where the mannequin\'s camera is; never take the distance of the place photograph.'
+  + ' The body keeps the mannequin\'s pose. The head, the face, the eyes and the hands do what the'
+  + ' MOMENT below says.'
+  + ' Natural perspective and contact shadows. No text, no logos, no watermark.';
 
 // For a pose whose mannequin is missing: two references, the body in words.
 const FRAG_RULE_PLAIN =
@@ -3990,7 +3999,9 @@ async function _submitSetFrame(b) {
 
   const pose = _poseFor(set.poseId, set.group);
   const cam = _loadFrameOpts().cameras.find(c => c.id === set.camera) || null;
-  const ref = await _frameRef(id, cast);
+  // What the look and the place LOOK like is not read here any more: the pictures are in the
+  // references, and the words about them were what the model drew from (the diet below). The
+  // reading itself stays - the agent that plans the moments still gets the place in words.
   // The references, hosted once for a whole set by the plan and handed in (`refs`); a frame made
   // again on its own hosts them itself.
   const refs = (b.refs && typeof b.refs === 'object') ? b.refs : {};
@@ -3998,17 +4009,19 @@ async function _submitSetFrame(b) {
   if (pose) urls.push(refs.pose || await _hostLocal(pose.file));
   urls.push(refs.look || await _hostLocal(cast.obrazImage), refs.place || await _hostLocal(cast.locationImage));
 
-  const parts = ['SHOT SIZE - the most important constraint, obey it before anything else: ' + set.rule];
-  parts.push(pose ? FRAG_RULE_POSED : FRAG_RULE_PLAIN);
-  if (cam) parts.push('Camera: ' + cam.prompt + '.');
-  if (pose && pose.desc) parts.push('Base body position - the person is ' + pose.desc + '.');
+  // THE DIET (the owner, 2026-09-21). What the pictures already say is not said again in words: the
+  // clothes and the face are the sheet's, the room is the photograph's. Only the LIGHT is kept in
+  // words - a compositing instruction, not a description - and only when there is one. What is left
+  // is the shot size, the roles of the references, the pose, the moment, and the shot size again.
+  // The shot size is named at the top and SPELLED OUT at the end: saying the whole rule twice was a
+  // fifth of the prompt for one instruction.
+  // The edit first, because the first line is the job; the shot size is the check at the end, said
+  // as what is OUTSIDE the picture - a name is a suggestion, an edge is a rule.
+  const parts = [pose ? FRAG_RULE_POSED : 'SHOT SIZE - obey it before anything else: ' + set.rule + ' ' + FRAG_RULE_PLAIN];
+  if (pose && pose.desc) parts.push('The pose being kept - the person is ' + pose.desc + '.');
+  if (cam) parts.push('The lens of the shot: ' + cam.prompt + '.');
   if (moment) parts.push('THE MOMENT - this frozen instant: ' + moment);
-  if (ref.character) parts.push('The person to keep: ' + ref.character);
-  if (ref.environment) parts.push('The location: ' + ref.environment);
-  if (ref.lighting) parts.push('Match the location lighting exactly - ' + ref.lighting);
-  // The shot size again, at the end. It is the first thing said and the last: between them stand two
-  // wide references and a paragraph of likeness, and what a model keeps is what it read last.
-  parts.push('FRAMING CHECK, the last word on it: ' + set.rule);
+  parts.push('FRAMING CHECK, the last word on it: ' + set.rule + ' ' + (set.cut || ''));
   const prompt = parts.join(' ') + FRAG_LIGHT_MATCH + PERSON_REAL;
 
   const taskId = await _i2i(FRAG_FRAME_ENGINE, prompt, urls, aspect, FRAG_FRAME_RES);
@@ -4132,7 +4145,11 @@ router.post('/scen3/fragments/pick-frame', (req, res) => {
 // panel to show it, the agent to write for it - so it is written here as the one rule and read
 // there as the one picture.
 function _framePool(p) {
-  const all = (_normMix((p || {}).mix).variants || []).slice();
+  const mix = _normMix((p || {}).mix);
+  // A frame the person switched OFF is out of the rotation (the owner, 2026-09-21): it stays in the
+  // project, dimmed at the head of the strip, and nothing takes it until it is switched back on.
+  const off = new Set((mix.banned || []).map(String));
+  const all = (mix.variants || []).filter(v => !off.has(String(v.id))).slice();
   const start = {};
   for (const v of all) {
     if (!v.set) continue;
@@ -4265,6 +4282,39 @@ router.post('/scen3/video/prompts', async (req, res) => {
    is already drawn - but what is written here is what a later redraw of this frame will be asked
    for, so a wording somebody fixed by hand is not lost.
    ──────────────────────────────────────────────────────────────────────────── */
+/* ── A frame switched off ────────────────────────────────────────────────────
+   POST /api/scen3/frames/ban  { projectId, frameId, banned } -> { success, project }
+
+   The ✕ on a frame in the general zone (the owner, 2026-09-21): the frame stays in the project and
+   on the strip - dimmed, and first, so it is out of the way - but no line takes it any more. The ✓
+   in the same corner brings it back. `mix.banned` is the list that already meant exactly this
+   ("the user hid it in the project", _frameState), so it is the one used.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/frames/ban', (req, res) => {
+  try {
+    const b = req.body || {};
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === String(b.projectId || ''));
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
+    p.mix = _normMix(p.mix);
+    const id = String(b.frameId || '');
+    if (!p.mix.variants.some(v => v.id === id)) return res.status(404).json({ success: false, error: 'no such frame' });
+    const off = new Set(p.mix.banned.map(String));
+    if (b.banned === false) off.delete(id); else off.add(id);
+    p.mix.banned = [...off];
+    // A line holding this frame by hand is handed back to the rule: a switched-off frame standing in
+    // a line would be the one thing the switch is for.
+    if (off.has(id)) {
+      p.lines = (p.lines || []).map(_normLine);
+      for (const l of p.lines) if (String(l.frameId || '') === id) l.frameId = '';
+    }
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(p) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/scen3/frames/prompt', (req, res) => {
   try {
     const b = req.body || {};

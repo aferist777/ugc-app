@@ -2036,9 +2036,24 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-fsetcol .mv3-wk-ftext-in.is-wish{flex:1 1 auto; min-height:58px}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
 .mv3-wk-fsetfr{
+  position:relative;
   flex:0 0 auto; width:56px; height:100px; padding:0; border-radius:var(--r-xs); overflow:hidden; cursor:pointer;
   border:1px solid var(--border-soft); background:var(--bg); color:var(--muted); font:600 9.5px/1.2 var(--font);
 }
+/* A frame switched off: dimmed where it stands, at the head of the strip, and no fragment takes it.
+   The ✕ in its corner is what switched it off; the ✓ in the same corner brings it back. */
+.mv3-wk-fsetfr.is-off img{filter:brightness(.32) saturate(.5)}
+.mv3-wk-fsetfr.is-off{border-style:dashed}
+.mv3-wk-fsetx{
+  position:absolute; top:2px; right:2px; width:16px; height:16px; padding:0; z-index:2;
+  display:flex; align-items:center; justify-content:center; border-radius:var(--r-xs); cursor:pointer;
+  border:1px solid rgba(255,255,255,.3); background:rgba(0,0,0,.55); color:#fff; font:600 8.5px/1 var(--font);
+  opacity:0; transition:opacity .12s var(--ease);
+}
+.mv3-wk-fsetfr:hover .mv3-wk-fsetx, .mv3-wk-fsetx.is-back{opacity:1}
+.mv3-wk-fsetx:hover{background:var(--danger); border-color:var(--danger)}
+.mv3-wk-fsetx.is-back{color:var(--success, oklch(.72 .15 150))}
+.mv3-wk-fsetx.is-back:hover{background:var(--success, oklch(.72 .15 150)); border-color:var(--success, oklch(.72 .15 150)); color:#fff}
 .mv3-wk-fsetfr img{width:100%; height:100%; object-fit:cover; display:block}
 .mv3-wk-fsetfr:hover{border-color:var(--ink)}
 .mv3-wk-fsetfr.is-on{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset}
@@ -2063,15 +2078,46 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-ftext-in.is-tall{min-height:164px}
 .mv3-wk-fedited-row{display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0}
 
+/* WHICH FRAME A FRAGMENT OPENS ON (js/merge-v3/wk-fragments.js, _pickRow): a thin bar the width of
+   the fragment between the frame row and the clip row, and under it - open - the frames of the set
+   one under the other. A frame pressed there goes on the stage and carries `select` in its middle:
+   the choice is made on the big picture, not on a thumbnail the size of a stamp. */
+.mv3-wk-fpickwrap{margin:8px 0 2px}
+.mv3-wk-fpick{
+  width:100%; display:flex; align-items:center; gap:8px; padding:4px 9px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
+  font:600 10px/1.4 var(--font); text-align:left;
+}
+.mv3-wk-fpick:hover{border-color:var(--primary)}
+.mv3-wk-fpick.is-open{border-color:var(--gold); color:var(--gold)}
+.mv3-wk-fpick-t{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-wk-fpick-c{flex:0 0 auto; opacity:.8}
+.mv3-wk-fpicklist{
+  margin:4px 0 0; padding:5px; max-height:330px; overflow-y:auto;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface);
+}
+.mv3-wk-fpickrow{position:relative; width:104px; flex:0 0 auto}
+.mv3-wk-fpickshot{
+  display:block; width:100%; padding:0; cursor:pointer; overflow:hidden;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg);
+}
+.mv3-wk-fpickshot img{width:100%; aspect-ratio:9/16; object-fit:cover; display:block}
+.mv3-wk-fpickshot:hover{border-color:var(--ink)}
+.mv3-wk-fpickrow.is-on .mv3-wk-fpickshot{border-color:var(--primary)}
+.mv3-wk-fpickrow.is-seen .mv3-wk-fpickshot{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset}
+/* `select` in the middle of the frame being looked at. */
+.mv3-wk-tileact.is-pick{top:50%; bottom:auto; transform:translate(-50%, -50%)}
+.mv3-wk-fpickrule{
+  width:104px; padding:5px 6px; cursor:pointer; border-radius:var(--r-xs);
+  border:1px dashed var(--border); background:var(--bg); color:var(--muted); font:600 9.5px/1.3 var(--font);
+}
+.mv3-wk-fpickrule:hover{border-color:var(--primary); color:var(--primary)}
+
 /* F3 - a frame being drawn, and the line's other frames to pick from. */
 .mv3-wk-fdot.is-busy{background:var(--primary); border-color:var(--primary); animation:mv3-wk-pulse 1.1s ease-in-out infinite}
 @keyframes mv3-wk-pulse{0%,100%{opacity:1}50%{opacity:.25}}
 .mv3-wk-fmedia.is-busy{border-color:var(--primary); border-style:solid}
 .mv3-wk-fmedia:not(.is-empty){cursor:zoom-in}
-.mv3-wk-fstrip{display:flex; flex-wrap:wrap; gap:3px; justify-content:center}
-.mv3-wk-fvar{
-  width:20px; height:36px; padding:0; border-radius:3px; overflow:hidden; cursor:pointer;
-  border:1px solid var(--border-soft); background:var(--bg);
-}
-.mv3-wk-fvar.is-on{border-color:var(--primary); cursor:default}
-.mv3-wk-fvar img{width:100%; height:100%; object-fit:cover; display:block}
+/* The stamp-sized strip of frames under a fragment went with the picker above (.mv3-wk-fpick): a
+   frame is chosen by looking at it on the stage, not at a 20px sliver of it. */
