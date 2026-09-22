@@ -54,7 +54,6 @@ const FRAME_PRICE = 0.06;
 const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
-const ZKEY = 'mv3_zones_v1';             // { <timeline key>: { voice, frames, video } } - a zone opened or shut by hand
 const TIP_MS = 320;                      // hover before a row's whole text appears
 
 let _ctx = null;
@@ -94,10 +93,6 @@ let _setPick = '';                        // a frame of the pool pressed in the 
 // fragment is opened - each is looked at on its own terms.
 let _stagePick = '';                      // '' | 'clip' | 'frame'
 let _stageFor = -2;                       // the fragment _stagePick belongs to
-// A press on the clip's thumbnail is an ask to PLAY it, and only that press is (Y2). One-shot: the
-// stage is told once and the flag goes, so a repaint - a poll, a save, a row landing - never starts
-// the film again behind the person's back.
-let _stagePlay = false;
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 function _urlLine() {
@@ -123,39 +118,6 @@ function _remembered() {
     if (v === 'all') return -1;
     return Number.isInteger(v) && v >= 0 ? v : -1;
   } catch (e) { return -1; }
-}
-
-// ── The zones of the general zone, open or shut ─────────────────────────────
-// Each stage is a drawer (the owner, 2026-09-21): open while there is work in it, shut by itself
-// once its work is done - every line read, the set drawn - or while it cannot be worked (no
-// character in a look, no environment), and open or shut by hand, which is remembered per project.
-// A zone that finishes lets go of the hand's choice: "done" shuts it whatever it was.
-let _zoneWas = {};                        // { <zone>: done } as last painted, to catch the finish
-function _zoneChoice() {
-  try { return (JSON.parse(localStorage.getItem(ZKEY) || '{}') || {})[_key] || {}; } catch (e) { return {}; }
-}
-function _setZone(id, open) {
-  try {
-    const all = JSON.parse(localStorage.getItem(ZKEY) || '{}') || {};
-    all[_key] = { ...(all[_key] || {}), [id]: !!open };
-    localStorage.setItem(ZKEY, JSON.stringify(all));
-  } catch (e) { /* a private window */ }
-}
-function _forgetZone(id) {
-  try {
-    const all = JSON.parse(localStorage.getItem(ZKEY) || '{}') || {};
-    if (all[_key] && id in all[_key]) { delete all[_key][id]; localStorage.setItem(ZKEY, JSON.stringify(all)); }
-  } catch (e) { /* a private window */ }
-}
-// Open or shut, for this paint. Blocked is shut, and not to be opened; done is shut unless opened
-// by hand AFTER it was done; otherwise the hand's choice, else open.
-function _zoneOpen(id, done, blocked) {
-  if (blocked) return false;
-  if (done && _zoneWas[id] === false) _forgetZone(id);    // just finished: it shuts, whatever the hand said
-  _zoneWas[id] = !!done;
-  const choice = _zoneChoice();
-  if (typeof choice[id] === 'boolean') return choice[id];
-  return !done;
 }
 
 // ── What a line has ─────────────────────────────────────────────────────────
@@ -657,7 +619,7 @@ export function paint(host, ctx, api, head) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _zoneWas = {}; _rightAt.clear(); _tipHide(); }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _rightAt.clear(); _tipHide(); }
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
@@ -754,48 +716,53 @@ const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 // each a drawer with its own `generate` at the foot. The counters and `generate all` stand in the
 // panel's header, whatever the panel shows (W2.5).
 function _all(host, p, lines) {
-  // FOUR STAGES, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): mark up, read, draw, film. The
-  // number sits on the corner of each gold frame. The first two are a sentence each and share a
-  // row; the frames and the video carry strips and menus and keep the full width under them.
-  const row = el('div', 'mv3-wk-zrow');
-  host.appendChild(row);
-  _stageMood(row, p, lines);
-  _stageVoice(row, p, lines);
-  _stageFrames(host, p);
-  _stageVideo(host, p, lines);
+  // FOUR FIELDS, TWO BY TWO, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): mark up, read,
+  // draw, film. The number sits on the corner of each gold frame, and the FRAME says where the
+  // field stands - dashed while there is work in it, solid when there is none. They do not open
+  // and shut any more: four fields side by side hold what four drawers held, and a drawer that
+  // shuts itself is one more thing to reopen.
+  const top = el('div', 'mv3-wk-zrow');
+  host.appendChild(top);
+  _stageMood(top, p, lines);
+  _stageVoice(top, p, lines);
+  const low = el('div', 'mv3-wk-zrow');
+  host.appendChild(low);
+  _stageFrames(low, p);
+  _stageVideo(low, p, lines);
 }
 
-// One zone: a gold frame, a head that opens and shuts it, and - open - a body and a foot with the
-// zone's own `generate`. `spec`: name, sub (what it is, while open), summary (where it stands, while
-// shut), done, blocked with its why, soon (under development: dashed).
+// ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
+// field's own `generate`. `spec`: step (the number), name, sub (what it is), summary (where it
+// stands - said in the head beside the name, always, because the field never shuts), done, blocked
+// with its why.
+//
+// THE FRAME IS THE STATE (the owner, 2026-09-22): dashed gold while there is work left in this
+// field, solid gold when there is none. It replaces both the drawer that shut itself and the tick
+// beside the name - a border says it without a word, and four of them say the whole thing at a
+// glance.
 function _stage(host, id, spec) {
-  // `keepOpen`: a zone that is finished but still the thing being looked at (the frames). It gets
-  // its tick, and it stays open until somebody shuts it.
-  const open = _zoneOpen(id, !!spec.done && !spec.keepOpen, !!spec.blocked);
-  // Blocked outranks done: a pool made before the character was taken off is not a zone at rest.
+  // Blocked outranks done: a pool made before the character was taken off is not a field at rest.
   const done = !!spec.done && !spec.blocked;
-  const box = el('div', 'mv3-wk-stage' + (spec.soon ? ' is-soon' : '') + (open ? '' : ' is-closed')
-    + (spec.blocked ? ' is-blocked' : '') + (done ? ' is-done' : '') + (spec.half ? ' is-half' : ''));
-  // The stage's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
-  // 3 draw, 4 film - the order the zones actually work in, said once and visibly.
+  const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
+    + (spec.blocked ? ' is-blocked' : '') + (spec.half ? ' is-half' : ''));
+  // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
+  // 3 draw, 4 film - the order they actually work in, said once and visibly.
   if (spec.step) box.appendChild(el('span', 'mv3-wk-znum', String(spec.step)));
   const head = el('div', 'mv3-wk-stage-head');
   head.appendChild(el('span', '', spec.name));
-  if (done) head.appendChild(el('span', 'mv3-wk-zdone', '✓'));
-  const sub = spec.blocked ? 'needs ' + spec.why : (open ? spec.sub : spec.summary) || '';
+  // What the field IS, and then where it stands. The second used to appear only when the drawer
+  // was shut; with nothing to shut, it belongs in the head all the time.
+  const sub = spec.blocked ? 'needs ' + spec.why
+    : [spec.sub, spec.summary].filter(Boolean).join(' · ');
   if (sub) head.appendChild(el('span', 'mv3-wk-vsub', sub));
-  const chev = el('span', 'mv3-wk-zchev', spec.blocked ? '' : open ? '▾' : '▸');
-  head.appendChild(chev);
-  head.title = spec.blocked ? 'Still missing: ' + spec.why : open ? 'Shut this zone' : 'Open this zone';
-  if (!spec.blocked) head.addEventListener('click', () => { _setZone(id, !open); _ctx.repaint(); });
+  if (spec.blocked) head.title = 'Still missing: ' + spec.why;
   box.appendChild(head);
   host.appendChild(box);
-  if (!open) return { open, body: null, foot: null };
   const body = el('div', 'mv3-wk-stage-body');
   box.appendChild(body);
   const foot = el('div', 'mv3-wk-stage-foot');
   box.appendChild(foot);
-  return { open, body, foot };
+  return { open: true, body, foot };
 }
 
 function _genButton(foot, spec) {
@@ -976,12 +943,11 @@ function _stageMood(host, p, lines) {
   const want = VOICE.untagged(p);
   const done = live.length > 0 && !want.length;
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
-  const { open, body, foot } = _stage(host, 'mood', {
+  const { body, foot } = _stage(host, 'mood', {
     step: 1, half: true,
     name: 'mood', sub: 'and the tags of the read', done,
-    summary: now ? now.label : 'not chosen yet',
+    summary: want.length ? want.length + (want.length === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
   });
-  if (!open) return;
   const row = el('div', 'mv3-wk-fsets');
   const mood = el('select', 'mv3-wk-vsel is-small is-wide');
   mood.title = 'The emotion of the whole video: the read, the frames and the clips all follow it';
@@ -1019,12 +985,11 @@ function _stageVoice(host, p, lines) {
   const read = live.filter(isRead).length;
   const done = live.length > 0 && read === live.length && !g.busy;
   const untagged = VOICE.untagged(p).length;
-  const { open, body, foot } = _stage(host, 'voice', {
+  const { body, foot } = _stage(host, 'voice', {
     step: 2, half: true,
-    name: 'voice', sub: 'ElevenLabs v3, by the tags', done,
+    name: 'voice', sub: 'ElevenLabs v3', done,
     summary: read + '/' + live.length + ' read',
   });
-  if (!open) return;
   VOICE.paintRow(body, _api.voiceApi());
   const has = _canRead();
   const will = live.filter(l => !isRead(l)).length;
@@ -1064,22 +1029,18 @@ function _stageFrames(host, p) {
   const missing = _missing(p);
   const blocked = missing.length > 0;
   const s = _standing(p);
-  // The frames zone does NOT shut itself when a set finishes (the owner, 2026-09-21): the frames
-  // are what is looked at the moment they arrive. It opens and shuts by hand like the others.
-  const { open, body, foot } = _stage(host, 'frames', {
-    step: 3,
-    name: 'first frames', sub: 'a set for the whole video', done: s.framesDone, keepOpen: true,
+  const { body, foot } = _stage(host, 'frames', {
+    step: 3, half: true,
+    name: 'first frames', sub: 'a set for the video', done: s.framesDone,
     blocked, why: missing.join(' and '),
-    summary: s.frames + (s.frames === 1 ? ' frame' : ' frames') + ' in the pool' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
+    summary: s.frames + '/' + s.framesAsked + ' drawn' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
   });
-  if (!open) return;
   const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
 
-  // The shot size, its mannequin beside it - as tall as the menus and the wishes together - and
-  // how many.
-  // The menus on the LEFT and the mannequin on the RIGHT (the owner, 2026-09-21), and the menus
-  // wear short names so three of them fit a narrow column: the shot size with how many beside it,
-  // the spread rule under them.
+  // The three menus across the top of the field, each on its line with its name over it, and
+  // under them the wishes with the mannequin of the chosen shot size beside them (the owner,
+  // 2026-09-22 - the field is half a row wide now, and a mannequin beside the MENUS left them too
+  // narrow to read a word of). The mannequin is next to the one field that can give up the width.
   const row = el('div', 'mv3-wk-fsetrow');
   const pose = set ? _poseById(set.poseId) : null;
   const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
@@ -1145,8 +1106,11 @@ function _stageFrames(host, p) {
   wish.disabled = _planning;
   wish.addEventListener('input', () => { _drafts.wish = wish.value; });
   wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
-  col.appendChild(wish);
-  row.append(col, pic);
+  // The wishes and the mannequin, side by side at the foot of the block.
+  const under = el('div', 'mv3-wk-fwishrow');
+  under.append(wish, pic);
+  col.appendChild(under);
+  row.append(col);
   body.appendChild(row);
 
   // The pool, the full width under the block: every frame as it came. A frame pressed goes on the
@@ -1234,15 +1198,15 @@ function _stageVideo(host, p, lines) {
   const missing = _missing(p);
   const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
   const motion = _envMotion(p);
-  const written = lines.filter(_animated).length;
-  const done = !!motion && lines.length > 0 && written === lines.length;
-  const { open, body, foot } = _stage(host, 'video', {
-    step: 4,
-    name: 'video', sub: 'the place, then the person', soon: true, done,
+  const live = _live(lines);
+  const written = live.filter(_animated).length;
+  const done = !!motion && live.length > 0 && written === live.length;
+  const { body, foot } = _stage(host, 'video', {
+    step: 4, half: true,
+    name: 'video', sub: 'the place, then the person', done,
     blocked: !!why, why,
-    summary: written + '/' + lines.length + ' animated' + (motion ? '' : ' · the place is not written'),
+    summary: written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
-  if (!open) return;
   _needEnvMeta();
   const v = _video();
   // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
@@ -1295,9 +1259,14 @@ function _stageVideo(host, p, lines) {
   // `generate`: the place first when it has nothing written, then the animation of every line that
   // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no
   // second press to confirm, as with the reads.
-  const willWrite = lines.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
+  const willWrite = live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length;
   const clips = _clipWork(p, lines);
   const clipCost = clips.reduce((a, x) => a + x.cost, 0);
+  // HOW LONG THE VIDEO IS, beside what is left to make (the owner, 2026-09-22): the reads of the
+  // lines that are in it, added up - which is exactly the length the cut comes to, because a clip
+  // is trimmed to its read (lib/frag-mirror.js). A line not read yet has no length to add.
+  const secs = live.reduce((a, l) => a + (isRead(l) ? (_take(l) || {}).dur || 0 : 0), 0);
+  const whole = secs ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
   // A clip in flight does not shut this button (V4): the planner skips the fragments that are
   // already being made, so `generate` here starts the others.
   const busy = !!_writing || _envWriting;
@@ -1307,15 +1276,16 @@ function _stageVideo(host, p, lines) {
   _genButton(foot, {
     label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
       : _writing === 'lines' ? 'writing…'
-        : _writing === 'clips' ? 'clips ' + (lines.filter((l, i) => _clipState(p, l, i) === 'ok').length) + '/' + lines.length + '…'
+        : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
-    cap: busy ? '' : [
+    cap: busy ? whole : [
       _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
       !motion ? 'the place' : '',
       willWrite ? willWrite + (willWrite === 1 ? ' prompt' : ' prompts') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
+      whole,
     ].filter(Boolean).join(' · ') || 'everything is made',
-    disabled: busy || !_place(p) || !lines.length || (!!motion && !willWrite && !clips.length),
+    disabled: busy || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
     title: 'The place, then how the person moves on every line, then the clips of the fragments that'
       + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
       + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
@@ -1390,7 +1360,6 @@ function _row(p, l, i, n) {
     // being tried out in the picker, say - hanging over another fragment.
     _stagePick = '';
     _stageFor = i;
-    _stagePlay = false;
     if (_open !== i) { _open = i; _remember(); }
     _ctx.repaint();
   }));
@@ -1416,8 +1385,15 @@ function _row(p, l, i, n) {
   row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, l, i, n), TIP_MS); });
   row.addEventListener('mouseleave', _tipHide);
   // What a line can have DONE to it, out of the way of the list (the owner, 2026-09-22): read it
-  // again, or take it off the script.
-  row.addEventListener('contextmenu', (e) => { e.preventDefault(); _tipHide(); _rowMenu(e, row, p, l, i, n); });
+  // again, or take it off the script. The press OPENS this fragment first - a menu about a line you
+  // are not looking at is a menu applied to the wrong one - and opening is all it does: a second
+  // right-click on the open line does not shut it, unlike a left one.
+  row.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    _tipHide();
+    if (_open !== i) { _open = i; _picking = false; _pickView = ''; _setPick = ''; _stagePick = ''; _stageFor = i; _remember(); _ctx.repaint(); }
+    _rowMenu(e, row, p, l, i, n);
+  });
   // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
     _tipHide();
@@ -1461,6 +1437,9 @@ async function _setOff(i, want) {
     _adopt(await _post('/api/scen3/projects/' + encodeURIComponent(p.id) + '/line/state', { index: i, removed: !!want }));
     if (want && _open === i) _open = -1;
     _remember();
+    // The route has already re-laid the cut by the time it answers, so the timeline under the blur
+    // can be brought up to date on the spot rather than on the watcher's next round (Z'3).
+    await Store.refresh();
   } catch (e) {
     _readErr = (want ? 'The line was not taken off: ' : 'The line was not restored: ') + e.message;
   }
@@ -1939,10 +1918,13 @@ function _clipCol(p, l, i, rs, take) {
     box.appendChild(el('span', '', 'no clip'));
   }
   if (c && c.thumb) {
-    // Pressed, it PLAYS on the stage (X4) - a four-second clip is not worth a window over the whole
-    // panel. The window is still there on the right button, for looking at one frame of it closely.
-    box.title = 'Play it on the stage; right-click to open it large';
-    box.addEventListener('click', () => { _stagePick = 'clip'; _stagePlay = true; _ctx.repaint(); });
+    // Pressed, it goes ON the stage - it does not start (the owner, 2026-09-22). A thumbnail picks
+    // which of the two the stage shows, the frame or the clip, and nothing else; PLAYING is a press
+    // on the stage itself, where the film actually is. It used to be both, so switching frame and
+    // clip re-started the video every time. The window is still on the right button, for looking at
+    // one frame of it closely.
+    box.title = 'Show it on the stage; press the stage to play it. Right-click to open it large';
+    box.addEventListener('click', () => { _stagePick = 'clip'; _ctx.repaint(); });
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       showPicture({ src: c.thumb, name: 'clip of fragment ' + _no((p.lines || []), i), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] });
@@ -2051,12 +2033,10 @@ export function openPicture(p) {
   const name = 'fragment ' + _no(lines, _open);
   // The clip, as a film with its own sound, unless the frame was asked for (X4).
   if (c && c.path && _stagePick !== 'frame') {
-    const play = _stagePlay;
-    _stagePlay = false;                   // asked once, answered once
     // What stands on the stage while the video opens (Z5): the clip's own poster, or - a clip
     // filed before posters - the frame it was made from.
     const poster = c.thumb || (fr ? derived(fr.preview || fr.path, 'main') : '');
-    return { film: c.path, caption: name + ' · clip', play, poster };
+    return { film: c.path, caption: name + ' · clip', poster };
   }
   if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: name + (c ? ' · frame' : '') };
   if (c && c.thumb) return { src: c.thumb, caption: name + ' · clip' };

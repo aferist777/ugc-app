@@ -543,6 +543,16 @@ function _fragOnly(base, theirs) {
   return mirrorMoved;
 }
 
+/**
+ * Look for a newer timeline NOW, instead of waiting for the next poll (phase Z', the owner
+ * 2026-09-22). For the places that KNOW the server has just re-laid the cut - taking a line off the
+ * script, putting it back - because twenty seconds of an unchanged timeline under the blur reads as
+ * nothing having happened. It is the same check the watcher makes, not a second way of doing it.
+ */
+export async function refresh() {
+  try { await _checkRemote(); } catch (e) { /* the watcher will try again */ }
+}
+
 try {
   setInterval(() => { _checkRemote().catch(() => {}); }, WATCH_MS);
   document.addEventListener('visibilitychange', () => {

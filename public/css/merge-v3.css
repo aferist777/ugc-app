@@ -1881,17 +1881,21 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-ins-head-act.is-counters .mv3-wk-fstat{flex:0 0 auto}
 .mv3-wk-genall{flex:0 0 auto}
 .mv3-wk-mood-about{margin:4px 2px 0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
-/* FOUR STAGES, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): 1 mood - which is also where the
-   script is marked up - 2 voice, 3 first frames, 4 video. The first two are a sentence each and
-   share a row; the other two carry strips and menus and keep the full width. The number sits ON the
-   corner of the gold frame, over the line itself, which is why the frame is the positioned one. */
-.mv3-wk-zrow{display:flex; align-items:flex-start; gap:10px}
+/* FOUR FIELDS, TWO BY TWO, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): 1 mood - which is
+   also where the script is marked up - 2 voice, 3 first frames, 4 video. They do not open and shut:
+   all four stand open, and THE FRAME SAYS WHERE EACH ONE IS - dashed gold while there is work left
+   in it, solid gold when there is none. The number sits ON the corner of the frame, over the line
+   itself, which is why the frame is the positioned one. Both boxes of a row are given the same
+   height, so the two frames read as one pair rather than two loose cards. */
+.mv3-wk-zrow{display:flex; align-items:stretch; gap:10px}
 .mv3-wk-zrow > .mv3-wk-stage{flex:1 1 0; min-width:0}
 .mv3-wk-stage{
   position:relative;
-  margin:0 0 10px; padding:8px 10px 9px; border:1px solid var(--gold); border-radius:var(--r-sm);
+  margin:0 0 10px; padding:8px 10px 9px; border:1px dashed var(--gold); border-radius:var(--r-sm);
   display:flex; flex-direction:column; gap:7px;
 }
+/* Nothing left to do in it. */
+.mv3-wk-stage.is-done{border-style:solid}
 .mv3-wk-znum{
   position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
@@ -1899,28 +1903,32 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
   font:700 9px/1 var(--font); font-variant-numeric:tabular-nums;
 }
 .mv3-wk-stage.is-blocked .mv3-wk-znum{filter:grayscale(1)}
-/* Half a row is not wide enough for a name, a summary and a chevron on one line - nor for what
-   the `generate` is about beside the button, so that gets a line of its own and wraps. */
+/* Half a row is not wide enough for a name and a summary on one line - nor for what the
+   `generate` is about beside the button, so that gets a line of its own and wraps. */
 .mv3-wk-stage.is-half .mv3-wk-stage-head{flex-wrap:wrap; row-gap:2px}
 .mv3-wk-stage.is-half .mv3-wk-stage-head .mv3-wk-vsub{flex:1 1 100%}
 .mv3-wk-stage.is-half .mv3-wk-vrow{flex-wrap:wrap; row-gap:4px}
 .mv3-wk-stage.is-half .mv3-wk-stage-foot{flex-wrap:wrap; row-gap:5px}
 .mv3-wk-stage.is-half .mv3-wk-stage-foot .mv3-wk-vsub{flex:1 1 100%; white-space:normal; text-align:left}
-.mv3-wk-stage.is-soon{border-style:dashed}
-/* The head opens and shuts the zone (the owner, 2026-09-21). Shut, it says where the zone stands;
-   done, a green mark; blocked - nothing to work on yet - dimmed, with what it waits for, and no
-   chevron: it opens by itself when the casting is there. */
-.mv3-wk-stage-head{display:flex; align-items:baseline; gap:8px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold); cursor:pointer; user-select:none}
+/* HOW THE FIRST-FRAMES FIELD FOLDS IN HALF A ROW. Its menus wear their names to the LEFT at full
+   width, which at 200px leaves the menu itself too narrow to read a word of: the name goes ABOVE
+   it instead, and each menu takes the whole line. The mannequin stands beside the wishes rather
+   than beside the menus - it is a picture, and so is what it is next to. */
+.mv3-wk-stage.is-half .mv3-wk-fsetlab{flex:1 1 100%; flex-direction:column; align-items:stretch; gap:2px}
+.mv3-wk-stage.is-half .mv3-wk-fsetlab.is-tight{flex:1 1 100%}
+.mv3-wk-stage.is-half .mv3-wk-fsetlab.is-tight .mv3-wk-vsel.is-small{width:auto; flex:1 1 auto}
+.mv3-wk-stage.is-half .mv3-wk-fsetlabw{text-transform:uppercase; letter-spacing:.06em; font-size:8.5px}
+/* The head says what the field is and, after a dot, where it stands - it used to say the second
+   only while the drawer was shut, and there is nothing to shut now. Blocked - nothing to work on
+   yet - dims the whole field and says what it waits for. */
+.mv3-wk-stage-head{display:flex; align-items:baseline; gap:8px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold); user-select:none}
 .mv3-wk-stage-head .mv3-wk-vsub{text-transform:none; letter-spacing:0; font-weight:400; flex:1 1 auto; min-width:0}
-.mv3-wk-stage-head .mv3-wk-zdone{color:var(--success, oklch(.72 .15 150)); font-size:10px}
-.mv3-wk-stage-head .mv3-wk-zchev{margin-left:auto; flex:0 0 auto; font-size:10px; opacity:.85}
-.mv3-wk-stage.is-closed{padding-bottom:8px}
 .mv3-wk-stage.is-blocked{opacity:.55}
-.mv3-wk-stage.is-blocked .mv3-wk-stage-head{cursor:default}
 .mv3-wk-stage.is-blocked .mv3-wk-stage-head .mv3-wk-vsub{color:var(--warn, oklch(.72 .15 75))}
 .mv3-wk-stage-body{display:flex; flex-direction:column; gap:6px}
 .mv3-wk-stage-body .mv3-wk-vrow.is-now{margin:0}
-.mv3-wk-stage-foot{display:flex; align-items:center; justify-content:flex-end; gap:8px}
+/* margin-top:auto keeps the foot at the bottom of a field stretched to its neighbour. */
+.mv3-wk-stage-foot{display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:auto}
 .mv3-wk-gen{
   flex:0 0 auto; padding:4px 14px; cursor:pointer; border-radius:var(--pill);
   border:1px solid var(--gold); background:var(--gold); color:var(--bg); font:700 10px/1.2 var(--font);
@@ -1950,7 +1958,6 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */
 .mv3-wk-frow .mv3-wk-vplay{width:20px; height:20px; font-size:8px}
 .mv3-wk-fmodes, .mv3-wk-fsets, .mv3-wk-facts{display:flex; flex-wrap:wrap; gap:4px}
-.mv3-sc-tab.is-soon{opacity:.5}
 .mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
 /* How the two columns work, over the script it is about (V7): a gold band, not grey italics at the
    foot of a zone nobody scrolls to. */
@@ -2092,7 +2099,12 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-fpose.is-empty{background:var(--bg)}
 .mv3-wk-fpose img{width:100%; height:100%; object-fit:cover; object-position:center top; display:block}
 .mv3-wk-fsetcol{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px}
-.mv3-wk-fsetcol .mv3-wk-ftext-in.is-wish{flex:1 1 auto; min-height:58px}
+/* The wishes and the mannequin share the line under the menus, so the menus have the whole width
+   of the field to themselves (the owner, 2026-09-22 - the field is half a row now). */
+.mv3-wk-fwishrow{display:flex; align-items:stretch; flex-wrap:wrap; gap:9px; min-width:0}
+/* Side by side while there is room for both; in a field too narrow for that, the wishes take the
+   line and the mannequin stands under them - a field 60px wide is not a field to type in. */
+.mv3-wk-fwishrow .mv3-wk-ftext-in.is-wish{flex:1 1 120px; min-width:0; min-height:72px}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
 .mv3-wk-fsetfr{
   position:relative;

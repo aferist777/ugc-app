@@ -347,12 +347,11 @@ function _stage(chosen) {
   // doors are back the moment the line is closed (a second press on its row).
   const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
-    // A clip PLAYS here (X4); everything else is a picture.
-    if (pic.film) {
-      PV.showFilm(pic.film, pic.caption, pic.poster);
-      // Only when the panel says the person just asked for it (Y2).
-      if (pic.play) PV.filmPlay(true);
-    } else PV.showStill(pic.src, pic.caption);
+    // A clip PLAYS here (X4) - and ONLY here: it is put up stopped, with its triangle, and the
+    // press that starts it is a press on the stage (the owner, 2026-09-22). Nothing in the panel
+    // asks for it to play any more.
+    if (pic.film) PV.showFilm(pic.film, pic.caption, pic.poster);
+    else PV.showStill(pic.src, pic.caption);
     // A picture that can be REFRAMED brings a selection with it (V9): the panel says the shape - the
     // project's format - and this puts the frame on the stage and the acts along its foot. The order
     // matters: `showStill` with a new picture drops any selection, so the crop is asked for after it.

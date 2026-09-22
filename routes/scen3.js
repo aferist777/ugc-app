@@ -3008,7 +3008,10 @@ router.post('/scen3/projects/:id/line', (req, res) => {
 
    The timeline is the one thing that has to change, and it changes by itself: the mirror lays only
    the lines that are in the video, so the cut closes over the line that went and opens again when
-   it comes back (lib/frag-mirror.js).
+   it comes back (lib/frag-mirror.js). This route WAITS for that re-laying before it answers, unlike
+   every other caller of the mirror: the person is looking straight at the timeline through the blur
+   when they press this, and the page refreshes it the moment the answer arrives (phase Z', the
+   owner 2026-09-22). Everywhere else the mirror is fire-and-forget, because nothing is watching.
 
    A line cannot be taken off WHILE IT IS BEING MADE: the money would buy a fragment that is no
    longer in the video. Its neighbours are free - the numbers do not move, so a clip in flight
@@ -3026,7 +3029,7 @@ function _lineBusy(id, i) {
   return '';
 }
 
-router.post('/scen3/projects/:id/line/state', (req, res) => {
+router.post('/scen3/projects/:id/line/state', async (req, res) => {
   try {
     const id = String(req.params.id);
     const list = _loadProjects();
@@ -3048,7 +3051,11 @@ router.post('/scen3/projects/:id/line/state', (req, res) => {
     proj.lines = lines;
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
-    MIRROR.touch(proj.id, { project: proj });   // the cut closes over it, or opens again (T')
+    // The cut closes over it, or opens again (T') - and this one is WAITED for, so the page can
+    // show the new timeline the moment it gets the answer. A mirror that could not be built must
+    // never fail the thing that prompted it, so a failure is logged and the answer goes anyway.
+    try { await MIRROR.rebuild(proj.id, { project: proj }); }
+    catch (e) { console.warn('[scen3/line/state] the timeline was not re-laid:', e.message); }
     console.log('[scen3/line/state] ' + id + ' line ' + (i + 1) + (off ? ' taken off' : ' restored'));
     res.json({ success: true, project: _projFull(proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
