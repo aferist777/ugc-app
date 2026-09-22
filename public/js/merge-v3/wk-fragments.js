@@ -55,6 +55,14 @@ const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
 const TIP_MS = 320;                      // hover before a row's whole text appears
+// HOW WIDE THE SCRIPT COLUMN IS (phase R, the owner 2026-09-22). The two columns of this step are
+// rebuilt on every repaint, so the width cannot live in the DOM; it lives here and is put back
+// after each paint, the way the columns' scroll offsets are. 0 means "never dragged" - the CSS
+// default then stands. Kept like the shell's two sashes, in a plain key the server mirrors.
+const SPLIT_KEY = 'mv3_wk_split';
+const SPLIT_MIN = 190;                   // narrower than this a line of script is unreadable
+const SPLIT_PART = 0.62;                 // ...and the fields keep at least the rest
+let _splitW = (() => { try { return parseInt(localStorage.getItem(SPLIT_KEY) || '', 10) || 0; } catch (e) { return 0; } })();
 
 let _ctx = null;
 let _api = null;                          // what the step lends: the character cast, the voice, the shelves
@@ -630,8 +638,10 @@ export function paint(host, ctx, api, head) {
   host.classList.add('is-split');
   const left = el('div', 'mv3-wk-half is-frags');
   host.appendChild(left);
+  host.appendChild(_splitSash(host, left));
   const right = el('div', 'mv3-wk-half is-guide is-frag');
   host.appendChild(right);
+  _applySplit(host, left);
   _keepScroll(right, 'r' + _open + ':' + api.view());
 
   _pickUpDrawing();
@@ -676,6 +686,47 @@ export function paint(host, ctx, api, head) {
 // voice picker): moving to another fragment should start at its top, coming back to the same one
 // should not. Put back after the paint, which is a microtask away and before anything is drawn.
 const _rightAt = new Map();
+// ── The sash between the fields and the script (R2) ─────────────────────────
+// The script column is the one with a size: the fields take what is left. Dragging LEFT makes it
+// wider, because it stands on the right of them; a double-click gives it back to the stylesheet.
+function _clampSplit(host, px) {
+  const all = host.getBoundingClientRect().width || 600;
+  const hi = Math.max(SPLIT_MIN, Math.round(all * SPLIT_PART));
+  return Math.round(Math.max(SPLIT_MIN, Math.min(px, hi)));
+}
+function _applySplit(host, col) {
+  if (!_splitW) return;
+  col.style.flex = '0 0 ' + _clampSplit(host, _splitW) + 'px';
+}
+function _splitSash(host, col) {
+  const s = el('div', 'mv3-wk-sash');
+  s.title = 'Drag to give the script more room · double-click to put it back';
+  s.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const base = col.getBoundingClientRect().width;
+    document.body.classList.add('mv3-resize-v');
+    const move = (ev) => {
+      _splitW = _clampSplit(host, base + (x0 - ev.clientX));
+      col.style.flex = '0 0 ' + _splitW + 'px';
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-v');
+      try { localStorage.setItem(SPLIT_KEY, String(_splitW)); } catch (err) { /* a private window */ }
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  s.addEventListener('dblclick', () => {
+    _splitW = 0;
+    try { localStorage.removeItem(SPLIT_KEY); } catch (e) { /* a private window */ }
+    _ctx.repaint();
+  });
+  return s;
+}
+
 function _keepScroll(box, key) {
   softScroll(box);                          // a gentler wheel in setup (V5)
   box.addEventListener('scroll', () => { _rightAt.set(key, box.scrollTop); }, { passive: true });
@@ -729,6 +780,7 @@ function _all(host, p, lines) {
   host.appendChild(low);
   _stageFrames(low, p);
   _stageVideo(low, p, lines);
+  _shelfFrames(host, p);
 }
 
 // ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
@@ -748,6 +800,7 @@ function _stage(host, id, spec) {
   // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
   // 3 draw, 4 film - the order they actually work in, said once and visibly.
   if (spec.step) box.appendChild(el('span', 'mv3-wk-znum', String(spec.step)));
+  // A shelf has no number and no button: it is not a step, it is where what was made lands.
   const head = el('div', 'mv3-wk-stage-head');
   head.appendChild(el('span', '', spec.name));
   // What the field IS, and then where it stands. The second used to appear only when the drawer
@@ -760,6 +813,7 @@ function _stage(host, id, spec) {
   host.appendChild(box);
   const body = el('div', 'mv3-wk-stage-body');
   box.appendChild(body);
+  if (spec.bare) return { open: true, body, foot: null };   // a shelf has nothing to press
   const foot = el('div', 'mv3-wk-stage-foot');
   box.appendChild(foot);
   return { open: true, body, foot };
@@ -943,8 +997,8 @@ function _stageMood(host, p, lines) {
   const want = VOICE.untagged(p);
   const done = live.length > 0 && !want.length;
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
-  const { body, foot } = _stage(host, 'mood', {
-    step: 1, half: true,
+  const { body } = _stage(host, 'mood', {
+    step: 1, half: true, bare: true,     // its button stands on the mood's own line, not in a foot
     name: 'mood', sub: 'and the tags of the read', done,
     summary: want.length ? want.length + (want.length === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
   });
@@ -1112,11 +1166,34 @@ function _stageFrames(host, p) {
   body.appendChild(row);
   body.appendChild(wish);
 
-  // The pool, the full width under the block: every frame as it came. A frame pressed goes on the
-  // stage; pressed again, the stage shows the casting pair.
+  // `generate`: the price first, the set on the second press. What was drawn is not here: it is
+  // on the shelf under the four fields (_shelfFrames), where there is width for it.
+  _framesButton(foot);
+}
+
+// ── FRAMES: the shelf of what has been drawn (phase R, the owner 2026-09-22) ──
+// A field of its own under the four, the full width of the column: in the first-frames field,
+// which is half a row wide, the strip showed about three frames of a set. Everything it can do
+// came with it - press a frame to put it on the stage, ✕ to take it out of the rotation, drag to
+// reorder, right-click to see it large. Its frame is dashed until the set is drawn, like the
+// others. No number: a shelf is not a step.
+//
+// AT ITS HEAD, a frame that is not a frame: an empty tile with a `+`, in gold dashes. It is the
+// door to asking for a frame in words - a chat that will open over THESE fields and leave the
+// script beside them alone - and until that door exists it says so on hover. (One stood here
+// before and was taken away in phase V for promising exactly this with nothing behind it; it
+// comes back with the promise written on it.)
+function _shelfFrames(host, p) {
+  const s = _standing(p);
+  const { body } = _stage(host, 'shelf', {
+    bare: true,
+    name: 'frames', sub: 'what has been drawn', done: s.framesDone,
+    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '') : '',
+  });
   const strip = el('div', 'mv3-wk-fset');
-  // No `+` tile (the owner, 2026-09-22): it stood there switched off, promising a frame of one's
-  // own that nothing behind it could make. The strip is what was drawn, and nothing else.
+  const add = el('div', 'mv3-wk-fsetfr is-add', '+');
+  add.title = 'In development: a frame made to order, asked for in words. The chat will open over these fields.';
+  strip.appendChild(add);
   const hidden = _off(p);
   const shown = _poolAll(p);
   for (const fr of shown) {
@@ -1171,9 +1248,12 @@ function _stageFrames(host, p) {
   }
   for (let k = 0; k < _drawing.size; k++) strip.appendChild(el('div', 'mv3-wk-fsetfr is-busy', 'drawing…'));
   body.appendChild(strip);
+}
 
-  // `generate`: the price first, the set on the second press.
-  const n = v.frames || 4;
+// The one button of the first-frames field, kept apart from the field itself so the shelf could
+// move out from between them.
+function _framesButton(foot) {
+  const n = _video().frames || 4;
   const busy = _planning || _drawing.size > 0;
   _genButton(foot, {
     label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',

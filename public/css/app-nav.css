@@ -61,10 +61,19 @@
 }
 .lib-switch select:hover{ border-color:var(--primary); }
 
+/* A button that stands in the strip and reads like one of its entries: the render queue on
+   Merge (phase R). Same shape as Alerts, without the count. */
+.sv3-nav .sv3-navbtn{
+  flex:0 0 auto; margin-right:2px; padding:5px 10px; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); font:600 12px/1 var(--font); transition:.12s var(--ease);
+}
+.sv3-nav .sv3-navbtn:hover{ color:var(--ink); background:var(--surface-2); }
+
 /* ── Alerts ──────────────────────────────────────────────────────────────────
-   What is being generated, on every page (js/alerts-bell.js). Left of Library because it is a
-   reading about work in flight, not a place to go; the count on it is the same red as the render
-   queue's, so two numbers about waiting work look like the same kind of thing. */
+   What is being generated, on every page (js/alerts-bell.js). At the right-hand end, before
+   Admin, because it is a reading about work in flight and not a place to go; the count on it is
+   the same red as the render queue's, so two numbers about waiting work look alike. */
 .sv3-nav .sv3-alerts{
   position:relative; display:flex; align-items:center; gap:5px; flex:0 0 auto;
   margin-right:2px; padding:5px 10px; cursor:pointer;

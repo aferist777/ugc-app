@@ -254,6 +254,11 @@ async function _adopt() {
       _project = d.project;
       const first = _firstStep();
       if (first !== _step) { _leave(); _step = first; _paintChips(); _lend(); }
+      // WHATEVER STEP IT LANDED ON IS THE ONE IT IS STANDING ON (phase R): remembered here and not
+      // only when a chip is pressed, so a walk to another page and back comes home to the same
+      // place. Without it a project opened by its address came back on whichever step the rule
+      // picks for a project with a cut - the timeline - however long you had been in setup.
+      _remember(_step);
       _repaint();
     }
   } catch (e) {

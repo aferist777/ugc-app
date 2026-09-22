@@ -162,8 +162,21 @@ export async function open(k) {
   return load(k);
 }
 
+// ── WHICH PROJECT MERGE COMES BACK TO (phase R, the owner 2026-09-22) ──────
+// The open project lives in the address (?p=<key>), which a reload keeps and a walk through the
+// top strip loses - the link there goes to a bare /merge. So the key is also remembered, and
+// Merge with no ?p= opens what was remembered. In SESSION storage, by the owner's decision: it is
+// where you were this time the app was open, not a setting, and closing the app forgets it.
+// (It also means nothing of this reaches the server - storage-sync.js mirrors localStorage only.)
+//
+// This replaces the older rule that a fresh /merge starts empty "because the empty page should be
+// a preview of where + new project goes". Coming back to what you were doing beat it.
+const SS_OPEN = 'mv3_open_key';
+const _remember = (k) => { try { if (k) sessionStorage.setItem(SS_OPEN, k); else sessionStorage.removeItem(SS_OPEN); } catch (e) { /* a private window */ } };
+const _remembered = () => { try { return sessionStorage.getItem(SS_OPEN) || ''; } catch (e) { return ''; } };
+
 // Back to nothing open. The URL has to be cleared too, or load() would read the project that
-// was just closed straight back out of ?p=.
+// was just closed straight back out of ?p= - and so does the memory, for the same reason.
 export async function openBlank() {
   if (_dirty) { try { await save(); } catch (e) {} }
   try {
@@ -171,6 +184,7 @@ export async function openBlank() {
     u.searchParams.delete('p');
     history.replaceState({}, '', u);
   } catch (e) {}
+  _remember('');
   return load();
 }
 
@@ -196,6 +210,9 @@ export async function load(k) {
       if (p) want = p;
     } catch (e) {}
   }
+  // ...and failing that, the one this session was last on (R6).
+  let fromMemory = false;
+  if (!want) { want = _remembered(); fromMemory = !!want; }
 
   // Nothing asked for: the empty timeline, and no project open. Not the newest project -
   // see hasProject() above.
@@ -222,6 +239,9 @@ export async function load(k) {
 
   const r = await fetch('/api/mv3/timeline?key=' + encodeURIComponent(want));
   const d = await r.json();
+  // A REMEMBERED project that is no longer there must not stop the page: it was deleted in
+  // another tab, or the app was pointed at another library. Forget it and open empty (R6).
+  if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
   if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
   _timeline = d.timeline;
   _version = d.version;
@@ -242,6 +262,7 @@ export async function load(k) {
       history.replaceState({}, '', u);
     }
   } catch (e) {}
+  _remember(_key);                  // and the walk to another page comes back here (R6)
   _dirty = false;
   _bindHistory();
   _emit();

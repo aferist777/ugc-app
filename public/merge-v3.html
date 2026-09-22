@@ -27,11 +27,16 @@
 <!-- Which entry is lit is read from the address by js/app-nav.js, so this markup
      does not change when the page moves from /merge-v3 to /merge. -->
 <nav class="sv3-nav">
-  <a href="/character">Character</a>
   <a href="/merge">Merge</a>
+  <a href="/library" data-also="/library2">Library</a>
+  <a href="/character">Character</a>
   <span class="sp"></span>
-  <a href="/library">Library</a>
-  <span class="tag">merge</span>
+  <!-- The render queue, up here beside Alerts (the owner, 2026-09-22): both are readings about
+       work in flight, and neither belongs to the project the bar below is about. It opens the
+       same window it always did (js/merge-v3/queue.js). The bell and Admin are put in after it
+       by js/app-nav.js, so the right-hand end reads Queue, the wait, Alerts, Admin. -->
+  <button class="sv3-navbtn" id="mv3-queue" type="button"
+          title="Render queue - projects waiting to be rendered">Queue</button>
 </nav>
 
 <main class="mv3-app">
@@ -74,9 +79,8 @@
     <span class="mv3-bar-lock" id="mv3-project-lock" hidden></span>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
-    <!-- The render window, with the export settings: js/merge-v3/export-b.js. -->
-    <button class="mv3-iconbtn is-text" id="mv3-queue" type="button"
-            title="Render queue - projects waiting to be rendered">queue</button>
+    <!-- The render window, with the export settings: js/merge-v3/export-b.js. (The queue button
+         that stood here moved into the top strip, beside Alerts - phase R.) -->
       <button class="mv3-c-btn mv3-x-open" id="mv3-export" type="button"
             title="Render this timeline with FFmpeg">Export</button>
   </div>

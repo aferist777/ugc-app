@@ -354,7 +354,11 @@ export function mountAlerts(nav) {
   _btn.appendChild(_el('span', null, 'Alerts'));
   _btn.appendChild(_el('span', 'sv3-al-count'));
   _btn.addEventListener('click', _toggle);
-  const at = nav.querySelector('a[href="/library"]');
+  // ANCHORED ON ADMIN (phase R): Admin is the last thing in the strip on every page and is put
+  // there before this runs (initNav), so the bell lands at the right-hand end wherever it is. It
+  // used to hang off the Library link, which is on the LEFT of the strip since phase R - and on
+  // the Character page there was none, so the bell ended up after Admin.
+  const at = nav.querySelector('a[href="/admin"]');
   // The wait stands to the LEFT of the button, so the two read as one thing: what is running, and
   // how long it has to go (the owner, 2026-09-22).
   _wait = _el('span', 'sv3-al-wait');
