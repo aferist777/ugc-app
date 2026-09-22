@@ -6,6 +6,7 @@
 //                                                                        the page that started it
 //   POST /api/alerts/seen       { ids? }   the list was opened: the green dot goes out
 //   POST /api/alerts/notified   { ids }    their toast was shown - not again on another page
+//   POST /api/alerts/:id/cancel            stop waiting for it (phase N)
 //   POST /api/alerts/clear                 the finished ones go; the running ones stay
 //
 // Reading never touches a provider. Asking kie.ai or Replicate "is it done yet" is the server
@@ -46,6 +47,18 @@ router.post('/alerts/notified', (req, res) => {
     const ids = (req.body || {}).ids;
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, error: 'ids are required' });
     res.json({ success: true, marked: ALERTS.markNotified(ids) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Stop waiting for it (phase N, the owner 2026-09-23). The row fails with a word of its own, the
+// runner drops it on its next round, and a result that arrives afterwards is not filed. It does NOT
+// get the money back - the task was paid for when it was asked for.
+router.post('/alerts/:id/cancel', (req, res) => {
+  try {
+    const rec = ALERTS.cancel(req.params.id, (req.body || {}).why);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such alert' });
+    console.log('[alerts] ' + rec.what + ' ' + rec.id + ' given up on');
+    res.json({ success: true, item: ALERTS.view(rec) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

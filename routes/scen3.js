@@ -2187,6 +2187,24 @@ async function _speakLine(key, voiceId, model, text, params) {
    simply leaves the rest unread - one press finishes them.
    ─────────────────────────────────────────────────────────────────────────── */
 const READ_GAP_MS = 1000;
+// HOW MANY MAY BE SPEAKING AT ONCE (phase N, the owner 2026-09-23, after ElevenLabs refused a run
+// saying five is the limit). The queue starts a line a second and waits for none of them, so a
+// script of ten with a six-second read had seven in the air. Four, not five: a line read by hand
+// from the fragment's own menu goes through the same gate, and it must not be the one that breaks
+// it. The gate is the PROCESS's, not the queue's, for exactly that reason.
+const READ_AT_ONCE = 4;
+let _speaking = 0;
+const _speakWaiting = [];
+async function _speakSlot() {
+  if (_speaking < READ_AT_ONCE) { _speaking++; return; }
+  await new Promise(r => _speakWaiting.push(r));
+  _speaking++;
+}
+function _speakDone() {
+  _speaking = Math.max(0, _speaking - 1);
+  const next = _speakWaiting.shift();
+  if (next) next();
+}
 const _reads = new Map();                 // projectId -> { total, done, skipped, failed, running }
 
 // What ElevenLabs actually said, when it said no: the body of its answer beats "Request failed".
@@ -2226,7 +2244,13 @@ async function _speakOne(key, ctx, i) {
   const line = ctx.lines[i] || {};
   const text = _readTextOf(line, ctx.variant);
   if (!text.trim()) return { skipped: true };
-  const buf = await _speakLine(key, ctx.cast.id, ctx.model, text, ctx.voice.ttsParams);
+  // Through the gate: at most four of these are inside ElevenLabs at any moment (N2). Everything
+  // after the call is ours - the file, the length, the one-tick write - so the slot is given back
+  // as soon as the sound is in hand, not when the project has been saved.
+  await _speakSlot();
+  let buf;
+  try { buf = await _speakLine(key, ctx.cast.id, ctx.model, text, ctx.voice.ttsParams); }
+  finally { _speakDone(); }
   const name = `v${ctx.id}_${i + 1}_${ctx.variant}_${Date.now()}.mp3`;
   const abs = path.join(ctx.dir, name);
   fs.writeFileSync(abs, buf);
@@ -3203,6 +3227,26 @@ const FRAG_LIGHT_MATCH =
   ' The light on the person is the light of the location: the same direction, softness, colour temperature'
   + ' and shadows, so the person is lit by that room and not by a studio.';
 
+// IS THE FACE COVERED, and by what (phase N)? Read out of the sentence the agent already wrote
+// about the look - it names a balaclava, a mask, a helmet or a scarf plainly when there is one.
+// Only the clause that says so is taken: the rest of the look is the sheet's business, and putting
+// it back into the prompt is what the diet was for.
+const FACE_COVER = /\b(balaclava|ski mask|face mask|mask|respirator|bandana|scarf (?:over|across)|helmet|visor|hood(?:ie)? pulled|veil|niqab|burqa|face (?:is )?(?:covered|obscured|hidden|concealed))\b/i;
+function _faceCovered(proj) {
+  const said = String(((proj && proj.frameRef) || {}).character || '');
+  const at = said.search(FACE_COVER);
+  if (at < 0) return '';
+  // The CLAUSE that says it - not the sentence, and not the whole reading. The agent writes one
+  // long sentence about the look, and everything in it except the covering is what the sheet
+  // already shows, which is exactly what the diet keeps out of this prompt.
+  const from = Math.max(said.lastIndexOf(',', at), said.lastIndexOf(';', at), said.lastIndexOf('.', at)) + 1;
+  // ...and it ends where the next clause plainly begins: the sentence usually runs on into the
+  // clothes, which the sheet shows for itself.
+  const stop = said.slice(at).search(/[.;]|,\s+and\b/);
+  const clause = said.slice(from, stop < 0 ? said.length : at + stop).trim();
+  return clause ? clause.slice(0, 300) + '.' : '';
+}
+
 // How the look and the place read - the person to keep, the place, its light - asked once for a look
 // and a place and kept on the project, so every frame of the video describes them the same way.
 async function _frameRef(projectId, cast) {
@@ -3256,6 +3300,12 @@ async function _planFrames({ n, set, mood, wish, ref, pose, lookUrl, placeUrl, p
     (poseUrl && pose && pose.desc) ? 'THE BASE POSE, the one every variation keeps: the person is ' + pose.desc + '.' : '',
     'WHAT A MOMENT MAY DESCRIBE - only what this shot size actually shows: ' + set.visible + '.',
     'THE MOOD OF THE VIDEO is "' + m.label + '". The face: ' + m.face + ' The body: ' + m.gestures,
+    // THE PERSON, AS READ (phase N, the owner 2026-09-23). The planner could see the look sheet
+    // and still wrote "a wide grin, crinkling the corners of their eyes" for a face under a
+    // balaclava: a picture does not assert an absence, and the sentence that was read from that
+    // very sheet does. It was on the project all along and only the place's half of it was used.
+    ref.character ? 'THE PERSON, as read from the sheet - plan only what this face and these clothes'
+      + ' can actually do: ' + ref.character : '',
     ref.environment ? 'THE PLACE, as read: ' + ref.environment : '',
     wish ? 'WHAT THE PERSON MAKING THE VIDEO ASKS FOR - follow it in every variation: ' + wish : '',
     'Write ' + n + ' variations of this ONE shot: the same person, the same place, the same shot size and the same base pose, and in each a DIFFERENT moment - the tilt and the turn of the head, what the hands do'
@@ -3319,6 +3369,16 @@ async function _submitSetFrame(b) {
   // The edit first, because the first line is the job; the shot size is the check at the end, said
   // as what is OUTSIDE the picture - a name is a suggestion, an edge is a rule.
   const parts = [pose ? FRAG_RULE_POSED : 'SHOT SIZE - obey it before anything else: ' + set.rule + ' ' + FRAG_RULE_PLAIN];
+  // WHAT THE SHEET CANNOT SAY FOR ITSELF (phase N). The diet stands - the clothes and the face are
+  // the sheet's and are not described again - but an ABSENCE is not something a picture asserts,
+  // and "turn the mannequin into a real person, exactly that face, no faceless head" is read by the
+  // engine as an instruction to invent one. So when the look covers the face, that one fact is said
+  // in words and outranks those sentences. Nothing else of the look is quoted.
+  const covered = _faceCovered(proj);
+  if (covered) parts.push('THE FACE IS COVERED, and this outranks anything above about the face: ' + covered
+    + ' Keep that covering exactly as it is on the reference sheet, over the whole face it covers.'
+    + ' Do NOT invent a face, do not uncover it, do not show a mouth or a nose that the sheet does not show,'
+    + ' and do not treat the covered head as the mannequin\'s faceless head to be replaced.');
   if (pose && pose.desc) parts.push('The pose being kept - the person is ' + pose.desc + '.');
   if (cam) parts.push('The lens of the shot: ' + cam.prompt + '.');
   if (moment) parts.push('THE MOMENT - this frozen instant: ' + moment);

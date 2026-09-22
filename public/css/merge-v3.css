@@ -1929,6 +1929,24 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 }
 /* Nothing left to do in it. */
 .mv3-wk-stage.is-done{border-style:solid}
+/* WHILE IT IS WORKING, the bottom line of the frame fills up from the left (phase N, the owner
+   2026-09-23): five pixels of gold, as wide as the work is far along. The number itself is set by
+   js/merge-v3/wk-fragments.js on a timer of its own - a progress bar is not worth a repaint of the
+   panel four times a second. It is laid OVER the frame's own bottom edge, dashed or solid. */
+.mv3-wk-stage.is-working{--wk-pc:0%}
+.mv3-wk-stage.is-working::after{
+  content:''; position:absolute; left:-1px; bottom:-3px; height:5px; width:var(--wk-pc);
+  max-width:calc(100% + 2px); border-radius:3px; background:var(--gold);
+  transition:width .25s linear; pointer-events:none;
+}
+/* ...and when there is nothing left in it, the word stands beside the number and STAYS (the owner:
+   a mark that flashes for two seconds is a mark you miss). The background cuts the frame's line
+   behind it, the way the number does. */
+.mv3-wk-zdone{
+  position:absolute; left:13px; top:-8px; z-index:2; padding:0 5px;
+  background:var(--bg); color:var(--gold);
+  font:700 8.5px/16px var(--font); letter-spacing:.1em; text-transform:uppercase;
+}
 .mv3-wk-znum{
   position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
@@ -2152,9 +2170,11 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-fwishrow.is-mood .mv3-wk-mood-about{flex:1 1 150px; min-width:0; margin:0}
 .mv3-wk-fwishrow.is-mood .mv3-wk-gen{margin-left:auto}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
+/* The frames of the shelf are the mannequin's width (the owner, 2026-09-23): the shelf has the
+   whole column now, and these were sized for the half-row field they used to live in. */
 .mv3-wk-fsetfr{
   position:relative;
-  flex:0 0 auto; width:56px; height:100px; padding:0; border-radius:var(--r-xs); overflow:hidden; cursor:pointer;
+  flex:0 0 auto; width:76px; height:135px; padding:0; border-radius:var(--r-xs); overflow:hidden; cursor:pointer;
   border:1px solid var(--border-soft); background:var(--bg); color:var(--muted); font:600 9.5px/1.2 var(--font);
 }
 .mv3-wk-fsetfr{transition:border-color .12s var(--ease)}
@@ -2195,6 +2215,17 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
   border-style:dashed; border-color:var(--gold); color:var(--gold); font:400 22px/1 var(--font);
 }
 .mv3-wk-fsetfr.is-add:hover{background:color-mix(in oklch, var(--gold) 10%, transparent)}
+/* LETTING GO of something that is being made (phase N1): the cross in its top-right corner. Red,
+   because it is the one control here that ends something, and small, because it is not the thing
+   you are meant to press. */
+.mv3-wk-drop{
+  position:absolute; right:3px; top:3px; z-index:3; width:16px; height:16px; padding:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid transparent; border-radius:var(--r-xs);
+  background:oklch(0 0 0 / .55); color:#fff; font:700 9px/1 var(--font);
+}
+.mv3-wk-drop:hover{background:var(--danger, oklch(.62 .19 25)); border-color:var(--danger, oklch(.62 .19 25))}
+.mv3-wk-drop[disabled]{opacity:.4; cursor:default}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
 .mv3-wk-flabel.is-row > span:first-child{flex:1 1 auto}
 .mv3-wk-vsel.is-small.is-col{flex:0 0 auto; width:100%}

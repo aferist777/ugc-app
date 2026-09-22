@@ -58,6 +58,11 @@ let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_ca
 let _reading = [];                      // the lines being spoken now
 let _batch = null;                      // { done, total } while every stale line is being read
 let _tagging = false;                   // the tagger is marking the script up
+// WHEN THE WORK STARTED (phase N): the field it belongs to fills its bottom border as it goes, and
+// the two things that cannot be counted - one agent call, one line spoken - are drawn from an
+// estimate that has to be measured from somewhere.
+let _tagAt = 0;
+let _readAt = 0;
 let _rsaid = '';                        // what the reads have to say, and whether it is bad
 let _rbad = false;
 
@@ -470,7 +475,10 @@ export const canSpeak = (p) => untagged(p).length === 0;
 
 /** What the reads are doing: the tagger at work, the lines being spoken (none, one, or a chunk
  *  of three), and the batch "generate" is walking, if any. */
-export const reading = () => ({ tagging: _tagging, lines: _reading, busy: _tagging || _reading.length > 0 || !!_batch, batch: _batch });
+export const reading = () => ({
+  tagging: _tagging, lines: _reading, busy: _tagging || _reading.length > 0 || !!_batch, batch: _batch,
+  tagAt: _tagAt, readAt: _readAt,       // when each started, for the field's own progress (N3)
+});
 
 /** The words of a line, changed - with their [tags] when the line has tags, which the server keeps
  *  as long as the words in them are these words. What the take said stays with the take, which is
@@ -515,6 +523,7 @@ export async function tagAll(api) {
   const want = untagged(p);
   if (!want.length) return;
   _tagging = true;
+  _tagAt = Date.now();
   _rsaid = ''; _rbad = false;
   _repaint(api);
   try {
@@ -526,6 +535,7 @@ export async function tagAll(api) {
     _rbad = true;
   }
   _tagging = false;
+  _tagAt = 0;
   _repaint(api);
 }
 
@@ -572,6 +582,7 @@ async function _speak(api, lines, inBatch) {
     return false;
   }
   _reading = lines.slice();
+  if (!_readAt) _readAt = Date.now();
   _rsaid = ''; _rbad = false;
   _repaint(api);
   let ok = false;
@@ -593,6 +604,7 @@ async function _speak(api, lines, inBatch) {
     _rbad = true;
   }
   _reading = [];
+  if (!_batch) _readAt = 0;
   _repaint(api);
   return ok;
 }
@@ -614,6 +626,7 @@ export async function readAll(api) {
   const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
+  _readAt = Date.now();
   _rsaid = ''; _rbad = false;
   _repaint(api);
   try {
@@ -630,6 +643,7 @@ export async function readAll(api) {
     _rbad = true;
   }
   _batch = null;
+  _readAt = 0;
   _repaint(api);
 }
 

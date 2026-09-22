@@ -88,6 +88,7 @@ const _drawing = new Map();
 let _envMeta = null;
 let _envWriting = false;
 let _planning = false;                    // the agent is writing the moments of a set
+let _planAt = 0;                          // ...since when (N3: the field's bar before any frame exists)
 let _armedSet = false;                    // the set's `generate` pressed once and asking
 let _armedVideo = false;                  // ...and the video zone's, which pays for the clips
 let _dragging = '';                       // the frame being dragged along the strip
@@ -102,6 +103,62 @@ let _setPick = '';                        // a frame of the pool pressed in the 
 let _stagePick = '';                      // '' | 'clip' | 'frame'
 let _stageFor = -2;                       // the fragment _stagePick belongs to
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
+
+// ── HOW LONG THIS USUALLY TAKES (phase N, the owner 2026-09-23) ─────────────
+// Two of the four fields cannot count their own progress - the tagging is ONE call to an agent,
+// and a single line being spoken is one call to ElevenLabs - so their border fills by an estimate.
+// An estimate that never learns is a lie the second time, so every finished run leaves its length
+// here and the next one is drawn from the last few. In this browser only: it is an observation of
+// how fast the world is today, not a setting, and nothing else should read it.
+const PACE_KEY = 'mv3_pace_v1';
+const PACE_KEEP = 5;
+// Read when they are asked for, not at load: a clip's estimate is declared with the clips, far
+// below this, and naming it here would be reaching into its dead zone.
+const _paceFirst = (kind) => (kind === 'tag' ? 20000 : kind === 'read' ? 9000
+  : kind === 'frame' ? FRAME_ESTIMATE_MS : kind === 'clip' ? CLIP_ESTIMATE_MS : 30000);
+function _paceAll() {
+  try { return JSON.parse(localStorage.getItem(PACE_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+/** What one of these usually takes, in ms. */
+function _pace(kind) {
+  const seen = (_paceAll()[kind] || []).filter(n => n > 0);
+  if (!seen.length) return _paceFirst(kind);
+  return Math.round(seen.reduce((a, n) => a + n, 0) / seen.length);
+}
+/** One finished run, measured. */
+function _paceSaw(kind, ms) {
+  if (!(ms > 500) || ms > 30 * 60000) return;         // nonsense, or a tab that was asleep
+  try {
+    const all = _paceAll();
+    all[kind] = (all[kind] || []).concat(Math.round(ms)).slice(-PACE_KEEP);
+    localStorage.setItem(PACE_KEY, JSON.stringify(all));
+  } catch (e) { /* a private window */ }
+}
+// How far a thing that cannot be counted has got: never past 95%, because the last five per cent
+// belong to the answer actually arriving.
+const _byTime = (at, kind) => (!at ? 0 : Math.min(0.95, (Date.now() - at) / Math.max(1, _pace(kind))));
+
+// ── The bar along the bottom of a field ────────────────────────────────────
+// Every field that is working registers the box and a function that says how far along it is,
+// 0 to 1. One timer moves them all, and it moves the NUMBER ONLY - a repaint of the panel for a
+// progress bar would be a repaint four times a second.
+const _bars = [];
+let _barTimer = 0;
+function _barsMove() {
+  let any = false;
+  for (const b of _bars) {
+    if (!b.box.isConnected) continue;
+    any = true;
+    const pc = Math.max(0, Math.min(1, b.at() || 0));
+    b.box.style.setProperty('--wk-pc', Math.round(pc * 100) + '%');
+  }
+  if (!any && _barTimer) { clearInterval(_barTimer); _barTimer = 0; }
+}
+function _barWatch(box, at) {
+  _bars.push({ box, at });
+  _barsMove();
+  if (!_barTimer) _barTimer = setInterval(_barsMove, 250);
+}
 
 function _urlLine() {
   try {
@@ -334,6 +391,7 @@ async function _makeSet() {
   const v = _video();
   _readErr = '';
   _planning = true;
+  _planAt = Date.now();
   _ctx.repaint();
   try {
     const r = await _post('/api/scen3/frames/plan', { projectId: p.id, set: v.framing, n: v.frames, wish: v.wish, format: _format(), where: _where() });
@@ -354,8 +412,11 @@ async function _follow(alertId) {
     await API.follow(alertId);
     if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
   } catch (e) {
-    _readErr = 'A frame failed: ' + e.message;
+    if (!_dropped.has(alertId)) _readErr = 'A frame failed: ' + e.message;
   }
+  _dropped.delete(alertId);
+  const was = _drawing.get(alertId);
+  if (was && was.startedAt) _paceSaw('frame', Date.now() - was.startedAt);   // the next estimate (N3)
   _drawing.delete(alertId);
   if (!_drawing.size) endProgress('frames', _readErr ? _readErr : undefined);
   if (_ctx) _ctx.repaint();
@@ -421,6 +482,7 @@ async function _saveEnvMotion(p, motion) {
 // stale (F4). The first two are credits; the clips are dollars, which is why the zone asks a second
 // press when there are any.
 let _writing = '';                        // 'place' | 'lines' | 'clips' | ''
+let _writeAt = 0;                         // ...since when (N3)
 // How fast they leave is the SERVER's business now (phase X1): one a second, and it does not wait
 // for any of them. The page only asks for the list and follows the rows.
 
@@ -473,12 +535,14 @@ async function _writeVideo(p, opts) {
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
+    _writeAt = Date.now();
     await _saveEnvMotion(p, null);
     if (_readErr) { _writing = ''; return _ctx.repaint(); }
   }
   const lines = Array.isArray(p.lines) ? p.lines : [];
   if (_live(lines).some(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion))) {
     _writing = 'lines';
+    if (!_writeAt) _writeAt = Date.now();
     _ctx.repaint();
     try {
       const r = await _post('/api/scen3/video/prompts', { projectId: p.id });
@@ -499,6 +563,7 @@ async function _writeVideo(p, opts) {
     }
   }
   _writing = '';
+  _writeAt = 0;
   _ctx.repaint();
 }
 
@@ -508,6 +573,43 @@ async function _saveFramePrompt(p, frameId, prompt) {
   try { _adopt(await _post('/api/scen3/frames/prompt', { projectId: p.id, frameId, prompt })); }
   catch (e) { _readErr = 'The prompt was not saved: ' + e.message; }
   _ctx.repaint();
+}
+
+// ── LETTING GO OF SOMETHING THAT IS TAKING TOO LONG (phase N1) ──────────────
+// The cross on a thing being made. It does NOT get the money back - the task was paid for when it
+// was asked for and kie has no cancel - and the button says so: what it stops is the WAITING. The
+// row fails with a word of its own, the server stops asking about it, and a picture that arrives
+// afterwards is not filed.
+let _dropping = '';
+// The rows this panel let go of. The follower is still waiting on them and will see them fail;
+// what it must not do is report that failure as news (N1).
+const _dropped = new Set();
+async function _dropRow(alertId, what) {
+  if (!alertId || _dropping) return;
+  _dropping = alertId;
+  _readErr = '';
+  if (_ctx) _ctx.repaint();
+  try {
+    _dropped.add(alertId);
+    await _post('/api/alerts/' + encodeURIComponent(alertId) + '/cancel', {});
+  } catch (e) {
+    _dropped.delete(alertId);
+    _readErr = 'Could not let go of ' + what + ': ' + e.message;
+  }
+  _dropping = '';
+  // The follower is still waiting on this row; it sees the failure on its next look and tidies up.
+  if (_ctx) _ctx.repaint();
+}
+
+// The cross itself, for the corner of whatever is being made.
+function _dropX(alertId, what) {
+  const b = el('button', 'mv3-wk-drop', '✕');
+  b.type = 'button';
+  b.title = 'Stop waiting for ' + what + '. It was paid for when it was asked for - this does not'
+    + ' get that back; it takes the row out of Alerts and stops the app expecting a picture.';
+  b.disabled = !alertId || !!_dropping;
+  b.addEventListener('click', (e) => { e.stopPropagation(); _dropRow(alertId, what); });
+  return b;
 }
 
 // A frame of the pool for this line, by hand - or '' to hand the line back to the rule.
@@ -628,6 +730,7 @@ export function paint(host, ctx, api, head) {
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
   if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _rightAt.clear(); _tipHide(); }
+  _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
   if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
@@ -796,10 +899,17 @@ function _stage(host, id, spec) {
   // Blocked outranks done: a pool made before the character was taken off is not a field at rest.
   const done = !!spec.done && !spec.blocked;
   const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
-    + (spec.blocked ? ' is-blocked' : '') + (spec.half ? ' is-half' : ''));
+    + (spec.blocked ? ' is-blocked' : '') + (spec.half ? ' is-half' : '')
+    + (spec.work ? ' is-working' : ''));
   // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
   // 3 draw, 4 film - the order they actually work in, said once and visibly.
   if (spec.step) box.appendChild(el('span', 'mv3-wk-znum', String(spec.step)));
+  // DONE, beside the number, and it stays (the owner, 2026-09-23 - a mark that flashes for two
+  // seconds is a mark you miss). The border says the same thing without a word; the word is for
+  // the moment you look up and want to be told.
+  if (done && spec.step) box.appendChild(el('span', 'mv3-wk-zdone', 'done'));
+  // ...and while there IS work in it, the bottom line of the frame fills up (N3).
+  if (spec.work) _barWatch(box, spec.work);
   // A shelf has no number and no button: it is not a step, it is where what was made lands.
   const head = el('div', 'mv3-wk-stage-head');
   head.appendChild(el('span', '', spec.name));
@@ -828,6 +938,28 @@ function _genButton(foot, spec) {
   if (spec.on) b.addEventListener('click', spec.on);
   foot.appendChild(b);
   return b;
+}
+
+// HOW FAR THE SET HAS GOT: the frames that have landed, and for each one still being drawn, its
+// own share by the estimate. The whole is what was asked for.
+function _framesPart(p) {
+  const s = _standing(p);
+  const asked = Math.max(1, s.framesAsked);
+  let got = s.frames;
+  for (const d of _drawing.values()) got += _byTime(d.startedAt, 'frame');
+  // The planner is thinking: it is one call before any frame exists, and it is a tenth of the wait.
+  if (_planning && !_drawing.size) return Math.min(0.1, _byTime(_planAt, 'tag') * 0.1);
+  return Math.min(1, got / asked);
+}
+// ...and the same for the clips. The place and the prompts happen before any clip is asked for,
+// and they are short: they hold the first tenth.
+function _clipsPart(p, lines) {
+  const live = _live(lines);
+  const want = live.length || 1;
+  if (!_clipping.size) return Math.min(0.1, _byTime(_writeAt, 'tag') * 0.1);
+  let got = live.filter((l, i) => _clipState(p, l, i) === 'ok').length;
+  for (const c of _clipping.values()) got += _byTime(c.startedAt, 'clip');
+  return Math.min(1, got / want);
 }
 
 // Where the script stands. The frames are a set, not a line each: what the pool holds over what
@@ -999,6 +1131,8 @@ function _stageMood(host, p, lines) {
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
   const { body } = _stage(host, 'mood', {
     step: 1, half: true, bare: true,     // its button stands on the mood's own line, not in a foot
+    // One call to an agent has no halfway point, so this fills by an estimate that learns (N3).
+    work: g.tagging ? () => _byTime(g.tagAt, 'tag') : null,
     name: 'mood', sub: 'and the tags of the read', done,
     summary: want.length ? want.length + (want.length === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
   });
@@ -1044,6 +1178,10 @@ function _stageVoice(host, p, lines) {
   const untagged = VOICE.untagged(p).length;
   const { body, foot } = _stage(host, 'voice', {
     step: 2, half: true,
+    // Counted, when there is a batch: every line that lands moves it. One line read by hand has
+    // nothing to count, so that one goes by the estimate (N3).
+    work: g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
+      : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
     name: 'voice', sub: 'ElevenLabs v3', done,
     summary: read + '/' + live.length + ' read',
   });
@@ -1088,6 +1226,8 @@ function _stageFrames(host, p) {
   const s = _standing(p);
   const { body, foot } = _stage(host, 'frames', {
     step: 3, half: true,
+    // The frames that have landed, plus how far the ones still drawing have got (N3).
+    work: (_planning || _drawing.size) ? () => _framesPart(p) : null,
     name: 'first frames', sub: 'a set for the video', done: s.framesDone,
     blocked, why: missing.join(' and '),
     summary: s.frames + '/' + s.framesAsked + ' drawn' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
@@ -1246,7 +1386,12 @@ function _shelfFrames(host, p) {
     b.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicture({ src: fr.path, name: 'frame ' + (fr.n || ''), rows: fr.prompt ? [['prompt', fr.prompt]] : [] }); });
     strip.appendChild(b);
   }
-  for (let k = 0; k < _drawing.size; k++) strip.appendChild(el('div', 'mv3-wk-fsetfr is-busy', 'drawing…'));
+  // One tile per frame in flight - and each one knows its own row, so it can be let go of (N1).
+  for (const [alertId] of _drawing) {
+    const tile = el('div', 'mv3-wk-fsetfr is-busy', 'drawing…');
+    tile.appendChild(_dropX(alertId, 'this frame'));
+    strip.appendChild(tile);
+  }
   body.appendChild(strip);
 }
 
@@ -1282,6 +1427,9 @@ function _stageVideo(host, p, lines) {
   const done = !!motion && live.length > 0 && written === live.length;
   const { body, foot } = _stage(host, 'video', {
     step: 4, half: true,
+    // The clips that have landed, plus the ones in flight; the place and the prompts, which come
+    // first and are quick, go by the estimate of a clip (N3).
+    work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done,
     blocked: !!why, why,
     summary: written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
@@ -1937,8 +2085,11 @@ async function _followClip(i, alertId) {
     });
     if (_ctx && _ctx.reloadProject) await _ctx.reloadProject();
   } catch (e) {
-    _readErr = 'Fragment ' + (i + 1) + ': the clip failed - ' + e.message;
+    if (!_dropped.has(alertId)) _readErr = 'Fragment ' + _no(((_ctx && _ctx.project && _ctx.project.lines) || []), i) + ': the clip failed - ' + e.message;
   }
+  _dropped.delete(alertId);
+  const was = _clipping.get(i);
+  if (was && was.startedAt) _paceSaw('clip', Date.now() - was.startedAt);    // the next estimate (N3)
   _clipping.delete(i);
   if (!_clipping.size) endProgress('clip', _readErr ? _readErr : undefined);
   if (_ctx) _ctx.repaint();
@@ -1997,8 +2148,11 @@ function _clipCol(p, l, i, rs, take) {
     img.src = c.thumb;
     box.appendChild(img);
   } else {
-    box.appendChild(el('span', '', 'no clip'));
+    box.appendChild(el('span', '', _clipping.has(i) ? 'making…' : 'no clip'));
   }
+  // The cross, while this fragment's clip is being made (N1): the longest wait in the workshop,
+  // and the one most worth being able to walk away from.
+  if (_clipping.has(i)) box.appendChild(_dropX((_clipping.get(i) || {}).alertId, 'this clip'));
   if (c && c.thumb) {
     // Pressed, it goes ON the stage - it does not start (the owner, 2026-09-22). A thumbnail picks
     // which of the two the stage shows, the frame or the clip, and nothing else; PLAYING is a press
