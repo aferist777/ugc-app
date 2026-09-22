@@ -871,7 +871,10 @@ function _filmTick() {
 }
 
 /**
- * Play a film on the borrowed stage.
+ * Put a film on the borrowed stage. It does NOT start (phase Y2, the owner 2026-09-22): opening a
+ * fragment should show its clip, not play it at you. The first frame stands with a triangle on it,
+ * and `filmPlay` - a press on the thumbnail, or on the stage itself - is what starts it.
+ *
  * @param src      the clip, or '' to take it off
  * @param caption  a line under it, as a still has
  */
@@ -905,7 +908,6 @@ export function showFilm(src, caption) {
     if (!_film || _film.el !== el) return;
     _film.box = null;
     if (_on) _paint();
-    filmPlay(true);
   });
   el.addEventListener('ended', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });
   el.addEventListener('error', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });

@@ -2065,6 +2065,8 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
   flex:0 0 auto; width:56px; height:100px; padding:0; border-radius:var(--r-xs); overflow:hidden; cursor:pointer;
   border:1px solid var(--border-soft); background:var(--bg); color:var(--muted); font:600 9.5px/1.2 var(--font);
 }
+.mv3-wk-fsetfr{transition:border-color .12s var(--ease)}
+.mv3-wk-fsetfr:hover{border-color:var(--gold)}
 /* Dragged into order: the one being carried fades, the one it would land on lights its left edge. */
 .mv3-wk-fsetfr.is-dragging{opacity:.4}
 .mv3-wk-fsetfr.is-over{box-shadow:-3px 0 0 0 var(--gold)}
@@ -2103,7 +2105,11 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 }
 .mv3-wk-fmedia.is-empty{border-style:dashed; border-color:var(--border); color:var(--muted); font:600 9.5px/1 var(--font)}
 .mv3-wk-fmedia img{width:100%; height:100%; object-fit:cover; display:block}
-.mv3-wk-fmedia.is-pose{background:#dfe3e8}
+/* PRESSABLE, AND IT SAYS SO (Y4, the owner 2026-09-22): the frame and the clip of a fragment put
+   themselves on the stage when pressed, and nothing used to hint at it. A box with nothing in it is
+   not pressable, so it gets neither the hand nor the frame. */
+.mv3-wk-fmedia:not(.is-empty){cursor:pointer; transition:border-color .12s var(--ease)}
+.mv3-wk-fmedia:not(.is-empty):hover{border-color:var(--gold)}
 .mv3-wk-vmore.is-media{align-self:stretch; text-align:center}
 .mv3-wk-fcap{font:400 9.5px/1.35 var(--font); color:var(--muted); text-align:center}
 .mv3-wk-fcap.is-why{color:var(--warn, oklch(.72 .15 75))}
@@ -2114,7 +2120,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* The clips a fragment has, under its grid (phase F4): a row per take, with its poster, and the
    one it is set to marked. A row is a button - pressing it makes that take the fragment's clip. */
 .mv3-wk-vrow.is-take{width:100%; cursor:pointer; text-align:left; color:var(--ink); font:inherit}
-.mv3-wk-vrow.is-take:hover{border-color:var(--primary)}
+.mv3-wk-vrow.is-take:hover{border-color:var(--gold)}
 .mv3-wk-vrow.is-take.is-on{cursor:default}
 .mv3-wk-vshot{flex:0 0 auto; width:34px; height:60px; object-fit:cover; border-radius:var(--r-xs); display:block; background:var(--bg)}
 
@@ -2160,6 +2166,5 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-fdot.is-busy{background:var(--primary); border-color:var(--primary); animation:mv3-wk-pulse 1.1s ease-in-out infinite}
 @keyframes mv3-wk-pulse{0%,100%{opacity:1}50%{opacity:.25}}
 .mv3-wk-fmedia.is-busy{border-color:var(--primary); border-style:solid}
-.mv3-wk-fmedia:not(.is-empty){cursor:zoom-in}
 /* The stamp-sized strip of frames under a fragment went with the picker above (.mv3-wk-fpick): a
    frame is chosen by looking at it on the stage, not at a 20px sliver of it. */

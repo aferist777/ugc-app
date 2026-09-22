@@ -347,8 +347,11 @@ function _stage(chosen) {
   const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
     // A clip PLAYS here (X4); everything else is a picture.
-    if (pic.film) PV.showFilm(pic.film, pic.caption);
-    else PV.showStill(pic.src, pic.caption);
+    if (pic.film) {
+      PV.showFilm(pic.film, pic.caption);
+      // Only when the panel says the person just asked for it (Y2).
+      if (pic.play) PV.filmPlay(true);
+    } else PV.showStill(pic.src, pic.caption);
     // A picture that can be REFRAMED brings a selection with it (V9): the panel says the shape - the
     // project's format - and this puts the frame on the stage and the acts along its foot. The order
     // matters: `showStill` with a new picture drops any selection, so the crop is asked for after it.

@@ -195,9 +195,18 @@ function _paintList(list) {
     go.title = s.archived
       ? 'Put it back in the library'
       : 'Make a project from this scenario and open it';
-    go.addEventListener('click', (e) => {
+    go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
-      if (s.archived) _archive(s, false); else _use(s.id, go);
+      if (s.archived) return _archive(s, false);
+      go.disabled = true;
+      go.textContent = '…';
+      try {
+        await _use(s.id);
+      } catch (err) {
+        go.disabled = false;
+        go.textContent = 'use';
+        alert('Could not make the project: ' + err.message);
+      }
     });
     acts.appendChild(go);
     row.appendChild(acts);
@@ -234,7 +243,7 @@ function _rowMenu(ev, s, row) {
   };
 
   item('open', 'read and edit the text', () => openForm(s));
-  if (!s.archived) item('use', 'make a project from it', () => _use(s.id, null));
+  if (!s.archived) item('use', 'make a project from it', () => _use(s.id).catch(e => alert('Could not make the project: ' + e.message)));
   if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
   else item('archive', 'out of the list, kept', () => _archive(s, true));
   // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
@@ -272,22 +281,21 @@ async function _archive(s, yes) {
 // the start: the project itself (its own copy of the lines), and the EMPTY timeline it will be
 // assembled into, keyed to it. Without that second one, a project made today would be invisible
 // here until its first assembly, and tomorrow there would be no way back into it.
-async function _use(scenarioId, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  try {
-    const p = await API.project(scenarioId);
-    const d = await fetch('/api/mv3/timeline/new', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: p.id }),
-    }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
-    stop();                               // the picker has done its job
-    await Store.open(d.key);
-    WK.setStep('setup');
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'use'; }
-    alert('Could not make the project: ' + e.message);
-  }
+// It THROWS when it cannot (phase Y1). It used to swallow its own failure into an `alert`, which
+// meant the window that called it could not tell success from failure either: the button stayed
+// down and the window stayed open with nothing said in it. Who called this is who knows where to
+// put the news - a button in the list, a line in the form.
+async function _use(scenarioId) {
+  const p = await API.project(scenarioId);
+  const d = await fetch('/api/mv3/timeline/new', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: p.id }),
+  }).then(r => r.json());
+  if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
+  stop();                               // the picker has done its job
+  await Store.open(d.key);
+  WK.setStep('setup');
+  return d.key;
 }
 
 // ── The scenario itself, read or written ────────────────────────────────────
@@ -462,7 +470,11 @@ export async function openForm(summary) {
     use.disabled = true;
     try {
       const saved = await store();
-      await _use(saved.id, null);
+      await _use(saved.id);
+      // THE WINDOW GOES (phase Y1, the owner 2026-09-22). `_use` leaves the picker and opens the
+      // project on its step, and this modal used to stay on top of it - with the page's shortcuts
+      // switched off underneath, because a modal layer holds them.
+      _closeForm(ov, layer);
     } catch (e) {
       note.textContent = e.message;
       use.disabled = false;

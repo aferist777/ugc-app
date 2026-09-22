@@ -92,6 +92,10 @@ let _setPick = '';                        // a frame of the pool pressed in the 
 // fragment is opened - each is looked at on its own terms.
 let _stagePick = '';                      // '' | 'clip' | 'frame'
 let _stageFor = -2;                       // the fragment _stagePick belongs to
+// A press on the clip's thumbnail is an ask to PLAY it, and only that press is (Y2). One-shot: the
+// stage is told once and the flag goes, so a repaint - a poll, a save, a row landing - never starts
+// the film again behind the person's back.
+let _stagePlay = false;
 const FRAME_ESTIMATE_MS = 75000;          // what the countdown starts from; it learns from real runs
 
 function _urlLine() {
@@ -277,13 +281,20 @@ function _mark() {
     b.classList.toggle('is-playing', !!is);
   });
 }
-function _playBtn(src, what) {
+// `then` is what the row hands over: the read it plays belongs to a fragment, and pressing play is
+// a way of saying "this one" (Y5). The press does NOT reach the row - it would close an open
+// fragment - so the opening is done here instead.
+function _playBtn(src, what, then) {
   const b = el('button', 'mv3-wk-vplay is-read', '▶');
   b.type = 'button';
   b.disabled = !src;
   b.dataset.src = src || '';
   b.title = src ? 'Play ' + what : 'Not read yet';
-  b.addEventListener('click', (e) => { e.stopPropagation(); _play(src); });
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _play(src);
+    if (then) then();
+  });
   return b;
 }
 
@@ -675,6 +686,10 @@ export function paint(host, ctx, api) {
   // The countdown belongs to the set being drawn, on the stage of the general zone.
   // The countdown belongs to whatever is being made where you are looking: the clip of the open
   // fragment, or - with no fragment open - the set being drawn in the general zone.
+  // The read that is playing keeps its ❚❚ (Y5). The buttons are built fresh by every paint and the
+  // audio element is not, so without this a repaint - and pressing play is now one - draws every
+  // button idle while the sound goes on.
+  _mark();
   const mine = _open >= 0 ? _clipping.get(_open) : null;
   const place = mine ? 'clip' : (_open < 0 && _drawing.size ? 'frames' : null);
   onlyHere(place);
@@ -1282,7 +1297,17 @@ function _row(p, l, i) {
   row.appendChild(meta);
   // The read, playable from the row (owner, 2026-09-21): hearing a line is how it is judged, and
   // the row is where the eye already is.
-  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+  // Hearing a line is judging it, so the fragment it belongs to comes forward on the right. It
+  // OPENS - it never closes the one already open, which is what a press on the row itself does.
+  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read', () => {
+    if (_open === i) return;
+    _tipHide();
+    _open = i;
+    _picking = false;
+    _pickView = '';
+    _remember();
+    _ctx.repaint();
+  }));
 
   // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
   // and the row is read for its words.
@@ -1731,7 +1756,7 @@ function _clipCol(p, l, i, rs, take) {
     // Pressed, it PLAYS on the stage (X4) - a four-second clip is not worth a window over the whole
     // panel. The window is still there on the right button, for looking at one frame of it closely.
     box.title = 'Play it on the stage; right-click to open it large';
-    box.addEventListener('click', () => { _stagePick = 'clip'; _ctx.repaint(); });
+    box.addEventListener('click', () => { _stagePick = 'clip'; _stagePlay = true; _ctx.repaint(); });
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       showPicture({ src: c.thumb, name: 'clip of fragment ' + (i + 1), rows: [['seconds', c.dur ? c.dur.toFixed(1) : ''], ['said', c.said || '']] });
@@ -1839,7 +1864,11 @@ export function openPicture(p) {
   const fr = _frameFor(p, l, _open).v;
   const name = 'fragment ' + (_open + 1);
   // The clip, as a film with its own sound, unless the frame was asked for (X4).
-  if (c && c.path && _stagePick !== 'frame') return { film: c.path, caption: name + ' · clip' };
+  if (c && c.path && _stagePick !== 'frame') {
+    const play = _stagePlay;
+    _stagePlay = false;                   // asked once, answered once
+    return { film: c.path, caption: name + ' · clip', play };
+  }
   if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: name + (c ? ' · frame' : '') };
   if (c && c.thumb) return { src: c.thumb, caption: name + ' · clip' };
   return null;

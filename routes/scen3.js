@@ -4364,6 +4364,18 @@ const MOTION_RULES =
   + ' THE GAZE: the person is speaking into the lens and holds it. Now and then, where a thought'
   + ' turns or a phrase lands, the eyes flick away for a beat and come straight back to the lens.'
   + ' They never settle anywhere else and never address anyone off camera.';
+// THE TALKING IS VISIBLE (phase Y3, the owner 2026-09-22). This stands at the HEAD of every prompt,
+// the way the place's own movement stands at its foot (X6): one sentence, the same for every mood,
+// written by us and not by the agent, so it cannot be forgotten or reworded into nothing.
+//
+// Being honest about what it can do: Kling avatar drives the mouth from the AUDIO - the lipsync is
+// the sound's, not the prompt's. What a sentence at the front can do is stop the model settling on a
+// nearly-closed mouth and a still jaw, which is what "the lips barely move" looks like. If this is
+// not enough on screen, the next thing to try is the model tier, not more words.
+const MOTION_LIPS =
+  'The mouth articulates the speech clearly: the lips shape every syllable and the jaw moves with the'
+  + ' words, so the talking is plainly visible on the face.';
+
 // The one shot size that has a hand in the shot: it is holding the phone, and it must not wander.
 const MOTION_SELFIE =
   ' THIS IS A SELFIE: the arm holding the phone stays where it is for the whole clip - it does not'
@@ -4380,6 +4392,9 @@ function _motionStale(line, envMotion) {
   const shot = line && line.shot;
   if (!shot || !shot.motion) return true;
   if (String(shot.said || '') !== String((line && line.text) || '')) return true;
+  // Written before the articulation sentence existed (Y3), or before the place had one (X6): either
+  // half being out of date makes it a prompt that is no longer what we send.
+  if (String(shot.motion).indexOf(MOTION_LIPS) < 0) return true;
   return !!envMotion && String(shot.motion).indexOf(envMotion) < 0;
 }
 
@@ -4470,7 +4485,10 @@ async function _writePrompts(id, want) {
       // renderer was never hearing about the background at all. The place's own sentence is added
       // here, word for word as it stands on the place, so the field in the fragment shows exactly
       // what is sent and editing that field edits the whole of it.
-      const motion = envMotion && said.indexOf(envMotion) < 0 ? said + ' ' + envMotion : said;
+      const body = envMotion && said.indexOf(envMotion) < 0 ? said + ' ' + envMotion : said;
+      // The articulation goes FIRST, the place LAST, and what the agent wrote sits between them -
+      // one text, which is what the fragment shows and what the renderer is sent.
+      const motion = body.indexOf(MOTION_LIPS) < 0 ? MOTION_LIPS + ' ' + body : body;
       write[i] = _normShot({
         motion, motionAgent: motion, motionEdited: false,
         said: String(lines[i].text || ''), mood: mood.id, at: now,
