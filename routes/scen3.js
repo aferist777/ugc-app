@@ -1096,10 +1096,28 @@ function _poseFor(poseId, framingId) {
 
 // Pull the labelled blocks out of the analysis. Anything the model puts before the
 // first label is kept as LIGHTING, which is what a label-less answer used to be.
-const _BLOCK_KEYS = ['POSE', 'CHARACTER', 'ENVIRONMENT', 'LIGHTING', 'DIRECTION'];
+const _BLOCK_KEYS = ['POSE', 'CHARACTER', 'CLOTHES', 'ENVIRONMENT', 'LIGHTING', 'DIRECTION'];
+// The garments of the CLOTHES block, one per line, each with where it is worn in front of it
+// (phase N7). Kept as lines because the frame prompt picks among them by where they are.
+const CLOTHES_WHERE = ['HEAD', 'TOP', 'BOTTOM', 'FEET', 'HANDS'];
+function _clothesLines(raw) {
+  const text = String(raw || '');
+  const at = text.search(/^\s*\**\s*CLOTHES\s*\**\s*:/im);
+  if (at < 0) return '';
+  const rest = text.slice(at).replace(/^\s*\**\s*CLOTHES\s*\**\s*:/i, '');
+  const next = rest.search(new RegExp('^\\s*\\**\\s*(' + _BLOCK_KEYS.join('|') + ')\\s*\\**\\s*:', 'im'));
+  const body = next < 0 ? rest : rest.slice(0, next);
+  return body.split(/\r?\n/)
+    .map(l => l.replace(/^[\s*•\-–]+/, '').trim())
+    .filter(l => new RegExp('^(' + CLOTHES_WHERE.join('|') + ')\\b', 'i').test(l))
+    .map(l => l.replace(/\s+/g, ' ').slice(0, 300))
+    .slice(0, 12)
+    .join('\n');
+}
+
 function _splitBlocks(raw) {
   const text = String(raw || '');
-  const out = { pose: '', character: '', environment: '', lighting: '', direction: '' };
+  const out = { pose: '', character: '', clothes: '', environment: '', lighting: '', direction: '' };
   const re = new RegExp('^\\s*\\**\\s*(' + _BLOCK_KEYS.join('|') + ')\\s*\\**\\s*:', 'gim');
   const hits = [];
   let m;
@@ -2743,6 +2761,12 @@ function _normFrameRef(r) {
   return {
     look: String(r.look), place: String(r.place),
     character: str(r.character, 1500), environment: str(r.environment, 1500), lighting: str(r.lighting, 1200),
+    // One garment a line, where it is worn in front (N7).
+    clothes: str(r.clothes, 3000),
+    // Which questions the reading answered: 2 since the clothes were asked for (N7). An older one is
+    // read again once; one that is new and simply has no clothes lines is NOT, or a look the agent
+    // cannot list would cost a vision call on every set for ever.
+    v: Number(r.v) || 1,
     at: str(r.at, 40),
   };
 }
@@ -3247,18 +3271,39 @@ function _faceCovered(proj) {
   return clause ? clause.slice(0, 300) + '.' : '';
 }
 
+// WHICH GARMENTS A SHOT SIZE SHOWS (N7): a selfie is the head and the top, a half body adds the
+// hands, a full body is everything. Anything else would name a thing the frame must not contain.
+const CLOTHES_BY_SHOT = { selfie: ['HEAD', 'TOP'], half: ['HEAD', 'TOP', 'HANDS'], full: CLOTHES_WHERE };
+function _clothesShown(proj, setId) {
+  const lines = String(((proj && proj.frameRef) || {}).clothes || '').split('\n').filter(Boolean);
+  if (!lines.length) return '';
+  const where = CLOTHES_BY_SHOT[setId] || CLOTHES_WHERE;
+  const keep = lines.filter(l => where.some(w => new RegExp('^' + w + '\\b', 'i').test(l)));
+  return keep.map(l => l.replace(/\s*$/, '').replace(/([^.!?])$/, '$1.')).join(' ');
+}
+
 // How the look and the place read - the person to keep, the place, its light - asked once for a look
 // and a place and kept on the project, so every frame of the video describes them the same way.
+const FRAME_READ_V = 2;                 // 2: the reading lists the clothes (N7)
 async function _frameRef(projectId, cast) {
   const p = PROJECTS.get(projectId);
   const have = p && _normFrameRef(p.frameRef);
-  if (have && have.look === cast.obrazImage && have.place === cast.locationImage) return have;
+  // A reading made before the clothes were asked for (N7) is read again, once.
+  if (have && have.look === cast.obrazImage && have.place === cast.locationImage && have.v >= FRAME_READ_V) return have;
   const [lookUrl, placeUrl] = await Promise.all([_hostLocal(cast.obrazImage), _hostLocal(cast.locationImage)]);
   const ask = 'IMAGE 1 is a character reference sheet, IMAGE 2 is an empty location.'
     + ' Answer in exactly the labelled blocks below, each on its own line, each one plain sentences'
     + ' with no lists and no extra headings.'
     + '\nCHARACTER: describe the person on the sheet - face, hair, build, skin tone and the clothing they'
     + ' are wearing, as the traits to preserve.'
+    // THE CLOTHES, garment by garment (phase N7, the owner 2026-09-23). The frame prompt checks
+    // them against the sheet, and picks the ones a shot size shows - so each line says where it is
+    // worn, and the details that drift first (the colour of a logo, the words of a print) are asked
+    // for exactly.
+    + '\nCLOTHES: every garment and accessory the person wears, ONE PER LINE, each line starting with'
+    + ' where it is worn - HEAD, TOP, BOTTOM, FEET or HANDS - then a colon, then the garment and its'
+    + ' colours, and EXACTLY every logo, print, pattern or lettering on it: its colour, what it shows or'
+    + ' what it says, and where on the garment it sits. Nothing else on these lines.'
     + '\nENVIRONMENT: describe the location - what kind of place it is, its architecture, surfaces, colours'
     + ' and depth, and in one clause where in the frame there is clear space for a person.'
     + '\nLIGHTING: describe the location\'s light precisely enough to composite a person into it convincingly -'
@@ -3273,13 +3318,16 @@ async function _frameRef(projectId, cast) {
   const ref = _normFrameRef({
     look: cast.obrazImage, place: cast.locationImage,
     character: blocks.character, environment: blocks.environment, lighting: blocks.lighting,
+    clothes: _clothesLines(raw),
+    v: FRAME_READ_V,
     at: new Date().toISOString(),
   });
   // Kept on the project in one burst, touching nothing else.
   const list = _loadProjects();
   const q = list.find(x => String(x.id) === String(projectId));
   if (q) { q.frameRef = ref; _saveProjects(list); }
-  console.log('[scen3/frames] read the look and the place: character ' + ref.character.length + 'ch, environment '
+  console.log('[scen3/frames] read the look and the place: character ' + ref.character.length + 'ch, clothes '
+    + (ref.clothes ? ref.clothes.split('\n').length : 0) + ' lines, environment '
     + ref.environment.length + 'ch, lighting ' + ref.lighting.length + 'ch');
   return ref;
 }
@@ -3361,7 +3409,8 @@ async function _submitSetFrame(b) {
   urls.push(refs.look || await _hostLocal(cast.obrazImage), refs.place || await _hostLocal(cast.locationImage));
 
   // THE DIET (the owner, 2026-09-21). What the pictures already say is not said again in words: the
-  // clothes and the face are the sheet's, the room is the photograph's. Only the LIGHT is kept in
+  // face is the sheet's, the room is the photograph's. (The CLOTHES came back in 2026-09-23 as a
+  // checklist - see N7 below - because their small details drifted without words to hold them.) Only the LIGHT is kept in
   // words - a compositing instruction, not a description - and only when there is one. What is left
   // is the shot size, the roles of the references, the pose, the moment, and the shot size again.
   // The shot size is named at the top and SPELLED OUT at the end: saying the whole rule twice was a
@@ -3379,6 +3428,15 @@ async function _submitSetFrame(b) {
     + ' Keep that covering exactly as it is on the reference sheet, over the whole face it covers.'
     + ' Do NOT invent a face, do not uncover it, do not show a mouth or a nose that the sheet does not show,'
     + ' and do not treat the covered head as the mannequin\'s faceless head to be replaced.');
+  // THE CLOTHES, AS A CHECKLIST (phase N7, the owner 2026-09-23). The diet kept every word about the
+  // look out of this prompt, and the small things drifted - three frames of three drew the red
+  // lettering on a grey hoodie black, or not at all. The sheet is still the source; these words only
+  // name what must survive it. And only what this shot size SHOWS: trainers named in a waist-up
+  // frame pull the picture back to full height, which is what the framing check below exists to stop.
+  const wear = _clothesShown(proj, set.id);
+  if (wear) parts.push('THE CLOTHES - copy them from the reference sheet exactly as they are there;'
+    + ' these words are only a checklist of what must survive: ' + wear
+    + ' Every logo, print and lettering keeps its colour, its content and its place on the garment.');
   if (pose && pose.desc) parts.push('The pose being kept - the person is ' + pose.desc + '.');
   if (cam) parts.push('The lens of the shot: ' + cam.prompt + '.');
   if (moment) parts.push('THE MOMENT - this frozen instant: ' + moment);
