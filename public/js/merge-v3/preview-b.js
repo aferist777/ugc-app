@@ -768,7 +768,13 @@ function _fit() {
   const w = Math.max(1, Math.round(r.width * dpr));
   const h = Math.max(1, Math.round(r.height * dpr));
   if (w === CW && h === CH && _cv.width === w) return;
-  if (CW && CH && (_still || _pair)) {
+  // A PICTURE keeps where it was pushed: the view moves with half the change, so what was in
+  // the middle stays in the middle. THE PAIR does not - its two halves are measured against the
+  // surface, while the dashed frames and the words are drawn from the surface as it is NOW, so a
+  // view left over from the old size slid them off the stage as the sash moved (the owner,
+  // 2026-09-22). It re-centres instead: nothing about a pair is worth keeping across a resize.
+  if (CW && CH && _pair) { _view = { z: 1, x: 0, y: 0 }; _pair.boxes = null; }
+  else if (CW && CH && _still) {
     _view.x += (w - CW) / 2;
     _view.y += (h - CH) / 2;
   }

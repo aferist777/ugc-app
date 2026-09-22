@@ -1694,7 +1694,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* The right column of the script (js/merge-v3/wk-fragments.js, .is-guide.is-frag) is a flex COLUMN
    with room at its edges, and everything in it keeps its own height - a one-line div or a textarea
    is the first thing a full column squashes to nothing - while the column scrolls instead. */
-.mv3-wk-half.is-guide{flex:1 1 auto; min-width:0; padding:9px 10px; overflow-y:auto}
+.mv3-wk-half.is-guide{order:1; flex:1 1 auto; min-width:0; padding:9px 10px; overflow-y:auto}
 .mv3-wk-half.is-guide > *{flex:0 0 auto}
 .mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
@@ -1927,11 +1927,13 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-stage.is-blocked .mv3-wk-znum{filter:grayscale(1)}
 /* Half a row is not wide enough for a name and a summary on one line - nor for what the
    `generate` is about beside the button, so that gets a line of its own and wraps. */
-.mv3-wk-stage.is-half .mv3-wk-stage-head{flex-wrap:wrap; row-gap:2px}
-.mv3-wk-stage.is-half .mv3-wk-stage-head .mv3-wk-vsub{flex:1 1 100%}
+/* What the field is stays BESIDE its name (the owner, 2026-09-22) - it wrapped under it while
+   the fields were narrow, and a line of its own for three words was a line wasted. */
+.mv3-wk-stage.is-half .mv3-wk-stage-head{flex-wrap:nowrap}
 .mv3-wk-stage.is-half .mv3-wk-vrow{flex-wrap:wrap; row-gap:4px}
-.mv3-wk-stage.is-half .mv3-wk-stage-foot{flex-wrap:wrap; row-gap:5px}
-.mv3-wk-stage.is-half .mv3-wk-stage-foot .mv3-wk-vsub{flex:1 1 100%; white-space:normal; text-align:left}
+/* What a press will cost stands on the button's own line, just left of it (the owner,
+   2026-09-22): the two belong together, and the right-hand edge they share is the mannequin's. */
+.mv3-wk-stage-foot .mv3-wk-vsub{flex:0 1 auto; text-align:right}
 /* HOW THE FIRST-FRAMES FIELD FOLDS IN HALF A ROW. Its menus wear their names to the LEFT at full
    width, which at 200px leaves the menu itself too narrow to read a word of: the name goes ABOVE
    it instead, and each menu takes the whole line. The mannequin stands beside the wishes rather
@@ -1944,6 +1946,9 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
    only while the drawer was shut, and there is nothing to shut now. Blocked - nothing to work on
    yet - dims the whole field and says what it waits for. */
 .mv3-wk-stage-head{display:flex; align-items:baseline; gap:8px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold); user-select:none}
+/* The name of the field never wraps: it is two words at most, and what it says about itself
+   beside it is the thing that gives way. */
+.mv3-wk-stage-head > span:first-child{flex:0 0 auto; white-space:nowrap}
 .mv3-wk-stage-head .mv3-wk-vsub{text-transform:none; letter-spacing:0; font-weight:400; flex:1 1 auto; min-width:0}
 .mv3-wk-stage.is-blocked{opacity:.55}
 .mv3-wk-stage.is-blocked .mv3-wk-stage-head .mv3-wk-vsub{color:var(--warn, oklch(.72 .15 75))}
@@ -1971,8 +1976,12 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 /* The script stands in a gold frame of its own (the owner, 2026-09-21), like the zones across from
    it: it is the one thing on this step that is set once and read all the way through. The frame is
    inside the column's own padding, and the list scrolls inside it. */
+/* THE SCRIPT STANDS ON THE RIGHT of the fields (the owner, 2026-09-22), which is the far side
+   from the preview - the preview is down the left of the window now (phase P), and the fields are
+   what the eye travels between. Markup order is unchanged; `order` is what swaps them. */
 .mv3-wk-half.is-frags{
-  flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; margin:2px 0 8px 9px; padding:8px 7px 8px;
+  order:2;
+  flex:0 0 min(300px, 46%); min-height:0; overflow:hidden; margin:2px 8px 8px 0; padding:8px 7px 8px;
   display:flex; flex-direction:column; gap:6px;
   border:1px solid var(--gold); border-radius:var(--r-sm);
 }
@@ -2115,18 +2124,21 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
    the wishes - one block, the mannequin as tall as the two together (the owner, 2026-09-21) - and
    the pool as a strip under it, the full width, every frame a door to the stage. */
 .mv3-wk-fsetrow{display:flex; gap:9px; align-items:stretch}
-/* The mannequin stands on the RIGHT of the menus (the owner, 2026-09-21), as tall as they are
-   together with the wishes under them. */
-.mv3-wk-fpose{flex:0 0 auto; width:54px; min-height:92px; border-radius:var(--r-xs); overflow:hidden; background:#dfe3e8; border:1px solid var(--border-soft)}
+/* The mannequin stands on the RIGHT of the menus (the owner, 2026-09-21), as tall as the three
+   of them and as WIDE as the `generate` button at the foot of the field (2026-09-22), so the
+   field has one right-hand edge instead of two. */
+.mv3-wk-fpose{flex:0 0 auto; width:76px; min-height:92px; border-radius:var(--r-xs); overflow:hidden; background:#dfe3e8; border:1px solid var(--border-soft)}
 .mv3-wk-fpose.is-empty{background:var(--bg)}
 .mv3-wk-fpose img{width:100%; height:100%; object-fit:cover; object-position:center top; display:block}
 .mv3-wk-fsetcol{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:4px}
-/* The wishes and the mannequin share the line under the menus, so the menus have the whole width
-   of the field to themselves (the owner, 2026-09-22 - the field is half a row now). */
-.mv3-wk-fwishrow{display:flex; align-items:stretch; flex-wrap:wrap; gap:9px; min-width:0}
-/* Side by side while there is room for both; in a field too narrow for that, the wishes take the
-   line and the mannequin stands under them - a field 60px wide is not a field to type in. */
-.mv3-wk-fwishrow .mv3-wk-ftext-in.is-wish{flex:1 1 120px; min-width:0; min-height:72px}
+/* The wishes stand under the menus AND the mannequin, the whole width of the field. */
+.mv3-wk-stage .mv3-wk-ftext-in.is-wish{min-height:58px}
+/* A line that holds a sentence and the button that acts on it: the mood's field. */
+.mv3-wk-fwishrow{display:flex; align-items:center; flex-wrap:wrap; gap:9px; min-width:0}
+/* Squeezed narrower than this the sentence becomes a ribbon one word wide, so the button drops
+   to its own line instead. */
+.mv3-wk-fwishrow.is-mood .mv3-wk-mood-about{flex:1 1 150px; min-width:0; margin:0}
+.mv3-wk-fwishrow.is-mood .mv3-wk-gen{margin-left:auto}
 .mv3-wk-fset{display:flex; gap:5px; overflow-x:auto; padding:2px 0; scrollbar-width:thin}
 .mv3-wk-fsetfr{
   position:relative;

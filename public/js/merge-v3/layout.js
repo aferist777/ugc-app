@@ -206,6 +206,19 @@ function _save() {
   } catch (e) { /* a private window */ }
 }
 
+/**
+ * THE MOST ROOM THERE IS FOR THE WORK (the owner, 2026-09-22). A new project is opened to be
+ * built, and building happens in the panel: the column takes everything the preview can spare and
+ * the timeline shrinks to its floor, which puts the corner at the far left and the very bottom.
+ * Saved like any drag, because it IS the arrangement from now on - until the next drag.
+ */
+export function roomForWork() {
+  _applyLeft(Number.MAX_SAFE_INTEGER);       // clamped to what the preview can spare
+  _applyTl(0);                               // ...and to the timeline's floor
+  _placeCross();
+  _save();
+}
+
 export function initLayout() {
   let open = null;
   try { open = localStorage.getItem(LS_OPEN); } catch (e) {}

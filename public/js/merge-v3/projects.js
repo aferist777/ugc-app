@@ -21,6 +21,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
+import { roomForWork } from './layout.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 function _own() { return document.getElementById('mv3-owner'); }
@@ -218,6 +219,7 @@ function _wireNew() {
       if (!d || !d.success) throw new Error((d && d.error) || 'refused');
       // Opening it is the point of having made it. The picker repaints off the store change.
       await Store.open(d.key);
+      roomForWork();                                  // a new project is opened to be worked on
       _note('');
     } catch (e) {
       _note(e.message);

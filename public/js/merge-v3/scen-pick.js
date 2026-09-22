@@ -30,7 +30,7 @@
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { askDelete } from './ask.js';
-import { setOpenColumn } from './layout.js';
+import { setOpenColumn, roomForWork } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
 
@@ -294,6 +294,7 @@ async function _use(scenarioId) {
   if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
   stop();                               // the picker has done its job
   await Store.open(d.key);
+  roomForWork();                        // a new talking head is opened to be built
   WK.setStep('setup');
   return d.key;
 }

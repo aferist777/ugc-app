@@ -961,12 +961,15 @@ function _stageMood(host, p, lines) {
   mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
   row.appendChild(mood);
   body.appendChild(row);
-  if (now && now.about) body.appendChild(el('div', 'mv3-wk-mood-about', now.about));
-  _genButton(foot, {
+  // The mood's own sentence and the button that acts on it share a line (the owner, 2026-09-22):
+  // the words say what this mood IS, the button marks the script up by it, and a count of the
+  // lines still to mark was a third thing said where two were enough - the frame already says
+  // whether there is work left in this field.
+  const under = el('div', 'mv3-wk-fwishrow is-mood');
+  if (now && now.about) under.appendChild(el('div', 'mv3-wk-mood-about', now.about));
+  body.appendChild(under);
+  _genButton(under, {
     label: g.tagging ? 'tagging…' : 'generate',
-    cap: !live.length ? '' : g.tagging ? '' : want.length
-      ? want.length + (want.length === 1 ? ' line' : ' lines') + ' to mark up'
-      : 'the script is marked up',
     disabled: g.busy || !_kit || !live.length || !want.length,
     title: !want.length ? 'Every line has its tags. Change the words of one and it comes back here.'
       : 'Read the script and put the [tags] of this mood between the words - '
@@ -1037,10 +1040,9 @@ function _stageFrames(host, p) {
   });
   const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
 
-  // The three menus across the top of the field, each on its line with its name over it, and
-  // under them the wishes with the mannequin of the chosen shot size beside them (the owner,
-  // 2026-09-22 - the field is half a row wide now, and a mannequin beside the MENUS left them too
-  // narrow to read a word of). The mannequin is next to the one field that can give up the width.
+  // The three menus down the left, each on its line with its name over it, and the mannequin of
+  // the chosen shot size beside them - as wide as the `generate` button under it, so the field
+  // has one right-hand edge (the owner, 2026-09-22). The wishes take the full width beneath both.
   const row = el('div', 'mv3-wk-fsetrow');
   const pose = set ? _poseById(set.poseId) : null;
   const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
@@ -1106,12 +1108,9 @@ function _stageFrames(host, p) {
   wish.disabled = _planning;
   wish.addEventListener('input', () => { _drafts.wish = wish.value; });
   wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
-  // The wishes and the mannequin, side by side at the foot of the block.
-  const under = el('div', 'mv3-wk-fwishrow');
-  under.append(wish, pic);
-  col.appendChild(under);
-  row.append(col);
+  row.append(col, pic);
   body.appendChild(row);
+  body.appendChild(wish);
 
   // The pool, the full width under the block: every frame as it came. A frame pressed goes on the
   // stage; pressed again, the stage shows the casting pair.
@@ -1234,7 +1233,9 @@ function _stageVideo(host, p, lines) {
   model.append(kling, seed);
   model.value = 'kling';
   model.disabled = _saving;
-  sets.append(tier, model);
+  // The model first and the quality after it (the owner, 2026-09-22): what makes the clip, then
+  // how good it is - the second only means anything once the first is read.
+  sets.append(model, tier);
   body.appendChild(sets);
 
   // HOW THE PLACE MOVES. One field, because it is one sentence about one picture - and it is the
@@ -1278,13 +1279,14 @@ function _stageVideo(host, p, lines) {
       : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + live.length + '…'
           : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+    // What this press will SPEND and how long the video is - and nothing else (the owner,
+    // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
+    // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
     cap: busy ? whole : [
       _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
-      !motion ? 'the place' : '',
-      willWrite ? willWrite + (willWrite === 1 ? ' prompt' : ' prompts') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
       whole,
-    ].filter(Boolean).join(' · ') || 'everything is made',
+    ].filter(Boolean).join(' · '),
     disabled: busy || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
     title: 'The place, then how the person moves on every line, then the clips of the fragments that'
       + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')

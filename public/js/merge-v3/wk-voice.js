@@ -140,10 +140,12 @@ export function paintRow(host, api) {
     row.appendChild(txt);
     row.appendChild(_pick(api, 'change'));
   } else if (!mine.length) {
+    // The button FIRST, then what it is about (the owner, 2026-09-22): there is nothing else in
+    // this row to press, and a sentence ending in a button reads as a caption to it.
+    row.appendChild(_pick(api, 'choose a voice'));
     row.appendChild(el('span', 'mv3-wk-vsub is-grow', rec
       ? (rec.name || 'This character') + ' has no voice yet - every line is read in it'
       : 'No voice yet - choose one for the project, or a character who has one'));
-    row.appendChild(_pick(api, 'choose a voice'));
   } else {
     row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
     const sel = el('select', 'mv3-wk-vsel');
