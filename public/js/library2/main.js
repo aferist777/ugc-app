@@ -183,7 +183,6 @@ function paintShelves() {
   $('l2-bar-label').textContent = SHELVES[_shelf] || '';
   $('l2-add-narrator').hidden = _shelf !== 'narrators';
   $('l2-add-source').hidden = _shelf !== 'sources';
-  $('l2-open-scenarios').hidden = _shelf !== 'scenarios';
   $('l2-write').hidden = _shelf === 'narrators';
   // Sources is the accordion; the other two shelves are lists in the plain area.
   const isSources = _shelf === 'sources';
@@ -824,12 +823,13 @@ function renderTopics(rec) {
     name.textContent = `${tp.projectName} · ${String(tp.text || '').length} chars of transcript`;
     f.appendChild(name);
     for (const u of used) {
-      const link = document.createElement('a');
-      link.className = 'l2-topic-used';
-      link.href = '/scenarios?s=' + encodeURIComponent(u.id);
-      link.textContent = u.title;
-      link.title = 'Open it on the Scenarios page';
-      f.appendChild(link);
+      // What was already written from this topic, named. Not a door any more: the page that read a
+      // scenario is gone, and a scenario is opened from its own shelf here or used in Merge.
+      const made = document.createElement('span');
+      made.className = 'l2-topic-used';
+      made.textContent = u.title;
+      made.title = 'A scenario written from this topic';
+      f.appendChild(made);
     }
     const sp = document.createElement('span');
     sp.className = 'sp';
@@ -1689,7 +1689,6 @@ function closeAll() {
 
   $('l2-add-source').addEventListener('click', openAddSource);
   $('l2-add-narrator').addEventListener('click', addNarrator);
-  $('l2-open-scenarios').addEventListener('click', () => { window.location.href = '/scenarios'; });
 
   // Writing without a source: the same column, entered directly. The topics column stays folded
   // with nothing in it, which is honest - there is no source to have topics.
@@ -1747,9 +1746,6 @@ function closeAll() {
   $('l2-nar-close').addEventListener('click', closeAll);
 
   $('l2-scen-close').addEventListener('click', closeAll);
-  $('l2-scen-open').addEventListener('click', () => {
-    if (_scen) window.location.href = '/scenarios?s=' + encodeURIComponent(_scen.id);
-  });
   $('l2-scen-del').addEventListener('click', async () => {
     if (!_scen) return;
     if (!confirm(`Delete "${_scen.title || 'untitled'}"? This cannot be undone.`)) return;

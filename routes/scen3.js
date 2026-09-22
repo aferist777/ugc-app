@@ -145,8 +145,6 @@ function _newId(list) {
 // because each record stores its own plain string.
 // ════════════════════════════════════════════════════════════════════════════
 
-const OPT_KINDS = ['verticals', 'products', 'roles'];
-
 function _saveOptions(o) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
   writeFileAtomic(OPT_FILE, JSON.stringify(o, null, 2));
@@ -205,18 +203,6 @@ router.get('/scen3/options', (_req, res) => {
 });
 
 // Removes one suggestion from one list. Body: { kind, value }.
-router.post('/scen3/options/delete', (req, res) => {
-  try {
-    const kind  = String((req.body || {}).kind  || '');
-    const value = String((req.body || {}).value || '').trim();
-    if (!OPT_KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'bad kind' });
-    if (!value) return res.status(400).json({ success: false, error: 'value required' });
-    const o = _loadOptions();
-    o[kind] = o[kind].filter(x => String(x).trim().toLowerCase() !== value.toLowerCase());
-    _saveOptions(o);
-    res.json({ success: true, options: _sorted(o) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // The narrator's gender lives on the single role entry (one presenter).
 const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCase();
@@ -354,20 +340,6 @@ router.countByLib = function countByLib(lib) {
 };
 
 // ── Duplicate: same content, fresh id + dates, " copy" appended to the title ─
-router.post('/scen3/scenarios/:id/duplicate', (req, res) => {
-  try {
-    const list = _load();
-    const src  = list.find(x => String(x.id) === String(req.params.id));
-    if (!src) return res.status(404).json({ success: false, error: 'not found' });
-    const now  = new Date().toISOString();
-    const copy = _norm({
-      ...src, id: _newId(list), title: `${src.title} copy`, createdAt: now, updatedAt: now,
-    }, now);
-    list.unshift(copy);
-    _save(list);
-    res.json({ success: true, scenario: _full(copy) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // ── Delete one scenario (single id only, never a bulk wipe) ─────────────────
 router.delete('/scen3/scenarios/:id', (req, res) => {
@@ -431,26 +403,6 @@ function _previewTarget(hit) {
 // POST { path } -> { path: '/media/.../preview/<name>.jpg' }
 // Returns the source path unchanged when it is already small enough to be its
 // own preview, so the client never has to special-case that.
-router.post('/scen3/preview1k', async (req, res) => {
-  try {
-    const src = String((req.body || {}).path || '');
-    const hit = _resolveMedia(src);
-    if (!hit) return res.status(400).json({ success: false, error: 'path outside the media folders' });
-    if (!fs.existsSync(hit.abs)) return res.status(404).json({ success: false, error: 'source not found' });
-    if (/(^|\/)(thumbs|preview)\//i.test(hit.rel)) return res.json({ success: true, path: src });
-
-    const { abs: outAbs, url: outUrl } = _previewTarget(hit);
-
-    if (!fs.existsSync(outAbs)) {
-      if (!(await needsPreview(hit.abs))) return res.json({ success: true, path: src, note: 'source already small' });
-      await makePreview(hit.abs, outAbs);
-    }
-    res.json({ success: true, path: outUrl });
-  } catch (e) {
-    console.error('[scen3/preview1k]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 // ════════════════════════════════════════════════════════════════════════════
 // GENERATION
@@ -746,8 +698,6 @@ async function _hostLocal(urlPath, opts) {
   return url;
 }
 
-const _engineOf = (b) => String((b || {}).engine || DEFAULT_ENGINE);
-
 // ── engine dispatch ─────────────────────────────────────────────────────────
 // The AGGREGATOR decides which service the task is created on; kie.ai is the
 // default and hosts both models, Replicate hosts nano-banana-2 only.
@@ -837,14 +787,6 @@ async function _i2i(engine, prompt, urls, aspect, quality, agg) {
     prompt, image_input: imgs, aspect_ratio: ar, resolution: _resOf(quality), output_format: 'jpg',
   });
 }
-// A frame task names its project, so /api/status and recovery file it into the project's
-// frames/; every other result is a candidate and lands in media/work/.
-const _track = (tid, tag, projectId) => {
-  try {
-    const meta = projectId != null && String(projectId).trim() ? { projectId: String(projectId).trim(), sub: 'frames' } : {};
-    require('../lib/pending-tasks').addPendingTask(tid, 'work', tag, tag, meta);
-  } catch (e) {}
-};
 
 // ── Lookbook generator: three modes, decided by what came in ────────────────
 //   prompt only        -> N distinct prompts -> N text-to-image runs
@@ -921,15 +863,9 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
   try {
     const b = req.body || {};
     const out = await _submitLookbook(b);
-    // FROM MERGE (`where` says which panel): it becomes a row in Alerts, the server sees it
-    // through, and the page only follows the record. The old Scenarios page sends no `where` and
-    // is answered exactly as before - it files its own results.
-    if (b.where) return res.json({ success: true, alertId: _journal('lookbook', 'image', out, b).id, mode: out.mode, kind: out.kind, refToken: out.refToken });
-    _track(out.taskId, 'lbcand');
-    res.json({
-      success: true, mode: out.mode, kind: out.kind, taskIds: [out.taskId], prompts: [out.prompt],
-      gender: out.gender, description: out.description, refToken: out.refToken,
-    });
+    // A row in Alerts, and the server sees it through; the page only follows the record. (`where`
+    // says which panel asked, so the row can take you back to it.)
+    res.json({ success: true, alertId: _journal('lookbook', 'image', out, b).id, mode: out.mode, kind: out.kind, refToken: out.refToken });
   } catch (e) {
     console.error('[scen3/gen/lookbook]', e.message);
     res.status(e.status || 500).json({ success: false, error: e.message, ...(e.refused ? { refused: true } : {}) });
@@ -997,6 +933,8 @@ function _normOptList(arr, fallback) {
   return list.length ? list : fallback.slice();
 }
 
+// Read-only since phase G: the page that edited these went, and what is left reads the file (or
+// the defaults it is seeded from) for the camera and the shot size of a set.
 function _loadFrameOpts() {
   const cur = _read(FRAME_OPT_FILE);
   // An older file carried `shots` instead of `framings`; the fallback quietly
@@ -1011,28 +949,6 @@ function _loadFrameOpts() {
   return out;
 }
 
-router.get('/scen3/frame-options', (_req, res) => {
-  try { res.json({ success: true, options: _loadFrameOpts() }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// Whole-set write. An empty list is refused so a slip cannot leave the popup with
-// no options at all. No editor UI points here yet — the Sources gear is still a
-// stub — but the endpoint is what that editor will use.
-router.post('/scen3/frame-options', (req, res) => {
-  try {
-    const b = req.body || {};
-    const cameras  = _normOptList(b.cameras, []);
-    const framings = _normOptList(b.framings, []);
-    if (!cameras.length || !framings.length) {
-      return res.status(400).json({ success: false, error: 'both lists must keep at least one option' });
-    }
-    const out = { cameras, framings };
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    writeFileAtomic(FRAME_OPT_FILE, JSON.stringify(out, null, 2));
-    res.json({ success: true, options: out });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // ── Mannequin poses (v3's own store) ────────────────────────────────────────
 // Each pose belongs to exactly ONE framing group. The grey mannequins ship with the program
@@ -1135,11 +1051,6 @@ function _normPose(p) {
   };
 }
 
-function _savePoses(list) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  writeFileAtomic(POSE_FILE, JSON.stringify(list, null, 2));
-}
-
 function _loadPoses() {
   const cur = _read(POSE_FILE);
   if (Array.isArray(cur)) return cur.map(_normPose).filter(p => p.id && p.group);
@@ -1166,152 +1077,9 @@ const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
 // The pixel size of a stored asset. The centre preview shows a DERIVATIVE, so the
 // page cannot read the real dimensions off the <img> it is displaying — labelling a
 // selection from that reported a size several times smaller than the crop it produced.
-router.post('/scen3/media-size', async (req, res) => {
-  try {
-    const p = String((req.body || {}).path || '').trim();
-    const hit = _resolveMedia(p);
-    if (!hit || !fs.existsSync(hit.abs)) return res.status(400).json({ success: false, error: 'not found: ' + p });
-    const m = await sharp(hit.abs).metadata();
-    res.json({ success: true, width: m.width || 0, height: m.height || 0 });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
-router.post('/scen3/frame/crop', async (req, res) => {
-  try {
-    const b   = req.body || {};
-    const src = String(b.path || '').trim();
-    const r   = b.rect || {};
-    const hit = _resolveMedia(src);
-    if (!hit || !fs.existsSync(hit.abs)) {
-      return res.status(400).json({ success: false, error: `the frame is missing: ${src}` });
-    }
-    const fx = Number(r.x), fy = Number(r.y), fw = Number(r.w), fh = Number(r.h);
-    if (![fx, fy, fw, fh].every(Number.isFinite)) {
-      return res.status(400).json({ success: false, error: 'rect must be {x,y,w,h} as fractions of the frame' });
-    }
-    if (fw < CROP_MIN - 1e-6 || fh < CROP_MIN - 1e-6) {
-      return res.status(400).json({ success: false,
-        error: `the selection must cover at least a third of the frame — got ${Math.round(fw * 100)}% x ${Math.round(fh * 100)}%` });
-    }
-
-    const meta = await sharp(hit.abs).metadata();
-    if (!meta.width || !meta.height) return res.status(500).json({ success: false, error: 'could not measure the frame' });
-
-    // fractions -> pixels, then clamped so rounding can never ask for a pixel that
-    // is not there (sharp throws on an extract that leaves the image)
-    let left = Math.round(fx * meta.width);
-    let top  = Math.round(fy * meta.height);
-    let w    = Math.round(fw * meta.width);
-    let h    = Math.round(fh * meta.height);
-    left = Math.max(0, Math.min(left, meta.width  - 1));
-    top  = Math.max(0, Math.min(top,  meta.height - 1));
-    w    = Math.max(1, Math.min(w, meta.width  - left));
-    h    = Math.max(1, Math.min(h, meta.height - top));
-
-    const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
-    const name = `crop_${base}_${Date.now()}.jpg`;
-    // Beside its frame, which is a project's working file; a frame from anywhere else (a shelf
-    // picture cropped for a one-off) has no project, and its crop is working material.
-    const dest = path.join(hit.root === CFG.PROJECTS_DIR ? path.dirname(hit.abs) : CFG.MEDIA.work, name);
-    await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
-
-    const finalUrl = toUrl(dest);
-    const preview  = await _framePreview(finalUrl);
-    console.log(`[scen3/frame/crop] ${base} ${meta.width}x${meta.height}`
-      + ` -> ${w}x${h} at ${left},${top}`);
-    res.json({ success: true, path: finalUrl, preview, width: w, height: h });
-  } catch (e) {
-    console.error('[scen3/frame/crop]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// ── First frames (Build mix) ────────────────────────────────────────────────
-// The character reference is a 4K SHEET — a 16:9 layout with a portrait beside a
-// full-body turnaround — not a photo of someone in a room. The prompt therefore
-// has to say "take the person OUT of image 1", or the sheet itself gets dragged
-// into the scene as an object, or the turnaround is reproduced as several people.
-// With a mannequin the shot is BUILT ON IT: it owns the pose, the camera angle and
-// the crop, and the person is grown onto it. The mannequin is blue, jointed and shot
-// on a grey studio backdrop, and none of that may survive into the result — hence the
-// explicit ban. The word "standing" is deliberately absent: it fought every pose
-// where the subject films itself with an arm out past the frame edge.
-const FRAME_RULE_POSED =
-  'Create ONE photorealistic photograph of ONE real person.'
-  + ' IMAGE 1 is a blue artist mannequin and it defines the BODY: reproduce its pose, the tilt and'
-  + ' rotation of its head, its shoulder line, the direction and foreshortening of its arms, and the camera'
-  + ' angle — exactly, including any arm that reaches toward the lens and runs out past the edge of the frame.'
-  + ' The mannequin has no eyes and says nothing about where the person is looking: the GAZE rule decides that.'
-  + ' Take the POSE from it, never the crop: the mannequin is photographed at its own shot size, and the'
-  + ' SHOT SIZE stated above wins over it.'
-  + ' Never render the mannequin itself: no blue material, no ball joints, no seams, no blank faceless head,'
-  + ' no grey studio backdrop.'
-  + ' IMAGE 2 is a character reference sheet — take ONLY the person from it and keep the same face, hair,'
-  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
-  + ' more than ONE person in the result.'
-  + ' IMAGE 3 is the location — keep its architecture, furniture, colours and depth, and put the person in it.'
-  + ' Natural perspective and contact shadows. No text, no captions, no logos, no watermark.';
-
-// Fallback for a pose that has no mannequin drawn yet: two references, and the
-// pose carried by words alone.
-const FRAME_RULE_PLAIN =
-  'Create ONE photorealistic photograph: the person from IMAGE 1, in the location from IMAGE 2.'
-  + ' IMAGE 1 is a character reference sheet — take ONLY the person from it and keep the same face, hair,'
-  + ' skin tone, body and clothing exactly. Never draw the sheet, its panels or its borders, and never show'
-  + ' more than ONE person in the result.'
-  + ' IMAGE 2 is the location — keep its architecture, furniture, colours and depth.'
-  + ' The person is centred in the frame. Natural perspective and contact shadows.'
-  + ' No text, no captions, no logos, no watermark.';
-
-// THE EYES ALWAYS COME BACK TO THE LENS.
-//
-// A first frame is the opening of an ad: the person is talking to whoever is holding the
-// phone, and a subject looking off past the camera reads as a stock photo of somebody else's
-// conversation. Nothing in this prompt used to ask for eye contact, and three things quietly
-// argued against it - the mannequin rule copies the head's rotation, six of the sixteen poses
-// either say the head is turned aside or say nothing about the gaze at all, and the reading
-// pass is asked to describe the head's position.
-//
-// So the head is left alone and only the EYES are pinned. The pose survives intact - turned
-// shoulders, a head in profile, a glance back over one shoulder - and the person still looks
-// at the viewer, which is what a face turned three-quarters to camera does in every portrait
-// ever taken. Stated as a ranked constraint next to the shot size, because a rule that has to
-// beat both the pose description and the reference image has to say so.
-const FRAME_GAZE_RULE =
-  'GAZE — as important as the shot size, and it outranks the pose and every reference image:'
-  + ' the person LOOKS STRAIGHT INTO THE CAMERA LENS, making direct eye contact with the viewer.'
-  + ' The head may stay turned, tilted, in profile or looking back over a shoulder exactly as the'
-  + ' pose requires — only the EYES turn back to the lens, with both irises and pupils clearly'
-  + ' visible and centred on the camera. Never render averted eyes, eyes drifting off-frame, eyes'
-  + ' following the direction the head is turned, closed eyes, or a downward glance.';
-
-// Editing an existing frame: the frame already carries its own light, camera and
-// framing, so those are NOT restated — repeating them would fight the edit.
-//
-// The gaze rule is deliberately NOT here. An edit is a sentence somebody typed about this
-// picture; if it says "have her look away", the app arguing back would be the bug. To pull an
-// old frame's eyes to the lens, ask for it - "look into the camera" - and it happens.
-const FRAME_EDIT_RULE =
-  'Edit the photograph in the reference image. Keep the same person — same face, hair, skin and clothing —'
-  + ' the same location and the same framing, unless the instruction says otherwise. Change ONLY what the'
-  + ' instruction asks for, and keep the result one photorealistic photograph of one person.'
-  + ' No text, no captions, no logos, no watermark.';
 
 const _cleanText = (s) => String(s || '').replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
-
-// Record the task on the project and start watching it. Without a projectId the
-// caller is a one-off (a script, a probe) and there is nowhere to file a result,
-// so the frame is simply left to the caller.
-function _armWatcher(projectId, taskId, mode, prompt) {
-  const id = String(projectId || '').trim();
-  if (!id) return;
-  const startedAt = new Date().toISOString();
-  const ok = _patchMix(id, (mix) => { mix.pending = { taskId, mode, prompt, startedAt }; mix.lastError = ''; });
-  if (!ok) { console.warn('[scen3/watch] no project', id, '- not watching', taskId.slice(0, 24)); return; }
-  _watchFrame(id, taskId, { mode, prompt });
-}
 
 // The pose whose mannequin should ride along, or null — resolved server-side so the
 // client cannot ask for a pose belonging to a different framing group than it chose.
@@ -1325,7 +1093,6 @@ function _poseFor(poseId, framingId) {
   const hit = _resolveMedia(pose.file);
   return (hit && fs.existsSync(hit.abs)) ? pose : null;
 }
-const _poseImageFor = (poseId, framingId) => (_poseFor(poseId, framingId) || {}).file || '';
 
 // Pull the labelled blocks out of the analysis. Anything the model puts before the
 // first label is kept as LIGHTING, which is what a label-less answer used to be.
@@ -1357,240 +1124,7 @@ function _splitBlocks(raw) {
 //
 // Whatever comes back is creative wording only. The invariants — identity lock,
 // one person, no watermark — stay on the server so a rewrite cannot drop them.
-router.post('/scen3/gen/frame/analyze', async (req, res) => {
-  try {
-    const b        = req.body || {};
-    const note     = String(b.note || '').trim();
-    const basePath = String(b.basePath || '').trim();
 
-    if (basePath) {
-      const hit = _resolveMedia(basePath);
-      if (!hit || !fs.existsSync(hit.abs)) {
-        return res.status(400).json({ success: false, error: `the frame is missing: ${basePath}` });
-      }
-      if (!note) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
-      const url = await _hostLocal(basePath);
-      const ask = 'Look at this photograph. The user wants this change: "' + note + '".'
-        + ' Rewrite that request as one clear, specific instruction for an image editor —'
-        + ' name what to change and how it should look afterwards, in the terms a photographer would use.'
-        + ' Do not restate what stays the same. Reply with the instruction only, no preamble, no quotes.';
-      const raw = await _ask([{
-        role: 'user',
-        content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url } }],
-      }]);
-      const intent = _cleanText(raw);
-      console.log('[scen3/frame/analyze] edit:', intent.slice(0, 130).replace(/\s+/g, ' '));
-      return res.json({ success: true, mode: 'edit', intent });
-    }
-
-    // ── COMPOSE: read the mannequin, the character and the location in ONE pass.
-    // Every one of the three feeds a different part of the prompt, so each gets its
-    // own labelled block instead of a single blob of prose.
-    const charPath = String(b.characterPath || '').trim();
-    const locPath  = String(b.locationPath  || '').trim();
-    if (!charPath || !locPath) {
-      return res.status(400).json({ success: false, error: 'both a character and a location are required' });
-    }
-    for (const [label, p] of [['character', charPath], ['location', locPath]]) {
-      const hit = _resolveMedia(p);
-      if (!hit || !fs.existsSync(hit.abs)) {
-        return res.status(400).json({ success: false, error: `the ${label} image is missing: ${p}` });
-      }
-    }
-
-    // the mannequin, when the chosen pose has one drawn and it fits the framing group
-    const poseRec  = _poseFor(b.poseId, b.framing);
-    const posePath = poseRec ? poseRec.file : '';
-    const poseUrl  = posePath ? await _hostLocal(posePath) : '';
-    const charUrl  = await _hostLocal(charPath);
-    const locUrl   = await _hostLocal(locPath);
-
-    const n = poseUrl ? { pose: 1, char: 2, loc: 3 } : { char: 1, loc: 2 };
-    const ask = (poseUrl
-      ? `IMAGE ${n.pose} is a blue artist mannequin used as a pose reference, `
-      : '')
-      + `IMAGE ${n.char} is a character reference sheet, IMAGE ${n.loc} is an empty location.`
-      + ' Answer in exactly the labelled blocks below, each on its own line, each one plain sentences'
-      + ' with no lists and no extra headings.'
-      // The pose already knows what it is. Handing that over stops the reading pass
-      // guessing at an ambiguous silhouette — folded forearms read as crossed arms
-      // rather than as arms merely hanging in front of the body.
-      + (poseUrl && poseRec && poseRec.desc
-        ? `\nThe mannequin in IMAGE ${n.pose} is posed as: ${poseRec.desc}.`
-          + ' Treat that as given and describe how it is actually done in the picture.'
-        : '')
-      + (poseUrl
-        ? '\nPOSE: describe the mannequin\'s BODY precisely enough to reproduce with a real person — the'
-          + ' position and tilt of the head, the shoulder line, where each arm goes and how strongly it is'
-          + ' foreshortened, which limbs run out past the edge of the frame and at which edge, and the camera'
-          + ' height and angle. Do NOT say how much of the body is in shot and do NOT name a shot size:'
-          + ' the crop is decided separately and your description must not contradict it.'
-          // The eyes are settled by the gaze rule and by nothing else. A mannequin has no eyes,
-          // so anything said here about where it "looks" is invented - and it would land in the
-          // prompt as a second opinion the generator has to choose between.
-          + ' Say nothing about where it is looking or where its gaze is directed: the mannequin has no'
-          + ' eyes, and the gaze is decided elsewhere. Describe the head as an angle, not as a direction'
-          + ' of attention. Never mention the mannequin\'s material, colour, joints or background.'
-        : '')
-      + '\nCHARACTER: describe the person on the sheet — face, hair, build, skin tone and the clothing they'
-      + ' are wearing, as the traits to preserve.'
-      + '\nENVIRONMENT: describe the location — what kind of place it is, its architecture, surfaces, colours'
-      + ' and depth, and in one clause where in the frame there is clear space for a person.'
-      + '\nLIGHTING: describe the location\'s light precisely enough to composite a person into it convincingly —'
-      + ' where the key light comes from, hard or soft, its colour temperature and any cast, how strong the'
-      + ' ambient fill is, the character and direction of the shadows, and what time of day it reads as.'
-      + (note ? '\nDIRECTION: rewrite this request from the user as clear photographic direction for the shot: "' + note + '".' : '');
-
-    const content = [{ type: 'text', text: ask }];
-    if (poseUrl) content.push({ type: 'image_url', image_url: { url: poseUrl } });
-    content.push({ type: 'image_url', image_url: { url: charUrl } });
-    content.push({ type: 'image_url', image_url: { url: locUrl } });
-
-    const raw = _cleanText(await _ask([{ role: 'user', content }]));
-    const blocks = _splitBlocks(raw);
-
-    // `reading` stays in the response for anything still expecting the old shape
-    console.log('[scen3/frame/analyze] compose:'
-      + ` pose ${blocks.pose.length}ch, character ${blocks.character.length}ch,`
-      + ` environment ${blocks.environment.length}ch, lighting ${blocks.lighting.length}ch,`
-      + ` direction ${blocks.direction.length}ch` + (poseUrl ? ' | mannequin read' : ' | no mannequin'));
-    res.json({
-      success: true, mode: 'compose',
-      pose: blocks.pose, character: blocks.character,
-      environment: blocks.environment, lighting: blocks.lighting,
-      reading: blocks.lighting, intent: blocks.direction,
-    });
-  } catch (e) {
-    console.error('[scen3/frame/analyze]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-router.post('/scen3/gen/frame', async (req, res) => {
-  try {
-    const b       = req.body || {};
-    // The frame is filed onto a project by the watcher, so a project that is not the
-    // caller's to change is not theirs to generate into either.
-    if (b.projectId != null && String(b.projectId).trim()) {
-      const host = _loadProjects().find(p => String(p.id) === String(b.projectId).trim());
-      if (host && !OWN.canEdit(host, req.user)) return OWN.refuse(res, host);
-    }
-    const charPath = String(b.characterPath || '').trim();
-    const locPath  = String(b.locationPath || '').trim();
-    const note     = String(b.note || '').trim();
-    const eng      = _engineOf(b);
-    const agg      = MIX_AGGS.includes(b.aggregator) ? b.aggregator : 'kie';
-    const aspect   = MIX_FORMATS.includes(b.format) ? b.format : '9:16';
-    const quality  = MIX_QUALITIES.includes(b.quality) ? b.quality : '2K';
-
-    const basePath = String(b.basePath || '').trim();
-    const intent   = String(b.intent || '').trim();
-
-    // ── EDIT: one reference, the frame itself. Camera, framing and pose are NOT
-    // restated — the frame already carries them, and repeating them fights the edit.
-    if (basePath) {
-      const hit = _resolveMedia(basePath);
-      if (!hit || !fs.existsSync(hit.abs)) {
-        return res.status(400).json({ success: false, error: `the frame is missing: ${basePath}` });
-      }
-      const direction = intent || note;
-      if (!direction) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
-      const prompt = `${FRAME_EDIT_RULE} Instruction: ${direction}`;
-      const taskId = await _i2i(eng, prompt, [await _hostLocal(basePath)], aspect, quality, agg);
-      if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-      _track(taskId, 'frame', b.projectId);
-      _armWatcher(b.projectId, taskId, 'edit', prompt);
-      console.log(`[scen3/gen/frame] edit on=${agg} engine=${eng} aspect=${aspect} quality=${quality}`);
-      return res.json({ success: true, mode: 'edit', taskId, prompt });
-    }
-
-    // ── COMPOSE: character + location (+ mannequin), with the structured parameters
-    if (!charPath) return res.status(400).json({ success: false, error: 'pick a character first' });
-    if (!locPath)  return res.status(400).json({ success: false, error: 'pick a location first' });
-
-    // a missing reference is a bad request, not a server fault
-    for (const [label, p] of [['character', charPath], ['location', locPath]]) {
-      const hit = _resolveMedia(p);
-      if (!hit || !fs.existsSync(hit.abs)) {
-        return res.status(400).json({ success: false, error: `the ${label} image is missing: ${p}` });
-      }
-    }
-
-    // The mannequin is the BASE, so it goes FIRST — the prompt calls it IMAGE 1 and
-    // builds the person onto it. Without one the two-reference wording is used.
-    const posePath = _poseImageFor(b.poseId, b.framing);
-    const urls = [];
-    if (posePath) urls.push(await _hostLocal(posePath));
-    urls.push(await _hostLocal(charPath),
-              await _hostLocal(locPath));
-
-    // Camera optics stay in the prompt; FRAMING does not. Framing is only the
-    // filter that decides which poses are offered, and the mannequin already
-    // carries the crop — restating it in words just fights the reference.
-    const opts = _loadFrameOpts();
-    const cam  = opts.cameras.find(c => c.id === String(b.camera || '')) || null;
-    const pose = _loadPoses().find(p => p.id === String(b.poseId || '')) || null;
-    // The group is still only a filter over the pose list — its NAME never reaches
-    // the prompt. What does reach it is its `crop`, as the opening directive.
-    const framing = opts.framings.find(f => f.id === String(b.framing || '')) || null;
-
-    // Every block comes from the analysis pass; the pose falls back to the stored
-    // wording when there is no mannequin to read.
-    const A = {
-      pose:        String(b.pose        || '').trim(),
-      character:   String(b.character   || '').trim(),
-      environment: String(b.environment || '').trim(),
-      lighting:    String(b.lighting || b.reading || '').trim(),
-    };
-
-    // The crop leads. Buried in the middle of the pose description it was ignored
-    // and the shot came back full-length; the shot size has to be the first thing
-    // read, stated as where the frame cuts rather than as a name for the shot.
-    const parts = [];
-    if (framing && framing.crop) {
-      parts.push(`SHOT SIZE — the most important constraint, obey it before anything else:`
-        + ` ${framing.crop}. Frame the person exactly this way and do not pull back to fit more of the body in.`);
-    }
-    // Beside the shot size, and before the pose it has to outrank.
-    parts.push(FRAME_GAZE_RULE);
-    parts.push(posePath ? FRAME_RULE_POSED : FRAME_RULE_PLAIN);
-    if (cam) parts.push(`Camera: ${cam.prompt}.`);
-    // The stored description leads and the reading fills in the detail. On its own the
-    // reading can describe folded forearms without ever naming them as crossed arms.
-    const poseDesc = (pose && pose.desc) ? pose.desc : '';
-    const poseText = [poseDesc, A.pose].filter(Boolean).join('. ');
-    if (poseText)      parts.push(`Body position to reproduce — the person is ${poseText}`);
-    if (A.character)   parts.push(`The person to keep: ${A.character}`);
-    if (A.environment) parts.push(`The location: ${A.environment}`);
-    if (A.lighting)    parts.push(`Match the location lighting exactly — ${A.lighting}`);
-    // the user's own steering, cleaned up by the reading pass
-    if (intent)    parts.push(`Additional direction: ${intent}`);
-    else if (note) parts.push(`Additional direction: ${note}`);
-    const prompt = parts.join(' ');
-
-    const tag = `on=${agg} engine=${eng} aspect=${aspect} quality=${quality} refs=${urls.length}`
-      + ` cam=${cam ? cam.id : '-'} crop=${framing && framing.crop ? framing.id : '-'}`
-      + ` pose=${pose ? pose.id + (posePath ? '+img(base)' : '(text)') : '-'}`
-      + ` blocks=${Object.keys(A).filter(k => A[k]).join('+') || 'none'}`;
-
-    // A dry run assembles everything and returns it WITHOUT creating a task, so the
-    // prompt and the reference order can be read before any credits are spent.
-    if (b.dryRun) {
-      console.log(`[scen3/gen/frame] DRY RUN ${tag}\n  refs: ${urls.join('\n        ')}\n  prompt: ${prompt}`);
-      return res.json({ success: true, mode: 'compose', dryRun: true, prompt, refs: urls });
-    }
-
-    const taskId = await _i2i(eng, prompt, urls, aspect, quality, agg);
-    if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    _track(taskId, 'frame', b.projectId);
-    _armWatcher(b.projectId, taskId, 'compose', prompt);
-    console.log(`[scen3/gen/frame] compose ${tag}`);
-    res.json({ success: true, mode: 'compose', taskId, prompt });
-  } catch (e) {
-    console.error('[scen3/gen/frame]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 // ── Environments ────────────────────────────────────────────────────────────
 // ONE place, photographed empty, that a person is later put into to speak to the camera. Made
@@ -1928,9 +1462,7 @@ router.post('/scen3/gen/env', async (req, res) => {
     const out = await _submitEnv(b);
     // A choice of places is not a generation: nothing was submitted and nothing is journalled.
     if (out.choose) return res.json({ success: true, choose: true, why: out.why, options: out.options, refToken: out.refToken });
-    if (b.where) return res.json({ success: true, alertId: _journal('environment', 'image', out, b).id, mode: out.mode, refToken: out.refToken });
-    _track(out.taskId, 'env');
-    res.json({ success: true, mode: out.mode, taskId: out.taskId, prompt: out.prompt, description: out.description, refToken: out.refToken });
+    res.json({ success: true, alertId: _journal('environment', 'image', out, b).id, mode: out.mode, refToken: out.refToken });
   } catch (e) {
     console.error('[scen3/gen/env]', e.message);
     res.status(e.status || 500).json({
@@ -2017,10 +1549,8 @@ router.post('/scen3/env/motion', async (req, res) => {
 // page that asked only follows the row, so leaving the page loses nothing - which is the whole
 // point (docs/local-app/PLAN.md, "Alerts").
 //
-// `where` is what the panel says about itself - the project, the step, the level inside it - and
-// its ABSENCE is what tells these routes they are talking to the old Scenarios page. That page
-// files its own results and is not journalled: it is being removed whole (PLAN, phase G) and is
-// not touched.
+// `where` is what the panel says about itself - the project, the step, the level inside it - so
+// the row in the journal can take you back to where the work was started.
 const JOBS = require('../lib/gen-jobs');
 // The journal itself, for the two questions the routes ask of it directly: is a clip of this
 // fragment already running, and - when a clip is re-asked with fresh links - which task the record
@@ -2160,9 +1690,7 @@ router.post('/scen3/gen/dress', async (req, res) => {
   try {
     const b = req.body || {};
     const out = await _submitDress(b);
-    if (b.where) return res.json({ success: true, alertId: _journal('look', 'image', out, b).id, mode: out.mode, kind: out.kind });
-    _track(out.taskId, 'dressed');
-    res.json({ success: true, mode: out.mode, kind: out.kind, taskId: out.taskId, prompt: out.prompt, engine: out.engine });
+    res.json({ success: true, alertId: _journal('look', 'image', out, b).id, mode: out.mode, kind: out.kind });
   } catch (e) {
     console.error('[scen3/gen/dress]', e.message);
     res.status(e.status || 500).json({ success: false, error: e.message });
@@ -2170,30 +1698,6 @@ router.post('/scen3/gen/dress', async (req, res) => {
 });
 
 // ── Mix 2–5 lookbooks into one new lookbook ─────────────────────────────────
-router.post('/scen3/gen/mix', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const paths = (Array.isArray(b.paths) ? b.paths : []).filter(Boolean).slice(0, 5);
-    const note  = String(b.note || '').trim();
-    const eng   = _engineOf(b);
-    if (paths.length < 2) return res.status(400).json({ success: false, error: 'select 2 to 5 lookbooks to mix' });
-
-    const urls = [];
-    for (const p of paths) urls.push(await _hostLocal(p));
-    const prompt = `Blend the ${urls.length} outfits shown in the reference images into ONE new cohesive outfit,`
-      + ' taking the strongest pieces from each so they work together as a single styled look.'
-      + (note ? ' Follow these instructions for the mix: ' + note + '.' : '') + KNOLL_TAIL;
-
-    const tid = await _i2i(eng, prompt, urls, '1:1');
-    if (!tid) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
-    _track(tid, 'lbcand');
-    console.log(`[scen3/gen/mix] ${urls.length} refs engine=${eng}`);
-    res.json({ success: true, taskId: tid, prompt });
-  } catch (e) {
-    console.error('[scen3/gen/mix]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 // ── Save a dressed result as an obraz on the character ──────────────────────
 // The user chose that dressed looks join the character's own library, so they
@@ -2264,59 +1768,10 @@ async function _saveObraz(b) {
   return { obrazId: id, path: rel, preview };
 }
 
-router.post('/scen3/obraz-save', async (req, res) => {
-  try {
-    const out = await _saveObraz(req.body || {});
-    res.json({ success: true, ...out });
-  } catch (e) {
-    console.error('[scen3/obraz-save]', e.message);
-    res.status(e.status || 500).json({ success: false, error: e.message });
-  }
-});
 
 // ── Delete one obraz ────────────────────────────────────────────────────────
 // Removes exactly one record and its own folder. Guarded so it can only ever
 // unlink inside obrazy/, and it refuses to write when the library will not parse.
-router.post('/scen3/obraz-delete', (req, res) => {
-  try {
-    const id = String((req.body || {}).obrazId || '');
-    if (!id) return res.status(400).json({ success: false, error: 'obrazId is required' });
-    if (!fs.existsSync(OBRAZY_JSON)) return res.status(404).json({ success: false, error: 'no library' });
-
-    const list = _read(OBRAZY_JSON);
-    if (!Array.isArray(list)) {
-      return res.status(500).json({ success: false, error: 'obrazy.json is unreadable — refusing to write' });
-    }
-    const victim = list.find(o => String(o.id) === id);
-    if (!victim) return res.status(404).json({ success: false, error: 'not found' });
-
-    const next = list.filter(o => String(o.id) !== id);
-    if (next.length !== list.length - 1) {
-      return res.status(500).json({ success: false, error: 'refusing to remove more than one record' });
-    }
-    writeFileAtomic(OBRAZY_JSON, JSON.stringify(next, null, 2));
-
-    // its folder, only if it really sits under media/looks/
-    let removedDir = null;
-    try {
-      const m = String(victim.char || '').match(/^\/media\/looks\/([^/]+)\//);
-      if (m) {
-        const abs = path.resolve(CFG.OBRAZY_DIR, m[1]);
-        const rootAbs = path.resolve(CFG.OBRAZY_DIR);
-        if (abs.startsWith(rootAbs + path.sep) && fs.existsSync(abs)) {
-          fs.rmSync(abs, { recursive: true, force: true });
-          removedDir = toUrl(abs);
-        }
-      }
-    } catch (e) { console.warn('[scen3/obraz-delete] folder cleanup failed:', e.message); }
-
-    console.log(`[scen3/obraz-delete] ${id} removed (library now ${next.length})${removedDir ? ' + ' + removedDir : ''}`);
-    res.json({ success: true, removed: id, removedDir, remaining: next.length });
-  } catch (e) {
-    console.error('[scen3/obraz-delete]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
 
 // ── Finalize a finished task ────────────────────────────────────────────────
 // The shared /api/status poller drops the result into uploads/. This copies a
@@ -2409,16 +1864,6 @@ async function _fileGenerated(kind, src, b) {
 }
 
 // The route is the old Scenarios page, which still files its own results.
-router.post('/scen3/finalize', async (req, res) => {
-  try {
-    const body = req.body || {};
-    const out = await _fileGenerated(String(body.kind || ''), String(body.path || ''), body);
-    res.json({ success: true, ...out });
-  } catch (e) {
-    console.error('[scen3/finalize]', e.message);
-    res.status(e.status || 500).json({ success: false, error: e.message });
-  }
-});
 
 // ── voice moods ─────────────────────────────────────────────────────────────
 // A mood is what the user picks in Montage; its `tags` are the ONLY ones the tagging
@@ -2434,43 +1879,7 @@ const MP = require('../lib/motion-presets');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
 const VSHELF = require('../lib/voice-shelf');
-const MOOD_FILE = path.join(DATA_DIR, 'scen3-moods.json');
 
-function _normMood(m) {
-  const s = (m && typeof m === 'object') ? m : {};
-  const tags = Array.isArray(s.tags) ? s.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
-  const safe = tags.filter(t => VT.TTS_SAFE_TAGS.includes(t));
-  const dropped = tags.filter(t => !VT.TTS_SAFE_TAGS.includes(t));
-  if (dropped.length) console.warn(`[scen3/moods] "${s.id}" drops unusable tags:`, dropped.join(', '));
-  return {
-    id:    String(s.id || '').trim(),
-    label: String(s.label || '').trim(),
-    note:  String(s.note || '').trim(),   // one line for the interface
-    brief: String(s.brief || '').trim(),  // the direction the casting director reads
-    tags:  safe,
-    active: s.active !== false,
-  };
-}
-
-function _loadMoods() {
-  const cur = _read(MOOD_FILE);
-  if (Array.isArray(cur)) {
-    const list = cur.map(_normMood).filter(m => m.id && m.label && m.tags.length);
-    if (list.length) return list;
-  }
-  const seeded = VT.AD_MOODS.map(_normMood);
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    writeFileAtomic(MOOD_FILE, JSON.stringify(seeded, null, 2));
-  } catch (e) {}
-  console.log(`[scen3] seeded ${seeded.length} voice moods`);
-  return seeded;
-}
-
-router.get('/scen3/moods', (_req, res) => {
-  try { res.json({ success: true, moods: _loadMoods().filter(m => m.active), role: VT.CASTING_DIRECTOR_ROLE }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // Everything the Video section needs to draw itself: how the character may move, which
 // lipsync model is wired up, and what the two quality tiers cost. The prompts come with
@@ -2491,9 +1900,6 @@ router.get('/scen3/motion-presets', (_req, res) => {
 // The whole tag library, for the help panel. Read-only: it is reference material,
 // and it carries which tags are delivery instructions, which are voice casting and
 // which are body language for the video prompt rather than the spoken text.
-router.get('/scen3/voice-tags', (_req, res) => {
-  res.json({ success: true, library: VT.LIBRARY, safe: VT.TTS_SAFE_TAGS, motion: VT.MOTION_TAGS });
-});
 
 // ── the casting director: inserting voice tags ──────────────────────────────
 // One call over the WHOLE script, never line by line: the mood briefs describe an arc
@@ -2624,17 +2030,15 @@ router.post('/scen3/voice/tag', async (req, res) => {
     if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
 
     const voice = _normVoice(proj.voice);
-    // TWO CALLERS. Merge sends the mood of the VIDEO (lib/motion-presets.js - one vocabulary for
-    // the read, the frames and the animation; docs/local-app/PLAN.md, phase W) and reads with v3
-    // only: every line touched gets its words back as `tagged`, marked or not, so the tagged read
-    // IS the read, and the project is switched to it. The Scenarios page sends no mood and keeps
-    // its own list and its own rule - a line without tags stays plain - until phase G removes it.
+    // The mood of the VIDEO, always: one vocabulary for the read, the frames and the animation
+    // (lib/motion-presets.js; docs/local-app/PLAN.md, phase W). Every line touched gets its words
+    // back as `tagged`, marked or not, so the tagged read IS the read and the project is switched
+    // to it. The second caller - the Scenarios page, with a mood list of its own - went with the
+    // page in phase G, and its list went with it.
     const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
-    const merge = !!vm;
-    const mood = merge
-      ? { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags }
-      : _loadMoods().find(m => m.id === voice.mood);
-    if (!mood) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'pick a mood first' });
+    if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'a mood is needed' });
+    const merge = true;
+    const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags };
 
     // `only` re-tags just those lines, leaving every approved line untouched. Sent
     // empty (or absent) it is a full pass over the script.
@@ -2960,17 +2364,6 @@ router.get('/scen3/voice/state', (req, res) => {
   res.json({ success: true, state: (id && _reads.get(id)) || null });
 });
 
-// ── server-side frame watcher ───────────────────────────────────────────────
-// A generation used to be driven entirely by the page: it polled the task, filed
-// the result and appended the frame. Reloading or closing the tab mid-run left the
-// image in uploads/ with nothing tying it to the project. The server now watches
-// every frame task it starts, so the frame reaches the strip regardless.
-//
-// Both sides may finish: whoever gets there first appends, and the other sees the
-// variant's taskId already present and does nothing. That makes a double commit a
-// no-op rather than a duplicate frame.
-const _watching = new Set();
-
 // Build the preview for a freshly generated frame. The frame stays where it is;
 // only the preview is made, exactly as POST /scen3/finalize does for the page.
 async function _framePreview(finalUrl) {
@@ -2985,100 +2378,6 @@ async function _framePreview(finalUrl) {
     console.warn('[scen3/watch] preview failed:', e.message);
     return finalUrl;
   }
-}
-
-// Read-modify-write in one synchronous burst, so the page's own save cannot
-// interleave with the watcher's.
-function _patchMix(projectId, fn) {
-  const p = PROJECTS.get(projectId);
-  if (!p) return false;
-  p.mix = _normMix(p.mix);
-  if (fn(p.mix) === false) return false;
-  p.updatedAt = new Date().toISOString();
-  PROJECTS.save(p);
-  return true;
-}
-
-function _watchFrame(projectId, taskId, { mode, prompt }) {
-  const key = `${projectId}:${taskId}`;
-  if (_watching.has(key)) return;
-  _watching.add(key);
-
-  const started = Date.now();
-  const MAX_MS = 15 * 60 * 1000;
-
-  const tick = async () => {
-    if (Date.now() - started > MAX_MS) {
-      console.warn('[scen3/watch]', taskId.slice(0, 24), 'gave up after 15 min');
-      _patchMix(projectId, (mix) => {
-        if (!mix.pending || mix.pending.taskId !== taskId) return false;
-        mix.pending = null;
-        mix.lastError = 'the generator did not answer within 15 minutes';
-      });
-      _watching.delete(key);
-      return;
-    }
-    // The project's frames/ - asked for on every tick, so a project renamed meanwhile is followed.
-    const FRAMES = PROJECTS.dirOf(projectId, 'frames');
-    if (!FRAMES) {
-      console.warn('[scen3/watch]', taskId.slice(0, 24), 'the project is gone - not watching');
-      _watching.delete(key);
-      return;
-    }
-    let s = null;
-    try { s = await H.resolveTask(taskId, FRAMES, 'generated'); } catch (e) { s = null; }
-
-    if (s && s.state === 'success' && s.imagePath) {
-      const finalUrl = s.imagePath;
-      const preview  = await _framePreview(finalUrl);
-      _patchMix(projectId, (mix) => {
-        const already = mix.variants.some(v => v.taskId === taskId);
-        if (!already) {
-          mix.variants.unshift({
-            id: 'f' + Date.now(), path: finalUrl, preview,
-            prompt: prompt || '', at: new Date().toISOString(), taskId,
-          });
-          mix.activeId = mix.variants[0].id;
-          mix.note = '';
-          console.log('[scen3/watch]', taskId.slice(0, 24), '-> filed into project', projectId);
-        } else {
-          console.log('[scen3/watch]', taskId.slice(0, 24), '-> the page already filed it');
-        }
-        if (mix.pending && mix.pending.taskId === taskId) mix.pending = null;
-        mix.lastError = '';
-      });
-      _watching.delete(key);
-      return;
-    }
-
-    if (s && s.state === 'failed') {
-      console.warn('[scen3/watch]', taskId.slice(0, 24), 'failed:', s.error || '');
-      _patchMix(projectId, (mix) => {
-        if (!mix.pending || mix.pending.taskId !== taskId) return false;
-        mix.pending = null;
-        mix.lastError = String(s.error || 'generation failed');
-      });
-      _watching.delete(key);
-      return;
-    }
-    setTimeout(tick, 4000);
-  };
-  setTimeout(tick, 4000);
-  console.log(`[scen3/watch] watching ${taskId.slice(0, 24)} for project ${projectId} (${mode})`);
-}
-
-// ── video: watching a clip ──────────────────────────────────────────────────
-// Mutate one project and save. The line-level twin of _patchMix: a render finishes on
-// its own schedule, so whoever files it has to write straight to the store rather than
-// hand something back to a page that may be long gone.
-function _patchProj(projectId, fn) {
-  const p = PROJECTS.get(projectId);
-  if (!p) return false;
-  p.lines = Array.isArray(p.lines) ? p.lines.map(_normLine) : [];
-  if (fn(p) === false) return false;
-  p.updatedAt = new Date().toISOString();
-  PROJECTS.save(p);
-  return true;
 }
 
 // resolveTask cannot be reused here: it names every download .jpg, compresses it as an
@@ -3146,166 +2445,6 @@ async function _clipPoster(absVideo, name) {
 // ONE retry, recorded on the render marker so a restart cannot reset the count.
 const _FETCH_FAIL_RE = /upload failed|fetch failed|download failed|cannot (?:be )?(?:fetch|download|access)|invalid url|url is not accessible/i;
 
-// The render marker as it is STORED, for the moments a decision depends on what is on disk
-// rather than on what this watcher was started with.
-function _lineRenderOf(projectId, idx) {
-  try {
-    const p = _loadProjects().find(x => String(x.id) === String(projectId));
-    const l = p && (p.lines || [])[idx];
-    return l && l.render ? _normRender(l.render) : null;
-  } catch (e) { return null; }
-}
-
-async function _retryClipFetch(projectId, idx, prev) {
-  const proj = _loadProjects().find(p => String(p.id) === String(projectId));
-  if (!proj) return null;
-  const line = (proj.lines || []).map(_normLine)[idx];
-  if (!line) return null;
-  const frame = (_normMix(proj.mix).variants || []).find(v => v.id === prev.fromFrame);
-  if (!frame || !frame.path || !prev.fromAudio) return null;
-
-  // Both files again, under new keys: there is one host, so the retry that helps is a fresh
-  // upload - a signature with its whole life ahead of it, and a link no cache can hand back cold.
-  const imageUrl = await _hostLocal(frame.path, { forceFresh: true, verify: true });
-  const audioUrl = await _hostLocal(prev.fromAudio,
-    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
-
-  const quality = MP.qualityById(prev.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
-  const prompt = MP.promptFor(prev.preset);
-  const taskId = await _kieTask(quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt });
-  const ok = _patchProj(projectId, (p) => {
-    p.lines = p.lines.map(_normLine);
-    const l = p.lines[idx];
-    if (!l.render || String(l.render.taskId) !== String(prev.taskId)) return false;   // moved on
-    l.render = _normRender({ ...prev, taskId, error: '', audioUrl,
-      retry: prev.retry + 1, startedAt: new Date().toISOString() });
-  });
-  if (!ok) return null;
-  console.log('[scen3/clip] resubmitted line', idx + 1, 'with fresh links ->', String(taskId).slice(0, 24));
-  return taskId;
-}
-
-function _watchClip(projectId, idx, taskId) {
-  const key = `clip:${projectId}:${taskId}`;
-  if (_watching.has(key)) return;
-  _watching.add(key);
-
-  const started = Date.now();
-  // Twelve minutes, not twenty. Twenty was cover for failures being misread as "pending"
-  // (see H.readKieRecord) - a dead job was polled to the timeout and then reported as one
-  // that never answered. With the answer read properly, kie is quick about both outcomes and
-  // a job past twelve minutes is not one worth waiting on in silence.
-  const MAX_MS = 12 * 60 * 1000;
-  let lastState = '';
-  // Only the line still waiting on THIS task may be written: by the time an answer
-  // lands the user may have re-rendered, and the newer task owns the slot.
-  const mine = (l) => l && l.render && l.render.taskId === taskId;
-  // The same question asked of the stored project, for the top of each tick. A cancel clears
-  // `render`, a re-render replaces its taskId; either way this watcher has nothing left it is
-  // allowed to write, so it should stop rather than poll on to its timeout.
-  const stillMine = () => {
-    try {
-      const p = PROJECTS.get(projectId);
-      const l = p && (p.lines || [])[idx];
-      return !!(l && l.render && String(l.render.taskId) === String(taskId));
-    } catch (e) { return true; }        // unreadable store: keep watching rather than drop a job
-  };
-
-  const stop = (msg) => {
-    _patchProj(projectId, (p) => {
-      const l = p.lines[idx];
-      if (!mine(l)) return false;
-      l.render = { ...l.render, error: msg };
-      if (!msg) l.render = null;
-    });
-    _watching.delete(key);
-  };
-
-  const tick = async () => {
-    if (!stillMine()) {
-      console.log('[scen3/clip]', taskId.slice(0, 24), 'no longer owns line', idx + 1, '- stopping');
-      _watching.delete(key);
-      return;
-    }
-    if (Date.now() - started > MAX_MS) {
-      console.warn('[scen3/clip]', taskId.slice(0, 24), 'gave up after 12 min, last state:', lastState || '(none)');
-      // Say what the renderer was actually doing. "Did not answer" was never true - it answered
-      // every five seconds, and what it said is the only useful part of this message.
-      return stop('the renderer was still on "' + (lastState || 'no state') + '" after 12 minutes');
-    }
-    let s = null;
-    try { s = await _fetchClip(taskId, projectId); } catch (e) { s = null; }
-    if (s && s.raw) lastState = s.raw;
-
-    if (s && s.state === 'success') {
-      _patchProj(projectId, (p) => {
-        const l = p.lines[idx];
-        if (!mine(l)) return false;
-        const r = l.render;
-        const clip = _normTake({
-          path: s.path, dur: s.dur, thumb: s.thumb, at: new Date().toISOString(),
-          said: r.said, fromAudio: r.fromAudio, fromFrame: r.fromFrame,
-          preset: r.preset, quality: r.quality,
-        });
-        // A new VARIANT, not a replacement: earlier takes stay browsable, whichever frame
-        // they came from. The fresh one is what the fragment is set to — it is the thing
-        // the user just paid for and asked to see.
-        const list = Array.isArray(l.video[r.variant]) ? l.video[r.variant] : [];
-        const at = list.findIndex(x => x.id === clip.id);
-        if (at >= 0) list[at] = clip; else list.push(clip);
-        l.video[r.variant] = list;
-        l.pick = { ...(l.pick || {}), [r.variant]: clip.id };
-        l.render = null;
-      });
-      console.log('[scen3/clip]', taskId.slice(0, 24), '-> filed on line', idx + 1);
-      // The preview's proxy, made now rather than on the first play in Merge.
-      try { require('./proxies').warmProxies([s.path], 480); } catch (e) {}
-      _watching.delete(key);
-      return;
-    }
-    if (s && s.state === 'failed') {
-      console.warn('[scen3/clip]', taskId.slice(0, 24), 'failed:', s.error || '');
-      // The renderer could not READ our files: nothing was rendered and nothing was charged,
-      // so upload them again and ask again rather than reporting a failure the user can do
-      // nothing about. Once only.
-      const now = _lineRenderOf(projectId, idx);
-      if (_FETCH_FAIL_RE.test(String(s.error || '')) && now && now.retry < 1
-          && String(now.taskId) === String(taskId)) {
-        let next = null;
-        try { next = await _retryClipFetch(projectId, idx, now); }
-        catch (e) { console.warn('[scen3/clip] resubmit failed:', e.message); }
-        _watching.delete(key);
-        if (next) return _watchClip(projectId, idx, next);
-        return stop(String(s.error || 'render failed') + ' - and uploading the files again did not help');
-      }
-      return stop(String(s.error || 'render failed'));
-    }
-    setTimeout(tick, 5000);
-  };
-  setTimeout(tick, 5000);
-  console.log(`[scen3/clip] watching ${taskId.slice(0, 24)} for line ${idx + 1} of ${projectId}`);
-}
-
-// A server restart must not orphan a task either: pick up whatever was pending.
-function _resumeWatchers() {
-  try {
-    const list = _loadProjects();
-    let n = 0;
-    let c = 0;
-    list.forEach(p => {
-      const pend = _normPending((p.mix || {}).pending);
-      if (pend) { _watchFrame(p.id, pend.taskId, { mode: pend.mode, prompt: pend.prompt }); n++; }
-      (p.lines || []).forEach((l, i) => {
-        const r = _normRender(l && l.render);
-        if (r && !r.error) { _watchClip(p.id, i, r.taskId); c++; }
-      });
-    });
-    if (n) console.log(`[scen3/watch] resumed ${n} pending frame task(s) after boot`);
-    if (c) console.log(`[scen3/clip] resumed ${c} pending clip task(s) after boot`);
-  } catch (e) { console.warn('[scen3/watch] resume failed:', e.message); }
-}
-setTimeout(_resumeWatchers, 1500);
-
 // ════════════════════════════════════════════════════════════════════════════
 // PROJECTS
 //
@@ -3353,17 +2492,6 @@ const MIX_MODELS    = ['nano-banana-2', 'nano-banana-2-lite'];
 const MIX_FORMATS   = ['9:16', '2:3', '3:4', '1:1', '16:9'];
 const MIX_QUALITIES = ['1K', '2K', '4K'];
 const MIX_MODES     = ['same', 'cycle', 'random', 'manual'];
-
-function _normPending(p) {
-  const s = (p && typeof p === 'object') ? p : null;
-  if (!s || !s.taskId) return null;
-  return {
-    taskId:    String(s.taskId),
-    mode:      s.mode === 'edit' ? 'edit' : 'compose',
-    prompt:    String(s.prompt || ''),
-    startedAt: String(s.startedAt || ''),
-  };
-}
 
 function _normMix(m) {
   const s   = (m && typeof m === 'object') ? m : {};
@@ -3416,7 +2544,6 @@ function _normMix(m) {
     order: Array.isArray(s.order) ? s.order.map(String).filter(Boolean) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
-    pending: _normPending(s.pending),
     lastError: String(s.lastError || ''),
     approved:     Array.isArray(s.approved) ? s.approved.map(String) : [],
     banned:       Array.isArray(s.banned)   ? s.banned.map(String)   : [],
@@ -3450,10 +2577,6 @@ function _normProject(p, now) {
     lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],
     voice:      _normVoice(src.voice),
     video:      _normVideo(src.video),
-    // Which section of the Montage column the work has reached. Saved because moving on
-    // is a decision, and a reload should not quietly send the user back a step.
-    stage:      src.stage === 'video' ? 'video' : 'voice',
-    reel:       _normReel(src.reel),
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
@@ -3496,29 +2619,6 @@ function _normTake(t) {
     // A clip's poster frame. The cards show stills only — the clip itself belongs to a
     // viewer, not to a list of ten of them all decoding at once.
     thumb:   String(s.thumb || ''),
-  };
-}
-// The reel as the user approved it in the preview: the clips, in order, with the total
-// they add up to. This is the handoff to Merge — an ORDER, not a file. Concatenating is
-// Merge's job, and doing it here would only have to be redone after the next re-render.
-function _normReel(r) {
-  const s = (r && typeof r === 'object') ? r : null;
-  if (!s || !Array.isArray(s.clips) || !s.clips.length) return null;
-  const clips = s.clips.map(c => ({
-    n:    Math.max(0, parseInt((c || {}).n, 10) || 0),
-    path: String((c || {}).path || ''),
-    dur:  +(c || {}).dur || 0,
-  })).filter(c => c.path);
-  if (!clips.length) return null;
-  return {
-    clips,
-    total: +(clips.reduce((a, c) => a + c.dur, 0)).toFixed(2),
-    variant: s.variant === 'tagged' ? 'tagged' : 'plain',
-    at: String(s.at || new Date().toISOString()),
-    // Set once the cut reaches Merge, so the page can say it has been sent and where to.
-    // Empty until then — not a flag for "ready", just a record of what happened.
-    mergeKey: String(s.mergeKey || ''),
-    mergedAt: String(s.mergedAt || ''),
   };
 }
 
@@ -3596,7 +2696,6 @@ function _normLine(l) {
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.
-    render:  _normRender(s.render),
   };
 }
 
@@ -3626,30 +2725,6 @@ function _normShot(sh) {
     said:         String(sh.said || ''),
     mood:         str(sh.mood, 40),
     at:           str(sh.at, 40),
-  };
-}
-
-// One clip in flight for one line.
-function _normRender(r) {
-  const s = (r && typeof r === 'object') ? r : null;
-  if (!s || !s.taskId) return null;
-  return {
-    taskId:  String(s.taskId),
-    variant: s.variant === 'tagged' ? 'tagged' : 'plain',
-    // Everything needed to file the answer without re-deriving it, and to know later
-    // what the clip was made from.
-    said:      String(s.said || ''),
-    fromAudio: String(s.fromAudio || ''),
-    fromFrame: String(s.fromFrame || ''),
-    preset:    String(s.preset || ''),
-    quality:   String(s.quality || ''),
-    startedAt: String(s.startedAt || ''),
-    error:     String(s.error || ''),
-    // How many times this fragment has been resubmitted after the renderer said it could not
-    // fetch our files. On the record rather than in memory so a restart cannot hand out a fresh
-    // set of retries.
-    retry:     Math.max(0, parseInt(s.retry, 10) || 0),
-    audioUrl:  String(s.audioUrl || ''),
   };
 }
 
@@ -3762,8 +2837,6 @@ const _projFull = p => ({
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),
   video: _normVideo(p.video),
-  stage: p.stage === 'video' ? 'video' : 'voice',
-  reel:  _normReel(p.reel),
   mix:   _normMix(p.mix),
 });
 
@@ -4009,7 +3082,7 @@ router.get('/scen3/frame-sets', (_req, res) => {
   res.json({ success: true, max: FRAME_SET_MAX, sets: FRAME_SETS.map(s => ({ id: s.id, label: s.label, about: s.about, poseId: s.poseId })) });
 });
 
-// The references rule, for a frame of the set. Written from FRAME_RULE_POSED, with the one change the
+// The references rule, for a frame of the set. Written from the old page's frame rule, with the one change the
 // owner asked for: the eyes are the moment's, not a rule's.
 // THIS IS AN EDIT, NOT A COMPOSITION (the owner, 2026-09-21, after two sets came out head to toe with
 // a face that was not the character's).
@@ -4779,10 +3852,6 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
    the clip once into the project's clips/, makes a poster, normalises it for the browser, measures
    it and files it as a take of that line. Leaving the page loses nothing.
 
-   The Scenarios page keeps its own route (/scen3/video/render) with its own watcher until phase G;
-   the machinery below - the refusals, the hosting, the fetch of a finished clip - is shared with it
-   rather than copied.
-
    EVERY REFUSAL IS BEFORE THE MONEY. What cannot be rendered is said plainly - no words, no frame,
    no read, a read that no longer matches the words, a read longer than the model takes - and
    answered as `skipped`, not as an error: a chain walking eight lines must be able to step over one.
@@ -5102,7 +4171,6 @@ JOBS.register('clip', {
     if (at >= 0) takes[at] = clip; else takes.push(clip);
     line.video[variant] = takes;
     line.pick = { ...(line.pick || {}), [variant]: clip.id };
-    line.render = null;
     proj.updatedAt = clip.at;
     _saveProjects(list);
     MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a clip filed
@@ -5129,32 +4197,6 @@ JOBS.register('clip', {
    tasks bound to the original's id; carried over, the watcher would file one result into
    two projects. The copy starts with nothing pending.
    ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/projects/:id/copy', (req, res) => {
-  try {
-    const list = _loadProjects();
-    const src = list.find(x => String(x.id) === String(req.params.id));
-    if (!src) return res.status(404).json({ success: false, error: 'not found' });
-
-    const now = new Date().toISOString();
-    const rec = _normProject(JSON.parse(JSON.stringify(src)), now);
-    rec.id = _newId(list);
-    rec.owner = OWN.uidOf(req);
-    rec.createdAt = now;
-    rec.updatedAt = now;
-    // "(copy)", then "(copy 2)" and on, so two copies of one project can be told apart.
-    const base = String(src.name || 'untitled project').replace(/\s*\(copy(?: \d+)?\)$/i, '');
-    const taken = new Set(list.map(x => String(x.name || '').toLowerCase()));
-    rec.name = base + ' (copy)';
-    for (let n = 2; taken.has(rec.name.toLowerCase()); n++) rec.name = `${base} (copy ${n})`;
-    rec.mix.pending = null;
-    rec.mix.lastError = '';
-    for (const l of rec.lines) if (l && l.render) l.render = null;
-
-    list.unshift(rec);
-    _saveProjects(list);
-    res.json({ success: true, project: _projFull(rec) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // ── video: starting a render ────────────────────────────────────────────────
 // One line per call. The page walks the list itself so a clip appears the moment it is
@@ -5164,83 +4206,6 @@ router.post('/scen3/projects/:id/copy', (req, res) => {
 // The answer is NOT waited for here. A render outlives any request, so the task is
 // handed to a watcher that files it even if the page is closed, and the page follows
 // along through /scen3/video/state.
-router.post('/scen3/video/render', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
-
-    const list = _loadProjects();
-    const proj = list.find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-
-    const i = parseInt(b.line, 10);
-    const lines = (proj.lines || []).map(_normLine);
-    if (!(i >= 0 && i < lines.length)) {
-      return res.status(400).json({ success: false, error: 'line is out of range' });
-    }
-
-    const video = _normVideo(proj.video);
-    const voice = _normVoice(proj.voice);
-    const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
-    const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
-    const line = lines[i];
-
-    // Everything that makes a render impossible, said plainly instead of as a 400 from
-    // kie ten seconds later.
-    const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
-    if (!said.trim()) return res.json({ success: true, skipped: 'this fragment has no words' });
-    if (line.render && !line.render.error) {
-      return res.json({ success: true, taskId: line.render.taskId, already: true });
-    }
-    const frame = (_normMix(proj.mix).variants || []).find(v => v.id === line.frameId);
-    if (!frame || !frame.path) return res.json({ success: true, skipped: 'no first frame on this fragment' });
-    const take = line.audio[variant];
-    if (!take || !take.path) return res.json({ success: true, skipped: `no ${variant} read yet` });
-    if (take.said !== said) return res.json({ success: true, skipped: 'the read no longer matches the words' });
-    if (take.dur > quality.maxAudioSec) {
-      return res.json({ success: true,
-        skipped: `the read is ${take.dur.toFixed(1)}s and the model takes ${quality.maxAudioSec}s at most` });
-    }
-
-    // Both files go up fresh every time. kie fetches them itself, and a URL that has
-    // been sitting around comes back as "Image fetch failed" long after the money is
-    // committed. The extension has to be honest too: an mp3 served as .jpg is rejected
-    // by the audio decoder.
-    // verify: read each URL back before spending anything on it. A host can answer 200 with a
-    // link that serves a landing page, and the render then fails as "upload failed" after the
-    // task is created and charged.
-    const imageUrl = await _hostLocal(frame.path, { forceFresh: true, verify: true });
-    const audioUrl = await _hostLocal(take.path,
-      { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
-
-    const prompt = MP.promptFor(video.preset);
-    const taskId = await _kieTask(quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt });
-    // Deliberately NOT handed to the shared pending-task recovery: that one exists for
-    // orphaned IMAGE tasks and downloads every result as a .jpg, which for a clip means
-    // an mp4 saved under the wrong name and a thumbnail that cannot be made. Clips have
-    // their own watcher, and _resumeWatchers picks them up after a restart.
-
-    _patchProj(id, (p) => {
-      p.lines = p.lines.map(_normLine);
-      p.lines[i].render = _normRender({
-        taskId, variant, said, fromAudio: take.path, fromFrame: line.frameId,
-        preset: video.preset, quality: video.quality,
-        startedAt: new Date().toISOString(),
-        // Kept so a fetch failure can be retried somewhere else without guessing where the
-        // file went the first time.
-        audioUrl,
-      });
-    });
-    _watchClip(id, i, taskId);
-
-    res.json({ success: true, taskId, model: quality.model, prompt });
-  } catch (e) {
-    console.error('[scen3/video/render]', e.response ? (e.response.data || e.message) : e.message);
-    res.status(502).json({ success: false, error: (e.response && e.response.data && e.response.data.msg) || e.message });
-  }
-});
 
 // ── Stop waiting on one fragment's render ────────────────────────────────────
 // What this does NOT do is stop the renderer. kie.ai exposes no cancel for a job in flight,
@@ -5251,71 +4216,6 @@ router.post('/scen3/video/render', async (req, res) => {
 //
 // The taskId must be sent and must match. A cancel that arrives after the user has already
 // re-rendered would otherwise throw away the NEW job's marker and leave it running unwatched.
-router.post('/scen3/video/cancel', (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const i = parseInt(b.line, 10);
-    const taskId = String(b.taskId || '').trim();
-    if (!id || !taskId) return res.status(400).json({ success: false, error: 'projectId and taskId are required' });
-
-    const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    if (!(i >= 0 && i < (proj.lines || []).length)) {
-      return res.status(400).json({ success: false, error: 'line is out of range' });
-    }
-    const cur = _lineRenderOf(id, i);
-    if (!cur) return res.json({ success: true, already: true, note: 'that fragment is not rendering' });
-    if (String(cur.taskId) !== taskId) {
-      return res.status(409).json({ success: false,
-        error: 'that fragment is on a newer render now - nothing was cancelled' });
-    }
-
-    _patchProj(id, (p) => {
-      p.lines = p.lines.map(_normLine);
-      const l = p.lines[i];
-      if (!l.render || String(l.render.taskId) !== taskId) return false;
-      l.render = null;
-    });
-    console.log('[scen3/clip] cancelled the wait on line', i + 1, 'task', taskId.slice(0, 24));
-    res.json({ success: true, taskId, line: i });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// ── the cast character's face ────────────────────────────────────────────────
-// The 4K reference sheet is a close-up PORTRAIT on the left and three full-body views on
-// the right. Looked at it to be sure rather than guessing: a slice of width = height * 2/3
-// taken from x=0 lands on a clean head-and-shoulders on every character in the library.
-//
-// The sheet's own thumbnail is 600px wide, so that slice would be ~225px and the 360px face
-// panel would show it blown up. This makes a face-sized picture instead - twice the panel, for a
-// high-density screen - and caches it, since a sheet never changes without a new file name.
-// One cut at the server's size (480x720) is made again.
-const FACE_W = 960, FACE_H = 1440;
-
-async function _castFace(sheetPath, charId) {
-  const hit = _resolveMedia(sheetPath);
-  if (!hit || !fs.existsSync(hit.abs)) return '';
-  // Derived from the sheet and made again when missing, so it is cache, not media.
-  const dir = path.join(CFG.CACHE_DIR, 'faces');
-  fs.mkdirSync(dir, { recursive: true });
-  const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
-  const abs = path.join(dir, name);
-  const url = `/cache/faces/${name}`;
-  if (fs.existsSync(abs) && ((await sharp(abs).metadata()).width || 0) >= FACE_W) return url;
-  const meta = await sharp(hit.abs).metadata();
-  const w = Math.min(meta.width, Math.round(meta.height * 2 / 3));
-  await sharp(hit.abs)
-    .extract({ left: 0, top: 0, width: w, height: meta.height })
-    .resize(FACE_W, FACE_H, { fit: 'cover' })
-    .jpeg({ quality: 85 })
-    .toFile(abs);
-  console.log('[scen3/face]', name, 'from', w + 'x' + meta.height);
-  return url;
-}
 
 // ── the voice library ────────────────────────────────────────────────────────
 // A proxy, for one reason above all: the ElevenLabs key stays on the server. It also trims
@@ -5452,109 +4352,7 @@ router.post('/scen3/voices/take', async (req, res) => {
   }
 });
 
-// Everything the voice studio needs about who it is casting a voice for. Built on demand
-// rather than on every project read: cropping a sheet is work, and only this popup wants it.
-router.get('/scen3/cast-face/:id', async (req, res) => {
-  try {
-    const proj = _loadProjects().find(p => String(p.id) === String(req.params.id));
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const cast = _normCasting(proj.casting);
-    const chars = _read(path.join(DATA_DIR, 'characters.json'));
-    const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
-    const ch = arr.find(c => String(c.id) === cast.characterId)
-            || arr.find(c => String(c.name) === cast.characterName);
-    if (!ch) return res.status(404).json({ success: false, error: 'the cast character is not in the library' });
-    const face = ch.sheet ? await _castFace(ch.sheet, ch.id) : '';
-    res.json({
-      success: true,
-      character: { id: String(ch.id), name: String(ch.name || ''), gender: String(ch.gender || '') },
-      // Every voice ever taken for this character, and which of them is starred. The starred
-      // one IS `voice` — the field every read uses — so the two can never disagree.
-      voices: Array.isArray(ch.voices) ? ch.voices : [],
-      active: String(ch.voice || ''),
-      face,
-      // the look this project actually shoots with, as a fallback picture
-      obraz: String(cast.obrazImage || ''),
-      voice: _castVoice(proj),
-    });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// The cut, re-read from the PROJECT rather than trusted from the page: the page may have
-// been open a while, and what goes to Merge has to be what is on disk. The resolver is the
-// one the cards and the reel preview use, so all three agree on which take is in the cut.
-function _cutClips(p) {
-  const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
-  const cut = (p.lines || []).map(_normLine).map((l, i) => {
-    const c = _pickClip(l, variant);
-    // Same freshness rule the cards and the preview apply: a clip of words that have since
-    // been edited is not this fragment's clip. Without this the page could show a cut of
-    // nine and Merge receive ten — the reel is judged on what the preview played.
-    const words = String((variant === 'tagged' ? l.tagged : l.text) || l.text || '');
-    if (!c || c.said !== words) return null;
-    return { n: i + 1, line: l, clip: c };
-  }).filter(Boolean);
-  return { variant, cut };
-}
-
 // The reel the user approved in the preview. Stored as an order of clips; the hand-off to
-// Merge is the next call, so this deliberately does no stitching and touches nothing
-// outside the project.
-router.post('/scen3/reel/save', (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const list = _loadProjects();
-    const p = list.find(x => String(x.id) === id);
-    if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
-    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
-
-    const { variant, cut } = _cutClips(p);
-    const clips = cut.map(c => ({ n: c.n, path: c.clip.path, dur: c.clip.dur }));
-    if (!clips.length) return res.status(400).json({ success: false, error: 'no clips to save' });
-
-    const reel = _normReel({ ...(p.reel || {}), clips, variant, at: new Date().toISOString() });
-    p.reel = reel;
-    p.updatedAt = new Date().toISOString();
-    _saveProjects(list);
-    res.json({ success: true, reel });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// ── Hand the cut to Merge ────────────────────────────────────────────────────
-// The page saves the reel, then hands the project to Merge through /api/mv3/import/scen3
-// (routes/mergev3.js). Each fragment's audio used to be pulled out of its clip first, into
-// <clip>_av.mp3; nothing ever read those files, and that step is gone.
-
-// What the page polls while a batch runs. Deliberately tiny: the full project carries
-// the whole mix workspace, and re-fetching that every few seconds to learn one boolean
-// would be absurd.
-router.get('/scen3/video/state/:id', (req, res) => {
-  try {
-    const proj = _loadProjects().find(p => String(p.id) === String(req.params.id));
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    const variant = _normVoice(proj.voice).variant === 'tagged' ? 'tagged' : 'plain';
-    const lines = (proj.lines || []).map(_normLine).map((l, i) => {
-      // the variant this fragment is set to; another frame's clip is not this fragment's
-      // clip, however recently it was made
-      const clip = _pickClip(l, variant);
-      return {
-        n: i,
-        rendering: !!(l.render && !l.render.error),
-        error: (l.render && l.render.error) || '',
-        variants: (l.video[variant] || []).length,
-        // EVERY field of the take, `at` included. The page mirrors this row into its own
-        // copy and saves it, so anything missing here is quietly erased from a clip the
-        // server had already recorded in full.
-        clip: clip ? { id: clip.id, path: clip.path, thumb: clip.thumb, dur: clip.dur, at: clip.at,
-                       said: clip.said, fromAudio: clip.fromAudio, fromFrame: clip.fromFrame,
-                       preset: clip.preset, quality: clip.quality } : null,
-      };
-    });
-    res.json({ success: true, variant, lines });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 // ── The frames generated for one look ────────────────────────────────────────
 //   GET    /api/scen3/look-frames/:obrazId          every frame made with that look
 //   DELETE /api/scen3/look-frames/:obrazId/:frameId one of them, file and reference
@@ -5706,35 +4504,7 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
   }
 });
 
-// Opened up for the Merge v3 import (routes/mergev3.js). The cut - which variant, and the
-// freshness rule that drops a clip generated for words since edited - must have exactly one
-// implementation: a second copy would let the editor receive a different cut than the one
-// Scenarios played back.
-// The cut as it stands BEFORE any lipsync: every fragment that has a read and a first
-// frame, whether or not a clip was ever rendered for it. Same freshness rule as _cutClips
-// - a read of words that have since been edited is not this fragment's read - so the two
-// answer the same question about the same script, one in pictures and one in stills.
-function _audioCut(p) {
-  const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
-  const frames = _normMix(p.mix).variants || [];
-  const cut = (p.lines || []).map(_normLine).map((l, i) => {
-    const said = String((variant === 'tagged' ? l.tagged : l.text) || l.text || '');
-    const take = (l.audio || {})[variant];
-    if (!said.trim() || !take || !take.path || take.said !== said) return null;
-    const frame = frames.find(v => v && String(v.id) === String(l.frameId || ''));
-    return { n: i + 1, line: l, audio: take, frame: (frame && frame.path) ? frame.path : null };
-  }).filter(Boolean);
-  return { variant, cut };
-}
-
-router.cutClips = _cutClips;
-// The prompt blocks, for tools that must send exactly what the app sends (a model comparison is
-// worthless if the bench says something the routes do not).
-router.PROMPTS = { ENV_TAIL, ENV_KEEP, DRESS_LOCK, COSTUME_LOCK, KNOLL_TAIL, MASCOT_TAIL, PERSON_REAL, TEXTILE_REAL };
-// ...and the agents that write the long half of those prompts, for the same reason.
-router.AGENTS = { readEnvironmentIdea: _readEnvironmentIdea, readDressing: _readDressing, readLookbookIdea: _readLookbookIdea, planFrames: _planFrames };
 router.FRAME_SETS = FRAME_SETS;
-router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 // The frame rule, for the timeline mirror (lib/frag-mirror.js): the pool in the order the frames
 // stand in, and which of them a line opens on. One rule, read by the page, by the agent that writes

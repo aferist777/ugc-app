@@ -5,7 +5,7 @@
 // markup:
 //
 //   • which entry is lit is read from the ADDRESS, not hardcoded. The page answers on
-//     /scenarios-v3 today and on /scenarios after the swap, and a hardcoded class would
+//     the page's own address, whatever it is, and a hardcoded class would
 //     light the wrong one the day that changes.
 //   • the Admin entry, on a page whose strip leaves it out.
 
@@ -22,7 +22,7 @@ function _lightCurrent(nav) {
     // the nav simply lights nothing.
     for (const raw of [a.getAttribute('href') || ''].concat((a.getAttribute('data-also') || '').split(/\s+/))) {
       const p = raw.replace(/\/+$/, '');
-      // longest matching prefix wins, so /scenarios-v3 beats /scenarios on its own page
+      // longest matching prefix wins, so /library2 beats /library on its own page
       if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
     }
   });

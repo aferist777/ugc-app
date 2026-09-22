@@ -4,7 +4,7 @@
 
    The column idiom (a collapsed column becomes a 38px clickable spine with a
    vertical label) is deliberately re-declared here rather than imported from
-   css/scenarios-v3.css. That file's column rules are tangled with
+   the Scenarios page's stylesheet. Its column rules were tangled with
    scenario-specific sizing — casting slot widths, the montage 400px clamp,
    body[data-mode="workspace"] gating — so pulling them in would drag that page's
    layout along. Extracting the primitives into app-shell.css is worth doing once

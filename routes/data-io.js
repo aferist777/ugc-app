@@ -79,8 +79,11 @@ const GROUPS = [
   { id: 'projects', label: 'Projects (Scenarios projects with their voice, frames and clips; Merge timelines, generation history)',
     dirs: ['projects'], stores: ['data/project-list.json', 'data/merge.json', 'data/mv3-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
     needs: ['media', 'hooks'], heavy: true },
-  { id: 'scenarios', label: 'Scenarios library (scenarios, poses, moods, options)',
-    dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-poses.json', 'data/scen3-moods.json',
+  // The moods store went with the Scenarios page (phase G): the video's moods live in
+  // lib/motion-presets.js and are not a stored thing. An old library may still hold the file; the
+  // export no longer carries it and nothing reads it.
+  { id: 'scenarios', label: 'Scenarios library (scenarios, poses, options)',
+    dirs: [], stores: ['data/scen3-scenarios.json', 'data/scen3-poses.json',
                        'data/scen3-options.json', 'data/scen3-frame-options.json'] },
   { id: 'looks', label: 'Looks',
     dirs: ['media/looks'], stores: ['data/obrazy.json'] },

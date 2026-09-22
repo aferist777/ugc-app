@@ -22,7 +22,6 @@
 <!-- Which entry is lit comes from the address (js/app-nav.js), imported by the page module. -->
 <nav class="sv3-nav">
   <a href="/character">Character</a>
-  <a href="/scenarios">Scenarios</a>
   <a href="/merge">Merge</a>
   <span class="sp"></span>
   <a href="/library" data-also="/library2">Library</a>
@@ -49,7 +48,6 @@
       <span class="l2-status" id="l2-status"></span>
       <button class="l2-btn" type="button" id="l2-add-narrator" hidden>New narrator</button>
       <button class="l2-btn" type="button" id="l2-add-source" hidden>Add source</button>
-      <button class="l2-btn" type="button" id="l2-open-scenarios" hidden>Open Scenarios</button>
       <!-- Writing without a source: the same accordion, entered at the script column. -->
       <button class="l2-btn primary" type="button" id="l2-write">Write a script</button>
     </div>
@@ -270,14 +268,13 @@
 </div>
 
 <!-- ══ A generated scenario: where it came from, and what it says. Read-only — editing belongs
-     to the Scenarios page, and two autosaves over one record would race. ══ -->
+     read-only here: the scenario is written on this page and used in Merge. ══ -->
 <div class="l2-ov" id="l2-scen-ov" hidden>
   <div class="l2-panel wide" role="dialog" aria-modal="true" aria-labelledby="l2-scen-title">
     <div class="l2-panel-head">
       <span class="l2-panel-t" id="l2-scen-title">Scenario</span>
       <span class="l2-words" id="l2-scen-meta"></span>
       <span class="sp"></span>
-      <button class="l2-btn" type="button" id="l2-scen-open">Edit in Scenarios</button>
       <button class="l2-btn danger" type="button" id="l2-scen-del">Delete</button>
       <button class="l2-btn" type="button" id="l2-scen-close" title="Close (Esc)">✕</button>
     </div>

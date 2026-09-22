@@ -21,13 +21,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const { APP_DIR, ROOT_DIR, POSES_CACHE_DIR } = require('../lib/config');
+const { APP_DIR, ROOT_DIR } = require('../lib/config');
 require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-const PAGES = ['/', '/character', '/merge', '/scenarios', '/library', '/library2', '/admin'];
+const PAGES = ['/', '/character', '/merge', '/library', '/library2', '/admin'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -38,6 +38,15 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
                  ['POST', '/api/restart'], ['GET', '/birols'],
+                 // the Scenarios page and what only it called, removed in phase G
+                 ['POST', '/api/scen3/options/delete'], ['POST', '/api/scen3/preview1k'], ['GET', '/api/scen3/frame-options'],
+                 ['POST', '/api/scen3/frame-options'], ['POST', '/api/scen3/media-size'], ['POST', '/api/scen3/frame/crop'],
+                 ['POST', '/api/scen3/gen/frame/analyze'], ['POST', '/api/scen3/gen/frame'], ['POST', '/api/scen3/gen/mix'],
+                 ['POST', '/api/scen3/obraz-save'], ['POST', '/api/scen3/obraz-delete'], ['POST', '/api/scen3/finalize'],
+                 ['GET', '/api/scen3/moods'], ['GET', '/api/scen3/voice-tags'], ['POST', '/api/scen3/video/render'],
+                 ['POST', '/api/scen3/video/cancel'], ['GET', '/api/scen3/video/state/x'], ['GET', '/api/scen3/cast-face/x'],
+                 ['POST', '/api/scen3/reel/save'], ['POST', '/api/scen3/scenarios/x/duplicate'], ['POST', '/api/scen3/projects/x/copy'],
+                 ['POST', '/api/mv3/import/scen3'], ['GET', '/scenarios'],
                  // old versions, removed in the cleanup of 2026-09-15 - one route per removed file
                  ['GET', '/api/balance'], ['POST', '/api/public-host'], ['GET', '/api/recover-tasks'],
                  ['GET', '/api/edit-state'], ['GET', '/api/gen-timings'], ['GET', '/api/hooks/state'],
@@ -91,17 +100,8 @@ function getRoutes() {
   for (const u of [...PAGES, ...STATICS, ...getRoutes()]) rows.push(['GET', u, await call('GET', u)]);
 
   rows.push(['GET', 'thumb of a shipped preset', await call('GET', '/api/thumb?src=/presets/anatolian-stone.jpg&v=card')]);
-  const previewFile = path.join(POSES_CACHE_DIR, 'scen3', 'preview', path.basename(MANNEQUIN));
-  const hadPreview = fs.existsSync(previewFile);
-  const pv = await call('POST', '/api/scen3/preview1k', { path: MANNEQUIN });
-  rows.push(['POST', 'preview1k of a shipped pose', pv]);
-  let pvPath = null;
-  try { pvPath = JSON.parse(pv.text).path; } catch (e) { /* reported below as a failed row */ }
-  if (pvPath) {
-    rows.push(['GET', 'the preview it returned: ' + pvPath, await call('GET', pvPath)]);
-    rows.push(['GET', 'thumb of that preview', await call('GET', '/api/thumb?src=' + encodeURIComponent(pvPath) + '&v=strip')]);
-  }
-  if (!hadPreview) { try { fs.unlinkSync(previewFile); } catch (e) { /* not made - nothing to remove */ } }
+  // The 1K preview of a mannequin went with the Scenarios page (phase G); the thumbnail above is
+  // what is left of this check - one shipped asset, resized on demand.
 
   let failed = 0;
   const lines = [];

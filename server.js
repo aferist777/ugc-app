@@ -94,9 +94,9 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. Some files keep the name of the rebuild that replaced an older
-// page (character-v2.html, merge-v3.html, scenarios-v3.html): renaming them would churn every
+// page (character-v2.html, merge-v3.html): renaming them would churn every
 // import path under public/js/ for no gain.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML

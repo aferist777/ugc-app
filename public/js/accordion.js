@@ -5,7 +5,7 @@
 // the deeper columns is not thrown away by folding it, only hidden, so returning finds it as you
 // left it.
 //
-// WHY THIS IS ITS OWN FILE. The Scenarios page grew its own version (js/scenarios-v3/shell.js)
+// WHY THIS IS ITS OWN FILE. The Scenarios page grew its own version of this
 // with a mode → open-columns map, which is right for a page that opens two columns at once. This
 // is the simpler and more general shape - exactly one column open, levels in order - and it is
 // written to be lifted into the next page rather than copied out of this one.

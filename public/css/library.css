@@ -499,4 +499,3 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-sedit-status{ font-size:10.5px; color:var(--muted); }
 .lib-sedit-status.ok{ color:oklch(.78 .13 150); }
 .lib-sedit-status.err{ color:oklch(.75 .15 25); }
-.lib-sedit-link{ font-size:10.5px; color:var(--primary); }

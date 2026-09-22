@@ -1,6 +1,6 @@
 /* Generation progress - the house style for "this is being generated": the target itself
    blurs in place behind a spinner, a label, a bar and a countdown that learns from how long
-   the same kind of job took last time. js/scenarios-v3/progress.js draws these classes.
+   the same kind of job took last time. js/progress.js draws these classes.
 
    Shared: it started on the scenarios page and character-v2 reuses the same module, so the
    rules live here rather than in either page's stylesheet. Both pages link it. Colours come

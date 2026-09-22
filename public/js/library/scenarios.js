@@ -114,14 +114,7 @@ function _panel(it) {
   const st = document.createElement('span');
   st.className = 'lib-sedit-status';
 
-  const openThere = document.createElement('a');
-  openThere.className = 'lib-sedit-link';
-  openThere.href = '/scenarios?s=' + encodeURIComponent(it.id);
-  openThere.textContent = 'open in Scenarios';
-  openThere.title = 'Edit line by line, with the roles and metadata';
-
-  foot.append(save, st, document.createElement('span'), openThere);
-  foot.children[2].className = 'sp';
+  foot.append(save, st);
   panel.appendChild(foot);
 
   // Ctrl/Cmd+Enter saves. A ten-line script is a lot of typing to then go hunting for a button.

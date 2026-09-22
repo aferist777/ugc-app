@@ -876,12 +876,6 @@ async function _fixThumbs() {
 // Only on Media: it is the one shelf whose contents are files you bring in rather than
 // things the app made. The button lands them under the Uploads filter.
 function _paintUpload() {
-  // Writing a scenario needs the roles, the vertical and the product, which are three fields this
-  // page does not have. So the button hands over to the page that does, and asks it to open its
-  // own create form on arrival - see ?new=1 in js/scenarios-v3/library.js.
-  const ns = $('lib-new-scenario');
-  if (ns) ns.hidden = _shelf !== 'scenarios';
-
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (!btn) return;
@@ -954,10 +948,6 @@ function boot() {
   if (brk) brk.addEventListener('click', _cleanBroken);
   const thb = $('lib-thumbs');
   if (thb) thb.addEventListener('click', _fixThumbs);
-
-  // ?new=1 is the whole handover: Scenarios opens its own create form on arrival.
-  const nsc = $('lib-new-scenario');
-  if (nsc) nsc.addEventListener('click', () => { window.location.href = '/scenarios?new=1'; });
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

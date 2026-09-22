@@ -359,10 +359,9 @@
    you have already used, and the whole point of the ideas base is coming back to the rest. */
 .l2-topic.used{ border-color:oklch(.42 .07 150); }
 .l2-topic-used{
-  font-size:10.5px; color:var(--primary); text-decoration:none;
+  font-size:10.5px; color:var(--muted); text-decoration:none;
   padding:1px 6px; border:1px solid var(--border); border-radius:var(--pill);
 }
-.l2-topic-used:hover{ border-color:var(--primary); }
 /* Read-only lines in the scenario panel. Same shape as the editable ones so the two read alike,
    without the affordance to type - which would be a second autosave racing the Scenarios page. */
 .l2-scene-ro{
