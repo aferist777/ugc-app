@@ -114,9 +114,9 @@ export function setOpenColumn(which) {
 }
 
 // ── Sash dragging ──────────────────────────────────────────────────────────
-// `sign` is which way the pointer has to move to make the panel BIGGER: the left
-// column grows rightwards (+1), the timeline grows upwards (-1) because it hangs
-// off the bottom edge.
+// `sign` is which way the pointer has to move to make the panel BIGGER. Both hang off an edge
+// of the window, so both are -1: the column off the right edge (P1 - it used to be on the left
+// and +1), the timeline off the bottom.
 function _wireSash(sash, { axis, sign, get, set, save, reset }) {
   if (!sash) return;
   const cls = axis === 'x' ? 'mv3-resize-v' : 'mv3-resize-h';
@@ -172,8 +172,9 @@ function _wireCross() {
     const left0 = _leftNow(), tl0 = _tlNow();
     document.body.classList.add('mv3-resize-xy');
     const move = (ev) => {
-      _applyLeft(left0 + (ev.clientX - x0));
-      // The timeline hangs off the bottom, so it GROWS as the pointer goes up.
+      // The column hangs off the right edge, so it GROWS as the pointer goes left (P1)...
+      _applyLeft(left0 - (ev.clientX - x0));
+      // ...and the timeline hangs off the bottom, so it GROWS as the pointer goes up.
       _applyTl(tl0 - (ev.clientY - y0));
       _placeCross();
     };
@@ -221,8 +222,9 @@ export function initLayout() {
     });
   });
 
+  // The column is on the RIGHT of the preview (P1), so it grows as the pointer goes LEFT.
   _wireSash(document.getElementById('mv3-sash-v'), {
-    axis: 'x', sign: 1,
+    axis: 'x', sign: -1,
     get: _leftNow, set: (px) => { _applyLeft(px); _placeCross(); },
     reset: () => { _applyLeft(_defLeft()); _placeCross(); },
     save: () => { try { localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow()))); } catch (e) {} },

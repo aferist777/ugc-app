@@ -210,12 +210,19 @@ select.mv3-rr-rf{cursor:pointer}
 }
 .mv3-big-x:hover{color:var(--ink); border-color:var(--border-soft)}
 
-/* ── Left side: the stack - two panels, one open, and the timeline under them ──
+/* ── The stack - two panels, one open, and the timeline under them ────────────
    The column is a flex column: the pair takes what the timeline leaves, and the
    timeline's height is set inline by the page (the horizontal sash drags it).
    Its width is what the vertical sash drags, and it is set inline by the page in
-   pixels. The open panel gets whatever is left after the 34px spine. */
-.mv3-left{display:flex; flex-direction:column; flex:0 0 auto; min-width:0; width:300px}
+   pixels. The open panel gets whatever is left after the 34px spine.
+
+   IT STANDS ON THE RIGHT (the owner, 2026-09-22), with the preview down the left side of the
+   window. The markup still reads stack - sash - preview, because every script here finds its
+   elements by id and the page should read in the order it is written; what puts them on screen
+   the other way round is `order`, and the only thing that has to know is the sash, which now
+   makes the column bigger by moving LEFT (js/merge-v3/layout.js). Its id is still `mv3-left`:
+   renaming it would touch the saved width, the sashes and four modules to say nothing new. */
+.mv3-left{display:flex; flex-direction:column; flex:0 0 auto; min-width:0; width:300px; order:3}
 .mv3-pair{display:flex; flex:1 1 0; min-height:0; min-width:0}
 
 .mv3-panel{display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg)}
@@ -282,7 +289,7 @@ select.mv3-rr-rf{cursor:pointer}
 }
 .mv3-sash:hover{background:oklch(1 0 0 / .10)}
 .mv3-sash:hover::after{opacity:1}
-.mv3-sash.is-v{width:5px; cursor:col-resize}
+.mv3-sash.is-v{width:5px; cursor:col-resize; order:2}
 /* WHERE THE TWO SASHES MEET. Each one moves a single edge; this moves both at once, which
    is the gesture you actually want when the timeline is too short AND the preview too
    narrow. It rides the vertical sash and is put at the horizontal one's height by
@@ -480,11 +487,15 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    9:16, because every output of this app is a Reel. height + aspect-ratio +
    max-width together let the stage take the height it is given and give back the
    width it does not need. */
-#mv3-preview{flex:1 1 0; min-width:0}
-/* Padding, so the stage does not sit flush against the panel. */
+#mv3-preview{flex:1 1 0; min-width:0; order:1}
+/* Padding, so the stage does not sit flush against the panel. The colour AROUND the stage is a
+   variable because the FIRST STEP label is painted on it, over the stage's own border, and a
+   legend whose background is a second spelling of the same colour goes wrong the day one of them
+   is changed. */
 .mv3-preview-body{
+  --mv3-around:oklch(.13 .012 265);
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
-  padding:26px 18px; background:oklch(.13 .012 265);
+  padding:26px 18px; background:var(--mv3-around);
 }
 .mv3-stage{
   height:100%; max-height:100%; max-width:100%; aspect-ratio:9/16;
@@ -1544,6 +1555,17 @@ body.mv3-workshop .mv3-pv-bar{opacity:.4; pointer-events:none}
    that move it (js/merge-v3/preview-b.js) have room to move in. */
 body.mv3-workshop .mv3-stage{aspect-ratio:auto !important; width:100%; height:100%; border-radius:var(--r-sm)}
 body.mv3-workshop .mv3-preview-body{padding:10px}
+/* THE STAGE IS THE FIRST STEP while it holds the casting - who says it and where (the owner,
+   2026-09-22). A gold frame five pixels thick, with the words sewn into its top line: the person
+   starts here, though the mood and the voice can be done from the start and say so themselves.
+   The frame goes when the stage turns to a fragment's frame or its clip - that is not a step, it
+   is work being looked at. */
+.mv3-stage.is-first{border:5px solid var(--gold)}
+.mv3-stage-step{
+  position:absolute; top:-8px; left:16px; z-index:3; pointer-events:none;
+  padding:0 7px; background:var(--mv3-around, oklch(.13 .012 265)); color:var(--gold);
+  font:700 10px/1.6 var(--font); letter-spacing:.14em; text-transform:uppercase; white-space:nowrap;
+}
 /* THE LOCK. While a build step is open the timeline and the Library are not where the work is
    (js/merge-v3/layout.js, lock): blurred and dimmed, and inert - they take no pointer and no
    keyboard. The timeline step lifts it (decided with the owner 2026-09-21). */

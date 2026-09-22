@@ -690,7 +690,7 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
-  if (!_borrowed) { _still = null; _pair = null; _crop = null; _filmStop(); }
+  if (!_borrowed) { _still = null; _pair = null; _crop = null; _filmStop(); _firstStep(false); }
   if (_borrowed) pause();
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
@@ -827,6 +827,7 @@ export function showStill(src, caption) {
   _pair = null;
   _crop = null;                             // another picture is not the one being cropped (V9)
   _filmStop();                              // ...and a picture is not a film (X4)
+  _firstStep(false);                        // ...nor the step that comes before both (P2)
   if (!src) { _still = null; if (_on) _paint(); return; }
   const img = new Image();
   img.decoding = 'async';
@@ -894,6 +895,7 @@ export function showFilm(src, caption, poster) {
     return;
   }
   _filmStop();
+  _firstStep(false);
   _still = null;
   _pair = null;
   _crop = null;
@@ -1239,6 +1241,7 @@ export function showPair(top, bottom, onPick) {
   _still = null;
   _crop = null;
   _filmStop();
+  _firstStep(true);
   const a = _halfSpec(top), b = _halfSpec(bottom);
   const want = a.src + '|' + b.src;
   if (_pair && _pair.key === want && !_film) {
@@ -1265,6 +1268,37 @@ export function showPair(top, bottom, onPick) {
   if (_on) _paint();
 }
 
+// ── The stage as the FIRST STEP (P2, the owner 2026-09-22) ──────────────────
+// The casting - who and where - is where a talking head begins, and the stage says so: a gold
+// frame five pixels thick with the words sewn into its top line. It belongs to the PAIR and to
+// nothing else; a frame or a clip on the stage is work being judged, not a step to take. The
+// label is an element rather than something drawn on the canvas, because it sits ON the border,
+// which the canvas is inside.
+const STEP_WORDS = 'First Step';
+function _firstStep(on) {
+  const stage = document.getElementById(STAGE);
+  if (!stage) return;
+  stage.classList.toggle('is-first', !!on);
+  const had = stage.querySelector('.mv3-stage-step');
+  if (!on) { if (had) had.remove(); return; }
+  if (had) return;
+  const tag = document.createElement('div');
+  tag.className = 'mv3-stage-step';
+  tag.textContent = STEP_WORDS;
+  stage.appendChild(tag);
+}
+
+// The gold of the theme, asked for once: the dashed halves and their words are painted on the
+// canvas, and a second spelling of the same colour is a colour that will one day be two.
+let _gold = '';
+function _goldNow() {
+  if (!_gold) {
+    try { _gold = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim(); } catch (e) { _gold = ''; }
+    if (!_gold) _gold = '#d8b45a';
+  }
+  return _gold;
+}
+
 // Each picture inside its own half, whole - the point is to SEE both, and cropping either
 // to fill a half would hide the thing being judged.
 function _drawPair() {
@@ -1287,17 +1321,19 @@ function _drawPair() {
     if (!s) return;
     if (s.src) { if (s.caption) _caption(s.caption, top + hh, hh); return; }
     if (!s.empty) return;
+    // Gold, like the frame around the stage and the fields across from it: this half is a thing
+    // to fill in, and the first one (P2).
     const inset = Math.round(Math.min(W, hh) * 0.06);
     _ctx.save();
     _ctx.setLineDash([8, 7]);
     _ctx.lineWidth = 2;
-    _ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    _ctx.strokeStyle = _goldNow();
     _ctx.strokeRect(PAD + inset, top + inset, W - 2 * inset, hh - 2 * inset);
     _ctx.restore();
     _ctx.font = '600 ' + Math.round(Math.min(W, H) * 0.045) + 'px Inter, Segoe UI, system-ui, sans-serif';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
-    _ctx.fillStyle = 'rgba(255,255,255,.5)';
+    _ctx.fillStyle = _goldNow();
     _ctx.fillText(s.empty, PAD + W / 2, top + hh / 2);
     _ctx.textBaseline = 'alphabetic';
     _ctx.textAlign = 'left';
