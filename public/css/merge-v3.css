@@ -1872,15 +1872,40 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
    gold and three zones in gold, one above the other - voice, first frames, video - each a drawer
    with its own `generate` at the foot. Gold because a field is a state the person sets, the same
    gold as a chosen tile. */
-.mv3-wk-ftop{display:flex; align-items:center; gap:8px; margin:2px 0 8px}
-.mv3-wk-ftop .mv3-wk-fstats{flex:1 1 auto; margin:0; min-width:0}
+/* Where the whole script stands is the RIGHT-HAND COLUMN OF THE STEP'S HEADER (the owner,
+   2026-09-22): the three boxes and `generate all`, beside the name of the step. In the header the
+   boxes do not stretch - the title has the width - and the whole block drops to its own line when
+   the panel is too narrow to hold both (the header wraps, .mv3-ins-head.is-wk). */
+.mv3-ins-head-act.is-counters{margin-left:auto; gap:8px}
+.mv3-ins-head-act.is-counters .mv3-wk-fstats{flex:0 0 auto; margin:0}
+.mv3-ins-head-act.is-counters .mv3-wk-fstat{flex:0 0 auto}
 .mv3-wk-genall{flex:0 0 auto}
-.mv3-wk-mood{margin:2px 0 10px; padding:8px 10px 9px; border:1px solid var(--gold); border-radius:var(--r-sm)}
 .mv3-wk-mood-about{margin:4px 2px 0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
+/* FOUR STAGES, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): 1 mood - which is also where the
+   script is marked up - 2 voice, 3 first frames, 4 video. The first two are a sentence each and
+   share a row; the other two carry strips and menus and keep the full width. The number sits ON the
+   corner of the gold frame, over the line itself, which is why the frame is the positioned one. */
+.mv3-wk-zrow{display:flex; align-items:flex-start; gap:10px}
+.mv3-wk-zrow > .mv3-wk-stage{flex:1 1 0; min-width:0}
 .mv3-wk-stage{
+  position:relative;
   margin:0 0 10px; padding:8px 10px 9px; border:1px solid var(--gold); border-radius:var(--r-sm);
   display:flex; flex-direction:column; gap:7px;
 }
+.mv3-wk-znum{
+  position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--gold); background:var(--gold); color:var(--bg);
+  font:700 9px/1 var(--font); font-variant-numeric:tabular-nums;
+}
+.mv3-wk-stage.is-blocked .mv3-wk-znum{filter:grayscale(1)}
+/* Half a row is not wide enough for a name, a summary and a chevron on one line - nor for what
+   the `generate` is about beside the button, so that gets a line of its own and wraps. */
+.mv3-wk-stage.is-half .mv3-wk-stage-head{flex-wrap:wrap; row-gap:2px}
+.mv3-wk-stage.is-half .mv3-wk-stage-head .mv3-wk-vsub{flex:1 1 100%}
+.mv3-wk-stage.is-half .mv3-wk-vrow{flex-wrap:wrap; row-gap:4px}
+.mv3-wk-stage.is-half .mv3-wk-stage-foot{flex-wrap:wrap; row-gap:5px}
+.mv3-wk-stage.is-half .mv3-wk-stage-foot .mv3-wk-vsub{flex:1 1 100%; white-space:normal; text-align:left}
 .mv3-wk-stage.is-soon{border-style:dashed}
 /* The head opens and shuts the zone (the owner, 2026-09-21). Shut, it says where the zone stands;
    done, a green mark; blocked - nothing to work on yet - dimmed, with what it waits for, and no
@@ -1924,7 +1949,6 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-half.is-frags > *{flex:0 0 auto}
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */
 .mv3-wk-frow .mv3-wk-vplay{width:20px; height:20px; font-size:8px}
-.mv3-wk-vuse.is-right{margin-left:auto}
 .mv3-wk-fmodes, .mv3-wk-fsets, .mv3-wk-facts{display:flex; flex-wrap:wrap; gap:4px}
 .mv3-sc-tab.is-soon{opacity:.5}
 .mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
@@ -1948,14 +1972,21 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
   flex:1 1 auto; min-width:0; font:400 10.5px/1.4 var(--font); color:var(--ink);
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
+/* A LINE TAKEN OFF THE SCRIPT (phase Z), at the foot of the list: dim, with no number and no
+   marks - it is not in the video - and carrying the one act it has. A div rather than a button:
+   there is no fragment to open. */
+.mv3-wk-flabel.is-off{margin:8px 0 3px; color:var(--muted)}
+.mv3-wk-frow.is-off{opacity:.45; cursor:default; border-style:dashed}
+.mv3-wk-frow.is-off:hover{opacity:.75; border-color:var(--border)}
+.mv3-wk-frow.is-off .mv3-wk-vuse{flex:0 0 auto; padding:2px 8px; font-size:9px}
 /* Three marks: the read, the frame, the clip - green done, amber stale, hollow not yet. */
 .mv3-wk-fdots{flex:0 0 auto; display:flex; gap:3px}
 .mv3-wk-fdot{width:7px; height:7px; border-radius:50%; border:1px solid var(--border)}
 .mv3-wk-fdot.is-ok{background:var(--success, oklch(.72 .15 150)); border-color:var(--success, oklch(.72 .15 150))}
 .mv3-wk-fdot.is-stale{background:var(--warn, oklch(.72 .15 75)); border-color:var(--warn, oklch(.72 .15 75))}
-/* The open fragment. */
-.mv3-wk-fhead{display:flex; align-items:center; gap:7px; margin:2px 0 4px}
-.mv3-wk-ftitle{font:700 12px/1.2 var(--font); color:var(--ink)}
+/* The open fragment. It has no title row any more (the owner, 2026-09-22): the number and the
+   length of the take stand in the line's own row on the left, and `read again` is in that row's
+   right-click menu. */
 .mv3-wk-flink{
   margin-left:auto; padding:0; border:0; background:none; cursor:pointer;
   font:600 10px/1.2 var(--font); color:var(--muted);
@@ -1963,6 +1994,9 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-vfoot .mv3-wk-flink{margin-left:8px}
 .mv3-wk-flink:hover{color:var(--primary)}
 .mv3-wk-fwords{margin:0 0 6px; font:400 11.5px/1.5 var(--font); color:var(--ink)}
+/* What the tagger put between the words, in gold (the owner, 2026-09-22): the words are the
+   person's, the [tags] are the machine's, and the difference is worth seeing without reading. */
+.mv3-wk-wtag{color:var(--gold); font-weight:600}
 .mv3-wk-vmore[disabled]{opacity:.55; cursor:default}
 .mv3-wk-vmore.is-go{border-color:var(--primary); color:var(--primary)}
 .mv3-wk-fstale{flex:0 0 auto; font:700 8.5px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--warn, oklch(.72 .15 75))}
@@ -1989,9 +2023,9 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 
 /* The whole text of a row, under the pointer (js/merge-v3/wk-fragments.js, _tipShow): fixed to
    the viewport and parked on the body, like the face enlargement - the list scrolls and clips its
-   own children. 200px wide (the owner, 2026-09-21). */
+   own children. 400px wide (the owner, 2026-09-22; 200 before that). */
 .mv3-wk-ftip{
-  position:fixed; z-index:9600; width:200px; pointer-events:none; padding:7px 9px 6px;
+  position:fixed; z-index:9600; width:400px; pointer-events:none; padding:7px 9px 6px;
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface); box-shadow:var(--shadow);
 }
 .mv3-wk-ftip-t{font:400 11px/1.45 var(--font); color:var(--ink); white-space:normal; word-break:break-word}

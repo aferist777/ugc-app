@@ -39,7 +39,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { el } from './wk-maker.js';
-import { isRead, plainWords } from './scen-api.js';
+import { isRead, plainWords, isLive } from './scen-api.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -456,8 +456,15 @@ async function _take(api, card) {
 // The read is the standard one: eleven_multilingual_v2, no tags, no parameters (decided with the
 // owner; moods and tags are a conversation of their own). That is what a project with no voice
 // settings gets, and none are set here.
-const _needs = (l) => !isRead(l);
+const _needs = (l) => isLive(l) && !isRead(l);
 const _tagged = (l) => !!String((l && l.tagged) || '').trim();
+/** The lines of the video still waiting for their tags - stage 1 (the mood field) is about these. */
+export const untagged = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
+  .map((l, i) => ((isLive(l) && !_tagged(l)) ? i : -1)).filter(i => i >= 0);
+/** Can anything be read at all? Not until the script is marked up: v3 reads the tagged words, and
+ *  a line spoken without them is a line spoken in another performance (the owner, 2026-09-22 - no
+ *  silent tagging inside the read). */
+export const canSpeak = (p) => untagged(p).length === 0;
 
 /** What the reads are doing: the tagger at work, the lines being spoken (none, one, or a chunk
  *  of three), and the batch "generate" is walking, if any. */
@@ -493,6 +500,33 @@ export async function saveText(api, i, text) {
 // whole script when nothing is tagged yet - the arc is a property of the sequence - and only the
 // lines that lack tags when some are, so what was approved stays as it is. The server switches the
 // project to the tagged read as it does.
+/**
+ * THE MOOD FIELD'S `generate` (phase Z, the owner 2026-09-22): the analysis and the tags, on
+ * their own. It used to be the first half of the voice field's button, which meant the script was
+ * marked up on the way to being spoken and nobody ever saw the markup before paying for the read.
+ * It is stage 1 now, and the read is stage 2.
+ */
+export async function tagAll(api) {
+  if (_tagging || _reading.length || _batch) return;
+  const p = api.project() || {};
+  const lines = Array.isArray(p.lines) ? p.lines : [];
+  const want = untagged(p);
+  if (!want.length) return;
+  _tagging = true;
+  _rsaid = ''; _rbad = false;
+  _repaint(api);
+  try {
+    // Nothing tagged yet: the whole script at once, because the mood briefs describe an ARC and a
+    // line marked on its own argues with its neighbours. Otherwise only what is missing.
+    await _tag(api, want.length === lines.length ? [] : want);
+  } catch (e) {
+    _rsaid = 'The tagging failed: ' + e.message;
+    _rbad = true;
+  }
+  _tagging = false;
+  _repaint(api);
+}
+
 async function _tag(api, only) {
   const body = { projectId: api.projectId(), mood: api.mood() };
   if (only && only.length) body.only = only;
@@ -505,27 +539,16 @@ async function _tag(api, only) {
 }
 
 /**
- * The voice field's `generate` (decided with the owner 2026-09-21): the tags where they are
- * missing, then every line that needs reading, one after another - no second press, the read is
- * credits rather than dollars.
+ * The voice field's `generate` (phase Z): every line that needs reading. It no longer tags on the
+ * way - that is stage 1, in the mood field, and this refuses to start until it is done.
  */
 export async function generate(api) {
   if (_tagging || _reading.length || _batch) return;
-  const p = api.project() || {};
-  const lines = Array.isArray(p.lines) ? p.lines : [];
-  const untagged = lines.map((l, i) => (_tagged(l) ? -1 : i)).filter(i => i >= 0);
-  _tagging = true;
-  _rsaid = ''; _rbad = false;
-  _repaint(api);
-  try {
-    if (untagged.length) await _tag(api, untagged.length === lines.length ? [] : untagged);
-  } catch (e) {
-    _tagging = false;
-    _rsaid = 'The tagging failed: ' + e.message;
+  if (!canSpeak(api.project() || {})) {
+    _rsaid = 'The script is not marked up yet - stage 1, in the mood field, does that.';
     _rbad = true;
     return _repaint(api);
   }
-  _tagging = false;
   await readAll(api);
 }
 
@@ -537,15 +560,20 @@ export async function generate(api) {
 // itself. A stray click cannot get in this way - the buttons are disabled while a batch runs.
 async function _speak(api, lines, inBatch) {
   if (_reading.length || (_batch && !inBatch)) return false;
+  // Tagging is stage 1 and nothing else does it (Z2): a line read without its tags would not match
+  // the lines around it.
+  const some = Array.isArray(api.project() && api.project().lines) ? api.project().lines : [];
+  if (lines.some(i => some[i] && !_tagged(some[i]))) {
+    _rsaid = 'This line has no tags yet - mark the script up first, in the mood field.';
+    _rbad = true;
+    _repaint(api);
+    return false;
+  }
   _reading = lines.slice();
   _rsaid = ''; _rbad = false;
   _repaint(api);
   let ok = false;
   try {
-    const p = api.project() || {};
-    const all = Array.isArray(p.lines) ? p.lines : [];
-    const untagged = lines.filter(i => all[i] && !_tagged(all[i]));
-    if (untagged.length) await _tag(api, untagged);
     const d = await (await fetch('/api/scen3/voice/speak', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: api.projectId(), only: lines }),

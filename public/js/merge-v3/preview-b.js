@@ -875,13 +875,21 @@ function _filmTick() {
  * fragment should show its clip, not play it at you. The first frame stands with a triangle on it,
  * and `filmPlay` - a press on the thumbnail, or on the stage itself - is what starts it.
  *
+ * A PICTURE STANDS IN UNTIL THE VIDEO OPENS (Z5, the owner 2026-09-22): a video element has
+ * nothing to draw until it has decoded a frame, and on a real clip that is long enough for the
+ * stage to look empty - which is exactly what "the preview does not show the clip" was. The
+ * poster, or the frame the fragment opens on, is drawn in its place and goes the moment the film
+ * itself has something.
+ *
  * @param src      the clip, or '' to take it off
  * @param caption  a line under it, as a still has
+ * @param poster   a picture to stand in while it opens
  */
-export function showFilm(src, caption) {
+export function showFilm(src, caption, poster) {
   if (!src) return _filmStop();
   if (_film && _film.src === src) {
     _film.caption = String(caption || '');
+    _filmPoster(poster);
     if (_on) _paint();
     return;
   }
@@ -901,17 +909,32 @@ export function showFilm(src, caption) {
   const stage = document.getElementById(STAGE);
   if (stage) stage.appendChild(el);
   el.src = src;
-  _film = { src, el, caption: String(caption || ''), playing: false, box: null };
+  _film = { src, el, caption: String(caption || ''), playing: false, box: null, pic: null, picSrc: '' };
+  _filmPoster(poster);
   // It starts by itself: pressing the clip IS the ask to see it. A browser that refuses to play
   // with sound before it has been clicked leaves the first frame up, and the next click plays it.
   el.addEventListener('loadeddata', () => {
     if (!_film || _film.el !== el) return;
-    _film.box = null;
+    _film.box = null;                       // the film may not be the poster's shape
     if (_on) _paint();
   });
   el.addEventListener('ended', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });
   el.addEventListener('error', () => { if (_film && _film.el === el) { _film.playing = false; _paint(); } });
   if (_on) _paint();
+}
+
+// The stand-in picture, loaded once per film. It is dropped as soon as the video can be drawn,
+// so a clip never shows its poster over itself.
+function _filmPoster(src) {
+  const want = String(src || '');
+  if (!_film || _film.picSrc === want) return;
+  _film.picSrc = want;
+  _film.pic = null;
+  if (!want) return;
+  const img = new Image();
+  img.onload = () => { if (_film && _film.picSrc === want) { _film.pic = img; _film.box = null; if (_on) _paint(); } };
+  img.onerror = () => { if (_film && _film.picSrc === want) _film.pic = null; };
+  img.src = want;
 }
 
 /** Play or pause the film on the stage. Without an argument, the other one. */
@@ -936,15 +959,19 @@ export const filming = () => !!_film;
 // while it is stopped, nothing while it plays.
 function _drawFilm() {
   if (!_film) return;
+  // The film when it has a frame to give; the stand-in picture until then (Z5).
   const v = _film.el;
-  if (v.videoWidth) {
-    if (!_film.box) {
-      const s = Math.min(CW / v.videoWidth, CH / v.videoHeight);
-      const w = Math.round(v.videoWidth * s), h = Math.round(v.videoHeight * s);
-      _film.box = { w, h, x: Math.round((CW - w) / 2), y: Math.round((CH - h) / 2) };
+  const from = v.videoWidth ? v : (_film.pic && _film.pic.naturalWidth ? _film.pic : null);
+  if (from) {
+    const fw = from.videoWidth || from.naturalWidth;
+    const fh = from.videoHeight || from.naturalHeight;
+    if (!_film.box || _film.box.of !== (from === v ? 'film' : 'pic')) {
+      const s = Math.min(CW / fw, CH / fh);
+      const w = Math.round(fw * s), h = Math.round(fh * s);
+      _film.box = { w, h, x: Math.round((CW - w) / 2), y: Math.round((CH - h) / 2), of: from === v ? 'film' : 'pic' };
     }
     const b = _film.box;
-    try { _ctx.drawImage(v, b.x, b.y, b.w, b.h); } catch (e) { /* a frame not decoded yet */ }
+    try { _ctx.drawImage(from, b.x, b.y, b.w, b.h); } catch (e) { /* a frame not decoded yet */ }
     if (!_film.playing) {
       const r = Math.round(Math.min(b.w, b.h) * 0.11);
       _ctx.save();

@@ -2025,6 +2025,10 @@ router.post('/scen3/voice/tag', async (req, res) => {
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
+    // A line TAKEN OFF the script (phase Z) is tagged with the rest, and deliberately: tags belong
+    // to the WORDS, not to the cut, so a line put back comes back already marked and needs no
+    // second pass. It costs nothing - it is the same one call - and the zone that asks for the
+    // tagging counts only the lines that are in the video when it decides it is done.
     const lines = (proj.lines || []).map(_normLine);
     const texts = lines.map(l => l.text);
     if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
@@ -2248,11 +2252,12 @@ async function _speakOne(key, ctx, i) {
 // Which lines a read is about: the ones named, or every one that needs it. Without an explicit
 // `only` nobody pays twice for the same words.
 function _readWanted(ctx, only) {
+  const live = (i) => !(ctx.lines[i] || {}).removed;      // a line taken off is not read (phase Z)
   if (Array.isArray(only)) {
     return [...new Set(only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < ctx.lines.length))]
-      .sort((a, c) => a - c);
+      .filter(live).sort((a, c) => a - c);
   }
-  return ctx.lines.map((_, i) => i).filter(i => _readNeeds(ctx.lines[i], ctx.variant));
+  return ctx.lines.map((_, i) => i).filter(i => live(i) && _readNeeds(ctx.lines[i], ctx.variant));
 }
 
 // The project as it is NOW - with every take these reads filed - for the page to paint from.
@@ -2343,6 +2348,7 @@ router.post('/scen3/voice/speak-all', (req, res) => {
     const st = {
       total: only.length, done: 0, skipped: [], failed: [], running: true,
       startedAt: new Date().toISOString(), endedAt: null, variant: ctx.variant,
+      only,                                  // which lines, so a line cannot be taken off mid-read (Z)
     };
     _reads.set(id, st);
     res.json({ success: true, queued: only.length, lines: only.map(i => i + 1), state: st });
@@ -2675,6 +2681,14 @@ function _normLine(l) {
     // whole project. Per line it could drift, and two lines showing different takes
     // of the same read has no meaning.
     frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
+    // TAKEN OFF THE SCRIPT (phase Z, the owner 2026-09-22). A line is never deleted: it is taken
+    // off, keeps its place in this list, and can be put back. Keeping its place is the whole point
+    // - a line that is not picked by hand takes its first frame from the set BY ITS NUMBER, and a
+    // clip is the take made from the frame its line opens on, so closing the gap would move every
+    // line below onto another frame and their clips would vanish from the fragments and from the
+    // timeline while the files sat there. Nothing reads a line that is off: not the reads, not the
+    // clips, not the prompts, not the mirror. The TAGGER is the one exception - see /voice/tag.
+    removed: !!s.removed,
     // How this line is filmed and how the person moves on it - the directing agent's reading (the
     // fragments step, docs/local-app/PLAN.md F2), or null until the script has been read.
     shot:    _normShot(s.shot),
@@ -2980,6 +2994,62 @@ router.post('/scen3/projects/:id/line', (req, res) => {
     proj.updatedAt = new Date().toISOString();
     _saveProjects(list);
     MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): the words of a line
+    res.json({ success: true, project: _projFull(proj) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── A line taken off the script, and put back ───────────────────────────────
+   POST /api/scen3/projects/:id/line/state  { index, removed } -> { success, project }
+
+   The owner's decision (2026-09-22): a line is never deleted. It is taken off - the panel dims it
+   and moves it to the foot of the script with a `restore` on it - and its files stay in the project
+   folder. It keeps its PLACE in the list (see `removed` in _normLine), so nothing below it moves
+   onto another frame and no clip disappears; putting it back is simply the flag going away.
+
+   The timeline is the one thing that has to change, and it changes by itself: the mirror lays only
+   the lines that are in the video, so the cut closes over the line that went and opens again when
+   it comes back (lib/frag-mirror.js).
+
+   A line cannot be taken off WHILE IT IS BEING MADE: the money would buy a fragment that is no
+   longer in the video. Its neighbours are free - the numbers do not move, so a clip in flight
+   cannot land on somebody else's line.
+   ──────────────────────────────────────────────────────────────────────────── */
+// Is this very line being made right now? The journal is what knows about a clip - it is the one
+// place a run is written down - and a read run keeps the lines it is walking.
+function _lineBusy(id, i) {
+  const clip = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
+    && r.job && r.job.params && r.job.params.file
+    && String(r.job.params.file.projectId) === String(id) && Number(r.job.params.file.line) === i);
+  if (clip) return 'this fragment is being filmed right now';
+  const run = _reads.get(String(id));
+  if (run && run.running && Array.isArray(run.only) && run.only.includes(i)) return 'this fragment is being read right now';
+  return '';
+}
+
+router.post('/scen3/projects/:id/line/state', (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+
+    const lines = (proj.lines || []).map(_normLine);
+    const i = parseInt((req.body || {}).index, 10);
+    if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const off = !!(req.body || {}).removed;
+    if (off) {
+      const busy = _lineBusy(id, i);
+      if (busy) return res.status(409).json({ success: false, error: busy });
+    }
+    if (lines[i].removed === off) return res.json({ success: true, project: _projFull(proj) });
+
+    lines[i].removed = off;
+    proj.lines = lines;
+    proj.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    MIRROR.touch(proj.id, { project: proj });   // the cut closes over it, or opens again (T')
+    console.log('[scen3/line/state] ' + id + ' line ' + (i + 1) + (off ? ' taken off' : ' restored'));
     res.json({ success: true, project: _projFull(proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -3495,9 +3565,10 @@ async function _writePrompts(id, want) {
 
     // Which lines this touches: the ones named, or every line whose prompt is stale - and never one
     // edited by hand unless named.
+    const live = (i) => !lines[i].removed;               // a line taken off is not written for (Z)
     const only = Array.isArray(want)
-      ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
-      : lines.map((_, i) => i).filter(i => _motionStale(lines[i], envMotion) && !(lines[i].shot && lines[i].shot.motionEdited));
+      ? [...new Set(want.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].filter(live).sort((a, c) => a - c)
+      : lines.map((_, i) => i).filter(i => live(i) && _motionStale(lines[i], envMotion) && !(lines[i].shot && lines[i].shot.motionEdited));
     if (!only.length) return { project: proj, report: { written: 0, skipped: [] } };
 
     // The frames themselves, in the order the lines take them: the agent writes movement that starts
@@ -3863,6 +3934,7 @@ function _clipPlan(proj, i) {
   const lines = (proj.lines || []).map(_normLine);
   const line = lines[i];
   if (!line) return { skipped: 'no such fragment' };
+  if (line.removed) return { skipped: 'this fragment is taken off the script' };
   const video = _normVideo(proj.video);
   const voice = _normVoice(proj.voice);
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
@@ -3989,7 +4061,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const request = { projectId: id, line: i };
     const rec = JOBS.submitted({
       kind: 'video', what: 'clip',
-      title: 'Clip · fragment ' + (i + 1),
+      title: 'Clip · fragment ' + _lineNo((proj.lines || []).map(_normLine), i),
       where: b.where || null,
       stage: 'getting ready',
       taskIds: [],
@@ -4053,12 +4125,20 @@ function _clipDone(proj, i) {
 // Where a clip was asked from, for the Alerts list: this fragment of this project. The page sends
 // the open timeline's key and the row is addressed from it, so every row of a queue points at its
 // own fragment (js/merge-v3/wk-fragments.js, _whereLine says the same thing for one clip).
-const _whereClip = (key, title, i) => ({
+// `n` is what a person reads - the fragment's place in the VIDEO, which is not its index once a
+// line has been taken off (phase Z). The address and `spot` keep the index: that is what opens it.
+const _whereClip = (key, title, i, n) => ({
   page: 'merge',
   href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
-  label: 'Merge \u00b7 ' + title + ' \u00b7 fragment ' + (i + 1),
+  label: 'Merge \u00b7 ' + title + ' \u00b7 fragment ' + (n || i + 1),
   spot: { key, step: 'setup', line: i + 1 },
 });
+/** A line's place among the lines that are in the video, counted from one (phase Z). */
+function _lineNo(lines, i) {
+  let n = 0;
+  for (let k = 0; k <= i && k < lines.length; k++) if (!lines[k].removed) n++;
+  return n;
+}
 
 // The queue itself: a start a second, and nobody waits for anybody. What comes of each start is
 // written into the row it belongs to - the task number and "rendering", or the failure.
@@ -4106,10 +4186,11 @@ router.post('/scen3/fragments/clips', (req, res) => {
       if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
       if (!b.again && _clipDone(proj, i)) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
       const request = { projectId: id, line: i };
+      const no = _lineNo(lines, i);
       const rec = JOBS.submitted({
         kind: 'video', what: 'clip',
-        title: 'Clip \u00b7 fragment ' + (i + 1),
-        where: _whereClip(key, title, i),
+        title: 'Clip \u00b7 fragment ' + no,
+        where: _whereClip(key, title, i, no),
         stage: 'getting ready',
         taskIds: [],
         job: { type: 'clip', params: { request, file: { projectId: id, line: i } } },

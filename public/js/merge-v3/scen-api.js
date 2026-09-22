@@ -94,6 +94,18 @@ export const isRead = (l) => {
   return !!(take && take.path && take.said === said);
 };
 
+/**
+ * IS THIS LINE IN THE VIDEO (phase Z, the owner 2026-09-22)? A line is never deleted - it is
+ * TAKEN OFF: it keeps its place in the script (which is what stops the frames and the clips of
+ * the lines below it moving), the panel dims it and puts it at the foot of the list with a
+ * `restore`, and nothing else reads it - not the counters, not the reads, not the clips, not the
+ * prompts, not the timeline mirror. The server keeps the same rule (routes/scen3.js, _normLine).
+ */
+export const isLive = (l) => !(l && l.removed);
+/** The lines of the video, with their places in the script kept - [{ l, i }], i the real index. */
+export const liveLines = (lines) => (Array.isArray(lines) ? lines : [])
+  .map((l, i) => ({ l, i })).filter(x => isLive(x.l));
+
 /** The words without their [tags] - what the line says, whatever the read performs. */
 export const plainWords = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ')
   .replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();

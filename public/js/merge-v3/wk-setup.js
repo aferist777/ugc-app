@@ -231,9 +231,10 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // The title line says what this step IS, and nothing else (the owner, 2026-09-21): where the
-  // script stands belongs over the script, and stands there (js/merge-v3/wk-fragments.js,
-  // _counters). A shelf hangs its own bar on the right of this line.
+  // THE TITLE LINE IS TWO COLUMNS (the owner, 2026-09-22): what this step is on the left, and on
+  // the right where the whole script stands - the counters and `generate all`, hung there by the
+  // script pane itself (js/merge-v3/wk-fragments.js, _counters). A shelf hangs its own bar in the
+  // same place, and only one of them is ever on screen.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
@@ -266,7 +267,7 @@ export function paint(host, ctx) {
   // The stage is painted AFTER the panel, from the same state (this file, _stage): a shelf may
   // put something on trial while it paints, and the stage has to show it.
   if (_view === 'hub') {
-    FRAG.paint(scroll, ctx, _fragApi(chosen));
+    FRAG.paint(scroll, ctx, _fragApi(chosen), head);
     _stage(chosen);
   } else if (_view === 'env') {
     ENV.paintShelf(scroll, head, _envApi());
@@ -277,7 +278,7 @@ export function paint(host, ctx) {
   } else if (_view === 'voice') {
     // The voices are chosen in the right column, beside the script (owner, 2026-09-21) - with
     // nobody cast too: the project then takes a voice of its own (js/merge-v3/wk-voice.js).
-    FRAG.paint(scroll, ctx, _fragApi(chosen));
+    FRAG.paint(scroll, ctx, _fragApi(chosen), head);
     _stage(chosen);
   } else if (_view === 'newlb' && who) {
     _paintNewLookbook(scroll, head, who);
@@ -348,7 +349,7 @@ function _stage(chosen) {
   if (pic) {
     // A clip PLAYS here (X4); everything else is a picture.
     if (pic.film) {
-      PV.showFilm(pic.film, pic.caption);
+      PV.showFilm(pic.film, pic.caption, pic.poster);
       // Only when the panel says the person just asked for it (Y2).
       if (pic.play) PV.filmPlay(true);
     } else PV.showStill(pic.src, pic.caption);

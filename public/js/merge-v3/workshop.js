@@ -32,7 +32,7 @@
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
 import { lock } from './layout.js';
-import { isRead } from './scen-api.js';
+import { isRead, isLive } from './scen-api.js';
 
 // `timeline` last and apart: `setup` builds the project, it edits the result.
 //
@@ -88,7 +88,8 @@ const _lend = () => { PV.borrow(active()); lock(active()); };
 // before any of this - keeps its chip: there is something there to edit. The cells the fragments
 // will lay themselves (`frag`, docs/local-app/PLAN.md, phase T') are not such a cut.
 function _readCount() {
-  const lines = (_project && Array.isArray(_project.lines)) ? _project.lines : [];
+  // The lines that are IN the video: one taken off is not waited for (phase Z, scen-api.js).
+  const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
   return { read: lines.filter(isRead).length, total: lines.length };
 }
 // IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first read has been laid on it
