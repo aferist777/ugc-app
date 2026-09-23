@@ -558,9 +558,9 @@ function _envApi() {
 }
 
 // ── Where you are inside the step ───────────────────────────────────────────
-// The step chip in the panel header says WHICH step is open; these say where inside it. They
-// are drawn by the workshop, under that chip and bracketed to it, so the two read as one thing
-// at two depths (js/merge-v3/workshop.js, _paintChips).
+// The route in the panel header: `setup`, then the places inside it, drawn by the workshop on one
+// tint so the two read as one thing at two depths (js/merge-v3/workshop.js, _paintRoute). At the
+// hub there is none - the panel's own title says where you are.
 const WHERE = {
   cast: 'character',
   voice: 'voice',
@@ -586,7 +586,7 @@ export function crumbs() {
   return (PATH[_view] || []).map((id, i, all) => ({ id, label: WHERE[id], here: i === all.length - 1 }));
 }
 
-/** Pressing one of them - or the step's own chip, which is the hub. */
+/** Pressing one of them - or `setup` at the start of the route, which is the hub. */
 export function goCrumb(id) {
   const want = id === 'hub' ? 'hub' : id;
   if (want !== 'hub' && !WHERE[want]) return;

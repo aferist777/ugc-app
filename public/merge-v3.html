@@ -125,16 +125,24 @@
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,
              so the drop path checks the files itself. -->
         <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>
+        <!-- WHAT IS PICKED ON THE TIMELINE - a clip, a lane, several clips - slides in over the
+             Library from the right (phase L5, the owner 2026-09-23), and slides out when nothing is.
+             Painted by js/merge-v3/inspector.js. -->
+        <aside class="mv3-over" id="mv3-over" aria-label="Settings of what is picked on the timeline">
+          <div class="mv3-over-body"></div>
+        </aside>
       </section>
 
+      <!-- SETUP (phase L, the owner 2026-09-23). What this panel holds now is the build of a
+           talking head and the scenario picker that starts one; the settings of whatever is picked
+           on the timeline slide over the Library instead. Its id stays: four modules find it. -->
       <section class="mv3-panel mv3-col" id="mv3-inspector" data-col="inspector">
-        <div class="mv3-spine">Inspector</div>
+        <div class="mv3-spine">Setup</div>
         <div class="mv3-panel-head">
-          <span class="mv3-panel-title">Inspector</span>
+          <span class="mv3-panel-title">Setup</span>
           <span class="sp"></span>
         </div>
-        <!-- Filled by js/merge-v3/inspector.js from the selection; it renders its own
-             idle state, so there is no placeholder to replace here. -->
+        <!-- Filled by js/merge-v3/inspector.js: the picker, or the build (js/merge-v3/workshop.js). -->
         <div class="mv3-panel-body"></div>
       </section>
 

@@ -81,6 +81,20 @@ function _ago(iso) {
 const _running = (r) => r.state === 'running';
 const _canOpen = (r) => r.state === 'done' && r.result && r.result.path;
 
+// WHERE A ROW TAKES YOU: back to where it was started - except a picture from Merge's pictures
+// window that has landed, which is shown on its shelf in the Library, lit (phase L4, the owner
+// 2026-09-23; js/merge-v3/main.js, ?reveal=). While it runs, or when it failed, the window is still
+// the place: that is where it is waited for, or asked again.
+function _hrefOf(rec) {
+  const w = rec.where || {};
+  const spot = w.spot || {};
+  const path = (rec.result || {}).path || '';
+  if (rec.state === 'done' && path && spot.view === 'pictures' && spot.key) {
+    return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
+  }
+  return w.href || '';
+}
+
 // ── HOW LONG IS LEFT (phase X3, the owner 2026-09-22) ───────────────────────
 // A chip to the left of the button, whenever something is running. What it says is the wait: the
 // LONGEST of what is still going, not the sum, because generations run side by side - ten clips
@@ -201,11 +215,11 @@ function _row(rec) {
   }
   row.appendChild(acts);
 
-  // The row itself is the way back to where it was started.
-  const href = (rec.where && rec.where.href) || '';
+  // The row itself is the way back to where it was started - or, for a picture, to the picture.
+  const href = _hrefOf(rec);
   if (href) {
     row.classList.add('is-linked');
-    row.title = 'Go to where this was started';
+    row.title = /[?&]reveal=/.test(href) ? 'Show it in the Library' : 'Go to where this was started';
     row.addEventListener('click', () => { _close(); _goTo(href); });
   }
   return row;
@@ -258,8 +272,12 @@ function _open(rec) {
 }
 
 // The address of a place is read when its page loads (js/merge-v3/workshop.js and wk-setup.js),
-// so standing on that address already and pressing the row means: go there again.
+// so standing on that address already and pressing the row means: go there again. The page is
+// asked first: one that can show the place where it stands takes the event and nothing is loaded
+// again (Merge, for a picture of the project it has open - js/merge-v3/main.js).
 function _goTo(href) {
+  const ask = new CustomEvent('ugc:goto', { detail: { href }, cancelable: true });
+  if (!window.dispatchEvent(ask)) return;
   if (href === location.pathname + location.search) location.reload();
   else location.href = href;
 }
@@ -319,7 +337,7 @@ function _announce(rec) {
     open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
     t.appendChild(open);
   }
-  const href = (rec.where && rec.where.href) || '';
+  const href = _hrefOf(rec);
   if (href) t.addEventListener('click', () => _goTo(href));
   _toasts().appendChild(t);
   setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, TOAST_MS);

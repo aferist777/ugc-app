@@ -273,9 +273,3 @@ export function wirePlace(canvas, api) {
   document.addEventListener('mouseup', _up);
 }
 
-export function unwirePlace() {
-  if (_cv) { _cv.removeEventListener('mousedown', _down); _cv.style.cursor = ''; }
-  document.removeEventListener('mousemove', _move);
-  document.removeEventListener('mouseup', _up);
-  _cv = null; _api = null; _drag = null; _live = null;
-}

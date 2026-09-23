@@ -87,7 +87,7 @@ export const takeOf = (l) => {
  * Is this line READ - its take there, and spoken from the words the line has now? `said` is
  * written with the take (routes/scen3.js, /scen3/voice/speak), so editing a line makes its read
  * stale by itself. One rule for the counters (js/merge-v3/wk-fragments.js), the voice stage
- * (js/merge-v3/wk-voice.js) and the timeline chip, which waits for every line (js/merge-v3/workshop.js).
+ * (js/merge-v3/wk-voice.js) and the Library spine, which waits for the first read (js/merge-v3/workshop.js).
  */
 export const isRead = (l) => {
   const { take, said } = takeOf(l);

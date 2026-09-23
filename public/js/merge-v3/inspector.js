@@ -1,12 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the inspector.
+   MERGE v3 — the inspector: the settings of what is picked on the timeline, and the panel the
+   build of a talking head lives in.
 
-   Three states, and which one is showing is decided entirely by the selection on the timeline
-   (js/merge-v3/timeline-b.js):
+   TWO PLACES SINCE PHASE L (the owner, 2026-09-23). What is PICKED on the timeline
+   (js/merge-v3/timeline-b.js) is painted into a strip that slides over the Library from the right:
 
-     nothing        how the timeline works
+     nothing        no strip - the Library, uncovered
      a lane         what applies to the whole lane
      a clip         that clip's own settings; several clips - removing them
+
+   The panel that used to show them is Setup now: the scenario picker that starts a talking head,
+   and the build itself (js/merge-v3/workshop.js). A project that is not a talking head has
+   nothing in it and no spine for it.
 
    Lane settings are a STAMP, not an inherited default: choosing a value on a lane writes it
    into every clip on it, overwriting whatever each clip had. The undo arrow is the way back.
@@ -29,30 +34,21 @@ import * as WK from './workshop.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
+import { setOpenColumn } from './layout.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
+function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
+// The strip in or out. Out means nothing is picked - there is nothing for it to be about.
+function _over(open) {
+  const el = document.getElementById('mv3-over');
+  if (el) el.classList.toggle('is-open', !!open);
+}
 
 function _el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
   return e;
-}
-
-// `right` is for a panel whose one action belongs beside the name rather than buried under
-// the settings for it - the Subtitles track's Generate is the case.
-function _title(text, sub, right) {
-  const wrap = _el('div', 'mv3-ins-head');
-  const txt = _el('div', 'mv3-ins-head-txt');
-  txt.appendChild(_el('div', 'mv3-ins-title', text));
-  if (sub) txt.appendChild(_el('div', 'mv3-ins-sub', sub));
-  wrap.appendChild(txt);
-  if (right) {
-    const act = _el('div', 'mv3-ins-head-act');
-    act.appendChild(right);
-    wrap.appendChild(act);
-  }
-  return wrap;
 }
 
 // A read-only fact: a label and what it says.
@@ -675,43 +671,6 @@ function _renderBlankClip(host, { track, clip }) {
   return _blankFilm(host, track, clip, set, pair);
 }
 
-// Nothing selected: the few rules here that cannot be guessed by looking.
-function _renderBlankIdle(host) {
-  host.appendChild(_title('Nothing selected', 'How this timeline works'));
-  const help = _el('div', 'mv3-ins-help');
-  const block = (heading, lines) => {
-    help.appendChild(_el('div', 'mv3-ins-todo-h', heading));
-    const ul = _el('ul');
-    for (const line of lines) ul.appendChild(_el('li', null, line));
-    help.appendChild(ul);
-  };
-
-  block('Picture and sound travel together', [
-    'A film dropped on a video lane lands on the mirrored audio lane too, and the two halves '
-      + 'keep the same length, speed and direction from then on.',
-    'Their levels are separate: a birol arrives silent, and is turned up on its sound half.',
-    'A picture has no sound, so it lands alone.',
-    'A film lands at its full length. Pull either edge to shorten it - which also chooses '
-      + 'which part of it stays.',
-  ]);
-
-  block('Nothing moves on its own', [
-    'A clip stays exactly where it is dropped. Nothing to the right of it shifts when '
-      + 'something else changes length.',
-    'Clips on one lane may overlap - the later one in the lane is drawn on top of the other.',
-  ]);
-
-  block('Removing', [
-    'Removing a picture takes its sound with it. Removing the sound leaves the picture, silent.',
-    'Drag across empty lane to take several at once, then Delete.',
-  ]);
-
-  const note = _el('div', 'mv3-ins-note',
-    'The top video lane is the top layer: the stack is painted from the bottom up.');
-  help.appendChild(note);
-  host.appendChild(help);
-}
-
 function _renderMany(host, n) {
   const h = document.createElement('div');
   h.className = 'mv3-ins-title';
@@ -731,32 +690,43 @@ function _renderMany(host, n) {
 function render() {
   if (_held) { _pending = true; return; }
   const host = _host();
-  if (!host) return;
-  // The panel is rebuilt wholesale, so a music preview would keep playing with its stop
-  // button thrown away. Stop it before the rebuild rather than orphan it.
+  const over = _overHost();
+  // Both are rebuilt wholesale, so a music preview would keep playing with its stop button
+  // thrown away. Stop it before the rebuild rather than orphan it.
   M.stopPreview();
-  host.textContent = '';
-  // A step may lay the panel out itself (js/merge-v3/wk-setup.js); this is where that
-  // arrangement ends, so the next thing to paint gets the ordinary scroll box back.
-  host.className = 'mv3-panel-body';
-  // Making a talking-head project takes this panel over: there is nothing selected yet, and
+  if (host) {
+    host.textContent = '';
+    // A step may lay the panel out itself (js/merge-v3/wk-setup.js); this is where that
+    // arrangement ends, so the next thing to paint gets the ordinary scroll box back.
+    host.className = 'mv3-panel-body';
+  }
+  if (over) over.textContent = '';
+  // A PROJECT THAT IS NOT A TALKING HEAD HAS NO SETUP (phase L): the panel is there for the picker
+  // that makes one and for nothing else, and its spine is hidden. Whatever left it open - a blank
+  // project, or nothing, opened after a talking head's setup - the Library is the open panel.
+  if (!ScenPick.active() && !WK.isTalking()) {
+    const ins = document.getElementById('mv3-inspector');
+    if (ins && !ins.classList.contains('is-collapsed')) setOpenColumn('library');
+  }
+  // Making a talking-head project takes the Setup panel over: there is nothing selected yet, and
   // the scenario library is what the person is choosing from (js/merge-v3/scen-pick.js).
-  if (ScenPick.active()) return ScenPick.paint(host);
-  // A talking-head project is built in a fixed order, and while one of those steps is open
-  // this panel belongs to it - what is selected on the timeline is not what the person is
-  // doing (js/merge-v3/workshop.js).
-  if (WK.active()) return WK.paint(host);
+  if (ScenPick.active()) { _over(false); return host && ScenPick.paint(host); }
+  // A talking-head project is built in a fixed order, and while it is being built the Setup
+  // panel belongs to it - the timeline is locked, so nothing on it can be picked anyway.
+  if (WK.active()) { _over(false); return host && WK.paint(host); }
+  if (!over || !blankMounted()) return _over(false);
   // A BAND SELECTION OUTRANKS the single one. It is the more deliberate of the two - the
   // single selection is usually just whatever the pointer passed over on the way to drawing
-  // the band - and a panel of settings for four clips at once has no honest meaning, so what
-  // it offers is the one thing that does: getting rid of them.
+  // the band - and settings for four clips at once have no honest meaning, so what the strip
+  // offers is the one thing that does: getting rid of them.
   const many = multiB();
-  if (many > 1) return _renderMany(host, many);
-  if (!blankMounted()) return _renderBlankIdle(host);
+  if (many > 1) { _over(true); return _renderMany(over, many); }
   const one = oneB();
-  if (one) return _renderBlankClip(host, one);
+  if (one) { _over(true); return _renderBlankClip(over, one); }
   const tr = trackB();
-  return tr ? _renderBlankTrack(host, tr) : _renderBlankIdle(host);
+  if (tr) { _over(true); return _renderBlankTrack(over, tr); }
+  // Nothing picked: the strip goes, and the Library under it is what is left (phase L).
+  _over(false);
 }
 
 export function initInspector() {
@@ -783,7 +753,7 @@ export function initInspector() {
   // slider often ends with the pointer somewhere else entirely, and a listener on the
   // panel would never see the release.
   document.addEventListener('pointerdown', (e) => {
-    if (e.target && e.target.closest && e.target.closest('#mv3-inspector')) _held = true;
+    if (e.target && e.target.closest && e.target.closest('#mv3-inspector, #mv3-over')) _held = true;
   });
   document.addEventListener('pointerup', () => {
     if (!_held) return;

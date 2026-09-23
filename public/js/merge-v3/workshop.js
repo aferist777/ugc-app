@@ -13,15 +13,16 @@
    blank project has no scenario, no fragments and nothing to step through, so it
    never sees any of this.
 
-   THE STEPS ARE LOADED WHEN THEY ARE OPENED, one module each. Together they are the
-   biggest thing on this page - characters, looks, environments, frames - and most
-   visits to Merge open none of them. `timeline` is not a module: it IS the inspector
-   as it has always been, which is why it is the step an old project opens on.
+   THE BUILD STEP IS LOADED WHEN IT IS OPENED, a module of its own. It is the biggest thing
+   on this page - characters, looks, environments, frames - and most visits to Merge never
+   open it. `timeline` is not a module: in that step the Setup panel is folded, the Library
+   is open and the settings of whatever is picked slide over it (js/merge-v3/inspector.js).
 
-   WHILE A BUILD STEP IS OPEN THE TIMELINE AND THE LIBRARY ARE LOCKED (js/merge-v3/layout.js):
-   the cut is laid from the fragments later, so until then both are blurred and inert. The
-   `timeline` chip itself waits for the reads - every line spoken, or a cut already there
-   (decided with the owner 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
+   WHILE SETUP IS OPEN THE TIMELINE IS LOCKED AND THE LIBRARY FOLDED (js/merge-v3/layout.js):
+   the cut is laid from the fragments, so until there is one there is nothing to edit. The
+   folded Library is the way to the timeline, and it waits for the first read laid (phase L,
+   the owner 2026-09-23; decided with the owner 2026-09-21, docs/local-app/PLAN.md "Сцена,
+   setup и таймлайн-зеркало").
 
    WHAT IS STORED WHERE. What has been CHOSEN - the character, the look, the place,
    the frames - is the scenario project and lives on the server, where it always has.
@@ -31,23 +32,19 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
-import { lock } from './layout.js';
+import { lock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 
-// `timeline` last and apart: `setup` builds the project, it edits the result.
-//
-// TWO STEPS (decided with the owner 2026-09-21). The casting, the voice and the fragments were
-// three steps once, then two; but the character and the place are chosen on the stage now, and
-// what is left of "setting" is the voice - one row over the script, which is what the fragments
-// are. So the whole build is one step, and the chip's short name carries the long one as its tip.
-const STEPS = [
-  { id: 'setup', label: 'setup', title: 'talking head setup - who says it, where, in what voice; the frame and the clip of each fragment' },
-  { id: 'timeline', label: 'timeline', title: 'timeline edit - the cut, and whatever is selected on it' },
-];
+// TWO STEPS (decided with the owner 2026-09-21): `setup` builds the project, `timeline` edits the
+// result. There are NO CHIPS for them any more (phase L, the owner 2026-09-23): the pair of panels
+// is the switch. The Setup panel open is the setup step; the Library spine pressed is the timeline
+// step - the timeline unlocked, the Library open, the settings of a clip sliding over it - and the
+// Setup spine pressed is setup again (_ask below).
+const STEPS = ['setup', 'timeline'];
 // What a step used to be called, so an address in an old journal row and a step remembered in this
 // browser still land somewhere (lib/alerts.js, and `mv3_step_v1` below).
 const WAS = { setting: 'setup', fragments: 'setup', frames: 'setup', voice: 'setup', video: 'setup' };
-const _stepId = (id) => { const s = WAS[String(id || '')] || String(id || ''); return STEPS.some(x => x.id === s) ? s : ''; };
+const _stepId = (id) => { const s = WAS[String(id || '')] || String(id || ''); return STEPS.includes(s) ? s : ''; };
 const KEY = 'mv3_step_v1';               // { <timeline key>: <step id> }
 
 let _key = '';                           // the open timeline's key
@@ -65,10 +62,10 @@ export function projectIdOf(key) {
 /** Is a talking-head project open? */
 export function isTalking() { return !!_pid; }
 
-/** The step showing now. 'timeline' means the inspector behaves as it always has. */
+/** The step showing now. 'timeline' means the cut is being edited: the Library open, Setup folded. */
 export function step() { return _step; }
 
-/** Is a BUILD step open - the case where this panel owns the inspector? */
+/** Is the BUILD step open - the case where this panel owns the Setup panel? */
 export function active() { return !!_pid && _step !== 'timeline'; }
 
 /** The scenario project record, or null while it is still being read. */
@@ -80,13 +77,15 @@ export function onChange(fn) { _onChange = fn; }
 const _repaint = () => { if (_onChange) _onChange(); };
 // The stage belongs to a build step while one is open, and to the timeline otherwise - and the
 // timeline and the Library the other way round: locked while a step is open (js/merge-v3/layout.js).
-const _lend = () => { PV.borrow(active()); lock(active()); };
+// And in a talking head the open PANEL is the step (phase L): Setup for setup, the Library for
+// the timeline. A blank project has no Setup and leaves the pair alone.
+const _lend = () => {
+  PV.borrow(active());
+  lock(active());
+  if (_pid) setOpenColumn(active() ? 'inspector' : 'library');
+};
 
-// THE TIMELINE STEP WAITS FOR THE READS (decided with the owner 2026-09-21): the cut is laid from
-// the fragments, and it is laid once every line is read - so the chip is dead until then, with the
-// count on it. A project that already has a cut of its own on the timeline - sent from Scenarios
-// before any of this - keeps its chip: there is something there to edit. The cells the fragments
-// will lay themselves (`frag`, docs/local-app/PLAN.md, phase T') are not such a cut.
+// How far the script has got - what the Library spine says while it waits (below, _paintSpines).
 function _readCount() {
   // The lines that are IN the video: one taken off is not waited for (phase Z, scen-api.js).
   const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
@@ -103,7 +102,7 @@ function _hasCut() {
 function _mayEdit() {
   if (_hasCut()) return true;
   // Before the page has the timeline in hand, the project's own reads answer the same question:
-  // one read means the mirror has something to lay, and the chip should not be dead.
+  // one read means the mirror has something to lay, and the Library spine should not be dead.
   return !!(_project && _readCount().read > 0);
 }
 
@@ -126,16 +125,36 @@ function _remembered() {
 }
 
 export function setStep(id) {
-  if (!STEPS.some(s => s.id === id)) return;
+  if (!STEPS.includes(id)) return;
   if (_step === id) return;
   if (id === 'timeline' && !_mayEdit()) return;
   _leave();
   _step = id;
   _remember(id);
-  _paintChips();
+  _stepToUrl(id);
+  _paintRoute();
   _lend();
   _repaint();
+  // THE PAGE IS LAID OUT FOR THE STEP (phase L1, the owner 2026-09-23): the timeline as tall as its
+  // lanes, the preview a little wider - or, back in setup, the most room there is for the work. On
+  // the switch only: opening a page keeps the arrangement that was saved. After the paint, because
+  // the lanes have to be drawn, and unlocked, before they can be measured.
+  requestAnimationFrame(() => { if (id === 'timeline') roomForTimeline(); else roomForWork(); });
 }
+
+// THE SPINES ARE THE SWITCH (phase L). A press on the folded Library, in a talking head, is the way
+// to the timeline - refused, and the spine says why, until there is something on it; a press on the
+// folded Setup is the way back. A press that asks for the step already open is an ordinary "open
+// this panel" - the scenario picker can hold Setup in the middle of the timeline step - and so is
+// anything outside a talking head.
+onColumnAsk((col) => {
+  if (!_pid) return false;
+  const want = col === 'library' ? 'timeline' : col === 'inspector' ? 'setup' : '';
+  if (!want || want === _step) return false;
+  if (want === 'timeline' && !_mayEdit()) return true;
+  setStep(want);
+  return true;
+});
 
 // ?step= in the address, which is how the Alerts list takes somebody back to the place a
 // generation was started from (js/alerts-bell.js). It is read once, when the project is adopted,
@@ -145,27 +164,62 @@ function _urlStep() {
     return _stepId(new URLSearchParams(location.search).get('step') || '');
   } catch (e) { return ''; }
 }
+// ...so a step switched after such an address rewrites it, or a reload would put you back on the
+// step the link pointed at rather than the one you are on.
+function _stepToUrl(id) {
+  try {
+    const u = new URL(location.href);
+    if (!u.searchParams.has('step') || u.searchParams.get('step') === id) return;
+    u.searchParams.set('step', id);
+    history.replaceState({}, '', u);
+  } catch (e) { /* an address that cannot be rewritten only means a reload lands on the old step */ }
+}
 
 // Which step an opened project lands on. A project with a cut on its timeline is one
 // being edited, so it opens on the timeline; an empty one has nothing to edit yet and
 // opens where the work starts. A remembered choice beats both - unless it is the timeline
-// and the timeline is not open to this project yet (its chip says why).
+// and the timeline is not open to this project yet (the Library spine says why).
 function _firstStep() {
   const want = _urlStep() || _remembered() || (_hasCut() ? 'timeline' : 'setup');
   return want === 'timeline' && !_mayEdit() ? 'setup' : want;
 }
 
-// ── The chips, in the panel's own header ────────────────────────────────────
+// ── The spines ──────────────────────────────────────────────────────────────
+// What the two folded panels say, which in a talking head is what the steps say (phase L). The
+// Library spine is dead until the timeline has something on it - the first read laid is enough -
+// and says how far the script has got; a blank project has no Setup spine at all (the body class
+// lets the stylesheet hide it).
+function _paintSpines() {
+  document.body.classList.toggle('mv3-talking', !!_pid);
+  const lib = document.getElementById('mv3-library');
+  if (!lib) return;
+  const off = !!_pid && _step === 'setup' && !_mayEdit();
+  lib.classList.toggle('is-off', off);
+  const n = _readCount();
+  lib.title = !_pid ? ''
+    : off ? (_project ? 'Read a fragment first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total : 'Reading the project…')
+      : _step === 'setup' ? 'The timeline and the Library · ' + n.read + '/' + n.total + ' read' : '';
+  const ins = document.getElementById('mv3-inspector');
+  if (ins) ins.title = _pid && _step === 'timeline' ? 'Back to setup - the script and the four fields' : '';
+}
+
+// ── The route, in the panel's own header ────────────────────────────────────
 // Beside the title rather than under it: the header is one line on every panel of this
 // page, and a second line here would cost the list below it the same height on a column
 // that is already narrow.
 function _head() { return document.querySelector('#mv3-inspector .mv3-panel-head'); }
 
-function _paintChips() {
+function _paintRoute() {
+  _paintSpines();
   const head = _head();
   if (!head) return;
   let bar = head.querySelector('.mv3-wk-steps');
-  if (!_pid) { if (bar) bar.remove(); return; }
+  // THE ROUTE INSIDE SETUP, and only that (phase L): no step chips, the spines switch the steps.
+  // At the hub there is no route - the panel's own title says where you are - and on a shelf it
+  // reads "setup → looks → …", its first word being the way back to the hub.
+  const mod = _loaded.setup;
+  const crumbs = (_pid && _step === 'setup' && mod && typeof mod.crumbs === 'function') ? (mod.crumbs() || []) : [];
+  if (!crumbs.length) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
     bar.className = 'mv3-wk-steps';
@@ -174,53 +228,30 @@ function _paintChips() {
     head.insertBefore(bar, sp || null);
   }
   bar.textContent = '';
-  for (const s of STEPS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'mv3-wk-step' + (s.id === _step ? ' is-on' : '');
-    b.textContent = s.label;
-    b.title = s.title;
-    if (s.id === 'timeline' && !_mayEdit()) {
-      // Dead until there is something on the timeline - the first read is enough - and it says
-      // how far the script has got.
-      const n = _readCount();
-      b.disabled = true;
-      b.title = _project ? 'Read a fragment first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
-        : 'Reading the project…';
-    } else if (s.id === 'timeline' && _project) {
-      const n = _readCount();
-      b.title = s.title + ' · ' + n.read + '/' + n.total + ' read';
-    }
-    // Pressing the open step's own chip goes back to the top of it.
-    b.addEventListener('click', () => {
-      if (s.id === _step && _loaded[_step] && typeof _loaded[_step].goCrumb === 'function') _loaded[_step].goCrumb('hub');
-      else setStep(s.id);
-    });
-    // The open step may have places INSIDE it. They follow its chip in the same row as a ROUTE -
-    // step, arrow, place, arrow, place - so what led to what reads left to right, and the
-    // header stays one line however deep the route goes.
-    const crumbs = (s.id === _step && _loaded[_step] && typeof _loaded[_step].crumbs === 'function')
-      ? (_loaded[_step].crumbs() || []) : [];
-    if (!crumbs.length) { bar.appendChild(b); continue; }
-    const wrap = document.createElement('div');
-    wrap.className = 'mv3-wk-stepwrap';
-    wrap.appendChild(b);
-    for (const c of crumbs) {
-      const arrow = document.createElement('span');
-      arrow.className = 'mv3-wk-arrow';
-      arrow.textContent = '\u2192';
-      wrap.appendChild(arrow);
-      const sb = document.createElement('button');
-      sb.type = 'button';
-      // Passed through: dashed. Where you are: lit, nothing more (css/merge-v3.css).
-      sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : ' is-trail');
-      sb.textContent = c.label;
-      sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
-      if (!c.here) sb.addEventListener('click', () => { _loaded[_step].goCrumb(c.id); });
-      wrap.appendChild(sb);
-    }
-    bar.appendChild(wrap);
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mv3-wk-step is-on';
+  b.textContent = 'setup';
+  b.title = 'Back to the script and the four fields';
+  b.addEventListener('click', () => mod.goCrumb('hub'));
+  const wrap = document.createElement('div');
+  wrap.className = 'mv3-wk-stepwrap';
+  wrap.appendChild(b);
+  for (const c of crumbs) {
+    const arrow = document.createElement('span');
+    arrow.className = 'mv3-wk-arrow';
+    arrow.textContent = '\u2192';
+    wrap.appendChild(arrow);
+    const sb = document.createElement('button');
+    sb.type = 'button';
+    // Passed through: dashed. Where you are: lit, nothing more (css/merge-v3.css).
+    sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : ' is-trail');
+    sb.textContent = c.label;
+    sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
+    if (!c.here) sb.addEventListener('click', () => { mod.goCrumb(c.id); });
+    wrap.appendChild(sb);
   }
+  bar.appendChild(wrap);
   // A route longer than the panel is wide scrolls sideways (css/merge-v3.css), and its END is
   // where you are - so that is the part kept in view. The start is a flick away; the current
   // place hidden past the edge would be the one word on the row that could not be read.
@@ -242,7 +273,7 @@ async function _adopt() {
   // Where a talking head lands is decided once its record is here (below): whether the timeline
   // may open depends on its reads. Until then the panel says it is reading the project.
   _step = _pid ? 'setup' : 'timeline';
-  _paintChips();
+  _paintRoute();
   _lend();
   _repaint();
   if (!_pid) return;
@@ -253,9 +284,9 @@ async function _adopt() {
     if (d && d.success && _pid === projectIdOf(Store.key() || '')) {
       _project = d.project;
       const first = _firstStep();
-      if (first !== _step) { _leave(); _step = first; _paintChips(); _lend(); }
+      if (first !== _step) { _leave(); _step = first; _paintRoute(); _lend(); }
       // WHATEVER STEP IT LANDED ON IS THE ONE IT IS STANDING ON (phase R): remembered here and not
-      // only when a chip is pressed, so a walk to another page and back comes home to the same
+      // only when a spine is pressed, so a walk to another page and back comes home to the same
       // place. Without it a project opened by its address came back on whichever step the rule
       // picks for a project with a cut - the timeline - however long you had been in setup.
       _remember(_step);
@@ -284,24 +315,35 @@ async function _reload() {
   return null;
 }
 
+// WHEN THE STEP IS DECIDED: a talking head reads its project before it knows where it lands, and a
+// caller that needs the Library - which comes with the timeline step - waits for that (the ?reveal=
+// of an Alerts row, js/merge-v3/main.js). Replaced only when the project changes: a second notice
+// about the same one must not swap a read still in flight for a promise that is already kept.
+let _settled = Promise.resolve();
+export const settled = () => _settled;
+function _follow() {
+  if ((Store.key() || '') === _key) return;
+  _settled = _adopt();
+}
+
 export function initWorkshop() {
-  Store.onChange(_adopt);
-  _adopt();
+  Store.onChange(_follow);
+  _follow();
 }
 
 // ── The panel ───────────────────────────────────────────────────────────────
 // The build step is its own module and arrives when it is first opened - it is the biggest thing
-// on this page. `timeline` has none: it IS the inspector as it has always been, and the inspector
-// never asks this panel to paint it (js/merge-v3/inspector.js, WK.active()).
+// on this page. `timeline` has none: in that step the inspector paints what is picked into the
+// strip over the Library and never asks this panel for anything (js/merge-v3/inspector.js,
+// WK.active()).
 const MODULES = {
   setup: () => import('./wk-setup.js'),
 };
 const _loaded = {};
 
 export function paint(host) {
-  // The chips carry the step's own crumbs, and those change as the step changes what it shows.
-  _paintChips();
-  const spec = STEPS.find(s => s.id === _step);
+  // The route inside the step changes as the step changes what it shows.
+  _paintRoute();
   const load = MODULES[_step];
   if (!load) return;
   const mod = _loaded[_step];
@@ -314,9 +356,9 @@ export function paint(host) {
     // Again, because the step may have changed where it is WHILE painting - an address asking for
     // a level it cannot open (a lookbook with nobody cast) lands on the one it can, and the route
     // in the header has to say the place that is actually on screen.
-    return _paintChips();
+    return _paintRoute();
   }
-  host.appendChild(_note('opening ' + spec.label + '…'));
+  host.appendChild(_note('opening ' + _step + '…'));
   load().then((m) => { _loaded[_step] = m; _repaint(); })
     .catch((e) => { host.textContent = ''; host.appendChild(_note('Could not open this step: ' + e.message, true)); });
 }

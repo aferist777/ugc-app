@@ -18,7 +18,7 @@ import { initPreviewB, mount as mountPvB } from './preview-b.js';
 import { initExportB } from './export-b.js';
 import { initQueue } from './queue.js';
 import { initInspector } from './inspector.js';
-import { initWorkshop } from './workshop.js';
+import { initWorkshop, settled as wkSettled, isTalking, step as wkStep, setStep } from './workshop.js';
 import { initProjects } from './projects.js';
 import * as Store from './store.js';
 import { initBar } from './bar.js';
@@ -58,13 +58,49 @@ initBar();
   });
 })();
 
-// Selecting anything brings the Inspector out - the left pair is a switch, so the Library folds
-// to its spine by the same rule that already governs them.
-//
-// NOT the reverse. Deselecting does not bring the Library back, and that is deliberate: pressing
-// bare lane deselects, and pressing bare lane is also how you seek. Flipping the panel on every
-// scrub would be unusable. The Library's spine is one click away.
-onSelB((n) => { if (n) setOpenColumn('inspector'); });
+// ?reveal=<a file> in the address - how the Alerts row of a picture that has landed brings
+// somebody to it (js/alerts-bell.js, phase L4): the Library open on the images shelf, the picture
+// lit. In a talking head the Library comes with the timeline step, so that step is taken first,
+// once the project has been read and its step decided. Said once: the address forgets it, or a
+// reload after walking the shelf would jump back to the picture.
+async function _reveal(path) {
+  await wkSettled();
+  if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
+  const L = await import('./library.js');
+  return L.reveal(path);
+}
+(() => {
+  let path = '';
+  try { path = new URLSearchParams(location.search).get('reveal') || ''; } catch (e) { return; }
+  if (!path) return;
+  let done = false;
+  Store.onChange(() => {
+    if (done || !Store.key()) return;
+    done = true;
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('reveal');
+      history.replaceState({}, '', u);
+    } catch (e) { /* a reload only shows it again */ }
+    _reveal(path).catch(e => console.warn('[merge-v3] reveal:', e.message));
+  });
+})();
+// ...and without a reload, when the row is pressed on this page with that project already open:
+// the Alerts list asks the page first (js/alerts-bell.js, `ugc:goto`).
+window.addEventListener('ugc:goto', (e) => {
+  let u;
+  try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
+  const path = u.searchParams.get('reveal') || '';
+  if (!path || u.pathname !== location.pathname || u.searchParams.get('p') !== Store.key()) return;
+  e.preventDefault();
+  _reveal(path).catch(err => console.warn('[merge-v3] reveal:', err.message));
+});
+
+// PICKING SOMETHING SHOWS THE LIBRARY, and the settings of what was picked slide over it from
+// the right (phase L5, the owner 2026-09-23; js/merge-v3/inspector.js paints the strip). It used
+// to fold the Library away and bring the Inspector out - which is Setup now, and has nothing to
+// say about a clip. Letting go of the pick takes the strip away, and the Library is still there.
+onSelB((n) => { if (n) setOpenColumn('library'); });
 
 // The timeline and the preview take the panels they draw into as soon as the store has
 // something to show - the empty timeline of "nothing open" included.

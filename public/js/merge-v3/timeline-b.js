@@ -28,7 +28,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
-import { askDelete, closeAsk, short } from './ask.js';
+import { askDelete, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
@@ -60,7 +60,6 @@ const FALLBACK_DUR = 3;
 
 
 
-const _isMainVideo = (t) => !!t && t.kind === 'video' && !!t.main;
 const _zoom = () => {
   const z = document.getElementById('mv3-zoom');
   return z ? (parseInt(z.value, 10) || 60) : 60;
@@ -354,10 +353,10 @@ function _beginBand(e) {
   const el = document.createElement('div');
   el.className = 'mv3b-band';
   document.body.appendChild(el);
-  // The selection is NOT cleared here. A press on bare lane is a seek until it moves, and
-  // seeking to look at the clip you had just picked must not take the Inspector off it.
-  // The moment the press becomes a sweep, _moveBand replaces the selection (or adds to it
-  // with Shift). Esc clears without sweeping.
+  // The selection is not cleared HERE: a press on bare lane is a seek until it moves, and a
+  // sweep that is adding (Shift) keeps what was picked. The moment the press becomes a sweep,
+  // _moveBand replaces the selection (or adds to it); let go without sweeping and _endBand
+  // clears it. Esc clears without sweeping.
   _band = { x0, y0, el, add: e.shiftKey, moved: false, lane: e.target.closest('.mv3b-lane') };
   e.preventDefault();
 }
@@ -400,11 +399,15 @@ function _endBand() {
   const b = _band;
   b.el.remove();
   _band = null;
-  // Pressed on bare lane and let go without sweeping: that was a seek, to the moment under the
-  // pointer - the selection stays, so looking at a clip you just picked keeps it in the panel.
+  // PRESSED ON BARE LANE and let go without sweeping: a seek to the moment under the pointer,
+  // AND letting go of whatever was picked - the strip of its settings slides away and the Library
+  // is what is left (phase L6, the owner 2026-09-23). It used to keep the pick, so that seeking to
+  // look at a clip did not take it out of the panel; that gesture is the RULER's now, which seeks
+  // and touches nothing else.
   if (!b.moved && b.lane) {
     const r = b.lane.getBoundingClientRect();
     _seekTo((b.x0 - r.left) / _zoom());
+    if (!b.add) _clearSel();
   }
 }
 
@@ -615,7 +618,6 @@ function _endDrag() {
         for (const tr of t) {
           const c = (tr.clips || []).find(x => x.id === id);
           if (!c) continue;
-          const was = +c.dur;
           if (d.edge === 'in') { c.start = d.start; c.trimIn = d.trimIn; }
           c.dur = d.dur;
           return;
@@ -660,8 +662,6 @@ function _endDrag() {
     }
   });
 }
-
-function _repaint() { if (_on) { closeAsk(); _build(); } }
 
 const _hasClip = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf(DRAG_TYPE) >= 0;
 
@@ -1110,18 +1110,11 @@ function _build() {
   host.appendChild(inner);
 }
 
-// Take over the timeline panel. Called by the dispatcher in main.js when a blank project
-// is opened; the talking-head module is told to stand down first.
+// Take over the timeline panel - once, from main.js, when the store first has something to show.
 export function mount() {
   _on = true;
   document.body.classList.add('mv3-blank');
   _build();
-}
-
-export function unmount() {
-  _on = false;
-  closeAsk();
-  document.body.classList.remove('mv3-blank');
 }
 
 export const multiCount = () => _sel.size;
@@ -1336,11 +1329,6 @@ export function setClipField(trackId, clipId, key, value) {
   });
 }
 
-// Set one field on one LANE. Separate from the clip writer on purpose: a lane's volume is a
-// master that multiplies what its clips are set to, and stamping it onto them - which is what
-// the other editor does for effects - would destroy levels set by hand.
-const TRACK_FIELDS = new Set(['volume']);
-
 // ── A value written onto every clip of a lane ───────────────────────────────
 // THE STAMP, and it is a stamp rather than an inherited default: choosing a filter for a lane
 // writes it into each clip on it, overwriting whatever each one had. That is what the other
@@ -1379,15 +1367,6 @@ export function resetTrack(trackId) {
       c.transition = null; c.animation = null; c.filter = null;
       c.fit = null; c.cropAlign = null;
     }
-  });
-}
-
-export function setTrackField(trackId, key, value) {
-  if (!TRACK_FIELDS.has(key)) return;
-  Store.mutate(tl => {
-    const t = (tl.tracks || []).find(x => x.id === trackId);
-    if (!t) return;
-    if (key === 'volume') t.volume = Math.max(0, Math.min(4, +value || 0));
   });
 }
 
@@ -1489,6 +1468,71 @@ export function mateOf(clipId) {
 }
 export const deleteMulti = () => _deleteSelected();
 
+// ── The right-click on bare lane (phase L3, the owner 2026-09-23) ───────────
+// The playhead goes to the moment under the pointer, and a menu asks what to make THERE. A picture:
+// the pictures window, whose `to timeline` lays what it makes at the playhead - and what it makes is
+// on the images shelf either way (lib/mv3-gens.js). A video: not yet - its window is being rebuilt
+// around what a clip is made from (words, a picture), so the row is there, says so and does nothing.
+// A right-click on a clip or on a lane's name is not this menu's.
+let _ctx = null;
+function _closeCtx() {
+  if (!_ctx) return;
+  _ctx.el.remove();
+  document.removeEventListener('mousedown', _ctx.away, true);
+  window.removeEventListener('scroll', _closeCtx, true);
+  Layers.close(_ctx.layer);
+  _ctx = null;
+}
+
+function _laneMenu(e) {
+  if (!_on || locked()) return;
+  const host = _host();
+  const t = e.target;
+  if (!host || !t || !t.closest || !host.contains(t)) return;
+  if (t.closest('.mv3b-clip') || t.closest('.mv3b-lbl')) return;
+  const lane = t.closest('.mv3b-lane');
+  if (!lane) return;
+  e.preventDefault();
+  _closeCtx();
+  _seekTo((e.clientX - lane.getBoundingClientRect().left) / _zoom());
+
+  const box = document.createElement('div');
+  box.className = 'mv3-plus-menu';
+  const item = (label, sub, title, on) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-plus-item';
+    b.title = title;
+    const s = document.createElement('span');
+    s.textContent = label;
+    b.appendChild(s);
+    const m = document.createElement('small');
+    m.textContent = sub;
+    b.appendChild(m);
+    b.disabled = !on;
+    if (on) b.addEventListener('click', (ev) => { ev.stopPropagation(); _closeCtx(); on(); });
+    box.appendChild(b);
+  };
+  // Loaded on demand, like the Library's own way into it: the window is a thousand lines.
+  item('generate image', 'the pictures window · "to timeline" puts it here',
+    'Make a picture with a model - it lands on the images shelf, and "to timeline" lays it at the playhead',
+    () => import('./imagen.js').then(m => m.openImagen())
+      .catch(err => console.warn('[timeline] the picture window did not open:', (err && err.message) || err)));
+  item('generate video', 'in development', 'In development - the video window is being rebuilt', null);
+
+  // Fixed to the viewport and parked on the body, where the pointer was.
+  document.body.appendChild(box);
+  const w = box.offsetWidth, h = box.offsetHeight;
+  box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, e.clientX))) + 'px';
+  box.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, e.clientY))) + 'px';
+  const away = (ev) => { if (!box.contains(ev.target)) _closeCtx(); };
+  // A menu, not a window: Escape closes it first and the page keeps its shortcuts (js/layers.js).
+  const layer = Layers.open(box, { modal: false, name: 'timeline menu', onEsc: _closeCtx });
+  _ctx = { el: box, away, layer };
+  document.addEventListener('mousedown', away, true);
+  window.addEventListener('scroll', _closeCtx, true);
+}
+
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
   const z = document.getElementById('mv3-zoom');
@@ -1498,6 +1542,7 @@ export function initTimelineB() {
   document.addEventListener('mousemove', _moveDrag);
   document.addEventListener('mouseup', _endDrag);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
+  document.addEventListener('contextmenu', _laneMenu);
   // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. Delegated to the document and matched by
   // id rather than bound to the element: the timeline is rebuilt from the model whenever
   // anything changes, so a listener on a clip is a listener on a node that may not survive

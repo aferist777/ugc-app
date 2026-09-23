@@ -232,11 +232,10 @@ select.mv3-rr-rf{cursor:pointer}
   display:flex; align-items:center; gap:9px; flex:0 0 auto; overflow:hidden;
   padding:7px 11px; background:var(--surface); border-bottom:1px solid var(--border-soft);
 }
-/* The inspector's header carries the step chips and, when the open step has places inside it,
-   its sub-steps in the SAME row. One line, so the header is the height it has always been -
-   the bracket under the pair is drawn inside that line and costs nothing. */
+/* The Setup panel's header carries, when setup has places inside it, the route to where you are
+   in the SAME row. One line, so the header is the height it has always been. */
 #mv3-inspector .mv3-panel-head{align-items:center}
-/* The word stays whole: it is the name of the panel, and the chips beside it can scroll. */
+/* The word stays whole: it is the name of the panel, and the route beside it can scroll. */
 #mv3-inspector .mv3-panel-title{flex:0 0 auto}
 /* The title gives way first: it is a label, and the shelf buttons beside it are
    controls. min-width:0 is what actually lets a flex item shrink far enough to
@@ -254,16 +253,27 @@ select.mv3-rr-rf{cursor:pointer}
    a vertical label. `order` is the only addition, and it is what keeps that spine
    on the left. */
 .mv3-col{min-width:0}
-/* The collapsed one is the switch to the other panel, so it is loud: a 3px yellow edge and a
-   yellow label - the same yellow the Character page puts on the same kind of button. */
+/* A FOLDED PANEL IS A BUTTON (phase L2, the owner 2026-09-23): a gold outline all the way round
+   and rounded corners, with room around it so the corners show - it used to be a strip with one
+   gold edge, in a gold of its own rather than the theme's. In a talking head the two of them are
+   the step switch (js/merge-v3/workshop.js): the Library one leads to the timeline, the Setup one
+   back to the build. 34px wide and 4px of margin each side: the 42px the layout reserves for it
+   (layout.js, SPINE_W). */
 .mv3-col.is-collapsed{
   order:0; flex:0 0 34px; min-width:34px; max-width:34px; cursor:pointer;
-  border-right:3px solid #e8b93a;
+  margin:6px 4px; border:1px solid var(--gold); border-radius:var(--r-sm);
+  transition:background .12s var(--ease);
 }
 .mv3-col:not(.is-collapsed){order:1; flex:1 1 0}
-.mv3-col.is-collapsed:hover{background:oklch(.86 .16 92 / .10)}
+.mv3-col.is-collapsed:hover{background:color-mix(in oklch, var(--gold) 12%, transparent)}
 .mv3-col.is-collapsed .mv3-panel-head,
 .mv3-col.is-collapsed .mv3-panel-body{display:none}
+/* Not yet: the Library spine of a talking head before anything is on its timeline. Dashed, like a
+   field with work still in it, and it says why on hover. */
+.mv3-col.is-collapsed.is-off{border-style:dashed; opacity:.55; cursor:default}
+.mv3-col.is-collapsed.is-off:hover{background:none}
+/* A project that is not a talking head has no setup, so no Setup spine: the pair is the Library. */
+body:not(.mv3-talking) #mv3-inspector.is-collapsed{display:none}
 
 .mv3-spine{
   display:none; flex:1; align-items:center; justify-content:center;
@@ -271,8 +281,8 @@ select.mv3-rr-rf{cursor:pointer}
   font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
   color:var(--muted); user-select:none;
 }
-.mv3-col.is-collapsed .mv3-spine{display:flex; color:oklch(.86 .16 92)}
-.mv3-col.is-collapsed:hover .mv3-spine{color:oklch(.94 .14 92)}
+.mv3-col.is-collapsed .mv3-spine{display:flex; color:var(--gold)}
+.mv3-col.is-collapsed:hover .mv3-spine{color:color-mix(in oklch, var(--gold) 70%, white)}
 
 /* ── Sashes ──────────────────────────────────────────────────────────────────
    5px, which is thin enough to read as a rule between panels rather than as a
@@ -625,6 +635,12 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* A favourite shows its star WITHOUT hovering - that is how the mark is read at a
    glance, and the same reason the Library page marks its cards. */
 .mv3-tile.is-fav .mv3-tile-star{opacity:1; color:oklch(.86 .16 92)}
+/* THE FILE AN ALERT LED HERE (phase L4, js/merge-v3/library.js reveal): ringed in the theme's gold,
+   drawn in twice so the eye finds it, and lit until the shelf is painted again. Outside the tile,
+   because the picture covers everything inside it; the grid's gap and the panel's padding are the
+   room it is drawn in. */
+.mv3-tile.is-found{border-color:var(--gold); outline:2px solid var(--gold); outline-offset:2px; animation:mv3-found .6s var(--ease) 2}
+@keyframes mv3-found{from{outline-offset:8px; outline-color:transparent} to{outline-offset:2px; outline-color:var(--gold)}}
 
 /* The upload cell. Dashed like the empty-region marker, because that is what it is:
    a slot with nothing in it yet. */
@@ -649,6 +665,10 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-plus-item:hover{background:var(--surface-2)}
 .mv3-plus-item small{font:400 9.5px/1.2 var(--font); color:var(--muted)}
+/* A row that is there but not yet (the timeline's `generate video`, phase L3) or not now (a
+   fragment's `read` with no voice): greyed, and no hover to suggest it can be pressed. */
+.mv3-plus-item[disabled]{opacity:.5; cursor:default}
+.mv3-plus-item[disabled]:hover{background:transparent}
 .mv3-grid-note{display:block; padding:8px 2px 0; font-size:11px; color:var(--muted)}
 
 /* ── Drop target ─────────────────────────────────────────────────────────────
@@ -718,27 +738,21 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:600 10px/1.45 var(--font);
 }
 
-.mv3-ins-help{font:400 10.5px/1.5 var(--font); color:var(--muted)}
-.mv3-ins-help ol, .mv3-ins-help ul{margin:0 0 10px; padding-left:16px}
-.mv3-ins-help li{margin:0 0 4px}
-/* The idle panel is now several short lists rather than one. A heading needs air above it,
-   or the group above and the group below read as one run-on list. */
-.mv3-ins-help > .mv3-ins-todo-h{margin-top:11px}
-.mv3-ins-help > .mv3-ins-todo-h:first-child{margin-top:0}
-
-/* Not-yet-built controls, named rather than hidden: an empty panel says nothing about
-   what is coming, and this is the list to argue with before it is written. */
-.mv3-ins-todo{
-  margin-top:12px; padding:8px 9px;
-  border:1px dashed var(--border); border-radius:var(--r-sm);
-  color:var(--muted); font:400 10px/1.5 var(--font);
+/* WHAT IS PICKED ON THE TIMELINE, over the Library (phase L5, the owner 2026-09-23): a strip
+   350px wide that slides in from the panel's right edge while something is picked and out when
+   nothing is. Over the Library rather than instead of it, so a clip can be dragged in while the
+   settings of another are open. It carries the panel's own scroll box and padding. */
+#mv3-library{position:relative; overflow:hidden}
+.mv3-over{
+  position:absolute; top:0; right:0; bottom:0; z-index:5; width:min(350px, 100%);
+  display:flex; flex-direction:column;
+  background:var(--bg); border-left:1px solid var(--gold); box-shadow:-10px 0 24px oklch(0 0 0 / .35);
+  transform:translateX(102%); transition:transform .18s var(--ease); pointer-events:none;
 }
-.mv3-ins-todo-h{
-  font:700 9px/1 var(--font); letter-spacing:.07em; text-transform:uppercase;
-  color:var(--muted); margin-bottom:5px;
-}
-.mv3-ins-todo ul, .mv3-ins-keys ul{margin:0; padding-left:14px}
-.mv3-ins-todo li{margin:0 0 3px}
+.mv3-over.is-open{transform:none; pointer-events:auto}
+.mv3-over-body{flex:1; min-height:0; overflow:auto; padding:10px}
+/* A folded Library has nothing to slide over. */
+#mv3-library.is-collapsed .mv3-over{display:none}
 
 /* ── Inspector controls ───────────────────────────────────────────────────────
    A fixed label column so a stack of rows lines up down one edge - the thing that
@@ -1526,13 +1540,13 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-sc-lines:focus{outline:1px solid var(--primary); outline-offset:-1px}
 
-/* ── The steps of a talking head ─────────────────────────────────────────────
-   In the inspector's own header, beside its title (js/merge-v3/workshop.js): the panel
-   IS the workshop while one of them is open, and a second header line would cost the
-   list below it the same height on a column that is already narrow. */
-/* One line, always. When the open step adds its own sub-steps the row can run out of
-   width, and WRAPPING would make the header taller exactly when you go a level deeper - so it
-   scrolls sideways instead, without a bar of its own to take up the height it just saved. */
+/* ── The route inside setup ──────────────────────────────────────────────────
+   In the Setup panel's own header, beside its title (js/merge-v3/workshop.js): a second header
+   line would cost the list below it the same height on a column that is already narrow. The
+   steps themselves have no chips - the two spines are the switch (phase L). */
+/* One line, always. A deep route can run out of width, and WRAPPING would make the header
+   taller exactly when you go a level deeper - so it scrolls sideways instead, without a bar of
+   its own to take up the height it just saved. */
 .mv3-wk-steps{display:flex; align-items:center; gap:3px; margin-left:8px; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none}
 .mv3-wk-steps::-webkit-scrollbar{display:none}
 .mv3-wk-step{
@@ -1540,11 +1554,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
   background:transparent; color:var(--muted); cursor:pointer;
   font:600 9px/1.5 var(--font); letter-spacing:.03em; text-transform:uppercase; white-space:nowrap;
 }
-.mv3-wk-step:hover{color:var(--ink)}
 .mv3-wk-step.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
-/* The timeline chip waits for the reads (js/merge-v3/workshop.js): dead until then, its tooltip
-   says how far the script is. */
-.mv3-wk-step[disabled]{opacity:.45; cursor:default; color:var(--muted)}
 /* While a build step holds the stage the transport has nothing to drive: the preview is
    showing that step's work, not the cut. Dimmed and dead rather than hidden - it comes
    back the moment the timeline step is picked, and a control that vanishes and returns
@@ -1566,10 +1576,10 @@ body.mv3-workshop .mv3-preview-body{padding:10px}
   padding:0 7px; background:var(--mv3-around, oklch(.13 .012 265)); color:var(--gold);
   font:700 10px/1.6 var(--font); letter-spacing:.14em; text-transform:uppercase; white-space:nowrap;
 }
-/* THE LOCK. While a build step is open the timeline and the Library are not where the work is
-   (js/merge-v3/layout.js, lock): blurred and dimmed, and inert - they take no pointer and no
-   keyboard. The timeline step lifts it (decided with the owner 2026-09-21). */
-body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
+/* THE LOCK. While setup is open the timeline is not where the work is (js/merge-v3/layout.js,
+   lock): blurred and dimmed, and inert - it takes no pointer and no keyboard. The Library is
+   folded meanwhile, and its spine is the way out (phase L; decided with the owner 2026-09-21). */
+body.mv3-locked #mv3-timeline{
   filter:blur(3px) saturate(.7); opacity:.5; pointer-events:none; user-select:none;
 }
 
@@ -1630,17 +1640,17 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 .mv3-wk-grid.is-env{grid-template-columns:repeat(auto-fill, minmax(118px, 1fr))}
 .mv3-wk-tile.is-env .mv3-wk-face{aspect-ratio:3/2; object-fit:contain; object-position:center}
 .mv3-wk-grid.is-env .mv3-wk-tile.is-add{aspect-ratio:3/2}
-/* WHERE YOU ARE INSIDE THE OPEN STEP: after that step's chip, in the same row. In the row and
-   not under it, because a second line would make the header taller the moment you went one
-   level deeper, and move everything below it while it was being read.
-   THE WHOLE ROUTE IS ONE THING. The step chip and every place after it sit on a shared tint,
-   so the step reads as a block from its name down to wherever you are in it. Arrow and chip
-   are spaced alike and tight - equal gaps are what make it read as one sequence and not as
-   chips that happen to have arrows near them. */
-/* No vertical padding: the step chip is the tallest thing in the row and the tint is exactly
-   its height, so going a level deeper adds a tail to the pill and never a pixel to the header.
-   None on the left either - the chip's own outline IS the start of the pill. The 2px on the
-   right is the gap again, which puts the last word as far from the end as the first. */
+/* WHERE YOU ARE INSIDE SETUP: after the word `setup`, in the same row. In the row and not
+   under it, because a second line would make the header taller the moment you went one level
+   deeper, and move everything below it while it was being read.
+   THE WHOLE ROUTE IS ONE THING. `setup` and every place after it sit on a shared tint, so the
+   step reads as a block from its name down to wherever you are in it. Arrow and place are
+   spaced alike and tight - equal gaps are what make it read as one sequence and not as pills
+   that happen to have arrows near them. */
+/* No vertical padding: `setup` is the tallest thing in the row and the tint is exactly its
+   height, so going a level deeper adds a tail to the pill and never a pixel to the header.
+   None on the left either - its own outline IS the start of the pill. The 2px on the right is
+   the gap again, which puts the last word as far from the end as the first. */
 .mv3-wk-stepwrap{
   display:flex; align-items:center; gap:2px; flex:0 0 auto;
   padding:0 2px 0 0; border-radius:999px; background:var(--primary-soft);
@@ -1655,7 +1665,7 @@ body.mv3-locked #mv3-timeline, body.mv3-locked #mv3-library{
 }
 .mv3-wk-sub:hover{color:var(--ink)}
 /* The places already passed through keep a dashed outline - the trail. The one you are on is
-   lit and nothing more: the step chip at the start has the solid outline, the trail is dashed,
+   lit and nothing more: `setup` at the start has the solid outline, the trail is dashed,
    and where you stand needs no box to be found, because it is where the trail ends. */
 .mv3-wk-sub.is-trail{border-style:dashed; border-color:var(--primary)}
 .mv3-wk-sub.is-here{cursor:default}

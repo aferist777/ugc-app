@@ -18,7 +18,7 @@ import * as Layers from '../layers.js';
 import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
          softened } from './fx-b.js';
 import { paintCaptions, subsTrack, regroup, autoWordsPerLine } from './subs-b.js';
-import { wirePlace, unwirePlace, paintHandles, liveOf } from './place-b.js';
+import { wirePlace, paintHandles, liveOf } from './place-b.js';
 import { isStill } from './store.js';
 import { setPlayhead, setSubsStyle } from './timeline-b.js';
 
@@ -135,6 +135,17 @@ function _srcFor(src, rev) {
 // downloads, and one element cannot hold both.
 const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : (_shooting === 'orig' ? 'orig' : _quality()) + (rev ? '|rev' : ''));
 
+// A PICTURE THAT HAS ARRIVED ASKS TO BE DRAWN (phase L7, the owner 2026-09-23). An element is made
+// by the paint that first needs it - the playhead has just landed on its clip - and that paint, and
+// the one a frame later, both find nothing decoded: the file is not even open yet. Nothing looked
+// again when it was, so the stage stayed black until the next seek into the same clip, which then
+// found the file open. Now the element says when it has something: its first data, the end of every
+// seek, an image's load. Not while playing - the clock paints every frame anyway, and a repaint from
+// here would cancel the tick that drives it (see _repaint).
+function _ready() {
+  if (_on && !_playing) _repaint();
+}
+
 function _el(src, rev) {
   const key = _key(src, rev);
   if (_media.has(key)) return _media.get(key);
@@ -142,11 +153,14 @@ function _el(src, rev) {
   if (isStill({ src })) {
     el = new Image();
     el.decoding = 'async';
+    el.addEventListener('load', _ready);
   } else {
     el = document.createElement('video');
     el.muted = true;            // sound is the audio lanes' business, not the picture's
     el.playsInline = true;
     el.preload = 'auto';
+    el.addEventListener('loadeddata', _ready);
+    el.addEventListener('seeked', _ready);
   }
   el.crossOrigin = 'anonymous';
   el.src = _srcFor(src, rev);
@@ -578,8 +592,6 @@ export function seek(t) {
   _syncAudio();
 }
 
-export const playheadAt = () => _at;
-
 function _clock() {
   const el = document.getElementById('mv3-pv-time');
   if (!el) return;
@@ -807,8 +819,6 @@ function _centre() {
   if (_film) _film.box = null;
   if (_on) _paint();
 }
-
-export const isBorrowed = () => _borrowed;
 
 /**
  * Show one picture on the borrowed stage - who was cast, the look being tried, the frame
@@ -1076,8 +1086,6 @@ export function cropOff() {
   _crop = null;
   if (_on) _paint();
 }
-
-export const cropping = () => !!_crop;
 
 /** The selection as fractions of the picture, for the server to cut by, or null. */
 export const cropRect = () => (_crop ? { ...(_crop.rect) } : null);
@@ -1410,9 +1418,7 @@ function _syncPlayBtn() {
 }
 
 // ── Mounting ────────────────────────────────────────────────────────────────
-// The format picker, between the clock and the quality. Built here and removed on unmount,
-// because it belongs to this workflow: a scenario project's frame comes from the scenario and
-// is not a choice to offer beside it.
+// The format picker, between the clock and the quality, built once when the preview is mounted.
 function _wireFormat() {
   const bar = document.querySelector('.mv3-pv-bar');
   const q = document.getElementById('mv3-pv-q');
@@ -1464,8 +1470,8 @@ function _resize() {
   // either of them, so it is stated here - inline, which is what lets one number decide it.
   const stage = document.getElementById(STAGE);
   if (stage) stage.style.aspectRatio = CW + ' / ' + CH;
-  // The stage is shaped by CSS, so the shape has to reach CSS. On the body because the stage
-  // itself belongs to whichever preview is mounted.
+  // The stage is shaped by CSS, so the shape has to reach CSS - on the body, where every rule
+  // that depends on it can read it.
   document.body.classList.toggle('mv3-fmt-169', _fmt() === '16:9');
   const sel = document.getElementById('mv3-pvb-fmt');
   if (sel && sel.value !== _fmt()) sel.value = _fmt();
@@ -1529,29 +1535,6 @@ function _wireTransport() {
     e.preventDefault();
     toggle();
   });
-}
-
-export function unmount() {
-  // Nothing to give back if it was never taken. Without this guard the dispatcher's first
-  // swap at boot - which unmounts this one before mounting the other - emptied the stage and
-  // took the talking-head canvas with it, before a blank project had ever been opened.
-  if (!_on) return;
-  _on = false;
-  pause();
-  cancelAnimationFrame(_raf);
-  for (const [, el] of _audio) { try { el.pause(); el.src = ''; } catch (e) {} }
-  _audio.clear();
-  _sweep(new Set());
-  const stage = document.getElementById(STAGE);
-  if (stage) stage.textContent = '';
-  unwirePlace();
-  _rects.clear();
-  const st0 = document.getElementById(STAGE);
-  if (st0) st0.style.aspectRatio = '';
-  const sel = document.getElementById('mv3-pvb-fmt');
-  if (sel) sel.remove();
-  document.body.classList.remove('mv3-fmt-169');
-  _cv = null; _ctx = null;
 }
 
 export const isMounted = () => _on;

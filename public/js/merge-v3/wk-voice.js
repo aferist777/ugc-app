@@ -458,7 +458,7 @@ async function _take(api, card) {
 // A take is STALE when the words are no longer the ones that were spoken - the server keeps what
 // it said in each take (routes/scen3.js, /scen3/voice/speak) - so nothing has to be marked by
 // hand, and editing a line makes its read stale by itself. Unread or stale is the one rule,
-// shared with the timeline chip that waits for every line (js/merge-v3/scen-api.js).
+// shared with the counters and the Library spine (js/merge-v3/scen-api.js, isRead).
 //
 // The read is the standard one: eleven_multilingual_v2, no tags, no parameters (decided with the
 // owner; moods and tags are a conversation of their own). That is what a project with no voice

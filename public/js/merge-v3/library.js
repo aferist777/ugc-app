@@ -75,6 +75,8 @@ function _note(text, isError) {
 function _tile(it, i) {
   const cell = document.createElement('div');
   cell.className = 'mv3-tile' + (it.meta && it.meta.favorite ? ' is-fav' : '');
+  // Which file, so a tile can be found by what it shows (reveal, below).
+  cell.dataset.media = String(it.media || '').split('?')[0];
   const hid = (it.meta || {}).hookId || null;
   cell.title = [hid, it.name, it.kind, (it.meta || {}).categoryId].filter(Boolean).join(' · ');
 
@@ -776,6 +778,41 @@ export async function showGroup(tab, catLabel) {
   _cat = opt.value;
   try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
   await _load();
+}
+
+// ── One file, shown on its shelf (phase L4, the owner 2026-09-23) ───────────
+// Where the Alerts row of a picture that has landed leads (js/alerts-bell.js, js/merge-v3/main.js):
+// the images shelf, open on the category the picture was filed in - a project's pictures go under
+// the project's own (lib/mv3-gens.js) - and its tile in view and lit until the shelf is painted
+// again. Looked for across the whole shelf first: the category the shelf was last left on need not
+// be the one it is in.
+export async function reveal(path) {
+  const want = String(path || '').split('?')[0];
+  if (!want) return false;
+  setOpenColumn('library');
+  _setTab('images');
+  _cat = '';
+  await _load();
+  const it = _items.find(x => String(x.media || '').split('?')[0] === want);
+  if (!it) {
+    _status('That picture is no longer on the shelf', true);
+    setTimeout(() => _status(''), 5000);
+    return false;
+  }
+  const cat = String((it.meta || {}).categoryId || '');
+  const sel = document.getElementById('mv3-lib-cat');
+  if (cat && sel && [...sel.options].some(o => o.value === cat)) {
+    _cat = cat;
+    await _load();
+  }
+  try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
+  const cell = [...document.querySelectorAll('#mv3-library .mv3-tile')].find(c => c.dataset.media === want);
+  if (!cell) return false;
+  cell.classList.add('is-found');
+  // A frame later: the step a talking head was just switched to lays the page out again first
+  // (js/merge-v3/layout.js, roomForTimeline), and the panel's height is part of where "centre" is.
+  requestAnimationFrame(() => cell.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  return true;
 }
 
 export function initLibrary() {

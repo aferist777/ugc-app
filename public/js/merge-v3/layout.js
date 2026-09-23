@@ -27,7 +27,7 @@ const LS_OPEN   = 'mv3_open_col';
 const _defLeft = () => Math.round(window.innerWidth * 0.6);
 const DEF_TL_H   = 290;
 
-const SPINE_W     = 34;    // must match .mv3-col.is-collapsed in css/merge-v3.css
+const SPINE_W     = 42;    // .mv3-col.is-collapsed in css/merge-v3.css: 34px and a 4px margin each side
 const SASH        = 5;     // must match .mv3-sash in css/merge-v3.css
 // Wide enough that the four shelf buttons always fit the Library header, and that the
 // timeline under it shows its label column and a few seconds of lane.
@@ -75,13 +75,13 @@ function _tlNow() {
 }
 
 // ── The lock ────────────────────────────────────────────────────────────────
-// While a talking head is being BUILT - a step of the workshop is open (js/merge-v3/workshop.js) -
-// the timeline and the Library are not where the work is: the cut is laid from the fragments
-// later, and until then a clip dragged in from the Library would be a clip on a timeline nobody is
-// editing. So both are locked: blurred (css/merge-v3.css, body.mv3-locked), inert to the pointer
-// and the keyboard, and the Library column cannot be opened - the inspector is what is open,
-// whichever column was before. The timeline step lifts it (decided with the owner 2026-09-21,
-// docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
+// While a talking head is being BUILT - setup is open (js/merge-v3/workshop.js) - the timeline and
+// the Library are not where the work is: the cut is laid from the fragments, and until then a clip
+// dragged in from the Library would be a clip on a timeline nobody is editing. So the timeline is
+// locked - blurred (css/merge-v3.css, body.mv3-locked), inert to the pointer and the keyboard - and
+// the Library is folded, Setup open in its place, and cannot be opened by anything but its own
+// spine, which is the step switch and lifts the lock first (phase L; decided with the owner
+// 2026-09-21, docs/local-app/PLAN.md "Сцена, setup и таймлайн-зеркало").
 let _locked = false;
 
 export function lock(on) {
@@ -89,28 +89,47 @@ export function lock(on) {
   if (want === _locked) return;
   _locked = want;
   document.body.classList.toggle('mv3-locked', want);
-  for (const id of ['mv3-timeline', 'mv3-library']) {
-    const el = document.getElementById(id);
-    if (el) el.inert = want;
-  }
+  // The timeline sleeps. The Library is not frozen but FOLDED: folded, it is only its spine, and
+  // in a talking head its spine is the way to the timeline step (phase L) - freezing it would
+  // freeze the switch.
+  const tl = document.getElementById('mv3-timeline');
+  if (tl) tl.inert = want;
   if (want) setOpenColumn('inspector');
 }
 
 /** Is the lock on? The timeline's own keys ask before they act (js/merge-v3/timeline-b.js). */
 export const locked = () => _locked;
 
+// ── A SPINE MAY MEAN MORE THAN "OPEN THIS PANEL" (phase L, the owner 2026-09-23) ──
+// In a talking head the two spines are the step switch: the Library spine is the way to the
+// timeline, the Setup spine the way back (js/merge-v3/workshop.js). So a press on a folded panel
+// is offered first to the one handler registered for it; only if it does not take the press does
+// the panel simply open.
+let _ask = null;
+export function onColumnAsk(fn) { _ask = typeof fn === 'function' ? fn : null; }
+
+// ── Which panel came forward ────────────────────────────────────────────────
+// Told to whoever holds something in the panel that just folded: the scenario picker is LEFT when
+// the Library comes forward (js/merge-v3/scen-pick.js). A picker running on behind the fold would
+// come back in place of setup the next time the panel opened - and in a project that is not a
+// talking head the folded Setup has no spine to open it by (phase L).
+const _opened = [];
+export function onColumnOpen(fn) { if (typeof fn === 'function') _opened.push(fn); }
+
 // ── Which of the two left panels is open ───────────────────────────────────
 // Exactly one, always. There is deliberately no "both closed" state: the pair is
 // a switch, and a switch with an off position would just be a third layout to
 // keep working.
 export function setOpenColumn(which) {
-  // Not the Library while the lock is on: it is inert, and a column of greyed shelves in front of
-  // the inspector would be the panel the person cannot use in place of the one they can.
+  // Not the Library while the lock is on: setup is open, and the Library comes with the timeline
+  // step - its spine asks the workshop first (onColumnAsk), which lifts the lock before it opens it.
   if (which === 'library' && _locked) return;
+  const was = document.querySelector('.mv3-col:not(.is-collapsed)');
   document.querySelectorAll('.mv3-col').forEach(c => {
     c.classList.toggle('is-collapsed', c.dataset.col !== which);
   });
   try { localStorage.setItem(LS_OPEN, which); } catch (e) {}
+  if (!was || was.dataset.col !== which) for (const fn of _opened) { try { fn(which); } catch (e) { /* the switch is made */ } }
 }
 
 // ── Sash dragging ──────────────────────────────────────────────────────────
@@ -207,10 +226,31 @@ function _save() {
 }
 
 /**
+ * THE TIMELINE STEP'S ARRANGEMENT (phase L1, the owner 2026-09-23): the timeline as tall as its
+ * lanes need - measured as drawn, because lanes are not all one height - and the column 30px
+ * narrower than its widest, so the preview is a little wider than setup leaves it. Clamped like
+ * any drag: the panel above keeps its floor, and lanes that still do not fit scroll as before.
+ */
+export function roomForTimeline() {
+  const panel = document.getElementById('mv3-timeline');
+  const tl = document.getElementById('mv3-tl');
+  const head = panel && panel.querySelector('.mv3-panel-head');
+  if (panel && tl) {
+    // The lanes' own height, plus the header over them and the scrollbar under them.
+    const want = (head ? head.getBoundingClientRect().height : 0) + tl.scrollHeight + (tl.offsetHeight - tl.clientHeight) + 2;
+    _applyTl(want);
+  }
+  _applyLeft(_clampLeft(Number.MAX_SAFE_INTEGER) - 30);
+  _placeCross();
+  _save();
+}
+
+/**
  * THE MOST ROOM THERE IS FOR THE WORK (the owner, 2026-09-22). A new project is opened to be
  * built, and building happens in the panel: the column takes everything the preview can spare and
  * the timeline shrinks to its floor, which puts the corner at the far left and the very bottom.
- * Saved like any drag, because it IS the arrangement from now on - until the next drag.
+ * Saved like any drag, because it IS the arrangement from now on - until the next drag. Setup
+ * comes back to it too (phase L1).
  */
 export function roomForWork() {
   _applyLeft(Number.MAX_SAFE_INTEGER);       // clamped to what the preview can spare
@@ -231,7 +271,9 @@ export function initLayout() {
   // purpose - collapsing it would leave the left side with no panel at all.
   document.querySelectorAll('.mv3-col').forEach(col => {
     col.addEventListener('click', () => {
-      if (col.classList.contains('is-collapsed')) setOpenColumn(col.dataset.col);
+      if (!col.classList.contains('is-collapsed') || col.classList.contains('is-off')) return;
+      if (_ask && _ask(col.dataset.col)) return;          // the step switch took it (phase L)
+      setOpenColumn(col.dataset.col);
     });
   });
 

@@ -30,7 +30,7 @@
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { askDelete } from './ask.js';
-import { setOpenColumn, roomForWork } from './layout.js';
+import { setOpenColumn, roomForWork, onColumnOpen } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
 
@@ -74,6 +74,10 @@ export function stop() {
   _active = false;
   _repaint();
 }
+
+// THE LIBRARY COMING FORWARD IS LEAVING THE PICKER (phase L): by its spine, by a pick on the
+// timeline, by the timeline step - the person has gone elsewhere (js/merge-v3/layout.js).
+onColumnOpen((which) => { if (which === 'library') stop(); });
 
 /** Enter the picker: the inspector column comes forward and the list loads. */
 export async function start() {
@@ -292,8 +296,11 @@ async function _use(scenarioId) {
     body: JSON.stringify({ projectId: p.id }),
   }).then(r => r.json());
   if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
-  stop();                               // the picker has done its job
   await Store.open(d.key);
+  // The picker has done its job - left only now that the project is open: left before, the panel
+  // would belong for a moment to whatever was open before it, and a blank project has no Setup
+  // (phase L), so the Library would flash up in its place.
+  stop();
   roomForWork();                        // a new talking head is opened to be built
   WK.setStep('setup');
   return d.key;
