@@ -13,6 +13,8 @@
 <!-- The media popup, shared with Merge v3 (both drive js/library/viewer.js).
      Before library.css, so anything this page overrides still wins. -->
 <link rel="stylesheet" href="css/lib-viewer.css">
+<!-- The countdown rows of the scenario generator (js/progress.js startInlineProgress). -->
+<link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/library.css">
 </head>
 <body>
@@ -60,6 +62,9 @@
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
+      <!-- Scenarios only (phase E1): the generator in place of the list, and the way back to it. -->
+      <button class="lib-btn primary" type="button" id="lib-new-scen" hidden title="Write a scenario - from a source, or from a topic alone">New scenario</button>
+      <button class="lib-btn" type="button" id="lib-back-scen" hidden title="Back to the list of scenarios - what is being written goes on">← Scenarios</button>
       <!-- Only appears when two records point at one file; says how many. -->
       <button class="lib-btn" type="button" id="lib-dupes" hidden>Duplicates</button>
       <!-- Only appears when a record points at a file that is not on disk. -->
@@ -92,6 +97,10 @@
         <div class="lib-info-body" id="lib-info-body"></div>
       </aside>
     </div>
+    <!-- THE SCENARIO GENERATOR (phase E): sources down the left, the form or a source's topics on the
+         right. Built the first time "New scenario" is pressed and only hidden after that, so what it
+         runs goes on while the list is looked at (js/library/make.js). -->
+    <div class="lib-make" id="lib-make" hidden></div>
   </main>
 </div>
 

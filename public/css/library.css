@@ -529,3 +529,270 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-sc-status{ font-size:10.5px; color:var(--muted); }
 .lib-sc-status.ok{ color:oklch(.78 .13 150); }
 .lib-sc-status.err{ color:oklch(.75 .15 25); }
+
+/* ── Buttons and lines the generator brought (phase E) ─────────────────────────
+   .lib-btn itself lives in css/lib-viewer.css; the primary one is the generator's main press. */
+.lib-btn.primary{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
+.lib-btn.primary:hover{ filter:brightness(1.08); color:var(--primary-ink); background:var(--primary); }
+.lib-status.ok{ color:oklch(.78 .13 150); }
+/* A line where a countdown row would be: "pick a file first", a refusal, a job's last word. */
+.lib-job-say{ font-size:11px; line-height:1.45; color:var(--ink); }
+.lib-job-say.err{ color:oklch(.75 .15 25); }
+
+/* A draft heading the Scenarios list: the tag says it is one and how far it got. */
+.lib-sc-tag{
+  flex:0 0 auto; padding:2px 7px; border-radius:var(--pill);
+  font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  color:oklch(.9 .09 85); background:oklch(.3 .05 85);
+}
+.lib-sc-tag.run{ color:var(--primary-ink); background:var(--primary); }
+.lib-srow.is-draft{ border-style:dashed; }
+
+/* ── The scenario generator (phase E, js/library/make.js) ─────────────────────
+   Sources down a narrow column on the left, the form - or the chosen source's topics - on the
+   right. Styles came from Library 2 (css/library2.css, l2-*) under the mk- prefix. */
+.lib-make{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
+.mk-src{
+  flex:0 0 200px; min-height:0; display:flex; flex-direction:column; gap:6px;
+  padding:8px; background:var(--surface); border-right:1px solid var(--border);
+}
+/* The "+" over the column: 20px high, the column's width. */
+.mk-add{
+  flex:0 0 20px; height:20px; width:100%; padding:0;
+  border:1px dashed var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:700 14px/18px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.mk-add:hover{ color:var(--ink); border-color:var(--primary); border-style:solid; }
+.mk-src-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.mk-src-empty{ padding:8px 2px; font-size:11px; line-height:1.5; color:var(--muted); }
+.mk-src-card{
+  position:relative; display:flex; flex-direction:column; flex:0 0 auto;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  overflow:hidden; cursor:pointer; transition:.12s var(--ease);
+}
+.mk-src-card:hover{ border-color:var(--primary); }
+/* The chosen source: gold, three pixels in all - the border and a ring over the poster. */
+.mk-src-card.cur{ border-color:var(--gold); }
+.mk-src-card.cur::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  border:2px solid var(--gold); border-radius:inherit;
+}
+.mk-src-thumb{ position:relative; width:100%; aspect-ratio:16 / 9; background:var(--bg); }
+.mk-src-thumb img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+.mk-src-thumb.pending{
+  background:repeating-linear-gradient(45deg,
+    oklch(.23 .018 265), oklch(.23 .018 265) 6px,
+    oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
+}
+.mk-src-dur{
+  position:absolute; right:4px; bottom:4px; padding:1px 5px; border-radius:var(--r-xs);
+  background:oklch(0 0 0 / .66); color:oklch(.97 0 0);
+  font-size:9.5px; font-weight:600; font-variant-numeric:tabular-nums;
+}
+.mk-x{
+  position:absolute; top:4px; right:4px; z-index:1;
+  width:17px; height:17px; padding:0; border:0; border-radius:50%;
+  background:oklch(0 0 0 / .5); color:oklch(.97 0 0);
+  font-size:10px; line-height:17px; text-align:center; cursor:pointer;
+  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+}
+.mk-src-card:hover .mk-x, .mk-x:focus-visible{ opacity:1; }
+.mk-x:hover{ background:var(--danger); }
+.mk-src-t{ padding:6px 7px 0; font-size:11px; font-weight:600; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
+.mk-src-s{ display:flex; flex-wrap:wrap; gap:6px; padding:2px 7px 6px; font-size:10px; color:var(--muted); }
+.mk-src-draft{ color:oklch(.85 .1 85); font-weight:700; }
+
+.mk-main{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
+/* The generator's own line, over both views: what was saved, what went wrong. */
+.mk-said{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:6px 12px; font-size:11.5px; color:var(--ink);
+  background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.mk-said > span{ flex:1 1 auto; min-width:0; }
+.mk-said.ok > span{ color:oklch(.82 .13 150); }
+.mk-said.err > span{ color:oklch(.78 .14 25); }
+.mk-said-x{ background:none; border:0; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px; }
+.mk-said-x:hover{ color:var(--ink); }
+.mk-view{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.mk-head{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto; min-height:38px;
+  padding:6px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.mk-head .sp{ flex:1; }
+.mk-col-title{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.mk-note{ font-size:10.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* The source's name, editable in place: a heading you can fix, not a form field. */
+.mk-title-in{
+  flex:1 1 auto; min-width:0;
+  font:600 12px/1.2 var(--font); color:var(--ink);
+  background:transparent; border:1px solid transparent; border-radius:var(--r-xs);
+  padding:3px 5px; margin:-3px 0 -3px -5px;
+}
+.mk-title-in:hover{ border-color:var(--border); }
+.mk-title-in:focus{ outline:none; background:var(--bg); border-color:var(--primary); }
+.mk-body{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 12px 16px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.mk-empty{ padding:12px 2px; font-size:12px; line-height:1.5; color:var(--muted); }
+/* The countdown row (css/gen-progress.css .sv3-inline-prog) lies over its host: the host is a
+   positioned strip of its own height, or the row would cover the whole window. */
+.mk-job{ position:relative; min-height:28px; display:flex; flex-direction:column; gap:5px; }
+.mk-job > .sv3-inline-prog{ border-radius:var(--r-xs); }
+.mk-note-line{
+  padding:6px 9px; font-size:11px; line-height:1.45; color:oklch(.93 .06 85);
+  background:oklch(.3 .05 85 / .35); border:1px solid oklch(.5 .09 85); border-radius:var(--r-xs);
+}
+
+/* A source's topics. */
+.mk-summary{ font-size:11.5px; line-height:1.55; color:var(--muted); }
+.mk-summary:empty{ display:none; }
+.mk-topics{ display:flex; flex-direction:column; gap:6px; }
+.mk-topic{
+  padding:9px 10px; background:var(--surface-2); cursor:pointer;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); transition:.12s var(--ease);
+}
+.mk-topic:hover{ border-color:var(--primary); }
+/* Written from already: still material, just used. */
+.mk-topic.used{ border-color:oklch(.42 .07 150); }
+.mk-topic-h{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.mk-topic-t{ font-size:12.5px; font-weight:600; color:var(--ink); }
+.mk-topic-span{ margin-left:auto; flex:0 0 auto; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.mk-topic-s{ margin:4px 0 0; font-size:11px; line-height:1.5; color:var(--muted); }
+.mk-topic-f{ display:flex; align-items:center; gap:8px; margin-top:7px; }
+.mk-topic-f .sp{ flex:1; }
+.mk-topic-name{ font-size:10.5px; color:var(--muted); }
+.mk-tag{
+  flex:0 0 auto; padding:2px 7px; border-radius:var(--pill);
+  font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+}
+.mk-tag.ready{ color:oklch(.9 .12 150); background:oklch(.28 .06 150); }
+.mk-tag.wait{ color:oklch(.9 .09 85); background:oklch(.3 .05 85); }
+
+/* The form: stages stacked in the order they run - seeing the hook while reading paragraph four is
+   the point, because every paragraph after the first exists to deliver on it. */
+.mk-field{ display:flex; flex-direction:column; gap:4px; }
+.mk-field > span{ font-size:10.5px; font-weight:600; color:var(--muted); }
+.mk-field em{ font-style:normal; font-weight:400; opacity:.8; }
+.mk-field input[type=text], .mk-field select{
+  font:12px/1.45 var(--font); color:var(--ink);
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 8px;
+}
+.mk-field input[type=text]:focus, .mk-field select:focus{ outline:none; border-color:var(--primary); }
+.mk-field input[type=file]{ font:11px var(--font); color:var(--muted); }
+.mk-controls{
+  display:flex; flex-wrap:wrap; gap:8px;
+  padding:8px 10px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+}
+.mk-controls:empty{ display:none; }
+.mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.mk-ctl > span{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.mk-ctl select, .mk-ctl input{
+  font:600 11px var(--font); color:var(--ink);
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
+  height:26px; padding:0 6px; min-width:96px;
+}
+.mk-ctl input[type=number]{ width:66px; min-width:0; }
+.mk-ctl select:focus, .mk-ctl input:focus{ outline:none; border-color:var(--primary); }
+.mk-stage{ display:flex; flex-direction:column; gap:7px; padding:10px 0 0; border-top:1px solid var(--border); }
+.mk-stage-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.mk-stage-h .sp{ flex:1; }
+.mk-stage-h > span:first-child{ font-size:11px; font-weight:700; color:var(--ink); }
+.mk-stage-h em{ font-style:normal; font-weight:400; color:var(--muted); }
+/* The one generate button lives in one of these two, never in both. */
+.mk-go-slot{ display:inline-flex; }
+#mk-hook{
+  font:12px/1.5 var(--font); color:var(--ink); resize:vertical;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
+}
+#mk-hook:focus{ outline:none; border-color:var(--primary); }
+/* Five candidates, each labelled with the KIND it is - that is what they differ in. */
+.mk-hooks{ display:flex; flex-direction:column; gap:4px; }
+.mk-hook{
+  display:flex; gap:8px; align-items:flex-start; width:100%; text-align:left;
+  padding:7px 9px; cursor:pointer;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  transition:.12s var(--ease);
+}
+.mk-hook:hover{ border-color:var(--primary); }
+.mk-hook-k{
+  flex:0 0 auto; padding:1px 6px; border-radius:var(--pill);
+  background:var(--primary-soft); color:var(--primary);
+  font-size:9px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+}
+.mk-hook-t{ font-size:11.5px; line-height:1.5; color:var(--ink); }
+.mk-save-row{ display:flex; flex-wrap:wrap; gap:8px; }
+.mk-save-row .mk-field{ flex:1 1 150px; }
+.mk-save-row input, .mk-save-row select{ height:28px; }
+/* One card per beat: the rewrite button acts on THIS paragraph, and "rewrite 4" needs a visible 4. */
+.mk-scenes{ display:flex; flex-direction:column; gap:6px; }
+.mk-scene{
+  display:flex; gap:8px; align-items:flex-start;
+  padding:8px 9px; background:var(--surface-2);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.mk-scene.hook{ border-color:var(--primary); }
+.mk-scene-n{
+  flex:0 0 auto; width:30px; text-align:center; padding-top:3px;
+  font-size:10px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums;
+}
+.mk-scene-n.is-hook{ font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--primary); }
+.mk-scene-t{
+  flex:1 1 auto; min-width:0; font:12px/1.55 var(--font); color:var(--ink);
+  background:transparent; border:0; resize:none; padding:0;
+}
+.mk-scene-t:focus{ outline:none; }
+.mk-scene-a{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; }
+.mk-scene-rw{
+  background:none; border:1px solid var(--border); border-radius:var(--r-xs);
+  color:var(--muted); font-size:10px; padding:2px 6px; cursor:pointer;
+}
+.mk-scene-rw:hover{ color:var(--ink); border-color:var(--primary); }
+.mk-scene-rw[disabled]{ opacity:.4; cursor:default; }
+.mk-scene-secs{ font-size:9px; color:var(--muted); text-align:center; }
+
+/* The "add a source" window, on the layer stack. */
+.mk-ov{
+  position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .72); padding:24px;
+}
+.mk-panel{
+  display:flex; flex-direction:column; width:min(620px, 96vw); max-height:min(820px, 92vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.mk-panel-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.mk-panel-head .sp{ flex:1; }
+.mk-panel-t{ font-size:12.5px; font-weight:600; color:var(--ink); }
+.mk-panel-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+.mk-choice{ display:flex; gap:4px; }
+.mk-choice-btn{
+  flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:600 11.5px/1.2 var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.mk-choice-btn:hover{ color:var(--ink); }
+.mk-choice-btn.cur{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
+.mk-route{ display:flex; flex-direction:column; gap:10px; }
+.mk-route > .lib-btn{ align-self:flex-start; }
+.mk-pnote{ margin:0; font-size:10.5px; line-height:1.5; color:var(--muted); }
+.mk-pnote code{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:10px; }
+/* The lock is the whole point of the link route: it says why, not just no. */
+.mk-lock{
+  display:flex; flex-direction:column; gap:3px; padding:8px 10px;
+  background:oklch(.3 .05 85 / .35); border:1px solid oklch(.5 .09 85);
+  border-radius:var(--r-xs); font-size:11px; color:oklch(.93 .06 85);
+}
+.mk-cookies{
+  margin-top:6px; padding:10px; display:flex; flex-direction:column; gap:7px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+}
+.mk-cookies-head{ display:flex; align-items:center; gap:8px; font-size:10.5px; font-weight:700; color:var(--muted); }
+.mk-cookies-state{ margin-left:auto; font-weight:600; }
+.mk-cookies-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.mk-cookies-row input[type=file]{ font:11px var(--font); color:var(--muted); }

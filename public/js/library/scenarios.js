@@ -10,6 +10,9 @@
 // and fields, where it came from when the generator wrote it, its lines - editable in one textarea,
 // one line per line, because editing a script is reading it top to bottom - and Delete.
 //
+// DRAFTS HEAD THE LIST (phase E4): a script the generator is still writing, one row each, saying how
+// far it got. A draft is not selected - pressing it continues it in the generator (js/library/make.js).
+//
 // Lines are `{text}` records - the roles live on the scenario, not on its lines - so splitting the
 // textarea on newlines maps onto the store exactly. A line that carries a newline of its own (the
 // generator can write one) is shown on one textarea line, or a Save would quietly make it two.
@@ -74,6 +77,25 @@ function _pick(it) {
   _show(it);
 }
 
+// A draft's row: what it is about, how far it got, where it is written from.
+function _draftRow(dr) {
+  const row = _el('button', 'lib-srow is-draft');
+  row.type = 'button';
+  row.title = 'Continue this draft in the generator';
+  const main = _el('div', 'lib-srow-main');
+  main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
+  const tail = [dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
+    dr.paragraphs ? dr.paragraphs + (dr.paragraphs === 1 ? ' paragraph' : ' paragraphs') : '',
+    String(dr.narratorName || '').replace(/ — .*$/, '')].filter(Boolean).join(' · ');
+  main.appendChild(_el('div', 'lib-srow-s', tail));
+  row.appendChild(_el('span', 'lib-sc-tag' + (dr.running ? ' run' : ''),
+    'draft · ' + (dr.running ? 'writing…' : (dr.stageLabel || dr.stage || ''))));
+  row.appendChild(main);
+  row.appendChild(_el('div', 'lib-srow-d', _fmtDate(dr.updatedAt)));
+  row.addEventListener('click', () => { if (_hooks.openDraft) _hooks.openDraft(dr.id); });
+  return row;
+}
+
 export function render(items, hooks = {}) {
   _hooks = hooks || {};
   _items = items || [];
@@ -81,10 +103,11 @@ export function render(items, hooks = {}) {
   if (!grid) return;
   grid.textContent = '';
   grid.className = 'lib-rows is-scenarios';
+  for (const dr of (_hooks.drafts || [])) grid.appendChild(_draftRow(dr));
 
   if (!_items.length) {
     _sel = '';
-    grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet.'));
+    grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet. “New scenario” above writes one.'));
     _empty();
     return;
   }
@@ -265,6 +288,16 @@ async function _delete(s, btn) {
 
 /** Lines typed and not saved - the page asks before the shelf is left. */
 export function unsaved() { return _dirty(); }
+
+/** Lines typed and not saved, dropped: the person agreed to leave them (the generator opened over
+ *  them), and must not be asked again about lines no longer on screen. */
+export function drop() {
+  const ta = document.querySelector('#lib-info-body .lib-sc-ta');
+  if (ta && ta.dataset.was != null) ta.value = ta.dataset.was;
+}
+
+/** The scenario to select at the next render - one the generator has just saved. */
+export function select(id) { _sel = String(id || ''); }
 
 // Leaving the shelf: an answer on its way is dropped, and coming back opens on the first scenario.
 export function leave() {

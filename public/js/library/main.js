@@ -17,6 +17,7 @@ import * as V from './voices.js';
 import * as MU from './music.js';
 import * as SC from './scenarios.js';
 import * as INFO from './info.js';
+import * as MK from './make.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -51,6 +52,9 @@ let _reqId = 0;
 // last - a newer read that overtakes the one that asked must not drop them.
 let _checksDue = false;
 let _first = true;      // the page's very first read, for restoring a remembered filter
+// Scenarios: the generator is showing instead of the list (phase E), and the drafts heading the list.
+let _making = false;
+let _drafts = [];
 
 function _status(text, kind) {
   const el = $('lib-status');
@@ -62,8 +66,44 @@ function _status(text, kind) {
 function _paintShelves() {
   document.querySelectorAll('.lib-shelf').forEach(b => b.classList.toggle('cur', b.dataset.kind === _shelf));
   _paintUpload();
+  _paintMake();
   // Media's three checks show their buttons only there; leaving Media puts them away at once.
   if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
+}
+
+// ── The scenario generator (phase E) ─────────────────────────────────────────
+// "New scenario" puts it where the list is; "← Scenarios" brings the list back, read again, since a
+// scenario may have been saved and a draft started. Leaving it only hides it: what it runs goes on.
+function _paintMake() {
+  const on = _shelf === 'scenarios';
+  if (!on) _making = false;
+  const nb = $('lib-new-scen'), bb = $('lib-back-scen'), split = $('lib-split'), mk = $('lib-make');
+  if (nb) nb.hidden = !on || _making;
+  if (bb) bb.hidden = !on || !_making;
+  if (split) split.hidden = _making;
+  if (mk) mk.hidden = !_making;
+}
+
+async function _openMake(opts) {
+  if (_shelf !== 'scenarios') return;
+  if (!_making && SC.unsaved()) {
+    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
+    SC.drop();
+  }
+  _making = true;
+  _paintMake();
+  _status('');
+  await MK.open(opts || {});
+}
+
+async function _closeMake(then) {
+  if (!_making) return;
+  await MK.close();
+  _making = false;
+  _paintMake();
+  if (then) then();
+  _load({ keepScroll: true });
+  _counts();
 }
 
 // The kind and category are remembered, so every place that changes them goes through
@@ -495,7 +535,10 @@ function _renderGrid() {
   if (_shelf === 'scenarios') {
     // reload, not a local patch: a saved scenario changes its line count, and that count is the
     // store's answer rather than the editor's.
-    SC.render(_items, { reload: () => _load({ keepScroll: true }), status: _status, counts: _counts });
+    SC.render(_items, {
+      reload: () => _load({ keepScroll: true }), status: _status, counts: _counts,
+      drafts: _drafts, openDraft: (id) => _openMake({ draftId: id }),
+    });
     return;
   }
   grid.textContent = '';
@@ -591,9 +634,17 @@ async function _load(opts) {
       if (_cat) q.push('cat=' + encodeURIComponent(_cat));
     }
     const url = '/api/library/shelf/' + _shelf + (q.length ? '?' + q.join('&') : '');
+    // Scenarios: the drafts head the list (phase E4), read beside the shelf.
+    const draftsP = _shelf === 'scenarios'
+      ? fetch('/api/scriptgen/drafts').then(r => r.json()).catch(() => null) : null;
     const d = await (await fetch(url)).json();
     if (my !== _reqId) return;
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
+    if (draftsP) {
+      const dd = await draftsP;
+      if (my !== _reqId) return;
+      _drafts = (dd && dd.success && dd.drafts) || [];
+    }
     _items = d.items || [];
     _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
     // A remembered kind or category can outlive what it pointed at — a category emptied,
@@ -659,6 +710,8 @@ function _select(kind) {
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'music') MU.stopPreview();  // nor a backing track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
+  // The generator is hidden, not stopped: a draft typed into is saved now, its stages run on.
+  if (_making) { MK.close(); _making = false; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
@@ -939,6 +992,17 @@ function boot() {
   if (brk) brk.addEventListener('click', _cleanBroken);
   const thb = $('lib-thumbs');
   if (thb) thb.addEventListener('click', _fixThumbs);
+
+  MK.init({
+    status: _status,
+    counts: _counts,
+    // "open" beside "Saved": the list again, on that scenario.
+    openScenario: (id) => _closeMake(() => SC.select(id)),
+  });
+  const nb = $('lib-new-scen');
+  if (nb) nb.addEventListener('click', () => _openMake());
+  const bb = $('lib-back-scen');
+  if (bb) bb.addEventListener('click', () => _closeMake());
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

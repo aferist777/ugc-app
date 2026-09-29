@@ -185,11 +185,13 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
 // `key` separates WHAT IS BEING TIMED from what is written on the row. The label is a sentence
 // for a human ("Finding topics in 82k of transcript"); the key is what makes two runs comparable
 // ("l2-topics|80k"). Left out, they are the same thing - which is right when the label is fixed.
-export function startInlineProgress(host, { label, key, estimateMs = 0 } = {}) {
+// `startedAt` re-attaches the row to a job already running, as startProgress does: the bar and the
+// countdown start from its real age, and finish() times the whole job, not the part watched.
+export function startInlineProgress(host, { label, key, estimateMs = 0, startedAt = 0 } = {}) {
   if (!host) return { finish() {}, fail() {}, detach() {}, say() {} };
   const emaKey = key || label;
   const est = _emaGet(emaKey, estimateMs);
-  const t0 = Date.now();
+  const t0 = startedAt || Date.now();
   let closed = false;
 
   const row = document.createElement('div');

@@ -10,6 +10,14 @@
 //   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle
 //   POST /api/scriptgen/save                -> { scenario }  into the scenarios store
 //   GET  /api/scriptgen/jobs/:jobId         -> { state, step, error, result }
+//   GET  /api/scriptgen/drafts              -> { drafts: [summary + running] }
+//   GET  /api/scriptgen/drafts/:id          -> { draft, running }
+//   POST /api/scriptgen/drafts              -> { draft }   create or update
+//   DELETE /api/scriptgen/drafts/:id        -> { success }  refused while a stage writes into it
+//
+// ONE STAGE AT A TIME PER DRAFT (phase E5). A stage that is running is marked on its draft, a second
+// start of anything on that draft is refused with 409 and the job that IS running, and the drafts
+// list carries the mark - so a page opened later follows the job instead of paying for it twice.
 //
 // WHY JOBS: a reasoning model writing fifteen paragraphs from a ten-minute transcript takes
 // longer than any sane request timeout, and the humanizer takes as long again. The client polls;
@@ -58,9 +66,21 @@ function _sweep() {
 // the result too, and both are upserts on the same row, so this is belt and braces rather than a
 // race - but without it, closing the tab while a script is being written throws the script away
 // after it has been paid for.
-function _start(res, step, work, keep) {
+//
+// `run` marks the draft the stage writes into: { key, what, ... } - see _runKey.
+function _start(res, step, work, keep, run) {
+  const key = (run && run.key) || '';
+  const busy = key ? _running.get(key) : null;
+  if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
+    return res.status(409).json({ success: false, error: `This draft is already being written (${busy.what}).`, ...busy });
+  }
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step, at: Date.now(), error: null, result: null };
+  if (key) {
+    const rest = { ...run };
+    delete rest.key;
+    _running.set(key, { ...rest, jobId, startedAt: job.at });
+  }
   res.json({ success: true, jobId });
   (async () => {
     try {
@@ -73,8 +93,34 @@ function _start(res, step, work, keep) {
       job.state = 'error';
       job.error = e.message;
       job.at = Date.now();
+    } finally {
+      // The mark goes after the keeper has written, in the same tick: whoever sees the draft free
+      // also sees the answer in it.
+      if (key && _running.get(key) && _running.get(key).jobId === jobId) _running.delete(key);
     }
   })();
+}
+
+// What is writing into which draft: 'd:<draftId>' -> { jobId, startedAt, what, model, effort,
+// scenes, index }. In memory, like the jobs themselves: a restart ends both.
+const _running = new Map();
+
+// The draft a stage writes into. By id; a stage sent with a source and topic but no id (Library 2
+// did that) is keyed by the draft that source and topic already have, so both ways in meet.
+function _runKey(b) {
+  const id = String((b && b.draftId) || '');
+  if (id) return 'd:' + id;
+  const s = String((b && b.sourceId) || ''), t = String((b && b.topicId) || '');
+  if (!s || !t) return '';
+  const d = drafts.list().find(x => String(x.sourceId) === s && String(x.topicId) === t);
+  return d ? 'd:' + d.id : 's:' + s + '|' + t;
+}
+
+function _runningFor(d) {
+  if (!d) return null;
+  return _running.get('d:' + d.id)
+    || (d.sourceId && d.topicId ? _running.get('s:' + d.sourceId + '|' + d.topicId) : null)
+    || null;
 }
 
 // What the prompts call the narrator block: a real profile, or the neutral rules. Asking for a
@@ -129,21 +175,34 @@ function _sourceText(sourceId, topicId) {
 //
 // The settings and the topic go in alongside the result, because a row that holds five hooks and
 // nothing else is not resumable: it has no name and no dropdowns to reopen.
+//
+// WHERE IT IS WRITTEN FROM is decided when the answer lands, not when the stage started: a draft
+// detached meanwhile - its source deleted, its topic gone with a new reading of the topics - stays
+// detached (phase E), or the ids this stage started with would point it at nothing again.
+function _whereNow(sourceId, topicId) {
+  const rec = sourceId ? sources.get(sourceId) : null;
+  if (!rec) return null;
+  if (!topicId) return { sourceTitle: rec.title || '', topicTitle: '' };
+  const t = (rec.topics || []).find(x => String(x.id) === String(topicId));
+  return t ? { sourceTitle: rec.title || '', topicTitle: t.title || '' } : null;
+}
+
 function _keeper(b, build) {
   const id = String(b.draftId || '');
   const sourceId = String(b.sourceId || '');
   const topicId = String(b.topicId || '');
   if (!id && !(sourceId && topicId)) return null;
-  let titles = { sourceTitle: '', topicTitle: '' };
-  try { titles = _sourceText(sourceId, topicId); } catch (e) { /* titles are decoration here */ }
   return (result) => {
     const patch = build(result);
     if (!patch) return;
+    const cur = id ? drafts.get(id) : null;
+    const detached = cur && String(cur.sourceId || '') !== sourceId;
+    const now = detached ? null : _whereNow(sourceId, topicId);
     drafts.save({
       id: id || undefined,
-      sourceId, topicId,
-      sourceTitle: titles.sourceTitle, topicTitle: titles.topicTitle,
-      topic: String(b.topic || ''),
+      ...(now ? { sourceId, topicId, sourceTitle: now.sourceTitle, topicTitle: now.topicTitle } : {}),
+      // Only when the stage was sent one: the cleaning pass is not, and must not blank the topic.
+      ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
         language: b.language, tone: b.tone, scenes: b.scenes,
         narratorId: b.narratorId, narratorName: b.narratorName, readingIndex: b.readingIndex,
@@ -200,7 +259,10 @@ router.post('/scriptgen/hooks', (req, res) => {
     const hooks = (data.hooks || []).filter(h => h && h.text);
     if (!hooks.length) throw new Error('No hooks came back.');
     return { hooks, narrator: _readingLabel(nar), reading: nar.reading, model: m.model };
-  }, _keeper(b, (r) => ({ hooks: r.hooks })));
+  // Five new hooks mean a hook is to be picked again: the one the draft held is cleared with them,
+  // or a draft reopened later would show the old hook and hide the five that were paid for.
+  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '' })),
+  { key: _runKey(b), what: 'hooks', model: m.model, effort: m.effort });
 });
 
 router.post('/scriptgen/script', (req, res) => {
@@ -242,7 +304,8 @@ router.post('/scriptgen/script', (req, res) => {
       reading: nar.reading,
       model: m.model,
     };
-  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, title: r.title, hook, humanized: false })));
+  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, title: r.title, hook, humanized: false })),
+  { key: _runKey(b), what: 'script', model: m.model, effort: m.effort, scenes: m.scenes });
 });
 
 router.post('/scriptgen/humanize', (req, res) => {
@@ -277,7 +340,8 @@ router.post('/scriptgen/humanize', (req, res) => {
       narrator: _readingLabel(nar),
       reading: nar.reading,
     };
-  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, humanized: !!r.applied })));
+  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, humanized: !!r.applied })),
+  { key: _runKey(b), what: 'humanize', model: m.model, effort: m.effort });
 });
 
 router.post('/scriptgen/rewrite', (req, res) => {
@@ -305,7 +369,53 @@ router.post('/scriptgen/rewrite', (req, res) => {
     const paragraph = String(data.paragraph || '').trim();
     if (!paragraph) throw new Error('The rewrite came back empty.');
     return { index, paragraph };
-  });
+  }, _keeper(b, (r) => {
+    // Into the draft's own paragraphs as they are NOW - the page may have edited others meanwhile -
+    // falling back to the script it sent when the draft has none.
+    const cur = (b.draftId && drafts.get(b.draftId)) || drafts.list().find(x => b.sourceId && b.topicId
+      && String(x.sourceId) === String(b.sourceId) && String(x.topicId) === String(b.topicId));
+    const next = ((cur && cur.paragraphs && cur.paragraphs.length) ? cur.paragraphs : script).slice();
+    if (r.index >= next.length) return null;
+    next[r.index] = r.paragraph;
+    return { paragraphs: next };
+  }),
+  { key: _runKey(b), what: 'rewrite', model: m.model, effort: m.effort, index });
+});
+
+// ── drafts ──────────────────────────────────────────────────────────────────
+// Here since the generator moved into the Library (phase E); /api/library2/drafts goes with that page.
+
+router.get('/scriptgen/drafts', (_req, res) => {
+  try { res.json({ success: true, drafts: drafts.summaries().map(s => ({ ...s, running: _runningFor(s) })) }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.get('/scriptgen/drafts/:id', (req, res) => {
+  const d = drafts.get(req.params.id);
+  if (!d) return res.status(404).json({ success: false, error: 'no such draft' });
+  res.json({ success: true, draft: d, running: _runningFor(d) });
+});
+
+// Called at every stage of writing, so it has to be an upsert: a second row for work that
+// already has one would show the same unfinished script twice.
+// An id the store does not have is refused rather than made: the page only ever sends ids the
+// server gave it, so an unknown one is a draft saved or discarded meanwhile - and a late save must
+// not bring it back beside the scenario it became.
+router.post('/scriptgen/drafts', (req, res) => {
+  const b = req.body || {};
+  if (b.id && !drafts.get(b.id)) return res.status(404).json({ success: false, error: 'no such draft' });
+  try { res.json({ success: true, draft: drafts.save(b) }); }
+  catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+// Not while a stage writes into it: its keeper would bring the draft back the moment it lands.
+router.delete('/scriptgen/drafts/:id', (req, res) => {
+  const d = drafts.get(req.params.id);
+  if (!d) return res.status(404).json({ success: false, error: 'no such draft' });
+  const run = _runningFor(d);
+  if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - discard it when it has landed.`, ...run });
+  drafts.remove(d.id);
+  res.json({ success: true });
 });
 
 // ── into the scenarios store ────────────────────────────────────────────────
@@ -316,6 +426,10 @@ router.post('/scriptgen/save', (req, res) => {
   const title = String(b.title || '').trim();
   const paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
   if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
+  // Not while a stage still writes into the draft: saving removes it, and the keeper would bring it
+  // back beside the scenario the moment its answer landed.
+  const run = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
+  if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - save when it has landed.`, ...run });
   if (paragraphs.length < MIN_LINES) {
     return res.status(400).json({ success: false,
       error: `the scenarios store needs at least ${MIN_LINES} lines — this script has ${paragraphs.length}` });

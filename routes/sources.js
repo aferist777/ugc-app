@@ -8,8 +8,15 @@
 //   GET    /api/sources/:id/transcript   -> { cues, chars, model }
 //   POST   /api/sources/upload           multipart file -> { jobId, source }
 //   POST   /api/sources/:id/transcribe   -> { jobId }
-//   DELETE /api/sources/:id              -> { success, removed }
+//   POST   /api/sources/:id/topics       -> { jobId }   409 with the running job while one runs
+//   DELETE /api/sources/:id              -> { success, removed, draftsDetached }
 //   GET    /api/sources/jobs/:jobId      -> { state, step, error, source }
+//
+// WHAT RUNS IS SAID (phase E5): a source being read is 'stored' / 'downloading' / 'transcribing'
+// in its record, and finding its topics is `job` on it - so a page opened later shows the wait
+// instead of offering to pay again, and a second start is refused. A restart ends every job, so
+// the records it left mid-way are marked 'interrupted' when the server starts, with the file kept
+// for "transcribe again".
 //
 // Ingest is one job with three visible steps - stored, poster, transcript - because that is
 // how it fails: the copy succeeds, the poster is cheap, and the transcription is the minutes-
@@ -32,8 +39,38 @@ const VT = require('../lib/video-thumb');
 const YTDLP = require('../lib/ytdlp');
 const COOKIES = require('../lib/yt-cookies');
 const TOPICS = require('../lib/writing-topics');
+const DRAFTS = require('../lib/script-drafts');
 
 const router = express.Router();
+
+// Being read right now: states only a running job leaves behind.
+const LIVE = new Set(['stored', 'downloading', 'transcribing']);
+
+// Topics being found, per source: id -> { kind: 'topics', jobId, startedAt }.
+const _mining = new Map();
+const _withJob = (rec) => (_mining.has(String(rec.id)) ? { ...rec, job: _mining.get(String(rec.id)) } : rec);
+
+// When the server starts, no job is running - so a record still saying it is being read was cut
+// off by the app closing. It says so, and keeps its file for "transcribe again".
+//
+// A failed source whose transcript still says 'running' (a link that failed while being read, from
+// before its catch set the transcript too) is repaired here as well: the page would keep calling it
+// "being read" and never offer to read it again.
+function _markInterrupted() {
+  try {
+    for (const s of store.list()) {
+      const t = s.transcript || {};
+      if (s.state === 'error' && t.state === 'running') { store.update(s.id, { transcript: { ...t, state: 'error' } }); continue; }
+      if (!LIVE.has(s.state)) continue;
+      store.update(s.id, {
+        state: 'error',
+        error: 'interrupted - the app was closed while this was being ' + (s.state === 'downloading' ? 'downloaded' : 'read'),
+        transcript: t.state === 'ready' ? t : { ...t, state: 'error' },
+      });
+    }
+  } catch (e) { console.warn('[sources] could not mark the interrupted sources:', e.message); }
+}
+_markInterrupted();
 
 const VIDEO_RE = /\.(mp4|mov|webm|mkv|m4v|avi|mp3|m4a|wav|aac|ogg)$/i;
 
@@ -137,7 +174,7 @@ function _utf8Name(name) {
 
 router.get('/sources', (_req, res) => {
   try {
-    res.json({ success: true, sources: store.summaries(), maxChars: store.MAX_TRANSCRIPT_CHARS });
+    res.json({ success: true, sources: store.summaries().map(_withJob), maxChars: store.MAX_TRANSCRIPT_CHARS });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -252,7 +289,7 @@ router.delete('/sources/cookies', (_req, res) => {
 router.get('/sources/:id', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
-  res.json({ success: true, source: rec });
+  res.json({ success: true, source: _withJob(rec) });
 });
 
 router.get('/sources/:id/transcript', (req, res) => {
@@ -378,7 +415,14 @@ router.post('/sources/link', async (req, res) => {
       job.source = store.summary(saved);
       job.at = Date.now();
     } catch (e) {
-      if (id) store.update(id, { state: 'error', error: e.message });
+      if (id) {
+        // The transcript too, as the upload and transcribe catches do: left 'running', the source
+        // would read as still being read, with no way to read it again.
+        const cur = store.get(id) || {};
+        const t = cur.transcript || null;
+        store.update(id, { state: 'error', error: e.message,
+          transcript: t && t.state === 'ready' ? t : { ...(t || {}), state: 'error' } });
+      }
       job.state = 'error';
       job.error = e.message;
       job.botCheck = !!e.botCheck;
@@ -393,9 +437,12 @@ router.post('/sources/:id/transcribe', (req, res) => {
   const rec = store.get(id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
   if (!rec.videoPath) return res.status(400).json({ success: false, error: 'this source has no file' });
+  if (LIVE.has(rec.state)) return res.status(409).json({ success: false, error: 'this source is being read already' });
 
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: 'starting', at: Date.now(), error: null, source: null, sourceId: id };
+  // Marked at once, not when _process gets to it: a second press in between would start a second read.
+  store.update(id, { state: 'transcribing', error: '' });
   res.json({ success: true, jobId });
 
   (async () => {
@@ -426,9 +473,14 @@ router.post('/sources/:id/topics', (req, res) => {
   if (!t || !Array.isArray(t.cues) || !t.cues.length) {
     return res.status(400).json({ success: false, error: 'this source has no transcript yet' });
   }
+  const busy = _mining.get(id);
+  if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
+    return res.status(409).json({ success: false, error: 'the topics of this source are being found already', ...busy });
+  }
 
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: 'reading the transcript', at: Date.now(), error: null, sourceId: id };
+  _mining.set(id, { kind: 'topics', jobId, startedAt: job.at });
   res.json({ success: true, jobId });
 
   (async () => {
@@ -438,10 +490,19 @@ router.post('/sources/:id/topics', (req, res) => {
         t.cues,
         { ...(req.body || {}), onProgress: (s) => { job.step = s; } },
       );
-      const saved = store.update(id, { topics: found.topics, videoSummary: found.videoSummary });
+      // A topic is known by its span (`t<first block>_<last block>`), so one that comes back the
+      // same keeps its "written" marks; a draft on a topic that does not come back carries on without
+      // a source rather than pointing at nothing.
+      const before = new Map(((store.get(id) || {}).topics || []).map(x => [String(x.id), x]));
+      const topics = found.topics.map(x => {
+        const was = before.get(String(x.id));
+        return was && Array.isArray(was.usedBy) && was.usedBy.length ? { ...x, usedBy: was.usedBy } : x;
+      });
+      const saved = store.update(id, { topics, videoSummary: found.videoSummary });
+      try { DRAFTS.detachSource(id, topics.map(x => x.id)); } catch (e) { /* the topics stand */ }
       job.state = 'done';
       job.step = `${found.topics.length} topics from ${found.blocks} blocks`;
-      job.topics = found.topics.map(x => ({ id: x.id, title: x.title, start: x.start, end: x.end }));
+      job.topics = topics.map(x => ({ id: x.id, title: x.title, start: x.start, end: x.end }));
       job.videoSummary = found.videoSummary;
       job.source = store.summary(saved);
       job.at = Date.now();
@@ -449,6 +510,8 @@ router.post('/sources/:id/topics', (req, res) => {
       job.state = 'error';
       job.error = e.message;
       job.at = Date.now();
+    } finally {
+      if (_mining.get(id) && _mining.get(id).jobId === jobId) _mining.delete(id);
     }
   })();
 });
@@ -465,10 +528,20 @@ router.patch('/sources/:id', (req, res) => {
   } catch (e) { res.status(404).json({ success: false, error: e.message }); }
 });
 
+// Not while it is being read: the file is open (Windows will not delete it) and the job would write
+// into a record that is gone. Its drafts are kept, without a source.
 router.delete('/sources/:id', (req, res) => {
   try {
-    const removed = store.remove(req.params.id);
-    res.json({ success: true, removed });
+    const id = String(req.params.id);
+    const rec = store.get(id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
+    if (LIVE.has(rec.state) || _mining.has(id)) {
+      return res.status(409).json({ success: false, error: 'this source is being read - delete it when that has finished' });
+    }
+    const removed = store.remove(id);
+    let draftsDetached = 0;
+    try { draftsDetached = DRAFTS.detachSource(id); } catch (e) { /* the source is gone either way */ }
+    res.json({ success: true, removed, draftsDetached });
   } catch (e) { res.status(404).json({ success: false, error: e.message }); }
 });
 
