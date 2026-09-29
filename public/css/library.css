@@ -529,7 +529,21 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
 }
 .lib-sc-ta:focus{ outline:none; border-color:var(--primary); }
-.lib-sc-foot{ display:flex; align-items:center; gap:10px; }
+/* The scenario column is a column: its parts keep their height, the foot goes to the bottom edge
+   and stays there while the rest scrolls under it (phase F6). */
+.lib-info-body.is-scenarios{ display:flex; flex-direction:column; }
+.lib-info-body.is-scenarios > *{ flex:0 0 auto; }
+.lib-sc-foot{
+  display:flex; align-items:center; gap:10px;
+  position:sticky; bottom:0; z-index:1; margin-top:auto;
+  padding:8px 12px; background:var(--surface); border-top:1px solid var(--border);
+}
+/* "Where it came from", folding (phase F5): the section's own name is the switch. */
+.lib-sc-origin > summary{ cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; }
+.lib-sc-origin > summary::-webkit-details-marker{ display:none; }
+.lib-sc-origin > summary::before{ content:'▸'; font-size:9px; transition:transform .12s var(--ease); }
+.lib-sc-origin[open] > summary::before{ transform:rotate(90deg); }
+.lib-sc-origin > summary:hover{ color:var(--ink); }
 .lib-sc-foot .sp{ flex:1; }
 .lib-sc-status{ font-size:10.5px; color:var(--muted); }
 .lib-sc-status.ok{ color:oklch(.78 .13 150); }

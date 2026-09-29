@@ -46,11 +46,13 @@ function _tail(m) {
 }
 
 // Where a generated scenario came from, as the generator recorded it (routes/scriptgen.js, save).
+// Not the hook: it is the first line of the script, which the lines below show anyway (phase F5).
 const ORIGIN_ROWS = [
   ['sourceTitle', 'written from'], ['topicTitle', 'topic'], ['narratorName', 'narrator'],
   ['narratorReading', 'which reading'], ['language', 'language'], ['tone', 'tone'], ['model', 'model'],
-  ['hook', 'the hook'],
 ];
+// "Where it came from" folds (phase F5): folded until opened, and remembered either way.
+const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
 
 let _items = [];
 let _sel = '';           // the selected scenario's id
@@ -185,16 +187,20 @@ async function _show(it) {
   _row(facts, 'edited', _fmtDate(s.updatedAt || s.createdAt));
   body.appendChild(facts);
 
-  body.appendChild(_el('div', 'lib-info-sec', 'Where it came from'));
+  const fold = _el('details', 'lib-sc-origin');
+  try { fold.open = localStorage.getItem(LS_ORIGIN_OPEN) === '1'; } catch (e) { /* folded */ }
+  fold.appendChild(_el('summary', 'lib-info-sec', 'Where it came from'));
+  fold.addEventListener('toggle', () => { try { localStorage.setItem(LS_ORIGIN_OPEN, fold.open ? '1' : '0'); } catch (e) { /* kept for this view */ } });
   const o = s.origin;
-  if (!o) body.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
+  if (!o) fold.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
   else {
     const from = _el('div', 'lib-vi');
     for (const [key, label] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim());
     if (!o.sourceTitle) _row(from, 'written from', o.sourceId ? 'a source since deleted' : 'no source');
     if (o.humanized) _row(from, 'cleaning pass', 'applied');
-    body.appendChild(from);
+    fold.appendChild(from);
   }
+  body.appendChild(fold);
 
   body.appendChild(_el('div', 'lib-info-sec', 'Lines · ' + lines.length));
   const edit = _el('div', 'lib-sc-edit');
@@ -214,8 +220,10 @@ async function _show(it) {
   del.type = 'button';
   del.title = 'Delete this scenario';
   foot.append(save, st, _el('span', 'sp'), del);
-  edit.appendChild(foot);
   body.appendChild(edit);
+  // The foot is the column's last child, stuck to its bottom edge (phase F6): Save and Delete are
+  // in sight however long the lines are.
+  body.appendChild(foot);
 
   save.addEventListener('click', () => _save(s, ta, save, st));
   ta.addEventListener('keydown', (e) => {

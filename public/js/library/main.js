@@ -705,7 +705,10 @@ async function _counts() {
 // clearing them on the way past every other shelf is what made the page forget where you
 // were: leave Media, come back, and you were staring at everything again.
 function _select(kind) {
-  if (!SHELVES[kind] || kind === _shelf) return;
+  if (!SHELVES[kind]) return;
+  // The Scenarios button pressed while the generator is open goes back to the list, as
+  // "← Scenarios" does (phase F4); pressing the open shelf otherwise does nothing.
+  if (kind === _shelf) { if (kind === 'scenarios' && _making) _closeMake(); return; }
   // Lines typed into a scenario and not saved are not thrown away without a word.
   if (_shelf === 'scenarios' && SC.unsaved()
     && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
