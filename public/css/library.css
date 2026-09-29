@@ -23,14 +23,19 @@
    the grid loses a third of its width when a character's looks open beside it: with
    auto-fill the cards kept their size and the last ones dropped to a second row, so
    selecting a character made the whole shelf jump. Fixed columns just narrow. */
+/* A ROW IS NEVER SHORTER THAN ITS TILE (phase F1, the owner 2026-09-30: "only the top half of the
+   name shows"). The card height is auto here, and a card is overflow:hidden - a grid item that
+   clips may shrink to nothing - so with more characters than fit the screen the grid squeezed EVERY
+   row until they all fitted: the 16:9 sheet kept its height and the name and the counts slid under
+   the bottom edge. max-content rows keep the whole tile, and the shelf scrolls instead. */
 .lib-grid.is-characters{
   grid-template-columns:repeat(6, minmax(0, 1fr));
+  grid-auto-rows:max-content;
   --card-total:auto;
 }
 /* Height comes from the RATIO here, not a fixed value: the cards change width when the
-   looks pane opens, and a fixed height would crop a 16:9 character sheet to a strip.
-   A ratio is safe now that the column width is definite (a sixth of the grid) — the
-   circular case was aspect-ratio inside an auto-fill column sized by its content. */
+   looks pane opens, and a fixed height would crop a 16:9 character sheet to a strip. The
+   rows above are what stop the grid squeezing the tile; the ratio only sizes the picture. */
 .lib-grid.is-characters .lib-thumb-box{ height:auto; aspect-ratio:16 / 9; }
 /* A CHARACTER'S WHOLE NAME (phase D1, the owner 2026-09-29): two lines under the sheet instead of
    one cut short - at a 1366px window a tile is 122px wide and "Mason "Raven" Cruz-Delacroix" lost
