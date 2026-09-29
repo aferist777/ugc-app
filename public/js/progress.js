@@ -8,8 +8,8 @@
 // believable estimate instead of a bare spinner.
 //
 // It lives in js/ rather than in one page's folder because three of them import it - Character,
-// Library 2 and Merge - and a page reaching sideways into another page's folder
-// to get it.
+// the Library (the scenario generator) and Merge - and a page reaching sideways into another
+// page's folder to get it.
 
 const EMA_KEY = 'sv3_gen_ema_v1';
 const EMA_ALPHA = 0.35;

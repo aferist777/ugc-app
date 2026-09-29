@@ -105,7 +105,7 @@ function _start(res, step, work, keep, run) {
 // scenes, index }. In memory, like the jobs themselves: a restart ends both.
 const _running = new Map();
 
-// The draft a stage writes into. By id; a stage sent with a source and topic but no id (Library 2
+// The draft a stage writes into. By id; a stage sent with a source and topic but no id (the retired Library 2
 // did that) is keyed by the draft that source and topic already have, so both ways in meet.
 function _runKey(b) {
   const id = String((b && b.draftId) || '');
@@ -383,7 +383,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
 });
 
 // ── drafts ──────────────────────────────────────────────────────────────────
-// Here since the generator moved into the Library (phase E); /api/library2/drafts goes with that page.
+// Here since the generator moved into the Library (phase E); /api/library2/drafts went with Library 2.
 
 router.get('/scriptgen/drafts', (_req, res) => {
   try { res.json({ success: true, drafts: drafts.summaries().map(s => ({ ...s, running: _runningFor(s) })) }); }

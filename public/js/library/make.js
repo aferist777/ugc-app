@@ -192,8 +192,8 @@ const _reading = (s) => !!s && s.state !== 'error'
 async function _readSources() {
   try { _sources = (await J.api('/api/sources')).sources || []; } catch (e) { return; }
   for (const s of _sources) {
-    // A topics job the server knows about and this page does not - the page was reloaded, or Library 2
-    // started it. Followed at once, so its card is right when it lands whether it is opened or not.
+    // A topics job the server knows about and this page does not - the page was reloaded, or another
+    // window started it. Followed at once, so its card is right when it lands whether it is opened or not.
     const id = String(s.id);
     if (s.job && s.job.kind === 'topics' && s.job.jobId && !_srcJobs.has(id)) {
       _srcJobs.set(id, { kind: 'topics', jobId: s.job.jobId, startedAt: s.job.startedAt || Date.now(), rows: [], step: '' });
@@ -403,7 +403,7 @@ function _paintTopics(rec) {
     f.appendChild(write);
     card.appendChild(f);
     // Decided at the press, not when the card was painted: a draft may have been made on this topic
-    // since - by a generation from here, or in Library 2 - and a blank form saved over it would wipe
+    // since - by a generation from here, or in another window - and a blank form saved over it would wipe
     // what it holds.
     const go = async () => {
       await _readDrafts();
@@ -762,7 +762,7 @@ async function _saveDraft(o) {
     try { d = await post(); }
     catch (e) {
       // The server does not make a draft under an id it no longer has (saved or discarded elsewhere,
-      // in Library 2): the form keeps its work as a new draft instead.
+      // in another window): the form keeps its work as a new draft instead.
       if (e.status !== 404 || gen !== _gen) throw e;
       _gen.draftId = '';
       d = await post();

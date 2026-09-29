@@ -3,8 +3,8 @@
 
    A talking-head project starts from a SCENARIO: a title, a list of lines, and the
    three labels the casting reads (vertical, product, role with the narrator's
-   gender). The store is routes/scen3.js and it is shared - Library 2 writes into it
-   too - so this is a client, not a copy.
+   gender). The store is routes/scen3.js and it is shared - the Library's generator writes into
+   it too - so this is a client, not a copy.
 
    The two calls worth understanding before using them:
 
@@ -43,7 +43,7 @@ const _post = (url, body) => _json(url, {
  * wrote from, without a source, archived. The counts come back whichever filter is asked for: a
  * tab that cannot say how many are on the other side is a tab you have to click to understand.
  *
- * @param filter  '' | 'library1' | 'library2' | 'archive' | 'src:<source id>' | 'nosrc'
+ * @param filter  '' | 'library1' | 'archive' | 'src:<source id>' | 'nosrc'
  */
 export const list = (filter) => {
   const f = String(filter || '');

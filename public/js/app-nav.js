@@ -16,13 +16,11 @@ function _lightCurrent(nav) {
   let best = null, bestLen = -1;
   nav.querySelectorAll('a[href]').forEach(a => {
     a.classList.remove('cur');
-    // `data-also` lets one entry own more than one address. The libraries are one place
-    // with a picker inside them, not several destinations, so the nav says "Library" once
-    // and stays lit on every one of them - without it a page whose link was removed from
-    // the nav simply lights nothing.
+    // `data-also` lets one entry own more than one address - a page reached through another one
+    // lights that one's entry. Without it a page whose link is not in the nav lights nothing.
     for (const raw of [a.getAttribute('href') || ''].concat((a.getAttribute('data-also') || '').split(/\s+/))) {
       const p = raw.replace(/\/+$/, '');
-      // longest matching prefix wins, so /library2 beats /library on its own page
+      // longest matching prefix wins, so a longer address beats its own prefix
       if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
     }
   });

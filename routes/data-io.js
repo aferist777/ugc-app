@@ -95,7 +95,8 @@ const GROUPS = [
     dirs: ['media/characters'], stores: ['data/characters.json'] },
   { id: 'locations', label: 'Locations',
     dirs: ['media/locations'], stores: ['data/scen3-env-meta.json'] },
-  { id: 'library2', label: 'Library 2 (narrators, script drafts)',
+  // The id stays 'library2' - archives already written carry it; the page it named is gone.
+  { id: 'library2', label: 'Scenario generator (narrators, script drafts)',
     dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',
     dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },

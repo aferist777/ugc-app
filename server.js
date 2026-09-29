@@ -96,7 +96,7 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 // <base href="/"> in each page. Some files keep the name of the rebuild that replaced an older
 // page (character-v2.html, merge-v3.html): renaming them would churn every
 // import path under public/js/ for no gain.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -117,8 +117,6 @@ app.use('/api', require('./routes/narrators'));
 app.use('/api', require('./routes/sources'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
 app.use('/api', require('./routes/scriptgen'));
-// Library 2's own API: the shelf counts, and the drafts of scripts still being written.
-app.use('/api', require('./routes/library2'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/userdata'));

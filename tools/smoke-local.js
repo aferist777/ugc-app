@@ -27,7 +27,7 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
-const PAGES = ['/', '/character', '/merge', '/library', '/library2', '/admin'];
+const PAGES = ['/', '/character', '/merge', '/library', '/admin'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -38,6 +38,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],
                  ['POST', '/api/restart'], ['GET', '/birols'],
+                 // Library 2, whose generator moved into the Library's Scenarios shelf in phase E
+                 ['GET', '/library2'], ['GET', '/api/library2/counts'], ['GET', '/api/library2/drafts'],
                  // the Scenarios page and what only it called, removed in phase G
                  ['POST', '/api/scen3/options/delete'], ['POST', '/api/scen3/preview1k'], ['GET', '/api/scen3/frame-options'],
                  ['POST', '/api/scen3/frame-options'], ['POST', '/api/scen3/media-size'], ['POST', '/api/scen3/frame/crop'],

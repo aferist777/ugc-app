@@ -9,7 +9,6 @@
 // downloaded whole videos to paint small cards, which is what made it heavy.
 
 import { initNav } from '../app-nav.js';
-import { mountLibSwitch } from '../lib-switch.js';
 import { openViewer } from './viewer.js';
 import * as A from './actions.js';
 import { renderCatBar, closeConfirm } from './cats-bar.js';
@@ -1022,10 +1021,6 @@ function boot() {
       _upload(files);
     });
   }
-
-  // Which library you are in, above the shelves. Mounted rather than written into the
-  // markup so both library pages get the same list from one place.
-  mountLibSwitch(document.getElementById('lib-shelves'));
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);

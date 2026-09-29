@@ -207,10 +207,10 @@ router.get('/scen3/options', (_req, res) => {
 // The narrator's gender lives on the single role entry (one presenter).
 const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCase();
 
-// WHICH LIBRARY A SCENARIO BELONGS TO is decided by one thing: whether it carries provenance.
-// A scenario written by hand on this page has none; one generated in Library 2 records what it
-// was written from and in whose voice. So the two libraries are not two stores - they are one
-// store read two ways, which is why a generated scenario can still be edited here.
+// SAVED OR GENERATED is decided by one thing: whether it carries provenance. A scenario written or
+// pasted by hand has none; one the Library's generator wrote (js/library/make.js, routes/scriptgen.js)
+// records what it was written from and in whose voice. One store read two ways, which is why a
+// generated scenario can still be edited like any other.
 const _libOf = s => (s.origin ? 'library2' : 'library1');
 
 const _summary = s => ({
@@ -262,7 +262,7 @@ function _bySource(live) {
 }
 
 // ── List: summaries only, most recently edited first ────────────────────────
-// ?lib=library1 | library2 narrows the list to hand-written or generated scenarios; ?source=<id>
+// ?lib=library1 narrows the list to the saved (hand-written) ones, ?lib=archive to the archived; ?source=<id>
 // to the ones written from one source, ?source=none to the ones generated without a source.
 // Filtered HERE rather than in each page, so the callers cannot disagree about what "generated"
 // means - the answer is "it has provenance", and only this file knows that.
@@ -279,7 +279,7 @@ router.get('/scen3/scenarios', (req, res) => {
     const asked = String((req.query && req.query.lib) || '').trim();
     // Only a name we know narrows anything; anything else means all, and the answer says `all`
     // rather than echoing a filter that was not applied.
-    const want = ['library1', 'library2', 'archive'].includes(asked) ? asked : '';
+    const want = ['library1', 'archive'].includes(asked) ? asked : '';
     const source = want ? '' : String((req.query && req.query.source) || '').trim();
     const list = want === 'archive' ? all.filter(s => s.archived)
       : want ? live.filter(s => _libOf(s) === want)
@@ -374,11 +374,6 @@ router.createScenario = function createScenario(body) {
 router.MIN_LINES = MIN_LINES;
 router.GENDERS = GENDERS;
 
-// How many scenarios are in one library. Exported for Library 2's badge, which needs the number
-// without the rows - and which must not decide for itself what "generated" means.
-router.countByLib = function countByLib(lib) {
-  return _load().filter(s => _libOf(s) === lib).length;
-};
 
 // ── Duplicate: same content, fresh id + dates, " copy" appended to the title ─
 

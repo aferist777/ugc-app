@@ -15,8 +15,7 @@ person, in a window of its own, and keeps everything it makes in one folder - th
 | **Character** | Builds a person once, as a 4K reference sheet (face and three full-body views) that every later picture of them is conditioned on |
 | **Scenarios** | The ad line by line: cast, wardrobe, location, a frame per line, the voice, lipsync |
 | **Merge** | The timeline: clips, overlays, halfers, music, word-timed captions, and the render to mp4 |
-| **Library** | The shelves: characters, lookbooks, environments, media, voices, music, scenarios, renders |
-| **Library 2** | Sources and transcripts to write scripts from |
+| **Library** | The shelves: characters, lookbooks, environments, media, voices, music, scenarios, renders - and on Scenarios the generator: sources and their transcripts, topics, scripts, narrators |
 | **Admin** | API keys, and Import / Export of the whole library |
 
 Generation goes out to paid services: images and video through kie.ai or Replicate (the same

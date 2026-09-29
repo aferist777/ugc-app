@@ -550,7 +550,7 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 
 /* ── The scenario generator (phase E, js/library/make.js) ─────────────────────
    Sources down a narrow column on the left, the form - or the chosen source's topics - on the
-   right. Styles came from Library 2 (css/library2.css, l2-*) under the mk- prefix. */
+   right. Styles came from the retired Library 2 page (l2-*) under the mk- prefix. */
 .lib-make{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
 .mk-src{
   flex:0 0 200px; min-height:0; display:flex; flex-direction:column; gap:6px;
