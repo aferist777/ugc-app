@@ -87,6 +87,12 @@ async function _load() {
   _repaint();
   try {
     const d = await API.list(_lib);
+    // A source's chip - or "no source" - goes when its last scenario is archived or deleted, here or in
+    // the Library. The filter goes with it, back to all, instead of lighting nothing over an empty list.
+    const c = d.counts || {};
+    const gone = (_lib.startsWith('src:') && !(c.sources || []).some(s => 'src:' + s.id === _lib))
+      || (_lib === 'nosrc' && !c.noSource);
+    if (gone) { _lib = ''; return _load(); }
     _rows = d.rows;
     _counts = d.counts;
     _state = '';
@@ -110,10 +116,12 @@ function _short(title, max) {
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t) t = 'source';
   const lim = max || 16;
-  if (t.length <= lim) return t;
-  const cut = t.slice(0, lim);
+  // Counted and cut by characters, not UTF-16 units: an emoji cut in half is a broken glyph.
+  const chars = Array.from(t);
+  if (chars.length <= lim) return t;
+  const cut = chars.slice(0, lim).join('');
   const sp = cut.lastIndexOf(' ');
-  return (sp >= Math.floor(lim / 2) ? cut.slice(0, sp) : cut).replace(/[\s,.;:-]+$/, '') + '…';
+  return (sp >= Math.floor(cut.length / 2) ? cut.slice(0, sp) : cut).replace(/[\s,.;:-]+$/, '') + '…';
 }
 
 // The chips in their order. The active source always shows, even when it is past the fifth.
@@ -121,13 +129,19 @@ function _tabs() {
   const c = _counts || {};
   const srcs = Array.isArray(c.sources) ? c.sources : [];
   const labels = srcs.map(s => _short(s.title));
-  // Names that shorten to the same thing are given more room until they differ (or run out).
-  for (let lim = 24; lim <= 48; lim += 8) {
+  // Names that shorten to the same thing are given more room until they differ. Names that differ
+  // only in what is never shown - an extension, a bracket: "видео.mp4" and "видео (1).mp4" - never
+  // will: they keep the short label and are numbered, the full name on hover.
+  const clashes = () => {
     const seen = new Map();
     labels.forEach((l, i) => seen.set(l, (seen.get(l) || []).concat(i)));
-    const clash = [...seen.values()].filter(ix => ix.length > 1).flat();
-    if (!clash.length) break;
-    for (const i of clash) labels[i] = _short(srcs[i].title, lim);
+    return [...seen.values()].filter(ix => ix.length > 1);
+  };
+  for (let lim = 24; lim <= 48 && clashes().length; lim += 8) {
+    for (const i of clashes().flat()) labels[i] = _short(srcs[i].title, lim);
+  }
+  for (const group of clashes()) {
+    group.forEach((i, k) => { labels[i] = _short(srcs[i].title) + (k ? ' ' + (k + 1) : ''); });
   }
   const chips = srcs.map((s, i) => ({ id: 'src:' + s.id, label: labels[i], n: s.n, src: true,
     title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title }));
@@ -262,7 +276,8 @@ function _paintList(list) {
   const rows = _rows.filter(_matches);
   if (!rows.length) {
     list.appendChild(_el('div', 'mv3-ins-note',
-      _rows.length ? 'Nothing matches that.' : 'No scenarios yet. Write one with "+ scenario".'));
+      _rows.length ? 'Nothing matches that.'
+        : _lib ? 'Nothing under this filter.' : 'No scenarios yet. Write one with "+ scenario".'));
     return;
   }
   for (const s of rows) {
