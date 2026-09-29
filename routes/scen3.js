@@ -218,6 +218,9 @@ const _summary = s => ({
   vertical: s.vertical, product: s.product, roles: s.roles, archived: !!s.archived,
   gender: _genderOf(s),
   lib: _libOf(s),
+  // The source it was written from, by id (phase E7): Merge groups the generated ones by it. By id,
+  // not by title - the title here is a snapshot, and renaming a source must not split its group.
+  sourceId: (s.origin && s.origin.sourceId) || '',
   // Enough of the provenance for a row to say where it came from, without the hook and the
   // model ids a list has no use for.
   origin: s.origin ? {
@@ -232,13 +235,40 @@ const _summary = s => ({
 // one scenario is exactly when the hook, the language and the model become worth reading.
 const _full = s => ({ ..._summary(s), lines: s.lines || [], origin: s.origin || null });
 
+// The generated scenarios by the source they came from (phase E7), newest group first: its id, the
+// name to show - the source's CURRENT title, or the last one a scenario remembers when the source is
+// gone, or "deleted source" - and how many. Written without a source is its own count.
+function _bySource(live) {
+  let titles = new Map();
+  try { titles = new Map(require('../lib/sources-store').list().map(x => [String(x.id), x.title || x.originalName || ''])); }
+  catch (e) { /* the names are decoration; the groups stand without them */ }
+  const groups = new Map();
+  let noSource = 0;
+  for (const s of live) {
+    if (!s.origin) continue;
+    const id = String(s.origin.sourceId || '');
+    if (!id) { noSource++; continue; }
+    const g = groups.get(id) || { id, title: '', n: 0, last: '', gone: !titles.has(id) };
+    g.n++;
+    const at = String(s.createdAt || s.updatedAt || '');
+    if (at >= g.last) { g.last = at; if (g.gone && s.origin.sourceTitle) g.title = s.origin.sourceTitle; }
+    groups.set(id, g);
+  }
+  const sources = [...groups.values()]
+    .map(g => ({ id: g.id, title: g.gone ? (g.title || 'deleted source') : (titles.get(g.id) || g.title || 'untitled source'), n: g.n, gone: g.gone, last: g.last }))
+    .sort((a, b) => b.last.localeCompare(a.last))
+    .map(({ last, ...g }) => g);
+  return { sources, noSource };
+}
+
 // ── List: summaries only, most recently edited first ────────────────────────
-// ?lib=library1 | library2 narrows the list to hand-written or generated scenarios. Filtered
-// HERE rather than in each page, so the two callers cannot disagree about what "generated"
+// ?lib=library1 | library2 narrows the list to hand-written or generated scenarios; ?source=<id>
+// to the ones written from one source, ?source=none to the ones generated without a source.
+// Filtered HERE rather than in each page, so the callers cannot disagree about what "generated"
 // means - the answer is "it has provenance", and only this file knows that.
 //
-// The counts of both libraries come back either way: a picker that cannot say how many are on
-// the other side is a picker you have to click to understand.
+// The counts come back either way: a picker that cannot say how many are on the other side is a
+// picker you have to click to understand.
 router.get('/scen3/scenarios', (req, res) => {
   try {
     const all = _load().slice()
@@ -250,17 +280,25 @@ router.get('/scen3/scenarios', (req, res) => {
     // Only a name we know narrows anything; anything else means all, and the answer says `all`
     // rather than echoing a filter that was not applied.
     const want = ['library1', 'library2', 'archive'].includes(asked) ? asked : '';
+    const source = want ? '' : String((req.query && req.query.source) || '').trim();
     const list = want === 'archive' ? all.filter(s => s.archived)
-      : want ? live.filter(s => _libOf(s) === want) : live;
+      : want ? live.filter(s => _libOf(s) === want)
+      : source === 'none' ? live.filter(s => s.origin && !s.origin.sourceId)
+      : source ? live.filter(s => s.origin && String(s.origin.sourceId || '') === source)
+      : live;
+    const groups = _bySource(live);
     res.json({
       success: true,
       scenarios: list.map(_summary),
       lib: want || 'all',
+      source,
       counts: {
         library1: live.filter(s => _libOf(s) === 'library1').length,
         library2: live.filter(s => _libOf(s) === 'library2').length,
         all: live.length,
         archive: all.length - live.length,
+        sources: groups.sources,
+        noSource: groups.noSource,
       },
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

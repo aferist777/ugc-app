@@ -34,22 +34,17 @@ import { setOpenColumn, roomForWork, onColumnOpen } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
 
-// The two libraries are one store read two ways: a scenario written here has no
-// provenance, one written in Library 2 records what it was written from.
-const TABS = [
-  { id: '', label: 'all' },
-  { id: 'library1', label: 'written here' },
-  { id: 'library2', label: 'from Library 2' },
-  // Last, and apart from the other three: it is not a narrower view of the library, it is
-  // the pile the library is not showing.
-  { id: 'archive', label: 'archive' },
-];
+// THE FILTERS (phase E7, the owner 2026-09-29): all · saved - written by hand, no provenance - · a chip
+// per source the generator wrote from · no source - generated from a topic alone - · archive. The
+// sources are grouped by id on the server, and a chip shows the source's current name, shortened
+// here and in full on hover. More than six sources: the five newest and "+N ▾" for the rest.
+const SRC_SHOWN = 5;
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
 let _active = false;
 let _rows = [];
-let _counts = { all: 0, library1: 0, library2: 0 };
-let _lib = '';
+let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
+let _lib = '';                // '' | 'library1' | 'src:<id>' | 'nosrc' | 'archive'
 let _q = '';
 let _state = '';              // '', 'loading', or an error to show in place of the list
 let _onChange = null;
@@ -102,6 +97,86 @@ async function _load() {
   _repaint();
 }
 
+function _filter(id) {
+  if (_lib === id) return;
+  _lib = id;
+  _load();
+}
+
+// A source's name on a chip: no file extension, nothing in brackets, underscores as spaces, and at
+// most 16 characters, cut at a word with "…". Two that come out the same keep more of their names.
+function _short(title, max) {
+  let t = String(title || '').replace(/\.(mp4|mov|webm|mkv|m4v|avi|mp3|m4a|wav|aac|ogg)$/i, '')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) t = 'source';
+  const lim = max || 16;
+  if (t.length <= lim) return t;
+  const cut = t.slice(0, lim);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= Math.floor(lim / 2) ? cut.slice(0, sp) : cut).replace(/[\s,.;:-]+$/, '') + '…';
+}
+
+// The chips in their order. The active source always shows, even when it is past the fifth.
+function _tabs() {
+  const c = _counts || {};
+  const srcs = Array.isArray(c.sources) ? c.sources : [];
+  const labels = srcs.map(s => _short(s.title));
+  // Names that shorten to the same thing are given more room until they differ (or run out).
+  for (let lim = 24; lim <= 48; lim += 8) {
+    const seen = new Map();
+    labels.forEach((l, i) => seen.set(l, (seen.get(l) || []).concat(i)));
+    const clash = [...seen.values()].filter(ix => ix.length > 1).flat();
+    if (!clash.length) break;
+    for (const i of clash) labels[i] = _short(srcs[i].title, lim);
+  }
+  const chips = srcs.map((s, i) => ({ id: 'src:' + s.id, label: labels[i], n: s.n, src: true,
+    title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title }));
+  let shown = chips;
+  let more = null;
+  if (chips.length > SRC_SHOWN + 1) {
+    shown = chips.slice(0, SRC_SHOWN);
+    more = chips.slice(SRC_SHOWN);
+    const cur = more.find(t => t.id === _lib);
+    if (cur) { shown = shown.concat(cur); more = more.filter(t => t !== cur); }
+  }
+  const out = [{ id: '', label: 'all', n: c.all || 0 }, { id: 'library1', label: 'saved', n: c.library1 || 0,
+    title: 'Written or pasted by hand' }].concat(shown);
+  if (more && more.length) out[out.length - 1] = { ...out[out.length - 1], more };
+  if (c.noSource) out.push({ id: 'nosrc', label: 'no source', n: c.noSource, title: 'Generated from a topic alone' });
+  out.push({ id: 'archive', label: 'archive', n: c.archive || 0 });
+  return out;
+}
+
+// The sources past the fifth, as a menu layer: Escape closes it, a press outside does too.
+let _more = null;
+function _closeMore() {
+  if (!_more) return;
+  _more.el.remove();
+  document.removeEventListener('mousedown', _more.away, true);
+  Layers.close(_more.layer);
+  _more = null;
+}
+function _moreMenu(anchor, tabs) {
+  _closeMore();
+  const el = _el('div', 'mv3-plus-menu');
+  for (const t of tabs) {
+    const b = _el('button', 'mv3-plus-item');
+    b.type = 'button';
+    b.appendChild(_el('span', null, t.label + ' · ' + t.n));
+    b.title = t.title || '';
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMore(); _filter(t.id); });
+    el.appendChild(b);
+  }
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  el.style.position = 'fixed';
+  el.style.left = Math.max(8, Math.min(window.innerWidth - el.offsetWidth - 8, r.left)) + 'px';
+  el.style.top = (r.bottom + 4) + 'px';
+  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeMore(); };
+  document.addEventListener('mousedown', away, true);
+  _more = { el, away, layer: Layers.open(el, { name: 'more sources', modal: false, onEsc: _closeMore }) };
+}
+
 // What a row says about itself, beyond its title: the three labels the casting reads, and
 // how many lines there are - which is how many fragments the project will have.
 function _meta(s) {
@@ -142,13 +217,20 @@ export function paint(host) {
   add.addEventListener('click', () => openForm(null));
   head.appendChild(add);
 
-  for (const tab of TABS) {
-    const b = _el('button', 'mv3-sc-tab' + (tab.id === _lib ? ' is-on' : ''));
+  for (const tab of _tabs()) {
+    const b = _el('button', 'mv3-sc-tab' + (tab.id === _lib ? ' is-on' : '') + (tab.src ? ' is-src' : ''));
     b.type = 'button';
-    const n = tab.id ? (_counts[tab.id] || 0) : (_counts.all || 0);
-    b.textContent = tab.label + ' · ' + n;
-    b.addEventListener('click', () => { if (_lib !== tab.id) { _lib = tab.id; _load(); } });
+    b.textContent = tab.label + ' · ' + tab.n;
+    if (tab.title) b.title = tab.title;
+    b.addEventListener('click', () => _filter(tab.id));
     head.appendChild(b);
+    if (tab.more) {
+      const m = _el('button', 'mv3-sc-tab is-more', '+' + tab.more.length + ' ▾');
+      m.type = 'button';
+      m.title = 'The other sources';
+      m.addEventListener('click', (e) => { e.stopPropagation(); _moreMenu(m, tab.more); });
+      head.appendChild(m);
+    }
   }
 
   const act = _el('div', 'mv3-ins-head-act');
