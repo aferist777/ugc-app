@@ -488,7 +488,8 @@ router.post('/sources/:id/topics', (req, res) => {
       const found = await TOPICS.extract(
         { title: rec.title, channel: rec.channel, seconds: rec.seconds, description: '' },
         t.cues,
-        { ...(req.body || {}), onProgress: (s) => { job.step = s; } },
+        // The generator's model, or - when that choice has no key - one that can run.
+        { ...require('../lib/llm-json').runnable(req.body || {}), onProgress: (s) => { job.step = s; } },
       );
       // A topic is known by its span (`t<first block>_<last block>`), so one that comes back the
       // same keeps its "written" marks; a draft on a topic that does not come back carries on without

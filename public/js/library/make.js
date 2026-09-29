@@ -548,8 +548,11 @@ function _openSourceWin(it, play) {
     media.controls = true;
     media.preload = 'metadata';
     if (media.tagName === 'VIDEO' && it.thumb) media.poster = it.thumb;
-    // Never Electron's own menu here: "Save video as" would start copying a gigabyte to Downloads.
+    // Never Electron's own menu here, nor the controls' own Download: "Save video as" would start
+    // copying a gigabyte to Downloads. No picture-in-picture either - it would outlive the window.
     media.addEventListener('contextmenu', (e) => e.preventDefault());
+    media.setAttribute('controlslist', 'nodownload noremoteplayback');
+    if (media.tagName === 'VIDEO') media.disablePictureInPicture = true;
     media.addEventListener('error', () => {
       if (!_srcWin || _srcWin.ov !== ov) return;
       stage.textContent = '';
@@ -794,6 +797,11 @@ async function _buildControls(settings) {
   };
   fillModels(pick.model, pick.effort);
   const remember = () => J.rememberModel({ provider: prov.value, model: model.value, effort: effort.value });
+  // The choice the form landed on is remembered too, when nothing usable was: topic mining and the
+  // narrators window run on the remembered one, and must not fall back to a provider with no key.
+  const had = J.modelChoice();
+  const hadOk = had && _reg.providers.some(p => p.id === had.provider && p.keyed);
+  if (!hadOk && _reg.providers.some(p => p.id === prov.value && p.keyed)) remember();
   prov.addEventListener('change', () => { fillModels('', ''); remember(); });
   model.addEventListener('change', () => { fillEfforts(effort.value); remember(); });
   effort.addEventListener('change', remember);

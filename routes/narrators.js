@@ -29,7 +29,7 @@ const multer = require('multer');
 
 const store = require('../lib/narrators-store');
 const P = require('../lib/writing-prompts');
-const { callJSON } = require('../lib/llm-json');
+const { callJSON, runnable } = require('../lib/llm-json');
 const STT = require('../lib/stt-replicate');
 const WM = require('../lib/writing-models');
 
@@ -205,7 +205,7 @@ router.post('/narrators/:id/analyse', (req, res) => {
       error: `${words} words is not enough to read a voice from — at least ${store.MIN_SAMPLE_WORDS} are needed.` });
   }
 
-  const opts = WM.normalise(req.body || {});
+  const opts = WM.normalise(runnable(req.body || {}));
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: `reading ${samples.length} samples`, at: Date.now(), error: null, narrator: null };
   res.json({ success: true, jobId });

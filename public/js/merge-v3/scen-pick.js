@@ -143,14 +143,20 @@ function _closeCatMenu() {
   Layers.close(_catMenu.layer);
   _catMenu = null;
 }
+let _catOpening = false;
 async function _filterMenu() {
-  if (_catMenu) { _closeCatMenu(); return; }
+  // A second press while the list is still being read is the same press: one menu, never two (the
+  // second would be orphaned on screen, its layer swallowing every Escape after it).
+  if (_catMenu || _catOpening) { _closeCatMenu(); _catOpening = false; return; }
+  _catOpening = true;
   try {
     const d = await API.list(_lib);
     _counts = d.counts || _counts;
     _rows = d.rows || _rows;
     _state = '';
   } catch (e) { /* the counts it has will do */ }
+  if (!_catOpening) return;                      // pressed again meanwhile: closed
+  _catOpening = false;
   _repaint();                                    // the button's own count, now
   const anchor = document.querySelector('.mv3-sc-filter');
   if (!_active || !anchor) return;
