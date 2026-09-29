@@ -529,7 +529,8 @@ export async function openForm(summary) {
   const collect = () => ({
     id: rec.id || undefined,
     title: title.value.trim(),
-    type: 'talking_head',
+    // The scenario's own type, not a fixed one: it is a field now (phase F7), set in the Library.
+    type: (rec && rec.type) || 'talking_head',
     vertical: vertical.value.trim(),
     product: product.value.trim(),
     // One role, the narrator: the store keeps a list, and nothing offers a second one.

@@ -13,9 +13,17 @@
 // DRAFTS HEAD THE LIST (phase E4): a script the generator is still writing, one row each, saying how
 // far it got. A draft is not selected - pressing it continues it in the generator (js/library/make.js).
 //
+// FILTERS AND FIELDS (phase F7, the owner 2026-09-30): over the list, above the drafts, a dropdown per
+// field - type, role, gender, vertical, product, narrator (the voice of the WRITING), language - with
+// the values the scenarios really have and how many; the choice is remembered, drafts are not
+// filtered. The same fields are dropdowns in the column, saved the moment one is chosen, each with
+// "new…" for a value nobody has used yet.
+//
 // Lines are `{text}` records - the roles live on the scenario, not on its lines - so splitting the
 // textarea on newlines maps onto the store exactly. A line that carries a newline of its own (the
 // generator can write one) is shown on one textarea line, or a Save would quietly make it two.
+
+import { askName } from '../name-box.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,11 +46,70 @@ function _tail(m) {
   const n = m.lines || 0;
   return [
     n + (n === 1 ? ' line' : ' lines'),
-    m.type,
     m.vertical,
     m.product,
     m.roles,
+    m.narrator,
+    m.language,
   ].filter(Boolean).join(' · ');
+}
+
+// ── Filters (phase F7) ──────────────────────────────────────────────────────
+const FIELDS = [
+  { key: 'type', label: 'type' }, { key: 'role', label: 'role' }, { key: 'gender', label: 'gender' },
+  { key: 'vertical', label: 'vertical' }, { key: 'product', label: 'product' },
+  { key: 'narrator', label: 'narrator' }, { key: 'language', label: 'language' },
+];
+const NONE = '__none__';
+const LS_FILTERS = 'library_sc_filters_v1';
+let _filters = (() => { try { return JSON.parse(localStorage.getItem(LS_FILTERS) || '{}') || {}; } catch (e) { return {}; } })();
+const _saveFilters = () => { try { localStorage.setItem(LS_FILTERS, JSON.stringify(_filters)); } catch (e) { /* this view only */ } };
+const _val = (it, key) => String(((it && it.meta) || {})[key] || '').trim();
+const _passes = (it) => FIELDS.every(f => {
+  const want = _filters[f.key];
+  if (!want) return true;
+  const v = _val(it, f.key);
+  return want === NONE ? !v : v === want;
+});
+
+function _filterRow() {
+  const row = _el('div', 'lib-sc-filters');
+  for (const f of FIELDS) {
+    const counts = new Map();
+    let none = 0;
+    for (const it of _items) { const v = _val(it, f.key); if (v) counts.set(v, (counts.get(v) || 0) + 1); else none++; }
+    const sel = _el('select', 'lib-sc-filter' + (_filters[f.key] ? ' is-on' : ''));
+    sel.title = 'Show only the scenarios with this ' + f.label;
+    const add = (value, text) => { const o = _el('option', null, text); o.value = value; sel.appendChild(o); };
+    add('', 'any ' + f.label);
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).forEach(([v, n]) => add(v, v + ' · ' + n));
+    if (none && counts.size) add(NONE, 'no ' + f.label + ' · ' + none);
+    // A remembered choice nothing has any more still shows, at 0: the list is never cut by
+    // something invisible.
+    const cur = _filters[f.key] || '';
+    if (cur && ![...sel.options].some(o => o.value === cur)) add(cur, (cur === NONE ? 'no ' + f.label : cur) + ' · 0');
+    sel.value = cur;
+    sel.addEventListener('change', () => {
+      if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { sel.value = cur; return; }
+      if (sel.value) _filters[f.key] = sel.value; else delete _filters[f.key];
+      _saveFilters();
+      render(_items, _hooks);
+    });
+    row.appendChild(sel);
+  }
+  if (Object.keys(_filters).length) {
+    const x = _el('button', 'lib-sc-filter-x', 'clear');
+    x.type = 'button';
+    x.title = 'Show every scenario again';
+    x.addEventListener('click', () => {
+      if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
+      _filters = {};
+      _saveFilters();
+      render(_items, _hooks);
+    });
+    row.appendChild(x);
+  }
+  return row;
 }
 
 // Where a generated scenario came from, as the generator recorded it (routes/scriptgen.js, save).
@@ -105,6 +172,7 @@ export function render(items, hooks = {}) {
   if (!grid) return;
   grid.textContent = '';
   grid.className = 'lib-rows is-scenarios';
+  if (_items.length) grid.appendChild(_filterRow());
   for (const dr of (_hooks.drafts || [])) grid.appendChild(_draftRow(dr));
 
   if (!_items.length) {
@@ -113,10 +181,17 @@ export function render(items, hooks = {}) {
     _empty();
     return;
   }
-  // The selection survives a reload while that scenario is still here; otherwise the first.
-  if (!_items.some(i => String(i.id) === _sel)) _sel = String(_items[0].id);
+  const shown = _items.filter(_passes);
+  if (!shown.length) {
+    _sel = '';
+    grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
+    _empty('Nothing under these filters.');
+    return;
+  }
+  // The selection survives a reload while that scenario is still shown; otherwise the first.
+  if (!shown.some(i => String(i.id) === _sel)) _sel = String(shown[0].id);
 
-  for (const it of _items) {
+  for (const it of shown) {
     const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : ''));
     row.type = 'button';
     row.dataset.id = String(it.id);
@@ -143,10 +218,126 @@ function _pane() {
   return body;
 }
 
-function _empty() {
+function _empty(note) {
   _seq++;
   const body = _pane();
-  if (body) body.appendChild(_el('div', 'lib-info-note', 'Nothing on this shelf yet.'));
+  if (body) body.appendChild(_el('div', 'lib-info-note', note || 'Nothing on this shelf yet.'));
+}
+
+// ── The fields, as dropdowns (phase F7) ─────────────────────────────────────
+// The lists to choose from: the suggestion lists, the narrators, the generator's languages - read
+// once, the narrators again when the narrators window changes them.
+let _lists = null;
+async function _readLists() {
+  if (_lists) return _lists;
+  const j = (u) => fetch(u).then(r => r.json()).catch(() => null);
+  const [opt, nar, mod] = await Promise.all([j('/api/scen3/options'), j('/api/narrators'), j('/api/scriptgen/models')]);
+  _lists = {
+    verticals: (opt && opt.options && opt.options.verticals) || [],
+    products: (opt && opt.options && opt.options.products) || [],
+    roles: (opt && opt.options && opt.options.roles) || [],
+    narrators: ((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name })),
+    languages: (mod && mod.languages) || [],
+  };
+  return _lists;
+}
+document.addEventListener('lib:narrators', () => { _lists = null; });
+
+// What the shelf has in use for a field, beside the suggestions: a value on some scenario is a value.
+const _inUse = (key) => [...new Set(_items.map(it => _val(it, key)).filter(Boolean))];
+const _uniq = (arr) => { const seen = new Set(); return arr.filter(v => { const k = String(v).toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; }); };
+
+// One field row: a label and a select. `values` are [{value, label}]; "none" and "new…" are added as
+// asked. The pick is handed to `onPick`, which saves; a refused save puts the old value back.
+function _fieldRow(box, label, current, values, onPick, o = {}) {
+  const r = _el('div', 'lib-vi-row is-edit');
+  r.appendChild(_el('span', 'lib-vi-l', label));
+  const sel = _el('select', 'lib-sc-fsel');
+  const add = (value, text) => { const op = _el('option', null, text); op.value = value; sel.appendChild(op); };
+  if (o.none) add('', o.noneLabel || 'none');
+  for (const v of values) add(v.value, v.label);
+  if (current && !values.some(v => v.value === current)) add(current, o.missingLabel ? o.missingLabel(current) : current);
+  if (o.newItem) add('__new__', 'new…');
+  sel.value = current || '';
+  let was = sel.value;
+  sel.addEventListener('change', async () => {
+    let v = sel.value;
+    if (v === '__new__') {
+      const name = await askName({ anchor: sel, title: 'New ' + label, okLabel: 'Set', maxLength: 60 });
+      if (!name) { sel.value = was; return; }
+      v = name.trim();
+      if (![...sel.options].some(op => op.value === v)) {
+        const op = _el('option', null, v); op.value = v;
+        sel.insertBefore(op, sel.querySelector('option[value="__new__"]'));
+      }
+      sel.value = v;
+    }
+    sel.disabled = true;
+    const ok = await onPick(v);
+    sel.disabled = false;
+    if (ok) was = sel.value; else sel.value = was;
+  });
+  r.appendChild(sel);
+  box.appendChild(r);
+  return sel;
+}
+
+// A field saved on its own - only that field, as an edit, so nothing else the column painted can be
+// sent back over a newer copy, and the lines being typed stay where they are.
+async function _patch(s, patch, what) {
+  const st = document.querySelector('#lib-info-body .lib-sc-status');
+  const say = (t, k) => { if (st) { st.textContent = t; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
+  say('saving ' + what + '…');
+  try {
+    const r = await fetch('/api/scen3/scenarios', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: s.id, edit: true, ...patch }),
+    });
+    const d = await r.json().catch(() => null);
+    if (r.status === 404) { say('this scenario was deleted elsewhere', 'err'); return false; }
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    Object.assign(s, d.scenario);
+    // The row and the filters read the shelf's items: this one is told what it is now.
+    const it = _items.find(x => String(x.id) === String(s.id));
+    if (it) {
+      const role = (d.scenario.roles || [])[0] || {};
+      it.meta = { ...(it.meta || {}), type: d.scenario.type || '', vertical: d.scenario.vertical || '', product: d.scenario.product || '',
+        role: role.name || '', gender: role.gender || '',
+        roles: role.name ? role.name + (role.gender ? ' (' + String(role.gender)[0] + ')' : '') : '',
+        narrator: (d.scenario.narrator && d.scenario.narrator.name) || '', language: d.scenario.language || '' };
+      const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(s.id)) + '"] .lib-srow-s');
+      if (row) row.textContent = _tail(it.meta);
+    }
+    say('saved · ' + what, 'ok');
+    return true;
+  } catch (e) { say('Not saved: ' + e.message, 'err'); return false; }
+}
+
+async function _paintFields(box, s) {
+  const L = await _readLists();
+  const opt = (arr) => arr.map(v => ({ value: v, label: v }));
+  const role = (s.roles || [])[0] || { id: 'r0', name: '', gender: '' };
+  const roleOf = (name, gender) => [{ id: role.id || 'r0', name, gender }];
+  _fieldRow(box, 'type', s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
+    v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true });
+  const roleSel = _fieldRow(box, 'role', role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
+    v => _patch(s, { roles: roleOf(v, genderSel.value) }, 'role'), { none: true, newItem: true });
+  const genderSel = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'female' }, { value: 'male', label: 'male' }],
+    v => _patch(s, { roles: roleOf(roleSel.value, v) }, 'gender'), { none: true });
+  _fieldRow(box, 'vertical', s.vertical, opt(_uniq([..._inUse('vertical'), ...L.verticals])),
+    v => _patch(s, { vertical: v }, 'vertical'), { none: true, newItem: true });
+  _fieldRow(box, 'product', s.product, opt(_uniq([..._inUse('product'), ...L.products])),
+    v => _patch(s, { product: v }, 'product'), { none: true, newItem: true });
+  // The narrator by id; one the list does not have any more is named, marked deleted.
+  const nar = s.narrator || null;
+  const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
+  const curNar = nar ? (nar.id || (L.narrators.find(n => n.name === nar.name) || {}).id || '__name__:' + nar.name) : '';
+  _fieldRow(box, 'narrator', curNar, narValues, (v) => {
+    const n = L.narrators.find(x => x.id === v);
+    return _patch(s, { narrator: v ? { id: v, name: n ? n.name : String(v).replace(/^__name__:/, '') } : { id: '', name: '' } }, 'narrator');
+  }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
+  _fieldRow(box, 'language', s.language || '', opt(_uniq([...L.languages, ..._inUse('language')])),
+    v => _patch(s, { language: v }, 'language'), { none: true });
 }
 
 function _row(box, label, value) {
@@ -178,14 +369,11 @@ async function _show(it) {
 
   const lines = s.lines || [];
   const facts = _el('div', 'lib-vi');
-  const role = (s.roles || [])[0];
-  _row(facts, 'type', s.type);
-  _row(facts, 'vertical', s.vertical);
-  _row(facts, 'product', s.product);
-  _row(facts, 'role', role ? [role.name, role.gender].filter(Boolean).join(' · ') : '');
+  body.appendChild(facts);
+  await _paintFields(facts, s);
+  if (my !== _seq) return;
   _row(facts, 'lines', String(lines.length));
   _row(facts, 'edited', _fmtDate(s.updatedAt || s.createdAt));
-  body.appendChild(facts);
 
   const fold = _el('details', 'lib-sc-origin');
   try { fold.open = localStorage.getItem(LS_ORIGIN_OPEN) === '1'; } catch (e) { /* folded */ }

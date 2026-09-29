@@ -450,6 +450,11 @@ function _rendersShelf() {
 // a file we can read here would only add a way for it to fail.
 const SCEN3_FILE = path.join(DATA_DIR, 'scen3-scenarios.json');
 
+// The scenario store's own answer to "what narrator and language is this" (routes/scen3.js).
+function _labels(s) {
+  try { return require('./scen3').effectiveLabels(s); } catch (e) { return { narrator: null, language: '' }; }
+}
+
 function _scenariosShelf() {
   const list = _read(SCEN3_FILE, []);
   // Archived ones are not on the shelf (phase D5): archiving is taking a scenario out of the list,
@@ -465,6 +470,12 @@ function _scenariosShelf() {
       thumb: null,
       meta: {
         type: s.type || '', vertical: s.vertical || '', product: s.product || '',
+        // Every field the shelf filters by (phase F7): the role's name and gender apart, and the
+        // narrator and language the scenario IS (its own, or the generator's when not set).
+        role: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).name || '',
+        gender: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).gender || '',
+        narrator: (_labels(s).narrator || {}).name || '',
+        language: _labels(s).language || '',
         // roles are records - {id, name, gender} - so the row reads their names, with the
         // gender in brackets because "doctor" and "doctor" are two different castings.
         roles: (Array.isArray(s.roles) ? s.roles : [])

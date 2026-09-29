@@ -66,9 +66,9 @@ function _norm(r, now) {
     lines:     Array.isArray(src.lines)
       ? src.lines.map(l => ({ text: String((l && l.text) || '') }))   // single track: any legacy textColored is dropped
       : [],
-    // One format, and it is called what the UI calls it. Forced rather than read: this
-    // store has never held anything else, and the old `ugc_ad` id died with v2.
-    type:      'talking_head',
+    // What kind of scenario (phase F7: a field and a filter, editable in the Library). Only
+    // talking_head exists so far (the owner, 2026-09-30); whatever a record carries is kept.
+    type:      String(src.type || '').trim() || 'talking_head',
     // Out of the way, not gone: a scenario that has been used and is not wanted in the list
     // any more is archived rather than deleted, because deleting it is the one thing that
     // cannot be taken back. The list hides these and one filter shows only them.
@@ -86,9 +86,32 @@ function _norm(r, now) {
     // Null for everything written by hand, which is every scenario that existed before
     // generation did.
     origin:    _normOrigin(src.origin),
+    // THE SCENARIO'S OWN LABELS (phase F7): the narrator - the voice of the WRITING, not the reader's
+    // gender, which lives on the role - and the language. `origin` says what the generator used and
+    // stays provenance; these say what the scenario is, editable, and a generated one shows its
+    // origin's values until they are set. null = never set (the origin shows through); an empty
+    // name or language = set to none on purpose.
+    narrator:  _normNarrator(src.narrator),
+    language:  src.language == null ? null : String(src.language).trim(),
     createdAt: src.createdAt || now,
     updatedAt: src.updatedAt || now,
   };
+}
+
+function _normNarrator(n) {
+  if (n == null || typeof n !== 'object') return null;
+  return { id: String(n.id || ''), name: String(n.name || '').trim() };
+}
+
+// What a scenario's narrator and language ARE: its own when set, otherwise what the generator wrote
+// it with. Read by the list, the Library shelf and its filters.
+function effectiveLabels(s) {
+  const o = (s && s.origin) || {};
+  const nar = s && s.narrator
+    ? (s.narrator.name ? { id: s.narrator.id || '', name: s.narrator.name } : null)
+    : (o.narratorName ? { id: o.narratorId || '', name: o.narratorName } : null);
+  const language = s && s.language != null ? s.language : (o.language || '');
+  return { narrator: nar, language };
 }
 
 function _normOrigin(o) {
@@ -236,6 +259,8 @@ const _summary = (s, titles) => ({
   vertical: s.vertical, product: s.product, roles: s.roles, archived: !!s.archived,
   gender: _genderOf(s),
   lib: _libOf(s),
+  narrator: effectiveLabels(s).narrator,
+  language: effectiveLabels(s).language,
   // The source it was written from, by id (phase E7): Merge groups the generated ones by it. By id,
   // not by title - the title here is a snapshot, and renaming a source must not split its group.
   sourceId: (s.origin && s.origin.sourceId) || '',
@@ -393,6 +418,41 @@ router.createScenario = function createScenario(body) {
   return _full(rec);
 };
 router.MIN_LINES = MIN_LINES;
+router.effectiveLabels = effectiveLabels;
+
+// THE SUGGESTION LISTS REBUILT FROM WHAT SCENARIOS USE, once per library (phase F7, the owner
+// 2026-09-30: "delete all the junk you find"). Typed-and-abandoned values ("fesdfsd", "dsfsdfds")
+// go; values scenarios carry but the lists lacked ("history", "social") come in. The old file is
+// kept in backups/, and a mark in cache/ stops it running twice.
+function _rebuildOptionsOnce() {
+  const CFGX = require('../lib/config');
+  const mark = require('path').join(CFGX.CACHE_DIR, 'scen3-options-rebuilt.json');
+  if (fs.existsSync(mark)) return;
+  const was = _read(OPT_FILE);
+  const used = { verticals: [], products: [], roles: [] };
+  for (const s of _load()) {
+    _pushUniq(used.verticals, s.vertical);
+    _pushUniq(used.products, s.product);
+    (s.roles || []).forEach(r => _pushUniq(used.roles, r && r.name));
+  }
+  const gone = [];
+  if (was && typeof was === 'object') {
+    for (const k of ['verticals', 'products', 'roles']) {
+      for (const v of (Array.isArray(was[k]) ? was[k] : [])) {
+        if (!used[k].some(x => String(x).toLowerCase() === String(v).trim().toLowerCase())) gone.push(k + ': ' + v);
+      }
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const dir = require('path').join(CFGX.BACKUPS_DIR, day + ' options');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(OPT_FILE, require('path').join(dir, 'scen3-options.json'));
+  }
+  _saveOptions(used);
+  fs.mkdirSync(CFGX.CACHE_DIR, { recursive: true });
+  writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), removed: gone }, null, 2));
+  if (gone.length) console.log('[scen3] suggestion lists rebuilt from the scenarios; removed: ' + gone.join(', '));
+}
+try { _rebuildOptionsOnce(); } catch (e) { console.warn('[scen3] could not rebuild the suggestion lists:', e.message); }
 
 // A source about to be deleted leaves its CURRENT name in the scenarios written from it (phase F2):
 // the name is read live while the source exists, and once it is gone this copy is all there is.
