@@ -13,6 +13,8 @@
 // If the key is absent (this browser has never opened Birols) there is nothing to
 // clobber and nothing to patch.
 
+import { askName } from '../name-box.js';
+
 const CHAR_KIND = 'characters';
 
 function _lsRead(key) {
@@ -116,8 +118,8 @@ export async function fixThumb(it) {
 //     that belongs with the storage rework (moves on rename), not here.
 export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks']);
 
-export async function renameItem(it) {
-  const next = prompt('Rename', it.name || '');
+export async function renameItem(it, anchor) {
+  const next = await askName({ anchor, title: 'Rename', value: it.name || '', okLabel: 'Rename' });
   if (next == null) return null;
   const name = String(next).trim();
   if (!name || name === it.name) return null;

@@ -4,17 +4,24 @@
 // does: a scenario is a title, a few fields and a line count. A card here would be a grey tile
 // with a name under it, which is a thumbnail that admits it has no thumbnail.
 //
-// A row OPENS IN PLACE. Clicking it drops a panel underneath holding every line of the scenario
-// in one textarea, one line per line, with Save under it. Editing a script is reading it top to
-// bottom and fixing what reads wrong, and one field you can select across does that; the
-// Scenarios page's row-per-line editor is for working line by line, which is a different job.
+// ONE ROW IS ALWAYS SELECTED and the right column is about it (phase D5, the owner 2026-09-29) - the
+// rule of the picture shelves: opening the shelf selects the first, a delete falls back to the
+// first, a reload keeps the one that was selected. The column holds the whole scenario: its title
+// and fields, where it came from when the generator wrote it, its lines - editable in one textarea,
+// one line per line, because editing a script is reading it top to bottom - and Delete.
 //
-// Lines are `{text}` records - the roles live on the scenario, not on its lines - so splitting a
-// textarea on newlines maps onto the store exactly, with nothing to preserve per line. That is
-// what makes this safe to offer here at all.
-//
-// One panel open at a time: two open textareas of a ten-line script is more scrolling than the
-// whole shelf is worth.
+// Lines are `{text}` records - the roles live on the scenario, not on its lines - so splitting the
+// textarea on newlines maps onto the store exactly. A line that carries a newline of its own (the
+// generator can write one) is shown on one textarea line, or a Save would quietly make it two.
+
+const $ = (id) => document.getElementById(id);
+
+function _el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
 
 const _fmtDate = (s) => {
   if (!s) return '';
@@ -35,173 +42,233 @@ function _tail(m) {
   ].filter(Boolean).join(' · ');
 }
 
-let _open = '';          // the id whose panel is showing
+// Where a generated scenario came from, as the generator recorded it (routes/scriptgen.js, save).
+const ORIGIN_ROWS = [
+  ['sourceTitle', 'written from'], ['topicTitle', 'topic'], ['narratorName', 'narrator'],
+  ['narratorReading', 'which reading'], ['language', 'language'], ['tone', 'tone'], ['model', 'model'],
+  ['hook', 'the hook'],
+];
+
+let _items = [];
+let _sel = '';           // the selected scenario's id
+let _seq = 0;            // an answer for a scenario no longer selected is dropped
 let _hooks = {};
+let _say = null;         // { id, text, kind } - said in the column once it is painted again
 
-function _status(panel, text, kind) {
-  const el = panel.querySelector('.lib-sedit-status');
-  if (!el) return;
-  el.textContent = text || '';
-  el.className = 'lib-sedit-status' + (kind ? ' ' + kind : '');
+// ── The rows ────────────────────────────────────────────────────────────────
+function _paintSel() {
+  document.querySelectorAll('#lib-grid .lib-srow').forEach(r => r.classList.toggle('cur', r.dataset.id === _sel));
 }
 
-async function _fill(panel, it) {
-  const ta = panel.querySelector('.lib-sedit-ta');
-  _status(panel, 'loading…');
-  try {
-    const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(it.id)).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'could not read it');
-    const lines = (d.scenario && d.scenario.lines) || [];
-    ta.value = lines.map(l => (l && l.text) || '').join('\n');
-    ta.dataset.was = ta.value;          // what was loaded, to tell an edit from a no-op
-    panel.dataset.title = (d.scenario && d.scenario.title) || it.name;
-    _status(panel, '');
-    // Grow to the content so a ten-line script needs no inner scrolling, up to a ceiling.
-    ta.style.height = Math.min(460, Math.max(120, ta.scrollHeight + 4)) + 'px';
-  } catch (e) {
-    ta.value = '';
-    _status(panel, e.message, 'err');
-  }
+// The textarea holds work that is not saved yet: leaving the scenario asks first.
+function _dirty() {
+  const ta = document.querySelector('#lib-info-body .lib-sc-ta');
+  return !!(ta && ta.dataset.was != null && ta.value !== ta.dataset.was);
 }
 
-async function _save(panel, it, btn) {
-  const ta = panel.querySelector('.lib-sedit-ta');
-  // Blank lines are separators people leave while editing, not lines of script: they are dropped
-  // rather than saved as empty ones, which is also what stops a stray trailing newline from
-  // adding a line every time you press Save.
-  const lines = ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
-  if (!lines.length) { _status(panel, 'nothing to save - every line is empty', 'err'); return; }
-
-  btn.disabled = true;
-  _status(panel, 'saving…');
-  try {
-    const d = await fetch('/api/scen3/scenarios', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: it.id, title: panel.dataset.title || it.name, lines }),
-    }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    ta.dataset.was = ta.value;
-    _status(panel, 'Saved · ' + lines.length + (lines.length === 1 ? ' line' : ' lines'), 'ok');
-    // The row's tail carries the line count, so it is now out of date. Reloading the shelf is the
-    // honest fix: the count comes from the store, not from what was just typed.
-    if (_hooks.reload) _hooks.reload();
-  } catch (e) {
-    _status(panel, 'Not saved: ' + e.message, 'err');
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function _panel(it) {
-  const panel = document.createElement('div');
-  panel.className = 'lib-sedit';
-
-  const ta = document.createElement('textarea');
-  ta.className = 'lib-sedit-ta';
-  ta.spellcheck = false;
-  ta.placeholder = 'One line of the script per line.';
-  panel.appendChild(ta);
-
-  const foot = document.createElement('div');
-  foot.className = 'lib-sedit-foot';
-
-  const save = document.createElement('button');
-  save.type = 'button';
-  save.className = 'lib-btn';
-  save.textContent = 'Save';
-  save.addEventListener('click', () => _save(panel, it, save));
-
-  const st = document.createElement('span');
-  st.className = 'lib-sedit-status';
-
-  foot.append(save, st);
-  panel.appendChild(foot);
-
-  // Ctrl/Cmd+Enter saves. A ten-line script is a lot of typing to then go hunting for a button.
-  ta.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save.click(); }
-  });
-  return panel;
+// Pressing the selected row again reads it again too, so it asks as well.
+function _pick(it) {
+  if (_dirty() && !confirm('The lines of this scenario have changes that are not saved. Leave them?')) return;
+  _sel = String(it.id);
+  _paintSel();
+  _show(it);
 }
 
 export function render(items, hooks = {}) {
   _hooks = hooks || {};
-  const grid = document.getElementById('lib-grid');
+  _items = items || [];
+  const grid = $('lib-grid');
   if (!grid) return;
   grid.textContent = '';
   grid.className = 'lib-rows is-scenarios';
 
-  if (!items.length) {
-    const e = document.createElement('div');
-    e.className = 'lib-empty';
-    e.textContent = 'No scenarios yet.';
-    grid.appendChild(e);
+  if (!_items.length) {
+    _sel = '';
+    grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet.'));
+    _empty();
     return;
   }
+  // The selection survives a reload while that scenario is still here; otherwise the first.
+  if (!_items.some(i => String(i.id) === _sel)) _sel = String(_items[0].id);
 
-  for (const it of items) {
-    const wrap = document.createElement('div');
-    wrap.className = 'lib-swrap';
-
-    const row = document.createElement('button');
+  for (const it of _items) {
+    const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : ''));
     row.type = 'button';
-    row.className = 'lib-srow';
-    row.setAttribute('aria-expanded', 'false');
+    row.dataset.id = String(it.id);
+    const main = _el('div', 'lib-srow-main');
+    main.appendChild(_el('div', 'lib-srow-t', it.name));
+    main.appendChild(_el('div', 'lib-srow-s', _tail(it.meta || {})));
+    row.appendChild(main);
+    row.appendChild(_el('div', 'lib-srow-d', _fmtDate((it.meta || {}).date)));
+    // Pressing the selected one again reads its column again, as on the picture shelves.
+    row.addEventListener('click', () => _pick(it));
+    grid.appendChild(row);
+  }
+  _show(_items.find(i => String(i.id) === _sel));
+}
 
-    const main = document.createElement('div');
-    main.className = 'lib-srow-main';
+// ── The column ──────────────────────────────────────────────────────────────
+function _pane() {
+  const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
+  if (!pane || !body) return null;
+  pane.hidden = false;
+  body.className = 'lib-info-body is-scenarios';
+  body.textContent = '';
+  if (head) head.textContent = 'Scenario';
+  return body;
+}
 
-    const t = document.createElement('div');
-    t.className = 'lib-srow-t';
-    t.textContent = it.name;
+function _empty() {
+  _seq++;
+  const body = _pane();
+  if (body) body.appendChild(_el('div', 'lib-info-note', 'Nothing on this shelf yet.'));
+}
 
-    const s = document.createElement('div');
-    s.className = 'lib-srow-s';
-    s.textContent = _tail(it.meta || {});
+function _row(box, label, value) {
+  if (!value) return;
+  const r = _el('div', 'lib-vi-row');
+  r.appendChild(_el('span', 'lib-vi-l', label));
+  r.appendChild(_el('span', 'lib-vi-v', value));
+  box.appendChild(r);
+}
 
-    main.append(t, s);
+async function _show(it) {
+  const my = ++_seq;
+  const body = _pane();
+  if (!body || !it) return;
+  body.appendChild(_el('div', 'lib-sc-title', it.name));
+  let s = null;
+  try {
+    const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(it.id)).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'it could not be read');
+    s = d.scenario;
+  } catch (e) {
+    if (my !== _seq) return;
+    body.appendChild(_el('div', 'lib-info-note', e.message));
+    return;
+  }
+  if (my !== _seq) return;
+  body.textContent = '';
+  body.appendChild(_el('div', 'lib-sc-title', s.title || 'untitled'));
 
-    const d = document.createElement('div');
-    d.className = 'lib-srow-d';
-    d.textContent = _fmtDate((it.meta || {}).date);
+  const lines = s.lines || [];
+  const facts = _el('div', 'lib-vi');
+  const role = (s.roles || [])[0];
+  _row(facts, 'type', s.type);
+  _row(facts, 'vertical', s.vertical);
+  _row(facts, 'product', s.product);
+  _row(facts, 'role', role ? [role.name, role.gender].filter(Boolean).join(' · ') : '');
+  _row(facts, 'lines', String(lines.length));
+  _row(facts, 'edited', _fmtDate(s.updatedAt || s.createdAt));
+  body.appendChild(facts);
 
-    const arrow = document.createElement('span');
-    arrow.className = 'lib-srow-arrow';
-    arrow.textContent = '▾';
+  body.appendChild(_el('div', 'lib-info-sec', 'Where it came from'));
+  const o = s.origin;
+  if (!o) body.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
+  else {
+    const from = _el('div', 'lib-vi');
+    for (const [key, label] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim());
+    if (!o.sourceTitle) _row(from, 'written from', o.sourceId ? 'a source since deleted' : 'no source');
+    if (o.humanized) _row(from, 'cleaning pass', 'applied');
+    body.appendChild(from);
+  }
 
-    row.append(main, d, arrow);
-    wrap.appendChild(row);
+  body.appendChild(_el('div', 'lib-info-sec', 'Lines · ' + lines.length));
+  const edit = _el('div', 'lib-sc-edit');
+  const ta = _el('textarea', 'lib-sc-ta');
+  ta.spellcheck = false;
+  ta.placeholder = 'One line of the script per line.';
+  ta.value = lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')).join('\n');
+  ta.dataset.was = ta.value;
+  edit.appendChild(ta);
 
-    row.addEventListener('click', () => {
-      const already = wrap.querySelector('.lib-sedit');
-      if (already) {                       // second click closes
-        already.remove();
-        row.setAttribute('aria-expanded', 'false');
-        _open = '';
-        return;
-      }
-      // Close whichever other one is open first.
-      grid.querySelectorAll('.lib-sedit').forEach(p => p.remove());
-      grid.querySelectorAll('.lib-srow').forEach(r => r.setAttribute('aria-expanded', 'false'));
-      const panel = _panel(it);
-      wrap.appendChild(panel);
-      row.setAttribute('aria-expanded', 'true');
-      _open = String(it.id);
-      _fill(panel, it);
+  const foot = _el('div', 'lib-sc-foot');
+  const save = _el('button', 'lib-btn', 'Save');
+  save.type = 'button';
+  save.title = 'Save the lines (Ctrl+Enter)';
+  const st = _el('span', 'lib-sc-status');
+  const del = _el('button', 'lib-btn danger', 'Delete');
+  del.type = 'button';
+  del.title = 'Delete this scenario';
+  foot.append(save, st, _el('span', 'sp'), del);
+  edit.appendChild(foot);
+  body.appendChild(edit);
+
+  save.addEventListener('click', () => _save(s, ta, save, st));
+  ta.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save.click(); }
+  });
+  del.addEventListener('click', () => _delete(s, del));
+
+  // A script needs no inner scrolling when it fits; past that the textarea scrolls.
+  requestAnimationFrame(() => { ta.style.height = Math.min(520, Math.max(140, ta.scrollHeight + 4)) + 'px'; });
+
+  // What the last Save or refusal said, now that the column is painted again.
+  if (_say && _say.id === String(s.id)) {
+    st.textContent = _say.text;
+    st.className = 'lib-sc-status' + (_say.kind ? ' ' + _say.kind : '');
+  }
+  _say = null;
+}
+
+async function _save(s, ta, btn, st) {
+  // Blank lines are separators people leave while editing, not lines of script: they are dropped
+  // rather than saved as empty ones, which also stops a stray trailing newline adding a line.
+  const lines = ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
+  if (!lines.length) { st.textContent = 'Nothing to save - every line is empty.'; st.className = 'lib-sc-status err'; return; }
+  btn.disabled = true;
+  st.textContent = 'saving…';
+  st.className = 'lib-sc-status';
+  try {
+    // Only what the column edits: the title it painted may have been renamed since, in Merge. And an
+    // EDIT, so a scenario deleted meanwhile is not made again from these lines alone.
+    const r = await fetch('/api/scen3/scenarios', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: s.id, lines, edit: true }),
     });
-
-    grid.appendChild(wrap);
-    // Survive a reload of the shelf: the panel that was open reopens, because Save reloads and
-    // a Save that closed the thing you were editing would be its own kind of rude.
-    if (_open && String(it.id) === _open) {
-      const panel = _panel(it);
-      wrap.appendChild(panel);
-      row.setAttribute('aria-expanded', 'true');
-      _fill(panel, it);
+    const d = await r.json().catch(() => null);
+    if (r.status === 404) {
+      ta.dataset.was = ta.value;                // nothing left to save it into - leaving is not a loss
+      if (_hooks.status) _hooks.status('"' + (s.title || 'untitled') + '" was deleted elsewhere', 'err');
+      _sel = '';
+      if (_hooks.reload) await _hooks.reload();
+      if (_hooks.counts) _hooks.counts();
+      return;
     }
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    ta.dataset.was = ta.value;
+    // Said after the reload repaints the column (the row's line count comes from the store).
+    _say = { id: String(s.id), text: 'Saved · ' + lines.length + (lines.length === 1 ? ' line' : ' lines'), kind: 'ok' };
+    if (_hooks.reload) await _hooks.reload();
+  } catch (e) {
+    st.textContent = 'Not saved: ' + e.message;
+    st.className = 'lib-sc-status err';
+    btn.disabled = false;
   }
 }
 
-// Leaving the shelf forgets which panel was open: coming back to a shelf with an editor already
-// hanging open is a surprise, and there is nothing unsaved to protect - Save is explicit.
-export function leave() { _open = ''; }
+async function _delete(s, btn) {
+  if (!confirm('Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.')) return;
+  btn.disabled = true;
+  try {
+    const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    _sel = '';                                  // the first one is selected after the reload
+    if (_hooks.reload) await _hooks.reload();
+    if (_hooks.counts) _hooks.counts();
+    if (_hooks.status) _hooks.status('Deleted "' + (s.title || 'untitled') + '"');
+  } catch (e) {
+    btn.disabled = false;
+    if (_hooks.status) _hooks.status('Not deleted: ' + e.message, 'err');
+  }
+}
+
+/** Lines typed and not saved - the page asks before the shelf is left. */
+export function unsaved() { return _dirty(); }
+
+// Leaving the shelf: an answer on its way is dropped, and coming back opens on the first scenario.
+export function leave() {
+  _seq++;
+  _sel = '';
+  _say = null;
+}

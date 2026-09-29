@@ -36,6 +36,7 @@ import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
 import { trimmer } from './trim.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
+import { askName } from '../name-box.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
@@ -308,75 +309,18 @@ function _categorySelect(item) {
   return sel;
 }
 
-// The small box a new category is named in. Beside the dropdown it came from, above the viewer
-// (which sits at 9470 on this page), and gone on Escape, on a click elsewhere, or once made.
-let _nameBox = null;
-function _closeNameBox() {
-  if (!_nameBox) return;
-  _nameBox.el.remove();
-  document.removeEventListener('mousedown', _nameBox.away, true);
-  document.removeEventListener('keydown', _nameBox.key, true);
-  Layers.close(_nameBox.layer);
-  _nameBox = null;
-}
-
-function _askCategoryName(anchor, kind, onMade) {
-  _closeNameBox();
-  const el = document.createElement('div');
-  el.className = 'mv3-newcat';
-  const lbl = document.createElement('div');
-  lbl.className = 'mv3-newcat-t';
-  lbl.textContent = 'New ' + kind.replace(/s$/, '') + ' category';
-  const inp = document.createElement('input');
-  inp.type = 'text';
-  inp.className = 'mv3-newcat-in';
-  inp.placeholder = 'Name';
-  inp.maxLength = 60;
-  const err = document.createElement('div');
-  err.className = 'mv3-newcat-err';
-  const row = document.createElement('div');
-  row.className = 'mv3-newcat-r';
-  const ok = document.createElement('button');
-  ok.type = 'button'; ok.className = 'mv3-newcat-b is-ok'; ok.textContent = 'Create';
-  const no = document.createElement('button');
-  no.type = 'button'; no.className = 'mv3-newcat-b'; no.textContent = 'Cancel';
-  row.append(ok, no);
-  el.append(lbl, inp, err, row);
-  document.body.appendChild(el);
-
-  const r = anchor.getBoundingClientRect();
-  const w = el.offsetWidth;
-  el.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))) + 'px';
-  el.style.top = Math.round(r.bottom + 6) + 'px';
-  inp.focus();
-
-  const make = async () => {
-    const name = inp.value.trim();
-    if (!name) { err.textContent = 'Give it a name.'; inp.focus(); return; }
-    const taken = ((_allCats || {})[kind] || []).find(c => String(c.label).toLowerCase() === name.toLowerCase());
-    if (taken) { err.textContent = 'There is already a category called ' + taken.label + '.'; inp.select(); return; }
-    ok.disabled = true;
-    try {
-      const { cat } = await createCategory(kind, name);
-      _closeNameBox();
-      await onMade(cat);
-    } catch (e) {
-      err.textContent = e.message;
-      ok.disabled = false;
-    }
-  };
-  ok.addEventListener('click', make);
-  no.addEventListener('click', _closeNameBox);
-  const away = (e) => { if (!el.contains(e.target)) _closeNameBox(); };
-  // On top of the viewer it was opened over, so Escape closes this box and not that
-  // (js/layers.js). Enter is this box's own and stays here.
-  const key = (e) => {
-    if (e.key === 'Enter' && document.activeElement === inp) { e.preventDefault(); make(); }
-  };
-  const layer = Layers.open(el, { name: 'new category', onEsc: _closeNameBox });
-  _nameBox = { el, away, key, layer };
-  document.addEventListener('mousedown', away, true);
-  document.addEventListener('keydown', key, true);
+// A new category, named beside the dropdown it came from (js/name-box.js). A name already on the
+// list is refused in the box rather than made twice.
+async function _askCategoryName(anchor, kind, onMade) {
+  const cat = await askName({
+    anchor, title: 'New ' + kind.replace(/s$/, '') + ' category', okLabel: 'Create', maxLength: 60,
+    check: (name) => {
+      const taken = ((_allCats || {})[kind] || []).find(c => String(c.label).toLowerCase() === name.toLowerCase());
+      return taken ? 'There is already a category called ' + taken.label + '.' : '';
+    },
+    submit: async (name) => (await createCategory(kind, name)).cat,
+  });
+  if (cat) await onMade(cat);
 }
 
 // ── the one trim an upload is allowed ──

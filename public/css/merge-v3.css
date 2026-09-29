@@ -1445,30 +1445,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-trimbox-save[disabled]{ opacity:.55; cursor:default }
 
-/* ── Naming a new category from the viewer ──────────────────────────────────
-   Above the viewer, which sits at 9470 on this page. */
-.mv3-newcat{
-  position:fixed; z-index:9600; width:230px; padding:10px;
-  display:flex; flex-direction:column; gap:6px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.mv3-newcat-t{ font:700 10px/1 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--muted) }
-.mv3-newcat-in{
-  height:28px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 12px/1 var(--font);
-}
-.mv3-newcat-in:focus{ outline:none; border-color:var(--primary) }
-.mv3-newcat-err{ font:600 10px/1.3 var(--font); color:var(--danger); min-height:0 }
-.mv3-newcat-err:empty{ display:none }
-.mv3-newcat-r{ display:flex; justify-content:flex-end; gap:6px }
-.mv3-newcat-b{
-  padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:transparent; color:var(--ink); font:600 11px/1 var(--font); cursor:pointer;
-}
-.mv3-newcat-b.is-ok{ border-color:var(--primary); background:var(--primary); color:var(--primary-ink, oklch(.15 0 0)) }
-.mv3-newcat-b[disabled]{ opacity:.55; cursor:default }
-
 /* ── Picking a scenario for a talking head ───────────────────────────────────
    The inspector's other job (js/merge-v3/scen-pick.js): while a talking-head project
    is being started there is nothing selected to inspect, so the panel is the scenario

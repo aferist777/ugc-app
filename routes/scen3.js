@@ -279,10 +279,13 @@ router.get('/scen3/scenarios/:id', (req, res) => {
 // This is what line edits and renames hit (autosaved, no Save button).
 router.post('/scen3/scenarios', (req, res) => {
   try {
-    const b    = req.body || {};
+    const { edit, ...b } = req.body || {};
     const now  = new Date().toISOString();
     const list = _load();
     const i    = b.id != null ? list.findIndex(x => String(x.id) === String(b.id)) : -1;
+    // An EDIT of a scenario that is gone is not a creation: the Library's column sends only the
+    // lines, and a scenario made from them would have lost its roles and where it came from.
+    if (edit && i < 0) return res.status(404).json({ success: false, error: 'this scenario no longer exists' });
 
     if (i >= 0) {
       // keep the original id + createdAt; the request may only carry changed fields
@@ -342,12 +345,33 @@ router.countByLib = function countByLib(lib) {
 // ── Duplicate: same content, fresh id + dates, " copy" appended to the title ─
 
 // ── Delete one scenario (single id only, never a bulk wipe) ─────────────────
+// A scenario the generator wrote from a source's topic is one of that topic's "written" marks
+// (routes/scriptgen.js, save). The mark goes with it (phase D5): the topic would otherwise go on
+// counting a script that no longer exists. A mark that cannot be taken off does not stop the delete.
+function _unmarkTopic(s) {
+  const o = s && s.origin;
+  if (!o || !o.sourceId || !o.topicId) return;
+  try {
+    const SOURCES = require('../lib/sources-store');
+    const rec = SOURCES.get(o.sourceId);
+    const topics = (rec && Array.isArray(rec.topics)) ? rec.topics : [];
+    const i = topics.findIndex(t => String(t.id) === String(o.topicId));
+    if (i < 0 || !Array.isArray(topics[i].usedBy)) return;
+    const used = topics[i].usedBy.filter(u => String((u && u.id) || '') !== String(s.id));
+    if (used.length === topics[i].usedBy.length) return;
+    const next = topics.slice();
+    next[i] = { ...topics[i], usedBy: used };
+    SOURCES.update(o.sourceId, { topics: next });
+  } catch (e) { console.warn('[scen3] could not take the written mark off its topic:', e.message); }
+}
+
 router.delete('/scen3/scenarios/:id', (req, res) => {
   try {
     const list = _load();
-    const next = list.filter(x => String(x.id) !== String(req.params.id));
-    if (next.length === list.length) return res.status(404).json({ success: false, error: 'not found' });
-    _save(next);
+    const gone = list.find(x => String(x.id) === String(req.params.id));
+    if (!gone) return res.status(404).json({ success: false, error: 'not found' });
+    _save(list.filter(x => x !== gone));
+    _unmarkTopic(gone);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

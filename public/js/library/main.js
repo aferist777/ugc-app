@@ -47,6 +47,9 @@ let _sel = '';
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
+// Media's three checks are owed once a read asked for them, and are run by whichever read lands
+// last - a newer read that overtakes the one that asked must not drop them.
+let _checksDue = false;
 let _first = true;      // the page's very first read, for restoring a remembered filter
 
 function _status(text, kind) {
@@ -59,6 +62,8 @@ function _status(text, kind) {
 function _paintShelves() {
   document.querySelectorAll('.lib-shelf').forEach(b => b.classList.toggle('cur', b.dataset.kind === _shelf));
   _paintUpload();
+  // Media's three checks show their buttons only there; leaving Media puts them away at once.
+  if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
 }
 
 // The kind and category are remembered, so every place that changes them goes through
@@ -109,7 +114,7 @@ function _paintFilters(filters, cats) {
     cur: _cat,
     onFilter: (id) => { _setFilter(_filter, id); _load(); },
     status: _status,
-    reload: () => _load(),
+    reload: (o) => _load(o),
     refreshCats: _loadCats,
   });
   _applyCatHeight();
@@ -242,7 +247,8 @@ async function _runAction(id, it) {
 // and would swallow a message set before it.
 async function _apply(r) {
   if (!r) return;
-  if (r.reload || r.removed) { await _load({ keepScroll: true }); _counts(); }
+  // Something gone - deleted, or moved to another kind - is what can change Media's checks.
+  if (r.reload || r.removed) { await _load({ keepScroll: true, checks: !!r.removed }); _counts(); }
   else if (r.changed) { _renderGrid(); _showSelected(); }
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
@@ -336,11 +342,17 @@ function _picker(cls, current, options, onPick, title) {
 // through the thumbnail door, from the copy when there is one and from the original when not, made
 // once and cached (lib/thumbs.js `strip`). The shelf's own shape stays: the Character page reads it
 // too, and wraps `thumb` in the same door itself.
+//
+// A still on Media too (phase D3): its shelf `thumb` is the 640px copy, already a door address, so the
+// tile is sized from the picture itself. A clip keeps its poster - 320px, a miniature already, and a
+// static file, which the door would only make slower.
 const _SIZED = new Set(['characters', 'obrazy', 'lookbooks', 'environments']);
+const _door = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=strip';
 function _tileSrc(it) {
+  if (it.kind === 'images') return it.media ? _door(it.media) : '';
   if (!_SIZED.has(it.kind)) return it.thumb || '';
   const src = it.thumb || it.media;
-  return src ? '/api/thumb?src=' + encodeURIComponent(src) + '&v=strip' : '';
+  return src ? _door(src) : '';
 }
 
 function _card(it, extra) {
@@ -478,12 +490,12 @@ function _renderGrid() {
     MU.render(_items, { status: _status, reload: () => _load({ keepScroll: true }) });
     return;
   }
-  // Scenarios are text, so they are rows too - see js/library/scenarios.js. No info column and
-  // no viewer: the row's one job is to open the scenario where it is edited.
+  // Scenarios are text, so they are rows too, and one is always selected with the right column
+  // about it - see js/library/scenarios.js (phase D5).
   if (_shelf === 'scenarios') {
     // reload, not a local patch: a saved scenario changes its line count, and that count is the
     // store's answer rather than the editor's.
-    SC.render(_items, { reload: () => _load({ keepScroll: true }) });
+    SC.render(_items, { reload: () => _load({ keepScroll: true }), status: _status, counts: _counts });
     return;
   }
   grid.textContent = '';
@@ -560,13 +572,15 @@ const _infoHooks = {
 async function _load(opts) {
   const grid0 = $('lib-grid');
   const scroll = (opts && opts.keepScroll && grid0) ? grid0.scrollTop : null;
+  if (opts && opts.checks) _checksDue = true;
   const my = ++_reqId;
   closeConfirm();          // never leave one pointing at a chip that is about to be replaced
   _status('Reading…');
   _paintShelves();
   // The right column belongs to the picture shelves, where it says what the selected tile is, and to
-  // Voices, whose module fills it with the selected voice. Every other shelf has the whole width.
-  if (!PICKABLE.has(_shelf) && _shelf !== 'voices') INFO.hide();
+  // Voices and Scenarios, whose modules fill it with the selected row. Every other shelf has the
+  // whole width.
+  if (!PICKABLE.has(_shelf) && _shelf !== 'voices' && _shelf !== 'scenarios') INFO.hide();
   try {
     // The kind and category are Media's, and they are now REMEMBERED across shelf
     // switches — so they must not be sent to a shelf that has no such kinds. Sending a
@@ -598,18 +612,19 @@ async function _load(opts) {
       _first = false;
       if (deadKind || deadCat || emptyOnOpen) {
         _setFilter((deadKind || emptyOnOpen) ? '' : _filter, '');
-        return _load();
+        return _load(opts);        // with what was asked of the first read, checks included
       }
     }
     _first = false;
     _paintFilters(d.filters, d.cats);
     _renderGrid();
-    const label = SHELVES[_shelf] || _shelf;
-    $('lib-count').textContent = label + ' · ' + d.shown + (d.shown !== d.total ? ' of ' + d.total : '');
     _showSelected();       // the column follows the shelf it was read with
-    _checkDupes();
-    _checkBroken();
-    _checkThumbs();
+    // MEDIA'S CHECKS ONLY WHEN THEY CAN HAVE CHANGED (phase D3, the owner 2026-09-29): entering Media,
+    // and after an upload, a delete, a kind change, a category deleted with its clips, a clean or a
+    // repair. They used to run on every read - every filter chip, every star - and twice as the
+    // page opened; Thumbnails re-reads the whole shelf and opens every poster's header, and the
+    // tiles' own pictures waited behind all of it.
+    if (_checksDue) { _checksDue = false; _runChecks(); }
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     _status('');
   } catch (e) {
@@ -638,6 +653,9 @@ async function _counts() {
 // were: leave Media, come back, and you were staring at everything again.
 function _select(kind) {
   if (!SHELVES[kind] || kind === _shelf) return;
+  // Lines typed into a scenario and not saved are not thrown away without a word.
+  if (_shelf === 'scenarios' && SC.unsaved()
+    && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'music') MU.stopPreview();  // nor a backing track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
@@ -645,7 +663,13 @@ function _select(kind) {
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
-  _load();
+  _load({ checks: kind === 'media' });
+}
+
+// All three at once. Each one looks at the shelf again after its answer: one that lands after
+// Media was left must not show its button on another shelf.
+function _runChecks() {
+  return Promise.all([_checkDupes(), _checkBroken(), _checkThumbs()]);
 }
 
 // ── Broken records ──────────────────────────────────────────────────────────
@@ -657,6 +681,7 @@ async function _checkBroken() {
   if (!btn) return;
   if (_shelf !== 'media') { btn.hidden = true; return; }
   try { _broken = await A.findBroken(); } catch (e) { _broken = null; }
+  if (_shelf !== 'media') { btn.hidden = true; return; }
   const n = _broken && _broken.total;
   btn.hidden = !n;
   if (n) {
@@ -688,7 +713,7 @@ async function _cleanBroken() {
     const r = await A.cleanBroken();
     await _load();
     _counts();
-    await _checkBroken();
+    await _runChecks();
     const parts = [];
     if (r.media) parts.push(r.media + ' media record' + (r.media === 1 ? '' : 's'));
     if (r.looks) parts.push(r.looks + ' look' + (r.looks === 1 ? '' : 's'));
@@ -707,6 +732,7 @@ async function _checkDupes() {
   if (!btn) return;
   if (_shelf !== 'media') { btn.hidden = true; return; }
   try { _dupes = await A.findDupes(); } catch (e) { _dupes = null; }
+  if (_shelf !== 'media') { btn.hidden = true; return; }
   const n = _dupes && _dupes.total;
   btn.hidden = !n;
   if (n) {
@@ -746,7 +772,7 @@ async function _cleanDupes() {
     const d = await A.cleanDupes();
     await _load();
     _counts();
-    await _checkDupes();
+    await _runChecks();
     _status('Removed ' + d.count + ' duplicate record' + (d.count === 1 ? '' : 's') + '; no files were deleted');
   } catch (e) { _status(e.message, 'err'); }
   if (btn) btn.disabled = false;
@@ -784,10 +810,13 @@ async function _checkThumbs() {
         try { await A.linkThumb(_thumbs.byId.get(String(x.id)), x.thumb); done++; } catch (e) {}
       }
       _status(done ? ('Reconnected ' + done + ' thumbnail' + (done === 1 ? '' : 's')) : '');
-      await _load();                                    // redraws the grid, and re-enters here
-      return;
+      // Redraws the grid with the new posters - only if Media is still what is open: a reload of
+      // another shelf would repaint Scenarios' column over lines being typed.
+      if (_shelf === 'media') await _load({ keepScroll: true });
+      return _checkThumbs();                            // and counts again; _linked stops a loop
     }
   } catch (e) { _thumbs = null; }
+  if (_shelf !== 'media') { btn.hidden = true; return; }
   const n = _thumbs && _thumbs.need ? _thumbs.need.length : 0;
   btn.hidden = !n;
   if (n) {
@@ -825,7 +854,7 @@ async function _fixThumbs() {
   }
   await _load();
   _counts();
-  await _checkThumbs();
+  await _runChecks();
   _status(
     'Made ' + done + ' thumbnail' + (done === 1 ? '' : 's') +
     (failed ? ('; ' + failed + ' could not be read') : ''),
@@ -866,7 +895,7 @@ async function _upload(files) {
   if (_filter === 'images') {
     const ri = await A.uploadImages(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
     if (btn) btn.disabled = false;
-    if (ri.ok) { await _load(); _counts(); }
+    if (ri.ok) { await _load({ checks: true }); _counts(); }
     _status(ri.ok === ri.total
       ? ('Uploaded ' + ri.ok + (ri.ok === 1 ? ' image' : ' images'))
       : (ri.ok + ' of ' + ri.total + ' uploaded'), ri.ok === ri.total ? '' : 'err');
@@ -882,7 +911,7 @@ async function _upload(files) {
   // Land on the kind the clips went to, so they are visible without hunting.
   if (r.ok) {
     _setFilter(target, '');
-    await _load();
+    await _load({ checks: true });
     _counts();
   }
   // After the reload, never before: _load() signs off with _status('') and would wipe this.
@@ -931,7 +960,7 @@ function boot() {
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(_load).then(_checkDupes).then(_checkBroken).then(_checkThumbs);
+  _loadCats().then(() => _load({ checks: true }));
   _counts();
 }
 

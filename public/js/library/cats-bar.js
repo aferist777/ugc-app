@@ -19,6 +19,7 @@
 // its category, and generating into it again brings it straight back here.
 
 import * as A from './actions.js';
+import { askName } from '../name-box.js';
 
 const CLICK_DELAY = 200;      // long enough to catch a double click, short enough to not lag
 const DRAG_SLOP = 4;          // px before a press becomes a drag rather than a click
@@ -142,7 +143,7 @@ export function renderCatBar(box, cats, ctx) {
   add.disabled = !ctx.kind;
   add.title = ctx.kind ? 'New category' : 'Pick Birols, Uploads or Hooks first — a category belongs to one of them';
   add.addEventListener('click', async () => {
-    const name = prompt('New category');
+    const name = await askName({ anchor: add, title: 'New category', okLabel: 'Add', maxLength: 60 });
     if (name == null || !String(name).trim()) return;
     try {
       const d = await A.addCat(ctx.kind, String(name).trim());
@@ -202,7 +203,8 @@ export function renderCatBar(box, cats, ctx) {
             ? ('Deleted the category and ' + d.affected + (d.affected === 1 ? ' clip' : ' clips'))
             : ('Deleted the category' + (d.affected ? ('; ' + d.affected + ' moved to Uncategorized') : ''));
           const tail = d.disposition === 'hidden' ? ' It returns when you generate into it again.' : '';
-          ctx.refreshCats().then(() => ctx.reload()).then(() => ctx.status(msg + tail));
+          // A category deleted WITH its clips changes what Media's checks count.
+          ctx.refreshCats().then(() => ctx.reload({ checks: d.mode === 'delete' })).then(() => ctx.status(msg + tail));
         });
       });
       b.appendChild(x);
@@ -215,7 +217,10 @@ export function renderCatBar(box, cats, ctx) {
 
     b.addEventListener('dblclick', async () => {
       _cancelClick();                       // the single click must not also fire
-      const next = prompt(cat.own ? 'Rename category' : 'Name for a library copy of this category', cat.name);
+      const next = await askName({
+        anchor: b, title: cat.own ? 'Rename category' : 'A library copy of this category',
+        value: cat.name, okLabel: 'Rename', maxLength: 60,
+      });
       if (next == null) return;
       const name = String(next).trim();
       if (!name || name === cat.name) return;

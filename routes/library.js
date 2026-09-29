@@ -202,6 +202,9 @@ function _mediaShelf() {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
   const hooks = _read(path.join(DATA_DIR, 'hooks-archive.json'), []);
+  // The hook numbers, read once for the whole build: it used to be once per hook, off the disk
+  // each time, on every read of Media and on every count of the shelves (phase D3).
+  const hookIds = _hookIds();
 
   const fromArchive = arch.filter(e => e && e.videoPath).map(e => ({
     id: String(e.id),
@@ -240,7 +243,7 @@ function _mediaShelf() {
     // puts in the creative's name. Read from the registry rather than the record: the
     // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
-            hookId: _hookIds()[String(h.videoPath || '').split('?')[0]] || null,
+            hookId: hookIds[String(h.videoPath || '').split('?')[0]] || null,
             trimmable: _canTrim(h, 'hooks'), trimmed: h.trimmed || null },
   }));
 
@@ -449,8 +452,10 @@ const SCEN3_FILE = path.join(DATA_DIR, 'scen3-scenarios.json');
 
 function _scenariosShelf() {
   const list = _read(SCEN3_FILE, []);
+  // Archived ones are not on the shelf (phase D5): archiving is taking a scenario out of the list,
+  // and Merge's picker, which has an archive of its own to restore from, already reads it that way.
   const items = (Array.isArray(list) ? list : [])
-    .slice()
+    .filter(s => s && !s.archived)
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     .map(s => ({
       id: String(s.id),

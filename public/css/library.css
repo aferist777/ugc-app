@@ -32,14 +32,25 @@
    A ratio is safe now that the column width is definite (a sixth of the grid) — the
    circular case was aspect-ratio inside an auto-fill column sized by its content. */
 .lib-grid.is-characters .lib-thumb-box{ height:auto; aspect-ratio:16 / 9; }
-.lib-grid.is-characters /* A hook permanent number, beside its name in the grid (lib/hook-ids.js). */
+/* A CHARACTER'S WHOLE NAME (phase D1, the owner 2026-09-29): two lines under the sheet instead of
+   one cut short - at a 1366px window a tile is 122px wide and "Mason "Raven" Cruz-Delacroix" lost
+   its tail. Every tile keeps room for the two, so a row stays even; only a name longer than that
+   is cut, and the tile's tooltip carries it whole. */
+.lib-grid.is-characters .lib-name{
+  white-space:normal; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  height:calc(2.5em + 6px);
+}
+/* A hook's permanent number, beside its name in the grid (lib/hook-ids.js). It lived under a
+   selector with a comment in its middle, so it only ever styled the Characters shelf - and the
+   numbers are on Media. Its line is no taller than the name's: a taller one pushed the category
+   select under the card's bottom edge. */
 .lib-hid{
   display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
   background:var(--surface-2); color:var(--accent);
-  font:700 9.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font:700 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing:.03em; vertical-align:1px;
 }
-.lib-card{ height:auto; }
 .lib-grid.is-lookbooks,
 .lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
 
@@ -449,6 +460,9 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   transition:.12s var(--ease);
 }
 .lib-srow:hover{ border-color:var(--primary); }
+/* The selected scenario (phase D5): gold, three pixels in all, as a selected tile - the border and a
+   ring inside it, which on a row with no picture nothing covers. */
+.lib-srow.cur{ border-color:var(--gold); box-shadow:inset 0 0 0 2px var(--gold); }
 .lib-srow:focus-visible{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
 .lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .lib-srow-t{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
@@ -498,29 +512,20 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-mus-del:hover:not([disabled]){ color:var(--danger); border-color:var(--danger); }
 .lib-mus-play[disabled], .lib-mus-del[disabled]{ opacity:.4; cursor:default; }
 
-/* ── Scenarios: the row's editor, opened in place ─────────────────────────────
-   One textarea holding the whole script, one line per line, because editing a script is reading
-   it top to bottom. The panel is a sibling of the row inside .lib-swrap so the row keeps its own
-   hover and focus styling while the panel sits under it. */
-.lib-swrap{ display:flex; flex-direction:column; }
-.lib-srow-arrow{
-  flex:0 0 auto; font-size:9px; color:var(--muted); transition:transform .12s var(--ease);
-}
-.lib-srow[aria-expanded="true"]{ border-color:var(--primary); border-bottom-left-radius:0; border-bottom-right-radius:0; }
-.lib-srow[aria-expanded="true"] .lib-srow-arrow{ transform:rotate(180deg); }
-.lib-sedit{
-  display:flex; flex-direction:column; gap:6px; padding:8px 10px 10px;
-  background:var(--surface); border:1px solid var(--primary); border-top:0;
-  border-radius:0 0 var(--r-sm) var(--r-sm);
-}
-.lib-sedit-ta{
-  width:100%; min-height:120px; resize:vertical;
+/* ── Scenarios: the selected one, in the right column (phase D5) ──────────────
+   The title in the body at its own size - the column's head is upper case and cut to one line -
+   then the fields, where it came from, and the lines: one textarea holding the whole script, one
+   line per line, because editing a script is reading it top to bottom. */
+.lib-sc-title{ padding:10px 12px 2px; font-size:13px; font-weight:650; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
+.lib-sc-edit{ display:flex; flex-direction:column; gap:6px; padding:10px 12px 12px; }
+.lib-sc-ta{
+  width:100%; min-height:140px; resize:vertical;
   font:12px/1.55 var(--font); color:var(--ink);
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
 }
-.lib-sedit-ta:focus{ outline:none; border-color:var(--primary); }
-.lib-sedit-foot{ display:flex; align-items:center; gap:10px; }
-.lib-sedit-foot .sp{ flex:1; }
-.lib-sedit-status{ font-size:10.5px; color:var(--muted); }
-.lib-sedit-status.ok{ color:oklch(.78 .13 150); }
-.lib-sedit-status.err{ color:oklch(.75 .15 25); }
+.lib-sc-ta:focus{ outline:none; border-color:var(--primary); }
+.lib-sc-foot{ display:flex; align-items:center; gap:10px; }
+.lib-sc-foot .sp{ flex:1; }
+.lib-sc-status{ font-size:10.5px; color:var(--muted); }
+.lib-sc-status.ok{ color:oklch(.78 .13 150); }
+.lib-sc-status.err{ color:oklch(.75 .15 25); }

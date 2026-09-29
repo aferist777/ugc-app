@@ -17,14 +17,11 @@
 .sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
 .sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
 .sv3-nav .sp{flex:1}
-.sv3-nav .tag{
-  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
-}
+/* No chips in the header (phase D2, the owner 2026-09-29): the labels that said which page or
+   shelf you were on went - the lit link already says it. What stays is what can be pressed. */
 
-/* The page's own settings, sitting immediately left of the tag that names the page — the
-   two read as one unit: what you are looking at, and how it works. Square rather than a
-   pill, because it is a control and the two beside it are readings. */
+/* The page's own settings, at the right with the controls. Square rather than a pill, because it
+   is a control. */
 .sv3-nav .sv3-gear{
   display:flex; align-items:center; justify-content:center; flex:0 0 auto;
   width:24px; height:24px; margin-right:2px; padding:0;

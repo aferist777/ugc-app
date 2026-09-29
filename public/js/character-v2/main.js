@@ -613,10 +613,6 @@ function setMode(mode) {
   document.body.dataset.mode = m;
   $('cv2-create').classList.toggle('is-collapsed', m !== 'create');
   $('cv2-list').classList.toggle('is-collapsed', m !== 'view');
-  const tag = $('cv2-mode-tag');
-  // Named, not just stated: "view" alone says which half of this page you are in, while
-  // the gear beside it is about the page as a whole - so the chip says which page too.
-  if (tag) tag.textContent = 'character ' + m;
   // The side column shows looks in view and the character card in create, so its label has
   // to follow. Which PANEL is visible is CSS's job; only the words are set here.
   const t = $('cv2-side-title'), sp = $('cv2-side-spine');

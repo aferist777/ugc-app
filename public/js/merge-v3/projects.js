@@ -22,6 +22,7 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
+import { askName } from '../name-box.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 function _own() { return document.getElementById('mv3-owner'); }
@@ -201,7 +202,7 @@ function _wireNew() {
   b.addEventListener('click', () => _kindMenu(b));
   _newBlank = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const title = prompt('Name for the new project:', today + ' - ');
+    const title = await askName({ anchor: b, title: 'New project', value: today + ' - ', select: false, okLabel: 'Create' });
     if (title === null) return;                       // cancelled, not an empty name
     const clean = title.trim();
     if (!clean) { _note('a name is needed'); return; }
