@@ -1443,10 +1443,25 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3-sc-tab:hover{color:var(--ink)}
 .mv3-sc-tab.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
-/* A source's chip (phase E7): dashed until chosen, so the sources read as one family beside the
-   fixed filters; the full name is on hover. */
-.mv3-sc-tab.is-src:not(.is-on){border-style:dashed}
-.mv3-sc-tab.is-more{border-style:dashed}
+/* The category dropdown (phase F8): a pill that says what is shown, and how many. A long source
+   name is cut on the button; the list shows it whole. */
+.mv3-sc-filter{
+  display:inline-flex; align-items:center; gap:4px; max-width:240px; min-width:0;
+  padding:3px 9px; border:1px solid var(--border); border-radius:999px;
+  background:transparent; color:var(--muted); font:600 9.5px/1.4 var(--font); cursor:pointer;
+}
+.mv3-sc-filter:hover{color:var(--ink); border-color:var(--primary)}
+.mv3-sc-filter.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
+.mv3-sc-filter-t{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-sc-filter-n{flex:0 0 auto}
+.mv3-sc-menu{max-width:360px; max-height:min(70vh, 520px); overflow-y:auto}
+.mv3-sc-menu .mv3-plus-item span{overflow-wrap:anywhere}
+.mv3-sc-menu .mv3-plus-item.is-on span{color:var(--primary)}
+.mv3-sc-menu-sep{
+  padding:6px 8px 2px; font:700 8.5px var(--font); letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted);
+}
+.mv3-sc-menu-sep.is-end{padding:0; margin:3px 0; border-top:1px solid var(--border-soft)}
 /* Pushed to the right edge: making a scenario is not one of the filters beside it. */
 .mv3-sc-new{
   padding:3px 9px; border:1px solid var(--primary); border-radius:var(--r-xs);

@@ -34,11 +34,11 @@ import { setOpenColumn, roomForWork, onColumnOpen } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
 
-// THE FILTERS (phase E7, the owner 2026-09-29): all · saved - written by hand, no provenance - · a chip
-// per source the generator wrote from · no source - generated from a topic alone - · archive. The
-// sources are grouped by id on the server, and a chip shows the source's current name, shortened
-// here and in full on hover. More than six sources: the five newest and "+N ▾" for the rest.
-const SRC_SHOWN = 5;
+// THE CATEGORY (phase E7, the owner 2026-09-29; one dropdown since F8, 2026-09-30): all · saved -
+// written by hand, no provenance - · each source the generator wrote from · no source - generated
+// from a topic alone - · archive. The sources are grouped by id on the server and named by their
+// CURRENT title, and the list is read again every time it opens: a source renamed in the Library
+// is renamed here, even with the picker already open.
 const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
 
 let _active = false;
@@ -67,6 +67,7 @@ export function onChange(fn) { _onChange = fn; }
 export function stop() {
   if (!_active) return;
   _active = false;
+  _closeCatMenu();
   _repaint();
 }
 
@@ -109,86 +110,72 @@ function _filter(id) {
   _load();
 }
 
-// A source's name on a chip: no file extension, nothing in brackets, underscores as spaces, and at
-// most 16 characters, cut at a word with "…". Two that come out the same keep more of their names.
-function _short(title, max) {
-  let t = String(title || '').replace(/\.(mp4|mov|webm|mkv|m4v|avi|mp3|m4a|wav|aac|ogg)$/i, '')
-    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!t) t = 'source';
-  const lim = max || 16;
-  // Counted and cut by characters, not UTF-16 units: an emoji cut in half is a broken glyph.
-  const chars = Array.from(t);
-  if (chars.length <= lim) return t;
-  const cut = chars.slice(0, lim).join('');
-  const sp = cut.lastIndexOf(' ');
-  return (sp >= Math.floor(cut.length / 2) ? cut.slice(0, sp) : cut).replace(/[\s,.;:-]+$/, '') + '…';
-}
-
-// The chips in their order. The active source always shows, even when it is past the fifth.
-function _tabs() {
+// The choices, in order, each with its count. Sources by their full names; two that are called the
+// same are numbered, the rest of what tells them apart is in the tooltip.
+function _choices() {
   const c = _counts || {};
   const srcs = Array.isArray(c.sources) ? c.sources : [];
-  const labels = srcs.map(s => _short(s.title));
-  // Names that shorten to the same thing are given more room until they differ. Names that differ
-  // only in what is never shown - an extension, a bracket: "видео.mp4" and "видео (1).mp4" - never
-  // will: they keep the short label and are numbered, the full name on hover.
-  const clashes = () => {
-    const seen = new Map();
-    labels.forEach((l, i) => seen.set(l, (seen.get(l) || []).concat(i)));
-    return [...seen.values()].filter(ix => ix.length > 1);
-  };
-  for (let lim = 24; lim <= 48 && clashes().length; lim += 8) {
-    for (const i of clashes().flat()) labels[i] = _short(srcs[i].title, lim);
-  }
-  for (const group of clashes()) {
-    group.forEach((i, k) => { labels[i] = _short(srcs[i].title) + (k ? ' ' + (k + 1) : ''); });
-  }
-  const chips = srcs.map((s, i) => ({ id: 'src:' + s.id, label: labels[i], n: s.n, src: true,
-    title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title }));
-  let shown = chips;
-  let more = null;
-  if (chips.length > SRC_SHOWN + 1) {
-    shown = chips.slice(0, SRC_SHOWN);
-    more = chips.slice(SRC_SHOWN);
-    const cur = more.find(t => t.id === _lib);
-    if (cur) { shown = shown.concat(cur); more = more.filter(t => t !== cur); }
-  }
-  const out = [{ id: '', label: 'all', n: c.all || 0 }, { id: 'library1', label: 'saved', n: c.library1 || 0,
-    title: 'Written or pasted by hand' }].concat(shown);
-  if (more && more.length) out[out.length - 1] = { ...out[out.length - 1], more };
+  const seen = new Map();
+  const sources = srcs.map(s => {
+    const name = String(s.title || 'untitled source').trim();
+    const k = (seen.get(name) || 0) + 1;
+    seen.set(name, k);
+    return { id: 'src:' + s.id, label: k > 1 ? name + ' ' + k : name, n: s.n, src: true, gone: !!s.gone,
+      title: (s.gone ? 'A source since deleted: ' : 'Written from ') + s.title };
+  });
+  const out = [
+    { id: '', label: 'all', n: c.all || 0 },
+    { id: 'library1', label: 'saved', n: c.library1 || 0, title: 'Written or pasted by hand' },
+  ].concat(sources);
   if (c.noSource) out.push({ id: 'nosrc', label: 'no source', n: c.noSource, title: 'Generated from a topic alone' });
   out.push({ id: 'archive', label: 'archive', n: c.archive || 0 });
   return out;
 }
 
-// The sources past the fifth, as a menu layer: Escape closes it, a press outside does too.
-let _more = null;
-function _closeMore() {
-  if (!_more) return;
-  _more.el.remove();
-  document.removeEventListener('mousedown', _more.away, true);
-  Layers.close(_more.layer);
-  _more = null;
+// The dropdown: a menu layer under its button (Escape and a press outside close it). A menu rather
+// than a <select>: the panel repaints whenever the project changes, and an open <select> would be
+// closed under the hand. It reads the list again before it opens, so names and counts are now.
+let _catMenu = null;
+function _closeCatMenu() {
+  if (!_catMenu) return;
+  _catMenu.el.remove();
+  document.removeEventListener('mousedown', _catMenu.away, true);
+  Layers.close(_catMenu.layer);
+  _catMenu = null;
 }
-function _moreMenu(anchor, tabs) {
-  _closeMore();
-  const el = _el('div', 'mv3-plus-menu');
-  for (const t of tabs) {
-    const b = _el('button', 'mv3-plus-item');
+async function _filterMenu() {
+  if (_catMenu) { _closeCatMenu(); return; }
+  try {
+    const d = await API.list(_lib);
+    _counts = d.counts || _counts;
+    _rows = d.rows || _rows;
+    _state = '';
+  } catch (e) { /* the counts it has will do */ }
+  _repaint();                                    // the button's own count, now
+  const anchor = document.querySelector('.mv3-sc-filter');
+  if (!_active || !anchor) return;
+  const el = _el('div', 'mv3-plus-menu mv3-sc-menu');
+  let srcHead = false;
+  for (const t of _choices()) {
+    if (t.src && !srcHead) { el.appendChild(_el('div', 'mv3-sc-menu-sep', 'written from')); srcHead = true; }
+    if (!t.src && srcHead && (t.id === 'nosrc' || t.id === 'archive') && !el.querySelector('.mv3-sc-menu-sep.is-end')) {
+      el.appendChild(_el('div', 'mv3-sc-menu-sep is-end'));
+    }
+    const b = _el('button', 'mv3-plus-item' + (t.id === _lib ? ' is-on' : ''));
     b.type = 'button';
-    b.appendChild(_el('span', null, t.label + ' · ' + t.n));
-    b.title = t.title || '';
-    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMore(); _filter(t.id); });
+    b.appendChild(_el('span', null, t.label));
+    b.appendChild(_el('small', null, t.n + (t.n === 1 ? ' scenario' : ' scenarios') + (t.gone ? ' · source deleted' : '')));
+    if (t.title) b.title = t.title;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeCatMenu(); _filter(t.id); });
     el.appendChild(b);
   }
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
-  el.style.position = 'fixed';
-  el.style.left = Math.max(8, Math.min(window.innerWidth - el.offsetWidth - 8, r.left)) + 'px';
-  el.style.top = (r.bottom + 4) + 'px';
-  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeMore(); };
+  el.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - el.offsetWidth - 8, r.left))) + 'px';
+  el.style.top = Math.round(Math.min(window.innerHeight - el.offsetHeight - 8, r.bottom + 4)) + 'px';
+  const away = (e) => { if (!el.contains(e.target) && !(e.target.closest && e.target.closest('.mv3-sc-filter'))) _closeCatMenu(); };
   document.addEventListener('mousedown', away, true);
-  _more = { el, away, layer: Layers.open(el, { name: 'more sources', modal: false, onEsc: _closeMore }) };
+  _catMenu = { el, away, layer: Layers.open(el, { name: 'scenario category', modal: false, onEsc: _closeCatMenu }) };
 }
 
 // What a row says about itself, beyond its title: the three labels the casting reads, and
@@ -231,21 +218,15 @@ export function paint(host) {
   add.addEventListener('click', () => openForm(null));
   head.appendChild(add);
 
-  for (const tab of _tabs()) {
-    const b = _el('button', 'mv3-sc-tab' + (tab.id === _lib ? ' is-on' : '') + (tab.src ? ' is-src' : ''));
-    b.type = 'button';
-    b.textContent = tab.label + ' · ' + tab.n;
-    if (tab.title) b.title = tab.title;
-    b.addEventListener('click', () => _filter(tab.id));
-    head.appendChild(b);
-    if (tab.more) {
-      const m = _el('button', 'mv3-sc-tab is-more', '+' + tab.more.length + ' ▾');
-      m.type = 'button';
-      m.title = 'The other sources';
-      m.addEventListener('click', (e) => { e.stopPropagation(); _moreMenu(m, tab.more); });
-      head.appendChild(m);
-    }
-  }
+  // The category: one button showing the choice and its count; pressing it opens the list.
+  const cur = _choices().find(t => t.id === _lib) || { label: 'all', n: _counts.all || 0 };
+  const pick = _el('button', 'mv3-sc-filter' + (_lib ? ' is-on' : ''));
+  pick.type = 'button';
+  pick.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
+  pick.appendChild(_el('span', 'mv3-sc-filter-t', cur.label));
+  pick.appendChild(_el('span', 'mv3-sc-filter-n', '· ' + cur.n + ' ▾'));
+  pick.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
+  head.appendChild(pick);
 
   const act = _el('div', 'mv3-ins-head-act');
   const x = _el('button', 'mv3-iconbtn', '✕');
