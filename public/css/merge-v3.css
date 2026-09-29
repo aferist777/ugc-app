@@ -650,25 +650,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-tile.mv3-plus:hover{border-color:var(--primary); color:var(--ink); border-style:solid}
 .mv3-tile.mv3-plus[disabled]{opacity:.4; cursor:default; border-color:var(--border)}
-/* Where a picture comes from: found on this computer, or made here. Fixed to the viewport
-   because the panel it opens out of scrolls and clips its own children. */
-.mv3-plus-menu{
-  position:fixed; z-index:9300; min-width:190px; padding:4px;
-  display:flex; flex-direction:column; gap:2px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.mv3-plus-item{
-  display:flex; flex-direction:column; gap:2px; padding:6px 8px;
-  border:0; border-radius:var(--r-xs); background:transparent; color:var(--ink);
-  font:600 11px/1.2 var(--font); text-align:left; cursor:pointer; transition:.1s var(--ease);
-}
-.mv3-plus-item:hover{background:var(--surface-2)}
-.mv3-plus-item small{font:400 9.5px/1.2 var(--font); color:var(--muted)}
-/* A row that is there but not yet (the timeline's `generate video`, phase L3) or not now (a
-   fragment's `read` with no voice): greyed, and no hover to suggest it can be pressed. */
-.mv3-plus-item[disabled]{opacity:.5; cursor:default}
-.mv3-plus-item[disabled]:hover{background:transparent}
+/* The menus (.mv3-plus-menu / .mv3-plus-item) live in css/app-shell.css since phase F2: the
+   Library's source menu uses them too. */
 .mv3-grid-note{display:block; padding:8px 2px 0; font-size:11px; color:var(--muted)}
 
 /* ── Drop target ─────────────────────────────────────────────────────────────
@@ -1500,9 +1483,6 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-sc-btn.is-use{border-color:var(--primary); color:var(--primary)}
 .mv3-sc-btn.is-use:hover{background:var(--primary); color:var(--primary-ink, oklch(.15 0 0))}
 .mv3-sc-btn[disabled]{opacity:.5; cursor:default}
-/* The one item on the right-click menu that cannot be taken back. */
-.mv3-plus-item.is-danger span{color:var(--danger, oklch(.62 .19 25))}
-.mv3-plus-item.is-danger:hover{background:oklch(.62 .19 25 / .14)}
 
 /* ── The scenario itself, read or written ────────────────────────────────────
    The same window for both, in the render window's frame (.mv3-x): one dialog look on

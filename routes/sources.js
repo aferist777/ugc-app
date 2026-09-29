@@ -538,6 +538,8 @@ router.delete('/sources/:id', (req, res) => {
     if (LIVE.has(rec.state) || _mining.has(id)) {
       return res.status(409).json({ success: false, error: 'this source is being read - delete it when that has finished' });
     }
+    // The scenarios written from it keep the name it has now, not the one it had when they were saved.
+    try { require('./scen3').keepSourceTitle(id, rec.title || rec.originalName || ''); } catch (e) { /* a name, not the delete */ }
     const removed = store.remove(id);
     let draftsDetached = 0;
     try { draftsDetached = DRAFTS.detachSource(id); } catch (e) { /* the source is gone either way */ }

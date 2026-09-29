@@ -195,8 +195,14 @@ async function _show(it) {
   if (!o) fold.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
   else {
     const from = _el('div', 'lib-vi');
-    for (const [key, label] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim());
-    if (!o.sourceTitle) _row(from, 'written from', o.sourceId ? 'a source since deleted' : 'no source');
+    // The source by its current name (the server reads it live); one since deleted by the name it had.
+    const gone = o.sourceId && o.sourceGone;
+    for (const [key, label] of ORIGIN_ROWS) {
+      if (key === 'sourceTitle' && gone) continue;
+      _row(from, label, String(o[key] || '').trim());
+    }
+    if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted');
+    else if (!o.sourceTitle) _row(from, 'written from', 'no source');
     if (o.humanized) _row(from, 'cleaning pass', 'applied');
     fold.appendChild(from);
   }

@@ -269,6 +269,8 @@ function _paintSources() {
     if (nd) sub.appendChild(el('span', 'mk-src-draft', nd === 1 ? '1 draft' : `${nd} drafts`));
     card.appendChild(sub);
     card.addEventListener('click', () => _chooseSource(it));
+    // Its own menu (phase F2) - and never Electron's "Save image as" on the poster.
+    card.addEventListener('contextmenu', (e) => { e.preventDefault(); _sourceMenu(e, it); });
     box.appendChild(card);
   }
 }
@@ -419,6 +421,27 @@ function _paintTopics(rec) {
 const _draftFor = (sourceId, topicId) => _drafts.find(d =>
   String(d.sourceId) === String(sourceId) && String(d.topicId) === String(topicId)) || null;
 
+// ONE RENAME, wherever it is typed - the topics header or the source window (phase F2) - and
+// everything this page shows the name in follows it: the card, the topics header, the form's
+// "from", the drafts. The server reads the name live for the scenarios and drafts it has.
+async function _renameSource(id, title) {
+  const d = await J.api('/api/sources/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+  });
+  const name = d.source.title;
+  const i = _sources.findIndex(x => String(x.id) === id);
+  if (i >= 0) _sources[i] = { ..._sources[i], title: name };
+  if (_src && String(_src.id) === id) {
+    _src.title = name;
+    const inp = $('mk-src-title');
+    if (inp && document.activeElement !== inp) inp.value = name;
+  }
+  if (_gen && String(_gen.sourceId) === id) { _gen.sourceTitle = name; _paintFrom(); }
+  for (const dr of _drafts) if (String(dr.sourceId) === id) dr.sourceTitle = name;
+  _paintSources();
+  return name;
+}
+
 let _titleT = null;
 async function _saveTitle() {
   clearTimeout(_titleT);
@@ -428,18 +451,153 @@ async function _saveTitle() {
   const title = $('mk-src-title').value.trim();
   if (!title || title === _src.title) return;
   try {
-    const d = await J.api('/api/sources/' + encodeURIComponent(id), {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
-    });
-    const i = _sources.findIndex(x => String(x.id) === id);
-    if (i >= 0) _sources[i] = { ..._sources[i], title: d.source.title };
-    if (_src && String(_src.id) === id) _src.title = d.source.title;
-    _paintSources();
+    await _renameSource(id, title);
     if (_src && String(_src.id) === id) {
       $('mk-title-saved').textContent = 'saved';
       setTimeout(() => { if ($('mk-title-saved')) $('mk-title-saved').textContent = ''; }, 1600);
     }
   } catch (e) { if (_src && String(_src.id) === id) $('mk-title-saved').textContent = e.message; }
+}
+
+// ── A source's menu and its window (phase F2) ───────────────────────────────
+// Right-click on a card: "change name" and "play", both into the same window - the video on the
+// left, the name on the right. "play" starts the video; "change name" puts the caret in the name
+// and leaves the video still (the owner, 2026-09-30).
+let _menu = null;
+function _closeMenu() {
+  if (!_menu) return;
+  _menu.el.remove();
+  document.removeEventListener('mousedown', _menu.away, true);
+  Layers.close(_menu.layer);
+  _menu = null;
+}
+
+function _sourceMenu(ev, it) {
+  _closeMenu();
+  const m = el('div', 'mv3-plus-menu');
+  const item = (label, sub, on, off) => {
+    const b = el('button', 'mv3-plus-item');
+    b.type = 'button';
+    b.appendChild(el('span', null, label));
+    if (sub) b.appendChild(el('small', null, sub));
+    b.disabled = !!off;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); on(); });
+    m.appendChild(b);
+  };
+  item('change name', 'what this source is called everywhere', () => _openSourceWin(it, false));
+  item('play', it.media ? 'watch it' : 'no file to play - it never downloaded', () => _openSourceWin(it, true), !it.media);
+  document.body.appendChild(m);
+  m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - m.offsetWidth - 6, ev.clientX))) + 'px';
+  m.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - m.offsetHeight - 6, ev.clientY))) + 'px';
+  const away = (e) => { if (!m.contains(e.target)) _closeMenu(); };
+  _menu = { el: m, away, layer: Layers.open(m, { modal: false, name: 'source menu', onEsc: _closeMenu }) };
+  // On the next tick: this very right-click is still travelling, and would close what it opened.
+  setTimeout(() => { if (_menu && _menu.el === m) document.addEventListener('mousedown', away, true); }, 0);
+}
+
+const AUDIO_RE = /\.(mp3|m4a|wav|aac|ogg)$/i;
+let _srcWin = null;
+
+function _closeSourceWin() {
+  if (!_srcWin) return;
+  const w = _srcWin;
+  _srcWin = null;
+  // Let go of the file: a paused element keeps buffering a gigabyte otherwise.
+  const media = w.ov.querySelector('video, audio');
+  if (media) { try { media.pause(); media.removeAttribute('src'); media.load(); } catch (e) { /* gone anyway */ } }
+  w.ov.remove();
+  Layers.close(w.layer);
+}
+
+function _openSourceWin(it, play) {
+  _closeSourceWin();
+  const id = String(it.id);
+  const ov = el('div', 'mk-ov');
+  ov.innerHTML = `
+    <div class="mk-panel src-panel" role="dialog" aria-modal="true" aria-label="Source">
+      <div class="mk-panel-head">
+        <span class="mk-panel-t" data-f="head"></span>
+        <span class="sp"></span>
+        <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button>
+      </div>
+      <div class="src-body">
+        <div class="src-stage" data-f="stage"></div>
+        <aside class="src-side">
+          <label class="mk-field"><span>Name</span><input type="text" data-f="name" maxlength="200" spellcheck="false"></label>
+          <div class="src-save">
+            <button class="lib-btn primary" type="button" data-f="save">Save name</button>
+            <span class="lib-status" data-f="st"></span>
+          </div>
+          <div class="lib-vi" data-f="facts"></div>
+        </aside>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const q = (n) => ov.querySelector(`[data-f="${n}"]`);
+  ov.querySelector('[data-x="close"]').addEventListener('click', _closeSourceWin);
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) _closeSourceWin(); });
+  _srcWin = { ov, layer: Layers.open(ov, { name: 'source', onEsc: _closeSourceWin }) };
+
+  q('head').textContent = it.title;
+  // The picture side: the file itself, played from the library - the server serves it in ranges,
+  // so an hour-long source opens at once and seeks.
+  const stage = q('stage');
+  if (!it.media) stage.appendChild(el('div', 'src-none', 'There is no file for this source - it never downloaded.'));
+  else {
+    const media = el(AUDIO_RE.test(it.media) ? 'audio' : 'video');
+    media.controls = true;
+    media.preload = 'metadata';
+    if (media.tagName === 'VIDEO' && it.thumb) media.poster = it.thumb;
+    // Never Electron's own menu here: "Save video as" would start copying a gigabyte to Downloads.
+    media.addEventListener('contextmenu', (e) => e.preventDefault());
+    media.addEventListener('error', () => {
+      if (!_srcWin || _srcWin.ov !== ov) return;
+      stage.textContent = '';
+      stage.appendChild(el('div', 'src-none', 'This file cannot be played here - its format is not one the window knows.'));
+    });
+    media.src = it.media;
+    stage.appendChild(media);
+    if (play) media.play().catch(() => { /* the controls are there */ });
+  }
+
+  const fact = (label, value) => {
+    if (!value) return;
+    const r = el('div', 'lib-vi-row');
+    r.append(el('span', 'lib-vi-l', label), el('span', 'lib-vi-v', value));
+    q('facts').appendChild(r);
+  };
+  const t = it.transcript || {};
+  fact('length', it.seconds ? J.clock(it.seconds) : '');
+  fact('size', it.bytes ? J.mb(it.bytes) : '');
+  fact('added', J.fmtDate(it.addedAt));
+  fact('from', it.kind === 'youtube' ? (it.url || 'a link') : 'a file');
+  fact('transcript', t.state === 'ready'
+    ? ((t.chars || 0) >= 1000 ? `${Math.round(t.chars / 1000)}k characters` : `${t.chars || 0} characters`) : _stateLine(it));
+  fact('topics', it.topics ? `${it.topicsUsed || 0} of ${it.topics} used` : '');
+
+  const name = q('name');
+  name.value = it.title;
+  const doSave = async () => {
+    const title = name.value.trim();
+    const st = q('st');
+    if (!title) { st.textContent = 'A name is needed.'; st.className = 'lib-status err'; return; }
+    if (title === it.title) { st.textContent = 'unchanged'; st.className = 'lib-status'; return; }
+    q('save').disabled = true;
+    try {
+      const saved = await _renameSource(id, title);
+      it = { ...it, title: saved };
+      if (_srcWin && _srcWin.ov === ov) {
+        q('head').textContent = saved;
+        st.textContent = 'saved';
+        st.className = 'lib-status ok';
+      }
+    } catch (e) {
+      if (_srcWin && _srcWin.ov === ov) { st.textContent = e.message; st.className = 'lib-status err'; }
+    } finally { if (_srcWin && _srcWin.ov === ov) q('save').disabled = false; }
+  };
+  q('save').addEventListener('click', doSave);
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
+  if (!play) { name.focus(); name.select(); }
 }
 function _queueRename() { clearTimeout(_titleT); _titleT = setTimeout(_saveTitle, 700); }
 

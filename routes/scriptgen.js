@@ -385,15 +385,25 @@ router.post('/scriptgen/rewrite', (req, res) => {
 // ── drafts ──────────────────────────────────────────────────────────────────
 // Here since the generator moved into the Library (phase E); /api/library2/drafts went with Library 2.
 
+// A draft names its source by the source's CURRENT title (phase F2), as the scenarios do.
+function _liveSource(d, titles) {
+  if (!d || !d.sourceId) return d;
+  const t = titles.get(String(d.sourceId));
+  return t == null ? d : { ...d, sourceTitle: t };
+}
+const _titles = () => { try { return new Map(sources.list().map(x => [String(x.id), x.title || x.originalName || ''])); } catch (e) { return new Map(); } };
+
 router.get('/scriptgen/drafts', (_req, res) => {
-  try { res.json({ success: true, drafts: drafts.summaries().map(s => ({ ...s, running: _runningFor(s) })) }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  try {
+    const titles = _titles();
+    res.json({ success: true, drafts: drafts.summaries().map(s => ({ ..._liveSource(s, titles), running: _runningFor(s) })) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 router.get('/scriptgen/drafts/:id', (req, res) => {
   const d = drafts.get(req.params.id);
   if (!d) return res.status(404).json({ success: false, error: 'no such draft' });
-  res.json({ success: true, draft: d, running: _runningFor(d) });
+  res.json({ success: true, draft: _liveSource(d, _titles()), running: _runningFor(d) });
 });
 
 // Called at every stage of writing, so it has to be an upsert: a second row for work that
@@ -404,6 +414,9 @@ router.get('/scriptgen/drafts/:id', (req, res) => {
 router.post('/scriptgen/drafts', (req, res) => {
   const b = req.body || {};
   if (b.id && !drafts.get(b.id)) return res.status(404).json({ success: false, error: 'no such draft' });
+  // The source's name comes from the source, not from the page: a form opened before a rename
+  // would otherwise save the old name back.
+  if (b.sourceId) { const rec = sources.get(b.sourceId); if (rec) b.sourceTitle = rec.title || rec.originalName || ''; }
   try { res.json({ success: true, draft: drafts.save(b) }); }
   catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });

@@ -213,7 +213,24 @@ const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCa
 // generated scenario can still be edited like any other.
 const _libOf = s => (s.origin ? 'library2' : 'library1');
 
-const _summary = s => ({
+// THE SOURCE IS NAMED BY ITS CURRENT TITLE (phase F2, the owner 2026-09-30: renaming a source
+// changes "written from"): the copy saved in `origin` is what it was called at the save, and is
+// kept for a source since deleted - then marked `sourceGone`. Read, never rewritten: a rename
+// writes nothing into the scenarios.
+function _sourceTitles() {
+  try {
+    return new Map(require('../lib/sources-store').list().map(x => [String(x.id), x.title || x.originalName || '']));
+  } catch (e) { return null; }
+}
+function _liveOrigin(o, titles) {
+  if (!o || !o.sourceId) return o || null;
+  const map = titles || _sourceTitles();
+  if (!map) return o;
+  const id = String(o.sourceId);
+  return map.has(id) ? { ...o, sourceTitle: map.get(id), sourceGone: false } : { ...o, sourceGone: true };
+}
+
+const _summary = (s, titles) => ({
   id: s.id, title: s.title, type: s.type,
   vertical: s.vertical, product: s.product, roles: s.roles, archived: !!s.archived,
   gender: _genderOf(s),
@@ -225,7 +242,7 @@ const _summary = s => ({
   // model ids a list has no use for.
   origin: s.origin ? {
     narratorName: s.origin.narratorName || '',
-    sourceTitle: s.origin.sourceTitle || '',
+    sourceTitle: (_liveOrigin(s.origin, titles) || {}).sourceTitle || '',
     topicTitle: s.origin.topicTitle || '',
   } : null,
   lineCount: (s.lines || []).length,
@@ -233,7 +250,10 @@ const _summary = s => ({
 });
 // The full record carries the WHOLE provenance, not the three fields a list row needs: opening
 // one scenario is exactly when the hook, the language and the model become worth reading.
-const _full = s => ({ ..._summary(s), lines: s.lines || [], origin: s.origin || null });
+const _full = s => {
+  const titles = _sourceTitles();
+  return { ..._summary(s, titles), lines: s.lines || [], origin: _liveOrigin(s.origin, titles) };
+};
 
 // The generated scenarios by the source they came from (phase E7), newest group first: its id, the
 // name to show - the source's CURRENT title, or the last one a scenario remembers when the source is
@@ -289,7 +309,7 @@ router.get('/scen3/scenarios', (req, res) => {
     const groups = _bySource(live);
     res.json({
       success: true,
-      scenarios: list.map(_summary),
+      scenarios: (() => { const titles = _sourceTitles(); return list.map(s => _summary(s, titles)); })(),
       lib: want || 'all',
       source,
       counts: {
@@ -372,6 +392,23 @@ router.createScenario = function createScenario(body) {
   return _full(rec);
 };
 router.MIN_LINES = MIN_LINES;
+
+// A source about to be deleted leaves its CURRENT name in the scenarios written from it (phase F2):
+// the name is read live while the source exists, and once it is gone this copy is all there is.
+// Their edit dates are left alone - the lists sort by them, and nobody edited anything.
+router.keepSourceTitle = function keepSourceTitle(sourceId, title) {
+  if (!sourceId || !title) return 0;
+  const list = _load();
+  let n = 0;
+  for (const s of list) {
+    if (s && s.origin && String(s.origin.sourceId) === String(sourceId) && s.origin.sourceTitle !== title) {
+      s.origin = { ...s.origin, sourceTitle: title };
+      n++;
+    }
+  }
+  if (n) _save(list);
+  return n;
+};
 router.GENDERS = GENDERS;
 
 
