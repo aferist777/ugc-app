@@ -18,6 +18,7 @@ import * as MU from './music.js';
 import * as SC from './scenarios.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
+import * as NR from './narrators.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -78,8 +79,10 @@ function _paintMake() {
   const on = _shelf === 'scenarios';
   if (!on) _making = false;
   const nb = $('lib-new-scen'), bb = $('lib-back-scen'), split = $('lib-split'), mk = $('lib-make');
+  const nr = $('lib-narrators');
   if (nb) nb.hidden = !on || _making;
   if (bb) bb.hidden = !on || !_making;
+  if (nr) nr.hidden = !on;
   if (split) split.hidden = _making;
   if (mk) mk.hidden = !_making;
 }
@@ -1003,6 +1006,8 @@ function boot() {
   if (nb) nb.addEventListener('click', () => _openMake());
   const bb = $('lib-back-scen');
   if (bb) bb.addEventListener('click', () => _closeMake());
+  const nr = $('lib-narrators');
+  if (nr) nr.addEventListener('click', () => NR.open());
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

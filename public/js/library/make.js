@@ -632,17 +632,29 @@ async function _paintNarrators(want, wantName) {
     values.push({ value: n.id, label: `${n.name} — random of ${n.readings}` });
     for (let i = 1; i <= n.readings; i++) values.push({ value: `${n.id}#${i}`, label: `${n.name} — reading ${i}` });
   }
-  const known = values.some(v => v.value === cur);
+  let pick = cur || 'neutral';
   const note = $('mk-nar-note');
-  if (!known && cur && cur !== 'neutral') {
-    const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
-    values.push({ value: cur, label: name + ' — deleted' });
-    note.hidden = false;
-    note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
-  } else note.hidden = true;
+  note.hidden = true;
+  if (!values.some(v => v.value === pick) && pick !== 'neutral') {
+    const [nid, ri] = pick.split('#');
+    const nar = list.find(n => String(n.id) === nid);
+    if (nar && ri) {
+      // The narrator is there and only the pinned READING is gone (deleted in the narrators window):
+      // the choice falls back to the narrator itself, a reading picked at random - and says so.
+      pick = nid;
+      note.hidden = false;
+      note.textContent = `Reading ${ri} of ${nar.name} is gone - one of its readings is picked at random now. Pin another if it matters.`;
+      if (_gen && _gen.draftId) _queueDraft();
+    } else {
+      const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
+      values.push({ value: pick, label: name + ' — deleted' });
+      note.hidden = false;
+      note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
+    }
+  }
   sel.textContent = '';
   for (const v of values) { const o = el('option', null, v.label); o.value = v.value; sel.appendChild(o); }
-  sel.value = cur || 'neutral';
+  sel.value = pick;
 }
 
 const _controlsReady = () => !!$('mk-c-lang');
