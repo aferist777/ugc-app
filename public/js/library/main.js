@@ -1,4 +1,4 @@
-// LIBRARY — shelves, filters and the character/looks split.
+// LIBRARY — shelves, filters, and on the picture shelves the right column about the selected tile.
 //
 // The page is deliberately its own thing: none of the legacy gallery / obrazy / refs
 // modules load here. Every shelf arrives from /api/library/shelf/:kind in one shape,
@@ -16,6 +16,7 @@ import { renderCatBar, closeConfirm } from './cats-bar.js';
 import * as V from './voices.js';
 import * as MU from './music.js';
 import * as SC from './scenarios.js';
+import * as INFO from './info.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -38,7 +39,11 @@ let _shelf = 'characters';
 let _filter = '';         // media: kind
 let _cat = '';            // media: birol category
 
-let _char = '';           // characters: the selected character
+// THE SHELVES WHERE ONE TILE IS ALWAYS SELECTED (phase B, the owner 2026-09-29): opening one selects
+// the top-left tile, there is no "nothing selected", and the right column says what the selected one
+// is (js/library/info.js). Kept across a reload of the same shelf, dropped on leaving it.
+const PICKABLE = new Set(['characters', 'lookbooks', 'environments']);
+let _sel = '';
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
@@ -187,8 +192,7 @@ function _wireCatSash() {
 // ── Actions ─────────────────────────────────────────────────────────────────
 // Which ones an item offers is a property of its shelf, not of the UI: a lookbook file
 // has no favourite flag to set and no category to file it under, a character's name is
-// a label while a lookbook's name IS its filename. One list, used by both the card menu
-// and the viewer's action row, so the two can never offer different things.
+// a label while a lookbook's name IS its filename. The viewer's action row reads it.
 const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
 // Which kinds a record can be CONVERTED between. Not the same set as the ones that can be
 // starred: an image and a clip are different files in different stores, and there is no
@@ -239,49 +243,14 @@ async function _runAction(id, it) {
 async function _apply(r) {
   if (!r) return;
   if (r.reload || r.removed) { await _load({ keepScroll: true }); _counts(); }
-  else if (r.changed) { _renderGrid(); _refreshLooks(); }
+  else if (r.changed) { _renderGrid(); _showSelected(); }
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
 
-// The card menu. Right-click, because the cards are 68px wide and per-card buttons at
-// that size are a worse target than a menu is.
-let _menu = null;
-function _closeMenu() { if (_menu) { _menu.remove(); _menu = null; } }
-document.addEventListener('click', _closeMenu);
-document.addEventListener('scroll', _closeMenu, true);
-
-function _openMenu(ev, it) {
-  ev.preventDefault();
-  _closeMenu();
-  const m = document.createElement('div');
-  m.className = 'lib-menu';
-  const add = (label, danger, on) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'lib-menu-item' + (danger ? ' danger' : '');
-    b.textContent = label;
-    b.addEventListener('click', on);
-    m.appendChild(b);
-  };
-  add('Open', false, () => { _closeMenu(); _open(it); });
-  for (const a of _actionsFor(it)) {
-    add(a.label, a.danger, async () => {
-      _closeMenu();
-      let r = null;
-      try { r = await _runAction(a.id, it); } catch (e) { _status(e.message, 'err'); return; }
-      await _apply(r);
-    });
-  }
-  document.body.appendChild(m);
-  // Keep it on screen: near the cursor, but flipped when it would hang off an edge.
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.min(ev.clientX, window.innerWidth  - r.width  - 6) + 'px';
-  m.style.top  = Math.min(ev.clientY, window.innerHeight - r.height - 6) + 'px';
-  _menu = m;
-}
-
-// Open in the viewer, with the same actions available there.
-function _open(it, list) {
+// Open in the viewer, with the same actions available there. `follow` is told every item the viewer
+// steps to: a picture shelf moves its selection with it, so closing the viewer leaves you on the one
+// you were looking at (phase B5).
+function _open(it, list, follow) {
   const items = list || _items;
   // By id, not by identity. A card holds the item object it was rendered from, and a
   // reload replaces every object in _items — so indexOf() on a card that outlived a
@@ -290,6 +259,7 @@ function _open(it, list) {
   if (at < 0) at = items.findIndex(x => x && String(x.id) === String(it.id) && x.kind === it.kind);
   if (at < 0) { _status('That item is no longer on this shelf', 'err'); return; }
   openViewer(items, at, {
+    onIndex: typeof follow === 'function' ? (_i, item) => follow(item) : null,
     actionsFor: _actionsFor,
     // Kind and category belong in the right column rather than the button row: they are
     // states to read off, not actions to fire, and a <select> shows the current value.
@@ -360,9 +330,23 @@ function _picker(cls, current, options, onPick, title) {
   return sel;
 }
 
+// A TILE SHOWS A MINIATURE, never the picture itself (phase B1, the owner 2026-09-29). The shelf's
+// `thumb` for a character, a look, a lookbook or an environment is the thumbs/ copy beside it - and,
+// where there is none, the original: a 5504px sheet of 6.6 MB in a 190px tile. So those tiles go
+// through the thumbnail door, from the copy when there is one and from the original when not, made
+// once and cached (lib/thumbs.js `strip`). The shelf's own shape stays: the Character page reads it
+// too, and wraps `thumb` in the same door itself.
+const _SIZED = new Set(['characters', 'obrazy', 'lookbooks', 'environments']);
+function _tileSrc(it) {
+  if (!_SIZED.has(it.kind)) return it.thumb || '';
+  const src = it.thumb || it.media;
+  return src ? '/api/thumb?src=' + encodeURIComponent(src) + '&v=strip' : '';
+}
+
 function _card(it, extra) {
   const card = document.createElement('div');
   card.className = 'lib-card' + (it.meta && it.meta.favorite ? ' fav' : '');
+  card.dataset.id = String(it.id);
   // A hook's permanent number (lib/hook-ids.js): what the render window puts into the name
   // of every creative that opens with this hook, so it belongs where the hook is chosen.
   const hookId = (it.meta && it.meta.hookId) || null;
@@ -370,8 +354,9 @@ function _card(it, extra) {
 
   // The ratio lives on the box: an <img> with no loaded source contributes no height,
   // which collapsed the rows and killed the grid's scrolling.
+  const src = _tileSrc(it);
   const box = document.createElement('div');
-  box.className = 'lib-thumb-box' + (it.thumb ? '' : ' lib-thumb-pending');
+  box.className = 'lib-thumb-box' + (src ? '' : ' lib-thumb-pending');
   const img = document.createElement('img');
   img.className = 'lib-thumb';
   img.alt = it.name;
@@ -380,7 +365,7 @@ function _card(it, extra) {
   // hand-rolled observer looked equivalent but handed out no src at all in a view that
   // does not composite, leaving every card blank.
   img.loading = 'lazy';
-  if (it.thumb) img.src = it.thumb;
+  if (src) img.src = src;
   box.appendChild(img);
 
   // A render with no poster could not be opened by ffmpeg, which means the file is truncated
@@ -443,6 +428,10 @@ function _card(it, extra) {
   }
 
   if (extra) card.appendChild(extra);
+  // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
+  // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
+  // miniature, not the file. What the old menu offered is in the viewer and on the tile.
+  card.addEventListener('contextmenu', (e) => e.preventDefault());
   return card;
 }
 
@@ -521,81 +510,52 @@ function _renderGrid() {
       if (it.meta.voices) { const v = document.createElement('span'); v.textContent = '· voice'; sub.appendChild(v); }
     }
     const card = _card(it, sub);
-    if (_shelf === 'characters') {
-      // A character card's job is to select: one click shows its looks beside the grid.
-      // The sheet itself opens on double click, so both actions live on the same card.
-      card.classList.toggle('cur', it.id === _char);
-      card.addEventListener('click', () => _pickCharacter(it));
-      card.addEventListener('dblclick', () => _open(it));
+    if (PICKABLE.has(_shelf)) {
+      // A picture shelf's tile SELECTS: the right column says what it is, and the enlarged view is
+      // the column's picture pressed. Pressing the selected one again reads the column again (B4).
+      card.classList.toggle('cur', String(it.id) === _sel);
+      card.addEventListener('click', () => _pick(it));
     } else {
       card.addEventListener('click', () => _open(it));
     }
-    card.addEventListener('contextmenu', (e) => _openMenu(e, it));
     grid.appendChild(card);
   }
 }
 
-// ── Characters: the looks of the selected one, in the last third ─────────────
-async function _pickCharacter(it) {
-  const pane = $('lib-looks');
-  if (!pane) return;
+// ── The selected tile, and the right column about it (phase B) ──────────────
+function _paintSel() {
+  document.querySelectorAll('#lib-grid .lib-card').forEach(c => c.classList.toggle('cur', c.dataset.id === _sel));
+}
 
-  if (_char === it.id) {           // clicking the selected character closes the pane
-    _char = '';
-    pane.hidden = true;
-    _renderGrid();
-    return;
+// Select a tile - or, when it is the selected one already, read its column again.
+function _pick(it) {
+  _sel = String(it.id);
+  _paintSel();
+  INFO.show(_shelf, it, _infoHooks);
+}
+
+// After every read of a picture shelf: the selection stays where it was while that tile is still
+// there, and otherwise falls on the top-left one - a shelf just opened, the selected tile just
+// deleted.
+function _showSelected() {
+  if (!PICKABLE.has(_shelf)) return;
+  let it = _items.find(x => String(x.id) === _sel);
+  if (!it) {
+    it = _items[0] || null;
+    _sel = it ? String(it.id) : '';
+    _paintSel();
   }
-  _char = it.id;
-  _renderGrid();                   // repaint so the selection ring moves
-  await _loadLooks(it);
+  if (it) INFO.show(_shelf, it, _infoHooks);
+  else INFO.empty(SHELVES[_shelf] || _shelf);
 }
 
-// Kept apart from the selecting so anything that changes a look — a rename, a delete —
-// can repaint the pane without re-toggling the character.
-async function _loadLooks(it) {
-  const pane = $('lib-looks');
-  const head = $('lib-looks-head');
-  const grid = $('lib-looks-grid');
-  if (!pane || !grid) return;
-  pane.hidden = false;
-  head.textContent = it.name + ' — looks';
-  grid.textContent = '';
-
-  try {
-    const d = await (await fetch('/api/library/looks/' + encodeURIComponent(it.id))).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
-    if (!d.items.length) {
-      const e = document.createElement('div');
-      e.className = 'lib-empty';
-      e.textContent = 'No looks for this character yet.';
-      grid.appendChild(e);
-      return;
-    }
-    head.textContent = it.name + ' — ' + d.items.length + ' look' + (d.items.length === 1 ? '' : 's');
-    for (const l of d.items) {
-      const c = _card(l);
-      c.addEventListener('click', () => _open(l, d.items));
-      c.addEventListener('contextmenu', (e) => _openMenu(e, l));
-      grid.appendChild(c);
-    }
-  } catch (e) {
-    grid.textContent = '';
-    const err = document.createElement('div');
-    err.className = 'lib-empty';
-    err.textContent = e.message;
-    grid.appendChild(err);
-  }
-}
-
-// Repaint the open looks pane against the server again. Deleting or renaming a look
-// leaves the pane showing what used to be there, and the pane is a second list of the
-// same records — it has to be re-read, not patched.
-function _refreshLooks() {
-  if (_shelf !== 'characters' || !_char) return;
-  const c = _items.find(x => String(x.id) === String(_char));
-  if (c) _loadLooks(c);
-}
+// What the column asks of the page: the viewer - with the selection following its steps - and a
+// look's card, the same card the grid draws, cross and all.
+const _infoHooks = {
+  open: (it) => _open(it, null, (item) => { if (String(item.id) !== _sel) _pick(item); }),
+  openLook: (l, list) => _open(l, list),
+  card: (l) => _card(l),
+};
 
 async function _load(opts) {
   const grid0 = $('lib-grid');
@@ -604,10 +564,9 @@ async function _load(opts) {
   closeConfirm();          // never leave one pointing at a chip that is about to be replaced
   _status('Reading…');
   _paintShelves();
-  // The side pane belongs to Characters, where it opens on a selection, and to Voices,
-  // where it is permanent and the voices module fills it.
-  const pane = $('lib-looks');
-  if (pane && _shelf !== 'characters' && _shelf !== 'voices') { pane.hidden = true; _char = ''; }
+  // The right column belongs to the picture shelves, where it says what the selected tile is, and to
+  // Voices, whose module fills it with the selected voice. Every other shelf has the whole width.
+  if (!PICKABLE.has(_shelf) && _shelf !== 'voices') INFO.hide();
   try {
     // The kind and category are Media's, and they are now REMEMBERED across shelf
     // switches — so they must not be sent to a shelf that has no such kinds. Sending a
@@ -647,7 +606,7 @@ async function _load(opts) {
     _renderGrid();
     const label = SHELVES[_shelf] || _shelf;
     $('lib-count').textContent = label + ' · ' + d.shown + (d.shown !== d.total ? ' of ' + d.total : '');
-    _refreshLooks();       // the pane is a second list of the same records
+    _showSelected();       // the column follows the shelf it was read with
     _checkDupes();
     _checkBroken();
     _checkThumbs();
@@ -657,6 +616,7 @@ async function _load(opts) {
     if (my !== _reqId) return;
     _items = [];
     _renderGrid();
+    _showSelected();
     _status(e.message, 'err');
   }
 }
@@ -681,7 +641,9 @@ function _select(kind) {
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'music') MU.stopPreview();  // nor a backing track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
+  if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
+  _sel = '';                               // a shelf opens on its top-left tile (B2)
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
 }

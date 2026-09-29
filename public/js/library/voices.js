@@ -155,12 +155,11 @@ function _line(box, label, value, opts) {
 
 // The permanent right column: the tags at the top, the characters using the voice below.
 function _info() {
-  const pane = $('lib-looks'), head = $('lib-looks-head'), body = $('lib-looks-grid');
+  const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
   if (!pane || !body) return;
   pane.hidden = false;
-  pane.classList.add('is-voices');
   body.textContent = '';
-  body.className = 'lib-looks-grid is-voices';
+  body.className = 'lib-info-body is-voices';
 
   const it = _items.find(i => i.meta.voiceId === _sel);
   if (!it) {
@@ -255,6 +254,4 @@ export function render(items, hooks) {
 // the one thing a list of players must not do.
 export function leave() {
   _stopAll(null);
-  const pane = $('lib-looks');
-  if (pane) pane.classList.remove('is-voices');
 }

@@ -5,7 +5,8 @@
 //
 //   GET /api/library/shelf/:kind        kind: characters | lookbooks |
 //                                             environments | media
-//   GET /api/library/looks/:charId      the looks of one character
+//   GET /api/library/info/:kind/:id     what the right column says about one tile
+//   GET /api/library/looks/:charId      the looks of one character (the Character page's)
 //   GET /api/library/counts             one number per shelf, for the switcher
 //   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
 //
@@ -38,6 +39,8 @@ const LC = require('../lib/library-cats');
 const SHELF = require('../lib/shelf-files');
 const VS = require('../lib/voice-shelf');
 const VT = require('../lib/video-thumb');
+// What is known about a picture on a flat shelf - here, an environment's description and motion.
+const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
@@ -147,6 +150,8 @@ function _looks() {
         character: known ? charName[String(o.charId)] : '',
         gender: String(o.gender || ''),
         variations: Array.isArray(o.variations) ? o.variations.length : 0,
+        // The lookbook it was dressed in, when it was (the right column of a lookbook lists them).
+        lookbook: String(o.lb || '').split('?')[0],
         date: o.date || null,
       },
     };
@@ -526,7 +531,94 @@ router.get('/library/shelf/:kind', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// A character's looks, for the pane beside the Characters grid.
+// ── The right column: what one tile is (phase B, the owner 2026-09-29) ───────
+// The Library page selects a tile on the Characters, Lookbooks and Environments shelves and shows
+// what it is beside the grid - read here in one go, on every selection, so a voice given or a look
+// made elsewhere shows up the next time the tile is pressed.
+//   characters    { media, voices: [{ voiceId, name, tags, demo, dur, main }], looks }
+//   lookbooks     { media, looks }            - the looks dressed in it (a look's `lb`)
+//   environments  { media, description, motion } - what the place is and how it moves
+//                                              (lib/shelf-meta.js; the video field animates by it)
+function _voicesOf(c) {
+  // The one every read uses first, then the rest of those saved for the character. The voice shelf
+  // fills in what the character's own copy lacks: a character that only ever had `voice` carries no
+  // name or demo for it.
+  const shelf = new Map(VS.read().filter(e => e && e.voiceId).map(e => [String(e.voiceId), e]));
+  const out = [];
+  const seen = new Set();
+  const add = (v, main) => {
+    const id = String((v && v.voiceId) || '');
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const s = shelf.get(id) || {};
+    const l = s.labels || {};
+    const demo = [v.sample, s.demo].find(p => p && _onDisk(p)) || '';
+    out.push({
+      voiceId: id,
+      // Empty when neither the character nor the shelf knows it - a voice taken before the shelf
+      // existed; the page says so instead of printing its id as a name.
+      name: String(v.name || s.name || '').trim(),
+      tags: [v.gender || l.gender, v.age || l.age, v.accent || l.accent, v.descriptive || l.descriptive]
+        .filter(Boolean).map(String),
+      demo,
+      dur: +v.dur || +s.dur || 0,
+      main,
+    });
+  };
+  const saved = (Array.isArray(c.voices) ? c.voices : []).filter(v => v && v.voiceId);
+  if (c.voice) add(saved.find(v => String(v.voiceId) === String(c.voice)) || { voiceId: c.voice }, true);
+  for (const v of saved) add(v, false);
+  return out;
+}
+
+// A flat shelf's entry is its file: the id is the file name, and nothing else is accepted - a
+// name with a separator in it is not a file on this shelf.
+function _flatEntry(dir, id) {
+  const f = String(id || '');
+  if (!f || f !== path.basename(f) || !IMG_RE.test(f)) return null;
+  if (!fs.existsSync(path.join(dir, f))) return null;
+  return toUrl(dir) + '/' + f;
+}
+
+const INFO = {
+  characters: (id) => {
+    const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
+    const c = (Array.isArray(chars) ? chars : []).find(x => x && !x.draft && String(x.id) === id);
+    if (!c) return null;
+    const sheet = String(c.sheet || c.baseFace || '');
+    return {
+      media: (sheet && _onDisk(sheet)) ? sheet : null,
+      voices: _voicesOf(c),
+      looks: _looks().items.filter(l => l.meta.charId === id),
+    };
+  },
+  lookbooks: (id) => {
+    const media = _flatEntry(LOOKBOOKS_DIR, id);
+    if (!media) return null;
+    return { media, looks: _looks().items.filter(l => l.meta.lookbook === media) };
+  },
+  environments: (id) => {
+    const media = _flatEntry(ENVIRONMENTS_DIR, id);
+    if (!media) return null;
+    const m = SM.read('environments')[media] || {};
+    return { media, description: String(m.description || ''), motion: String(m.motion || '') };
+  },
+};
+
+router.get('/library/info/:kind/:id', (req, res) => {
+  try {
+    const kind = String(req.params.kind || '');
+    const id = String(req.params.id || '');
+    const build = INFO[kind];
+    if (!build) return res.status(404).json({ success: false, error: `no right column for "${kind}"` });
+    const out = build(id);
+    if (!out) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
+    res.json({ success: true, kind, id, ...out });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// A character's looks, for the Character page's strip. The Library reads them through
+// /library/info above; this goes when that page does.
 router.get('/library/looks/:charId', (req, res) => {
   try {
     const id = String(req.params.charId || '');

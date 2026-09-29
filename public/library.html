@@ -83,13 +83,14 @@
       </div>
       <div class="lib-sash" id="lib-cats-sash" title="Drag to resize, double-click to fit the contents"></div>
     </div>
-    <!-- Characters splits: the grid keeps two thirds, the selected character's looks
-         take the last third. Every other shelf uses the full width. -->
+    <!-- THE RIGHT COLUMN (phase B): the grid keeps two thirds, and the last third says what the
+         selected tile is - on Characters, Lookbooks and Environments (js/library/info.js) - or the
+         selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
       <div class="lib-grid" id="lib-grid"></div>
-      <aside class="lib-looks" id="lib-looks" hidden>
-        <div class="lib-looks-head" id="lib-looks-head">Looks</div>
-        <div class="lib-looks-grid" id="lib-looks-grid"></div>
+      <aside class="lib-info" id="lib-info" hidden>
+        <div class="lib-info-head" id="lib-info-head"></div>
+        <div class="lib-info-body" id="lib-info-body"></div>
       </aside>
     </div>
   </main>
