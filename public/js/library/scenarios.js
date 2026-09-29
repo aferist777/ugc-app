@@ -64,6 +64,10 @@ const NONE = '__none__';
 const LS_FILTERS = 'library_sc_filters_v1';
 let _filters = (() => { try { return JSON.parse(localStorage.getItem(LS_FILTERS) || '{}') || {}; } catch (e) { return {}; } })();
 const _saveFilters = () => { try { localStorage.setItem(LS_FILTERS, JSON.stringify(_filters)); } catch (e) { /* this view only */ } };
+// A scenario opened ON PURPOSE - "open" after the generator saved it, or the one just edited - stays
+// in the list even when the filters would hide it, marked as outside them. Choosing a filter or
+// another row lets it go.
+let _keep = '';
 const _val = (it, key) => String(((it && it.meta) || {})[key] || '').trim();
 const _passes = (it) => FIELDS.every(f => {
   const want = _filters[f.key];
@@ -93,6 +97,7 @@ function _filterRow() {
       if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { sel.value = cur; return; }
       if (sel.value) _filters[f.key] = sel.value; else delete _filters[f.key];
       _saveFilters();
+      _keep = '';
       render(_items, _hooks);
     });
     row.appendChild(sel);
@@ -105,6 +110,7 @@ function _filterRow() {
       if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
       _filters = {};
       _saveFilters();
+      _keep = '';
       render(_items, _hooks);
     });
     row.appendChild(x);
@@ -142,6 +148,7 @@ function _dirty() {
 function _pick(it) {
   if (_dirty() && !confirm('The lines of this scenario have changes that are not saved. Leave them?')) return;
   _sel = String(it.id);
+  if (_keep && _keep !== _sel) _keep = '';
   _paintSel();
   _show(it);
 }
@@ -181,7 +188,7 @@ export function render(items, hooks = {}) {
     _empty();
     return;
   }
-  const shown = _items.filter(_passes);
+  const shown = _items.filter(it => _passes(it) || String(it.id) === _keep);
   if (!shown.length) {
     _sel = '';
     grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
@@ -192,9 +199,11 @@ export function render(items, hooks = {}) {
   if (!shown.some(i => String(i.id) === _sel)) _sel = String(shown[0].id);
 
   for (const it of shown) {
-    const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : ''));
+    const outside = !_passes(it);
+    const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : ''));
     row.type = 'button';
     row.dataset.id = String(it.id);
+    if (outside) row.title = 'Outside the filters - shown because it was opened';
     const main = _el('div', 'lib-srow-main');
     main.appendChild(_el('div', 'lib-srow-t', it.name));
     main.appendChild(_el('div', 'lib-srow-s', _tail(it.meta || {})));
@@ -236,7 +245,9 @@ async function _readLists() {
     verticals: (opt && opt.options && opt.options.verticals) || [],
     products: (opt && opt.options && opt.options.products) || [],
     roles: (opt && opt.options && opt.options.roles) || [],
-    narrators: ((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name })),
+    // Neutral is the generator's own voice - not a record in the store, sent beside the list.
+    narrators: [...(nar && nar.neutral ? [{ id: String(nar.neutral.id), name: nar.neutral.name }] : []),
+      ...((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name }))],
     languages: (mod && mod.languages) || [],
   };
   return _lists;
@@ -307,6 +318,11 @@ async function _patch(s, patch, what) {
         narrator: (d.scenario.narrator && d.scenario.narrator.name) || '', language: d.scenario.language || '' };
       const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(s.id)) + '"] .lib-srow-s');
       if (row) row.textContent = _tail(it.meta);
+      // The one just edited stays in sight even if it no longer matches, and the filters are counted
+      // again - a value made with "new…" can be filtered by at once.
+      _keep = String(s.id);
+      const fr = document.querySelector('#lib-grid .lib-sc-filters');
+      if (fr) fr.replaceWith(_filterRow());
     }
     say('saved · ' + what, 'ok');
     return true;
@@ -333,8 +349,11 @@ async function _paintFields(box, s) {
   const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
   const curNar = nar ? (nar.id || (L.narrators.find(n => n.name === nar.name) || {}).id || '__name__:' + nar.name) : '';
   _fieldRow(box, 'narrator', curNar, narValues, (v) => {
+    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator');
     const n = L.narrators.find(x => x.id === v);
-    return _patch(s, { narrator: v ? { id: v, name: n ? n.name : String(v).replace(/^__name__:/, '') } : { id: '', name: '' } }, 'narrator');
+    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator');
+    // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
+    return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
   }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
   _fieldRow(box, 'language', s.language || '', opt(_uniq([...L.languages, ..._inUse('language')])),
     v => _patch(s, { language: v }, 'language'), { none: true });
@@ -462,6 +481,7 @@ async function _save(s, ta, btn, st) {
     }
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     ta.dataset.was = ta.value;
+    _keep = String(s.id);
     // Said after the reload repaints the column (the row's line count comes from the store).
     _say = { id: String(s.id), text: 'Saved · ' + lines.length + (lines.length === 1 ? ' line' : ' lines'), kind: 'ok' };
     if (_hooks.reload) await _hooks.reload();
@@ -499,7 +519,7 @@ export function drop() {
 }
 
 /** The scenario to select at the next render - one the generator has just saved. */
-export function select(id) { _sel = String(id || ''); }
+export function select(id) { _sel = String(id || ''); _keep = _sel; }
 
 // Leaving the shelf: an answer on its way is dropped, and coming back opens on the first scenario.
 export function leave() {

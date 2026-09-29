@@ -428,9 +428,13 @@ function _rebuildOptionsOnce() {
   const CFGX = require('../lib/config');
   const mark = require('path').join(CFGX.CACHE_DIR, 'scen3-options-rebuilt.json');
   if (fs.existsSync(mark)) return;
+  // Only a store that could be READ drives this one-time rewrite: an unreadable file is not "no
+  // scenarios", and rebuilding from it would empty the lists for good.
+  const list = _read(FILE);
+  if (!Array.isArray(list)) return;
   const was = _read(OPT_FILE);
   const used = { verticals: [], products: [], roles: [] };
-  for (const s of _load()) {
+  for (const s of list) {
     _pushUniq(used.verticals, s.vertical);
     _pushUniq(used.products, s.product);
     (s.roles || []).forEach(r => _pushUniq(used.roles, r && r.name));
