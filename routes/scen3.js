@@ -111,6 +111,7 @@ function _normOrigin(o) {
     hook:       String(s.hook       || ''),
     language:   String(s.language   || ''),
     tone:       String(s.tone       || ''),
+    provider:   String(s.provider   || ''),
     model:      String(s.model      || ''),
     humanized:  !!s.humanized,
     at:         String(s.at || ''),

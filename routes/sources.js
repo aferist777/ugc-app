@@ -34,7 +34,7 @@ const path = require('path');
 const multer = require('multer');
 
 const store = require('../lib/sources-store');
-const STT = require('../lib/stt-openrouter');
+const STT = require('../lib/stt-replicate');
 const VT = require('../lib/video-thumb');
 const YTDLP = require('../lib/ytdlp');
 const COOKIES = require('../lib/yt-cookies');

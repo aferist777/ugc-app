@@ -36,7 +36,7 @@ const express = require('express');
 
 const P = require('../lib/writing-prompts');
 const WM = require('../lib/writing-models');
-const { callJSON } = require('../lib/llm-json');
+const { callJSON, hasKey } = require('../lib/llm-json');
 const narrators = require('../lib/narrators-store');
 const sources = require('../lib/sources-store');
 const scen3 = require('./scen3');
@@ -218,8 +218,8 @@ function _keeper(b, build) {
 router.get('/scriptgen/models', (_req, res) => {
   res.json({
     success: true,
-    providers: WM.providers(),
-    efforts: WM.EFFORTS,
+    // Each model with the effort levels it takes (phase F3); a provider without a key says so.
+    providers: WM.providers(hasKey),
     languages: WM.LANGUAGES,
     tones: WM.TONES,
     scenes: { min: Math.max(WM.SCENES_MIN, MIN_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
@@ -476,6 +476,8 @@ router.post('/scriptgen/save', (req, res) => {
       narratorReading: nar.reading && nar.reading.total > 1
         ? `reading ${nar.reading.index} of ${nar.reading.total}` : '',
       hook: paragraphs[0] || '', language: String(b.language || ''), tone: String(b.tone || ''),
+      // Which aggregator too (phase F3): the same model id can run on two of them.
+      provider: String(b.provider || ''),
       model: String(b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),
     },
   };

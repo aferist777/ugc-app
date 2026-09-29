@@ -30,7 +30,7 @@ const multer = require('multer');
 const store = require('../lib/narrators-store');
 const P = require('../lib/writing-prompts');
 const { callJSON } = require('../lib/llm-json');
-const STT = require('../lib/stt-openrouter');
+const STT = require('../lib/stt-replicate');
 const WM = require('../lib/writing-models');
 
 const router = express.Router();

@@ -671,8 +671,9 @@ async function _mineTopics() {
   $('mk-mine').disabled = true;
   let run = null;
   try {
+    // On the generator's model (phase F3), not on a default of the mining's own.
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/topics`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
     });
     run = { kind: 'topics', jobId: d.jobId, startedAt: Date.now(), rows: [], step: '' };
   } catch (e) {
@@ -756,19 +757,49 @@ async function _buildControls(settings) {
   box.appendChild(_ctl('Tone', _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
   const nar = _select('mk-c-narrator', [{ value: 'neutral', label: 'Neutral' }], 'neutral');
   box.appendChild(_ctl('Narrator', nar));
-  const provs = _reg.providers.map(p => ({ value: p.id, label: p.label + (p.wired ? '' : ' (n/a)') }));
-  const prov = _select('mk-c-provider', provs, s.provider || d.provider);
-  const chosen = _reg.providers.find(p => p.id === prov.value) || _reg.providers[0];
-  const model = _select('mk-c-model', chosen.models, s.model || d.model);
-  prov.addEventListener('change', () => {
+
+  // PROVIDER, MODEL, EFFORT (phase F3): the aggregators kie.ai and Replicate, their models, and the
+  // effort levels THE CHOSEN MODEL takes - the list is rebuilt when the model changes, and hidden
+  // for a model that takes none. A draft opens on its own choice; a new form on the last one made.
+  const was = J.modelChoice() || {};
+  const pick = { provider: s.provider || was.provider || d.provider, model: s.model || was.model || d.model, effort: s.effort || was.effort || d.effort };
+  const provs = _reg.providers.map(p => ({ value: p.id, label: p.label + (p.keyed ? '' : ' — no key'), disabled: !p.keyed }));
+  const prov = _select('mk-c-provider', provs, pick.provider);
+  if (prov.selectedIndex < 0 || prov.selectedOptions[0].disabled) {
+    const first = _reg.providers.find(p => p.keyed) || _reg.providers[0];
+    prov.value = first.id;
+  }
+  prov.title = 'Which aggregator runs the model - its key is on Admin';
+  const model = el('select');
+  model.id = 'mk-c-model';
+  const effort = el('select');
+  effort.id = 'mk-c-effort';
+  const effortCtl = _ctl('Effort', effort);
+  const fillEfforts = (wantEffort) => {
     const p = _reg.providers.find(x => x.id === prov.value);
+    const m = p && p.models.find(x => x.id === model.value);
+    const list = (m && m.efforts) || [];
+    effort.textContent = '';
+    for (const v of list) { const o = el('option', null, v); o.value = v; effort.appendChild(o); }
+    effort.value = list.includes(wantEffort) ? wantEffort : (m ? m.effort : '');
+    effortCtl.hidden = !list.length;
+    effort.title = 'How long the model thinks before it writes - only the levels this model takes';
+  };
+  const fillModels = (wantModel, wantEffort) => {
+    const p = _reg.providers.find(x => x.id === prov.value) || _reg.providers[0];
     model.textContent = '';
-    for (const m of (p ? p.models : [])) { const o = el('option', null, m); o.value = m; model.appendChild(o); }
-    _queueDraft();
-  });
+    for (const m of p.models) { const o = el('option', null, m.label); o.value = m.id; o.title = m.id; model.appendChild(o); }
+    model.value = p.models.some(m => m.id === wantModel) ? wantModel : p.models[0].id;
+    fillEfforts(wantEffort);
+  };
+  fillModels(pick.model, pick.effort);
+  const remember = () => J.rememberModel({ provider: prov.value, model: model.value, effort: effort.value });
+  prov.addEventListener('change', () => { fillModels('', ''); remember(); });
+  model.addEventListener('change', () => { fillEfforts(effort.value); remember(); });
+  effort.addEventListener('change', remember);
   box.appendChild(_ctl('Provider', prov));
   box.appendChild(_ctl('Model', model));
-  box.appendChild(_ctl('Effort', _select('mk-c-effort', _reg.efforts, s.effort || d.effort)));
+  box.appendChild(effortCtl);
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
   const want = s.narratorId ? (s.readingIndex ? `${s.narratorId}#${s.readingIndex}` : s.narratorId) : 'neutral';
   await _paintNarrators(want, s.narratorName);
@@ -910,6 +941,9 @@ async function _saveDraft(o) {
   clearTimeout(_saveT);
   _saveT = null;
   if (!_gen) return;
+  // A form with nothing in it is not a draft yet: turning a dropdown on a blank form made an empty
+  // "untitled draft" row. The first word typed - or the first stage started - makes it.
+  if (!_gen.draftId && !_hasContent()) return;
   const gen = _gen;
   const post = () => J.api('/api/scriptgen/drafts', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_payload()),
@@ -928,6 +962,11 @@ async function _saveDraft(o) {
     _noteDraft(d.draft);
     if (gen === _gen) { _gen.draftId = d.draft.id; _paintGo(); }
   } catch (e) { /* a draft that failed to save is not worth interrupting the writing for */ }
+}
+
+function _hasContent() {
+  return !!(($('mk-topic') && $('mk-topic').value.trim()) || ($('mk-hook') && $('mk-hook').value.trim())
+    || ($('mk-title') && $('mk-title').value.trim()) || (_gen && ((_gen.hooks || []).length || (_gen.paragraphs || []).length)));
 }
 
 // The drafts list kept as the server has it after a save, so a topic card painted next says "draft"
@@ -1360,7 +1399,7 @@ async function _saveScript() {
         gender: $('mk-gender').value,
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
-        narratorId: o.narratorId, language: o.language, tone: o.tone, model: o.model,
+        narratorId: o.narratorId, language: o.language, tone: o.tone, provider: o.provider, model: o.model,
         // The reading the script was ACTUALLY written with: "random" has to resolve to a real one.
         readingId: _gen.readingId || o.readingId,
         sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,

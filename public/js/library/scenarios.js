@@ -49,7 +49,7 @@ function _tail(m) {
 // Not the hook: it is the first line of the script, which the lines below show anyway (phase F5).
 const ORIGIN_ROWS = [
   ['sourceTitle', 'written from'], ['topicTitle', 'topic'], ['narratorName', 'narrator'],
-  ['narratorReading', 'which reading'], ['language', 'language'], ['tone', 'tone'], ['model', 'model'],
+  ['narratorReading', 'which reading'], ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
