@@ -1,4 +1,4 @@
-// CHARACTER v2 — the twenty presets, and the prompt they build.
+// NEW CHARACTER (js/library/chmake.js) — the twenty presets, and the prompt they build.
 //
 // Every preset was checked against schema.js's own dependency rules before it was written
 // down, so choosing one always leaves the dropdowns in a state they would allow you to reach

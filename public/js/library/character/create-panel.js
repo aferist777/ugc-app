@@ -1,4 +1,4 @@
-// CHARACTER v2 — the Create column.
+// NEW CHARACTER - the Create model column (js/library/chmake.js; the Character page's, moved in phase H8).
 //
 // Built in three pieces, because two of them must not move when the column flips between
 // building by hand and steering a reference by words:
@@ -24,7 +24,7 @@
 
 import { PARAM_SCHEMA, MARKS_KEYS, NONE_DEFAULT, RND_ORDER, allowedOpts, paramByKey, allParamKeys, genName } from './schema.js';
 import { PRESETS, presetById, exampleUrl, promptSegments, presetLabel } from './presets.js';
-import * as Layers from '../layers.js';
+import * as Layers from '../../layers.js';
 
 const SEL_ID = (k) => 'cv2-p-' + k;
 const LS_PRESET = 'cv2_preset_v1';
@@ -168,10 +168,6 @@ export function clearPreset() {
 function paintPresetState() {
   const panel = document.getElementById('cv2-create-main');
   if (panel) panel.classList.toggle('has-preset', !!_preset);
-  // On the body as well as the panel: the two buttons this hides live in the head, which is a
-  // sibling of the panel rather than inside it, and the rest of this page already switches on
-  // body attributes rather than reaching across the tree.
-  document.body.dataset.preset = _preset ? '1' : '';
   const img = document.getElementById('cv2-preset-img');
   const p = presetById(_preset);
   if (img) {

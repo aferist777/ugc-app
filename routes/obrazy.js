@@ -16,7 +16,6 @@ const router  = express.Router();
 const { ROOT_DIR, DATA_DIR } = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const { obrazAbsFolder } = require('../lib/obrazy-store');
-const { deleteDraftByObraz } = require('../lib/char-store');
 
 function _safeRel(p) {
   return String(p || '').replace(/^\//, '');
@@ -79,16 +78,12 @@ router.delete('/obrazy/:id', (req, res) => {
     const id = req.params.id;
     const name = req.query.name || '';
     if (!id) return res.status(400).json({ success: false, error: 'id required' });
-    // Drop the provisional draft character tied to this obraz, if any (a
-    // PROMOTED character has draft:false and is left untouched).
-    let draftRemoved = false;
-    try { draftRemoved = deleteDraftByObraz(id); } catch {}
     const folder = obrazAbsFolder(name, id);
     if (fs.existsSync(folder)) {
       fs.rmSync(folder, { recursive: true, force: true });
-      return res.json({ success: true, removed: path.basename(folder), draftRemoved });
+      return res.json({ success: true, removed: path.basename(folder) });
     }
-    res.json({ success: true, removed: null, draftRemoved });
+    res.json({ success: true, removed: null });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

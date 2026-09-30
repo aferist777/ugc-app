@@ -34,6 +34,9 @@
     hooks_archive_v1: 1,
     obrazy: 1, projects_v1: 1,
     applog_v2: 1,
+    // the Character page (phase H8) - its preset choice, cv2_preset_v1, is New Character's now and stays
+    cv2_mode_v1: 1, cv2_char_v1: 1, cv2_side_open_v1: 1, cv2_create_mode_v1: 1, cv2_char_filter_v1: 1, cv2_work_v1: 1,
+    cv2_advanced_v1: 1, cv2_t2i_v1: 1, cv2_t2i_v2: 1, cv2_i2i_v1: 1, cv2_i2i_v2: 1, cv2_sheet_v1: 1, cv2_kind_v1: 1,
     __just_imported_at: 1         // ephemeral cross-tab ping
   };
   function blocked(k) { return !k || BLOCK[k] === 1; }

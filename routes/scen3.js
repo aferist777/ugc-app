@@ -614,7 +614,7 @@ function _previewTarget(hit) {
 // v3 owns its own prompts and endpoints on purpose: the shared
 // EXTRACT_CLOTHING_PROMPT in lib/config.js is used by the Character tab, and
 // tightening it for knolling here would change that tab's behaviour. Only the
-// ENGINE layer is reused (lib/helpers task creators + the shared /api/status
+// ENGINE layer is reused (lib/helpers task creators + the shared resolveTask
 // poller), never routes/lookbook.js or routes/char-store.js.
 //
 // Every reference image is re-hosted through uploadToPublicHost first: Replicate
@@ -914,7 +914,7 @@ async function _hostLocal(urlPath, opts) {
 //   nano-banana-2-lite  image_urls  (<=10 urls)             | no resolution field | no output_format
 //
 // Both take aspect_ratio. A kie taskId has no 'repl:' prefix and a Replicate one
-// does, so the shared /api/status poller routes either by itself.
+// does, so the shared resolveTask routes either by itself.
 const axios = require('axios');
 
 async function _kieTask(model, input) {
@@ -1996,7 +1996,7 @@ async function _saveObraz(b) {
 // unlink inside obrazy/, and it refuses to write when the library will not parse.
 
 // ── Finalize a finished task ────────────────────────────────────────────────
-// The shared /api/status poller drops the result into uploads/. This copies a
+// A shared poll dropped the result into uploads/. This copies a
 // lookbook candidate into the lookbook base, and builds the preview for
 // whatever came out, so the popup never has to fetch a full-size file.
 // Filing a finished picture where it belongs: a lookbook or an environment onto its shelf, with its
@@ -3084,7 +3084,7 @@ function _castVoice(p) {
           || arr.find(c => String(c.name) === cast.characterName);
   if (!ch) return own || { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
   const id = String(ch.voice || '').trim();
-  if (!id) return own || { has: false, reason: `"${ch.name}" has no voice saved — set one in the Character tab` };
+  if (!id) return own || { has: false, reason: `"${ch.name}" has no voice saved — give it one in its column on the Library's Characters shelf` };
   // The voice is NAMED after the character plus its number in that character's list, because
   // "Adrian - Cinematic Deep Male" says nothing about whose voice it is while a project is
   // being read. An id not in the list yet still counts as the first one.
@@ -4759,158 +4759,6 @@ router.post('/scen3/voices/take', async (req, res) => {
     const msg = (d.detail && (d.detail.message || d.detail)) || d.message || e.message;
     console.error('[scen3/voices] take failed', msg);
     res.status(502).json({ success: false, error: String(msg) });
-  }
-});
-
-// The reel the user approved in the preview. Stored as an order of clips; the hand-off to
-// ── The frames generated for one look ────────────────────────────────────────
-//   GET    /api/scen3/look-frames/:obrazId          every frame made with that look
-//   DELETE /api/scen3/look-frames/:obrazId/:frameId one of them, file and reference
-//
-// Character v2's view mode shows these beside the character, but reading them is not something
-// it can do for itself: the frames live in project.mix.variants and the only thing tying them to
-// a look is project.casting.obrazId - a casting is per project, one character and one look for
-// the whole script. So the question is answered here, where the projects are owned, rather than
-// by a second reader of this store.
-//
-// Deleting is the same argument with more at stake. It removes the variant, every reference to it
-// on the project, and the files - and it belongs here for the same reason: two writers of
-// scen3-projects.json is how a store starts drifting.
-
-// Three states, and the page colours by them:
-//
-//   green   the project's active pick, or a frame standing in a script line. NOT deletable -
-//           taking either away damages the script rather than tidying it.
-//   grey    banned: the user hid it in the project. Deletable, it is already discarded.
-//   yellow  everything else - generated, kept, used by nothing.
-//
-// `approved` travels too but does not decide the colour: it is the checkmark shown in the
-// scenarios popup, a shortlist rather than a use.
-function _frameState(p, v) {
-  const mix = p.mix || {};
-  const id = String(v.id || '');
-  const onLine = (p.lines || []).some(l => l && String(l.frameId || '') === id);
-  const active = String(mix.activeId || '') === id;
-  if (active || onLine) return 'green';
-  if ((mix.banned || []).map(String).includes(id)) return 'grey';
-  return 'yellow';
-}
-
-const _STATE_ORDER = { green: 0, yellow: 1, grey: 2 };
-
-function _lookFrames(obrazId) {
-  const out = [];
-  for (const p of _loadProjects()) {
-    if (String((p.casting || {}).obrazId || '') !== obrazId) continue;
-    const mix = p.mix || {};
-    for (const v of (mix.variants || [])) {
-      if (!v || !v.path) continue;
-      const id = String(v.id || '');
-      out.push({
-        id, path: v.path, preview: v.preview || v.path,
-        prompt: String(v.prompt || ''), at: v.at || null, size: v.size || null,
-        projectId: String(p.id || ''), projectTitle: String(p.title || p.name || ''),
-        state: _frameState(p, v),
-        approved: (mix.approved || []).map(String).includes(id),
-        active: String(mix.activeId || '') === id,
-        onLine: (p.lines || []).some(l => l && String(l.frameId || '') === id),
-      });
-    }
-  }
-  // Green, then yellow, then grey - and newest first inside each, since the last thing generated
-  // is the thing being looked at.
-  out.sort((a, b) => (_STATE_ORDER[a.state] - _STATE_ORDER[b.state])
-    || String(b.at || '').localeCompare(String(a.at || '')));
-  return out;
-}
-
-router.get('/scen3/look-frames/:obrazId', (req, res) => {
-  try {
-    const obrazId = String(req.params.obrazId || '');
-    if (!obrazId) return res.status(400).json({ success: false, error: 'obrazId is required' });
-    const items = _lookFrames(obrazId);
-    // The projects that actually have frames for this look, for the picker above the grid: a
-    // list built from what is there beats one built from every project that ever existed.
-    const seen = new Map();
-    for (const it of items) {
-      const e = seen.get(it.projectId) || { id: it.projectId, title: it.projectTitle, count: 0 };
-      e.count++;
-      seen.set(it.projectId, e);
-    }
-    res.json({ success: true, obrazId, items, total: items.length, projects: [...seen.values()] });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
-  try {
-    const obrazId = String(req.params.obrazId || '');
-    const frameId = String(req.params.frameId || '');
-    if (!obrazId || !frameId) return res.status(400).json({ success: false, error: 'obrazId and frameId are required' });
-
-    const list = _loadProjects();
-    let gone = null, host = null;
-    for (const p of list) {
-      if (String((p.casting || {}).obrazId || '') !== obrazId) continue;
-      const mix = p.mix || {};
-      const v = (mix.variants || []).find(x => x && String(x.id) === frameId);
-      if (!v) continue;
-      // Refused HERE, not only by a hidden cross: a rule that lives in one client is a rule the
-      // next client does not have. A green frame is the active pick or stands in a line, and
-      // taking either away damages the script instead of tidying it.
-      if (_frameState(p, v) === 'green') {
-        return res.status(409).json({
-          success: false, state: 'green',
-          error: 'That frame is in use by the scenario - the active pick or a line uses it.',
-        });
-      }
-      if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
-      gone = v; host = p;
-
-      // The variant, and then every place the project still points at it: the approved and
-      // banned lists, the active pick, and any line whose frame it was. A dangling frameId on a
-      // line is what makes a script render a hole later.
-      mix.variants = (mix.variants || []).filter(x => !x || String(x.id) !== frameId);
-      if (Array.isArray(mix.approved)) mix.approved = mix.approved.filter(id => String(id) !== frameId);
-      if (Array.isArray(mix.banned)) mix.banned = mix.banned.filter(id => String(id) !== frameId);
-      if (String(mix.activeId || '') === frameId) mix.activeId = '';
-      for (const line of (p.lines || [])) {
-        if (line && String(line.frameId || '') === frameId) line.frameId = '';
-      }
-      p.updatedAt = new Date().toISOString();
-      break;
-    }
-    if (!gone) return res.status(404).json({ success: false, error: 'frame not found for that look' });
-
-    _saveProjects(list);
-
-    // Only files nothing SURVIVING points at. A crop chain means one variant's source can be
-    // another variant's image, and a delete that takes a file still in use breaks a frame nobody
-    // asked about.
-    const inUse = new Set();
-    for (const p of list) {
-      for (const v of ((p.mix || {}).variants || [])) {
-        if (!v) continue;
-        if (v.path) inUse.add(v.path);
-        if (v.preview) inUse.add(v.preview);
-        if (v.croppedFrom) inUse.add(v.croppedFrom);
-      }
-      const c = p.casting || {};
-      if (c.obrazImage) inUse.add(c.obrazImage);
-      if (c.locationImage) inUse.add(c.locationImage);
-    }
-    const removed = [], kept = [];
-    for (const rel of [gone.path, gone.preview]) {
-      if (!rel || inUse.has(rel)) { if (rel) kept.push(rel); continue; }
-      const abs = path.join(CFG.ROOT_DIR, String(rel).replace(/^\/+/, ''));
-      try { if (fs.existsSync(abs)) { fs.unlinkSync(abs); removed.push(rel); } } catch (e) {}
-    }
-    console.log('[scen3/look-frames] deleted', frameId, 'from', host.id, '| files removed', removed.length,
-      kept.length ? ('| kept ' + kept.length + ' still in use') : '');
-    res.json({ success: true, frameId, projectId: String(host.id || ''), removed, kept });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
   }
 });
 

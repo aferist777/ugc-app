@@ -27,9 +27,16 @@ require('dotenv').config({ path: path.join(ROOT_DIR, '.env') });
 const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
+// '/' opens Merge and '/character' lands on the Library's Characters shelf - both answered by redirects.
 const PAGES = ['/', '/character', '/merge', '/library', '/admin'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
-const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN];
+const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
+                 // New Character's modules, moved out of the Character page's folder in phase H8
+                 '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
+                 '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
+                 '/css/char-make.css'];
+// Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
+const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl',
@@ -65,7 +72,15 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['POST', '/api/ffmpeg/render'], ['GET', '/api/ffmpeg/status/x'],
                  ['POST', '/api/ffmpeg/cancel/x'], ['GET', '/api/ffmpeg/proxy-status'],
                  ['GET', '/api/mv3/overlays'], ['GET', '/api/mv3/overlays/x'],
-                 ['POST', '/api/mv3/overlays/hide'], ['POST', '/api/mv3/overlays/save']];
+                 ['POST', '/api/mv3/overlays/hide'], ['POST', '/api/mv3/overlays/save'],
+                 // phase H8: the Character page, its settings popup, the attempt log, the rescued list,
+                 // the prompt editor, its own poll, and what only it showed
+                 ['GET', '/character-v2.html'], ['GET', '/js/character-v2/main.js'], ['GET', '/css/character-v2.css'],
+                 ['GET', '/js/character-v2/create-panel.js'],
+                 ['GET', '/css/cv2-settings.css'], ['GET', '/api/character-v2/ladders'], ['POST', '/api/character-v2/ladders'],
+                 ['POST', '/api/character-v2/recover'], ['GET', '/api/character-v2/recovered'], ['GET', '/api/character-v2/trace'],
+                 ['GET', '/api/prompts'], ['GET', '/api/status/x'], ['GET', '/api/char-store/ref-status/x'],
+                 ['GET', '/api/library/looks/x'], ['GET', '/api/scen3/look-frames/x']];
 
 async function call(method, url, body) {
   const t0 = Date.now();
@@ -126,6 +141,13 @@ function getRoutes() {
     if (r.status !== 404) { failed++; console.log(`!! removed route answers: ${m} ${u} -> ${r.status}`); }
   }
   console.log(`removed routes: ${REMOVED.length} checked`);
+
+  for (const [from, to] of REDIRECTS) {
+    let where = '';
+    try { where = (await fetch(base + from, { redirect: 'manual' })).headers.get('location') || ''; } catch (e) { where = 'ERR ' + e.message; }
+    if (where !== to) { failed++; console.log(`!! ${from} leads to "${where}", not ${to}`); }
+  }
+  console.log(`redirects: ${REDIRECTS.length} checked`);
 
   process.exitCode = failed ? 1 : 0;
 })();

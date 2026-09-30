@@ -1062,7 +1062,7 @@ function _paintCharacters(host, head) {
   if (!shown.length) {
     host.appendChild(_note(_chars.length
       ? 'Nobody of that gender on the shelf. Show all to cast anyway.'
-      : 'No characters yet - make one on the Character tab.'));
+      : 'No characters yet - make one with New Character on the Characters shelf of the Library.'));
     return;
   }
 

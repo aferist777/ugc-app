@@ -102,8 +102,6 @@ const GROUPS = [
     dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
-  { id: 'prompts', label: 'Prompt edits',
-    dirs: [], stores: ['data/prompts.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
   { id: 'settings', label: 'Settings, API keys and the YouTube sign-in', secret: true,
     dirs: [], stores: ['data/settings.json', 'data/yt-cookies.txt', 'data/yt-cookies.json'] },

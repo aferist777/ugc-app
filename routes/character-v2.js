@@ -1,19 +1,19 @@
 'use strict';
 
-// CHARACTER v2 — generating from a reference.
+// MAKING A CHARACTER'S PORTRAIT - behind New Character on the Library's Characters shelf
+// (public/js/library/chmake.js; the Character page that used these went in phase H8).
 //
 // Two steps, deliberately two requests. The analyzer runs first and can REFUSE, and a refusal
-// should cost nothing: no engine call, no image, no wait. It also lets the page say "Analyzing"
-// and then "Generating" instead of one long silence.
+// should cost nothing: no engine call, no image, no wait. It also lets the page say "Reading"
+// and then "Drawing" instead of one long silence.
 //
 //   POST /api/character-v2/analyze    reference + the user's text -> prompt material, or a refusal
-//   POST /api/character-v2/generate   a ready prompt + the reference -> an i2i task
-//   GET  /api/character-v2/engines    which engines, tiers and aggregators exist, from one place
+//   POST /api/character-v2/generate   a ready prompt (+ the reference) -> a task, and its Alerts row
 //
 // The page assembles the final prompt between the two calls. That is on purpose: the house
-// template (framing, backdrop, wardrobe, realism) already lives in the page's presets.js and is
-// what Create sends, so building the reference prompt from the same module keeps one definition
-// of the house look instead of a server-side copy that drifts.
+// template (framing, backdrop, wardrobe, realism) already lives in public/js/library/character/
+// presets.js and is what Create sends, so building the reference prompt from the same module keeps
+// one definition of the house look instead of a server-side copy that drifts.
 //
 // Which engine draws it and which aggregator is asked are two separate choices, because they
 // fail separately: the day google/nano-banana-2 answered ModelRateLimitError on Replicate, the
@@ -23,17 +23,14 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 
-const { MEDIA } = require('../lib/config');
+const { MEDIA, CV2_APPEARANCE_PROMPT } = require('../lib/config');
 const {
   uploadToPublicHost, callAIVisionWithFallback, parseLooseJson, resolveLocalMedia, resolveTask,
 } = require('../lib/helpers');
 const { reasonOf } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
-const TRACE = require('../lib/cv2-trace');
-const REC = require('../lib/cv2-recovered');
 const WATCH = require('../lib/cv2-watch');
-const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
 
 // Only the two the flow has a meaning for: 3:2 builds the house format, and match_input_image
@@ -63,98 +60,6 @@ async function _refUrl(body) {
   return await uploadToPublicHost(buf, { verify: true });
 }
 
-// ── The ladders ──────────────────────────────────────────────────────────────
-// GET  /api/character-v2/ladders        what is stored, repaired against what exists,
-//                                       plus the options a picker can offer
-// POST /api/character-v2/ladders        { op, steps } - one operation at a time
-//
-// Repaired on the way OUT rather than validated on the way in, because the matrix can
-// change under a stored ladder: an engine dropped from an aggregator turns a saved
-// choice into a 422 nobody caused. Reading is where that gets noticed.
-router.get('/character-v2/ladders', (_req, res) => {
-  try {
-    const options = {};
-    const pairs = {};
-    for (const op of Object.keys(L.OPS)) { options[op] = L.optionsFor(op); pairs[op] = L.pairCount(op); }
-    res.json({ success: true, ladders: L.getLadders(), options, pairs, max: L.MAX_STEPS });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/character-v2/ladders', (req, res) => {
-  try {
-    const op = String((req.body && req.body.op) || '');
-    if (!L.OPS[op]) return res.status(400).json({ success: false, error: 'unknown operation: ' + op });
-    // What comes back is what was STORED, not what was sent: a step that could not be
-    // repaired is gone, and the page should redraw from the truth rather than from its
-    // own optimism.
-    const saved = L.setLadder(op, (req.body && req.body.steps) || []);
-    console.log('[cv2/ladders]', op, '->', saved.map(s => s.provider + '/' + (s.engine || s.model)).join(' > '));
-    res.json({ success: true, op, steps: saved });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// ── Recovery ─────────────────────────────────────────────────────────────────
-// POST /api/character-v2/recover      run the net, file anything this page can place
-// GET  /api/character-v2/recovered    what is waiting to be put on screen
-// POST /api/character-v2/recovered/:id/done   it has been placed, forget it
-//
-// The page calls recover on load. It used to be that nothing on Character ever did - the
-// recovery endpoint is called by tabs.js, which belongs to the older pages - so a generation
-// abandoned by closing the tab waited for the next SERVER restart to be collected.
-router.post('/character-v2/recover', async (_req, res) => {
-  try {
-    const { resolveAll } = require('../lib/pending-tasks');
-    const items = await resolveAll();
-    const added = REC.note(items, new Date().toISOString());
-    if (added.length) console.log('[cv2/recover] rescued', added.length, 'item(s) for this page');
-    res.json({ success: true, checked: items.length, added: added.length, waiting: REC.list() });
-  } catch (err) {
-    // Never fatal: recovery is a bonus on top of a page that works without it.
-    res.status(200).json({ success: false, error: err.message, waiting: REC.list() });
-  }
-});
-
-router.get('/character-v2/recovered', (_req, res) => {
-  res.json({ success: true, waiting: REC.list() });
-});
-
-router.post('/character-v2/recovered/:id/done', (req, res) => {
-  const n = REC.drop(String(req.params.id || ''));
-  res.json({ success: true, dropped: n });
-});
-
-// ── GET /api/character-v2/trace ──────────────────────────────────────────────
-// The tree: runs newest first, each grouped by the button that started it, with the calls
-// under it and repeats collapsed. NO bodies - a list of forty calls should not carry a
-// megabyte of prompts nobody has asked to read. One call's payload comes from /trace/:id.
-router.get('/character-v2/trace', (req, res) => {
-  try {
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 40));
-    res.json({ success: true, runs: TRACE.tree({ limit }), ring: TRACE.RING });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ── GET /api/character-v2/trace/:id ──────────────────────────────────────────
-// One call, whole: request and response, headers and body, exactly as they were written -
-// which is to say already redacted and already scrubbed, because that happened before this
-// ever reached the disk.
-router.get('/character-v2/trace/:id', (req, res) => {
-  const rec = TRACE.byId(String(req.params.id || ''));
-  if (!rec) {
-    // Named rather than a bare 404: the ring is finite, and "it scrolled off" is a
-    // different problem from "that id never existed".
-    return res.status(404).json({ success: false,
-      error: 'that call is no longer in memory - only the last ' + TRACE.RING + ' are kept' });
-  }
-  res.json({ success: true, call: rec });
-});
-
 // ── POST /api/character-v2/analyze ───────────────────────────────────────────
 // Body: { imageUrl | imageBase64 | imagePath, text }
 // -> { ok: true,  who, change, imageUrl }   prompt material, the change folded into `who`
@@ -168,7 +73,7 @@ router.post('/character-v2/analyze', async (req, res) => {
     const text = String(b.text || '').trim();
     const imageUrl = await _refUrl(b);
 
-    const prompt = String(getPrompt('CV2_APPEARANCE_PROMPT') || '').replace(/\{USER_TEXT\}/g, text);
+    const prompt = String(CV2_APPEARANCE_PROMPT || '').replace(/\{USER_TEXT\}/g, text);
     const raw = await callAIVisionWithFallback([{
       role: 'user',
       content: [
@@ -226,8 +131,8 @@ JOBS.register('portrait', {
 });
 
 // ── POST /api/character-v2/generate ──────────────────────────────────────────
-// Body: { prompt, engine?, quality?, aspect?, and optionally imageUrl | imageBase64 | imagePath }
-// -> { taskId }, which the page polls through the shared GET /api/status/:taskId
+// Body: { prompt, aspect?, where, and optionally imageUrl | imageBase64 | imagePath }
+// -> { taskId, alertId }: the page follows the Alerts row (lib/gen-jobs.js files the portrait)
 //
 // One route for both directions of the page: a reference makes it an edit, no reference makes it
 // a text-to-image. Both live here rather than in the older character-creator route because that
@@ -246,10 +151,8 @@ async function _submitPortrait(b) {
     // house 3:2.
     const aspect = (hasRef && ASPECTS.includes(b.aspect)) ? b.aspect : '3:2';
 
-    // The ladder decides, not the request. Which pairing to try, in what order, and what
-    // to do when one refuses is this page's own setting now - the body's engine/provider
-    // are ignored on purpose, and the gear that used to send them goes with the popup
-    // that replaces it.
+    // The ladder decides, not the request (lib/cv2-ladders.js): which pairing to try, in what
+    // order, and what to do when one refuses. An engine or provider in the body is ignored.
     const sub = await RUN.runImageLadder(hasRef ? 'reference' : 'create', {
       prompt,
       imageUrls: hasRef ? [await _refUrl(b)] : [],
@@ -277,7 +180,9 @@ router.post('/character-v2/generate', async (req, res) => {
   // moment - a reload, or the overlay's Cancel, while the ladder is still deciding has a row to act on.
   // The asking goes on behind the answer: it hands the row its task, or fails it with the reason. The
   // server watches the task to the end (WATCH.watch in _submitPortrait).
-  if (b.where) {
+  // Always a row: it is what resolves the portrait now - a request with no place gets the Characters shelf.
+  if (!b.where || typeof b.where !== 'object') b.where = { page: 'library', href: '/library?shelf=characters&make=1', label: 'Library · New Character · portrait' };
+  {
     if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: 'prompt is required' });
     const kick = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     _asking.add(kick);                           // before the row: JOBS.submitted polls straight away
@@ -306,25 +211,6 @@ router.post('/character-v2/generate', async (req, res) => {
       _asking.delete(kick);
     }
     return;
-  }
-  // Without a place to lead back to there is no row: the task is asked for and answered.
-  const alertId = '';
-  try {
-    const sub = await _submitPortrait(b);
-    res.json({
-      success: true, alertId, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
-      quality: sub.quality, aspect: sub.aspect,
-      // Which step answered, so the page can say "Replicate refused, OpenRouter drew it"
-      // rather than reporting a result with no history.
-      steps: sub.steps,
-    });
-  } catch (err) {
-    // reasonOf digs the provider's own wording out of whichever envelope it used -
-    // Replicate puts it in data.detail, kie in data.msg. Without it the page showed axios's
-    // "Request failed with status code 400", which names the status and nothing else, and a 400
-    // you cannot read is a 400 you cannot fix.
-    console.error('[cv2/generate]', err.response?.data || err.message);
-    res.status(err.status || 502).json({ success: false, error: reasonOf(err), alertId });
   }
 });
 

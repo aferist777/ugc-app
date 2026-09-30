@@ -1,4 +1,4 @@
-// CHARACTER v2 — the save stage's form, in the model column.
+// NEW CHARACTER - the save stage's form (js/library/chmake.js).
 //
 // Reached from "Save model" at the bottom of that column. While it is up the page is committed
 // to finishing one thing, so the two left columns are shut and inert and Cancel is the way out.
@@ -25,7 +25,6 @@ let _hooks = {};
 let _state = 'form';
 let _els = {};
 let _nameTimer = 0;
-let _resume = false;   // finishing an existing draft rather than saving a new character
 // How the last thing this panel was told about ended. The caller already says so when it
 // reports - status(msg, 'err') on a failure, 'ok' on a good one - so the retry button can
 // read the outcome off that instead of being told a second time.
@@ -45,7 +44,7 @@ function _sec(title) {
 }
 
 function _syncFoot() {
-  const { cancel, go, retry, del, name, gender } = _els;
+  const { cancel, go, retry, name, gender } = _els;
   const busy = _state === 'saving' || _state === 'sheet';
   const exists = _state === 'sheet' || _state === 'saved';   // the record has been created
   cancel.hidden = exists;
@@ -59,8 +58,6 @@ function _syncFoot() {
   retry.classList.toggle('is-retry', failed);
   retry.textContent = failed ? 'Try again' : 'Regenerate';
   retry.title = failed ? 'The sheet did not generate — submit it again' : 'Submit the 4K sheet again';
-  // A draft can be deleted right up to the moment it stops being one.
-  if (del) { del.hidden = !_resume || exists; del.disabled = busy; }
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
   go.disabled = busy || (_state === 'form' && !name.value.trim());
   // The button says what pressing it does NOW, not what the stage is called. From the form it
@@ -174,14 +171,6 @@ export function build(host, hooks) {
   retry.title = 'Submit the 4K sheet again';
   retry.hidden = true;
   retry.addEventListener('click', () => { if (_hooks.onRetrySheet) _hooks.onRetrySheet(); });
-  // Only when a draft is being finished. A fresh save has no record to delete, and Cancel is
-  // already the way out of one.
-  const del = document.createElement('button');
-  del.type = 'button'; del.id = 'cv2-save-del'; del.className = 'cv2-save-btn is-del';
-  del.textContent = 'Delete';
-  del.title = 'Delete this draft and its files';
-  del.hidden = true;
-  del.addEventListener('click', () => { if (_hooks.onDelete) _hooks.onDelete(); });
   const go = document.createElement('button');
   go.type = 'button'; go.id = 'cv2-save-go'; go.className = 'cv2-save-btn is-go';
   go.textContent = 'Save character';
@@ -193,19 +182,18 @@ export function build(host, hooks) {
     if (!n) return;
     if (_hooks.onSave) _hooks.onSave({ name: n, gender: gender.value });
   });
-  foot.appendChild(del); foot.appendChild(cancel);
+  foot.appendChild(cancel);
   foot.appendChild(retry); foot.appendChild(go);
   wrap.appendChild(foot);
 
   host.appendChild(wrap);
-  _els = { name, gender, cancel, go, retry, del, stat: sstat };
+  _els = { name, gender, cancel, go, retry, stat: sstat };
   _syncFoot();
 
   return {
     // Opened afresh each time, so whatever the create column had is what it starts from.
     open: ({ name: n, gender: g, ready } = {}) => {
       _state = 'form';
-      _resume = false;
       _ready = !!ready;
       _lastKind = '';          // a fresh save carries none of the last one's outcome
       name.value = n || '';
@@ -214,10 +202,6 @@ export function build(host, hooks) {
       sstat.className = 'cv2-save-stat';
       _syncFoot();
     },
-    // Whether this is an existing draft being finished. It decides the Delete button, and the
-    // caller passes the draft's id into the save so the record is overwritten, not duplicated.
-    setResume: (on) => { _resume = !!on; _syncFoot(); },
-    resuming: () => _resume,
     state: () => _state,
     setState: (s) => { _state = s; _syncFoot(); },
     // Re-assert the footer from the panel's own state. A job's control lock restores exactly

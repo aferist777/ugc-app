@@ -12,16 +12,15 @@ person, in a window of its own, and keeps everything it makes in one folder - th
 
 | Page | What it does |
 |---|---|
-| **Character** | Builds a person once, as a 4K reference sheet (face and three full-body views) that every later picture of them is conditioned on |
-| **Scenarios** | The ad line by line: cast, wardrobe, location, a frame per line, the voice, lipsync |
-| **Merge** | The timeline: clips, overlays, halfers, music, word-timed captions, and the render to mp4 |
-| **Library** | The shelves: characters, lookbooks, environments, media, voices, music, scenarios, renders - and on Scenarios the generator: sources and their transcripts, topics, scripts, narrators |
+| **Merge** | Where the app opens. The talking head built line by line - cast, wardrobe, location, a frame per line, the voice, lipsync - and the timeline: clips, overlays, halfers, music, word-timed captions, and the render to mp4 |
+| **Library** | The shelves: characters, lookbooks, environments, media, voices, music, scenarios, renders. On Characters, **New Character** builds a person once, as a 4K reference sheet (face and three full-body views) that every later picture of them is conditioned on, and a character's voices are chosen in its column; on Scenarios, the generator: sources and their transcripts, topics, scripts, narrators |
 | **Admin** | API keys, and Import / Export of the whole library |
 
 Generation goes out to paid services: images and video through kie.ai or Replicate (the same
-models through two aggregators, because they fail separately), language and vision through
-OpenRouter, voices through ElevenLabs, transcription through Groq. Rendering is local, with
-ffmpeg.
+models through two aggregators, because they fail separately), scripts through kie.ai or
+Replicate, reading pictures through Replicate or kie.ai (OpenRouter where a ladder does not say
+otherwise), voices through ElevenLabs, transcription through Replicate's Whisper. Every paid
+picture, video and piece of music is a row in Alerts. Rendering is local, with ffmpeg.
 
 ---
 
@@ -93,13 +92,14 @@ server.js   Express, bound to 127.0.0.1 only
 routes\     one file per API area; ffmpeg.js is the renderer
 lib\        config.js (the two roots: program and library), media paths, stores, generation
 public\     the pages; js\<page>\ holds that page's ES modules
-tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, migrate-library.js, warm-thumbs.js
+tools\      smoke-local.js (the quick check), fetch-yt-dlp.js, migrate-library.js, upgrade-library.js, warm-thumbs.js
 ```
 
 `yt-dlp` ships with the app (`vendor/yt-dlp/`, fetched and checked by `npm install`).
 
 After a change: `node tools/smoke-local.js` against a running server - every page and every
-parameterless GET route, key redaction, removed routes still 404. It spends nothing.
+parameterless GET route, key redaction, removed routes still 404, '/' and '/character' landing where
+they should. It spends nothing.
 
 ---
 

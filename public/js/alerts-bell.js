@@ -92,9 +92,9 @@ function _hrefOf(rec) {
   if (rec.state === 'done' && path && spot.view === 'pictures' && spot.key) {
     return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
   }
-  // A 4K sheet made on the Characters shelf (phase H): once it is drawn, the row leads to the character
-  // itself, selected on the shelf; while it runs, or when it failed, back into the making area.
-  if (rec.state === 'done' && rec.what === 'sheet' && spot.view === 'chmake' && spot.key) {
+  // A 4K sheet (phase H): once it is drawn, the row leads to the character itself, selected on the
+  // shelf - the row carries it in where.spot.key; while it runs, or when it failed, where it was asked.
+  if (rec.state === 'done' && rec.what === 'sheet' && spot.key) {
     return '/library?shelf=characters&sel=' + encodeURIComponent(spot.key);
   }
   return w.href || '';

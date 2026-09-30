@@ -2,11 +2,12 @@
 
 // ════════════════════════════════════════════════════════════════════════
 // PERSISTENT CHARACTERS (ACTORS) — REST API.
-//   POST   /api/char-store/create            create char + kick off 2 sheets
+//   POST   /api/char-store/create            create a character + kick off its 4K sheet (a row in Alerts)
+//   POST   /api/char-store/regen-ref         draw the sheet again (one at a time per character)
 //   GET    /api/char-store/list              list all chars
-//   GET    /api/char-store/ref-status/:tid   poll portrait/tpose generation
-//   PATCH  /api/char-store/:id               edit name/gender/voice/notes
-//   DELETE /api/char-store/:id               remove char + its folder
+//   PATCH  /api/char-store/:id               edit name/gender/voice/voices/notes
+//   DELETE /api/char-store/:id               remove char + its folder (not while its sheet runs)
+//   DELETE /api/char-store/:id/voice/:vid    unbind one voice, its slot freed
 // ════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -15,10 +16,10 @@ const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR } = require('../lib/config');
+const { CHARACTERS_DIR, ROOT_DIR, DATA_DIR, PUBLIC_DIR, CACHE_DIR, BACKUPS_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
-  uploadToPublicHost, resolveTask, resolveLocalMedia, callAIVisionWithFallback,
+  uploadToPublicHost, resolveTask, resolveLocalMedia,
 } = require('../lib/helpers');
 const { reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
@@ -26,9 +27,51 @@ const RUN = require('../lib/cv2-run');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
-  loadChars, findChar, upsertChar, patchChar, deleteChar,
-  findDraftByObraz,
+  loadChars, saveChars, findChar, upsertChar, patchChar, deleteChar,
 } = require('../lib/char-store');
+
+// WHAT THE CHARACTER PAGE LEFT BEHIND, set aside ONCE per library (phase H8, the owner 2026-10-01): its
+// drafts - "не будем хранить черновики" - and its own logs, the attempt log (cv2-trace.jsonl) and the
+// rescued list (cv2-recovered.json), which nothing reads any more. A draft's record goes into
+// backups/<date> character page/drafts.json and its folder beside it; characters.json keeps only real
+// characters. Marked in cache/, like the other one-time tidy-ups.
+function _dropDraftsOnce() {
+  const mark = path.join(CACHE_DIR, 'char-drafts-dropped.json');
+  if (fs.existsSync(mark)) return;
+  try {
+    const file = path.join(DATA_DIR, 'characters.json');
+    if (fs.existsSync(file)) JSON.parse(fs.readFileSync(file, 'utf8'));   // unreadable: not now, not marked
+    const list = loadChars();
+    const drafts = list.filter(c => c && c.draft);
+    const dir = path.join(BACKUPS_DIR, new Date().toISOString().slice(0, 10) + ' character page');
+    const logs = fs.readdirSync(DATA_DIR)
+      .filter(f => /^cv2-trace\.jsonl(\.\d+)?$/.test(f) || f === 'cv2-recovered.json' || f === 'prompts.json');
+    if (logs.length) {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const f of logs) {
+        try { fs.renameSync(path.join(DATA_DIR, f), path.join(dir, f)); }
+        catch (e) { console.warn('[char-store] ' + f + ' left where it was:', e.message); }
+      }
+    }
+    if (drafts.length) {
+      fs.mkdirSync(dir, { recursive: true });
+      writeFileAtomic(path.join(dir, 'drafts.json'), JSON.stringify(drafts, null, 2));
+      for (const d of drafts) {
+        if (!d.folder) continue;
+        const src = path.join(CHARACTERS_DIR, d.folder), dst = path.join(dir, d.folder);
+        if (!fs.existsSync(src)) continue;
+        try { fs.renameSync(src, dst); }
+        catch (e) { fs.cpSync(src, dst, { recursive: true }); fs.rmSync(src, { recursive: true, force: true }); }
+      }
+      saveChars(list.filter(c => !(c && c.draft)));
+      console.log('[char-store] ' + drafts.length + ' draft(s) set aside in ' + dir);
+    }
+    if (logs.length) console.log('[char-store] the Character page logs set aside in ' + dir + ': ' + logs.join(', '));
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), drafts: drafts.map(d => ({ id: d.id, name: d.name })), logs }, null, 2));
+  } catch (e) { console.warn('[char-store] drafts could not be set aside:', e.message); }
+}
+_dropDraftsOnce();
 
 // The reference sheet is a long-lived canonical asset, and which engine draws it, through
 // whom, and at which tier is now the `sheet` ladder in lib/cv2-ladders.js - a setting, not
@@ -94,9 +137,8 @@ async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
 
 // Generate the SINGLE combined reference sheet (large portrait + full-body
 // turnaround on one 4K 16:9 image) in the BACKGROUND, retrying on throttle.
-// The taskId is patched onto the char as soon as it is submitted, so the actor
-// popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
-// failed sheet stays null and can be regenerated from the popup.
+// The taskId is patched onto the char as soon as it is submitted; the runner (lib/gen-jobs.js)
+// resolves it through the Alerts row. Fire-and-forget: a failed sheet stays null, with its reason.
 // `alertId` is the row written at the press (_openSheetRow). The kickoff moves its stage as it goes,
 // hands it the task once the ladder accepts, and stops at the next step if the row was let go of - a
 // sheet cancelled while its face is still being uploaded is never asked for at all.
@@ -167,9 +209,12 @@ function _runningSheet(charId, exceptId) {
 // THE ROW FOR A SHEET, written at the press (V2) - before the face is uploaded or anybody is asked. The
 // page follows it by its id (the Library's creation, phase H); the runner (lib/gen-jobs.js) waits for
 // the task once the kickoff hands it one. Without `where` nothing is journalled, as before.
-// Answers { id, kick } - the row, and the token its kickoff registers under (see _kicking).
+// Answers { id, kick } - the row, and the token its kickoff registers under (see _kicking). Always a
+// row: it is the only thing that resolves a sheet now (the Character page's own poll went in H8), so a
+// request without a place to lead back to gets the Characters shelf.
+const SHELF_WHERE = { page: 'library', href: '/library?shelf=characters', label: 'Library · Characters' };
 function _openSheetRow(charId, where, name) {
-  if (!where) return { id: '', kick: '' };
+  if (!where || typeof where !== 'object') where = SHELF_WHERE;
   const kick = _kickToken();
   _kicking.add(kick);
   try {
@@ -272,15 +317,14 @@ function _keepFace(folder, folderNm, buf, previous) {
 }
 
 // ── POST /api/char-store/create ──────────────────────────────────────────
-// Body: { id?, name, gender, faceImagePath, imageEngine }
+// Body: { name, gender, faceImagePath | faceImageBase64, figure, where }
 // The active appearance image is the identity source for the combined
 // reference-sheet generation. The sheet is the character's canonical asset;
 // the face is kept beside it as `baseFace` so a failed sheet can always be
 // regenerated from what made it.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, faceImageBase64, sourceObrazId, realismMarkers, figure } = req.body || {};
-    const asDraft = !!(req.body && req.body.draft);
+    const { name, gender, faceImagePath, faceImageBase64, realismMarkers, figure } = req.body || {};
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
     // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
@@ -296,54 +340,11 @@ router.post('/char-store/create', async (req, res) => {
       faceBuffer = fs.readFileSync(srcAbs);
     }
 
-    // Promotion path: if the active image's obraz has a draft (voice designed in
-    // the Save-obraz popup), reuse that draft's id + voice + description instead
-    // of starting fresh — then flip draft → real. upsertChar(same id) overwrites.
-    const draft = sourceObrazId ? findDraftByObraz(sourceObrazId) : null;
-    const charId   = id || (draft && draft.id) || Date.now();
+    const charId   = Date.now();
     const charName = (name && String(name).trim()) || 'Character';
     const folderNm = charFolderName(charName, charId);
     const folder   = path.join(CHARACTERS_DIR, folderNm);
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
-    // What is already under this id, if anything - starring a take then finishing it, or saving
-    // the same draft twice, both land here with a face this record has already got one of.
-    const existing = findChar(charId);
-
-    // engine / provider / tier used to be computed here from what the page sent. They are
-    // the `sheet` ladder's business now, and the ladder is not a request parameter - so the
-    // three fields the page still sends are read by nobody, and the gear that sends them is
-    // on its way out with the popup that replaces it.
-
-    // ── Kept as a draft: an unfinished character, saved to be come back to ──
-    // No sheet, so no upload and no engine call at all - a draft costs nothing. But the face
-    // MUST be kept: the sheet is normally the character's only asset, and a draft has no sheet
-    // yet, so without the face there would be nothing to finish it from. It goes into the
-    // character's own folder rather than staying in uploads/, which is swept.
-    //
-    // baseFace is where regen-ref already looks when there is no sheet, so finishing a draft
-    // needs no new path through that code.
-    if (asDraft) {
-      const rec = {
-        id: charId,
-        name: charName,
-        gender: gender || null,
-        folder: folderNm,
-        sheet: null,
-        sheetTask: null,
-        sheetError: null,
-        baseFace: _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
-        voice: null,
-        notes: '',
-        voiceDescription: '',
-        draft: true,
-        figure: figure || '',
-        sourceObrazId: sourceObrazId || null,
-        date: new Date().toISOString(),
-      };
-      upsertChar(rec);
-      console.log('[char-store/create] draft', charId, charName, '->', rec.baseFace);
-      return res.json({ success: true, char: rec, draft: true });
-    }
 
     // An untouched preset already has its sheet. Copied into the character's own folder rather
     // than pointed at: from here on it belongs to this character, and deleting the character
@@ -361,21 +362,20 @@ router.post('/char-store/create', async (req, res) => {
     // request into thirty seconds of nothing on a bad host rotation. It moved into the
     // kickoff, where the waiting was always meant to happen.
 
-    // Save the character immediately (sheet pending) so "Save char" opens the
-    // actor popup right away. The combined reference sheet is generated in the
-    // BACKGROUND below -- retrying throttle -- so a low-credit Replicate 429
-    // (burst limit) never blocks the save / popup.
+    // Save the character immediately (sheet pending), and generate the combined reference sheet in
+    // the BACKGROUND below - retrying throttle - so a low-credit Replicate 429 (burst limit) never
+    // blocks the save.
     const rec = {
       id:           charId,
       name:         charName,
-      gender:       gender || (draft && draft.gender) || null,
+      gender:       gender || null,
       folder:       folderNm,
       sheet:        readySheet,
       sheetTask:    null,
       // The face that is about to become the sheet, kept. If the sheet never arrives - a dead
       // engine, a throttle that outlasts the retries - this is what Regenerate works from, and
       // without it that button can only apologise.
-      baseFace:     _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
+      baseFace:     _keepFace(folder, folderNm, faceBuffer, null),
       // imageEngine / imageProvider / sheetQuality are written by _sheetPatch when the ladder
       // actually lands on a step. Guessing them here would put the step we HOPED for on the
       // record next to the taskId of the one that took it.
@@ -383,19 +383,16 @@ router.post('/char-store/create', async (req, res) => {
       // on the last attempt would otherwise still be sitting there while this one is in flight -
       // and the page reads that field to decide a wait is hopeless.
       sheetError:   null,
-      // Inherit voice + description from the draft (designed in Save-obraz popup).
-      voice:        (draft && draft.voice) || null,
-      notes:        (draft && draft.notes) || '',
-      voiceDescription: (draft && draft.voiceDescription) || '',
-      draft:        false,
-      sourceObrazId: sourceObrazId || (draft && draft.sourceObrazId) || null,
+      voice:        null,
+      notes:        '',
+      voiceDescription: '',
       date:         new Date().toISOString(),
     };
-    upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
+    upsertChar(rec);
     // The row before the answer, so the page has it to follow from the first moment (V2).
     const row = readySheet ? { id: '', kick: '' } : _openSheetRow(charId, req.body && req.body.where, charName);
     const alertId = row.id;
-    res.json({ success: true, char: rec, alertId, promotedFromDraft: !!draft });
+    res.json({ success: true, char: rec, alertId });
 
     if (readySheet) {
       // Nothing to kick off, nothing to poll, nothing to pay for. The page's wait loop ends on
@@ -404,9 +401,8 @@ router.post('/char-store/create', async (req, res) => {
       return;
     }
 
-    // Background: the combined sheet, retrying throttle. The taskId is patched
-    // onto the record so the actor popup picks it up and polls ref-status to
-    // resolve it into the char folder.
+    // Background: the combined sheet, retrying throttle. Its Alerts row (opened above) is what the
+    // page follows; lib/gen-jobs.js resolves the task into the character's folder.
     _kickoffSheets(charId, faceBuffer, { realismMarkers, figure }, alertId, row.kick)
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
@@ -416,13 +412,9 @@ router.post('/char-store/create', async (req, res) => {
 });
 
 // ── GET /api/char-store/list ─────────────────────────────────────────────
-// Drafts are hidden — they only surface once promoted via Save char.
-// ?drafts=1 asks for the unfinished ones INSTEAD - the ones kept with a star while a character
-// was being made. Every existing caller sends nothing and still gets only finished characters,
-// which is what they have always assumed.
-router.get('/char-store/list', (req, res) => {
-  const only = String((req.query && req.query.drafts) || '') === '1';
-  res.json({ success: true, drafts: only, chars: loadChars().filter(c => only ? !!c.draft : !c.draft) });
+// Every character. A draft left in a library the one-time tidy-up has not reached yet is not one.
+router.get('/char-store/list', (_req, res) => {
+  res.json({ success: true, chars: loadChars().filter(c => !c.draft) });
 });
 
 // Read a stored path as a buffer, or null if it is not there. Records outlive files.
@@ -481,7 +473,7 @@ function _identitySource(c, body) {
 // Re-submits the combined reference sheet. The identity source is the current
 // sheet when there is one, and otherwise everything else that could be one —
 // see _identitySource. Unstated engine/aggregator/tier fall back to whatever the
-// character was last made with. Returns taskId; the frontend polls ref-status.
+// character was last made with. Answers the Alerts row the page follows.
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
     const { charId } = req.body || {};
@@ -493,7 +485,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
     const src = _identitySource(c, req.body);
     if (!src) {
       return res.status(404).json({ success: false,
-        error: 'nothing to regenerate from - this character has no sheet, no saved face and no files. Open it in Create and save it again.' });
+        error: 'nothing to draw it from - this character has no sheet, no saved face and no files. Make it again with New Character on the Characters shelf.' });
     }
     console.log('[char-store/regen-ref]', charId, 'from', src.from);
 
@@ -538,97 +530,6 @@ router.post('/char-store/regen-ref', async (req, res) => {
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
-
-// ── POST /api/char-store/dress-sheet ──────────────────────────────────────
-// Body: { charId, lookbookPath }
-// Dress the character's combined 4K reference sheet in the chosen lookbook via
-// nano-banana-2: the sheet's layout/composition (portrait close-up + full-body
-// front/side/back on white) stays EXACTLY the same — only the neutral bodysuit
-// is replaced by the outfit in every figure. Returns { taskId } (repl:) — the
-// client polls the shared GET /api/status.
-const _DRESS_SHEET_PROMPT =
-  `IMAGE 1 is a character reference sheet: a large head-and-shoulders portrait close-up plus the same person ` +
-  `standing full-body from several angles (front, side, back) in a plain neutral skin-tight bodysuit on a white background. ` +
-  `The LAST image shows an outfit (a lookbook of clothing items). ` +
-  `Redraw the EXACT SAME reference sheet - identical layout, figure placement, poses, camera angles, framing, crop, ` +
-  `white background and the same single person in every figure - but dress the person in the outfit from the LAST image ` +
-  `in EVERY figure (the portrait AND every full-body view), replacing the neutral bodysuit entirely. ` +
-  `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
-  `Do NOT change the composition, do NOT add/remove/move figures, keep the face, hair, skin tone, body proportions ` +
-  `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
-// Best-effort JSON extraction from an LLM reply (handles ```json fences / prose).
-function _looseJson(s) {
-  if (!s) return null;
-  const m = String(s).match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try { return JSON.parse(m[0]); } catch { return null; }
-}
-// Analyze a user's refine request against the sheet + lookbook and return a
-// CLOTHING-ONLY edit clause, dropping anything that touches pose/composition
-// (the reference layout must never change). { clothing, pose_ignored }.
-async function _analyzeDressRefine(refine, sheetUrl, lbUrl) {
-  const content = [
-    { type: 'text', text:
-      `Image 1 is a character reference sheet (a portrait close-up plus the same person full-body from several angles, in a neutral bodysuit). Image 2 is a clothing lookbook. `
-      + `The person will be dressed in the lookbook outfit. The user asked for these extra adjustments: "${String(refine).slice(0, 500)}". `
-      + `Rewrite the user's request as a concise CLOTHING-ONLY instruction (e.g. add jeans, change a colour, swap a jacket). `
-      + `You MUST IGNORE and DROP anything that changes pose, body position, stance, camera angle, framing, crop, number of figures or the sheet composition - that layout is locked and cannot change. `
-      + `Return strict JSON only: {"clothing":"<clothing-only edits, empty string if the request had none>","pose_ignored":<true if the request mentioned any pose/composition change, else false>}.` },
-    { type: 'image_url', image_url: { url: sheetUrl } },
-    { type: 'image_url', image_url: { url: lbUrl } },
-  ];
-  try {
-    const raw = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000 });
-    const j = _looseJson(raw) || {};
-    return { clothing: String(j.clothing || '').trim(), pose_ignored: !!j.pose_ignored };
-  } catch (e) {
-    console.warn('[dress-sheet] refine analysis failed:', e.message);
-    return { clothing: '', pose_ignored: false };
-  }
-}
-// Apply-and-refine variant: the CURRENT (possibly already dressed) sheet is the target
-// and the MAIN clean sheet rides along as a face anchor — if anything covers or distorts
-// the face on the current image, it is restored from the main one.
-const _DRESS_CURRENT_PROMPT =
-  `IMAGE 1 is the CURRENT character reference sheet: a large head-and-shoulders portrait close-up plus the same person ` +
-  `standing full-body from several angles. IMAGE 2 is the MAIN reference of the SAME person with a clean, unobstructed face - ` +
-  `keep the face IDENTICAL to IMAGE 2, and if anything covers, shadows or distorts the face in IMAGE 1, restore it from IMAGE 2. ` +
-  `The LAST image shows an outfit (a lookbook of clothing items). ` +
-  `Redraw the EXACT SAME reference sheet as IMAGE 1 - identical layout, figure placement, poses, camera angles, framing, crop ` +
-  `and background - but dress the person in the outfit from the LAST image in EVERY figure, replacing the current clothing entirely. ` +
-  `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
-  `Do NOT change the composition, do NOT add/remove/move figures, keep the hair, skin tone, body proportions ` +
-  `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
-
-// ── POST /api/char-store/redress ──────────────────────────────────────────
-// Body: { charId, imagePath, text }
-// Re-dress the character ON THE GIVEN IMAGE from a free-form user note (any
-// language). A vision LLM reads the image + note, decides what outfit change is
-// meant and writes ONE English instruction; the image then goes to nano-banana-2
-// with the composition AND pose hard-locked — only the clothing changes.
-// A note that ONLY asks to change pose/composition is REJECTED (no generation):
-// returns { rejected:true, notice } for the bold-yellow message under the preview.
-const _REDRESS_LOCK =
-  `Redraw the EXACT SAME image - identical layout, figure placement, poses, body positions, camera angles, framing, ` +
-  `crop, background and the same single person in every figure. Do NOT change the composition, do NOT add/remove/move ` +
-  `figures, do NOT change pose or camera. Keep the face, hair, skin tone, body proportions and height identical. ` +
-  `ONLY the clothing/outfit changes described below are allowed, applied consistently to EVERY figure in the image. ` +
-  `Photorealistic, sharp focus, high detail, no text, no labels, no watermarks. OUTFIT CHANGE: `;
-async function _analyzeRedress(text, imageUrl) {
-  const content = [
-    { type: 'text', text:
-      `You are a wardrobe assistant. The image shows a character (possibly several views of the same person). `
-      + `The user wrote this request (it may be in ANY language): "${String(text).slice(0, 500)}". `
-      + `Classify the request and translate it into ONE concise ENGLISH clothing instruction: `
-      + `clothing = garments, outfits, shoes, hats, accessories, colours/prints/materials of clothes. `
-      + `pose = body position, stance, gesture, camera angle, framing, crop, composition, figure count, background layout. `
-      + `Return strict JSON only: {"clothing":"<English clothing-only instruction, empty string if none>","pose_requested":<true if any pose/composition change was asked>}` },
-    { type: 'image_url', image_url: { url: imageUrl } },
-  ];
-  const raw = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000 });
-  const j = _looseJson(raw) || {};
-  return { clothing: String(j.clothing || '').trim(), pose_requested: !!j.pose_requested };
-}
 
 // A sheet task that was accepted and then failed, handed to the next aggregator that has not been
 // asked yet. Returns { taskId, note } if there was somewhere to go, or null once there is not.
@@ -681,10 +582,6 @@ async function _retrySheetElsewhere(c, why) {
   }
 }
 
-// ── GET /api/char-store/ref-status/:taskId?charId=&kind=sheet ─────────────
-// Resolves a reference-sheet task into the char's folder and patches the
-// matching field on success. Legacy kinds portrait|tpose stay resolvable so
-// pre-rebuild polls / records don't break.
 // RESOLVING ONE SHEET, whoever is asking: the page that is watching it, or the server's own
 // runner (lib/gen-jobs.js) for somebody who has closed it. Everything that used to happen only
 // while the page polled - filing the picture into the character's folder, patching the record, and
@@ -732,15 +629,6 @@ async function _resolveSheet(taskId, charId, kind) {
   }
   return result;
 }
-
-router.get('/char-store/ref-status/:taskId', async (req, res) => {
-  try {
-    const out = await _resolveSheet(req.params.taskId, req.query.charId, req.query.kind);
-    res.json({ success: true, ...out });
-  } catch (err) {
-    res.status(err.status || 502).json({ success: false, error: err.message });
-  }
-});
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
 // A sheet is the picture every frame of every ad is later built from, and it takes minutes. The

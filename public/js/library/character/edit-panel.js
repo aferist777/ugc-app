@@ -1,4 +1,4 @@
-// CHARACTER v2 — editing the portrait the parameters just made.
+// NEW CHARACTER - editing the portrait on the bench (js/library/chmake.js).
 //
 // The create column turns into this the moment a portrait exists: chips for the traits worth
 // changing, a field for anything else, and Cancel / Edit on the floor.

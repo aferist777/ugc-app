@@ -64,18 +64,11 @@ app.use(express.json({ limit: '50mb' }));
 // A save from a page opened before a file moved still carries the old address: rewritten here,
 // before any route reads the body (lib/moves.js).
 app.use('/api', require('./lib/moves').rewriteBodies);
-// The trace. install() puts one interceptor on the default axios instance - which every
-// outgoing call in this app uses - and the middleware opens the context that interceptor
-// checks. Both are no-ops until a request arrives carrying X-CV2-Run, which only the
-// Character page sends, so nothing else in the app is recorded or slowed.
-//
-// AFTER express.json, because the inbound body is the root of each trace and it has to be
-// parsed to be read; BEFORE the routes, or their calls would run outside the context.
-const cv2trace = require('./lib/cv2-trace');
-cv2trace.install();
-app.use(cv2trace.middleware);
-// Root → the Character page (each tab is its own URL; Phase 5c).
-app.get('/', (_req, res) => res.redirect('/character'));
+// Root → Merge (phase H8, the owner 2026-10-01: the app opens on Merge). The Character page is gone -
+// making a character is the Library's Characters shelf now - and its old address, which older Alerts
+// rows still lead to, lands there.
+app.get('/', (_req, res) => res.redirect('/merge'));
+app.get('/character', (_req, res) => res.redirect('/library?shelf=characters'));
 // The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
 // stale script: 'no-cache' uses ETag/Last-Modified - an unchanged file is a cheap 304.
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -93,10 +86,9 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
-// <base href="/"> in each page. Some files keep the name of the rebuild that replaced an older
-// page (character-v2.html, merge-v3.html): renaming them would churn every
-// import path under public/js/ for no gain.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html' };
+// <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
+// page: renaming it would churn every import path under public/js/ for no gain.
+const PAGE_FILES = { '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -108,7 +100,6 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
 app.use('/api', require('./routes/alerts'));   // the journal of generations behind the Alerts button
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/gallery'));
-app.use('/api', require('./routes/prompts'));
 app.use('/api', require('./routes/settings'));
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
 // how a script is written, routes/scen3.js owns who reads it aloud.
@@ -133,7 +124,7 @@ app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
-app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
+app.use('/api', require('./routes/character-v2'));   // making a character: the portrait, read and drawn (Library, New Character)
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
 app.use('/api', require('./routes/images'));   // still pictures: upload, and the record that files one
@@ -146,7 +137,7 @@ app.use('/api', require('./routes/mergev3'));
 app.use('/api', require('./routes/mv3b'));
 app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both workflows
 // Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
-// from the Character page's matrix on purpose: the two lists are free to grow apart.
+// from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
@@ -156,11 +147,9 @@ app.use('/api', require('./routes/mv3-img'));
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`[boot] library: ${ROOT_DIR}`);
   console.log(`╔════════════════════════════════════════╗`);
-  console.log(`║  UGC Character Generator               ║`);
+  console.log(`║  UGC Studio                            ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);
-  console.log(`║  build: replicate-aware /api/status    ║`);
   console.log(`╚════════════════════════════════════════╝`);
-  console.log(`[boot] ${new Date().toISOString()} | /api/status dispatches by repl: prefix → Replicate, else → kie.ai`);
 
   // Defer heavy startup tasks so server is responsive immediately
   setTimeout(() => {
@@ -205,14 +194,6 @@ const server = app.listen(PORT, '127.0.0.1', () => {
       .then(recovered => {
         if (recovered.length)
           console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
-        // Filed for the Character page as well, or a generation rescued here would be a file
-        // on disk that no screen ever mentions - which is the whole failure this net exists
-        // to prevent. Character's own recovery call catches the rest; this catches the case
-        // where the server restarted before anyone reopened the page.
-        try {
-          const added = require('./lib/cv2-recovered').note(recovered, new Date().toISOString());
-          if (added.length) console.log(`[cv2-recovered] ${added.length} waiting for the Character page`);
-        } catch (e) { console.warn('[cv2-recovered] could not file:', e.message); }
       })
       .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
   }, 15000); // start 15s after server is ready — keeps server responsive on page load

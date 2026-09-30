@@ -6,7 +6,6 @@
 //   GET /api/library/shelf/:kind        kind: characters | lookbooks |
 //                                             environments | media
 //   GET /api/library/info/:kind/:id     what the right column says about one tile
-//   GET /api/library/looks/:charId      the looks of one character (the Character page's)
 //   GET /api/library/counts             one number per shelf, for the switcher
 //   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
 //
@@ -644,16 +643,6 @@ router.get('/library/info/:kind/:id', (req, res) => {
     const out = build(id);
     if (!out) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
     res.json({ success: true, kind, id, ...out });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// A character's looks, for the Character page's strip. The Library reads them through
-// /library/info above; this goes when that page does.
-router.get('/library/looks/:charId', (req, res) => {
-  try {
-    const id = String(req.params.charId || '');
-    const items = _looks().items.filter(l => l.meta.charId === id);
-    res.json({ success: true, charId: id, items, total: items.length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

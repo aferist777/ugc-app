@@ -3,9 +3,9 @@
 // "New Character" in the shelf's header puts this where the grid and its column were, and
 // "← Characters" (the same place) brings them back. It is the Character page's creation, moved: the
 // parameters and presets, TPDNE and your own picture, the edit chips, the takes, and the save form that
-// draws the 4K reference sheet. The panels themselves are the Character page's modules (create-panel,
-// edit-panel, save-panel, presets, schema); what is new is the orchestration below, the layout
-// (css/char-make.css) and the waiting.
+// draws the 4K reference sheet. The panels are js/library/character/ (create-panel, edit-panel,
+// save-panel, presets, schema - they came with the page, which went in phase H8); the orchestration is
+// below, the layout css/char-make.css.
 //
 // THE WAITING FOLLOWS THE JOURNAL. A portrait and a sheet each have an Alerts row written at the press
 // (routes/character-v2.js, routes/char-store.js); this page follows that row by its id instead of
@@ -21,11 +21,11 @@
 //
 // Leaving is allowed at every step, the sheet included (the owner): the area is only hidden.
 
-import * as CreatePanel from '../character-v2/create-panel.js';
-import * as EditPanel from '../character-v2/edit-panel.js';
-import * as SavePanel from '../character-v2/save-panel.js';
-import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from '../character-v2/presets.js';
-import { genName } from '../character-v2/schema.js';
+import * as CreatePanel from './character/create-panel.js';
+import * as EditPanel from './character/edit-panel.js';
+import * as SavePanel from './character/save-panel.js';
+import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './character/presets.js';
+import { genName } from './character/schema.js';
 import { startProgress, lockControls } from '../progress.js';
 
 const $ = (id) => document.getElementById(id);
@@ -719,7 +719,6 @@ function _build() {
       _paintDrop(_face.src);
       _status('Not saved - the portrait is still here');
     },
-    onDelete: () => {},                          // drafts are gone: the button never shows
     onDone: () => _finishSave(),
     onSave: ({ name, gender }) => _run('Saving the character…', async () => {
       const body = { name, gender, figure: _face.figure || '', where: _where('sheet') };
@@ -757,7 +756,6 @@ function _build() {
       name: _face.name || ($('cv2-name') && $('cv2-name').value.trim()) || '',
       gender: (_face.values && _face.values.gender) || '',
     });
-    _savePanel.setResume(false);
     _setStage(true);
     _paintDrop(ready || _face.src);
   });
@@ -824,7 +822,6 @@ function _restore() {
     // The save stage comes back as it was left: the form, the character's name, and the sheet - still
     // coming, or landed, or failed with its reason.
     _savePanel.open({ name: _saving.name || '', gender: _saving.gender || '' });
-    _savePanel.setResume(false);
     _setStage(true);
     if (_saving.sheet) _paintDrop(_saving.sheet);
     if (_saving.state === 'sheet' && _saving.alertId) { _awaitSheet(); return; }

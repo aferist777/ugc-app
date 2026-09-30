@@ -1,4 +1,4 @@
-// CHARACTER v2 — the creation schema.
+// NEW CHARACTER (js/library/chmake.js) — the creation schema.
 //
 // Copied VERBATIM out of the creator this page replaced (public/js/character-redesign.js,
 // deleted with the old Character page) so the options a user sees are the same ones it offered:
