@@ -33,15 +33,22 @@ export async function pollJob(base, jobId, onStep, stop) {
     if (onStep) onStep(job);
     if (job.state === 'done') return job;
     if (job.state === 'error') throw new Error(job.error || 'the job failed');
+    if (job.state === 'cancelled') throw Object.assign(new Error('cancelled'), { cancelled: true });
   }
 }
 
 // A countdown row in `host`, which must be positioned (css: position:relative) - the row lies
 // over it. `startedAt` re-attaches the row to a job already running, at its real age.
-export function startJob(host, { key, label, estimateMs, startedAt }) {
+export function startJob(host, { key, label, estimateMs, startedAt, onCancel }) {
   host.hidden = false;
   host.textContent = '';
-  return startInlineProgress(host, { key, label, estimateMs, startedAt });
+  return startInlineProgress(host, { key, label, estimateMs, startedAt, onCancel });
+}
+
+// The cross beside a countdown (phase G1): asks the server to stop the job. The poll then sees it
+// cancelled; an answer that it had already ended is not an error.
+export async function cancelJob(base, jobId) {
+  return api(`${base}/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
 }
 
 // A line in the same place with no job behind it: "pick a file first", a refusal, the last word

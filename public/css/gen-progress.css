@@ -72,3 +72,12 @@
 }
 .sv3-inline-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .3s linear}
 .sv3-inline-eta{flex:0 0 auto; font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+/* The cross that cancels the job, right of the countdown - only on rows that were given onCancel. */
+.sv3-inline-x{
+  flex:0 0 auto; width:20px; height:20px; margin-right:-6px; padding:0;
+  border:1px solid transparent; border-radius:var(--r-xs); background:none;
+  color:var(--muted); font:600 10px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-inline-x:hover{color:var(--primary-ink, #fff); background:var(--danger); border-color:var(--danger)}
+.sv3-inline-x:focus-visible{outline:none; border-color:var(--primary); color:var(--ink)}
+.sv3-inline-x[disabled]{opacity:.4; cursor:default; background:none; border-color:transparent; color:var(--muted)}

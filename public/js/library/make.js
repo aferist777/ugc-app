@@ -1192,7 +1192,7 @@ async function _followStage(jobId, run, gen, onResult) {
   _stageRow(rec);
   try {
     const job = await J.pollJob('/api/scriptgen/jobs', jobId, (j) => {
-      if (j.step && here() && rec.rows.length) rec.rows[rec.rows.length - 1].say(j.step);
+      if (j.step && here() && rec.rows.length && !rec.cancelling) rec.rows[rec.rows.length - 1].say(j.step);
     });
     // One timing for the whole job, however many rows showed it.
     rec.rows.forEach((r, i) => (i === 0 ? r.finish() : r.detach()));
@@ -1200,6 +1200,19 @@ async function _followStage(jobId, run, gen, onResult) {
     else if (here()) await _landInto(run.what, job.result || {});
     return true;
   } catch (e) {
+    if (e.cancelled) {
+      // Cancelled (phase G1): not an error. The form goes back to what it showed before the press -
+      // the hooks it had, the script it had - since the server kept nothing of this stage.
+      rec.rows.forEach(r => r.detach());
+      if (here()) {
+        _sayBriefly('cancelled - what was already sent is paid for');
+        if (_gen === gen && onResult) {
+          if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
+          if ((_gen.paragraphs || []).length) _renderScenes();
+        } else await _reloadDraftInto();
+      }
+      return 'cancelled';
+    }
     const last = rec.rows.length - 1;
     rec.rows.forEach((r, i) => (i === last && here() ? r.fail(e.message) : r.detach()));
     // A stage nobody started from this form has no caller to put the buttons back.
@@ -1249,9 +1262,31 @@ function _stageRow(rec) {
   const t = run.timing
     || (_TIMING[run.what] ? _TIMING[run.what](run, run.index || 0)
       : { key: 'l2-stage', label: 'Still writing…', estimateMs: J.EST.script(15) });
-  const row = J.startJob($('mk-job'), { ...t, startedAt: run.startedAt || Date.now() });
+  const row = J.startJob($('mk-job'), { ...t, startedAt: run.startedAt || Date.now(), onCancel: () => _cancelStage(rec) });
   rec.rows.push(row);
   return row;
+}
+
+// The ✕ beside the countdown (phase G1, the owner 2026-09-30): the server stops the job and frees the
+// draft; the poll sees it cancelled and _followStage puts the form back. A job that ended meanwhile
+// lands as usual - the cross came too late, and says nothing.
+async function _cancelStage(rec) {
+  if (rec.cancelling) return;
+  rec.cancelling = true;
+  try { await J.cancelJob('/api/scriptgen/jobs', rec.jobId); }
+  catch (e) {
+    rec.cancelling = false;
+    const row = rec.rows[rec.rows.length - 1];
+    if (row) row.say('could not cancel: ' + e.message);
+  }
+}
+
+// A word in the job strip that goes away by itself - unless something else has been said there since.
+function _sayBriefly(text) {
+  const host = $('mk-job');
+  J.sayJob(host, text);
+  const said = host.firstChild;
+  setTimeout(() => { if (host.firstChild === said && said) J.clearJob(host); }, 3500);
 }
 
 // The draft as the server has it, into the form - what a stage wrote while nobody was following it.

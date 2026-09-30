@@ -68,6 +68,10 @@ function _sweep() {
 // after it has been paid for.
 //
 // `run` marks the draft the stage writes into: { key, what, ... } - see _runKey.
+//
+// A STAGE CAN BE CANCELLED (phase G1, /scriptgen/jobs/:id/cancel): `work` gets an AbortSignal as its
+// second argument and hands it to callJSON. A cancelled job keeps state 'cancelled' whatever its call
+// does afterwards - an answer that arrives anyway is not kept - and its draft is free at once.
 function _start(res, step, work, keep, run) {
   const key = (run && run.key) || '';
   const busy = key ? _running.get(key) : null;
@@ -76,6 +80,8 @@ function _start(res, step, work, keep, run) {
   }
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step, at: Date.now(), error: null, result: null };
+  const ac = new AbortController();
+  _aborts.set(jobId, { ac, key });
   if (key) {
     const rest = { ...run };
     delete rest.key;
@@ -84,22 +90,29 @@ function _start(res, step, work, keep, run) {
   res.json({ success: true, jobId });
   (async () => {
     try {
-      job.result = await work((s) => { job.step = s; });
+      const result = await work((s) => { if (job.state === 'running') job.step = s; }, ac.signal);
+      if (job.state !== 'running') return;          // cancelled meanwhile: the answer is not kept
+      job.result = result;
       job.state = 'done';
       job.step = 'done';
       job.at = Date.now();
       if (keep) { try { keep(job.result); } catch (e) { /* the result stands even unsaved */ } }
     } catch (e) {
+      if (job.state !== 'running') return;
       job.state = 'error';
       job.error = e.message;
       job.at = Date.now();
     } finally {
+      _aborts.delete(jobId);
       // The mark goes after the keeper has written, in the same tick: whoever sees the draft free
       // also sees the answer in it.
       if (key && _running.get(key) && _running.get(key).jobId === jobId) _running.delete(key);
     }
   })();
 }
+
+// The running jobs' cancel handles: jobId -> { ac, key }. In memory, like the jobs.
+const _aborts = new Map();
 
 // What is writing into which draft: 'd:<draftId>' -> { jobId, startedAt, what, model, effort,
 // scenes, index }. In memory, like the jobs themselves: a restart ends both.
@@ -235,6 +248,26 @@ router.get('/scriptgen/jobs/:jobId', (req, res) => {
   res.json({ success: true, ...job });
 });
 
+// The cross beside the countdown (phase G1). The job is marked at once and its draft let go - it can be
+// started again straight away, from this page or another - and the call is told to stop. What was
+// already asked for is paid for: kie may finish the request anyway, Replicate bills the seconds it ran.
+// A job that has already ended is left as it is, and the answer says which way it went.
+router.post('/scriptgen/jobs/:jobId/cancel', (req, res) => {
+  const id = String(req.params.jobId);
+  const job = _jobs[id];
+  if (!job) return res.status(404).json({ success: false, error: 'no such job' });
+  if (job.state !== 'running') return res.json({ success: true, state: job.state, already: true });
+  job.state = 'cancelled';
+  job.step = 'cancelled';
+  job.at = Date.now();
+  const h = _aborts.get(id);
+  if (h) {
+    if (h.key && _running.get(h.key) && _running.get(h.key).jobId === id) _running.delete(h.key);
+    try { h.ac.abort(); } catch (e) { /* ended by itself */ }
+  }
+  res.json({ success: true, state: 'cancelled' });
+});
+
 // ── the stages ──────────────────────────────────────────────────────────────
 
 router.post('/scriptgen/hooks', (req, res) => {
@@ -248,13 +281,13 @@ router.post('/scriptgen/hooks', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  _start(res, 'Writing hooks', async () => {
+  _start(res, 'Writing hooks', async (_step, signal) => {
     const data = await callJSON({
       system: P.HOOKS_SYSTEM,
       user: P.hooksUserPrompt({ topic, language: m.language, tone: m.tone,
         narratorBlock: nar.block, sourceText: src.text }),
       schema: P.HOOKS_SCHEMA, name: 'hooks',
-      provider: m.provider, model: m.model, effort: m.effort,
+      provider: m.provider, model: m.model, effort: m.effort, signal,
     });
     const hooks = (data.hooks || []).filter(h => h && h.text);
     if (!hooks.length) throw new Error('No hooks came back.');
@@ -278,7 +311,7 @@ router.post('/scriptgen/script', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  _start(res, `Writing ${m.scenes} paragraphs`, async (step) => {
+  _start(res, `Writing ${m.scenes} paragraphs`, async (step, signal) => {
     // WITH a transcript the rules change, not just the input: "select, do not summarise" and
     // "facts only from the transcript" only make sense when there is one.
     const withSource = !!src.text;
@@ -291,7 +324,7 @@ router.post('/scriptgen/script', (req, res) => {
         : P.scriptUserPrompt({ topic, language: m.language, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, hook }),
       schema: P.SCRIPT_SCHEMA, name: 'script',
-      provider: m.provider, model: m.model, effort: m.effort,
+      provider: m.provider, model: m.model, effort: m.effort, signal,
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
     if (!paragraphs.length) throw new Error('The script came back empty.');
@@ -322,12 +355,12 @@ router.post('/scriptgen/humanize', (req, res) => {
   const rest = paragraphs.slice(1);
   if (!rest.length) return res.status(400).json({ success: false, error: 'only the hook — nothing to clean' });
 
-  _start(res, `Cleaning ${rest.length} paragraphs`, async () => {
+  _start(res, `Cleaning ${rest.length} paragraphs`, async (_step, signal) => {
     const data = await callJSON({
       system: P.HUMANIZER_SYSTEM,
       user: P.humanizerUserPrompt({ paragraphs: rest, narratorBlock: nar.block, hook }),
       schema: P.HUMANIZER_SCHEMA, name: 'humanized',
-      provider: m.provider, model: m.model, effort: m.effort,
+      provider: m.provider, model: m.model, effort: m.effort, signal,
     });
     const cleaned = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
     // A count that does not match means the editor dropped or merged beats. The original wins
@@ -359,12 +392,12 @@ router.post('/scriptgen/rewrite', (req, res) => {
   try { m = WM.normalise(b); } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
   const topic = String(b.topic || '').trim();
 
-  _start(res, `Rewriting paragraph ${index + 1}`, async () => {
+  _start(res, `Rewriting paragraph ${index + 1}`, async (_step, signal) => {
     const data = await callJSON({
       system: P.REWRITE_SYSTEM,
       user: P.rewriteUserPrompt({ topic, language: m.language, tone: m.tone, script, index }),
       schema: P.REWRITE_SCHEMA, name: 'rewrite',
-      provider: m.provider, model: m.model, effort: m.effort,
+      provider: m.provider, model: m.model, effort: m.effort, signal,
     });
     const paragraph = String(data.paragraph || '').trim();
     if (!paragraph) throw new Error('The rewrite came back empty.');

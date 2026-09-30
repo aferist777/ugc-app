@@ -187,7 +187,10 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
 // ("l2-topics|80k"). Left out, they are the same thing - which is right when the label is fixed.
 // `startedAt` re-attaches the row to a job already running, as startProgress does: the bar and the
 // countdown start from its real age, and finish() times the whole job, not the part watched.
-export function startInlineProgress(host, { label, key, estimateMs = 0, startedAt = 0 } = {}) {
+// `onCancel`, when given, puts a ✕ at the right end of the row (phase G1, the Library's generator):
+// pressing it calls onCancel once, and the row says "cancelling…" until its owner closes it. Rows
+// without it are as they always were.
+export function startInlineProgress(host, { label, key, estimateMs = 0, startedAt = 0, onCancel = null } = {}) {
   if (!host) return { finish() {}, fail() {}, detach() {}, say() {} };
   const emaKey = key || label;
   const est = _emaGet(emaKey, estimateMs);
@@ -202,6 +205,22 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
     <span class="sv3-inline-bar"><i></i></span>
     <span class="sv3-inline-eta"></span>`;
   row.querySelector('.sv3-inline-label').textContent = label || 'Working…';
+  if (typeof onCancel === 'function') {
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'sv3-inline-x';
+    x.textContent = '✕';
+    x.title = 'Cancel - what was already sent is paid for';
+    x.setAttribute('aria-label', 'Cancel');
+    x.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (closed || x.disabled) return;
+      x.disabled = true;
+      row.querySelector('.sv3-inline-label').textContent = 'cancelling…';
+      try { onCancel(); } catch (err) { /* the owner says what happened */ }
+    });
+    row.appendChild(x);
+  }
   host.appendChild(row);
 
   const bar = row.querySelector('.sv3-inline-bar > i');
