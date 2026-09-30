@@ -55,7 +55,9 @@ let _varAt = -1;
 let _busy = false;
 let _headPanel = null, _refPanel = null, _editPanel = null, _savePanel = null;
 // What is being waited for, remembered with the bench so it can be picked up again:
-//   _pending  a portrait: { alertId, label, from: 'create'|'text', text, values, name, figure, startedAt }
+//   _pending  a portrait: { alertId, label, from: 'create'|'text', text, values, name, figure, startedAt,
+//             failed } - one that failed or was let go of is kept, flagged: "try again" in Alerts starts
+//             the SAME row again, and _recheck picks it back up
 //   _saving   the save stage: { charId, alertId, name, gender, sheet, state: 'sheet'|'saved', note, kind }
 let _pending = null;
 let _saving = null;
@@ -133,17 +135,32 @@ async function _followRow(alertId, onStage) {
   for (;;) {
     await _sleep(1500);
     if (my !== _follow) throw Object.assign(new Error('no longer waited for'), { stopped: true });
-    let d = null;
-    try { d = await (await fetch('/api/alerts/' + encodeURIComponent(alertId))).json(); }
+    let d = null, status = 0;
+    try { const r = await fetch('/api/alerts/' + encodeURIComponent(alertId)); status = r.status; d = await r.json(); }
     catch (e) { continue; }                      // the server restarting: ask again
     if (my !== _follow) throw Object.assign(new Error('no longer waited for'), { stopped: true });
     const it = d && d.item;
-    if (!it) throw new Error((d && d.error) || 'the row of this generation is gone from Alerts');
+    // GONE is not failed: the row was cleared from Alerts (or pruned) after it ended. What it made is
+    // where the server filed it; each wait says so in its own way instead of offering to pay again.
+    if (!it) {
+      if (status && status !== 404) continue;
+      throw Object.assign(new Error('its row is gone from Alerts'), { gone: true });
+    }
     if (it.state === 'done') return (it.result && it.result.path) || '';
     if (it.state === 'failed') throw Object.assign(new Error(it.error || 'the generation failed'), { cancelled: !!it.cancelled });
     const s = it.stage || '';
     if (s && s !== said) { said = s; if (onStage) { try { onStage(s); } catch (e) { /* only words */ } } }
   }
+}
+
+// One row, read once - for _recheck.
+async function _readRow(alertId) {
+  try {
+    const r = await fetch('/api/alerts/' + encodeURIComponent(alertId));
+    if (r.status === 404) return null;
+    const d = await r.json();
+    return (d && d.item) || null;
+  } catch (e) { return undefined; }              // could not ask: leave everything as it is
 }
 
 // The cross on the overlay, offered once a wait is longer than usual: the row is let go of, and the
@@ -181,6 +198,7 @@ async function _run(label, fn, opts = {}) {
   } catch (e) {
     if (e && e.stopped) pr.detach();             // the bench was emptied under it: nothing to report
     else if (e && e.cancelled) { pr.detach(); _status('Let go of - what was asked for is paid for'); }
+    else if (e && e.soft) { pr.detach(); _status(e.message); }
     else { pr.fail(e.message); _status(e.message, 'err'); _showErr(label, e.message, opts.detail); }
   } finally {
     unlock();
@@ -209,9 +227,12 @@ function _paintPresetCancel() {
   b.title = undo ? 'Drop this preset and go back to the parameters' : 'Leave the portrait as it is and go back to the parameters';
 }
 
+// A portrait still coming (not one kept after it failed).
+const _waiting = () => !!(_pending && !_pending.failed);
+
 function _paintSaveBtn() {
   const b = $('chm-savemodel');
-  if (b) b.disabled = _busy || !_face.src || !!_pending;
+  if (b) b.disabled = _busy || !_face.src || _waiting();
 }
 
 // The one writer of _face. 'tpdne' and 'upload' are a NEW person: a fresh name, the reference panel, the
@@ -262,8 +283,9 @@ function _paintDrop(src) {
   img.src = _thumb(src, 'main');
   img.alt = 'the portrait';
   drop.appendChild(img);
-  // The cross acts on the TAKE, so only while the take is what is shown - not over a sheet.
-  if (src !== _face.src || (_root && _root.dataset.stage === 'save')) return;
+  // The cross acts on the TAKE, so only while the take is what is shown - not over a sheet, and not once
+  // the character has been saved from it.
+  if (src !== _face.src || _saving || (_root && _root.dataset.stage === 'save')) return;
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'cv2-drop-del';
@@ -279,7 +301,10 @@ function _pushVar(label) {
   _paintVars();
 }
 
+// Once the character is saved the takes are frozen (review H): the face on the bench IS the character's
+// now, and the save form's "Try again" must not draw another take's sheet.
 function _showVar(i) {
+  if (_saving) return;
   if (i < 0 || i >= _vars.length || i === _varAt) return;
   _varAt = i;
   _face = { ..._vars[i] };
@@ -290,6 +315,7 @@ function _showVar(i) {
 }
 
 function _deleteVar() {
+  if (_saving) return;
   if (_varAt < 0 || _varAt >= _vars.length) return _showFace(null);
   _vars.splice(_varAt, 1);
   if (!_vars.length) return _showFace(null);
@@ -335,6 +361,8 @@ function _paintVars() {
 // ── A portrait: asked for, then followed ─────────────────────────────────────
 // `p` is what landing it needs: where it came from, the words or the values, the name. Kept in _pending
 // until it lands, so an area opened again - or the app started again - goes on waiting for it.
+// The route answers with the row at once (routes/character-v2.js) and asks the ladder behind it, so
+// _pending holds the row from the first moment - a reload or a Cancel always has something to act on.
 async function _askPortrait(body, p) {
   const r = await (await fetch('/api/character-v2/generate', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -342,10 +370,48 @@ async function _askPortrait(body, p) {
   })).json();
   if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
   if (!r.alertId) throw new Error('the portrait was asked for, but the server wrote no row to follow');
-  _pending = { ...p, alertId: r.alertId, startedAt: Date.now(), detail: r.engine ? (r.engine + ' @ ' + r.provider + ', ' + r.quality) : '' };
+  _pending = { ...p, alertId: r.alertId, startedAt: Date.now() };
   _remember();
   _paintSaveBtn();
   return _pending;
+}
+
+// Following the portrait in _pending to its end, and landing it. A failure or a cancel KEEPS it,
+// flagged, so a retry from Alerts can bring it back; a row gone from Alerts ends the wait plainly.
+async function _followPending(pr) {
+  const p = _pending;
+  try {
+    const path = await _followRow(p.alertId, (s) => pr.tick(s));
+    if (!path) throw new Error('the portrait finished without a picture');
+    if (_pending === p) _landPortrait(path, p);
+  } catch (e) {
+    if (e.stopped) throw e;
+    if (_pending === p) {
+      if (e.gone) {
+        _pending = null;
+        _remember();
+        throw Object.assign(new Error('the portrait ended, but its row was cleared from Alerts - what it made is in media/work'), { soft: true });
+      }
+      p.failed = true;
+      _remember();
+    }
+    throw e;
+  }
+}
+
+// One portrait, however it was asked for. `prepare` answers the request and what landing it needs -
+// for the words, after the analyzer has read the picture. The overlay's Cancel is honoured whenever it
+// comes: before the request nothing is asked for, after it the row is let go of.
+function _makePortrait(label, prepare) {
+  const ask = { cancelled: false };
+  const cancelled = () => Object.assign(new Error('cancelled'), { cancelled: true });
+  return _run(label, async (pr) => {
+    const req = await prepare(pr, ask);
+    if (ask.cancelled) throw cancelled();
+    await _askPortrait(req.body, req.p);
+    if (ask.cancelled) { _letGo(_pending.alertId); }
+    await _followPending(pr);
+  }, { onCancel: () => { ask.cancelled = true; if (_waiting()) _letGo(_pending.alertId); } }).then((ok) => { _paintSaveBtn(); return ok; });
 }
 
 // The portrait has landed: onto the bench as a take of whoever asked for it.
@@ -375,23 +441,15 @@ function _landPortrait(path, p) {
 // Waiting for the portrait in _pending, under the overlay. Also how a wait is picked up again.
 function _awaitPortrait() {
   const p = _pending;
-  if (!p) return Promise.resolve(false);
-  return _run(p.label || 'Generating the portrait…', async (pr) => {
-    try {
-      const path = await _followRow(p.alertId, (s) => pr.tick(s));
-      if (!path) throw new Error('the portrait finished without a picture');
-      if (_pending && _pending.alertId === p.alertId) _landPortrait(path, p);
-    } catch (e) {
-      if (!e.stopped && _pending && _pending.alertId === p.alertId) { _pending = null; _remember(); }
-      throw e;
-    }
-  }, { startedAt: p.startedAt, detail: p.detail, onCancel: () => _letGo(p.alertId) });
+  if (!p || p.failed) return Promise.resolve(false);
+  return _run(p.label || 'Generating the portrait…', (pr) => _followPending(pr),
+    { startedAt: p.startedAt, onCancel: () => _letGo(p.alertId) }).then((ok) => { _paintSaveBtn(); return ok; });
 }
 
 // Text into a new picture, in two steps: the analyzer reads the picture together with the words and
 // answers with prompt material or a refusal (a refusal costs no engine call), then the engine draws it.
 // A bare TPDNE crop is CONVERTED into the house portrait; anything else is edited where it stands.
-async function _fromText(text, panel) {
+async function _fromText(text, panel, pr) {
   if (!_face.src) throw new Error('Nothing to work from - make a portrait first');
   const convert = panel === 'ref' && _face.source === 'tpdne';
   const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
@@ -400,10 +458,11 @@ async function _fromText(text, panel) {
   })).json();
   if (!a || !a.success) throw new Error((a && a.error) || 'the analyzer failed');
   if (!a.ok) throw new Error(a.reason);
-  await _askPortrait({
-    prompt: convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change),
-    imageUrl: a.imageUrl, aspect: convert ? '3:2' : 'match_input_image',
-  }, { from: 'text', text, panel, label: panel === 'ref' ? 'Reading the reference…' : 'Reading the portrait…' });
+  if (pr) pr.tick('Drawing…');
+  return {
+    body: { prompt: convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change), imageUrl: a.imageUrl, aspect: convert ? '3:2' : 'match_input_image' },
+    p: { from: 'text', text, panel, label: panel === 'ref' ? 'Reading the reference…' : 'Reading the portrait…' },
+  };
 }
 
 // ── The save stage ──────────────────────────────────────────────────────────
@@ -429,6 +488,11 @@ function _awaitSheet() {
       _savePanel.status('The sheet is ready.', 'ok');
     } catch (e) {
       if (e.stopped || _saving !== s) throw e;
+      if (e.gone) {
+        // The row was cleared from Alerts: the character itself says how its sheet ended.
+        await _settleFromCharacter(s);
+        return;
+      }
       s.state = 'saved'; s.kind = 'err';
       s.note = (e.cancelled ? 'The sheet was let go of' : e.message) + ' - the character is saved; Try again draws it again.';
       _remember();
@@ -439,11 +503,57 @@ function _awaitSheet() {
   }, { startedAt: s.startedAt, onCancel: () => _letGo(s.alertId) });
 }
 
+// The save form settled from the character record - for a sheet whose row is gone from Alerts. Never
+// offers a paid "Try again" for a sheet that exists.
+async function _settleFromCharacter(s) {
+  let c = null;
+  try {
+    const d = await (await fetch('/api/char-store/list')).json();
+    c = ((d && d.chars) || []).find(x => String(x.id) === String(s.charId)) || null;
+  } catch (e) { c = null; }
+  if (_saving !== s) return;
+  if (c && c.sheet) { s.sheet = c.sheet; s.state = 'saved'; s.kind = 'ok'; s.note = 'The sheet is ready.'; _paintDrop(c.sheet); }
+  else if (c && c.sheetTask) { s.state = 'saved'; s.kind = ''; s.note = 'The sheet is still being drawn - it lands on the character by itself.'; }
+  else { s.state = 'saved'; s.kind = 'err'; s.note = ((c && c.sheetError) || (c ? 'The sheet did not come' : 'This character is gone')) + ' - Try again draws it again.'; }
+  _remember();
+  _savePanel.setState('saved');
+  _savePanel.status(s.note, s.kind || undefined);
+}
+
+// WHAT CHANGED WHILE NOBODY LOOKED (review H): a portrait or a sheet that failed here can be started
+// again from Alerts - the same row runs again - and this area would go on showing the failure and
+// offering to pay a second time. Asked every time the area opens and whenever the window comes back.
+async function _recheck() {
+  if (_busy || !_built) return;
+  if (_pending && _pending.failed) {
+    const p = _pending;
+    const it = await _readRow(p.alertId);
+    if (_pending !== p || _busy) return;
+    if (it === null) { _pending = null; _remember(); }
+    else if (it && it.state === 'running') { p.failed = false; _remember(); _awaitPortrait(); return; }
+    else if (it && it.state === 'done' && it.result && it.result.path) { _landPortrait(it.result.path, p); return; }
+  }
+  const s = _saving;
+  if (s && s.state === 'saved' && s.kind === 'err' && s.alertId) {
+    const it = await _readRow(s.alertId);
+    if (_saving !== s || _busy) return;
+    if (it && it.state === 'running') { s.state = 'sheet'; s.note = ''; _remember(); _awaitSheet(); }
+    else if (it && it.state === 'done') await _settleFromCharacter(s);
+  }
+}
+
 // Done, or a preset whose sheet was ready: the bench empties, the area closes, and the shelf is read
-// again with the new character selected and in view (js/library/main.js, onSaved).
-function _finishSave() {
+// again with the new character selected and in view (js/library/main.js, onSaved). A name typed just
+// before the press - still inside the form's pause - is written first (review H).
+async function _finishSave() {
   const s = _saving || {};
-  const id = s.charId || '', name = (_savePanel && _savePanel.name()) || s.name || '';
+  const id = s.charId || '';
+  const typed = (_savePanel && _savePanel.name()) || '';
+  const name = typed || s.name || '';
+  if (id && typed && typed !== s.name) {
+    try { await _patchChar(id, { name: typed }); }
+    catch (e) { _status('The new name was not saved: ' + e.message, 'err'); }
+  }
   _saving = null;
   _follow++;
   _setStage(false);
@@ -466,11 +576,18 @@ function _retrySheet() {
   const s = _saving;
   if (!s || !s.charId) return;
   return _run('Asking for the sheet again…', async () => {
+    // No face: the server draws from what the character was saved with (its sheet, then its face) - the
+    // bench may hold another take by now.
     const body = { charId: s.charId, figure: _face.figure || '', where: _where('sheet') };
-    if (_face.base64) body.faceImageBase64 = _face.base64; else if (_face.path) body.faceImagePath = _face.path;
     const r = await (await fetch('/api/char-store/regen-ref', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     })).json();
+    // One is running already (started again from Alerts): that one is followed, not a second paid for.
+    if (r && r.running && r.alertId) {
+      s.alertId = r.alertId; s.state = 'sheet'; s.note = ''; s.kind = ''; s.startedAt = Date.now();
+      _remember();
+      return;
+    }
     if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be asked for again');
     s.alertId = r.alertId || ''; s.state = 'sheet'; s.note = ''; s.kind = ''; s.startedAt = Date.now();
     _remember();
@@ -527,15 +644,10 @@ function _build() {
   // Dismissing a failed overlay dismisses the whole failure, the block under the picture too.
   host.addEventListener('sv3-progress-dismissed', _clearErr);
 
-  const onGenerate = (values, name) => _run('Generating the character…', async (pr) => {
-    const p = await _askPortrait({ prompt: genPrompt(values) },
-      { from: 'create', values: { ...values }, name: name || '', label: 'Generating the character…' });
-    const path = await _followRow(p.alertId, (s) => pr.tick(s));
-    if (!path) throw new Error('the portrait finished without a picture');
-    if (_pending && _pending.alertId === p.alertId) _landPortrait(path, p);
-  }, { onCancel: () => { if (_pending) _letGo(_pending.alertId); } }).then((ok) => {
-    if (!ok && _pending && !_busy) { _pending = null; _remember(); _paintSaveBtn(); }
-  });
+  const onGenerate = (values, name) => _makePortrait('Generating the character…', async () => ({
+    body: { prompt: genPrompt(values) },
+    p: { from: 'create', values: { ...values }, name: name || '', label: 'Generating the character…' },
+  }));
 
   _headPanel = CreatePanel.buildHead($('chm-head-host'), { onGenerate });
   CreatePanel.build($('chm-main-host'), {
@@ -565,16 +677,7 @@ function _build() {
     }),
   });
   _refPanel = CreatePanel.buildRef($('chm-ref-host'), {
-    onApply: (text) => _run('Reading the reference…', async (pr) => {
-      await _fromText(text, 'ref');
-      pr.tick('Drawing…');
-      const p = _pending;
-      const path = await _followRow(p.alertId, (s) => pr.tick(s));
-      if (!path) throw new Error('the portrait finished without a picture');
-      if (_pending && _pending.alertId === p.alertId) _landPortrait(path, p);
-    }, { onCancel: () => { if (_pending) _letGo(_pending.alertId); } }).then((ok) => {
-      if (!ok && _pending && !_busy) { _pending = null; _remember(); _paintSaveBtn(); }
-    }),
+    onApply: (text) => _makePortrait('Reading the reference…', (pr) => _fromText(text, 'ref', pr)),
     onExit: () => { if (!_busy) _showFace(null); },
   });
   _editPanel = EditPanel.build($('chm-edit-host'), {
@@ -588,16 +691,7 @@ function _build() {
       _setMode('main');
       _status('Portrait kept as it is');
     },
-    onEdit: (text) => _run('Reading the portrait…', async (pr) => {
-      await _fromText(text, 'edit');
-      pr.tick('Drawing…');
-      const p = _pending;
-      const path = await _followRow(p.alertId, (s) => pr.tick(s));
-      if (!path) throw new Error('the portrait finished without a picture');
-      if (_pending && _pending.alertId === p.alertId) _landPortrait(path, p);
-    }, { onCancel: () => { if (_pending) _letGo(_pending.alertId); } }).then((ok) => {
-      if (!ok && _pending && !_busy) { _pending = null; _remember(); _paintSaveBtn(); }
-    }),
+    onEdit: (text) => _makePortrait('Reading the portrait…', (pr) => _fromText(text, 'edit', pr)),
   });
 
   for (const [id, step] of [['chm-prev', -1], ['chm-next', 1]]) {
@@ -637,7 +731,7 @@ function _build() {
       _saving = { charId: String(r.char.id), alertId: r.alertId || '', name, gender, state: 'sheet', startedAt: Date.now(), note: '', kind: '' };
       _remember();
       // An untouched preset came with its sheet: nothing to wait for, straight out.
-      if (r.char.sheet) { _finishSave(); return; }
+      if (r.char.sheet) { await _finishSave(); return; }
       if (!r.alertId) throw new Error('the character is saved, but its sheet has no row to follow - see Alerts');
     }).then((ok) => { if (ok && _saving && _saving.state === 'sheet') return _awaitSheet(); }),
     onRename: (name) => {
@@ -654,7 +748,7 @@ function _build() {
   });
 
   $('chm-savemodel').addEventListener('click', async () => {
-    if (!_face.src || _busy || _pending) return;
+    if (!_face.src || _busy || _waiting()) return;
     // An untouched preset arrives with its sheet already drawn: the form opens on the SHEET.
     const ready = await _presetSheetUrl();
     if (ready) _paintDrop(ready);
@@ -691,7 +785,7 @@ function _wireUpload() {
     const fr = new FileReader();
     fr.onerror = () => _status('Could not read that file', 'err');
     fr.onload = () => {
-      if (_busy || _pending || (_root && _root.dataset.stage === 'save')) { _status('Busy - drop it again in a moment', 'err'); return; }
+      if (_busy || _waiting() || (_root && _root.dataset.stage === 'save')) { _status('Busy - drop it again in a moment', 'err'); return; }
       _status('');
       _showFace(String(fr.result), 'upload');
     };
@@ -699,7 +793,7 @@ function _wireUpload() {
   };
   inp.addEventListener('change', () => { const f = (inp.files && inp.files[0]) || null; inp.value = ''; take(f); });
   drop.addEventListener('click', (e) => {
-    if (_busy || _face.src || _pending) return;
+    if (_busy || _face.src || _waiting()) return;
     if (e.target.closest('.cv2-drop-del, .cv2-page')) return;
     inp.click();
   });
@@ -716,6 +810,7 @@ function _wireUpload() {
 // ── The bench put back, and whatever it was waiting for picked up again ─────
 function _restore() {
   _recall();
+  if (_saving) _setStage(true);
   if (_face.src) {
     _paintDrop(_face.src);
     if (_headPanel) _headPanel.setName(_face.name);
@@ -737,7 +832,8 @@ function _restore() {
     if (_saving.note) _savePanel.status(_saving.note, _saving.kind || undefined);
     return;
   }
-  if (_pending && _pending.alertId) _awaitPortrait().then((ok) => { if (!ok && _pending && !_busy) { _pending = null; _remember(); _paintSaveBtn(); } });
+  if (_waiting()) { _awaitPortrait(); return; }
+  _recheck();
 }
 
 // ── The area's door ─────────────────────────────────────────────────────────
@@ -749,8 +845,10 @@ export function open() {
   if (!host) return;
   if (!_built) _build();
   host.hidden = false;
-  // The first time only: after that the area keeps its own state - it was only hidden.
-  if (!_opened) { _opened = true; _restore(); }
+  // The first time only: after that the area keeps its own state - it was only hidden - and is only
+  // asked whether a failure shown here has been started again from Alerts meanwhile.
+  if (!_opened) { _opened = true; _restore(); window.addEventListener('focus', () => { if (host && !host.hidden) _recheck(); }); }
+  else _recheck();
 }
 
 // Hidden, not stopped: a portrait or a sheet being waited for goes on, and so does its wait here.
@@ -759,5 +857,3 @@ export function close() {
   if (host) host.hidden = true;
 }
 
-// Whether a save stage or a wait is open - the shelf says so on the button that comes back to it.
-export function working() { return !!(_busy || _pending || _saving); }

@@ -684,7 +684,19 @@ function _watchSheets() {
     if (_shelf !== 'characters' || _creating) return;
     try {
       const d = await (await fetch('/api/library/shelf/characters')).json();
-      if (_shelf === 'characters' && !_creating && ids(d && d.items) !== was) { _load({ keepScroll: true }); return; }
+      if (_shelf === 'characters' && !_creating && d && d.success && ids(d.items) !== was) {
+        // The tiles again, the column left alone (review H): it may be in the middle of a voice search or
+        // a Save. The items keep their identity - the column holds one of them - and take the new fields.
+        const old = new Map(_items.map(it => [String(it.id), it]));
+        _items = (d.items || []).map(n => { const o = old.get(String(n.id)); return o ? Object.assign(o, n) : n; });
+        const g = $('lib-grid');
+        const top = g ? g.scrollTop : 0;
+        _renderGrid();
+        if (g) g.scrollTop = top;
+        const cur = _items.find(it => String(it.id) === _sel);
+        if (cur) INFO.setPicture('characters', cur);
+        _counts();
+      }
     } catch (e) { /* asked again next round */ }
     _watchSheets();
   }, 10000);
@@ -1080,9 +1092,8 @@ function _place(u) {
 async function _goToPlace(p) {
   if (!p) return;
   if (p.kind !== _shelf) {
-    if (_shelf === 'scenarios' && SC.unsaved()
-      && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
-    _select(p.kind);
+    _select(p.kind);                              // it asks about unsaved lines itself
+    if (_shelf !== p.kind) return;                // the person kept them
   }
   if (p.make && p.kind === 'characters') { _openCreate(); return; }
   if (_creating) await _closeCreate(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });

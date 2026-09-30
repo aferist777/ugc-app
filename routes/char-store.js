@@ -100,9 +100,12 @@ async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
 // `alertId` is the row written at the press (_openSheetRow). The kickoff moves its stage as it goes,
 // hands it the task once the ladder accepts, and stops at the next step if the row was let go of - a
 // sheet cancelled while its face is still being uploaded is never asked for at all.
-async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId) {
-  const gone = () => { if (!alertId) return false; const r = ALERTS.get(alertId); return !r || !!r.cancelled; };
-  const stage = (s) => { if (alertId) ALERTS.update(alertId, { stage: s }); };
+async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId, kick) {
+  // The row as it was when this kickoff started: let go of since, or started again from Alerts (a new
+  // startedAt - that run is the retry's, not this one's), and this kickoff stops at its next step.
+  const born = alertId ? ((ALERTS.get(alertId) || {}).startedAt || '') : '';
+  const gone = () => { if (!alertId) return false; const r = ALERTS.get(alertId); return !r || !!r.cancelled || (r.startedAt || '') !== born; };
+  const stage = (s) => { if (alertId && !gone()) ALERTS.update(alertId, { stage: s }); };
   try {
     // Hosted here rather than in the request. Verified, because an engine handed a link it
     // cannot read fails ten seconds after being charged, and a presigned link has an expiry of
@@ -140,26 +143,49 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId) {
     console.warn('[char-store] sheet submit failed everywhere:', why);
     patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || 'the sheet could not be submitted') });
     if (alertId && !gone()) ALERTS.fail(alertId, String(why || 'the sheet could not be submitted'));
+  } finally {
+    if (kick) _kicking.delete(kick);
   }
+}
+
+// THE KICKOFFS ALIVE IN THIS PROCESS, by the token their row carries (job.params.kick). A row written at
+// the press has no task until its kickoff hands it one; the kickoff lives in memory, so after the app
+// was closed in the middle of it nothing ever will - and the row would wait out its thirty minutes,
+// holding the character's tile and the save form. A row with no task whose kickoff is not alive here
+// is failed at once, with a reason; "try again" starts it from the saved face.
+// The token is registered BEFORE the row is written: JOBS.submitted polls straight away.
+const _kicking = new Set();
+const _kickToken = () => 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// The running sheet row of a character, if any - one sheet at a time per character: a second one
+// would be paid for, and whichever landed second would overwrite the first.
+function _runningSheet(charId, exceptId) {
+  return ALERTS.list().find(r => r && r.state === 'running' && r.job && r.job.type === 'sheet'
+    && String(((r.job.params || {}).charId) || '') === String(charId) && r.id !== exceptId) || null;
 }
 
 // THE ROW FOR A SHEET, written at the press (V2) - before the face is uploaded or anybody is asked. The
 // page follows it by its id (the Library's creation, phase H); the runner (lib/gen-jobs.js) waits for
 // the task once the kickoff hands it one. Without `where` nothing is journalled, as before.
+// Answers { id, kick } - the row, and the token its kickoff registers under (see _kicking).
 function _openSheetRow(charId, where, name) {
-  if (!where) return '';
+  if (!where) return { id: '', kick: '' };
+  const kick = _kickToken();
+  _kicking.add(kick);
   try {
     // The character in the row's own spot: a finished sheet leads to it (js/alerts-bell.js).
     const spot = { ...((where && where.spot) || {}), key: String(charId) };
-    return JOBS.submitted({
+    const id = JOBS.submitted({
       kind: 'image', what: 'sheet',
       title: 'Sheet · ' + String(name || 'character').slice(0, 60),
       where: { ...where, spot }, stage: 'starting', taskIds: [],
-      job: { type: 'sheet', params: { charId: String(charId), request: { charId: String(charId) } } },
+      job: { type: 'sheet', params: { charId: String(charId), kick, request: { charId: String(charId) } } },
     }).id;
+    return { id, kick };
   } catch (e) {
+    _kicking.delete(kick);
     console.warn('[char-store] could not write the alert:', e.message);
-    return '';
+    return { id: '', kick: '' };
   }
 }
 
@@ -367,7 +393,8 @@ router.post('/char-store/create', async (req, res) => {
     };
     upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
     // The row before the answer, so the page has it to follow from the first moment (V2).
-    const alertId = readySheet ? '' : _openSheetRow(charId, req.body && req.body.where, charName);
+    const row = readySheet ? { id: '', kick: '' } : _openSheetRow(charId, req.body && req.body.where, charName);
+    const alertId = row.id;
     res.json({ success: true, char: rec, alertId, promotedFromDraft: !!draft });
 
     if (readySheet) {
@@ -380,7 +407,7 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure }, alertId)
+    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure }, alertId, row.kick)
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -460,6 +487,9 @@ router.post('/char-store/regen-ref', async (req, res) => {
     const { charId } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
+    // One sheet at a time per character (review H): the one running is answered, for the page to follow.
+    const busy = _runningSheet(charId);
+    if (busy) return res.status(409).json({ success: false, running: true, alertId: busy.id, error: 'its 4K sheet is already being made' });
     const src = _identitySource(c, req.body);
     if (!src) {
       return res.status(404).json({ success: false,
@@ -483,7 +513,8 @@ router.post('/char-store/regen-ref', async (req, res) => {
     // sheetTask once something is accepted, sheetError only when nowhere is left. `was` is this
     // character's CURRENT sheet, so the page knows which picture means "still the old one".
     patchChar(charId, { sheetTask: null, sheetError: null, sheetNote: 'Preparing the sheet…', sheetLetGo: null });
-    const alertId = _openSheetRow(charId, req.body && req.body.where, c.name);
+    const row = _openSheetRow(charId, req.body && req.body.where, c.name);
+    const alertId = row.id;
     res.json({
       success: true, pending: true, was: c.sheet || null, alertId,
       engine: first.engine || '', provider: first.provider || '', quality: first.quality || '',
@@ -501,7 +532,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
     _kickoffSheets(charId, src.buf, {
       realismMarkers: req.body && req.body.realismMarkers,
       figure: req.body && req.body.figure,
-    }, alertId).catch(e => console.warn('[char-store/regen-ref] sheet kickoff failed:', e.message));
+    }, alertId, row.kick).catch(e => console.warn('[char-store/regen-ref] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/regen-ref]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
@@ -721,9 +752,12 @@ JOBS.register('sheet', {
   timeoutMs: 30 * 60 * 1000,
   // The row is written at the press, before anything is uploaded (_openSheetRow): until the kickoff
   // hands it a task it is "not started", not a failure.
-  poll: (rec) => rec.taskIds[0]
-    ? _resolveSheet(rec.taskIds[0], ((rec.job || {}).params || {}).charId, 'sheet')
-    : { state: 'pending' },
+  poll: (rec) => {
+    const p = (rec.job || {}).params || {};
+    if (rec.taskIds[0]) return _resolveSheet(rec.taskIds[0], p.charId, 'sheet');
+    return _kicking.has(p.kick) ? { state: 'pending' }
+      : { state: 'failed', error: 'the app was closed before the sheet was asked for - try again' };
+  },
   file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
   // Let go of in Alerts: the character stops waiting for this sheet (lib/gen-jobs.js cancelled).
   cancel: (rec) => _sheetLetGo(((rec.job || {}).params || {}).charId, rec.taskIds[0] || ''),
@@ -735,6 +769,7 @@ JOBS.register('sheet', {
     const id = String((request || {}).charId || ((rec && rec.job && rec.job.params) || {}).charId || '');
     const c = findChar(id);
     if (!c) throw new Error('that character is gone');
+    if (_runningSheet(id, rec && rec.id)) throw new Error('another 4K sheet for this character is being made - wait for it, or let it go first');
     let job = c.sheetJob;
     if (!job || !job.prompt || !job.imageUrl) {
       const src = _identitySource(c, {});
@@ -941,8 +976,7 @@ router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
 router.delete('/char-store/:id', async (req, res) => {
   // Not while its 4K sheet is being made (phase H6): the wait would be left with nothing to file into.
   // Let the sheet go in Alerts first, or wait for it.
-  const busy = ALERTS.list().some(r => r && r.state === 'running' && r.job && r.job.type === 'sheet'
-    && String(((r.job.params || {}).charId) || '') === String(req.params.id));
+  const busy = _runningSheet(req.params.id);
   if (busy) return res.status(409).json({ success: false, error: 'its 4K sheet is being made - wait for it, or let it go in Alerts first' });
   const char = findChar(req.params.id);   // capture the voices before the record is removed
   const ok = deleteChar(req.params.id);

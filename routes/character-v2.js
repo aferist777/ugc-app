@@ -208,8 +208,12 @@ const ALERTS = require('../lib/alerts');
 JOBS.register('portrait', {
   timeoutMs: 20 * 60 * 1000,
   poll: async (rec) => {
-    // Written at the press, before the ladder has answered: no task yet is "not started", not a failure.
-    if (!rec.taskIds[0]) return { state: 'pending' };
+    // Written at the press, before the ladder has answered: no task yet is "not started" - while the
+    // asking is alive in this process. A row the app was closed on in the middle of it gets no task ever.
+    if (!rec.taskIds[0]) {
+      return _asking.has(((rec.job || {}).params || {}).kick) ? { state: 'pending' }
+        : { state: 'failed', error: 'the app was closed before the portrait was asked for - try again' };
+    }
     const seen = WATCH.peek(rec.taskIds[0]);
     if (seen && seen.state === 'success') return { state: 'success', imagePath: seen.imagePath };
     if (seen && (seen.state === 'failed' || seen.state === 'gaveup')) {
@@ -263,28 +267,50 @@ async function _submitPortrait(b) {
   }
 }
 
+// The askings alive in this process, by the token their row carries (job.params.kick) - see the poll.
+const _asking = new Set();
+
 router.post('/character-v2/generate', async (req, res) => {
   const b = req.body || {};
-  // THE ROW COMES FIRST (V2): written at the press, before the ladder is asked, so a page that
-  // follows it (the Library's creation, phase H) has something to follow from the first moment, and a
-  // ladder that refuses everywhere still leaves its reason in the journal. The server watches the task
-  // to the end (WATCH.watch in _submitPortrait); the row is what anybody else reads.
-  let alertId = '';
+  // THE ROW COMES FIRST (V2) AND IS THE ANSWER: written at the press and answered at once, before the
+  // ladder is asked, so the page that follows it (New Character, phase H) holds it from the first
+  // moment - a reload, or the overlay's Cancel, while the ladder is still deciding has a row to act on.
+  // The asking goes on behind the answer: it hands the row its task, or fails it with the reason. The
+  // server watches the task to the end (WATCH.watch in _submitPortrait).
   if (b.where) {
+    if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: 'prompt is required' });
+    const kick = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    _asking.add(kick);                           // before the row: JOBS.submitted polls straight away
+    let alertId = '';
     try {
       alertId = JOBS.submitted({
         kind: 'image', what: 'portrait',
         title: 'Portrait · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
         where: b.where, stage: 'asking the engine', taskIds: [],
-        job: { type: 'portrait', params: { request: { ...b, where: null } } },
+        job: { type: 'portrait', params: { kick, request: { ...b, where: null } } },
       }).id;
-    } catch (e) { console.warn('[cv2/generate] could not write the alert:', e.message); }
+    } catch (e) {
+      _asking.delete(kick);
+      return res.status(500).json({ success: false, error: 'the Alerts row could not be written: ' + e.message });
+    }
+    res.json({ success: true, alertId });
+    try {
+      const sub = await _submitPortrait(b);
+      // A row let go of meanwhile stays let go of (update leaves it alone): the task was paid for when
+      // the ladder accepted it, the watcher still files it into media/work, and nothing follows it.
+      ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
+    } catch (err) {
+      console.error('[cv2/generate]', err.response?.data || err.message);
+      ALERTS.fail(alertId, reasonOf(err));       // a row let go of is left as it is (lib/alerts.js)
+    } finally {
+      _asking.delete(kick);
+    }
+    return;
   }
+  // Without a place to lead back to there is no row: the task is asked for and answered.
+  const alertId = '';
   try {
     const sub = await _submitPortrait(b);
-    // A row let go of meanwhile stays let go of (update leaves it alone): the task was paid for when
-    // the ladder accepted it, the watcher still files it into media/work, and nothing follows it.
-    if (alertId) ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
     res.json({
       success: true, alertId, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
       quality: sub.quality, aspect: sub.aspect,
@@ -298,9 +324,7 @@ router.post('/character-v2/generate', async (req, res) => {
     // "Request failed with status code 400", which names the status and nothing else, and a 400
     // you cannot read is a 400 you cannot fix.
     console.error('[cv2/generate]', err.response?.data || err.message);
-    const why = reasonOf(err);
-    if (alertId) { const r = ALERTS.get(alertId); if (r && !r.cancelled) ALERTS.fail(alertId, why); }
-    res.status(err.status || 502).json({ success: false, error: why, alertId });
+    res.status(err.status || 502).json({ success: false, error: reasonOf(err), alertId });
   }
 });
 

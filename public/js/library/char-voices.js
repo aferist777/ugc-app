@@ -209,7 +209,8 @@ export function paint(body, it, voices, hooks) {
   find.appendChild(results);
 
   const search = () => run('Searching the voice library…', async () => {
-    const q = new URLSearchParams({ page_size: String(PAGE), page: String(page) });
+    // The library counts pages from zero; the pager here from one.
+    const q = new URLSearchParams({ page_size: String(PAGE), page: String(page - 1) });
     if (fGender.value) q.set('gender', fGender.value);
     if (fLang.value) q.set('language', fLang.value);
     if (fAccent.value) q.set('accent', fAccent.value);

@@ -23,6 +23,7 @@ function _el(tag, cls, text) {
 }
 
 let _seq = 0;             // an answer for a tile no longer selected is dropped
+let _cur = null;          // { kind, id } of the tile the column is about
 
 // The picture as the column shows it: sized for a third of a wide screen, twice over (lib/thumbs.js
 // `sheet`, 1920px), and made once.
@@ -101,6 +102,7 @@ export async function show(kind, it, hooks) {
   if (!pane || !body) return;
   leave();
   const my = _seq;
+  _cur = { kind, id: String(it.id) };
   pane.hidden = false;
   body.className = 'lib-info-body is-' + kind;
   body.textContent = '';
@@ -121,6 +123,14 @@ export async function show(kind, it, hooks) {
   } else if (kind === 'environments') {
     body.appendChild(_place(d));
   }
+}
+
+/** The column's picture again, for a tile whose picture changed under it (a character's sheet landed) -
+ *  without painting the column again, so its voices, a search and a Save in progress stay. */
+export function setPicture(kind, it) {
+  if (!_cur || _cur.kind !== kind || _cur.id !== String(it.id) || !it.media) return;
+  const img = document.querySelector('#lib-info-body .lib-info-ref img');
+  if (img) img.src = _big(it.media);
 }
 
 /** A shelf with nothing on it: the column says so rather than showing the last tile. */
