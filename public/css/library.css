@@ -708,6 +708,18 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .mk-controls:empty{ display:none; }
 .mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .mk-ctl > span{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+/* The narrators' gear beside the Narrator field's name (phase G2): as tall as the name, no taller, so the
+   fields of the row stay level. */
+.mk-ctl > span:has(.mk-gear){ display:flex; align-items:center; gap:4px; }
+.mk-gear{
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+  width:15px; height:15px; margin:-3px 0; padding:0;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); cursor:pointer; transition:.12s var(--ease);
+}
+.mk-gear svg{ width:11px; height:11px; }
+.mk-gear:hover{ color:var(--ink); border-color:var(--border); background:var(--surface-2); }
+.mk-gear:focus-visible{ outline:none; border-color:var(--primary); color:var(--ink); }
 .mk-ctl select, .mk-ctl input{
   font:600 11px var(--font); color:var(--ink);
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);

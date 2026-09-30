@@ -58,15 +58,14 @@
     <!-- Filter rows, filled from what the shelf actually holds: for Media the kind and
          then the birol category. Empty rows collapse. -->
     <div class="lib-bar" id="lib-bar">
+      <!-- Scenarios only (phase E1): the generator in place of the list, and the way back to it - at the
+           LEFT of the bar, one in the other's place (the owner, phase G3). -->
+      <button class="lib-btn primary" type="button" id="lib-new-scen" hidden title="Write a scenario - from a source, or from a topic alone">New scenario</button>
+      <button class="lib-btn" type="button" id="lib-back-scen" hidden title="Back to the list of scenarios - what is being written goes on">← Scenarios</button>
       <span class="lib-bar-label" id="lib-bar-label"></span>
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
-      <!-- Scenarios only (phase E1): the generator in place of the list, and the way back to it. -->
-      <button class="lib-btn primary" type="button" id="lib-new-scen" hidden title="Write a scenario - from a source, or from a topic alone">New scenario</button>
-      <button class="lib-btn" type="button" id="lib-back-scen" hidden title="Back to the list of scenarios - what is being written goes on">← Scenarios</button>
-      <!-- The narrators window (phase E6) - on the list and in the generator alike. -->
-      <button class="lib-btn" type="button" id="lib-narrators" hidden title="The narrators - how a script is written">Narrators</button>
       <!-- Only appears when two records point at one file; says how many. -->
       <button class="lib-btn" type="button" id="lib-dupes" hidden>Duplicates</button>
       <!-- Only appears when a record points at a file that is not on disk. -->
