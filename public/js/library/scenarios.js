@@ -24,6 +24,7 @@
 // generator can write one) is shown on one textarea line, or a Save would quietly make it two.
 
 import { askName } from '../name-box.js';
+import * as Layers from '../layers.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -120,9 +121,10 @@ function _filterRow() {
 
 // Where a generated scenario came from, as the generator recorded it (routes/scriptgen.js, save).
 // Not the hook: it is the first line of the script, which the lines below show anyway (phase F5).
+// "written from" is painted before these, by the source's live name. [key, label, whole row wide].
 const ORIGIN_ROWS = [
-  ['sourceTitle', 'written from'], ['topicTitle', 'topic'], ['narratorName', 'narrator'],
-  ['narratorReading', 'which reading'], ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
+  ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
+  ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
@@ -220,6 +222,7 @@ export function render(items, hooks = {}) {
 function _pane() {
   const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
   if (!pane || !body) return null;
+  _closeFieldMenu();   // its field is about to be painted again
   pane.hidden = false;
   body.className = 'lib-info-body is-scenarios';
   body.textContent = '';
@@ -258,39 +261,195 @@ document.addEventListener('lib:narrators', () => { _lists = null; });
 const _inUse = (key) => [...new Set(_items.map(it => _val(it, key)).filter(Boolean))];
 const _uniq = (arr) => { const seen = new Set(); return arr.filter(v => { const k = String(v).toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; }); };
 
-// One field row: a label and a select. `values` are [{value, label}]; "none" and "new…" are added as
-// asked. The pick is handed to `onPick`, which saves; a refused save puts the old value back.
+// ONE FIELD (phase G4, the owner 2026-09-30): its name above a button that shows the value, laid two to
+// a row. Pressing it opens the list as a layer - a list of our own, because a row of a native <select>
+// cannot carry the ✕ that removes a wrong value. `values` are [{value, label}]; "none" and "new…" are
+// added as asked. The pick is handed to `onPick`, which saves; a refused save puts the old value back.
+// Returns { value } - the role and the gender read each other's current value when they save.
 function _fieldRow(box, label, current, values, onPick, o = {}) {
-  const r = _el('div', 'lib-vi-row is-edit');
-  r.appendChild(_el('span', 'lib-vi-l', label));
-  const sel = _el('select', 'lib-sc-fsel');
-  const add = (value, text) => { const op = _el('option', null, text); op.value = value; sel.appendChild(op); };
-  if (o.none) add('', o.noneLabel || 'none');
-  for (const v of values) add(v.value, v.label);
-  if (current && !values.some(v => v.value === current)) add(current, o.missingLabel ? o.missingLabel(current) : current);
-  if (o.newItem) add('__new__', 'new…');
-  sel.value = current || '';
-  let was = sel.value;
-  sel.addEventListener('change', async () => {
-    let v = sel.value;
+  const cell = _el('div', 'lib-sc-cell');
+  cell.appendChild(_el('span', 'lib-sc-cl', label));
+  const btn = _el('button', 'lib-sc-fbtn');
+  btn.type = 'button';
+  const f = { value: current || '' };
+  const labelOf = (v) => {
+    if (!v) return o.noneLabel || 'none';
+    const hit = values.find(x => x.value === v);
+    return hit ? hit.label : (o.missingLabel ? o.missingLabel(v) : v);
+  };
+  const paint = () => {
+    btn.textContent = '';
+    btn.appendChild(_el('span', 'lib-sc-fbtn-t', labelOf(f.value)));
+    btn.appendChild(_el('span', 'lib-sc-fbtn-c', '▾'));
+    btn.title = labelOf(f.value);
+    btn.classList.toggle('is-none', !f.value);
+  };
+  paint();
+  const choose = async (v) => {
     if (v === '__new__') {
-      const name = await askName({ anchor: sel, title: 'New ' + label, okLabel: 'Set', maxLength: 60 });
-      if (!name) { sel.value = was; return; }
-      v = name.trim();
-      if (![...sel.options].some(op => op.value === v)) {
-        const op = _el('option', null, v); op.value = v;
-        sel.insertBefore(op, sel.querySelector('option[value="__new__"]'));
-      }
-      sel.value = v;
+      const name = await askName({ anchor: btn, title: 'New ' + label, okLabel: 'Set', maxLength: 60 });
+      v = String(name || '').trim();
+      if (!v) return;
+      if (!values.some(x => x.value === v)) values.push({ value: v, label: v });
     }
-    sel.disabled = true;
+    if (v === f.value) return;
+    const was = f.value;
+    f.value = v;
+    paint();
+    btn.disabled = true;
     const ok = await onPick(v);
-    sel.disabled = false;
-    if (ok) was = sel.value; else sel.value = was;
+    btn.disabled = false;
+    if (!ok) { f.value = was; paint(); }
+  };
+  btn.addEventListener('click', () => {
+    if (_fmenu && _fmenu.anchor === btn) { _closeFieldMenu(); return; }
+    const rows = [];
+    if (o.none) rows.push({ value: '', label: o.noneLabel || 'none' });
+    rows.push(...values);
+    // The value it holds, when the list no longer has it (a narrator since deleted), is still shown.
+    if (f.value && !values.some(x => x.value === f.value)) rows.push({ value: f.value, label: labelOf(f.value) });
+    _fieldMenu(btn, {
+      label, rows, current: f.value, newItem: !!o.newItem, onChoose: choose,
+      removable: o.remove ? (v) => !!v && o.remove.can(v) : null,
+      field: o.remove ? o.remove.field : '',
+      onRemoved: (v) => {
+        const i = values.findIndex(x => x.value === v);
+        if (i >= 0) values.splice(i, 1);
+        if (f.value === v) { f.value = o.remove.fallback || ''; paint(); }
+      },
+    });
   });
-  r.appendChild(sel);
-  box.appendChild(r);
-  return sel;
+  cell.appendChild(btn);
+  box.appendChild(cell);
+  return f;
+}
+
+// The open list of a field: one at a time, on the Layers stack (Escape closes it), closed by a press
+// anywhere outside it and whenever the column is painted again.
+let _fmenu = null;
+function _closeFieldMenu() {
+  if (!_fmenu) return;
+  const m = _fmenu;
+  _fmenu = null;
+  document.removeEventListener('mousedown', m.away, true);
+  m.el.remove();
+  Layers.close(m.layer);
+}
+
+// REMOVING A VALUE: the ✕ at the right of a row, shown on hover. The first press only asks - the row
+// turns red and says how many scenarios carry it (archived ones too; the server counts) - the second
+// removes it, and moving off the row takes the question back.
+function _fieldMenu(anchor, m) {
+  _closeFieldMenu();
+  const menu = _el('div', 'mv3-plus-menu lib-sc-menu');
+  menu.setAttribute('role', 'listbox');
+  menu.setAttribute('aria-label', m.label);
+  const pick = (v) => { _closeFieldMenu(); m.onChoose(v); };
+  for (const r of m.rows) {
+    const row = _el('div', 'lib-sc-mrow');
+    const it = _el('button', 'mv3-plus-item' + (r.value === m.current ? ' is-cur' : ''));
+    it.type = 'button';
+    it.setAttribute('role', 'option');
+    it.setAttribute('aria-selected', r.value === m.current ? 'true' : 'false');
+    const txt = _el('span', null, r.label);
+    it.appendChild(txt);
+    it.addEventListener('click', (e) => { e.stopPropagation(); if (row.classList.contains('is-asking')) return; pick(r.value); });
+    row.appendChild(it);
+    if (m.removable && m.removable(r.value)) {
+      const x = _el('button', 'lib-sc-mx', '✕');
+      x.type = 'button';
+      x.title = 'Remove "' + r.label + '" - from the list and from every scenario that has it';
+      x.setAttribute('aria-label', 'Remove ' + r.label);
+      let ask = 0;   // which question is standing: the answer to an older one is dropped
+      const back = () => { ask++; row.classList.remove('is-asking'); delete row.dataset.count; txt.textContent = r.label; it.disabled = false; };
+      row.addEventListener('mouseleave', () => { if (row.classList.contains('is-asking')) back(); });
+      x.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!row.classList.contains('is-asking')) {
+          const my = ++ask;
+          row.classList.add('is-asking');
+          it.disabled = true;
+          txt.textContent = 'counting…';
+          const n = await _valueCount(m.field, r.value);
+          if (my !== ask) return;
+          if (n.error) { txt.textContent = 'cannot say - ' + n.error; return; }
+          row.dataset.count = String(n.count);
+          txt.textContent = n.count
+            ? 'remove from ' + n.count + (n.count === 1 ? ' scenario' : ' scenarios') + (n.archived ? ' (' + n.archived + ' archived)' : '') + '?'
+            : 'remove?';
+          return;
+        }
+        // The second press - only once the count has come back.
+        if (row.dataset.count == null) return;
+        const count = Number(row.dataset.count || 0);
+        if (count && _dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { back(); return; }
+        _closeFieldMenu();
+        await _removeValue(m.field, r.value, count, () => m.onRemoved(r.value));
+      });
+      row.appendChild(x);
+    }
+    menu.appendChild(row);
+  }
+  if (m.newItem) {
+    const row = _el('div', 'lib-sc-mrow');
+    const it = _el('button', 'mv3-plus-item is-new');
+    it.type = 'button';
+    it.appendChild(_el('span', null, 'new…'));
+    it.addEventListener('click', (e) => { e.stopPropagation(); pick('__new__'); });
+    row.appendChild(it);
+    menu.appendChild(row);
+  }
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.minWidth = Math.max(190, Math.round(r.width)) + 'px';
+  const below = window.innerHeight - r.bottom - 8, above = r.top - 8;
+  const up = below < Math.min(menu.offsetHeight, 240) && above > below;
+  menu.style.maxHeight = Math.max(120, Math.round(up ? above : below)) + 'px';
+  menu.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.left))) + 'px';
+  menu.style.top = Math.round(up ? Math.max(6, r.top - 2 - menu.offsetHeight) : r.bottom + 2) + 'px';
+  const cur = menu.querySelector('.is-cur');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
+  const away = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) _closeFieldMenu(); };
+  _fmenu = { el: menu, anchor, away, layer: Layers.open(menu, { modal: false, name: m.label + ' list', onEsc: _closeFieldMenu }) };
+  setTimeout(() => { if (_fmenu && _fmenu.el === menu) document.addEventListener('mousedown', away, true); }, 0);
+}
+
+async function _valueCount(field, value) {
+  try {
+    const r = await fetch('/api/scen3/values/remove', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value, dry: true }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!d || !d.success) return { count: 0, error: (d && d.error) || 'refused' };
+    return { count: d.count || 0, archived: d.archived || 0 };
+  } catch (e) { return { count: 0, error: e.message }; }
+}
+
+// The removal itself. The suggestion lists are read again at the next paint; when scenarios carried the
+// value the shelf is read again too - their rows, the filters and this column all say what they are now.
+// A filter set to the removed value is let go, or it would hide everything behind a value nobody has.
+async function _removeValue(field, value, count, onDone) {
+  const st = document.querySelector('#lib-info-body .lib-sc-status');
+  const say = (t, k) => { if (st) { st.textContent = t; st.className = 'lib-sc-status' + (k ? ' ' + k : ''); } };
+  say('removing ' + field + ' “' + value + '”…');
+  try {
+    const r = await fetch('/api/scen3/values/remove', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    _lists = null;
+    if (onDone) onDone();
+    if (_filters[field] && _filters[field].toLowerCase() === value.toLowerCase()) { delete _filters[field]; _saveFilters(); }
+    const n = d.count || 0;
+    const note = 'removed ' + field + ' “' + value + '”' + (n ? ' from ' + n + (n === 1 ? ' scenario' : ' scenarios') : '');
+    if (n || count) {
+      _say = { id: _sel, text: note, kind: 'ok' };
+      if (_hooks.reload) await _hooks.reload();
+    } else say(note, 'ok');
+  } catch (e) { say('Not removed: ' + e.message, 'err'); }
 }
 
 // A field saved on its own - only that field, as an edit, so nothing else the column painted can be
@@ -334,16 +493,20 @@ async function _paintFields(box, s) {
   const opt = (arr) => arr.map(v => ({ value: v, label: v }));
   const role = (s.roles || [])[0] || { id: 'r0', name: '', gender: '' };
   const roleOf = (name, gender) => [{ id: role.id || 'r0', name, gender }];
+  // What a ✕ may take away (phase G4): the four vocabularies a person types into. talking_head is the
+  // type everything falls back to; gender is two words, narrators go in their own window, languages
+  // are the generator's list.
+  const rm = (field, fallback) => ({ field, fallback, can: (v) => !(field === 'type' && v === 'talking_head') });
   _fieldRow(box, 'type', s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
-    v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true });
-  const roleSel = _fieldRow(box, 'role', role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
-    v => _patch(s, { roles: roleOf(v, genderSel.value) }, 'role'), { none: true, newItem: true });
-  const genderSel = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'female' }, { value: 'male', label: 'male' }],
-    v => _patch(s, { roles: roleOf(roleSel.value, v) }, 'gender'), { none: true });
+    v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true, remove: rm('type', 'talking_head') });
+  const roleF = _fieldRow(box, 'role', role.name, opt(_uniq([..._inUse('role'), ...L.roles])),
+    v => _patch(s, { roles: roleOf(v, genderF.value) }, 'role'), { none: true, newItem: true, remove: rm('role', '') });
+  const genderF = _fieldRow(box, 'gender', role.gender, [{ value: 'female', label: 'female' }, { value: 'male', label: 'male' }],
+    v => _patch(s, { roles: roleOf(roleF.value, v) }, 'gender'), { none: true });
   _fieldRow(box, 'vertical', s.vertical, opt(_uniq([..._inUse('vertical'), ...L.verticals])),
-    v => _patch(s, { vertical: v }, 'vertical'), { none: true, newItem: true });
+    v => _patch(s, { vertical: v }, 'vertical'), { none: true, newItem: true, remove: rm('vertical', '') });
   _fieldRow(box, 'product', s.product, opt(_uniq([..._inUse('product'), ...L.products])),
-    v => _patch(s, { product: v }, 'product'), { none: true, newItem: true });
+    v => _patch(s, { product: v }, 'product'), { none: true, newItem: true, remove: rm('product', '') });
   // The narrator by id; one the list does not have any more is named, marked deleted.
   const nar = s.narrator || null;
   const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
@@ -359,12 +522,16 @@ async function _paintFields(box, s) {
     v => _patch(s, { language: v }, 'language'), { none: true });
 }
 
-function _row(box, label, value) {
+// A fact in the column's grid (phase G4/G5): its name above its value, two to a row; `wide` takes the
+// whole row - the long ones, a source's or a topic's name. An empty fact is left out.
+function _row(box, label, value, wide) {
   if (!value) return;
-  const r = _el('div', 'lib-vi-row');
-  r.appendChild(_el('span', 'lib-vi-l', label));
-  r.appendChild(_el('span', 'lib-vi-v', value));
-  box.appendChild(r);
+  const c = _el('div', 'lib-sc-cell' + (wide ? ' is-wide' : ''));
+  c.appendChild(_el('span', 'lib-sc-cl', label));
+  const v = _el('span', 'lib-sc-cv', value);
+  v.title = value;
+  c.appendChild(v);
+  box.appendChild(c);
 }
 
 async function _show(it) {
@@ -387,7 +554,7 @@ async function _show(it) {
   body.appendChild(_el('div', 'lib-sc-title', s.title || 'untitled'));
 
   const lines = s.lines || [];
-  const facts = _el('div', 'lib-vi');
+  const facts = _el('div', 'lib-sc-grid');
   body.appendChild(facts);
   await _paintFields(facts, s);
   if (my !== _seq) return;
@@ -401,15 +568,13 @@ async function _show(it) {
   const o = s.origin;
   if (!o) fold.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
   else {
-    const from = _el('div', 'lib-vi');
+    const from = _el('div', 'lib-sc-grid');
     // The source by its current name (the server reads it live); one since deleted by the name it had.
+    // The names go first and whole-row wide, the short facts two to a row after them (phase G5).
     const gone = o.sourceId && o.sourceGone;
-    for (const [key, label] of ORIGIN_ROWS) {
-      if (key === 'sourceTitle' && gone) continue;
-      _row(from, label, String(o[key] || '').trim());
-    }
-    if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted');
-    else if (!o.sourceTitle) _row(from, 'written from', 'no source');
+    if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted', true);
+    else _row(from, 'written from', String(o.sourceTitle || '').trim() || 'no source', true);
+    for (const [key, label, wide] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim(), wide);
     if (o.humanized) _row(from, 'cleaning pass', 'applied');
     fold.appendChild(from);
   }
@@ -526,4 +691,5 @@ export function leave() {
   _seq++;
   _sel = '';
   _say = null;
+  _closeFieldMenu();
 }

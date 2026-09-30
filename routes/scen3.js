@@ -164,9 +164,10 @@ function _newId(list) {
 //
 // These are remembered across scenarios: whatever the user types into one of
 // those three fields is HARVESTED into the shared list when the scenario is
-// saved, and offered in that field's dropdown from then on. Deleting an option
-// only removes the suggestion — scenarios already using the value keep it,
-// because each record stores its own plain string.
+// saved, and offered in that field's dropdown from then on. Removing a value
+// (/scen3/values/remove, phase G4) takes it off the scenarios as well - the
+// dropdowns are built from the scenarios too, so a value left on one of them
+// would come straight back.
 // ════════════════════════════════════════════════════════════════════════════
 
 function _saveOptions(o) {
@@ -226,7 +227,51 @@ router.get('/scen3/options', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Removes one suggestion from one list. Body: { kind, value }.
+// REMOVING A VALUE (phase G4, the owner 2026-09-30: "I added a wrong offer - it has to go somehow"). A value
+// of type, role, vertical or product leaves the suggestions AND every scenario that carries it, archived
+// ones included: the column's dropdowns and the filters are built from the scenarios themselves, so a value
+// left on one would come straight back. Type falls back to talking_head (which itself cannot be removed),
+// a role keeps its gender and loses its name. updatedAt is left alone - this tidies a vocabulary, it does
+// not edit a script. The generator's drafts lose it from their save form too. Body: { field, value, dry } -
+// dry only counts, for the question the page asks before the second press.
+const VALUE_FIELDS = { type: '', role: 'roles', vertical: 'verticals', product: 'products' };
+const DEFAULT_TYPE = 'talking_head';
+router.post('/scen3/values/remove', (req, res) => {
+  const b = req.body || {};
+  const field = String(b.field || '');
+  const value = String(b.value || '').trim();
+  if (!Object.prototype.hasOwnProperty.call(VALUE_FIELDS, field)) {
+    return res.status(400).json({ success: false, error: 'only a type, role, vertical or product can be removed' });
+  }
+  if (!value) return res.status(400).json({ success: false, error: 'which value?' });
+  const same = (v) => String(v || '').trim().toLowerCase() === value.toLowerCase();
+  if (field === 'type' && same(DEFAULT_TYPE)) {
+    return res.status(400).json({ success: false, error: DEFAULT_TYPE + ' is the type every scenario falls back to - it stays' });
+  }
+  try {
+    const list = _load();
+    const has = (s) => field === 'role' ? (s.roles || []).some(r => r && same(r.name)) : same(s[field]);
+    const hit = list.filter(s => s && has(s));
+    const archived = hit.filter(s => s.archived).length;
+    if (b.dry) return res.json({ success: true, count: hit.length, archived });
+    if (hit.length) {
+      _save(list.map(s => {
+        if (!s || !has(s)) return s;
+        if (field === 'role') return { ...s, roles: s.roles.map(r => (r && same(r.name) ? { ...r, name: '' } : r)) };
+        if (field === 'type') return { ...s, type: DEFAULT_TYPE };
+        return { ...s, [field]: '' };
+      }));
+    }
+    const key = VALUE_FIELDS[field];
+    if (key) {
+      const o = _loadOptions();
+      const kept = o[key].filter(v => !same(v));
+      if (kept.length !== o[key].length) _saveOptions({ ...o, [key]: kept });
+    }
+    const drafts = (field === 'vertical' || field === 'product') ? require('../lib/script-drafts').clearSaveValue(field, value) : 0;
+    res.json({ success: true, count: hit.length, archived, ids: hit.map(s => String(s.id)), drafts });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
 
 // The narrator's gender lives on the single role entry (one presenter).
 const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCase();

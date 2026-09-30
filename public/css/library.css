@@ -963,13 +963,43 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   background:transparent; color:var(--muted); font:600 10.5px var(--font); text-decoration:underline;
 }
 .lib-sc-filter-x:hover{ color:var(--ink); }
-.lib-vi-row.is-edit{ align-items:center; }
 /* A scenario kept in the list though the filters would hide it (it was opened on purpose). */
 .lib-srow.is-outside:not(.cur){ border-style:dashed; opacity:.8; }
-.lib-sc-fsel{
-  min-width:0; max-width:100%; height:24px; padding:0 4px;
-  font:11px var(--font); color:var(--ink);
+/* The scenario column's fields and facts, two to a row (phases G4, G5): the name above, the value or
+   its dropdown under it; a long one (a source's or a topic's name) takes the whole row. */
+.lib-sc-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px 10px; padding:10px 12px; }
+.lib-sc-cell{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.lib-sc-cell.is-wide{ grid-column:1 / -1; }
+.lib-sc-cl{ font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.lib-sc-cv{ font-size:10.5px; color:var(--ink); overflow-wrap:anywhere; }
+.lib-sc-fbtn{
+  display:flex; align-items:center; gap:6px; width:100%; min-width:0; height:24px; padding:0 6px 0 8px;
+  font:11px var(--font); color:var(--ink); text-align:left; cursor:pointer;
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
 }
-.lib-sc-fsel:focus{ outline:none; border-color:var(--primary); }
-.lib-sc-fsel[disabled]{ opacity:.6; }
+.lib-sc-fbtn:hover{ border-color:var(--border-soft); }
+.lib-sc-fbtn:focus-visible{ outline:none; border-color:var(--primary); }
+.lib-sc-fbtn[disabled]{ opacity:.6; cursor:default; }
+.lib-sc-fbtn-t{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-sc-fbtn.is-none .lib-sc-fbtn-t{ color:var(--muted); }
+.lib-sc-fbtn-c{ flex:0 0 auto; font-size:9px; color:var(--muted); }
+/* A field's list: the shared menu, scrolling when long; the chosen value in the accent; the ✕ of a
+   value that can be removed shows on hover, and a row asking "remove from N scenarios?" turns red. */
+.lib-sc-menu{ overflow-y:auto; max-width:320px; }
+.lib-sc-mrow{ position:relative; }
+.lib-sc-mrow > .mv3-plus-item{ width:100%; }
+.lib-sc-mrow > .mv3-plus-item span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-sc-mrow:has(.lib-sc-mx) > .mv3-plus-item{ padding-right:30px; }
+.lib-sc-mrow > .mv3-plus-item.is-cur span{ color:var(--primary); }
+.lib-sc-mrow > .mv3-plus-item.is-new span{ color:var(--muted); font-weight:500; }
+.lib-sc-mx{
+  position:absolute; top:50%; right:5px; transform:translateY(-50%);
+  width:20px; height:20px; padding:0; border:1px solid transparent; border-radius:var(--r-xs);
+  background:none; color:var(--muted); font:600 10px/1 var(--font); cursor:pointer;
+  opacity:0; transition:.1s var(--ease);
+}
+.lib-sc-mrow:hover .lib-sc-mx, .lib-sc-mx:focus-visible{ opacity:1; }
+.lib-sc-mx:hover, .lib-sc-mrow.is-asking .lib-sc-mx{ opacity:1; color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+.lib-sc-mrow.is-asking > .mv3-plus-item,
+.lib-sc-mrow.is-asking > .mv3-plus-item[disabled]:hover{ opacity:1; cursor:default; background:oklch(.62 .19 25 / .14); }
+.lib-sc-mrow.is-asking > .mv3-plus-item span{ color:var(--danger); }
