@@ -299,6 +299,10 @@ function _actionsFor(it) {
 // Runs one action and reports what the caller has to do about it. `removed` means the
 // item is gone, so whoever is showing it has to stop.
 async function _runAction(id, it) {
+  // A character whose sheet is being made is left alone until it lands (phase H6).
+  if ((id === 'rename' || id === 'del') && it.kind === 'characters' && it.meta && it.meta.sheetRunning) {
+    return { msg: 'Its 4K sheet is being made - wait for it, or let it go in Alerts first', err: true };
+  }
   if (id === 'rename') {
     const name = await A.renameItem(it);
     if (name) it.name = name;
@@ -600,6 +604,14 @@ function _renderGrid() {
       looks.textContent = n + (n === 1 ? ' look' : ' looks');
       sub.appendChild(looks);
       if (it.meta.voices) { const v = document.createElement('span'); v.textContent = '· voice'; sub.appendChild(v); }
+      // Its 4K sheet is still being made (phase H6): the tile shows the face until it lands.
+      if (it.meta.sheetRunning) {
+        const s = document.createElement('span');
+        s.className = 'lib-sub-run';
+        s.textContent = '· sheet…';
+        s.title = 'The 4K reference sheet is being made - it replaces the face when it lands';
+        sub.appendChild(s);
+      }
     }
     const card = _card(it, sub);
     if (PICKABLE.has(_shelf)) {
@@ -648,6 +660,28 @@ const _infoHooks = {
   openLook: (l, list) => _open(l, list),
   card: (l) => _card(l),
 };
+
+// A SHEET LANDING IS SEEN BY THE SHELF (phase H6): while a tile says "sheet…", the shelf is asked every
+// ten seconds whether that is still so, and read again once it is not - the face on the tile turns into
+// the sheet, and its rename and delete come back.
+let _sheetT = null;
+function _watchSheets() {
+  clearTimeout(_sheetT);
+  _sheetT = null;
+  if (_shelf !== 'characters' || _creating) return;
+  const ids = (list) => (list || []).filter(it => it && it.meta && it.meta.sheetRunning).map(it => String(it.id)).sort().join();
+  const was = ids(_items);
+  if (!was) return;
+  _sheetT = setTimeout(async () => {
+    _sheetT = null;
+    if (_shelf !== 'characters' || _creating) return;
+    try {
+      const d = await (await fetch('/api/library/shelf/characters')).json();
+      if (_shelf === 'characters' && !_creating && ids(d && d.items) !== was) { _load({ keepScroll: true }); return; }
+    } catch (e) { /* asked again next round */ }
+    _watchSheets();
+  }, 10000);
+}
 
 async function _load(opts) {
   const grid0 = $('lib-grid');
@@ -719,6 +753,7 @@ async function _load(opts) {
       const c = document.querySelector('#lib-grid .lib-card.cur');
       if (c) c.scrollIntoView({ block: 'nearest' });
     }
+    _watchSheets();
     _status('');
   } catch (e) {
     if (my !== _reqId) return;
@@ -1023,6 +1058,40 @@ async function _upload(files) {
     : (r.ok + ' of ' + r.total + ' uploaded'), r.ok === r.total ? '' : 'err');
 }
 
+// ── An address to land on (phase H5) ─────────────────────────────────────────
+// What an Alerts row leads to: ?shelf=characters&make=1 is the making area (a portrait or a sheet being
+// made there), ?shelf=characters&sel=<id> a character on the shelf, selected and in view. Read when the
+// page loads, and - when the Library is already open - taken from the Alerts list without loading the
+// page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
+function _place(u) {
+  const q = u.searchParams;
+  const kind = q.get('shelf') || '';
+  if (!SHELVES[kind]) return null;
+  return { kind, sel: q.get('sel') || '', make: q.get('make') === '1' };
+}
+
+async function _goToPlace(p) {
+  if (!p) return;
+  if (p.kind !== _shelf) {
+    if (_shelf === 'scenarios' && SC.unsaved()
+      && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
+    _select(p.kind);
+  }
+  if (p.make && p.kind === 'characters') { _openCreate(); return; }
+  if (_creating) await _closeCreate(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
+  else if (p.sel) { _sel = p.sel; _scrollSel = true; await _load({ keepScroll: true }); }
+}
+
+window.addEventListener('ugc:goto', (e) => {
+  let u;
+  try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
+  if (u.pathname !== location.pathname) return;
+  const p = _place(u);
+  if (!p) return;
+  e.preventDefault();
+  _goToPlace(p);
+});
+
 function boot() {
   initNav();
   try {
@@ -1031,6 +1100,16 @@ function boot() {
     _filter = localStorage.getItem(LS_FILTER) || '';
     _cat = localStorage.getItem(LS_CAT) || '';
   } catch (e) {}
+  // The address wins over the remembered shelf, and is then taken off it: a reload is not a second
+  // arrival from Alerts.
+  let arrive = null;
+  try { arrive = _place(new URL(location.href)); } catch (e) { arrive = null; }
+  if (arrive) {
+    _shelf = arrive.kind;
+    try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
+    if (arrive.sel) { _sel = arrive.sel; _scrollSel = true; }
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
+  }
 
   document.querySelectorAll('.lib-shelf').forEach(b => {
     b.addEventListener('click', () => _select(b.dataset.kind));
@@ -1081,7 +1160,9 @@ function boot() {
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(() => _load({ checks: true }));
+  _loadCats().then(() => _load({ checks: true })).then(() => {
+    if (arrive && arrive.make && arrive.kind === 'characters') _openCreate();
+  });
   _counts();
 }
 

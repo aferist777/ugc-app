@@ -89,8 +89,21 @@ function _imageShelf(dir, urlPrefix, kind) {
 // ── Characters ──────────────────────────────────────────────────────────────
 // The shelf is the character RECORDS, not the loose files in characters/: a card has
 // to be selectable so its looks can show beside it, and only a record knows its looks.
+// The characters whose 4K sheet is being made right now - a running sheet row in the journal (phase H6).
+// The shelf marks their tiles, and the tile's rename and delete wait for it: a character deleted under
+// its sheet leaves the wait with nothing to file into, and a name changed there is overwritten from the
+// save form that is still open on the old one.
+function _sheetsRunning() {
+  try {
+    return new Set(require('../lib/alerts').list()
+      .filter(r => r && r.state === 'running' && r.job && r.job.type === 'sheet')
+      .map(r => String(((r.job.params || {}).charId) || '')).filter(Boolean));
+  } catch (e) { return new Set(); }
+}
+
 function _charactersShelf() {
   const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
+  const running = _sheetsRunning();
   const looks = _looks().items;
   const perChar = {};
   looks.forEach(l => { const k = l.meta.charId; perChar[k] = (perChar[k] || 0) + 1; });
@@ -114,6 +127,7 @@ function _charactersShelf() {
         looks: perChar[String(c.id)] || 0,
         voices: Array.isArray(c.voices) ? c.voices.length : 0,
         date: c.date || null,
+        sheetRunning: running.has(String(c.id)),
       },
     };
   }).filter(x => x.media && _onDisk(x.media));

@@ -149,10 +149,12 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId) {
 function _openSheetRow(charId, where, name) {
   if (!where) return '';
   try {
+    // The character in the row's own spot: a finished sheet leads to it (js/alerts-bell.js).
+    const spot = { ...((where && where.spot) || {}), key: String(charId) };
     return JOBS.submitted({
       kind: 'image', what: 'sheet',
       title: 'Sheet · ' + String(name || 'character').slice(0, 60),
-      where, stage: 'starting', taskIds: [],
+      where: { ...where, spot }, stage: 'starting', taskIds: [],
       job: { type: 'sheet', params: { charId: String(charId), request: { charId: String(charId) } } },
     }).id;
   } catch (e) {
@@ -937,6 +939,11 @@ router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
 
 // ── DELETE /api/char-store/:id ───────────────────────────────────────────
 router.delete('/char-store/:id', async (req, res) => {
+  // Not while its 4K sheet is being made (phase H6): the wait would be left with nothing to file into.
+  // Let the sheet go in Alerts first, or wait for it.
+  const busy = ALERTS.list().some(r => r && r.state === 'running' && r.job && r.job.type === 'sheet'
+    && String(((r.job.params || {}).charId) || '') === String(req.params.id));
+  if (busy) return res.status(409).json({ success: false, error: 'its 4K sheet is being made - wait for it, or let it go in Alerts first' });
   const char = findChar(req.params.id);   // capture the voices before the record is removed
   const ok = deleteChar(req.params.id);
   let voices = [];

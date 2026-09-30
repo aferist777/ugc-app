@@ -965,6 +965,8 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-sc-filter-x:hover{ color:var(--ink); }
 /* A scenario kept in the list though the filters would hide it (it was opened on purpose). */
 .lib-srow.is-outside:not(.cur){ border-style:dashed; opacity:.8; }
+/* A character whose 4K sheet is still being made (phase H6). */
+.lib-sub-run{ color:var(--gold); font-weight:600; }
 /* The scenario column's fields and facts, two to a row (phases G4, G5): the name above, the value or
    its dropdown under it; a long one (a source's or a topic's name) takes the whole row. */
 .lib-sc-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px 10px; padding:10px 12px; }
