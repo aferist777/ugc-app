@@ -46,6 +46,9 @@
    on the bench both go - Create would make somebody else and throw this one away. */
 .chm[data-create-mode="ref"] #cv2-rnd, .chm[data-create-mode="ref"] #cv2-gen,
 .chm[data-portrait="1"] #cv2-rnd, .chm[data-portrait="1"] #cv2-gen{ display:none; }
+/* Cancel and Edit take the column's floor in the edit state, so TPDNE - which would throw away the
+   portrait being edited - steps aside there. */
+.chm[data-create-mode="edit"] #chm-foot-host{ display:none; }
 
 /* THE SAVE STAGE: the parameters fold to a 38px spine that cannot be pressed, the portrait keeps two
    fifths and the form takes three - the Character page's split. */
