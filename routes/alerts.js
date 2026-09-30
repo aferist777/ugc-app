@@ -57,6 +57,7 @@ router.post('/alerts/:id/cancel', (req, res) => {
   try {
     const rec = ALERTS.cancel(req.params.id, (req.body || {}).why);
     if (!rec) return res.status(404).json({ success: false, error: 'no such alert' });
+    if (rec.cancelled) require('../lib/gen-jobs').cancelled(rec);
     console.log('[alerts] ' + rec.what + ' ' + rec.id + ' given up on');
     res.json({ success: true, item: ALERTS.view(rec) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

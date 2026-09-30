@@ -203,10 +203,13 @@ router.post('/character-v2/analyze', async (req, res) => {
 // falls back to resolving the task itself - which is what the watcher cannot do after a restart,
 // because its loop lives in memory and the row does not.
 const JOBS = require('../lib/gen-jobs');
+const ALERTS = require('../lib/alerts');
 
 JOBS.register('portrait', {
   timeoutMs: 20 * 60 * 1000,
   poll: async (rec) => {
+    // Written at the press, before the ladder has answered: no task yet is "not started", not a failure.
+    if (!rec.taskIds[0]) return { state: 'pending' };
     const seen = WATCH.peek(rec.taskIds[0]);
     if (seen && seen.state === 'success') return { state: 'success', imagePath: seen.imagePath };
     if (seen && (seen.state === 'failed' || seen.state === 'gaveup')) {
@@ -261,22 +264,27 @@ async function _submitPortrait(b) {
 }
 
 router.post('/character-v2/generate', async (req, res) => {
+  const b = req.body || {};
+  // THE ROW COMES FIRST (V2): written at the press, before the ladder is asked, so a page that
+  // follows it (the Library's creation, phase H) has something to follow from the first moment, and a
+  // ladder that refuses everywhere still leaves its reason in the journal. The server watches the task
+  // to the end (WATCH.watch in _submitPortrait); the row is what anybody else reads.
+  let alertId = '';
+  if (b.where) {
+    try {
+      alertId = JOBS.submitted({
+        kind: 'image', what: 'portrait',
+        title: 'Portrait · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+        where: b.where, stage: 'asking the engine', taskIds: [],
+        job: { type: 'portrait', params: { request: { ...b, where: null } } },
+      }).id;
+    } catch (e) { console.warn('[cv2/generate] could not write the alert:', e.message); }
+  }
   try {
-    const b = req.body || {};
     const sub = await _submitPortrait(b);
-    // FROM THE CHARACTER PAGE: a row in the journal. The server already watches this one to the
-    // end (WATCH.watch below); the row is what makes it visible from anywhere else.
-    let alertId = '';
-    if (b.where) {
-      try {
-        alertId = JOBS.submitted({
-          kind: 'image', what: 'portrait',
-          title: 'Portrait · ' + String(b.said || b.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 60),
-          where: b.where, engine: sub.engine, taskIds: [sub.taskId],
-          job: { type: 'portrait', params: { request: { ...b, where: null } } },
-        }).id;
-      } catch (e) { console.warn('[cv2/generate] could not write the alert:', e.message); }
-    }
+    // A row let go of meanwhile stays let go of (update leaves it alone): the task was paid for when
+    // the ladder accepted it, the watcher still files it into media/work, and nothing follows it.
+    if (alertId) ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
     res.json({
       success: true, alertId, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
       quality: sub.quality, aspect: sub.aspect,
@@ -286,11 +294,13 @@ router.post('/character-v2/generate', async (req, res) => {
     });
   } catch (err) {
     // reasonOf digs the provider's own wording out of whichever envelope it used -
-    // Replicate puts it in data.detail, kie in data.msg, OpenRouter in data.error.message.
-    // Without it the page showed axios's "Request failed with status code 400", which
-    // names the status and nothing else, and a 400 you cannot read is a 400 you cannot fix.
+    // Replicate puts it in data.detail, kie in data.msg. Without it the page showed axios's
+    // "Request failed with status code 400", which names the status and nothing else, and a 400
+    // you cannot read is a 400 you cannot fix.
     console.error('[cv2/generate]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: reasonOf(err) });
+    const why = reasonOf(err);
+    if (alertId) { const r = ALERTS.get(alertId); if (r && !r.cancelled) ALERTS.fail(alertId, why); }
+    res.status(err.status || 502).json({ success: false, error: why, alertId });
   }
 });
 
