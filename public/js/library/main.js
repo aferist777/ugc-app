@@ -17,6 +17,7 @@ import * as MU from './music.js';
 import * as SC from './scenarios.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
+import * as CM from './chmake.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -53,6 +54,10 @@ let _checksDue = false;
 let _first = true;      // the page's very first read, for restoring a remembered filter
 // Scenarios: the generator is showing instead of the list (phase E), and the drafts heading the list.
 let _making = false;
+// Characters: making a character is showing instead of the shelf (phase H).
+let _creating = false;
+// The next read of the shelf brings the selected tile into view (a character just saved lands ~23rd).
+let _scrollSel = false;
 let _drafts = [];
 
 function _status(text, kind) {
@@ -73,14 +78,47 @@ function _paintShelves() {
 // ── The scenario generator (phase E) ─────────────────────────────────────────
 // "New scenario" puts it where the list is; "← Scenarios" brings the list back, read again, since a
 // scenario may have been saved and a draft started. Leaving it only hides it: what it runs goes on.
+// Characters has the same pair (phase H): "New Character" and "← Characters", the making area in place
+// of the shelf. Both flags are painted HERE, together, because this runs on every read of a shelf and a
+// flag painted anywhere else would be undone by the next read.
 function _paintMake() {
-  const on = _shelf === 'scenarios';
+  const on = _shelf === 'scenarios', ch = _shelf === 'characters';
   if (!on) _making = false;
+  if (!ch) _creating = false;
   const nb = $('lib-new-scen'), bb = $('lib-back-scen'), split = $('lib-split'), mk = $('lib-make');
+  const nc = $('lib-new-char'), bc = $('lib-back-char'), cm = $('lib-chmake');
   if (nb) nb.hidden = !on || _making;
   if (bb) bb.hidden = !on || !_making;
-  if (split) split.hidden = _making;
+  if (nc) nc.hidden = !ch || _creating;
+  if (bc) bc.hidden = !ch || !_creating;
+  if (split) split.hidden = _making || _creating;
   if (mk) mk.hidden = !_making;
+  if (cm) cm.hidden = !_creating;
+}
+
+// ── Making a character (phase H) ─────────────────────────────────────────────
+// "New Character" puts it where the shelf is; "← Characters" (and the shelf's own button) brings the
+// shelf back, read again - a character may have been saved. Leaving only hides it: what it waits for goes on.
+function _openCreate() {
+  if (_shelf !== 'characters') return;
+  INFO.leave();                                   // a voice demo must not play on under it
+  _creating = true;
+  _paintMake();
+  _status('');
+  CM.open();
+}
+
+// `then` runs before the shelf is read (to choose what it selects), `after` once it has been - a read
+// ends by clearing the status line, so anything said has to come after it.
+async function _closeCreate(then, after) {
+  if (!_creating) return;
+  CM.close();
+  _creating = false;
+  _paintMake();
+  if (then) then();
+  await _load({ keepScroll: true });
+  _counts();
+  if (after) after();
 }
 
 async function _openMake(opts) {
@@ -676,6 +714,11 @@ async function _load(opts) {
     // tiles' own pictures waited behind all of it.
     if (_checksDue) { _checksDue = false; _runChecks(); }
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
+    if (_scrollSel) {
+      _scrollSel = false;
+      const c = document.querySelector('#lib-grid .lib-card.cur');
+      if (c) c.scrollIntoView({ block: 'nearest' });
+    }
     _status('');
   } catch (e) {
     if (my !== _reqId) return;
@@ -705,7 +748,11 @@ function _select(kind) {
   if (!SHELVES[kind]) return;
   // The Scenarios button pressed while the generator is open goes back to the list, as
   // "← Scenarios" does (phase F4); pressing the open shelf otherwise does nothing.
-  if (kind === _shelf) { if (kind === 'scenarios' && _making) _closeMake(); return; }
+  if (kind === _shelf) {
+    if (kind === 'scenarios' && _making) _closeMake();
+    if (kind === 'characters' && _creating) _closeCreate();
+    return;
+  }
   // Lines typed into a scenario and not saved are not thrown away without a word.
   if (_shelf === 'scenarios' && SC.unsaved()
     && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
@@ -714,6 +761,7 @@ function _select(kind) {
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
   // The generator is hidden, not stopped: a draft typed into is saved now, its stages run on.
   if (_making) { MK.close(); _making = false; }
+  if (_creating) { CM.close(); _creating = false; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
@@ -1005,6 +1053,17 @@ function boot() {
   if (nb) nb.addEventListener('click', () => _openMake());
   const bb = $('lib-back-scen');
   if (bb) bb.addEventListener('click', () => _closeMake());
+
+  CM.init({
+    // Done: the shelf again, on the character just made - selected, in view, its column open.
+    onSaved: (id, name) => _closeCreate(
+      () => { if (id) { _sel = String(id); _scrollSel = true; } },
+      () => _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved')),
+  });
+  const nc = $('lib-new-char');
+  if (nc) nc.addEventListener('click', () => _openCreate());
+  const bc = $('lib-back-char');
+  if (bc) bc.addEventListener('click', () => _closeCreate());
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

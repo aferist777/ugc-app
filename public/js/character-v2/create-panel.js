@@ -24,6 +24,7 @@
 
 import { PARAM_SCHEMA, MARKS_KEYS, NONE_DEFAULT, RND_ORDER, allowedOpts, paramByKey, allParamKeys, genName } from './schema.js';
 import { PRESETS, presetById, exampleUrl, promptSegments, presetLabel } from './presets.js';
+import * as Layers from '../layers.js';
 
 const SEL_ID = (k) => 'cv2-p-' + k;
 const LS_PRESET = 'cv2_preset_v1';
@@ -227,8 +228,13 @@ function renderPrompt() {
   }
 }
 
+// On the Layers stack like every other little window (js/layers.js): Escape closes it and nothing under it.
 let _pop = null;
-function closeTokenPicker() { if (_pop) { _pop.remove(); _pop = null; } }
+let _popLayer = null;
+function closeTokenPicker() {
+  if (_pop) { _pop.remove(); _pop = null; }
+  if (_popLayer) { Layers.close(_popLayer); _popLayer = null; }
+}
 document.addEventListener('click', closeTokenPicker);
 
 // Two rows, as asked: what the dependencies allow, then everything else. The split is the
@@ -291,6 +297,7 @@ function openTokenPicker(anchor, k) {
   pop.style.top = Math.round(top) + 'px';
   pop.style.left = Math.round(left) + 'px';
   _pop = pop;
+  _popLayer = Layers.open(pop, { modal: false, name: 'value picker', onEsc: closeTokenPicker });
 }
 
 // ── Build ───────────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@
 <!-- The countdown rows of the scenario generator (js/progress.js startInlineProgress). -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/library.css">
+<!-- Making a character on the Characters shelf (phase H, js/library/chmake.js). -->
+<link rel="stylesheet" href="css/char-make.css">
 </head>
 <body>
 
@@ -62,6 +64,10 @@
            LEFT of the bar, one in the other's place (the owner, phase G3). -->
       <button class="lib-btn primary" type="button" id="lib-new-scen" hidden title="Write a scenario - from a source, or from a topic alone">New scenario</button>
       <button class="lib-btn" type="button" id="lib-back-scen" hidden title="Back to the list of scenarios - what is being written goes on">← Scenarios</button>
+      <!-- Characters only (phase H): making a character in place of the shelf, and the way back - at the
+           left too, one in the other's place. -->
+      <button class="lib-btn primary" type="button" id="lib-new-char" hidden title="Make a character - from the parameters, a preset, a random face or your own picture">New Character</button>
+      <button class="lib-btn" type="button" id="lib-back-char" hidden title="Back to the characters - what is being made goes on">← Characters</button>
       <span class="lib-bar-label" id="lib-bar-label"></span>
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
@@ -102,6 +108,10 @@
          right. Built the first time "New scenario" is pressed and only hidden after that, so what it
          runs goes on while the list is looked at (js/library/make.js). -->
     <div class="lib-make" id="lib-make" hidden></div>
+    <!-- MAKING A CHARACTER (phase H): the parameters, the portrait with its takes, and the save form that
+         draws the 4K sheet. Built the first time "New Character" is pressed and only hidden after that,
+         so a portrait or a sheet being made goes on while the shelf is looked at (js/library/chmake.js). -->
+    <div class="lib-chmake" id="lib-chmake" hidden></div>
   </main>
 </div>
 

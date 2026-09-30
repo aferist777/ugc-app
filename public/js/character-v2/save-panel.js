@@ -136,8 +136,8 @@ export function build(host, hooks) {
   const voice = _sec('Voice');
   const vnote = document.createElement('div');
   vnote.className = 'cv2-save-note';
-  vnote.textContent = 'Chosen after saving, under the reference in view mode - where the character '
-    + 'and its voices are looked at together.';
+  vnote.textContent = 'Chosen after saving, in the character’s column on the Characters shelf - where '
+    + 'the character and its voices are looked at together.';
   voice.appendChild(vnote);
   wrap.appendChild(voice);
 
