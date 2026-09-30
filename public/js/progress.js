@@ -253,6 +253,9 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
       row.querySelector('.sv3-inline-label').textContent = msg || 'Failed';
       row.querySelector('.sv3-inline-label').classList.add('err');
       eta.textContent = '';
+      // Nothing left to cancel: a cross that stayed would look live and do nothing.
+      const x = row.querySelector('.sv3-inline-x');
+      if (x) x.remove();
       closed = true;
     },
   };

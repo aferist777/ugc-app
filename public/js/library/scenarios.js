@@ -332,6 +332,8 @@ function _closeFieldMenu() {
   const m = _fmenu;
   _fmenu = null;
   document.removeEventListener('mousedown', m.away, true);
+  window.removeEventListener('scroll', m.onScroll, true);
+  window.removeEventListener('resize', _closeFieldMenu);
   m.el.remove();
   Layers.close(m.layer);
 }
@@ -382,7 +384,10 @@ function _fieldMenu(anchor, m) {
         // The second press - only once the count has come back.
         if (row.dataset.count == null) return;
         const count = Number(row.dataset.count || 0);
-        if (count && _dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { back(); return; }
+        // The list is drawn again when scenarios change or a filter stood on this value - and a drawing
+        // of the list paints the column again, so typed lines not saved are asked about first.
+        const onFilter = String(_filters[m.field] || '').toLowerCase() === String(r.value).toLowerCase();
+        if ((count || onFilter) && _dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { back(); return; }
         _closeFieldMenu();
         await _removeValue(m.field, r.value, count, () => m.onRemoved(r.value));
       });
@@ -410,7 +415,12 @@ function _fieldMenu(anchor, m) {
   const cur = menu.querySelector('.is-cur');
   if (cur) cur.scrollIntoView({ block: 'nearest' });
   const away = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) _closeFieldMenu(); };
-  _fmenu = { el: menu, anchor, away, layer: Layers.open(menu, { modal: false, name: m.label + ' list', onEsc: _closeFieldMenu }) };
+  // Placed once, so it closes when what it hangs from moves: the column scrolling under it, the window
+  // changing size. A scroll INSIDE the list (a long one, or the current value brought into view) is its own.
+  const onScroll = (e) => { if (!menu.contains(e.target)) _closeFieldMenu(); };
+  _fmenu = { el: menu, anchor, away, onScroll, layer: Layers.open(menu, { modal: false, name: m.label + ' list', onEsc: _closeFieldMenu }) };
+  window.addEventListener('scroll', onScroll, true);
+  window.addEventListener('resize', _closeFieldMenu);
   setTimeout(() => { if (_fmenu && _fmenu.el === menu) document.addEventListener('mousedown', away, true); }, 0);
 }
 
@@ -442,12 +452,19 @@ async function _removeValue(field, value, count, onDone) {
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     _lists = null;
     if (onDone) onDone();
-    if (_filters[field] && _filters[field].toLowerCase() === value.toLowerCase()) { delete _filters[field]; _saveFilters(); }
+    // The generator's form may hold it too (js/library/make.js clears it there).
+    document.dispatchEvent(new CustomEvent('lib:values-removed', { detail: { field, value } }));
+    const dropped = !!(_filters[field] && _filters[field].toLowerCase() === value.toLowerCase());
+    if (dropped) { delete _filters[field]; _saveFilters(); }
     const n = d.count || 0;
     const note = 'removed ' + field + ' “' + value + '”' + (n ? ' from ' + n + (n === 1 ? ' scenario' : ' scenarios') : '');
     if (n || count) {
       _say = { id: _sel, text: note, kind: 'ok' };
       if (_hooks.reload) await _hooks.reload();
+    } else if (dropped) {
+      // Nothing carried it, but the list was filtered by it: drawn again without that filter.
+      _say = { id: _sel, text: note, kind: 'ok' };
+      render(_items, _hooks);
     } else say(note, 'ok');
   } catch (e) { say('Not removed: ' + e.message, 'err'); }
 }

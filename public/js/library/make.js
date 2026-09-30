@@ -152,6 +152,14 @@ function _build() {
   // The narrators window says when a narrator was made, deleted or read again (js/library/narrators.js);
   // the form's list of them is rebuilt, keeping the choice while it still exists.
   document.addEventListener('lib:narrators', () => { if (_gen) _paintNarrators(); });
+  // A vertical or product removed on the Scenarios shelf (phase G4) leaves this form too, hidden or not:
+  // the server cleared the drafts' copies, and a stage landing later would save the form's copy back.
+  document.addEventListener('lib:values-removed', (e) => {
+    const { field, value } = (e && e.detail) || {};
+    if (field !== 'vertical' && field !== 'product') return;
+    const inp = $('mk-' + field);
+    if (inp && inp.value.trim().toLowerCase() === String(value || '').trim().toLowerCase()) inp.value = '';
+  });
   // Closing the page is leaving the form: a save still waiting out its pause goes now.
   window.addEventListener('pagehide', () => { if (_saveT && _gen) _saveDraft({ keepalive: true }); });
 }
@@ -727,6 +735,9 @@ function _paintFrom() {
 // narrators' gear). A button inside the label is its own press - it does not reach the select.
 function _ctl(label, node, extra) {
   const w = el('label', 'mk-ctl');
+  // Pointed at its field: a label with no `for` labels its FIRST control, and the gear in the name
+  // comes before the select - a press on the word "Narrator" would open the narrators window.
+  if (node && node.id) w.htmlFor = node.id;
   const head = el('span', null, label);
   if (extra) head.appendChild(extra);
   w.appendChild(head);
@@ -1203,13 +1214,15 @@ async function _followStage(jobId, run, gen, onResult) {
     if (e.cancelled) {
       // Cancelled (phase G1): not an error. The form goes back to what it showed before the press -
       // the hooks it had, the script it had - since the server kept nothing of this stage.
+      // Painted from the form itself, never read back from the server: nothing of the stage was kept,
+      // and a reload would put the draft's copy over edits still waiting out their pause.
       rec.rows.forEach(r => r.detach());
       if (here()) {
         _sayBriefly('cancelled - what was already sent is paid for');
-        if (_gen === gen && onResult) {
-          if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
-          if ((_gen.paragraphs || []).length) _renderScenes();
-        } else await _reloadDraftInto();
+        if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
+        if ((_gen.paragraphs || []).length) _renderScenes();
+        // A stage this form did not start has no caller to set the stage back.
+        if (_gen !== gen || !onResult) _setStage((_gen.hooks || []).length && !$('mk-hook').value.trim() ? 'pick' : 'idle');
       }
       return 'cancelled';
     }
