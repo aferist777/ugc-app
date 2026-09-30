@@ -657,6 +657,13 @@ function _showSelected() {
 // look's card, the same card the grid draws, cross and all.
 const _infoHooks = {
   open: (it) => _open(it, null, (item) => { if (String(item.id) !== _sel) _pick(item); }),
+  // A character's voice or gender changed in its column (phase H7): the tiles say so, the column stays.
+  changed: () => {
+    const g = $('lib-grid');
+    const top = g ? g.scrollTop : 0;
+    _renderGrid();
+    if (g) g.scrollTop = top;
+  },
   openLook: (l, list) => _open(l, list),
   card: (l) => _card(l),
 };

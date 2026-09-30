@@ -175,6 +175,45 @@
   flex:0 0 auto; padding:1px 5px; border:1px solid var(--gold); border-radius:var(--r-xs);
   font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--gold);
 }
+/* A character's gender, a press away, and its voices with the ways to change them (phase H7,
+   js/library/char-voices.js). */
+.lib-cv-gender{ display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border-soft); }
+.lib-cv-l{ flex:0 0 auto; margin-right:4px; font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.lib-cv-g{
+  height:22px; padding:0 10px; border:1px solid var(--border); border-radius:var(--pill);
+  background:var(--surface-2); color:var(--muted); font:600 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-cv-g:hover:not([disabled]){ color:var(--ink); }
+.lib-cv-g.is-on{ color:var(--primary); border-color:var(--primary); background:var(--primary-soft); cursor:default; }
+.lib-cv-g[disabled]{ opacity:.5; cursor:default; }
+.lib-cv-row{ position:relative; }
+.lib-cv-star{
+  flex:0 0 auto; width:20px; height:20px; padding:0; border:0; background:none; cursor:pointer;
+  font-size:13px; line-height:1; color:var(--border); transition:.12s var(--ease);
+}
+.lib-cv-star:hover:not([disabled]){ color:var(--gold); }
+.lib-cv-x{
+  flex:0 0 auto; width:19px; height:19px; padding:0; line-height:1;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface);
+  color:var(--muted); font-size:10px; cursor:pointer; opacity:0; transition:.12s var(--ease);
+}
+.lib-cv-row:hover .lib-cv-x, .lib-cv-x:focus-visible{ opacity:1; }
+.lib-cv-x:hover:not([disabled]){ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+/* The status line is also the host of a countdown row, which lies over it. */
+.lib-cv-stat{ position:relative; min-height:26px; display:flex; align-items:center; padding:4px 12px; }
+.lib-cv-stat-t{ font:600 10px var(--font); color:var(--muted); }
+.lib-cv-stat-t.ok{ color:var(--primary); }
+.lib-cv-stat-t.err{ color:var(--danger); }
+.lib-cv-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; padding:8px 12px; }
+.lib-cv-sel{
+  flex:0 1 84px; min-width:0; height:24px; padding:0 5px;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:500 10.5px var(--font);
+}
+.lib-cv-sel.is-wide{ flex-basis:120px; }
+.lib-cv-go{ margin-left:auto; }
+.lib-cv-take{ flex:0 0 auto; color:var(--primary); border-color:var(--primary); }
+.lib-cv-pager{ display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; }
+.lib-cv-at{ font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums; }
 .lib-info-looks{
   --card-w:120px; --card-h:68px; --card-total:86px;
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w));

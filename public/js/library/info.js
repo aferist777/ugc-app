@@ -11,6 +11,8 @@
 // the tile is pressed, without reloading the page. The Voices shelf paints its own info into the
 // same column (js/library/voices.js); the page decides which of the two has it.
 
+import * as CV from './char-voices.js';
+
 const $ = (id) => document.getElementById(id);
 
 function _el(tag, cls, text) {
@@ -21,14 +23,10 @@ function _el(tag, cls, text) {
 }
 
 let _seq = 0;             // an answer for a tile no longer selected is dropped
-let _audio = null;        // the one demo playing
-let _playing = null;      // ...and its button
 
 // The picture as the column shows it: sized for a third of a wide screen, twice over (lib/thumbs.js
 // `sheet`, 1920px), and made once.
 const _big = (src) => '/api/thumb?src=' + encodeURIComponent(src) + '&v=sheet';
-
-const _pretty = (s) => String(s || '').replace(/_/g, ' ');
 
 function _date(s) {
   const d = s ? new Date(s) : null;
@@ -59,53 +57,8 @@ function _ref(kind, it, hooks) {
   return b;
 }
 
-// ── A character's voices ────────────────────────────────────────────────────
-// The main one - the voice every read uses - first and in gold, then the others saved for the
-// character. To look at and to listen to; choosing them comes with the Character page's move here.
-function _voices(list) {
-  const box = _el('div', 'lib-info-part');
-  box.appendChild(_el('div', 'lib-info-sec', list.length > 1 ? 'Voices · ' + list.length : 'Voice'));
-  if (!list.length) { box.appendChild(_note('No voice yet.')); return box; }
-  for (const v of list) {
-    const row = _el('div', 'lib-info-voice' + (v.main ? ' is-main' : ''));
-    row.title = v.main ? 'The voice every read uses' : 'One of the voices saved for this character';
-    const play = _el('button', 'lib-vplay', '▶');
-    play.type = 'button';
-    play.disabled = !v.demo;
-    play.title = v.demo ? 'Play our demo' : 'There is no demo of this voice';
-    play.addEventListener('click', () => _play(v.demo, play));
-    const txt = _el('div', 'lib-vtxt');
-    txt.appendChild(_el('div', 'lib-vname', v.name || 'Not on the Voices shelf'));
-    txt.appendChild(_el('div', 'lib-vsub', (v.tags || []).map(_pretty).join(' · ') || v.voiceId));
-    row.appendChild(play);
-    row.appendChild(txt);
-    if (v.main) row.appendChild(_el('span', 'lib-info-main', 'main'));
-    box.appendChild(row);
-  }
-  return box;
-}
-
-// One demo at a time. Pressing the one that plays stops it.
-function _play(src, btn) {
-  const again = _playing === btn;
-  _stopAudio();
-  if (again || !src) return;
-  const a = new Audio(src);
-  _audio = a;
-  _playing = btn;
-  btn.textContent = '❚❚';
-  btn.classList.add('is-playing');
-  const done = () => { if (_audio === a) _stopAudio(); };
-  a.addEventListener('ended', done);
-  a.play().catch(done);
-}
-
-function _stopAudio() {
-  if (_audio) { try { _audio.pause(); } catch (e) { /* it is going anyway */ } }
-  if (_playing) { _playing.textContent = '▶'; _playing.classList.remove('is-playing'); }
-  _audio = null;
-  _playing = null;
-}
+// ── A character's gender and voices ─────────────────────────────────────────
+// Chosen here since the Character page moved into the Library (phase H7): js/library/char-voices.js.
 
 // ── Looks: a character's own, or the ones dressed in a lookbook ─────────────
 function _looks(list, hooks, none) {
@@ -161,7 +114,7 @@ export async function show(kind, it, hooks) {
   if (my !== _seq) return;
   if (!d || !d.success) { body.appendChild(_note((d && d.error) || 'It could not be read.')); return; }
   if (kind === 'characters') {
-    body.appendChild(_voices(d.voices || []));
+    CV.paint(body, it, d.voices || [], { changed: hooks.changed, alive: () => my === _seq });
     body.appendChild(_looks(d.looks || [], hooks, 'No looks for this character yet.'));
   } else if (kind === 'lookbooks') {
     body.appendChild(_looks(d.looks || [], hooks, 'Nothing has been dressed in this lookbook yet.'));
@@ -185,7 +138,7 @@ export function empty(label) {
 /** Stop what the column is doing - a demo playing, an answer still on its way. */
 export function leave() {
   _seq++;
-  _stopAudio();
+  CV.stop();
 }
 
 /** Leave, and give the width back to the grid. */
