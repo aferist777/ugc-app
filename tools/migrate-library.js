@@ -308,6 +308,9 @@ if (blocked) fail('refusing to apply - see above');
   const up = UPGRADE.upgrade(LIB, { log: (s) => say(s) });
   if (up.upgraded) say(`upgrade: ${up.report.unreferenced} files nothing uses set aside in ${up.backup}; ${up.newlyMissing.length} paths lost by it`);
   if (INTO_LAYOUT_6) {
+    // No draft characters (phase H8): out of the staged set before the merge, into the library's backups.
+    const drafts = require('../lib/char-drafts').setAside(LIB, path.join(TO, 'backups'));
+    if (drafts.length) say(drafts.length + ' draft character(s) set aside in ' + path.join(TO, 'backups'));
     const m = mergeLibrary(LIB, TO, { overwrite: OVERWRITE_STORES });
     say(`merged into ${TO}: ${m.projects} projects (${m.projectsHere} already there), ${m.timelines} timelines, `
       + `${m.categories} categories, ${m.files} files (${m.skipped} already there), ${m.stores} stores`);

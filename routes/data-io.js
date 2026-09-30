@@ -483,6 +483,13 @@ router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) =>
         r.setAside = u.upgraded ? u.report.unreferenced : 0;
         r.timelinesRewritten = (u.timelines && u.timelines.converted) || 0;
       }
+      // Draft characters are not characters any more (phase H8): an archive made before that can carry
+      // one, and with overwrite its record would even replace the finished character of the same id. Out
+      // of the staged set before the merge, into this library's backups (lib/char-drafts.js).
+      try {
+        const drafts = require('../lib/char-drafts').setAside(lib, path.join(ROOT_DIR, 'backups'));
+        if (drafts.length) { r.draftsSetAside = drafts.length; console.log('[data-io] staged set: ' + drafts.length + ' draft character(s) set aside'); }
+      } catch (e) { console.warn('[data-io] staged set: drafts not set aside:', e.message); }
       Object.assign(r, require('../lib/library-merge').mergeLibrary(lib, ROOT_DIR, {
         overwrite, onNewFolder: (url) => require('../lib/moves').forget(url),
       }));

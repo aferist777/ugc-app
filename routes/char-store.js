@@ -29,49 +29,37 @@ const {
   charFolderName, charAbsFolderRec,
   loadChars, saveChars, findChar, upsertChar, patchChar, deleteChar,
 } = require('../lib/char-store');
+const CHAR_DRAFTS = require('../lib/char-drafts');
 
-// WHAT THE CHARACTER PAGE LEFT BEHIND, set aside ONCE per library (phase H8, the owner 2026-10-01): its
-// drafts - "не будем хранить черновики" - and its own logs, the attempt log (cv2-trace.jsonl) and the
-// rescued list (cv2-recovered.json), which nothing reads any more. A draft's record goes into
-// backups/<date> character page/drafts.json and its folder beside it; characters.json keeps only real
-// characters. Marked in cache/, like the other one-time tidy-ups.
-function _dropDraftsOnce() {
+// WHAT THE CHARACTER PAGE LEFT BEHIND (phase H8, the owner 2026-10-01). Its own logs - the attempt log
+// (cv2-trace.jsonl and its rotations), the rescued list (cv2-recovered.json), the prompt edits
+// (prompts.json) - which nothing reads any more, set aside ONCE per library (marked in cache/). And
+// drafts, on EVERY start: one can come back with an archive made before H8 (lib/char-drafts.js - Import
+// takes them out of the staged set too). Both into backups/<date> character page/.
+function _tidyAfterTheCharacterPage() {
+  try {
+    const drafts = CHAR_DRAFTS.setAside(ROOT_DIR, BACKUPS_DIR);
+    if (drafts.length) console.log('[char-store] ' + drafts.length + ' draft(s) set aside in ' + CHAR_DRAFTS.backupDir(BACKUPS_DIR));
+  } catch (e) { console.warn('[char-store] drafts could not be set aside:', e.message); }
   const mark = path.join(CACHE_DIR, 'char-drafts-dropped.json');
   if (fs.existsSync(mark)) return;
   try {
-    const file = path.join(DATA_DIR, 'characters.json');
-    if (fs.existsSync(file)) JSON.parse(fs.readFileSync(file, 'utf8'));   // unreadable: not now, not marked
-    const list = loadChars();
-    const drafts = list.filter(c => c && c.draft);
-    const dir = path.join(BACKUPS_DIR, new Date().toISOString().slice(0, 10) + ' character page');
-    const logs = fs.readdirSync(DATA_DIR)
-      .filter(f => /^cv2-trace\.jsonl(\.\d+)?$/.test(f) || f === 'cv2-recovered.json' || f === 'prompts.json');
-    if (logs.length) {
-      fs.mkdirSync(dir, { recursive: true });
-      for (const f of logs) {
-        try { fs.renameSync(path.join(DATA_DIR, f), path.join(dir, f)); }
-        catch (e) { console.warn('[char-store] ' + f + ' left where it was:', e.message); }
-      }
+    const dir = CHAR_DRAFTS.backupDir(BACKUPS_DIR);
+    const logs = fs.existsSync(DATA_DIR) ? fs.readdirSync(DATA_DIR)
+      .filter(f => /^cv2-trace\.jsonl(\.\d+)?$/.test(f) || f === 'cv2-recovered.json' || f === 'prompts.json') : [];
+    const moved = [];
+    for (const f of logs) {
+      try { fs.mkdirSync(dir, { recursive: true }); fs.renameSync(path.join(DATA_DIR, f), path.join(dir, f)); moved.push(f); }
+      catch (e) { console.warn('[char-store] ' + f + ' left where it was:', e.message); }
     }
-    if (drafts.length) {
-      fs.mkdirSync(dir, { recursive: true });
-      writeFileAtomic(path.join(dir, 'drafts.json'), JSON.stringify(drafts, null, 2));
-      for (const d of drafts) {
-        if (!d.folder) continue;
-        const src = path.join(CHARACTERS_DIR, d.folder), dst = path.join(dir, d.folder);
-        if (!fs.existsSync(src)) continue;
-        try { fs.renameSync(src, dst); }
-        catch (e) { fs.cpSync(src, dst, { recursive: true }); fs.rmSync(src, { recursive: true, force: true }); }
-      }
-      saveChars(list.filter(c => !(c && c.draft)));
-      console.log('[char-store] ' + drafts.length + ' draft(s) set aside in ' + dir);
-    }
-    if (logs.length) console.log('[char-store] the Character page logs set aside in ' + dir + ': ' + logs.join(', '));
+    if (moved.length) console.log('[char-store] the Character page logs set aside in ' + dir + ': ' + moved.join(', '));
+    // Not marked while one could not be moved (a Windows lock): the next start tries again.
+    if (moved.length < logs.length) return;
     fs.mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), drafts: drafts.map(d => ({ id: d.id, name: d.name })), logs }, null, 2));
-  } catch (e) { console.warn('[char-store] drafts could not be set aside:', e.message); }
+    writeFileAtomic(mark, JSON.stringify({ at: new Date().toISOString(), logs: moved }, null, 2));
+  } catch (e) { console.warn('[char-store] the Character page logs could not be set aside:', e.message); }
 }
-_dropDraftsOnce();
+_tidyAfterTheCharacterPage();
 
 // The reference sheet is a long-lived canonical asset, and which engine draws it, through
 // whom, and at which tier is now the `sheet` ladder in lib/cv2-ladders.js - a setting, not
