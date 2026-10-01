@@ -1005,6 +1005,9 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       if (!fs.existsSync(path.join(shelf.dir, base))) return res.status(404).json({ success: false, error: 'not found' });
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
+      // And its preview, made for a large one when it was filed (routes/scen3.js _previewTarget) - it
+      // was left behind before phase I, where every environment the chat makes has one.
+      _unlink(`${shelf.url}/preview/${base.replace(/\.[^.]+$/, '.jpg')}`);
       // What the agent wrote about it goes with it (lib/shelf-meta.js) - an entry for a picture
       // that no longer exists is only something a later picture of the same name could inherit.
       try { require('../lib/shelf-meta').drop(kind, `${shelf.url}/${base}`); }
