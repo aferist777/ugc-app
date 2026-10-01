@@ -275,8 +275,8 @@ function _paintList(list) {
     txt.appendChild(_el('span', 'mv3-sc-meta', _meta(s)));
     row.appendChild(txt);
 
-    // One button, and which one depends on where the scenario is: an archived one is not
-    // offered as something to build with until it is back in the library.
+    // The button depends on where the scenario is: an archived one is not offered as something
+    // to build with until it is back in the library.
     const acts = _el('div', 'mv3-sc-acts');
     const go = _el('button', 'mv3-sc-btn is-use', s.archived ? 'restore' : 'use');
     go.type = 'button';
@@ -286,17 +286,36 @@ function _paintList(list) {
     go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
       if (s.archived) return _archive(s, false);
-      go.disabled = true;
+      _disarm();
+      for (const b of acts.children) b.disabled = true;     // the cross waits for the project too
       go.textContent = '…';
       try {
         await _use(s.id);
       } catch (err) {
-        go.disabled = false;
+        for (const b of acts.children) b.disabled = false;
         go.textContent = 'use';
         alert('Could not make the project: ' + err.message);
       }
     });
     acts.appendChild(go);
+    // OUT OF THE LIST from the row itself (phase I1, the owner 2026-10-01), in two presses: the
+    // first turns the cross into "really?" for three seconds, the second archives. One press would
+    // make a row vanish under a stray click; the archive filter's `restore` brings it back.
+    if (!s.archived) {
+      const armed = !!_armed && _armed.id === s.id;
+      const x = _el('button', 'mv3-sc-btn is-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+      x.type = 'button';
+      x.title = 'Move to the archive - press twice';
+      if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
+      x.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!_armed || _armed.id !== s.id) { _arm(s.id, x); return; }
+        _disarm();
+        for (const b of acts.children) b.disabled = true;
+        _archive(s, true);
+      });
+      acts.appendChild(x);
+    }
     row.appendChild(acts);
 
     row.addEventListener('click', () => openForm(s));
@@ -362,6 +381,29 @@ function _rowMenu(ev, s, row) {
 async function _archive(s, yes) {
   try { await API.archive(s.id, yes); } catch (e) { alert('Could not change it: ' + e.message); }
   _load();
+}
+
+// The row's cross, armed: { id, x, timer }. One at a time - arming another row disarms this one -
+// and it disarms itself after three seconds, because an armed cross left there is a trap for the
+// next click that happens to land on it.
+let _armed = null;
+
+function _arm(id, x) {
+  _disarm();
+  _armed = { id, x, timer: setTimeout(_disarm, 3000) };
+  x.textContent = 'really?';
+  x.classList.add('is-armed');
+}
+
+function _disarm() {
+  if (!_armed) return;
+  const { x, timer } = _armed;
+  _armed = null;
+  clearTimeout(timer);
+  if (x && x.isConnected) {
+    x.textContent = '✕';
+    x.classList.remove('is-armed');
+  }
 }
 
 // ── Making the project ──────────────────────────────────────────────────────
@@ -468,10 +510,18 @@ export async function openForm(summary) {
   const save = _el('button', 'mv3-c-btn', 'save');
   save.type = 'button';
   save.title = 'Keep it in the library';
-  const use = _el('button', 'mv3-x-go', 'use');
+  // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
+  // 2026-10-01). For a scenario in the archive the same place says `restore`: the row and its menu
+  // offer nothing to build with until it is back, and neither does this window.
+  let archived = !!(summary && summary.archived);
+  const use = _el('button', 'mv3-c-btn mv3-x-use');
   use.type = 'button';
-  use.title = 'Save it and make a project from it';
-  foot.append(note, save, use);
+  const dressUse = () => {
+    use.textContent = archived ? 'restore' : 'use';
+    use.title = archived ? 'Put it back in the library' : 'Save it and make a project from it';
+  };
+  dressUse();
+  foot.append(save, note, use);
   box.appendChild(foot);
 
   const linesOf = () => lines.value.split('\n').map(s => s.trim()).filter(Boolean);
@@ -484,7 +534,7 @@ export async function openForm(summary) {
     // An EDIT is never refused by the server, only a new scenario is: a half-typed title
     // must not be able to fail a save of something that already exists.
     save.disabled = !!why && isNew;
-    use.disabled = !!why;
+    use.disabled = !!why && !archived;           // a restore needs no valid text
     return why;
   };
   title.addEventListener('input', gate);
@@ -524,6 +574,8 @@ export async function openForm(summary) {
       role.value = r0.name || '';
       gender.value = ['male', 'female'].includes(String(r0.gender || '')) ? r0.gender : '';
       lines.value = (rec.lines || []).map(l => l.text || '').join('\n');
+      archived = !!rec.archived;
+      dressUse();
       note.textContent = '';
     } catch (e) {
       note.textContent = 'Could not read it: ' + e.message;
@@ -559,6 +611,21 @@ export async function openForm(summary) {
     save.disabled = false;
   });
   use.addEventListener('click', async () => {
+    if (archived) {
+      use.disabled = true;
+      note.textContent = 'restoring…';
+      try {
+        await API.archive(rec.id, false);
+        archived = false;
+        dressUse();
+        note.textContent = 'back in the library';
+        _load();
+      } catch (e) {
+        note.textContent = e.message;
+      }
+      gate();
+      return;
+    }
     if (gate()) return;
     use.disabled = true;
     try {

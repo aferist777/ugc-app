@@ -419,7 +419,11 @@ router.post('/scen3/scenarios', (req, res) => {
     if (i >= 0) {
       // keep the original id + createdAt; the request may only carry changed fields
       const merged = _norm({ ...list[i], ...b, id: list[i].id, createdAt: list[i].createdAt }, now);
-      merged.updatedAt = now;
+      // Going INTO the archive is not an edit and keeps the date; coming back is news and gets a new
+      // one, so the scenario heads the list again (phase I1, the owner 2026-10-01).
+      const sent = Object.keys(b).filter(k => k !== 'id');
+      const outOnly = sent.length === 1 && sent[0] === 'archived' && b.archived === true;
+      merged.updatedAt = outOnly ? (list[i].updatedAt || now) : now;
       list[i] = merged;
       _save(list);
       _harvest(merged);

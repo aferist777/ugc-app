@@ -1498,6 +1498,18 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-sc-btn.is-use{border-color:var(--primary); color:var(--primary)}
 .mv3-sc-btn.is-use:hover{background:var(--primary); color:var(--primary-ink, oklch(.15 0 0))}
 .mv3-sc-btn[disabled]{opacity:.5; cursor:default}
+/* The row's cross into the archive (phase I1): as quiet as its neighbour until pointed at, red when
+   pointed at, and filled red while armed - "really?" for three seconds - so the second press is never
+   a surprise. An armed row keeps its buttons at full strength even when the pointer has left it. */
+.mv3-sc-btn.is-x{min-width:22px; text-align:center}
+.mv3-sc-btn.is-x:hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
+.mv3-sc-btn.is-x.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
+.mv3-sc-acts:has(.is-armed){opacity:1}
+/* The scenario window's foot (phase I2): save and its note on the left, use (or restore) alone at the
+   right edge, worn exactly like save. A button that cannot be pressed now looks it, and does not light
+   up under the pointer. */
+.mv3-x.is-scen .mv3-x-use{margin-left:auto}
+.mv3-x.is-scen .mv3-x-foot .mv3-c-btn[disabled]{opacity:.45; cursor:default; color:var(--muted); border-color:var(--border); background:var(--surface-2)}
 
 /* ── The scenario itself, read or written ────────────────────────────────────
    The same window for both, in the render window's frame (.mv3-x): one dialog look on

@@ -62,9 +62,11 @@ export const save = (rec) => _post('/api/scen3/scenarios', rec).then(d => d.scen
 
 /**
  * Archived or back. Sent through the same upsert as any other edit - the server merges what
- * it is given into the stored record - so this needs no route of its own.
+ * it is given into the stored record - so this needs no route of its own. As an EDIT: a scenario
+ * deleted meanwhile answers 404 instead of being made again out of nothing but the flag. Going
+ * into the archive keeps the scenario's date; coming back gives it a new one, so it heads the list.
  */
-export const archive = (id, yes) => save({ id, archived: !!yes });
+export const archive = (id, yes) => save({ id, archived: !!yes, edit: true });
 
 /** Gone for good: the store has no bin, which is why the panel asks first. */
 export const remove = (id) =>
