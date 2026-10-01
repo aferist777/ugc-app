@@ -603,7 +603,7 @@ async function _dropRow(alertId, what) {
 
 // The cross itself, for the corner of whatever is being made.
 function _dropX(alertId, what) {
-  const b = el('button', 'mv3-wk-drop', '✕');
+  const b = el('button', 'mv3-wk-letgo', '✕');
   b.type = 'button';
   b.title = 'Stop waiting for ' + what + '. It was paid for when it was asked for - this does not'
     + ' get that back; it takes the row out of Alerts and stops the app expecting a picture.';

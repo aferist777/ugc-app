@@ -321,6 +321,10 @@ video.mv3-ig-shot{ width:100%; height:auto; display:block; border-radius:var(--r
   border-left:1px solid var(--border); background:var(--surface);
 }
 .mv3-ig-sash{ flex:0 0 5px }
+/* Between the chat and the strip, where the markup puts it. Merge's own sash rule (.mv3-sash.is-v,
+   merge-v3.css) sends a vertical sash to the far end with order:2 since the preview moved left in
+   phase P - here that put it on the window's right edge, outside the strip it sizes (phase I0). */
+.mv3-sash.is-v.mv3-ig-sash{ order:0 }
 .mv3-ig-strip-head{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 10px;
   border-bottom:1px solid var(--border); background:var(--surface-2);

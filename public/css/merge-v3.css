@@ -2202,15 +2202,16 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-fsetfr.is-add:hover{background:color-mix(in oklch, var(--gold) 10%, transparent)}
 /* LETTING GO of something that is being made (phase N1): the cross in its top-right corner. Red,
    because it is the one control here that ends something, and small, because it is not the thing
-   you are meant to press. */
-.mv3-wk-drop{
+   you are meant to press. Its own class (phase I0): it was .mv3-wk-drop, the name the makers' photo
+   field already had, and coming later in the file it turned that field into this cross. */
+.mv3-wk-letgo{
   position:absolute; right:3px; top:3px; z-index:3; width:16px; height:16px; padding:0; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
   border:1px solid transparent; border-radius:var(--r-xs);
   background:oklch(0 0 0 / .55); color:#fff; font:700 9px/1 var(--font);
 }
-.mv3-wk-drop:hover{background:var(--danger, oklch(.62 .19 25)); border-color:var(--danger, oklch(.62 .19 25))}
-.mv3-wk-drop[disabled]{opacity:.4; cursor:default}
+.mv3-wk-letgo:hover{background:var(--danger, oklch(.62 .19 25)); border-color:var(--danger, oklch(.62 .19 25))}
+.mv3-wk-letgo[disabled]{opacity:.4; cursor:default}
 .mv3-wk-fcol .mv3-wk-flabel{margin:0 0 1px}
 .mv3-wk-flabel.is-row > span:first-child{flex:1 1 auto}
 .mv3-wk-vsel.is-small.is-col{flex:0 0 auto; width:100%}
