@@ -82,8 +82,10 @@ function createMaker(kind) {
   let _ui = {};
   let _sends = [];
   let _att = null;                                  // { path, from: 'base' | 'photo' }
-  let _attAt = 0;                                   // when the place above the box last changed
   let _posting = false;
+  let _lastSent = null;                             // { path, from } of the send just made - not sent twice by a second Enter
+  let _uploading = 0;                               // photos still on their way into Images
+  let _upSeq = 0;                                   // the newest of them is the one that lands in the place
   let _shelf = null;                                // the base tiles
   let _src = 'computer';                            // the right column: 'computer' | 'library'
   let _cat = '';
@@ -235,7 +237,6 @@ function createMaker(kind) {
   // ── the picture of the next message ───────────────────────────────────────
   function _setAtt(a) {
     _att = a && a.path ? { path: a.path, from: a.from === 'base' ? 'base' : 'photo' } : null;
-    _attAt = Date.now();
     _said = '';
     _paintAtts();
     _paintBase();
@@ -247,6 +248,10 @@ function createMaker(kind) {
   function _why() {
     const t = (_ui.ta ? _ui.ta.value : '').trim();
     if (_sends.filter(s => s.state === 'running').length >= AT_ONCE) return AT_ONCE + ' are being made - wait for one of them';
+    // A photo still on its way would be left out of the message (review I).
+    if (_uploading) return 'the photo is still being added';
+    // The same picture again with nothing typed is a second Enter, not a second wish (review I).
+    if (!t && _lastSent && _sameRef(_att, _lastSent)) return 'sent - type the next message, or pick another picture';
     if (!_att) {
       if (!t) return '';
       if (t.length < MIN_WORDS_ALONE) return (MIN_WORDS_ALONE - t.length) + ' more characters, or add a picture';
@@ -300,10 +305,17 @@ function createMaker(kind) {
     _ui.go.disabled = _posting || !!why || (!_att && !t);
   }
 
-  // A photo from this computer: into Images first, so the message can point at it for good.
+  const _sameRef = (a, r) => ((!a || !a.path)
+    ? !(r && r.path)
+    : !!(r && r.path === a.path && (r.from || 'photo') === a.from));
+
+  // A photo from this computer: into Images first, so the message can point at it for good. Sending
+  // waits while one is on its way, and when two are, the newer one is the picture (review I).
   async function _upload(f) {
     if (!/^image\//.test(f.type || '')) { _say('that file is not a picture'); return; }
     if (f.size > 30 * 1024 * 1024) { _say('that picture is ' + Math.round(f.size / 1048576) + ' MB - the limit is 30'); return; }
+    const my = ++_upSeq;
+    _uploading++;
     _ui.drop.classList.add('is-busy');
     _say('adding the photo to Images…');
     try {
@@ -315,13 +327,15 @@ function createMaker(kind) {
       });
       const d = await post(ADDR + '/photo', { dataUrl, name: f.name || '' });
       _said = '';
-      _setAtt({ path: d.path, from: 'photo' });
+      if (my === _upSeq) _setAtt({ path: d.path, from: 'photo' });
       if (_src === 'library') _loadImages();
       else _images = null;                         // read again when the library side is opened
     } catch (e) {
-      _say('Could not add the photo: ' + e.message);
+      _said = 'Could not add the photo: ' + e.message;
     } finally {
-      _ui.drop.classList.remove('is-busy');
+      _uploading--;
+      if (!_uploading) _ui.drop.classList.remove('is-busy');
+      _paintAtts();
     }
   }
 
@@ -344,7 +358,8 @@ function createMaker(kind) {
       _ui.ta.value = '';
       _grow();
       // The picture stays above the box until it is replaced - by hand, or by the result of this.
-      _sends.push({ ...d.send, _sentAtt: _attAt });
+      _sends.push(d.send);
+      _lastSent = att ? { path: att.path, from: att.from } : { path: '', from: '' };
       _paintThread(true);
       _remember();
       _poll();
@@ -361,13 +376,13 @@ function createMaker(kind) {
     try {
       const d = await json(ADDR);
       const before = new Map(_sends.map(s => [s.id, s]));
-      _sends = (d.sends || []).map(s => ({ ...s, _sentAtt: (before.get(s.id) || {})._sentAtt }));
-      // A picture that has just landed becomes the next base - if nobody touched the place above the
-      // box since it was sent.
+      _sends = d.sends || [];
+      // A picture that has just landed becomes the next base - if the place above the box still holds
+      // what that message was sent with (decided by what is there, so a reload does not forget it).
       for (const s of _sends) {
         const was = before.get(s.id);
         if (was && was.state === 'running' && s.state === 'done' && s.result && s.result.path) {
-          if (s._sentAtt != null && s._sentAtt === _attAt) _setAtt({ path: s.result.path, from: 'base' });
+          if (_sameRef(_att, s.ref)) _setAtt({ path: s.result.path, from: 'base' });
           _shelf = null;                           // the left column shows it next
           if (_hooks.landed) _hooks.landed(kind);
         }
@@ -419,13 +434,15 @@ function createMaker(kind) {
       }
       const sig = _sig(s);
       if (n.agent && n.sig === sig) {
-        if (s.state === 'running' && n.prog) n.prog.say(_stageWords(s.stage));
+        if (s.state === 'running' && n.prog) { n.prog.say(_stageWords(s.stage)); n.away = false; }
         continue;
       }
       // Ended, or running again (a retry from Alerts): the countdown says how it ended and the answer
       // is drawn anew in the same place.
       if (n.prog) {
-        if (s.state === 'done') n.prog.finish(); else n.prog.detach();
+        // Timed only when it was seen landing: one that landed while the area was hidden would teach the
+        // countdown the time it was away (review I).
+        if (s.state === 'done' && !n.away) n.prog.finish(); else n.prog.detach();
         n.prog = null;
       }
       const agent = _agentBubble(s, n);
@@ -639,7 +656,8 @@ function createMaker(kind) {
       sel.appendChild(o);
     }
     sel.value = _cat;
-    if (sel.value !== _cat) { _cat = ''; sel.value = ''; }
+    // A remembered category that is not there any more is dropped - once the categories are known.
+    if (_images !== null && sel.value !== _cat) { _cat = ''; sel.value = ''; }
 
     host.textContent = '';
     if (_images === null) { host.appendChild(el('div', 'mkc-none', 'reading the Library…')); return; }
@@ -676,10 +694,15 @@ function createMaker(kind) {
       _build();
       if (!_opened) {
         _opened = true;
-        window.addEventListener('focus', () => {
+        // Read again whenever something may have changed it from outside: the window comes back, or a
+        // row was asked for again from the Alerts list on this page (review I - a failed send has no
+        // poll of its own running).
+        const again = () => {
           const host = document.getElementById(sp.host);
           if (host && !host.hidden) _load();
-        });
+        };
+        window.addEventListener('focus', again);
+        window.addEventListener('ugc:alert-retried', again);
       }
       _shelf = null;
       _paintBase();
@@ -692,6 +715,8 @@ function createMaker(kind) {
     close() {
       clearTimeout(_timer);
       _timer = 0;
+      // A countdown left running while the area is hidden is not timed if it lands meanwhile.
+      for (const n of _nodes.values()) if (n.prog) n.away = true;
       _remember();
     },
   };

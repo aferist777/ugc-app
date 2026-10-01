@@ -220,7 +220,11 @@ function _row(rec) {
         return;
       }
       _armed = null;
-      _json('/api/alerts/' + encodeURIComponent(rec.id) + '/retry', { method: 'POST' }).then(_poll);
+      // Said to the page as well (phase I): a panel that shows this row's end - the Library's chats -
+      // reads itself again, because nothing of its own was waiting any more.
+      _json('/api/alerts/' + encodeURIComponent(rec.id) + '/retry', { method: 'POST' })
+        .then(() => { try { window.dispatchEvent(new CustomEvent('ugc:alert-retried', { detail: { id: rec.id } })); } catch (e) { /* only a hint */ } })
+        .then(_poll);
     });
     acts.appendChild(again);
   }

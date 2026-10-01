@@ -136,35 +136,69 @@ router.post('/makechat/:kind/send', (req, res) => {
 
 // Behind the answer: the picture up, the agent, the task - the row told each step, and told the task
 // the moment it exists.
+//
+// THE ROW IS THIS ASKING'S ONLY WHILE NOTHING ELSE HAS TAKEN IT (review I): let go of and asked for
+// again from Alerts, it runs again with another task - and this asking, still waiting on the agent,
+// must then neither pay for a second task nor write its own over the retry's. So every step checks
+// that the row is still running on THIS kick with no task but the one this asking got. (Alerts' retry
+// also waits while the kick is alive - lib/gen-jobs.js `busy` - so this is the second guard.)
+const MOVES = require('../lib/moves');
 async function _work(kind, type, alertId, kick, sendId, request) {
-  const params = (more) => ({ kick, chat: { kind, id: sendId }, request, ...(more || {}) });
+  let mine = '';                                   // the task this asking got, once it has one
+  const ours = () => {
+    const r = ALERTS.get(alertId);
+    if (!r || r.state !== 'running') return false;
+    if ((((r.job || {}).params || {}).kick) !== kick) return false;
+    return ((r.taskIds || [])[0] || '') === mine;
+  };
+  // A picture moved while the agent was reading (another category, say): lib/relocate.js rewrote the
+  // row, and what is written back now follows it instead of restoring the old address.
+  const now = (p) => (p ? MOVES.resolve(p) : p);
+  const fresh = (req) => {
+    const out = { ...req };
+    for (const k of ['imagePath', 'photoPath']) if (out[k]) out[k] = now(out[k]);
+    return out;
+  };
+  const freshFile = (f) => (f && f.from ? { ...f, from: now(f.from) } : (f || {}));
+  const params = (more) => ({ kick, chat: { kind, id: sendId }, request: fresh(request), ...(more || {}) });
   const hooks = {
-    stage: (w) => { ALERTS.update(alertId, { stage: w }); },
-    stop: () => { const r = ALERTS.get(alertId); return !r || r.state !== 'running'; },
+    stage: (w) => { if (ours()) ALERTS.update(alertId, { stage: w }); },
+    stop: () => !ours(),
     asked: (a) => {
-      ALERTS.update(alertId, { taskIds: [a.taskId], engine: a.engine, stage: '', job: { type, params: params({ file: a.file || {} }) } });
+      if (!ours()) return;
+      ALERTS.update(alertId, { taskIds: [a.taskId], engine: a.engine, stage: '', job: { type, params: params({ file: freshFile(a.file) }) } });
+      mine = a.taskId;
     },
   };
   try {
     const out = type === 'environment' ? await M.submitEnv(request, hooks) : await M.submitLookbook(request, hooks);
     // A choice of places is offered only to a page that can show one, and this one does not ask.
     if (out.choose) throw new Error('the agent could not decide what place to make - say which place');
+    if (!ours()) {
+      console.warn('[makechat] ' + type + ' ' + alertId + ': the row was taken over while its task was asked for - task ' + out.taskId + ' is not followed');
+      return;
+    }
     ALERTS.update(alertId, {
       taskIds: [out.taskId], engine: out.engine, stage: '',
-      job: { type, params: params({ request: M.retryRequest(request, out), file: out.file || {} }) },
+      job: { type, params: params({ request: M.retryRequest(fresh(request), out), file: freshFile(out.file) }) },
     });
-    CHAT.change(kind, sendId, (s) => { s.mode = String(out.mode || ''); });
+    mine = out.taskId;
+    // Only words for the chat: a store that cannot be written now must not fail a row whose task is paid.
+    try { CHAT.change(kind, sendId, (s) => { s.mode = String(out.mode || ''); }); }
+    catch (e) { console.warn('[makechat] the chat could not take the mode of ' + sendId + ':', e.message); }
   } catch (e) {
     if (e && e.stopped) return;                    // let go of before the money: nothing to say
     console.warn('[makechat] ' + type + ':', e.message);
-    ALERTS.fail(alertId, e.message, e.refused ? { refused: true } : undefined);
+    if (ours()) ALERTS.fail(alertId, e.message, e.refused ? { refused: true } : undefined);
   } finally {
     M.asking.delete(kick);
   }
 }
 
 // A photo from this computer, into Images - converted to JPEG when the shelf would not take it as it
-// is (a phone's HEIC), and recognised by its bytes so the same photo twice is one picture.
+// is (AVIF, GIF, TIFF), and recognised by its bytes so the same photo twice is one picture. A phone's
+// HEIC cannot be read: the sharp this app ships decodes AV1 inside HEIF but not HEVC (review I), so it
+// is turned down in words rather than failing somewhere later.
 router.post('/makechat/:kind/photo', async (req, res) => {
   try {
     const sp = _spec(req);
@@ -173,12 +207,16 @@ router.post('/makechat/:kind/photo', async (req, res) => {
     let buf = Buffer.from(raw, 'base64');
     if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable picture' });
     if (buf.length > PHOTO_MAX) return res.status(400).json({ success: false, error: 'that picture is over 30 MB' });
-    let fmt = '';
-    try { fmt = (await sharp(buf).metadata()).format || ''; } catch (e) { fmt = ''; }
+    let meta = null;
+    try { meta = await sharp(buf).metadata(); } catch (e) { meta = null; }
+    const fmt = (meta && meta.format) || '';
     if (!fmt) return res.status(400).json({ success: false, error: 'that file is not a picture' });
+    const HEIC = 'a HEIC photo cannot be read here - save it as JPEG first';
+    if (fmt === 'heif' && String(meta.compression || '').toLowerCase() === 'hevc') return res.status(400).json({ success: false, error: HEIC });
     let ext = { jpeg: 'jpg', png: 'png', webp: 'webp' }[fmt] || '';
     if (!ext) {
-      buf = await sharp(buf).rotate().jpeg({ quality: 92 }).toBuffer();
+      try { buf = await sharp(buf).rotate().jpeg({ quality: 92 }).toBuffer(); }
+      catch (e) { return res.status(400).json({ success: false, error: fmt === 'heif' ? HEIC : 'that picture could not be read (' + fmt + ')' }); }
       ext = 'jpg';
     }
 

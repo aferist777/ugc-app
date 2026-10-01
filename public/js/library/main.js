@@ -716,6 +716,9 @@ function _watchShelf() {
           if (g) g.scrollTop = top;
           const cur = _items.find(it => String(it.id) === _sel);
           if (cur) INFO.setPicture(kind, cur);
+          // The selected one gone, or none yet (the first picture landing on an empty shelf): one is
+          // always selected on a picture shelf, so the column follows the top-left tile (review I).
+          else _showSelected();
           _counts();
         }
       }
@@ -1116,7 +1119,13 @@ async function _goToPlace(p) {
     _select(p.kind);                              // it asks about unsaved lines itself
     if (_shelf !== p.kind) return;                // the person kept them
   }
-  if (p.make && MAKERS[p.kind]) { if (_makingOn !== p.kind) await _openMaker(); return; }
+  if (p.make && MAKERS[p.kind]) {
+    if (_makingOn !== p.kind) await _openMaker();
+    // Already showing: asked to look again - a row it shows may have been started again from Alerts
+    // (review I). Not the generator, whose open() starts a clean form.
+    else if (p.kind !== 'scenarios') await MAKERS[p.kind].mod.open({});
+    return;
+  }
   if (_makingOn) await _closeMaker(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
   else if (p.sel) { _sel = p.sel; _scrollSel = true; await _load({ keepScroll: true }); }
 }
@@ -1204,7 +1213,9 @@ function boot() {
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
   _loadCats().then(() => _load({ checks: true })).then(() => {
-    if (arrive && arrive.make && MAKERS[arrive.kind]) _openMaker();
+    // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
+    // reading is the person's choice, and its own area is not opened in its place (review I).
+    if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker();
   });
   _counts();
 }

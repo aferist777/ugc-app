@@ -615,7 +615,8 @@ export async function openForm(summary) {
       use.disabled = true;
       note.textContent = 'restoring…';
       try {
-        await API.archive(rec.id, false);
+        // By the list's id when the record could not be read (review I): rec.id is null then.
+        await API.archive(rec.id || summary.id, false);
         archived = false;
         dressUse();
         note.textContent = 'back in the library';

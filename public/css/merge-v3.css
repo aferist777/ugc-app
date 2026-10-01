@@ -1502,7 +1502,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
    pointed at, and filled red while armed - "really?" for three seconds - so the second press is never
    a surprise. An armed row keeps its buttons at full strength even when the pointer has left it. */
 .mv3-sc-btn.is-x{min-width:22px; text-align:center}
-.mv3-sc-btn.is-x:hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
+.mv3-sc-btn.is-x:not(.is-armed):hover:not([disabled]){color:var(--danger); border-color:var(--danger)}
 .mv3-sc-btn.is-x.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
 .mv3-sc-acts:has(.is-armed){opacity:1}
 /* The scenario window's foot (phase I2): save and its note on the left, use (or restore) alone at the

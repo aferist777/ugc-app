@@ -1878,8 +1878,12 @@ function _pollMaker(rec) {
   return { state: 'failed', error: 'the app was closed before the picture was asked for - try again' };
 }
 
+// A chat's row whose first asking is still going on is not asked for again yet (lib/gen-jobs.js retry).
+const _stillAsking = (rec) => _asking.has(((rec.job || {}).params || {}).kick);
+
 JOBS.register('lookbook', {
   poll: _pollMaker,
+  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('lookbook', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
@@ -1892,6 +1896,7 @@ JOBS.register('lookbook', {
 
 JOBS.register('environment', {
   poll: _pollMaker,
+  busy: _stillAsking,
   file: async (rec, landed) => {
     const filed = await _fileGenerated('environment', landed.imagePath, _fileParams(rec));
     return { path: filed.path, preview: filed.preview, from: filed.from || '', media: 'image' };
