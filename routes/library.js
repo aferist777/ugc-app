@@ -526,10 +526,19 @@ function _musicShelf() {
   return { items, filters: [] };
 }
 
+// How many lookbooks or environments are being made right now (phase I) - a chat's, or Merge's maker's.
+// The page asks the shelf again while there are any, so what lands shows up on the grid by itself.
+function _makingNow(type) {
+  try {
+    return require('../lib/alerts').list()
+      .filter(r => r && r.state === 'running' && r.job && r.job.type === type).length;
+  } catch (e) { return 0; }
+}
+
 const SHELVES = {
   characters:   _charactersShelf,
-  lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR), 'lookbooks'), filters: [] }),
-  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), filters: [] }),
+  lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR), 'lookbooks'), filters: [], running: _makingNow('lookbook') }),
+  environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), filters: [], running: _makingNow('environment') }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
   music:        _musicShelf,
@@ -542,7 +551,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    const { items, filters, labelFor, labelKeys } = build();
+    const { items, filters, labelFor, labelKeys, running } = build();
     // Filtering happens here rather than in the page, so the count the page shows is the
     // count it received. Media takes two: the kind, and the category within it.
     const f = String(req.query.filter || '');
@@ -556,7 +565,7 @@ router.get('/library/shelf/:kind', (req, res) => {
       ? !(i.meta || {}).categoryId
       : (i.meta || {}).categoryId === cat);
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats, labelKeys: labelKeys || null });
+      filters: filters || [], cats, labelKeys: labelKeys || null, running: running || 0 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -621,18 +630,57 @@ const INFO = {
       looks: _looks().items.filter(l => l.meta.charId === id),
     };
   },
+  // What is known about a lookbook (phase I): its gender and description - either may be empty, and
+  // both can be written by hand in the column - and the picture it was made from.
   lookbooks: (id) => {
     const media = _flatEntry(LOOKBOOKS_DIR, id);
     if (!media) return null;
-    return { media, looks: _looks().items.filter(l => l.meta.lookbook === media) };
+    const m = SM.read('lookbooks')[media] || {};
+    return {
+      media, looks: _looks().items.filter(l => l.meta.lookbook === media),
+      gender: String(m.gender || ''), description: String(m.description || ''), from: String(m.from || ''),
+    };
   },
   environments: (id) => {
     const media = _flatEntry(ENVIRONMENTS_DIR, id);
     if (!media) return null;
     const m = SM.read('environments')[media] || {};
-    return { media, description: String(m.description || ''), motion: String(m.motion || '') };
+    return { media, description: String(m.description || ''), motion: String(m.motion || ''), from: String(m.from || '') };
   },
 };
+
+// WRITTEN BY HAND IN THE COLUMN (phase I, the owner: shown, and filling them is optional). One writer
+// per field: a lookbook's gender and description, an environment's description here; how a place
+// moves keeps its own route (/api/scen3/env/motion). An empty value takes the field away.
+//   PATCH /api/library/meta/:kind/:id   { description?, gender? }
+// A lookbook's gender decides which lookbooks Merge offers a character, and its description is what
+// the dressing reads - which is the point of correcting them.
+const META_FIELDS = { lookbooks: ['description', 'gender'], environments: ['description'] };
+const GENDERS = ['male', 'female', 'unisex'];
+router.patch('/library/meta/:kind/:id', (req, res) => {
+  try {
+    const kind = String(req.params.kind || '');
+    const fields = META_FIELDS[kind];
+    if (!fields) return res.status(404).json({ success: false, error: `nothing to write on "${kind}"` });
+    const media = _flatEntry(kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR, String(req.params.id || ''));
+    if (!media) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
+    const b = req.body || {};
+    if (b.gender != null && b.gender !== '' && !GENDERS.includes(String(b.gender))) {
+      return res.status(400).json({ success: false, error: 'gender is male, female, unisex or nothing' });
+    }
+    const all = SM.read(kind);
+    const m = { ...(all[media] || {}) };
+    for (const f of fields) {
+      if (b[f] == null) continue;
+      const v = String(b[f]).trim().slice(0, 4000);
+      if (v) m[f] = v; else delete m[f];
+    }
+    m.at = new Date().toISOString();
+    all[media] = m;
+    SM.write(kind, all);
+    res.json({ success: true, kind, id: String(req.params.id), gender: String(m.gender || ''), description: String(m.description || '') });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
 
 router.get('/library/info/:kind/:id', (req, res) => {
   try {

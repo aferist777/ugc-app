@@ -34,7 +34,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // New Character's modules, moved out of the Character page's folder in phase H8
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
-                 '/css/char-make.css'];
+                 '/css/char-make.css',
+                 // the making chats of Environments and Lookbooks (phase I): the page's module, its styles, both chats
+                 '/js/library/makechat.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.

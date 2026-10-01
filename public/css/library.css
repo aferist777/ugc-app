@@ -225,6 +225,27 @@
   display:block; margin-bottom:2px;
   font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
 }
+.lib-info-text.is-none{ color:var(--muted); }
+/* A lookbook's gender and description, an environment's description - shown, and written by hand when
+   wanted (phase I); an empty one asks for nothing. */
+.lib-info-k{ display:block; padding:8px 12px 3px; font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.lib-info-genders{ display:flex; align-items:center; flex-wrap:wrap; gap:4px; padding:6px 12px 0; }
+.lib-info-genders .lib-info-k{ padding:0 6px 0 0; }
+.lib-info-chip{
+  padding:3px 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--muted); font:600 10px/1.2 var(--font); cursor:pointer;
+}
+.lib-info-chip:hover{ color:var(--ink); }
+.lib-info-chip.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+.lib-info-edit{
+  display:block; width:calc(100% - 24px); margin:0 12px; min-height:64px; padding:6px 8px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--ink); font:500 11px/1.5 var(--font);
+}
+.lib-info-edit:focus{ outline:none; border-color:var(--primary); }
+.lib-info-edit::placeholder{ color:var(--muted); }
+.lib-info-editfoot{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:22px; padding:4px 12px 0; }
+.lib-info-said{ flex:1 1 auto; font-size:10px; color:var(--muted); }
 
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .lib-grid{

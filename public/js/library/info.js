@@ -55,6 +55,9 @@ function _ref(kind, it, hooks) {
   img.src = _big(it.media);
   b.appendChild(img);
   b.addEventListener('click', () => hooks.open(it));
+  // No "Save image as" on the column's copy (phase I): the window's own menu would save the 1920px
+  // copy, not the picture.
+  b.addEventListener('contextmenu', (e) => e.preventDefault());
   return b;
 }
 
@@ -76,19 +79,94 @@ function _looks(list, hooks, none) {
   return box;
 }
 
-// ── What is known about a place ─────────────────────────────────────────────
-function _place(d) {
+// ── What is known about a place, or an outfit ───────────────────────────────
+// Shown, and written by hand when wanted (phase I, the owner: "показывай, но заполнение этих полей
+// необязательно"): a lookbook's gender and description, a place's description. Empty is fine - nothing
+// asks for them. How a place MOVES is written by the agent the first time a video is filmed there, and
+// edited where it is used; here it is only said.
+const GENDERS = ['male', 'female', 'unisex'];
+
+function _patch(kind, id, body) {
+  return fetch('/api/library/meta/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }).then(r => r.json()).then((d) => { if (!d || !d.success) throw new Error((d && d.error) || 'not saved'); return d; });
+}
+
+function _about(kind, it, d) {
   const box = _el('div', 'lib-info-part');
-  box.appendChild(_el('div', 'lib-info-sec', 'The place'));
-  if (!d.description && !d.motion) { box.appendChild(_note('Nothing is written about this place yet.')); return box; }
-  const text = (label, value) => {
+  box.appendChild(_el('div', 'lib-info-sec', kind === 'lookbooks' ? 'The outfit' : 'The place'));
+  const id = String(it.id);
+  const said = _el('div', 'lib-info-said');
+
+  if (kind === 'lookbooks') {
+    const row = _el('div', 'lib-info-genders');
+    row.appendChild(_el('span', 'lib-info-k', 'gender'));
+    let cur = GENDERS.includes(d.gender) ? d.gender : '';
+    const paint = () => row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === cur));
+    for (const g of GENDERS.concat([''])) {
+      const b = _el('button', 'lib-info-chip', g || '—');
+      b.type = 'button';
+      b.dataset.g = g;
+      b.title = g ? 'Worn by ' + (g === 'unisex' ? 'either' : 'a ' + g + ' character') : 'Not said';
+      b.addEventListener('click', async () => {
+        if (g === cur) return;
+        const was = cur;
+        cur = g;
+        paint();
+        try { await _patch(kind, id, { gender: g }); said.textContent = 'saved'; }
+        catch (e) { cur = was; paint(); said.textContent = e.message; }
+      });
+      row.appendChild(b);
+    }
+    paint();
+    box.appendChild(row);
+  }
+
+  const ta = _el('textarea', 'lib-info-edit');
+  ta.value = d.description || '';
+  ta.placeholder = kind === 'lookbooks'
+    ? 'What it is - not written yet. Optional: the dressing reads it.'
+    : 'What the place is - not written yet. Optional: the first frames are composed from it.';
+  ta.rows = 4;
+  ta.spellcheck = true;
+  const save = _el('button', 'lib-btn lib-info-save', 'save');
+  save.type = 'button';
+  save.hidden = true;
+  let kept = ta.value;
+  ta.addEventListener('input', () => { save.hidden = ta.value.trim() === kept.trim(); said.textContent = ''; });
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      const r = await _patch(kind, id, { description: ta.value });
+      kept = r.description;
+      ta.value = kept;
+      save.hidden = true;
+      said.textContent = 'saved';
+    } catch (e) {
+      said.textContent = e.message;
+    }
+    save.disabled = false;
+  });
+  box.appendChild(_el('div', 'lib-info-k', 'what it is'));
+  box.appendChild(ta);
+  const foot = _el('div', 'lib-info-editfoot');
+  foot.append(said, save);
+  box.appendChild(foot);
+
+  if (kind === 'environments') {
     const t = _el('div', 'lib-info-text');
-    t.appendChild(_el('b', null, label));
-    t.appendChild(document.createTextNode(value));
+    t.appendChild(_el('b', null, 'how it moves'));
+    t.appendChild(document.createTextNode(d.motion || 'written when it is first filmed'));
+    if (!d.motion) t.classList.add('is-none');
     box.appendChild(t);
-  };
-  if (d.description) text('what it is', d.description);
-  if (d.motion) text('how it moves', d.motion);
+  }
+  if (d.from) {
+    const t = _el('div', 'lib-info-text');
+    t.appendChild(_el('b', null, 'made from'));
+    t.appendChild(document.createTextNode(String(d.from).split('/').pop()));
+    t.title = d.from;
+    box.appendChild(t);
+  }
   return box;
 }
 
@@ -119,9 +197,10 @@ export async function show(kind, it, hooks) {
     CV.paint(body, it, d.voices || [], { changed: hooks.changed, alive: () => my === _seq });
     body.appendChild(_looks(d.looks || [], hooks, 'No looks for this character yet.'));
   } else if (kind === 'lookbooks') {
+    body.appendChild(_about(kind, it, d));
     body.appendChild(_looks(d.looks || [], hooks, 'Nothing has been dressed in this lookbook yet.'));
   } else if (kind === 'environments') {
-    body.appendChild(_place(d));
+    body.appendChild(_about(kind, it, d));
   }
 }
 

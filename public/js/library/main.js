@@ -18,6 +18,7 @@ import * as SC from './scenarios.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
+import * as MC from './makechat.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -53,7 +54,8 @@ let _reqId = 0;
 let _checksDue = false;
 let _first = true;      // the page's very first read, for restoring a remembered filter
 // THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
-// shelf - Scenarios the generator, Characters New Character. "New …" at the LEFT of the header opens it,
+// shelf - Scenarios the generator, Characters New Character, Environments and Lookbooks their chats
+// (js/library/makechat.js). "New …" at the LEFT of the header opens it,
 // "← …" in the same place brings the shelf back, read again. Leaving one only hides it: what it runs goes
 // on. Each module answers init(hooks), open(opts) and close(), and none of them touches its host's
 // `hidden` for good - _paintMake is the one writer, because it runs on every read of a shelf and an area
@@ -68,6 +70,16 @@ const MAKERS = {
     mod: CM, host: 'lib-chmake', label: 'New Character', back: '← Characters',
     title: 'Make a character - from the parameters, a preset, a random face or your own picture',
     backTitle: 'Back to the characters - what is being made goes on',
+  },
+  environments: {
+    mod: MC.environments, host: 'lib-envmake', label: 'New environment', back: '← Environments',
+    title: 'Make an environment - from words, from a photo, or one on the shelf changed',
+    backTitle: 'Back to the environments - what is being made goes on',
+  },
+  lookbooks: {
+    mod: MC.lookbooks, host: 'lib-lbmake', label: 'New lookbook', back: '← Lookbooks',
+    title: 'Make a lookbook - from words, from a photo, or one on the shelf built on',
+    backTitle: 'Back to the lookbooks - what is being made goes on',
   },
 };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
@@ -667,37 +679,48 @@ const _infoHooks = {
   card: (l) => _card(l),
 };
 
-// A SHEET LANDING IS SEEN BY THE SHELF (phase H6): while a tile says "sheet…", the shelf is asked every
-// ten seconds whether that is still so, and read again once it is not - the face on the tile turns into
-// the sheet, and its rename and delete come back.
+// WHAT LANDS IS SEEN BY THE SHELF. While a character's tile says "sheet…" (phase H6), and while a
+// lookbook or an environment is being made - in a chat or in Merge (phase I) - the shelf is asked every
+// ten seconds, and its tiles drawn again when the answer differs: the face on a tile turns into its
+// sheet, a new picture joins the grid.
 let _sheetT = null;
-function _watchSheets() {
+let _shelfRunning = 0;    // what the last read of Lookbooks or Environments said is being made there
+const _watched = (kind, items, running) => (kind === 'characters'
+  ? (items || []).some(it => it && it.meta && it.meta.sheetRunning)
+  : (kind === 'lookbooks' || kind === 'environments') && running > 0);
+const _shelfSig = (items, running) => (items || [])
+  .map(it => String(it.id) + (it && it.meta && it.meta.sheetRunning ? '*' : '')).join() + '|' + (running || 0);
+
+function _watchShelf() {
   clearTimeout(_sheetT);
   _sheetT = null;
-  if (_shelf !== 'characters' || _makingOn) return;
-  const ids = (list) => (list || []).filter(it => it && it.meta && it.meta.sheetRunning).map(it => String(it.id)).sort().join();
-  const was = ids(_items);
-  if (!was) return;
+  const kind = _shelf;
+  if (_makingOn || !_watched(kind, _items, _shelfRunning)) return;
+  const was = _shelfSig(_items, _shelfRunning);
   _sheetT = setTimeout(async () => {
     _sheetT = null;
-    if (_shelf !== 'characters' || _makingOn) return;
+    if (_shelf !== kind || _makingOn) return;
     try {
-      const d = await (await fetch('/api/library/shelf/characters')).json();
-      if (_shelf === 'characters' && !_makingOn && d && d.success && ids(d.items) !== was) {
-        // The tiles again, the column left alone (review H): it may be in the middle of a voice search or
-        // a Save. The items keep their identity - the column holds one of them - and take the new fields.
-        const old = new Map(_items.map(it => [String(it.id), it]));
-        _items = (d.items || []).map(n => { const o = old.get(String(n.id)); return o ? Object.assign(o, n) : n; });
-        const g = $('lib-grid');
-        const top = g ? g.scrollTop : 0;
-        _renderGrid();
-        if (g) g.scrollTop = top;
-        const cur = _items.find(it => String(it.id) === _sel);
-        if (cur) INFO.setPicture('characters', cur);
-        _counts();
+      const d = await (await fetch('/api/library/shelf/' + kind)).json();
+      if (_shelf === kind && !_makingOn && d && d.success) {
+        _shelfRunning = d.running || 0;
+        if (_shelfSig(d.items, d.running) !== was) {
+          // The tiles again, the column left alone (review H): it may be in the middle of a voice search,
+          // a Save or a description being written. The items keep their identity - the column holds one
+          // of them - and take the new fields.
+          const old = new Map(_items.map(it => [String(it.id), it]));
+          _items = (d.items || []).map(n => { const o = old.get(String(n.id)); return o ? Object.assign(o, n) : n; });
+          const g = $('lib-grid');
+          const top = g ? g.scrollTop : 0;
+          _renderGrid();
+          if (g) g.scrollTop = top;
+          const cur = _items.find(it => String(it.id) === _sel);
+          if (cur) INFO.setPicture(kind, cur);
+          _counts();
+        }
       }
     } catch (e) { /* asked again next round */ }
-    _watchSheets();
+    _watchShelf();
   }, 10000);
 }
 
@@ -736,6 +759,7 @@ async function _load(opts) {
     }
     _items = d.items || [];
     _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
+    _shelfRunning = d.running || 0;
     // A remembered kind or category can outlive what it pointed at — a category emptied,
     // a filter saved before the shelf changed shape. Drop it AND read again: resetting the
     // chip alone left the grid showing the empty result the dead filter had returned.
@@ -771,7 +795,7 @@ async function _load(opts) {
       const c = document.querySelector('#lib-grid .lib-card.cur');
       if (c) c.scrollIntoView({ block: 'nearest' });
     }
-    _watchSheets();
+    _watchShelf();
     _status('');
   } catch (e) {
     if (my !== _reqId) return;
@@ -1149,6 +1173,15 @@ function boot() {
       () => { if (id) { _sel = String(id); _scrollSel = true; } },
       () => _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved')),
   });
+  // The chats: "show on shelf" under a picture is the shelf again, on that picture - its id there is
+  // its file name (routes/library.js).
+  const chatHooks = {
+    showOnShelf: (kind, path) => _closeMaker(() => {
+      if (kind === _shelf && path) { _sel = String(path).split('/').pop(); _scrollSel = true; }
+    }),
+  };
+  MC.environments.init(chatHooks);
+  MC.lookbooks.init(chatHooks);
   const nb = $('lib-new');
   if (nb) nb.addEventListener('click', () => _openMaker());
   const bb = $('lib-back');

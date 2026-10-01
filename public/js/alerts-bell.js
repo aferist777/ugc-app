@@ -97,6 +97,12 @@ function _hrefOf(rec) {
   if (rec.state === 'done' && rec.what === 'sheet' && spot.key) {
     return '/library?shelf=characters&sel=' + encodeURIComponent(spot.key);
   }
+  // An environment or a lookbook from the Library's chats (phase I): once it is made, the row leads
+  // to it on its shelf, selected - its id there is its file name; while it runs, to the chat.
+  if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'envmake' || spot.view === 'lbmake')) {
+    return '/library?shelf=' + (spot.view === 'envmake' ? 'environments' : 'lookbooks')
+      + '&sel=' + encodeURIComponent(path.split('/').pop());
+  }
   return w.href || '';
 }
 
