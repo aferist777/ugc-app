@@ -52,13 +52,28 @@ let _reqId = 0;
 // last - a newer read that overtakes the one that asked must not drop them.
 let _checksDue = false;
 let _first = true;      // the page's very first read, for restoring a remembered filter
-// Scenarios: the generator is showing instead of the list (phase E), and the drafts heading the list.
-let _making = false;
-// Characters: making a character is showing instead of the shelf (phase H).
-let _creating = false;
+// THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
+// shelf - Scenarios the generator, Characters New Character. "New …" at the LEFT of the header opens it,
+// "← …" in the same place brings the shelf back, read again. Leaving one only hides it: what it runs goes
+// on. Each module answers init(hooks), open(opts) and close(), and none of them touches its host's
+// `hidden` for good - _paintMake is the one writer, because it runs on every read of a shelf and an area
+// painted anywhere else would be undone by the next read.
+const MAKERS = {
+  scenarios: {
+    mod: MK, host: 'lib-make', label: 'New scenario', back: '← Scenarios',
+    title: 'Write a scenario - from a source, or from a topic alone',
+    backTitle: 'Back to the list of scenarios - what is being written goes on',
+  },
+  characters: {
+    mod: CM, host: 'lib-chmake', label: 'New Character', back: '← Characters',
+    title: 'Make a character - from the parameters, a preset, a random face or your own picture',
+    backTitle: 'Back to the characters - what is being made goes on',
+  },
+};
+let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
 // The next read of the shelf brings the selected tile into view (a character just saved lands ~23rd).
 let _scrollSel = false;
-let _drafts = [];
+let _drafts = [];         // the drafts heading the Scenarios list (phase E)
 
 function _status(text, kind) {
   const el = $('lib-status');
@@ -75,72 +90,56 @@ function _paintShelves() {
   if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
 }
 
-// ── The scenario generator (phase E) ─────────────────────────────────────────
-// "New scenario" puts it where the list is; "← Scenarios" brings the list back, read again, since a
-// scenario may have been saved and a draft started. Leaving it only hides it: what it runs goes on.
-// Characters has the same pair (phase H): "New Character" and "← Characters", the making area in place
-// of the shelf. Both flags are painted HERE, together, because this runs on every read of a shelf and a
-// flag painted anywhere else would be undone by the next read.
+// ── The making areas ────────────────────────────────────────────────────────
 function _paintMake() {
-  const on = _shelf === 'scenarios', ch = _shelf === 'characters';
-  if (!on) _making = false;
-  if (!ch) _creating = false;
-  const nb = $('lib-new-scen'), bb = $('lib-back-scen'), split = $('lib-split'), mk = $('lib-make');
-  const nc = $('lib-new-char'), bc = $('lib-back-char'), cm = $('lib-chmake');
-  if (nb) nb.hidden = !on || _making;
-  if (bb) bb.hidden = !on || !_making;
-  if (nc) nc.hidden = !ch || _creating;
-  if (bc) bc.hidden = !ch || !_creating;
-  if (split) split.hidden = _making || _creating;
-  if (mk) mk.hidden = !_making;
-  if (cm) cm.hidden = !_creating;
+  if (_makingOn && _makingOn !== _shelf) _makingOn = '';
+  const m = MAKERS[_shelf];
+  const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split');
+  if (nb) {
+    nb.hidden = !m || !!_makingOn;
+    if (m) { nb.textContent = m.label; nb.title = m.title; }
+  }
+  if (bb) {
+    bb.hidden = !m || !_makingOn;
+    if (m) { bb.textContent = m.back; bb.title = m.backTitle; }
+  }
+  if (split) split.hidden = !!_makingOn;
+  for (const k of Object.keys(MAKERS)) {
+    const h = $(MAKERS[k].host);
+    if (h) h.hidden = _makingOn !== k;
+  }
 }
 
-// ── Making a character (phase H) ─────────────────────────────────────────────
-// "New Character" puts it where the shelf is; "← Characters" (and the shelf's own button) brings the
-// shelf back, read again - a character may have been saved. Leaving only hides it: what it waits for goes on.
-function _openCreate() {
-  if (_shelf !== 'characters') return;
-  INFO.leave();                                   // a voice demo must not play on under it
-  _creating = true;
+// The open shelf's area, in place of the shelf. Lines typed into a scenario and not saved are not
+// thrown away without a word, and a picture shelf's column lets go first - a voice demo must not play
+// on under the area.
+async function _openMaker(opts) {
+  const m = MAKERS[_shelf];
+  if (!m) return;
+  if (_shelf === 'scenarios' && _makingOn !== 'scenarios' && SC.unsaved()) {
+    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
+    SC.drop();
+  }
+  if (PICKABLE.has(_shelf)) INFO.leave();
+  _makingOn = _shelf;
   _paintMake();
   _status('');
-  CM.open();
+  await m.mod.open(opts || {});
 }
 
-// `then` runs before the shelf is read (to choose what it selects), `after` once it has been - a read
-// ends by clearing the status line, so anything said has to come after it.
-async function _closeCreate(then, after) {
-  if (!_creating) return;
-  CM.close();
-  _creating = false;
+// The shelf back, read again - something may have been made. `then` runs before the read (to choose
+// what it selects), `after` once it has been: a read ends by clearing the status line, so anything said
+// has to come after it.
+async function _closeMaker(then, after) {
+  if (!_makingOn) return;
+  const m = MAKERS[_makingOn];
+  await m.mod.close();
+  _makingOn = '';
   _paintMake();
   if (then) then();
   await _load({ keepScroll: true });
   _counts();
   if (after) after();
-}
-
-async function _openMake(opts) {
-  if (_shelf !== 'scenarios') return;
-  if (!_making && SC.unsaved()) {
-    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
-    SC.drop();
-  }
-  _making = true;
-  _paintMake();
-  _status('');
-  await MK.open(opts || {});
-}
-
-async function _closeMake(then) {
-  if (!_making) return;
-  await MK.close();
-  _making = false;
-  _paintMake();
-  if (then) then();
-  _load({ keepScroll: true });
-  _counts();
 }
 
 // The kind and category are remembered, so every place that changes them goes through
@@ -578,7 +577,7 @@ function _renderGrid() {
     // store's answer rather than the editor's.
     SC.render(_items, {
       reload: () => _load({ keepScroll: true }), status: _status, counts: _counts,
-      drafts: _drafts, openDraft: (id) => _openMake({ draftId: id }),
+      drafts: _drafts, openDraft: (id) => _openMaker({ draftId: id }),
     });
     return;
   }
@@ -675,16 +674,16 @@ let _sheetT = null;
 function _watchSheets() {
   clearTimeout(_sheetT);
   _sheetT = null;
-  if (_shelf !== 'characters' || _creating) return;
+  if (_shelf !== 'characters' || _makingOn) return;
   const ids = (list) => (list || []).filter(it => it && it.meta && it.meta.sheetRunning).map(it => String(it.id)).sort().join();
   const was = ids(_items);
   if (!was) return;
   _sheetT = setTimeout(async () => {
     _sheetT = null;
-    if (_shelf !== 'characters' || _creating) return;
+    if (_shelf !== 'characters' || _makingOn) return;
     try {
       const d = await (await fetch('/api/library/shelf/characters')).json();
-      if (_shelf === 'characters' && !_creating && d && d.success && ids(d.items) !== was) {
+      if (_shelf === 'characters' && !_makingOn && d && d.success && ids(d.items) !== was) {
         // The tiles again, the column left alone (review H): it may be in the middle of a voice search or
         // a Save. The items keep their identity - the column holds one of them - and take the new fields.
         const old = new Map(_items.map(it => [String(it.id), it]));
@@ -800,11 +799,10 @@ async function _counts() {
 // were: leave Media, come back, and you were staring at everything again.
 function _select(kind) {
   if (!SHELVES[kind]) return;
-  // The Scenarios button pressed while the generator is open goes back to the list, as
-  // "← Scenarios" does (phase F4); pressing the open shelf otherwise does nothing.
+  // The open shelf's button pressed while its making area shows goes back to the shelf, as "← …" does
+  // (phase F4); pressing the open shelf otherwise does nothing.
   if (kind === _shelf) {
-    if (kind === 'scenarios' && _making) _closeMake();
-    if (kind === 'characters' && _creating) _closeCreate();
+    if (_makingOn) _closeMaker();
     return;
   }
   // Lines typed into a scenario and not saved are not thrown away without a word.
@@ -813,9 +811,8 @@ function _select(kind) {
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'music') MU.stopPreview();  // nor a backing track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
-  // The generator is hidden, not stopped: a draft typed into is saved now, its stages run on.
-  if (_making) { MK.close(); _making = false; }
-  if (_creating) { CM.close(); _creating = false; }
+  // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
+  if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
@@ -1095,8 +1092,8 @@ async function _goToPlace(p) {
     _select(p.kind);                              // it asks about unsaved lines itself
     if (_shelf !== p.kind) return;                // the person kept them
   }
-  if (p.make && p.kind === 'characters') { _openCreate(); return; }
-  if (_creating) await _closeCreate(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
+  if (p.make && MAKERS[p.kind]) { if (_makingOn !== p.kind) await _openMaker(); return; }
+  if (_makingOn) await _closeMaker(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
   else if (p.sel) { _sel = p.sel; _scrollSel = true; await _load({ keepScroll: true }); }
 }
 
@@ -1144,23 +1141,18 @@ function boot() {
     status: _status,
     counts: _counts,
     // "open" beside "Saved": the list again, on that scenario.
-    openScenario: (id) => _closeMake(() => SC.select(id)),
+    openScenario: (id) => _closeMaker(() => SC.select(id)),
   });
-  const nb = $('lib-new-scen');
-  if (nb) nb.addEventListener('click', () => _openMake());
-  const bb = $('lib-back-scen');
-  if (bb) bb.addEventListener('click', () => _closeMake());
-
   CM.init({
     // Done: the shelf again, on the character just made - selected, in view, its column open.
-    onSaved: (id, name) => _closeCreate(
+    onSaved: (id, name) => _closeMaker(
       () => { if (id) { _sel = String(id); _scrollSel = true; } },
       () => _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved')),
   });
-  const nc = $('lib-new-char');
-  if (nc) nc.addEventListener('click', () => _openCreate());
-  const bc = $('lib-back-char');
-  if (bc) bc.addEventListener('click', () => _closeCreate());
+  const nb = $('lib-new');
+  if (nb) nb.addEventListener('click', () => _openMaker());
+  const bb = $('lib-back');
+  if (bb) bb.addEventListener('click', () => _closeMaker());
 
   const btn = $('lib-upload');
   const inp = $('lib-file');
@@ -1179,7 +1171,7 @@ function boot() {
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
   _loadCats().then(() => _load({ checks: true })).then(() => {
-    if (arrive && arrive.make && arrive.kind === 'characters') _openCreate();
+    if (arrive && arrive.make && MAKERS[arrive.kind]) _openMaker();
   });
   _counts();
 }

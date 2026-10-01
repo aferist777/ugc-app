@@ -59,14 +59,11 @@
     <!-- Filter rows, filled from what the shelf actually holds: for Media the kind and
          then the birol category. Empty rows collapse. -->
     <div class="lib-bar" id="lib-bar">
-      <!-- Scenarios only (phase E1): the generator in place of the list, and the way back to it - at the
-           LEFT of the bar, one in the other's place (the owner, phase G3). -->
-      <button class="lib-btn primary" type="button" id="lib-new-scen" hidden title="Write a scenario - from a source, or from a topic alone">New scenario</button>
-      <button class="lib-btn" type="button" id="lib-back-scen" hidden title="Back to the list of scenarios - what is being written goes on">← Scenarios</button>
-      <!-- Characters only (phase H): making a character in place of the shelf, and the way back - at the
-           left too, one in the other's place. -->
-      <button class="lib-btn primary" type="button" id="lib-new-char" hidden title="Make a character - from the parameters, a preset, a random face or your own picture">New Character</button>
-      <button class="lib-btn" type="button" id="lib-back-char" hidden title="Back to the characters - what is being made goes on">← Characters</button>
+      <!-- The shelf's making area in place of the shelf, and the way back - at the LEFT of the bar, one in
+           the other's place (the owner, phases G3 and H1). Their words come from the shelf that is open:
+           New scenario, New Character, New environment, New lookbook (js/library/main.js MAKERS). -->
+      <button class="lib-btn primary" type="button" id="lib-new" hidden></button>
+      <button class="lib-btn" type="button" id="lib-back" hidden></button>
       <span class="lib-bar-label" id="lib-bar-label"></span>
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
