@@ -17,10 +17,8 @@
      without this; the music generator in the inspector is what needs it here. -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/merge-v3.css">
-<!-- NOT linked here: css/mv3-imagen.css. The picture window brings its own stylesheet the
-     first time it is opened (js/merge-v3/chatwin.js), the way the settings behind its gear
-     do - the module itself is imported on demand, and a stylesheet loaded with the page for
-     a window most visits never open is the same waste one level down. -->
+<!-- The pictures chat in the Library panel (js/merge-v3/picchat.js, phase J). -->
+<link rel="stylesheet" href="css/mv3-imagen.css">
 </head>
 <body>
 
@@ -100,8 +98,14 @@
       <section class="mv3-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
         <div class="mv3-panel-head">
-          <span class="mv3-panel-title">Library</span>
+          <!-- Two views (phase J): the shelf, and the pictures chat - "LIBRARY / generate image",
+               a press on "Library" back to the shelf; on the shelf the crumb stays, pale, while the
+               project has a conversation (js/merge-v3/picchat.js). -->
+          <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
+          <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button" hidden>/ generate image</button>
           <span class="sp"></span>
+          <!-- The chat's own buttons, in place of the category and the shelves while it shows. -->
+          <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
           <!-- Categories of whichever group is open. Its options come from the same
                response that fills the grid, so it can never offer a category that
                is not there. -->
@@ -121,6 +125,8 @@
              is emptied and rebuilt on every load, which would wipe the message. -->
         <div class="mv3-libstatus" id="mv3-lib-status" hidden></div>
         <div class="mv3-panel-body"></div>
+        <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
+        <div class="mv3-pc" id="mv3-pc"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,
              so the drop path checks the files itself. -->
         <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>
@@ -160,6 +166,10 @@
           <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
           <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
                   title="Cut the selected clip at the playhead">split</button>
+          <!-- What can be MADE with a model (phase J): images is the pictures chat in the Library
+               panel; videos and music are not here yet. js/merge-v3/bar.js. -->
+          <button class="mv3-iconbtn is-text" id="mv3-gen" type="button"
+                  title="Make something with a model">generate &#9662;</button>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
                is what made the old store's data loss so hard to notice. -->

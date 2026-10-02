@@ -15,8 +15,8 @@
    The order matters: a refusal that mentions a timeout is still a refusal, so the never-list
    is consulted first.
 
-   Used by the picture window (chatwin.js) and by Animate (animate.js), because the aggregators
-   are the same and so are their bad days.
+   Used by Animate (animate.js). The pictures chat has no Retry of its own any more: a picture is
+   sent by the server and Alerts tries it again (phase J).
    ════════════════════════════════════════════════════════════════════════════ */
 
 const RETRYABLE = [

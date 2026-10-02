@@ -211,6 +211,14 @@ function _hookIds() {
   try { return require('../lib/hook-ids').map(); } catch (e) { return {}; }
 }
 
+// A clip whose record lost its poster still has one beside it on disk (lib/video-thumb.js) - shown
+// instead of "no thumb" (phase J4), the way the renders shelf finds its own.
+function _posterOf(thumb, video) {
+  if (thumb) return thumb;
+  const t = VT.thumbUrlFor(video);
+  return (t && _onDisk(t)) ? t : null;
+}
+
 function _mediaShelf() {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
@@ -224,7 +232,7 @@ function _mediaShelf() {
     name: String(e.name || '').trim() || 'clip',
     kind: _isUpload(e) ? 'uploads' : 'birols',
     media: e.videoPath,
-    thumb: e.thumbPath || null,
+    thumb: _posterOf(e.thumbPath, e.videoPath),
     // The archive has known how long each clip is since it was generated. Sending it lets a
     // drop onto a Merge lane land at the right width straight away, instead of appearing at
     // a placeholder length and resizing a moment later once the browser has read the file.
@@ -244,7 +252,7 @@ function _mediaShelf() {
     name: String(h.name || '').trim() || 'hook',
     kind: 'hooks',
     media: h.videoPath,
-    thumb: h.thumbPath || null,
+    thumb: _posterOf(h.thumbPath, h.videoPath),
     // `favorite` and `categoryId` are read back here on purpose: the star and the category
     // dropdown write them, so leaving either out would let you set it and see no change.
     // Hook records already carried a category — public/js/scen-hooks.js has always written

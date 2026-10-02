@@ -16,7 +16,7 @@
    refusal, and "the other one" needs no setting.
 
    ── Nothing loads with the page ─────────────────────────────────────────────
-   imagen.js imports this the first time the gear is pressed, and this module injects its
+   The pictures chat (picchat.js) imports this the first time the gear is pressed, and this module injects its
    own stylesheet at the same moment. A panel most visits never open should not cost every
    visit its markup and its CSS.
 

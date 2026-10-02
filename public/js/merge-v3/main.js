@@ -22,10 +22,12 @@ import { initWorkshop, settled as wkSettled, isTalking, step as wkStep, setStep 
 import { initProjects } from './projects.js';
 import * as Store from './store.js';
 import { initBar } from './bar.js';
+import { initPicChat, openPictures } from './picchat.js';
 
 initNav();
 initLayout();
 initLibrary();
+initPicChat();
 initTimelineB();
 initPreviewB();
 initExportB();
@@ -37,8 +39,14 @@ initWorkshop();
 initProjects();
 initBar();
 
-// ?open=pictures in the address, which is how the Alerts list takes somebody back to the window a
-// picture was asked for in (js/alerts-bell.js). Once, when the project it names has opened.
+// ?open=pictures in the address, which is how the Alerts list takes somebody back to the chat a
+// picture was asked for in (js/alerts-bell.js). Once, when the project it names has opened. In a
+// talking head the Library comes with the timeline step, so that step is taken first.
+async function _pictures() {
+  await wkSettled();
+  if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
+  return openPictures();
+}
 (() => {
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
@@ -50,7 +58,13 @@ initBar();
     if (opened || !Store.key()) return;
     opened = true;
     if (want === 'pictures') {
-      import('./imagen.js').then(m => m.openImagen()).catch(() => { /* no picture model configured */ });
+      // Said once: the address forgets it, or a reload after going back to the shelf would return here.
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete('open');
+        history.replaceState({}, '', u);
+      } catch (e) { /* a reload only opens it again */ }
+      _pictures().catch(e => console.warn('[merge-v3] pictures:', e.message));
       return;
     }
     // Animate is about one picture, so the address carries which.
@@ -90,10 +104,18 @@ async function _reveal(path) {
 window.addEventListener('ugc:goto', (e) => {
   let u;
   try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
+  if (u.pathname !== location.pathname || u.searchParams.get('p') !== Store.key()) return;
   const path = u.searchParams.get('reveal') || '';
-  if (!path || u.pathname !== location.pathname || u.searchParams.get('p') !== Store.key()) return;
-  e.preventDefault();
-  _reveal(path).catch(err => console.warn('[merge-v3] reveal:', err.message));
+  if (path) {
+    e.preventDefault();
+    _reveal(path).catch(err => console.warn('[merge-v3] reveal:', err.message));
+    return;
+  }
+  // A picture still being made leads to its chat - on the spot, with this project open (phase J).
+  if (u.searchParams.get('open') === 'pictures') {
+    e.preventDefault();
+    _pictures().catch(err => console.warn('[merge-v3] pictures:', err.message));
+  }
 });
 
 // PICKING SOMETHING SHOWS THE LIBRARY, and the settings of what was picked slide over it from

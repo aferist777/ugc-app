@@ -1282,7 +1282,7 @@ export function swapClipMedia(id, media) {
  *
  * Returns { ok, lane, at } or { ok: false, why }.
  */
-export function placeAbove(data) {
+export function placeAbove(data, opts) {
   if (!_on) return { ok: false, why: 'The timeline is not showing' };
   const at = _r2(Math.max(0, _playhead));
   const id = _id();
@@ -1302,7 +1302,7 @@ export function placeAbove(data) {
     lane = over.name;
   });
   if (!ok || !lane) return { ok: false, why: Store.status() || 'The picture could not be placed' };
-  selectClipById(id);
+  if (!opts || opts.select !== false) selectClipById(id);
   return { ok: true, lane, at };
 }
 
@@ -1470,7 +1470,7 @@ export const deleteMulti = () => _deleteSelected();
 
 // ── The right-click on bare lane (phase L3, the owner 2026-09-23) ───────────
 // The playhead goes to the moment under the pointer, and a menu asks what to make THERE. A picture:
-// the pictures window, whose `to timeline` lays what it makes at the playhead - and what it makes is
+// the pictures chat (phase J), whose `to timeline` lays what it makes at the playhead - and what it makes is
 // on the images shelf either way (lib/mv3-gens.js). A video: not yet - its window is being rebuilt
 // around what a clip is made from (words, a picture), so the row is there, says so and does nothing.
 // A right-click on a clip or on a lane's name is not this menu's.
@@ -1513,11 +1513,11 @@ function _laneMenu(e) {
     if (on) b.addEventListener('click', (ev) => { ev.stopPropagation(); _closeCtx(); on(); });
     box.appendChild(b);
   };
-  // Loaded on demand, like the Library's own way into it: the window is a thousand lines.
-  item('generate image', 'the pictures window · "to timeline" puts it here',
+  // The pictures chat, in the Library panel's place (phase J).
+  item('generate image', 'the pictures chat · "to timeline" puts it here',
     'Make a picture with a model - it lands on the images shelf, and "to timeline" lays it at the playhead',
-    () => import('./imagen.js').then(m => m.openImagen())
-      .catch(err => console.warn('[timeline] the picture window did not open:', (err && err.message) || err)));
+    () => import('./picchat.js').then(m => m.openPictures())
+      .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
   item('generate video', 'in development', 'In development - the video window is being rebuilt', null);
 
   // Fixed to the viewport and parked on the body, where the pointer was.

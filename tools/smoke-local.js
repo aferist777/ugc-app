@@ -36,7 +36,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
                  '/css/char-make.css',
                  // the making chats of Environments and Lookbooks (phase I): the page's module, its styles, both chats
-                 '/js/library/makechat.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks'];
+                 '/js/library/makechat.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks',
+                 // the pictures chat in Merge's Library panel (phase J)
+                 '/js/merge-v3/picchat.js', '/css/mv3-imagen.css', '/api/mv3/img/matrix'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -67,6 +69,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/studio'], ['POST', '/api/studio/gen-object'], ['POST', '/api/generate'],
                  ['GET', '/api/audio/voices'], ['POST', '/api/biroly/generate'], ['GET', '/api/biroly/state'],
                  ['GET', '/api/userdata/geni'], ['POST', '/api/ffmpeg/build-ass'], ['GET', '/api/mv3/img/rules'],
+                 // phase J: the pictures window's own steps - the server sends a message now
+                 ['POST', '/api/mv3/img/think'], ['POST', '/api/mv3/img/gen'], ['POST', '/api/mv3/chat'],
+                 ['GET', '/js/merge-v3/chatwin.js'], ['GET', '/js/merge-v3/imagen.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay

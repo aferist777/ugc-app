@@ -10,39 +10,30 @@
 //   GET    /api/mv3/img/rules               how to ask: one prompting rule set per model
 //   GET    /api/mv3/img/settings            the analyst's chain and the defaults
 //   PUT    /api/mv3/img/settings            a shallow patch of any of them
-//   POST   /api/mv3/img/think                { engine, text, refs, thread } -> { prompt } or
-//                                            { ask } - the rewrite, or a question instead of
-//                                            one. `refs` are library paths: they are hosted and
-//                                            the analyst is given the pictures, not a count
 //   GET    /api/mv3/img/feed?project=…      that project's generations, newest first
-//   POST   /api/mv3/img/gen                 { project, engine, provider, prompt, aspect, quality,
-//                                             refs? } - refs are library paths; with any of them
-//                                             the engine's EDIT model is used instead
-//   DELETE /api/mv3/img/item/:id            off the strip; the library keeps the picture
+//   POST   /api/mv3/img/send                { project, text, refs, engine, provider, quality, aspect,
+//                                             n, write, where } - a message of the pictures chat
 //
-//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first. One per KIND: a project
-//                                            has a conversation about pictures and another
-//                                            about clips, and they are not the same one.
-//   POST   /api/mv3/chat                    { project, kind, role, text, refs?, genId?, sent? }
-//   DELETE /api/mv3/chat/:id                one turn - and the picture it carries
+//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first
 //   DELETE /api/mv3/chat?project=…          the whole thread; the pictures stay
 //
 //   POST   /api/mv3/img/upload               multipart `image` + `project` - a reference from
 //                                            the person's own disk, filed on the images shelf
 //                                            under the project's category
 //
-// ONE PICTURE PER CALL. A panel that wants four asks four times, and gets four independent
-// walk down the fallback for it - one submit that dies takes one picture with it rather than
-// the batch.
-//
-// The reply to a submit is the RECORD, not the picture: the picture is minutes away and the
-// strip has something to draw in the meantime. The panel then polls the feed, which is also
-// what a second tab reads, and what the page finds waiting after a reload.
+// A MESSAGE IS SENT BY THE SERVER (phase J, the owner 2026-10-02 - the chat lives in the Library
+// panel now and is left and come back to). The press writes the person's turn, a record and an Alerts
+// row for every picture asked for, and the answering turn that points at them - and answers; the
+// analyst, the hosting of the references and the asking happen behind it, the rows saying which in
+// words. A page that goes away loses nothing, and a reload finds every countdown at its real age.
+// Up to FIVE sends at once per project (the owner); each picture of a send is its own walk down the
+// fallback, so one that dies takes one picture with it rather than the batch.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 const router = express.Router();
 
@@ -54,6 +45,7 @@ const SET = require('../lib/mv3-settings');
 const IMG = require('../lib/images-store');
 const LC = require('../lib/library-cats');
 const { MEDIA } = require('../lib/config');
+const { toDiskExisting } = require('../lib/media');
 
 // The whole table, shaped for the panel. Built from the same rows that submit, so the panel
 // cannot offer a pairing that fails at submit time.
@@ -89,39 +81,6 @@ router.put('/mv3/img/settings', (req, res) => {
   }
 });
 
-// ── Reading what was said ───────────────────────────────────────────────────
-// Its own call rather than a step inside the generation, because it can answer with a QUESTION -
-// and a question is a turn in the thread, not a picture that failed. The panel decides what to
-// do with either.
-router.post('/mv3/img/think', async (req, res) => {
-  const b = req.body || {};
-  try {
-    const e = MV.ENGINES[String(b.engine || '')];
-    // THE ANALYST LOOKS AT THE REFERENCES. `refs` is the list of library paths attached above
-    // the input, and they are hosted here exactly as they are for a generation - the same
-    // helper, the same cache, so attaching a picture and then generating from it is one upload
-    // rather than two. A number alone was what it used to get, and a number cannot be looked at.
-    //
-    // Hosting is not allowed to cost the rewrite: if it fails the count still goes through, and
-    // the analyst writes from the words as it always did.
-    let refUrls = [];
-    const refs = Array.isArray(b.refs) ? b.refs.filter(Boolean) : [];
-    if (refs.length) {
-      try { refUrls = await GENS.hostRefs(refs); }
-      catch (err) { console.warn('[mv3-img] think: could not host references -', err.message); }
-    }
-    const out = await AGENT.think({
-      engine: b.engine, text: b.text, thread: b.thread,
-      refs: refs.length || (+b.refs || 0), refUrls,
-      aspects: MV.ASPECTS, tiers: e ? e.tiers : [],
-    });
-    res.json(Object.assign({ success: true }, out));
-  } catch (e) {
-    // Never fatal: the caller falls back to the words as typed.
-    res.status(400).json({ success: false, error: String(e.message || e).slice(0, 300) });
-  }
-});
-
 router.get('/mv3/img/feed', (req, res) => {
   try {
     res.json({ success: true, items: GENS.list(String(req.query.project || '')) });
@@ -130,24 +89,104 @@ router.get('/mv3/img/feed', (req, res) => {
   }
 });
 
-router.post('/mv3/img/gen', async (req, res) => {
+// ── A message ───────────────────────────────────────────────────────────────
+const AT_ONCE = 5;
+const COUNTS = [1, 2, 4];
+
+router.post('/mv3/img/send', (req, res) => {
   const b = req.body || {};
+  let kick = '';
   try {
-    const rec = await GENS.start({
-      project: b.project, engine: b.engine, provider: b.provider,
-      prompt: b.prompt, said: b.said, aspect: b.aspect, quality: b.quality,
-      // Local library paths. Made reachable from the outside on the way through - see _hostRefs.
-      refs: b.refs,
-      // Where the page asked from, so the Alerts list can take somebody back to it.
-      where: b.where,
-    });
-    res.json({ success: true, item: rec });
-  } catch (e) {
-    // The record survives a failed submit - it is what tells the strip WHY nothing came back.
-    // So the error is reported and the feed still has something to show.
-    res.status(400).json({ success: false, error: String(MV.reasonOf(e)).slice(0, 400) });
+    const project = String(b.project || '').trim();
+    if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
+    const text = String(b.text || '').trim().slice(0, 20000);
+    if (!text) return res.status(400).json({ success: false, error: 'say what to make' });
+    const engine = String(b.engine || '');
+    const e = MV.ENGINES[engine];
+    if (!e) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
+    const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 5);
+    for (let i = 0; i < refs.length; i++) {
+      const abs = toDiskExisting(refs[i]);
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+    }
+    const n = COUNTS.includes(+b.n) ? +b.n : 1;
+    const write = b.write !== false;
+
+    // THE NUMBERS RULE is arithmetic (lib/mv3-agent.js): with two or more pictures and a message that
+    // does not say which is which, the question is the answer - at once, and nothing is asked for.
+    if (write && AGENT.needsNumbers(text, refs.length)) {
+      CHAT.add({ project, kind: 'image', role: 'user', text, refs });
+      CHAT.add({ project, kind: 'image', role: 'agent', text: AGENT.numbersQuestion(text, refs.length) });
+      return res.json({ success: true, asked: true });
+    }
+    if (GENS.runningSends(project) >= AT_ONCE) {
+      return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
+    }
+
+    // What was said before this message, for "the same but at night" - read before this turn is written,
+    // so neither this message nor a send pressed meanwhile is taken for the previous one.
+    const before = CHAT.read(project, 'image').slice(-4).map(m => ({ role: m.role, text: m.text }));
+    const msgId = CHAT.newId();
+    kick = 'k' + crypto.randomBytes(8).toString('hex');
+    GENS.asking.add(kick);                 // before the rows: the runner asks about them at once
+    CHAT.add({ project, kind: 'image', role: 'user', text, refs });
+    const first = write ? 'reading your message' : (refs.length ? 'sending the pictures' : 'asking ' + (b.provider || 'the model'));
+    const ids = [];
+    for (let i = 0; i < n; i++) {
+      ids.push(GENS.create({
+        project, send: msgId, kick, where: b.where, stage: first,
+        engine, provider: b.provider, prompt: text, said: text,
+        aspect: b.aspect, quality: b.quality, refs,
+      }).id);
+    }
+    CHAT.add({ id: msgId, project, kind: 'image', role: 'agent', text: '', genId: ids[0], genIds: ids, refs });
+    res.json({ success: true, send: msgId, genIds: ids });
+    _work({ project, text, refs, engine, write, ids, kick, before });
+  } catch (err) {
+    if (kick) GENS.asking.delete(kick);
+    console.error('[mv3-img/send]', err.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Behind the answer: the analyst reads the message and LOOKS at the references (hosted once - the
+// same bytes are one upload, lib/helpers.js), then every picture is asked for. The analyst never stops
+// the work: unreachable, or answering nothing usable, the words go as typed and `fell` says why.
+async function _work(o) {
+  try {
+    let over = { prompt: o.text };
+    if (o.write) {
+      let refUrls = [];
+      if (o.refs.length) {
+        try { refUrls = await GENS.hostRefs(o.refs); }
+        catch (err) { console.warn('[mv3-img] send: could not host references -', err.message); }
+      }
+      try {
+        const e = MV.ENGINES[o.engine];
+        const t = await AGENT.think({
+          engine: o.engine, text: o.text, refs: o.refs.length, refUrls,
+          // Only so "the same but at night" has something to be the same AS.
+          thread: o.before,
+          aspects: MV.ASPECTS, tiers: e ? e.tiers : [],
+        });
+        if (t && t.ask) {
+          for (const id of o.ids) GENS.refuse(id, 'the analyst asked a question instead', o.kick);
+          CHAT.add({ project: o.project, kind: 'image', role: 'agent', text: t.ask });
+          return;
+        }
+        over = { prompt: (t && t.prompt) || o.text, aspect: t && t.aspect, quality: t && t.quality,
+                 fell: (t && t.fell) || '', writer: (t && t.writer) || '' };
+      } catch (err) {
+        over = { prompt: o.text, fell: 'the analyst could not be reached' };
+      }
+    }
+    await Promise.all(o.ids.map(id => GENS.submit(id, over, o.kick)));
+  } catch (err) {
+    console.warn('[mv3-img] send:', err.message);
+  } finally {
+    GENS.asking.delete(o.kick);
+  }
+}
 
 // ── The thread ──────────────────────────────────────────────────────────────
 // Read whole rather than paged. A project's conversation is bounded by what one person typed
@@ -158,15 +197,6 @@ router.get('/mv3/chat', (req, res) => {
     res.json({ success: true, items: CHAT.read(String(req.query.project || ''), req.query.kind) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-router.post('/mv3/chat', (req, res) => {
-  const b = req.body || {};
-  try {
-    res.json({ success: true, item: CHAT.add(b) });
-  } catch (e) {
-    res.status(400).json({ success: false, error: e.message });
   }
 });
 

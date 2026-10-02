@@ -23,6 +23,9 @@ let _extraRows = null;
 // Something a caller hangs UNDER the media on the stage - Merge's trimmer is the one there is.
 // Opt-in: a page that passes nothing gets exactly the viewer it had.
 let _underStage = null;
+// What a PICTURE is drawn from on the stage, when not its own file - Merge shows the 2048px preview
+// tier rather than a 4K original (phase J4). Opt-in, like the rest.
+let _showSrc = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
 // A track has nothing to look at, so it gets a player on the stage instead of a broken picture.
@@ -80,7 +83,7 @@ function _paint() {
   } else {
     const img = document.createElement('img');
     img.className = 'lib-view-media';
-    img.src = it.media;
+    img.src = (_showSrc && _showSrc(it)) || it.media;
     img.alt = it.name || '';
     stage.appendChild(img);
     stage.classList.remove('has-under');
@@ -201,6 +204,7 @@ export function openViewer(items, index, opts) {
   _actionsFor = typeof o.actionsFor === 'function' ? o.actionsFor : () => [];
   _extraRows = typeof o.extraRows === 'function' ? o.extraRows : null;
   _underStage = typeof o.underStage === 'function' ? o.underStage : null;
+  _showSrc = typeof o.showSrc === 'function' ? o.showSrc : null;
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';
@@ -244,6 +248,7 @@ export function closeViewer() {
   _onAction = null;
   _actionsFor = () => [];
   _extraRows = null;
+  _showSrc = null;
   document.removeEventListener('keydown', _onKey);
   if (_layer) { Layers.close(_layer); _layer = null; }
 }

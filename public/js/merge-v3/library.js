@@ -37,6 +37,7 @@ import { trimmer } from './trim.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { askName } from '../name-box.js';
+import { openPictures, isChat, showShelf } from './picchat.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
@@ -86,7 +87,8 @@ function _tile(it, i) {
     // lazy + async: a group runs to hundreds of clips and most are below the fold.
     img.loading = 'lazy';
     img.decoding = 'async';
-    img.src = it.thumb;
+    // A picture's miniature is the 440px tier, as on the Library page: a tile is ~100px (phase J4).
+    img.src = String(it.thumb).replace('&v=card', '&v=strip');
     img.alt = it.name || '';
     // A thumb whose file has gone would otherwise leave a broken-image glyph, which
     // reads as a bug in the grid rather than as a missing file.
@@ -189,7 +191,11 @@ const KINDABLE = new Set(['birols', 'uploads', 'hooks']);
 const NEW_CAT = '__new__';
 let _allCats = null;
 
-const _viewerOpts = () => ({ extraRows: _viewerRows, underStage: _underStage });
+// A picture opens at the 2048px preview tier, never the 4K original (phase J4).
+const _viewerOpts = () => ({
+  extraRows: _viewerRows, underStage: _underStage,
+  showSrc: (it) => (it.kind === 'images' ? '/api/thumb?src=' + encodeURIComponent(it.media) + '&v=main' : null),
+});
 
 function _viewerRows(item) {
   if (!item) return [];
@@ -439,16 +445,8 @@ function _plusMenu(anchor) {
   };
 
   item('load from local', 'pictures from this computer', _pickFiles);
-  // Loaded on demand: the picture window is a thousand lines and a stylesheet, and most
-  // visits to this panel never open it.
-  item('generate', 'make one with a model', async () => {
-    try {
-      const M = await import('./imagen.js');
-      await M.openImagen();
-    } catch (err) {
-      _status('Could not open the picture window: ' + ((err && err.message) || err), true);
-    }
-  });
+  // The pictures chat, in this panel's place (phase J).
+  item('generate', 'make one with a model', () => openPictures());
 
   // Fixed to the viewport and parked on the body: the panel scrolls and clips its own
   // children, and the grid is the thing being scrolled.
@@ -585,6 +583,12 @@ function _wireDrop() {
   panel.addEventListener('dragover', (e) => {
     if (!_hasFiles(e)) return;
     e.preventDefault();
+    // The pictures chat takes its own drops - as attachments, filed once (js/merge-v3/picchat.js). A file
+    // let go of elsewhere on the panel then is nobody's, but it must not replace the page either.
+    if (isChat()) {
+      if (!(e.target && e.target.closest && e.target.closest('#mv3-pc'))) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
     e.dataTransfer.dropEffect = 'copy';
     panel.classList.add('is-drop');
   });
@@ -595,6 +599,7 @@ function _wireDrop() {
   panel.addEventListener('drop', (e) => {
     if (!_hasFiles(e)) return;
     e.preventDefault();
+    if (isChat()) return;
     panel.classList.remove('is-drop');
     _upload(Array.from((e.dataTransfer && e.dataTransfer.files) || []));
   });
@@ -712,6 +717,7 @@ function _setTab(tab) {
 export async function showGroup(tab, catLabel) {
   if (TABS.indexOf(tab) < 0) return;
   setOpenColumn('library');
+  showShelf();
   _setTab(tab);
   if (!catLabel) return;
   // _setTab kicks off its own load; this one runs after it and is what actually filters.
@@ -734,6 +740,7 @@ export async function reveal(path) {
   const want = String(path || '').split('?')[0];
   if (!want) return false;
   setOpenColumn('library');
+  showShelf();
   _setTab('images');
   _cat = '';
   await _load();
@@ -791,6 +798,8 @@ export function initLibrary() {
     });
   }
   _wireDrop();
+  // Back from the pictures chat with something made or added: the shelf reads again (phase J).
+  window.addEventListener('mv3:lib-reload', () => _load());
 
   let saved = null;
   try { saved = localStorage.getItem(LS_TAB); } catch (e) {}

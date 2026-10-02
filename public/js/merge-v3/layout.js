@@ -259,6 +259,23 @@ export function roomForWork() {
   _save();
 }
 
+/**
+ * ROOM FOR A CONVERSATION (phase J, the owner 2026-10-02): the pictures chat lives in the Library
+ * panel, and a thread with a message box under it needs height. When the chat comes forward and the
+ * pair above the timeline is shorter than `min`, the timeline gives up what is missing - down to its
+ * own floor. Taller already, nothing moves.
+ */
+export function roomForChat(min) {
+  const pair = document.getElementById('mv3-pair');
+  if (!pair) return;
+  const h = pair.getBoundingClientRect().height;
+  const want = min || 540;
+  if (h <= 0 || h >= want) return;
+  _applyTl(_tlNow() - (want - h));
+  _placeCross();
+  _save();
+}
+
 export function initLayout() {
   let open = null;
   try { open = localStorage.getItem(LS_OPEN); } catch (e) {}
