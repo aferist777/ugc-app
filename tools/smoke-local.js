@@ -43,7 +43,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/captions/style.js', '/js/captions/ass.js',
                  // the fonts captions are drawn in (phase K5)
                  '/js/captions/fonts.js', '/css/caption-fonts.css', '/fonts/captions/Montserrat-Black.ttf',
-                 '/js/captions/presets.js'];
+                 '/js/captions/presets.js',
+                 // libass in the page for the captions' preview (phase K4; laid out by tools/fetch-jassub.js)
+                 '/js/captions/layer.js', '/vendor/jassub/jassub.js', '/vendor/jassub/wasm/jassub-worker-modern.wasm'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.

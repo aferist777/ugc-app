@@ -18,6 +18,9 @@ import * as Layers from '../layers.js';
 import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
          softened } from './fx-b.js';
 import { paintCaptions, subsTrack, regroup, autoWordsPerLine } from './subs-b.js';
+// The captions, drawn by libass itself over the frame (phase K4) - the painter above draws only while
+// that is not up yet.
+import * as CapLayer from '../captions/layer.js';
 import { wirePlace, paintHandles, liveOf } from './place-b.js';
 import { isStill } from './store.js';
 import { setPlayhead, setSubsStyle } from './timeline-b.js';
@@ -478,9 +481,12 @@ function _paint() {
       _show(el, el.naturalWidth, el.naturalHeight, c, gaps);
     }
   }
-  // OVER EVERY LAYER, like the render burns them. Captions are not a layer of their own -
-  // nothing is ever laid on top of the words - so they go on last, after the whole stack.
-  try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {}
+  // OVER EVERY LAYER, like the render burns them. Drawn by libass on its own canvas over the frame
+  // (captions/layer.js, K4); the painter is the stand-in while that is not up. A screenshot is saved
+  // without them and the server burns them in with the render's own libass (lib/caption-shot.js).
+  if (_shooting) { /* burnt in by the server */ }
+  else if (CapLayer.ready()) CapLayer.render(_at);
+  else { try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {} }
 
   // WHAT IS OUTSIDE THE FRAME, dimmed and edged. It is drawn rather than clipped away because
   // seeing where an insert has got to is the whole reason for the margin - but it must not read
@@ -704,6 +710,8 @@ export function borrow(on) {
   _borrowed = want;
   if (!_borrowed) { _still = null; _pair = null; _crop = null; _filmStop(); _firstStep(false); }
   if (_borrowed) pause();
+  // The stage lent to the workshop shows no captions (the painter drew none there either).
+  CapLayer.show(!_borrowed);
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
   if (_still) _still.box = null;
@@ -1470,6 +1478,8 @@ function _resize() {
   // either of them, so it is stated here - inline, which is what lets one number decide it.
   const stage = document.getElementById(STAGE);
   if (stage) stage.style.aspectRatio = CW + ' / ' + CH;
+  // The captions' canvas covers the frame exactly - the margin is the editor's, not the film's.
+  CapLayer.place(PAD / CW, PAD / CH, W / CW, H / CH);
   // The stage is shaped by CSS, so the shape has to reach CSS - on the body, where every rule
   // that depends on it can read it.
   document.body.classList.toggle('mv3-fmt-169', _fmt() === '16:9');
@@ -1486,6 +1496,8 @@ export function mount() {
   _cv.className = 'mv3-pv-canvas';
   stage.appendChild(_cv);
   _ctx = _cv.getContext('2d');
+  // libass over the frame; once it can draw, the frame is painted again so the captions are its.
+  CapLayer.attach(stage, () => { CapLayer.setTimeline(Store.timeline()); _repaint(); });
   _resize();
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.
@@ -1541,7 +1553,12 @@ export const isMounted = () => _on;
 
 export function initPreviewB() {
   // Not while a screenshot is being drawn: that has the frame's size and its own canvas in hand.
-  Store.onChange(() => { if (_on && !_shooting) { _resize(); _repaint(); _clock(); } });
+  Store.onChange(() => {
+    if (!_on || _shooting) return;
+    // The captions' .ass follows every edit - built by the same builder the render uses.
+    CapLayer.setTimeline(Store.timeline());
+    _resize(); _repaint(); _clock();
+  });
   // A dragged sash changes the surface the workshop is drawing on, and nothing else would
   // notice: the timeline's own frame is a fixed size, this one is the panel.
   window.addEventListener('resize', () => { if (_on && _borrowed) { _resize(); _paint(); } });

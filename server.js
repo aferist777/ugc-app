@@ -83,6 +83,11 @@ app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
 // Scratch, in the system temp folder.
 app.use('/temp_files',   express.static(TEMP_DIR));
 app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
+// JASSUB, libass in the page for the captions' preview (phase K4): laid out by tools/fetch-jassub.js,
+// part of the program, not of the library.
+app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via

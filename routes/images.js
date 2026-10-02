@@ -80,6 +80,16 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
   const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to its category's folder
   try {
+    // THE CAPTIONS, burnt in here (phase K4): the page draws them with libass on a canvas it cannot
+    // read back, so the frame arrives without them and the render's own libass adds them, from the
+    // project's timeline at that moment. A picture without them is still a picture - said, not lost.
+    const key = String((req.body || {}).key || '');
+    if (key && (req.body || {}).at != null) {
+      try {
+        const tl = require('../lib/merge-store').read().timelines[key];
+        if (tl && Array.isArray(tl.tracks)) await require('../lib/caption-shot').burn(req.file.path, tl, +req.body.at);
+      } catch (e) { console.warn('[images/shot] the captions could not be drawn:', e.message); }
+    }
     const { cat } = LC.add('images', 'Screenshots');
     const { item } = await IMG.add(imagePath, {
       name: String((req.body || {}).name || '').trim().slice(0, 120) || 'screenshot',

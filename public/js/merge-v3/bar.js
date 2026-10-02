@@ -241,6 +241,8 @@ async function _shoot() {
     fd.append('name', (title || 'shot') + ' ' + _clock(r.at));
     fd.append('project', title);
     fd.append('at', String(r.at));
+    // The captions are burnt in by the server from this project's timeline (phase K4).
+    fd.append('key', Store.key() || '');
     const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'the server would not take it');
     btn.textContent = '✓';

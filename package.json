@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
-    "postinstall": "node tools/fetch-yt-dlp.js --optional"
+    "postinstall": "node tools/fetch-yt-dlp.js --optional && node tools/fetch-jassub.js --optional"
   },
   "dependencies": {
     "archiver": "^7.0.1",
