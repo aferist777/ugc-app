@@ -26,23 +26,44 @@
 .mkc-sub{ font-size:10.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mkc-none{ font:600 10.5px/1.5 var(--font); color:var(--muted); padding:12px 6px; text-align:center; }
 
+/* ── the sashes between the columns (phase I4) ── */
+/* The side columns take the width the sash gave them (js/library/makechat.js sets flex-basis) and give
+   way only when the window itself is too narrow; the chat takes the rest and keeps ~360px. */
+.mkc-sash{
+  flex:0 0 5px; align-self:stretch; cursor:col-resize; background:var(--border);
+  position:relative; transition:background .12s var(--ease);
+}
+.mkc-sash:hover, .mkc-sash.on{ background:var(--primary); }
+body.mkc-resizing, body.mkc-resizing *{ cursor:col-resize !important; user-select:none; }
+.mkc-col + .mkc-sash + .mkc-col{ border-left:0; }
+
+/* A tile is a button holding a box of its own shape (phase I4). The SHAPE is on the box, not on the
+   grid's cell: a cell that clips its content may be squeezed by the grid to nothing, and on a long
+   shelf every row was squeezed under its tiles until each lay over the one above. The picture fills
+   the box, cut at the edges. */
+.mkc-box{ position:relative; display:block; width:100%; overflow:hidden; border-radius:var(--r-xs); background:var(--surface-2); }
+.mkc-box img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+
 /* ── left: the shelf, small ── */
-.mkc-base{ flex:0 0 250px; }
+/* As many columns as tiles of ~100px fit: dragging the sash reflows them by itself. */
+.mkc-base{ flex:0 1 250px; min-width:150px; }
 .mkc-tiles{
   flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-gutter:stable; padding:8px;
-  display:grid; grid-template-columns:1fr 1fr; gap:7px; align-content:start;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); grid-auto-rows:max-content;
+  gap:7px; align-content:start;
 }
 .mkc-tile{
-  position:relative; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); cursor:pointer; overflow:hidden; aspect-ratio:1/1;
+  display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); cursor:pointer;
 }
-.mkc-tiles.is-environments .mkc-tile{ aspect-ratio:3/2; }
-.mkc-tile img{ width:100%; height:100%; object-fit:cover; display:block; }
+.mkc-tile .mkc-box{ aspect-ratio:1/1; }
+.mkc-tiles.is-environments .mkc-tile .mkc-box{ aspect-ratio:3/2; }
 .mkc-tile:hover{ border-color:var(--border-soft); }
-.mkc-tile.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+.mkc-tile.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
 
 /* ── middle: the chat ── */
-.mkc-chat{ flex:1 1 auto; background:var(--bg); }
+/* Basis 0: the chat takes what the sides leave, so a side column is exactly as wide as its sash says. */
+.mkc-chat{ flex:1 1 0; min-width:360px; background:var(--bg); }
 .mkc-thread{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
   display:flex; flex-direction:column; gap:12px;
@@ -153,42 +174,34 @@
 .mkc-go:hover:not([disabled]){ filter:brightness(1.1); }
 .mkc-go[disabled]{ opacity:.4; cursor:default; }
 
-/* ── right: where else a picture comes from ── */
-.mkc-src{ flex:0 0 270px; }
-.mkc-tabs{ display:flex; gap:4px; }
-.mkc-tab{
-  padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 10.5px/1.2 var(--font); cursor:pointer;
+/* ── right: Images, and a photo from this computer (one column since phase I4) ── */
+.mkc-src{ flex:0 1 280px; min-width:200px; }
+/* The field that brings a photo in: as tall as two dropdowns, the plus on the left, what it does beside it. */
+.mkc-up{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px; height:56px; margin:8px 8px 0; padding:0 12px;
+  border:1px dashed var(--border-soft); border-radius:var(--r-sm); background:var(--surface-2);
+  color:var(--muted); cursor:pointer; text-align:left; transition:.12s var(--ease);
 }
-.mkc-tab:hover{ color:var(--ink); }
-.mkc-tab.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
-.mkc-comp{ flex:1 1 auto; min-height:0; padding:10px; display:flex; }
-.mkc-comp[hidden], .mkc-lib[hidden]{ display:none; }
-.mkc-drop{
-  flex:1 1 auto; max-height:260px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-  border:1px dashed var(--border); border-radius:var(--r-sm); background:var(--surface-2);
-  color:var(--muted); cursor:pointer; padding:14px; text-align:center; transition:.12s var(--ease);
-}
-.mkc-drop:hover{ border-color:var(--primary); color:var(--ink); }
-.mkc-drop.is-busy{ opacity:.6; cursor:progress; }
-.mkc-drop-plus{ font:300 30px/1 var(--font); }
-.mkc-drop-t{ font:700 11px/1.3 var(--font); color:var(--ink); }
-.mkc-drop-s{ font:500 10px/1.4 var(--font); }
-.mkc-lib{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.mkc-up:hover, .mkc.is-drag .mkc-up{ border-color:var(--primary); color:var(--ink); }
+.mkc-up.is-busy{ opacity:.6; cursor:progress; }
+.mkc-up-plus{ flex:0 0 auto; width:30px; text-align:center; font:300 26px/1 var(--font); color:var(--primary); }
+.mkc-up-t{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.mkc-up-t b{ font:700 11px/1.3 var(--font); color:var(--ink); }
+.mkc-up-t span{ font:500 9.5px/1.35 var(--font); }
 .mkc-cat{
   flex:0 0 auto; margin:8px 8px 0; height:26px; padding:0 5px;
   border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 10.5px/24px var(--font); cursor:pointer;
 }
+/* A kladka: as many columns as tiles of ~120px fit, each tile its own shape. */
 .mkc-masonry{
   flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-gutter:stable; padding:8px;
   display:flex; gap:7px; align-items:flex-start;
 }
 .mkc-mcol{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:7px; }
 .mkc-card{
-  position:relative; width:100%; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); cursor:pointer; overflow:hidden;
+  display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); cursor:pointer;
 }
-.mkc-card img{ width:100%; height:100%; object-fit:cover; display:block; }
 .mkc-card:hover{ border-color:var(--border-soft); }
-.mkc-card.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+.mkc-card.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }

@@ -54,6 +54,7 @@ const _stageWords = (s) => STAGE[s] || s || 'drawing';
 const SPECS = {
   environments: {
     host: 'lib-envmake', title: 'New environment', shelf: 'Environments', aspect: '3:2', estimateMs: 120000,
+    uploads: 'uploads_environments',
     placeholder: 'Describe a place - or pick a picture and say what to change: "evening, the lamps on"',
     empty: 'Describe a place to make it from words. Press one on the left to change it, or take a photo from the right - from this computer or the Library\'s Images - and the place is taken out of it. Everything made here stays in this chat and on the Environments shelf.',
     hint: (att, text) => !att ? 'drawn from your words'
@@ -63,6 +64,7 @@ const SPECS = {
   },
   lookbooks: {
     host: 'lib-lbmake', title: 'New lookbook', shelf: 'Lookbooks', aspect: '1:1', estimateMs: 45000,
+    uploads: 'uploads_lookbooks',
     placeholder: 'Describe an outfit - or pick a picture: alone it takes the outfit out of it, with words it applies them',
     empty: 'Describe an outfit to draw it from words. Press a lookbook on the left to build on it, or take a photo from the right - from this computer or the Library\'s Images - and the outfit is taken out of it. Everything made here stays in this chat and on the Lookbooks shelf.',
     hint: (att, text) => !att ? 'drawn from your words'
@@ -87,7 +89,7 @@ function createMaker(kind) {
   let _uploading = 0;                               // photos still on their way into Images
   let _upSeq = 0;                                   // the newest of them is the one that lands in the place
   let _shelf = null;                                // the base tiles
-  let _src = 'computer';                            // the right column: 'computer' | 'library'
+  let _masonryCols = 0;                             // how many columns the Images kladka was last drawn in
   let _cat = '';
   let _images = null;
   let _cats = [];
@@ -99,7 +101,7 @@ function createMaker(kind) {
   // ── the bench, remembered ─────────────────────────────────────────────────
   function _remember() {
     try {
-      localStorage.setItem(LS, JSON.stringify({ text: _ui.ta ? _ui.ta.value : '', att: _att, src: _src, cat: _cat }));
+      localStorage.setItem(LS, JSON.stringify({ text: _ui.ta ? _ui.ta.value : '', att: _att, cat: _cat }));
     } catch (e) { /* this view only */ }
   }
   function _recall() {
@@ -108,7 +110,6 @@ function createMaker(kind) {
     if (!w) return;
     if (_ui.ta && typeof w.text === 'string') _ui.ta.value = w.text;
     if (w.att && typeof w.att.path === 'string' && w.att.path.startsWith('/')) _att = { path: w.att.path, from: w.att.from === 'base' ? 'base' : 'photo' };
-    if (w.src === 'library' || w.src === 'computer') _src = w.src;
     if (typeof w.cat === 'string') _cat = w.cat;
   }
 
@@ -150,33 +151,28 @@ function createMaker(kind) {
     bar.append(ta, go);
     chat.appendChild(bar);
 
+    // ONE right column (phase I4, the owner): the field that brings a photo in from this computer, the
+    // Images categories under it, and the pictures of the one chosen. A photo brought in lands in this
+    // chat's upload category, and the dropdown goes there.
     const src = el('section', 'mkc-col mkc-src');
     const sh = el('div', 'mkc-head');
-    const tabs = el('div', 'mkc-tabs');
-    const tComp = el('button', 'mkc-tab', 'computer');
-    tComp.type = 'button';
-    tComp.title = 'A photo from this computer - it goes into the Library\'s Images, under ' + (kind === 'environments' ? 'uploads_environments' : 'uploads_lookbooks');
-    const tLib = el('button', 'mkc-tab', 'library');
-    tLib.type = 'button';
-    tLib.title = 'A picture already in the Library\'s Images';
-    tabs.append(tComp, tLib);
-    sh.appendChild(tabs);
+    sh.appendChild(el('span', 'mkc-t', 'Images'));
+    sh.appendChild(el('span', 'mkc-sub', 'press one to use it as the photo'));
     src.appendChild(sh);
-    const comp = el('div', 'mkc-comp');
-    const drop = el('button', 'mkc-drop');
+    const drop = el('button', 'mkc-up');
     drop.type = 'button';
-    drop.appendChild(el('span', 'mkc-drop-plus', '+'));
-    drop.appendChild(el('span', 'mkc-drop-t', 'a photo from this computer'));
-    drop.appendChild(el('span', 'mkc-drop-s', 'click, drop it here, or paste it into the message box'));
-    comp.appendChild(drop);
-    src.appendChild(comp);
-    const lib = el('div', 'mkc-lib');
+    drop.title = 'A photo from this computer - it goes into the Library\'s Images, under ' + sp.uploads;
+    drop.appendChild(el('span', 'mkc-up-plus', '+'));
+    const upT = el('span', 'mkc-up-t');
+    upT.appendChild(el('b', null, 'a photo from this computer'));
+    upT.appendChild(el('span', null, 'click, drop it here, or paste it into the message box'));
+    drop.appendChild(upT);
+    src.appendChild(drop);
     const cat = document.createElement('select');
     cat.className = 'mkc-cat';
-    lib.appendChild(cat);
+    src.appendChild(cat);
     const libList = el('div', 'mkc-masonry');
-    lib.appendChild(libList);
-    src.appendChild(lib);
+    src.appendChild(libList);
 
     const file = document.createElement('input');
     file.type = 'file';
@@ -184,9 +180,28 @@ function createMaker(kind) {
     file.hidden = true;
     _root.appendChild(file);
 
-    _root.append(base, chat, src);
+    // THE SASHES (phase I4, the owner): one between the shelf and the chat, one between the chat and
+    // the right column. Each moves the side column's edge; a double click hands the width back.
+    const sashL = el('div', 'mkc-sash');
+    sashL.title = 'Drag to resize, double-click for the usual width';
+    const sashR = el('div', 'mkc-sash');
+    sashR.title = sashL.title;
+
+    _root.append(base, sashL, chat, sashR, src);
     host.appendChild(_root);
-    _ui = { baseList, count, thread, atts, ta, go, tComp, tLib, comp, lib, cat, libList, drop, file };
+    _ui = { base, src, chat, baseList, count, thread, atts, ta, go, cat, libList, drop, file };
+    _wireSash(sashL, 'base', 1);
+    _wireSash(sashR, 'src', -1);
+    _applyWidths();
+    // The kladka counts its columns from its width: drawn again when that count changes, not on every
+    // pixel of a drag, and in the next frame rather than in the middle of one.
+    if (window.ResizeObserver) {
+      let raf = 0;
+      new ResizeObserver(() => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; if (_colsOf(libList) !== _masonryCols) _paintImages(); });
+      }).observe(libList);
+    }
 
     // No "Save image as" on a miniature, and the box keeps its own cut and paste.
     host.addEventListener('contextmenu', (e) => { if (e.target.closest('img')) e.preventDefault(); });
@@ -203,8 +218,6 @@ function createMaker(kind) {
       e.preventDefault();
       _upload(f);
     });
-    tComp.addEventListener('click', () => { _src = 'computer'; _paintSrc(); _remember(); });
-    tLib.addEventListener('click', () => { _src = 'library'; _paintSrc(); _remember(); });
     cat.addEventListener('change', () => { _cat = cat.value; _remember(); _loadImages(); });
     drop.addEventListener('click', () => file.click());
     file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) _upload(f); });
@@ -223,9 +236,60 @@ function createMaker(kind) {
 
     _recall();
     _grow();
-    _paintSrc();
     _paintAtts();
     _paintThread();
+  }
+
+  // ── the columns' widths ───────────────────────────────────────────────────
+  // Remembered per chat. The chat in the middle keeps at least CHAT_MIN; each side its own bounds.
+  const LS_W = 'lib_mkchat_' + kind + '_w_v1';
+  const W = { base: { def: 250, min: 150, max: 560 }, src: { def: 280, min: 200, max: 620 } };
+  const CHAT_MIN = 360;
+  let _w = { base: W.base.def, src: W.src.def };
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_W) || 'null');
+    if (s && typeof s === 'object') for (const k of ['base', 'src']) if (Number.isFinite(+s[k])) _w[k] = +s[k];
+  } catch (e) { /* the usual widths */ }
+
+  function _clampW(side, v) {
+    const b = W[side];
+    let max = b.max;
+    // Never so wide that the chat is squeezed below its minimum, whatever the window's width now.
+    if (_root && _root.clientWidth) max = Math.min(max, _root.clientWidth - _w[side === 'base' ? 'src' : 'base'] - CHAT_MIN - 12);
+    return Math.round(Math.max(b.min, Math.min(Math.max(b.min, max), v)));
+  }
+
+  function _applyWidths() {
+    if (!_ui.base) return;
+    _ui.base.style.flexBasis = _w.base + 'px';
+    _ui.src.style.flexBasis = _w.src + 'px';
+  }
+
+  // `dir` 1: the column is on the left, dragging right widens it; -1: on the right, dragging left does.
+  function _wireSash(sash, side, dir) {
+    sash.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const from = e.clientX;
+      const start = _w[side];
+      document.body.classList.add('mkc-resizing');
+      sash.classList.add('on');
+      const move = (ev) => { _w[side] = _clampW(side, start + dir * (ev.clientX - from)); _applyWidths(); };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.classList.remove('mkc-resizing');
+        sash.classList.remove('on');
+        try { localStorage.setItem(LS_W, JSON.stringify(_w)); } catch (err) { /* this view only */ }
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    sash.addEventListener('dblclick', () => {
+      _w[side] = W[side].def;
+      _applyWidths();
+      try { localStorage.setItem(LS_W, JSON.stringify(_w)); } catch (err) { /* this view only */ }
+    });
   }
 
   function _grow() {
@@ -239,8 +303,7 @@ function createMaker(kind) {
     _att = a && a.path ? { path: a.path, from: a.from === 'base' ? 'base' : 'photo' } : null;
     _said = '';
     _paintAtts();
-    _paintBase();
-    _paintImages();
+    _markOn();
     _remember();
   }
 
@@ -272,7 +335,17 @@ function createMaker(kind) {
       const img = document.createElement('img');
       img.src = thumb(_att.path, 'strip');
       img.alt = '';
-      img.addEventListener('error', () => cell.classList.add('is-gone'));
+      // Taken off its shelf since it was put here (the place is remembered across visits): it leaves
+      // the place, and the chat says why - a send with it would only be turned down (phase I4).
+      const was = _att.path;
+      img.addEventListener('error', () => {
+        if (!_att || _att.path !== was) return;
+        _att = null;
+        _said = 'that picture is not in the library any more';
+        _paintAtts();
+        _markOn();
+        _remember();
+      });
       cell.appendChild(img);
       cell.appendChild(el('span', 'n', '1'));
       cell.appendChild(el('span', 'tag', _att.from === 'base' ? 'base' : 'photo'));
@@ -327,9 +400,12 @@ function createMaker(kind) {
       });
       const d = await post(ADDR + '/photo', { dataUrl, name: f.name || '' });
       _said = '';
-      if (my === _upSeq) _setAtt({ path: d.path, from: 'photo' });
-      if (_src === 'library') _loadImages();
-      else _images = null;                         // read again when the library side is opened
+      if (my === _upSeq) {
+        // The dropdown goes to where it was filed, so the picture just added is in view (phase I4).
+        if (d.catId) _cat = String(d.catId);
+        _setAtt({ path: d.path, from: 'photo' });
+      }
+      _loadImages();
     } catch (e) {
       _said = 'Could not add the photo: ' + e.message;
     } finally {
@@ -586,6 +662,11 @@ function createMaker(kind) {
   }
 
   // ── the left column: the shelf, small ─────────────────────────────────────
+  // A TILE IS A BOX OF ITS OWN SHAPE (phase I4): square for a lookbook, 3:2 for an environment, and the
+  // picture fills it, cut at the edges. The shape lives on an inner box, never on the grid's cell: a
+  // cell that clips its content may be squeezed by the grid to nothing, and with a long shelf the rows
+  // were squeezed under their tiles until each lay over the one above. The columns are as many as fit
+  // (css/makechat.css), so a sash dragged reflows them by itself.
   async function _loadBase() {
     try {
       const d = await json('/api/library/shelf/' + kind);
@@ -596,6 +677,29 @@ function createMaker(kind) {
     _paintBase();
   }
 
+  // A miniature, never the original: the shelf's own copy (thumbs/, 600px) through the thumbnail
+  // door, as the Library's grid does - the original only when there is no copy.
+  // An Images record's `thumb` is a thumbnail door address already, never a file - for those the
+  // picture itself goes through the door (main.js _tileSrc does the same).
+  const _mini = (it) => thumb((it.thumb && !String(it.thumb).startsWith('/api/')) ? it.thumb : it.media, 'strip');
+
+  function _tileOf(cls, it, shape) {
+    const t = el('button', cls);
+    t.type = 'button';
+    t.title = it.name || '';
+    t.dataset.path = it.media;
+    const box = el('span', 'mkc-box');
+    if (shape) box.style.aspectRatio = shape;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = _mini(it);
+    box.appendChild(img);
+    t.appendChild(box);
+    return t;
+  }
+
   function _paintBase() {
     const host = _ui.baseList;
     if (!host) return;
@@ -603,30 +707,29 @@ function createMaker(kind) {
     if (_shelf === null) { host.appendChild(el('div', 'mkc-none', 'reading the shelf…')); return; }
     if (!_shelf.length) { host.appendChild(el('div', 'mkc-none', 'Nothing on the shelf yet - the first one is made from words or a photo.')); return; }
     for (const it of _shelf) {
-      const on = !!_att && _att.from === 'base' && _att.path === it.media;
-      const t = el('button', 'mkc-tile' + (on ? ' on' : ''));
-      t.type = 'button';
-      t.title = it.name || '';
-      const img = document.createElement('img');
-      img.src = thumb(it.media, 'strip');
-      img.alt = '';
-      img.loading = 'lazy';
-      t.appendChild(img);
-      t.addEventListener('click', () => _setAtt(on ? null : { path: it.media, from: 'base' }));
+      const t = _tileOf('mkc-tile', it, '');
+      t.addEventListener('click', () => {
+        const on = !!_att && _att.from === 'base' && _att.path === it.media;
+        _setAtt(on ? null : { path: it.media, from: 'base' });
+      });
       host.appendChild(t);
     }
+    _markOn();
   }
 
-  // ── the right column: where else a picture comes from ─────────────────────
-  function _paintSrc() {
-    if (!_ui.tComp) return;
-    _ui.tComp.classList.toggle('on', _src === 'computer');
-    _ui.tLib.classList.toggle('on', _src === 'library');
-    _ui.comp.hidden = _src !== 'computer';
-    _ui.lib.hidden = _src !== 'library';
-    if (_src === 'library' && _images === null) _loadImages();
+  // Which tiles hold the picture of the next message - lit in place, nothing drawn again.
+  function _markOn() {
+    const mark = (host, from) => {
+      if (!host) return;
+      for (const t of host.querySelectorAll('[data-path]')) {
+        t.classList.toggle('on', !!_att && _att.from === from && _att.path === t.dataset.path);
+      }
+    };
+    mark(_ui.baseList, 'base');
+    mark(_ui.libList, 'photo');
   }
 
+  // ── the right column: Images ──────────────────────────────────────────────
   async function _loadImages() {
     const want = _cat;
     try {
@@ -640,9 +743,12 @@ function createMaker(kind) {
     _paintImages();
   }
 
+  // As many columns as tiles of ~120px fit, one at the least.
+  const _colsOf = (host) => Math.max(1, Math.min(6, Math.floor(((host && host.clientWidth) || 0) / 126) || 1));
+
   function _paintImages() {
     const host = _ui.libList;
-    if (!host || _src !== 'library') return;
+    if (!host) return;
     const sel = _ui.cat;
     sel.textContent = '';
     const all = document.createElement('option');
@@ -659,31 +765,31 @@ function createMaker(kind) {
     // A remembered category that is not there any more is dropped - once the categories are known.
     if (_images !== null && sel.value !== _cat) { _cat = ''; sel.value = ''; }
 
+    const top = host.scrollTop;
     host.textContent = '';
+    _masonryCols = _colsOf(host);
     if (_images === null) { host.appendChild(el('div', 'mkc-none', 'reading the Library…')); return; }
     if (!_images.length) { host.appendChild(el('div', 'mkc-none', _cat ? 'Nothing in this category.' : 'No pictures in the Library\'s Images yet.')); return; }
-    // Two columns, each tile its own shape, the next into the shorter one.
-    const cols = [el('div', 'mkc-mcol'), el('div', 'mkc-mcol')];
-    const h = [0, 0];
+    // A kladka: each tile its own shape, the next into the shortest column.
+    const cols = [];
+    const h = [];
+    for (let i = 0; i < _masonryCols; i++) { cols.push(el('div', 'mkc-mcol')); h.push(0); }
     for (const it of _images) {
       const m = it.meta || {};
-      const r = (m.w > 0 && m.h > 0) ? m.h / m.w : 1;
-      const k = h[0] <= h[1] ? 0 : 1;
-      h[k] += r;
-      const on = !!_att && _att.from === 'photo' && _att.path === it.media;
-      const t = el('button', 'mkc-card' + (on ? ' on' : ''));
-      t.type = 'button';
-      t.title = it.name || '';
-      t.style.aspectRatio = (m.w > 0 && m.h > 0) ? (m.w + '/' + m.h) : '1/1';
-      const img = document.createElement('img');
-      img.src = thumb(it.media, 'card');
-      img.alt = '';
-      img.loading = 'lazy';
-      t.appendChild(img);
-      t.addEventListener('click', () => _setAtt(on ? null : { path: it.media, from: 'photo' }));
+      const sized = m.w > 0 && m.h > 0;
+      let k = 0;
+      for (let j = 1; j < cols.length; j++) if (h[j] < h[k]) k = j;
+      h[k] += sized ? m.h / m.w : 1;
+      const t = _tileOf('mkc-card', it, sized ? (m.w + '/' + m.h) : '1/1');
+      t.addEventListener('click', () => {
+        const on = !!_att && _att.from === 'photo' && _att.path === it.media;
+        _setAtt(on ? null : { path: it.media, from: 'photo' });
+      });
       cols[k].appendChild(t);
     }
     host.append(...cols);
+    host.scrollTop = top;
+    _markOn();
   }
 
   // ── the area's door ───────────────────────────────────────────────────────
@@ -707,8 +813,9 @@ function createMaker(kind) {
       _shelf = null;
       _paintBase();
       _loadBase();
-      if (_src === 'library') _loadImages();
+      // The chat first: its read makes the upload categories, and the dropdown is read after it.
       await _load();
+      _loadImages();
       if (_ui.ta) _ui.ta.focus();
     },
     // Hidden, not stopped: what is being made goes on, on the server; the chat shows it on return.

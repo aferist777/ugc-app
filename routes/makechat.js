@@ -63,9 +63,27 @@ function _spec(req) {
 
 const _within = (abs, dir) => abs.startsWith(path.resolve(dir) + path.sep);
 
+// BOTH UPLOAD CATEGORIES EXIST FROM THE FIRST LOOK AT EITHER CHAT (phase I4, the owner): the right
+// column's dropdown shows where a photo from this computer will go before the first one is added.
+// Once per run of the server - a category deleted by hand is not put back under the person's hands
+// every four seconds.
+let _catsMade = false;
+function _makeCats() {
+  if (_catsMade) return;
+  _catsMade = true;
+  try {
+    const LC = require('../lib/library-cats');
+    for (const k of Object.keys(SPEC)) LC.add('images', SPEC[k].cat);
+  } catch (e) {
+    _catsMade = false;
+    console.warn('[makechat] the upload categories could not be made:', e.message);
+  }
+}
+
 router.get('/makechat/:kind', (req, res) => {
   try {
     _spec(req);
+    _makeCats();
     const sends = CHAT.read(req.params.kind);
     res.json({ success: true, sends, keep: CHAT.KEEP, atOnce: AT_ONCE });
   } catch (e) {
@@ -226,7 +244,7 @@ router.post('/makechat/:kind/photo', async (req, res) => {
     const { cat } = LC.add('images', sp.cat);
     const same = IMG.read().find(e => e && e.categoryId === cat.id && e.meta && e.meta.sha1 === sha1);
     const sameHit = same && M.resolveMedia(same.imagePath);
-    if (sameHit && fs.existsSync(sameHit.abs)) return res.json({ success: true, path: same.imagePath, name: same.name, again: true });
+    if (sameHit && fs.existsSync(sameHit.abs)) return res.json({ success: true, path: same.imagePath, name: same.name, catId: cat.id, again: true });
 
     const file = 'ref_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '.' + ext;
     fs.mkdirSync(CFG.MEDIA.work, { recursive: true });
@@ -237,7 +255,8 @@ router.post('/makechat/:kind/photo', async (req, res) => {
       name: clean || sp.cat, source: 'upload', categoryId: cat.id, categoryLabel: cat.label,
       meta: { sha1, made: sp.type },
     });
-    res.json({ success: true, path: item.imagePath, name: item.name });
+    // The category too: the page's dropdown goes to it, so the picture just added is in view.
+    res.json({ success: true, path: item.imagePath, name: item.name, catId: cat.id });
   } catch (e) {
     console.error('[makechat/photo]', e.message);
     res.status(e.status || 500).json({ success: false, error: e.message });
