@@ -9,7 +9,7 @@
 
 import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
   from '../captions/style.js';
-import { cssWeight } from '../captions/fonts.js';
+import { cssWeight, fontOf } from '../captions/fonts.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -113,17 +113,22 @@ export function paintCaptions(ctx, tl, at, W, H, fmt) {
 // descent together - and not the em a CSS pixel size names, so the same number draws a smaller
 // letter in the file (Arial: 60 is an em of about 54). Measured once per face off the canvas's own
 // metrics for it, which are the same tables libass reads.
+// The line is the font table's (fonts.js - libass's own measure of the file); the canvas only says
+// where the baseline sits in it, and that only once the web font has arrived - measured before, the
+// fallback's numbers would stay for the session.
 const _faces = new Map();
 function _faceOf(ctx, st) {
   const css = _css(st, 100);
   if (_faces.has(css)) return _faces.get(css);
+  const loaded = !document.fonts || document.fonts.check(css);
+  if (!loaded && document.fonts) document.fonts.load(css).catch(() => {});
   ctx.save();
   ctx.font = css;
   const m = ctx.measureText('Hg');
   ctx.restore();
   const up = +m.fontBoundingBoxAscent || 0, down = +m.fontBoundingBoxDescent || 0;
-  const face = (up + down > 0) ? { line: (up + down) / 100, ascent: up / (up + down) } : { line: 1.15, ascent: 0.8 };
-  _faces.set(css, face);
+  const face = { line: fontOf(st.font).line, ascent: (up + down > 0) ? up / (up + down) : 0.8 };
+  if (loaded) _faces.set(css, face);
   return face;
 }
 

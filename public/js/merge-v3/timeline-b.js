@@ -627,11 +627,19 @@ function _endDrag() {
             // trim. They are shifted back, and a word now before the start is dropped.
             if (Array.isArray(c.words) && c.words.length) {
               const sh = Math.round(((+d.start || 0) - (+c.start || 0)) * 100) / 100;
-              c.words = c.words
+              const had = c.words.length;
+              const left = c.words
                 .map(w => ({ ...w, s: Math.round(((+w.s || 0) - sh) * 100) / 100, e: Math.round(((+w.e || 0) - sh) * 100) / 100 }))
                 .filter(w => w.e > 0)
                 .map(w => ({ ...w, s: Math.max(0, w.s) }));
-              if (!c.words.length) c.words = null;
+              if (!left.length) {
+                // Every word cut off: what is left is the text, as typed.
+                c.words = null;
+              } else {
+                c.words = left;
+                // Words cut off leave the text too, as a split does - the text and its words say the same.
+                if (left.length < had) c.name = left.map(w => w.w).join(' ');
+              }
             }
             c.start = d.start;
             c.trimIn = d.words ? 0 : d.trimIn;

@@ -30,6 +30,11 @@ const STAGE = 'mv3-stage';
 let _on = false;
 let _cv = null;          // our canvas, ours alone - the other preview owns its own
 let _ctx = null;
+// The grips of a picked insert, on a canvas of their own ABOVE the captions' (phase K4 review): libass
+// draws the captions on a canvas laid over this one, and the grips are the editor's furniture - over
+// everything. Clicks still go to _cv underneath; this one lets them through.
+let _hcv = null;
+let _hctx = null;
 let _at = 0;             // playhead, seconds
 let _media = new Map();  // src -> HTMLVideoElement | HTMLImageElement, kept between draws
 let _raf = 0;
@@ -413,6 +418,7 @@ function _paint() {
     // No clip is drawn, so none is under the pointer: the gesture layer (js/merge-v3/place-b.js)
     // must not find the timeline's last rectangles under a press on the stage's halves.
     _rects.clear();
+    if (_hctx) { _hctx.setTransform(1, 0, 0, 1, 0, 0); _hctx.clearRect(0, 0, _hcv.width, _hcv.height); }
     _ctx.setTransform(1, 0, 0, 1, 0, 0);
     _ctx.fillStyle = '#000';
     _ctx.fillRect(0, 0, CW, CH);
@@ -506,7 +512,14 @@ function _paint() {
 
   // The grips last of all, over the veil and the captions - they are the editor's furniture
   // rather than part of the picture, and something you cannot see is something you cannot grab.
-  try { paintHandles(_ctx); } catch (e) {}
+  if (_hctx) {
+    _hctx.setTransform(1, 0, 0, 1, 0, 0);
+    _hctx.clearRect(0, 0, CW, CH);
+    _hctx.setTransform(1, 0, 0, 1, PAD, PAD);
+    try { paintHandles(_hctx); } catch (e) {}
+  } else {
+    try { paintHandles(_ctx); } catch (e) {}
+  }
 
   _note(gapNote(gaps));
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
@@ -570,6 +583,9 @@ export async function grabFrame(ms = 12000) {
     _shooting = false;
     W = keep.W; H = keep.H; PAD = keep.PAD; CW = keep.CW; CH = keep.CH;
     _ctx = keep.ctx; _media = keep.media;
+    // Edits made while the frame was being taken did not reach the captions' layer (the store's
+    // listener stands down during a shot).
+    CapLayer.setTimeline(Store.timeline());
     _repaint();
   }
 }
@@ -1474,6 +1490,7 @@ function _resize() {
   PAD = Math.round(Math.min(W, H) * PAD_FRAC);
   CW = W + PAD * 2; CH = H + PAD * 2;
   if (_cv) { _cv.width = CW; _cv.height = CH; }
+  if (_hcv) { _hcv.width = CW; _hcv.height = CH; }
   // The stage is shaped by a stylesheet rule per format; with a margin the shape is no longer
   // either of them, so it is stated here - inline, which is what lets one number decide it.
   const stage = document.getElementById(STAGE);
@@ -1498,6 +1515,11 @@ export function mount() {
   _ctx = _cv.getContext('2d');
   // libass over the frame; once it can draw, the frame is painted again so the captions are its.
   CapLayer.attach(stage, () => { CapLayer.setTimeline(Store.timeline()); _repaint(); });
+  _hcv = document.createElement('canvas');
+  _hcv.className = 'mv3-pv-canvas mv3-pv-grips';
+  Object.assign(_hcv.style, { position: 'absolute', left: '0', top: '0', pointerEvents: 'none' });
+  stage.appendChild(_hcv);
+  _hctx = _hcv.getContext('2d');
   _resize();
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.

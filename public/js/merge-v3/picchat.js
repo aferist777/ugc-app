@@ -31,7 +31,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { setOpenColumn, panelRoom } from './layout.js';
+import { setOpenColumn, panelRoom, onColumnOpen } from './layout.js';
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from '../library/viewer.js';
 import { askDelete, closeAsk, note } from './ask.js';
@@ -136,10 +136,9 @@ async function _show(on) {
     return;
   }
   _build();
-  // The corner goes as far left and down as it can (phase J7, the owner). A frame later: a talking head
-  // taken to its timeline step lays the page out on the next frame (workshop.js, roomForTimeline), and
-  // the chat's room comes after that, not before.
-  requestAnimationFrame(() => { if (_chat) panelRoom(true); });
+  // The corner goes as far left and down as it can (phase J7, the owner) - only while the chat can be
+  // SEEN: a folded Library (a talking head on setup) takes no room for it (_takeRoom, onColumnOpen).
+  _takeRoom();
   _fit();
   _loadTable();
   _loadCats();
@@ -1214,7 +1213,23 @@ function _build() {
   _paintAtts();
 }
 
+// The room is the chat's while it shows: taken when the Library opens on it, given back when the
+// Library folds. A frame later, so a talking head's step lays its own arrangement first
+// (layout.js keeps that as what leaving the chat comes back to).
+function _libraryOpen() {
+  const lib = $('mv3-library');
+  return !!lib && !lib.classList.contains('is-collapsed');
+}
+function _takeRoom() {
+  requestAnimationFrame(() => { if (_chat && _libraryOpen()) panelRoom(true); });
+}
+
 export function initPicChat() {
+  onColumnOpen((which) => {
+    if (!_chat) return;
+    if (which === 'library') _takeRoom();
+    else panelRoom(false);
+  });
   const title = $('mv3-lib-title');
   if (title) title.addEventListener('click', (e) => { if (!_chat) return; e.stopPropagation(); _show(false); });
   const gen = $('mv3-lib-gen');

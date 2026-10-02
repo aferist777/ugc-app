@@ -1,20 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CAPTIONS — the .ass file, ONE builder for the render and the preview (phases K0, K3; 2026-10-03).
 
-   Burnt by libass through ffmpeg's `ass` filter (lib/mv3b-render.js), and - from phase K4 - drawn by
-   the same libass in the page, so the screen and the file are one drawing.
+   Burnt by libass through ffmpeg's `ass` filter (lib/mv3b-render.js), and drawn by the same libass in
+   the page (layer.js, K4), so the screen and the file are one drawing.
 
-   ONE PAGE IS ONE EVENT. What happens to a word while it is spoken - a colour, a box behind it, a short
-   pop, a jump, a fill - is a switch at that word's moment inside the page's own event (`\t` with the
-   word's times, `\kf` for the fill), never a new event per word: the page is laid out once and does not
-   jump, and its entrance (pop, fade, slide) plays once. Checked on our ffmpeg frame by frame: a colour
-   switch inside one event, a box behind ONE word (BorderStyle 3 - boxes are drawn per run, and every
-   run's box is clear but the spoken word's), a pop of one word, \kf from the unsung colour to the sung.
-   Each word's block starts with \r, so nothing one word does leaks into the next.
+   A PAGE IS LAID OUT ONCE. What a word does while it is spoken is a timed switch (`\t` at the word's
+   moments, `\kf` for the fill), never a new layout - and what would change the layout or the boxes is
+   drawn in a layer of its own (after the K3 review, checked on our ffmpeg frame by frame):
+     layer +0  the line's box, ONE run for the whole page (a box drawn word by word left dark seams
+               where the boxes of a semi-transparent line overlapped);
+     layer +1  the box behind the spoken word (`box`): every word's box clear but the spoken one's,
+               the spaces in clear blocks of their own so the box sits round the word only;
+     layer +2  the letters - outlined, with their shadow; a word being popped steps aside here;
+     layer +3  the pop or the jump (`pop`, `bounce`): the same text, every word clear but the spoken
+               one, which grows - so scaling it never moves its neighbours or the other line.
+   Every layer has the same font, size, spacing and scale, so libass lays the words in the same places
+   in all of them (a border or a shadow does not move a glyph). Four layers per lane: lane i is 4i..4i+3,
+   so a higher lane is still drawn on top. A style that needs none of this - no box with timed words,
+   no box or pop effect - is one event, as it always was.
 
-   A caption carries its words with times from its own start ({w, s, e, k}); without words (a line typed
-   by hand) there is nothing to time and the page is drawn whole. A word marked `k` wears the highlight
-   for the whole page. The casing is applied here, to what is drawn - never to the stored text.
+   A caption's words carry their times from its own start ({w, s, e, k}); they are used only while they
+   still SAY the caption's text - a line corrected by hand is drawn as typed, untimed, rather than the
+   old words being burnt over it. A word marked `k` wears the highlight for its whole page. Casing is
+   applied here, to what is drawn - never to the stored text.
 
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -73,111 +81,152 @@ export function karaokeLine(words, tag, casing) {
   return out.join('');
 }
 
-// ── The effects ─────────────────────────────────────────────────────────────
+// ── What a style needs ──────────────────────────────────────────────────────
 const ms = (sec) => Math.max(0, Math.round((+sec || 0) * 1000));
+const BOXY = (st) => st.borderStyle === 'box' || st.borderStyle === 'boxline';
 
-// How the page arrives, the part that is repeated in every word's block (it is the text's own scale;
-// \r would otherwise undo it from the second word on). \fad and \move are the event's and go once.
-function _arrive(st) {
-  return st.appear === 'pop' ? '\\fscx85\\fscy85\\t(0,140,\\fscx100\\fscy100)' : '';
+/** Drawn in more than one event per page (see the header). */
+export function layered(st) {
+  return st.effect === 'box' || st.effect === 'pop' || st.effect === 'bounce' || (BOXY(st) && st.effect !== 'none');
 }
 
-// What one word does while it is spoken. `t` its moments in ms from the page's start.
-function _wordTags(st, w) {
-  const s = ms(w.s), e = Math.max(ms(w.e), s + 1);
-  const hl = tagColour(st.highlight), prim = tagColour(st.primary);
-  if (w.k) return '\\1c' + hl;                              // marked to stand out: the whole page
-  switch (st.effect) {
-    case 'color':
-      return '\\t(' + s + ',' + (s + 1) + ',\\1c' + hl + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
-    case 'box': {
-      // The box behind every run is there but clear; the spoken word's is not.
-      return '\\t(' + s + ',' + (s + 1) + ',\\3c' + hl + '\\3a&H00&)\\t(' + e + ',' + (e + 1) + ',\\3c' + tagColour(st.backColor) + '\\3a' + _baseBoxAlpha(st) + ')';
-    }
-    case 'pop':
-      // Mostly upward: a word that grows sideways pushes its neighbours.
-      return '\\t(' + s + ',' + (s + 80) + ',\\fscx108\\fscy125\\1c' + hl + ')\\t(' + (s + 80) + ',' + (s + 170) + ',\\fscx100\\fscy100)'
-        + '\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
-    case 'bounce':
-      return '\\t(' + s + ',' + (s + 60) + ',\\fscy132\\1c' + hl + ')\\t(' + (s + 60) + ',' + (s + 140) + ',\\fscy100)'
-        + '\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
-    default:
-      return '';
-  }
+// The words, while they still say the caption's text; a line edited by hand has none to time.
+const _norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function _wordsOf(c) {
+  const w = Array.isArray(c.words) && c.words.length ? c.words : null;
+  if (!w) return null;
+  return _norm(w.map(x => x.w).join(' ')) === _norm(c.name) ? w : null;
 }
 
-// The box behind a word that is not being spoken: the line's own box when the style has one, clear
-// otherwise.
-const _baseBoxAlpha = (st) => (st.borderStyle === 'box' ? tagAlpha(st.backAlpha) : '&HFF&');
+// How the page arrives, repeated in every word's block (\r would undo it from the second word on).
+// \fad and \move are the event's and go once (_place).
+const _arrive = (st) => (st.appear === 'pop' ? '\\fscx85\\fscy85\\t(0,140,\\fscx100\\fscy100)' : '');
+const _blur = (st) => ((+st.blur || 0) > 0 ? '\\blur' + (+st.blur).toFixed(1) : '');
+const _times = (w) => { const s = ms(w.s); return [s, Math.max(ms(w.e), s + 1)]; };
 
-function _body(c, st) {
-  const words = Array.isArray(c.words) && c.words.length ? c.words : null;
-  const arrive = _arrive(st);
-  const blur = (+st.blur || 0) > 0 ? '\\blur' + (+st.blur).toFixed(1) : '';
-  if (words && st.effect === 'karaoke') return (arrive ? '{' + arrive + '}' : '') + karaokeLine(words, '\\k', st.casing);
-  if (words && st.effect === 'sweep') return (arrive ? '{' + arrive + '}' : '') + karaokeLine(words, '\\kf', st.casing);
-  const timed = words && (['color', 'box', 'pop', 'bounce'].includes(st.effect) || words.some(w => w.k));
-  if (!timed) return (arrive ? '{' + arrive + '}' : '') + assText(cased(c.name, st.casing));
-  const box = st.effect === 'box' ? '\\3c' + tagColour(st.backColor) + '\\3a' + _baseBoxAlpha(st) : '';
-  return words.map((w, i) => '{\\r' + blur + arrive + box + _wordTags(st, w) + '}'
-    + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? ' ' : '')).join('');
-}
-
-// The page's own tags: where it sits, how it arrives, its blur.
+// The page's own tags: where it sits, how it arrives.
 function _place(st, a) {
   const x = Math.round(a.x), y = Math.round(a.y);
   const pos = st.appear === 'slide'
     ? '\\move(' + x + ',' + (y + Math.round(40 * (a.h / 1920))) + ',' + x + ',' + y + ',0,180)'
     : '\\pos(' + x + ',' + y + ')';
   const fade = (st.appear === 'fade' || st.appear === 'slide') ? '\\fad(' + (st.appear === 'fade' ? 160 : 120) + ',0)' : '';
-  const blur = (+st.blur || 0) > 0 ? '\\blur' + (+st.blur).toFixed(1) : '';
-  return '{\\an' + a.an + pos + fade + blur + '}';
+  return '{\\an' + a.an + pos + fade + '}';
 }
 
-// One [V4+ Styles] entry.
-function styleLine(name, st, a, w, h) {
-  // Margins are what libass wraps a long line against, even with an explicit position.
-  const margin = Math.round(w * 0.06);
+// ── layer +2: the letters ───────────────────────────────────────────────────
+function _textBody(c, st, words) {
+  const arrive = _arrive(st), blur = _blur(st);
+  const head = (arrive || blur) ? '{' + blur + arrive + '}' : '';
+  if (words && st.effect === 'karaoke') return head + karaokeLine(words, '\\k', st.casing);
+  if (words && st.effect === 'sweep') return head + karaokeLine(words, '\\kf', st.casing);
+  const perWord = words && (['color', 'pop', 'bounce'].includes(st.effect) || words.some(w => w.k));
+  if (!perWord) return head + assText(cased(words ? words.map(w => w.w).join(' ') : c.name, st.casing));
+  const hl = tagColour(st.highlight), prim = tagColour(st.primary);
+  return words.map((w, i) => {
+    const [s, e] = _times(w);
+    let t = '';
+    if (st.effect === 'pop' || st.effect === 'bounce') {
+      // The spoken word is drawn by the layer above, grown; here it steps aside for its moment.
+      t = (w.k ? '\\1c' + hl : '') + '\\t(' + s + ',' + (s + 1) + ',\\alpha&HFF&)\\t(' + e + ',' + (e + 1) + ',\\alpha&H00&)';
+    } else if (w.k) {
+      t = '\\1c' + hl;                                    // marked to stand out: the whole page
+    } else if (st.effect === 'color') {
+      t = '\\t(' + s + ',' + (s + 1) + ',\\1c' + hl + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
+    }
+    return '{\\r' + blur + arrive + t + '}' + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? ' ' : '');
+  }).join('');
+}
+
+// ── layer +3: the spoken word grows ─────────────────────────────────────────
+function _popBody(st, words) {
+  const arrive = _arrive(st), blur = _blur(st), hl = tagColour(st.highlight);
+  const pop = st.effect === 'pop';
+  const grow = pop ? '\\fscx112\\fscy125' : '\\fscy132';
+  const up = pop ? 80 : 60, down = pop ? 170 : 140;
+  return words.map((w, i) => {
+    const [s, e] = _times(w);
+    return '{\\r' + blur + arrive + '\\alpha&HFF&\\1c' + hl
+      + '\\t(' + s + ',' + (s + 1) + ',\\alpha&H00&)\\t(' + s + ',' + (s + up) + ',' + grow + ')'
+      + '\\t(' + (s + up) + ',' + (s + down) + ',\\fscx100\\fscy100)\\t(' + e + ',' + (e + 1) + ',\\alpha&HFF&)}'
+      + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? ' ' : '');
+  }).join('');
+}
+
+// ── layer +0: the line's box, one run ───────────────────────────────────────
+function _lineBoxBody(c, st, words) {
+  const text = words ? words.map(w => w.w).join(' ') : c.name;
+  return '{' + _arrive(st) + '\\1a&HFF&\\2a&HFF&\\3c' + tagColour(st.backColor) + '\\3a' + tagAlpha(st.backAlpha) + '}'
+    + assText(cased(text, st.casing));
+}
+
+// ── layer +1: the box behind the spoken word ───────────────────────────────
+function _wordBoxBody(st, words) {
+  const arrive = _arrive(st), hl = tagColour(st.highlight);
+  const clear = '\\1a&HFF&\\2a&HFF&\\3a&HFF&';
+  return words.map((w, i) => {
+    const [s, e] = _times(w);
+    return '{\\r' + arrive + clear + '\\t(' + s + ',' + (s + 1) + ',\\3c' + hl + '\\3a&H00&)\\t(' + e + ',' + (e + 1) + ',\\3a&HFF&)}'
+      + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? '{\\r' + arrive + clear + '} ' : '');
+  }).join('');
+}
+
+// ── The [V4+ Styles] entries ────────────────────────────────────────────────
+const _alpha255 = (opacity, dflt) => Math.round((1 - Math.max(0, Math.min(1, opacity == null ? dflt : +opacity))) * 255);
+// A box needs room round the letters - with none, libass draws no box at all.
+const _pad = (st) => Math.max(+st.outline || 0, 2, Math.round((+st.size || 60) * 0.08));
+
+function _styleRow(name, st, a, w, h, bs, outlineCol, backCol, outline, shadow) {
   const face = assFace(st.font, st.bold);
-  const boxAlpha = Math.round((1 - Math.max(0, Math.min(1, +st.backAlpha || 0))) * 255);
-  const shadowAlpha = Math.round((1 - Math.max(0, Math.min(1, st.shadowAlpha == null ? 0.75 : +st.shadowAlpha))) * 255);
-  // How the letters are bordered:
-  //   1 an outline (OutlineColour), and the shadow in BackColour;
-  //   3 a box in OutlineColour (that is how libass fills it), its shadow in BackColour - and the
-  //     spoken-word box rides on the same, one run at a time;
-  //   4 a box in BackColour AND an outline in OutlineColour.
-  let bs = 1, outlineCol = hexToAss(st.outlineColor, 0), backCol = hexToAss(st.shadowColor, shadowAlpha), outline = +st.outline || 0;
-  if (st.borderStyle === 'boxline') {
-    bs = 4; backCol = hexToAss(st.backColor, boxAlpha);
-  } else if (st.borderStyle === 'box' || st.effect === 'box') {
-    bs = 3;
-    outlineCol = hexToAss(st.backColor, st.borderStyle === 'box' ? boxAlpha : 255);
-    // A box needs room around the letters, whatever the outline was.
-    outline = Math.max(outline, st.effect === 'box' ? 10 : 0);
-  }
   return [
     name, face.family, Math.round(st.size),
     hexToAss(st.primary, 0), hexToAss(st.secondary, 0), outlineCol, backCol,
     face.bold, st.italic ? -1 : 0, 0, 0,
     Math.round(+st.scaleX || 100), Math.round(+st.scaleY || 100), +st.spacing || 0, 0,
-    bs, outline, (+st.shadow || 0),
-    a.an, margin, margin, Math.round(h * 0.05), 1,
+    bs, outline, shadow,
+    a.an, Math.round(w * 0.06), Math.round(w * 0.06), Math.round(h * 0.05), 1,
   ].join(',');
+}
+
+// The letters' style. Layered, it is always outlined letters (border style 1) - the boxes are drawn
+// by the box style; on its own it is the whole look:
+//   1 an outline (OutlineColour), the shadow in BackColour;
+//   3 a box in OutlineColour (that is how libass fills it);
+//   4 a box in BackColour AND an outline in OutlineColour.
+function textStyle(name, st, a, w, h, isLayered) {
+  const shadowCol = hexToAss(st.shadowColor, _alpha255(st.shadowAlpha, 0.75));
+  if (isLayered || !BOXY(st)) {
+    // A 'box' look has no letter outline - its letters stand on the box.
+    const outline = (isLayered && st.borderStyle === 'box') ? 0 : (+st.outline || 0);
+    return _styleRow(name, st, a, w, h, 1, hexToAss(st.outlineColor, 0), shadowCol, outline, +st.shadow || 0);
+  }
+  const boxAlpha = _alpha255(st.backAlpha, 0);
+  if (st.borderStyle === 'boxline') {
+    return _styleRow(name, st, a, w, h, 4, hexToAss(st.outlineColor, 0), hexToAss(st.backColor, boxAlpha), _pad(st), +st.shadow || 0);
+  }
+  return _styleRow(name, st, a, w, h, 3, hexToAss(st.backColor, boxAlpha), shadowCol,
+    (+st.outline || 0) > 0 ? +st.outline : _pad(st), +st.shadow || 0);
+}
+
+// The boxes' style (layers +0 and +1): border style 3, colours set by the events, no shadow.
+function boxStyle(name, st, a, w, h) {
+  return _styleRow(name, st, a, w, h, 3, hexToAss(st.backColor, _alpha255(st.backAlpha, 0)), '&HFF000000', _pad(st), 0);
 }
 
 /**
  * Every lane that holds words, burnt into ONE file: a style per lane, and one more for every caption
- * that wears a style of its own. Lanes are given bottom lane first (style.js captionLanes); the Layer is
- * the lane's index, so a higher lane is drawn on top.
+ * that wears a style of its own (and a box style beside each that needs one). Lanes are given bottom
+ * lane first (style.js captionLanes).
  */
 export function buildAss(lanes, w, h) {
   const list = (Array.isArray(lanes) ? lanes : [lanes]).filter(Boolean);
   const used = [];
+  const make = (name, st) => ({ name, st, a: { ...anchorOf(st, w, h), h }, layered: layered(st) });
   for (const track of list) {
     const clips = ((track && track.clips) || []).filter(c => c && c.name && (+c.dur) > 0);
     if (!clips.length) continue;
-    const st = withAuto(resolveStyle(track.style), w, h);
-    used.push({ name: 'S' + used.length, st, a: { ...anchorOf(st, w, h), h }, clips, lane: track.style });
+    const s = make('S' + used.length, withAuto(resolveStyle(track.style), w, h));
+    used.push({ ...s, clips, lane: track.style });
   }
   if (!used.length) return '';
   const first = used[0].st;
@@ -189,8 +238,7 @@ export function buildAss(lanes, w, h) {
     if (!c.style || typeof c.style !== 'object' || !Object.keys(c.style).length) return u;
     const key = i + '|' + JSON.stringify(c.style);
     if (!own.has(key)) {
-      const st = withAuto(resolveStyle(u.lane, c.style), w, h);
-      const s = { name: u.name + 'o' + own.size, st, a: { ...anchorOf(st, w, h), h } };
+      const s = make(u.name + 'o' + own.size, withAuto(resolveStyle(u.lane, c.style), w, h));
       own.set(key, s);
       extra.push(s);
     }
@@ -198,15 +246,28 @@ export function buildAss(lanes, w, h) {
   };
 
   const lines = [];
-  used.forEach((u, layer) => {
+  const dlg = (layer, start, end, style, text) => lines.push('Dialogue: ' + layer + ',' + assTime(start) + ','
+    + assTime(end) + ',' + style + ',,0,0,0,,' + text);
+  used.forEach((u, lane) => {
+    const L = lane * 4;
     for (const c of u.clips) {
-      const s = styleOf(u, layer, c);
+      const s = styleOf(u, lane, c);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
-      lines.push('Dialogue: ' + layer + ',' + assTime(start) + ',' + assTime(end) + ','
-                 + s.name + ',,0,0,0,,' + _place(s.st, s.a) + _body(c, s.st));
+      const words = _wordsOf(c);
+      const place = _place(s.st, s.a);
+      if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(c, s.st, words));
+      if (s.layered && s.st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(s.st, words));
+      dlg(L + 2, start, end, s.name, place + _textBody(c, s.st, words));
+      if (s.layered && (s.st.effect === 'pop' || s.st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(s.st, words));
     }
   });
+
+  const styles = [];
+  for (const s of used.concat(extra)) {
+    styles.push('Style: ' + textStyle(s.name, s.st, s.a, w, h, s.layered));
+    if (s.layered && (BOXY(s.st) || s.st.effect === 'box')) styles.push('Style: ' + boxStyle(s.name + 'b', s.st, s.a, w, h));
+  }
 
   const head = [
     '[Script Info]',
@@ -223,7 +284,7 @@ export function buildAss(lanes, w, h) {
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour,'
       + ' Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle,'
       + ' Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-  ].concat(used.concat(extra).map(u => 'Style: ' + styleLine(u.name, u.st, u.a, w, h))).concat([
+  ].concat(styles).concat([
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',

@@ -235,14 +235,12 @@ export function roomForTimeline() {
   const panel = document.getElementById('mv3-timeline');
   const tl = document.getElementById('mv3-tl');
   const head = panel && panel.querySelector('.mv3-panel-head');
+  let wantTl = _tlNow();
   if (panel && tl) {
     // The lanes' own height, plus the header over them and the scrollbar under them.
-    const want = (head ? head.getBoundingClientRect().height : 0) + tl.scrollHeight + (tl.offsetHeight - tl.clientHeight) + 2;
-    _applyTl(want);
+    wantTl = (head ? head.getBoundingClientRect().height : 0) + tl.scrollHeight + (tl.offsetHeight - tl.clientHeight) + 2;
   }
-  _applyLeft(_clampLeft(Number.MAX_SAFE_INTEGER) - 30);
-  _placeCross();
-  _save();
+  _stepRoom(_clampLeft(Number.MAX_SAFE_INTEGER) - 30, wantTl);
 }
 
 /**
@@ -253,8 +251,27 @@ export function roomForTimeline() {
  * comes back to it too (phase L1).
  */
 export function roomForWork() {
-  _applyLeft(Number.MAX_SAFE_INTEGER);       // clamped to what the preview can spare
-  _applyTl(0);                               // ...and to the timeline's floor
+  // Clamped to what the preview can spare, and to the timeline's floor.
+  _stepRoom(_clampLeft(Number.MAX_SAFE_INTEGER), 0);
+}
+
+// A STEP'S ARRANGEMENT while a chat holds the room (phase J7 review): it becomes what leaving the chat
+// comes back to, and the chat keeps its corner - otherwise the step drew over the chat's room, and
+// leaving the chat brought back an arrangement from another step.
+function _stepRoom(left, tl) {
+  if (_panelOn) {
+    let back = null;
+    try { back = JSON.parse(localStorage.getItem(LS_ROOM) || 'null'); } catch (e) { back = null; }
+    if (back) {
+      try { localStorage.setItem(LS_ROOM, JSON.stringify({ left: Math.round(_clampLeft(left)), tl: Math.round(_clampTl(tl)) })); } catch (e) { /* a private window */ }
+      _applyLeft(Number.MAX_SAFE_INTEGER);
+      _applyTl(0);
+      _placeCross();
+      return;
+    }
+  }
+  _applyLeft(left);
+  _applyTl(tl);
   _placeCross();
   _save();
 }
@@ -267,7 +284,9 @@ export function roomForWork() {
  * shows finds the one to come back to still there.
  */
 const LS_ROOM = 'mv3_pc_room_v1';
+let _panelOn = false;                    // a chat holds the room right now
 export function panelRoom(on) {
+  _panelOn = !!on;
   let back = null;
   try { back = JSON.parse(localStorage.getItem(LS_ROOM) || 'null'); } catch (e) { back = null; }
   if (on) {

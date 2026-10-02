@@ -65,7 +65,9 @@ async function _start() {
       wasmUrl: wasm, modernWasmUrl: wasm,
       fonts: fontFiles().map(abs),
       queryFonts: false,
-      defaultFont: 'liberation sans',
+      // What a font lacks (Liberation Sans and Russo One have no ₽) is drawn in PT Sans, which has it -
+      // the render's libass borrows it from Windows (Arial) for the same letters.
+      defaultFont: 'pt sans',
       // The preview is small; libass draws at the canvas's own pixels and no more.
       prescaleHeightLimit: 1920,
     });

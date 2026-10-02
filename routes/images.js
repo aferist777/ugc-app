@@ -83,10 +83,14 @@ router.post('/images/shot', _upload.single('image'), async (req, res) => {
     // THE CAPTIONS, burnt in here (phase K4): the page draws them with libass on a canvas it cannot
     // read back, so the frame arrives without them and the render's own libass adds them, from the
     // project's timeline at that moment. A picture without them is still a picture - said, not lost.
+    // The page sends the captions it shows (a save may be half a second behind); the stored timeline
+    // is the fallback.
     const key = String((req.body || {}).key || '');
-    if (key && (req.body || {}).at != null) {
+    if ((req.body || {}).at != null) {
       try {
-        const tl = require('../lib/merge-store').read().timelines[key];
+        let tl = null;
+        try { tl = JSON.parse(String((req.body || {}).captions || '')); } catch (e) { tl = null; }
+        if (!(tl && Array.isArray(tl.tracks)) && key) tl = require('../lib/merge-store').read().timelines[key];
         if (tl && Array.isArray(tl.tracks)) await require('../lib/caption-shot').burn(req.file.path, tl, +req.body.at);
       } catch (e) { console.warn('[images/shot] the captions could not be drawn:', e.message); }
     }
