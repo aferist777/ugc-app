@@ -42,7 +42,8 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // the captions' one style module, the page's and the server's (phase K0)
                  '/js/captions/style.js', '/js/captions/ass.js',
                  // the fonts captions are drawn in (phase K5)
-                 '/js/captions/fonts.js', '/css/caption-fonts.css', '/fonts/captions/Montserrat-Black.ttf'];
+                 '/js/captions/fonts.js', '/css/caption-fonts.css', '/fonts/captions/Montserrat-Black.ttf',
+                 '/js/captions/presets.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
