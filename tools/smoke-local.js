@@ -38,7 +38,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // the making chats of Environments and Lookbooks (phase I): the page's module, its styles, both chats
                  '/js/library/makechat.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks',
                  // the pictures chat in Merge's Library panel (phase J)
-                 '/js/merge-v3/picchat.js', '/css/mv3-imagen.css', '/api/mv3/img/matrix'];
+                 '/js/merge-v3/picchat.js', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
+                 // the captions' one style module, the page's and the server's (phase K0)
+                 '/js/captions/style.js', '/js/captions/ass.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.

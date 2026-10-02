@@ -594,10 +594,10 @@ function _blankWordsTrack(host, track) {
   )));
   host.appendChild(C.row('Colour', isSubs ? C.pair(
     C.color(st.primary, (v) => set({ primary: v })),
-    C.toggleNamed('karaoke', !!st.karaoke, (on) => set({ karaoke: on }),
+    C.toggleNamed('karaoke', st.effect === 'karaoke', (on) => set({ effect: on ? 'karaoke' : 'none' }),
                   'Colour each word as it is spoken'),
   ) : C.color(st.primary, (v) => set({ primary: v }))));
-  if (isSubs && st.karaoke) {
+  if (isSubs && st.effect === 'karaoke') {
     host.appendChild(C.row('Not yet', C.color(st.secondary, (v) => set({ secondary: v }))));
     host.appendChild(C.hint('The colour a word wears before it is spoken. Only lines made by '
       + 'transcription carry word timings - a line you type flips as one piece.'));

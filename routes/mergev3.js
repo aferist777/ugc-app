@@ -78,25 +78,14 @@ function _emptyBlank() {
       lane('v1', 'video', 'main video', 'a1', true),
       lane('a1', 'audio', 'main audio', 'v1', true),
       lane('a2', 'audio', 'audio 2',    'v2', false),
-      Object.assign(lane('subs', 'subs', 'Subtitles', null, true), { style: { ...SUBS_STYLE } }),
+      Object.assign(lane('subs', 'subs', 'Subtitles', null, true), { style: CAP.normalizeStyle({}) }),
     ],
   };
 }
 
-const SUBS_STYLE = {
-  font: 'Arial', size: 60, bold: true, italic: false,
-  // libass karaoke convention, kept because libass is what burns these: text starts in
-  // `secondary` and flips to `primary` as each word is spoken. So primary = sung.
-  primary: '#ffffff', secondary: '#8a9099',
-  outlineColor: '#000000', shadowColor: '#000000',
-  backColor: '#000000', backAlpha: 0,
-  outline: 3, shadow: 0, blur: 0,
-  borderStyle: 'outline',        // outline | box
-  pos: 'bottom',                 // top | center | bottom - the anchor the offset is from
-  tx: 0, ty: 0,                  // base offset, as fractions of the frame
-  scaleX: 100, scaleY: 100,      // per-axis letter scale, percent - 100 is the font as drawn
-  wrap: true, wordsPerLine: 0, karaoke: false,
-};
+// The caption style - its fields, defaults and limits - is ONE module the page shares (phase K0):
+// public/js/captions/style.js, through lib/mv3b-subs.js.
+const CAP = require('../lib/mv3b-subs');
 
 // The key a page asks for when it has nothing to ask for and the store is empty.
 const LOCAL_KEY = 'local';
@@ -154,45 +143,6 @@ const VOL_MAX = 4;
 const num = (v, d) => (v == null || isNaN(+v)) ? d : +v;
 const orNull = (v) => (v == null ? null : v);
 
-// The subtitle look, clamped field by field. Anything unknown is dropped and anything
-// missing falls back to the default, so a half-written style can never reach the renderer.
-//
-// The subtitle lane's and each text lane's.
-function _subsStyle(st) {
-  st = st || {};
-  const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
-  const clamp = (v, lo, hi, dflt) => (v == null || isNaN(+v)) ? dflt : Math.max(lo, Math.min(hi, +v));
-  const hex = (v, dflt) => (/^#[0-9a-fA-F]{6}$/.test(String(v)) ? String(v) : dflt);
-  return {
-
-    font: String(st.font || SUBS_STYLE.font).slice(0, 60),
-    size: clamp(st.size, 20, 120, SUBS_STYLE.size),
-    bold: st.bold == null ? SUBS_STYLE.bold : !!st.bold,
-    italic: !!st.italic,
-    primary: hex(st.primary, SUBS_STYLE.primary),
-    secondary: hex(st.secondary, SUBS_STYLE.secondary),
-    outlineColor: hex(st.outlineColor, SUBS_STYLE.outlineColor),
-    shadowColor: hex(st.shadowColor, SUBS_STYLE.shadowColor),
-    backColor: hex(st.backColor, SUBS_STYLE.backColor),
-    backAlpha: clamp(st.backAlpha, 0, 1, SUBS_STYLE.backAlpha),
-    outline: clamp(st.outline, 0, 10, SUBS_STYLE.outline),
-    shadow: clamp(st.shadow, 0, 10, SUBS_STYLE.shadow),
-    blur: clamp(st.blur, 0, 10, SUBS_STYLE.blur),
-    // Percent, and wider than the slider offers: the panel stops at 200, but a project
-    // written by hand or by a later build should not have its captions silently reshaped.
-    scaleX: clamp(st.scaleX, 25, 400, SUBS_STYLE.scaleX),
-    scaleY: clamp(st.scaleY, 25, 400, SUBS_STYLE.scaleY),
-    borderStyle: pick(st.borderStyle, ['outline', 'box'], SUBS_STYLE.borderStyle),
-    pos: pick(st.pos, ['top', 'center', 'bottom'], SUBS_STYLE.pos),
-    // The base offset every subtitle is moved by. Wider bounds than a PiP rect: a caption
-    // nudged off the frame is a legitimate thing to do while composing.
-    tx: clamp(st.tx, -1, 1, 0),
-    ty: clamp(st.ty, -1, 1, 0),
-    wrap: st.wrap == null ? SUBS_STYLE.wrap : !!st.wrap,
-    wordsPerLine: Math.round(clamp(st.wordsPerLine, 0, 12, 0)),
-    karaoke: !!st.karaoke,
-  };
-}
 
 // One clip, rebuilt from a fixed shape. A field missing from this list is DROPPED on the next
 // save, so anything that has to survive a reload is named here. `isSubs` is passed in rather
@@ -224,7 +174,8 @@ function _clipOf(c, isSubs) {
       // could not tell the two apart, and would either overwrite somebody's work or grow a
       // second copy of the script every time it ran.
       frag:    Number.isFinite(+c.frag) && +c.frag > 0 ? Math.round(+c.frag) : null,
-      name:    String(c.name || '').slice(0, 200),
+      // 400, the panel's own limit for a caption's text - at 200 the rest was lost on save.
+      name:    String(c.name || '').slice(0, 400),
       libId:   c.libId ? String(c.libId) : null,
       start:   Math.max(0, num(c.start, 0)),
       dur:     Math.max(0.1, num(c.dur, 1)),
@@ -276,15 +227,9 @@ function _clipOf(c, isSubs) {
       // Null stays null - the band's default turn. +null is 0, which is on the list, so every
       // clip that came back with no rotation left its second save turned upright.
       rotation: (c.rotation != null && [0, 90, 180, 270].includes(+c.rotation)) ? +c.rotation : null,
-      // Per-word timings for karaoke, RELATIVE to the clip's own start. Relative and not
-      // absolute so that dragging a caption along the lane keeps its highlight in step -
-      // absolute offsets would need rewriting on every move, and one missed rewrite is a
-      // caption whose highlight runs ahead of the voice.
-      words: (isSubs && Array.isArray(c.words))
-        ? c.words.slice(0, 200)
-            .filter(w => w && w.w != null)
-            .map(w => ({ w: String(w.w).slice(0, 60), s: Math.max(0, num(w.s, 0)), e: Math.max(0, num(w.e, 0)) }))
-        : null,
+      // Per-word timings, RELATIVE to the clip's own start, so dragging a caption along the lane keeps
+      // its words in step. {w, s, e} and `k` for a word marked to stand out (public/js/captions/style.js).
+      words: isSubs ? CAP.normalizeWords(c.words) : null,
   };
 }
 
@@ -356,15 +301,13 @@ function _sanitizeBlank(timeline) {
                                // The five answers the blank panel offers for a filled clip.
                                // _clipOf keeps the talking-head editor's three, and top and
                                // bottom came back from a save as nothing.
-                               cropAlign: ['left', 'center', 'right', 'top', 'bottom'].includes(c.cropAlign) ? c.cropAlign : null })),
+                               cropAlign: ['left', 'center', 'right', 'top', 'bottom'].includes(c.cropAlign) ? c.cropAlign : null,
+                               // A caption's OWN style (phase K0, the owner 2026-10-03): only what it
+                               // sets over its lane's; absent when it sets nothing.
+                               ...(isWords ? { style: CAP.normalizeOverride(c.style) || undefined } : {}) })),
     };
-    // `sizeAuto` is added HERE and not inside _subsStyle, which talking-head projects also go
-    // through: it is the flag that says the caption size is still the format's suggestion
-    // rather than a number somebody chose, and only a blank project can change format.
-    if (isWords) {
-      row.style = _subsStyle(t.style);
-      row.style.sizeAuto = (t.style && t.style.sizeAuto === false) ? false : true;
-    }
+    // The words lanes' look, every field valid and nothing unknown (public/js/captions/style.js).
+    if (isWords) row.style = CAP.normalizeStyle(t.style);
     // A video lane is a layer: clips on it may cover one another and the order they are in
     // is which one shows. Only the audio lanes are sorted, where overlap is a mix and the
     // order means nothing.

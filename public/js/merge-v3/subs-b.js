@@ -1,81 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — captions for a BLANK project, on this side of the wire.
 
-   The client half of lib/mv3b-subs.js. That file writes the .ass libass burns; this one
-   draws the same words on the preview canvas, groups a transcript into lines, and turns an
-   audio timeline into something the speech-to-text endpoint understands.
-
-   THE STYLE DEFAULTS ARE COPIED, not imported: the other file is CommonJS on the server and
-   this one is a module in a browser. Two copies of a dozen numbers, and the alternative was a
-   build step. If a default moves, it moves in both - they are the same eleven lines.
-
-   WHAT MUST AGREE is where a caption sits and how big it is. anchorOf() here is anchorOf()
-   there, and the size is scaled by the same ratio, because a caption that sits differently on
-   the screen and in the file is a caption nobody can place.
+   This file draws the words on the preview canvas, groups a transcript into lines, and turns an
+   audio timeline into something the speech-to-text endpoint understands. HOW A CAPTION LOOKS - the
+   fields, the defaults, where it sits - is public/js/captions/style.js, the one module the server's
+   builder reads too (phase K0), so the screen and the file cannot disagree over a default.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export const DEF = {
-  font: 'Arial', size: 60, bold: true, italic: false,
-  primary: '#ffffff', secondary: '#8a9099',
-  outlineColor: '#000000', shadowColor: '#000000',
-  backColor: '#000000', backAlpha: 0,
-  outline: 3, shadow: 0, blur: 0,
-  borderStyle: 'outline', pos: 'bottom', tx: 0, ty: 0,
-  wrap: true, wordsPerLine: 0, karaoke: false, sizeAuto: true,
-};
+import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
+  from '../captions/style.js';
 
-// The frame the style is authored against - PlayResX/Y in the .ass, and the size the render
-// actually comes out at.
-const RENDER = { '9:16': { w: 1080, h: 1920 }, '16:9': { w: 1920, h: 1080 } };
-export const renderFrame = (fmt) => RENDER[fmt] || RENDER['9:16'];
+export { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes };
 
-// ── What the format decides, until somebody decides otherwise ───────────────
-// A 9:16 frame is a column: eight words across it come out as a paragraph in a shoe box, so
-// the line breaks earlier and the letters are bigger relative to the frame. Sideways there is
-// room to read a whole clause at once.
-//
-// These are DEFAULTS and not rules: the moment either is set by hand the manual value wins and
-// changing the format stops moving it. `wordsPerLine: 0` and `sizeAuto` are what "still
-// automatic" looks like in the stored style - a number nobody chose.
-export function autoWordsPerLine(fmt) { return fmt === '16:9' ? 8 : 4; }
-export function autoSize(fmt) {
-  const f = renderFrame(fmt);
-  return Math.round(f.h * (fmt === '16:9' ? 0.050 : 0.035));
-}
-
-/** The style as everything downstream should read it, with the automatic parts filled in. */
-export function styleOf(track, fmt) {
-  const st = Object.assign({}, DEF, (track && track.style) || {});
+/**
+ * The style as everything downstream should read it, with the automatic parts filled in - the lane's,
+ * or, given a caption, that caption's own on top of it (phase K0).
+ */
+export function styleOf(track, fmt, clip) {
+  const st = resolveStyle(track && track.style, clip && clip.style);
   if (st.sizeAuto !== false) st.size = autoSize(fmt);
   if (!(+st.wordsPerLine > 0)) st.wordsPerLine = autoWordsPerLine(fmt);
   return st;
-}
-
-/** Where a caption sits, in pixels of whatever frame it is given. Mirrors lib/mv3b-subs.js. */
-export function anchorOf(style, w, h) {
-  const base = style.pos === 'top' ? 0.10 : style.pos === 'center' ? 0.50 : 0.88;
-  return {
-    x: w / 2 + (+style.tx || 0) * w,
-    y: h * base + (+style.ty || 0) * h,
-    an: style.pos === 'top' ? 8 : style.pos === 'center' ? 5 : 2,
-  };
 }
 
 export function subsTrack(tl) {
   return (((tl && tl.tracks) || []).find(t => t && t.kind === 'subs')) || null;
 }
 
-// The transcript's one lane and the text lanes above it. Two kinds because they are two
-// things: one is what was said, cut up by a machine; the others are what somebody typed.
-//
-// RETURNED BOTTOM LANE FIRST, which is the reverse of the list. Everything downstream draws in
-// the order it is given, so this is what makes higher-in-the-column mean on-top - the same rule
-// the video lanes have always had, now that the text lanes sit above the subtitles.
-export function captionLanes(tl) {
-  return ((tl && tl.tracks) || [])
-    .filter(t => t && (t.kind === 'subs' || t.kind === 'text'))
-    .reverse();
-}
 
 // ── Drawing ─────────────────────────────────────────────────────────────────
 // Outline first and text over it, with a round join: a stroke drawn after the fill eats half
@@ -176,25 +127,25 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
                                  && at < (+c.start || 0) + (+c.dur || 0));
   if (!live.length) return;
 
-  const st = styleOf(tr, fmt);
   // The style speaks in frame pixels; the canvas is a smaller frame of the same shape.
   const scale = H / renderFrame(fmt).h;
-  const face = _faceOf(ctx, st);
-  // A line is the size the style names; the letters inside it are smaller (see _faceOf).
-  const lh = Math.max(6, st.size * scale);
-  const px = lh / face.line;
-  const a = anchorOf(st, W, H);
-  // The style's margins in the .ass (lib/mv3b-subs.js styleLine), which is what libass wraps against.
+  // The style's margins in the .ass (public/js/captions/ass.js styleLine), what libass wraps against.
   const margin = W * 0.06;
 
-  ctx.save();
-  ctx.font = (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + px.toFixed(1) + 'px '
-           + st.font + ', Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-
   for (const c of live) {
-    const words = st.karaoke && Array.isArray(c.words) && c.words.length ? c.words : null;
+    // The lane's style, or this caption's own on top of it (phase K0).
+    const st = styleOf(tr, fmt, c);
+    const face = _faceOf(ctx, st);
+    // A line is the size the style names; the letters inside it are smaller (see _faceOf).
+    const lh = Math.max(6, st.size * scale);
+    const px = lh / face.line;
+    const a = anchorOf(st, W, H);
+    ctx.save();
+    ctx.font = (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + px.toFixed(1) + 'px '
+             + st.font + ', Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
     // Karaoke captions wrap like any other - they ran off both edges on screen while the file wrapped
     // them. A line break typed into a caption is a break in both.
     const lines = [];
@@ -236,8 +187,8 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
       ctx.fillStyle = st.primary;
       _line(ctx, ln.text, a.x, y, st, scale);
     });
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 // ── Turning a transcript into captions ──────────────────────────────────────

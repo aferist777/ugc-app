@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The captions modules are ES modules: the page imports them and the server require()s them (Node 24)."
+}

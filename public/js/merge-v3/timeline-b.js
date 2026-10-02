@@ -226,7 +226,8 @@ function _drop(trackId, want, data) {
   Store.mutate(tl => {
     const t = tl.tracks;
     const track = t.find(x => x.id === trackId);
-    if (!track || track.kind === 'subs') return;
+    // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
+    if (!track || track.kind === 'subs' || track.kind === 'text') return;
 
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
     // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
@@ -505,6 +506,7 @@ function _beginDrag(e, t, c, el) {
     group: edge ? [] : group,
     x0: e.clientX, y0: e.clientY, start0: +c.start,
     id: c.id, from: t.id, kind: t.kind, to: t.id,
+    words: t.kind === 'subs' || t.kind === 'text',
     mate: mateClip ? { id: mateClip.id, from: mateTrack.id, kind: mateTrack.kind, to: mateTrack.id } : null,
     el, mateEl: mateClip ? document.querySelector(`.mv3b-clip[data-clip="${mateClip.id}"]`) : null,
     start: +c.start, moved: false,
@@ -539,7 +541,8 @@ function _moveDrag(e) {
     // second eats two seconds of film.
     const sp = _drag.speed || 1;
     if (_drag.edge === 'in') {
-      const lo = -_drag.trimIn0 / sp;
+      // A caption has no source behind its front edge: it may be pulled back as far as the start.
+      const lo = _drag.words ? -_drag.start0 : -_drag.trimIn0 / sp;
       const hi = _drag.dur0 - 0.1;
       const d = Math.max(lo, Math.min(hi, dx));
       _drag.start = Math.max(0, Math.round((_drag.start0 + d) * 100) / 100);
@@ -618,7 +621,21 @@ function _endDrag() {
         for (const tr of t) {
           const c = (tr.clips || []).find(x => x.id === id);
           if (!c) continue;
-          if (d.edge === 'in') { c.start = d.start; c.trimIn = d.trimIn; }
+          if (d.edge === 'in') {
+            // A CAPTION'S WORDS KEEP THEIR MOMENTS (phase K0): their times run from the caption's
+            // start, so moving the start moved every word by as much - the highlight ran late after a
+            // trim. They are shifted back, and a word now before the start is dropped.
+            if (Array.isArray(c.words) && c.words.length) {
+              const sh = Math.round(((+d.start || 0) - (+c.start || 0)) * 100) / 100;
+              c.words = c.words
+                .map(w => ({ ...w, s: Math.round(((+w.s || 0) - sh) * 100) / 100, e: Math.round(((+w.e || 0) - sh) * 100) / 100 }))
+                .filter(w => w.e > 0)
+                .map(w => ({ ...w, s: Math.max(0, w.s) }));
+              if (!c.words.length) c.words = null;
+            }
+            c.start = d.start;
+            c.trimIn = d.words ? 0 : d.trimIn;
+          }
           c.dur = d.dur;
           return;
         }
@@ -666,7 +683,7 @@ function _endDrag() {
 const _hasClip = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf(DRAG_TYPE) >= 0;
 
 function _wireLane(lane, t) {
-  if (t.kind === 'subs') return;
+  if (t.kind === 'subs' || t.kind === 'text') return;
   lane.addEventListener('dragover', (e) => {
     if (!_hasClip(e)) return;
     e.preventDefault();
@@ -1446,6 +1463,25 @@ export function setSubsStyle(trackId, patch, captions) {
       srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
       transition: null, animation: null, filter: null, volume: null, pairId: null,
     })).sort((a, b) => a.start - b.start);
+  });
+}
+
+/**
+ * A CAPTION'S OWN STYLE (phase K0, the owner 2026-10-03): `patch` over the lane's style for these
+ * captions - merged into what they already set - or, given null, back to the lane's style. One step to
+ * undo however many captions.
+ */
+export function setCaptionStyle(trackId, clipIds, patch) {
+  const ids = new Set((clipIds || []).map(String));
+  if (!ids.size) return;
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    if (!t) return;
+    for (const c of (t.clips || [])) {
+      if (!ids.has(c.id)) continue;
+      if (patch == null) { delete c.style; continue; }
+      c.style = Object.assign({}, c.style || {}, patch);
+    }
   });
 }
 
