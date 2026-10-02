@@ -90,6 +90,7 @@ function createMaker(kind) {
   let _upSeq = 0;                                   // the newest of them is the one that lands in the place
   let _shelf = null;                                // the base tiles
   let _masonryCols = 0;                             // how many columns the Images kladka was last drawn in
+  let _paintedCat = null;                           // which category it was last drawn for
   let _cat = '';
   let _images = null;
   let _cats = [];
@@ -199,7 +200,8 @@ function createMaker(kind) {
       let raf = 0;
       new ResizeObserver(() => {
         if (raf) return;
-        raf = requestAnimationFrame(() => { raf = 0; if (_colsOf(libList) !== _masonryCols) _paintImages(); });
+        // Not while the area is hidden (width 0): it would be drawn in one column and shown so for a frame.
+        raf = requestAnimationFrame(() => { raf = 0; if (libList.clientWidth && _colsOf(libList) !== _masonryCols) _paintImages(); });
       }).observe(libList);
     }
 
@@ -271,6 +273,11 @@ function createMaker(kind) {
       if (e.button !== 0) return;
       e.preventDefault();
       const from = e.clientX;
+      // From what is DRAWN, not what was remembered: a window made narrower (zoom, a smaller screen)
+      // shrinks both side columns below their remembered widths, and starting from those made the
+      // edge jump against the drag and the other column spring back (review I4).
+      _w.base = Math.round(_ui.base.getBoundingClientRect().width) || _w.base;
+      _w.src = Math.round(_ui.src.getBoundingClientRect().width) || _w.src;
       const start = _w[side];
       document.body.classList.add('mkc-resizing');
       sash.classList.add('on');
@@ -286,7 +293,7 @@ function createMaker(kind) {
       document.addEventListener('mouseup', up);
     });
     sash.addEventListener('dblclick', () => {
-      _w[side] = W[side].def;
+      _w[side] = _clampW(side, W[side].def);
       _applyWidths();
       try { localStorage.setItem(LS_W, JSON.stringify(_w)); } catch (err) { /* this view only */ }
     });
@@ -326,36 +333,56 @@ function createMaker(kind) {
     return '';
   }
 
+  // The picture in the place, as a cell. When its thumbnail does not come, the file is asked about
+  // ITSELF before anything is decided: gone (404) - it leaves the place and the chat says why, a send
+  // with it would only be turned down; moved - the place follows it to its new address (the media
+  // door redirects a moved file); anything else (a server restarting) - it stays (review I4).
+  let _attCell = null;
+  function _attCellOf(att) {
+    const cell = el('div', 'mkc-att');
+    const img = document.createElement('img');
+    img.src = thumb(att.path, 'strip');
+    img.alt = '';
+    const was = att.path;
+    img.addEventListener('error', async () => {
+      let r = null;
+      try { r = await fetch(was, { method: 'HEAD' }); } catch (e) { return; }
+      if (!_att || _att.path !== was) return;
+      if (r.ok) {
+        const now = decodeURI(new URL(r.url, location.href).pathname);
+        if (now && now !== was) { _setAtt({ path: now, from: _att.from }); }
+        return;
+      }
+      if (r.status !== 404) return;
+      _att = null;
+      _said = 'that picture is not in the library any more';
+      _paintAtts();
+      _markOn();
+      _remember();
+    });
+    cell.appendChild(img);
+    cell.appendChild(el('span', 'n', '1'));
+    cell.appendChild(el('span', 'tag', att.from === 'base' ? 'base' : 'photo'));
+    const x = el('button', 'x', '✕');
+    x.type = 'button';
+    x.title = 'Not this one';
+    x.addEventListener('click', () => _setAtt(null));
+    cell.appendChild(x);
+    cell.title = att.path.split('/').pop();
+    return cell;
+  }
+
   function _paintAtts() {
     const host = _ui.atts;
     if (!host) return;
     host.textContent = '';
     if (_att) {
-      const cell = el('div', 'mkc-att');
-      const img = document.createElement('img');
-      img.src = thumb(_att.path, 'strip');
-      img.alt = '';
-      // Taken off its shelf since it was put here (the place is remembered across visits): it leaves
-      // the place, and the chat says why - a send with it would only be turned down (phase I4).
-      const was = _att.path;
-      img.addEventListener('error', () => {
-        if (!_att || _att.path !== was) return;
-        _att = null;
-        _said = 'that picture is not in the library any more';
-        _paintAtts();
-        _markOn();
-        _remember();
-      });
-      cell.appendChild(img);
-      cell.appendChild(el('span', 'n', '1'));
-      cell.appendChild(el('span', 'tag', _att.from === 'base' ? 'base' : 'photo'));
-      const x = el('button', 'x', '✕');
-      x.type = 'button';
-      x.title = 'Not this one';
-      x.addEventListener('click', () => _setAtt(null));
-      cell.appendChild(x);
-      cell.title = _att.path.split('/').pop();
-      host.appendChild(cell);
+      // The same picture keeps its cell: the row is painted on every key typed, and a new <img> each
+      // time was a new request each time - and a single failed one (a server restarting) dropped the
+      // picture (review I4).
+      const key = _att.path + '|' + _att.from;
+      if (!_attCell || _attCell.key !== key) _attCell = { key, node: _attCellOf(_att) };
+      host.appendChild(_attCell.node);
     } else {
       const slot = el('button', 'mkc-slot', '+');
       slot.type = 'button';
@@ -405,7 +432,10 @@ function createMaker(kind) {
         if (d.catId) _cat = String(d.catId);
         _setAtt({ path: d.path, from: 'photo' });
       }
-      _loadImages();
+      await _loadImages();
+      // And brought into view, wherever the list is (review I4).
+      const lit = _ui.libList && _ui.libList.querySelector('.mkc-card.on');
+      if (lit && my === _upSeq) lit.scrollIntoView({ block: 'nearest' });
     } catch (e) {
       _said = 'Could not add the photo: ' + e.message;
     } finally {
@@ -730,6 +760,7 @@ function createMaker(kind) {
   }
 
   // ── the right column: Images ──────────────────────────────────────────────
+  let _imagesErr = '';                               // the last read failed - said instead of "no pictures"
   async function _loadImages() {
     const want = _cat;
     try {
@@ -737,8 +768,12 @@ function createMaker(kind) {
       if (want !== _cat) return;
       _images = d.items || [];
       _cats = d.cats || [];
+      _imagesErr = '';
     } catch (e) {
-      _images = [];
+      if (want !== _cat) return;
+      // What was there stays; the column says the Library could not be read (review I4).
+      _imagesErr = 'could not read the Library - it is asked again when the chat is opened again';
+      if (_images === null) _images = [];
     }
     _paintImages();
   }
@@ -762,13 +797,26 @@ function createMaker(kind) {
       sel.appendChild(o);
     }
     sel.value = _cat;
-    // A remembered category that is not there any more is dropped - once the categories are known.
-    if (_images !== null && sel.value !== _cat) { _cat = ''; sel.value = ''; }
+    // A remembered category that is not there any more (deleted, or made again under another id) is
+    // dropped - once the categories are known - and all of Images read in its place: the answer in
+    // hand was for the dead one (review I4).
+    if (_images !== null && !_imagesErr && sel.value !== _cat) {
+      _cat = '';
+      sel.value = '';
+      _remember();
+      _loadImages();
+      return;
+    }
 
-    const top = host.scrollTop;
+    // The scroll is kept only for the same list drawn again (a width change, a reload); another
+    // category starts at its top, where the newest is (review I4).
+    const top = _paintedCat === _cat ? host.scrollTop : 0;
+    _paintedCat = _cat;
     host.textContent = '';
-    _masonryCols = _colsOf(host);
+    if (host.clientWidth) _masonryCols = _colsOf(host);
+    else if (!_masonryCols) _masonryCols = 2;
     if (_images === null) { host.appendChild(el('div', 'mkc-none', 'reading the Library…')); return; }
+    if (_imagesErr && !_images.length) { host.appendChild(el('div', 'mkc-none', _imagesErr)); return; }
     if (!_images.length) { host.appendChild(el('div', 'mkc-none', _cat ? 'Nothing in this category.' : 'No pictures in the Library\'s Images yet.')); return; }
     // A kladka: each tile its own shape, the next into the shortest column.
     const cols = [];
