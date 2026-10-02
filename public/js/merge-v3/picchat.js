@@ -31,7 +31,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { setOpenColumn, roomForChat } from './layout.js';
+import { setOpenColumn, panelRoom } from './layout.js';
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from '../library/viewer.js';
 import { askDelete, closeAsk, note } from './ask.js';
@@ -128,15 +128,18 @@ async function _show(on) {
   if (!_chat) {
     _stop();
     peekHide();
+    // The arrangement there was before the chat (phase J7).
+    panelRoom(false);
     for (const n of _nodes.values()) n.away = true;
     // The shelf was read before the chat came forward: what was made or added since is not on it yet.
     if (_made) { _made = false; window.dispatchEvent(new CustomEvent('mv3:lib-reload')); }
     return;
   }
   _build();
-  // A frame later: a talking head taken to its timeline step lays the page out on the next frame
-  // (workshop.js, roomForTimeline), and the chat's room comes after that, not before.
-  requestAnimationFrame(() => { if (_chat) roomForChat(); });
+  // The corner goes as far left and down as it can (phase J7, the owner). A frame later: a talking head
+  // taken to its timeline step lays the page out on the next frame (workshop.js, roomForTimeline), and
+  // the chat's room comes after that, not before.
+  requestAnimationFrame(() => { if (_chat) panelRoom(true); });
   _fit();
   _loadTable();
   _loadCats();
@@ -199,6 +202,8 @@ function _onStore() {
   if (adopt) { const v = _store(LS_VIEW, {}); v[k] = 'chat'; delete v['']; _keep(LS_VIEW, v); }
   if (want !== _chat) _show(want);
   else if (_chat) _reload(true);
+  // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
+  else panelRoom(false);
   if (!_chat) _probeTalk(k);
   _paintHead();
 }
@@ -1093,9 +1098,6 @@ function _build() {
   file.multiple = true;
   file.hidden = true;
   const bar = el('div', 'mv3-ig-bar');
-  const clip = el('button', 'mv3-ig-clip', '+');
-  clip.type = 'button';
-  clip.title = 'Attach a picture from this computer';
   const ta = document.createElement('textarea');
   ta.className = 'mv3-ig-say';
   ta.rows = 1;
@@ -1110,7 +1112,7 @@ function _build() {
   const go = el('button', 'b', '>');
   go.type = 'button';
   go.title = 'Send (Enter) · a new line is Shift+Enter';
-  bar.append(clip, ta, pen, nBtn, go);
+  bar.append(ta, pen, nBtn, go);
   chat.append(thread, atts, file, bar);
 
   const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
@@ -1161,7 +1163,6 @@ function _build() {
   _wireStripSash(sash, stripBox);
 
   file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });
-  clip.addEventListener('click', () => file.click());
   cat.addEventListener('change', () => { _cat = cat.value || ''; _feed = []; _paintStrip(); _loadStrip(); });
   nBtn.addEventListener('click', () => {
     _n = _n === 1 ? 2 : _n === 2 ? 4 : 1;

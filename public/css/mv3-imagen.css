@@ -92,7 +92,7 @@
 .mv3-pc.is-narrow .mv3-ig-att-slot{ width:40px; height:40px; line-height:38px; font-size:15px }
 .mv3-pc.is-narrow .mv3-ig-bar{ flex-wrap:wrap; gap:6px; padding:8px 10px }
 .mv3-pc.is-narrow .mv3-ig-say{ flex:1 1 100%; order:-1 }
-.mv3-pc.is-narrow .mv3-ig-clip{ margin-right:auto }
+.mv3-pc.is-narrow .mv3-ig-bar .pen{ margin-left:auto }
 
 /* ── middle: the conversation ── */
 .mv3-ig-chat{ flex:1 1 auto; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
@@ -214,12 +214,6 @@
   flex:0 0 auto; display:flex; align-items:flex-end; gap:7px;
   padding:10px 12px; border-top:1px solid var(--border); background:var(--surface-2);
 }
-.mv3-ig-clip{
-  flex:0 0 auto; width:30px; height:30px; padding:0;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 14px/28px var(--font); cursor:pointer;
-}
-.mv3-ig-clip:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
 .mv3-ig-say{
   flex:1 1 auto; min-width:0; min-height:30px; max-height:140px; padding:7px 9px; resize:none;
   border:1px solid var(--border); border-radius:var(--r-xs);
@@ -250,7 +244,7 @@
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .b:hover:not([disabled]){ filter:brightness(1.1) }
-.mv3-ig-bar .b[disabled], .mv3-ig-bar .n[disabled], .mv3-ig-clip[disabled]{ opacity:.45; cursor:default }
+.mv3-ig-bar .b[disabled], .mv3-ig-bar .n[disabled]{ opacity:.45; cursor:default }
 
 /* ── right: everything there is to point at ──
    Narrow by default and dragged by the sash beside it (picchat.js sets the basis). */

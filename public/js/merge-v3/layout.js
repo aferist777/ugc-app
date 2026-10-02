@@ -260,18 +260,29 @@ export function roomForWork() {
 }
 
 /**
- * ROOM FOR A CONVERSATION (phase J, the owner 2026-10-02): the pictures chat lives in the Library
- * panel, and a thread with a message box under it needs height. When the chat comes forward and the
- * pair above the timeline is shorter than `min`, the timeline gives up what is missing - down to its
- * own floor. Taller already, nothing moves.
+ * THE PANEL TAKES THE ROOM, AND GIVES IT BACK (phase J7, the owner 2026-10-03): a chat in the Library
+ * panel - and the captions view - moves the corner as far left and down as it goes, and leaving it puts
+ * back the arrangement there was before, whatever was dragged meanwhile. The arrangement to come back to
+ * is kept apart (`mv3_pc_room_v1`) and the panel's own is never saved as the person's - a reload while it
+ * shows finds the one to come back to still there.
  */
-export function roomForChat(min) {
-  const pair = document.getElementById('mv3-pair');
-  if (!pair) return;
-  const h = pair.getBoundingClientRect().height;
-  const want = min || 540;
-  if (h <= 0 || h >= want) return;
-  _applyTl(_tlNow() - (want - h));
+const LS_ROOM = 'mv3_pc_room_v1';
+export function panelRoom(on) {
+  let back = null;
+  try { back = JSON.parse(localStorage.getItem(LS_ROOM) || 'null'); } catch (e) { back = null; }
+  if (on) {
+    if (!back) {
+      try { localStorage.setItem(LS_ROOM, JSON.stringify({ left: Math.round(_leftNow()), tl: Math.round(_tlNow()) })); } catch (e) { /* a private window */ }
+    }
+    _applyLeft(Number.MAX_SAFE_INTEGER);     // clamped to what the preview can spare
+    _applyTl(0);                             // ...and to the timeline's floor
+    _placeCross();
+    return;
+  }
+  if (!back) return;
+  try { localStorage.removeItem(LS_ROOM); } catch (e) { /* a private window */ }
+  _applyLeft(+back.left || _defLeft());
+  _applyTl(+back.tl || DEF_TL_H);
   _placeCross();
   _save();
 }
