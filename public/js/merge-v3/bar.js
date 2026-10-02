@@ -51,7 +51,7 @@ function _status() {
   Store.onChange(() => {
     const s = Store.status();
     if (!s && !el.textContent) return;
-    el.className = 'mv3-tl-status';
+    el.className = 'mv3-tl-status' + (s && Store.statusIsInfo() ? ' is-info' : '');
     el.textContent = s || '';
     el.hidden = !s;
   });

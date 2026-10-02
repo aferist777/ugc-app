@@ -107,6 +107,18 @@ export function kind() { return BLANK_KIND; }
 export function isBlank() { return true; }
 export function version() { return _version; }
 export function status() { return _status; }
+// WHAT KIND OF NEWS the status is. Red is for "an edit of yours is not on the server"; the server laying
+// its own cells - the fragments, the lines heard from the sound - is news, not a fault, and is said in a
+// quiet colour (bar.js). Kept as the texts themselves, so a new message is a warning unless listed here.
+const _INFO = new Set([
+  'Fragments re-laid - the reads and the clips of this script are on the timeline.',
+  'Captions laid from the sound.',
+  'The fragments were laid again - it will merge in when your edit saves.',
+  'The captions were laid from the sound - they merge in when your edit saves.',
+  'The fragments were laid again while you edited - your edit was kept and merged in.',
+  'The captions were laid from the sound while you edited - your edit was kept and merged in.',
+]);
+export function statusIsInfo() { return _INFO.has(_status); }
 export function isReady() { return !!_timeline; }
 
 export function onChange(cb) {
@@ -294,11 +306,21 @@ const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
+  // ON THE SUBTITLE LANE the server lays the heard lines anew, under new ids (lib/captions-job.js, phase
+  // K1). A heard line I RETYPED meanwhile is mine now - a typed line - though their lay replaced it: it
+  // stays. And the heard lines their lay put over a typed line of mine it never saw go, the way the
+  // server leaves out the words under a typed line it knows (review K1).
+  const subs = theirs.kind === 'subs';
+  const mineTyped = subs ? (mine.clips || []).filter(c => c && !isHeard(c) && !t.has(c.id)
+    && (!b.has(c.id) || isHeard(b.get(c.id)))) : [];
+  const over = (c) => mineTyped.some(k => (+c.start || 0) < (+k.start || 0) + (+k.dur || 0)
+    && (+k.start || 0) < (+c.start || 0) + (+c.dur || 0));
   const out = [];
   // Their order first, so a clip added elsewhere keeps its place in their lane.
   for (const c of (theirs.clips || [])) {
     const inBase = b.has(c.id), inMine = m.has(c.id);
     if (inBase && !inMine) continue;                       // I deleted it - my click stands
+    if (!inMine && !inBase && subs && isHeard(c) && over(c)) continue;   // laid over a line I typed
     if (!inMine) { out.push(c); continue; }                // added elsewhere - keep theirs
     const mc = m.get(c.id);
     // Mine only wins where I actually changed it; otherwise theirs may be the newer edit.
@@ -306,10 +328,13 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   }
   // Anything of mine they have never seen.
   for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id)) out.push(c);
+  // ...and a heard line I retyped that their lay replaced.
+  for (const c of mineTyped) if (b.has(c.id)) out.push(c);
   // Start order only where the order means nothing. On a lane whose clips may cover one another
   // the order is the stacking order, and a merge that tidied it would restack the picture as a
-  // side effect of another device having saved.
-  if (sortByStart) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  // side effect of another device having saved. Captions are put in time order the moment one of mine
+  // was put back among a lay's.
+  if (sortByStart || mineTyped.length) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };
@@ -477,7 +502,9 @@ export async function save(_merges = 0) {
       // buttons lit up on the edit and went grey again before anyone could press them.
       if (!raced) _timeline = stored;
       else _schedule();
-      if (!/another device/.test(_status || '')) _status = null;
+      // A message about another device stays; so does the news of a server lay this very save merged in
+      // (_merges > 0) - the resave after a merge is what would otherwise wipe it at once.
+      if (!/another device/.test(_status || '') && !(_merges > 0 && statusIsInfo())) _status = null;
     } else {
       throw new Error((d && d.error) || 'save refused');
     }

@@ -61,6 +61,7 @@ function _line(s) {
     if (r.missing && r.missing.length) out.push('Not found, heard as silence: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '...' : '') + '.');
     if (r.moved) out.push('The sound changed while listening - press again to match it.');
     if (r.suspect) out.push('Groq may have heard only part of it - press again to ask once more.');
+    else if (r.partial) out.push('Groq may have heard only part of it - it was asked twice, and this is its answer.');
     return out.join(' ');
   }
   if (s.last && s.last.at) {
@@ -106,10 +107,14 @@ async function _poll(first) {
   if (k !== _key) return;                            // another project opened meanwhile
   const s = _get(k);
   const was = s.job;
+  // Told only when what the strip SAYS changes (review K1): the strip is rebuilt whole, and an open
+  // colour or a menu in it would be torn down every second and a half for the same words.
+  const before = JSON.stringify(view(k));
   if (d) { s.job = d.job || null; s.last = d.last || s.last; s.read = true; }
   const now = s.job;
-  if (now && now.state === 'listening') { _schedule(); _emit(); return; }
-  _emit();
+  const changed = JSON.stringify(view(k)) !== before;
+  if (now && now.state === 'listening') { _schedule(); if (changed) _emit(); return; }
+  if (changed) _emit();
   if (now && now.state === 'done' && (!was || was.state === 'listening') && now.result && now.result.rev) {
     await _landed(now.result.rev);
   }

@@ -482,6 +482,8 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
   flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   font:600 10px/1 var(--font); color:var(--danger);
 }
+/* The server laying its own cells (the fragments, the lines heard from the sound) is news, not a fault. */
+.mv3-tl-status.is-info{color:var(--muted)}
 
 .mv3-tl-zoom{flex:0 0 auto; display:flex; align-items:center; gap:6px}
 .mv3-tl-zoom > span:first-child{

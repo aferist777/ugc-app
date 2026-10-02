@@ -710,6 +710,8 @@ export function initInspector() {
   // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
   Listen.init();
   Listen.onChange(() => {
+    // Not over a talking head's Setup or the scenario picker: render() would rebuild those whole.
+    if (ScenPick.active() || WK.active()) return;
     const tr = trackB();
     if (tr && tr.kind === 'subs' && !oneB() && multiB() <= 1) render();
   });
