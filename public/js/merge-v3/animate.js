@@ -142,7 +142,7 @@ export async function openAnimate(clip) {
   if (!clip || !clip.src) return;
   await closeAnimate(true);
   const engines = await _matrix();
-  if (!engines.length) { alert('No image-to-video engine is available - check the API keys in Brain.'); return; }
+  if (!engines.length) { alert('No image-to-video engine is available - check the API keys on Admin.'); return; }
 
   const ov = _el('div', 'mv3-x-ov mv3-anim-ov');
   const box = _el('div', 'mv3-anim');

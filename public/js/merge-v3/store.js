@@ -22,6 +22,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as History from './history.js';
+import { isHeard } from '../captions/heard.js';
 
 const SAVE_DEBOUNCE = 500;
 
@@ -434,6 +435,7 @@ export async function save(_merges = 0) {
       // that starts from 0 - nothing to report there, and saying "changed on another device"
       // about a project nobody touched would be as misleading as saying nothing when they did.
       const untouched = _same(d.timeline, _base);
+      const who = untouched ? null : _serverOnly(_base, d.timeline);
       const { timeline, added, removed } = _merge(_base, _timeline, d.timeline);
       _timeline = timeline;
       _version = d.version;
@@ -443,8 +445,11 @@ export async function save(_merges = 0) {
         const parts = [];
         if (added) parts.push(added + (added === 1 ? ' clip' : ' clips') + ' added');
         if (removed) parts.push(removed + (removed === 1 ? ' clip' : ' clips') + ' removed');
-        _status = 'Changed on another device' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
-                + ' - your edit was kept and merged in.';
+        // The server laying its own cells is not another device (_serverOnly).
+        _status = (who && who.frag) ? 'The fragments were laid again while you edited - your edit was kept and merged in.'
+          : who ? 'The captions were laid from the sound while you edited - your edit was kept and merged in.'
+          : 'Changed on another device' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
+            + ' - your edit was kept and merged in.';
       }
       _emit();
       _saving = false;
@@ -485,6 +490,22 @@ export async function save(_merges = 0) {
   }
 }
 
+/**
+ * Save what is not saved yet, and WAIT for it (phase K1) - for a press that hands the SAVED timeline to
+ * the server, which listens to the sound it holds. save() itself returns at once while another save is
+ * in the air. True when nothing is left unsaved.
+ */
+export async function flush() {
+  for (let round = 0; round < 3; round++) {
+    const t0 = Date.now();
+    while (_saving && Date.now() - t0 < 10000) await new Promise(r => setTimeout(r, 50));
+    if (_saving) return false;
+    if (!_dirty) return true;
+    await save();
+  }
+  return !_dirty;
+}
+
 // A reload or a navigation must not outrun the debounce.
 try {
   const flush = () => { if (_dirty) { try { save(); } catch (e) {} } };
@@ -522,46 +543,69 @@ async function _checkRemote() {
   if (!d || !d.success || d.key !== _key) return;
   if (_same(d.timeline, _base)) { _version = d.version; return; }   // someone else's project
 
-  // WHO CHANGED IT. A talking head lays its own fragments on the timeline (lib/frag-mirror.js,
-  // phase T'): a read spoken or a clip filed re-lays the cells that carry `frag`, and that is not
-  // "another device" - it is this project's own script arriving. Told apart by looking at what
-  // actually differs: if every cell the person owns is untouched, it was the workshop.
-  const mirrored = _fragOnly(_base, d.timeline);
+  // WHO CHANGED IT. The server lays two kinds of cell itself: a talking head's fragments
+  // (lib/frag-mirror.js, phase T' - a read spoken or a clip filed re-lays the cells that carry `frag`)
+  // and the lines heard from the sound (lib/captions-job.js, phase K1). Neither is "another device" -
+  // it is this project's own work arriving. Told apart by looking at what actually differs: if every
+  // cell and every lane setting the person owns is untouched, it was the server.
+  const who = _serverOnly(_base, d.timeline);
   if (_dirty) {
-    _status = mirrored
-      ? 'The fragments were laid again - it will merge in when your edit saves.'
-      : 'Changed on another device - your edit will be merged in when it saves.';
+    _status = !who ? 'Changed on another device - your edit will be merged in when it saves.'
+      : who.frag ? 'The fragments were laid again - it will merge in when your edit saves.'
+      : 'The captions were laid from the sound - they merge in when your edit saves.';
     _emit();
     return;
   }
+  // The lines laid from the sound are ONE step to undo, as they were when the page laid them itself:
+  // the step is taken before the new state comes in. A mirror lay is not - undoing it would only fight
+  // the mirror, which lays it again - and neither is somebody else's edit.
+  const undoable = !!who && who.heard && !who.frag;
+  if (undoable) History.push();
   _timeline = d.timeline;
   _version = d.version;
   _base = clone(d.timeline);
   _title = d.title || _title;
   _adv = d.adv || _adv;
-  _bindHistory();
-  _status = mirrored
-    ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
-    : 'Changed on another device - this is the current version.';
+  if (!undoable) _bindHistory();
+  _status = !who ? 'Changed on another device - this is the current version.'
+    : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
+    : 'Captions laid from the sound.';
   _emit();
 }
 
-// Is the difference between two versions of a project ONLY in the cells the workshop owns? The
-// person's cells - everything without `frag` - are compared lane by lane; a change anywhere in
-// them means somebody edited the project, whatever else moved with it.
-function _fragOnly(base, theirs) {
+// Is the difference between two versions of a project ONLY in what the server lays itself - the
+// workshop's cells (`frag`) and, on the subtitle lane, the lines heard from the sound (`words`)?
+// Everything else is the person's: the other cells, every lane's own settings, which lanes there are
+// and in what order. A change anywhere in that means somebody edited the project, whatever else moved
+// with it. Null for that; otherwise { frag, heard } - which of the two moved.
+const _isFrag = (c) => Number(c && c.frag) > 0;
+function _serverOnly(base, theirs) {
   const lanes = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []);
-  const a = lanes(base), b = lanes(theirs);
-  if (!a.length || a.length !== b.length) return false;
-  let mirrorMoved = false;
+  const a = lanes(base);
+  if (!a.length) return null;
+  // A subtitle lane the server had to add - an old project without one - holds only heard lines.
+  const b = lanes(theirs).filter(l => !(l && l.kind === 'subs' && !a.some(x => x.id === l.id)
+    && (l.clips || []).every(isHeard)));
+  let heard = b.length !== lanes(theirs).length;
+  let frag = false;
+  if (a.length !== b.length) return null;
+  const byId = (list) => list.slice().sort((x, y) => String(x.id).localeCompare(String(y.id)));
   for (let i = 0; i < a.length; i++) {
-    const mine = (a[i].clips || []).filter(c => !(Number(c && c.frag) > 0));
-    const yours = (b[i].clips || []).filter(c => !(Number(c && c.frag) > 0));
-    if (!_same(mine, yours)) return false;
-    if (!_same((a[i].clips || []).filter(c => Number(c && c.frag) > 0),
-      (b[i].clips || []).filter(c => Number(c && c.frag) > 0))) mirrorMoved = true;
+    const x = a[i], y = b[i];
+    if (!x || !y || x.id !== y.id) return null;
+    const { clips: xc, ...xf } = x;
+    const { clips: yc, ...yf } = y;
+    if (!_same(xf, yf)) return null;
+    const subs = x.kind === 'subs';
+    // The person's cells: on the subtitle lane in any order (a lay puts the lines back in time
+    // order), elsewhere as they are - on a video lane the order is which one shows.
+    const own = (list) => (list || []).filter(c => !_isFrag(c) && !(subs && isHeard(c)));
+    if (subs ? !_same(byId(own(xc)), byId(own(yc))) : !_same(own(xc), own(yc))) return null;
+    if (!_same((xc || []).filter(_isFrag), (yc || []).filter(_isFrag))) frag = true;
+    const said = (list) => (list || []).filter(c => !_isFrag(c) && isHeard(c));
+    if (subs && !_same(said(xc), said(yc))) heard = true;
   }
-  return mirrorMoved;
+  return (frag || heard) ? { frag, heard } : null;
 }
 
 /**

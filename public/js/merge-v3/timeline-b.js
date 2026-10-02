@@ -1420,19 +1420,15 @@ export function addCaption(trackId, at, text) {
   });
 }
 
-/** Replace the lot - what a transcription does when it comes back. */
-export function setCaptions(trackId, list) {
+/**
+ * The language the subtitle lane is listened in (phase K1): an ISO code, or 'auto' to let Groq tell.
+ * The lines themselves are laid by the server (lib/captions-job.js), not here.
+ */
+export function setSubsListen(trackId, lang) {
   Store.mutate(tl => {
-    const t = _words(tl, trackId);
+    const t = (tl.tracks || []).find(x => x.id === trackId && x.kind === 'subs');
     if (!t) return;
-    t.clips = (list || []).map(c => ({
-      id: _id(), src: null, thumb: null,
-      name: String(c.name || ''),
-      start: Math.max(0, +c.start || 0), dur: Math.max(0.1, +c.dur || CAP_DUR),
-      words: Array.isArray(c.words) ? c.words : null,
-      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-      transition: null, animation: null, filter: null, volume: null, pairId: null,
-    })).sort((a, b) => a.start - b.start);
+    t.listen = (lang && lang !== 'auto') ? { lang: String(lang) } : null;
   });
 }
 

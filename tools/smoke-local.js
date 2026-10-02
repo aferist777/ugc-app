@@ -45,7 +45,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/captions/fonts.js', '/css/caption-fonts.css', '/fonts/captions/Montserrat-Black.ttf',
                  '/js/captions/presets.js',
                  // libass in the page for the captions' preview (phase K4; laid out by tools/fetch-jassub.js)
-                 '/js/captions/layer.js', '/vendor/jassub/jassub.js', '/vendor/jassub/wasm/jassub-worker-modern.wasm'];
+                 '/js/captions/layer.js', '/vendor/jassub/jassub.js', '/vendor/jassub/wasm/jassub-worker-modern.wasm',
+                 // captions from the sound, laid by the server (phase K1)
+                 '/js/captions/heard.js', '/js/merge-v3/listen.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -79,6 +81,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // phase J: the pictures window's own steps - the server sends a message now
                  ['POST', '/api/mv3/img/think'], ['POST', '/api/mv3/img/gen'], ['POST', '/api/mv3/chat'],
                  ['GET', '/js/merge-v3/chatwin.js'], ['GET', '/js/merge-v3/imagen.js'],
+                 // phase K1: the page's own listening job - the server listens to the project now
+                 ['POST', '/api/stt/timeline'], ['GET', '/api/stt/timeline/x'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay

@@ -17,8 +17,8 @@
 //
 // TWO CALLS RUN AS JOBS because both take longer than any sane request timeout: transcribing
 // a sample video is minutes of upload, and the analysis reads five thousand words of prose
-// with reasoning on. The pattern is the one routes/stt-timeline.js already uses - an
-// in-memory map, polled - rather than a new mechanism.
+// with reasoning on. An in-memory map, polled - the pattern Merge's captions use too
+// (lib/captions-job.js) - rather than a new mechanism.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');

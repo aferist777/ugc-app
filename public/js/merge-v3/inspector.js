@@ -24,10 +24,11 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          setClipFields as setManyB,
          removeTrack as removeTrackB, playhead as playheadB,
          stampTrack as stampB, resetTrack as resetTrackB,
-         addCaption as addCapB, setCaptions as setCapsB, setCaptionText as setCapTextB,
-         setSubsStyle as setSubsStyleB } from './timeline-b.js';
-import { styleOf, subsTrack as subsTrackB, segmentsFor, groupWords, autoSize,
-         autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
+         addCaption as addCapB, setCaptionText as setCapTextB,
+         setSubsStyle as setSubsStyleB, setSubsListen as setListenB } from './timeline-b.js';
+import { styleOf, autoSize, autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
+import { LANGS, listenOf } from '../captions/heard.js';
+import * as Listen from './listen.js';
 import { askDelete } from './ask.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as ScenPick from './scen-pick.js';
@@ -462,56 +463,9 @@ function _blankAudioTrack(host, track) {
 }
 
 // ── Captions from what was said ─────────────────────────────────────────────
-// The transcript comes back in TIMELINE coordinates - the endpoint lays the sound out end to
-// end, silence and all, before it listens - so the words need no shifting afterwards. It is
-// the same endpoint the other workflow uses; nothing about it knows which timeline asked.
-let _stt = { busy: false, said: '' };
-
-async function _generateCaptions() {
-  const tl = Store.timeline();
-  const segs = segmentsFor(tl);
-  if (!segs.some(x => x.src)) {
-    _stt = { busy: false, said: 'There is no sound on the timeline to read.' };
-    return render();
-  }
-  _stt = { busy: true, said: 'Listening...' };
-  render();
-  try {
-    const start = await fetch('/api/stt/timeline', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ segments: segs }),
-    }).then(r => r.json());
-    if (!start || !start.success) throw new Error((start && start.error) || 'refused');
-
-    for (;;) {
-      await new Promise(r => setTimeout(r, 1200));
-      const st = await fetch('/api/stt/timeline/' + encodeURIComponent(start.jobId)).then(r => r.json());
-      if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
-      if (st.state === 'running') {
-        const p = +st.progress || 0;
-        const pc = Math.max(0, Math.min(100, p > 1 ? Math.round(p) : Math.round(p * 100)));
-        _stt.said = 'Listening... ' + pc + '%';
-        render();
-        continue;
-      }
-      if (st.state !== 'done') throw new Error(st.error || 'it did not finish');
-
-      const fmt = (tl && tl.format) || '9:16';
-      const per = styleOf(subsTrackB(tl), fmt).wordsPerLine;
-      const caps = groupWords(st.words || [], per);
-      const lane = subsTrackB(tl);
-      if (lane) setCapsB(lane.id, caps);
-      _stt = { busy: false, said: caps.length
-        ? caps.length + (caps.length === 1 ? ' line' : ' lines') + ' from ' + (st.words || []).length + ' words'
-        : 'Nothing was said on those tracks.' };
-      render();
-      return;
-    }
-  } catch (e) {
-    _stt = { busy: false, said: e.message };
-    render();
-  }
-}
+// The SERVER listens to the project and lays the lines (lib/captions-job.js, phase K1); the strip
+// presses the button and says what the job of THIS project is doing (listen.js).
+const LANG_OPTS = LANGS.map(([k, label]) => [k, label]);
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
@@ -533,12 +487,17 @@ function _blankWordsTrack(host, track) {
     { title: 'One line at the playhead, to type yourself' });
   if (isSubs) {
     // The two ways a line gets onto this lane, side by side: heard, or typed.
-    const gen = C.button(_stt.busy ? 'Listening...' : 'Generate from the sound', _generateCaptions, {
-      title: 'Transcribes the audible sound - the main audio lane first, music beds left out - and writes the words onto this lane',
+    const v = Listen.view(Store.key());
+    const gen = C.button(v.busy ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
+      title: 'Listens to the audible sound - the main audio lane first, music beds and reversed clips left '
+        + 'out - and lays the words on this lane. Lines you typed stay as they are.',
     });
-    gen.disabled = _stt.busy;
+    gen.disabled = v.busy || !Store.key() || !Store.canEdit();
     host.appendChild(C.row('', C.pair(gen, add)));
-    if (_stt.said) host.appendChild(C.hint(_stt.said));
+    // Telling Groq the language helps on a short or quiet opening, where it can guess another one.
+    host.appendChild(C.row('Language', C.select(LANG_OPTS, (listenOf(track) || { lang: 'auto' }).lang,
+      (val) => setListenB(track.id, val))));
+    if (v.line) host.appendChild(C.hint(v.line));
   } else {
     host.appendChild(C.row('', add));
     host.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
@@ -747,6 +706,13 @@ export function initInspector() {
   });
   ScenPick.onChange(render);
   WK.onChange(render);
+  // The job of the open project, as it goes. Repainted only while the subtitle lane itself is what
+  // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
+  Listen.init();
+  Listen.onChange(() => {
+    const tr = trackB();
+    if (tr && tr.kind === 'subs' && !oneB() && multiB() <= 1) render();
+  });
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);
