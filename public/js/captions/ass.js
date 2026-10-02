@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { resolveStyle, withAuto, anchorOf } from './style.js';
+import { assFace } from './fonts.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -68,11 +69,13 @@ function styleLine(name, st, a, w, h) {
   // A BOX IS DRAWN IN THE OUTLINE'S COLOUR: libass fills BorderStyle 3 with OutlineColour.
   const box = st.borderStyle === 'box';
   const boxAlpha = Math.round((1 - Math.max(0, Math.min(1, +st.backAlpha || 0))) * 255);
+  // The font's own family name and the Bold its file asks for - never a fake bold (fonts.js, K5).
+  const face = assFace(st.font, st.bold);
   return [
-    name, st.font, Math.round(st.size),
+    name, face.family, Math.round(st.size),
     hexToAss(st.primary, 0), hexToAss(st.secondary, 0),
     box ? hexToAss(st.backColor, boxAlpha) : hexToAss(st.outlineColor, 0), hexToAss(st.backColor, boxAlpha),
-    st.bold ? -1 : 0, st.italic ? -1 : 0, 0, 0,
+    face.bold, st.italic ? -1 : 0, 0, 0,
     100, 100, 0, 0,
     st.borderStyle === 'box' ? 3 : 1,
     (+st.outline || 0), (+st.shadow || 0),

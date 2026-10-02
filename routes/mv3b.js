@@ -51,8 +51,11 @@ router.post('/mv3b/render', async (req, res) => {
     // HOW FAR IT HAS GOT, read off ffmpeg rather than guessed from a stopwatch. It prints the
     // position it has encoded to; against the known length that is real progress, and real
     // progress is what makes "time remaining" a measurement instead of a wish.
+    // A caption drawn in a font it was not given is said with the warnings (lib/font-check.js).
+    const fonts = require('../lib/font-check').watcher();
     proc.stderr.on('data', d => {
       const s = d.toString();
+      fonts.feed(s);
       job.log = (job.log + s).slice(-4000);
       const m = /time=(\d+):(\d\d):(\d\d(?:\.\d+)?)/.exec(s);
       if (m) job.at = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
@@ -68,7 +71,7 @@ router.post('/mv3b/render', async (req, res) => {
           if (job.phase !== ph) { job.phase = ph; job.span = spans[ph] || 0; job.phaseAt = Date.now(); }
           job.at = at;
         });
-        const said = [...(ready.warnings || []), ...((r && r.warnings) || [])];
+        const said = [...(ready.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) job.warning = said.join('; ');
         job.status = 'done'; job.url = toUrl(out);
       } catch (e) {

@@ -29,6 +29,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
 import { styleOf, subsTrack as subsTrackB, segmentsFor, groupWords, autoSize,
          autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
 import { askDelete } from './ask.js';
+import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as ScenPick from './scen-pick.js';
 import * as WK from './workshop.js';
 import { isStill } from './store.js';
@@ -512,8 +513,8 @@ async function _generateCaptions() {
   }
 }
 
-const FONTS = [['Arial', 'Arial'], ['Impact', 'Impact'], ['Verdana', 'Verdana'],
-               ['Georgia', 'Georgia'], ['Times New Roman', 'Times'], ['Courier New', 'Courier']];
+// The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
+const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
 const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
@@ -588,10 +589,11 @@ function _blankWordsTrack(host, track) {
 
   host.appendChild(_el('div', 'mv3-c-sep'));
 
-  host.appendChild(C.row('Font', C.pair(
-    C.select(FONTS, st.font, (v) => set({ font: v })),
-    C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'),
-  )));
+  // Bold is a choice only where the family ships both weights; a Black or a Bold file is what it is.
+  const fontSel = C.select(FONTS, st.font, (v) => set({ font: v }));
+  host.appendChild(C.row('Font', fontOf(st.font).bold === 'style'
+    ? C.pair(fontSel, C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'))
+    : fontSel));
   host.appendChild(C.row('Colour', isSubs ? C.pair(
     C.color(st.primary, (v) => set({ primary: v })),
     C.toggleNamed('karaoke', st.effect === 'karaoke', (on) => set({ effect: on ? 'karaoke' : 'none' }),

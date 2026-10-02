@@ -105,8 +105,11 @@ async function runBlank(item) {
   const done = BUSY.start();
   _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let log = '';
+  // A caption drawn in a font it was not given is said with the warnings (lib/font-check.js).
+  const fonts = require('../lib/font-check').watcher();
   _proc.stderr.on('data', d => {
     const chunk = d.toString();
+    fonts.feed(chunk);
     log = (log + chunk).slice(-3000);
     // Read off ffmpeg's own position, as the single render does. Written into the list so a
     // second tab watching the queue sees the same number.
@@ -140,7 +143,7 @@ async function runBlank(item) {
       };
       try {
         const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase));
-        const said = [...(built.warnings || []), ...((r && r.warnings) || [])];
+        const said = [...(built.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) warning = said.join('; ');
       } catch (e) {
         try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }

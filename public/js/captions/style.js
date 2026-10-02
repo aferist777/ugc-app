@@ -17,6 +17,8 @@
    1920x1080) and `size` is the height of the font's LINE, the way the .ass format means it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { familyOf } from './fonts.js';
+
 // What the active word does (phase K3 draws all of them; K0 knows them):
 //   none     every word looks the same
 //   karaoke  each word turns `primary` the moment it is spoken, `secondary` before - the old toggle
@@ -36,7 +38,7 @@ export const POSITIONS = ['top', 'center', 'bottom'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
-  font: 'Arial', size: 60, bold: true, italic: false,
+  font: 'Liberation Sans', size: 60, bold: true, italic: false,
   // libass's karaoke convention: a word is `secondary` before it is spoken and `primary` after.
   primary: '#ffffff', secondary: '#8a9099', highlight: '#ffe14d',
   outlineColor: '#000000', shadowColor: '#000000', backColor: '#000000',
@@ -63,7 +65,8 @@ const TEXT = (n) => (v) => (v == null ? undefined : String(v).slice(0, n));
 
 const RULES = {
   preset: TEXT(60),
-  font: (v) => { const s = String(v == null ? '' : v).trim().slice(0, 60); return s || undefined; },
+  // Always a shipped font (fonts.js): an old project's Arial is stored as Liberation Sans (K5).
+  font: (v) => { const s = String(v == null ? '' : v).trim().slice(0, 60); return s ? familyOf(s) : undefined; },
   size: NUM(20, 200),
   bold: BOOL, italic: BOOL,
   primary: COLOUR, secondary: COLOUR, highlight: COLOUR,
@@ -125,6 +128,7 @@ export function resolveStyle(laneStyle, clipStyle) {
   const own = clipStyle ? _legacy(clipStyle) : null;
   const st = Object.assign({}, DEF, lane, own || {});
   delete st.karaoke;                       // read as `effect` above (_legacy)
+  st.font = familyOf(st.font);             // a shipped font, whatever an old project named (K5)
   return st;
 }
 

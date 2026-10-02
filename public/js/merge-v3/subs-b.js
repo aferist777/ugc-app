@@ -9,6 +9,12 @@
 
 import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
   from '../captions/style.js';
+import { cssWeight } from '../captions/fonts.js';
+
+// The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
+// at the weight its @font-face is declared at (css/caption-fonts.css, K5).
+const _css = (st, px) => (st.italic ? 'italic ' : '') + cssWeight(st.font, st.bold) + ' ' + px + 'px "'
+  + st.font + '", "Liberation Sans", sans-serif';
 
 export { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes };
 
@@ -109,7 +115,7 @@ export function paintCaptions(ctx, tl, at, W, H, fmt) {
 // metrics for it, which are the same tables libass reads.
 const _faces = new Map();
 function _faceOf(ctx, st) {
-  const css = (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + '100px ' + st.font + ', Arial, sans-serif';
+  const css = _css(st, 100);
   if (_faces.has(css)) return _faces.get(css);
   ctx.save();
   ctx.font = css;
@@ -141,8 +147,7 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     const px = lh / face.line;
     const a = anchorOf(st, W, H);
     ctx.save();
-    ctx.font = (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + px.toFixed(1) + 'px '
-             + st.font + ', Arial, sans-serif';
+    ctx.font = _css(st, px.toFixed(1));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
