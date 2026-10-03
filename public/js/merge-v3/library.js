@@ -38,6 +38,7 @@ import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { askName } from '../name-box.js';
 import { openPictures, isChat, showShelf } from './picchat.js';
+import * as Views from './lib-views.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
@@ -584,8 +585,9 @@ function _wireDrop() {
     if (!_hasFiles(e)) return;
     e.preventDefault();
     // The pictures chat takes its own drops - as attachments, filed once (js/merge-v3/picchat.js). A file
-    // let go of elsewhere on the panel then is nobody's, but it must not replace the page either.
-    if (isChat()) {
+    // let go of elsewhere on the panel then is nobody's, but it must not replace the page either - nor over
+    // the captions view, where the shelf is hidden (K6).
+    if (isChat() || Views.isCaptions()) {
       if (!(e.target && e.target.closest && e.target.closest('#mv3-pc'))) e.dataTransfer.dropEffect = 'none';
       return;
     }
@@ -599,7 +601,7 @@ function _wireDrop() {
   panel.addEventListener('drop', (e) => {
     if (!_hasFiles(e)) return;
     e.preventDefault();
-    if (isChat()) return;
+    if (isChat() || Views.isCaptions()) return;
     panel.classList.remove('is-drop');
     _upload(Array.from((e.dataTransfer && e.dataTransfer.files) || []));
   });
@@ -717,6 +719,7 @@ function _setTab(tab) {
 export async function showGroup(tab, catLabel) {
   if (TABS.indexOf(tab) < 0) return;
   setOpenColumn('library');
+  Views.toBase();
   showShelf();
   _setTab(tab);
   if (!catLabel) return;
@@ -740,6 +743,7 @@ export async function reveal(path) {
   const want = String(path || '').split('?')[0];
   if (!want) return false;
   setOpenColumn('library');
+  Views.toBase();
   showShelf();
   _setTab('images');
   _cat = '';

@@ -31,7 +31,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { setOpenColumn, panelRoom, onColumnOpen } from './layout.js';
+import { setOpenColumn } from './layout.js';
+import * as Views from './lib-views.js';
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from '../library/viewer.js';
 import { askDelete, closeAsk, note } from './ask.js';
@@ -110,6 +111,7 @@ export const isChat = () => _chat;
 
 /** Every way in: the generate menu, "+" on the Images shelf, the lane's right-click, ?open=pictures. */
 export async function openPictures() {
+  Views.toBase();
   setOpenColumn('library');
   await _show(true);
 }
@@ -128,8 +130,7 @@ async function _show(on) {
   if (!_chat) {
     _stop();
     peekHide();
-    // The arrangement there was before the chat (phase J7).
-    panelRoom(false);
+    // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
     for (const n of _nodes.values()) n.away = true;
     // The shelf was read before the chat came forward: what was made or added since is not on it yet.
     if (_made) { _made = false; window.dispatchEvent(new CustomEvent('mv3:lib-reload')); }
@@ -137,8 +138,7 @@ async function _show(on) {
   }
   _build();
   // The corner goes as far left and down as it can (phase J7, the owner) - only while the chat can be
-  // SEEN: a folded Library (a talking head on setup) takes no room for it (_takeRoom, onColumnOpen).
-  _takeRoom();
+  // SEEN: lib-views takes the room for it, and gives it back when the Library folds (K6b).
   _fit();
   _loadTable();
   _loadCats();
@@ -146,22 +146,9 @@ async function _show(on) {
   if (_chat && _ui) _ui.ta.focus();
 }
 
+// The header, the panel's class and the room are lib-views' (K6b): it is told the base and the crumb.
 function _paintHead() {
-  const panel = $('mv3-library');
-  if (panel) panel.classList.toggle('is-chat', _chat);
-  const t = $('mv3-lib-title');
-  if (t) {
-    t.classList.toggle('is-link', _chat);
-    t.title = _chat ? 'Back to the Library' : '';
-  }
-  const g = $('mv3-lib-gen');
-  if (g) {
-    g.hidden = !(_chat || _talk);
-    g.classList.toggle('is-on', _chat);
-    g.title = _chat ? '' : 'Back to the conversation about pictures';
-  }
-  const h = $('mv3-pc-head');
-  if (h) h.hidden = !_chat;
+  Views.setBase(_chat ? 'chat' : 'shelf', _talk);
 }
 
 // ── The project the conversation belongs to ────────────────────────────────
@@ -202,7 +189,7 @@ function _onStore() {
   if (want !== _chat) _show(want);
   else if (_chat) _reload(true);
   // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
-  else panelRoom(false);
+  else Views.sync();
   if (!_chat) _probeTalk(k);
   _paintHead();
 }
@@ -1213,27 +1200,10 @@ function _build() {
   _paintAtts();
 }
 
-// The room is the chat's while it shows: taken when the Library opens on it, given back when the
-// Library folds. A frame later, so a talking head's step lays its own arrangement first
-// (layout.js keeps that as what leaving the chat comes back to).
-function _libraryOpen() {
-  const lib = $('mv3-library');
-  return !!lib && !lib.classList.contains('is-collapsed');
-}
-function _takeRoom() {
-  requestAnimationFrame(() => { if (_chat && _libraryOpen()) panelRoom(true); });
-}
-
 export function initPicChat() {
-  onColumnOpen((which) => {
-    if (!_chat) return;
-    if (which === 'library') _takeRoom();
-    else panelRoom(false);
-  });
-  const title = $('mv3-lib-title');
-  if (title) title.addEventListener('click', (e) => { if (!_chat) return; e.stopPropagation(); _show(false); });
-  const gen = $('mv3-lib-gen');
-  if (gen) gen.addEventListener('click', (e) => { e.stopPropagation(); if (!_chat) openPictures(); });
+  // "Library" in the header leaves the chat; the pale crumb on the shelf opens it (lib-views wires both).
+  Views.onBack('chat', () => _show(false));
+  Views.onCrumb(() => openPictures());
   // Back from another tab or window: the countdowns catch up at once rather than at the next tick.
   document.addEventListener('visibilitychange', () => { if (!document.hidden && _chat) _reload(); });
   window.addEventListener('beforeunload', () => { if (_key !== null) _saveDraft(_key); });

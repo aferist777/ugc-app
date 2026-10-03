@@ -23,9 +23,11 @@ import { initProjects } from './projects.js';
 import * as Store from './store.js';
 import { initBar } from './bar.js';
 import { initPicChat, openPictures } from './picchat.js';
+import { initViews } from './lib-views.js';
 
 initNav();
 initLayout();
+initViews();
 initLibrary();
 initPicChat();
 initTimelineB();

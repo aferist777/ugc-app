@@ -554,6 +554,32 @@ export function recutClips(track, tl, makeId) {
   const pages = recut(track, tl);
   if (!pages) return null;
   const old = ((track && track.clips) || []).filter(isHeard);
+  const typed = ((track && track.clips) || []).filter((c) => c && !isHeard(c));
+  return typed.concat(_asClips(pages, old, makeId)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+}
+
+/**
+ * Only SOME heard captions cut again - those picked (K6: a caption given a style of its own is cut by
+ * it, and the rest of the lane stays the very same objects, its hand cuts included). Every other
+ * caption is a wall the new pages do not cross. @returns { clips, made: [ids of the new pages] } or null
+ */
+export function recutSome(track, tl, ids, makeId) {
+  const want = ids instanceof Set ? ids : new Set(ids || []);
+  const all = (track && track.clips) || [];
+  const mine = all.filter((c) => isHeard(c) && want.has(c.id));
+  if (!mine.length) return null;
+  const others = all.filter((c) => !mine.includes(c));
+  const pages = paginate(wordsOf({ clips: mine }), {
+    lane: track.style, format: tl && tl.format,
+    typed: others.filter((c) => c && c.name).map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]),
+    joins: joinsOf(soundPieces(tl)),
+  });
+  const made = _asClips(pages, mine, makeId);
+  return { clips: others.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0)), made: made.map((c) => c.id) };
+}
+
+// Pages as lane clips, keeping the ids of the captions they came from (see recutClips).
+function _asClips(pages, old, makeId) {
   const key = (c) => JSON.stringify([r2(c.start), r2(c.dur), c.name, c.words, c.style || null,
     c.tx == null ? null : c.tx, c.ty == null ? null : c.ty]);
   const byKey = new Map(old.map((c) => [key(c), c.id]));
@@ -578,6 +604,5 @@ export function recutClips(track, tl, makeId) {
     c.id = id;
     return c;
   });
-  const typed = ((track && track.clips) || []).filter((c) => c && !isHeard(c));
-  return typed.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  return made;
 }

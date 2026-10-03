@@ -219,6 +219,9 @@ function _wireCross() {
 // Both sizes, written together: the crossing moves both, and saving one of them would
 // leave the next reload with half of the arrangement.
 function _save() {
+  // While the panel holds the room its arrangement is not the person's: what is dragged then is not kept
+  // (phase J7a; the drag wrote it after all until K6b).
+  if (_panelOn) return;
   try {
     localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow())));
     localStorage.setItem(LS_TL_H, String(Math.round(_tlNow())));
@@ -329,14 +332,14 @@ export function initLayout() {
     axis: 'x', sign: -1,
     get: _leftNow, set: (px) => { _applyLeft(px); _placeCross(); },
     reset: () => { _applyLeft(_defLeft()); _placeCross(); },
-    save: () => { try { localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow()))); } catch (e) {} },
+    save: () => { if (_panelOn) return; try { localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow()))); } catch (e) {} },
   });
 
   _wireSash(document.getElementById('mv3-sash-h'), {
     axis: 'y', sign: -1,
     get: _tlNow, set: (px) => { _applyTl(px); _placeCross(); },
     reset: () => { _applyTl(DEF_TL_H); _placeCross(); },
-    save: () => { try { localStorage.setItem(LS_TL_H, String(Math.round(_tlNow()))); } catch (e) {} },
+    save: () => { if (_panelOn) return; try { localStorage.setItem(LS_TL_H, String(Math.round(_tlNow()))); } catch (e) {} },
   });
 
   _wireCross();

@@ -32,7 +32,7 @@ import { askDelete, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
-import { recutClips } from '../captions/pages.js';
+import { recutClips, recutSome } from '../captions/pages.js';
 import { isHeard } from '../captions/heard.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
@@ -1096,6 +1096,9 @@ export function splitAtPlayhead() {
   return { ok: true };
 }
 
+// The project the pick was made in (K6b).
+let _selKey = null;
+
 function _build() {
   const host = _host();
   if (!host) return;
@@ -1103,6 +1106,22 @@ function _build() {
 
   const tl = Store.timeline();
   const tracks = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];
+
+  // THE PICK FOLLOWS THE TIMELINE (K6b): another project's pick is let go of - every project's subtitle
+  // lane is "subs", so a picked lane stayed picked in the next one - and so is a clip that is gone (a
+  // re-cut, a lay by the server), which "N clips selected" still counted.
+  let lost = false;
+  const key = Store.key();
+  if (key !== _selKey) {
+    _selKey = key;
+    if (_sel.size || _selTrack) { _sel.clear(); _selTrack = ''; lost = true; }
+  } else if (_sel.size || _selTrack) {
+    const have = new Set();
+    for (const t of tracks) for (const c of (t.clips || [])) have.add(c.id);
+    for (const id of [..._sel]) if (!have.has(id)) { _sel.delete(id); lost = true; }
+    if (_selTrack && !tracks.some(t => t.id === _selTrack)) { _selTrack = ''; lost = true; }
+  }
+  if (lost) queueMicrotask(_afterSelB);
 
   const inner = document.createElement('div');
   inner.className = 'mv3b-inner';
@@ -1508,18 +1527,72 @@ export function setFormat(fmt) {
  * captions - merged into what they already set - or, given null, back to the lane's style. One step to
  * undo however many captions.
  */
-export function setCaptionStyle(trackId, clipIds, patch) {
+export function setCaptionStyle(clipIds, style, opts) {
   const ids = new Set((clipIds || []).map(String));
   if (!ids.size) return;
+  const o = opts || {};
+  let made = null;
+  let gone = null;
+  // ONE mutation across every lane of words: a band can take captions of the subtitles and of a text lane
+  // at once, and that is one step to undo (K6).
   Store.mutate(tl => {
-    const t = _words(tl, trackId);
-    if (!t) return;
-    for (const c of (t.clips || [])) {
-      if (!ids.has(c.id)) continue;
-      if (patch == null) { delete c.style; continue; }
-      c.style = Object.assign({}, c.style || {}, patch);
+    for (const t of (tl.tracks || [])) {
+      if (!t || (t.kind !== 'subs' && t.kind !== 'text')) continue;
+      let touched = false;
+      for (const c of (t.clips || [])) {
+        if (!ids.has(c.id)) continue;
+        touched = true;
+        if (style == null) delete c.style;
+        // A preset is a whole style (every field), so it REPLACES what the caption wore; a field changed by
+        // hand goes on top of it.
+        else if (o.replace) c.style = JSON.parse(JSON.stringify(style));
+        else c.style = Object.assign({}, c.style || {}, style);
+      }
+      // A look that changes the cut cuts the picked heard captions again - only them (recutSome).
+      if (touched && o.cut && t.kind === 'subs') {
+        const r = recutSome(t, tl, ids, _id);
+        if (r) {
+          gone = (gone || []).concat((t.clips || []).filter(c => ids.has(c.id) && Array.isArray(c.words) && c.words.length).map(c => c.id));
+          t.clips = r.clips;
+          made = (made || []).concat(r.made);
+        }
+      }
     }
   });
+  // The pick follows its words onto the pages cut from them.
+  if (made) {
+    for (const id of (gone || [])) _sel.delete(id);
+    for (const id of made) _sel.add(id);
+    _paintSel();
+  }
+}
+
+// ── The pick, as the panels ask about it (K6) ───────────────────────────────
+/** The ids picked. */
+export const selectedIds = () => [..._sel];
+
+/** The picked captions - when EVERY picked clip is a caption on a lane of words: [{ track, clip }]; else null. */
+export function selectedCaptions() {
+  if (!_sel.size) return null;
+  const tl = Store.timeline();
+  const out = [];
+  for (const t of ((tl && tl.tracks) || [])) {
+    for (const c of (t.clips || [])) {
+      if (!_sel.has(c.id)) continue;
+      if (t.kind !== 'subs' && t.kind !== 'text') return null;
+      out.push({ track: t, clip: c });
+    }
+  }
+  return out.length ? out : null;
+}
+
+/** Let go of the pick - "Library" in the captions view's header, a shelf asked for. */
+export function clearSelection() { _clearSel(); }
+
+/** The picked lane, or the first picked clip, scrolled into view - the timeline may have just shrunk. */
+export function revealSelection() {
+  const el = document.querySelector('.mv3b-row.is-selT, .mv3b-clip.is-sel');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 /** The other half of a pair, if this clip has one. The panel says so out loud. */
