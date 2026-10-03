@@ -23,7 +23,7 @@
 
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
-import { recutClips, recutWithLooks, lookOf, CUT_KEYS } from '../captions/pages.js';
+import { recutClips, recutWithLooks, lookOf, CUT_KEYS, timedWords } from '../captions/pages.js';
 import { isCorrected } from '../captions/words.js';
 
 const SAVE_DEBOUNCE = 500;
@@ -322,6 +322,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   // A heard line I CORRECTED (K10) keeps its timed words, and it is mine as a typed line is: one their lay
   // never saw stays, the very object, and their words under it go one by one (_mergeBlank cuts around it).
   const fixed = subs ? new Set(_mineFixed(base, mine, theirs).map(c => c.id)) : new Set();
+  const unlaid = subs ? new Set(_unlaid(base, mine, theirs).map(c => c.id)) : new Set();
   // THEIR LAY REPLACED THE HEARD LINES while mine were cut again (review K2): both sides put a new heard set
   // in place of the base's, and keeping both drew every word twice. Their lay wins for the heard lines; a
   // style of mine that changes the cut is applied to their words afterwards (_mergeBlank).
@@ -339,7 +340,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   }
   // Anything of mine they have never seen.
   for (const c of (mine.clips || [])) {
-    if (!t.has(c.id) && !b.has(c.id) && (!(relaid && isHeard(c)) || fixed.has(c.id))) out.push(c);
+    if (!t.has(c.id) && !b.has(c.id) && (!(relaid && isHeard(c)) || fixed.has(c.id) || unlaid.has(c.id))) out.push(c);
   }
   // ...and a heard line I retyped, or corrected, that their lay replaced.
   for (const c of mineTyped) if (b.has(c.id)) out.push(c);
@@ -348,7 +349,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
   // the order is the stacking order, and a merge that tidied it would restack the picture as a
   // side effect of another device having saved. Captions are put in time order the moment one of mine
   // was put back among a lay's.
-  if (sortByStart || mineTyped.length || fixed.size) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  if (sortByStart || mineTyped.length || fixed.size || unlaid.size) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };
@@ -367,6 +368,53 @@ function _mineFixed(base, mine, theirs) {
   const b = _byId(base.clips), t = _byId(theirs.clips);
   return (mine.clips || []).filter(c => isHeard(c) && isCorrected(c) && !t.has(c.id)
     && (!b.has(c.id) || !_same(c, b.get(c.id))));
+}
+
+// New heard lines of mine (a half of a split, a page of a re-cut) WHERE THEIR LAY LAID NO WORD (review K10): it
+// kept a corrected line there and left the words under it out - so it cannot stand in for mine, and dropping
+// mine lost those words while the status said the edit was kept. [] when theirs laid nothing new.
+function _unlaid(base, mine, theirs) {
+  const b = _byId(base.clips), t = _byId(theirs.clips);
+  const mids = [];
+  for (const c of (theirs.clips || [])) {
+    if (!isHeard(c) || b.has(c.id)) continue;
+    const s0 = +c.start || 0;
+    for (const w of c.words) mids.push(s0 + ((+w.s || 0) + (+w.e || 0)) / 2);
+  }
+  if (!mids.length) return [];
+  return (mine.clips || []).filter(c => isHeard(c) && !t.has(c.id) && !b.has(c.id) && !isCorrected(c)
+    && !mids.some(x => x >= (+c.start || 0) && x < (+c.start || 0) + (+c.dur || 0)));
+}
+
+// The words marked to stand out on a lane's heard lines, by their moment: "start:end" in hundredths -> [from, to].
+function _markSpans(clips, skip) {
+  const out = new Map();
+  for (const c of (clips || [])) {
+    if (!isHeard(c) || (skip && skip.has(c.id))) continue;
+    const s0 = +c.start || 0;
+    for (const w of timedWords(c)) {
+      if (!w || !w.k) continue;
+      const a = Math.round((s0 + (+w.s || 0)) * 100), z = Math.round((s0 + (+w.e || 0)) * 100);
+      out.set(a + ':' + z, [a / 100, z / 100]);
+    }
+  }
+  return out;
+}
+
+// MY MARKS ONTO THEIR LAY (review K10): a word marked or unmarked here while the server laid the lane again is a
+// look of that word - it goes onto the word laid at its moment, as the server carries its own (captions-job.js).
+// `marks`: [[from, to, on]]; only the lay's own lines are touched, never a line of mine kept as it is.
+function _applyMarks(lane, marks, mineIds) {
+  for (const c of (lane.clips || [])) {
+    if (!isHeard(c) || mineIds.has(c.id)) continue;
+    const s0 = +c.start || 0;
+    for (const w of c.words) {
+      const a = s0 + (+w.s || 0), z = s0 + (+w.e || 0), mid = (a + z) / 2;
+      const hit = marks.find(([x, y]) => (mid >= x - 0.005 && mid <= y + 0.005) || ((x + y) / 2 >= a - 0.005 && (x + y) / 2 <= z + 0.005));
+      if (!hit) continue;
+      if (hit[2]) w.k = true; else delete w.k;
+    }
+  }
 }
 
 // Returns the merged timeline plus what arrived from the other device, for the notice.
@@ -415,10 +463,21 @@ function _mergeBlank(base, mine, theirs) {
       // ...or a line I corrected stands among their pages (K10): their words under it go, one by one.
       const mineFixed = _mineFixed(bb, m, t);
       const keep = new Set(mineFixed.map(c => c.id));
+      // ...or lines of mine their lay laid nothing over (_unlaid): held as they are, like the corrected ones.
+      const unlaid = _unlaid(bb, m, t);
       // No corrected line is cut again by the merge - theirs (their lay kept them) neither - unless I changed
       // how the lane is cut: then theirs are cut my way, as my page cut mine.
-      if (!cutChanged) for (const c of merged.clips) if (isHeard(c) && isCorrected(c)) keep.add(c.id);
-      if (looks.length || cutChanged || mineFixed.length) recut.push({ lane: merged, looks, keep });
+      if (!cutChanged) {
+        for (const c of merged.clips) if (isHeard(c) && isCorrected(c)) keep.add(c.id);
+        for (const c of unlaid) keep.add(c.id);
+      }
+      // ...and the words I marked or unmarked meanwhile go onto their words at the same moment.
+      const mineB = _markSpans(bb.clips, keep), mineM = _markSpans(m.clips, keep);
+      const marks = [];
+      for (const [k, v] of mineM) if (!mineB.has(k)) marks.push([v[0], v[1], true]);
+      for (const [k, v] of mineB) if (!mineM.has(k)) marks.push([v[0], v[1], false]);
+      const cut = !!(looks.length || cutChanged || mineFixed.length || unlaid.length);
+      if (cut || marks.length) recut.push({ lane: merged, looks, keep, marks, cut, mine: new Set((m.clips || []).map(c => c.id)) });
     }
     out.push(merged);
   }
@@ -437,9 +496,12 @@ function _mergeBlank(base, mine, theirs) {
   for (const lane of out) {
     const r = recut.find(x => x.lane === lane);
     if (lane.kind !== 'subs' || (!r && !(fmtChanged && (lane.clips || []).some(isHeard)))) continue;
-    const clips = r && (r.looks.length || r.keep.size) ? recutWithLooks(lane, timeline, r.looks, _newId, r.keep)
-      : recutClips(lane, timeline, _newId);
-    if (clips) lane.clips = clips;
+    if (!r || r.cut || fmtChanged) {
+      const clips = r && (r.looks.length || r.keep.size) ? recutWithLooks(lane, timeline, r.looks, _newId, r.keep)
+        : recutClips(lane, timeline, _newId);
+      if (clips) lane.clips = clips;
+    }
+    if (r && r.marks.length) _applyMarks(lane, r.marks, r.mine);
   }
   return { timeline, added, removed };
 }

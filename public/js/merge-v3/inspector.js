@@ -111,6 +111,24 @@ let _typing = false;
 let _typedPending = false;
 const _isTextField = (el) => !!el && (el.tagName === 'TEXTAREA'
   || (el.tagName === 'INPUT' && /^(text|search|number|)$/.test(String(el.type || '')))) && !el.closest('[data-own-keys]');
+// A caption's current text in the store, or null when it is gone.
+function _captionName(trackId, clipId) {
+  const tl = Store.timeline();
+  const t = ((tl && tl.tracks) || []).find(x => x.id === trackId);
+  const c = t && (t.clips || []).find(x => x.id === clipId);
+  return c ? String(c.name || '') : null;
+}
+// THE BOX NOT TYPED IN YET FOLLOWS THE LINE (review K10): the paint waits while a field is focused, but a box
+// focused and still holding what it was painted with has nothing of the person's in it - it takes the line's
+// text now, in place, with the focus where it is (a word corrected just before the box was clicked).
+function _freshenField() {
+  const a = document.activeElement;
+  if (!a || !a.__ids || a.value !== a.__painted) return;
+  const cur = _captionName(a.__ids.track, a.__ids.clip);
+  if (cur == null || cur === a.__painted) return;
+  a.value = cur;
+  a.__painted = cur;
+}
 
 // ── A clip ────────────────────────────────────────────────────────────────
 // Built from the primitives in controls.js.
@@ -793,10 +811,20 @@ function _blankCaption(host, track, clip) {
   if (own) _presetLine(host, clip.style, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }));
   const heardLine = isHeard(clip);
   const area = C.textarea(clip.name || '', (v) => {
+    // NEVER THE OLD TEXT OVER A NEWER ONE (review K10): the box writes the WHOLE text, and the line may have
+    // changed after the box was painted - a word corrected just before the box was clicked, a lay. Then what
+    // was typed is not written over it, and is said in the note to be put in again.
+    const cur = _captionName(track.id, clip.id);
+    if (cur != null && cur !== area.__painted) {
+      if (v !== area.__painted) note(area, 'The line changed meanwhile - your text was not written over it.', 'It reads now: «' + cur + '». You typed: «' + v + '»');
+      return;
+    }
     const r = setCapTextB(track.id, clip.id, v);
     if (r && r.why) note(area, 'The text was not changed.', r.why);
   }, 3);
   area.maxLength = 400;
+  area.__painted = clip.name || '';
+  area.__ids = { track: track.id, clip: clip.id };
   // Escape takes back what was typed and keeps the line picked (K10b - it let go of the line, and of the
   // typing with it). Enter keeps a heard line's text and goes on to its words; a typed line may hold line
   // breaks, so there Enter is one.
@@ -838,8 +866,10 @@ function _blankCaption(host, track, clip) {
         if (r && r.why) note(area, 'Not timed.', r.why);
       }, { title: 'Gives the words of the text the moments of the words heard there' })));
     }
-  } else if (WordEdit.wantsText(clip.id)) {
-    // Arrived by Tab from the last word of the line before: a typed line is read on in its text.
+  }
+  // Arrived by Tab from the last word of the line before, on a line with no chips (typed, or rewritten before
+  // K10): it is read on in its text - the focus must land somewhere, or the next Delete is the timeline's.
+  if (WordEdit.wantsText(clip.id)) {
     area.focus({ preventScroll: true });
     area.select();
   }
@@ -913,7 +943,7 @@ function render(force) {
   // lay - waits while a text field in the strip is being typed in, and paints when it is left. A change of the
   // pick (`force`) writes the field into its own line first (onSelB) and paints at once. The words of a caption
   // keep their own field across a paint (word-edit.js), so they do not hold it.
-  if (!force && _typing) { _typedPending = true; return; }
+  if (!force && _typing) { _typedPending = true; _freshenField(); return; }
   let cap;
   WordEdit.beforeRepaint();
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }

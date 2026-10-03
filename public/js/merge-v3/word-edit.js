@@ -205,7 +205,9 @@ function _paintPick() {
   f.addEventListener('focus', () => { if (!S.edit) S.edit = _openState('edit', S.sel); f.__edit = S.edit; });
   f.addEventListener('input', () => { if (S.edit && f.__edit === S.edit) S.edit.value = f.value; });
   f.addEventListener('keydown', _fieldKeys);
-  f.addEventListener('blur', () => { if (!_painting && S.edit && f.__edit === S.edit) _commit('none'); });
+  // Kept when the focus leaves it - but not when only the WINDOW does (Alt+Tab): the field still has the focus
+  // inside the page, and taking it away there left nothing focused, where Delete takes the whole line.
+  f.addEventListener('blur', () => { if (!_painting && S.edit && f.__edit === S.edit && document.activeElement !== f) _commit('none'); });
   row.appendChild(f);
   const btn = (label, title, fn, off, cls) => {
     const b = _el('button', 'mv3-wd-btn' + (cls ? ' ' + cls : ''), label);
@@ -216,7 +218,10 @@ function _paintPick() {
     // The focus stays on the list: a pressed button that kept it would play the preview on Space AND press
     // itself again.
     b.addEventListener('pointerdown', (e) => e.preventDefault());
-    b.addEventListener('click', () => { if (S.edit) _commit('none'); fn(); });
+    // An open field is kept first, back onto the list (a refused one stops here, its words said); the list keeps
+    // the focus after the operation too - a focus left on nothing makes the next Delete the TIMELINE's, and it
+    // takes the whole line (review K10).
+    b.addEventListener('click', () => { if (S.edit && !_commit('list')) return; fn(); if (!S.edit) _keepFocus(); });
     row.appendChild(b);
     return b;
   };
@@ -397,14 +402,19 @@ function _apply(op, i, opts) {
 function _run(op, after, opts) {
   const was = { sel: S.sel, at: S.at };
   const i = S.sel;
-  S.focusClip = S.clip;
   _say('');
   S.sel = after;
   S.at = null;
-  if (_apply(op, i, opts)) return true;
+  if (_apply(op, i, opts)) { _keepFocus(); return true; }
   S.sel = was.sel; S.at = was.at;
   _paintPick();
+  _keepFocus();
   return false;
+}
+
+// The focus on the words list - the one painted now (an operation repaints the strip inside the mutation).
+function _keepFocus() {
+  if (_list && _list.isConnected && document.activeElement !== _list) _list.focus({ preventScroll: true });
 }
 
 function _mark() {

@@ -224,7 +224,14 @@ function _place(seq, end) {
         if (b - a >= need) win = [a, b];
         else if (R - L >= need) win = [L, R];
       }
-      if (win) { out.push(..._share(toks, win[0], win[1])); i = j; break; }
+      if (win) {
+        // A word beside that gave up some of its time was touched too (the owner's answer 1b; review K10).
+        const placed = _share(toks, win[0], win[1]);
+        placed.forEach((o, k) => { const t = toks[k]; if (t.s != null && (cs(t.s) !== cs(o.s) || cs(t.e) !== cs(o.e))) o.h = true; });
+        out.push(...placed);
+        i = j;
+        break;
+      }
       // No room: the words beside it share their time with the new ones (and keep their own text and marks).
       let took = false;
       if (prev) { out.pop(); toks.unshift(prev); lo = cs(prev.s); took = true; }
@@ -244,25 +251,27 @@ const _endOf = (ws, dur) => Math.max(cs(dur), ...ws.map((w) => cs(w.e)), 0);
 
 // Levenshtein over the keys, walked back from the end with an equal pair taken first: matched words stay
 // together. [op, old index, new index] in order - '=' the same word, '~' another in its place, '-' gone, '+' new.
+// A WORD OF LETTERS WEIGHS TWICE A MARK (review K10): every mark has the same empty key, so a dash moved one word
+// on matched the old dash at no cost and dropped the word it passed - which then lost its moment and its mark.
+// Weighted, keeping the lettered word matched always wins; an unchanged mark still matches its own old word.
 function _align(a, b) {
   const n = a.length, m = b.length;
-  const D = Array.from({ length: n + 1 }, (_, i) => {
-    const row = new Array(m + 1).fill(0);
-    row[0] = i;
-    return row;
-  });
-  for (let j = 0; j <= m; j++) D[0][j] = j;
+  const c = (k) => (k ? 2 : 1);
+  const D = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = 1; i <= n; i++) D[i][0] = D[i - 1][0] + c(a[i - 1]);
+  for (let j = 1; j <= m; j++) D[0][j] = D[0][j - 1] + c(b[j - 1]);
+  const sub = (x, y) => (x === y ? 0 : Math.max(c(x), c(y)));
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
-      D[i][j] = Math.min(D[i - 1][j] + 1, D[i][j - 1] + 1, D[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      D[i][j] = Math.min(D[i - 1][j] + c(a[i - 1]), D[i][j - 1] + c(b[j - 1]), D[i - 1][j - 1] + sub(a[i - 1], b[j - 1]));
     }
   }
   const ops = [];
   let i = n, j = m;
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && a[i - 1] === b[j - 1] && D[i][j] === D[i - 1][j - 1]) { ops.push(['=', i - 1, j - 1]); i--; j--; continue; }
-    if (i > 0 && D[i][j] === D[i - 1][j] + 1) { ops.push(['-', i - 1, -1]); i--; continue; }
-    if (j > 0 && D[i][j] === D[i][j - 1] + 1) { ops.push(['+', -1, j - 1]); j--; continue; }
+    if (i > 0 && D[i][j] === D[i - 1][j] + c(a[i - 1])) { ops.push(['-', i - 1, -1]); i--; continue; }
+    if (j > 0 && D[i][j] === D[i][j - 1] + c(b[j - 1])) { ops.push(['+', -1, j - 1]); j--; continue; }
     ops.push(['~', i - 1, j - 1]);
     i--;
     j--;
@@ -517,8 +526,14 @@ export function edgeAt(words, i, side, t, dur, alone) {
     const shared = !!p && !alone && cs(p.e) >= S - 1;
     const lo = p ? (shared ? cs(p.s) + MINC : Math.min(cs(p.e), S)) : 0;
     const hi = E - MINC;
-    if (lo > hi) return _done(ws);                          // two words too short to move between
+    if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
     T = Math.max(lo, Math.min(hi, T));
+    // Never the other way from the key (review K10): a word already shorter than the minimum put the bound on
+    // the far side of the edge, and the clamp moved the edge - and the neighbour - backwards.
+    if ((T - S) * (cs(t) - S) < 0) {
+      return { why: cs(t) < S ? (shared ? 'The word before is at its shortest (' + WORD_MIN + ' s)' : 'The word before ends here')
+        : 'This word is at its shortest (' + WORD_MIN + ' s)' };
+    }
     if (T === S && !(shared && cs(p.e) !== S)) return _done(ws);
     w.s = T / 100;
     w.h = true;
@@ -528,8 +543,12 @@ export function edgeAt(words, i, side, t, dur, alone) {
     const shared = !!n && !alone && cs(n.s) <= E + 1;
     const lo = S + MINC;
     const hi = n ? (shared ? Math.max(cs(n.s), cs(n.e)) - MINC : Math.max(cs(n.s), E)) : Math.max(end, E);
-    if (lo > hi) return _done(ws);
+    if (lo > hi) return { why: 'These two words are at their shortest (' + WORD_MIN + ' s)' };
     T = Math.min(hi, Math.max(lo, T));
+    if ((T - E) * (cs(t) - E) < 0) {
+      return { why: cs(t) > E ? (shared ? 'The word after is at its shortest (' + WORD_MIN + ' s)' : (n ? 'The next word starts here' : 'The line ends here'))
+        : 'This word is at its shortest (' + WORD_MIN + ' s)' };
+    }
     if (T === E && !(shared && cs(n.s) !== E)) return _done(ws);
     w.e = T / 100;
     w.h = true;

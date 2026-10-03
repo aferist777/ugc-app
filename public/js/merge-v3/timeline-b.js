@@ -1062,8 +1062,11 @@ export function canSplit() {
   // of the page - and a page stays up past its last word, so that was most of its tail (review K2).
   const words = isHeard(one.clip) ? timedWords(one.clip) : null;
   if (words) {
-    const left = _playhead - s;
-    if (!words.some(w => (+w.s) >= left) || !words.some(w => (+w.s) < left)) {
+    // The same rounded moment the cut uses (review K10): a word picked in the strip puts the playhead on its
+    // start exactly, and the float difference came out a hair past it - the last word was refused, and a cut
+    // before the first word gave a typed copy of the whole text.
+    const left = _r2(_r2(_playhead) - s);
+    if (!words.some(w => _r2(+w.s) >= left) || !words.some(w => _r2(+w.s) < left)) {
       return { ok: false, why: 'No word starts on that side of the playhead - drag the edge of the line to shorten it' };
     }
   }
@@ -1099,9 +1102,9 @@ export function splitAtPlayhead() {
         // A line rewritten before K10 is timed for its text first: the halves carry the person's words.
         const words = timedWords(c);
         // A word ends where its half does (K10): the left half's last word used to run on past the cut.
-        const w0 = words.filter(w => (+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
+        const w0 = words.filter(w => _r2(+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
         // The whole word, mark and all (K2: the right half used to lose `k`).
-        const w1 = words.filter(w => (+w.s) >= left)
+        const w1 = words.filter(w => _r2(+w.s) >= left)
           .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
         c.words = w0.length ? w0 : null;
         b.words = w1.length ? w1 : null;

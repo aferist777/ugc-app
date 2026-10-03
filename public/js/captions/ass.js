@@ -254,11 +254,16 @@ function boxStyle(name, st, a, w, h) {
 export function buildAss(lanes, w, h) {
   const list = (Array.isArray(lanes) ? lanes : [lanes]).filter(Boolean);
   const used = [];
-  const make = (name, st) => ({ name, st, a: { ...anchorOf(st, w, h), h }, layered: layered(st) });
+  // A LANE HOLDING A MARKED WORD (review K10): a page with one is written word by word, and on a 'box' look
+  // with no spoken effect - one event, a box per run of letters - the semi-transparent boxes of the runs overlap
+  // in dark seams. Such a lane is drawn layered, the box once under the page; a lane without one is unchanged.
+  const make = (name, st, marks) => ({ name, st, a: { ...anchorOf(st, w, h), h }, marks: !!marks,
+    layered: layered(st) || (!!marks && st.borderStyle === 'box' && st.effect === 'none') });
   for (const track of list) {
     const clips = ((track && track.clips) || []).filter(c => c && c.name && (+c.dur) > 0);
     if (!clips.length) continue;
-    const s = make('S' + used.length, withAuto(resolveStyle(track.style), w, h));
+    const marks = clips.some(c => { const ws = _wordsOf(c); return !!ws && ws.some(x => x && x.k); });
+    const s = make('S' + used.length, withAuto(resolveStyle(track.style), w, h), marks);
     used.push({ ...s, clips, lane: track.style });
   }
   if (!used.length) return '';
@@ -271,7 +276,7 @@ export function buildAss(lanes, w, h) {
     if (!c.style || typeof c.style !== 'object' || !Object.keys(c.style).length) return u;
     const key = i + '|' + JSON.stringify(c.style);
     if (!own.has(key)) {
-      const s = make(u.name + 'o' + own.size, withAuto(resolveStyle(u.lane, c.style), w, h));
+      const s = make(u.name + 'o' + own.size, withAuto(resolveStyle(u.lane, c.style), w, h), u.marks);
       own.set(key, s);
       extra.push(s);
     }
@@ -283,7 +288,7 @@ export function buildAss(lanes, w, h) {
   const smaller = (s, size) => {
     const key = s.name + '|' + size;
     if (!shrunk.has(key)) {
-      const z = make(s.name + 'z' + shrunk.size, Object.assign({}, s.st, { size }));
+      const z = make(s.name + 'z' + shrunk.size, Object.assign({}, s.st, { size }), s.marks);
       shrunk.set(key, z);
       extra.push(z);
     }

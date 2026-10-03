@@ -80,8 +80,12 @@ function _line(s) {
   if (j && j.state === 'done') {
     const r = j.result || {};
     const out = [];
+    // Every word heard lies under lines the person corrected or typed: something WAS said, and the lane is left
+    // as it is on purpose (review K10 - it said "Nothing was said" and hid the kept and stale counts).
+    const under = !r.lines && r.dropped && ((+r.dropped.fixed || 0) + (+r.dropped.typed || 0)) > 0;
     out.push(r.lines ? (r.stored ? 'Laid again from what was heard: ' : '') + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
-      : 'Nothing was said on those tracks - the lane was left as it was.');
+      : under ? 'Every word heard lies under lines you corrected or typed - the lane was left as it was.'
+        : 'Nothing was said on those tracks - the lane was left as it was.');
     if (r.stored) {
       if (r.lines) out.push('Nothing asked, nothing paid.');
     } else if (r.local) {
