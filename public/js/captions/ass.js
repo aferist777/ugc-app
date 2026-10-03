@@ -29,6 +29,7 @@
 
 import { resolveStyle, withAuto, anchorOf, cased } from './style.js';
 import { assFace } from './fonts.js';
+import { padOf } from './measure.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -173,8 +174,6 @@ function _wordBoxBody(st, words) {
 
 // ── The [V4+ Styles] entries ────────────────────────────────────────────────
 const _alpha255 = (opacity, dflt) => Math.round((1 - Math.max(0, Math.min(1, opacity == null ? dflt : +opacity))) * 255);
-// A box needs room round the letters - with none, libass draws no box at all.
-const _pad = (st) => Math.max(+st.outline || 0, 2, Math.round((+st.size || 60) * 0.08));
 
 function _styleRow(name, st, a, w, h, bs, outlineCol, backCol, outline, shadow) {
   const face = assFace(st.font, st.bold);
@@ -202,15 +201,15 @@ function textStyle(name, st, a, w, h, isLayered) {
   }
   const boxAlpha = _alpha255(st.backAlpha, 0);
   if (st.borderStyle === 'boxline') {
-    return _styleRow(name, st, a, w, h, 4, hexToAss(st.outlineColor, 0), hexToAss(st.backColor, boxAlpha), _pad(st), +st.shadow || 0);
+    return _styleRow(name, st, a, w, h, 4, hexToAss(st.outlineColor, 0), hexToAss(st.backColor, boxAlpha), padOf(st), +st.shadow || 0);
   }
   return _styleRow(name, st, a, w, h, 3, hexToAss(st.backColor, boxAlpha), shadowCol,
-    (+st.outline || 0) > 0 ? +st.outline : _pad(st), +st.shadow || 0);
+    (+st.outline || 0) > 0 ? +st.outline : padOf(st), +st.shadow || 0);
 }
 
 // The boxes' style (layers +0 and +1): border style 3, colours set by the events, no shadow.
 function boxStyle(name, st, a, w, h) {
-  return _styleRow(name, st, a, w, h, 3, hexToAss(st.backColor, _alpha255(st.backAlpha, 0)), '&HFF000000', _pad(st), 0);
+  return _styleRow(name, st, a, w, h, 3, hexToAss(st.backColor, _alpha255(st.backAlpha, 0)), '&HFF000000', padOf(st), 0);
 }
 
 /**
