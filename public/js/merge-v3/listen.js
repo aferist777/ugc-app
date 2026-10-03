@@ -53,7 +53,7 @@ export function local() { return _local; }
 export async function readLocal(force) {
   if (_localAsked && !force) return _localAsked;
   _localAsked = fetch('/api/speech/local').then(r => r.json()).then((d) => { _local = d && d.success ? d.state : null; _emit(); return _local; })
-    .catch(() => { _local = null; return null; });
+    .catch(() => { _local = null; _localAsked = null; return null; });      // asked again next time
   return _localAsked;
 }
 

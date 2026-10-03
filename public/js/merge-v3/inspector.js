@@ -467,6 +467,9 @@ function _blankAudioTrack(host, track) {
 // presses the button and says what the job of THIS project is doing (listen.js).
 const LANG_OPTS = LANGS.map(([k, label]) => [k, label]);
 const ENGINES = [['cloud', 'cloud (Groq)'], ['local', 'this computer']];
+// What the subtitle strip was last built for: while only the words of its status line change (a percent),
+// the line is rewritten in place - rebuilding the strip every 1.5 s tore down an open menu (review K1b).
+let _listenShape = null;
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
@@ -502,16 +505,25 @@ function _blankWordsTrack(host, track) {
     // cannot be asked. Off when this copy of the app has no recognition of its own.
     const L = Listen.local();
     const can = !!(L && L.platform && (L.program.present || L.cuda.present));
-    const engine = how.engine === 'local' && can ? 'local' : 'cloud';
+    // What is STORED is shown: a lane set to this computer in a copy without the program can still be put
+    // back on Groq here - nothing else writes the field, and every press would be refused (review K1b).
+    const engine = how.engine === 'local' ? 'local' : 'cloud';
     const on = C.select(ENGINES, engine, (val) => setListenB(track.id, { engine: val }));
-    on.disabled = !can;
+    on.disabled = !can && engine !== 'local';
     host.appendChild(C.row('Listen on', on));
-    if (L && !can) host.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - Groq only.'));
-    else if (engine === 'local' && L && !L.model.present) {
+    if (L && !can) {
+      host.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - '
+        + (engine === 'local' ? 'switch Listen on to cloud (Groq).' : 'Groq only.')));
+    } else if (engine === 'local' && L && !L.model.present) {
       host.appendChild(C.hint('The first time downloads the speech model (' + Math.round(L.model.bytes / 1e6)
         + ' MB) into the library\'s cache - after that it needs no internet.'));
     }
-    if (v.line) host.appendChild(C.hint(v.line));
+    // The line is marked, so a percent that moves rewrites it in place instead of rebuilding the strip.
+    const ln = C.hint(v.line || '');
+    ln.dataset.listenLine = '1';
+    ln.hidden = !v.line;
+    host.appendChild(ln);
+    _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, local: L };
     // A run that fell over here with no model asks once (the owner, K1b answer 4).
     if (v.ask && L) {
       host.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
@@ -733,7 +745,16 @@ export function initInspector() {
     // Not over a talking head's Setup or the scenario picker: render() would rebuild those whole.
     if (ScenPick.active() || WK.active()) return;
     const tr = trackB();
-    if (tr && tr.kind === 'subs' && !oneB() && multiB() <= 1) render();
+    if (!(tr && tr.kind === 'subs' && !oneB() && multiB() <= 1)) return;
+    const v = Listen.view(Store.key());
+    const el = document.querySelector('#mv3-over [data-listen-line]');
+    if (el && _listenShape && _listenShape.key === Store.key() && _listenShape.busy === v.busy
+      && _listenShape.ask === v.ask && _listenShape.local === Listen.local()) {
+      el.textContent = v.line;
+      el.hidden = !v.line;
+      return;
+    }
+    render();
   });
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.

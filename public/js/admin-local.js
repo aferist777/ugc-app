@@ -88,7 +88,10 @@
 
     body.appendChild(el('div', 'dio-sec', 'The graphics card'));
     if (!c.gpu) {
-      body.appendChild(row('No NVIDIA graphics card', 'Recognition runs on the processor - about 0.7 s for every second of sound.', null));
+      // An NVIDIA build already on disk keeps its Delete even when no card answers now (review K1b).
+      body.appendChild(row('No NVIDIA graphics card', c.present
+        ? 'The NVIDIA build is installed (about ' + gb(c.disk) + ') but no card answers now - recognition runs on the processor.'
+        : 'Recognition runs on the processor - about 0.7 s for every second of sound.', c.present ? del('cuda') : null));
     } else {
       var cright, csub;
       if (c.downloading) { cright = bar(c.downloading); csub = 'Downloading the NVIDIA build - it is unpacked into this library\'s cache when it arrives.'; }
