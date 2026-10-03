@@ -17,13 +17,13 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
          softened } from './fx-b.js';
-import { paintCaptions, subsTrack, regroup, autoWordsPerLine } from './subs-b.js';
+import { paintCaptions } from './subs-b.js';
 // The captions, drawn by libass itself over the frame (phase K4) - the painter above draws only while
 // that is not up yet.
 import * as CapLayer from '../captions/layer.js';
 import { wirePlace, paintHandles, liveOf } from './place-b.js';
 import { isStill } from './store.js';
-import { setPlayhead, setSubsStyle } from './timeline-b.js';
+import { setPlayhead, setFormat } from './timeline-b.js';
 
 const STAGE = 'mv3-stage';
 
@@ -1461,16 +1461,9 @@ function _wireFormat() {
   sel.value = _fmt();
   sel.addEventListener('change', () => {
     const next = FORMATS[sel.value] ? sel.value : '9:16';
-    Store.mutate(tl => { tl.format = next; });
-    // A line length left on `auto` follows the frame, and following it means the lines that
-    // are already down get re-cut - eight words across a column is the paragraph-in-a-shoe-box
-    // this rule exists to prevent, and it would arrive silently on the format change.
-    const tl = Store.timeline();
-    const tr = subsTrack(tl);
-    if (tr && !(+((tr.style || {}).wordsPerLine) > 0)) {
-      const list = regroup(tr, autoWordsPerLine(next));
-      if (list) setSubsStyle(tr.id, {}, list);
-    }
+    // The heard captions are cut again for the new frame in the same step (K2): another width, another
+    // automatic size and words per page - eight words across a column is a paragraph in a shoe box.
+    setFormat(next);
     _resize();
     _repaint();
   });

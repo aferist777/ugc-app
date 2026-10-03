@@ -32,6 +32,8 @@ import { askDelete, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
+import { recut } from '../captions/pages.js';
+import { isHeard } from '../captions/heard.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -1053,8 +1055,9 @@ export function splitAtPlayhead() {
       c.dur = left;
       if (Array.isArray(c.words) && c.words.length) {
         const w0 = c.words.filter(w => (+w.s) < left);
+        // The whole word, mark and all (K2: the right half used to lose `k`).
         const w1 = c.words.filter(w => (+w.s) >= left)
-          .map(w => ({ w: w.w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
+          .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
         c.words = w0.length ? w0 : null;
         b.words = w1.length ? w1 : null;
         if (c.words) c.name = c.words.map(w => w.w).join(' ');
@@ -1454,24 +1457,53 @@ export function setCaptionText(trackId, clipId, text) {
 /**
  * How every caption looks. One style for the lane - they are one set of subtitles.
  *
- * `captions`, when given, are written in the SAME mutation. Changing how many words go on a
- * line changes both the setting and the lines it cuts, and two mutations would be two steps to
- * undo for one thing the person did once.
+ * `cut`: the heard lines are cut again by the rules (pages.js) in the SAME mutation - from the lane as it
+ * is at that moment, with the style just set. Changing how many words go on a page, or anything that
+ * makes a line wider, changes both the setting and the pages it cuts, and two mutations would be two
+ * steps to undo for one thing the person did once. Returns the pages laid, or null.
  */
-export function setSubsStyle(trackId, patch, captions) {
+export function setSubsStyle(trackId, patch, cut) {
+  let pages = null;
   Store.mutate(tl => {
     const t = _words(tl, trackId);
     if (!t) return;
     t.style = Object.assign({}, t.style || {}, patch || {});
-    if (!Array.isArray(captions)) return;
-    t.clips = captions.map(c => ({
+    if (cut && t.kind === 'subs') pages = _recutLane(tl, t);
+  });
+  return pages;
+}
+
+// THE HEARD LINES CUT AGAIN, inside a mutation (K2). The lines somebody typed stay the very same
+// objects - their ids, their own style, their place - so a merge with another save still knows them;
+// the pages cut from the heard words carry the own look of the lines they came from.
+function _recutLane(tl, t) {
+  const pages = recut(t, tl);
+  if (!pages) return null;
+  const typed = (t.clips || []).filter(c => c && !isHeard(c));
+  const made = pages.map(p => {
+    const c = {
       id: _id(), src: null, thumb: null,
-      name: String(c.name || ''),
-      start: Math.max(0, +c.start || 0), dur: Math.max(0.1, +c.dur || CAP_DUR),
-      words: Array.isArray(c.words) ? c.words : null,
+      name: p.name, start: p.start, dur: Math.max(0.1, +p.dur || CAP_DUR), words: p.words,
       srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
       transition: null, animation: null, filter: null, volume: null, pairId: null,
-    })).sort((a, b) => a.start - b.start);
+    };
+    if (p.style) c.style = p.style;
+    if (p.tx != null) c.tx = p.tx;
+    if (p.ty != null) c.ty = p.ty;
+    return c;
+  });
+  t.clips = typed.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  return made.length;
+}
+
+/**
+ * The frame's shape, and the heard captions cut again for it - a frame of another width and another
+ * automatic size is another set of pages. ONE mutation: one step to undo (it used to be two).
+ */
+export function setFormat(fmt) {
+  return Store.mutate(tl => {
+    tl.format = fmt;
+    for (const t of (tl.tracks || [])) if (t && t.kind === 'subs') _recutLane(tl, t);
   });
 }
 

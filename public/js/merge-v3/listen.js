@@ -11,6 +11,9 @@
                    job goes on, and opening the project again picks it up by its key
      the end       the store reads the timeline the server laid (Store.refresh), which says "Captions
                    laid from the sound" rather than "another device", and is one Ctrl+Z
+     again         "back to what was heard" (K2) is the same press with { stored: true }: the server lays
+                   again from the answers it keeps, and stops before asking anybody when the sound
+                   has changed since
 
    The state is per PROJECT: "listening..." on one project's lane says nothing on another's.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -71,15 +74,17 @@ function _line(s) {
       return 'Listening - ' + (j.fell ? FELL[j.fell] + '; ' : '') + part + 'on this computer' + (j.pct != null ? ' ' + j.pct + '%' : '');
     }
     if (j.where === 'cloud' && j.part) return 'Listening - part ' + j.part.i + ' of ' + j.part.n;
-    return 'Listening - ' + step;
+    return (j.stored ? 'Laying again - ' : 'Listening - ') + step;
   }
   if (j && j.state === 'failed') return j.error || 'It did not finish.';
   if (j && j.state === 'done') {
     const r = j.result || {};
     const out = [];
-    out.push(r.lines ? _n(r.lines, 'line', 'lines') + ' from ' + _n(r.words, 'word', 'words') + '.'
+    out.push(r.lines ? (r.stored ? 'Laid again from what was heard: ' : '') + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
       : 'Nothing was said on those tracks - the lane was left as it was.');
-    if (r.local) {
+    if (r.stored) {
+      if (r.lines) out.push('Nothing asked, nothing paid.');
+    } else if (r.local) {
       out.push('Heard on this computer in ' + Math.round(+r.took || 0) + ' s' + (r.fell ? ' - ' + FELL[r.fell]
         + (r.fell !== 'no-key' ? '; press again to ask Groq.' : '.') : '.'));
     } else if (r.lines && !r.paid) out.push('Nothing paid - heard before.');
@@ -94,7 +99,7 @@ function _line(s) {
     return out.join(' ');
   }
   if (s.last && s.last.at) {
-    return 'Last listened ' + _when(s.last.at) + ' - ' + _n(+s.last.lines || 0, 'line', 'lines') + ' from '
+    return 'Last listened ' + _when(s.last.at) + ' - ' + _n(+s.last.lines || 0, 'page', 'pages') + ' from '
       + _n(+s.last.words || 0, 'word', 'words') + '.';
   }
   return '';
@@ -106,9 +111,13 @@ function _line(s) {
  */
 export function view(key) {
   const k = key || Store.key();
-  if (!k) return { busy: false, line: '', ask: false };
+  if (!k) return { busy: false, line: '', ask: false, again: false, heard: false };
   const s = _get(k);
-  return { busy: !!(s.job && s.job.state === 'listening'), line: _line(s), ask: !!(s.job && s.job.state === 'failed' && s.job.code === 'need-model') };
+  const busy = !!(s.job && s.job.state === 'listening');
+  // Something was heard and laid for this project (its subs/ file says so): it can be laid again (K2).
+  const heard = !!(s.last && s.last.at) || !!(s.job && s.job.state === 'done' && s.job.result && s.job.result.lines);
+  return { busy, line: _line(s), ask: !!(s.job && s.job.state === 'failed' && s.job.code === 'need-model'),
+    again: busy && !!s.job.stored, heard };
 }
 
 async function _read(k) {
@@ -169,7 +178,7 @@ export async function start(opts) {
     _emit();
     return;
   }
-  s.job = { state: 'listening', step: 'saving the timeline' };
+  s.job = { state: 'listening', step: 'saving the timeline', stored: !!(opts && opts.stored) };
   _emit();
   if (!(await Store.flush())) {
     s.job = null;
@@ -180,7 +189,8 @@ export async function start(opts) {
   let d = null;
   try {
     const r = await fetch('/api/mv3/captions/transcribe', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, download: !!(opts && opts.download) }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: k, download: !!(opts && opts.download), stored: !!(opts && opts.stored) }),
     });
     d = await r.json();
   } catch (e) { d = { success: false, error: 'The app did not answer - ' + e.message }; }

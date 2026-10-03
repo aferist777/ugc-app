@@ -42,17 +42,19 @@ router.post('/mv3/captions/transcribe', (req, res) => {
     if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
     const lane = (Array.isArray(t.tracks) ? t.tracks : []).find((x) => x && x.kind === 'subs');
     const here = (HEARD.listenOf(lane) || {}).engine === 'local';
-    if (here && !LOCAL.hasProgram()) {
+    // "Back to what was heard" (K2) asks nobody: neither the key nor the program is needed.
+    const stored = !!(req.body && req.body.stored);
+    if (!stored && here && !LOCAL.hasProgram()) {
       return res.status(400).json({ success: false, code: 'no-build', error: 'Speech recognition on this computer is not installed - the lane can listen through Groq.' });
     }
     // No key is no refusal while this computer can hear (phase K1b).
-    if (!here && !GROQ.keyOf() && !LOCAL.hasProgram()) {
+    if (!stored && !here && !GROQ.keyOf() && !LOCAL.hasProgram()) {
       return res.status(400).json({ success: false, code: 'no-key', error: 'No Groq API key - add it on Admin -> API keys.' });
     }
     if (JOB.busy(key)) return res.status(409).json({ success: false, code: 'busy', error: 'Already listening to this project.', job: JOB.get(key) });
     const ok = JOB.precheck(t);
     if (ok.code) return res.status(400).json({ success: false, code: ok.code, error: ok.error });
-    res.json({ success: true, job: JOB.start(key, t, ok.pieces, { download: !!(req.body && req.body.download) }) });
+    res.json({ success: true, job: JOB.start(key, t, ok.pieces, { download: !stored && !!(req.body && req.body.download), stored }) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

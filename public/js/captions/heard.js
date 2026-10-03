@@ -2,16 +2,14 @@
    CAPTIONS FROM WHAT WAS SAID - the sound a timeline plays, and the words heard in it (phase K1).
 
    The server listens (lib/captions-job.js) and lays the lines; the page reads the same rules to say
-   whether there is anything to listen to and to re-cut the words it already has. ONE module, as the
-   style is (style.js): an ES module the page imports and the server require()s through
-   lib/mv3b-subs.js.
+   whether there is anything to listen to. How the words are cut into pages - at the lay and at every
+   re-cut - is pages.js (phase K2). ONE module, as the style is (style.js): an ES module the page
+   imports and the server require()s through lib/mv3b-subs.js.
 
    A HEARD line is a caption that carries the timings of its words (`words`); a TYPED one has none.
    Heard lines are the server's to lay again; typed ones are never touched - by the server, by a
    re-cut, by anything but the hand that typed them.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-import { resolveStyle, autoWordsPerLine } from './style.js';
 
 /** The languages Groq can be told; 'auto' lets it detect. ISO-639-1, as the API takes them. */
 export const LANGS = [
@@ -34,12 +32,6 @@ export function listenOf(lane) {
 }
 
 export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 0;
-
-/** The lane's words per line, as a lay or a re-cut reads it: the lane's own, or the format's. */
-export function perLineOf(lane, fmt) {
-  const st = resolveStyle(lane && lane.style);
-  return +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(fmt);
-}
 
 // ── The sound, as the listener wants it ─────────────────────────────────────
 // One flat run of audio laid end to end, silence where the timeline is silent, so the words come
@@ -122,70 +114,6 @@ export function silencesOf(pieces) {
     at = Math.max(at, p.end);
   }
   return out;
-}
-
-// ── Turning a transcript into captions ──────────────────────────────────────
-// Grouped by COUNT rather than by pause. A pause is where a sentence ends, which sounds like the
-// better rule until it meets someone who speaks without them - the lines then run to fifteen words
-// and off both sides of the frame. A count cannot do that. (K2 cuts by both.)
-export function groupWords(words, perLine) {
-  const n = Math.max(1, Math.round(perLine || 4));
-  const out = [];
-  for (let i = 0; i < words.length; i += n) {
-    const chunk = words.slice(i, i + n).filter(w => String(w.text || '').trim());
-    if (!chunk.length) continue;
-    const start = +chunk[0].start || 0;
-    const end = Math.max(start + 0.2, +chunk[chunk.length - 1].end || start + 0.4);
-    out.push({
-      name: chunk.map(w => String(w.text).trim()).join(' '),
-      start: Math.round(start * 100) / 100,
-      dur: Math.round((end - start) * 100) / 100,
-      // {w, s, e}, and the times measured from the caption rather than from the film - the
-      // shape the project stores, and the only one that survives a save.
-      words: chunk.map(w => ({
-        w: String(w.text).trim(),
-        s: Math.round(((+w.start || 0) - start) * 100) / 100,
-        e: Math.round(((+w.end || 0) - start) * 100) / 100,
-      })),
-    });
-  }
-  return out;
-}
-
-// ── Cutting the same transcript a different way ─────────────────────────────
-// The words are still here. Every heard caption carries the timings of the words in it, so changing
-// how many go on a line is arithmetic on what the lane already holds - no listening, no waiting and
-// nothing to pay for. Asking for the transcription again to move a slider would be charging
-// somebody for a decision they are still making.
-
-/** Every heard word on the lane, put back into timeline coordinates. */
-export function wordsOf(track) {
-  const out = [];
-  for (const c of ((track && track.clips) || [])) {
-    if (!isHeard(c)) continue;
-    const base = +c.start || 0;
-    for (const w of c.words) {
-      if (!w || !String(w.w || '').trim()) continue;
-      out.push({ text: String(w.w), start: base + (+w.s || 0), end: base + (+w.e || 0) });
-    }
-  }
-  return out.sort((a, b) => a.start - b.start);
-}
-
-/**
- * The lane re-cut into lines of a new length, or null when there is no transcript to re-cut.
- *
- * LINES SOMEBODY TYPED ARE LEFT ALONE. They have no word timings - there is nothing to cut them by -
- * and re-flowing a sentence written by hand into somebody else's line length is rewriting their work
- * to fit a slider.
- */
-export function regroup(track, perLine) {
-  const words = wordsOf(track);
-  if (!words.length) return null;
-  const typed = ((track && track.clips) || [])
-    .filter(c => c && c.name && !isHeard(c))
-    .map(c => ({ name: c.name, start: +c.start || 0, dur: +c.dur || 1, words: null }));
-  return groupWords(words, perLine).concat(typed).sort((a, b) => a.start - b.start);
 }
 
 // ── What was heard, made fit to lay ─────────────────────────────────────────

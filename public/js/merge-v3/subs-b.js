@@ -181,7 +181,3 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
   }
 }
 
-// ── The words heard, cut into lines ─────────────────────────────────────────
-// One module for the page and the server (public/js/captions/heard.js, phase K1): the server lays the
-// lines it heard, and the page re-cuts the words a lane already holds by the same rule.
-export { groupWords, wordsOf, regroup } from '../captions/heard.js';

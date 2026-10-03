@@ -26,7 +26,8 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          stampTrack as stampB, resetTrack as resetTrackB,
          addCaption as addCapB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB } from './timeline-b.js';
-import { styleOf, autoSize, autoWordsPerLine, regroup, wordsOf } from './subs-b.js';
+import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
+import { wordsOf } from '../captions/pages.js';
 import { LANGS, listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
 import { askDelete } from './ask.js';
@@ -474,6 +475,10 @@ let _listenShape = null;
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
 const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
+// What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
+// step (K2, the owner's answer 3): a page cut for one font is not a page in another.
+const CUTS = ['font', 'bold', 'italic', 'size', 'sizeAuto', 'casing', 'scaleX', 'spacing', 'outline', 'borderStyle',
+  'wordsPerLine', 'lines'];
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
 // a place - and differ in exactly one way: where the words come from. So the style half is
@@ -484,20 +489,31 @@ function _blankWordsTrack(host, track) {
   const fmt = (tl && tl.format) || '9:16';
   const raw = (track && track.style) || {};
   const st = styleOf(track, fmt);
-  const set = (patch) => setSubsStyleB(track.id, patch);
   const isSubs = track.kind === 'subs';
+  const set = (patch) => setSubsStyleB(track.id, patch, isSubs && Object.keys(patch).some(k => CUTS.includes(k)));
 
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
   if (isSubs) {
     // The two ways a line gets onto this lane, side by side: heard, or typed.
     const v = Listen.view(Store.key());
-    const gen = C.button(v.busy ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
+    const gen = C.button(v.busy && !v.again ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
       title: 'Listens to the audible sound - the main audio lane first, music beds and reversed clips left '
         + 'out - and lays the words on this lane. Lines you typed stay as they are.',
     });
     gen.disabled = v.busy || !Store.key() || !Store.canEdit();
     host.appendChild(C.row('', C.pair(gen, add)));
+    // BACK TO WHAT WAS HEARD (K2): the pages laid again from the answers this project keeps - the hand
+    // cuts, trims and word edits of the heard lines go, the typed lines stay; nothing is asked or paid.
+    if (v.heard) {
+      const back = C.button(v.again ? 'Re-laying...' : 'back to what was heard', () => Listen.start({ stored: true }), {
+        title: 'Lays the heard lines again exactly as they were first heard and cut - your cuts and trims of '
+          + 'them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound has changed '
+          + 'since, Generate from the sound hears the new part.',
+      });
+      back.disabled = v.busy || !Store.canEdit();
+      host.appendChild(C.row('', back));
+    }
     // Telling the listener the language helps on a short or quiet opening, where it can guess another one.
     const how = listenOf(track) || {};
     host.appendChild(C.row('Language', C.select(LANG_OPTS, how.lang || 'auto', (val) => setListenB(track.id, { lang: val }))));
@@ -523,7 +539,7 @@ function _blankWordsTrack(host, track) {
     ln.dataset.listenLine = '1';
     ln.hidden = !v.line;
     host.appendChild(ln);
-    _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, local: L };
+    _listenShape = { key: Store.key(), busy: v.busy, ask: v.ask, again: v.again, heard: v.heard, local: L };
     // A run that fell over here with no model asks once (the owner, K1b answer 4).
     if (v.ask && L) {
       host.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
@@ -558,22 +574,33 @@ function _blankWordsTrack(host, track) {
                   'Let the format choose the size'),
   )));
   // AT ONCE, not at the next transcription. The words and their timings are on the lane
-  // already, so a new line length is a re-cut of what is here - and a slider that only took
-  // effect the next time you paid to listen would be a slider you could not judge.
+  // already, so a new page length is a re-cut of what is here - and a slider that only took
+  // effect the next time you paid to listen would be a slider you could not judge. The rules
+  // themselves (pages.js) are not settings: Words and Lines are what a person chooses.
   const heard = wordsOf(track).length;
   if (isSubs) {
-    host.appendChild(C.row('Per line', C.slider({
+    const recut = C.button('re-cut', () => setSubsStyleB(track.id, {}, true), {
+      title: 'Cuts the heard words into pages again by the rules, without changing anything else - for a '
+        + 'lane cut before, or after cuts of your own',
+    });
+    recut.disabled = !heard || !Store.canEdit();
+    host.appendChild(C.row('Words', C.pair(C.slider({
       min: 0, max: 12, step: 1, value: +raw.wordsPerLine || 0,
-      fmt: (v) => (v > 0 ? v + ' words' : 'auto (' + autoWordsPerLine(fmt) + ')'),
-      onChange: (v) => {
-        const per = v > 0 ? v : autoWordsPerLine(fmt);
-        setSubsStyleB(track.id, { wordsPerLine: v }, regroup(track, per) || undefined);
-      },
-    })));
+      fmt: (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine(fmt) + ')'),
+      onChange: (v) => set({ wordsPerLine: v }),
+    }), recut)));
+    // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
+    const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+    const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
+    host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
+    const pages = (track.clips || []).filter(c => Array.isArray(c.words) && c.words.length).length;
+    const most = +raw.wordsPerLine > 0 ? +raw.wordsPerLine : autoWordsPerLine(fmt);
     host.appendChild(C.hint(heard
-      ? 'Re-cuts the ' + heard + ' words on this lane straight away. Lines you typed yourself are '
-        + 'left as they are - there is nothing to cut them by.'
-      : 'How the transcript gets cut into lines. Nothing has been transcribed yet, so this waits '
+      ? 'A page ends at a sentence, at a pause, at a comma after two words, and before a line would run '
+        + 'wider than 78% of the frame - with at most ' + most + (most === 1 ? ' word' : ' words') + '. '
+        + heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
+        + '; changing these cuts them again straight away, lines you typed stay as they are.'
+      : 'How the transcript gets cut into pages. Nothing has been transcribed yet, so this waits '
         + 'for the first Generate.'));
   }
 
@@ -749,7 +776,8 @@ export function initInspector() {
     const v = Listen.view(Store.key());
     const el = document.querySelector('#mv3-over [data-listen-line]');
     if (el && _listenShape && _listenShape.key === Store.key() && _listenShape.busy === v.busy
-      && _listenShape.ask === v.ask && _listenShape.local === Listen.local()) {
+      && _listenShape.ask === v.ask && _listenShape.again === v.again && _listenShape.heard === v.heard
+      && _listenShape.local === Listen.local()) {
       el.textContent = v.line;
       el.hidden = !v.line;
       return;
