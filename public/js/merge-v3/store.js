@@ -23,7 +23,7 @@
 
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
-import { recutClips, CUT_KEYS } from '../captions/pages.js';
+import { recutClips, recutWithLooks, lookOf, CUT_KEYS } from '../captions/pages.js';
 
 const SAVE_DEBOUNCE = 500;
 
@@ -304,7 +304,8 @@ const _byId = (clips) => {
   return m;
 };
 const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const _newId = () => 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+let _idSeq = 0;
+const _newId = () => 'm' + Date.now().toString(36) + '-' + (_idSeq++).toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36);
 
 function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
@@ -380,10 +381,22 @@ function _mergeBlank(base, mine, theirs) {
     for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
     for (const c of (bb.clips || [])) if (!tIds.has(c.id) && mIds.has(c.id)) removed++;
     const merged = _mergeTrack(bb, m, t, t.kind === 'audio');
-    // Their lay came in while I changed how the lane is cut (a style field of the cut): cut their words my
-    // way, once the whole timeline is put together (the seams need its sound).
-    if (t.kind === 'subs' && (t.clips || []).some(c => isHeard(c) && !bIds.has(c.id))
-      && CUT_KEYS.some(k => !_same((m.style || {})[k], (bb.style || {})[k]))) recut.push(merged);
+    // Their lay came in while I changed how the lane is cut (a style field of the cut), or gave a heard
+    // caption a look of its own (K6): cut their words my way, with my looks laid over them by time, once the
+    // whole timeline is put together (the seams need its sound) - review K6: the look was dropped while the
+    // status said the edit was kept.
+    if (t.kind === 'subs' && (t.clips || []).some(c => isHeard(c) && !bIds.has(c.id))) {
+      const looks = [];
+      for (const c of (m.clips || [])) {
+        if (!isHeard(c)) continue;
+        const was = bIds.get(c.id);
+        if (was && _same(lookOf(was), lookOf(c))) continue;
+        if (!was && !lookOf(c)) continue;
+        looks.push([+c.start || 0, (+c.start || 0) + (+c.dur || 0), lookOf(c)]);
+      }
+      const cutChanged = CUT_KEYS.some(k => !_same((m.style || {})[k], (bb.style || {})[k]));
+      if (looks.length || cutChanged) recut.push({ lane: merged, looks });
+    }
     out.push(merged);
   }
   const mineList = Array.isArray(mine.tracks) ? mine.tracks : [];
@@ -399,8 +412,9 @@ function _mergeBlank(base, mine, theirs) {
   const timeline = { kind: theirs.kind || mine.kind || BLANK_KIND, format, tracks: out };
   const fmtChanged = mine.format !== base.format && theirs.format === base.format;
   for (const lane of out) {
-    if (lane.kind !== 'subs' || (!recut.includes(lane) && !(fmtChanged && (lane.clips || []).some(isHeard)))) continue;
-    const clips = recutClips(lane, timeline, _newId);
+    const r = recut.find(x => x.lane === lane);
+    if (lane.kind !== 'subs' || (!r && !(fmtChanged && (lane.clips || []).some(isHeard)))) continue;
+    const clips = r && r.looks.length ? recutWithLooks(lane, timeline, r.looks, _newId) : recutClips(lane, timeline, _newId);
     if (clips) lane.clips = clips;
   }
   return { timeline, added, removed };

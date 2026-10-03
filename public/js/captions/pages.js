@@ -251,11 +251,15 @@ const lookKey = (l) => (l ? JSON.stringify(l) : '');
  * @param opts.format  the timeline's format ('9:16' | '16:9')
  * @param opts.typed   [[from, to]] the lines typed by hand on the lane
  * @param opts.joins   [t] the seams between reads (joinsOf)
+ * @param opts.walls   [[from, to]] spans a page does not run into or across - heard captions NOT being cut
+ *                     again (recutSome). Unlike a typed line, a wall takes no word away (review K6).
  * @returns [{ name, start, dur, words: [{ w, s, e, k? }], style?, tx?, ty? }] - captions, heard
  */
 export function paginate(words, opts) {
   const o = opts || {};
-  const typed = (o.typed || []).map(([a, b]) => [+a || 0, +b || 0]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const spans = (list) => (list || []).map(([a, b]) => [+a || 0, +b || 0]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const typed = spans(o.typed);
+  const walls = spans(o.typed).concat(spans(o.walls)).sort((x, y) => x[0] - y[0]);
   const joins = (o.joins || []).map(Number).filter((t) => t >= 0).sort((a, b) => a - b);
   const F = renderFrame(o.format);
 
@@ -293,7 +297,7 @@ export function paginate(words, opts) {
   const between = (a, b) => {
     if (b.start - a.end >= PAGE.pause - 1e-9) return 'hard';
     const am = midOf(a), bm = midOf(b);
-    if (typed.some(([s, e]) => s < bm && e > am)) return 'hard';
+    if (walls.some(([s, e]) => s < bm && e > am)) return 'hard';
     if (joins.some((j) => j > am && j <= bm)) return 'hard';
     if (lookKey(a.look) !== lookKey(b.look)) return 'hard';
     return '';
@@ -425,7 +429,7 @@ export function paginate(words, opts) {
       const start = list[p.a].start;
       let end = last.end;
       const nextStart = pages[i + 1] ? list[pages[i + 1].a].start : Infinity;
-      const wall = typed.find(([a]) => a >= end - 1e-9);
+      const wall = walls.find(([a]) => a >= end - 1e-9);
       const limit = Math.min(nextStart, wall ? wall[0] : Infinity);
       end = (nextStart - end < PAGE.closeGap) ? Math.min(nextStart, limit) : Math.min(end + PAGE.hold, limit);
       return { start, end: Math.max(end, last.end) };
@@ -438,7 +442,7 @@ export function paginate(words, opts) {
       const x = span[i];
       if (x.end - x.start >= PAGE.minClip - 1e-9) continue;
       const prev = span[i - 1];
-      const wallEnd = typed.reduce((m, [a, b]) => (b <= x.start + 1e-9 && b > m ? b : m), 0);
+      const wallEnd = walls.reduce((m, [a, b]) => (b <= x.start + 1e-9 && b > m ? b : m), 0);
       const want = Math.max(up2(Math.max(prev ? prev.start + PAGE.minClip : 0, wallEnd)), down2(x.end - PAGE.minClip));
       if (want < x.start) {
         x.start = want;
@@ -555,7 +559,7 @@ export function recutClips(track, tl, makeId) {
   if (!pages) return null;
   const old = ((track && track.clips) || []).filter(isHeard);
   const typed = ((track && track.clips) || []).filter((c) => c && !isHeard(c));
-  return typed.concat(_asClips(pages, old, makeId)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  return typed.concat(_asClips(pages, old, makeId, track.clips)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
 }
 
 /**
@@ -569,17 +573,43 @@ export function recutSome(track, tl, ids, makeId) {
   const mine = all.filter((c) => isHeard(c) && want.has(c.id));
   if (!mine.length) return null;
   const others = all.filter((c) => !mine.includes(c));
+  // Typed lines take the words under them away, as in every cut; the other HEARD captions are only walls -
+  // a picked word that touches a neighbour (a zero-length word at a page's end, an edge pulled over it)
+  // used to be taken away, and a whole caption could vanish (review K6).
   const pages = paginate(wordsOf({ clips: mine }), {
     lane: track.style, format: tl && tl.format,
-    typed: others.filter((c) => c && c.name).map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]),
+    typed: typedOf({ clips: others }),
+    walls: others.filter(isHeard).map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]),
     joins: joinsOf(soundPieces(tl)),
   });
-  const made = _asClips(pages, mine, makeId);
+  const made = _asClips(pages, mine, makeId, all);
   return { clips: others.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0)), made: made.map((c) => c.id) };
 }
 
-// Pages as lane clips, keeping the ids of the captions they came from (see recutClips).
-function _asClips(pages, old, makeId) {
+/**
+ * The lane's heard captions cut again with LOOKS laid over them by time: `looks` [[from, to, look]] - a word
+ * whose middle falls in a span wears that look. What a save merge uses when the server laid the lane
+ * again while a caption was given a style of its own (review K6): the server's words, my looks.
+ */
+export function recutWithLooks(track, tl, looks, makeId) {
+  const all = (track && track.clips) || [];
+  const words = wordsOf(track);
+  if (!words.length) return null;
+  for (const w of words) {
+    const mid = (w.start + w.end) / 2;
+    const hit = (looks || []).find(([a, b]) => mid >= a && mid < b);
+    if (hit) { if (hit[2]) w.look = hit[2]; else delete w.look; }
+  }
+  const pages = paginate(words, { lane: track.style, format: tl && tl.format, typed: typedOf(track), joins: joinsOf(soundPieces(tl)) });
+  const typed = all.filter((c) => c && !isHeard(c));
+  return typed.concat(_asClips(pages, all.filter(isHeard), makeId, all)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+}
+
+// Pages as lane clips, keeping the ids of the captions they came from (see recutClips). A new id is never
+// one the lane already holds - two captions under one id are deleted, picked and merged as one (review K6).
+function _asClips(pages, old, makeId, lane) {
+  const taken = new Set((lane || old).map((c) => c && c.id));
+  const fresh = () => { let id; do { id = makeId(); } while (taken.has(id)); taken.add(id); return id; };
   const key = (c) => JSON.stringify([r2(c.start), r2(c.dur), c.name, c.words, c.style || null,
     c.tx == null ? null : c.tx, c.ty == null ? null : c.ty]);
   const byKey = new Map(old.map((c) => [key(c), c.id]));
@@ -598,7 +628,7 @@ function _asClips(pages, old, makeId) {
     if (!id || used.has(id)) {
       const at = c.start + ((c.words[0] && +c.words[0].s) || 0);
       const o = old.find((x) => !used.has(x.id) && at >= (+x.start || 0) - 1e-6 && at < (+x.start || 0) + (+x.dur || 0));
-      id = o ? o.id : makeId();
+      id = o ? o.id : fresh();
     }
     used.add(id);
     c.id = id;

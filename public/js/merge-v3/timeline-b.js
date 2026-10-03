@@ -33,6 +33,7 @@ import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome } from '../captions/pages.js';
+import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
@@ -66,7 +67,11 @@ const _zoom = () => {
   const z = document.getElementById('mv3-zoom');
   return z ? (parseInt(z.value, 10) || 60) : 60;
 };
-const _id = () => 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+// A counter as well as the clock: a re-cut makes hundreds of ids in one millisecond, and the clock and a
+// random number alone gave two captions one id a few times in a hundred presses (review K6). The parts are
+// separated, so a short counter and a long random number cannot spell the same id as the reverse.
+let _idSeq = 0;
+const _id = () => 'c' + Date.now().toString(36) + '-' + (_idSeq++).toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36);
 
 // ── Creating and destroying lanes ───────────────────────────────────────────
 // Numbers are positions, counted from the seam outwards, and they are re-assigned after
@@ -313,6 +318,7 @@ let _band = null;
 let _selTrack = '';
 
 function _clearSel() {
+  _selBack = null;
   if (!_sel.size && !_selTrack) return;
   _sel.clear();
   _selTrack = '';
@@ -322,6 +328,7 @@ function _clearSel() {
 }
 
 function _selectTrack(id) {
+  _selBack = null;
   _sel.clear();
   _selTrack = String(id || '');
   _paintSel();
@@ -383,6 +390,7 @@ function _moveBand(e) {
   if (!_band.moved) {
     if (w <= 3 && h <= 3) return;
     _band.moved = true;
+    _selBack = null;
     if (!_band.add) _clearSel();
   }
   Object.assign(_band.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
@@ -402,6 +410,8 @@ function _endBand() {
   const b = _band;
   b.el.remove();
   _band = null;
+  // The panels held still while the band was swept (gesture()); now they follow what it picked.
+  if (b.moved) _afterSelB();
   // PRESSED ON BARE LANE and let go without sweeping: a seek to the moment under the pointer,
   // AND letting go of whatever was picked - the strip of its settings slides away and the Library
   // is what is left (phase L6, the owner 2026-09-23). It used to keep the pick, so that seeking to
@@ -605,6 +615,7 @@ function _endDrag() {
   // is the one I want to change", and keeping the old set would make the inspector talk
   // about something else.
   if (!d.moved) {
+    _selBack = null;
     _sel.clear();
     _selTrack = '';
     _sel.add(d.id);
@@ -1098,6 +1109,10 @@ export function splitAtPlayhead() {
 
 // The project the pick was made in (K6b).
 let _selKey = null;
+// A press that cut the picked captions again moved the pick onto their new pages; this remembers the pick
+// before and after it, so Ctrl+Z puts the old pick back and redo the new one (review K6). Any pick made by
+// hand forgets it.
+let _selBack = null;
 
 function _build() {
   const host = _host();
@@ -1120,6 +1135,16 @@ function _build() {
     for (const t of tracks) for (const c of (t.clips || [])) have.add(c.id);
     for (const id of [..._sel]) if (!have.has(id)) { _sel.delete(id); lost = true; }
     if (_selTrack && !tracks.some(t => t.id === _selTrack)) { _selTrack = ''; lost = true; }
+  }
+  if (_selBack) {
+    const depth = History.depth().undo;
+    const have = new Set();
+    for (const t of tracks) for (const c of (t.clips || [])) have.add(c.id);
+    const now = [..._sel];
+    const swap = (from, to) => now.every(id => from.has(id)) && [...to].every(id => have.has(id));
+    const put = (ids) => { _sel.clear(); for (const id of ids) _sel.add(id); lost = true; };
+    if (depth === _selBack.depth - 1 && swap(_selBack.after, _selBack.before)) put(_selBack.before);
+    else if (depth === _selBack.depth && swap(_selBack.before, _selBack.after)) put(_selBack.after);
   }
   if (lost) queueMicrotask(_afterSelB);
 
@@ -1178,6 +1203,7 @@ export const multiCount = () => _sel.size;
 /** Pick one clip, by id - what a click on the PREVIEW means. */
 export function selectClipById(id) {
   if (!id || (_sel.size === 1 && _sel.has(id))) return;
+  _selBack = null;
   _sel.clear();
   _selTrack = '';
   _sel.add(String(id));
@@ -1533,6 +1559,10 @@ export function setCaptionStyle(clipIds, style, opts) {
   const o = opts || {};
   let made = null;
   let gone = null;
+  // The pick follows the re-cut only when it was on those captions: a lane's "reset" of the lines with a
+  // style of their own must leave the LANE picked (review K6).
+  const follow = [...ids].some(id => _sel.has(id));
+  const before = new Set(_sel);
   // ONE mutation across every lane of words: a band can take captions of the subtitles and of a text lane
   // at once, and that is one step to undo (K6).
   Store.mutate(tl => {
@@ -1542,11 +1572,13 @@ export function setCaptionStyle(clipIds, style, opts) {
       for (const c of (t.clips || [])) {
         if (!ids.has(c.id)) continue;
         touched = true;
-        if (style == null) delete c.style;
+        // `style` may be worked out per caption (review K6: Behind fills a box only where there was none).
+        const s = typeof style === 'function' ? style(c, t) : style;
+        if (s == null) delete c.style;
         // A preset is a whole style (every field), so it REPLACES what the caption wore; a field changed by
         // hand goes on top of it.
-        else if (o.replace) c.style = JSON.parse(JSON.stringify(style));
-        else c.style = Object.assign({}, c.style || {}, style);
+        else if (o.replace) c.style = JSON.parse(JSON.stringify(s));
+        else c.style = Object.assign({}, c.style || {}, s);
       }
       // A look that changes the cut cuts the picked heard captions again - only them (recutSome).
       if (touched && o.cut && t.kind === 'subs') {
@@ -1560,9 +1592,10 @@ export function setCaptionStyle(clipIds, style, opts) {
     }
   });
   // The pick follows its words onto the pages cut from them.
-  if (made) {
+  if (made && follow) {
     for (const id of (gone || [])) _sel.delete(id);
     for (const id of made) _sel.add(id);
+    _selBack = { before, after: new Set(_sel), depth: History.depth().undo };
     _paintSel();
   }
 }
@@ -1585,6 +1618,13 @@ export function selectedCaptions() {
   }
   return out.length ? out : null;
 }
+
+/**
+ * A band is being swept across the lanes. The captions view and the room it takes must not come and go
+ * under the pointer while it is: taking the room shrinks the timeline and moves the lanes away from a band
+ * drawn in screen pixels, which emptied the pick, which gave the room back... every frame (review K6).
+ */
+export const gesture = () => !!(_band && _band.moved);
 
 /** Let go of the pick - "Library" in the captions view's header, a shelf asked for. */
 export function clearSelection() { _clearSel(); }

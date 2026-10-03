@@ -27,7 +27,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          addCaption as addCapB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB,
          setCaptionStyle as setCapStyleB, selectedCaptions as capsB, clearSelection as clearSelB,
-         revealSelection as revealSelB } from './timeline-b.js';
+         revealSelection as revealSelB, gesture as gestureB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
@@ -43,7 +43,7 @@ import * as WK from './workshop.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
-import { setOpenColumn } from './layout.js';
+import { setOpenColumn, columnMax } from './layout.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -612,7 +612,7 @@ function _blankWordsTrack(host, track) {
   const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
   if (own.length) {
     host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(C.row('', C.button(own.length + (own.length === 1 ? ' line has' : ' lines have') + ' its own style - reset',
+    host.appendChild(C.row('', C.button(own.length + (own.length === 1 ? ' line has its' : ' lines have their') + ' own style - reset',
       () => setCapStyleB(own.map(c => c.id), null, { cut: isSubs }),
       { title: 'Puts those lines back on the lane\'s style' })));
   }
@@ -632,11 +632,11 @@ function _capHead(host, title, sub) {
 }
 
 // "based on Red Pop · edited" and the way back to it - a style made from a preset says which.
-function _presetLine(host, style, back) {
+function _presetLine(host, style, back, editedAny) {
   const id = style && style.preset;
   const name = id ? presetName(id) : '';
   if (!name) return;
-  const edited = editedKeys(style).length > 0;
+  const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
   const row = _el('div', 'mv3-cap-preset');
   row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
   if (edited) {
@@ -651,7 +651,7 @@ function _presetLine(host, style, back) {
 function _presetsToggle(host) {
   host.appendChild(C.row('', C.toggleNamed('presets', CapView.tilesOpen(), (on) => { CapView.setTilesOpen(on); render(); },
     'The preset styles beside these settings')));
-  if (_narrow && CapView.tilesOpen()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.'));
+  if (_narrow() && CapView.tilesOpen()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.'));
 }
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
@@ -712,8 +712,10 @@ function _styleRows(host, st, set, o) {
     host.appendChild(C.row('Its opacity', C.slider({ min: 0, max: 1, step: 0.05, value: st.shadowAlpha == null ? 0.75 : +st.shadowAlpha,
       fmt: C.pct, onChange: (v) => set({ shadowAlpha: v }) })));
   }
+  // A box given an opacity only where it would be invisible - never the shown one's copied over another's
+  // (review K6: a band wrote the first line's opacity into every line).
   host.appendChild(C.row('Behind', C.select(BEHIND, st.borderStyle,
-    (v) => set({ borderStyle: v, backAlpha: v !== 'outline' && !(+st.backAlpha) ? 0.6 : st.backAlpha }))));
+    (v) => (o.setBehind ? o.setBehind(v) : set(v !== 'outline' && !(+st.backAlpha) ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v })))));
   if (st.borderStyle === 'box' || st.borderStyle === 'boxline') {
     host.appendChild(C.row('Box', C.pair(
       C.slider({ min: 0, max: 1, step: 0.05, value: +st.backAlpha || 0, fmt: C.pct,
@@ -732,11 +734,19 @@ function _renderCaptions(host, items) {
   const lanes = [...new Set(items.map(x => x.track.name || x.track.kind))];
   _capHead(host, items.length + ' lines', 'on ' + lanes.join(' and '));
   const first = items[0];
-  if (first.clip.style) _presetLine(host, first.clip.style, () => setCapStyleB(ids, presetStyle(first.clip.style.preset), { replace: true, cut: true }));
+  // "based on" only when EVERY picked line wears the same preset - one line's preset put on the others by
+  // "back to the preset" replaced theirs (review K6); edited when any of them is.
+  const presetOfItem = (x) => (x.clip.style && x.clip.style.preset) || '';
+  const common = items.every(x => presetOfItem(x) === presetOfItem(first)) ? presetOfItem(first) : '';
+  const anyEdited = !!common && items.some(x => editedKeys(x.clip.style).length > 0);
+  if (common) _presetLine(host, first.clip.style,
+    () => setCapStyleB(ids, presetStyle(common), { replace: true, cut: true }), anyEdited);
   const st = styleOf(first.track, fmt, first.clip);
   const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
+  const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
+    ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v }), { cut: true });
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)) });
+  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)), setBehind });
   if (items.some(x => x.clip.style)) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
@@ -746,8 +756,7 @@ function _renderCaptions(host, items) {
   _presetsToggle(host);
   host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
     { danger: true, title: 'Also on the Delete key' })));
-  const s = first.clip.style || null;
-  return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
+  return { preset: common, edited: anyEdited,
     apply: (id) => { const p = presetStyle(id); if (p) setCapStyleB(ids, p, { replace: true, cut: true }); }, readOnly: !Store.canEdit() };
 }
 
@@ -837,26 +846,30 @@ function _renderMany(host, n) {
 function render() {
   if (_held) { _pending = true; return; }
   const cap = _render();
-  const on = !!cap && CapView.tilesOpen() && !_narrow;
-  _capApply = cap ? cap.apply : null;
-  if (on) CapView.show(cap); else CapView.hide();
   const was = Views.isCaptions();
+  // While a band is swept the view stays as it was - it follows the pick when the band is let go.
+  const on = gestureB() ? was : (!!cap && CapView.tilesOpen() && !_narrow());
+  _capApply = cap ? cap.apply : null;
+  if (on && cap) CapView.show(cap); else if (!on) CapView.hide();
   Views.setCaptions(on);
   // The timeline has just shrunk under the pick: the picked lane back in view, the lit tile too.
-  if (on && !was) requestAnimationFrame(() => requestAnimationFrame(() => { revealSelB(); CapView.revealLit(); _roomCheck(); }));
+  if (on && !was) requestAnimationFrame(() => requestAnimationFrame(() => { revealSelB(); CapView.revealLit(); }));
 }
 
-// ROOM FOR THE TILES (K6): the strip keeps its 350px and the tiles want 170 more beside it. A window that
-// cannot give the panel that even with the corner moved shows the strip alone, as before K6 - said under
-// "presets" - until the window is made wider.
+// ROOM FOR THE TILES (K6): the strip keeps its 350px and the tiles want 170 more beside it. Decided on every
+// paint from what the panel holds with the corner moved - not latched from one reading, which a sash dragged
+// narrow in the chat turned off for the session (review K6). A window that cannot give it shows the strip
+// alone, as before K6, and says so under "presets".
 const CAP_ROOM = 350 + 170;
-let _narrow = false;
-function _roomCheck() {
+function _narrow() {
+  const col = document.getElementById('mv3-left');
   const lib = document.getElementById('mv3-library');
-  if (!lib || !Views.isCaptions()) return;
-  if (lib.getBoundingClientRect().width < CAP_ROOM) { _narrow = true; render(); }
+  if (!col || !lib || lib.classList.contains('is-collapsed')) return false;
+  // What of the column is not the Library (a folded Setup's spine) stays not the Library.
+  const other = Math.max(0, col.getBoundingClientRect().width - lib.getBoundingClientRect().width);
+  return columnMax() - other < CAP_ROOM;
 }
-window.addEventListener('resize', () => { if (_narrow) { _narrow = false; render(); } });
+window.addEventListener('resize', () => { if (oneB() || trackB() || multiB() > 1) render(); });
 
 function _render() {
   const host = _host();

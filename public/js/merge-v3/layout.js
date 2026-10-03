@@ -43,6 +43,9 @@ function _num(key, def) {
 }
 
 // ── Left column width ──────────────────────────────────────────────────────
+/** The widest the column can be in this window - what the panel holds with the corner moved (K6). */
+export const columnMax = () => _clampLeft(Number.MAX_SAFE_INTEGER);
+
 function _clampLeft(px) {
   const lo = SPINE_W + MIN_PANEL;
   const hi = Math.max(lo, window.innerWidth - MIN_PREVIEW - SASH);

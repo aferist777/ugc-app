@@ -35,6 +35,8 @@ let _shown = false;
 let _asked = false;
 let _cat = _store(LS_CAT, '');
 let _apply = null;
+let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
+let _reading = false;
 
 /** Are the tiles open (the captions view), or folded (the strip alone, as before K6)? */
 export const tilesOpen = () => _store(LS_OPEN, true) !== false;
@@ -126,20 +128,36 @@ function _paintState() {
   }
   const n = (_state.ready || []).length;
   _ui.status.textContent = _state.making ? 'making the previews ' + n + '/' + _state.total + (_state.waiting ? ' - waiting for the render' : '')
-    : (_state.failed || []).length ? (_state.failed.length + ' previews could not be made - the styles still apply') : '';
+    : _state.error ? 'the previews could not be made (' + _state.error + ') - the styles still apply'
+    : (_state.failed || []).length ? (_state.failed.length + ' previews could not be made - the styles still apply')
+    : _incomplete(_state) ? 'previews ' + n + '/' + _state.total : '';
   _ui.status.hidden = !_ui.status.textContent;
 }
 
+// A set the server is not making and has not finished: a make lost to a restart, or one that could not start.
+const _incomplete = (s) => !!s && !s.making && ((s.ready || []).length + (s.failed || []).length) < s.total;
+
 async function _read(make) {
   if (_timer) { clearTimeout(_timer); _timer = 0; }
+  // One read at a time: a repaint during a read used to start a second chain of reads (review K6).
+  if (_reading) return;
+  _reading = true;
   let d = null;
   try {
     d = make
       ? await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: _cat || null }) }).then((r) => r.json())
       : await fetch('/api/mv3/captions/tiles').then((r) => r.json());
   } catch (e) { d = null; }
+  _reading = false;
   if (d && d.success) { _state = d; _paintState(); }
-  if (_shown && (!d || d.making)) _timer = setTimeout(() => { _timer = 0; if (_shown) _read(false); }, POLL_MS);
+  if (!d && make) _asked = false;                     // the make never reached the server: the next show asks again
+  if (d && (d.making || !_incomplete(d))) _retries = 0;
+  // Asked again, a few times and further apart, when the set is incomplete and nothing is making it (review K6:
+  // after a server restart the page stopped asking, and the rest of the tiles stayed names).
+  if (_shown && d && d.success && _incomplete(d) && _retries < 3) {
+    _retries++;
+    _timer = setTimeout(() => { _timer = 0; if (_shown) _read(true); }, 2000 * Math.pow(2, _retries));
+  } else if (_shown && (!d || d.making)) _timer = setTimeout(() => { _timer = 0; if (_shown) _read(false); }, POLL_MS);
 }
 
 /**
@@ -158,7 +176,7 @@ export function show(target) {
   }
   _ui.host.classList.toggle('is-ro', !!t.readOnly);
   if (!_asked) { _asked = true; _read(true); }
-  else if (_state && _state.making && !_timer) _read(false);
+  else if (_state && (_state.making || _incomplete(_state)) && !_timer && !_reading) _read(!_state.making);
 }
 
 export function hide() {
