@@ -78,3 +78,51 @@
 }
 .mv3-cap-based{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
 .mv3-c-marks{ display:inline-flex; gap:4px }
+
+/* ── A heard line's words, one by one (K10b, word-edit.js) ───────────────────
+   One focusable list with plain chips: the word and, small, where it starts. The picked one in the primary;
+   a word that stands out wears its colour (an "A" beside it); a corrected one a dot in the accent; the word
+   at the playhead underlined while the preview plays; one after the line's end pale. */
+.mv3-wd{ margin:6px 0 2px }
+.mv3-wd-list{
+  display:flex; flex-wrap:wrap; gap:4px; padding:5px; outline:none;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface);
+}
+.mv3-wd-list:focus-visible, .mv3-wd-list:focus{ border-color:var(--primary) }
+.mv3-wd-chip{
+  position:relative; display:inline-flex; align-items:baseline; gap:4px; padding:3px 7px 3px 7px; cursor:pointer;
+  border:1px solid var(--border); border-radius:11px; background:var(--bg); user-select:none;
+  font:500 11px/1.25 var(--font); color:var(--ink);
+}
+.mv3-wd-chip:hover{ border-color:var(--muted) }
+.mv3-wd-t{ font:500 8.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-chip.is-sel{ background:var(--primary-soft); border-color:var(--primary) }
+.mv3-wd-list:focus .mv3-wd-chip.is-sel{ background:var(--primary); color:var(--primary-ink) }
+.mv3-wd-list:focus .mv3-wd-chip.is-sel .mv3-wd-t{ color:oklch(.99 0 0 / .75) }
+.mv3-wd-chip.is-now .mv3-wd-w{ text-decoration:underline; text-underline-offset:3px }
+.mv3-wd-chip.is-after{ opacity:.45 }
+.mv3-wd-chip.is-k .mv3-wd-w{ color:var(--mark, #ffe14d) }
+.mv3-wd-chip.is-k::before{ content:'A'; font:800 8.5px/1 var(--font); color:var(--mark, #ffe14d) }
+.mv3-wd-chip.is-h::after{
+  content:''; position:absolute; top:2px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--accent);
+}
+.mv3-wd-row{ display:flex; align-items:center; gap:4px; margin-top:6px }
+.mv3-wd-in{
+  flex:1 1 auto; min-width:0; height:24px; padding:0 7px; outline:none;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
+  font:500 11.5px var(--font);
+}
+.mv3-wd-in:focus{ border-color:var(--primary) }
+.mv3-wd-in.is-insert{ border-style:dashed }
+.mv3-wd-btn{
+  flex:0 0 auto; width:24px; height:24px; padding:0; display:grid; place-items:center; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); color:var(--ink);
+  font:700 11px/1 var(--font);
+}
+.mv3-wd-btn:hover:not(:disabled){ border-color:var(--muted) }
+.mv3-wd-btn:disabled{ opacity:.4; cursor:default }
+.mv3-wd-btn.is-on{ color:var(--mark, #ffe14d); border-color:var(--mark, #ffe14d) }
+.mv3-wd-time{ margin-top:4px; font:500 10px/1.3 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-wd-msg{ margin-top:4px; font:500 10px/1.4 var(--font); color:var(--danger) }
+.mv3-wd-msg[hidden]{ display:none }
+.mv3-wd-help{ margin-top:5px; font:400 9.5px/1.45 var(--font); color:var(--muted) }

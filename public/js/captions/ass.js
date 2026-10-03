@@ -21,8 +21,10 @@
 
    A caption's words carry their times from its own start ({w, s, e, k}); they are used only while they
    still SAY the caption's text - a line corrected by hand is drawn as typed, untimed, rather than the
-   old words being burnt over it. A word marked `k` wears the highlight for its whole page. Casing is
-   applied here, to what is drawn - never to the stored text.
+   old words being burnt over it. A word marked `k` (K10b) wears the marked colour (style.js markedColour)
+   for its whole page in every effect - in karaoke and sweep before AND after it is sung; in color and box
+   it turns the text's colour while it is spoken, so it still flashes and its letters stay off the box.
+   Casing is applied here, to what is drawn - never to the stored text.
 
    THE LINES ARE BROKEN HERE, not by libass (phase K2): pages.js breakLines() says where - no line wider
    than 0.78 of the frame, the most even, never on a weak word - and the break is written as \N between
@@ -33,7 +35,7 @@
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { resolveStyle, withAuto, anchorOf, cased } from './style.js';
+import { resolveStyle, withAuto, anchorOf, cased, markedColour } from './style.js';
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
@@ -75,16 +77,25 @@ export function assText(s) {
 // switches at once, \kf fills from the left. A PAUSE IS A SYLLABLE OF ITS OWN: \k carries a length, not
 // a moment, so the moments are rounded once and the lengths taken between them - no word lights early by
 // the length of a pause, and nothing drifts.
-export function karaokeLine(words, tag, casing, brk) {
+// A MARKED word (`k`, K10b) wears its colour before AND after it is sung - both colours of its syllable -
+// and the next word takes the style's two back explicitly (\r would start the colours over, not the
+// timing). `mark`: { on, prim, sec } as override colours, or nothing - a line without a marked word is
+// written exactly as before.
+export function karaokeLine(words, tag, casing, brk, mark) {
   const k = tag || '\\k';
   const out = [];
   let cursor = 0;
+  let marked = false;
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     const s = Math.max(cursor, Math.round((+w.s || 0) * 100));
     const e = Math.max(s, Math.round((+w.e || 0) * 100));
     if (s > cursor) out.push('{\\k' + (s - cursor) + '}');
-    out.push('{' + k + (e - s) + '}' + assText(cased(w.w, casing)) + _gap(i, words.length, brk));
+    let col = '';
+    if (mark && w.k) col = '\\1c' + mark.on + '\\2c' + mark.on;
+    else if (mark && marked) col = '\\1c' + mark.prim + '\\2c' + mark.sec;
+    marked = !!(mark && w.k);
+    out.push('{' + col + k + (e - s) + '}' + assText(cased(w.w, casing)) + _gap(i, words.length, brk));
     cursor = e;
   }
   return out.join('');
@@ -135,9 +146,13 @@ function _textBody(c, st, words, page) {
   const arrive = _arrive(st), blur = _blur(st);
   const head = (arrive || blur) ? '{' + blur + arrive + '}' : '';
   const brk = page.brk;
-  if (words && st.effect === 'karaoke') return head + karaokeLine(words, '\\k', st.casing, brk);
-  if (words && st.effect === 'sweep') return head + karaokeLine(words, '\\kf', st.casing, brk);
-  const perWord = words && (['color', 'pop', 'bounce'].includes(st.effect) || words.some(w => w.k));
+  const anyMark = !!(words && words.some(w => w.k));
+  const mk = anyMark ? tagColour(markedColour(st)) : '';
+  if (words && (st.effect === 'karaoke' || st.effect === 'sweep')) {
+    const mark = anyMark ? { on: mk, prim: tagColour(st.primary), sec: tagColour(st.secondary) } : null;
+    return head + karaokeLine(words, st.effect === 'sweep' ? '\\kf' : '\\k', st.casing, brk, mark);
+  }
+  const perWord = words && (['color', 'pop', 'bounce'].includes(st.effect) || anyMark);
   if (!perWord) return head + assText(cased(page.text, st.casing));
   const hl = tagColour(st.highlight), prim = tagColour(st.primary);
   return words.map((w, i) => {
@@ -145,9 +160,13 @@ function _textBody(c, st, words, page) {
     let t = '';
     if (st.effect === 'pop' || st.effect === 'bounce') {
       // The spoken word is drawn by the layer above, grown; here it steps aside for its moment.
-      t = (w.k ? '\\1c' + hl : '') + '\\t(' + s + ',' + (s + 1) + ',\\alpha&HFF&)\\t(' + e + ',' + (e + 1) + ',\\alpha&H00&)';
+      t = (w.k ? '\\1c' + mk : '') + '\\t(' + s + ',' + (s + 1) + ',\\alpha&HFF&)\\t(' + e + ',' + (e + 1) + ',\\alpha&H00&)';
+    } else if (w.k && (st.effect === 'color' || st.effect === 'box')) {
+      // Marked, the whole page - and while it is spoken it turns the text's colour: a flash where every
+      // other word lights up, and letters that do not sink into a box of the same colour (K10b).
+      t = '\\1c' + mk + '\\t(' + s + ',' + (s + 1) + ',\\1c' + prim + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + mk + ')';
     } else if (w.k) {
-      t = '\\1c' + hl;                                    // marked to stand out: the whole page
+      t = '\\1c' + mk;                                    // marked to stand out: the whole page
     } else if (st.effect === 'color') {
       t = '\\t(' + s + ',' + (s + 1) + ',\\1c' + hl + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
     }

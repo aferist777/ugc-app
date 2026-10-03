@@ -33,7 +33,7 @@ import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
-import { retext } from '../captions/words.js';
+import { retext, isCorrected } from '../captions/words.js';
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 
@@ -860,6 +860,15 @@ function _clipEl(t, c) {
   el.style.width = Math.max(2, c.dur * _zoom()) + 'px';
   if (c.thumb && t.kind === 'video') el.style.backgroundImage = `url('${c.thumb}')`;
 
+  // A HEARD LINE CORRECTED BY HAND carries a small mark (K10b, the owner's answer 6): it is kept by Generate
+  // and goes with "back to what was heard". The words themselves are in the strip, not on the clip.
+  const fixed = t.kind === 'subs' && isHeard(c) && isCorrected(c);
+  if (fixed) {
+    el.classList.add('is-fixed');
+    const m = document.createElement('span');
+    m.className = 'mv3b-fix';
+    el.appendChild(m);
+  }
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
   cap.textContent = c.name || '';
@@ -897,7 +906,7 @@ function _clipEl(t, c) {
   // drag like anything else there.
 
 
-  el.title = (c.name || 'clip') +
+  el.title = (c.name || 'clip') + (fixed ? ' - corrected by hand' : '') +
     (t.kind === 'audio' && !(+c.volume) ? ' - silent; turn its sound on in the inspector' : '') +
     (c.pairId ? '' : (t.kind === 'video' ? ' - no sound of its own' : ''));
   return el;
@@ -1536,11 +1545,12 @@ export function setCaptionText(trackId, clipId, text) {
 /**
  * A heard caption's words changed by one of the word editor's operations (words.js - replaceAt, cutAt...,
  * K10b): `op(words, clip)` returns { words, name }, { remove: true } or { why }. ONE mutation, one step to
- * undo; nothing is changed when it refuses. @returns null, or { why }.
+ * undo; nothing is changed when it refuses. `opts.merge`: a series tag - [ and ] pressed twenty times are
+ * one step (history.js). @returns null, or { why }.
  */
-export function editWords(trackId, clipId, op) {
+export function editWords(trackId, clipId, op, opts) {
   let why = null;
-  Store.mutate(tl => {
+  const done = Store.mutate(tl => {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c || !isHeard(c)) { why = 'That line is not on the lane any more'; return; }
@@ -1550,8 +1560,29 @@ export function editWords(trackId, clipId, op) {
     if (r.remove) { t.clips = t.clips.filter(x => x !== c); return; }
     c.words = r.words;
     c.name = r.name;
-  });
+  }, opts);
+  if (!why && !done) why = Store.status() || 'This project cannot be edited here';
   return why ? { why } : null;
+}
+
+/** The caption after this one on its lane, by start - for proofreading on into the next line (K10b). */
+export function nextCaption(clipId) {
+  const tl = Store.timeline();
+  for (const t of ((tl && tl.tracks) || [])) {
+    const i = (t.clips || []).findIndex(x => x.id === clipId);
+    if (i < 0) continue;
+    if (t.kind !== 'subs' && t.kind !== 'text') return null;
+    const s = +t.clips[i].start || 0;
+    let best = null, bi = -1;
+    t.clips.forEach((x, j) => {
+      if (j === i || !x || !x.name) return;
+      const xs = +x.start || 0;
+      if (xs < s || (xs === s && j < i)) return;
+      if (!best || xs < (+best.start || 0) || (xs === (+best.start || 0) && j < bi)) { best = x; bi = j; }
+    });
+    return best ? { track: t, clip: best } : null;
+  }
+  return null;
 }
 
 /**
@@ -1644,6 +1675,33 @@ export function setCaptionStyle(clipIds, style, opts) {
     _selBack = { before, after: new Set(_sel), depth: History.depth().undo };
     _paintSel();
   }
+}
+
+/**
+ * These heard captions cut again by the lane's rules, and only them (K10b, `re-cut this line`: a line grown
+ * longer than a page by corrections - a correction itself never cuts). One step to undo; the pick moves onto
+ * the new pages and comes back with the undo (`_selBack`). @returns the ids of the new pages, or null.
+ */
+export function recutLines(trackId, clipIds) {
+  const ids = new Set((clipIds || []).map(String));
+  let made = null, gone = null;
+  const before = new Set(_sel);
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId && x.kind === 'subs');
+    if (!t) return;
+    const r = recutSome(t, tl, ids, _id);
+    if (!r) return;
+    gone = (t.clips || []).filter(c => ids.has(c.id) && isHeard(c)).map(c => c.id);
+    t.clips = r.clips;
+    made = r.made;
+  });
+  if (made && [...ids].some(id => _sel.has(id))) {
+    for (const id of (gone || [])) _sel.delete(id);
+    for (const id of made) _sel.add(id);
+    _selBack = { before, after: new Set(_sel), depth: History.depth().undo };
+    _paintSel();
+  }
+  return made;
 }
 
 // ── The pick, as the panels ask about it (K6) ───────────────────────────────
@@ -1801,10 +1859,15 @@ export function initTimelineB() {
     if (!_on) return;
     if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)
     if (locked()) return;                  // a talking head is being built: the timeline is asleep (js/merge-v3/layout.js)
-    if (e.key === 'Escape') _clearSel();
-    // Not while typing: the inspector has fields, and Delete there means a character.
-    if ((e.key === 'Delete' || e.key === 'Backspace') &&
-        !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))) {
+    // A key something nearer took for itself (the word editor, K10b) is not the timeline's.
+    if (e.defaultPrevented) return;
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || !!e.target.isContentEditable;
+    // Escape in a field takes back what was typed there - it does not let go of the line (K10b: it used to,
+    // and the caption's text field lost what was typed with the pick).
+    if (e.key === 'Escape' && !typing) _clearSel();
+    // Not while typing: the inspector has fields, and Delete there means a character. And not in a block that
+    // keeps its own keys (the words of a caption, where Delete takes a WORD).
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
       e.preventDefault();
       _deleteSelected();
     }

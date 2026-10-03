@@ -605,9 +605,18 @@ function _repaint() {
   _raf = requestAnimationFrame(() => { if (_on && !_playing) _paint(); });
 }
 
-export function seek(t) {
+/**
+ * Put the preview at `t`. `opts.exact` (K10b, a word picked in the caption's words): the sound and the
+ * picture land exactly there - the ordinary tolerance (a quarter second for the sound) is wider than a word,
+ * so a word picked after its neighbour played from the neighbour. Every element seeks once, as a new one does.
+ */
+export function seek(t, opts) {
   _at = Math.max(0, Math.round((+t || 0) * 100) / 100);
   _at0 = _at; _t0 = performance.now();
+  if (opts && opts.exact) {
+    for (const el of _audio.values()) el.__fresh = true;
+    for (const el of _media.values()) if (el && el.tagName === 'VIDEO') el.__fresh = true;
+  }
   _repaint();
   _clock();
   setPlayhead(_at);
@@ -1435,6 +1444,8 @@ export function pause() {
 }
 
 export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
+/** Is the preview playing (K10b: a word picked while it plays keeps it playing, from that word). */
+export const isPlaying = () => _playing;
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');

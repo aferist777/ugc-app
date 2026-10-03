@@ -36,7 +36,8 @@ function _history() {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
-    const k = e.key.toLowerCase();
+    // By the key's PLACE (K10b): in the Russian layout e.key is "я" and "н", and undo did nothing.
+    const k = e.code === 'KeyZ' ? 'z' : e.code === 'KeyY' ? 'y' : String(e.key || '').toLowerCase();
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); if (History.canUndo()) History.undo(); }
     else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); if (History.canRedo()) History.redo(); }
   });

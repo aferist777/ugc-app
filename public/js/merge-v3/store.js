@@ -451,7 +451,9 @@ function _bindHistory() {
     read: () => _timeline,
     write: (state) => {
       if (!_canEdit) { _status = _roMessage(); _emit(); return; }
-      _timeline = state; _dirty = true; _emit(); _schedule();
+      // An edit like any other (K10b): without the count, a save already on its way when Ctrl+Z was pressed
+      // took itself for the latest and put the undone state back on screen - and the undo was never saved.
+      _timeline = state; _dirty = true; _edits++; _emit(); _schedule();
     },
   });
 }
@@ -463,7 +465,7 @@ function _bindHistory() {
 // want back. The gesture keeps itself visible by moving the DOM directly and calls this
 // only on release, which is also why no separate "live" variant is needed: the state at
 // that moment is still the pre-gesture one, so the snapshot taken here is the right one.
-export function mutate(fn) {
+export function mutate(fn, opts) {
   if (!_timeline || typeof fn !== 'function') return false;
   // With no project open the blank timeline is a prompt, not a workspace: there is nowhere to
   // save an edit to, so it is refused out loud instead of being accepted and then lost.
@@ -476,7 +478,9 @@ export function mutate(fn) {
   // A change that changes nothing (a re-cut that comes out the same, a value set to itself) is no step to
   // undo and nothing to save (review K2).
   if (_same(draft, _timeline)) return true;
-  History.push();                 // BEFORE the change is adopted - see the header
+  // BEFORE the change is adopted - see the header. `opts.merge`: a series tag - the same gesture repeated
+  // within a moment is one step to undo (history.js).
+  History.push(opts && opts.merge);
   _timeline = draft;
   _dirty = true;
   _edits++;

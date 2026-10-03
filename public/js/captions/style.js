@@ -49,6 +49,8 @@ export const DEF = {
   wrap: true, wordsPerLine: 0, lines: 2,
   effect: 'none', appear: 'none', casing: 'none',
   sizeAuto: true,
+  // The colour of a word marked to stand out (`k`, K10b) - '' is automatic (markedColour).
+  marked: '',
 };
 
 // ── One rule per field, for the whole style and for a caption's part of it ──
@@ -85,7 +87,25 @@ const RULES = {
   lines: NUM(1, 3, true),
   effect: ONE(EFFECTS), appear: ONE(APPEARS), casing: ONE(CASINGS),
   sizeAuto: BOOL,
+  marked: (v) => (v === '' ? '' : COLOUR(v)),
 };
+
+// ── A word marked to stand out ──────────────────────────────────────────────
+// Automatic, the colour of the spoken word - unless that is the colour of the text (23 presets of 127: a
+// marked word would not stand out at all) or, where a word is coloured as it is sung (karaoke, sweep), the
+// colour it is sung or waits in. Then the first of yellow, red, blue that is far enough from them.
+const MARK_TRY = ['#ffe14d', '#ef4444', '#38bdf8'];
+const _rgb = (hex) => { const h = String(hex || '#000000').replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); };
+const _far = (a, b) => { const x = _rgb(a), y = _rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) >= 80; };
+
+/** The colour a marked word (`k`) wears: the style's `marked`, or the automatic one. */
+export function markedColour(st) {
+  const s = st || DEF;
+  if (HEX.test(String(s.marked || ''))) return String(s.marked).toLowerCase();
+  const sung = s.effect === 'karaoke' || s.effect === 'sweep';
+  const ok = (c) => HEX.test(String(c || '')) && _far(c, s.primary || DEF.primary) && (!sung || _far(c, s.secondary || DEF.secondary));
+  return [s.highlight].concat(MARK_TRY).find(ok) || MARK_TRY[0];
+}
 
 // A style written before `effect` existed said karaoke with a switch.
 function _legacy(st) {

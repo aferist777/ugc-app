@@ -28,6 +28,11 @@ let _io = null;          // { read(), write(state) } - supplied by the store
 let _undo = [];
 let _redo = [];
 let _subs = [];
+// A SERIES OF ONE GESTURE is one step (K10b): the word editor's [ and ] move an edge a hundredth at a time,
+// and twenty presses are one thing to take back. A push with the same tag as the last one, soon after it and
+// with nothing undone in between, keeps the snapshot taken before the series.
+const SERIES_MS = 1500;
+let _lastTag = null, _lastAt = 0;
 
 function _emit() { for (const cb of _subs) { try { cb(); } catch (e) {} } }
 
@@ -35,13 +40,18 @@ function _emit() { for (const cb of _subs) { try { cb(); } catch (e) {} } }
 export function bind(io) {
   _io = (io && typeof io.read === 'function' && typeof io.write === 'function') ? io : null;
   _undo = []; _redo = [];
+  _lastTag = null;
   _emit();
 }
 
 // Call BEFORE mutating. Taking the snapshot after the change would record the
-// result and undo would be a no-op.
-export function push() {
+// result and undo would be a no-op. `tag`: the gesture a series belongs to (see SERIES_MS).
+export function push(tag) {
   if (!_io) return;
+  const now = Date.now();
+  if (tag && tag === _lastTag && !_redo.length && _undo.length && now - _lastAt < SERIES_MS) { _lastAt = now; return; }
+  _lastTag = tag || null;
+  _lastAt = now;
   let snap;
   try { snap = JSON.stringify(_io.read()); } catch (e) { return; }
   if (snap == null) return;
@@ -56,6 +66,7 @@ export function push() {
 
 function _step(from, to) {
   if (!_io || !from.length) return false;
+  _lastTag = null;
   let cur;
   try { cur = JSON.stringify(_io.read()); } catch (e) { return false; }
   const next = from.pop();

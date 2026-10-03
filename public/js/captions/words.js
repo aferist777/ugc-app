@@ -144,7 +144,12 @@ function _word(x) {
   return o;
 }
 const _copy = (words) => (Array.isArray(words) ? words : []).filter((w) => w && w.w != null).map(_word);
-const _done = (words) => ({ words, name: textOf(words) });
+// The words and the text they spell - or a refusal when the text would pass 400 characters: the server keeps
+// 400, and a text cut there no longer spells its words, which then go untimed without a word said.
+const _done = (words) => {
+  const name = textOf(words);
+  return name.length > LIMITS.text ? { why: 'A line holds at most ' + LIMITS.text + ' characters' } : { words, name };
+};
 
 function _limits(toks, total) {
   if (total > LIMITS.words) return { why: 'A line holds at most ' + LIMITS.words + ' words' };
@@ -302,6 +307,16 @@ export function retext(words, text, dur) {
     last.w += ' ' + mark;
     touch(last);
   };
+  // A word taken out is a touch too (the owner's answer 1b) - of the line, which keeps no word for it: the
+  // word before the gap carries it (the one after, when the first went).
+  let touchNext = false;
+  const gone = () => {
+    const last = seq[seq.length - 1];
+    if (!last) { touchNext = true; return; }
+    if (last.group) return;                                  // new words are marked already
+    last.hh = true;
+    touch(last);
+  };
   let blk = { o: [], n: [] };
   const flush = () => {
     const { o, n } = blk;
@@ -311,7 +326,8 @@ export function retext(words, text, dur) {
       if (!timed(nt[j])) { if (real.length) real[real.length - 1] += ' ' + nt[j]; else glue(nt[j]); continue; }
       real.push(real.length ? nt[j] : withLead(nt[j]));
     }
-    if (!real.length) return;                                // taken out: a pause
+    if (!real.length) { if (o.length) gone(); return; }     // taken out: a pause
+    touchNext = false;                                       // what comes now is marked anyway
     if (o.length === real.length) {                          // another word in each place: its moment
       o.forEach((i, x) => { const e = { ...ws[i], w: real[x], o: i, hh: true }; touch(e); seq.push(e); });
       return;
@@ -343,6 +359,7 @@ export function retext(words, text, dur) {
     }
     flush();
     const e = { ...ws[i], w: withLead(nt[j]), o: i };       // the same word: its moment
+    if (touchNext) { e.hh = true; touchNext = false; }
     touch(e);
     seq.push(e);
   }
@@ -406,12 +423,18 @@ export function insertAt(words, i, text, dur) {
   return out ? _done(out.map(_word)) : _noRoom(ws.length + nt.length, end);
 }
 
-/** Word `i` taken out; its time becomes a pause. The last word of a line takes the line with it. */
+/**
+ * Word `i` taken out; its time becomes a pause. The word before the gap (the next one, when the first went)
+ * is marked touched: the line was corrected, and no word is left to say so. The last word of a line takes
+ * the line with it.
+ */
 export function removeAt(words, i) {
   const ws = _copy(words);
   if (!_at(ws, i)) return NO_WORD;
   if (ws.length === 1) return { remove: true };
   ws.splice(i, 1);
+  const n = ws[i > 0 ? i - 1 : 0];
+  ws[i > 0 ? i - 1 : 0] = { ...n, h: true };
   return _done(ws);
 }
 
@@ -441,8 +464,13 @@ export function cutAt(words, i, at, pos) {
   const txt = w.w;
   if (txt.length < 2) return { why: 'A word of one letter cannot be cut' };
   const S = cs(w.s), E = Math.max(cs(w.s), cs(w.e));
+  if (E - S < 2 * MINC) return { why: 'Too short to cut - each half needs ' + WORD_MIN + ' s' };
   let p = Number.isInteger(pos) ? pos : null;
   let T = at == null ? null : cs(at);
+  if (T != null && (T - S < MINC || E - T < MINC)) {
+    return { why: T <= S || T >= E ? 'Put the playhead inside the word - or type a space in it where it splits'
+      : 'Too close to the edge of the word - each half needs ' + WORD_MIN + ' s' };
+  }
   if (p == null) {
     const f = T == null ? 0.5 : (E > S ? (T - S) / (E - S) : 0.5);
     p = Math.round(txt.length * f);

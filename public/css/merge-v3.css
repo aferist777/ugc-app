@@ -2321,3 +2321,11 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-fmedia.is-busy{border-color:var(--primary); border-style:solid}
 /* The stamp-sized strip of frames under a fragment went with the picker above (.mv3-wk-fpick): a
    frame is chosen by looking at it on the stage, not at a 20px sliver of it. */
+
+/* A heard line corrected by hand (K10b): a small mark in the corner the cross does not use, in the accent - gold
+   is the one thing singled out on a surface, and a lane may hold many corrected lines. Generate keeps such a
+   line; "back to what was heard" takes it back to what was heard. */
+.mv3b-fix{
+  position:absolute; top:3px; left:3px; width:5px; height:5px; z-index:2; pointer-events:none;
+  border-radius:50%; background:var(--accent); box-shadow:0 0 0 1px oklch(0 0 0 / .55);
+}

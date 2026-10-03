@@ -27,7 +27,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          addCaption as addCapB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB,
          setCaptionStyle as setCapStyleB, selectedCaptions as capsB, clearSelection as clearSelB,
-         revealSelection as revealSelB, gesture as gestureB } from './timeline-b.js';
+         revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
@@ -37,7 +37,10 @@ import { wordsOf, CUT_KEYS } from '../captions/pages.js';
 import { LANGS, listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
-import { spells, textOf, correctedCount } from '../captions/words.js';
+import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
+import { overPage } from '../captions/pages.js';
+import { markedColour } from '../captions/style.js';
+import * as WordEdit from './word-edit.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as ScenPick from './scen-pick.js';
 import * as WK from './workshop.js';
@@ -102,6 +105,12 @@ function _fxTriple(tr, an, fi, onTr, onAn, onFi, skipAnim) {
 // or a save status changing. So a held control defers the repaint until it is let go.
 let _held = false;
 let _pending = false;
+// NOR WHILE A FIELD IS BEING TYPED IN (K10b): a caption's text, a lane's name - set on focus, cleared when the
+// field is left (render()). The words of a caption are not counted: they put their own field back.
+let _typing = false;
+let _typedPending = false;
+const _isTextField = (el) => !!el && (el.tagName === 'TEXTAREA'
+  || (el.tagName === 'INPUT' && /^(text|search|number|)$/.test(String(el.type || '')))) && !el.closest('[data-own-keys]');
 
 // ── A clip ────────────────────────────────────────────────────────────────
 // Built from the primitives in controls.js.
@@ -610,7 +619,7 @@ function _blankWordsTrack(host, track) {
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, typedOnly: !isSubs });
+  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, typedOnly: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
 
   // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
   const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
@@ -696,6 +705,15 @@ function _styleRows(host, st, set, o) {
   } else if (st.effect === 'karaoke' || st.effect === 'sweep') {
     host.appendChild(C.row('Not yet', C.color(st.secondary, (v) => set({ secondary: v }))));
   }
+  // A WORD MADE TO STAND OUT (K10b) wears this colour for its whole page. Shown where a line has one, or once
+  // it was set by hand; "auto" is the spoken word's colour - or, where that is the text's own (23 presets),
+  // yellow, red or blue, whichever stands out (style.js markedColour).
+  if (o.marks || st.marked) {
+    host.appendChild(C.row('Marked', C.pair(
+      C.color(markedColour(st), (v) => set({ marked: v })),
+      C.toggleNamed('auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
+        'The colour that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
+  }
   if (o.typedOnly && st.effect !== 'none') {
     host.appendChild(C.hint('A typed line has no word timings: the spoken word plays on heard captions only.'));
   }
@@ -750,7 +768,7 @@ function _renderCaptions(host, items) {
   const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
     ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v }), { cut: true });
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)), setBehind });
+  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
   if (items.some(x => x.clip.style)) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
@@ -773,23 +791,45 @@ function _blankCaption(host, track, clip) {
   const own = !!(clip.style && Object.keys(clip.style).length);
   _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
   if (own) _presetLine(host, clip.style, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }));
+  const heardLine = isHeard(clip);
   const area = C.textarea(clip.name || '', (v) => {
     const r = setCapTextB(track.id, clip.id, v);
     if (r && r.why) note(area, 'The text was not changed.', r.why);
   }, 3);
+  area.maxLength = 400;
+  // Escape takes back what was typed and keeps the line picked (K10b - it let go of the line, and of the
+  // typing with it). Enter keeps a heard line's text and goes on to its words; a typed line may hold line
+  // breaks, so there Enter is one.
+  area.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      area.value = clip.name || '';
+      area.blur();
+    } else if (e.key === 'Enter' && !e.shiftKey && heardLine) {
+      e.preventDefault(); e.stopPropagation();
+      area.blur();
+      WordEdit.focusList(clip.id);
+    }
+  });
   host.appendChild(area);
   host.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
     + 'stays up.'));
 
-  if (isHeard(clip)) {
+  if (heardLine) {
     // A HEARD LINE KEEPS ITS TIMING WHEN IT IS REWRITTEN (K10): the words that stay keep their moments, new
-    // ones share the time of what they replace (words.js).
+    // ones share the time of what they replace (words.js) - and each word can be changed by itself (K10b).
     host.appendChild(_el('div', 'mv3-c-sep'));
     const fixed = correctedCount(clip);
     host.appendChild(_fact('Timed', clip.words.length + ' words' + (fixed ? ' · ' + fixed + ' corrected' : '')));
     if (spells(clip.words, clip.name)) {
-      host.appendChild(C.hint('Rewrite the line and the words keep their moments - new words share the time '
-        + 'of the ones they replace. A corrected line stays when the captions are generated again.'));
+      WordEdit.paint(host, track, clip, { mark: markedColour(styleOf(track, fmt, clip)) });
+      // Corrections can make a line more than a page of its lane holds; a correction never cuts by itself.
+      const over = isCorrected(clip) ? overPage(clip, track.style, fmt) : null;
+      if (over) {
+        host.appendChild(C.hint('Longer than a page of this lane: ' + over + '.'));
+        host.appendChild(C.row('', C.button('re-cut this line', () => recutLinesB(track.id, [clip.id]),
+          { title: 'Cuts this line into pages by the lane\'s rules, keeping its words and corrections' })));
+      }
     } else {
       // Rewritten before K10: its words still say what was heard, and it is drawn as one piece until timed.
       host.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
@@ -798,13 +838,17 @@ function _blankCaption(host, track, clip) {
         if (r && r.why) note(area, 'Not timed.', r.why);
       }, { title: 'Gives the words of the text the moments of the words heard there' })));
     }
+  } else if (WordEdit.wantsText(clip.id)) {
+    // Arrived by Tab from the last word of the line before: a typed line is read on in its text.
+    area.focus({ preventScroll: true });
+    area.select();
   }
 
   // ITS OWN LOOK (the owner's addition, 2026-10-03): what is changed here is this line's, over its lane's.
   host.appendChild(_el('div', 'mv3-c-sep'));
   const heard = isHeard(clip);
   _styleRows(host, styleOf(track, fmt, clip), (patch) => setCapStyleB([clip.id], patch, { cut: heard && _cuts(patch) }),
-    { fmt, typedOnly: !heard });
+    { fmt, typedOnly: !heard, marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
   if (own) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], null, { cut: heard }),
@@ -863,9 +907,16 @@ function _renderMany(host, n) {
 
 // THE CAPTIONS VIEW FOLLOWS THE PICK (K6): up while captions are picked and the tiles are open, gone
 // with the pick - lib-views.js puts the shelf or the chat back, and the room with it.
-function render() {
+function render(force) {
   if (_held) { _pending = true; return; }
-  const cap = _render();
+  // NOT UNDER THE CURSOR (K10b): a store change - the save landing half a second after an edit, the watcher, a
+  // lay - waits while a text field in the strip is being typed in, and paints when it is left. A change of the
+  // pick (`force`) writes the field into its own line first (onSelB) and paints at once. The words of a caption
+  // keep their own field across a paint (word-edit.js), so they do not hold it.
+  if (!force && _typing) { _typedPending = true; return; }
+  let cap;
+  WordEdit.beforeRepaint();
+  try { cap = _render(); } finally { WordEdit.afterRepaint(); }
   const was = Views.isCaptions();
   // While a band is swept the view stays as it was - it follows the pick when the band is let go.
   const on = gestureB() ? was : (!!cap && CapView.tilesOpen() && !_narrow());
@@ -948,11 +999,17 @@ export function initInspector() {
     // A build step is NOT left that way: selecting a clip while composing frames is a slip of
     // the pointer far more often than it is a decision to go and edit the cut.
     if (WK.active()) return;
+    // WHAT WAS BEING TYPED GOES INTO ITS OWN LINE FIRST (K10b). A press on the timeline never takes the focus
+    // (its mousedown is prevented), so the field is still open on the line picked before: the words' field is
+    // written by the ids it was opened with, a text field by its own change on the blur.
+    WordEdit.leave();
+    const a = document.activeElement;
+    if (a && a.closest && a.closest('#mv3-over') && _isTextField(a)) a.blur();
     M.resetView();
-    render();
+    render(true);
   });
-  ScenPick.onChange(render);
-  WK.onChange(render);
+  ScenPick.onChange(() => render());
+  WK.onChange(() => render());
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
   CapView.onApply((id) => { if (_capApply) _capApply(id); });
   Views.onBack('captions', () => clearSelB());
@@ -978,7 +1035,7 @@ export function initInspector() {
   });
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
-  Store.onChange(render);
+  Store.onChange(() => render());
 
   // pointerdown/up on the document rather than on the panel: a drag that starts on a
   // slider often ends with the pointer somewhere else entirely, and a listener on the
@@ -991,4 +1048,14 @@ export function initInspector() {
     _held = false;
     if (_pending) { _pending = false; render(); }
   });
+  // The field being typed in (see _typing). On the strip itself, which is never rebuilt - only its insides.
+  const over = document.getElementById('mv3-over');
+  if (over) {
+    over.addEventListener('focusin', (e) => { _typing = _isTextField(e.target); });
+    over.addEventListener('focusout', (e) => {
+      if (!_isTextField(e.target)) return;
+      _typing = false;
+      if (_typedPending) { _typedPending = false; setTimeout(() => render(), 0); }
+    });
+  }
 }

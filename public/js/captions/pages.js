@@ -538,6 +538,30 @@ export function timedWords(c) {
   return r.words || w;
 }
 
+/**
+ * Is this heard caption more than ONE page of its lane - by the limits the cut keeps (K10b: a line grown by
+ * corrections; a correction never cuts by itself)? More words than a page holds, wider than its lines, or
+ * on screen longer than PAGE.maxDur. @returns what it is more than, in words, or null when it fits.
+ */
+export function overPage(c, laneStyle, format) {
+  const words = timedWords(c).filter((w) => w && String(w.w || '').trim());
+  if (words.length < 2) return null;
+  const F = renderFrame(format);
+  const st = withAuto(resolveStyle(laneStyle, c && c.style), F.w, F.h);
+  const N = +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);
+  const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+  if (words.length > N) return words.length + ' words, a page holds ' + N;
+  const end = Math.max(...words.map((w) => r2(w.e)));
+  const dur = end - r2(words[0].s);
+  if (dur > PAGE.maxDur + 1e-9) return dur.toFixed(1) + ' s of words, a page is up to ' + PAGE.maxDur + ' s';
+  const tokens = words.map((w) => String(w.w).trim());
+  const m = meter(st);
+  if (tokens.some((t) => m.text(t) > LINE_MAX * F.w)) return 'a word wider than a line, which gets a page of its own';
+  const got = breakLines(tokens, st, F.w).length;
+  if (got > lines) return got + ' lines, a page has ' + lines;
+  return null;
+}
+
 /** The typed lines of a lane, as spans [[from, to]]. */
 export const typedOf = (track) => ((track && track.clips) || [])
   .filter((c) => c && c.name && !isHeard(c))
