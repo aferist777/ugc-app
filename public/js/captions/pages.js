@@ -117,8 +117,8 @@ const endsClause = (t) => /[,;:—–…-]$|\.\.\.$/u.test(bare(t));
  * Where a page of `tokens` (its words as stored - casing is the style's) breaks into lines in style
  * `st` (resolved, size filled in) on a frame `W` wide: the line counts, top first ([2, 3] = two words,
  * then three). The fewest lines no wider than 0.78 of the frame each; among those, the most even, with
- * no weak word at a line's end and no word alone on a line of a page of three or more; when it is a
- * tie, the lower line the wider. A word wider than the limit alone is a line of its own.
+ * no weak word at a line's end and no short word alone on a line of a page of three or more; when it is
+ * a tie, the lower line the wider. A word wider than the limit alone is a line of its own.
  */
 export function breakLines(tokens, st, W) {
   const n = tokens.length;
@@ -155,7 +155,7 @@ export function breakLines(tokens, st, W) {
         if (b - a > 1 && w > lim) continue;
         let c = 10 * (w / lim) * (w / lim);
         if (b < n && weakEnd(tokens[b - 1])) c += 3;
-        if (b - a === 1 && n >= 3) c += 4;
+        if (b - a === 1 && n >= 3 && w < lim / 2) c += 4;    // a short word alone on a line
         c += 0.02 * (w / lim) * (k - p);         // a tie goes to the wider lower line
         if (cost[p - 1][a] + c < cost[p][b]) { cost[p][b] = cost[p - 1][a] + c; from[p][b] = a; }
       }
@@ -165,6 +165,26 @@ export function breakLines(tokens, st, W) {
   const out = [];
   for (let p = k, b = n; p > 0; p--) { const a = from[p][b]; out.unshift(b - a); b = a; }
   return out;
+}
+
+/**
+ * How a page is DRAWN: its lines (breakLines) and the size it is drawn at. A word wider than a line
+ * cannot be broken, so a page holding one is drawn smaller - just enough for it to fit 0.78 of the
+ * frame ("сельскохозяйственные" in Rubik Mono One is 1.24 of it) - rather than run off the edges.
+ * @returns { lines: [counts], size } - `size` the style's own when nothing had to shrink
+ */
+export function fitPage(tokens, st, W) {
+  const lim = LINE_MAX * W;
+  let size = +st.size || 60;
+  let s = st;
+  const widest = (x) => tokens.reduce((m, t) => Math.max(m, meter(x).text(t)), 0);
+  const w0 = widest(st);
+  if (w0 > lim) {
+    size = Math.max(8, Math.floor(size * lim / w0));
+    s = Object.assign({}, st, { size });
+    for (let guard = 0; guard < 40 && size > 8 && widest(s) > lim; guard++) s = Object.assign({}, st, { size: --size });
+  }
+  return { lines: breakLines(tokens, s, W), size };
 }
 
 // ── The seams between reads ─────────────────────────────────────────────────

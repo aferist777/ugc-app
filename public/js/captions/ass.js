@@ -24,12 +24,19 @@
    old words being burnt over it. A word marked `k` wears the highlight for its whole page. Casing is
    applied here, to what is drawn - never to the stored text.
 
+   THE LINES ARE BROKEN HERE, not by libass (phase K2): pages.js breakLines() says where - no line wider
+   than 0.78 of the frame, the most even, never on a weak word - and the break is written as \N between
+   the SAME two words in every layer, so the layers cannot part. libass's own wrap (0.88, the margins)
+   is only a safety net now. A line somebody typed with a line break is drawn as typed; a page holding a
+   word wider than a line is drawn in a smaller size, in a style row of its own, until it fits.
+
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { resolveStyle, withAuto, anchorOf, cased } from './style.js';
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
+import { fitPage } from './pages.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -67,7 +74,7 @@ export function assText(s) {
 // switches at once, \kf fills from the left. A PAUSE IS A SYLLABLE OF ITS OWN: \k carries a length, not
 // a moment, so the moments are rounded once and the lengths taken between them - no word lights early by
 // the length of a pause, and nothing drifts.
-export function karaokeLine(words, tag, casing) {
+export function karaokeLine(words, tag, casing, brk) {
   const k = tag || '\\k';
   const out = [];
   let cursor = 0;
@@ -76,11 +83,16 @@ export function karaokeLine(words, tag, casing) {
     const s = Math.max(cursor, Math.round((+w.s || 0) * 100));
     const e = Math.max(s, Math.round((+w.e || 0) * 100));
     if (s > cursor) out.push('{\\k' + (s - cursor) + '}');
-    out.push('{' + k + (e - s) + '}' + assText(cased(w.w, casing)) + (i < words.length - 1 ? ' ' : ''));
+    out.push('{' + k + (e - s) + '}' + assText(cased(w.w, casing)) + _gap(i, words.length, brk));
     cursor = e;
   }
   return out.join('');
 }
+
+// What follows word i of n: a space, a line break, or nothing after the last.
+const _gap = (i, n, brk) => (i < n - 1 ? (brk && brk.has(i) ? '\\N' : ' ') : '');
+// The page's text, the lines broken where the page breaks (a set of word indices a line ends at).
+const _joined = (tokens, brk) => tokens.map((t, i) => t + _gap(i, tokens.length, brk)).join('');
 
 // ── What a style needs ──────────────────────────────────────────────────────
 const ms = (sec) => Math.max(0, Math.round((+sec || 0) * 1000));
@@ -116,13 +128,14 @@ function _place(st, a) {
 }
 
 // ── layer +2: the letters ───────────────────────────────────────────────────
-function _textBody(c, st, words) {
+function _textBody(c, st, words, page) {
   const arrive = _arrive(st), blur = _blur(st);
   const head = (arrive || blur) ? '{' + blur + arrive + '}' : '';
-  if (words && st.effect === 'karaoke') return head + karaokeLine(words, '\\k', st.casing);
-  if (words && st.effect === 'sweep') return head + karaokeLine(words, '\\kf', st.casing);
+  const brk = page.brk;
+  if (words && st.effect === 'karaoke') return head + karaokeLine(words, '\\k', st.casing, brk);
+  if (words && st.effect === 'sweep') return head + karaokeLine(words, '\\kf', st.casing, brk);
   const perWord = words && (['color', 'pop', 'bounce'].includes(st.effect) || words.some(w => w.k));
-  if (!perWord) return head + assText(cased(words ? words.map(w => w.w).join(' ') : c.name, st.casing));
+  if (!perWord) return head + assText(cased(page.text, st.casing));
   const hl = tagColour(st.highlight), prim = tagColour(st.primary);
   return words.map((w, i) => {
     const [s, e] = _times(w);
@@ -135,12 +148,12 @@ function _textBody(c, st, words) {
     } else if (st.effect === 'color') {
       t = '\\t(' + s + ',' + (s + 1) + ',\\1c' + hl + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
     }
-    return '{\\r' + blur + arrive + t + '}' + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? ' ' : '');
+    return '{\\r' + blur + arrive + t + '}' + assText(cased(w.w, st.casing)) + _gap(i, words.length, brk);
   }).join('');
 }
 
 // ── layer +3: the spoken word grows ─────────────────────────────────────────
-function _popBody(st, words) {
+function _popBody(st, words, brk) {
   const arrive = _arrive(st), blur = _blur(st), hl = tagColour(st.highlight);
   const pop = st.effect === 'pop';
   const grow = pop ? '\\fscx112\\fscy125' : '\\fscy132';
@@ -150,25 +163,24 @@ function _popBody(st, words) {
     return '{\\r' + blur + arrive + '\\alpha&HFF&\\1c' + hl
       + '\\t(' + s + ',' + (s + 1) + ',\\alpha&H00&)\\t(' + s + ',' + (s + up) + ',' + grow + ')'
       + '\\t(' + (s + up) + ',' + (s + down) + ',\\fscx100\\fscy100)\\t(' + e + ',' + (e + 1) + ',\\alpha&HFF&)}'
-      + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? ' ' : '');
+      + assText(cased(w.w, st.casing)) + _gap(i, words.length, brk);
   }).join('');
 }
 
 // ── layer +0: the line's box, one run ───────────────────────────────────────
-function _lineBoxBody(c, st, words) {
-  const text = words ? words.map(w => w.w).join(' ') : c.name;
+function _lineBoxBody(st, page) {
   return '{' + _arrive(st) + '\\1a&HFF&\\2a&HFF&\\3c' + tagColour(st.backColor) + '\\3a' + tagAlpha(st.backAlpha) + '}'
-    + assText(cased(text, st.casing));
+    + assText(cased(page.text, st.casing));
 }
 
 // ── layer +1: the box behind the spoken word ───────────────────────────────
-function _wordBoxBody(st, words) {
+function _wordBoxBody(st, words, brk) {
   const arrive = _arrive(st), hl = tagColour(st.highlight);
   const clear = '\\1a&HFF&\\2a&HFF&\\3a&HFF&';
   return words.map((w, i) => {
     const [s, e] = _times(w);
     return '{\\r' + arrive + clear + '\\t(' + s + ',' + (s + 1) + ',\\3c' + hl + '\\3a&H00&)\\t(' + e + ',' + (e + 1) + ',\\3a&HFF&)}'
-      + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? '{\\r' + arrive + clear + '} ' : '');
+      + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? '{\\r' + arrive + clear + '}' + _gap(i, words.length, brk) : '');
   }).join('');
 }
 
@@ -244,21 +256,47 @@ export function buildAss(lanes, w, h) {
     return own.get(key);
   };
 
+  // A page holding a word wider than a line: the same style at the size it fits at.
+  const shrunk = new Map();
+  const smaller = (s, size) => {
+    const key = s.name + '|' + size;
+    if (!shrunk.has(key)) {
+      const z = make(s.name + 'z' + shrunk.size, Object.assign({}, s.st, { size }));
+      shrunk.set(key, z);
+      extra.push(z);
+    }
+    return shrunk.get(key);
+  };
+
   const lines = [];
   const dlg = (layer, start, end, style, text) => lines.push('Dialogue: ' + layer + ',' + assTime(start) + ','
     + assTime(end) + ',' + style + ',,0,0,0,,' + text);
   used.forEach((u, lane) => {
     const L = lane * 4;
     for (const c of u.clips) {
-      const s = styleOf(u, lane, c);
+      let s = styleOf(u, lane, c);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
       const words = _wordsOf(c);
+      // Where the page breaks into lines: the words', or the typed text's - unless it was typed with
+      // its own line breaks, which are drawn as typed.
+      const typedBreaks = !words && /\n/.test(String(c.name));
+      const tokens = words ? words.map(x => String(x.w)) : typedBreaks ? null : String(c.name).split(/\s+/).filter(Boolean);
+      const page = { brk: null, text: typedBreaks ? String(c.name) : (tokens || []).join(' ') };
+      if (tokens && tokens.length) {
+        const fit = fitPage(tokens, s.st, w);
+        if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
+        const brk = new Set();
+        let at = -1;
+        for (const k of fit.lines.slice(0, -1)) { at += k; brk.add(at); }
+        page.brk = brk.size ? brk : null;
+        page.text = _joined(tokens, page.brk);
+      }
       const place = _place(s.st, s.a);
-      if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(c, s.st, words));
-      if (s.layered && s.st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(s.st, words));
-      dlg(L + 2, start, end, s.name, place + _textBody(c, s.st, words));
-      if (s.layered && (s.st.effect === 'pop' || s.st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(s.st, words));
+      if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(s.st, page));
+      if (s.layered && s.st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(s.st, words, page.brk));
+      dlg(L + 2, start, end, s.name, place + _textBody(c, s.st, words, page));
+      if (s.layered && (s.st.effect === 'pop' || s.st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(s.st, words, page.brk));
     }
   });
 

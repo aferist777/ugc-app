@@ -10,6 +10,7 @@
 import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
   from '../captions/style.js';
 import { cssWeight, fontOf } from '../captions/fonts.js';
+import { fitPage } from '../captions/pages.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -74,31 +75,6 @@ function _karaokeLine(ctx, words, x, y, st, scale, into) {
   }
 }
 
-// LINES WHERE LIBASS BREAKS THEM. The render wraps a caption in libass (WrapStyle 0), and a preview
-// that broke it anywhere else would show the words in places the file does not. libass fills each
-// line as far as the frame less the style's margins allows, then evens the lines out: the last word
-// of a line moves down to the next while that brings the two closer in width, until nothing moves.
-// Returns [from, to) ranges into `words`.
-function _lines(ctx, words, maxWidth) {
-  if (!words.length) return [[0, 0]];
-  const space = ctx.measureText(' ').width;
-  const wide = words.map(w => ctx.measureText(w).width);
-  const span = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += wide[i]; return s + space * Math.max(0, b - a - 1); };
-  const starts = [0];
-  for (let i = 1; i < words.length; i++) {
-    if (span(starts[starts.length - 1], i + 1) > maxWidth) starts.push(i);
-  }
-  for (let moved = true, guard = 0; moved && guard < 200; guard++) {
-    moved = false;
-    for (let k = 1; k < starts.length; k++) {
-      const a = starts[k - 1], b = starts[k], c = k + 1 < starts.length ? starts[k + 1] : words.length;
-      if (b - a < 2) continue;
-      if (Math.abs(span(a, b - 1) - span(b - 1, c)) < Math.abs(span(a, b) - span(b, c))) { starts[k] = b - 1; moved = true; }
-    }
-  }
-  return starts.map((s, k) => [s, k + 1 < starts.length ? starts[k + 1] : words.length]);
-}
-
 /**
  * Every caption showing at this moment, onto the preview canvas.
  * @param fmt the project's format - the style is authored against that frame, not this one
@@ -139,13 +115,24 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
   if (!live.length) return;
 
   // The style speaks in frame pixels; the canvas is a smaller frame of the same shape.
-  const scale = H / renderFrame(fmt).h;
-  // The style's margins in the .ass (public/js/captions/ass.js styleLine), what libass wraps against.
-  const margin = W * 0.06;
+  const frame = renderFrame(fmt);
+  const scale = H / frame.h;
 
   for (const c of live) {
     // The lane's style, or this caption's own on top of it (phase K0).
-    const st = styleOf(tr, fmt, c);
+    let st = styleOf(tr, fmt, c);
+    // LINES WHERE THE FILE BREAKS THEM (K2): the .ass is broken by pages.js, not by libass, so the same
+    // rule says where here - and a page holding a word wider than a line is drawn smaller, as there. A
+    // line break typed into a caption is a break in both.
+    const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
+    const typedBreaks = !words && String(c.name).includes('\n');
+    const tokens = words ? words.map(w => String(w.w)) : typedBreaks ? null : String(c.name).split(/\s+/).filter(Boolean);
+    let counts = [];
+    if (tokens && tokens.length) {
+      const fit = fitPage(tokens, st, frame.w);
+      if (fit.size < st.size) st = Object.assign({}, st, { size: fit.size });
+      counts = fit.lines;
+    }
     const face = _faceOf(ctx, st);
     // A line is the size the style names; the letters inside it are smaller (see _faceOf).
     const lh = Math.max(6, st.size * scale);
@@ -155,21 +142,14 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     ctx.font = _css(st, px.toFixed(1));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
-    // Karaoke captions wrap like any other - they ran off both edges on screen while the file wrapped
-    // them. A line break typed into a caption is a break in both.
     const lines = [];
-    if (words) {
-      const tokens = words.map(w => String(w.w));
-      for (const [from, to] of (st.wrap ? _lines(ctx, tokens, W - margin * 2) : [[0, tokens.length]])) {
-        lines.push({ text: tokens.slice(from, to).join(' '), words: words.slice(from, to) });
-      }
+    if (typedBreaks) {
+      for (const para of String(c.name).split('\n')) lines.push({ text: para.trim(), words: null });
     } else {
-      for (const para of String(c.name).split('\n')) {
-        const tokens = para.split(/\s+/).filter(Boolean);
-        for (const [from, to] of (st.wrap ? _lines(ctx, tokens, W - margin * 2) : [[0, tokens.length]])) {
-          lines.push({ text: tokens.slice(from, to).join(' '), words: null });
-        }
+      let i = 0;
+      for (const k of counts) {
+        lines.push({ text: tokens.slice(i, i + k).join(' '), words: words ? words.slice(i, i + k) : null });
+        i += k;
       }
     }
     // The anchor is the BOTTOM of the block for a bottom caption and its middle for a centred
