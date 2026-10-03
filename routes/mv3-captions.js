@@ -31,6 +31,8 @@ const GROQ = require('../lib/groq-stt');
 const LOCAL = require('../lib/whisper-local');
 const { KEY_RE } = require('../lib/subs-store');
 const { HEARD } = require('../lib/mv3b-subs');
+const TILES = require('../lib/caption-tiles');
+const { CATEGORIES } = require('../public/js/captions/presets.js');
 
 router.post('/mv3/captions/transcribe', (req, res) => {
   try {
@@ -69,6 +71,22 @@ router.get('/mv3/captions/state', (req, res) => {
     // Always: "back to what was heard" shows by what the file says was laid, whatever the job in memory
     // did - a failed one used to hide it for fifteen minutes (review K2).
     res.json({ success: true, job, last: JOB.last(key) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── The caption presets' tiles (phase K6a; lib/caption-tiles.js) ───────────
+// The state only - no side effects, so the smoke check may ask it.
+router.get('/mv3/captions/tiles', (req, res) => {
+  try { res.json({ success: true, ...TILES.state() }); } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Make what is missing; `first` - a category to make first. Pressed again while making, it only reorders.
+router.post('/mv3/captions/tiles/make', (req, res) => {
+  try {
+    const first = String((req.body && req.body.first) || '');
+    res.json({ success: true, ...TILES.make(CATEGORIES.some((c) => c.id === first) ? first : null) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
