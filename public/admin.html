@@ -26,6 +26,7 @@
     <button class="adm-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
     <button class="adm-tab" type="button" role="tab" data-pane="data">Import / Export</button>
     <button class="adm-tab" type="button" role="tab" data-pane="local">This computer</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="thanks">Thanks</button>
   </div>
 
   <!-- The keys every generator reads, saved into settings.json in the library. -->
@@ -89,6 +90,15 @@
     </div>
     <div class="dio-body" id="loc-body"></div>
   </section>
+
+  <!-- The open-source work the app is built on: every repository, its licence, and what it does here (js/admin-thanks.js). -->
+  <section class="adm-panel" data-pane="thanks" hidden>
+    <div class="adm-head">
+      <span class="adm-title">Thanks</span>
+      <span class="adm-count" id="thx-count"></span>
+    </div>
+    <div class="dio-body thx-body" id="thx-body"></div>
+  </section>
 </div>
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
@@ -96,6 +106,7 @@
 <script src="js/admin-keys.js"></script>
 <script src="js/data-io.js"></script>
 <script src="js/admin-local.js"></script>
+<script src="js/admin-thanks.js"></script>
 <script>
   // The tab strip, after the panes' own scripts so they hear the first `adm-pane`. Panes are
   // hidden rather than rebuilt, so a half-typed key or an export being built survives a switch.

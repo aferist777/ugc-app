@@ -12,7 +12,8 @@
    `dist.integrity` of that version), so a tarball changed after the fact is refused. The page has no
    bundler, and JASSUB is ES modules importing other packages by bare name - so the files are laid out
    under vendor/jassub/ and those imports rewritten to relative paths:
-     - abslink (MIT) and lfa-ponyfill (MIT) go into deps/;
+     - abslink (Apache-2.0) and lfa-ponyfill (MIT) go into deps/, each with its licence - the text when the
+       package carries one, otherwise the licence its package.json declares (neither ships a text);
      - rvfc-polyfill (GPL-3.0) is NOT shipped: it only patches <video>, and the preview hands JASSUB a
        canvas (Electron has requestVideoFrameCallback natively anyway);
      - throughput (CommonJS, debug counters only) is replaced by a stub.
@@ -32,6 +33,9 @@ const PINS = {
 };
 const DIR = path.join(__dirname, '..', 'vendor', 'jassub');
 const MARK = path.join(DIR, 'PINNED.json');
+// How the files are laid out: moved when that changes, so an installed copy is laid out again (2: the deps'
+// licences read from their package.json - abslink was written down as MIT, it is Apache-2.0).
+const LAYOUT = 2;
 const optional = process.argv.includes('--optional');
 
 // A .tgz's files, by path inside the package ("package/..."). ustar: 512-byte headers, octal sizes.
@@ -66,7 +70,7 @@ const noMap = (s) => s.replace(/\n\/\/# sourceMappingURL=.*$/m, '');
 async function main() {
   try {
     const have = JSON.parse(fs.readFileSync(MARK, 'utf8'));
-    if (JSON.stringify(have) === JSON.stringify(PINS)) { console.log('[jassub] ' + PINS.jassub.version + ' already in place'); return; }
+    if (JSON.stringify(have) === JSON.stringify({ ...PINS, layout: LAYOUT })) { console.log('[jassub] ' + PINS.jassub.version + ' already in place'); return; }
   } catch (e) { /* not there yet */ }
 
   const pk = {};
@@ -102,14 +106,20 @@ async function main() {
   }
   put('LICENSE', pk.jassub.get('package/LICENSE') || '');
   for (const f of ['src/abslink.js', 'src/types.js', 'adapters/w3c.js']) put('deps/abslink/' + f, noMap(pk.abslink.get('package/' + f).toString('utf8')));
-  put('deps/abslink/LICENSE', pk.abslink.get('package/LICENSE') || 'MIT');
+  // The licence a package declares, and its text - or, when it ships none, a note saying which it is.
+  const declared = (name) => {
+    try { return JSON.parse(pk[name].get('package/package.json').toString('utf8')).license || 'see the package'; } catch (e) { return 'see the package'; }
+  };
+  const licence = (name, url) => pk[name].get('package/LICENSE')
+    || (name + ' is licensed ' + declared(name) + ', as its package.json declares; the package carries no licence text.\n' + url + '\n');
+  put('deps/abslink/LICENSE', licence('abslink', 'https://github.com/ThaUnknown/abslink'));
   put('deps/lfa-ponyfill/index.js', noMap(pk['lfa-ponyfill'].get('package/index.js').toString('utf8')));
-  const lfaLic = pk['lfa-ponyfill'].get('package/LICENSE');
-  if (lfaLic) put('deps/lfa-ponyfill/LICENSE', lfaLic);
+  put('deps/lfa-ponyfill/LICENSE', licence('lfa-ponyfill', 'https://github.com/ThaUnknown/lfa-ponyfill'));
   put('LICENSES.txt', 'jassub ' + PINS.jassub.version + ': LGPL-2.1-or-later AND (FTL OR GPL-2.0-or-later) AND MIT AND MIT-Modern-Variant AND ISC AND NTP AND Zlib AND BSL-1.0\n'
     + '(the wasm contains libass, FreeType, FriBidi, HarfBuzz and their dependencies; sources: https://github.com/ThaUnknown/jassub)\n'
-    + 'abslink ' + PINS.abslink.version + ': MIT; lfa-ponyfill ' + PINS['lfa-ponyfill'].version + ': MIT\n');
-  fs.writeFileSync(MARK, JSON.stringify(PINS, null, 2));
+    + 'abslink ' + PINS.abslink.version + ': ' + declared('abslink') + '; lfa-ponyfill ' + PINS['lfa-ponyfill'].version + ': '
+    + declared('lfa-ponyfill') + '\n');
+  fs.writeFileSync(MARK, JSON.stringify({ ...PINS, layout: LAYOUT }, null, 2));
   console.log('[jassub] ' + PINS.jassub.version + ' laid out in ' + DIR);
 }
 

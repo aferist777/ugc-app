@@ -11,7 +11,8 @@
      - a thumbnail of a shipped preset, and a 1K preview of a shipped mannequin - filed in the
        library's cache/poses/, and removed again at the end if this run made it;
      - the settings view: no secret and no retired key reaches the page;
-     - the routes that were removed still answer 404.
+     - the routes that were removed still answer 404;
+     - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js).
    It spends nothing: no request here starts a generation or a render.
 
    Exit code 1 on a 5xx, a network error, a leaked key, or a removed route that answers. A 4xx on
@@ -52,7 +53,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/captions/pages.js', '/js/captions/preset-use.js', '/js/merge-v3/lib-views.js',
                  '/js/merge-v3/captions-view.js', '/css/mv3-captions.css',
                  // speech recognition on this computer, Admin -> This computer (phase K1b)
-                 '/js/admin-local.js'];
+                 '/js/admin-local.js',
+                 // Admin -> Thanks: the repositories the app is built on
+                 '/js/admin-thanks.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -171,6 +174,14 @@ function getRoutes() {
     if (where !== to) { failed++; console.log(`!! ${from} leads to "${where}", not ${to}`); }
   }
   console.log(`redirects: ${REDIRECTS.length} checked`);
+
+  // A library added to package.json gets its line on Admin -> Thanks in the same change.
+  const pkg = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'package.json'), 'utf8'));
+  const thanked = fs.readFileSync(path.join(APP_DIR, 'public', 'js', 'admin-thanks.js'), 'utf8');
+  const deps = Object.keys(Object.assign({}, pkg.dependencies, pkg.devDependencies));
+  const unthanked = deps.filter(d => !thanked.includes('npm: ' + JSON.stringify(d)));
+  if (unthanked.length) { failed++; console.log('!! not on Admin -> Thanks: ' + unthanked.join(', ')); }
+  console.log(`thanks: ${deps.length - unthanked.length}/${deps.length} dependencies thanked`);
 
   process.exitCode = failed ? 1 : 0;
 })();
