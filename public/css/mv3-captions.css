@@ -1,0 +1,80 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   MERGE — "LIBRARY / captions": the preset tiles (js/merge-v3/captions-view.js, phase K6).
+
+   The panel's third view: while captions are picked on the timeline and the tiles are open, the
+   preset styles fill the panel left of the settings strip (#mv3-over keeps its 350px on the right).
+   The header reads "LIBRARY / captions" - "Library" lets the pick go - and the shelf's own controls
+   give way, as they do for the chat.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.mv3-cap{ display:none; flex:1 1 auto; min-height:0; min-width:0; flex-direction:column;
+  margin-right:min(350px, 100%); background:var(--bg) }
+#mv3-library.is-captions .mv3-cap{ display:flex }
+.mv3-col.is-collapsed .mv3-cap{ display:none !important }
+#mv3-library.is-captions .mv3-panel-body,
+#mv3-library.is-captions .mv3-libstatus,
+#mv3-library.is-captions .mv3-pc,
+#mv3-library.is-captions #mv3-pc-head,
+#mv3-library.is-captions #mv3-lib-cat,
+#mv3-library.is-captions .mv3-seg{ display:none !important }
+
+/* The categories, and how far the making is. */
+.mv3-cap-top{ flex:0 0 auto; padding:8px 10px 6px; border-bottom:1px solid var(--border-soft) }
+.mv3-cap-cats{ display:flex; flex-wrap:wrap; gap:4px }
+.mv3-cap-cat{
+  height:22px; padding:0 8px; border:1px solid var(--border); border-radius:999px;
+  background:var(--surface-2); color:var(--muted); cursor:pointer;
+  font:700 10px/20px var(--font); letter-spacing:.03em;
+}
+.mv3-cap-cat:hover{ color:var(--ink) }
+.mv3-cap-cat.is-on{ border-color:var(--primary); color:var(--ink); background:var(--primary-soft) }
+.mv3-cap-n{ font-weight:600; opacity:.6 }
+.mv3-cap-status{ margin-top:6px; font:600 10px/1.3 var(--font); color:var(--muted) }
+.mv3-cap-status[hidden]{ display:none }
+
+/* The tiles: 9:16, 150-216px, as many columns as fit. */
+.mv3-cap-grid{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 216px)); gap:10px 8px;
+  align-content:start; justify-content:start;
+}
+.mv3-cap-tile{
+  display:flex; flex-direction:column; gap:4px; padding:0; border:0; background:none; cursor:pointer;
+  text-align:left; min-width:0;
+}
+.mv3-cap-tile[hidden]{ display:none }
+.mv3-cap-box{
+  position:relative; aspect-ratio:9 / 16; overflow:hidden; border-radius:var(--r-xs);
+  border:1px solid var(--border); background:#1d2027;
+  display:flex; align-items:flex-end; justify-content:center;
+}
+.mv3-cap-tile:hover .mv3-cap-box{ border-color:var(--muted) }
+.mv3-cap-tile.is-on .mv3-cap-box{ border-color:var(--primary); box-shadow:0 0 0 2px var(--primary) }
+.mv3-cap-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none }
+/* Until the loop is made: the preset's name in its own font and colour, low on the frame. */
+.mv3-cap-ph{
+  margin:0 6px 22%; font-size:15px; line-height:1.1; text-align:center;
+  text-shadow:0 0 2px #000, 0 0 4px #000; overflow-wrap:anywhere;
+}
+.mv3-cap-box.is-ready .mv3-cap-ph{ visibility:hidden }
+.mv3-cap-name{
+  display:flex; align-items:baseline; gap:5px; min-width:0;
+  font:600 10.5px/1.3 var(--font); color:var(--muted);
+}
+.mv3-cap-nm{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.mv3-cap-tile.is-on .mv3-cap-nm{ color:var(--ink) }
+.mv3-cap-ed{ flex:0 0 auto; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--primary) }
+.mv3-cap-ed[hidden]{ display:none }
+.mv3-cap.is-ro .mv3-cap-tile{ opacity:.55; cursor:default }
+
+/* ── The strip's head for words: what the settings apply to, and the preset they wear ── */
+.mv3-cap-head{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 6px }
+.mv3-cap-what{ font:800 11px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink) }
+.mv3-cap-sub{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+.mv3-cap-preset{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:5px 7px;
+  border:1px solid var(--border); border-left:2px solid var(--primary); border-radius:var(--r-xs);
+  background:var(--surface);
+}
+.mv3-cap-based{ font:600 10.5px/1.3 var(--font); color:var(--muted) }
+.mv3-c-marks{ display:inline-flex; gap:4px }

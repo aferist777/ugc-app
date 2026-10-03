@@ -21,6 +21,8 @@
 <link rel="stylesheet" href="css/mv3-imagen.css">
 <!-- The fonts captions are drawn in - the same files the render uses (phase K5). -->
 <link rel="stylesheet" href="css/caption-fonts.css">
+<!-- The caption presets beside the settings of the picked captions (js/merge-v3/captions-view.js, phase K6). -->
+<link rel="stylesheet" href="css/mv3-captions.css">
 </head>
 <body>
 
@@ -105,6 +107,8 @@
                project has a conversation (js/merge-v3/picchat.js). -->
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
           <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button" hidden>/ generate image</button>
+          <!-- Third view (phase K6): captions picked on the timeline - "LIBRARY / captions" (js/merge-v3/lib-views.js). -->
+          <span class="mv3-lib-crumb is-on" id="mv3-lib-cap" hidden>/ captions</span>
           <span class="sp"></span>
           <!-- The chat's own buttons, in place of the category and the shelves while it shows. -->
           <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
@@ -129,6 +133,8 @@
         <div class="mv3-panel-body"></div>
         <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
         <div class="mv3-pc" id="mv3-pc"></div>
+        <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
+        <div class="mv3-cap" id="mv3-cap"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,
              so the drop path checks the files itself. -->
         <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>

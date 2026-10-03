@@ -25,7 +25,13 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          removeTrack as removeTrackB, playhead as playheadB,
          stampTrack as stampB, resetTrack as resetTrackB,
          addCaption as addCapB, setCaptionText as setCapTextB,
-         setSubsStyle as setSubsStyleB, setSubsListen as setListenB } from './timeline-b.js';
+         setSubsStyle as setSubsStyleB, setSubsListen as setListenB,
+         setCaptionStyle as setCapStyleB, selectedCaptions as capsB, clearSelection as clearSelB,
+         revealSelection as revealSelB } from './timeline-b.js';
+import * as CapView from './captions-view.js';
+import * as Views from './lib-views.js';
+import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
+import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
 import { LANGS, listenOf } from '../captions/heard.js';
@@ -478,6 +484,18 @@ const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
 // step (K2, the owner's answer 3): a page cut for one font is not a page in another. The list is pages.js's.
 const CUTS = CUT_KEYS;
+const _cuts = (patch) => Object.keys(patch || {}).some(k => CUTS.includes(k));
+
+// What a word does while it is spoken, how a page arrives, how it is cased, what stands behind it (K0's
+// fields, given controls in K6).
+const EFFECTS = [['none', 'none'], ['color', 'colour'], ['box', 'a box'], ['pop', 'pop'], ['bounce', 'jump'],
+  ['sweep', 'sweep'], ['karaoke', 'karaoke']];
+const APPEARS = [['none', 'at once'], ['pop', 'pops in'], ['fade', 'fades in'], ['slide', 'slides up']];
+const CASINGS = [['none', 'as typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
+const BEHIND = [['outline', 'nothing'], ['box', 'a box'], ['boxline', 'box + outline']];
+
+// What a press on a preset tile applies it to - set by whichever strip is painted (render).
+let _capApply = null;
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
 // a place - and differ in exactly one way: where the words come from. So the style half is
@@ -489,7 +507,12 @@ function _blankWordsTrack(host, track) {
   const raw = (track && track.style) || {};
   const st = styleOf(track, fmt);
   const isSubs = track.kind === 'subs';
-  const set = (patch) => setSubsStyleB(track.id, patch, isSubs && Object.keys(patch).some(k => CUTS.includes(k)));
+  const set = (patch) => setSubsStyleB(track.id, patch, isSubs && _cuts(patch));
+  // A preset REPLACES the lane's style (every field - the owner's answer 1); a subtitle lane is cut again.
+  const apply = (id) => { const s = presetStyle(id); if (s) setSubsStyleB(track.id, s, isSubs); };
+  const pagesNow = (track.clips || []).filter(isHeard).length;
+  _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : ''));
+  _presetLine(host, raw, () => apply(raw.preset));
 
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
@@ -551,27 +574,6 @@ function _blankWordsTrack(host, track) {
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-
-  host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
-  // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
-  // thing after the format changes, which a number of pixels would not.
-  host.appendChild(C.row('Nudge', C.slider({
-    min: -0.30, max: 0.30, step: 0.01, value: +st.ty || 0,
-    fmt: (v) => (Math.abs(v) < 0.005 ? 'none' : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '%'),
-    onChange: (v) => set({ ty: v }),
-  })));
-
-  // SIZE AND WORDS PER LINE ARE THE FORMAT'S until they are touched. A tall frame is a column:
-  // eight words across it is a paragraph in a shoe box. Both controls say "auto" while nobody
-  // has chosen, and stop following the format the moment somebody does.
-  const autoS = raw.sizeAuto !== false;
-  host.appendChild(C.row('Size', C.pair(
-    C.slider({ min: 20, max: 120, step: 1, value: st.size,
-               fmt: (v) => v + (autoS ? ' (auto)' : ''),
-               onChange: (v) => set({ size: v, sizeAuto: false }) }),
-    C.toggleNamed('auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(fmt) } : { sizeAuto: false }),
-                  'Let the format choose the size'),
-  )));
   // AT ONCE, not at the next transcription. The words and their timings are on the lane
   // already, so a new page length is a re-cut of what is here - and a slider that only took
   // effect the next time you paid to listen would be a slider you could not judge. The rules
@@ -604,50 +606,160 @@ function _blankWordsTrack(host, track) {
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
+  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, typedOnly: !isSubs });
 
+  // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
+  const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
+  if (own.length) {
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    host.appendChild(C.row('', C.button(own.length + (own.length === 1 ? ' line has' : ' lines have') + ' its own style - reset',
+      () => setCapStyleB(own.map(c => c.id), null, { cut: isSubs }),
+      { title: 'Puts those lines back on the lane\'s style' })));
+  }
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  _presetsToggle(host);
+  _laneRemove(host, track);
+  return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit() };
+}
+
+// ── The settings of words, shared by a lane, one caption and several (K6) ────
+// The head: what the settings below apply to - the owner's addition: a lane, this line, or several.
+function _capHead(host, title, sub) {
+  const h = _el('div', 'mv3-cap-head');
+  h.appendChild(_el('span', 'mv3-cap-what', title));
+  if (sub) h.appendChild(_el('span', 'mv3-cap-sub', sub));
+  host.appendChild(h);
+}
+
+// "based on Red Pop · edited" and the way back to it - a style made from a preset says which.
+function _presetLine(host, style, back) {
+  const id = style && style.preset;
+  const name = id ? presetName(id) : '';
+  if (!name) return;
+  const edited = editedKeys(style).length > 0;
+  const row = _el('div', 'mv3-cap-preset');
+  row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
+  if (edited) {
+    const b = C.button('back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
+    b.disabled = !Store.canEdit();
+    row.appendChild(b);
+  }
+  host.appendChild(row);
+}
+
+// The tiles beside the settings, or not - remembered (captions-view.js).
+function _presetsToggle(host) {
+  host.appendChild(C.row('', C.toggleNamed('presets', CapView.tilesOpen(), (on) => { CapView.setTilesOpen(on); render(); },
+    'The preset styles beside these settings')));
+  if (_narrow && CapView.tilesOpen()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.'));
+}
+
+// Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
+// size is still the format's (a caption has no "auto" of its own); `typedOnly` - no word timings here.
+function _styleRows(host, st, set, o) {
+  host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
+  // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
+  // thing after the format changes, which a number of pixels would not.
+  host.appendChild(C.row('Nudge', C.slider({
+    min: -0.30, max: 0.30, step: 0.01, value: +st.ty || 0,
+    fmt: (v) => (Math.abs(v) < 0.005 ? 'none' : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '%'),
+    onChange: (v) => set({ ty: v }),
+  })));
+  // SIZE IS THE FORMAT'S until it is touched (a lane's): "auto" while nobody has chosen. Up to 200, as a
+  // style allows - presets go to 170, and a slider stopping at 120 wrote 120 over them.
+  const autoS = !!o.autoS;
+  const size = C.slider({ min: 20, max: 200, step: 1, value: st.size, fmt: (v) => v + (autoS ? ' (auto)' : ''),
+    onChange: (v) => set({ size: v, sizeAuto: false }) });
+  host.appendChild(C.row('Size', o.autoS === undefined ? size : C.pair(size,
+    C.toggleNamed('auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
+      'Let the format choose the size'))));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
   // Bold is a choice only where the family ships both weights; a Black or a Bold file is what it is.
   const fontSel = C.select(FONTS, st.font, (v) => set({ font: v }));
-  host.appendChild(C.row('Font', fontOf(st.font).bold === 'style'
-    ? C.pair(fontSel, C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'))
-    : fontSel));
-  host.appendChild(C.row('Colour', isSubs ? C.pair(
-    C.color(st.primary, (v) => set({ primary: v })),
-    C.toggleNamed('karaoke', st.effect === 'karaoke', (on) => set({ effect: on ? 'karaoke' : 'none' }),
-                  'Colour each word as it is spoken'),
-  ) : C.color(st.primary, (v) => set({ primary: v }))));
-  if (isSubs && st.effect === 'karaoke') {
+  const marks = [];
+  if (fontOf(st.font).bold === 'style') marks.push(C.toggleNamed('B', !!st.bold, (on) => set({ bold: on }), 'Bold'));
+  marks.push(C.toggleNamed('I', !!st.italic, (on) => set({ italic: on }), 'Italic'));
+  const markBox = _el('span', 'mv3-c-marks');
+  for (const m of marks) markBox.appendChild(m);
+  host.appendChild(C.row('Font', C.pair(fontSel, markBox)));
+  host.appendChild(C.row('Casing', C.select(CASINGS, st.casing, (v) => set({ casing: v }))));
+  host.appendChild(C.row('Colour', C.color(st.primary, (v) => set({ primary: v }))));
+  // What the spoken word does - and the colour it is done in.
+  host.appendChild(C.row('Spoken', C.select(EFFECTS, st.effect, (v) => set({ effect: v }))));
+  if (['color', 'box', 'pop', 'bounce'].includes(st.effect)) {
+    host.appendChild(C.row('Its colour', C.color(st.highlight, (v) => set({ highlight: v }))));
+  } else if (st.effect === 'karaoke' || st.effect === 'sweep') {
     host.appendChild(C.row('Not yet', C.color(st.secondary, (v) => set({ secondary: v }))));
-    host.appendChild(C.hint('The colour a word wears before it is spoken. Only lines made by '
-      + 'transcription carry word timings - a line you type flips as one piece.'));
   }
+  if (o.typedOnly && st.effect !== 'none') {
+    host.appendChild(C.hint('A typed line has no word timings: the spoken word plays on heard captions only.'));
+  }
+  host.appendChild(C.row('Arrives', C.select(APPEARS, st.appear, (v) => set({ appear: v }))));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(C.row('Outline', C.pair(
-    C.slider({ min: 0, max: 8, step: 0.5, value: +st.outline || 0,
+    C.slider({ min: 0, max: 10, step: 0.5, value: +st.outline || 0,
                fmt: (v) => (v > 0 ? v + ' px' : 'none'), onChange: (v) => set({ outline: v }) }),
     C.color(st.outlineColor, (v) => set({ outlineColor: v })),
   )));
-  host.appendChild(C.row('Behind', C.select([['outline', 'nothing'], ['box', 'a box']],
-    st.borderStyle, (v) => set({ borderStyle: v, backAlpha: v === 'box' && !(+st.backAlpha) ? 0.6 : st.backAlpha }))));
-  if (st.borderStyle === 'box') {
+  host.appendChild(C.row('Shadow', C.pair(
+    C.slider({ min: 0, max: 10, step: 0.5, value: +st.shadow || 0,
+               fmt: (v) => (v > 0 ? v + ' px' : 'none'), onChange: (v) => set({ shadow: v }) }),
+    C.color(st.shadowColor, (v) => set({ shadowColor: v })),
+  )));
+  if ((+st.shadow || 0) > 0) {
+    host.appendChild(C.row('Its opacity', C.slider({ min: 0, max: 1, step: 0.05, value: st.shadowAlpha == null ? 0.75 : +st.shadowAlpha,
+      fmt: C.pct, onChange: (v) => set({ shadowAlpha: v }) })));
+  }
+  host.appendChild(C.row('Behind', C.select(BEHIND, st.borderStyle,
+    (v) => set({ borderStyle: v, backAlpha: v !== 'outline' && !(+st.backAlpha) ? 0.6 : st.backAlpha }))));
+  if (st.borderStyle === 'box' || st.borderStyle === 'boxline') {
     host.appendChild(C.row('Box', C.pair(
       C.slider({ min: 0, max: 1, step: 0.05, value: +st.backAlpha || 0, fmt: C.pct,
                  onChange: (v) => set({ backAlpha: v }) }),
       C.color(st.backColor, (v) => set({ backColor: v })),
     )));
   }
+}
 
+// SEVERAL CAPTIONS (K6): picked by a band, on one lane of words or two - one look for them all, as
+// their own style; anything else picked with them and this is not shown (_renderMany is).
+function _renderCaptions(host, items) {
+  const tl = Store.timeline();
+  const fmt = (tl && tl.format) || '9:16';
+  const ids = items.map(x => x.clip.id);
+  const lanes = [...new Set(items.map(x => x.track.name || x.track.kind))];
+  _capHead(host, items.length + ' lines', 'on ' + lanes.join(' and '));
+  const first = items[0];
+  if (first.clip.style) _presetLine(host, first.clip.style, () => setCapStyleB(ids, presetStyle(first.clip.style.preset), { replace: true, cut: true }));
+  const st = styleOf(first.track, fmt, first.clip);
+  const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
   host.appendChild(_el('div', 'mv3-c-sep'));
-  host.appendChild(C.hint(isSubs
-    ? 'One style for the lane: these are one set of subtitles, and a caption that looked '
-      + 'different from the rest would read as a mistake.'
-    : 'One style for the lane. A second look - a title over a caption - is what the other text '
-      + 'lane is for.'));
-  _laneRemove(host, track);
+  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)) });
+  if (items.some(x => x.clip.style)) {
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
+      { title: 'These lines wear their lane\'s style again' })));
+  }
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  _presetsToggle(host);
+  host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
+    { danger: true, title: 'Also on the Delete key' })));
+  const s = first.clip.style || null;
+  return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
+    apply: (id) => { const p = presetStyle(id); if (p) setCapStyleB(ids, p, { replace: true, cut: true }); }, readOnly: !Store.canEdit() };
 }
 
 // A caption: words and when. No length field, the same as every other clip here - the edges
 // set the timing, and they also say which part of the sound the line belongs to, which a
 // number typed into a box cannot.
 function _blankCaption(host, track, clip) {
+  const tl = Store.timeline();
+  const fmt = (tl && tl.format) || '9:16';
+  const own = !!(clip.style && Object.keys(clip.style).length);
+  _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
+  if (own) _presetLine(host, clip.style, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }));
   host.appendChild(C.textarea(clip.name || '', (v) => setCapTextB(track.id, clip.id, v), 3));
   host.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
     + 'stays up.'));
@@ -659,10 +771,25 @@ function _blankCaption(host, track, clip) {
       + 'piece from then on.'));
   }
 
+  // ITS OWN LOOK (the owner's addition, 2026-10-03): what is changed here is this line's, over its lane's.
   host.appendChild(_el('div', 'mv3-c-sep'));
+  const heard = isHeard(clip);
+  _styleRows(host, styleOf(track, fmt, clip), (patch) => setCapStyleB([clip.id], patch, { cut: heard && _cuts(patch) }),
+    { fmt, typedOnly: !heard });
+  if (own) {
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], null, { cut: heard }),
+      { title: 'This line wears its lane\'s style again' })));
+  }
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  _presetsToggle(host);
   host.appendChild(C.row('', C.button('Remove this line', () => removeB(track.id, clip.id), {
     danger: true, title: 'Takes the caption off the lane',
   })));
+  const s = own ? clip.style : null;
+  return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
+    apply: (id) => { const p = presetStyle(id); if (p) setCapStyleB([clip.id], p, { replace: true, cut: heard }); },
+    readOnly: !Store.canEdit() };
 }
 
 // NO HEADER, and no description of the lane under it. Which lane is open is visible on the
@@ -705,8 +832,33 @@ function _renderMany(host, n) {
     { danger: true, title: 'Also on the Delete key' })));
 }
 
+// THE CAPTIONS VIEW FOLLOWS THE PICK (K6): up while captions are picked and the tiles are open, gone
+// with the pick - lib-views.js puts the shelf or the chat back, and the room with it.
 function render() {
   if (_held) { _pending = true; return; }
+  const cap = _render();
+  const on = !!cap && CapView.tilesOpen() && !_narrow;
+  _capApply = cap ? cap.apply : null;
+  if (on) CapView.show(cap); else CapView.hide();
+  const was = Views.isCaptions();
+  Views.setCaptions(on);
+  // The timeline has just shrunk under the pick: the picked lane back in view, the lit tile too.
+  if (on && !was) requestAnimationFrame(() => requestAnimationFrame(() => { revealSelB(); CapView.revealLit(); _roomCheck(); }));
+}
+
+// ROOM FOR THE TILES (K6): the strip keeps its 350px and the tiles want 170 more beside it. A window that
+// cannot give the panel that even with the corner moved shows the strip alone, as before K6 - said under
+// "presets" - until the window is made wider.
+const CAP_ROOM = 350 + 170;
+let _narrow = false;
+function _roomCheck() {
+  const lib = document.getElementById('mv3-library');
+  if (!lib || !Views.isCaptions()) return;
+  if (lib.getBoundingClientRect().width < CAP_ROOM) { _narrow = true; render(); }
+}
+window.addEventListener('resize', () => { if (_narrow) { _narrow = false; render(); } });
+
+function _render() {
   const host = _host();
   const over = _overHost();
   // Both are rebuilt wholesale, so a music preview would keep playing with its stop button
@@ -738,7 +890,12 @@ function render() {
   // the band - and settings for four clips at once have no honest meaning, so what the strip
   // offers is the one thing that does: getting rid of them.
   const many = multiB();
-  if (many > 1) { _over(true); return _renderMany(over, many); }
+  if (many > 1) {
+    _over(true);
+    const caps = capsB();
+    if (caps && caps.length === many) return _renderCaptions(over, caps);
+    return _renderMany(over, many);
+  }
   const one = oneB();
   if (one) { _over(true); return _renderBlankClip(over, one); }
   const tr = trackB();
@@ -763,6 +920,9 @@ export function initInspector() {
   });
   ScenPick.onChange(render);
   WK.onChange(render);
+  // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
+  CapView.onApply((id) => { if (_capApply) _capApply(id); });
+  Views.onBack('captions', () => clearSelB());
   // The job of the open project, as it goes. Repainted only while the subtitle lane itself is what
   // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
   Listen.init();

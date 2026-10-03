@@ -50,6 +50,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/captions/heard.js', '/js/merge-v3/listen.js',
                  // caption presets in the Library panel (phase K6)
                  '/js/captions/pages.js', '/js/captions/preset-use.js', '/js/merge-v3/lib-views.js',
+                 '/js/merge-v3/captions-view.js', '/css/mv3-captions.css',
                  // speech recognition on this computer, Admin -> This computer (phase K1b)
                  '/js/admin-local.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
