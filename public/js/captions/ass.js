@@ -37,6 +37,7 @@ import { resolveStyle, withAuto, anchorOf, cased } from './style.js';
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
+import { spells } from './words.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -110,13 +111,8 @@ export function layered(st) {
   return st.effect === 'box' || st.effect === 'pop' || st.effect === 'bounce' || (BOXY(st) && st.effect !== 'none');
 }
 
-// The words, while they still say the caption's text; a line edited by hand has none to time.
-const _norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-function _wordsOf(c) {
-  const w = Array.isArray(c.words) && c.words.length ? c.words : null;
-  if (!w) return null;
-  return _norm(w.map(x => x.w).join(' ')) === _norm(c.name) ? w : null;
-}
+// The words, while they still spell the caption's text (words.js); a line rewritten before K10 has none to time.
+const _wordsOf = (c) => (spells(c.words, c.name) ? c.words : null);
 
 // How the page arrives, repeated in every word's block (\r would undo it from the second word on).
 // \fad and \move are the event's and go once (_place).

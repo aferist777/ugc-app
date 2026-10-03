@@ -130,14 +130,16 @@ const WORD_MAX = 1.5;                   // a word held longer than this is a tim
  * @param segments  [{ start, end, no_speech_prob, avg_logprob, compression_ratio }] in timeline seconds
  * @param opts.gaps   [[from, to]] where the timeline plays nothing (silencesOf)
  * @param opts.typed  [[from, to]] the lines typed by hand - they own their stretch
- * @returns { words, dropped: { noise, silence, typed } }
+ * @param opts.fixed  [[from, to]] the heard lines a person corrected (K10) - they own theirs too
+ * @returns { words, dropped: { noise, silence, typed, fixed } }
  */
 export function cleanWords(words, segments, opts) {
   const gaps = (opts && opts.gaps) || [];
   const typed = (opts && opts.typed) || [];
+  const fixed = (opts && opts.fixed) || [];
   const noisy = (segments || []).filter(NOISE).map(g => [+g.start || 0, +g.end || 0]);
   const inside = (spans, t) => spans.some(([a, b]) => t >= a && t < b);
-  const dropped = { noise: 0, silence: 0, typed: 0 };
+  const dropped = { noise: 0, silence: 0, typed: 0, fixed: 0 };
   const kept = [];
   for (const w0 of (words || [])) {
     const text = String((w0 && (w0.text != null ? w0.text : w0.word)) || '').trim();
@@ -156,6 +158,7 @@ export function cleanWords(words, segments, opts) {
     const into = gaps.find(([a]) => start < a && end > a + 0.05);
     if (into) end = into[0];
     if (inside(typed, (start + end) / 2)) { dropped.typed++; continue; }
+    if (inside(fixed, (start + end) / 2)) { dropped.fixed++; continue; }
     kept.push({ text, start, end });
   }
   kept.sort((a, b) => a.start - b.start);

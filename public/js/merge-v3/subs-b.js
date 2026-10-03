@@ -11,6 +11,7 @@ import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, r
   from '../captions/style.js';
 import { cssWeight, fontOf } from '../captions/fonts.js';
 import { fitText, tokensOf } from '../captions/pages.js';
+import { spells } from '../captions/words.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -125,7 +126,8 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     // rule says where here - and a page holding a word wider than a line is drawn smaller, as there. A
     // line break typed into a caption is a break in both.
     // Typed text is broken in each paragraph it was typed in, at breakable blanks only (review K2).
-    const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
+    // The words only while they spell the text, as the file has them (ass.js).
+    const words = st.effect === 'karaoke' && spells(c.words, c.name) ? c.words : null;
     const paras = words ? [words.map(w => String(w.w))] : String(c.name).split('\n').map(tokensOf);
     let counts = [];
     if (paras.some(p => p.length)) {

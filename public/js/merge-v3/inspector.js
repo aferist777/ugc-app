@@ -36,7 +36,8 @@ import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
 import { LANGS, listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
-import { askDelete } from './ask.js';
+import { askDelete, note } from './ask.js';
+import { spells, textOf, correctedCount } from '../captions/words.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as ScenPick from './scen-pick.js';
 import * as WK from './workshop.js';
@@ -521,20 +522,23 @@ function _blankWordsTrack(host, track) {
     const v = Listen.view(Store.key());
     const gen = C.button(v.busy && !v.again ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
       title: 'Listens to the audible sound - the main audio lane first, music beds and reversed clips left '
-        + 'out - and lays the words on this lane. Lines you typed stay as they are.',
+        + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are.',
     });
     gen.disabled = v.busy || !Store.key() || !Store.canEdit();
     host.appendChild(C.row('', C.pair(gen, add)));
     // BACK TO WHAT WAS HEARD (K2): the pages laid again from the answers this project keeps - the hand
     // cuts, trims and word edits of the heard lines go, the typed lines stay; nothing is asked or paid.
     if (v.heard) {
+      // The words corrected by hand go with it (K10, the owner's answer 1) - said before the press.
+      const fixed = (track.clips || []).reduce((n, c) => n + correctedCount(c), 0);
       const back = C.button(v.again ? 'Re-laying...' : 'back to what was heard', () => Listen.start({ stored: true }), {
-        title: 'Lays the heard lines again exactly as they were first heard and cut - your cuts and trims of '
-          + 'them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound has changed '
-          + 'since, Generate from the sound hears the new part.',
+        title: 'Lays the heard lines again exactly as they were first heard and cut - your cuts, trims and '
+          + 'corrections of them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound '
+          + 'has changed since, Generate from the sound hears the new part.',
       });
       back.disabled = v.busy || !Store.canEdit();
       host.appendChild(C.row('', back));
+      if (fixed) host.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with it.'));
     }
     // Telling the listener the language helps on a short or quiet opening, where it can guess another one.
     const how = listenOf(track) || {};
@@ -769,15 +773,31 @@ function _blankCaption(host, track, clip) {
   const own = !!(clip.style && Object.keys(clip.style).length);
   _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
   if (own) _presetLine(host, clip.style, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }));
-  host.appendChild(C.textarea(clip.name || '', (v) => setCapTextB(track.id, clip.id, v), 3));
+  const area = C.textarea(clip.name || '', (v) => {
+    const r = setCapTextB(track.id, clip.id, v);
+    if (r && r.why) note(area, 'The text was not changed.', r.why);
+  }, 3);
+  host.appendChild(area);
   host.appendChild(C.hint('Drag the caption to move it, and its edges to change how long it '
     + 'stays up.'));
 
-  if (Array.isArray(clip.words) && clip.words.length) {
+  if (isHeard(clip)) {
+    // A HEARD LINE KEEPS ITS TIMING WHEN IT IS REWRITTEN (K10): the words that stay keep their moments, new
+    // ones share the time of what they replace (words.js).
     host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(_fact('Timed', clip.words.length + ' words, from the transcription'));
-    host.appendChild(C.hint('Rewriting the line drops those timings, and it colours as one '
-      + 'piece from then on.'));
+    const fixed = correctedCount(clip);
+    host.appendChild(_fact('Timed', clip.words.length + ' words' + (fixed ? ' · ' + fixed + ' corrected' : '')));
+    if (spells(clip.words, clip.name)) {
+      host.appendChild(C.hint('Rewrite the line and the words keep their moments - new words share the time '
+        + 'of the ones they replace. A corrected line stays when the captions are generated again.'));
+    } else {
+      // Rewritten before K10: its words still say what was heard, and it is drawn as one piece until timed.
+      host.appendChild(C.hint('The text was changed by hand; its words still say: ' + textOf(clip.words)));
+      host.appendChild(C.row('', C.button('time the text', () => {
+        const r = setCapTextB(track.id, clip.id, clip.name || '');
+        if (r && r.why) note(area, 'Not timed.', r.why);
+      }, { title: 'Gives the words of the text the moments of the words heard there' })));
+    }
   }
 
   // ITS OWN LOOK (the owner's addition, 2026-10-03): what is changed here is this line's, over its lane's.

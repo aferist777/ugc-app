@@ -32,7 +32,8 @@ import { askDelete, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
-import { recutClips, recutSome } from '../captions/pages.js';
+import { recutClips, recutSome, timedWords } from '../captions/pages.js';
+import { retext } from '../captions/words.js';
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 
@@ -638,10 +639,11 @@ function _endDrag() {
             // A CAPTION'S WORDS KEEP THEIR MOMENTS (phase K0): their times run from the caption's
             // start, so moving the start moved every word by as much - the highlight ran late after a
             // trim. They are shifted back, and a word now before the start is dropped.
-            if (Array.isArray(c.words) && c.words.length) {
+            if (isHeard(c)) {
+              // A line rewritten before K10 is timed for its text first - the person's text is what stays.
+              const words = timedWords(c);
               const sh = Math.round(((+d.start || 0) - (+c.start || 0)) * 100) / 100;
-              const had = c.words.length;
-              const left = c.words
+              const left = words
                 .map(w => ({ ...w, s: Math.round(((+w.s || 0) - sh) * 100) / 100, e: Math.round(((+w.e || 0) - sh) * 100) / 100 }))
                 .filter(w => w.e > 0)
                 .map(w => ({ ...w, s: Math.max(0, w.s) }));
@@ -649,13 +651,24 @@ function _endDrag() {
                 // Every word cut off: what is left is the text, as typed.
                 c.words = null;
               } else {
-                c.words = left;
                 // Words cut off leave the text too, as a split does - the text and its words say the same.
-                if (left.length < had) c.name = left.map(w => w.w).join(' ');
+                if (left.length < words.length || words !== c.words) c.name = left.map(w => w.w).join(' ');
+                c.words = left;
               }
             }
             c.start = d.start;
             c.trimIn = d.words ? 0 : d.trimIn;
+          } else if (isHeard(c) && (+d.dur || 0) < (+c.dur || 0)) {
+            // THE BACK EDGE IS THE FRONT'S MIRROR (K10): a word that now starts past the end goes, from the
+            // words and from the text, and one the edge cuts through ends at the edge.
+            const words = timedWords(c);
+            const end = Math.round((+d.dur || 0) * 100) / 100;
+            const left = words.filter(w => (+w.s || 0) < end).map(w => ((+w.e || 0) > end ? { ...w, e: end } : w));
+            if (!left.length) c.words = null;
+            else {
+              if (left.length < words.length || words !== c.words) c.name = left.map(w => w.w).join(' ');
+              c.words = left;
+            }
           }
           c.dur = d.dur;
           return;
@@ -1038,7 +1051,7 @@ export function canSplit() {
   if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: 'Put the playhead inside the selected clip' };
   // A heard caption is cut BETWEEN its words: a half with none would keep the whole text as a typed copy
   // of the page - and a page stays up past its last word, so that was most of its tail (review K2).
-  const words = Array.isArray(one.clip.words) && one.clip.words.length ? one.clip.words : null;
+  const words = isHeard(one.clip) ? timedWords(one.clip) : null;
   if (words) {
     const left = _playhead - s;
     if (!words.some(w => (+w.s) >= left) || !words.some(w => (+w.s) < left)) {
@@ -1073,10 +1086,13 @@ export function splitAtPlayhead() {
         b.trimIn = _r2((+c.trimIn || 0) + left * sp);
       }
       c.dur = left;
-      if (Array.isArray(c.words) && c.words.length) {
-        const w0 = c.words.filter(w => (+w.s) < left);
+      if (isHeard(c)) {
+        // A line rewritten before K10 is timed for its text first: the halves carry the person's words.
+        const words = timedWords(c);
+        // A word ends where its half does (K10): the left half's last word used to run on past the cut.
+        const w0 = words.filter(w => (+w.s) < left).map(w => ((+w.e) > left ? { ...w, e: left } : w));
         // The whole word, mark and all (K2: the right half used to lose `k`).
-        const w1 = c.words.filter(w => (+w.s) >= left)
+        const w1 = words.filter(w => (+w.s) >= left)
           .map(w => ({ ...w, s: _r2(Math.max(0, (+w.s) - left)), e: _r2(Math.max(0, (+w.e) - left)) }));
         c.words = w0.length ? w0 : null;
         b.words = w1.length ? w1 : null;
@@ -1494,18 +1510,48 @@ export function setSubsListen(trackId, patch) {
   });
 }
 
-/** One caption's own text. Timing is the edges, the same as everything else on the timeline. */
+/**
+ * One caption's own text. A TYPED line takes it as it is. A HEARD line keeps its timing (phase K10): the
+ * words that stay keep their moments, a word spelled otherwise the moment of its place, new words share
+ * the time of what they replace (words.js retext) - they used to be dropped, and the line coloured as one
+ * piece. An empty heard line is taken off the lane, in the same step. @returns null, or { why } when the
+ * text cannot be timed (no room in the line, too many words) - nothing is changed then.
+ */
 export function setCaptionText(trackId, clipId, text) {
+  let why = null;
   Store.mutate(tl => {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c) return;
-    c.name = String(text || '').slice(0, 400);
-    // The words carried their own timings for the karaoke flip, and they described the text
-    // that WAS there. Rewritten by hand, they describe nothing - so they go, and the line
-    // colours as one piece.
-    c.words = null;
+    if (!isHeard(c)) { c.name = String(text || '').slice(0, 400); return; }
+    const r = retext(c.words, text, c.dur);
+    if (r.why) { why = r.why; return; }
+    if (r.remove) { t.clips = t.clips.filter(x => x !== c); return; }
+    c.words = r.words;
+    c.name = r.name;
   });
+  return why ? { why } : null;
+}
+
+/**
+ * A heard caption's words changed by one of the word editor's operations (words.js - replaceAt, cutAt...,
+ * K10b): `op(words, clip)` returns { words, name }, { remove: true } or { why }. ONE mutation, one step to
+ * undo; nothing is changed when it refuses. @returns null, or { why }.
+ */
+export function editWords(trackId, clipId, op) {
+  let why = null;
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    const c = t && (t.clips || []).find(x => x.id === clipId);
+    if (!c || !isHeard(c)) { why = 'That line is not on the lane any more'; return; }
+    // A line rewritten before K10 is timed for its text first: the operation works on what is shown.
+    const r = op(timedWords(c), c);
+    if (!r || r.why) { why = (r && r.why) || 'That cannot be done'; return; }
+    if (r.remove) { t.clips = t.clips.filter(x => x !== c); return; }
+    c.words = r.words;
+    c.name = r.name;
+  });
+  return why ? { why } : null;
 }
 
 /**

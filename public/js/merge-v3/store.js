@@ -24,6 +24,7 @@
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 import { recutClips, recutWithLooks, lookOf, CUT_KEYS } from '../captions/pages.js';
+import { isCorrected } from '../captions/words.js';
 
 const SAVE_DEBOUNCE = 500;
 
@@ -318,6 +319,9 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
     && (!b.has(c.id) || isHeard(b.get(c.id)))) : [];
   const over = (c) => mineTyped.some(k => (+c.start || 0) < (+k.start || 0) + (+k.dur || 0)
     && (+k.start || 0) < (+c.start || 0) + (+c.dur || 0));
+  // A heard line I CORRECTED (K10) keeps its timed words, and it is mine as a typed line is: one their lay
+  // never saw stays, the very object, and their words under it go one by one (_mergeBlank cuts around it).
+  const fixed = subs ? new Set(_mineFixed(base, mine, theirs).map(c => c.id)) : new Set();
   // THEIR LAY REPLACED THE HEARD LINES while mine were cut again (review K2): both sides put a new heard set
   // in place of the base's, and keeping both drew every word twice. Their lay wins for the heard lines; a
   // style of mine that changes the cut is applied to their words afterwards (_mergeBlank).
@@ -334,14 +338,17 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
     out.push((inBase && _same(mc, b.get(c.id))) ? c : mc);
   }
   // Anything of mine they have never seen.
-  for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id) && !(relaid && isHeard(c))) out.push(c);
-  // ...and a heard line I retyped that their lay replaced.
+  for (const c of (mine.clips || [])) {
+    if (!t.has(c.id) && !b.has(c.id) && (!(relaid && isHeard(c)) || fixed.has(c.id))) out.push(c);
+  }
+  // ...and a heard line I retyped, or corrected, that their lay replaced.
   for (const c of mineTyped) if (b.has(c.id)) out.push(c);
+  for (const c of (mine.clips || [])) if (fixed.has(c.id) && b.has(c.id)) out.push(c);
   // Start order only where the order means nothing. On a lane whose clips may cover one another
   // the order is the stacking order, and a merge that tidied it would restack the picture as a
   // side effect of another device having saved. Captions are put in time order the moment one of mine
   // was put back among a lay's.
-  if (sortByStart || mineTyped.length) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  if (sortByStart || mineTyped.length || fixed.size) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };
@@ -350,6 +357,16 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
     if (!_same(mine[k], base[k])) merged[k] = mine[k];
   }
   return merged;
+}
+
+// The heard lines I corrected that the server's copy does not have (K10): changed by me since the base, or
+// new (a half of a cut, a page of a re-cut holding a corrected word). One the server has, it has kept - its
+// lay keeps corrected lines - and one I left as it was and the server no longer has, "back to what was
+// heard" took away: that one goes.
+function _mineFixed(base, mine, theirs) {
+  const b = _byId(base.clips), t = _byId(theirs.clips);
+  return (mine.clips || []).filter(c => isHeard(c) && isCorrected(c) && !t.has(c.id)
+    && (!b.has(c.id) || !_same(c, b.get(c.id))));
 }
 
 // Returns the merged timeline plus what arrived from the other device, for the notice.
@@ -395,7 +412,13 @@ function _mergeBlank(base, mine, theirs) {
         looks.push([+c.start || 0, (+c.start || 0) + (+c.dur || 0), lookOf(c)]);
       }
       const cutChanged = CUT_KEYS.some(k => !_same((m.style || {})[k], (bb.style || {})[k]));
-      if (looks.length || cutChanged) recut.push({ lane: merged, looks });
+      // ...or a line I corrected stands among their pages (K10): their words under it go, one by one.
+      const mineFixed = _mineFixed(bb, m, t);
+      const keep = new Set(mineFixed.map(c => c.id));
+      // No corrected line is cut again by the merge - theirs (their lay kept them) neither - unless I changed
+      // how the lane is cut: then theirs are cut my way, as my page cut mine.
+      if (!cutChanged) for (const c of merged.clips) if (isHeard(c) && isCorrected(c)) keep.add(c.id);
+      if (looks.length || cutChanged || mineFixed.length) recut.push({ lane: merged, looks, keep });
     }
     out.push(merged);
   }
@@ -414,7 +437,8 @@ function _mergeBlank(base, mine, theirs) {
   for (const lane of out) {
     const r = recut.find(x => x.lane === lane);
     if (lane.kind !== 'subs' || (!r && !(fmtChanged && (lane.clips || []).some(isHeard)))) continue;
-    const clips = r && r.looks.length ? recutWithLooks(lane, timeline, r.looks, _newId) : recutClips(lane, timeline, _newId);
+    const clips = r && (r.looks.length || r.keep.size) ? recutWithLooks(lane, timeline, r.looks, _newId, r.keep)
+      : recutClips(lane, timeline, _newId);
     if (clips) lane.clips = clips;
   }
   return { timeline, added, removed };
@@ -660,12 +684,17 @@ function _serverOnly(base, theirs) {
     const { clips: yc, ...yf } = y;
     if (!_same(xf, yf)) return null;
     const subs = x.kind === 'subs';
+    // A heard line a person CORRECTED (K10) is the person's while the newer copy still has it - a lay keeps
+    // corrected lines, so only a hand changes one; gone from the newer copy, "back to what was heard" took
+    // it, and that is the server's own doing.
+    const kept = new Set((yc || []).filter(isCorrected).map(c => c.id));
+    const said1 = (c) => subs && isHeard(c) && !kept.has(c.id);
     // The person's cells: on the subtitle lane in any order (a lay puts the lines back in time
     // order), elsewhere as they are - on a video lane the order is which one shows.
-    const own = (list) => (list || []).filter(c => !_isFrag(c) && !(subs && isHeard(c)));
+    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c));
     if (subs ? !_same(byId(own(xc)), byId(own(yc))) : !_same(own(xc), own(yc))) return null;
     if (!_same((xc || []).filter(_isFrag), (yc || []).filter(_isFrag))) frag = true;
-    const said = (list) => (list || []).filter(c => !_isFrag(c) && isHeard(c));
+    const said = (list) => (list || []).filter(c => !_isFrag(c) && said1(c));
     if (subs && !_same(said(xc), said(yc))) heard = true;
   }
   return (frag || heard) ? { frag, heard } : null;

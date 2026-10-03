@@ -92,6 +92,11 @@ function _line(s) {
     if (r.lines && !r.asked && r.language) out.push('Heard as ' + _cap(r.language) + '.');
     const typed = r.dropped && r.dropped.typed;
     if (typed) out.push(_n(typed, 'word', 'words') + ' under your typed lines ' + (typed === 1 ? 'was' : 'were') + ' left out.');
+    // The heard lines a person corrected stay as they are (K10) - and one that no longer looks like what is
+    // heard under it is pointed out, for the person to look at: nothing takes it away by itself.
+    if (r.kept) out.push(_n(r.kept, 'corrected line', 'corrected lines') + ' kept.');
+    if (r.stale) out.push(_n(r.stale, 'corrected line', 'corrected lines') + ' no longer ' + (r.stale === 1 ? 'matches' : 'match')
+      + ' the sound under ' + (r.stale === 1 ? 'it' : 'them') + ' - have a look.');
     if (r.missing && r.missing.length) out.push('Not found, heard as silence: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '...' : '') + '.');
     if (r.moved) out.push('The sound changed while listening - press again to match it.');
     if (r.suspect) out.push('Groq may have heard only part of it - press again to ask once more.');

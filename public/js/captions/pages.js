@@ -28,6 +28,9 @@
 import { resolveStyle, withAuto, renderFrame, autoWordsPerLine } from './style.js';
 import { meter, LINE_MAX } from './measure.js';
 import { isHeard, soundPieces } from './heard.js';
+import { tokensOf, spells, retext } from './words.js';
+
+export { tokensOf };
 
 /** The cut's constants - not settings: the strip offers Words and Lines, nothing else. */
 export const PAGE = {
@@ -117,12 +120,6 @@ export function endsSentence(t, next, gap) {
 const endsClause = (t) => /[,;:—–…-]$|\.\.\.$/u.test(bare(t));
 
 // ── Lines ───────────────────────────────────────────────────────────────────
-/**
- * A typed text's words: split where a line MAY break - never at a no-break space ("50 000", "Иван
- * Петрович" typed with one), which stays inside its word, as libass keeps it (review K2).
- */
-export const tokensOf = (text) => String(text == null ? '' : text).split(/[^\S\u00a0\u202f\u2007]+/).filter(Boolean);
-
 /**
  * Where a page of `tokens` (its words as stored - casing is the style's) breaks into lines in style
  * `st` (resolved, size filled in) on a frame `W` wide: the line counts, top first ([2, 3] = two words,
@@ -245,15 +242,15 @@ export function fixJoins(words, joins) {
 const lookKey = (l) => (l ? JSON.stringify(l) : '');
 
 /**
- * @param words   [{ text, start, end, k?, look? }] in timeline seconds; `look` is the own look of the
- *                caption the word came from: { style?, tx?, ty? }
+ * @param words   [{ text, start, end, k?, h?, look? }] in timeline seconds; `look` is the own look of the
+ *                caption the word came from: { style?, tx?, ty? }; `h` a word a person corrected (K10)
  * @param opts.lane    the lane's style as stored
  * @param opts.format  the timeline's format ('9:16' | '16:9')
  * @param opts.typed   [[from, to]] the lines typed by hand on the lane
  * @param opts.joins   [t] the seams between reads (joinsOf)
  * @param opts.walls   [[from, to]] spans a page does not run into or across - heard captions NOT being cut
  *                     again (recutSome). Unlike a typed line, a wall takes no word away (review K6).
- * @returns [{ name, start, dur, words: [{ w, s, e, k? }], style?, tx?, ty? }] - captions, heard
+ * @returns [{ name, start, dur, words: [{ w, s, e, k?, h? }], style?, tx?, ty? }] - captions, heard
  */
 export function paginate(words, opts) {
   const o = opts || {};
@@ -279,6 +276,7 @@ export function paginate(words, opts) {
     if (end < start) end = start;
     const w = { text, start, end };
     if (w0.k) w.k = true;
+    if (w0.h) w.h = true;
     if (w0.look && Object.keys(w0.look).length) w.look = w0.look;
     ws.push(w);
   }
@@ -479,6 +477,7 @@ export function paginate(words, opts) {
       words: list.slice(p.a, p.b).map((w) => {
         const x = { w: w.text, s: r2(w.start - start), e: r2(w.end - start) };
         if (w.k) x.k = true;
+        if (w.h) x.h = true;
         return x;
       }),
     };
@@ -503,24 +502,40 @@ export function lookOf(c) {
   return Object.keys(l).length ? l : null;
 }
 
-/** Every heard word on the lane, back in timeline seconds, with its mark and its caption's look. */
+/**
+ * Every heard word on the lane, back in timeline seconds, with its marks and its caption's look. A caption
+ * whose words no longer spell its text (rewritten by hand before K10) is timed for its text first - the
+ * person's text is what is cut, never the words it replaced.
+ */
 export function wordsOf(track) {
   const out = [];
   for (const c of ((track && track.clips) || [])) {
     if (!isHeard(c)) continue;
     const base = +c.start || 0;
     const look = lookOf(c);
-    for (const w of c.words) {
+    for (const w of timedWords(c)) {
       if (!w || !String(w.w || '').trim()) continue;
       // Rounded as the cut rounds them: two words at one moment then tie exactly and keep their caption's
       // order, instead of being reordered by float noise on every re-cut (review K2).
       const x = { text: String(w.w), start: r2(base + (+w.s || 0)), end: r2(base + (+w.e || 0)) };
       if (w.k) x.k = true;
+      if (w.h) x.h = true;
       if (look) x.look = look;
       out.push(x);
     }
   }
   return out.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * A heard caption's words as they spell its text: its own, or - rewritten by hand before K10 - its text timed
+ * over them (retext). When even that cannot be done (no room), its words as they are.
+ */
+export function timedWords(c) {
+  const w = (c && Array.isArray(c.words)) ? c.words : [];
+  if (!w.length || spells(w, c.name)) return w;
+  const r = retext(w, c.name, c.dur);
+  return r.words || w;
 }
 
 /** The typed lines of a lane, as spans [[from, to]]. */
@@ -590,19 +605,27 @@ export function recutSome(track, tl, ids, makeId) {
  * The lane's heard captions cut again with LOOKS laid over them by time: `looks` [[from, to, look]] - a word
  * whose middle falls in a span wears that look. What a save merge uses when the server laid the lane
  * again while a caption was given a style of its own (review K6): the server's words, my looks.
+ *
+ * `keep` (a Set of ids): heard captions left exactly as they are - lines I corrected that the server's lay
+ * never saw (K10). They stand as typed lines do: the server's words under them go, ONE BY ONE (a page of
+ * its that only touches one keeps the rest of its words), and no page runs across them.
  */
-export function recutWithLooks(track, tl, looks, makeId) {
+export function recutWithLooks(track, tl, looks, makeId, keep) {
   const all = (track && track.clips) || [];
-  const words = wordsOf(track);
-  if (!words.length) return null;
+  const held = all.filter((c) => isHeard(c) && keep && keep.has(c.id));
+  const cut = all.filter((c) => isHeard(c) && !held.includes(c));
+  const typed = all.filter((c) => c && !isHeard(c));
+  const byStart = (a, b) => (+a.start || 0) - (+b.start || 0);
+  const words = wordsOf({ clips: cut });
+  if (!words.length) return held.length ? typed.concat(held).sort(byStart) : null;
   for (const w of words) {
     const mid = (w.start + w.end) / 2;
     const hit = (looks || []).find(([a, b]) => mid >= a && mid < b);
     if (hit) { if (hit[2]) w.look = hit[2]; else delete w.look; }
   }
-  const pages = paginate(words, { lane: track.style, format: tl && tl.format, typed: typedOf(track), joins: joinsOf(soundPieces(tl)) });
-  const typed = all.filter((c) => c && !isHeard(c));
-  return typed.concat(_asClips(pages, all.filter(isHeard), makeId, all)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  const spans = typedOf(track).concat(held.map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]));
+  const pages = paginate(words, { lane: track.style, format: tl && tl.format, typed: spans, joins: joinsOf(soundPieces(tl)) });
+  return typed.concat(held, _asClips(pages, cut, makeId, all)).sort(byStart);
 }
 
 // Pages as lane clips, keeping the ids of the captions they came from (see recutClips). A new id is never

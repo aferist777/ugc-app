@@ -186,6 +186,8 @@ export function normalizeWords(words) {
     .map(w => {
       const o = { w: String(w.w).slice(0, 60), s: num(w.s), e: num(w.e) };
       if (w.k) o.k = true;
+      // A word a person changed, put in, cut, joined or moved (K10): the line is theirs - Generate keeps it.
+      if (w.h) o.h = true;
       return o;
     });
 }
