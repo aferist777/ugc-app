@@ -466,6 +466,7 @@ function _blankAudioTrack(host, track) {
 // The SERVER listens to the project and lays the lines (lib/captions-job.js, phase K1); the strip
 // presses the button and says what the job of THIS project is doing (listen.js).
 const LANG_OPTS = LANGS.map(([k, label]) => [k, label]);
+const ENGINES = [['cloud', 'cloud (Groq)'], ['local', 'this computer']];
 
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
@@ -494,10 +495,28 @@ function _blankWordsTrack(host, track) {
     });
     gen.disabled = v.busy || !Store.key() || !Store.canEdit();
     host.appendChild(C.row('', C.pair(gen, add)));
-    // Telling Groq the language helps on a short or quiet opening, where it can guess another one.
-    host.appendChild(C.row('Language', C.select(LANG_OPTS, (listenOf(track) || { lang: 'auto' }).lang,
-      (val) => setListenB(track.id, val))));
+    // Telling the listener the language helps on a short or quiet opening, where it can guess another one.
+    const how = listenOf(track) || {};
+    host.appendChild(C.row('Language', C.select(LANG_OPTS, how.lang || 'auto', (val) => setListenB(track.id, { lang: val }))));
+    // WHO LISTENS (phase K1b): Groq, or this computer - which is also where a run goes by itself when Groq
+    // cannot be asked. Off when this copy of the app has no recognition of its own.
+    const L = Listen.local();
+    const can = !!(L && L.platform && (L.program.present || L.cuda.present));
+    const engine = how.engine === 'local' && can ? 'local' : 'cloud';
+    const on = C.select(ENGINES, engine, (val) => setListenB(track.id, { engine: val }));
+    on.disabled = !can;
+    host.appendChild(C.row('Listen on', on));
+    if (L && !can) host.appendChild(C.hint('Recognition on this computer is not installed in this copy of the app - Groq only.'));
+    else if (engine === 'local' && L && !L.model.present) {
+      host.appendChild(C.hint('The first time downloads the speech model (' + Math.round(L.model.bytes / 1e6)
+        + ' MB) into the library\'s cache - after that it needs no internet.'));
+    }
     if (v.line) host.appendChild(C.hint(v.line));
+    // A run that fell over here with no model asks once (the owner, K1b answer 4).
+    if (v.ask && L) {
+      host.appendChild(C.row('', C.button('Download the speech model (' + Math.round(L.model.bytes / 1e6)
+        + ' MB) and listen on this computer', () => Listen.start({ download: true }))));
+    }
   } else {
     host.appendChild(C.row('', add));
     host.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
@@ -709,6 +728,7 @@ export function initInspector() {
   // The job of the open project, as it goes. Repainted only while the subtitle lane itself is what
   // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
   Listen.init();
+  Listen.readLocal();
   Listen.onChange(() => {
     // Not over a talking head's Setup or the scenario picker: render() would rebuild those whole.
     if (ScenPick.active() || WK.active()) return;

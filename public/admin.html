@@ -21,10 +21,11 @@
 </nav>
 
 <div class="adm-body">
-  <!-- Two panes, one strip. The address carries the pane (#keys, #data), so a reload stays put. -->
+  <!-- Three panes, one strip. The address carries the pane (#keys, #data, #local), so a reload stays put. -->
   <div class="adm-tabs" role="tablist">
     <button class="adm-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
     <button class="adm-tab" type="button" role="tab" data-pane="data">Import / Export</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="local">This computer</button>
   </div>
 
   <!-- The keys every generator reads, saved into settings.json in the library. -->
@@ -79,12 +80,22 @@
       <div class="dio-parts" id="dio-imp-log"></div>
     </div>
   </section>
+
+  <!-- Speech recognition on this computer: the program, the model, the NVIDIA build (js/admin-local.js, K1b). -->
+  <section class="adm-panel" data-pane="local" hidden>
+    <div class="adm-head">
+      <span class="adm-title">This computer</span>
+      <span class="adm-count">speech recognition for captions - when Groq cannot be asked, or a subtitle lane listens here</span>
+    </div>
+    <div class="dio-body" id="loc-body"></div>
+  </section>
 </div>
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
 <script src="js/admin-keys.js"></script>
 <script src="js/data-io.js"></script>
+<script src="js/admin-local.js"></script>
 <script>
   // The tab strip, after the panes' own scripts so they hear the first `adm-pane`. Panes are
   // hidden rather than rebuilt, so a half-typed key or an export being built survives a switch.

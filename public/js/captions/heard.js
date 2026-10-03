@@ -20,10 +20,17 @@ export const LANGS = [
 ];
 const LANG_SET = new Set(LANGS.map(([k]) => k));
 
-/** How the subtitle lane is listened to, as stored on it: `{ lang }`, or null for "detect". */
+/**
+ * How the subtitle lane is listened to, as stored on it: `{ lang?, engine? }`, or null when everything is
+ * the default - detect the language, ask Groq. `engine: 'local'` is "this computer" (phase K1b).
+ */
 export function listenOf(lane) {
-  const lang = lane && lane.listen && String(lane.listen.lang || '');
-  return (lang && lang !== 'auto' && LANG_SET.has(lang)) ? { lang } : null;
+  const l = (lane && lane.listen) || {};
+  const out = {};
+  const lang = String(l.lang || '');
+  if (lang && lang !== 'auto' && LANG_SET.has(lang)) out.lang = lang;
+  if (l.engine === 'local') out.engine = 'local';
+  return Object.keys(out).length ? out : null;
 }
 
 export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 0;

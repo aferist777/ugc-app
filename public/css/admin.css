@@ -83,6 +83,19 @@
 
 /* ── Import / Export ─────────────────────────────────────────────────────── */
 .dio-body{ padding:12px 14px; max-width:760px; }
+
+/* Admin -> This computer (js/admin-local.js): one row per thing, what it is on the left, its state or its
+   button on the right. */
+.loc-row{
+  display:flex; align-items:center; gap:12px; margin-top:6px; padding:9px 11px;
+  border:1px solid var(--border-soft); border-radius:8px;
+}
+.loc-row > .lib-btn, .loc-row > .loc-state{ flex:0 0 auto; }
+.loc-state{ font:600 10.5px var(--font); }
+.loc-state.ok{ color:var(--ok, #3fd39b); }
+.loc-state.bad{ color:var(--danger, #ff6b6b); }
+.loc-prog{ flex:0 0 200px; }
+.loc-armed{ color:var(--danger, #ff6b6b); border-color:var(--danger, #ff6b6b); }
 .dio-sec{
   font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase;
   color:var(--muted); margin:14px 0 6px;

@@ -1421,14 +1421,19 @@ export function addCaption(trackId, at, text) {
 }
 
 /**
- * The language the subtitle lane is listened in (phase K1): an ISO code, or 'auto' to let Groq tell.
- * The lines themselves are laid by the server (lib/captions-job.js), not here.
+ * How the subtitle lane is listened to, one field at a time: `{ lang }` - an ISO code, or 'auto' to let
+ * the listener tell (phase K1) - and/or `{ engine }` - 'local' for this computer, 'cloud' for Groq
+ * (phase K1b). The defaults are not stored. The lines themselves are laid by the server
+ * (lib/captions-job.js), not here.
  */
-export function setSubsListen(trackId, lang) {
+export function setSubsListen(trackId, patch) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId && x.kind === 'subs');
     if (!t) return;
-    t.listen = (lang && lang !== 'auto') ? { lang: String(lang) } : null;
+    const next = Object.assign({}, t.listen || {}, patch || {});
+    if (!next.lang || next.lang === 'auto') delete next.lang;
+    if (next.engine !== 'local') delete next.engine;
+    t.listen = Object.keys(next).length ? next : null;
   });
 }
 

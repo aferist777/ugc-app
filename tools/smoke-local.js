@@ -47,7 +47,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // libass in the page for the captions' preview (phase K4; laid out by tools/fetch-jassub.js)
                  '/js/captions/layer.js', '/vendor/jassub/jassub.js', '/vendor/jassub/wasm/jassub-worker-modern.wasm',
                  // captions from the sound, laid by the server (phase K1)
-                 '/js/captions/heard.js', '/js/merge-v3/listen.js'];
+                 '/js/captions/heard.js', '/js/merge-v3/listen.js',
+                 // speech recognition on this computer, Admin -> This computer (phase K1b)
+                 '/js/admin-local.js'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.

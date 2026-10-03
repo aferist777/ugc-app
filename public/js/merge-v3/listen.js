@@ -38,6 +38,24 @@ const _when = (iso) => {
 };
 const _cap = (s) => String(s || '').replace(/^./, (m) => m.toUpperCase());
 const _n = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+const _mb = (b) => Math.round((+b || 0) / 1e6) + ' MB';
+
+// Why a run went to this computer (lib/captions-job.js FELL - the server sends the code).
+const FELL = { 'no-key': 'No Groq key', network: 'Groq could not be reached', down: 'Groq is not answering',
+  busy: 'Groq is busy', limit: "Groq's limit is used up", 'bad-key': 'Groq did not accept the key',
+  refused: 'Groq refused this sound', 'too-large': 'Groq refused this sound' };
+
+// ── This computer's ear (phase K1b) ─────────────────────────────────────────
+// Read once when a page asks, again after a model download: the program, the model, the NVIDIA build.
+let _local = null;
+let _localAsked = null;
+export function local() { return _local; }
+export async function readLocal(force) {
+  if (_localAsked && !force) return _localAsked;
+  _localAsked = fetch('/api/speech/local').then(r => r.json()).then((d) => { _local = d && d.success ? d.state : null; _emit(); return _local; })
+    .catch(() => { _local = null; return null; });
+  return _localAsked;
+}
 
 // What the line under the button says.
 function _line(s) {
@@ -46,6 +64,13 @@ function _line(s) {
   if (j && j.state === 'listening') {
     const step = String(j.step || 'starting');
     if (step === 'collecting the sound' && j.part) return 'Listening - collecting the sound (' + j.part.i + ' of ' + j.part.n + ')';
+    if (j.dl) return 'Listening - downloading the speech model ' + Math.floor(100 * j.dl.got / Math.max(1, j.dl.total)) + '% of ' + _mb(j.dl.total);
+    if (j.wait) return 'Listening - ' + j.wait;
+    const part = j.part ? 'part ' + j.part.i + ' of ' + j.part.n + ', ' : '';
+    if (j.where === 'local') {
+      return 'Listening - ' + (j.fell ? FELL[j.fell] + '; ' : '') + part + 'on this computer' + (j.pct != null ? ' ' + j.pct + '%' : '');
+    }
+    if (j.where === 'cloud' && j.part) return 'Listening - part ' + j.part.i + ' of ' + j.part.n;
     return 'Listening - ' + step;
   }
   if (j && j.state === 'failed') return j.error || 'It did not finish.';
@@ -54,7 +79,11 @@ function _line(s) {
     const out = [];
     out.push(r.lines ? _n(r.lines, 'line', 'lines') + ' from ' + _n(r.words, 'word', 'words') + '.'
       : 'Nothing was said on those tracks - the lane was left as it was.');
-    if (r.lines && !r.paid) out.push('Nothing paid - heard before.');
+    if (r.local) {
+      out.push('Heard on this computer in ' + Math.round(+r.took || 0) + ' s' + (r.fell ? ' - ' + FELL[r.fell]
+        + (r.fell !== 'no-key' ? '; press again to ask Groq.' : '.') : '.'));
+    } else if (r.lines && !r.paid) out.push('Nothing paid - heard before.');
+    if (r.timing === 'approximate') out.push('Some words are timed approximately.');
     if (r.lines && !r.asked && r.language) out.push('Heard as ' + _cap(r.language) + '.');
     const typed = r.dropped && r.dropped.typed;
     if (typed) out.push(_n(typed, 'word', 'words') + ' under your typed lines ' + (typed === 1 ? 'was' : 'were') + ' left out.');
@@ -71,12 +100,15 @@ function _line(s) {
   return '';
 }
 
-/** What the subtitle lane's strip shows for a project. */
+/**
+ * What the subtitle lane's strip shows for a project. `ask` - the run fell over to this computer and the
+ * speech model is not there yet: the strip offers to download it, once (the owner, K1b answer 4).
+ */
 export function view(key) {
   const k = key || Store.key();
-  if (!k) return { busy: false, line: '' };
+  if (!k) return { busy: false, line: '', ask: false };
   const s = _get(k);
-  return { busy: !!(s.job && s.job.state === 'listening'), line: _line(s) };
+  return { busy: !!(s.job && s.job.state === 'listening'), line: _line(s), ask: !!(s.job && s.job.state === 'failed' && s.job.code === 'need-model') };
 }
 
 async function _read(k) {
@@ -118,14 +150,16 @@ async function _poll(first) {
   if (now && now.state === 'done' && (!was || was.state === 'listening') && now.result && now.result.rev) {
     await _landed(now.result.rev);
   }
+  // A model downloaded on the way: the lane's choices read it again.
+  if (now && now.state !== 'listening' && was && was.state === 'listening' && now.result && now.result.local) readLocal(true);
 }
 function _schedule() {
   if (_timer) clearTimeout(_timer);
   _timer = setTimeout(_poll, POLL_MS);
 }
 
-/** Press: save, then ask the server to listen to the open project. */
-export async function start() {
+/** Press: save, then ask the server to listen to the open project. `opts.download` - yes to the model. */
+export async function start(opts) {
   const k = Store.key();
   if (!k || !Store.canEdit()) return;
   const s = _get(k);
@@ -146,7 +180,7 @@ export async function start() {
   let d = null;
   try {
     const r = await fetch('/api/mv3/captions/transcribe', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, download: !!(opts && opts.download) }),
     });
     d = await r.json();
   } catch (e) { d = { success: false, error: 'The app did not answer - ' + e.message }; }
