@@ -23,6 +23,7 @@
 
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
+import { recutClips, CUT_KEYS } from '../captions/pages.js';
 
 const SAVE_DEBOUNCE = 500;
 
@@ -303,6 +304,7 @@ const _byId = (clips) => {
   return m;
 };
 const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const _newId = () => 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
 function _mergeTrack(base, mine, theirs, sortByStart) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
@@ -315,6 +317,10 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
     && (!b.has(c.id) || isHeard(b.get(c.id)))) : [];
   const over = (c) => mineTyped.some(k => (+c.start || 0) < (+k.start || 0) + (+k.dur || 0)
     && (+k.start || 0) < (+c.start || 0) + (+c.dur || 0));
+  // THEIR LAY REPLACED THE HEARD LINES while mine were cut again (review K2): both sides put a new heard set
+  // in place of the base's, and keeping both drew every word twice. Their lay wins for the heard lines; a
+  // style of mine that changes the cut is applied to their words afterwards (_mergeBlank).
+  const relaid = subs && (theirs.clips || []).some(c => isHeard(c) && !b.has(c.id));
   const out = [];
   // Their order first, so a clip added elsewhere keeps its place in their lane.
   for (const c of (theirs.clips || [])) {
@@ -327,7 +333,7 @@ function _mergeTrack(base, mine, theirs, sortByStart) {
     out.push((inBase && _same(mc, b.get(c.id))) ? c : mc);
   }
   // Anything of mine they have never seen.
-  for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id)) out.push(c);
+  for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id) && !(relaid && isHeard(c))) out.push(c);
   // ...and a heard line I retyped that their lay replaced.
   for (const c of mineTyped) if (b.has(c.id)) out.push(c);
   // Start order only where the order means nothing. On a lane whose clips may cover one another
@@ -362,6 +368,7 @@ function _mergeBlank(base, mine, theirs) {
   const byId = (list) => new Map((Array.isArray(list) ? list : []).map((t) => [t.id, t]));
   const bL = byId(base.tracks), mL = byId(mine.tracks), tL = byId(theirs.tracks);
   const out = [];
+  const recut = [];
   let added = 0, removed = 0;
   for (const t of theirs.tracks) {
     if (!t || !t.id) continue;
@@ -372,7 +379,12 @@ function _mergeBlank(base, mine, theirs) {
     const bIds = _byId(bb.clips), mIds = _byId(m.clips), tIds = _byId(t.clips);
     for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
     for (const c of (bb.clips || [])) if (!tIds.has(c.id) && mIds.has(c.id)) removed++;
-    out.push(_mergeTrack(bb, m, t, t.kind === 'audio'));
+    const merged = _mergeTrack(bb, m, t, t.kind === 'audio');
+    // Their lay came in while I changed how the lane is cut (a style field of the cut): cut their words my
+    // way, once the whole timeline is put together (the seams need its sound).
+    if (t.kind === 'subs' && (t.clips || []).some(c => isHeard(c) && !bIds.has(c.id))
+      && CUT_KEYS.some(k => !_same((m.style || {})[k], (bb.style || {})[k]))) recut.push(merged);
+    out.push(merged);
   }
   const mineList = Array.isArray(mine.tracks) ? mine.tracks : [];
   mineList.forEach((m, i) => {
@@ -384,7 +396,14 @@ function _mergeBlank(base, mine, theirs) {
   });
   // The format is one field: mine if I changed it, otherwise whatever is stored.
   const format = (mine.format !== base.format) ? mine.format : theirs.format;
-  return { timeline: { kind: theirs.kind || mine.kind || BLANK_KIND, format, tracks: out }, added, removed };
+  const timeline = { kind: theirs.kind || mine.kind || BLANK_KIND, format, tracks: out };
+  const fmtChanged = mine.format !== base.format && theirs.format === base.format;
+  for (const lane of out) {
+    if (lane.kind !== 'subs' || (!recut.includes(lane) && !(fmtChanged && (lane.clips || []).some(isHeard)))) continue;
+    const clips = recutClips(lane, timeline, _newId);
+    if (clips) lane.clips = clips;
+  }
+  return { timeline, added, removed };
 }
 
 // Bound on load rather than at boot: History reads and writes through us, and until there is
@@ -414,9 +433,12 @@ export function mutate(fn) {
   // Somebody else's, open to look at. Refused here, at the one door every edit comes
   // through, so the lanes and the inspector need no rule of their own.
   if (!_canEdit) { _status = _roMessage(); _emit(); return false; }
-  History.push();                 // BEFORE the change - see the header
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
+  // A change that changes nothing (a re-cut that comes out the same, a value set to itself) is no step to
+  // undo and nothing to save (review K2).
+  if (_same(draft, _timeline)) return true;
+  History.push();                 // BEFORE the change is adopted - see the header
   _timeline = draft;
   _dirty = true;
   _edits++;

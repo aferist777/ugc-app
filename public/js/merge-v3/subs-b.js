@@ -10,7 +10,7 @@
 import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, resolveStyle }
   from '../captions/style.js';
 import { cssWeight, fontOf } from '../captions/fonts.js';
-import { fitPage } from '../captions/pages.js';
+import { fitText, tokensOf } from '../captions/pages.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -124,12 +124,12 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     // LINES WHERE THE FILE BREAKS THEM (K2): the .ass is broken by pages.js, not by libass, so the same
     // rule says where here - and a page holding a word wider than a line is drawn smaller, as there. A
     // line break typed into a caption is a break in both.
+    // Typed text is broken in each paragraph it was typed in, at breakable blanks only (review K2).
     const words = st.effect === 'karaoke' && Array.isArray(c.words) && c.words.length ? c.words : null;
-    const typedBreaks = !words && String(c.name).includes('\n');
-    const tokens = words ? words.map(w => String(w.w)) : typedBreaks ? null : String(c.name).split(/\s+/).filter(Boolean);
+    const paras = words ? [words.map(w => String(w.w))] : String(c.name).split('\n').map(tokensOf);
     let counts = [];
-    if (tokens && tokens.length) {
-      const fit = fitPage(tokens, st, frame.w);
+    if (paras.some(p => p.length)) {
+      const fit = fitText(paras, st, frame.w);
       if (fit.size < st.size) st = Object.assign({}, st, { size: fit.size });
       counts = fit.lines;
     }
@@ -143,15 +143,14 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const lines = [];
-    if (typedBreaks) {
-      for (const para of String(c.name).split('\n')) lines.push({ text: para.trim(), words: null });
-    } else {
+    paras.forEach((p, n) => {
+      if (!p.length) { lines.push({ text: '', words: null }); return; }
       let i = 0;
-      for (const k of counts) {
-        lines.push({ text: tokens.slice(i, i + k).join(' '), words: words ? words.slice(i, i + k) : null });
+      for (const k of (counts[n] || [p.length])) {
+        lines.push({ text: p.slice(i, i + k).join(' '), words: words ? words.slice(i, i + k) : null });
         i += k;
       }
-    }
+    });
     // The anchor is the BOTTOM of the block for a bottom caption and its middle for a centred
     // one, so a second line grows upward rather than off the frame.
     const blockTop = a.an === 8 ? a.y

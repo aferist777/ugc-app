@@ -38,12 +38,13 @@ export const PAGE = {
   closeGap: 0.7,     // a gap shorter than this to the next page is not shown: the page stays up
   hold: 0.3,         // before a longer one the page stays this much longer
   joinReach: 0.6,    // how far past the seam of two reads a stretched word can push the next one
+  minClip: 0.1,      // the shortest a page is on screen: the shortest clip a lane keeps
 };
 
 // What a cut of a phrase costs, besides being uneven ((words - n/k)^2 a page). The research's simulator
 // settled on 4 / 6 / 1 for the fewest pages alone; with one more page allowed (at `page`), 5 and 8 keep
 // the weak ends at 0-1% of pages on the recorded words, against 7-15% cut greedily (K2 stand).
-const COST = { weak: 5, enclitic: 8, pair: 10, short: 1, page: 3 };
+const COST = { weak: 5, enclitic: 8, pair: 10, short: 1, page: 3, flash: 4 };
 
 // ── The words ───────────────────────────────────────────────────────────────
 const r2 = (t) => Math.round((+t || 0) * 100) / 100;
@@ -75,10 +76,12 @@ const ENCLITIC = new Set(['же', 'ж', 'ли', 'ль', 'бы', 'б']);
 const PAIRS = new Set(['потому|что', 'так|как', 'так|что', 'несмотря|на', 'в|течение', 'по|крайней', 'крайней|мере',
   'как|будто']);
 // A full stop that never ends a sentence...
-const ABBR = new Set(['т.', 'т.е.', 'т.к.', 'е.', 'к.', 'им.', 'ул.', 'стр.', 'см.', 'проф.', 'акад.', 'гл.', 'рис.', 'табл.',
+const ABBR = new Set(['т.', 'т.е.', 'т.к.', 'е.', 'к.', 'ул.', 'стр.', 'проф.', 'акад.', 'гл.', 'табл.',
   'г-н.', 'г-жа.', 'д-р.', 'mr.', 'mrs.', 'ms.', 'dr.', 'vs.', 'e.g.', 'i.e.', 'st.']);
 // ...and one that ends it only when the next word starts with a capital ("и др. Потом", "100 руб. за штуку").
-const MAYBE = new Set(['т.д.', 'т.п.', 'д.', 'п.', 'г.', 'гг.', 'в.', 'вв.', 'руб.', 'коп.', 'тыс.', 'млн.', 'млрд.', 'др.', 'etc.']);
+// "им.", "рис.", "см." are words as often as abbreviations - "Я верю им. Они..." ends a sentence (review K2).
+const MAYBE = new Set(['т.д.', 'т.п.', 'д.', 'п.', 'г.', 'гг.', 'в.', 'вв.', 'руб.', 'коп.', 'тыс.', 'млн.', 'млрд.', 'др.', 'etc.',
+  'им.', 'рис.', 'см.']);
 
 /** A word a page (or a line) should not end on. */
 export const weakEnd = (t) => !hasMark(t) && WEAK.has(bare(t));
@@ -107,12 +110,19 @@ export function endsSentence(t, next, gap) {
   if (MAYBE.has(s)) return !next || capital(next);
   if (/^\p{Lu}\.$/u.test(String(t).replace(OPENERS, ''))) return false;      // an initial
   if (/^\d+\.$/u.test(s)) return !next || capital(next);                     // "3. в" is not an end
+  if (/^(\p{L}\.){2,}$/u.test(s)) return !next || capital(next);              // U.S., p.m.
   return true;
 }
 // A comma, a semicolon, a colon, a dash - or an ellipsis that did not end the sentence.
 const endsClause = (t) => /[,;:—–…-]$|\.\.\.$/u.test(bare(t));
 
 // ── Lines ───────────────────────────────────────────────────────────────────
+/**
+ * A typed text's words: split where a line MAY break - never at a no-break space ("50 000", "Иван
+ * Петрович" typed with one), which stays inside its word, as libass keeps it (review K2).
+ */
+export const tokensOf = (text) => String(text == null ? '' : text).split(/[^\S\u00a0\u202f\u2007]+/).filter(Boolean);
+
 /**
  * Where a page of `tokens` (its words as stored - casing is the style's) breaks into lines in style
  * `st` (resolved, size filled in) on a frame `W` wide: the line counts, top first ([2, 3] = two words,
@@ -174,17 +184,26 @@ export function breakLines(tokens, st, W) {
  * @returns { lines: [counts], size } - `size` the style's own when nothing had to shrink
  */
 export function fitPage(tokens, st, W) {
+  const f = fitText([tokens], st, W);
+  return { lines: f.lines[0], size: f.size };
+}
+
+/**
+ * The same for a text typed in PARAGRAPHS (its own line breaks): each paragraph broken by the rule, all
+ * at the one size the widest word of any of them allows. @returns { lines: [[counts] per paragraph], size }
+ */
+export function fitText(paras, st, W) {
   const lim = LINE_MAX * W;
   let size = +st.size || 60;
   let s = st;
-  const widest = (x) => tokens.reduce((m, t) => Math.max(m, meter(x).text(t)), 0);
+  const widest = (x) => { const m = meter(x); return paras.reduce((w, p) => p.reduce((v, t) => Math.max(v, m.text(t)), w), 0); };
   const w0 = widest(st);
   if (w0 > lim) {
     size = Math.max(8, Math.floor(size * lim / w0));
     s = Object.assign({}, st, { size });
     for (let guard = 0; guard < 40 && size > 8 && widest(s) > lim; guard++) s = Object.assign({}, st, { size: --size });
   }
-  return { lines: breakLines(tokens, s, W), size };
+  return { lines: paras.map((p) => breakLines(p, s, W)), size };
 }
 
 // ── The seams between reads ─────────────────────────────────────────────────
@@ -197,7 +216,8 @@ export function joinsOf(pieces) {
   const list = (pieces || []).slice().sort((a, b) => a.at - b.at);
   for (let i = 1; i < list.length; i++) {
     const p = list[i - 1], q = list[i];
-    if (q.at - p.end > PAGE.pause) continue;             // a silence between: the pause rule has it
+    // A silence between them is a seam too: the listener stretches the last word of a read into it, so
+    // the pause rule, measured between WORDS, can miss it (review K2).
     const goesOn = q.src === p.src && Math.abs(q.crop - (p.crop + (p.end - p.at) * (p.speed || 1))) < 0.05;
     if (!goesOn) out.push(q.at);
   }
@@ -247,8 +267,9 @@ export function paginate(words, opts) {
     let start = r2(w0.start), end = Math.max(start, r2(w0.end));
     const mid = (start + end) / 2;
     if (typed.some(([a, b]) => mid >= a && mid < b)) continue;
-    const inT = typed.find(([a, b]) => start >= a && start < b);
-    if (inT) start = up2(inT[1]);
+    // Out from under EVERY typed line before its middle - they may overlap, and a short one may sit
+    // inside the word's first half (review K2). The spans are in start order: one pass follows a chain.
+    for (const [a, b] of typed) if (a < mid && b > start) start = Math.max(start, up2(b));
     const nextT = typed.find(([a]) => a >= mid);
     if (nextT && end > nextT[0]) end = down2(nextT[0]);
     if (end < start) end = start;
@@ -305,13 +326,15 @@ export function paginate(words, opts) {
     return styleCache.get(key);
   };
 
-  // Does words[a..b) make a page?
-  const makes = (S, a, b) => {
+  // Does words[a..b) make a page? Joining a flash single to a neighbour (`merging`) is never refused for
+  // being short: the joined page is longer than the single it takes in (review K2: with two words a page,
+  // the rule against flashes made single-word ones).
+  const makes = (S, a, b, merging) => {
     const n = b - a;
     if (n === 1) return true;
     if (n > S.N) return false;
     const dur = list[b - 1].end - list[a].start;
-    if (dur > PAGE.maxDur + 1e-9 || dur < PAGE.minDur - 1e-9) return false;
+    if (dur > PAGE.maxDur + 1e-9 || (!merging && dur < PAGE.minDur - 1e-9)) return false;
     const toks = [];
     for (let i = a; i < b; i++) {
       if (S.m.text(list[i].text) > S.lim) return false;       // a word wider than a line stands alone
@@ -354,6 +377,7 @@ export function paginate(words, opts) {
               if (pair(last, next)) c += COST.pair;
             }
             if (list[a0 + b - 1].end - list[a0 + a].start < PAGE.short) c += COST.short;
+            if (b - a === 1 && L > 1 && list[a0 + a].end - list[a0 + a].start < PAGE.minDur) c += COST.flash;
             if (cost[p - 1][a] + c < cost[p][b] - 1e-9) { cost[p][b] = cost[p - 1][a] + c; from[p][b] = a; }
           }
         }
@@ -388,24 +412,62 @@ export function paginate(words, opts) {
     if (next && p.end !== 'hard' && p.end !== 'sentence') opts2.push(['next', list[next.a].start - list[p.a].end]);
     opts2.sort((x, y) => x[1] - y[1]);
     for (const [side] of opts2) {
-      if (side === 'prev' && makes(S, prev.a, p.b)) { prev.b = p.b; prev.end = p.end; pages.splice(i, 1); i -= 2; break; }
-      if (side === 'next' && makes(S, p.a, next.b)) { next.a = p.a; pages.splice(i, 1); i -= 1; break; }
+      if (side === 'prev' && makes(S, prev.a, p.b, true)) { prev.b = p.b; prev.end = p.end; pages.splice(i, 1); i -= 2; break; }
+      if (side === 'next' && makes(S, p.a, next.b, true)) { next.a = p.a; pages.splice(i, 1); i -= 1; break; }
     }
     if (i < -1) i = -1;
   }
 
-  // 5. Time on screen, and 6. the page's own look.
+  // 5. Time on screen.
+  const timing = () => {
+    const span = pages.map((p, i) => {
+      const last = list[p.b - 1];
+      const start = list[p.a].start;
+      let end = last.end;
+      const nextStart = pages[i + 1] ? list[pages[i + 1].a].start : Infinity;
+      const wall = typed.find(([a]) => a >= end - 1e-9);
+      const limit = Math.min(nextStart, wall ? wall[0] : Infinity);
+      end = (nextStart - end < PAGE.closeGap) ? Math.min(nextStart, limit) : Math.min(end + PAGE.hold, limit);
+      return { start, end: Math.max(end, last.end) };
+    });
+    // NO PAGE IS ON SCREEN UNDER 0.1 s - the shortest clip a lane keeps; a shorter one was stretched by
+    // the lane and drawn over the next page (review K2). It starts earlier instead, in the page before's
+    // tail (which keeps its own 0.1 s) and never before a typed line: its words keep their moments, so a
+    // re-cut gives the same pages back.
+    for (let i = 0; i < span.length; i++) {
+      const x = span[i];
+      if (x.end - x.start >= PAGE.minClip - 1e-9) continue;
+      const prev = span[i - 1];
+      const wallEnd = typed.reduce((m, [a, b]) => (b <= x.start + 1e-9 && b > m ? b : m), 0);
+      const want = Math.max(up2(Math.max(prev ? prev.start + PAGE.minClip : 0, wallEnd)), down2(x.end - PAGE.minClip));
+      if (want < x.start) {
+        x.start = want;
+        if (prev && prev.end > want) prev.end = want;
+      }
+    }
+    return span;
+  };
+  let span = timing();
+  // ...and where there is no room for that (a run of words each shorter than 0.1 s, one to a page), the
+  // page joins a neighbour across anything but a hard boundary, past N if it must: a word on screen for
+  // a twentieth of a second cannot be read anyway.
+  const stuck = new Set();
+  for (let guard = 0; guard <= pages.length; guard++) {
+    const i = span.findIndex((x, j) => x.end - x.start < PAGE.minClip - 1e-9 && !stuck.has(pages[j]));
+    if (i < 0) break;
+    const p = pages[i], prev = pages[i - 1], next = pages[i + 1];
+    if (prev && prev.end !== 'hard') { prev.b = p.b; prev.end = p.end; pages.splice(i, 1); }
+    else if (next && p.end !== 'hard') { next.a = p.a; pages.splice(i, 1); }
+    else { stuck.add(p); continue; }
+    span = timing();
+  }
+
+  // 6. The pages, with their own look.
   const out = [];
   for (let i = 0; i < pages.length; i++) {
     const p = pages[i];
-    const first = list[p.a], last = list[p.b - 1];
-    const start = first.start;
-    let end = last.end;
-    const nextStart = pages[i + 1] ? list[pages[i + 1].a].start : Infinity;
-    const wall = typed.find(([a]) => a >= end - 1e-9);
-    const limit = Math.min(nextStart, wall ? wall[0] : Infinity);
-    end = (nextStart - end < PAGE.closeGap) ? Math.min(nextStart, limit) : Math.min(end + PAGE.hold, limit);
-    end = Math.max(end, last.end);
+    const first = list[p.a];
+    const { start, end } = span[i];
     const c = {
       name: list.slice(p.a, p.b).map((w) => w.text).join(' '),
       start,
@@ -446,7 +508,9 @@ export function wordsOf(track) {
     const look = lookOf(c);
     for (const w of c.words) {
       if (!w || !String(w.w || '').trim()) continue;
-      const x = { text: String(w.w), start: base + (+w.s || 0), end: base + (+w.e || 0) };
+      // Rounded as the cut rounds them: two words at one moment then tie exactly and keep their caption's
+      // order, instead of being reordered by float noise on every re-cut (review K2).
+      const x = { text: String(w.w), start: r2(base + (+w.s || 0)), end: r2(base + (+w.e || 0)) };
       if (w.k) x.k = true;
       if (look) x.look = look;
       out.push(x);
@@ -459,6 +523,10 @@ export function wordsOf(track) {
 export const typedOf = (track) => ((track && track.clips) || [])
   .filter((c) => c && c.name && !isHeard(c))
   .map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]);
+
+/** The style fields a heard lane is cut again for: what makes a line wider or narrower, or a page longer. */
+export const CUT_KEYS = ['font', 'bold', 'size', 'sizeAuto', 'casing', 'scaleX', 'spacing', 'outline', 'shadow', 'borderStyle',
+  'effect', 'wordsPerLine', 'lines'];
 
 /**
  * The lane's HEARD captions cut again by these rules, from the words it holds - or null when it holds
@@ -474,4 +542,42 @@ export function recut(track, tl, style) {
     typed: typedOf(track),
     joins: joinsOf(soundPieces(tl)),
   });
+}
+
+/**
+ * The lane's clips with its heard captions cut again (recut) - the typed ones the very same objects - or
+ * null. A page that comes out as it was keeps its caption's id, any other the id of the caption its first
+ * word came from while that one is free (review K2): a re-cut that changes nothing changes nothing - no
+ * undo step, no save - and a merge with another save still knows the captions. `makeId` gives a new id.
+ */
+export function recutClips(track, tl, makeId) {
+  const pages = recut(track, tl);
+  if (!pages) return null;
+  const old = ((track && track.clips) || []).filter(isHeard);
+  const key = (c) => JSON.stringify([r2(c.start), r2(c.dur), c.name, c.words, c.style || null,
+    c.tx == null ? null : c.tx, c.ty == null ? null : c.ty]);
+  const byKey = new Map(old.map((c) => [key(c), c.id]));
+  const used = new Set();
+  const made = pages.map((p) => {
+    const c = {
+      id: null, src: null, thumb: null,
+      name: p.name, start: p.start, dur: Math.max(PAGE.minClip, +p.dur || 0), words: p.words,
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+      transition: null, animation: null, filter: null, volume: null, pairId: null,
+    };
+    if (p.style) c.style = p.style;
+    if (p.tx != null) c.tx = p.tx;
+    if (p.ty != null) c.ty = p.ty;
+    let id = byKey.get(key(c));
+    if (!id || used.has(id)) {
+      const at = c.start + ((c.words[0] && +c.words[0].s) || 0);
+      const o = old.find((x) => !used.has(x.id) && at >= (+x.start || 0) - 1e-6 && at < (+x.start || 0) + (+x.dur || 0));
+      id = o ? o.id : makeId();
+    }
+    used.add(id);
+    c.id = id;
+    return c;
+  });
+  const typed = ((track && track.clips) || []).filter((c) => c && !isHeard(c));
+  return typed.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0));
 }

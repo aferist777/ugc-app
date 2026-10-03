@@ -143,7 +143,7 @@ export function cleanWords(words, segments, opts) {
     const text = String((w0 && (w0.text != null ? w0.text : w0.word)) || '').trim();
     if (!text) continue;
     let start = +w0.start || 0;
-    const end = Math.max(start, +w0.end || start);
+    let end = Math.max(start, +w0.end || start);
     const mid = (start + end) / 2;
     if (inside(noisy, mid)) { dropped.noise++; continue; }
     // Wholly inside pure silence: invented, whatever it says. Starting in silence and running into
@@ -151,6 +151,10 @@ export function cleanWords(words, segments, opts) {
     const gap = gaps.find(([a, b]) => start >= a - 0.05 && start < b);
     if (gap && end <= gap[1] + 0.05) { dropped.silence++; continue; }
     if (gap) start = gap[1];
+    // ...and a word that runs on into a silence ends where the sound does: Whisper stretches the last word
+    // before a silence by ~0.4 s, which hid the pause from the cut (review K2).
+    const into = gaps.find(([a]) => start < a && end > a + 0.05);
+    if (into) end = into[0];
     if (inside(typed, (start + end) / 2)) { dropped.typed++; continue; }
     kept.push({ text, start, end });
   }

@@ -32,7 +32,7 @@ import { askDelete, short } from './ask.js';
 import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
-import { recut } from '../captions/pages.js';
+import { recutClips } from '../captions/pages.js';
 import { isHeard } from '../captions/heard.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
@@ -1025,6 +1025,15 @@ export function canSplit() {
   if (!one) return { ok: false, why: 'Select one clip to cut it at the playhead' };
   const s = +one.clip.start, e = s + (+one.clip.dur);
   if (_playhead - s < MIN_SPLIT || e - _playhead < MIN_SPLIT) return { ok: false, why: 'Put the playhead inside the selected clip' };
+  // A heard caption is cut BETWEEN its words: a half with none would keep the whole text as a typed copy
+  // of the page - and a page stays up past its last word, so that was most of its tail (review K2).
+  const words = Array.isArray(one.clip.words) && one.clip.words.length ? one.clip.words : null;
+  if (words) {
+    const left = _playhead - s;
+    if (!words.some(w => (+w.s) >= left) || !words.some(w => (+w.s) < left)) {
+      return { ok: false, why: 'No word starts on that side of the playhead - drag the edge of the line to shorten it' };
+    }
+  }
   return { ok: true };
 }
 
@@ -1477,23 +1486,10 @@ export function setSubsStyle(trackId, patch, cut) {
 // objects - their ids, their own style, their place - so a merge with another save still knows them;
 // the pages cut from the heard words carry the own look of the lines they came from.
 function _recutLane(tl, t) {
-  const pages = recut(t, tl);
-  if (!pages) return null;
-  const typed = (t.clips || []).filter(c => c && !isHeard(c));
-  const made = pages.map(p => {
-    const c = {
-      id: _id(), src: null, thumb: null,
-      name: p.name, start: p.start, dur: Math.max(0.1, +p.dur || CAP_DUR), words: p.words,
-      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-      transition: null, animation: null, filter: null, volume: null, pairId: null,
-    };
-    if (p.style) c.style = p.style;
-    if (p.tx != null) c.tx = p.tx;
-    if (p.ty != null) c.ty = p.ty;
-    return c;
-  });
-  t.clips = typed.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0));
-  return made.length;
+  const clips = recutClips(t, tl, _id);
+  if (!clips) return null;
+  t.clips = clips;
+  return clips.filter(isHeard).length;
 }
 
 /**

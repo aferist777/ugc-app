@@ -66,7 +66,9 @@ router.get('/mv3/captions/state', (req, res) => {
     // Asked with no project (the smoke check asks every route that way): nothing to say.
     if (!KEY_RE.test(key)) return res.json({ success: true, job: null, last: null });
     const job = JOB.get(key);
-    res.json({ success: true, job, last: job ? null : JOB.last(key) });
+    // Always: "back to what was heard" shows by what the file says was laid, whatever the job in memory
+    // did - a failed one used to hide it for fifteen minutes (review K2).
+    res.json({ success: true, job, last: JOB.last(key) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

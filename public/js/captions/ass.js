@@ -36,7 +36,7 @@
 import { resolveStyle, withAuto, anchorOf, cased } from './style.js';
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
-import { fitPage } from './pages.js';
+import { fitPage, fitText, tokensOf } from './pages.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -93,6 +93,13 @@ export function karaokeLine(words, tag, casing, brk) {
 const _gap = (i, n, brk) => (i < n - 1 ? (brk && brk.has(i) ? '\\N' : ' ') : '');
 // The page's text, the lines broken where the page breaks (a set of word indices a line ends at).
 const _joined = (tokens, brk) => tokens.map((t, i) => t + _gap(i, tokens.length, brk)).join('');
+// Line counts as the set of word indices a line ends at (the last line's end is no break).
+const _breaks = (counts) => {
+  const brk = new Set();
+  let at = -1;
+  for (const k of (counts || []).slice(0, -1)) { at += k; brk.add(at); }
+  return brk.size ? brk : null;
+};
 
 // ── What a style needs ──────────────────────────────────────────────────────
 const ms = (sec) => Math.max(0, Math.round((+sec || 0) * 1000));
@@ -278,19 +285,23 @@ export function buildAss(lanes, w, h) {
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
       const words = _wordsOf(c);
-      // Where the page breaks into lines: the words', or the typed text's - unless it was typed with
-      // its own line breaks, which are drawn as typed.
-      const typedBreaks = !words && /\n/.test(String(c.name));
-      const tokens = words ? words.map(x => String(x.w)) : typedBreaks ? null : String(c.name).split(/\s+/).filter(Boolean);
-      const page = { brk: null, text: typedBreaks ? String(c.name) : (tokens || []).join(' ') };
-      if (tokens && tokens.length) {
+      // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
+      // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
+      // drawn exactly as typed, its spaces and all (review K2).
+      const page = { brk: null, text: String(c.name) };
+      if (words) {
+        const tokens = words.map(x => String(x.w));
         const fit = fitPage(tokens, s.st, w);
         if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
-        const brk = new Set();
-        let at = -1;
-        for (const k of fit.lines.slice(0, -1)) { at += k; brk.add(at); }
-        page.brk = brk.size ? brk : null;
+        page.brk = _breaks(fit.lines);
         page.text = _joined(tokens, page.brk);
+      } else {
+        const paras = String(c.name).split('\n').map(tokensOf);
+        if (paras.some(p => p.length)) {
+          const fit = fitText(paras, s.st, w);
+          if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
+          if (fit.lines.some(l => l.length > 1)) page.text = paras.map((p, i) => _joined(p, _breaks(fit.lines[i]))).join('\n');
+        }
       }
       const place = _place(s.st, s.a);
       if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(s.st, page));

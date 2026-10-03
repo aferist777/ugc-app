@@ -27,7 +27,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          addCaption as addCapB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB } from './timeline-b.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
-import { wordsOf } from '../captions/pages.js';
+import { wordsOf, CUT_KEYS } from '../captions/pages.js';
 import { LANGS, listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
 import { askDelete } from './ask.js';
@@ -476,9 +476,8 @@ let _listenShape = null;
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
 const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
-// step (K2, the owner's answer 3): a page cut for one font is not a page in another.
-const CUTS = ['font', 'bold', 'italic', 'size', 'sizeAuto', 'casing', 'scaleX', 'spacing', 'outline', 'borderStyle',
-  'wordsPerLine', 'lines'];
+// step (K2, the owner's answer 3): a page cut for one font is not a page in another. The list is pages.js's.
+const CUTS = CUT_KEYS;
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
 // a place - and differ in exactly one way: where the words come from. So the style half is

@@ -47,8 +47,12 @@ function _fileOf(font, bold) {
 
 const ZERO = /[\p{M}\p{Cf}]/u;
 
+// No-break spaces are measured as the space they look like (review K2); the narrow one as half of it.
+const NBSP = { ' ': 1, ' ': 1, ' ': 0.5 };
+
 // One character's advance in em.
 function _adv(t, fb, ch) {
+  if (NBSP[ch]) return _adv(t, fb, ' ') * NBSP[ch];
   let i = IDX.get(ch);
   if (i === undefined) {
     const base = ch.normalize('NFD')[0];          // é, ü, ç... - the letter under the accent
@@ -68,7 +72,9 @@ const BOXY = (st) => st.borderStyle === 'box' || st.borderStyle === 'boxline';
 
 /** How far the drawing stands out on EACH side of the letters: the outline, or the box round them. */
 export function edgeOf(st) {
-  if (st.borderStyle === 'box' && st.effect !== 'box') return (+st.outline || 0) > 0 ? +st.outline : padOf(st);
+  // A box drawn as the letters' own border (one event) is padded by the outline; layered - a box with any
+  // effect, ass.js layered() - it is the box style's, padOf (review K2: measured short by the difference).
+  if (st.borderStyle === 'box' && (st.effect || 'none') === 'none') return (+st.outline || 0) > 0 ? +st.outline : padOf(st);
   if (BOXY(st) || st.effect === 'box') return padOf(st);
   return +st.outline || 0;
 }
