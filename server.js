@@ -132,7 +132,6 @@ app.use('/api', require('./routes/character-v2'));   // making a character: the 
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
 app.use('/api', require('./routes/images'));   // still pictures: upload, and the record that files one
-app.use('/api', require('./routes/video-engines'));   // one door to every i2v engine, whichever aggregator
 // Merge v3 - the timeline store. Version-checked: a write quoting a stale version is
 // refused, which is the thing timeline_data_v2 could not do.
 app.use('/api', require('./routes/mergev3'));

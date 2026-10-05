@@ -700,25 +700,14 @@ function _shot(g, progs) {
     add.type = 'button';
     add.title = 'Puts it on the lane above main video, at the playhead.';
     add.addEventListener('click', () => _place(g, add));
-    const anim = el('button', 'mv3-c-btn', 'animate');
-    anim.type = 'button';
-    anim.title = 'Make a clip from this picture.';
-    anim.addEventListener('click', async () => {
-      try {
-        const A = await import('./animate.js');
-        await A.openAnimate({ src: g.imagePath, name: (g.prompt || '').slice(0, 60) });
-      } catch (err) {
-        note(anim, 'Could not open Animate.', String((err && err.message) || err).slice(0, 120));
-      }
-    });
-    acts.append(use, add, anim);
+    acts.append(use, add);
     cell.appendChild(acts);
     // Taken off the shelf since: said, instead of a broken picture, and nothing builds on it.
     img.addEventListener('error', () => {
       const gone = el('div', 'mv3-ig-gone', 'not in the Library any more');
       gone.style.aspectRatio = img.style.aspectRatio;
       img.replaceWith(gone);
-      use.disabled = true; add.disabled = true; anim.disabled = true;
+      use.disabled = true; add.disabled = true;
     }, { once: true });
   } else if (g.state === 'pending') {
     const ghost = el('div', 'mv3-ig-shot is-busy');

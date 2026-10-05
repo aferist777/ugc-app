@@ -1435,7 +1435,7 @@ router.post('/library/media/record', (req, res) => {
     list.unshift(rec);
     store.write(list);
     // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
-    // category's folder, and anything already pointing at it - an Animate take on a timeline -
+    // category's folder, and anything already pointing at it - a take already on a timeline -
     // follows (lib/shelf-files.js).
     SHELF.placeRecords([{ kind, rec }]);
     const item = store.read().find(e => e && e.id === rec.id) || rec;

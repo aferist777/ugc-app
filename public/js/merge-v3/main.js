@@ -52,25 +52,18 @@ async function _pictures() {
 (() => {
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
-  if (want !== 'pictures' && want !== 'animate') return;
-  let src = '';
-  try { src = new URLSearchParams(location.search).get('src') || ''; } catch (e) { src = ''; }
+  if (want !== 'pictures') return;
   let opened = false;
   Store.onChange(() => {
     if (opened || !Store.key()) return;
     opened = true;
-    if (want === 'pictures') {
-      // Said once: the address forgets it, or a reload after going back to the shelf would return here.
-      try {
-        const u = new URL(location.href);
-        u.searchParams.delete('open');
-        history.replaceState({}, '', u);
-      } catch (e) { /* a reload only opens it again */ }
-      _pictures().catch(e => console.warn('[merge-v3] pictures:', e.message));
-      return;
-    }
-    // Animate is about one picture, so the address carries which.
-    if (src) import('./animate.js').then(m => m.openAnimate({ src })).catch(() => { /* no engine */ });
+    // Said once: the address forgets it, or a reload after going back to the shelf would return here.
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('open');
+      history.replaceState({}, '', u);
+    } catch (e) { /* a reload only opens it again */ }
+    _pictures().catch(e => console.warn('[merge-v3] pictures:', e.message));
   });
 })();
 

@@ -324,8 +324,6 @@ function _blankStill(host, track, c, set) {
     fig.appendChild(img);
   }
   left.appendChild(fig);
-  // NO ANIMATE BUTTON HERE (decided with the owner): a double click on the picture on the timeline
-  // opens it, and so does animate in the picture window. A right-click menu is where it goes next.
   top.appendChild(left);
 
   // EVERYTHING ELSE BESIDE THE PICTURE, in one column. Half the panel is not wide enough for

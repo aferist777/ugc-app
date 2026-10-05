@@ -29,7 +29,6 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { askDelete, short } from './ask.js';
-import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
@@ -1335,54 +1334,6 @@ function _write(c, key, value) {
 }
 
 /**
- * THE PICTURE BECOMES THE CLIP THAT WAS MADE FROM IT - Animate's Save, in place: same lane,
- * same moment, the video's own length. No ripple, because nothing here is a sequence (see the
- * placement rule above); a clip that has a sound twin on a linked lane takes it along, or the
- * picture and its sound would disagree about how long they run. One mutation, one undo.
- *
- * A CLIP THAT CAME BACK WITH SOUND (`media.audio`) gets the twin a film dropped here would have:
- * on the lane paired with this one, muted - it is filed as a birol, and a birol lands silent - so
- * turning it up is the sound slider on the clip's own panel.
- *
- * Returns false when there was nothing to change or the project cannot be edited.
- */
-export function swapClipMedia(id, media) {
-  let hit = false;
-  const ok = Store.mutate(tl => {
-    for (const t of (tl.tracks || [])) {
-      const c = (t.clips || []).find(x => x.id === id);
-      if (!c) continue;
-      hit = true;
-      const len = Math.max(0.1, Math.round((+media.dur || +c.dur || 0) * 100) / 100);
-      c.src = media.src;
-      c.thumb = media.thumb || null;
-      if (media.libId) c.libId = media.libId;
-      if (media.name) c.name = media.name;
-      c.srcDur = len; c.dur = len; c.trimIn = 0; c.trimOut = 0; c.speed = 1; c.reversed = false;
-      const mate = !c.pairId && media.audio && t.linkId ? (tl.tracks || []).find(x => x.id === t.linkId && x.kind === 'audio') : null;
-      if (mate) {
-        c.pairId = 'p' + _id().slice(1);
-        mate.clips.push({
-          id: _id(), src: media.src, thumb: null, name: c.name || '', libId: c.libId || null,
-          start: c.start, dur: len, srcDur: len, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
-          transition: null, animation: null, filter: null, volume: 0, pairId: c.pairId,
-        });
-        mate.clips.sort((a, b) => a.start - b.start);
-      } else if (c.pairId) {
-        for (const other of (tl.tracks || [])) {
-          for (const x of (other.clips || [])) {
-            if (x === c || x.pairId !== c.pairId) continue;
-            x.srcDur = len; x.dur = len; x.trimIn = 0; x.trimOut = 0; x.speed = 1; x.reversed = false;
-          }
-        }
-      }
-      return;
-    }
-  });
-  return !!(ok && hit);
-}
-
-/**
  * Several fields on one clip, in ONE mutation - which is what a placement is: putting a
  * picture on the frame sets its middle, its width and sometimes its turn, and that is one
  * thing the person did, not four.
@@ -1841,26 +1792,6 @@ export function initTimelineB() {
   document.addEventListener('mouseup', _endDrag);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
   document.addEventListener('contextmenu', _laneMenu);
-  // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. Delegated to the document and matched by
-  // id rather than bound to the element: the timeline is rebuilt from the model whenever
-  // anything changes, so a listener on a clip is a listener on a node that may not survive
-  // until the second click.
-  //
-  // What that window saves goes to the library AND replaces this still on its lane, in place -
-  // through swapClipMedia above, which keeps this editor's rules (no ripple, the sound twin
-  // follows the length).
-  document.addEventListener('dblclick', (e) => {
-    if (!_on || !e.target || !e.target.closest) return;
-    const el = e.target.closest('.mv3b-clip');
-    if (!el) return;
-    const id = el.dataset.clip;
-    const tl = Store.timeline();
-    for (const t of ((tl && tl.tracks) || [])) {
-      if (t.kind !== 'video') continue;
-      const c = (t.clips || []).find(x => x.id === id);
-      if (c && isStill({ src: c.src })) { e.stopPropagation(); openAnimate(c); return; }
-    }
-  });
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);
   document.addEventListener('keydown', (e) => {

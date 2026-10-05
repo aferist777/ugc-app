@@ -100,8 +100,9 @@ router.post('/media/thumb', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// What is in a file: length, frame size, whether it has sound (lib/media-probe.js). Merge asks it of
-// a clip Animate made, to know whether the clip arrives on the timeline with a sound twin.
+// What is in a file: length, frame size, whether it has sound (lib/media-probe.js). Nothing on a page asks
+// it since Animate went (phase C4); kept for the video chat's reference clips, whose start and end are picked
+// on the page (PLAN phase V7) - many B-roll records carry no duration.
 //   GET /api/media/probe?src=<address>   -> { duration, w, h, audio }
 router.get('/media/probe', async (req, res) => {
   try {

@@ -100,6 +100,10 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
                  // phase C3: the server version's 'copy to my profile' - one person owns every project here
                  ['POST', '/api/mv3/timeline/x/copy'], ['DELETE', '/api/scen3/projects/x'],
+                 // phase C4: Animate, its window and its routes
+                 ['GET', '/api/video/engines'], ['POST', '/api/video/animate'], ['GET', '/api/video/animate/status/x'],
+                 ['POST', '/api/video/think'], ['POST', '/api/video/reference'],
+                 ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay
