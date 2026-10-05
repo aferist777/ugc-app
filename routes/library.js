@@ -979,8 +979,17 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
       trimmed: { in: a, out: b, from, at: new Date().toISOString(), by: (req.user && req.user.login) || null },
     };
     if (kind !== 'hooks') patch.imagePath = thumbPath;
-    Object.assign(it, patch);
-    store.write(list);
+    // READ AGAIN AND WRITE IN THE SAME TICK (review V2r): the cut, the poster and the probe took seconds, and the
+    // video chat files clips into this store from the server meanwhile (lib/birols-store.js) - the list read
+    // before them would write those records away.
+    const fresh = store.read();
+    const cur = fresh.find(x => x && String(x.id) === id);
+    if (!cur) {
+      for (const u of [videoPath, thumbPath !== it.thumbPath ? thumbPath : '']) if (u) { try { fs.unlinkSync(path.join(ROOT_DIR, String(u).replace(/^\/+/, ''))); } catch (e) { /* gone */ } }
+      return res.status(404).json({ success: false, error: 'the clip was deleted while it was being cut' });
+    }
+    Object.assign(cur, patch);
+    store.write(fresh);
 
     // Ready for a lane, and a hook is still the same hook.
     try { require('./proxies').warmProxies([videoPath], 480); } catch (e) {}

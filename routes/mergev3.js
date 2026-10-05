@@ -455,20 +455,16 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     // Found by the name the filing used, and shortened by the same rule - see catLabelFor.
     // A failure here is not a failure to rename: the project has the name asked for, and a
     // category left behind is a tidying problem rather than lost work.
+    // The project's category on every shelf its chats file into - Images (pictures), B-roll (clips) and Uploads
+    // (clips brought in) - each on its own, merged into a category of the new name where the shelf has one
+    // (lib/project-cats.js, review V2r).
     let moved = false;
     try {
       const GENS = require('../lib/mv3-gens');
-      const LC = require('../lib/library-cats');
       const oldLabel = GENS.catLabelFor(was);
-      const newLabel = GENS.catLabelFor(title);
-      // The project's category on every shelf its chats file into - Images (pictures), B-roll (clips) and Uploads
-      // (clips brought in) - matched without case, as LC.add matches when it files (phase V2).
-      if (oldLabel !== newLabel && oldLabel !== GENS.LOOSE_CAT) {
-        for (const kind of ['images', 'birols', 'uploads']) {
-          const own = ((LC.read()[kind] || {}).own) || [];
-          const cat = own.find(c => String(c.label || '').toLowerCase() === oldLabel.toLowerCase());
-          if (cat) { require('../lib/shelf-files').renameCategory(kind, cat.id, newLabel); moved = true; }
-        }
+      if (oldLabel !== GENS.LOOSE_CAT) {
+        const out = require('../lib/project-cats').follow(oldLabel, GENS.catLabelFor(title));
+        moved = Object.values(out).some(v => v === 'renamed' || v === 'merged');
       }
     } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
 

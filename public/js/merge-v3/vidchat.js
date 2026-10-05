@@ -63,11 +63,14 @@ function VIDEOS(ctx) {
     const rate = (r.rates || {})[res];
     return Array.isArray(rate) ? rate[0] : (rate == null ? null : rate);
   }
-  function priceNow() {
-    const r = rec();
+  function priceNow() { return priceOf(rec()); }
+  // A record's price for the parameters as they are - the chosen one's, or the fallback rung's (which may not
+  // make this resolution at all: then it is skipped, and says so).
+  function priceOf(r) {
     if (!r) return null;
     const p = params();
-    const res = r.resolutions.includes(p.resolution) ? p.resolution : r.resDef;
+    if (p.resolution && !r.resolutions.includes(p.resolution)) return { none: true, cannot: p.resolution };
+    const res = p.resolution || r.resDef;
     const per = _perSec(r, res);
     if (per == null) return { none: true, res };
     if (r.duration.fromClip) return { per, res, fromClip: true };
@@ -255,8 +258,17 @@ function VIDEOS(ctx) {
         + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
     }
     const notes = [];
+    if (r && r.priceNote) notes.push(r.priceNote);
     if (r && r.agg === 'kie' && model() && model().id === 'grok15') notes.push("kie's rate for Grok 1.5 looks like a mistake - the first real clip will show");
-    if (r && r.duration.fromClip) notes.push('it may come back shorter than the clip, paid all the same');
+    if (r && r.duration.fromClip) notes.push('the most it costs: billed by the seconds that come back');
+    // The fallback rung, with its own price (PLAN V-B): asked only when the chosen one turns the clip down.
+    const other = r && model() ? model().records.find(x => x.agg !== r.agg && x.usable) : null;
+    if (other && !(_table && _table.fake)) {
+      const po = priceOf(other);
+      notes.push('if ' + r.aggLabel + ' turns it down: ' + other.aggLabel + ' '
+        + (!po || po.cannot ? '- skipped, it does not make ' + ((po && po.cannot) || 'this')
+          : po.none ? '(no published price)' : po.fromClip ? '≈' + money(po.per) + '/s' : '≈' + money(po.usd)));
+    }
     if (_table && _table.fake) notes.push('FAKE aggregator - nothing is paid');
     _set.fall.textContent = notes.join(' · ');
     _last.model = (model() || {}).id || _last.model;

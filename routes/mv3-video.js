@@ -84,12 +84,18 @@ router.post('/mv3/video/send', (req, res) => {
     }
 
     // Who can take it, before anything is written: the chosen aggregator (or the cheapest with a key) first.
-    const agg = KEYS.AGGS.includes(b.agg) ? b.agg : VM.defaultAgg(model, params);
+    // A CHOSEN one that cannot take it is a 400, never swapped for the other at the other's price (review V2r):
+    // the page showed what the chosen one costs. Only a refusal at the ask itself goes down the ladder.
+    const chosen = KEYS.AGGS.includes(b.agg) ? b.agg : '';
+    if (chosen && !VM.usable(chosen)) return res.status(400).json({ success: false, error: KEYS.why(chosen) || (KEYS.LABEL[chosen] + ' cannot be asked now') });
+    const probe = { media, params, prompt: isMC ? text : 'xxx' };
+    const agg = chosen || VM.defaultAgg(model, params, probe);
     const ladder = VM.ladder(model, agg);
     if (!ladder.length) return res.status(400).json({ success: false, error: VM.noRoute(model) });
     const why = [];
-    const fits = ladder.filter(p => { try { VM.check(p, { media, prompt: isMC ? text : 'x' }); return true; } catch (e) { why.push(e.message); return false; } });
+    const fits = ladder.filter(p => { try { VM.check(p, probe); return true; } catch (e) { why.push(e.message); return false; } });
     if (!fits.length) return res.status(400).json({ success: false, error: why[0] || 'no aggregator can take this' });
+    if (chosen && fits[0].agg !== chosen) return res.status(400).json({ success: false, error: why[0] || (KEYS.LABEL[chosen] + ' cannot take this') });
     if (VGENS.runningSends(project) >= AT_ONCE) {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
@@ -100,10 +106,15 @@ router.post('/mv3/video/send', (req, res) => {
     VGENS.asking.add(kick);
     CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
     const first = (isMC || b.write === false) ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
+    // Every record has its row: one without would never be ended, and would count against the three at once.
+    const where = (b.where && typeof b.where === 'object') ? b.where : {
+      page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
+      label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
+    };
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
-        project, send: msgId, kick, where: b.where, stage: first,
+        project, send: msgId, kick, where, stage: first,
         model, agg: fits[0].agg, prompt: text, said: text, params, media, skill: b.skill || null,
       }).id);
     }
@@ -122,6 +133,8 @@ router.post('/mv3/video/send', (req, res) => {
 // then every clip asked for. Each step of the record checks it is still its own.
 async function _work(o) {
   try {
+    // Every clip of the send let go of before the writer was asked: nothing to write for.
+    if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
     let over;
     if (o.isMC || o.asTyped) {
       const t = await AGENT.toEnglish(o.text);
@@ -144,13 +157,12 @@ async function _work(o) {
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
     }
-    await Promise.all(o.ids.map(id => VGENS.submit(id, over, o.kick)));
+    // Each on its own: one that breaks off (a store write that failed after its paid ask) is not every one's end.
+    const done = await Promise.allSettled(o.ids.map(id => VGENS.submit(id, over, o.kick)));
+    done.forEach((r, i) => { if (r.status === 'rejected') { console.warn('[mv3-video] send:', r.reason && r.reason.message); VGENS.abandon(o.ids[i], o.kick, r.reason); } });
   } catch (err) {
     console.warn('[mv3-video] send:', err.message);
-    for (const id of o.ids) {
-      const g = VGENS.get(id);
-      if (g && g.state === 'pending' && !g.taskId) VGENS.refuse(id, 'it stopped before it was asked for: ' + err.message, o.kick);
-    }
+    for (const id of o.ids) VGENS.abandon(id, o.kick, err);
   } finally {
     VGENS.asking.delete(o.kick);
   }
