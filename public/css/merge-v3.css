@@ -1707,7 +1707,6 @@ body.mv3-locked #mv3-timeline{
    One column: the voice and the script read in it (js/merge-v3/wk-voice.js). Who and where are on
    the stage (decided with the owner 2026-09-21). The column is the step's own scroll box with room
    at its edges - it is read, not tiled - and the voice level is laid out the same way. */
-.mv3-wk-scroll.is-col{padding:9px 10px 26px}
 /* The right column of the script (js/merge-v3/wk-fragments.js, .is-guide.is-frag) is a flex COLUMN
    with room at its edges, and everything in it keeps its own height - a one-line div or a textarea
    is the first thing a full column squashes to nothing - while the column scrolls instead. */
@@ -2260,7 +2259,6 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-vmore.is-media{align-self:stretch; text-align:center}
 .mv3-wk-fcap{font:400 9.5px/1.35 var(--font); color:var(--muted); text-align:center}
 .mv3-wk-fcap.is-why{color:var(--warn, oklch(.72 .15 75))}
-.mv3-wk-flink.is-cap{margin:0; align-self:center}
 .mv3-wk-ftext-in.is-tall{min-height:164px}
 .mv3-wk-fedited-row{display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0}
 

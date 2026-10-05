@@ -3149,18 +3149,6 @@ const _projFull = p => ({
   mix:   _normMix(p.mix),
 });
 
-// Newest first — the dropdown lists the most recent project at the top.
-router.get('/scen3/projects', (req, res) => {
-  try {
-    const list = _loadProjects().slice()
-      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    // Everyone sees every owner. The picker groups by them; which entries the caller may
-    // change is answered per project, from its `owner` against `me`.
-    res.json({ success: true, projects: list.map(_projSummary),
-               owners: OWN.ownersOf(list, req.user), me: OWN.meView(req.user) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 router.get('/scen3/projects/:id', (req, res) => {
   try {
     const p = _loadProjects().find(x => String(x.id) === String(req.params.id));

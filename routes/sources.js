@@ -5,7 +5,6 @@
 //
 //   GET    /api/sources                  -> { sources: [summary] }
 //   GET    /api/sources/:id              -> { source, transcriptChars }
-//   GET    /api/sources/:id/transcript   -> { cues, chars, model }
 //   POST   /api/sources/upload           multipart file -> { jobId, source }
 //   POST   /api/sources/:id/transcribe   -> { jobId }
 //   POST   /api/sources/:id/topics       -> { jobId }   409 with the running job while one runs
@@ -211,10 +210,6 @@ router.get('/sources/ytdlp', async (_req, res) => {
 // ── the cookie jar ──────────────────────────────────────────────────────────
 // Never returns the contents, only whether there is one and whether it worked.
 
-router.get('/sources/cookies', (_req, res) => {
-  res.json({ success: true, cookies: COOKIES.status() });
-});
-
 // Accepts either a pasted body or an uploaded file - the export is a text file, and people
 // arrive with it both ways.
 router.post('/sources/cookies', cookieUpload.single('file'), (req, res) => {
@@ -290,14 +285,6 @@ router.get('/sources/:id', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
   res.json({ success: true, source: _withJob(rec) });
-});
-
-router.get('/sources/:id/transcript', (req, res) => {
-  const rec = store.get(req.params.id);
-  if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
-  const t = store.readTranscript(req.params.id);
-  if (!t) return res.status(404).json({ success: false, error: 'no transcript yet' });
-  res.json({ success: true, ...t, chars: (rec.transcript && rec.transcript.chars) || 0 });
 });
 
 // ── ingest ──────────────────────────────────────────────────────────────────

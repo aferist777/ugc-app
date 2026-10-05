@@ -30,7 +30,7 @@ const PORT = process.env.PORT || 3000;
 
 const {
   ROOT_DIR, MEDIA_DIR, PROJECTS_DIR, MEDIA, CACHE_DIR,
-  LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, TEMP_DIR, TEMP_PUBLIC_DIR,
+  LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR,
 } = require('./lib/config');
 // A library from before layout 6 is upgraded before anything reads a store (lib/library-upgrade.js):
 // files move into project, shelf and category folders, and the stores follow. Stopped halfway,
@@ -81,8 +81,6 @@ app.use('/media',        express.static(MEDIA_DIR));
 app.use('/cache',        express.static(CACHE_DIR));
 app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
 // Scratch, in the system temp folder.
-app.use('/temp_files',   express.static(TEMP_DIR));
-app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 // JASSUB, libass in the page for the captions' preview (phase K4): laid out by tools/fetch-jassub.js,
 // part of the program, not of the library.
 app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {

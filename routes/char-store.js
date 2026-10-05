@@ -684,7 +684,6 @@ router.patch('/char-store/:id', (req, res) => {
 // ignored, since they go away with the character). The API key now has voice
 // delete permission.
 const _DATA_DIR        = DATA_DIR;
-const _CUSTOM_VOICES   = path.join(_DATA_DIR, 'custom-voices.json');
 const _OBRAZY_FILE     = path.join(_DATA_DIR, 'obrazy.json');
 function _readJson(f, fallback) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; } }
 
@@ -697,12 +696,8 @@ function _readJson(f, fallback) { try { return JSON.parse(fs.readFileSync(f, 'ut
 // Each one is put on the shelf before its slot goes, and the shelf is told the slot went.
 // Without that, the info column would go on claiming a released voice was still in the
 // account - it has no other way to know.
-//
-// A legacy `voice` may be a NAME from data/custom-voices.json rather than an id, so that
-// alias lookup stays.
 async function _releaseCharVoices(char) {
   if (!char) return [];
-  const catalog = _readJson(_CUSTOM_VOICES, []);
   const refs = [];
   if (char.voice) refs.push(String(char.voice));
   for (const v of (Array.isArray(char.voices) ? char.voices : [])) {
@@ -715,10 +710,8 @@ async function _releaseCharVoices(char) {
   const out = [];
 
   for (const ref of refs) {
-    const entry = catalog.find(x => x && (x.name === ref || x.voiceId === ref || x.id === ref));
-    const voiceId = (entry && entry.voiceId) || ref;
-    const matches = (v) => v && (String(v) === ref || String(v) === voiceId
-      || (entry && (String(v) === entry.name || String(v) === entry.id)));
+    const voiceId = ref;
+    const matches = (v) => v && String(v) === ref;
 
     // Both fields on every surviving character, which is what was missing.
     const heldBy = others.filter(c => matches(c.voice)
@@ -747,13 +740,6 @@ async function _releaseCharVoices(char) {
     }
     console.log('[char-store/delete] voice', voiceId, slot.released ? 'released' : ('kept: ' + slot.reason));
     out.push({ voiceId, released: !!slot.released, reason: slot.reason || '' });
-
-    // The legacy catalog entry goes with it.
-    if (entry) {
-      try {
-        writeFileAtomic(_CUSTOM_VOICES, JSON.stringify(catalog.filter(x => x !== entry), null, 2));
-      } catch (e) {}
-    }
   }
   return out;
 }

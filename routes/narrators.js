@@ -94,14 +94,6 @@ router.post('/narrators', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
-router.patch('/narrators/:id', (req, res) => {
-  try {
-    const name = String((req.body || {}).name || '').trim();
-    if (!name) return res.status(400).json({ success: false, error: 'a name is required' });
-    res.json({ success: true, narrator: store.update(req.params.id, { name }) });
-  } catch (e) { res.status(404).json({ success: false, error: e.message }); }
-});
-
 router.delete('/narrators/:id', (req, res) => {
   try {
     store.remove(req.params.id);

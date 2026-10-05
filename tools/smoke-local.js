@@ -94,6 +94,10 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // phase C: routes nothing called - a 501 stub, a write that replaced every look, a delete
                  // that wiped a look's folder past lib/relocate.js
                  ['POST', '/api/narrators/x/samples/link'], ['POST', '/api/userdata/obrazy'], ['DELETE', '/api/obrazy/x'],
+                 // ...and the probably dead: a list for a gone dropdown, a rename with no page, two reads the
+                 // page makes elsewhere, and scratch served over HTTP
+                 ['GET', '/api/scen3/projects'], ['PATCH', '/api/narrators/x'], ['GET', '/api/sources/cookies'],
+                 ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay
