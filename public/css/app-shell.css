@@ -7,7 +7,10 @@
 :root{
   --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
   --ease:cubic-bezier(.22,1,.36,1);
-  --font:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  /* No "Inter" here (phase S6, the owner 2026-10-05): no computer has it, so it only ever meant the BOLD caption
+     file css/caption-fonts.css declares under that name - Merge, which loads that file, was drawn bold and wide
+     everywhere while Library and Admin were Segoe UI. */
+  --font:"Segoe UI",system-ui,-apple-system,sans-serif;
   --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
   --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
   --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
