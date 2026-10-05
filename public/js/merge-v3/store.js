@@ -68,21 +68,12 @@ let _key = null;           // which project is open
 let _title = '';
 let _adv = null;          // the project's export settings, as the server holds them
 
-// WHOSE IT IS, and whether that is you. Read with the project and never changed here: the
-// server decides, and the answer only moves when a different project is opened. A project
-// that is not yours opens all the same - to look at - and every edit is refused at mutate()
-// with a message, rather than accepted here and thrown back by the server one save later.
-let _owner = null;
-let _ownerNick = null;
+// WHETHER IT MAY BE CHANGED. Read with the project and never changed here: the server decides (in the desktop
+// app every project is the one person's, lib/ownership.js), and a refused project would have every edit
+// refused at mutate() with a message rather than accepted here and thrown back one save later.
 let _canEdit = true;
-let _me = null;            // the signed-in person, as the list reports them
 export function canEdit() { return _canEdit; }
-export function owner() { return { owner: _owner, ownerNick: _ownerNick }; }
-export function me() { return _me; }
-function _roMessage() {
-  return 'Read only - this project belongs to ' + (_ownerNick || (_owner ? 'another user' : 'everyone (shared)'))
-       + '. Copy it to your profile to edit it.';
-}
+function _roMessage() { return 'Read only - this project cannot be changed here.'; }
 
 // NOTHING IS OPEN BY DEFAULT. Walking into Merge shows an empty timeline and the project
 // picker, and the project is chosen deliberately - opening whatever happened to be open last
@@ -164,8 +155,7 @@ export function setAdv(a) { _adv = (a && typeof a === 'object') ? a : null; }
 export async function listFull() {
   const d = await fetch('/api/mv3/timelines').then(r => r.json());
   if (!d || !d.success) throw new Error((d && d.error) || 'could not list projects');
-  _me = d.me || null;
-  return { list: d.list || [], owners: d.owners || [], me: _me };
+  return { list: d.list || [] };
 }
 export async function list() { return (await listFull()).list; }
 
@@ -202,18 +192,6 @@ export async function openBlank() {
   return load();
 }
 
-// A copy of a project under your own name, opened in its place. The one way to work on a
-// project that is somebody else's or shared. Nothing is flushed first: a project you could
-// not edit has no unsaved edit in it.
-export async function copy(k) {
-  const key = k || _key;
-  if (!key) throw new Error('nothing open to copy');
-  const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/copy', { method: 'POST' }).then(r => r.json());
-  if (!d || !d.success) throw new Error((d && d.error) || 'could not copy');
-  await open(d.key);
-  return d.key;
-}
-
 export async function load(k) {
   let want = k;
   // ?p=<key> is Scenarios handing over a project it has just written. It is also what a
@@ -242,7 +220,7 @@ export async function load(k) {
     _key = null;
     _title = '';
     _adv = null;
-    _owner = null; _ownerNick = null; _canEdit = true;
+    _canEdit = true;
     _base = null;
     _dirty = false;
     _status = null;
@@ -262,8 +240,6 @@ export async function load(k) {
   _key = d.key;
   _title = d.title || '';
   _adv = d.adv || null;
-  _owner = d.owner || null;
-  _ownerNick = d.ownerNick || null;
   _canEdit = d.canEdit !== false;
   _base = clone(d.timeline);        // the floor a later merge measures "what did I change" against
   // The URL follows what is actually open, so a reload comes back to the same project while a

@@ -117,6 +117,15 @@ export function askDelete(anchor, text, sub, onYes) {
 }
 
 /**
+ * A question with more than two answers (phase C3: delete the timeline only, or its files too). `choices`:
+ * [{ label, kind: 'yes' (the destructive one, in red) | undefined, on }]; a choice without `on` only closes.
+ * `opts.stay` - not closed by scrolling (an anchor that does not scroll: the project bar).
+ */
+export function askChoice(anchor, text, sub, choices, opts) {
+  _panel(anchor, text, sub, choices || [], opts);
+}
+
+/**
  * Something to say rather than something to ask. One button, and it only closes.
  *
  * Its own function rather than askDelete with an empty handler: a Yes/No offers a choice, and

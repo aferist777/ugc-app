@@ -12,37 +12,20 @@
    without this page doing anything - Scenarios writes it - and a cached list would show
    yesterday's projects until a reload.
 
-   ONE OWNER AT A TIME. Every project has an owner (or is shared - see lib/ownership.js),
-   and the picker lists one owner's projects, chosen in the Owner dropdown to its left.
-   Anyone's can be opened; only your own can be changed (the admin: all of them). The rest
-   open read-only, and the way to work on one is "copy to my profile", which makes a copy
-   under your name and opens it in place - the picker follows.
+   ONE PERSON. The desktop app has one, so every project is theirs (lib/ownership.js answers so) and
+   the picker lists them all - the owner picker, "copy to my profile" and the read-only lock of the
+   server version went in phase C.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
+import { askChoice } from './ask.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
-function _own() { return document.getElementById('mv3-owner'); }
-
-// Which owner's projects the picker lists. The value of the dropdown is the owner's id, and
-// 'shared' for the projects from before there were owners.
-const SHARED = 'shared';
-let _ownerSel = null;      // null until the first paint decides
-const _ownerOf = (p) => (p && p.owner) || SHARED;
-
-// Kept in the URL beside ?p=, so a reload comes back to the same list.
-function _urlOwner() {
-  try { return new URLSearchParams(location.search).get('o'); } catch (e) { return null; }
-}
-function _rememberOwner(v) {
-  try {
-    const u = new URL(location.href);
-    if (u.searchParams.get('o') !== v) { u.searchParams.set('o', v); history.replaceState({}, '', u); }
-  } catch (e) {}
-}
+// Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
+let _after = '';
 function _note(text) {
   const el = document.getElementById('mv3-project-note');
   if (el) el.textContent = text || '';
@@ -59,35 +42,12 @@ async function _paint() {
   if (!sel) return;
   let d = null;
   try { d = await Store.listFull(); } catch (e) { _note(e.message); return; }
-  const { list, owners, me } = d;
-
-  // WHICH OWNER. An open project decides: the picker has to be showing the list that
-  // contains it. Otherwise the last choice, kept in the URL like the project is; failing
-  // that, your own.
+  const { list } = d;
   const open = Store.key();
   const openRec = open ? list.find(p => p.key === open) : null;
-  if (openRec) _ownerSel = _ownerOf(openRec);
-  else if (_ownerSel == null) _ownerSel = _urlOwner() || (me ? String(me.id) : SHARED);
-  if (!owners.some(o => (o.id || SHARED) === _ownerSel)) _ownerSel = me ? String(me.id) : SHARED;
-  _rememberOwner(_ownerSel);
-
-  const own = _own();
-  if (own) {
-    // A list of one owner is not a choice - the desktop app has one person - so it is not shown.
-    const fld = own.closest('label');
-    if (fld) fld.style.display = owners.length > 1 ? '' : 'none';
-    own.textContent = '';
-    for (const o of owners) {
-      const e = document.createElement('option');
-      e.value = o.id || SHARED;
-      e.textContent = o.nick + (o.me ? ' (me)' : '') + ' · ' + o.count;
-      own.appendChild(e);
-    }
-    own.value = _ownerSel;
-  }
 
   sel.textContent = '';
-  const shown = list.filter(p => _ownerOf(p) === _ownerSel);
+  const shown = list;
   for (const p of shown) {
     const o = document.createElement('option');
     o.value = p.key;
@@ -107,30 +67,8 @@ async function _paint() {
     o.textContent = '— choose a project —';
     sel.insertBefore(o, sel.firstChild);
     sel.value = '';
-    _note(shown.length ? 'nothing open yet' : (list.length ? 'no projects here yet' : 'no projects yet'));
-  }
-  _paintButtons(openRec, me);
-}
-
-// Which of the three buttons apply to the open project. Yours: edit and delete. Somebody
-// else's, or shared: copy, and a lock that says whose it is. The admin gets both sets on
-// anything that is not theirs - they can change it, and they may still want their own.
-function _paintButtons(rec, me) {
-  const edit = document.getElementById('mv3-project-edit');
-  const del  = document.getElementById('mv3-project-del');
-  const copy = document.getElementById('mv3-project-copy');
-  const lock = document.getElementById('mv3-project-lock');
-  const has = !!rec;
-  const can = has && Store.canEdit();
-  const foreign = has && !!me && (rec.owner || null) !== String(me.id);
-  if (edit) edit.hidden = has && !can;
-  if (del)  del.hidden  = has && !can;
-  if (copy) copy.hidden = !foreign;
-  if (lock) {
-    lock.hidden = !(has && !can);
-    lock.textContent = (has && !can)
-      ? '🔒 read only — ' + (rec.owner ? 'belongs to ' + (rec.ownerNick || 'another user') : 'shared')
-      : '';
+    _note(_after || (shown.length ? 'nothing open yet' : 'no projects yet'));
+    _after = '';
   }
 }
 
@@ -154,21 +92,9 @@ export function initProjects() {
   sel.addEventListener('mousedown', () => { _paint(); });
   sel.addEventListener('focus', () => { _paint(); });
 
-  // Choosing an owner is leaving the project. The timeline would otherwise keep showing one
-  // person's work while the bar names another - the very confusion the placeholder above
-  // exists to prevent. Unsaved edits are flushed by openBlank on the way out.
-  const own = _own();
-  if (own) own.addEventListener('change', async () => {
-    _ownerSel = own.value;
-    _rememberOwner(_ownerSel);
-    if (Store.key()) { try { await Store.openBlank(); } catch (e) { _note(e.message); } }
-    else await _paint();
-  });
-
   _wireNew();
   _wireRename();
   _wireDelete();
-  _wireCopy();
 
   // And once when the store first knows which project is open. The sentinel is a Symbol, not
   // null: "no project open" IS null now, so a null seed made the first paint look like a
@@ -333,7 +259,7 @@ function _wireRename() {
     if (_editing) { _saveRename(); return; }
     const key = Store.key();
     if (!key) { _note('open a project first'); return; }
-    if (!Store.canEdit()) { _note('read only - copy it to your profile first'); return; }
+    if (!Store.canEdit()) { _note('this project cannot be changed here'); return; }
     _editing = true;
     box.value = Store.title() || '';
     box.hidden = false;
@@ -356,27 +282,6 @@ function _wireRename() {
     if (e.target === box || e.target === b) return;
     _cancelRename();
   }, true);
-}
-
-// ── Copy to my profile ──────────────────────────────────────────────────────
-// The way into a project that is not yours. The store opens the copy the moment it exists,
-// and the picker follows the store: the owner dropdown lands on you, with the copy selected.
-function _wireCopy() {
-  const b = document.getElementById('mv3-project-copy');
-  if (!b) return;
-  b.addEventListener('click', async () => {
-    if (!Store.key()) return;
-    b.disabled = true;
-    _note('copying…');
-    try {
-      await Store.copy();
-      _note('');
-    } catch (e) {
-      _note(e.message);
-    } finally {
-      b.disabled = false;
-    }
-  });
 }
 
 // ── Delete, armed by the first click ────────────────────────────────────────
@@ -406,14 +311,33 @@ function _wireDelete() {
     _disarm();
     const key = Store.key();
     if (!key) return;
-    _note('deleting…');
-    try {
-      const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key), { method: 'DELETE' }).then(r => r.json());
-      if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-      _note('');
-      // Back to nothing open rather than to whatever is left. Deleting a project and finding
-      // yourself editing a different one is how the wrong video gets edited.
-      await Store.openBlank();
-    } catch (e) { _note(e.message); }
+    // A TALKING HEAD'S FILES (phase C3, the owner 2026-10-05): the last timeline of its project holds the reads,
+    // frames and clips in the project's folder, and deleting it asks whether they go too. The pictures and videos
+    // on the Library's shelves are not in that folder and stay.
+    let rec = null;
+    try { rec = (await Store.list()).find(p => p.key === key) || null; } catch (e) { rec = null; }
+    if (rec && rec.ownFiles) {
+      askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
+        'Its reads, frames and clips are in the project folder. The pictures and videos on the Library shelves stay either way.', [
+          { label: 'Timeline only', on: () => _delete(key, false) },
+          { label: 'And its files', kind: 'yes', on: () => _delete(key, true) },
+          { label: 'Cancel' },
+        ], { stay: true });   // the bar does not scroll; a project still opening scrolls the page under it
+      return;
+    }
+    _delete(key, false);
   });
+}
+
+async function _delete(key, files) {
+  _note('deleting…');
+  try {
+    const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + (files ? '?files=1' : ''), { method: 'DELETE' }).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    // Back to nothing open rather than to whatever is left. Deleting a project and finding
+    // yourself editing a different one is how the wrong video gets edited.
+    const kept = d.files && d.files.kept;
+    _after = kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '';
+    await Store.openBlank();
+  } catch (e) { _note(e.message); }
 }

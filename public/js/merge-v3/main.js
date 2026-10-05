@@ -153,9 +153,6 @@ Store.onChange(() => {
     if (el) el.disabled = !can;
   }
   document.body.classList.toggle('mv3-noproject', !has);
-  // Open to look at. The store refuses the edits themselves (mutate); this is what says
-  // why before anybody tries.
-  document.body.classList.toggle('mv3-readonly', has && !can);
 });
 
 // Last, and not awaited: the shell is usable before the timeline arrives, and the store

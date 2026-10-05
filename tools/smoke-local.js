@@ -98,6 +98,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // page makes elsewhere, and scratch served over HTTP
                  ['GET', '/api/scen3/projects'], ['PATCH', '/api/narrators/x'], ['GET', '/api/sources/cookies'],
                  ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
+                 // phase C3: the server version's 'copy to my profile' - one person owns every project here
+                 ['POST', '/api/mv3/timeline/x/copy'], ['DELETE', '/api/scen3/projects/x'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay

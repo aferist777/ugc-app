@@ -3224,18 +3224,8 @@ router.post('/scen3/projects', (req, res) => {
 });
 
 // Deletes the project only — the source scenario stays in the library.
-router.delete('/scen3/projects/:id', (req, res) => {
-  try {
-    const list = _loadProjects();
-    const rec = list.find(x => String(x.id) === String(req.params.id));
-    if (!rec) return res.status(404).json({ success: false, error: 'not found' });
-    if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
-    // The project's folder goes with it - voice, frames, clips, timelines. What another project,
-    // a timeline elsewhere or a shelf still points at is moved to media/work/ first.
-    const { moved } = PROJECTS.remove(rec.id);
-    res.json({ success: true, kept: moved });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
+// (DELETE /scen3/projects/:id went in phase C3: nothing called it. A talking head's folder is deleted with its
+// last timeline from Merge - DELETE /mv3/timeline/:key?files=1, routes/mergev3.js.)
 
 /* ── The words of ONE line ───────────────────────────────────────────────
    POST /api/scen3/projects/:id/line  { index, text } -> { success, project }

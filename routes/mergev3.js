@@ -43,7 +43,6 @@
                                            stale version, so the caller can reconcile
                                            rather than guess.
                                            403 when the project is somebody else's.
-     POST   /api/mv3/timeline/:key/copy    -> { success, key, title } the caller's own copy
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -107,12 +106,13 @@ function _write(state) {
 router.get('/mv3/timelines', (req, res) => {
   try {
     const s = _read();
+    const own = _folderFiles(Object.keys(s.timelines));
     const list = Object.keys(s.timelines).map(key => {
       const t = s.timelines[key];
       let clips = 0;
       for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
-               kind: t.kind || null, clips, rev: _revOf(t), ...OWN.ownerView(t) };
+               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), ...OWN.ownerView(t) };
     }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     // Everyone sees every owner. The picker groups by them; which entries the caller may
     // change is answered per project, from its `owner` against `me`.
@@ -472,6 +472,22 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// WHICH TIMELINES HOLD A PROJECT'S OWN FILES (phase C3): the last timeline left in a talking head's folder -
+// projects/<name>/ with its project.json, reads, frames and clips. Deleting that timeline can take the folder too;
+// one with another timeline beside it (a copy) cannot - the other still uses the files.
+function _folderFiles(keys) {
+  const PROJECTS = require('../lib/projects-store');
+  const talking = new Set(PROJECTS.entries().filter(e => e.kind === 'scenarios').map(e => e.folder));
+  const byFolder = new Map();
+  for (const k of keys) {
+    const at = MSTORE.locate(k);
+    if (at && talking.has(at.folder)) byFolder.set(at.folder, (byFolder.get(at.folder) || []).concat(k));
+  }
+  const out = new Set();
+  for (const ks of byFolder.values()) if (ks.length === 1) out.add(ks[0]);
+  return out;
+}
+
 router.delete('/mv3/timeline/:key', (req, res) => {
   try {
     const key = String(req.params.key || '');
@@ -480,55 +496,39 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     // Deleting is the one write nobody but the owner should be able to undo their way out of,
     // so it is held to the same line as the rest - and the admin's on anything.
     if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
+    // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
+    // clips - goes with its last timeline (PROJECTS.remove: what another project, timeline or shelf still points
+    // at is moved to media/work first). The Library's categories named after the project are not in that folder
+    // and stay, with what was made into them. Refused while something is still being made for the project: a
+    // clip landing in a folder that is gone would be lost, and it was paid for.
+    let proj = null;
+    if (String(req.query.files || '') === '1') {
+      const at = MSTORE.locate(key);
+      const PROJECTS = require('../lib/projects-store');
+      const e = at ? PROJECTS.entries().find(x => x.kind === 'scenarios' && x.folder === at.folder) : null;
+      if (e) {
+        if (!_folderFiles(Object.keys(cur.timelines)).has(key)) {
+          return res.status(409).json({ success: false, error: 'Another timeline of this project still uses its files - delete the timeline only.' });
+        }
+        const running = require('../lib/alerts').list().filter(r => r && r.state === 'running' && r.where && r.where.spot
+          && String(r.where.spot.key || '') === key).length;
+        if (running) {
+          return res.status(409).json({ success: false, running,
+            error: running + (running === 1 ? ' thing is' : ' things are') + ' still being made for this project - wait for '
+              + (running === 1 ? 'it' : 'them') + ' or let ' + (running === 1 ? 'it' : 'them') + ' go in Alerts first.' });
+        }
+        proj = e;
+      }
+    }
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-/* ── A copy of somebody's project, owned by whoever asked ────────────────────
-   POST /api/mv3/timeline/:key/copy -> { success, key, title }
-
-   The one way to work on a project that is not yours. Everything the project is comes
-   across - tracks, export settings, format - and the copy is the caller's from its first second:
-   their name on it, rev 1,
-   nothing shared with the original but the media files, which neither project writes to.
-   ──────────────────────────────────────────────────────────────────────────── */
-router.post('/mv3/timeline/:key/copy', (req, res) => {
-  try {
-    const src = String(req.params.key || '');
-    const cur = _read();
-    const from = cur.timelines[src];
-    if (!from) return res.status(404).json({ success: false, error: `no project "${src}"` });
-
-    // "(copy)", then "(copy 2)" and on until the name is free: the rule rename and creation
-    // refuse on, applied here instead, because there is nobody in the loop to ask.
-    const base = String(from.title || 'Untitled').replace(/\s*\(copy(?: \d+)?\)$/i, '').slice(0, 100);
-    let title = base + ' (copy)';
-    for (let n = 2; _titleTaken(cur.timelines, title, null); n++) title = `${base} (copy ${n})`;
-
-    let key = 'mv3_' + Date.now();
-    for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
-
-    const now = new Date().toISOString();
-    const deep = (x) => (x == null ? null : JSON.parse(JSON.stringify(x)));
-    cur.timelines[key] = {
-      title,
-      createdAt: now,
-      updatedAt: now,
-      adv: deep(from.adv),
-      owner: OWN.uidOf(req),
-      rev: 1,
-      kind: BLANK_KIND,
-      format: from.format || '9:16',
-      // Where it came from. The result window walks this back to the Scenarios record the
-      // import was made from - see /mv3/timeline/:key/source below.
-      from: src,
-      tracks: Array.isArray(from.tracks) ? deep(from.tracks) : _emptyBlank().tracks,
-    };
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, key, title });
+    let files = null;
+    if (proj) {
+      const { moved } = require('../lib/projects-store').remove(proj.id);
+      files = { removed: true, kept: moved };
+    }
+    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
