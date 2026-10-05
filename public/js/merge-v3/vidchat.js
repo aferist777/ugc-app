@@ -155,7 +155,8 @@ function VIDEOS(ctx) {
       const o = document.createElement('option');
       o.value = r.agg;
       const per = _perSec(r, r.resDef);
-      o.textContent = r.aggLabel + (r.usable ? (per != null ? ' · ' + money(per) + '/s' : '') : ' - ' + (r.why || 'cannot be asked'));
+      // The reason already names the aggregator ("kie.ai - no key ...").
+      o.textContent = r.usable ? r.aggLabel + (per != null ? ' · ' + money(per) + '/s' : '') : (r.why || r.aggLabel + ' - cannot be asked');
       o.disabled = !r.usable;
       _set.agg.appendChild(o);
     }
