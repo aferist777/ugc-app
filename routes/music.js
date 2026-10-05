@@ -37,6 +37,14 @@ function _saveSunoLib(list) {
 // targetDuration (sec) is informational — Suno V4/V5 in customMode always generates two
 // ~1:30-2:30 variants per request, which the status endpoint concatenates (crossfade) into a
 // single 3-5 min track. We log the target to help debugging; downstream concat doesn't gate on it.
+// WHERE kie IS TOLD TO REPORT. kie's Suno endpoint used here (/api/v1/generate, docs.kie.ai/old-model/suno-api/
+// generate-music) REQUIRES a callback address, and kie POSTs every finished task to it - the track links, the
+// title, the style. This app never reads a callback (the task is polled, the status route below and
+// lib/gen-jobs.js), so the address must be one that can never be reached: the .invalid top-level domain is
+// reserved for exactly that (RFC 2606, RFC 6761) and never resolves. It used to be https://example.com/callback,
+// which handed each finished task to a server nobody here owns.
+const NO_CALLBACK = 'https://callback.invalid/kie-suno';
+
 // The asking itself, as a function: the server asks again when somebody presses retry in the
 // Alerts list, and that has to be the same request.
 async function _submitSuno(b) {
@@ -57,12 +65,18 @@ async function _submitSuno(b) {
         negativeTags: negativeTags || 'vocals, lyrics, metal, aggressive, heavy, noise',
         styleWeight:         styleWeight         ?? 0.7,
         weirdnessConstraint: weirdnessConstraint ?? 0.3,
-        callBackUrl: 'https://example.com/callback',
+        callBackUrl: NO_CALLBACK,
       },
       { headers: kieHeaders(), timeout: 30000 }
     );
   const taskId = taskRes.data?.data?.taskId || taskRes.data?.taskId;
-  if (!taskId) throw Object.assign(new Error('kie.ai did not answer with a taskId'), { status: 502 });
+  // kie refuses inside a 200 ({ code, msg }): its words, not a bare "no taskId" - so a refusal of the address
+  // above, which costs nothing, says what it is about the moment it happens.
+  if (!taskId) {
+    const said = String(taskRes.data?.msg || '').slice(0, 200);
+    throw Object.assign(new Error('kie.ai did not start the music' + (said ? ': ' + said : '')
+      + (/call ?back/i.test(said) ? ' (the app gives kie an address that never resolves, so finished tracks are not reported to anybody)' : '')), { status: 502 });
+  }
   return taskId;
 }
 
