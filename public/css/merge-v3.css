@@ -328,7 +328,7 @@ body.mv3-resize-h, body.mv3-resize-h *{cursor:row-resize !important; user-select
 
 /* Must match LBL_W in js/merge-v3/timeline-b.js: the playhead is positioned in px
    from the left edge of the scrolling area, so both sides need the same number. */
-:root{--mv3-lbl-w:78px}
+:root{--mv3-lbl-w:84px}
 
 /* The scroll box. Only this scrolls - the labels inside it are sticky, so they stay
    put while the lanes run right. */
@@ -780,6 +780,14 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   margin:1px 0 6px; padding-left:76px;
   font:400 9.5px/1.4 var(--font); color:var(--muted);
 }
+.mv3-c-hint.is-flush{padding-left:0}
+/* A row of buttons with no label (phase S2, controls.js acts): they share the strip's whole width and give
+   way evenly when it is short - a label that no longer fits ends in "…". */
+.mv3-c-acts{display:flex; align-items:center; gap:4px; padding:3px 0; min-width:0}
+.mv3-c-acts > .mv3-c-btn{
+  flex:0 1 auto; min-width:0; padding:3px 6px; font-size:9px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 
 .mv3-c-slider{display:flex; align-items:center; gap:7px; width:100%; min-width:0}
 .mv3-c-slider input[type=range]{flex:1 1 auto; min-width:0; height:14px; accent-color:var(--primary); cursor:pointer}
@@ -1213,6 +1221,15 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    lost its opposite number - so it is quiet rather than decorative. */
 .mv3b-lbl{gap:4px}
 .mv3b-lbl > span:first-child{overflow:hidden; text-overflow:ellipsis}
+/* THE NAME IS A BUTTON AND LOOKS LIKE ONE (phase S4, the owner 2026-10-05): a gold frame drawn inside the cell,
+   so nothing moves - over the cell's background, under the name. Hover and the picked lane fill it faintly.
+   The ruler's empty cell has none. An exception to "gold once per surface" (app-shell.css), asked for. */
+.mv3b-row:not(.is-ruler) .mv3b-lbl::before{
+  content:''; position:absolute; inset:3px 2px; z-index:-1; pointer-events:none;
+  border:1px solid var(--gold); border-radius:var(--r-xs); transition:background .12s var(--ease);
+}
+.mv3b-row:not(.is-ruler) .mv3b-lbl:hover::before,
+.mv3b-row.is-selT .mv3b-lbl::before{background:oklch(from var(--gold) l c h / .14)}
 .mv3b-link{flex:0 0 auto; font-size:9px; opacity:.7}
 
 /* Clips. A video lane is a LAYER - clips on it may cover one another and the lane's place in

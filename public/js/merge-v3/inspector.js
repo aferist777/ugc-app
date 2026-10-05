@@ -552,21 +552,23 @@ function _blankWordsTrack(host, track) {
         + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are.',
     });
     gen.disabled = v.busy || !Store.key() || !Store.canEdit();
-    host.appendChild(C.row('', C.pair(gen, add)));
     // BACK TO WHAT WAS HEARD (K2): the pages laid again from the answers this project keeps - the hand
     // cuts, trims and word edits of the heard lines go, the typed lines stay; nothing is asked or paid.
+    let back = null, fixed = 0;
     if (v.heard) {
       // The words corrected by hand go with it (K10, the owner's answer 1) - said before the press.
-      const fixed = (track.clips || []).reduce((n, c) => n + correctedCount(c), 0);
-      const back = C.button(v.again ? 'Re-laying...' : 'back to what was heard', () => Listen.start({ stored: true }), {
+      fixed = (track.clips || []).reduce((n, c) => n + correctedCount(c), 0);
+      back = C.button(v.again ? 'Re-laying...' : 'back to what was heard', () => Listen.start({ stored: true }), {
         title: 'Lays the heard lines again exactly as they were first heard and cut - your cuts, trims and '
           + 'corrections of them go, lines you typed stay. Nothing is asked and nothing is paid; if the sound '
           + 'has changed since, Generate from the sound hears the new part.',
       });
       back.disabled = v.busy || !Store.canEdit();
-      host.appendChild(C.row('', back));
-      if (fixed) host.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with it.'));
     }
+    // The ways a line gets onto this lane - heard, typed, heard again - in ONE row (phase S2, the owner
+    // 2026-10-05; a labelled row held only two).
+    host.appendChild(C.acts([gen, add, back]));
+    if (fixed) host.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with "back to what was heard".', true));
     // Telling the listener the language helps on a short or quiet opening, where it can guess another one.
     const how = listenOf(track) || {};
     host.appendChild(C.row('Language', C.select(LANG_OPTS, how.lang || 'auto', (val) => setListenB(track.id, { lang: val }))));
@@ -599,9 +601,9 @@ function _blankWordsTrack(host, track) {
         + ' MB) and listen on this computer', () => Listen.start({ download: true }))));
     }
   } else {
-    host.appendChild(C.row('', add));
+    host.appendChild(C.acts([add]));
     host.appendChild(C.hint('Typed, not heard: a transcription writes to the Subtitles lane '
-      + 'and never touches this one.'));
+      + 'and never touches this one.', true));
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
@@ -648,7 +650,7 @@ function _blankWordsTrack(host, track) {
       { title: 'Puts those lines back on the lane\'s style' })));
   }
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _presetsToggle(host);
+  _presetsHint(host);
   _laneRemove(host, track);
   return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit() };
 }
@@ -678,11 +680,10 @@ function _presetLine(host, style, back, editedAny) {
   host.appendChild(row);
 }
 
-// The tiles beside the settings, or not - remembered (captions-view.js).
-function _presetsToggle(host) {
-  host.appendChild(C.row('', C.toggleNamed('presets', CapView.tilesOpen(), (on) => { CapView.setTilesOpen(on); render(); },
-    'The preset styles beside these settings')));
-  if (_narrow() && CapView.tilesOpen()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.'));
+// The tiles are always beside the settings when there is room (phase S3, the owner 2026-10-05 - the
+// `presets` switch went: the presets are what the view is for). Only a window too narrow for them says so.
+function _presetsHint(host) {
+  if (_narrow()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.', true));
 }
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
@@ -793,7 +794,7 @@ function _renderCaptions(host, items) {
       { title: 'These lines wear their lane\'s style again' })));
   }
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _presetsToggle(host);
+  _presetsHint(host);
   host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
     { danger: true, title: 'Also on the Delete key' })));
   return { preset: common, edited: anyEdited,
@@ -885,7 +886,7 @@ function _blankCaption(host, track, clip) {
       { title: 'This line wears its lane\'s style again' })));
   }
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _presetsToggle(host);
+  _presetsHint(host);
   host.appendChild(C.row('', C.button('Remove this line', () => removeB(track.id, clip.id), {
     danger: true, title: 'Takes the caption off the lane',
   })));
@@ -949,7 +950,7 @@ function render(force) {
   try { cap = _render(); } finally { WordEdit.afterRepaint(); }
   const was = Views.isCaptions();
   // While a band is swept the view stays as it was - it follows the pick when the band is let go.
-  const on = gestureB() ? was : (!!cap && CapView.tilesOpen() && !_narrow());
+  const on = gestureB() ? was : (!!cap && !_narrow());
   _capApply = cap ? cap.apply : null;
   if (on && cap) CapView.show(cap); else if (!on) CapView.hide();
   Views.setCaptions(on);
@@ -957,11 +958,12 @@ function render(force) {
   if (on && !was) requestAnimationFrame(() => requestAnimationFrame(() => { revealSelB(); CapView.revealLit(); }));
 }
 
-// ROOM FOR THE TILES (K6): the strip keeps its 350px and the tiles want 170 more beside it. Decided on every
+// ROOM FOR THE TILES (K6): the strip keeps its 350px and the tiles want one column beside it - a 96px tile and
+// the grid's padding (phase S1 made them squares of 88-96px; K6's 9:16 ones wanted 170). Decided on every
 // paint from what the panel holds with the corner moved - not latched from one reading, which a sash dragged
 // narrow in the chat turned off for the session (review K6). A window that cannot give it shows the strip
-// alone, as before K6, and says so under "presets".
-const CAP_ROOM = 350 + 170;
+// alone, as before K6, and says so.
+const CAP_ROOM = 350 + 116;
 function _narrow() {
   const col = document.getElementById('mv3-left');
   const lib = document.getElementById('mv3-library');

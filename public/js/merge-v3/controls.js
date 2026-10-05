@@ -33,12 +33,27 @@ export function row(label, control) {
 }
 
 // A note under the controls, for a rule the UI cannot show by itself (what overrides
-// what, what is not wired yet).
-export function hint(text) {
+// what, what is not wired yet). `flush` - under a row of buttons with no label, so it starts
+// at the edge rather than at the label column.
+export function hint(text, flush) {
   const h = document.createElement('div');
-  h.className = 'mv3-c-hint';
+  h.className = 'mv3-c-hint' + (flush ? ' is-flush' : '');
   h.textContent = text;
   return h;
+}
+
+// A row of buttons with no label (phase S2): the whole width of the strip is theirs, so three fit
+// where a labelled row took two. Missing ones are skipped; a label too long for its share ends in "…"
+// and is whole in its title.
+export function acts(btns) {
+  const r = document.createElement('div');
+  r.className = 'mv3-c-acts';
+  for (const b of btns || []) {
+    if (!b) continue;
+    if (!b.title) b.title = b.textContent;
+    r.appendChild(b);
+  }
+  return r;
 }
 
 export function slider({ min, max, step, value, fmt, onChange }) {

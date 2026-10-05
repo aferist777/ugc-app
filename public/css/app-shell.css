@@ -15,7 +15,9 @@
   --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
   /* Gold marks the one thing that is singled out: the voice a character actually speaks
      with, a rescue waiting in the nav, an empty casting frame asking to be filled. Used
-     sparingly and never twice on the same surface, so it always means "look here". */
+     sparingly and never twice on the same surface, so it always means "look here". The one
+     exception, asked for by the owner (phase S4): the frames round the timeline's lane names,
+     which say "these are buttons". */
   --gold:oklch(.78 .12 85);
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
 }

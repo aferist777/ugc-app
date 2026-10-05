@@ -119,7 +119,8 @@
       document.querySelectorAll('.adm-panel[data-pane]').forEach(function (p) {
         p.hidden = p.getAttribute('data-pane') !== name;
       });
-      if (fromClick) history.replaceState(null, '', '#' + name);
+      // The page's own path: <base href="/"> would make a bare '#keys' the address of Merge, and F5 would open it.
+      if (fromClick) history.replaceState(null, '', location.pathname + '#' + name);
       document.dispatchEvent(new CustomEvent('adm-pane', { detail: name }));
     }
     tabs.forEach(function (t) {

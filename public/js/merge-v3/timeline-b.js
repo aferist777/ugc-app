@@ -47,9 +47,9 @@ let _on = false;        // is this module the one currently showing?
 
 const _host = () => document.getElementById(HOST);
 
-// The label column's width is shared with the talking-head timeline and with the CSS
-// (--mv3-lbl-w): the playhead is positioned in pixels, so all three have to agree.
-const LBL_W = 78;
+// The label column's width is shared with the CSS (--mv3-lbl-w): the playhead is positioned in pixels,
+// so both have to agree. 84 since phase S4 - at 78 "MAIN VIDEO" with its link mark ended in "…".
+const LBL_W = 84;
 // The square column sits to the LEFT of the labels, so the lanes begin 20px further in than
 // the label width alone says. The playhead is positioned in pixels from the timeline's left
 // edge; using LBL_W by itself put the line over the names it was meant to stand beside.

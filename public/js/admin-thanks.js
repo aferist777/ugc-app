@@ -10,10 +10,11 @@
    A dependency added to package.json without a line here fails the smoke check (tools/smoke-local.js
    reads the `npm` names below) - a new library gets its thanks in the same change.
 
-   Plain data and a renderer; the pane is built once, the first time it shows.
+   Plain data and a renderer; the pane is built once, the first time it shows. ONE LIST, A-Z (phase S5, the
+   owner 2026-10-05: every entry in alphabetical order): the case is ignored, so "dotenv" stands among the
+   D's, and the group an entry belongs to is a pale tag on its line.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
-  var GROUPS = ["App and server","Desktop","Video and audio tools","Pictures and video","Speech","Captions","Fonts","Caption presets","Tools and build","Ideas and rules we follow"];
   var THANKS = [
     { group: "App and server", name: "Node.js",
       url: "https://github.com/nodejs/node", license: "MIT",
@@ -274,31 +275,31 @@
     if (count) count.textContent = 'the open-source work this app is built on - ' + THANKS.length + ' repositories';
     body.appendChild(el('p', 'thx-intro', 'UGC Studio stands on the work of these projects and the people behind them. '
       + 'Each is listed with its licence, what it is, and what it does in this app. Thank you.'));
-    GROUPS.forEach(function (g) {
-      var list = THANKS.filter(function (t) { return t.group === g; });
-      if (!list.length) return;
-      var sec = el('section', 'thx-group');
-      var h = el('div', 'thx-gh');
-      h.appendChild(el('span', 'thx-gt', g));
-      h.appendChild(el('span', 'thx-gn', String(list.length)));
-      sec.appendChild(h);
-      list.forEach(function (t) {
-        var row = el('div', 'thx-row');
-        var top = el('div', 'thx-top');
-        var a = el('a', 'thx-name', t.name);
-        a.href = t.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.title = t.url;
-        top.appendChild(a);
-        top.appendChild(el('span', 'thx-lic', t.license));
-        row.appendChild(top);
-        row.appendChild(el('div', 'thx-what', t.what));
-        row.appendChild(el('div', 'thx-how', t.how));
-        sec.appendChild(row);
-      });
-      body.appendChild(sec);
+    var coll = null;
+    try { coll = new Intl.Collator('en', { sensitivity: 'base', numeric: true }); } catch (e) { /* plain compare then */ }
+    var list = THANKS.slice().sort(function (a, b) {
+      if (coll) return coll.compare(a.name, b.name);
+      var x = a.name.toLowerCase(), y = b.name.toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
     });
+    var sec = el('section', 'thx-group');
+    list.forEach(function (t) {
+      var row = el('div', 'thx-row');
+      var top = el('div', 'thx-top');
+      var a = el('a', 'thx-name', t.name);
+      a.href = t.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.title = t.url;
+      top.appendChild(a);
+      top.appendChild(el('span', 'thx-lic', t.license));
+      top.appendChild(el('span', 'thx-grp', t.group));
+      row.appendChild(top);
+      row.appendChild(el('div', 'thx-what', t.what));
+      row.appendChild(el('div', 'thx-how', t.how));
+      sec.appendChild(row);
+    });
+    body.appendChild(sec);
   }
 
   document.addEventListener('adm-pane', function (e) { if (e.detail === 'thanks' && !built) build(); });

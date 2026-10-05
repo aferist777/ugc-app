@@ -1,17 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MERGE v3 — "LIBRARY / captions": the preset tiles (phase K6c, 2026-10-03).
 
-   While captions are picked on the timeline - a subtitle or text lane, one caption, several - and the
-   tiles are open, the Library panel shows the 127 preset styles on the left and the settings of what is
-   picked in the strip on the right (inspector.js). A press on a tile applies the preset to what is
-   picked, at once and as one step to undo; the tile of the preset it wears is lit, and says `edited`
-   when it was changed since. `presets` at the foot of the settings folds the tiles away (remembered);
-   folded, the strip sits over the shelf or the chat as it always did.
+   While captions are picked on the timeline - a subtitle or text lane, one caption, several - the
+   Library panel shows the 127 preset styles on the left and the settings of what is picked in the strip
+   on the right (inspector.js). A press on a tile applies the preset to what is picked, at once and as one
+   step to undo; the tile of the preset it wears is lit, and says `edited` when it was changed since.
+   The tiles are always there when the window has room for them (phase S3, the owner 2026-10-05: the
+   `presets` switch that folded them away is gone); a window too narrow shows the strip alone.
 
    A tile is a 2.5 s loop made by the SERVER with the render's own builder and ffmpeg
-   (lib/caption-tiles.js) - what it shows is what the render draws. Until it is made, the tile shows the
-   preset's name in its own font and colour. The tiles are built ONCE and live outside the strip, which
-   is rebuilt on every change: 127 animations rebuilt per press would be the page's whole evening.
+   (lib/caption-tiles.js) - what it shows is what the render draws: a dark square with the words in its
+   middle (phase S1). Until it is made, the tile shows the preset's name in its own font and colour. The
+   tiles are built ONCE and live outside the strip, which is rebuilt on every change: 127 animations
+   rebuilt per press would be the page's whole evening.
 
    Which view shows, the header and the room are lib-views.js's; this only draws the tiles.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -20,8 +21,10 @@ import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
-const LS_OPEN = 'mv3_cap_tiles_v1';
 const POLL_MS = 1500;
+
+// The `presets` switch's memory (K6), forgotten once - here and, through storage-sync, in ui-state.
+try { if (localStorage.getItem('mv3_cap_tiles_v1') != null) localStorage.removeItem('mv3_cap_tiles_v1'); } catch (e) { /* a private window */ }
 
 const _store = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? fb : v; } catch (e) { return fb; } };
 const _keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
@@ -37,10 +40,6 @@ let _cat = _store(LS_CAT, '');
 let _apply = null;
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
 let _reading = false;
-
-/** Are the tiles open (the captions view), or folded (the strip alone, as before K6)? */
-export const tilesOpen = () => _store(LS_OPEN, true) !== false;
-export function setTilesOpen(on) { _keep(LS_OPEN, !!on); }
 
 /** What a press on a tile does - the inspector knows what is picked. */
 export function onApply(fn) { _apply = typeof fn === 'function' ? fn : null; }
