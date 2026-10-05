@@ -100,6 +100,10 @@ const GROUPS = [
     dirs: [], stores: ['data/narrators.json', 'data/script-drafts.json'] },
   { id: 'voices', label: 'Voice shelf',
     dirs: [], stores: ['data/voice-shelf.json'], needs: ['media'] },
+  // The video chat's presets (phase V4): the person's own and the samples seeded into them, with their versions. A
+  // plain list, merged on the way in by id - the newer one wins, the versions of both are kept (lib/library-merge.js).
+  { id: 'videopresets', label: 'Video presets',
+    dirs: [], stores: ['data/video-presets.json'] },
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.

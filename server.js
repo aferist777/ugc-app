@@ -143,6 +143,7 @@ app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both
 // from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
 app.use('/api', require('./routes/mv3-video'));   // the video chat's server (phase V2)
+app.use('/api', require('./routes/mv3-catalog'));   // its catalog (cookbook, examples) and the person's presets (phase V4)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Loopback only. There is no sign-in any more, so an app listening on every interface would hand
