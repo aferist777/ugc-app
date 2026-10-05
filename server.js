@@ -149,6 +149,7 @@ app.use('/api', require('./routes/mv3-img'));
 // calls to itself, all use 127.0.0.1.
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`[boot] library: ${ROOT_DIR}`);
+  { const fake = require('./lib/fake-agg').bootLine(); if (fake) console.log(fake); }
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Studio                            ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);
