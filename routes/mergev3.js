@@ -461,10 +461,14 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
       const LC = require('../lib/library-cats');
       const oldLabel = GENS.catLabelFor(was);
       const newLabel = GENS.catLabelFor(title);
+      // The project's category on every shelf its chats file into - Images (pictures), B-roll (clips) and Uploads
+      // (clips brought in) - matched without case, as LC.add matches when it files (phase V2).
       if (oldLabel !== newLabel && oldLabel !== GENS.LOOSE_CAT) {
-        const own = ((LC.read().images || {}).own) || [];
-        const cat = own.find(c => c.label === oldLabel);
-        if (cat) { require('../lib/shelf-files').renameCategory('images', cat.id, newLabel); moved = true; }
+        for (const kind of ['images', 'birols', 'uploads']) {
+          const own = ((LC.read()[kind] || {}).own) || [];
+          const cat = own.find(c => String(c.label || '').toLowerCase() === oldLabel.toLowerCase());
+          if (cat) { require('../lib/shelf-files').renameCategory(kind, cat.id, newLabel); moved = true; }
+        }
       }
     } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
 

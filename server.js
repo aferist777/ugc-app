@@ -142,6 +142,7 @@ app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both
 // Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
 // from the character ladders' matrix (lib/img-providers.js) on purpose: the two are free to grow apart.
 app.use('/api', require('./routes/mv3-img'));
+app.use('/api', require('./routes/mv3-video'));   // the video chat's server (phase V2)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Loopback only. There is no sign-in any more, so an app listening on every interface would hand
@@ -186,6 +187,9 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // and does. This hands the records their loops back.
     try { require('./lib/mv3-gens').resume(); }
     catch (e) { console.warn('[mv3-gens] could not resume:', e.message); }
+    // And the video chat's (phase V2): a clip still being made is followed again, one never asked for fails in words.
+    try { require('./lib/mv3-video-gens').resume(); }
+    catch (e) { console.warn('[mv3-video] could not resume:', e.message); }
 
     // The same for everything in the Alerts journal: a generation the app was closed in the middle
     // of is picked up here, filed when it lands, and the list says so (lib/gen-jobs.js). After the

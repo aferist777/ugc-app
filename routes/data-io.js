@@ -77,7 +77,7 @@ const GROUPS = [
   // A project's folder holds its voice, frames, clips and timelines; the timelines point at the
   // shelves.
   { id: 'projects', label: 'Projects (Scenarios projects with their voice, frames and clips; Merge timelines, generation history)',
-    dirs: ['projects'], stores: ['data/project-list.json', 'data/merge.json', 'data/mv3-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
+    dirs: ['projects'], stores: ['data/project-list.json', 'data/merge.json', 'data/mv3-gens.json', 'data/mv3-video-gens.json', 'data/mv3-chat.json', 'data/mv3-settings.json'],
     needs: ['media', 'hooks'], heavy: true },
   // The moods store went with the Scenarios page (phase G): the video's moods live in
   // lib/motion-presets.js and are not a stored thing. An old library may still hold the file; the
