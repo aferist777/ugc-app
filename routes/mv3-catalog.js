@@ -50,7 +50,7 @@ router.get('/mv3/video/catalog/case/:slug', (req, res) => {
   try {
     const c = CAT.caseOf(req.params.slug);
     if (!c) return res.status(404).json({ success: false, error: 'no such case' + (CAT.status().cases === 'ready' ? '' : ' - the cases are not fetched yet') });
-    res.json({ success: true, case: c.entry, details: c.details });
+    res.json({ success: true, case: c.entry, details: c.details, template: c.template, skill: c.skill, slots: c.slots });
   } catch (e) { _err(res, e); }
 });
 

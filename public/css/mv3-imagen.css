@@ -331,3 +331,8 @@
 .mv3-vc-params{ display:flex; flex-direction:column }
 .mv3-vc-std{ align-self:flex-start; margin:6px 0 2px }
 .mv3-pc.is-narrow .mv3-vc-params{ flex-direction:row; flex-wrap:wrap; gap:4px 8px }
+
+/* The row just above the box that a chat fills with its own (phase V5: the video chat's catalog and the recipe in use). */
+.mv3-ig-over{ flex:0 0 auto; display:flex; align-items:center; gap:6px; min-width:0; padding:5px 10px 0 }
+.mv3-ig-over[hidden]{ display:none }
+.mv3-ig-over .mv3-c-btn{ padding:2px 8px }

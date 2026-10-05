@@ -119,6 +119,11 @@ export function createChat(make) {
     placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
     // (phase V3) The line above the thread - what the chosen model does and what to attach. Empty hides it.
     banner: (v) => { if (!_ui) return; _ui.banner.textContent = String(v || ''); _ui.banner.hidden = !v; },
+    // (phase V5) The row just above the box that a description fills (the video chat: its catalog and the skill in
+    // use), and whether the writer is on.
+    over: () => (_ui ? _ui.over : null),
+    writing: () => _write,
+    saveDraft: () => _draftLater(),
   };
   const S = make(ctx);
   const T = S.text;
@@ -236,7 +241,9 @@ export function createChat(make) {
   function _saveDraft(k) {
     const d = stored(S.keys.draft, {});
     const text = _ui ? _ui.ta.value : ((d[k] || {}).text || '');
-    if (text.trim() || _atts.length) d[k] = { text, atts: _atts.slice(0, S.maxAtts) };
+    // What the description keeps of its own with the draft (phase V5: the video chat's skill in use).
+    const extra = typeof set.draftExtra === 'function' ? set.draftExtra() : null;
+    if (text.trim() || _atts.length || extra) d[k] = Object.assign({ text, atts: _atts.slice(0, S.maxAtts) }, extra ? { extra } : {});
     else delete d[k];
     keep(S.keys.draft, d);
   }
@@ -254,6 +261,7 @@ export function createChat(make) {
       _grow();
       _paintAtts();
     }
+    if (typeof set.draftLoad === 'function') set.draftLoad(d.extra || null);
   }
 
   function _say(t) { if (_ui) _ui.said.textContent = t || ''; }
@@ -870,6 +878,8 @@ export function createChat(make) {
     banner.hidden = true;
     const thread = el('div', 'mv3-ig-thread');
     const atts = el('div', 'mv3-ig-atts');
+    const over = el('div', 'mv3-ig-over');
+    over.hidden = true;
     const file = document.createElement('input');
     file.type = 'file';
     file.accept = S.upload.accept;
@@ -891,7 +901,7 @@ export function createChat(make) {
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(ta, pen, nBtn, go);
-    chat.append(banner, thread, atts, file, bar);
+    chat.append(banner, thread, atts, over, file, bar);
 
     const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
     sash.title = 'Drag to resize · double-click to reset';
@@ -927,7 +937,7 @@ export function createChat(make) {
       head.append(wipe, ...S.headButtons());
     }
 
-    _ui = { root, set: setBox, left, said, chat, banner, thread, atts, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, set: setBox, left, said, chat, banner, thread, atts, over, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     _wireStripSash(sash, stripBox);
 
     file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });
@@ -944,7 +954,7 @@ export function createChat(make) {
         ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
         : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
     };
-    pen.addEventListener('click', () => { _write = !_write; keep(S.keys.write, _write); paintPen(); });
+    pen.addEventListener('click', () => { _write = !_write; keep(S.keys.write, _write); paintPen(); if (typeof set.onPen === 'function') set.onPen(_write); });
     paintPen();
     go.addEventListener('click', () => _send());
     ta.addEventListener('keydown', (ev) => {
@@ -981,6 +991,7 @@ export function createChat(make) {
     _grow();
     set.paint();
     _paintAtts();
+    if (typeof set.draftLoad === 'function') set.draftLoad(d.extra || null);
   }
 
   function init() {

@@ -33,6 +33,19 @@ const { toDiskExisting } = require('../lib/media');
 
 const KIND = 'clip';
 const AT_ONCE = 3;                 // sends per project at once - a clip can take ten minutes
+const SKILL_KINDS = ['template', 'case', 'example', 'preset'];
+
+// The catalog's skill a send carries (phase V5): the recipe the writer follows, as the person left it - kept on the
+// record with where it came from and whether it was edited.
+function _skill(s) {
+  if (!s || typeof s !== 'object') return null;
+  const text = String(s.text || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
+  if (!text) return null;
+  return {
+    id: String(s.id || '').slice(0, 120), kind: SKILL_KINDS.includes(s.kind) ? s.kind : 'template',
+    title: String(s.title || '').slice(0, 160), v: String(s.v || '').slice(0, 40), edited: !!s.edited, text,
+  };
+}
 const COUNTS = [1, 2];
 const KINDS = ['image', 'video', 'audio'];
 
@@ -67,6 +80,8 @@ router.post('/mv3/video/send', (req, res) => {
     if (!text && !isMC) return res.status(400).json({ success: false, error: 'say what to make' });
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
+    // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
+    const skill = (isMC || b.write === false) ? null : _skill(b.skill);
 
     // What is attached, each checked to be in the library.
     const media = (Array.isArray(b.media) ? b.media : []).slice(0, 30).map(m => ({
@@ -115,13 +130,13 @@ router.post('/mv3/video/send', (req, res) => {
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
         project, send: msgId, kick, where, stage: first,
-        model, agg: fits[0].agg, prompt: text, said: text, params, media, skill: b.skill || null,
+        model, agg: fits[0].agg, prompt: text, said: text, params, media, skill,
       }).id);
     }
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path) });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
-    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill: b.skill || null, ids, kick, before, pair: fits[0] });
+    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill, ids, kick, before, pair: fits[0] });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/send]', err.message);
