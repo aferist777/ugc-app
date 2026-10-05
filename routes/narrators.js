@@ -179,13 +179,6 @@ router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) =
   })();
 });
 
-// Links are not wired yet - they arrive with the sources phase, which is where yt-dlp and the
-// bot-check handling live. Said plainly rather than accepted and quietly dropped.
-router.post('/narrators/:id/samples/link', (_req, res) => {
-  res.status(501).json({ success: false,
-    error: 'Link samples come with the sources phase (yt-dlp). Paste the text, or upload the file.' });
-});
-
 // ── the analysis ────────────────────────────────────────────────────────────
 
 router.post('/narrators/:id/analyse', (req, res) => {

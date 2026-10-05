@@ -1,11 +1,8 @@
 'use strict';
 
-// Per-obraz folder management. The "Save obraz" flow on the frontend hits
-// /api/obrazy/create BEFORE writing to localStorage so the look-image gets
-// moved into its dedicated folder and the returned path is what ends up in
-// obrazy.json. Deletion of an obraz triggers /api/obrazy/:id to wipe the
-// folder. Pose-variations save to the folder is wired separately in
-// routes/generate.js by passing obrazId through to resolveTask.
+// The looks' folders: their main pictures (GET /obrazy/main-images) and the looks whose files are all gone
+// (POST /obrazy/prune-missing). A look is deleted through DELETE /library/item/:kind/:id, which moves its
+// files through lib/relocate.js; the old DELETE /obrazy/:id, which wiped the folder past it, went in phase C.
 
 const express = require('express');
 const fs      = require('fs');
@@ -16,10 +13,6 @@ const router  = express.Router();
 const { ROOT_DIR, DATA_DIR } = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const { obrazAbsFolder } = require('../lib/obrazy-store');
-
-function _safeRel(p) {
-  return String(p || '').replace(/^\//, '');
-}
 
 // Return the relative web path of the earliest-mtime image inside an obraz folder.
 // Skips the thumbs/ subdir and anything that isn't an image. Returns null when
@@ -66,26 +59,6 @@ router.get('/obrazy/main-images', (_req, res) => {
     res.json({ success: true, mainImages: out });
   } catch (e) {
     res.json({ success: true, mainImages: {} });
-  }
-});
-
-// ── DELETE /api/obrazy/:id ──────────────────────────────────────────────────
-// Removes the entire folder for one obraz. Called by the frontend when the user
-// deletes an obraz from the Образы grid. Frontend resolves the folder name
-// from the obraz's name+id via the same helper before sending.
-router.delete('/obrazy/:id', (req, res) => {
-  try {
-    const id = req.params.id;
-    const name = req.query.name || '';
-    if (!id) return res.status(400).json({ success: false, error: 'id required' });
-    const folder = obrazAbsFolder(name, id);
-    if (fs.existsSync(folder)) {
-      fs.rmSync(folder, { recursive: true, force: true });
-      return res.json({ success: true, removed: path.basename(folder) });
-    }
-    res.json({ success: true, removed: null });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
   }
 });
 

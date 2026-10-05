@@ -258,8 +258,6 @@ function _frameFor(p, l, i) {
   const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + i) % pool.length : i % pool.length;
   return { v: pool[at], auto: true };
 }
-/** The rule, for a stand to check (the timeline mirror will read the same rule, phase T'). */
-export const frameFor = _frameFor;
 // THE CLIP OF A LINE is the one made from the frame the line OPENS ON - which is the frame it was
 // given by the rule as often as one picked by hand (phase F4; before the clips existed this read
 // `frameId`, which is empty for every line the pool serves in turn, and would have called every

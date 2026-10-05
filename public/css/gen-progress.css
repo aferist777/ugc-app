@@ -21,8 +21,6 @@
 /* While a job runs nothing in the popup is clickable except the overlay. */
 /* Frozen while a job runs. Dimmed as well as inert: a panel that ignores clicks but
    looks live invites the same click again. */
-.sv3-frozen{pointer-events:none; user-select:none; opacity:.55}
-.sv3-frozen .sv3-gen-ov{pointer-events:auto}
 .sv3-gen-card{
   position:relative; display:flex; flex-direction:column; align-items:center; gap:7px;
   padding:12px 14px; min-width:150px; max-width:92%;

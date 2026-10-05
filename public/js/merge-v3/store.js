@@ -106,7 +106,6 @@ export function timeline() { return _timeline; }
 // were rewritten into it at startup (lib/timeline-convert.js).
 export const BLANK_KIND = 'blank';
 export function kind() { return BLANK_KIND; }
-export function isBlank() { return true; }
 export function version() { return _version; }
 export function status() { return _status; }
 // WHAT KIND OF NEWS the status is. Red is for "an edit of yours is not on the server"; the server laying

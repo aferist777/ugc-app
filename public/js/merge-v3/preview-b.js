@@ -1004,8 +1004,6 @@ export function filmPlay(want) {
   if (_on) _paint();
 }
 
-export const filming = () => !!_film;
-
 // Letterboxed like a still, measured once, with the one control it has drawn on it: a triangle
 // while it is stopped, nothing while it plays.
 function _drawFilm() {
@@ -1444,8 +1442,6 @@ export function pause() {
 }
 
 export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
-/** Is the preview playing (K10b: a word picked while it plays keeps it playing, from that word). */
-export const isPlaying = () => _playing;
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');

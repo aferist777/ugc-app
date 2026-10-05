@@ -95,7 +95,3 @@ export function top() {
   return _stack.length ? _stack[_stack.length - 1] : null;
 }
 
-/** How many are open - for a test or a log line. */
-export function count() {
-  return _stack.length;
-}

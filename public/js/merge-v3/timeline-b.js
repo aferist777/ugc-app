@@ -1886,9 +1886,6 @@ export function initTimelineB() {
   });
 }
 
-// Exposed so a test can drive the rule rather than the mouse - the arithmetic of a synthetic
-// drag is not what is worth checking here.
-export { _drop as __drop };
 
 export const isMounted = () => _on;
 export { LBL_W };

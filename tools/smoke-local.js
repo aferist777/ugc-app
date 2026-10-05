@@ -91,6 +91,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/js/merge-v3/chatwin.js'], ['GET', '/js/merge-v3/imagen.js'],
                  // phase K1: the page's own listening job - the server listens to the project now
                  ['POST', '/api/stt/timeline'], ['GET', '/api/stt/timeline/x'],
+                 // phase C: routes nothing called - a 501 stub, a write that replaced every look, a delete
+                 // that wiped a look's folder past lib/relocate.js
+                 ['POST', '/api/narrators/x/samples/link'], ['POST', '/api/userdata/obrazy'], ['DELETE', '/api/obrazy/x'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay

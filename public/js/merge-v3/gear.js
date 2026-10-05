@@ -35,7 +35,6 @@ let _set = null;        // the analyst's chain, skipDown
 let _health = null;
 let _sec = 'almanac';
 let _eng = '';          // which model the almanac is showing
-let _saving = 0;
 let _writers = [];      // who can do the reading, and what they answer to
 let _maxW = 5;
 
@@ -57,10 +56,8 @@ async function load() {
 }
 
 // Saved as it is changed, like the panel it is modelled on - there is no Save button and
-// nothing to forget to press. The counter is what makes "saving…" honest when two changes
-// land close together.
+// nothing to forget to press.
 async function save(patch) {
-  _saving++;
   try {
     const d = await fetch('/api/mv3/img/settings', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -68,7 +65,6 @@ async function save(patch) {
     }).then(r => r.json());
     if (d && d.success) _set = d.settings;
   } catch (e) { /* the next change tries again */ }
-  _saving--;
 }
 
 // ── health, the two that matter here ────────────────────────────────────────

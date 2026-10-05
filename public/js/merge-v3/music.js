@@ -432,22 +432,3 @@ export function renderMusicTrack(host, track) {
   render();
 }
 
-// A music clip. No crop, no picture-in-picture, no effects - it is sound.
-export function renderMusicClip(host, id, clip, applySpeed, patch, remove) {
-  host.appendChild(C.row('Speed', C.slider({
-    min: 0.25, max: 2, step: 0.05, value: clip.speed || 1, fmt: C.times,
-    onChange: (v) => applySpeed(v),
-  })));
-  host.appendChild(C.row('Volume', C.volume(
-    clip.volume != null ? clip.volume : 0.5,
-    (v) => patch({ volume: v }),
-  )));
-
-  host.appendChild(_el('div', 'mv3-c-sep'));
-  host.appendChild(C.row('', C.button('Repeat after', async () => {
-    await _add(clip.src, clip.name, { once: true });
-  }, { title: 'Add another copy of this track after the end of the lane' })));
-  host.appendChild(C.row('', C.button('Remove from timeline', remove, {
-    danger: true, title: 'Takes the clip off the lane. The music library keeps the file.',
-  })));
-}

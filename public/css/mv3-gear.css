@@ -109,9 +109,6 @@
   font:700 10px/20px var(--font); text-align:center;
 }
 .mvg-rung.is-down .mvg-no{ background:var(--danger) }
-.mvg-who{ flex:1 1 auto; min-width:0 }
-.mvg-who b{ display:block; font:600 12px var(--font); color:var(--ink) }
-.mvg-who i{ display:block; margin-top:1px; font-style:normal; font-size:10px; color:var(--muted) }
 .mvg-move{ flex:0 0 auto; display:flex; flex-direction:column; gap:2px }
 .mvg-move button{
   width:22px; height:15px; padding:0; border:1px solid var(--border); border-radius:2px;
@@ -121,7 +118,7 @@
 .mvg-move button[disabled]{ opacity:.3; cursor:default }
 
 
-/* ── switches and options ─────────────────────────────────────────────────── */
+/* ── switches ─────────────────────────────────────────────────── */
 .mvg-sw{
   display:flex; align-items:flex-start; gap:9px; margin:18px 0 0; padding:11px 12px;
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
@@ -130,23 +127,6 @@
 .mvg-sw input{ margin:2px 0 0; flex:0 0 auto; accent-color:var(--primary) }
 .mvg-sw b{ display:block; font:600 11.5px var(--font); color:var(--ink) }
 .mvg-sw span{ font-size:10.5px; line-height:1.55; color:var(--muted) }
-
-.mvg-opts{ display:flex; flex-direction:column; gap:5px }
-.mvg-opt{
-  display:flex; align-items:flex-start; gap:9px; padding:10px 12px;
-  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
-  cursor:pointer; transition:.12s var(--ease);
-}
-.mvg-opt:hover{ border-color:var(--border-soft) }
-.mvg-opt.on{ border-color:var(--primary); background:var(--surface) }
-.mvg-opt input{ margin:2px 0 0; flex:0 0 auto; accent-color:var(--primary) }
-.mvg-opt b{ display:block; font:600 11.5px var(--font); color:var(--ink) }
-.mvg-opt i{ display:block; margin-top:2px; font-style:normal; font-size:10.5px; line-height:1.5; color:var(--muted) }
-.mvg-txt{
-  width:100%; margin:8px 0 0; height:28px; padding:0 8px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:500 11px var(--font);
-}
 
 /* ── the almanac, as it stands ────────────────────────────────────────────── */
 .mvg-rule{

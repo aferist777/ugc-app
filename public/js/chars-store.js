@@ -1,85 +1,22 @@
-// A READ-ONLY view of characters, their looks (obrazy) and the lookbook library, shared by
-// every page that casts one: Scenarios, and the talking-head workshop in Merge.
+// A READ-ONLY view of characters and their looks (obrazy), shared by every page that casts one: the
+// talking-head workshop in Merge and the Library.
 //
-// Characters stay owned by the Character tab and environments by their own backend; nothing
+// Characters are written by the Library's Characters shelf and environments by their own backend; nothing
 // here writes. What a page does with a choice is store an id on its project. The joins are the
 // ones v2 did in _ugcLoadModels, in one place, so two pages cannot disagree about what a
 // character's looks are.
 
 const _get = (url) => fetch(url).then(r => r.json()).catch(() => null);
 
-let _chars     = null;
-let _lookbooks = null;
-
-// Thumbnail rule. The server's generateMissingThumbs writes every thumb to a
-// sibling `thumbs/` folder with the extension normalised to .jpg, for EVERY media
-// dir (characters, lookbooks, environments, uploads, details…). v2 only rewrote
-// /uploads/ paths and therefore served full-size images for character sheets —
-// a 4K sheet is megabytes against a fraction of that for its thumb, so this generalises it.
-export function thumb(path) {
-  if (!path) return path;
-  const s = String(path);
-
-  const hit = (_lookbooks || []).find(x => String(x && (x.path || x)) === s);
-  if (hit && hit.thumbPath) return hit.thumbPath;
-
-  const m = s.match(/^(\/[^?#]*\/)([^/?#]+)\.(jpg|jpeg|png|webp)(\?.*)?$/i);
-  if (!m) return s;
-  if (/\/thumbs\/$/i.test(m[1])) return s;            // already a thumb
-  return `${m[1]}thumbs/${m[2]}.jpg${m[4] || ''}`;    // thumbs are always .jpg
-}
+let _chars = null;
 
 // The on-demand derivative: /api/thumb makes one the first time it is asked for and caches
-// it, so unlike the neighbouring-file rule above it cannot be missing. Its key carries the
+// it, so it cannot be missing. Its key carries the
 // source's mtime, so a regenerated image gets a fresh derivative rather than a stale picture.
 // See lib/thumbs.js for the sizes.
 export const derived = (path, v) => path
   ? '/api/thumb?src=' + encodeURIComponent(String(path).split('?')[0]) + '&v=' + (v || 'frame')
   : path;
-
-// An <img> showing the thumbnail, in three steps, each cheaper than the one it replaces:
-//
-//   1. the neighbouring thumbs/ file, when it is there - a plain static file, already cached
-//   2. /api/thumb, which MAKES one for anything that has none
-//   3. the full asset, so a picture always appears even if both of those fail
-//
-// Step 2 is the point of this. The rule used to be "neighbour, else the original", and the
-// original is where a 4 MB frame comes from: a cropped frame, a look, a location - anything
-// whose neighbour was never written - was quietly downloaded whole into a 52-pixel cell.
-// Nothing announces that; it just feels slow.
-//
-// opts.noFit — skip the landscape letterboxing, for slots that crop on purpose
-// (the character column deliberately crops the sheet to just the face).
-// opts.v     — which derivative to ask for; `frame` (440px) suits every strip here.
-export function thumbImg(fullPath, className, opts) {
-  const img = document.createElement('img');
-  if (className) img.className = className;
-  img.alt = '';
-  img.loading = 'lazy';
-
-  // The slots are 3:4 portrait, but a character's 4K reference sheet is 16:9
-  // (portrait + full-body turnaround side by side). Cropping that to 3:4 would
-  // leave a useless sliver, so a landscape image is letterboxed instead of
-  // cropped. Decided per image once it reports its real dimensions.
-  if (!(opts && opts.noFit)) {
-    img.addEventListener('load', () => {
-      if (img.naturalWidth > img.naturalHeight) img.classList.add('sv3-fit');
-    });
-  }
-
-  const v = (opts && opts.v) || 'frame';
-  const chain = [thumb(fullPath), derived(fullPath, v), fullPath]
-    .filter((x, i, a) => x && a.indexOf(x) === i);
-  let step = 0;
-  img.src = chain[step];
-  img.addEventListener('error', function next() {
-    if (++step >= chain.length) return;
-    img.dataset.fellBack = String(step);
-    img.src = chain[step];
-    if (step < chain.length - 1) img.addEventListener('error', next, { once: true });
-  }, { once: true });
-  return img;
-}
 
 // Which image represents an obraz. v2 prefers a server-computed earliest-mtime
 // map, then obraz.char, then the first usable variation / pool file.
@@ -151,13 +88,6 @@ export async function loadCharacters(force) {
     obrazy: byChar[String(c.id)] || [],
   }));
   return _chars;
-}
-
-export async function loadLookbooks(force) {
-  if (_lookbooks && !force) return _lookbooks;
-  const d = await _get('/api/gallery/lookbooks');
-  _lookbooks = (d && d.files) || [];
-  return _lookbooks;
 }
 
 // Most looks first, which is the order the Library already uses and the one that matches

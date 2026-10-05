@@ -31,9 +31,6 @@ export function styleOf(track, fmt, clip) {
   return st;
 }
 
-export function subsTrack(tl) {
-  return (((tl && tl.tracks) || []).find(t => t && t.kind === 'subs')) || null;
-}
 
 
 // ── Drawing ─────────────────────────────────────────────────────────────────

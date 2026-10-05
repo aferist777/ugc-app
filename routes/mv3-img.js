@@ -7,7 +7,6 @@
 // matrix or its ladders, and nothing there has to change for a model to be added to this list.
 //
 //   GET    /api/mv3/img/matrix              what can be asked for: engines, aggregators, shapes
-//   GET    /api/mv3/img/rules               how to ask: one prompting rule set per model
 //   GET    /api/mv3/img/settings            the analyst's chain and the defaults
 //   PUT    /api/mv3/img/settings            a shallow patch of any of them
 //   GET    /api/mv3/img/feed?project=…      that project's generations, newest first

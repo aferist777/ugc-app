@@ -608,21 +608,14 @@ function _previewTarget(hit) {
   return { abs, url: toUrl(abs) };
 }
 
-// POST { path } -> { path: '/media/.../preview/<name>.jpg' }
-// Returns the source path unchanged when it is already small enough to be its
-// own preview, so the client never has to special-case that.
-
 // ════════════════════════════════════════════════════════════════════════════
 // GENERATION
 //
-// v3 owns its own prompts and endpoints on purpose: the shared
-// EXTRACT_CLOTHING_PROMPT in lib/config.js is used by the Character tab, and
-// tightening it for knolling here would change that tab's behaviour. Only the
-// ENGINE layer is reused (lib/helpers task creators + the shared resolveTask
-// poller), never routes/lookbook.js or routes/char-store.js.
+// The workshop owns its own prompts and endpoints; only the ENGINE layer is shared (lib/helpers task
+// creators and the resolveTask poller), never routes/char-store.js.
 //
-// Every reference image is re-hosted through uploadToPublicHost first: Replicate
-// and kie cannot fetch localhost:3000.
+// Every reference image is re-hosted through uploadToPublicHost first: Replicate and kie cannot fetch
+// this computer.
 // ════════════════════════════════════════════════════════════════════════════
 
 const H = require('../lib/helpers');
@@ -1098,7 +1091,7 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
   }
 });
 
-// ── Frame parameter presets (global, editable from the popup) ───────────────
+// ── Frame parameter presets (global) ───────────────────────────────────────
 // Camera options carry OPTICS ONLY — how the body is posed or framed is chosen
 // separately, so the two never fight each other in the prompt.
 const FRAME_OPT_FILE = path.join(DATA_DIR, 'scen3-frame-options.json');
@@ -1986,10 +1979,9 @@ router.post('/scen3/gen/dress', async (req, res) => {
 // ── Mix 2–5 lookbooks into one new lookbook ─────────────────────────────────
 
 // ── Save a dressed result as an obraz on the character ──────────────────────
-// The user chose that dressed looks join the character's own library, so they
-// show up on the Character tab too. Writes are APPEND-ONLY and done here rather
-// than by shipping the whole array from the browser: /api/userdata/obrazy
-// replaces the entire list, and a racing writer could drop entries.
+// The user chose that dressed looks join the character's own library, so they show up on the Library's
+// Characters shelf too. Writes are APPEND-ONLY and done here, on the server, so a racing writer cannot drop
+// entries.
 const OBRAZY_JSON = path.join(DATA_DIR, 'obrazy.json');
 const OStore = require('../lib/obrazy-store');
 
@@ -2967,21 +2959,6 @@ function _normClips(v, frameId, pickId) {
     gone++;
     return false;
   });
-}
-
-// Which variant a fragment is SET to. The stored pick wins, but only while it still
-// animates the frame the fragment uses — swap the frame from the picker and the pick
-// stops applying, so the newest clip of the new frame stands in. One resolver, used by
-// the state endpoint and by the reel, so the page and the server never disagree about
-// which clip is "the" clip.
-function _pickClip(line, variant) {
-  const clips = (line.video || {})[variant] || [];
-  if (!clips.length) return null;
-  const frame = String(line.frameId || '');
-  const picked = clips.find(c => c.id === String((line.pick || {})[variant] || ''));
-  if (picked && picked.fromFrame === frame) return picked;
-  const forFrame = clips.filter(c => c.fromFrame === frame);
-  return forFrame.length ? forFrame[forFrame.length - 1] : null;
 }
 
 function _normLine(l) {

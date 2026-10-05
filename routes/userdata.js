@@ -10,25 +10,11 @@ function _read(name, fallback = []) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, name + '.json'), 'utf8')); }
   catch { return fallback; }
 }
-function _write(name, value) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  writeFileAtomic(path.join(DATA_DIR, name + '.json'), JSON.stringify(value, null, 2));
-}
 
 router.get('/userdata/obrazy',   (_req, res) => res.json({ success: true, list: _read('obrazy') }));
 
-router.post('/userdata/obrazy', (req, res) => {
-  const { list } = req.body;
-  if (!Array.isArray(list)) return res.status(400).json({ success: false, error: 'list must be array' });
-  try { _write('obrazy', list); res.json({ success: true }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// ── Edit-tab sessions ───────────────────────────────────────────────────────
-// Edit/Merge projects are NOT stored here. They live in data/edit-state.json via
-// routes/edit.js (/api/edit-state), the single source of truth (version-polled by
-// public/js/edit-sync.js). The old /api/userdata/edit-sessions mirror was removed
-// to de-race session storage (it duplicated the data and caused reload loops).
+// (POST /userdata/obrazy went in phase C: nothing called it, and one stray call replaced every look with the list it
+// carried. Looks are written by the routes that make and delete them.)
 
 // ── Generic UI-state KV: server-backed mirror of localStorage ─────────────────
 // Flat { key:string -> value:string }, same shape as localStorage. GET returns
@@ -41,11 +27,9 @@ const UI_STATE = 'ui-state';
 // source of truth for this app; a value being big is not a reason to quietly refuse it.
 // Anything still over the line is logged and named in the response.
 const MAX_VAL = 4000000;
+// Written as every store is (lib/atomic-write.js: a temp file, fsync, rename, a retry on a Windows lock).
 function _writeAtomic(name, value) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  const p = path.join(DATA_DIR, name + '.json'), tmp = p + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
-  fs.renameSync(tmp, p);
+  writeFileAtomic(path.join(DATA_DIR, name + '.json'), JSON.stringify(value, null, 2));
 }
 router.get('/ui-state', (_req, res) => {
   res.json({ success: true, state: _read(UI_STATE, {}) });

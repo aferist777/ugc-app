@@ -261,14 +261,6 @@ export function startInlineProgress(host, { label, key, estimateMs = 0, startedA
   };
 }
 
-// Freeze a whole subtree while a job runs: nothing inside can be clicked, and
-// the caller decides what stays live (the progress overlay opts back in via CSS).
-export function freeze(el) {
-  if (!el) return () => {};
-  el.classList.add('sv3-frozen');
-  return () => el.classList.remove('sv3-frozen');
-}
-
 // Disable a set of controls for the duration of a job, restoring exactly the
 // ones that were enabled to begin with.
 export function lockControls(nodes) {

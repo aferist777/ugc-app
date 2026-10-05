@@ -50,9 +50,6 @@ const PARAM_SCHEMA = [
 const _NONE_DEFAULT = ['scars', 'tattoos', 'piercings', 'freckles', 'facialHair', 'makeup'];
 const _MARKS_KEYS = ['scars', 'tattoos', 'piercings', 'freckles'];   // excluded from rnd
 
-// Simple mode shows only these; advanced shows every group.
-const BASIC = ['age', 'gender', 'ethnicity', 'body'];
-
 // Randomised in this order, so a later parameter can react to an earlier one.
 const _RND_ORDER = ['gender', 'age', 'ethnicity', 'skin', 'body', 'hairLength', 'hairColor', 'hairStyle', 'eyeColor', 'eyeShape', 'faceShape', 'eyebrows', 'facialHair', 'makeup'];
 
@@ -123,4 +120,4 @@ export function paramByKey(k) {
 }
 export const allParamKeys = () => PARAM_SCHEMA.flatMap(g => g.params.map(p => p.k));
 export const allowedOpts = _allowedOpts;
-export { PARAM_SCHEMA, BASIC, _MARKS_KEYS as MARKS_KEYS, _NONE_DEFAULT as NONE_DEFAULT, _RND_ORDER as RND_ORDER };
+export { PARAM_SCHEMA, _MARKS_KEYS as MARKS_KEYS, _NONE_DEFAULT as NONE_DEFAULT, _RND_ORDER as RND_ORDER };

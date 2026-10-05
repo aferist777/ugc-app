@@ -27,7 +27,7 @@ const RUN = require('../lib/cv2-run');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
-  loadChars, saveChars, findChar, upsertChar, patchChar, deleteChar,
+  loadChars, findChar, upsertChar, patchChar, deleteChar,
 } = require('../lib/char-store');
 const CHAR_DRAFTS = require('../lib/char-drafts');
 
@@ -684,10 +684,8 @@ router.patch('/char-store/:id', (req, res) => {
 // ignored, since they go away with the character). The API key now has voice
 // delete permission.
 const _DATA_DIR        = DATA_DIR;
-const _SETTINGS_FILE   = path.join(_DATA_DIR, 'settings.json');
 const _CUSTOM_VOICES   = path.join(_DATA_DIR, 'custom-voices.json');
 const _OBRAZY_FILE     = path.join(_DATA_DIR, 'obrazy.json');
-const _EL_API_BASE     = 'https://api.elevenlabs.io/v1';
 function _readJson(f, fallback) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; } }
 
 // EVERY voice the character had, not just the starred one. This function predates

@@ -10,8 +10,8 @@ const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.jso
 
 // Fields that hold live credentials. Their VALUES must never be sent to the browser — the
 // page only needs to know a key is set and show a masked hint. The server reads the real
-// values straight off disk on every request path (audio.js, video-engines.js, helpers.js,
-// …), so redacting the HTTP view changes no behaviour. Even on one machine with one person a
+// values straight off disk on every request path (helpers.js, settings-io.js, …), so redacting
+// the HTTP view changes no behaviour. Even on one machine with one person a
 // raw key in the page is a key in a screen-share or a browser extension's reach.
 //
 // r2SecretAccessKey is here; r2AccountId, r2AccessKeyId, r2Bucket and r2PublicBase are not.
@@ -32,7 +32,7 @@ const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl', 'telegramBot
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
-  catch { return { imageEngine: 'nano-banana-2' }; }
+  catch { return {}; }
 }
 
 function saveSettings(obj) {

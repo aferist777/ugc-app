@@ -358,18 +358,6 @@ body.mv3-noproject .mv3-tl::after{
   font:600 11px/1 var(--font); color:var(--muted);
 }
 
-/* ── Clip blocks ───────────────────────────────────────────────────────────── */
-.mv3-clip{
-  position:absolute; top:2px; bottom:2px; z-index:1;
-  border-radius:3px; overflow:hidden; cursor:grab;
-  box-shadow:inset 0 0 0 1px oklch(1 0 0 / .14);
-}
-.mv3-clip:hover{box-shadow:inset 0 0 0 1px oklch(1 0 0 / .34)}
-/* The selected clip has to be obvious against six different track colours, so the ring
-   is a light outline rather than a hue - a coloured border would read as "this is a
-   Hooks clip" on one lane and as selection on another. */
-.mv3-clip.is-sel{outline:2px solid var(--ink); outline-offset:-1px; z-index:2}
-
 /* The picture at the top of a still's inspector. This panel has no waveform, no source
    length and no playback to describe, so showing WHICH picture is the most useful thing it
    can put there. Contained, not cropped: the point is to recognise it, and a cover-crop of
@@ -405,15 +393,6 @@ body.mv3-noproject .mv3-tl::after{
   display:block; width:100%; max-height:190px;
   object-fit:contain; border-radius:4px;
 }
-
-/* A STILL WEARS ITS OWN PICTURE. The thumbnail is set as a background from the timeline
-   (it is per-clip, so it cannot live here), stretched to the block rather than cover-cropped
-   so trimming changes the length and never which part of the picture is on show.
-
-   The caption then sits on an arbitrary image instead of a flat lane colour, so it gets its
-   own dark strip. Without it a white name over a pale photograph is unreadable, which is the
-   one thing a label must never be. */
-.mv3-clip.is-still{ background-repeat:no-repeat; background-position:center; }
 
 /* The question a Main clip's X opens. Fixed, because it is anchored to the button in
    viewport coordinates from JS - the lane it belongs to scrolls and would clip it. */
@@ -1743,8 +1722,6 @@ body.mv3-locked #mv3-timeline{
 }
 .mv3-wk-sash:hover{background:oklch(1 0 0 / .10)}
 .mv3-wk-half.is-guide > *{flex:0 0 auto}
-.mv3-wk-guide-h{margin:2px 0 4px; font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
-.mv3-wk-guide-p{margin:0 0 10px; font:400 11px/1.5 var(--font); color:var(--ink)}
 
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls
@@ -2056,7 +2033,7 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-half.is-frags > *{flex:0 0 auto}
 /* The read's play button in a row is smaller than the voice's: the row is read for its words. */
 .mv3-wk-frow .mv3-wk-vplay{width:20px; height:20px; font-size:8px}
-.mv3-wk-fmodes, .mv3-wk-fsets, .mv3-wk-facts{display:flex; flex-wrap:wrap; gap:4px}
+.mv3-wk-fsets{display:flex; flex-wrap:wrap; gap:4px}
 .mv3-wk-vsel.is-small{flex:1 1 110px; padding:3px 5px; font-size:10px; font-weight:600}
 /* How the two columns work, over the script it is about (V7): a gold band, not grey italics at the
    foot of a zone nobody scrolls to. */
