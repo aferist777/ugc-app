@@ -745,12 +745,13 @@ export async function reveal(path) {
   setOpenColumn('library');
   Views.toBase();
   Views.toShelf();
-  _setTab('images');
+  const tab = want.startsWith('/media/birols/') ? 'birols' : want.startsWith('/media/uploads/') ? 'uploads' : 'images';
+  _setTab(tab);
   _cat = '';
   await _load();
   const it = _items.find(x => String(x.media || '').split('?')[0] === want);
   if (!it) {
-    _status('That picture is no longer on the shelf', true);
+    _status((tab === 'images' ? 'That picture' : 'That clip') + ' is no longer on the shelf', true);
     setTimeout(() => _status(''), 5000);
     return false;
   }

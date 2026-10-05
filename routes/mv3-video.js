@@ -99,7 +99,7 @@ router.post('/mv3/video/send', (req, res) => {
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
     CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
-    const first = isMC ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
+    const first = (isMC || b.write === false) ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
@@ -109,7 +109,8 @@ router.post('/mv3/video/send', (req, res) => {
     }
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path) });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
-    _work({ project, text, model, isMC, media, params, skill: b.skill || null, ids, kick, before, pair: fits[0] });
+    // The page's pen off (b.write === false): the words go as typed - translated first when not English.
+    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill: b.skill || null, ids, kick, before, pair: fits[0] });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/send]', err.message);
@@ -122,7 +123,7 @@ router.post('/mv3/video/send', (req, res) => {
 async function _work(o) {
   try {
     let over;
-    if (o.isMC) {
+    if (o.isMC || o.asTyped) {
       const t = await AGENT.toEnglish(o.text);
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.text, lang: 'en', writer: t.translated ? 'translated' : '' };

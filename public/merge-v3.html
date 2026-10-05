@@ -96,11 +96,14 @@
                project has a conversation (js/merge-v3/picchat.js). -->
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
           <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button" hidden>/ generate image</button>
+          <!-- The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own crumb, buttons and box. -->
+          <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button" hidden>/ generate video</button>
           <!-- Third view (phase K6): captions picked on the timeline - "LIBRARY / captions" (js/merge-v3/lib-views.js). -->
           <span class="mv3-lib-crumb is-on" id="mv3-lib-cap" hidden>/ captions</span>
           <span class="sp"></span>
           <!-- The chat's own buttons, in place of the category and the shelves while it shows. -->
           <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
+          <span class="mv3-pc-head" id="mv3-vc-head" hidden></span>
           <!-- Categories of whichever group is open. Its options come from the same
                response that fills the grid, so it can never offer a category that
                is not there. -->
@@ -122,6 +125,7 @@
         <div class="mv3-panel-body"></div>
         <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
         <div class="mv3-pc" id="mv3-pc"></div>
+        <div class="mv3-pc is-video" id="mv3-vc"></div>
         <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
         <div class="mv3-cap" id="mv3-cap"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,

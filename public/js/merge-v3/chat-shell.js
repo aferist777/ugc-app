@@ -113,6 +113,12 @@ export function createChat(make) {
     place: (item, anchor) => _place(item, anchor),
     peekShow: (src, anchor) => peekShow(src, anchor),
     peekHide: () => peekHide(),
+    // (phase V3) The words in the box - a description may put its standard prompt there - and its hint.
+    text: () => (_ui ? _ui.ta.value : ''),
+    setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
+    placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
+    // (phase V3) The line above the thread - what the chosen model does and what to attach. Empty hides it.
+    banner: (v) => { if (!_ui) return; _ui.banner.textContent = String(v || ''); _ui.banner.hidden = !v; },
   };
   const S = make(ctx);
   const T = S.text;
@@ -397,7 +403,7 @@ export function createChat(make) {
           landed.add(g.id);
           _made = true;
           const at = _sendSeq.get(m.id);
-          if (at != null && at === _attSeq && set.room() > 0) {
+          if (S.landAsRef !== false && at != null && at === _attSeq && set.room() > 0) {
             const was = _attSeq;
             _atts = [{ path: _path(g), name: (g.prompt || '').slice(0, 60) }];
             _attSeq++;
@@ -538,7 +544,8 @@ export function createChat(make) {
   async function _place(item, anchor) {
     const Tl = await import('./timeline-b.js');
     // Not picked on the timeline: a picked clip slides its settings over the Library - over this chat.
-    const r = Tl.placeAbove(item, { select: false });
+    // A clip (the video chat) goes with its length and its sound; a picture as a still.
+    const r = item && item.clip ? Tl.placeClipAbove(item, { select: false }) : Tl.placeAbove(item, { select: false });
     if (!r.ok) { note(anchor, 'Not added.', r.why); return; }
     note(anchor, 'Added to ' + r.lane + '.', 'At the playhead, ' + r.at.toFixed(1) + 's.');
     setTimeout(() => closeAsk(), 2400);
@@ -683,6 +690,7 @@ export function createChat(make) {
       + (_atts.some(a => a.path === it.path) ? ' on' : ''));
     t.style.aspectRatio = String(it.aspect || '1:1').replace(':', '/');
     t.title = it.name || '';
+    if (it.state === 'done' && it.kind === 'video' && it.video) return _clipTile(t, it);
     if (it.state === 'done' && it.path) {
       const img = document.createElement('img');
       img.src = thumbOf(it.path, 'strip');
@@ -714,6 +722,37 @@ export function createChat(make) {
     } else {
       t.appendChild(el('span', 'sp', String(it.error || 'failed').slice(0, 70)));
     }
+    return t;
+  }
+
+  // A CLIP in the right column (phase V3): its poster, dragged onto a lane as the clip it is, a press opens it. A clip
+  // is not an attachment until references take clips (phase V7).
+  function _clipTile(t, it) {
+    if (it.poster) {
+      const img = document.createElement('img');
+      img.src = thumbOf(it.poster, 'strip');
+      img.alt = it.name || '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      t.appendChild(img);
+    }
+    t.appendChild(el('span', 'mv3-ig-play', '▶'));
+    if (it.dur) t.appendChild(el('span', 'mv3-ig-dur', (+it.dur).toFixed(1) + 's'));
+    t.draggable = true;
+    t.addEventListener('dragstart', (ev) => {
+      ev.dataTransfer.effectAllowed = 'copy';
+      ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
+        libId: it.libId || '', src: it.video, thumb: it.poster || '',
+        name: (it.name || '').slice(0, 60), group: it.group || 'birols', dur: +it.dur || 0,
+      }));
+      t.classList.add('is-dragging');
+    });
+    t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
+    if (it.poster) {
+      t.addEventListener('mouseenter', () => peekShow(thumbOf(it.poster, 'main'), t));
+      t.addEventListener('mouseleave', peekHide);
+    }
+    t.addEventListener('click', () => { peekHide(); if (S.openTile) S.openTile(it); });
     return t;
   }
 
@@ -827,6 +866,8 @@ export function createChat(make) {
     setBox.append(left, said);
 
     const chat = el('div', 'mv3-ig-chat');
+    const banner = el('div', 'mv3-ig-banner');
+    banner.hidden = true;
     const thread = el('div', 'mv3-ig-thread');
     const atts = el('div', 'mv3-ig-atts');
     const file = document.createElement('input');
@@ -850,7 +891,7 @@ export function createChat(make) {
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(ta, pen, nBtn, go);
-    chat.append(thread, atts, file, bar);
+    chat.append(banner, thread, atts, file, bar);
 
     const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
     sash.title = 'Drag to resize · double-click to reset';
@@ -886,7 +927,7 @@ export function createChat(make) {
       head.append(wipe, ...S.headButtons());
     }
 
-    _ui = { root, set: setBox, left, said, chat, thread, atts, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, set: setBox, left, said, chat, banner, thread, atts, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     _wireStripSash(sash, stripBox);
 
     file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });

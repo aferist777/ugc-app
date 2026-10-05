@@ -1371,6 +1371,24 @@ export function placeAbove(data, opts) {
   return { ok: true, lane, at };
 }
 
+// A CLIP onto the same lane a picture goes to (phase V3, the video chat's "to timeline"): placed by _drop, so it
+// arrives at its real length with its sound twin on the lane's linked audio lane, as a clip dropped from the shelf
+// does. The lane is made first when there is none - a second step only then; otherwise one undo takes the clip off.
+export function placeClipAbove(data) {
+  if (!_on) return { ok: false, why: 'The timeline is not showing' };
+  const at = _r2(Math.max(0, _playhead));
+  let laneId = '', lane = '';
+  const find = (t) => { const vids = t.filter(x => x.kind === 'video'); return vids.length > 1 ? vids[vids.length - 2] : null; };
+  const now = find((Store.timeline() || {}).tracks || []);
+  if (now) { laneId = now.id; lane = now.name; }
+  else {
+    Store.mutate(tl => { const over = _newVideoLane(tl.tracks || []); if (over) { laneId = over.id; lane = over.name; } });
+  }
+  if (!laneId) return { ok: false, why: Store.status() || 'The clip could not be placed' };
+  _drop(laneId, at, data || {});
+  return { ok: true, lane, at };
+}
+
 export function setClipFields(trackId, clipId, patch) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);
@@ -1767,7 +1785,11 @@ function _laneMenu(e) {
     'Make a picture with a model - it lands on the images shelf, and "to timeline" lays it at the playhead',
     () => import('./picchat.js').then(m => m.openPictures())
       .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
-  item('generate video', 'in development', 'In development - the video window is being rebuilt', null);
+  // The video chat, the same place (phase V3).
+  item('generate video', 'the video chat · "to timeline" puts it here',
+    'Make a clip with a model - it lands on the B-roll shelf, and "to timeline" lays it at the playhead',
+    () => import('./vidchat.js').then(m => m.openVideos())
+      .catch(err => console.warn('[timeline] the video chat did not open:', (err && err.message) || err)));
 
   // Fixed to the viewport and parked on the body, where the pointer was.
   document.body.appendChild(box);

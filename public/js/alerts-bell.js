@@ -89,7 +89,7 @@ function _hrefOf(rec) {
   const w = rec.where || {};
   const spot = w.spot || {};
   const path = (rec.result || {}).path || '';
-  if (rec.state === 'done' && path && spot.view === 'pictures' && spot.key) {
+  if (rec.state === 'done' && path && (spot.view === 'pictures' || spot.view === 'videos') && spot.key) {
     return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
   }
   // A 4K sheet (phase H): once it is drawn, the row leads to the character itself, selected on the

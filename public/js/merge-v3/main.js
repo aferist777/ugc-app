@@ -23,6 +23,7 @@ import { initProjects } from './projects.js';
 import * as Store from './store.js';
 import { initBar } from './bar.js';
 import { initPicChat, openPictures } from './picchat.js';
+import { initVidChat, openVideos } from './vidchat.js';
 import { initViews } from './lib-views.js';
 
 initNav();
@@ -30,6 +31,7 @@ initLayout();
 initViews();
 initLibrary();
 initPicChat();
+initVidChat();
 initTimelineB();
 initPreviewB();
 initExportB();
@@ -49,10 +51,17 @@ async function _pictures() {
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   return openPictures();
 }
+// ...and ?open=videos, the video chat's (phase V3), the same way.
+async function _videos() {
+  await wkSettled();
+  if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
+  return openVideos();
+}
+const _OPENERS = { pictures: _pictures, videos: _videos };
 (() => {
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
-  if (want !== 'pictures') return;
+  if (!_OPENERS[want]) return;
   let opened = false;
   Store.onChange(() => {
     if (opened || !Store.key()) return;
@@ -63,7 +72,7 @@ async function _pictures() {
       u.searchParams.delete('open');
       history.replaceState({}, '', u);
     } catch (e) { /* a reload only opens it again */ }
-    _pictures().catch(e => console.warn('[merge-v3] pictures:', e.message));
+    _OPENERS[want]().catch(e => console.warn('[merge-v3] ' + want + ':', e.message));
   });
 })();
 
@@ -107,9 +116,10 @@ window.addEventListener('ugc:goto', (e) => {
     return;
   }
   // A picture still being made leads to its chat - on the spot, with this project open (phase J).
-  if (u.searchParams.get('open') === 'pictures') {
+  const open = u.searchParams.get('open') || '';
+  if (_OPENERS[open]) {
     e.preventDefault();
-    _pictures().catch(err => console.warn('[merge-v3] pictures:', err.message));
+    _OPENERS[open]().catch(err => console.warn('[merge-v3] ' + open + ':', err.message));
   }
 });
 

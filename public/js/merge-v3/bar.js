@@ -15,6 +15,7 @@ import * as History from './history.js';
 import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timeline-b.js';
 import { grabFrame } from './preview-b.js';
 import { openPictures } from './picchat.js';
+import { openVideos } from './vidchat.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -133,7 +134,7 @@ function _genMenu(anchor) {
     box.appendChild(b);
   };
   item('images', 'a picture, talked into being - in the Library panel', () => openPictures());
-  item('videos', 'in development', null);
+  item('videos', 'a clip, talked into being - in the Library panel', () => openVideos());
   item('music', 'not yet', null);
   // Fixed to the viewport and parked on the body, under the button.
   document.body.appendChild(box);
