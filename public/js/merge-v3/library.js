@@ -37,7 +37,7 @@ import { trimmer } from './trim.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { askName } from '../name-box.js';
-import { openPictures, isChat, showShelf } from './picchat.js';
+import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
 
 const LS_TAB = 'mv3_lib_tab';
@@ -584,11 +584,11 @@ function _wireDrop() {
   panel.addEventListener('dragover', (e) => {
     if (!_hasFiles(e)) return;
     e.preventDefault();
-    // The pictures chat takes its own drops - as attachments, filed once (js/merge-v3/picchat.js). A file
+    // A chat takes its own drops - as attachments, filed once (js/merge-v3/chat-shell.js). A file
     // let go of elsewhere on the panel then is nobody's, but it must not replace the page either - nor over
     // the captions view, where the shelf is hidden (K6).
-    if (isChat() || Views.isCaptions()) {
-      if (!(e.target && e.target.closest && e.target.closest('#mv3-pc'))) e.dataTransfer.dropEffect = 'none';
+    if (Views.isChat() || Views.isCaptions()) {
+      if (!(e.target && e.target.closest && e.target.closest('.mv3-pc.is-shown'))) e.dataTransfer.dropEffect = 'none';
       return;
     }
     e.dataTransfer.dropEffect = 'copy';
@@ -601,7 +601,7 @@ function _wireDrop() {
   panel.addEventListener('drop', (e) => {
     if (!_hasFiles(e)) return;
     e.preventDefault();
-    if (isChat() || Views.isCaptions()) return;
+    if (Views.isChat() || Views.isCaptions()) return;
     panel.classList.remove('is-drop');
     _upload(Array.from((e.dataTransfer && e.dataTransfer.files) || []));
   });
@@ -720,7 +720,7 @@ export async function showGroup(tab, catLabel) {
   if (TABS.indexOf(tab) < 0) return;
   setOpenColumn('library');
   Views.toBase();
-  showShelf();
+  Views.toShelf();
   _setTab(tab);
   if (!catLabel) return;
   // _setTab kicks off its own load; this one runs after it and is what actually filters.
@@ -744,7 +744,7 @@ export async function reveal(path) {
   if (!want) return false;
   setOpenColumn('library');
   Views.toBase();
-  showShelf();
+  Views.toShelf();
   _setTab('images');
   _cat = '';
   await _load();

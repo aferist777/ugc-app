@@ -38,8 +38,8 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/css/char-make.css',
                  // the making chats of Environments and Lookbooks (phase I): the page's module, its styles, both chats
                  '/js/library/makechat.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks',
-                 // the pictures chat in Merge's Library panel (phase J)
-                 '/js/merge-v3/picchat.js', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
+                 // the pictures chat in Merge's Library panel (phase J), on the shell both chats share (phase V1)
+                 '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
                  // the captions' one style module, the page's and the server's (phase K0)
                  '/js/captions/style.js', '/js/captions/ass.js',
                  // the fonts captions are drawn in (phase K5)

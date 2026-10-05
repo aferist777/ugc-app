@@ -13,7 +13,8 @@
 
 /* The chat fills the panel under its header, in place of the shelf. */
 .mv3-pc{ display:none; flex:1 1 auto; min-height:0; min-width:0; background:var(--bg) }
-#mv3-library.is-chat .mv3-pc{ display:flex }
+/* Which chat shows is lib-views.js's to say (is-shown) - the pictures chat now, the video chat from phase V3. */
+#mv3-library.is-chat .mv3-pc.is-shown{ display:flex }
 .mv3-col.is-collapsed .mv3-pc{ display:none !important }
 
 /* ── left: what to make them with ── */
