@@ -679,6 +679,21 @@ try {
 // reconciled, and pulling the rug mid-drag would be worse than telling you.
 const WATCH_MS = 20000;
 
+// TYPING IS AN EDIT TOO (review K10): a caption's text or a word being typed in and not written yet holds what
+// the person means to save. Adopting a newer copy meanwhile - a lay from the sound - replaced the line under the
+// field, and what was typed went nowhere. So while the page says a field holds unwritten typing (`setTyping`,
+// the inspector), the copy counts as dirty: the field writes first, and the newer one merges in at the save, as
+// for any edit. `typingDone` - the field was left - looks again at once when a copy was held back for it.
+let _typingFn = null;
+let _heldForTyping = false;
+export function setTyping(fn) { _typingFn = typeof fn === 'function' ? fn : null; }
+export function typingDone() {
+  if (!_heldForTyping) return;
+  _heldForTyping = false;
+  refresh();
+}
+const _typingNow = () => { try { return !!(_typingFn && _typingFn()); } catch (e) { return false; } };
+
 async function _checkRemote() {
   if (!_key || _saving || document.visibilityState === 'hidden') return;
   let v = null;
@@ -702,7 +717,9 @@ async function _checkRemote() {
   // it is this project's own work arriving. Told apart by looking at what actually differs: if every
   // cell and every lane setting the person owns is untouched, it was the server.
   const who = _serverOnly(_base, d.timeline);
-  if (_dirty) {
+  const typing = !_dirty && _typingNow();
+  if (typing) _heldForTyping = true;
+  if (_dirty || typing) {
     _status = !who ? 'Changed on another device - your edit will be merged in when it saves.'
       : who.frag ? 'The fragments were laid again - it will merge in when your edit saves.'
       : 'The captions were laid from the sound - they merge in when your edit saves.';

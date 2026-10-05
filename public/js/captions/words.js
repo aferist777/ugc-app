@@ -74,21 +74,40 @@ export const textOf = (words) => (words || []).map((w) => w.w).join(' ');
 
 /**
  * The words a person wrote: split as a line breaks - except that a run which was ONE word of the line before
- * (`old`: "than $2.", "хера —", a word holding a space) stays one word.
+ * (`old`: "than $2.", "хера —", a word holding a space) stays one word. WHERE it was one word (review K10): the
+ * new tokens are lined up with the old ones (the longest common run of equal tokens), and tokens are kept
+ * together only where they line up with all the parts of one old word, in order - the same pair elsewhere in the
+ * line, two words of their own before, stays two words. A text left as it was gives the old words back.
  */
 export function wordsIn(text, old) {
   const toks = tokensOf(text);
-  const runs = [];
-  for (const w of (old || [])) {
+  const flat = [];                                     // the old words' tokens: { t, o (word), k (part), n (parts) }
+  (old || []).forEach((w, o) => {
     const parts = tokensOf(w && w.w);
-    if (parts.length > 1 && !runs.some((r) => r.join(' ') === parts.join(' '))) runs.push(parts);
+    parts.forEach((t, k) => flat.push({ t, o, k, n: parts.length }));
+  });
+  if (!flat.some((x) => x.n > 1)) return toks;
+  const n = toks.length, m = flat.length;
+  const L = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      L[i][j] = toks[i] === flat[j].t ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    }
   }
-  if (!runs.length) return toks;
-  runs.sort((a, b) => b.length - a.length);
+  const to = new Array(n).fill(-1);                    // new token -> old token it lines up with
+  for (let i = 0, j = 0; i < n && j < m;) {
+    if (toks[i] === flat[j].t && L[i][j] === L[i + 1][j + 1] + 1) { to[i] = j; i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++;
+  }
   const out = [];
-  for (let i = 0; i < toks.length; i++) {
-    const r = runs.find((p) => p.every((x, k) => toks[i + k] === x));
-    if (r) { out.push(r.join(' ')); i += r.length - 1; } else out.push(toks[i]);
+  for (let i = 0; i < n; i++) {
+    const j = to[i];
+    const f = j >= 0 ? flat[j] : null;
+    if (f && f.n > 1 && f.k === 0 && i + f.n <= n) {
+      let whole = true;
+      for (let k = 1; k < f.n; k++) { if (to[i + k] !== j + k) { whole = false; break; } }
+      if (whole) { out.push(toks.slice(i, i + f.n).join(' ')); i += f.n - 1; continue; }
+    }
+    out.push(toks[i]);
   }
   return out;
 }
@@ -144,12 +163,29 @@ function _word(x) {
   return o;
 }
 const _copy = (words) => (Array.isArray(words) ? words : []).filter((w) => w && w.w != null).map(_word);
-// The words and the text they spell - or a refusal when the text would pass 400 characters: the server keeps
-// 400, and a text cut there no longer spells its words, which then go untimed without a word said.
+// The words and the text they spell - or a refusal when the text would pass 400 characters or a word 60: the
+// server keeps 400 and 60, and a text or a word cut there no longer spells its words, which then go untimed
+// without a word said. A word is measured as it IS, with the marks glued onto it (review K10: retext checked the
+// tokens before the glue, and a run of dashes in front of a word was stored cut - without the word).
 const _done = (words) => {
+  if (words.some((w) => String(w.w).length > LIMITS.word)) return { why: 'A word holds at most ' + LIMITS.word + ' characters' };
   const name = textOf(words);
   return name.length > LIMITS.text ? { why: 'A line holds at most ' + LIMITS.text + ' characters' } : { words, name };
 };
+
+// Where a word may be cut: between two characters as a reader sees them (review K10) - never inside an emoji's
+// pair of halves, a flag, a family or a letter with its stress mark. The boundaries strictly inside the text.
+function _cuts(txt) {
+  let starts = null;
+  try {
+    starts = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(txt)].map((s) => s.index);
+  } catch (e) {
+    starts = [];
+    let at = 0;
+    for (const ch of txt) { starts.push(at); at += ch.length; }  // by code point where there is no Segmenter
+  }
+  return starts.filter((i) => i > 0 && i < txt.length);
+}
 
 function _limits(toks, total) {
   if (total > LIMITS.words) return { why: 'A line holds at most ' + LIMITS.words + ' words' };
@@ -471,7 +507,8 @@ export function cutAt(words, i, at, pos) {
   const w = _at(ws, i);
   if (!w) return NO_WORD;
   const txt = w.w;
-  if (txt.length < 2) return { why: 'A word of one letter cannot be cut' };
+  const cuts = _cuts(txt);
+  if (!cuts.length) return { why: 'A word of one letter cannot be cut' };
   const S = cs(w.s), E = Math.max(cs(w.s), cs(w.e));
   if (E - S < 2 * MINC) return { why: 'Too short to cut - each half needs ' + WORD_MIN + ' s' };
   let p = Number.isInteger(pos) ? pos : null;
@@ -486,7 +523,8 @@ export function cutAt(words, i, at, pos) {
     const sp = [...txt.matchAll(/\s+/g)].map((m) => m.index);
     if (sp.length) p = sp.reduce((best, x) => (Math.abs(x - p) < Math.abs(best - p) ? x : best), sp[0]);
   }
-  p = Math.max(1, Math.min(txt.length - 1, p));
+  // Onto the nearest place a reader would see as between two characters.
+  p = cuts.reduce((best, x) => (Math.abs(x - p) < Math.abs(best - p) ? x : best), cuts[0]);
   const left = txt.slice(0, p).trim(), right = txt.slice(p).trim();
   if (!left || !right) return { why: 'Nothing would be left on one side of the cut' };
   if (T == null) T = S + Math.round((E - S) * weight(left) / (weight(left) + weight(right)));

@@ -30,6 +30,7 @@ import { editWords, playhead, onPlayhead, selectClipById, revealSelection, nextC
 import { seek } from './preview-b.js';
 import { replaceAt, insertAt, removeAt, joinAt, cutAt, markAt, edgeAt, LIMITS } from '../captions/words.js';
 import { timedWords } from '../captions/pages.js';
+import { note } from './ask.js';
 
 const S = {
   clip: null, track: null,   // the caption whose words are shown
@@ -40,6 +41,7 @@ const S = {
   edit: null,                // the field: { mode: 'edit'|'insert', i, w, s, value, a, b } (a, b the selection)
   focusClip: null,           // the list (or the field) had the focus when the strip was rebuilt, for this caption
   want: null,                // { clip, edit } - open this caption on its first word (Tab from the line before)
+  listFor: null,             // a caption whose words are not painted yet but will be: its list takes the focus then
   msg: null,                 // { clip, text } - a refusal, said under the row
 };
 let _box = null, _list = null, _painting = false, _wired = false;
@@ -68,15 +70,42 @@ export function afterRepaint() { _painting = false; }
  * the ids it was opened with, whatever is picked now.
  */
 export function leave() {
-  if (S.edit) _commit('none');
+  S.listFor = null;
+  if (S.edit) {
+    const e = S.edit;
+    const typed = String(e.value == null ? '' : e.value);
+    // Refused, it cannot stay on screen: the pick is moving to another line, whose strip replaces this one. So it
+    // is said in a note that stays until it is read, with what was typed to put in again (review K10) - opened
+    // once the new pick is painted, over it on the timeline, and not closed by the scrolling that brings it in.
+    if (!_commit('none')) {
+      const why = (S.msg && S.msg.text) || 'That cannot be done';
+      const head = e.mode === 'insert' ? 'The word after «' + e.w + '» was not put in.' : 'The correction of «' + e.w + '» was not applied.';
+      const sub = why + (typed.trim() ? ' - you typed: «' + typed + '»' : '');
+      S.edit = null;
+      _say('');
+      setTimeout(() => {
+        const at = document.querySelector('.mv3b-clip.is-sel') || document.getElementById('mv3-over') || document.body;
+        note(at, head, sub, { stay: true });
+      }, 0);
+    }
+  }
   S.focusClip = null;
 }
 
-/** The focus onto this caption's words (Enter in its text) - kept through the paint the text's change makes. */
-export function focusList(clipId) {
-  if (S.clip !== clipId) return;
-  S.focusClip = clipId;
-  if (_list && _list.isConnected) _list.focus({ preventScroll: true });
+/**
+ * The focus onto this caption's words (Enter in its text) - kept through the paint the text's change makes.
+ * True when the words of that caption are on screen and took it; false when they are not (a line whose words
+ * no longer spell its text has no words shown) - the caller keeps the focus somewhere then (review K10).
+ */
+export function focusList(clipId, later) {
+  if (S.clip === clipId && _list && _list.isConnected) {
+    S.focusClip = clipId;
+    _list.focus({ preventScroll: true });
+    return document.activeElement === _list;
+  }
+  // `later`: the text was just changed, so the line is about to be timed and painted with its words - they take it.
+  if (later) { S.listFor = clipId; return true; }
+  return false;
 }
 
 /** Was this caption asked to open with the focus in its text (Tab from the line before, onto a typed one)? */
@@ -97,6 +126,8 @@ export function paint(host, track, clip, opts) {
   const words = timedWords(clip);
   S.words = words;
   let focus = S.focusClip === clip.id ? (S.edit ? 'field' : 'list') : null;
+  if (S.listFor === clip.id) focus = 'list';
+  S.listFor = null;
   if (S.want && S.want.clip === clip.id) {
     // Arrived by Tab from the line before: its first word, the field open.
     S.sel = words.length ? 0 : null;
@@ -127,14 +158,16 @@ export function paint(host, track, clip, opts) {
     chip.appendChild(_el('span', 'mv3-wd-w', String(w.w)));
     chip.appendChild(_el('span', 'mv3-wd-t', (+w.s || 0).toFixed(2)));
     chip.title = String(w.w) + ' · ' + _fmt(S.start + (+w.s || 0)) + (w.h ? ' · corrected' : '') + (w.k ? ' · stands out' : '')
-      + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - not shown" : '');
+      + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - never lit" : '');
     // The pick is made on the press, so a double click lands on the same chip and opens it.
     chip.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
       const at = +w.s || 0;
       // An open field is written first - which repaints the strip: the word is found again by its start.
-      if (S.edit) _commit('none');
+      // A refused one keeps the field, its words said under it, and nothing else happens: picking another word
+      // would throw the correction away without a word (review K10).
+      if (S.edit && !_commit('none')) { _focusField(); return; }
       if (_list) _list.focus({ preventScroll: true });
       let j = i;
       if (S.words[j] !== w) {
@@ -198,6 +231,8 @@ function _paintPick() {
   f.spellcheck = false;
   const ins = S.edit && S.edit.mode === 'insert';
   f.value = S.edit ? S.edit.value : String(w.w);
+  // What the field was painted with: a field that still holds it has nothing of the person's (store.js setTyping).
+  f.__painted = S.edit ? (S.edit.mode === 'edit' ? S.edit.w : '') : String(w.w);
   f.placeholder = ins ? 'a word after «' + String(w.w) + '»' : '';
   if (ins) f.classList.add('is-insert');
   // The field belongs to ONE edit (f.__edit): opened by focusing it, written by its typing, kept on its blur.
@@ -233,7 +268,7 @@ function _paintPick() {
   _box.querySelector('.mv3-wd-pick').appendChild(row);
   const s = S.start + (+w.s || 0), e = S.start + (+w.e || 0);
   const time = _el('div', 'mv3-wd-time', _fmt(s) + ' → ' + _fmt(e) + ' · ' + Math.max(0, (+w.e || 0) - (+w.s || 0)).toFixed(2) + ' s'
-    + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - not shown" : ''));
+    + ((+w.s || 0) >= S.dur - 1e-6 ? " · after the line's end - never lit" : ''));
   host.appendChild(time);
 }
 
@@ -308,6 +343,11 @@ function _focusField(all) {
 // are pure, so where the pick and the field land is worked out BEFORE the change: the change repaints the
 // strip at once, inside the mutation.
 const ONLY = "The line's only word - «Remove this line» below takes the line";
+const _sameWords = (a, b) => a.length === b.length && a.every((x, i) => {
+  const y = b[i];
+  return String(x.w) === String(y.w) && Math.abs((+x.s || 0) - (+y.s || 0)) < 0.005 && Math.abs((+x.e || 0) - (+y.e || 0)) < 0.005
+    && !!x.k === !!y.k && !!x.h === !!y.h;
+});
 function _commit(then) {
   const e = S.edit;
   if (!e) return true;
@@ -326,6 +366,10 @@ function _commit(then) {
     const r = op(S.words);
     if (!r || r.why) { _say((r && r.why) || 'That cannot be done'); return false; }
     W = r.words || [];
+    // An edit that gives the same words back (two spaces where one was) is no change: the store would make none
+    // and paint nothing, and the field would stay focused belonging to no edit - typing and Enter did nothing
+    // (review K10). It goes the way of an unchanged field.
+    if (_sameWords(W, S.words)) op = null;
   }
   // The words the field made begin at `first`; `made` of them (a word with a space is two, marks alone none).
   const first = e.mode === 'edit' ? e.i : e.i + 1;

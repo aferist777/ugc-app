@@ -47,7 +47,7 @@ export const short = (s, n = 20) => {
  * nothing to answer - and they differ only in the buttons, so they share everything else:
  * where it opens, what dismisses it, and which keys it swallows on the way past.
  */
-function _panel(anchor, text, sub, buttons) {
+function _panel(anchor, text, sub, buttons, opts) {
   closeAsk();
 
   const el = document.createElement('div');
@@ -103,7 +103,9 @@ function _panel(anchor, text, sub, buttons) {
   const layer = Layers.open(el, { name: 'ask', onEsc: closeAsk });
   _ask = { el, away, layer };
   document.addEventListener('mousedown', away, true);
-  window.addEventListener('scroll', closeAsk, true);
+  // A note that says what was LOST stays until it is read (`stay`): the scrolling that follows a new pick - the
+  // strip painted again, the timeline bringing the pick into view - closed it before anyone saw it.
+  if (!(opts && opts.stay)) window.addEventListener('scroll', closeAsk, true);
   return made;
 }
 
@@ -120,6 +122,6 @@ export function askDelete(anchor, text, sub, onYes) {
  * Its own function rather than askDelete with an empty handler: a Yes/No offers a choice, and
  * offering a choice where there is none is how a button ends up meaning nothing.
  */
-export function note(anchor, text, sub) {
-  _panel(anchor, text, sub, [{ label: 'Got it' }]);
+export function note(anchor, text, sub, opts) {
+  _panel(anchor, text, sub, [{ label: 'Got it' }], opts);
 }

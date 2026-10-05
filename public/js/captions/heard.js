@@ -124,6 +124,7 @@ export function silencesOf(pieces) {
 // without paying again.
 const NOISE = (g) => (+g.no_speech_prob > 0.6 && +g.avg_logprob < -1) || +g.compression_ratio > 2.4;
 const WORD_MAX = 1.5;                   // a word held longer than this is a timing gone wrong
+const WORD_CHARS = 60;                  // the longest a stored word is (style.js normalizeWords, words.js LIMITS)
 
 /**
  * @param words     [{ text, start, end }] in timeline seconds
@@ -142,7 +143,11 @@ export function cleanWords(words, segments, opts) {
   const dropped = { noise: 0, silence: 0, typed: 0, fixed: 0 };
   const kept = [];
   for (const w0 of (words || [])) {
-    const text = String((w0 && (w0.text != null ? w0.text : w0.word)) || '').trim();
+    // No word longer than a stored word may be (60 - normalizeWords): a page built from a longer one (a web
+    // address heard as one word) spelled what its stored words no longer did, and an untouched line counted as
+    // corrected for good (review K10). Cut here, before the pages are, the text and the words say the same.
+    let text = String((w0 && (w0.text != null ? w0.text : w0.word)) || '').trim();
+    if (text.length > WORD_CHARS) text = text.slice(0, /[\uD800-\uDBFF]/.test(text[WORD_CHARS - 1]) ? WORD_CHARS - 1 : WORD_CHARS);
     if (!text) continue;
     let start = +w0.start || 0;
     let end = Math.max(start, +w0.end || start);

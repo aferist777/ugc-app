@@ -659,11 +659,15 @@ function _endDrag() {
             c.start = d.start;
             c.trimIn = d.words ? 0 : d.trimIn;
           } else if (isHeard(c) && (+d.dur || 0) < (+c.dur || 0)) {
-            // THE BACK EDGE IS THE FRONT'S MIRROR (K10): a word that now starts past the end goes, from the
-            // words and from the text, and one the edge cuts through ends at the edge.
+            // THE BACK EDGE IS THE FRONT'S MIRROR (K10): a word the edge passes goes, from the words and from
+            // the text, and one the edge cuts through ends at the edge. Only what the edge CROSSES (review K10): a
+            // word that lay past the old end already (a trim before K10) was not touched by this one and stays.
             const words = timedWords(c);
             const end = Math.round((+d.dur || 0) * 100) / 100;
-            const left = words.filter(w => (+w.s || 0) < end).map(w => ((+w.e || 0) > end ? { ...w, e: end } : w));
+            const was = Math.round((+c.dur || 0) * 100) / 100;
+            const crossed = (w) => (+w.s || 0) < was - 1e-6;
+            const left = words.filter(w => !crossed(w) || (+w.s || 0) < end)
+              .map(w => (crossed(w) && (+w.e || 0) > end ? { ...w, e: end } : w));
             if (!left.length) c.words = null;
             else {
               if (left.length < words.length || words !== c.words) c.name = left.map(w => w.w).join(' ');
@@ -1534,7 +1538,8 @@ export function setCaptionText(trackId, clipId, text) {
   Store.mutate(tl => {
     const t = _words(tl, trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
-    if (!c) return;
+    // Gone (a lay replaced it, or it was deleted): said, not swallowed - the caller still holds what was typed.
+    if (!c) { why = 'That line is not on the lane any more'; return; }
     if (!isHeard(c)) { c.name = String(text || '').slice(0, 400); return; }
     const r = retext(c.words, text, c.dur);
     if (r.why) { why = r.why; return; }
@@ -1865,9 +1870,13 @@ export function initTimelineB() {
     // A key something nearer took for itself (the word editor, K10b) is not the timeline's.
     if (e.defaultPrevented) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || !!e.target.isContentEditable;
-    // Escape in a field takes back what was typed there - it does not let go of the line (K10b: it used to,
-    // and the caption's text field lost what was typed with the pick).
-    if (e.key === 'Escape' && !typing) _clearSel();
+    // Escape in a TEXT field takes back what was typed there - it does not let go of the line (K10b: it used to,
+    // and the caption's text field lost what was typed with the pick). A select, a slider, a colour, a checkbox
+    // left focused is not typing: Escape lets go of the pick there as it always did (review K10).
+    const t0 = e.target;
+    const texty = t0.tagName === 'TEXTAREA' || !!t0.isContentEditable
+      || (t0.tagName === 'INPUT' && /^(text|search|number|email|url|tel|password|)$/.test(String(t0.type || '')));
+    if (e.key === 'Escape' && !texty) _clearSel();
     // Not while typing: the inspector has fields, and Delete there means a character. And not in a block that
     // keeps its own keys (the words of a caption, where Delete takes a WORD).
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !(e.target.closest && e.target.closest('[data-own-keys]'))) {

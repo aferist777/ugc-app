@@ -816,7 +816,11 @@ function _blankCaption(host, track, clip) {
     // changed after the box was painted - a word corrected just before the box was clicked, a lay. Then what
     // was typed is not written over it, and is said in the note to be put in again.
     const cur = _captionName(track.id, clip.id);
-    if (cur != null && cur !== area.__painted) {
+    if (cur == null) {
+      if (v !== area.__painted) note(area, 'That line is not on the lane any more - your text was not written.', 'You typed: «' + v + '»');
+      return;
+    }
+    if (cur !== area.__painted) {
       if (v !== area.__painted) note(area, 'The line changed meanwhile - your text was not written over it.', 'It reads now: «' + cur + '». You typed: «' + v + '»');
       return;
     }
@@ -836,8 +840,16 @@ function _blankCaption(host, track, clip) {
       area.blur();
     } else if (e.key === 'Enter' && !e.shiftKey && heardLine) {
       e.preventDefault(); e.stopPropagation();
+      const changed = area.value !== area.__painted;
       area.blur();
-      WordEdit.focusList(clip.id);
+      // No words of this line on screen and none coming (rewritten before K10 and not timed - its text did not
+      // change now): the focus stays in its text, in the box painted now if the blur repainted the strip (review
+      // K10) - left on nothing, the next Delete would be the timeline's, and it takes the whole line. A changed
+      // text is timed by its change and painted with its words, which then take the focus.
+      if (!WordEdit.focusList(clip.id, changed)) {
+        const box = [...document.querySelectorAll('#mv3-over textarea.mv3-c-area')].find(t => t.__ids && t.__ids.clip === clip.id) || area;
+        if (box.isConnected) box.focus({ preventScroll: true });
+      }
     }
   });
   host.appendChild(area);
@@ -1083,8 +1095,17 @@ export function initInspector() {
   // The field being typed in (see _typing). On the strip itself, which is never rebuilt - only its insides.
   const over = document.getElementById('mv3-over');
   if (over) {
+    // A field of the strip that holds typing not written yet - a caption's text, a word - keeps a newer copy of
+    // the project from being adopted under it (store.js setTyping; review K10). Fields that know what they were
+    // painted with say so (`__painted`); the rest are not typing a line.
+    Store.setTyping(() => {
+      const a = document.activeElement;
+      return !!(a && a.__painted != null && a.closest && a.closest('#mv3-over') && a.value !== a.__painted);
+    });
     over.addEventListener('focusin', (e) => { _typing = _isTextField(e.target); });
     over.addEventListener('focusout', (e) => {
+      // Left: whatever it wrote is written now (its change came first), and a copy held back for it comes in.
+      setTimeout(() => Store.typingDone(), 0);
       if (!_isTextField(e.target)) return;
       _typing = false;
       if (_typedPending) { _typedPending = false; setTimeout(() => render(), 0); }

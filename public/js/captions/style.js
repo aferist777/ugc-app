@@ -92,8 +92,9 @@ const RULES = {
 
 // ── A word marked to stand out ──────────────────────────────────────────────
 // Automatic, the colour of the spoken word - unless that is the colour of the text (23 presets of 127: a
-// marked word would not stand out at all) or, where a word is coloured as it is sung (karaoke, sweep), the
-// colour it is sung or waits in. Then the first of yellow, red, blue that is far enough from them.
+// marked word would not stand out at all), or, where a word is coloured as it is sung (karaoke, sweep), the
+// colour it is sung or waits in, or the colour of a box drawn behind it. Then the first of yellow, red, blue
+// that is far enough from them.
 const MARK_TRY = ['#ffe14d', '#ef4444', '#38bdf8'];
 const _rgb = (hex) => { const h = String(hex || '#000000').replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); };
 const _far = (a, b) => { const x = _rgb(a), y = _rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) >= 80; };
@@ -103,7 +104,11 @@ export function markedColour(st) {
   const s = st || DEF;
   if (HEX.test(String(s.marked || ''))) return String(s.marked).toLowerCase();
   const sung = s.effect === 'karaoke' || s.effect === 'sweep';
-  const ok = (c) => HEX.test(String(c || '')) && _far(c, s.primary || DEF.primary) && (!sung || _far(c, s.secondary || DEF.secondary));
+  // ...and, where a box is drawn behind the words, the box's colour (review K10: Highlighter Yellow Sweep's
+  // marked word came out yellow on its yellow box).
+  const boxed = (s.borderStyle === 'box' || s.borderStyle === 'boxline') && +s.backAlpha > 0;
+  const ok = (c) => HEX.test(String(c || '')) && _far(c, s.primary || DEF.primary) && (!sung || _far(c, s.secondary || DEF.secondary))
+    && (!boxed || _far(c, s.backColor || DEF.backColor));
   return [s.highlight].concat(MARK_TRY).find(ok) || MARK_TRY[0];
 }
 
