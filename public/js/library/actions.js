@@ -116,7 +116,7 @@ export async function fixThumb(it) {
 //     re-derives the folder from the record would point at a folder that does not exist.
 //     Renaming a look safely means moving the folder and rewriting every URL in the record;
 //     that belongs with the storage rework (moves on rename), not here.
-export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks']);
+export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds']);
 
 export async function renameItem(it, anchor) {
   const next = await askName({ anchor, title: 'Rename', value: it.name || '', okLabel: 'Rename' });
@@ -332,6 +332,8 @@ export function deleteWarning(it) {
       + 'The video' + (mb ? ' (' + mb + ' MB)' : '') + ' and its poster are removed from disk.\n'
       + 'This is the only copy - re-rendering is the only way back.';
   }
+  // (phase V7) A sound has no picture: the file alone goes.
+  if (it.kind === 'sounds') return 'Delete the sound "' + (it.name || '') + '"?\n\nThe sound file is removed from disk.';
   return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
 }
 
@@ -391,6 +393,25 @@ export async function uploadImages(files, onEach) {
       fd.append('image', f);
       fd.append('name', f.name.replace(/\.[^.]+$/, ''));
       await _json('/api/images/upload', { method: 'POST', body: fd });
+      ok++;
+    } catch (e) { /* one bad file must not stop the batch */ }
+  }
+  return { ok, total: list.length };
+}
+
+// (phase V7) Sounds onto the Sounds shelf, into the category open there - one call each, like the pictures.
+export async function uploadSounds(files, onEach, categoryId) {
+  let ok = 0;
+  const list = Array.from(files || []);
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (onEach) onEach(i + 1, list.length, f.name);
+    try {
+      const fd = new FormData();
+      fd.append('sound', f);
+      fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+      if (categoryId) fd.append('categoryId', categoryId);
+      await _json('/api/sounds/upload', { method: 'POST', body: fd });
       ok++;
     } catch (e) { /* one bad file must not stop the batch */ }
   }

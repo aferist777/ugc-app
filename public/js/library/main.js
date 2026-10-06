@@ -286,7 +286,7 @@ function _wireCatSash() {
 // Which ones an item offers is a property of its shelf, not of the UI: a lookbook file
 // has no favourite flag to set and no category to file it under, a character's name is
 // a label while a lookbook's name IS its filename. The viewer's action row reads it.
-const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
+const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 // Which kinds a record can be CONVERTED between. Not the same set as the ones that can be
 // starred: an image and a clip are different files in different stores, and there is no
 // meaning to turning a picture into a birol. The server refuses it too - see the /kind route.
@@ -294,7 +294,7 @@ const _KINDABLE = new Set(['birols', 'uploads', 'hooks']);
 // All three kinds can be filed under a category. Hook records already carried categoryId —
 // public/js/scen-hooks.js has always written it — so this offers a control for data that
 // was already there.
-const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
+const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 
 function _actionsFor(it) {
   const out = [];
@@ -386,10 +386,10 @@ function _open(it, list, follow) {
 // re-requested per card. A card offers the list belonging to ITS kind — with the All filter
 // the grid holds all three kinds at once, so one list would be the wrong one two thirds of
 // the time.
-let _catsByKind = { birols: [], uploads: [], hooks: [] };
+let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
 const _catsFor = (kind) => _catsByKind[kind] || [];
 async function _loadCats() {
-  try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [] }; }
+  try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] }; }
   // Merge builds its media-bar category filters from localStorage, so a name given here has
   // to be written there too or Merge would never offer it.
   A.mirrorCatsToMerge(_catsByKind);
@@ -447,6 +447,20 @@ function _tileSrc(it) {
   return src ? _door(src) : '';
 }
 
+// One sound heard at a time on the Media shelf (phase V7): a second ▶ stops the first.
+let _hearing = null;
+function _hear(src, btn) {
+  if (_hearing && _hearing.src === src && !_hearing.audio.paused) { _hearing.audio.pause(); return; }
+  if (_hearing) _hearing.audio.pause();
+  const audio = new Audio(src);
+  _hearing = { src, audio };
+  btn.textContent = '■';
+  const back = () => { btn.textContent = '▶'; };
+  audio.addEventListener('pause', back, { once: true });
+  audio.addEventListener('ended', back, { once: true });
+  audio.play().catch(back);
+}
+
 function _card(it, extra) {
   const card = document.createElement('div');
   card.className = 'lib-card' + (it.meta && it.meta.favorite ? ' fav' : '');
@@ -461,16 +475,39 @@ function _card(it, extra) {
   const src = _tileSrc(it);
   const box = document.createElement('div');
   box.className = 'lib-thumb-box' + (src ? '' : ' lib-thumb-pending');
-  const img = document.createElement('img');
-  img.className = 'lib-thumb';
-  img.alt = it.name;
-  img.decoding = 'async';
-  // Native lazy: the browser fetches what is near the viewport and nothing else. A
-  // hand-rolled observer looked equivalent but handed out no src at all in a view that
-  // does not composite, leaving every card blank.
-  img.loading = 'lazy';
-  if (src) img.src = src;
-  box.appendChild(img);
+  if (it.kind === 'sounds') {
+    // (phase V7) A sound has no picture: a note, its length, and ▶ to hear it here - the card itself opens the
+    // viewer, which plays it too.
+    box.className = 'lib-thumb-box lib-thumb-sound';
+    const note = document.createElement('span');
+    note.className = 'lib-snd';
+    note.textContent = '♪';
+    box.appendChild(note);
+    if (it.dur) {
+      const d = document.createElement('span');
+      d.className = 'lib-snd-dur';
+      d.textContent = (+it.dur).toFixed(1) + ' s';
+      box.appendChild(d);
+    }
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'lib-snd-play';
+    play.textContent = '▶';
+    play.title = 'Listen';
+    play.addEventListener('click', (e) => { e.stopPropagation(); _hear(it.media, play); });
+    box.appendChild(play);
+  } else {
+    const img = document.createElement('img');
+    img.className = 'lib-thumb';
+    img.alt = it.name;
+    img.decoding = 'async';
+    // Native lazy: the browser fetches what is near the viewport and nothing else. A
+    // hand-rolled observer looked equivalent but handed out no src at all in a view that
+    // does not composite, leaving every card blank.
+    img.loading = 'lazy';
+    if (src) img.src = src;
+    box.appendChild(img);
+  }
 
   // A render with no poster could not be opened by ffmpeg, which means the file is truncated
   // and no player will open it either. Said on the card, because the alternative is a card that
@@ -1061,6 +1098,13 @@ function _paintUpload() {
     if (inp) inp.accept = 'image/*';
     return;
   }
+  // (phase V7) Sounds go into the category open on the chips, if one is.
+  if (_filter === 'sounds') {
+    btn.textContent = 'Upload sounds';
+    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into the category chosen above, or with none.';
+    if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
+    return;
+  }
   if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
   const k = A.KINDS.find(x => x.id === _filter);
@@ -1080,6 +1124,16 @@ async function _upload(files) {
     _status(ri.ok === ri.total
       ? ('Uploaded ' + ri.ok + (ri.ok === 1 ? ' image' : ' images'))
       : (ri.ok + ' of ' + ri.total + ' uploaded'), ri.ok === ri.total ? '' : 'err');
+    return;
+  }
+  if (_filter === 'sounds') {
+    const cat = _cat && _cat !== '__uncat__' ? _cat : '';
+    const rs = await A.uploadSounds(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), cat);
+    if (btn) btn.disabled = false;
+    if (rs.ok) { await _load({ checks: true }); _counts(); }
+    _status(rs.ok === rs.total
+      ? ('Uploaded ' + rs.ok + (rs.ok === 1 ? ' sound' : ' sounds'))
+      : (rs.ok + ' of ' + rs.total + ' uploaded - only sound files are taken'), rs.ok === rs.total ? '' : 'err');
     return;
   }
   // The open kind decides where the clips are filed: looking at Hooks and pressing Upload

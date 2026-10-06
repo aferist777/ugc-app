@@ -796,6 +796,12 @@ router.post('/mv3/video/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no clip' });
   const b = req.body || {};
   try {
+    // A file with no picture is no clip (phase V7: a sound has its own door, onto Sounds).
+    const dim = await require('../lib/media-probe').probe(req.file.path).catch(() => ({}));
+    if (!(dim.w > 0)) {
+      try { fs.unlinkSync(req.file.path); } catch (er) { /* gone */ }
+      return res.status(400).json({ success: false, error: 'it has no picture in it' + (dim.audio ? ' - a sound goes in among the sounds' : '') });
+    }
     const { item } = await require('../lib/birols-store').add('/media/work/' + req.file.filename, {
       kind: 'uploads',
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname),
@@ -803,11 +809,52 @@ router.post('/mv3/video/upload', _upload.single('video'), async (req, res) => {
     });
     res.json({ success: true, item });
   } catch (e) {
+    // Not filed: nothing of it stays in media/work (a file that was placed already has moved - ENOENT here).
+    try { fs.unlinkSync(req.file.path); } catch (er) { /* gone or moved */ }
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
 router.use('/mv3/video/upload', (err, _req, res, _next) => {
+  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+});
+
+// ── A sound from this computer (phase V7) ───────────────────────────────────
+// Onto the Sounds shelf (lib/sounds-store.js): from the video chat into the project's category, from the Library into
+// the category open there (`categoryId`), else none.
+const SOUND_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.webm'];
+const _uploadSound = multer({
+  storage: multer.diskStorage({
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) { /* exists */ } cb(null, MEDIA.work); },
+    filename: (_q, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, 'snd_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex') + (SOUND_EXTS.includes(ext) ? ext : '.mp3'));
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_q, file, cb) => cb(null, /^audio\//.test(file.mimetype) || SOUND_EXTS.includes(path.extname(file.originalname).toLowerCase())),
+});
+
+router.post('/sounds/upload', _uploadSound.single('sound'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'no sound - mp3, wav, m4a, aac, ogg, flac or opus' });
+  const b = req.body || {};
+  try {
+    const project = String(b.project || '');
+    const { item } = await require('../lib/sounds-store').add('/media/work/' + req.file.filename, {
+      name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname).replace(/\.[^.]+$/, ''),
+      categoryId: String(b.categoryId || ''),
+      categoryLabel: project ? VGENS.catLabelFor(_titleOf(project)) : '',
+      source: 'upload',
+    });
+    res.json({ success: true, item });
+  } catch (e) {
+    // Not filed: nothing of it stays in media/work (a file that was placed already has moved - ENOENT here).
+    try { fs.unlinkSync(req.file.path); } catch (er) { /* gone or moved */ }
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
+router.use('/sounds/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 

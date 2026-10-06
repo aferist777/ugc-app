@@ -548,9 +548,42 @@ function _beginDrag(e, t, c, el) {
 // on the same node twice. Nobody presses a mouse button without moving it a little.
 const SLOP = 3;
 
+// (phase V7) THE VIDEO CHAT'S ATTACHMENTS TAKE A CLIP FROM A LANE: let go over the part of the zone that takes it
+// ([data-drop-kind] - clips from a video lane, sounds from either), the part of its file the lane plays goes there as a
+// reference, and the timeline stays as it was. The part is held lit while the clip is over it.
+let _dropEl = null;
+function _dropAt(e, kind) {
+  const at = document.elementFromPoint(e.clientX, e.clientY);
+  const z = at && at.closest ? at.closest('[data-drop-kind]') : null;
+  if (!z) return null;
+  const k = z.dataset.dropKind;
+  return (k === 'audio' || (k === 'video' && kind === 'video')) ? z : null;
+}
+function _hintDrop(el) {
+  if (_dropEl === el) return;
+  if (_dropEl) _dropEl.classList.remove('is-drop');
+  _dropEl = el;
+  if (el) el.classList.add('is-drop');
+}
+function _clipOut(d, kind) {
+  let c = null;
+  for (const t of ((Store.timeline() || {}).tracks || [])) { c = (t.clips || []).find(x => x.id === d.id); if (c) break; }
+  if (!c || !c.src || isStill(c)) return;
+  const sp = +c.speed || 1;
+  const from = Math.max(0, +c.trimIn || 0);
+  const r2 = (v) => Math.round(v * 100) / 100;
+  window.dispatchEvent(new CustomEvent('mv3:clip-out', { detail: {
+    kind, src: c.src, thumb: c.thumb || '', name: c.name || '', libId: c.libId || '',
+    in: r2(from), out: r2(from + (+c.dur || 0) * sp), srcDur: +c.srcDur || 0,
+  } }));
+}
+
 function _moveDrag(e) {
   if (!_drag) return;
   if (!_drag.moved && Math.abs(e.clientX - _drag.x0) < SLOP && Math.abs(e.clientY - _drag.y0) < SLOP) return;
+  // Past the slop the hand has really gone somewhere - up out of the lanes too, which moves no clip.
+  _drag.far = true;
+  if (!_drag.edge && !_drag.words) _hintDrop(_dropAt(e, _drag.kind));
   const z = _zoom();
   const dx = (e.clientX - _drag.x0) / z;
 
@@ -619,11 +652,19 @@ function _moveDrag(e) {
   }
 }
 
-function _endDrag() {
+function _endDrag(e) {
   if (!_drag) return;
   const d = _drag;
   _drag = null;
   document.body.classList.remove('mv3b-dragging');
+  // Let go over the video chat's attachments (phase V7): the clip goes there, the lanes are drawn back as they were.
+  const into = (d.far && !d.edge && !d.words && e && e.clientX != null) ? _dropAt(e, d.kind) : null;
+  _hintDrop(null);
+  if (into) {
+    _clipOut(d, into.dataset.dropKind);
+    _build();
+    return;
+  }
   // Pressed and let go without moving: that is a click, and a click on a clip selects it.
   // One clip, replacing whatever the band had - picking a single thing is how you say "this
   // is the one I want to change", and keeping the old set would make the inspector talk

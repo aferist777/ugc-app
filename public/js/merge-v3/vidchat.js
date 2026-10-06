@@ -13,12 +13,16 @@
      price of this send; the aggregator beside it with its own rate - the cheapest with a working key by default.
    - A line ABOVE THE THREAD says what the chosen model does and what to attach.
    - Kling motion control has no writer: the box IS its prompt, standing at the standard one when empty.
-   - A clip that lands is not put in the attachment row - clips are references only from phase V7.
+   - A clip that lands is not put in the attachment row by itself - it is one press on it in the column.
+   - (phase V7) Clips and sounds are references too: from this project's clips, B-roll, Uploads, the Sounds shelf, this
+     computer or a lane of the timeline; each goes as the PART of it the person chose (vtrim.js), the first seconds
+     the model takes by default, and the price follows that part.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, money, json, stored, keep } from './chat-shell.js';
+import { createChat, el, money, json, stored, keep, thumbOf, refCell } from './chat-shell.js';
+import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
 import { note } from './ask.js';
 import { startInlineProgress } from '../progress.js';
@@ -65,6 +69,140 @@ function VIDEOS(ctx) {
   // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
   const _kind = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
   const _pics = () => ctx.atts().filter(a => _kind(a) === 'image');
+  const _clips = () => ctx.atts().filter(a => _kind(a) === 'video');
+  const _sounds = () => ctx.atts().filter(a => _kind(a) === 'audio');
+  // The seconds of a clip or a sound that go - its part.
+  const _span = (a) => Math.max(0, (+a.out || 0) - (+a.in || 0));
+  const _s = (v) => (+v).toFixed(1).replace(/\.0$/, '') + ' s';
+
+  // ── The part of a clip or a sound that goes (phase V7) ────────────────────
+  // How long it may be on the chosen model: Seedance takes clips of 2-15 s (2.5: 2-30) and all of them together that
+  // much at most, the sounds likewise; Kling motion control follows 3-30 s of the moves - 10 s when the character keeps
+  // the picture's orientation. `max` is what is left for THIS one beside the others of its kind.
+  function _spanRule(a) {
+    const r = rec(), m = model();
+    if (!r || !m) return null;
+    const L = r.limits || {};
+    const k = _kind(a);
+    const others = ctx.atts().filter(x => x !== a && x.path !== a.path && _kind(x) === k).reduce((s, x) => s + _span(x), 0);
+    if (k === 'video') {
+      if (!(L.videos > 0)) return null;
+      if (m.family === 'kmc') {
+        const img = params().orientation === 'image';
+        const cap = img ? (L.videoSecsImage || 10) : (L.videoSecs || 30);
+        return { min: r.duration.min || 3, max: cap, all: cap,
+          why: m.label + ' follows ' + (r.duration.min || 3) + '-' + cap + ' s of the moves' + (img ? ' when the character keeps the picture\'s orientation' : '') + ' - and is billed by them.' };
+      }
+      const [lo, hi] = L.clipSecs || [2, 15];
+      const all = L.videoSecs || hi;
+      return { min: lo, max: Math.min(hi, Math.max(0, all - others)), all,
+        why: m.label + ' takes clips of ' + lo + '-' + hi + ' s, ' + all + ' s in all' + (r.agg === 'kie' ? ' - kie bills their seconds too.' : '.') };
+    }
+    if (k === 'audio') {
+      if (!(L.audios > 0)) return null;
+      const all = L.audioSecs || 15;
+      return { min: 0.5, max: Math.max(0, all - others), all, why: m.label + ' takes ' + all + ' s of sound in all.' };
+    }
+    return null;
+  }
+  // Why a clip or a sound cannot go as it is ('' when it can) - the cell turns red and the send says it.
+  function _spanWrong(a) {
+    const k = _kind(a), m = model();
+    const what = k === 'video' ? 'clip' : 'sound';
+    if (!(+a.dur > 0)) return 'its length is not known yet - is the file whole?';
+    const rule = _spanRule(a);
+    if (!rule) return ((m && m.label) || 'This model') + ' takes no ' + what + 's.';
+    const span = _span(a);
+    if (!(span > 0)) return 'no part of it is chosen - press it';
+    if (+a.dur < rule.min - 0.05) return 'it is ' + _s(a.dur) + ' - ' + m.label + ' needs a ' + what + ' of at least ' + _s(rule.min);
+    if (span < rule.min - 0.05) return 'the part is ' + _s(span) + ' - ' + m.label + ' needs at least ' + _s(rule.min) + ' - press it';
+    if (span > rule.max + 0.05) {
+      return rule.max < (rule.all || 0) - 0.05
+        ? 'with the other ' + what + 's it is more than ' + _s(rule.all) + ' in all - shorten one'
+        : 'the part is ' + _s(span) + ' - ' + m.label + ' takes ' + _s(rule.max) + ' - press it';
+    }
+    return '';
+  }
+  // What the zone's cell says of it (the shell asks): red with the reason, or gold seconds when only a part goes.
+  function _attState(a) {
+    if (_kind(a) === 'image') return null;
+    const bad = _spanWrong(a);
+    if (bad) return { bad };
+    return (+a.dur > _span(a) + 0.05) ? { cut: true } : null;
+  }
+
+  // A clip or a sound attached: its length measured when the shelf did not know it, then the part that goes - the one
+  // it came with (a lane of the timeline), else the first seconds the model takes ("17.3 s → the first 15 s go").
+  async function _onAttach(a) {
+    const k = _kind(a);
+    if (k === 'image') return;
+    let dur = +a.dur || 0;
+    // Measured when the shelf did not know its length - and a clip's file taken as a sound, which may have none.
+    if (!dur || (k === 'audio' && /\.(mp4|mov|m4v|webm|mkv|avi)(\?|$)/i.test(a.path))) {
+      const d = await json('/api/media/probe?src=' + encodeURIComponent(a.path));
+      if (d && d.success && +d.duration > 0) dur = Math.round(+d.duration * 100) / 100;
+      if (d && d.success && ((k === 'video' && !(d.w > 0)) || (k === 'audio' && !d.audio))) {
+        ctx.detach(a.path);
+        ctx.say('Not attached: it has no ' + (k === 'video' ? 'picture' : 'sound') + ' in it.');
+        return;
+      }
+    }
+    const now = ctx.atts().find(x => x.path === a.path);
+    if (!now) return;
+    if (!dur) { ctx.setAtt(a.path, { dur: '' }); return; }
+    const rule = _spanRule(now);
+    if (rule && rule.max < rule.min - 0.05) {
+      ctx.detach(a.path);
+      ctx.say(rule.why + ' ' + _s(rule.all - rule.max) + ' of it ' + (rule.all - rule.max === 1 ? 'is' : 'are') + ' taken - shorten one first.');
+      return;
+    }
+    let from = +now.in >= 0 && +now.out > +now.in ? Math.max(0, Math.min(+now.in, dur)) : 0;
+    let to = +now.out > from ? Math.min(+now.out, dur) : dur;
+    if (rule) {
+      if (to - from > rule.max) to = from + rule.max;
+      if (to - from < rule.min && dur >= rule.min) { to = Math.min(dur, from + rule.min); from = Math.max(0, to - rule.min); }
+    }
+    ctx.setAtt(a.path, { dur, in: Math.round(from * 100) / 100, out: Math.round(to * 100) / 100 });
+    if (dur > to - from + 0.05) {
+      ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press it to choose another part.');
+    }
+  }
+
+  // The part chosen by hand: the clip (or the sound) in a panel over the zone, its window within what the model takes.
+  function _trimFor(a, cell) {
+    const dur = +a.dur || 0;
+    if (!dur) { ctx.say('Its length is not known - it cannot be cut.'); return; }
+    const k = _kind(a);
+    const rule = _spanRule(a) || { min: 0.5, max: dur, why: '' };
+    openTrim({
+      anchor: cell, kind: k, src: a.path, poster: a.poster ? thumbOf(a.poster, 'main') : '', dur,
+      from: +a.in || 0, to: +a.out || Math.min(dur, rule.max),
+      min: Math.min(rule.min, dur), max: Math.max(Math.min(rule.min, dur), rule.max),
+      title: a.name || (k === 'audio' ? 'the sound' : 'the clip'), why: rule.why,
+      onChange: (f, t) => ctx.setAtt(a.path, { in: f, out: t }),
+    });
+  }
+
+  const _takes = (k) => {
+    const r = rec();
+    if (!r) return false;
+    const L = r.limits || {};
+    return k === 'video' ? L.videos > 0 : k === 'audio' ? L.audios > 0 : L.images > 0;
+  };
+
+  // A clip let go over the zone from a lane of the timeline (timeline-b.js): the part of its file the timeline plays.
+  window.addEventListener('mv3:clip-out', (ev) => {
+    const d = ev.detail || {};
+    if (!ctx.shown() || !d.src) return;
+    const k = d.kind === 'audio' ? 'audio' : 'video';
+    if (!_takes(k)) { ctx.say(((model() || {}).label || 'This model') + ' takes no ' + (k === 'video' ? 'clips' : 'sounds') + '.'); return; }
+    if (ctx.atts().some(x => x.path === d.src)) {
+      // Attached already: the part the timeline plays replaces the one it had.
+      ctx.setAtt(d.src, { in: d.in, out: d.out });
+      return;
+    }
+    ctx.attach(d.src, d.name || '', { kind: k, poster: k === 'video' ? d.thumb || '' : '', dur: +d.srcDur || 0, in: d.in, out: d.out });
+  });
 
   // ── The rates ─────────────────────────────────────────────────────────────
   // The aggregator's table, read through the chosen parameters - the server prices the same way
@@ -76,16 +214,28 @@ function VIDEOS(ctx) {
   function priceNow() { return priceOf(rec()); }
   // A record's price for the parameters as they are - the chosen one's, or the fallback rung's (which may not
   // make this resolution at all: then it is skipped, and says so).
-  function priceOf(r) {
+  // `media`: a card's own attachments (what it was written with) - else what is in the zone now.
+  function priceOf(r, media) {
     if (!r) return null;
     const p = params();
     if (p.resolution && !r.resolutions.includes(p.resolution)) return { none: true, cannot: p.resolution };
     const res = p.resolution || r.resDef;
-    const per = _perSec(r, res);
+    // (phase V7) With a reference clip a rate's second figure is the one asked (lib/video-models.js price), and the
+    // clip's seconds count: Kling is billed by the seconds of the moves, kie's Seedance by the clip's AND the video's.
+    const clips = media ? media.filter(x => x && x.kind === 'video') : (_takes('video') ? _clips() : []);
+    const vidIn = clips.reduce((s, a) => s + _span(a), 0);
+    const rate = (r.rates || {})[res];
+    const per = Array.isArray(rate) ? rate[clips.length ? 1 : 0] : (rate == null ? null : rate);
     if (per == null) return { none: true, res };
-    if (r.duration.fromClip) return { per, res, fromClip: true };
-    const secs = clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
-    return { per, res, secs, usd: per * secs };
+    if (r.duration.fromClip) {
+      const cap = p.orientation === 'image' ? (r.limits.videoSecsImage || 10) : (r.limits.videoSecs || 30);
+      const secs = vidIn ? Math.min(vidIn, cap) : 0;
+      return { per, res, fromClip: true, secs, usd: secs ? per * secs : null };
+    }
+    const out = clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
+    const withIn = r.agg === 'kie' && (model() || {}).family === 'seedance' && clips.length > 0;
+    const secs = withIn ? out + vidIn : out;
+    return { per, res, secs, out, vidIn: withIn ? vidIn : 0, usd: per * secs };
   }
   function _modelLine(m) {
     const r = recOf(m, m.defaultAgg) || m.records[0];
@@ -204,6 +354,8 @@ function VIDEOS(ctx) {
     const p = params();
     const n = _pics().length;
     const fam = m.family;
+    // (phase V7) Beside a clip or a sound Seedance's pictures are references - frames go only on their own.
+    const mixed = _takes('video') && _clips().length + _sounds().length > 0;
     if (!r.duration.fromClip) {
       const opts = [];
       for (let s = r.duration.min; s <= r.duration.max; s++) opts.push({ value: String(s), text: s + ' s' });
@@ -215,7 +367,7 @@ function VIDEOS(ctx) {
     // The shape: with a picture Grok takes the picture's, and Seedance's frames take theirs.
     if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
-      const as = _skill ? 'refs' : p.picturesAs;
+      const as = _skill || mixed ? 'refs' : p.picturesAs;
       const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && (as === 'frame' || as === 'fl')));
       const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
         r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => setParam('aspect', v));
@@ -232,17 +384,18 @@ function VIDEOS(ctx) {
       _row(box, 'sound', _select('mv3-vc-audio', 'Seedance makes its own sound', [{ value: 'on', text: 'with sound' }, { value: 'off', text: 'silent' }],
         p.audio === false ? 'off' : 'on', (v) => setParam('audio', v === 'on')));
       if (n > 0 && !_skill) {
+        const alone = 'only without clips and sounds';
         _row(box, 'pictures are', _select('mv3-vc-as', 'What the attached pictures are for', [
           { value: 'refs', text: 'references' },
-          { value: 'frame', text: 'the first frame', disabled: n !== 1, title: 'one picture' },
-          { value: 'fl', text: 'first and last frames', disabled: n !== 2, title: 'two pictures' },
-        ], p.picturesAs || 'refs', (v) => { setParam('picturesAs', v); _paintParams(); }));
+          { value: 'frame', text: 'the first frame', disabled: n !== 1 || mixed, title: mixed ? alone : 'one picture' },
+          { value: 'fl', text: 'first and last frames', disabled: n !== 2 || mixed, title: mixed ? alone : 'two pictures' },
+        ], mixed ? 'refs' : (p.picturesAs || 'refs'), (v) => { setParam('picturesAs', v); _paintParams(); }));
       }
     }
     if (fam === 'kmc') {
       _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
         { value: 'video', text: 'as in the clip (up to 30 s)' }, { value: 'image', text: 'as on the picture (up to 10 s)' },
-      ], p.orientation || 'video', (v) => { setParam('orientation', v); _paintPrice(); }));
+      ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); }));
       if (r.keepSound) {
         _row(box, 'sound', _select('mv3-vc-keep', 'The clip\'s own sound', [{ value: 'on', text: 'keep the clip\'s sound' }, { value: 'off', text: 'silent' }],
           p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
@@ -267,11 +420,14 @@ function VIDEOS(ctx) {
       box.innerHTML = '<b>&mdash;</b><span>no published price for this one</span>';
     } else if (pr.fromClip) {
       box.className = 'mv3-ig-cost';
-      box.innerHTML = '<b>≈' + money(pr.per) + '</b><span>per second of your clip · ' + pr.res + ' · ' + r.aggLabel + '</span>';
+      box.innerHTML = pr.usd != null
+        ? '<b>≈' + money(pr.usd) + '</b><span>at most · ' + _s(pr.secs) + ' of your clip × ' + money(pr.per) + '/s · ' + pr.res + ' · ' + r.aggLabel
+          + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>'
+        : '<b>≈' + money(pr.per) + '</b><span>per second of your clip · ' + pr.res + ' · ' + r.aggLabel + '</span>';
     } else {
       box.className = 'mv3-ig-cost';
-      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + pr.secs + ' s · ' + pr.res + ' · ' + r.aggLabel
-        + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
+      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s')
+        + ' · ' + pr.res + ' · ' + r.aggLabel + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
     }
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
@@ -379,8 +535,8 @@ function VIDEOS(ctx) {
 
   // ── The attachment zone (phase V6, the owner 2026-10-06) ──────────────────
   // Pictures | clips | sounds, each as many as the model takes on the chosen aggregator - the shell grows them one
-  // place at a time. With a recipe each part holds the recipe's slots of its kind, each cell wearing its name. Clips and
-  // sounds as references are phase V7: until then their parts say so (and a recipe's cells there stand dimmed).
+  // place at a time. With a recipe each part holds the recipe's slots of its kind, each cell wearing its name. A clip
+  // or a sound shows the seconds of it that go (phase V7); pressed, the part is chosen.
   const GENERIC = ['picture', 'pictures', 'clip', 'clips', 'sound', 'sounds'];
   const _partOf = (k) => (k === 'video' || k === 'audio' ? k : 'image');
   function _slotsOf(kind) {
@@ -402,15 +558,18 @@ function VIDEOS(ctx) {
         full: _seat() ? 'Room for ' + (r ? _picRoom(r) : 0) + ' - the storyboard goes to the video as one more picture, and it is drawn with these.' : '',
         none: who + ' takes no pictures.', other: 'Another picture for the writer to use - anything the recipe did not ask for' },
       { kind: 'video', word: 'clips', one: 'clip', room: lim.videos || 0, slots: _slotsOf('video'),
-        none: who + ' takes no clips.', off: (lim.videos || 0) ? 'Clips as references arrive in the next step.' : '' },
+        none: who + ' takes no clips.', other: 'Another clip for the writer to use - anything the recipe did not ask for' },
       { kind: 'audio', word: 'sounds', one: 'sound', room: lim.audios || 0, slots: _slotsOf('audio'),
-        none: who + ' takes no sounds.', off: (lim.audios || 0) ? 'Sounds as references arrive in the next step.' : '' },
+        none: who + ' takes no sounds.', other: 'Another sound for the writer to use - anything the recipe did not ask for' },
     ] };
   }
   // An armed slot turns the right column to what suits it (the owner): a person - characters and looks, a place -
-  // environments, clothes - lookbooks, a product, a style or anything else - Images.
+  // environments, clothes - lookbooks, a product, a style or anything else - Images; a clip - Uploads, where clips
+  // brought in from this computer go (the project's category when it has one); a sound - the Sounds shelf.
   function _shelfFor(kind, s) {
     const role = (s && s.role) || '';
+    if (kind === 'video') return 'grp:uploads';
+    if (kind === 'audio') return 'grp:sounds';
     if (kind !== 'image') return '';
     if (role === 'person') return 'shelf:people';
     if (role === 'location') return 'shelf:environments';
@@ -435,6 +594,13 @@ function VIDEOS(ctx) {
     const d = await json('/api/library/shelf/' + kind);
     return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media)
       .map(i => ({ path: i.media, state: 'done', name: i.name || '', libId: i.id || '' }));
+  }
+  // (phase V7) Suno's tracks stay on the Music shelf and are offered as sounds from there (their length is measured
+  // when one is attached - the shelf does not know it).
+  async function _loadMusic() {
+    const d = await json('/api/library/shelf/music');
+    return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
+      .map(i => ({ kind: 'audio', path: i.media, aspect: '5:2', state: 'done', name: i.name || '', dur: 0, libId: i.id || '' }));
   }
   // The recipe's first slot that is not filled as far as it must be - the send waits for it.
   function _missing() {
@@ -461,19 +627,31 @@ function VIDEOS(ctx) {
     if (miss) {
       ctx.flash(miss.part, miss.key);
       const what = miss.part === 'video' ? 'clip' : miss.part === 'audio' ? 'sound' : 'picture';
-      if (miss.part !== 'image') return ['The recipe needs a ' + what + '.', (what === 'clip' ? 'Clips' : 'Sounds') + ' as references arrive in the next step.'];
-      return ['The recipe needs ' + (miss.min - miss.have) + ' more ' + (miss.label || what) + ' ' + what + (miss.min - miss.have === 1 ? '' : 's') + '.',
-        miss.hint || 'Press its place, then a picture on the right or a file.'];
+      return ['The recipe needs ' + (miss.min - miss.have) + ' more ' + (miss.label && miss.label !== what ? miss.label + ' ' : '') + what + (miss.min - miss.have === 1 ? '' : 's') + '.',
+        miss.hint || 'Press its place, then a ' + what + ' on the right or a file.'];
     }
     const n = _pics().length;
+    const L = r.limits || {};
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
     if (n > _picRoom(r)) {
       return ['Too many pictures.', _seat() ? 'Room for ' + _picRoom(r) + ': the storyboard goes to ' + m.label + ' as one more picture, and it is drawn with these.'
-        : m.label + ' on ' + r.aggLabel + ' takes ' + (r.limits.images || 0) + '.'];
+        : m.label + ' on ' + r.aggLabel + ' takes ' + (L.images || 0) + '.'];
     }
-    if (ctx.atts().length > n) return ['Pictures only for now.', 'Clips and sounds as references arrive in the next step.'];
+    // (phase V7) Clips and sounds: as many as the model takes, each with a part it takes.
+    const vi = _clips(), au = _sounds();
+    if (vi.length > (L.videos || 0)) return ['Too many clips.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.videos ? L.videos : 'no clips') + '.'];
+    if (au.length > (L.audios || 0)) return ['Too many sounds.', m.label + ' on ' + r.aggLabel + ' takes ' + (L.audios ? L.audios : 'no sounds') + '.'];
+    if (L.total && n + vi.length + au.length + _seat() > L.total) return ['Too many attachments.', m.label + ' takes ' + L.total + ' files in all.'];
+    const wrong = vi.concat(au).map(a => [a, _spanWrong(a)]).find(x => x[1]);
+    if (wrong) {
+      const a = wrong[0];
+      const k = _kind(a);
+      return [(k === 'video' ? 'Clip ' : 'Sound ') + (ctx.atts().filter(x => _kind(x) === k).indexOf(a) + 1) + ' cannot go like this.', wrong[1] + '.'];
+    }
+    if (au.length && !n && !vi.length) return ['A sound goes beside a picture or a clip.', m.label + ' takes sounds as references to something it sees.'];
     // A two-step video always sends a picture - its storyboard (review V8).
-    if ((n || _seat()) && !_table.r2) return ['Attachments need R2.', (_seat() ? 'The storyboard goes to the video as a picture - ' : 'The models read pictures ') + 'from a public link: set R2 on Admin → API keys.'];
+    const any = n + vi.length + au.length;
+    if ((any || _seat()) && !_table.r2) return ['Attachments need R2.', (_seat() ? 'The storyboard goes to the video as a picture - ' : 'The models read what is attached ') + 'from a public link: set R2 on Admin → API keys.'];
     return '';
   }
 
@@ -486,7 +664,9 @@ function VIDEOS(ctx) {
     // What each picture is for: a recipe's slot says (its role - person, product... - or a frame), otherwise Seedance's
     // "pictures are" does.
     const slots = new Map(['image', 'video', 'audio'].flatMap(k => (_slotsOf(k) || []).map(s => [k + ':' + s.key, s])));
-    const frame = (i) => (fam !== 'seedance' ? '' : as === 'frame' && i === 0 ? 'frame-first'
+    // Beside a clip or a sound the pictures are references (phase V7).
+    const mixed = atts.some(a => _kind(a) !== 'image');
+    const frame = (i) => (fam !== 'seedance' || mixed ? '' : as === 'frame' && i === 0 ? 'frame-first'
       : as === 'fl' ? (i === 0 ? 'frame-first' : i === 1 ? 'frame-last' : '') : '');
     const role = (a, i) => {
       const s = a.slot ? slots.get(_kind(a) + ':' + a.slot) : null;
@@ -502,10 +682,11 @@ function VIDEOS(ctx) {
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
         audio: p.audio !== false, mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
-      media: atts.map((a) => ({
+      media: atts.map((a) => Object.assign({
         path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
         label: (a.slot && slots.get(_kind(a) + ':' + a.slot) || {}).label || '',
-      })),
+      // (phase V7) A clip or a sound goes as its part - the server prepares just that.
+      }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
       skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
@@ -964,7 +1145,7 @@ function VIDEOS(ctx) {
   }
   function _freshenOne(id, l) {
     const m = model();
-    const pr = priceNow();
+    const pr = priceOf(rec(), l.m.media || []);
     const n = _cardN.get(id) || 1;
     const other = m && _familyOf(l.m.card.model) && m.family !== _familyOf(l.m.card.model);
     // A two-step card is Seedance's whatever the column says (review V8): another model is no reason to write it again.
@@ -988,13 +1169,14 @@ function VIDEOS(ctx) {
     }
     // The sheet was planned for the length the card was written for (review V8): another length is said, not refused.
     const wasSecs = l.two ? +((l.m.card.params || {}).duration || 0) : 0;
-    const nowSecs = pr && !pr.none && !pr.fromClip ? pr.secs : 0;
+    const nowSecs = pr && !pr.none && !pr.fromClip ? (pr.out || pr.secs) : 0;
     const longer = wasSecs && nowSecs && wasSecs !== nowSecs ? ' · the storyboard was planned for ' + wasSecs + ' s' : '';
     l.price.textContent = seedOnly ? 'a two-step video is made by Seedance - pick a Seedance model on the left'
       : other ? 'it was written for ' + _labelOf(l.m.card.model)
         : !pr || pr.none ? (m ? m.label + ' · no published price' : '')
-          : pr.fromClip ? '≈' + money(pr.per) + ' per second of clip · ' + (m ? m.label : '')
-            : '≈' + money(pr.usd * n) + ' · ' + pr.secs + ' s · ' + pr.res + ' · ' + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + longer;
+          : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (m ? m.label : '')
+            : '≈' + money(pr.usd * n) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
+              + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + longer;
   }
 
   // Whether a card can go to the model chosen now - the card's own attachments are the server's to check.
@@ -1261,16 +1443,7 @@ function VIDEOS(ctx) {
       for (const a of media) {
         const k = count[a.kind] != null ? a.kind : 'image';
         count[k]++;
-        const cell = el('div', 'mv3-ig-msg-ref');
-        if (k === 'image') {
-          const img = document.createElement('img');
-          img.src = '/api/thumb?src=' + encodeURIComponent(a.path) + '&v=strip';
-          img.loading = 'lazy'; img.decoding = 'async';
-          cell.appendChild(img);
-          cell.addEventListener('mouseenter', () => ctx.peekShow('/api/thumb?src=' + encodeURIComponent(a.path) + '&v=main', cell));
-          cell.addEventListener('mouseleave', ctx.peekHide);
-        }
-        cell.appendChild(el('span', 'n', String(count[k])));
+        const cell = refCell(a, k, count[k], { show: ctx.peekShow, hide: ctx.peekHide });
         cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
         const wrap = el('div', 'vc-ref');
         wrap.appendChild(cell);
@@ -1281,6 +1454,15 @@ function VIDEOS(ctx) {
     }
     return box;
   }
+
+  // A clip or a sound of a Library shelf as the column shows it (phase V7).
+  const _clipItem = (i) => {
+    const mm = i.meta || {};
+    return { kind: 'video', video: i.media, poster: i.thumb || '', path: i.media,
+      aspect: (mm.w > 0 && mm.h > 0) ? mm.w + ':' + mm.h : '9:16', state: 'done', name: i.name || '',
+      dur: +i.dur || 0, libId: i.id || '', group: i.kind === 'uploads' ? 'uploads' : 'birols' };
+  };
+  const _soundItem = (i) => ({ kind: 'audio', path: i.media, aspect: '5:2', state: 'done', name: i.name || '', dur: +i.dur || 0, libId: i.id || '' });
 
   return {
     name: 'videos',
@@ -1295,19 +1477,48 @@ function VIDEOS(ctx) {
     eta: 180000,
     progressKey: (g) => 'mv3-video-' + (g.model || ''),
     sendUrl: '/api/mv3/video/send',
-    // A clip is not an attachment until phase V7: one that lands is not put in the row.
+    // A clip that lands is not put in the row by itself: it is one press on it in the column (phase V7).
     landAsRef: false,
     text: {
       placeholder: 'Describe a clip, or say what to change.',
       empty: 'Describe a clip. What comes back stays in this project — and on the B-roll shelf.',
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
-      onlyFiles: 'Only pictures can be attached here for now.',
-      slot: 'A picture to work from - from this computer, or press one on the right',
-      plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
-      cat: "This project's clips, a shelf of the Library or a category of its Images - pictures to attach",
+      onlyFiles: 'Only pictures, clips and sounds can be attached here.',
+      slot: 'From this computer, or press one on the right',
+      plus: 'Add a picture from this computer. It goes into Images and straight into the place above the message box.',
+      cat: "This project's clips, a shelf of the Library, a category of Images, B-roll, Uploads or Sounds - to attach",
       crumb: 'Back to the conversation about clips',
     },
-    upload: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || '') },
+    // (phase V7) Each kind through its own door, filed under the project's category: pictures into Images, clips into
+    // Uploads, sounds onto the Sounds shelf - and straight into their part of the zone.
+    uploads: {
+      image: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || ''),
+               att: (i) => ({ path: i.imagePath, name: i.name }) },
+      video: { url: '/api/mv3/video/upload', field: 'video', accept: 'video/*,.mov,.mkv,.m4v',
+               ok: (f) => /^video\//.test(f.type || '') || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(f.name || ''),
+               att: (i) => ({ path: i.videoPath, name: i.name, poster: i.thumbPath || '', dur: +i.duration || 0 }) },
+      audio: { url: '/api/sounds/upload', field: 'sound', accept: 'audio/*,.opus',
+               ok: (f) => /^audio\//.test(f.type || '') || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i.test(f.name || ''),
+               att: (i) => ({ path: i.audioPath, name: i.name, dur: +i.duration || 0 }) },
+    },
+    // (phase V7) Clips and sounds in the zone: the part that goes, what the cell says of it, and what the model takes.
+    takes: _takes,
+    attState: _attState,
+    onAttach: (a) => { _onAttach(a); },
+    trimFor: _trimFor,
+    onHide: () => closeTrim(),
+    // (phase V7) The column's "+" brings in what the column shows: a clip on B-roll or Uploads, a sound on Sounds.
+    plusKind: (cat) => (/^grp:(birols|uploads):/.test(String(cat || '')) ? 'video' : /^(grp:sounds:|shelf:music$)/.test(String(cat || '')) ? 'audio' : 'image'),
+    plusWords: {
+      video: 'Add a clip from this computer. It goes into Uploads, in this project\'s category, and into the clips of the zone.',
+      audio: 'Add a sound from this computer. It goes onto the Sounds shelf, in this project\'s category, and into the sounds of the zone.',
+    },
+    // (phase V7) Shelves with categories of their own, besides Images: clips from B-roll and Uploads, sounds.
+    moreCats: [
+      { key: 'birols', label: 'B-roll', url: '/api/library/shelf/media?filter=birols', map: _clipItem },
+      { key: 'uploads', label: 'Uploads', url: '/api/library/shelf/media?filter=uploads', map: _clipItem },
+      { key: 'sounds', label: 'Sounds', url: '/api/library/shelf/media?filter=sounds', map: _soundItem },
+    ],
     // The right column: this project's clips (posters; dragged onto a lane, pressed to play), or a category of Images
     // (pictures, pressed to attach).
     feed: {
@@ -1328,6 +1539,7 @@ function VIDEOS(ctx) {
       { id: 'people', label: 'characters & looks', load: _loadPeople },
       { id: 'environments', label: 'environments', load: () => _loadShelf('environments') },
       { id: 'lookbooks', label: 'lookbooks', load: () => _loadShelf('lookbooks') },
+      { id: 'music', label: 'music (Suno)', load: _loadMusic },
     ],
     shelfFor: _shelfFor,
     // (phase V6) The builder's cards in the thread, drawn here; the request at the thread's foot.

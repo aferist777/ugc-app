@@ -100,14 +100,14 @@ router.post('/media/thumb', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// What is in a file: length, frame size, whether it has sound (lib/media-probe.js). Nothing on a page asks
-// it since Animate went (phase C4); kept for the video chat's reference clips, whose start and end are picked
-// on the page (PLAN phase V7) - many B-roll records carry no duration.
+// What is in a file: length, frame size, whether it has sound (lib/media-probe.js). The video chat asks it for a
+// clip or a sound attached without its length (phase V7: hooks carry none) - the part that goes is picked on the page.
 //   GET /api/media/probe?src=<address>   -> { duration, w, h, audio }
 router.get('/media/probe', async (req, res) => {
   try {
     const src = String(req.query.src || '');
-    const abs = src ? VT.localFromUrl(src) : null;
+    // A library address only, and one that has moved since the page took it is followed (lib/moves.js).
+    const abs = src ? require('../lib/media').toDiskExisting(src) : null;
     if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not on disk' });
     const p = await require('../lib/media-probe').probe(abs);
     res.json({ success: true, ...p });

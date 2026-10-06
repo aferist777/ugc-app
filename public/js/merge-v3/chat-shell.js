@@ -60,6 +60,37 @@ export function el(tag, cls, text) {
 }
 
 export const thumbOf = (p, v) => '/api/thumb?src=' + encodeURIComponent(p) + '&v=' + (v || 'strip');
+// A clip's poster where the shelves keep it - thumbs/<name>_thumb.jpg beside it (lib/video-thumb.js thumbUrlFor).
+export const posterOf = (p) => {
+  const c = String(p || '').split('?')[0];
+  const i = c.lastIndexOf('/');
+  return c.slice(0, i) + '/thumbs/' + c.slice(i + 1).replace(/\.[^.]+$/, '') + '_thumb.jpg';
+};
+// One attachment of a message as it went: a picture's miniature, a clip's poster or a sound's note, its number - per
+// kind, the way the prompt names them - and for a clip or a sound the seconds of it that went (phase V7). `peek` is
+// the chat's enlarged view ({ show, hide }).
+export function refCell(a, k, n, peek) {
+  const c = el('div', 'mv3-ig-msg-ref' + (k !== 'image' ? ' is-' + k : ''));
+  if (k === 'image' || k === 'video') {
+    const src = k === 'image' ? a.path : posterOf(a.path);
+    const img = document.createElement('img');
+    img.src = thumbOf(src, 'strip');
+    img.loading = 'lazy'; img.decoding = 'async';
+    img.addEventListener('error', () => img.remove(), { once: true });
+    c.appendChild(img);
+    if (peek) {
+      c.addEventListener('mouseenter', () => peek.show(thumbOf(src, 'main'), c));
+      c.addEventListener('mouseleave', peek.hide);
+    }
+  }
+  if (k !== 'image') {
+    c.appendChild(el('span', 'ic', k === 'audio' ? '♪' : '▶'));
+    const secs = Math.max(0, (+a.out || 0) - (+a.in || 0));
+    if (secs) c.appendChild(el('span', 'dur', secs.toFixed(1) + 's'));
+  }
+  c.appendChild(el('span', 'n', String(n)));
+  return c;
+}
 export const money = (v) => '$' + (+(+v).toFixed(4));
 const ratioOf = (ar) => {
   const p = String(ar || '9:16').split(':');
@@ -111,6 +142,12 @@ export function createChat(make) {
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
     attach: (path, name, o) => _attach(path, name, o),
+    // (phase V7) An attachment changed by its description - the part of a clip or a sound that goes, its length once
+    // measured (a value of null or '' takes the field away) - or taken back off.
+    setAtt: (path, patch) => _setAtt(path, patch),
+    detach: (path) => _detach(path),
+    // Whether the chat is what the panel shows.
+    shown: () => _chat,
     // (phase V6) A recipe came or went: what is attached finds its slots again, and nothing stays armed.
     reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
@@ -175,6 +212,9 @@ export function createChat(make) {
     if (!_chat) {
       _stop();
       peekHide();
+      // A sound playing in the column stops with it, and the description lets go of what floats over the chat.
+      if (_sounding) { try { _sounding.audio.pause(); } catch (e) { /* gone */ } _sounding = null; }
+      if (typeof S.onHide === 'function') S.onHide();
       // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
       for (const n of _nodes.values()) n.away = true;
       // The shelf was read before the chat came forward: what was made or added since is not on it yet.
@@ -359,8 +399,12 @@ export function createChat(make) {
       }
     }
     _say('');
-    _atts.push({ path, name: name || '', kind, slot });
+    // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out).
+    const att = { path, name: name || '', kind, slot };
+    for (const k of ['poster', 'dur', 'in', 'out']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
+    _atts.push(att);
     _grew = kind;
+    if (typeof S.onAttach === 'function') S.onAttach(att);
     // An armed slot that is full now lets go.
     if (z && _armed && _armed.kind === kind && _armed.slot === slot && slot) {
       const p = z.parts.find(x => x.kind === kind);
@@ -378,6 +422,18 @@ export function createChat(make) {
     _attSeq++;
     _paintAtts();
     _paintStrip();
+    _draftLater();
+  }
+
+  function _setAtt(path, patch) {
+    const a = _atts.find(x => x.path === path);
+    if (!a) return;
+    for (const [k, v] of Object.entries(patch || {})) {
+      if (k === 'path' || k === 'kind' || k === 'slot') continue;
+      if (v == null || v === '') delete a[k]; else a[k] = v;
+    }
+    _attSeq++;
+    _paintAtts();
     _draftLater();
   }
 
@@ -454,12 +510,19 @@ export function createChat(make) {
       const why = !p.room ? p.none : p.off;
       box.title = why || '';
       box.classList.add('is-off');
-      if (p.slots && p.slots.length) {
+      if (mine.length) {
+        // (phase V7) Attached under a model that took them: they stay in sight, each with its cross, until taken off
+        // or another model takes them again - the send says why it will not go with them.
+        for (const a of mine) row.appendChild(_cell(_filled(a, num(a)), '', ''));
+      } else if (p.slots && p.slots.length) {
         for (const s of p.slots) row.appendChild(_empty(p, s, true));
       } else row.appendChild(el('span', 'mv3-ig-part-off', !p.room ? 'none' : 'next step'));
       box.appendChild(row);
       return box;
     }
+    // (phase V7) A clip let go over this part of the zone - from a lane of the timeline - is attached here, the part
+    // of its file the timeline plays (timeline-b.js asks for [data-drop-kind]; the description takes 'mv3:clip-out').
+    if (p.kind !== 'image') box.dataset.dropKind = p.kind;
     if (p.slots) {
       for (const s of p.slots) {
         const inS = mine.filter(a => a.slot === s.key);
@@ -481,23 +544,51 @@ export function createChat(make) {
   }
 
   // An attached thing: its picture, its NUMBER - with more than one, the message has to say which is which - and a cross.
+  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go; pressed, the
+  // description opens the part that goes (S.trimFor).
   function _filled(a, n) {
-    const cell = el('div', 'mv3-ig-att');
-    const img = document.createElement('img');
-    img.src = thumbOf(a.path, 'strip');
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    // Gone from the library since it was attached: it goes from the row, and the row says so.
-    img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
-    cell.appendChild(img);
+    const kind = _kindOf(a);
+    const cell = el('div', 'mv3-ig-att' + (kind === 'video' ? ' is-clip' : kind === 'audio' ? ' is-sound' : ''));
+    cell.dataset.path = a.path;
+    if (kind === 'image') {
+      const img = document.createElement('img');
+      img.src = thumbOf(a.path, 'strip');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      // Gone from the library since it was attached: it goes from the row, and the row says so.
+      img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
+      cell.appendChild(img);
+      cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
+      cell.addEventListener('mouseleave', peekHide);
+    } else {
+      if (kind === 'video' && a.poster) {
+        const img = document.createElement('img');
+        img.src = thumbOf(a.poster, 'strip');
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        cell.appendChild(img);
+        cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.poster, 'main'), cell));
+        cell.addEventListener('mouseleave', peekHide);
+      } else cell.appendChild(el('span', 'ic', kind === 'audio' ? '♪' : '▶'));
+      const secs = (+a.out > +a.in) ? (+a.out - +a.in) : 0;
+      // What the description says of it: `bad` - it cannot go like this, and why; `cut` - only a part of it goes.
+      const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
+      if (secs) cell.appendChild(el('span', 'dur' + (st.cut ? ' is-cut' : ''), secs.toFixed(1) + 's'));
+      if (st.bad) { cell.classList.add('is-bad'); cell.title = st.bad; }
+      else cell.title = (a.name || '') + (secs ? ' · ' + (st.cut ? secs.toFixed(1) + ' s of ' + (+a.dur).toFixed(1) + ' go' : 'all ' + secs.toFixed(1) + ' s go')
+        + ' - press to choose the part' : '');
+      cell.addEventListener('click', (ev) => {
+        if (ev.target.closest('.x')) return;
+        peekHide();
+        if (typeof S.trimFor === 'function') S.trimFor(a, cell);
+      });
+    }
     cell.appendChild(el('span', 'n', String(n)));
     const x = el('button', 'x', '✕');
     x.type = 'button';
     x.title = 'Not this one';
     x.addEventListener('click', () => _detach(a.path));
     cell.appendChild(x);
-    cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
-    cell.addEventListener('mouseleave', peekHide);
     return cell;
   }
 
@@ -535,7 +626,8 @@ export function createChat(make) {
         if (typeof S.shelfFor === 'function') _setCat(S.shelfFor(p.kind, s));
         return;
       }
-      if (p.kind === 'image') _ui.file.click();
+      const input = _fileOf(p.kind);
+      if (input) input.click();
     });
     return c;
   }
@@ -561,20 +653,36 @@ export function createChat(make) {
     return run;
   }
 
+  // (phase V7) What a description takes from this computer, by kind: `S.uploads` { image, video, audio } - each its own
+  // door ({ url, field, accept, ok(file), att(item) }) - or the one `S.upload` for pictures.
+  const _U = (k) => (S.uploads ? S.uploads[k] || null : (k === 'image' ? S.upload : null));
+  const _kindOfFile = (f) => ['image', 'video', 'audio'].find(k => _U(k) && _U(k).ok(f)) || '';
+  const _fileOf = (k) => (_ui && _ui.files ? _ui.files[k] || null : null);
+
   async function _uploadNow(files) {
-    const list = [...(files || [])].filter(f => f && S.upload.ok(f));
-    if (!list.length) { _say(T.onlyFiles); return; }
+    const all = [...(files || [])].filter(f => f && _kindOfFile(f));
+    if (!all.length) { _say(T.onlyFiles); return; }
+    // A kind the model takes none of is not brought in at all - it would land on its shelf and go nowhere.
+    const z = _zone();
+    const partOf = (k) => (z ? z.parts.find(p => p.kind === k) : null);
+    const takes = (k) => !z || !!(partOf(k) && partOf(k).room && !partOf(k).off);
+    const list = all.filter(f => takes(_kindOfFile(f)));
+    if (!list.length) { const p = partOf(_kindOfFile(all[0])); _say((p && (p.off || p.none)) || T.onlyFiles); return; }
     _made = true;
-    _say('adding ' + list.length + ' ' + (list.length === 1 ? S.noun.one : S.noun.many) + '…');
-    let bad = '';
+    _say('adding ' + list.length + ' ' + (list.length === 1 ? 'file' : 'files') + '…');
+    let bad = list.length < all.length ? ((partOf(_kindOfFile(all.find(f => !list.includes(f)))) || {}).none || '') : '';
     for (const f of list.slice(0, S.maxAtts)) {
+      const k = _kindOfFile(f);
+      const U = _U(k);
       const fd = new FormData();
-      fd.append(S.upload.field, f);
+      fd.append(U.field, f);
       fd.append('name', String(f.name || S.noun.one).replace(/\.[^.]+$/, ''));
       fd.append('project', _key || '');
-      const d = await json(S.upload.url, { method: 'POST', body: fd });
-      if (d && d.success && d.item) _attach(d.item.imagePath, d.item.name);
-      else bad = (d && d.error) || 'it could not be added';
+      const d = await json(U.url, { method: 'POST', body: fd });
+      if (d && d.success && d.item) {
+        const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
+        _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
+      } else bad = (d && d.error) || 'it could not be added';
     }
     _say(bad ? 'Not added: ' + bad : '');
     _loadCats();
@@ -719,19 +827,16 @@ export function createChat(make) {
     }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));
     if (m.text) b.appendChild(el('div', 'mv3-ig-text', m.text));
-    if (m.role === 'user' && (m.refs || []).length) {
+    // What the turn pointed at: by kind where the message says (the video chat's `media`), else its pictures.
+    const sent = (m.media || []).length ? m.media : (m.refs || []).map(p => ({ path: p, kind: 'image' }));
+    if (m.role === 'user' && sent.length) {
       const row = el('div', 'mv3-ig-msg-refs');
-      m.refs.forEach((p, i) => {
-        const c = el('div', 'mv3-ig-msg-ref');
-        const img = document.createElement('img');
-        img.src = thumbOf(p, 'strip');
-        img.loading = 'lazy'; img.decoding = 'async';
-        c.appendChild(img);
-        c.appendChild(el('span', 'n', String(i + 1)));
-        c.addEventListener('mouseenter', () => peekShow(thumbOf(p, 'main'), c));
-        c.addEventListener('mouseleave', peekHide);
-        row.appendChild(c);
-      });
+      const count = { image: 0, video: 0, audio: 0 };
+      for (const a of sent) {
+        const k = count[a.kind] != null ? a.kind : 'image';
+        count[k]++;
+        row.appendChild(refCell(a, k, count[k], { show: peekShow, hide: peekHide }));
+      }
       b.appendChild(row);
     }
     // ONE TURN, EVERY RESULT IT SPEAKS FOR, each in whatever state it is actually in.
@@ -887,28 +992,50 @@ export function createChat(make) {
   // chat's characters and looks, environments, lookbooks), which an armed slot of a recipe turns the column to.
   let _cats = [];               // the Images categories, as last read
   let _lastImgCat = '';         // the Images category last shown - where 'images' goes back to
+  // (phase V7) More shelves with categories a description shows - the video chat's B-roll, Uploads and Sounds:
+  // `S.moreCats` [{ key, label, url, map }]; their places in the dropdown are 'grp:<key>:<category>'.
+  let _more = {};
   async function _loadCats() {
     if (!_ui) return;
-    const d = await json(S.cats.url);
+    const groups = S.moreCats || [];
+    const [d, ...reads] = await Promise.all([json(S.cats.url)].concat(groups.map(g => json(g.url).catch(() => null))));
     _cats = (d && d.success) ? (d.cats || []).filter(c => c && c.id) : [];
+    _more = {};
+    groups.forEach((g, i) => { const r = reads[i]; _more[g.key] = (r && r.success) ? (r.cats || []).filter(c => c && c.id) : []; });
     const sel = _ui.cat;
     sel.innerHTML = '';
     const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
     sel.appendChild(opt('', 'this project'));
     const shelves = S.shelves || [];
     let host = sel;
-    if (shelves.length) {
-      const g = document.createElement('optgroup');
-      g.label = 'Library';
-      for (const s of shelves) g.appendChild(opt('shelf:' + s.id, s.label));
-      sel.appendChild(g);
+    if (shelves.length || groups.length) {
+      if (shelves.length) {
+        const g = document.createElement('optgroup');
+        g.label = 'Library';
+        for (const s of shelves) g.appendChild(opt('shelf:' + s.id, s.label));
+        sel.appendChild(g);
+      }
       host = document.createElement('optgroup');
       host.label = 'Images';
       sel.appendChild(host);
     }
     for (const c of _cats) host.appendChild(opt(c.id, c.label || c.name || c.id));
+    for (const g of groups) {
+      const og = document.createElement('optgroup');
+      og.label = g.label;
+      og.appendChild(opt('grp:' + g.key + ':', 'all of ' + g.label));
+      for (const c of _more[g.key]) og.appendChild(opt('grp:' + g.key + ':' + c.id, c.label || c.name || c.id));
+      sel.appendChild(og);
+    }
     sel.value = [...sel.options].some(o => o.value === _cat) ? _cat : '';
     if (sel.value !== _cat) { _cat = ''; _reload(); }
+  }
+  // A shelf of `S.moreCats` at the project's own category when it has one, else the whole shelf.
+  function _grpOwn(key) {
+    const title = String(Store.title() || '').trim().toLowerCase();
+    // By the bare name - the label carries the count ("Project · 4").
+    const own = title ? (_more[key] || []).find(c => String(c.name || c.label || '').trim().toLowerCase() === title) : null;
+    return 'grp:' + key + ':' + (own ? own.id : '');
   }
 
   // The column turned to `id` - by its dropdown, or by an armed slot ('images': the category last shown, else the
@@ -921,7 +1048,8 @@ export function createChat(make) {
       const own = _cats.find(c => String(c.name || '').trim().toLowerCase() === title);
       v = (_lastImgCat && _cats.some(c => c.id === _lastImgCat)) ? _lastImgCat : own ? own.id : (_cats[0] ? _cats[0].id : '');
     }
-    if (v && !v.startsWith('shelf:')) _lastImgCat = v;
+    if (/^grp:[^:]+$/.test(v)) v = _grpOwn(v.slice(4));
+    if (v && !v.startsWith('shelf:') && !v.startsWith('grp:')) _lastImgCat = v;
     if (v === _cat) return;
     _cat = v;
     _ui.cat.value = [..._ui.cat.options].some(o => o.value === _cat) ? _cat : '';
@@ -937,6 +1065,11 @@ export function createChat(make) {
     if (k.startsWith('shelf:')) {
       const sh = (S.shelves || []).find(s => 'shelf:' + s.id === k);
       items = sh ? await sh.load().catch(() => []) : [];
+    } else if (k.startsWith('grp:')) {
+      const [, key, cat] = k.match(/^grp:([^:]+):(.*)$/) || [];
+      const g = (S.moreCats || []).find(x => x.key === key);
+      const d = g ? await json(g.url + (cat ? '&cat=' + encodeURIComponent(cat) : '')) : null;
+      items = g ? (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(g.map) : [];
     } else {
       const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
       items = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
@@ -974,8 +1107,10 @@ export function createChat(make) {
   function _plusTile() {
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
-    b.title = T.plus;
-    b.addEventListener('click', () => _ui.file.click());
+    // (phase V7) A file of the kind the column shows: a clip where it shows clips, a sound where it shows sounds.
+    const k = typeof S.plusKind === 'function' ? S.plusKind(_cat) : 'image';
+    b.title = (S.plusWords && S.plusWords[k]) || T.plus;
+    b.addEventListener('click', () => { const input = _fileOf(k) || _ui.file; if (input) input.click(); });
     return b;
   }
 
@@ -986,6 +1121,7 @@ export function createChat(make) {
     if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
     t.title = it.name || '';
     if (it.state === 'done' && it.kind === 'video' && it.video) return _clipTile(t, it);
+    if (it.state === 'done' && it.kind === 'audio' && it.path) return _soundTile(t, it);
     if (it.state === 'done' && it.path) {
       const img = document.createElement('img');
       img.src = thumbOf(it.path, 'strip');
@@ -1026,12 +1162,20 @@ export function createChat(make) {
     if (it.poster) {
       const img = document.createElement('img');
       img.src = thumbOf(it.poster, 'strip');
-      img.alt = it.name || '';
+      img.alt = '';
       img.loading = 'lazy';
       img.decoding = 'async';
+      // A poster gone from the library leaves the tile plain, never a broken picture with its name over it.
+      img.addEventListener('error', () => img.remove(), { once: true });
       t.appendChild(img);
     }
-    t.appendChild(el('span', 'mv3-ig-play', '▶'));
+    // (phase V7) Where the model takes clips, a press ATTACHES it - a second takes it back off - and ▶ plays it; where it
+    // takes none, a press plays it as before.
+    const play = el('button', 'mv3-ig-play is-btn', '▶');
+    play.type = 'button';
+    play.title = 'Play it';
+    play.addEventListener('click', (ev) => { ev.stopPropagation(); peekHide(); if (S.openTile) S.openTile(it); });
+    t.appendChild(play);
     if (it.dur) t.appendChild(el('span', 'mv3-ig-dur', (+it.dur).toFixed(1) + 's'));
     t.draggable = true;
     t.addEventListener('dragstart', (ev) => {
@@ -1047,7 +1191,46 @@ export function createChat(make) {
       t.addEventListener('mouseenter', () => peekShow(thumbOf(it.poster, 'main'), t));
       t.addEventListener('mouseleave', peekHide);
     }
-    t.addEventListener('click', () => { peekHide(); if (S.openTile) S.openTile(it); });
+    t.addEventListener('click', () => {
+      peekHide();
+      if (typeof S.takes === 'function' && S.takes('video')) {
+        if (_atts.some(a => a.path === it.video)) _detach(it.video);
+        else _attach(it.video, it.name, { kind: 'video', poster: it.poster || '', dur: +it.dur || 0 });
+        _paintStrip();
+      } else if (S.openTile) S.openTile(it);
+    });
+    return t;
+  }
+
+  // A SOUND in the right column (phase V7): its name and length; ▶ plays it here, a press attaches it.
+  let _sounding = null;
+  function _soundTile(t, it) {
+    t.classList.add('is-sound');
+    t.appendChild(el('span', 'snd', '♪'));
+    t.appendChild(el('span', 'nm', it.name || 'sound'));
+    if (it.dur) t.appendChild(el('span', 'mv3-ig-dur', (+it.dur).toFixed(1) + 's'));
+    const play = el('button', 'mv3-ig-play is-btn', '▶');
+    play.type = 'button';
+    play.title = 'Listen';
+    play.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (_sounding && _sounding.src === it.path && !_sounding.audio.paused) { _sounding.audio.pause(); return; }
+      if (_sounding) _sounding.audio.pause();
+      const audio = new Audio(it.path);
+      _sounding = { src: it.path, audio };
+      play.textContent = '■';
+      audio.addEventListener('pause', () => { play.textContent = '▶'; }, { once: true });
+      audio.addEventListener('ended', () => { play.textContent = '▶'; }, { once: true });
+      audio.play().catch(() => { play.textContent = '▶'; });
+    });
+    t.appendChild(play);
+    t.title = it.name || '';
+    t.addEventListener('click', () => {
+      if (!(typeof S.takes === 'function' && S.takes('audio'))) { _say('This model takes no sounds.'); return; }
+      if (_atts.some(a => a.path === it.path)) _detach(it.path);
+      else _attach(it.path, it.name, { kind: 'audio', dur: +it.dur || 0 });
+      _paintStrip();
+    });
     return t;
   }
 
@@ -1167,11 +1350,19 @@ export function createChat(make) {
     const atts = el('div', 'mv3-ig-atts');
     const over = el('div', 'mv3-ig-over');
     over.hidden = true;
-    const file = document.createElement('input');
-    file.type = 'file';
-    file.accept = S.upload.accept;
-    file.multiple = true;
-    file.hidden = true;
+    // A door from this computer for every kind the description takes (phase V7) - pictures' is `file`, as it was.
+    const files = {};
+    for (const k of ['image', 'video', 'audio']) {
+      const U = _U(k);
+      if (!U) continue;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = U.accept;
+      input.multiple = true;
+      input.hidden = true;
+      files[k] = input;
+    }
+    const file = files.image;
     const bar = el('div', 'mv3-ig-bar');
     const ta = document.createElement('textarea');
     ta.className = 'mv3-ig-say';
@@ -1191,7 +1382,7 @@ export function createChat(make) {
     // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
     const foot = el('div', 'mv3-ig-foot');
     thread.appendChild(foot);
-    chat.append(banner, thread, atts, over, file, bar);
+    chat.append(banner, thread, atts, over, ...Object.values(files), bar);
 
     const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
     sash.title = 'Drag to resize · double-click to reset';
@@ -1233,10 +1424,12 @@ export function createChat(make) {
       headL.append(...S.crumbButtons());
     }
 
-    _ui = { root, set: setBox, left, said, chat, banner, thread, foot, atts, over, file, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, set: setBox, left, said, chat, banner, thread, foot, atts, over, file, files, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     _wireStripSash(sash, stripBox);
 
-    file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });
+    for (const input of Object.values(files)) {
+      input.addEventListener('change', () => { const f = [...(input.files || [])]; input.value = ''; _upload(f); });
+    }
     cat.addEventListener('change', () => _setCat(cat.value || ''));
     nBtn.addEventListener('click', () => {
       const i = S.counts.indexOf(_n);
@@ -1259,7 +1452,7 @@ export function createChat(make) {
     ta.addEventListener('input', () => { _grow(); _draftLater(); });
     // A file pasted into the box is attached.
     ta.addEventListener('paste', (ev) => {
-      const files = [...((ev.clipboardData && ev.clipboardData.files) || [])].filter(f => S.upload.ok(f));
+      const files = [...((ev.clipboardData && ev.clipboardData.files) || [])].filter(f => _kindOfFile(f));
       if (!files.length) return;
       ev.preventDefault();
       _upload(files);

@@ -29,7 +29,7 @@ let _showSrc = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
 // A track has nothing to look at, so it gets a player on the stage instead of a broken picture.
-const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac)(\?|$)/i;
+const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)(\?|$)/i;
 
 function _fmtDate(s) {
   if (!s) return '';
@@ -60,7 +60,9 @@ function _paint() {
 
   const stage = $('.lib-view-stage', _ov);
   stage.textContent = '';                     // replace, never reuse (see the note above)
-  const isVideo = VIDEO_RE.test(String(it.media || ''));
+  // A sound of the Sounds shelf is heard whatever its extension says - a .webm there has no picture (phase V7).
+  const isSound = it.kind === 'sounds';
+  const isVideo = !isSound && VIDEO_RE.test(String(it.media || ''));
   if (isVideo) {
     const v = document.createElement('video');
     v.className = 'lib-view-media';
@@ -72,7 +74,7 @@ function _paint() {
       if (extra) { stage.classList.add('has-under'); stage.appendChild(extra); }
       else stage.classList.remove('has-under');
     }
-  } else if (AUDIO_RE.test(String(it.media || ''))) {
+  } else if (isSound || AUDIO_RE.test(String(it.media || ''))) {
     const a = document.createElement('audio');
     a.className = 'lib-view-audio';
     a.src = it.media;

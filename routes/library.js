@@ -42,6 +42,7 @@ const VT = require('../lib/video-thumb');
 // What is known about a picture on a flat shelf - here, an environment's description and motion.
 const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
+const SND = require('../lib/sounds-store');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -246,6 +247,8 @@ function _mediaShelf() {
       // Whether the viewer may offer the one trim this clip is allowed, and what it was
       // trimmed to if that has happened.
       trimmable: _canTrim(e, _isUpload(e) ? 'uploads' : 'birols'), trimmed: e.trimmed || null,
+      // (phase V7) The video chat's column lays a clip out at its own shape.
+      w: +e.w || 0, h: +e.h || 0,
     },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
@@ -284,7 +287,18 @@ function _mediaShelf() {
     },
   }));
 
-  const items = fromArchive.concat(fromHooks).concat(fromImages).filter(i => _onDisk(i.media));
+  // (phase V7) Sounds - no picture: the page draws a row of its own for them.
+  const fromSounds = SND.read().filter(e => e && e.audioPath).map(e => ({
+    id: String(e.id),
+    name: String(e.name || '').trim() || 'sound',
+    kind: 'sounds',
+    media: e.audioPath,
+    thumb: null,
+    dur: +e.duration || 0,
+    meta: { categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite, source: e.source || 'upload' },
+  }));
+
+  const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).filter(i => _onDisk(i.media));
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
@@ -294,7 +308,7 @@ function _mediaShelf() {
   // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
   // note. Reading it from the record is the only way to name such a chip.
   const fromRecords = {};
-  for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read())) {
+  for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read()).concat(SND.read())) {
     if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
   }
 
@@ -305,6 +319,7 @@ function _mediaShelf() {
       { id: 'uploads', label: 'Uploads · ' + n('uploads') },
       { id: 'hooks',   label: 'Hooks · ' + n('hooks') },
       { id: 'images',  label: 'Images · ' + n('images') },
+      { id: 'sounds',  label: 'Sounds · ' + n('sounds') },
     ],
     // The chips depend on WHICH kind is open, and only the route handler knows that, so the
     // shelf hands back the ingredients instead of a finished row.
@@ -769,12 +784,12 @@ function _pathsInUse(doomed) {
   const skip = new Set((doomed || []).map(String));
   const used = new Set();
   // birols and uploads are one file; the pictures too, since a picture's own copy beside it now goes with it.
-  for (const kind of ['birols', 'hooks', 'images']) {
+  for (const kind of ['birols', 'hooks', 'images', 'sounds']) {
     let list = [];
     try { list = RECORD_STORES[kind].read(); } catch (e) { continue; }
     for (const e of list) {
       if (!e || skip.has(String(e.id))) continue;
-      for (const p of [e.videoPath, e.thumbPath, e.imagePath]) if (p) used.add(String(p).split('?')[0]);
+      for (const p of [e.videoPath, e.thumbPath, e.imagePath, e.audioPath]) if (p) used.add(String(p).split('?')[0]);
     }
   }
   return used;
@@ -875,6 +890,14 @@ const RECORD_STORES = {
     write: IMG.write,
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.imagePath],
+  },
+  // (phase V7) The Sounds shelf - server-owned like images (lib/sounds-store.js).
+  sounds: {
+    file: SND.FILE, lsKey: null,
+    read: SND.read,
+    write: SND.write,
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
+    files: (e) => [e.audioPath],
   },
 };
 // Uploads are birols with a flag, so they share the store.
@@ -1560,7 +1583,7 @@ router.get('/library/cats', (_req, res) => {
 router.post('/library/cats', (req, res) => {
   try {
     const { kind, label } = req.body || {};
-    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     const { cat, created } = LC.add(String(kind), label);
     res.json({ success: true, cat, created });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
@@ -1571,7 +1594,7 @@ router.patch('/library/cats/:id', (req, res) => {
     const id = String(req.params.id || '');
     const kind = String((req.body || {}).kind || '');
     const label = String((req.body || {}).label || '').trim();
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
     if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
 
@@ -1592,7 +1615,7 @@ router.patch('/library/cats/:id', (req, res) => {
 router.post('/library/cats/order', (req, res) => {
   try {
     const { kind, order } = req.body || {};
-    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     res.json({ success: true, order: LC.setOrder(String(kind), order) });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
@@ -1609,7 +1632,7 @@ router.delete('/library/cats/:id', (req, res) => {
     const id = String(req.params.id || '');
     const kind = String(req.query.kind || '');
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
-    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
     let affected = 0, removedFiles = [], sparedFiles = [], lsKey = null;
     if (mode === 'delete') {
