@@ -787,6 +787,13 @@ function VIDEOS(ctx) {
     if (c.state === 'ready') return _readyCard(m, box);
     // Made: what was sent, and the clips it made under it.
     box.appendChild(el('div', 'vc-prompt-sent', toShown(c.prompt)));
+    const g0 = (m.gens || [])[0];
+    if (g0 && g0.lang === 'zh' && g0.sent) {
+      box.appendChild(el('div', 'vc-zh-line', 'sent in 中文 · the English above'));
+      box.appendChild(el('div', 'vc-prompt-sent is-zh', toShown(g0.sent)));
+    } else if (c.sent && c.sent.zh && g0 && /^sent in English/.test(g0.fell || '')) {
+      box.appendChild(el('div', 'vc-zh-line is-fell', g0.fell));
+    }
     const shots = ctx.shots(m, progs);
     if (shots) box.appendChild(shots);
     const acts = el('div', 'vc-card-acts is-quiet');
@@ -838,10 +845,18 @@ function VIDEOS(ctx) {
     go.type = 'button';
     const price = el('span', 'vc-card-why');
     go.addEventListener('click', () => _make(m, go));
-    acts.append(nBtn, go, price);
+    // The 中文 box (the owner: ticked on the prompt, right before it is sent; Seedance only - PLAN V-I).
+    const zh = el('label', 'vc-zh');
+    const zcb = document.createElement('input');
+    zcb.type = 'checkbox';
+    // Remembered per model - every waiting card of this model follows.
+    zcb.addEventListener('change', () => { setParam('zh', zcb.checked); _freshenCards(); });
+    zh.append(zcb, el('span', null, '中文'));
+    zh.title = 'Send the prompt in Chinese (experimental, Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes.';
+    acts.append(nBtn, zh, go, price);
     if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
     box.appendChild(acts);
-    const l = { m, ta, go, price, save };
+    const l = { m, ta, go, price, save, zh, zcb };
     _live.set(m.id, l);
     _freshenOne(m.id, l);
     return box;
@@ -861,6 +876,10 @@ function VIDEOS(ctx) {
     const other = m && _familyOf(l.m.card.model) && m.family !== _familyOf(l.m.card.model);
     l.go.textContent = other ? 'write it again for ' + m.label : 'make' + (n > 1 ? ' ' + n : '');
     l.go.classList.toggle('is-make', !other);
+    if (l.zh) {
+      l.zh.hidden = !!other || !(m && (m.langs || []).includes('zh'));
+      l.zcb.checked = !!params().zh;
+    }
     l.price.textContent = other ? 'it was written for ' + _labelOf(l.m.card.model)
       : !pr || pr.none ? (m ? m.label + ' · no published price' : '')
         : pr.fromClip ? '≈' + money(pr.per) + ' per second of clip · ' + (m ? m.label : '')
@@ -883,6 +902,7 @@ function VIDEOS(ctx) {
       const b = _body();
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
+        zh: !!(l.zh && !l.zh.hidden && l.zcb.checked),
       });
       if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
       _cardN.delete(m.id);
@@ -1064,7 +1084,9 @@ function VIDEOS(ctx) {
       ['took', g.secs ? g.secs + 's' : ''],
       ['cost', g.credits ? g.credits + ' kie credits (≈' + money(g.credits * 0.005) + ')' : ''],
       ['references', (g.media || []).length ? String(g.media.length) : ''],
-      ['writer', g.fell ? 'sent as typed - ' + g.fell : (g.writer || '')],
+      ['writer', g.fell && !/^sent in English/.test(g.fell) ? 'sent as typed - ' + g.fell : (g.writer || '')],
+      ['language', g.lang === 'zh' ? 'sent in 中文' : /^sent in English/.test(g.fell || '') ? g.fell : ''],
+      ['in 中文', g.lang === 'zh' ? (g.sent || '') : ''],
       ['sent as', (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
     ],
 

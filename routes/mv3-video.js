@@ -420,6 +420,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
+    // The 中文 box (phase V6, PLAN V-I): only where the model reads Chinese - Seedance; Grok and Kling read English.
+    const zh = !!b.zh && ((VM.MODELS.find(x => x.id === s.model) || {}).langs || []).includes('zh');
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     const recipe = m.card.recipe || (rc && rc.card.recipe) || null;
     const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
@@ -433,18 +435,18 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
-        project, send: m.id, kick, where, stage: 'asking ' + rt.fits[0].aggLabel,
+        project, send: m.id, kick, where, stage: zh ? 'translating the prompt to Chinese' : 'asking ' + rt.fits[0].aggLabel,
         model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, skill, ready: true,
       }).id);
     }
     CHAT.update(m.id, (x) => {
       Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params,
-                              sent: { at: new Date().toISOString(), n } });
+                              sent: { at: new Date().toISOString(), n, zh } });
       x.genId = ids[0];
       x.genIds = ids;
     });
     res.json({ success: true, card: m.id, genIds: ids, agg: rt.fits[0].agg });
-    _make({ ids, kick, prompt, writer: m.card.writer || '' });
+    _make({ ids, kick, prompt, writer: m.card.writer || '', zh, max: Math.min(...rt.fits.map(p => p.promptMax || 30000)) });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/make]', err.message);
@@ -452,10 +454,20 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
   }
 });
 
-// Behind the answer: every clip of the card asked for, each on its own.
+// Behind the answer: the prompt into Chinese when the box was ticked - once for every clip; what is not translated
+// whole goes in English, and the record says why -, then every clip of the card asked for, each on its own.
 async function _make(o) {
   try {
-    const done = await Promise.allSettled(o.ids.map(id => VGENS.submit(id, { prompt: o.prompt, writer: o.writer }, o.kick)));
+    const over = { prompt: o.prompt, writer: o.writer, lang: 'en' };
+    if (o.zh) {
+      if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
+      let tr;
+      try { tr = await AGENT.toChinese(o.prompt); } catch (e) { tr = { fail: e.message }; }
+      if (tr.text && tr.text.length > o.max) tr = { fail: 'the Chinese is longer than the model takes (' + tr.text.length + ' > ' + o.max + ')' };
+      if (tr.text) Object.assign(over, { sent: tr.text, lang: 'zh' });
+      else over.fell = 'sent in English - ' + String(tr.fail || 'it was not translated').slice(0, 200);
+    }
+    const done = await Promise.allSettled(o.ids.map(id => VGENS.submit(id, over, o.kick)));
     done.forEach((r, i) => { if (r.status === 'rejected') { console.warn('[mv3-video] make:', r.reason && r.reason.message); VGENS.abandon(o.ids[i], o.kick, r.reason); } });
   } catch (err) {
     console.warn('[mv3-video] make:', err.message);
