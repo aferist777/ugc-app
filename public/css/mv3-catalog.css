@@ -263,3 +263,29 @@
 }
 .mv3-vc-recipe .x:hover{color:var(--danger); border-color:var(--danger)}
 .mv3-vc-recipe.is-off .k, .mv3-vc-recipe.is-off .t{opacity:.55}
+
+/* ── A preset's own tools (phase V6, PLAN V-D) ── */
+.vc-title-in{
+  display:block; width:100%; margin:5px 0 2px; padding:3px 6px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--bg); color:var(--ink); font:700 14px/1.3 var(--font);
+}
+.vc-title-in:focus{outline:none; border-color:var(--primary)}
+.vc-hint-line{margin-top:4px; font:500 10px/1.4 var(--font); color:var(--gold)}
+.vc-preset{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding:8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
+.vc-preset-row{display:flex; gap:6px; flex-wrap:wrap}
+.vc-preset-row .mv3-c-btn{padding:3px 10px}
+.vc-preset-row .mv3-c-btn.is-danger{color:var(--danger)}
+.vc-preset-row .mv3-c-btn[disabled]{opacity:.5}
+.vc-preset-said{font:600 10px/1.4 var(--font); color:var(--success)}
+.vc-preset-said:empty{display:none}
+.vc-preset-said.is-bad{color:var(--danger)}
+.vc-preset-line{font:500 10.5px/1.4 var(--font); color:var(--ink)}
+.vc-versions summary{font:600 10.5px/1.4 var(--font); color:var(--muted); cursor:pointer}
+.vc-versions-list{display:flex; flex-direction:column; gap:3px; margin-top:5px; max-height:220px; overflow-y:auto}
+.vc-version{display:flex; align-items:baseline; gap:7px; font:500 10px/1.4 var(--font); color:var(--muted)}
+.vc-version b{color:var(--ink); font-weight:700}
+.vc-version .at{flex:0 0 auto; font-variant-numeric:tabular-nums}
+.vc-version .what{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.vc-version .cur{color:var(--success); font-weight:700}
+.vc-version.is-current .what{color:var(--ink)}
+.vc-deleted{margin-top:16px}

@@ -56,6 +56,7 @@ async function _load() {
     cases: (cases && cases.success) ? cases.cases : [],
     why: (cases && cases.success) ? cases.why : 'the catalog could not be read',
     presets: (presets && presets.success) ? presets.presets : [],
+    deleted: (presets && presets.success) ? presets.deleted || [] : [],
   };
 }
 
@@ -664,6 +665,19 @@ function _paintGrid(keep = true) {
   _section(G, 'Examples', by('example'), all.filter(it => it.kind === 'example').length, 'Grok b-roll prompts picked by hand: the writer takes one as an example.');
   _section(G, 'Presets', by('preset'), all.filter(it => it.kind === 'preset').length, 'Yours: the samples that came with the program and your copies of them.');
   if (!shown.length && all.length) G.appendChild(el('div', 'vc-note', 'Nothing fits these filters.'));
+  if ((_data.deleted || []).length) {
+    const n = el('div', 'vc-note vc-deleted');
+    n.append('Deleted samples: ');
+    _data.deleted.forEach((x, i) => {
+      if (i) n.append(' · ');
+      const b = el('button', 'vc-link', x.title + ' - bring back');
+      b.type = 'button';
+      b.title = 'It comes back as it ships with the program now';
+      b.addEventListener('click', () => _presetOp(x.id, 'back', null, b));
+      n.appendChild(b);
+    });
+    G.appendChild(n);
+  }
   G.scrollTop = top;
 }
 const _catRank = (id) => { const i = (_data.cat.categories || []).findIndex(c => c.id === id); return i < 0 ? 99 : i; };
@@ -807,8 +821,118 @@ async function _read(it) {
 }
 function _edit(it, d) {
   const k = _key(it);
-  if (!_st.edits.has(k)) _st.edits.set(k, { text: (d.skill && d.skill.text) || '', slots: JSON.parse(JSON.stringify(d.slots || [])) });
+  if (!_st.edits.has(k)) _st.edits.set(k, { text: (d.skill && d.skill.text) || '', slots: JSON.parse(JSON.stringify(d.slots || [])), title: it.title });
   return _st.edits.get(k);
+}
+
+// ── A preset's own tools (phase V6, PLAN V-D: "edit, but with versions to get back the original; better duplicate and
+// edit the copy; and deleting") ──
+// save makes a NEW VERSION - nothing is wiped; any version is made current again, as a new version (so that is undone
+// the same way); a sample goes back to how it came with the program; duplicate is the way to change a sample and keep
+// it; delete takes two presses, and a deleted sample can be brought back; a sample shipped in a newer version is taken
+// as a new version. The routes are V4's (routes/mv3-catalog.js).
+async function _presetOp(id, op, body, btn) {
+  if (btn) btn.disabled = true;
+  const url = '/api/mv3/video/presets/' + encodeURIComponent(id) + (op && op !== 'delete' ? '/' + op : '');
+  const d = await json(url, { method: op === 'delete' ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  if (!_w) return null;
+  if (btn && btn.isConnected) btn.disabled = false;
+  if (!d || !d.success) { _presetSay((d && d.error) || 'the server did not answer', true); return null; }
+  const next = op === 'delete' ? null : (d.preset && d.preset.id) || id;
+  await _reloadPresets(next, op === 'duplicate' ? 'a copy - change it as you like' : op === 'delete' ? '' : op === 'back' ? 'brought back' : op === 'restore' ? 'that version is current again (as a new version)' : op === 'original' ? 'back as it came with the program' : op === 'newer' ? 'the newer sample is taken (your edits are in its versions)' : 'saved as version ' + ((d.preset && d.preset.v) || ''));
+  return d;
+}
+async function _reloadPresets(pickId, said) {
+  const r = await json('/api/mv3/video/presets');
+  if (!_w || !r || !r.success) return;
+  _data = Object.assign({}, _data, { presets: r.presets || [], deleted: r.deleted || [] });
+  for (const k of [..._full.keys()]) if (k.startsWith('preset:')) _full.delete(k);
+  for (const k of [..._st.edits.keys()]) if (k.startsWith('preset:') && k !== _st.inUse) _st.edits.delete(k);
+  if (pickId) _st.pick = 'preset:' + pickId;
+  else if (_st.pick && _st.pick.startsWith('preset:') && !r.presets.some(p => 'preset:' + p.id === _st.pick)) _st.pick = null;
+  _st.said = said || '';
+  _paintCounts();
+  _paintGrid();
+  await _paintRight();
+}
+function _presetSay(text, bad) {
+  const s = _w && _w.right.querySelector('.vc-preset-said');
+  if (!s) return;
+  s.textContent = text || '';
+  s.classList.toggle('is-bad', !!bad);
+}
+function _presetTools(it, ed) {
+  const p = it.preset;
+  const box = el('div', 'vc-preset');
+  const row = el('div', 'vc-preset-row');
+  const b = (text, title) => { const x = el('button', 'mv3-c-btn', text); x.type = 'button'; x.title = title; return x; };
+  const save = b('save', 'Save the title, what it needs and its skill as they are here - a new version; the one before is kept');
+  save.addEventListener('click', () => _presetOp(p.id, '', { fields: { title: ed.title, skill: ed.text, slots: ed.slots } }, save));
+  const dup = b('duplicate', 'A copy of it as it is saved now - the way to change a sample and keep the sample as it is');
+  dup.addEventListener('click', () => _presetOp(p.id, 'duplicate', null, dup));
+  const del = b('delete', p.seed ? 'Delete it - a sample can be brought back from under the tiles' : 'Delete it with its versions');
+  del.classList.add('is-danger');
+  del.addEventListener('click', () => {
+    if (!del.dataset.really) {
+      del.dataset.really = '1';
+      del.textContent = 'really?';
+      setTimeout(() => { if (del.isConnected) { delete del.dataset.really; del.textContent = 'delete'; } }, 3000);
+      return;
+    }
+    _presetOp(p.id, 'delete', null, del);
+  });
+  row.append(save, dup, del);
+  box.appendChild(row);
+  const said = el('div', 'vc-preset-said', _st.said || '');
+  _st.said = '';
+  box.appendChild(said);
+  if (p.newer) {
+    const n = el('div', 'vc-preset-line');
+    n.append('A newer version of this sample came with the program. ');
+    const take = el('button', 'vc-link', 'take it');
+    take.type = 'button';
+    take.title = 'It becomes a new version - what you changed stays in its versions';
+    take.addEventListener('click', () => _presetOp(p.id, 'newer', null, take));
+    n.appendChild(take);
+    box.appendChild(n);
+  }
+  if (p.seed && p.versionCount) {
+    const o = el('button', 'vc-link', 'back to the original');
+    o.type = 'button';
+    o.title = 'The sample as it came with the program - as a new version, so this too can be undone';
+    o.addEventListener('click', () => _presetOp(p.id, 'original', null, o));
+    box.appendChild(o);
+  }
+  // Its versions, read when opened.
+  const det = document.createElement('details');
+  det.className = 'vc-versions';
+  const sum = document.createElement('summary');
+  sum.textContent = 'versions · ' + ((p.versionCount || 0) + 1);
+  det.appendChild(sum);
+  const list = el('div', 'vc-versions-list');
+  det.appendChild(list);
+  det.addEventListener('toggle', async () => {
+    if (!det.open || list.childNodes.length) return;
+    list.appendChild(el('div', 'vc-none', 'reading…'));
+    const d = await json('/api/mv3/video/presets/' + encodeURIComponent(p.id));
+    list.textContent = '';
+    for (const v of ((d && d.success && d.versions) || []).slice().reverse()) {
+      const r = el('div', 'vc-version' + (v.current ? ' is-current' : ''));
+      r.append(el('b', null, 'v' + v.v), el('span', 'at', String(v.at || '').slice(0, 16).replace('T', ' ')),
+        el('span', 'what', (v.what || '') + (v.first && p.seed ? ' · the original' : '')));
+      if (v.current) r.appendChild(el('span', 'cur', 'current'));
+      else {
+        const re = el('button', 'vc-link', 'restore');
+        re.type = 'button';
+        re.title = 'Make this one current again - as a new version';
+        re.addEventListener('click', () => _presetOp(p.id, 'restore', { v: v.v }, re));
+        r.appendChild(re);
+      }
+      list.appendChild(r);
+    }
+  });
+  box.appendChild(det);
+  return box;
 }
 
 async function _paintRight() {
@@ -835,7 +959,16 @@ async function _paintRight() {
 
   scroll.appendChild(el('div', 'vc-kindline', KIND_WORD[it.kind] + (it.kind === 'case' && it.v ? ' · Seedance ' + it.v : '') + (it.kind === 'example' ? ' · ' + (it.bucket || '') : '')
     + (_st.inUse === want ? ' · in use in the chat' : '')));
-  scroll.appendChild(el('h4', 'vc-title', it.title));
+  if (it.kind === 'preset') {
+    const ti = document.createElement('input');
+    ti.type = 'text';
+    ti.className = 'vc-title-in';
+    ti.value = ed.title;
+    ti.maxLength = 120;
+    ti.title = 'Its name - saved with "save"';
+    ti.addEventListener('input', () => { ed.title = ti.value; });
+    scroll.appendChild(ti);
+  } else scroll.appendChild(el('h4', 'vc-title', it.title));
   if (it.kind === 'case' && it.sub) scroll.appendChild(el('div', 'vc-zh', it.sub));
   const desc = it.kind === 'template' ? ((d.tpl.description && d.tpl.description.en) || '')
     : it.kind === 'case' ? (d.details.summary || '') : it.kind === 'preset' ? (d.preset.summary || '') : '';
@@ -868,12 +1001,17 @@ async function _paintRight() {
   ta.spellcheck = false;
   ta.value = ed.text;
   const orig = (d.skill && d.skill.text) || '';
-  const back = el('button', 'vc-link', 'back to the original');
+  const back = el('button', 'vc-link', it.kind === 'preset' ? 'back to the saved' : 'back to the original');
   back.type = 'button';
   back.hidden = ed.text === orig;
   ta.addEventListener('input', () => { ed.text = ta.value; back.hidden = ed.text === orig; });
   back.addEventListener('click', () => { ed.text = orig; ta.value = orig; back.hidden = true; });
   scroll.append(ta, back);
+  // A sample is the person's to change - but a copy keeps the sample as it is (a hint, not a rule).
+  if (it.kind === 'preset' && it.preset.seed) {
+    scroll.appendChild(el('div', 'vc-hint-line', 'You are editing the sample itself - duplicate it to keep the sample as it is.'));
+  }
+  if (it.kind === 'preset') scroll.appendChild(_presetTools(it, ed));
 
   if (it.kind === 'template') scroll.appendChild(_casesOf(d.tpl));
   if (it.kind === 'case' || it.kind === 'example') {
