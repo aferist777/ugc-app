@@ -525,7 +525,7 @@ function VIDEOS(ctx) {
   // The writer's neutral references as the person reads and writes them: {{image:1}} <-> [picture 1].
   const toShown = (p) => String(p || '').replace(/\{\{\s*(image|video|audio)\s*:\s*(\d+)\s*\}\}/gi, (a, k, n) => '[' + REF_WORD[k.toLowerCase()] + ' ' + (+n) + ']');
   const toNeutral = (p) => String(p || '').replace(/\[(picture|clip|sound) (\d+)\]/gi, (a, k, n) => '{{' + REF_KIND[k.toLowerCase()] + ':' + n + '}}');
-  let _wantRecipe = false;      // "change the values" pressed: the request shows though a prompt card waits
+  let _wantRecipe = false;      // "change the values" pressed, or the recipe just chosen: the request shows though cards of it stand
   let _cardEls = null;          // the foot's request while it shows
   let _writingNow = false;
   const _live = new Map();      // card id -> its controls, while it waits to be made (price and button follow the column)
@@ -575,14 +575,10 @@ function VIDEOS(ctx) {
   });
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  // This recipe's newest prompt card while it is not made - being written, waiting, or failed (its "write it again" is
-  // the step): the step that comes next. Once it is made, the request comes back for the next variant.
-  function _openCard() {
-    if (!_skill) return null;
-    const cards = ctx.thread().filter(m => m.card && m.card.type === 'prompt' && m.card.recipe && m.card.recipe.id === _skill.id);
-    const last = cards.length ? cards[cards.length - 1] : null;
-    return last && last.card.state !== 'sent' ? last : null;
-  }
+  // This recipe's prompt cards in the thread. The request stands at the foot only while there is none - or when
+  // "change the values" asks for it: brought back by itself under a made card, it read as the recipe said twice (the
+  // owner, 2026-10-06). The card itself is the step that comes next.
+  const _recipeCards = () => (_skill ? ctx.thread().filter(m => m.card && m.card.type === 'prompt' && m.card.recipe && m.card.recipe.id === _skill.id) : []);
   // "change the values": the request again, under the card that waits.
   function _changeLink() {
     const change = el('button', 'vc-link', 'change the values');
@@ -597,7 +593,7 @@ function VIDEOS(ctx) {
     const foot = ctx.foot();
     if (!foot) return;
     ctx.bar(!_skill);
-    const show = !!_skill && (!_openCard() || _wantRecipe);
+    const show = !!_skill && (_wantRecipe || !_recipeCards().length);
     const key = _skill ? [_skill.kind, _skill.id, _split(_skill.text).head].join('|') : '';
     if (!show) {
       _cardEls = null;
@@ -784,12 +780,11 @@ function VIDEOS(ctx) {
   }
 
   // ── The cards in the thread ──
+  // Drawn again when what the card IS changes - its state, its model, another make; its sheets and its clips are
+  // repainted in place (_paintBoards, _paintTries), never under the typing.
   const _cardSig = (m) => {
     const c = m.card;
-    return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).join(','),
-      // A made card shows the storyboards still drawn for it, and is drawn again when one lands (review V8) - a card
-      // waiting to be made repaints its sheets in place, never under the typing.
-      c.state === 'sent' ? (m.boards || []).filter(g => g.state === 'pending').map(g => g.id).join(',') : ''].join(':');
+    return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).length].join(':');
   };
   const _busy = (thread) => thread.some(m => (m.card && m.card.type === 'prompt' && m.card.state === 'writing')
     || (m.boards || []).some(g => g.state === 'pending'));
@@ -822,51 +817,13 @@ function VIDEOS(ctx) {
       box.appendChild(acts);
       return box;
     }
-    if (c.state === 'ready') return _readyCard(m, box);
-    // Made: what was sent, and the clips it made under it - a two-step one with the storyboard it followed, and the
-    // sheets still being drawn for it (paid for: they land on the shelf, and their cross lets them go).
-    if (c.board) {
-      const used = (m.boards || []).find(g => g.id === c.board.chosen);
-      if (used && used.imagePath) {
-        const row = el('div', 'vc-boards is-made');
-        row.appendChild(_boardThumb(used, true, null, [used]));
-        row.appendChild(el('span', 'vc-board-note', used.gone ? 'the storyboard it followed - not on the Images shelf any more' : 'the storyboard it followed'));
-        box.appendChild(row);
-      }
-      const still = (m.boards || []).filter(g => g.state === 'pending');
-      if (still.length) {
-        const row = el('div', 'vc-boards');
-        for (const g of still) row.appendChild(_boardBusy(g, progs, 'b:' + g.id));
-        box.appendChild(row);
-      }
-    }
-    box.appendChild(el('div', 'vc-prompt-sent', toShown(c.prompt)));
-    const g0 = (m.gens || [])[0];
-    if (g0 && g0.lang === 'zh' && g0.sent) {
-      box.appendChild(el('div', 'vc-zh-line', 'sent in 中文 · the English above'));
-      box.appendChild(el('div', 'vc-prompt-sent is-zh', toShown(g0.sent)));
-    } else if (c.sent && c.sent.zh && g0 && /^sent in English/.test(g0.fell || '')) {
-      box.appendChild(el('div', 'vc-zh-line is-fell', g0.fell));
-    }
-    const shots = ctx.shots(m, progs);
-    if (shots) box.appendChild(shots);
-    const acts = el('div', 'vc-card-acts is-quiet');
-    const again = el('button', 'vc-link', 'again - a copy to change and make');
-    again.type = 'button';
-    again.addEventListener('click', async () => {
-      if (again.disabled) return;
-      again.disabled = true;
-      const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/again', { project: m.project });
-      if (again.isConnected) again.disabled = false;
-      if (!d || !d.success) { note(again, 'Not copied.', (d && d.error) || 'the server did not answer'); return; }
-      ctx.reload(true);
-    });
-    acts.appendChild(again);
-    box.appendChild(acts);
-    return box;
+    // Written - waiting, or made: a made card stays a field to edit and make again from (the owner, 2026-10-06), its
+    // attempts under it, each with what it followed and what it made.
+    return _readyCard(m, box);
   }
 
-  // A prompt card waiting to be made: the prompt to edit, the count, the price, and the press that makes the video.
+  // A written card: the prompt to edit, the count, the price, and the press that makes the video - again and again; the
+  // attempts it made under it.
   function _readyCard(m, box) {
     const c = m.card;
     if (c.edited) box.querySelector('.vc-card-h').appendChild(el('i', null, 'edited'));
@@ -916,12 +873,79 @@ function VIDEOS(ctx) {
     zh.title = 'Send the prompt in Chinese (experimental, Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes.';
     acts.append(nBtn, zh, go, price);
     if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
+    // A made card: a copy of it, to change and make apart from this one.
+    if (c.state === 'sent') {
+      const again = el('button', 'vc-link', 'again - a copy');
+      again.type = 'button';
+      again.title = 'A new card with this prompt, to change and make apart from this one';
+      again.addEventListener('click', async () => {
+        if (again.disabled) return;
+        again.disabled = true;
+        const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/again', { project: m.project });
+        if (again.isConnected) again.disabled = false;
+        if (!d || !d.success) { note(again, 'Not copied.', (d && d.error) || 'the server did not answer'); return; }
+        ctx.reload(true);
+      });
+      acts.appendChild(again);
+    }
     box.appendChild(acts);
-    const l = { m, ta, go, price, save, zh, zcb, two };
+    // The attempts: every make of the card, each with the sheet it followed and its clips - repainted in place.
+    const tries = el('div', 'vc-tries');
+    box.appendChild(tries);
+    const l = { m, ta, go, price, save, zh, zcb, two, tries, triesSig: '', triesProgs: new Map() };
     _live.set(m.id, l);
     if (two) _paintBoards(m.id, l);
+    _paintTries(m.id, l);
     _freshenOne(m.id, l);
     return box;
+  }
+
+  // ── The attempts of a card (the owner, 2026-10-06: a made card is made again from its own field) ──
+  // Every make is one: when, how many, the sheet it followed and its clips. A card made before attempts were kept has
+  // its clips as the first.
+  function _triesOf(m) {
+    const c = m.card;
+    const byId = new Map((m.gens || []).map(g => [g.id, g]));
+    const sends = Array.isArray(c.sends) && c.sends.length ? c.sends
+      : ((m.genIds || []).length ? [{ at: (c.sent || {}).at || '', n: (c.sent || {}).n || 1, zh: !!(c.sent || {}).zh,
+          boardId: (c.board || {}).chosen || '', genIds: m.genIds }] : []);
+    return sends.map(s => Object.assign({}, s, { gens: (s.genIds || []).map(id => byId.get(id)).filter(Boolean) }));
+  }
+  const _triesSig = (l) => _triesOf(l.m).map(t => t.gens.map(g => g.id + ':' + g.state + ':' + (g.videoPath || '') + ':' + (g.error || '')).join(',')
+    + '@' + (t.boardId || '')).join('|') + '#' + ((l.m.boards || []).map(g => g.id + (g.gone ? '-' : '')).join(','));
+  function _paintTries(id, l) {
+    const list = _triesOf(l.m);
+    // What a countdown says follows its clip's stage between the paints.
+    for (const t of list) for (const g of t.gens) { const p = g.state === 'pending' ? l.triesProgs.get(g.id) : null; if (p) p.say(ctx.stageWords(g)); }
+    const sig = _triesSig(l);
+    if (sig === l.triesSig) return;
+    l.triesSig = sig;
+    // A countdown seen landing teaches the estimate; the others only stop.
+    const now = new Map(list.flatMap(t => t.gens.map(g => [g.id, g])));
+    for (const [gid, p] of l.triesProgs) { const g = now.get(gid); if (g && g.state === 'done' && !document.hidden) p.finish(); else p.detach(); }
+    l.triesProgs.clear();
+    l.tries.textContent = '';
+    if (!list.length) return;
+    const boards = l.m.boards || [];
+    list.forEach((t, i) => {
+      const blk = el('div', 'vc-try');
+      const h = el('div', 'vc-try-h');
+      const when = t.at ? new Date(t.at) : null;
+      h.appendChild(el('span', 'k', 'attempt ' + (i + 1)));
+      if (when && !isNaN(when)) h.appendChild(el('span', null, when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })));
+      if (t.zh) h.appendChild(el('span', null, '中文'));
+      const sheet = t.boardId ? boards.find(g => g.id === t.boardId) : null;
+      if (sheet && sheet.imagePath) {
+        const row = el('span', 'vc-try-sheet');
+        row.appendChild(_boardThumb(sheet, false, null, [sheet]));
+        row.appendChild(el('span', null, sheet.gone ? 'its storyboard - not on the Images shelf any more' : 'its storyboard'));
+        h.appendChild(row);
+      }
+      blk.appendChild(h);
+      const shots = ctx.shots({ gens: t.gens }, l.triesProgs);
+      if (shots) blk.appendChild(shots);
+      l.tries.appendChild(blk);
+    });
   }
 
   // The prices and the presses of the waiting cards follow the column: another kind of model means writing again.
@@ -931,10 +955,11 @@ function VIDEOS(ctx) {
       _freshenOne(id, l);
     }
   }
-  // A card leaving the live ones takes its storyboard countdowns with it (review V8): each is an interval of its own.
+  // A card leaving the live ones takes its countdowns with it (review V8): each is an interval of its own.
   function _forget(id) {
     const l = _live.get(id);
     if (l && l.two) { for (const p of l.two.progs.values()) p.detach(); l.two.progs.clear(); }
+    if (l && l.triesProgs) { for (const p of l.triesProgs.values()) p.detach(); l.triesProgs.clear(); }
     _live.delete(id);
   }
   function _freshenOne(id, l) {
@@ -944,7 +969,8 @@ function VIDEOS(ctx) {
     const other = m && _familyOf(l.m.card.model) && m.family !== _familyOf(l.m.card.model);
     // A two-step card is Seedance's whatever the column says (review V8): another model is no reason to write it again.
     const seedOnly = !!l.two && other;
-    l.go.textContent = other && !seedOnly ? 'write it again for ' + m.label : 'make' + (n > 1 ? ' ' + n : '');
+    const again = l.m.card.state === 'sent' || (l.m.genIds || []).length > 0;
+    l.go.textContent = other && !seedOnly ? 'write it again for ' + m.label : (again ? 'make again' : 'make') + (n > 1 ? ' ×' + n : '');
     l.go.classList.toggle('is-make', !other || seedOnly);
     if (l.zh) {
       l.zh.hidden = !!other || !(m && (m.langs || []).includes('zh'));
@@ -1193,13 +1219,14 @@ function VIDEOS(ctx) {
     }
     if (had) { const b = two.strip.querySelector('.vc-board[data-id="' + CSS.escape(had) + '"]'); if (b) b.focus(); }
   }
-  function _freshenBoards(thread) {
+  // Every written card as the thread is read: its sheets and its attempts repainted in place.
+  function _freshenLive(thread) {
     for (const [id, l] of _live) {
-      if (!l.two) continue;
       if (!l.go.isConnected) { _forget(id); continue; }
       const now = thread.find(x => x.id === id);
       if (now) l.m = now;
-      _paintBoards(id, l);
+      if (l.two) _paintBoards(id, l);
+      _paintTries(id, l);
       _freshenOne(id, l);
     }
   }
@@ -1307,7 +1334,7 @@ function VIDEOS(ctx) {
     cardBubble: _cardBubble,
     cardSig: _cardSig,
     busy: _busy,
-    onThread: (thread) => { _paintFoot(true); _freshenBoards(thread); },
+    onThread: (thread) => { _paintFoot(true); _freshenLive(thread); },
     resultPath: (g) => g.videoPath,
 
     settings: {

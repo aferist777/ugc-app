@@ -148,6 +148,8 @@ export function createChat(make) {
       return Store.key();
     },
     shots: (m, progs) => _shots(m, progs),
+    // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
+    stageWords: (g) => _stageWords(g),
     footChanged: () => { if (_ui) _paintThread(true); },
   };
   const S = make(ctx);
@@ -584,10 +586,12 @@ export function createChat(make) {
     return g.stage ? g.stage + '…' : S.busyWord + '…';
   }
 
-  const _sig = (m) => [m.text || ''].concat(_gensOf(m).map(g => g.id + ':' + g.state + ':'
-    + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))
-    // (phase V6) A card is drawn again when what it IS changes - never for the text being typed into it.
-    .concat(m.card && typeof S.cardSig === 'function' ? [S.cardSig(m)] : []).join('|');
+  // (phase V6) A card is drawn again when what it IS changes - never for the text being typed into it; its clips are
+  // its description's to keep fresh in place (the owner, 2026-10-06: a made card stays a field to edit and make again
+  // from, and a clip landing must not rebuild it under the typing).
+  const _sig = (m) => ((m.card && typeof S.cardSig === 'function') ? [m.text || '', S.cardSig(m)]
+    : [m.text || ''].concat(_gensOf(m).map(g => g.id + ':' + g.state + ':'
+      + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))).join('|');
 
   function _dropProgs(n, landed) {
     for (const [id, p] of n.progs) {

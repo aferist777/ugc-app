@@ -466,7 +466,8 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       if (String(x.project || '') !== project || !x.card || x.card.type !== 'prompt') { why = [404, 'no such card']; return false; }
-      if (x.card.state !== 'ready') { why = [409, x.card.state === 'sent' ? 'it was made already' : 'it is not written yet']; return false; }
+      // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
+      if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
       if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
       if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
@@ -497,7 +498,6 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     const m = _cardOf(req.params.id, project, 'prompt');
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
-    if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'it was made - "again" makes a copy to change' });
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
     const s = _settings(b);
@@ -514,7 +514,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     kick = 'w' + crypto.randomBytes(8).toString('hex');
     CHAT.writing.add(kick);
     const ok = CHAT.update(m.id, (x) => {
-      if (!x.card || x.card.state === 'writing' || x.card.state === 'sent') return false;
+      if (!x.card || x.card.state === 'writing') return false;
       Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), model: s.model, agg: rt.fits[0].agg, params: s.params,
                               prompt: '', error: '', edited: false, writer: '', fell: '' });
       // Its sheets stay on the card, none chosen: the new prompts may be for another sheet (review V8).
@@ -562,8 +562,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const m = _cardOf(req.params.id, project, 'prompt');
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompt is still being written' });
-    if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'it was made already - "again" makes another' });
-    if (m.card.state !== 'ready') return res.status(409).json({ success: false, error: 'the prompt was not written - write it again' });
+    // A made card is made again from its own field (the owner, 2026-10-06): another attempt of the same card.
+    if (m.card.state !== 'ready' && m.card.state !== 'sent') return res.status(409).json({ success: false, error: 'the prompt was not written - write it again' });
     const prompt = _strictRefs(String(b.prompt == null ? m.card.prompt : b.prompt).replace(/\r\n/g, '\n')).trim().slice(0, 30000);
     if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
     const s = _settings(Object.assign({ model: m.card.model, params: m.card.params, agg: m.card.agg }, b));
@@ -624,20 +624,26 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
     };
+    // The attempts the card had - an old card made before attempts were kept counts its clips as the first.
+    const _was = (x) => (Array.isArray(x.card.sends) ? x.card.sends : ((x.genIds || []).length
+      ? [{ at: (x.card.sent && x.card.sent.at) || '', n: (x.card.sent && x.card.sent.n) || x.genIds.length, zh: !!(x.card.sent && x.card.sent.zh),
+           boardId: (x.card.board && x.card.board.chosen) || '', genIds: x.genIds.slice(0, 4) }] : []));
+    const part = String(_was(m).length + 1);
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
-        project, send: m.id, kick, where, stage: zh ? 'translating the prompt to Chinese' : 'asking ' + rt.fits[0].aggLabel,
+        project, send: m.id, part, kick, where, stage: zh ? 'translating the prompt to Chinese' : 'asking ' + rt.fits[0].aggLabel,
         model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, skill, ready: true, zh,
       }).id);
     }
     CHAT.update(m.id, (x) => {
-      Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params,
-                              sent: { at: new Date().toISOString(), n, zh } });
+      const at = new Date().toISOString();
+      Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params, sent: { at, n, zh },
+                              sends: _was(x).concat([{ at, n, zh, boardId, genIds: ids }]) });
       if (x.card.board && boardId) x.card.board.chosen = boardId;
-      x.genId = ids[0];
-      x.genIds = ids;
+      x.genIds = (x.genIds || []).concat(ids).slice(-40);
+      x.genId = x.genIds[0];
     });
     res.json({ success: true, card: m.id, genIds: ids, agg: rt.fits[0].agg });
     _make({ ids, kick, prompt, writer: m.card.writer || '', zh, max: Math.min(...rt.fits.map(p => p.promptMax || 30000)) });
@@ -685,7 +691,7 @@ router.post('/mv3/video/card/:id/board', (req, res) => {
     if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
     if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
-    if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'its video was made - "again" makes a copy to change' });
+    // A made card draws too: it is made again from its field, and another sheet may be what the next attempt follows.
     const typed = String(b.board != null ? b.board : m.card.board.prompt).replace(/\r\n/g, '\n').trim().slice(0, 6000);
     if (!typed) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
     const all = _mediaOf(m.media);
