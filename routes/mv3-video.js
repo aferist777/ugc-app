@@ -17,6 +17,8 @@
 //   POST  /api/mv3/video/card/:id/rewrite   the writer again for a card not made yet (a failed one, another model)
 //   POST  /api/mv3/video/card/:id/make      the video from the card: a record and an Alerts row per clip, at the press
 //   POST  /api/mv3/video/card/:id/again     a new card with a made card's prompt, to make it once more or change it
+//   POST  /api/mv3/video/card/:id/board     (phase V8) a two-step card's STORYBOARD: a picture of the pictures chat's
+//                                           store (nano-banana-2, 4K) with its Alerts row, at the press
 //
 // The thread itself is GET/DELETE /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': old libraries
 // hold 'video' messages of a strip that was removed, and a live 'video' would bring them back.
@@ -32,6 +34,7 @@ const router = express.Router();
 
 const VM = require('../lib/video-models');
 const VGENS = require('../lib/mv3-video-gens');
+const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
 const KEYS = require('../lib/agg-keys');
@@ -58,7 +61,7 @@ const COUNTS = [1, 2];
 const KINDS = ['image', 'video', 'audio'];
 
 router.get('/mv3/video/matrix', (_req, res) => {
-  try { res.json(Object.assign({ success: true }, VM.matrix())); }
+  try { res.json(Object.assign({ success: true }, VM.matrix(), { board: _boardInfo() })); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -226,6 +229,48 @@ const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+
   .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
 const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && m.card.type === 'prompt' && m.card.state === 'writing').length;
 
+// ── The storyboard (phase V8, PLAN V-G; the owner 2026-10-06: 4K, and always a stop after it) ──────────────────
+// A two-step recipe draws a STORYBOARD SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
+// Alerts row of type 'picture', filed on Images in the project's category) - and the video is made from it: the
+// sheet chosen on the card goes as the LAST picture of the clip, after the card's own.
+const BOARD_ENGINE = 'nano-banana-2';
+const BOARD_QUALITY = '4K';
+const BOARD_AT_ONCE = 2;
+function _boardInfo() {
+  const MV = require('../lib/mv3-img');
+  const e = MV.ENGINES[BOARD_ENGINE];
+  if (!e) return null;
+  return {
+    engine: BOARD_ENGINE, label: e.label, quality: BOARD_QUALITY,
+    providers: MV.PROVIDER_ORDER.filter(p => e.providers[p]).map(p => ({
+      agg: p, label: MV.PROVIDER_LABELS[p], usable: VM.usable(p), why: VM.usable(p) ? '' : (KEYS.why(p) || ''),
+      price: ((e.providers[p].price || {})[BOARD_QUALITY]) == null ? null : e.providers[p].price[BOARD_QUALITY],
+      maxRefs: e.providers[p].maxRefs || 0,
+    })),
+  };
+}
+// Who draws it: the first aggregator in the pictures chat's order with a key that takes this many pictures.
+function _boardProvider(refs) {
+  const info = _boardInfo();
+  if (!info) return { error: 'the storyboard engine is not in this program' };
+  const ok = info.providers.find(p => p.usable && (refs ? (p.maxRefs || 1) >= refs : true));
+  if (!ok) return { error: info.providers.find(p => p.usable) ? info.label + ' cannot take ' + refs + ' pictures' : (info.providers[0] && info.providers[0].why) || 'no aggregator can draw the storyboard' };
+  return { provider: ok.agg, label: ok.label };
+}
+// The storyboard's SEAT among the video's pictures: it goes after the card's own, so the card's pictures and it must
+// fit the model together - checked when the prompts are written and again before the sheet is paid for, never only
+// when the video is made (nine pictures and a sheet are ten, and the sheet would be bought for a video that cannot be).
+const BOARD_SEAT = { path: '(the storyboard)', kind: 'image', role: 'storyboard', label: 'storyboard', in: 0, out: 0 };
+function _seatWrong(model, agg, params, media) {
+  const list = media || [];
+  // Only what the seat itself breaks: a route closed anyway (a key gone) is said where it matters - at the make.
+  if (_routeOf(model, agg, params, list, 'xxx').error) return '';
+  const rt = _routeOf(model, agg, params, list.filter(x => x.kind === 'image').concat([BOARD_SEAT], list.filter(x => x.kind !== 'image')), 'xxx');
+  if (!rt.error) return '';
+  const n = list.filter(x => x.kind === 'image').length;
+  return 'the storyboard goes to the video as one more picture after your ' + n + ' - ' + rt.error;
+}
+
 // The pictures the WRITER looks at, made small first (review V6): a character's sheet is 4K, and the writer only has
 // to see what is in it - the aggregator gets each picture fitted to its own limits when the clip is asked for.
 async function _hostForWriter(paths) {
@@ -278,16 +323,22 @@ async function _writeCard(cardId, kick, o) {
       catch (e) { console.warn('[mv3-video] write: the writer will not see the pictures -', e.message); }
     }
     const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls, thread: [],
-                                       skill: { text: o.body }, params: o.params, max: o.max, recipe: true });
+                                       skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep });
     out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
       : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
+    if (t.prompt && o.twoStep) {
+      out.boardPrompt = String(t.board || '');
+      out.boardAspect = t.boardAspect || (['9:16', '16:9', '1:1'].includes((o.params || {}).aspect) ? o.params.aspect : '16:9');
+    }
   } catch (e) {
     out = { state: 'failed', error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
   }
   try {
     CHAT.update(cardId, (m) => {
       if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
-      Object.assign(m.card, out);
+      const { boardPrompt, boardAspect, ...rest } = out;
+      Object.assign(m.card, rest);
+      if (m.card.board && boardPrompt != null) Object.assign(m.card.board, { prompt: boardPrompt, aspect: boardAspect, edited: false });
     });
   } finally { CHAT.writing.delete(kick); }
 }
@@ -308,6 +359,8 @@ router.post('/mv3/video/write', (req, res) => {
     const s = _settings(b);
     if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+    const twoStep = !!b.twoStep;
+    if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
     const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
     if (!head) return res.status(400).json({ success: false, error: 'the recipe has no request to fill in' });
     const body = String(b.body || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
@@ -317,6 +370,8 @@ router.post('/mv3/video/write', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+    const seat = twoStep ? _seatWrong(s.model, s.agg, s.params, mm.media) : '';
+    if (seat) return res.status(400).json({ success: false, error: seat });
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
 
     const recipe = _recipeOf(b.recipe);
@@ -328,9 +383,10 @@ router.post('/mv3/video/write', (req, res) => {
                           card: { type: 'recipe', recipe, head, values, filled, body } });
     const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs, media: mm.media,
                           card: { type: 'prompt', state: 'writing', kick, startedAt: new Date().toISOString(), from: rc.id, recipe,
-                                  model: s.model, agg: rt.fits[0].agg, params: s.params } });
+                                  model: s.model, agg: rt.fits[0].agg, params: s.params,
+                                  board: twoStep ? { prompt: '', aspect: '', genIds: [], chosen: '' } : undefined } });
     res.json({ success: true, recipe: rc.id, card: pc.id });
-    _writeCard(pc.id, kick, { model: s.model, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax });
+    _writeCard(pc.id, kick, { model: s.model, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax, twoStep });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/write]', err.message);
@@ -343,14 +399,18 @@ router.patch('/mv3/video/card/:id', (req, res) => {
   const b = req.body || {};
   try {
     const project = String(b.project || '').trim();
-    const prompt = _strictRefs(String(b.prompt == null ? '' : b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
+    const prompt = b.prompt == null ? null : _strictRefs(String(b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
+    const board = b.board == null ? null : String(b.board).replace(/\r\n/g, '\n').slice(0, 6000);
+    const chosen = b.chosen == null ? null : String(b.chosen);
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       if (String(x.project || '') !== project || !x.card || x.card.type !== 'prompt') { why = [404, 'no such card']; return false; }
       if (x.card.state !== 'ready') { why = [409, x.card.state === 'sent' ? 'it was made already' : 'it is not written yet']; return false; }
-      if (x.card.prompt === prompt) return false;
-      x.card.prompt = prompt;
-      x.card.edited = true;
+      let changed = false;
+      if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
+      if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
+      if (x.card.board && chosen != null && CHAT.boardsOf(x).some(g => g.id === chosen) && x.card.board.chosen !== chosen) { x.card.board.chosen = chosen; changed = true; }
+      if (!changed) return false;
     });
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (why) return res.status(why[0]).json({ success: false, error: why[1] });
@@ -375,10 +435,13 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     const s = _settings(b);
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+    if (m.card.board && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - pick a Seedance model' });
     const mm = _mediaOf(m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+    const seat = m.card.board ? _seatWrong(s.model, s.agg, s.params, mm.media) : '';
+    if (seat) return res.status(400).json({ success: false, error: seat });
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
     kick = 'w' + crypto.randomBytes(8).toString('hex');
     CHAT.writing.add(kick);
@@ -389,7 +452,8 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     });
     if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
     res.json({ success: true, card: m.id });
-    _writeCard(m.id, kick, { model: s.model, filled: rc.card.filled, body: rc.card.body, media: mm.media, params: s.params, max: rt.fits[0].promptMax });
+    _writeCard(m.id, kick, { model: s.model, filled: rc.card.filled, body: rc.card.body, media: mm.media, params: s.params, max: rt.fits[0].promptMax,
+                             twoStep: !!m.card.board });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/rewrite]', err.message);
@@ -439,6 +503,22 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     }
     const mm = _mediaOf(m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+    let boardId = '';
+    if (m.card.board) {
+      const boards = CHAT.boardsOf(m);
+      boardId = String(b.boardId || m.card.board.chosen || '');
+      if (!boardId) {
+        const done = boards.filter(g => g.state === 'done' && g.imagePath);
+        boardId = done.length ? done[done.length - 1].id : '';
+      }
+      const g = boards.find(x => x.id === boardId);
+      if (!g) return res.status(409).json({ success: false, error: 'make the storyboard first - the video follows it' });
+      if (g.state !== 'done' || !g.imagePath) return res.status(409).json({ success: false, error: 'that storyboard is not ready' });
+      const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }]);
+      if (sb.error) return res.status(400).json({ success: false, error: 'the storyboard is not on the Images shelf any more - make it again' });
+      const pics = mm.media.filter(x => x.kind === 'image');
+      mm.media = pics.concat(sb.media, mm.media.filter(x => x.kind !== 'image'));
+    }
     const wrong = _refsWrong(prompt, mm.media);
     if (wrong) return res.status(400).json({ success: false, error: wrong });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, prompt);
@@ -468,6 +548,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     CHAT.update(m.id, (x) => {
       Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params,
                               sent: { at: new Date().toISOString(), n, zh } });
+      if (x.card.board && boardId) x.card.board.chosen = boardId;
       x.genId = ids[0];
       x.genIds = ids;
     });
@@ -505,6 +586,64 @@ async function _make(o) {
   }
 }
 
+// A two-step card's storyboard: a picture record and its row at the press (no writer - its prompt is on the card),
+// the drawing behind the answer. Another press draws another; the card chooses which one the video follows.
+router.post('/mv3/video/card/:id/board', (req, res) => {
+  const b = req.body || {};
+  let kick = '';
+  try {
+    const project = String(b.project || '').trim();
+    const m = _cardOf(req.params.id, project, 'prompt');
+    if (!m) return res.status(404).json({ success: false, error: 'no such card' });
+    if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
+    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
+    if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
+    if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'its video was made - "again" makes a copy to change' });
+    const prompt = String(b.board != null ? b.board : m.card.board.prompt).replace(/\r\n/g, '\n').trim().slice(0, 6000);
+    if (!prompt) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
+    const all = _mediaOf(m.media);
+    if (all.error) return res.status(400).json({ success: false, error: all.error });
+    const pics = all.media.filter(x => x.kind === 'image');
+    // The video it is for must be able to take it - before the sheet is paid for.
+    const seat = _seatWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
+    if (seat) return res.status(400).json({ success: false, error: seat });
+    const pv = _boardProvider(pics.length);
+    if (pv.error) return res.status(400).json({ success: false, error: pv.error });
+    const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
+    if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' storyboards are being drawn already - wait for one' });
+    const w0 = (b.where && typeof b.where === 'object') ? b.where : {
+      page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
+      label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
+    };
+    // Its row, once drawn, leads back to the card - the video is chosen and made there - not to the picture on its
+    // shelf, where a picture of the chats is shown (js/alerts-bell.js reveals only 'pictures' and 'videos').
+    const where = Object.assign({}, w0, { spot: Object.assign({}, w0.spot || {}, { view: 'storyboard' }) });
+    const title = (m.card.recipe && m.card.recipe.title) || 'video';
+    kick = 'b' + crypto.randomBytes(8).toString('hex');
+    GENS.asking.add(kick);
+    const g = GENS.create({
+      project, send: m.id, board: true, kick, where, stage: 'asking ' + pv.label, prompt, said: 'storyboard · ' + title,
+      engine: BOARD_ENGINE, provider: pv.provider, quality: BOARD_QUALITY, aspect: m.card.board.aspect || '16:9',
+      refs: pics.map(x => x.path),
+    });
+    CHAT.update(m.id, (x) => {
+      if (!x.card || !x.card.board) return false;
+      x.card.board.genIds = (x.card.board.genIds || []).concat([g.id]).slice(-20);
+      if (x.card.board.prompt !== prompt) { x.card.board.prompt = prompt; x.card.board.edited = true; }
+    });
+    res.json({ success: true, genId: g.id, provider: pv.provider });
+    (async () => {
+      try { await GENS.submit(g.id, { prompt }, kick); }
+      catch (e) { console.warn('[mv3-video] storyboard:', e.message); }
+      finally { GENS.asking.delete(kick); }
+    })();
+  } catch (err) {
+    if (kick) GENS.asking.delete(kick);
+    console.error('[mv3-video/board]', err.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // A made card's prompt in a new card, ready to change and make again - the made one stays what was sent.
 router.post('/mv3/video/card/:id/again', (req, res) => {
   const b = req.body || {};
@@ -516,7 +655,9 @@ router.post('/mv3/video/card/:id/again', (req, res) => {
     const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: m.refs || [], media: m.media || [],
                           card: { type: 'prompt', state: 'ready', from: m.card.from || '', copyOf: m.id, recipe: m.card.recipe,
                                   model: m.card.model, agg: m.card.agg, params: m.card.params, prompt: m.card.prompt,
-                                  writer: m.card.writer || '', edited: !!m.card.edited } });
+                                  writer: m.card.writer || '', edited: !!m.card.edited,
+                                  // Its storyboards go with it - those asked for again from Alerts too.
+                                  board: m.card.board ? Object.assign({}, m.card.board, { genIds: CHAT.boardsOf(m).map(g => g.id).slice(-20) }) : undefined } });
     res.json({ success: true, card: pc.id });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

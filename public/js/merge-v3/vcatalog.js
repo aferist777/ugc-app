@@ -190,6 +190,8 @@ function _fits(it, m) {
   if (!m) return false;
   const fam = m.family;
   if (it.kind === 'preset') return (it.models || []).includes(m.id);
+  // (phase V8) A storyboard first, then the video from it with the person's pictures: Seedance - Grok takes one picture.
+  if (it.ts && fam !== 'seedance') return false;
   if (fam === 'kmc') return false;
   const L = _limits(m);
   const r = it.refs || {};
@@ -986,6 +988,7 @@ async function _paintRight() {
     if (it.d && pr && pr.secs && pr.secs !== it.d) fit.appendChild(el('div', 'vc-warn', 'it asks for ' + it.d + ' s - ' + m.label + ' makes ' + pr.secs));
     if (!m.usable) fit.appendChild(el('div', 'vc-warn', m.why || 'no aggregator can be asked for this model'));
     if (!_fits(it, m)) fit.appendChild(el('div', 'vc-warn', 'it does not fit ' + m.label + ' - pick a model it fits above'));
+    if (it.ts) fit.appendChild(el('div', null, '2 steps: a storyboard picture first (nano-banana-2, 4K, ≈$0.09), then the video from it'));
   }
   scroll.appendChild(fit);
 
@@ -1153,6 +1156,8 @@ function _use(it, d, ed) {
   const skill = {
     id: it.id, kind: it.kind, title: it.title, v: (d.skill && d.skill.v) || '',
     edited: ed.text !== orig, text: ed.text, orig, slots: ed.slots,
+    // (phase V8) A storyboard picture first, then the video.
+    twoStep: !!it.ts,
   };
   const done = _st.onUse;
   _close();
