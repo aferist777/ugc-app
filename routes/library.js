@@ -33,6 +33,7 @@ const {
   FINALS_DIR,
 } = require('../lib/config');
 const { toUrl, toDiskWithin } = require('../lib/media');
+const { siblingsOf } = require('../lib/relocate');
 const LC = require('../lib/library-cats');
 // Where a shelf item's files live - its kind and category's folder - and moving them there.
 const SHELF = require('../lib/shelf-files');
@@ -753,7 +754,7 @@ function _unlink(webPath) {
   return false;
 }
 
-// Every path any SURVIVING record points at, across both media stores. `doomed` is the set of
+// Every path any SURVIVING record points at, across the media stores and the pictures. `doomed` is the set of
 // record ids about to go, so their own paths do not count as keeping a file alive.
 //
 // This exists because a file can be shared. Real data has 81 pairs of archive records — the
@@ -764,7 +765,8 @@ function _unlink(webPath) {
 function _pathsInUse(doomed) {
   const skip = new Set((doomed || []).map(String));
   const used = new Set();
-  for (const kind of ['birols', 'hooks']) {           // birols and uploads are one file
+  // birols and uploads are one file; the pictures too, since a picture's own copy beside it now goes with it.
+  for (const kind of ['birols', 'hooks', 'images']) {
     let list = [];
     try { list = RECORD_STORES[kind].read(); } catch (e) { continue; }
     for (const e of list) {
@@ -775,16 +777,46 @@ function _pathsInUse(doomed) {
   return used;
 }
 
-// Unlink only what nothing else needs. Reports what actually went and what was spared, so the
-// page can say "the clip is gone" without claiming a file was removed when it was not.
+// What belongs to a file and goes with it: the derivatives a move carries along (lib/relocate.js siblingsOf) -
+// its thumbs/ copy, a clip's poster, a preview, a clip's loudness mark. A picture made by an engine has a 600px
+// copy in thumbs/ beside it (lib/helpers.js createThumbnail), and deleting the picture used to leave that copy
+// behind with nothing pointing at it.
+//
+// A thumbs/ or preview/ copy is known only by the file's STEM, so while another file of that stem stays in the
+// folder (x.png beside x.jpg) the copy is left: it may be the other one's. The loudness mark is named after the
+// whole file name and always goes.
+function _derivativesOf(abs) {
+  let out = [];
+  try { out = siblingsOf(abs, path.basename(abs)).map(([a]) => a); } catch (e) { return []; }
+  const name = path.basename(abs);
+  const stem = name.replace(/\.[^.]+$/, '');
+  let twin = false;
+  try { twin = fs.readdirSync(path.dirname(abs)).some(f => f !== name && !/\.norm$/i.test(f) && f.replace(/\.[^.]+$/, '') === stem); }
+  catch (e) { twin = false; }
+  return twin ? out.filter(a => /\.norm$/i.test(a)) : out;
+}
+
+// Unlink only what nothing else needs - and with each file that goes, what is derived from it. Reports what
+// actually went and what was spared, so the page can say "the clip is gone" without claiming a file was removed
+// when it was not.
 function _unlinkUnused(paths, doomed) {
   const used = _pathsInUse(doomed);
   const removed = [], kept = [];
+  const gone = new Set();          // taken already as a derivative of a file before it in the list
   for (const p of (paths || [])) {
     if (!p) continue;
     const clean = String(p).split('?')[0];
     if (used.has(clean)) { kept.push(clean.split('/').pop()); continue; }
-    if (_unlink(p)) removed.push(clean.split('/').pop());
+    if (gone.has(clean)) { removed.push(clean.split('/').pop()); continue; }
+    const abs = _absInRoot(clean);
+    const derived = abs ? _derivativesOf(abs) : [];        // read while the file is still there
+    if (!_unlink(p)) continue;
+    removed.push(clean.split('/').pop());
+    for (const d of derived) {
+      const url = toUrl(d);
+      if (!url || used.has(url)) continue;
+      if (_unlink(url)) gone.add(url);
+    }
   }
   return { removed, kept };
 }
