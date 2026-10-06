@@ -22,7 +22,9 @@ import { createChat, el, money, json, stored, keep } from './chat-shell.js';
 import { openCatalog } from './vcatalog.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
-const SHOW_ATTS = 9;                       // places in the row at most, whatever a model takes
+const SHOW_ATTS = 9;                       // the old row's places at most (the zone grows instead - phase V6)
+const MAX_PICS = 30;                       // pictures at most, whatever a model says (Seedance 2.5 takes 30)
+const MAX_ATTS = 50;                       // everything attached at most - pictures, clips and sounds
 
 function arOf(i) {
   const w = +(i.w || (i.meta || {}).w || 0);
@@ -58,6 +60,9 @@ function VIDEOS(ctx) {
   const isMC = () => (model() || {}).family === 'kmc';
   // The catalog's recipe in use (phase V5) - kept with the draft, per project, until its cross.
   let _skill = null;
+  // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
+  const _kind = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
+  const _pics = () => ctx.atts().filter(a => _kind(a) === 'image');
 
   // ── The rates ─────────────────────────────────────────────────────────────
   // The aggregator's table, read through the chosen parameters - the server prices the same way
@@ -195,7 +200,7 @@ function VIDEOS(ctx) {
     box.textContent = '';
     if (!m || !r) return;
     const p = params();
-    const n = ctx.atts().length;
+    const n = _pics().length;
     const fam = m.family;
     if (!r.duration.fromClip) {
       const opts = [];
@@ -288,13 +293,6 @@ function VIDEOS(ctx) {
   // opens on it -, "edited", what it wants attached, and a cross. The recipe is the writer's: with the pen off, or for
   // Kling motion control (no writer), it stands dimmed and is not sent.
   const _edited = (s) => !!s && (s.orig != null ? s.text !== s.orig : !!s.edited);
-  function _needsWord(slots) {
-    const req = (slots || []).filter(s => s.required && s.min > 0);
-    if (!req.length) return '';
-    const SAID = { person: 'person ', product: 'product ', outfit: 'outfit ', location: 'place ', style: 'style ' };
-    const word = (s) => s.min + ' ' + (s.kind === 'video' ? 'clip' : s.kind === 'audio' ? 'sound' : (SAID[s.role] || '') + 'picture') + (s.min === 1 ? '' : 's');
-    return 'wants ' + req.map(word).join(' + ');
-  }
   function _paintRecipe() {
     // The row over the box held the catalog and the recipe until V6; both moved (the crumb, the line above).
     const over = ctx.over();
@@ -313,8 +311,6 @@ function VIDEOS(ctx) {
     t.addEventListener('click', _openCat);
     box.appendChild(t);
     if (_edited(_skill)) box.appendChild(el('i', null, 'edited'));
-    const needs = _needsWord(_skill.slots);
-    if (needs) box.appendChild(el('span', 'needs', needs));
     box.appendChild(el('span', 'sp'));
     if (!used) {
       box.appendChild(el('span', 'why', isMC() ? 'Kling motion control has no writer - not used with it'
@@ -323,7 +319,7 @@ function VIDEOS(ctx) {
     const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
-    x.addEventListener('click', () => { _skill = null; ctx.saveDraft(); _paintRecipe(); });
+    x.addEventListener('click', () => { _skill = null; ctx.reslot(); ctx.saveDraft(); _paintRecipe(); });
     box.appendChild(x);
   }
   // The catalog opens on the recipe in use when there is one (the owner, 2026-10-06), with the chat's own edits.
@@ -344,7 +340,8 @@ function VIDEOS(ctx) {
       text: u.skill.text, orig: u.skill.orig != null ? u.skill.orig : u.skill.text, slots: u.skill.slots || [],
     } : null;
     if (_set) { _set.model.value = u.model; _paintModel(true); }
-    ctx.paintAtts();
+    // What was attached before finds the recipe's slots.
+    ctx.reslot();
     ctx.saveDraft();
     _paintRecipe();
   }
@@ -355,15 +352,95 @@ function VIDEOS(ctx) {
     return Math.min(SHOW_ATTS, r.limits.images || 0);
   }
 
+  // ── The attachment zone (phase V6, the owner 2026-10-06) ──────────────────
+  // Pictures | clips | sounds, each as many as the model takes on the chosen aggregator - the shell grows them one
+  // place at a time. With a recipe each part holds the recipe's slots of its kind, each cell wearing its name. Clips and
+  // sounds as references are phase V7: until then their parts say so (and a recipe's cells there stand dimmed).
+  const GENERIC = ['picture', 'pictures', 'clip', 'clips', 'sound', 'sounds'];
+  const _partOf = (k) => (k === 'video' || k === 'audio' ? k : 'image');
+  function _slotsOf(kind) {
+    if (!_skill) return null;
+    return (_skill.slots || []).filter(s => _partOf(s.kind) === kind).map(s => ({
+      key: String(s.key || s.kind), role: s.role || '', kind: s.kind,
+      label: String(GENERIC.includes(s.key) ? (s.role || s.key) : s.key).replace(/[-_]+/g, ' '),
+      min: Math.max(0, +s.min || 0), max: Math.max(1, +s.max || 1, +s.min || 0), required: !!s.required, hint: s.hint || '',
+    }));
+  }
+  function _zone() {
+    const r = rec(), m = model();
+    const lim = r ? r.limits : { images: 0, videos: 0, audios: 0 };
+    const who = (m && m.label) || 'This model';
+    return { parts: [
+      { kind: 'image', word: 'pictures', one: 'picture', room: Math.min(MAX_PICS, lim.images || 0), slots: _slotsOf('image'),
+        none: who + ' takes no pictures.', other: 'Another picture for the writer to use - anything the recipe did not ask for' },
+      { kind: 'video', word: 'clips', one: 'clip', room: lim.videos || 0, slots: _slotsOf('video'),
+        none: who + ' takes no clips.', off: (lim.videos || 0) ? 'Clips as references arrive in the next step.' : '' },
+      { kind: 'audio', word: 'sounds', one: 'sound', room: lim.audios || 0, slots: _slotsOf('audio'),
+        none: who + ' takes no sounds.', off: (lim.audios || 0) ? 'Sounds as references arrive in the next step.' : '' },
+    ] };
+  }
+  // An armed slot turns the right column to what suits it (the owner): a person - characters and looks, a place -
+  // environments, clothes - lookbooks, a product, a style or anything else - Images.
+  function _shelfFor(kind, s) {
+    const role = (s && s.role) || '';
+    if (kind !== 'image') return '';
+    if (role === 'person') return 'shelf:people';
+    if (role === 'location') return 'shelf:environments';
+    if (role === 'outfit') return 'shelf:lookbooks';
+    return 'images';
+  }
+  // The shelves the column can show: a character's sheet, then its looks, one character after another.
+  async function _loadPeople() {
+    const [c, l] = await Promise.all([json('/api/library/shelf/characters'), json('/api/library/shelf/looks')]);
+    const chars = (c && c.success) ? c.items || [] : [];
+    const looks = (l && l.success) ? l.items || [] : [];
+    const out = [];
+    const tile = (i, name) => ({ path: i.media, state: 'done', name: name || i.name || '', libId: i.id || '' });
+    for (const ch of chars) {
+      out.push(tile(ch, ch.name));
+      for (const lk of looks.filter(x => (x.meta || {}).charId === ch.id)) out.push(tile(lk, ch.name + ' · ' + lk.name));
+    }
+    for (const lk of looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId))) out.push(tile(lk, lk.name));
+    return out.filter(x => x.path);
+  }
+  async function _loadShelf(kind) {
+    const d = await json('/api/library/shelf/' + kind);
+    return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media)
+      .map(i => ({ path: i.media, state: 'done', name: i.name || '', libId: i.id || '' }));
+  }
+  // The recipe's first slot that is not filled as far as it must be - the send waits for it.
+  function _missing() {
+    if (!_skill) return null;
+    const atts = ctx.atts();
+    for (const kind of ['image', 'video', 'audio']) {
+      for (const s of (_slotsOf(kind) || [])) {
+        if (!s.required || !s.min) continue;
+        const have = atts.filter(a => _kind(a) === kind && a.slot === s.key).length;
+        if (have < s.min) return Object.assign({ part: kind, have }, s);
+      }
+    }
+    return null;
+  }
+
   function _ready() {
     if (!_table) return ['No video models.', _err || 'reading the models…'];
     const m = model(), r = rec();
     if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
     if (isMC()) return ['Not yet.', 'Kling motion control needs a clip of the moves - clips as references arrive in a later step.'];
-    const n = ctx.atts().length;
+    // A recipe's cell that must be filled and is not: nothing is asked, the cell blinks (phase V6).
+    const miss = _missing();
+    if (miss) {
+      ctx.flash(miss.part, miss.key);
+      const what = miss.part === 'video' ? 'clip' : miss.part === 'audio' ? 'sound' : 'picture';
+      if (miss.part !== 'image') return ['The recipe needs a ' + what + '.', (what === 'clip' ? 'Clips' : 'Sounds') + ' as references arrive in the next step.'];
+      return ['The recipe needs ' + (miss.min - miss.have) + ' more ' + (miss.label || what) + ' ' + what + (miss.min - miss.have === 1 ? '' : 's') + '.',
+        miss.hint || 'Press its place, then a picture on the right or a file.'];
+    }
+    const n = _pics().length;
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
     if (n > (r.limits.images || 0)) return ['Too many pictures.', m.label + ' on ' + r.aggLabel + ' takes ' + (r.limits.images || 0) + '.'];
+    if (ctx.atts().length > n) return ['Pictures only for now.', 'Clips and sounds as references arrive in the next step.'];
     if (n && !_table.r2) return ['Attachments need R2.', 'The models read pictures from a public link - set R2 on Admin → API keys.'];
     return '';
   }
@@ -374,8 +451,16 @@ function VIDEOS(ctx) {
     const fam = m.family;
     const atts = ctx.atts();
     const as = p.picturesAs || 'refs';
-    const role = (i) => (fam !== 'seedance' ? '' : as === 'frame' && i === 0 ? 'frame-first'
+    // What each picture is for: a recipe's slot says (its role - person, product... - or a frame), otherwise Seedance's
+    // "pictures are" does.
+    const slots = new Map(['image', 'video', 'audio'].flatMap(k => (_slotsOf(k) || []).map(s => [k + ':' + s.key, s])));
+    const frame = (i) => (fam !== 'seedance' ? '' : as === 'frame' && i === 0 ? 'frame-first'
       : as === 'fl' ? (i === 0 ? 'frame-first' : i === 1 ? 'frame-last' : '') : '');
+    const role = (a, i) => {
+      const s = a.slot ? slots.get(_kind(a) + ':' + a.slot) : null;
+      if (s) return /^frame-/.test(s.kind) ? s.kind : s.role;
+      return _kind(a) === 'image' && !_skill ? frame(i) : '';
+    };
     const fmt = (Store.timeline() || {}).format || '9:16';
     return {
       model: m.id, agg: r.agg,
@@ -385,7 +470,7 @@ function VIDEOS(ctx) {
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
         audio: p.audio !== false, mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
-      media: atts.map((a, i) => ({ path: a.path, kind: 'image', role: role(i) })),
+      media: atts.map((a) => ({ path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)) })),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
       skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
@@ -396,7 +481,7 @@ function VIDEOS(ctx) {
     kind: 'clip',
     ids: { root: 'mv3-vc', head: 'mv3-vc-head', headL: 'mv3-vc-headl', crumb: 'mv3-lib-vgen' },
     keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
-    maxAtts: SHOW_ATTS,
+    maxAtts: MAX_ATTS,
     counts: [1, 2],
     noun: { one: 'picture', many: 'pictures' },
     busyWord: 'making the clip',
@@ -413,7 +498,7 @@ function VIDEOS(ctx) {
       onlyFiles: 'Only pictures can be attached here for now.',
       slot: 'A picture to work from - from this computer, or press one on the right',
       plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
-      cat: "This project's clips, or a category of the Library's Images - pictures to attach",
+      cat: "This project's clips, a shelf of the Library or a category of its Images - pictures to attach",
       crumb: 'Back to the conversation about clips',
     },
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || '') },
@@ -432,6 +517,13 @@ function VIDEOS(ctx) {
       map: (i) => ({ path: i.media, aspect: arOf(i), state: 'done', name: i.name || '', libId: i.id || '' }),
       group: 'images',
     },
+    // (phase V6) The Library's shelves the column can show besides Images - an armed slot of a recipe turns it to one.
+    shelves: [
+      { id: 'people', label: 'characters & looks', load: _loadPeople },
+      { id: 'environments', label: 'environments', load: () => _loadShelf('environments') },
+      { id: 'lookbooks', label: 'lookbooks', load: () => _loadShelf('lookbooks') },
+    ],
+    shelfFor: _shelfFor,
     resultPath: (g) => g.videoPath,
 
     settings: {
@@ -441,11 +533,12 @@ function VIDEOS(ctx) {
       onCount: _paintPrice,
       onProject: () => { if (_set) _paintParams(); },
       room: _room,
+      zone: _zone,
       ready: _ready,
       body: _body,
-      // The recipe in use goes with the draft, per project (phase V5).
+      // The recipe in use goes with the draft, per project (phase V5) - and the zone is laid out by its slots.
       draftExtra: () => (_skill ? { skill: _skill } : null),
-      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _paintRecipe(); },
+      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _paintRecipe(); ctx.paintAtts(); },
       onPen: () => _paintRecipe(),
     },
 

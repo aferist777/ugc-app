@@ -105,11 +105,19 @@ export function createChat(make) {
   const ctx = {
     ui: () => _ui,
     key: () => _key,
-    atts: () => _atts,
+    // In the order their numbers count (phase V6: per part of the zone, per slot of a recipe, then the rest).
+    atts: () => _ordered(),
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
-    attach: (path, name) => _attach(path, name),
+    attach: (path, name, o) => _attach(path, name, o),
+    // (phase V6) A recipe came or went: what is attached finds its slots again, and nothing stays armed.
+    reslot: () => _reslot(),
+    // (phase V6) A slot that must be filled, blinking - the send was refused for it.
+    flash: (kind, slot) => _flash(kind, slot),
+    // (phase V6) The right column shows this: '' this project, 'shelf:<id>' a shelf of the description's, 'images'
+    // the Images category last chosen (or the project's own), or an Images category id.
+    column: (id) => _setCat(id),
     place: (item, anchor) => _place(item, anchor),
     peekShow: (src, anchor) => peekShow(src, anchor),
     peekHide: () => peekHide(),
@@ -269,15 +277,76 @@ export function createChat(make) {
   function _say(t) { if (_ui) _ui.said.textContent = t || ''; }
 
   // ── The attachment row ────────────────────────────────────────────────────
-  function _attach(path, name) {
+  // (phase V6, the owner 2026-10-06) A description may lay it out as a ZONE - set.zone(): { parts: [{ kind, word, room,
+  // off, none, slots }] }, the video chat's pictures, clips and sounds side by side. A part shows ONE empty place, and
+  // the next appears beside it as things are attached, up to what the model takes - thirty places are never drawn at
+  // once - and scrolls sideways. With a recipe a part holds its SLOTS: every cell wears the slot's name, a slot shows one
+  // empty place at a time up to its most, and "other" closes the part for what the recipe did not ask for. A slot's
+  // empty place pressed is ARMED - the next tile or file goes into it, and the right column turns to what suits it;
+  // pressed again, it asks this computer for a file. Without a zone it is the one row it always was.
+  let _armed = null;            // { kind, slot } - the slot the next attachment goes into
+  const _kindOf = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
+  const _zone = () => (typeof set.zone === 'function' ? set.zone() : null);
+  const _keysOf = (p) => (p.slots || []).map(s => s.key);
+
+  // The attachments in the order their numbers count - per part, per slot, then the rest.
+  function _ordered() {
+    const z = _zone();
+    if (!z) return _atts;
+    const out = [];
+    for (const p of z.parts) {
+      const mine = _atts.filter(a => _kindOf(a) === p.kind);
+      const keys = _keysOf(p);
+      for (const k of keys) out.push(...mine.filter(a => a.slot === k));
+      out.push(...mine.filter(a => !keys.includes(a.slot)));
+    }
+    // A kind no part has (cannot happen with the video chat's three) keeps its place at the end.
+    for (const a of _atts) if (!out.includes(a)) out.push(a);
+    return out;
+  }
+
+  // Which slot of its part an attachment goes into: the armed one while it has room, else the first that MUST still
+  // be filled, else the first that may, else "other" ('').
+  function _slotFor(p) {
+    if (!p.slots) return '';
+    const inSlot = (k) => _atts.filter(a => _kindOf(a) === p.kind && a.slot === k).length;
+    if (_armed && _armed.kind === p.kind) {
+      if (_armed.slot === '') return '';
+      const s = p.slots.find(x => x.key === _armed.slot);
+      if (s && inSlot(s.key) < s.max) return s.key;
+    }
+    const must = p.slots.find(s => inSlot(s.key) < (s.min || 0));
+    if (must) return must.key;
+    const may = p.slots.find(s => inSlot(s.key) < s.max);
+    return may ? may.key : '';
+  }
+
+  function _attach(path, name, o) {
     if (!path || _atts.some(a => a.path === path)) return;
-    const room = set.room();
-    if (_atts.length >= room) {
-      _say(room ? 'This model takes ' + room + ' ' + (room === 1 ? S.noun.one : S.noun.many) + '.' : 'This model takes no ' + S.noun.many + '.');
-      return;
+    const kind = (o && (o.kind === 'video' || o.kind === 'audio')) ? o.kind : 'image';
+    const z = _zone();
+    let slot = '';
+    if (z) {
+      const p = z.parts.find(x => x.kind === kind);
+      if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
+      const n = _atts.filter(a => _kindOf(a) === kind).length;
+      if (n >= p.room) { _say('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.'); return; }
+      slot = _slotFor(p);
+    } else {
+      const room = set.room();
+      if (_atts.length >= room) {
+        _say(room ? 'This model takes ' + room + ' ' + (room === 1 ? S.noun.one : S.noun.many) + '.' : 'This model takes no ' + S.noun.many + '.');
+        return;
+      }
     }
     _say('');
-    _atts.push({ path, name: name || '' });
+    _atts.push({ path, name: name || '', kind, slot });
+    // An armed slot that is full now lets go.
+    if (z && _armed && _armed.kind === kind && _armed.slot === slot && slot) {
+      const p = z.parts.find(x => x.kind === kind);
+      const s = (p.slots || []).find(x => x.key === slot);
+      if (!s || _atts.filter(a => _kindOf(a) === kind && a.slot === slot).length >= s.max) _armed = null;
+    }
     _attSeq++;
     _paintAtts();
     _paintStrip();
@@ -292,41 +361,171 @@ export function createChat(make) {
     _draftLater();
   }
 
+  // A recipe came or went: what lies in no slot of it finds one, in the order it was attached.
+  function _reslot() {
+    _armed = null;
+    const z = _zone();
+    if (z) {
+      const keep = [];
+      const loose = [];
+      for (const a of _atts) {
+        const p = z.parts.find(x => x.kind === _kindOf(a));
+        if (p && _keysOf(p).includes(a.slot)) keep.push(a); else loose.push(a);
+      }
+      _atts = keep;
+      for (const a of loose) {
+        const p = z.parts.find(x => x.kind === _kindOf(a));
+        _atts.push(Object.assign({}, a, { slot: p ? _slotFor(p) : '' }));
+      }
+    }
+    _paintAtts();
+    _draftLater();
+  }
+
+  function _flash(kind, slot) {
+    if (!_ui) return;
+    const c = _ui.atts.querySelector('.mv3-ig-cell.is-empty[data-kind="' + kind + '"][data-slot="' + CSS.escape(slot || '') + '"]');
+    if (!c) return;
+    c.classList.remove('is-flash');
+    void c.offsetWidth;
+    c.classList.add('is-flash');
+    c.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    setTimeout(() => c.classList.remove('is-flash'), 1200);
+  }
+
   function _paintAtts() {
     if (!_ui) return;
     const host = _ui.atts;
     host.textContent = '';
-    _atts.forEach((a, i) => {
-      const cell = el('div', 'mv3-ig-att');
-      const img = document.createElement('img');
-      img.src = thumbOf(a.path, 'strip');
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      // Gone from the library since it was attached: it goes from the row, and the row says so.
-      img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
-      cell.appendChild(img);
-      // The NUMBER is the point: with more than one reference the message has to say which is which.
-      cell.appendChild(el('span', 'n', String(i + 1)));
-      const x = el('button', 'x', '✕');
-      x.type = 'button';
-      x.title = 'Not this one';
-      x.addEventListener('click', () => _detach(a.path));
-      cell.appendChild(x);
-      cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
-      cell.addEventListener('mouseleave', peekHide);
-      host.appendChild(cell);
-    });
-    // The empty places are the invitation - as many as the model takes, a description's most at most.
-    const room = set.room();
-    for (let i = _atts.length; i < room; i++) {
-      const slot = el('button', 'mv3-ig-att-slot', '+');
-      slot.type = 'button';
-      slot.title = T.slot;
-      slot.addEventListener('click', () => _ui.file.click());
-      host.appendChild(slot);
+    const z = _zone();
+    host.classList.toggle('is-zone', !!z);
+    if (!z) {
+      _atts.forEach((a, i) => host.appendChild(_filled(a, i + 1)));
+      // The empty places are the invitation - as many as the model takes, a description's most at most.
+      const room = set.room();
+      for (let i = _atts.length; i < room; i++) {
+        const slot = el('button', 'mv3-ig-att-slot', '+');
+        slot.type = 'button';
+        slot.title = T.slot;
+        slot.addEventListener('click', () => _ui.file.click());
+        host.appendChild(slot);
+      }
+      if (_atts.length >= 2) host.appendChild(el('span', 'mv3-ig-att-note', 'Say which one you mean by its number.'));
+      set.onAtts();
+      return;
     }
-    if (_atts.length >= 2) host.appendChild(el('span', 'mv3-ig-att-note', 'Say which one you mean by its number.'));
+    const order = _ordered();
+    const num = (a) => order.filter(x => _kindOf(x) === _kindOf(a)).indexOf(a) + 1;
+    for (const p of z.parts) host.appendChild(_part(p, num));
     set.onAtts();
+  }
+
+  // One part of the zone: its word and count, then its cells in a row that scrolls sideways.
+  function _part(p, num) {
+    const box = el('div', 'mv3-ig-part is-' + p.kind);
+    const mine = _atts.filter(a => _kindOf(a) === p.kind);
+    const head = el('div', 'mv3-ig-part-h', p.word);
+    if (p.room && !p.off) head.appendChild(el('b', null, mine.length + ' / ' + p.room));
+    box.appendChild(head);
+    const row = el('div', 'mv3-ig-part-row');
+    if (!p.room || p.off) {
+      // Nothing taken here - or not yet: the recipe's cells stand dimmed so it is clear what it wanted.
+      const why = !p.room ? p.none : p.off;
+      box.title = why || '';
+      box.classList.add('is-off');
+      if (p.slots && p.slots.length) {
+        for (const s of p.slots) row.appendChild(_empty(p, s, true));
+      } else row.appendChild(el('span', 'mv3-ig-part-off', !p.room ? 'none' : 'next step'));
+      box.appendChild(row);
+      return box;
+    }
+    if (p.slots) {
+      for (const s of p.slots) {
+        const inS = mine.filter(a => a.slot === s.key);
+        for (const a of inS) row.appendChild(_cell(_filled(a, num(a)), s.label || s.key, s.hint));
+        if (inS.length < s.max && mine.length < p.room) row.appendChild(_empty(p, s, false, inS.length < (s.min || 0)));
+      }
+      const keys = _keysOf(p);
+      for (const a of mine.filter(x => !keys.includes(x.slot))) row.appendChild(_cell(_filled(a, num(a)), 'other', ''));
+      if (mine.length < p.room) row.appendChild(_empty(p, { key: '', label: 'other', hint: p.other || '' }, false, false));
+    } else {
+      for (const a of mine) row.appendChild(_cell(_filled(a, num(a)), '', ''));
+      if (mine.length < p.room) row.appendChild(_empty(p, null, false, false));
+    }
+    _sideways(row);
+    box.appendChild(row);
+    // The place that just appeared is where the eye goes: the row comes to its end.
+    requestAnimationFrame(() => { row.scrollLeft = row.scrollWidth; });
+    return box;
+  }
+
+  // An attached thing: its picture, its NUMBER - with more than one, the message has to say which is which - and a cross.
+  function _filled(a, n) {
+    const cell = el('div', 'mv3-ig-att');
+    const img = document.createElement('img');
+    img.src = thumbOf(a.path, 'strip');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    // Gone from the library since it was attached: it goes from the row, and the row says so.
+    img.addEventListener('error', () => { _detach(a.path); _say('A ' + S.noun.one + ' in the row is not in the library any more.'); }, { once: true });
+    cell.appendChild(img);
+    cell.appendChild(el('span', 'n', String(n)));
+    const x = el('button', 'x', '✕');
+    x.type = 'button';
+    x.title = 'Not this one';
+    x.addEventListener('click', () => _detach(a.path));
+    cell.appendChild(x);
+    cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
+    cell.addEventListener('mouseleave', peekHide);
+    return cell;
+  }
+
+  // A cell of the zone: the thing (or its empty place) and, with a recipe, the slot's name under it.
+  function _cell(inner, label, hint) {
+    const c = el('div', 'mv3-ig-cell');
+    c.appendChild(inner);
+    if (label) {
+      const l = el('span', 'lab', label);
+      if (hint) l.title = hint;
+      c.appendChild(l);
+    }
+    return c;
+  }
+
+  // An empty place: with a recipe it is a slot's - pressed, it is armed; pressed again (or without a recipe), a file
+  // from this computer.
+  function _empty(p, s, dim, must) {
+    const key = s ? s.key : '';
+    const armed = !!(s && _armed && _armed.kind === p.kind && _armed.slot === key);
+    const b = el('button', 'mv3-ig-att-slot', '+');
+    b.type = 'button';
+    b.title = (s && s.hint) || (p.slots ? '' : T.slot) || T.slot;
+    const c = _cell(b, s ? (s.label || s.key) : '', s && s.hint);
+    c.classList.add('is-empty');
+    c.dataset.kind = p.kind;
+    c.dataset.slot = key;
+    if (must) c.classList.add('is-req');
+    if (armed) c.classList.add('is-armed');
+    if (dim) { c.classList.add('is-off'); b.disabled = true; return c; }
+    b.addEventListener('click', () => {
+      if (s && p.slots && !armed) {
+        _armed = { kind: p.kind, slot: key };
+        _paintAtts();
+        if (typeof S.shelfFor === 'function') _setCat(S.shelfFor(p.kind, s));
+        return;
+      }
+      if (p.kind === 'image') _ui.file.click();
+    });
+    return c;
+  }
+
+  // A row too long for its part scrolls sideways - the wheel too, while it has somewhere to go.
+  function _sideways(row) {
+    row.addEventListener('wheel', (e) => {
+      if (row.scrollWidth <= row.clientWidth + 1 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      row.scrollLeft += e.deltaY;
+    }, { passive: false });
   }
 
   // ── Bringing files in from this computer ──────────────────────────────────
@@ -602,7 +801,7 @@ export function createChat(make) {
       const key = Store.key();
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ project: key, text, refs: _atts.map(a => a.path) }, set.body(), {
+        body: JSON.stringify(Object.assign({ project: key, text, refs: _ordered().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it.
           where: {
@@ -633,31 +832,66 @@ export function createChat(make) {
   }
 
   // ── The right column ──────────────────────────────────────────────────────
+  // This project's own, or a category of the Library's Images - and (phase V6) the shelves a description adds (the video
+  // chat's characters and looks, environments, lookbooks), which an armed slot of a recipe turns the column to.
+  let _cats = [];               // the Images categories, as last read
+  let _lastImgCat = '';         // the Images category last shown - where 'images' goes back to
   async function _loadCats() {
     if (!_ui) return;
     const d = await json(S.cats.url);
-    const cats = (d && d.success) ? (d.cats || []) : [];
+    _cats = (d && d.success) ? (d.cats || []).filter(c => c && c.id) : [];
     const sel = _ui.cat;
     sel.innerHTML = '';
-    const mine = document.createElement('option');
-    mine.value = ''; mine.textContent = 'this project';
-    sel.appendChild(mine);
-    for (const c of cats) {
-      if (!c || !c.id) continue;
-      const o = document.createElement('option');
-      o.value = c.id; o.textContent = c.label || c.name || c.id;
-      sel.appendChild(o);
+    const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
+    sel.appendChild(opt('', 'this project'));
+    const shelves = S.shelves || [];
+    let host = sel;
+    if (shelves.length) {
+      const g = document.createElement('optgroup');
+      g.label = 'Library';
+      for (const s of shelves) g.appendChild(opt('shelf:' + s.id, s.label));
+      sel.appendChild(g);
+      host = document.createElement('optgroup');
+      host.label = 'Images';
+      sel.appendChild(host);
     }
+    for (const c of _cats) host.appendChild(opt(c.id, c.label || c.name || c.id));
     sel.value = [...sel.options].some(o => o.value === _cat) ? _cat : '';
     if (sel.value !== _cat) { _cat = ''; _reload(); }
+  }
+
+  // The column turned to `id` - by its dropdown, or by an armed slot ('images': the category last shown, else the
+  // project's own, else the first).
+  function _setCat(id) {
+    if (!_ui) return;
+    let v = String(id || '');
+    if (v === 'images') {
+      const title = String(Store.title() || '').trim().toLowerCase();
+      const own = _cats.find(c => String(c.name || '').trim().toLowerCase() === title);
+      v = (_lastImgCat && _cats.some(c => c.id === _lastImgCat)) ? _lastImgCat : own ? own.id : (_cats[0] ? _cats[0].id : '');
+    }
+    if (v && !v.startsWith('shelf:')) _lastImgCat = v;
+    if (v === _cat) return;
+    _cat = v;
+    _ui.cat.value = [..._ui.cat.options].some(o => o.value === _cat) ? _cat : '';
+    _feed = [];
+    _paintStrip();
+    _loadStrip();
   }
 
   async function _loadStrip() {
     if (!_cat) return _reload();
     const k = _cat;
-    const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
+    let items = [];
+    if (k.startsWith('shelf:')) {
+      const sh = (S.shelves || []).find(s => 'shelf:' + s.id === k);
+      items = sh ? await sh.load().catch(() => []) : [];
+    } else {
+      const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
+      items = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
+    }
     if (k !== _cat) return;
-    _feed = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
+    _feed = items;
     _paintStrip();
   }
 
@@ -681,7 +915,7 @@ export function createChat(make) {
     host.replaceChildren(...boxes);
     _ui.count.textContent = String(_feed.length);
     if (!_feed.length) {
-      const none = el('div', 'mv3-ig-none', _cat ? 'Nothing in this category.' : 'Nothing made in this project yet.');
+      const none = el('div', 'mv3-ig-none', _cat.startsWith('shelf:') ? 'Nothing on this shelf.' : _cat ? 'Nothing in this category.' : 'Nothing made in this project yet.');
       host.replaceChildren(none, _plusTile());
     }
   }
@@ -949,7 +1183,7 @@ export function createChat(make) {
     _wireStripSash(sash, stripBox);
 
     file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });
-    cat.addEventListener('change', () => { _cat = cat.value || ''; _feed = []; _paintStrip(); _loadStrip(); });
+    cat.addEventListener('change', () => _setCat(cat.value || ''));
     nBtn.addEventListener('click', () => {
       const i = S.counts.indexOf(_n);
       _n = S.counts[(i + 1) % S.counts.length];

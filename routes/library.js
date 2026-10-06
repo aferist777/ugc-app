@@ -548,6 +548,9 @@ const SHELVES = {
   characters:   _charactersShelf,
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, toUrl(LOOKBOOKS_DIR), 'lookbooks'), filters: [], running: _makingNow('lookbook') }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, toUrl(ENVIRONMENTS_DIR), 'environments'), filters: [], running: _makingNow('environment') }),
+  // Every character's looks in one list - read, not a shelf of the Library page: the video chat's right column offers
+  // them for a "person" cell of a recipe (phase V6), each with its character (meta.charId) to group them by.
+  looks:        () => ({ items: _looks().items.filter(x => x.media && _onDisk(x.media)), filters: [] }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
   music:        _musicShelf,

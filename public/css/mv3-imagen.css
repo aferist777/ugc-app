@@ -210,6 +210,42 @@
 .mv3-ig-att .x:hover{ background:var(--danger) }
 .mv3-ig-att-note{ font:600 9.5px/1.4 var(--font); color:var(--muted) }
 
+/* ── the video chat's ZONE (phase V6, the owner 2026-10-06): pictures | clips | sounds ──
+   Each part grows one empty place at a time and scrolls sideways; with a recipe every cell wears its slot's name. */
+.mv3-ig-atts.is-zone{ flex-wrap:nowrap; align-items:stretch; gap:0; padding:7px 12px 6px }
+.mv3-ig-part{ flex:1 1 0; min-width:74px; display:flex; flex-direction:column; gap:4px; padding:0 8px }
+.mv3-ig-part:first-child{ padding-left:0 }
+.mv3-ig-part:last-child{ padding-right:0 }
+.mv3-ig-part + .mv3-ig-part{ border-left:1px solid var(--border-soft) }
+.mv3-ig-part.is-image{ flex-grow:2.2 }
+.mv3-ig-part-h{
+  display:flex; align-items:baseline; gap:5px;
+  font:700 8.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+}
+.mv3-ig-part-h b{ font-weight:600; letter-spacing:0; font-variant-numeric:tabular-nums }
+.mv3-ig-part.is-off .mv3-ig-part-h{ opacity:.6 }
+.mv3-ig-part-row{
+  display:flex; align-items:flex-start; gap:6px; min-width:0;
+  overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; padding-bottom:3px;
+}
+.mv3-ig-part-off{ padding:4px 0; font:600 9.5px/1.35 var(--font); color:var(--muted); opacity:.75; white-space:nowrap }
+.mv3-ig-cell{ flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:2px }
+.mv3-ig-cell .lab{
+  max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* A slot that must be filled, still empty. */
+.mv3-ig-cell.is-req .mv3-ig-att-slot{ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-cell.is-req .lab{ color:var(--ink) }
+/* The slot the next tile or file goes into. */
+.mv3-ig-cell.is-armed .mv3-ig-att-slot{ border-style:solid; border-color:var(--primary); color:var(--primary); background:var(--primary-soft) }
+.mv3-ig-cell.is-armed .lab{ color:var(--primary) }
+.mv3-ig-cell.is-off .mv3-ig-att-slot{ opacity:.35; cursor:default }
+.mv3-ig-cell.is-flash .mv3-ig-att-slot{ animation:mv3-ig-flash .3s ease-in-out 3 }
+@keyframes mv3-ig-flash{ 50%{ border-color:var(--danger); color:var(--danger); background:oklch(.65 .2 25 / .18) } }
+.mv3-pc.is-narrow .mv3-ig-atts.is-zone{ padding:6px 10px 5px }
+.mv3-pc.is-narrow .mv3-ig-cell{ width:40px }
+
 /* ── the input ── */
 .mv3-ig-bar{
   flex:0 0 auto; display:flex; align-items:flex-end; gap:7px;
