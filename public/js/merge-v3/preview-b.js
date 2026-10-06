@@ -1494,7 +1494,12 @@ function _resize() {
   // The stage is shaped by a stylesheet rule per format; with a margin the shape is no longer
   // either of them, so it is stated here - inline, which is what lets one number decide it.
   const stage = document.getElementById(STAGE);
-  if (stage) stage.style.aspectRatio = CW + ' / ' + CH;
+  if (stage) {
+    stage.style.aspectRatio = CW + ' / ' + CH;
+    // The same shape as a number, for the rule that fits the stage into its field whole (merge-v3.css): a field
+    // narrower than the shape used to keep the stage's full height and squeeze the picture sideways.
+    stage.style.setProperty('--mv3-ar', String(CW / CH));
+  }
   // The captions' canvas covers the frame exactly - the margin is the editor's, not the film's.
   CapLayer.place(PAD / CW, PAD / CH, W / CW, H / CH);
   // The stage is shaped by CSS, so the shape has to reach CSS - on the body, where every rule

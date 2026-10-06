@@ -334,6 +334,20 @@ function _selectTrack(id) {
   _paintSel();
 }
 
+// A LANE PICKED LETS GO OF ITSELF at a press anywhere else (the owner, 2026-10-06): the preview, the Library, the
+// ruler, the page around - the pick goes and the strip of its settings slides back. Not a press in the strip itself
+// (the lane is being set there), not in a window or a menu on top (a question the strip asked), and not on a lane's
+// name or a clip: those pick something else. Captured, so a control that keeps its own mousedown still counts.
+function _awayFromLane(e) {
+  if (!_on || !_selTrack || e.button !== 0) return;
+  const t = e.target;
+  if (!t || !t.closest) return;
+  if (t.closest('#mv3-over, .mv3b-lbl, .mv3b-clip')) return;
+  const top = Layers.top();
+  if (top && top.el && top.el.contains && top.el.contains(t)) return;
+  _clearSel();
+}
+
 const _selSubs = [];
 export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb); }
 // HOW MANY THINGS ARE SELECTED, which a track counts towards: the listener on the other side
@@ -837,7 +851,8 @@ function _lane(t) {
   // The NAME is what picks the lane, not the whole row: the row is mostly lane, and a click
   // on lane already means something - it moves the playhead there.
   lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
-  lbl.addEventListener('click', (e) => { e.stopPropagation(); _selectTrack(t.id); });
+  // A second press on the name lets the lane go and the strip of its settings slides away (the owner, 2026-10-06).
+  lbl.addEventListener('click', (e) => { e.stopPropagation(); if (_selTrack === t.id && !_sel.size) _clearSel(); else _selectTrack(t.id); });
   if (_selTrack === t.id) row.classList.add('is-selT');
   row.appendChild(lbl);
 
@@ -1813,6 +1828,7 @@ export function initTimelineB() {
   document.addEventListener('mousemove', _moveDrag);
   document.addEventListener('mouseup', _endDrag);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
+  document.addEventListener('mousedown', _awayFromLane, true);
   document.addEventListener('contextmenu', _laneMenu);
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);

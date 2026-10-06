@@ -532,31 +532,68 @@ function _tile(it) {
   b.appendChild(line);
   b.title = it.title + (it.creator ? ' - ' + it.creator : '');
   b.addEventListener('click', () => _pick(it));
+  // The WHOLE tile is "on it" - the picture, its caption and its line (the owner, 2026-10-06): a clip used to stop
+  // the moment the pointer slid from the picture onto the words under it, and start again from the beginning.
   if (it.media) {
-    box.addEventListener('pointerenter', () => _hoverOn(box, it.media));
-    box.addEventListener('pointerleave', _stopHover);
+    b.addEventListener('pointerenter', () => _hoverOn(b, box, it.media));
+    b.addEventListener('pointerleave', () => _hoverOff(b));
   }
   return b;
 }
 
-// The clip plays where the pointer rests - one at a time, nothing fetched before it does.
-function _hoverOn(box, src) {
+// The clip plays while the pointer is on its tile - one at a time, nothing fetched before it does - and it plays ON:
+// left and come back to within a moment, it goes on where it was; come back later, and it starts from where it was
+// left rather than from the beginning again.
+const GRACE_MS = 1500;
+const _at = new Map();          // clip -> the moment it was left at
+function _hoverOn(tile, box, src) {
+  if (_hover && _hover.tile === tile) {
+    clearTimeout(_hover.gone);
+    _hover.gone = 0;
+    if (_hover.video) _hover.video.play().catch(() => { /* the clip is gone */ });
+    return;
+  }
   _stopHover();
-  const timer = setTimeout(() => {
+  const h = { tile, src, video: null, timer: 0, gone: 0 };
+  h.timer = setTimeout(() => {
     const v = document.createElement('video');
     v.className = 'vc-vid';
     v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none';
+    const from = _at.get(src) || 0;
+    if (from) v.addEventListener('loadedmetadata', () => { try { if (from < v.duration - 0.25) v.currentTime = from; } catch (e) { /* a stream */ } }, { once: true });
     v.src = src;
     box.appendChild(v);
     v.play().catch(() => { /* the pointer left first, or the clip is gone */ });
-    _hover.video = v;
+    h.video = v;
   }, HOVER_MS);
-  _hover = { box, timer, video: null };
+  _hover = h;
+}
+function _hoverOff(tile) {
+  const h = _hover;
+  if (!h || h.tile !== tile) return;
+  clearTimeout(h.timer);
+  h.timer = 0;
+  if (!h.video) { _hover = null; return; }          // left before it started
+  try { h.video.pause(); } catch (e) { /* gone */ }
+  _keepAt(h);
+  h.gone = setTimeout(() => { if (_hover === h) _stopHover(); }, GRACE_MS);
+}
+function _keepAt(h) {
+  try { if (h.video && h.video.currentTime > 0) _at.set(h.src, h.video.currentTime); } catch (e) { /* gone */ }
+  while (_at.size > 100) _at.delete(_at.keys().next().value);
 }
 function _stopHover() {
-  if (!_hover) return;
-  clearTimeout(_hover.timer);
-  if (_hover.video) { try { _hover.video.pause(); } catch (e) { /* gone */ } _hover.video.removeAttribute('src'); _hover.video.load(); _hover.video.remove(); }
+  const h = _hover;
+  if (!h) return;
+  clearTimeout(h.timer);
+  clearTimeout(h.gone);
+  if (h.video) {
+    _keepAt(h);
+    try { h.video.pause(); } catch (e) { /* gone */ }
+    h.video.removeAttribute('src');
+    try { h.video.load(); } catch (e) { /* gone */ }
+    h.video.remove();
+  }
   _hover = null;
 }
 

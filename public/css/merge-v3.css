@@ -189,9 +189,11 @@ select.mv3-rr-rf{cursor:pointer}
   background:oklch(0 0 0 / .86); padding:40px;
 }
 .mv3-big-box{
-  height:100%; display:flex; align-items:center; justify-content:center;
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center;
   /* Room on either side, so a 16:9 stage does not run into the edges of the screen. */
   padding:0 6vw;
+  /* The stage moved in here fits this box whole, as it fits its own field (container units). */
+  container-type:size;
 }
 .mv3-big-x{
   position:absolute; top:14px; right:16px;
@@ -466,9 +468,15 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
   --mv3-around:oklch(.13 .012 265);
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
   padding:26px 18px; background:var(--mv3-around);
+  /* Its size is the stage's measure (container units below). */
+  container-type:size;
 }
+/* THE STAGE KEEPS THE SHAPE OF THE FILM, whatever the field (the owner, 2026-10-06): the largest box of that shape
+   that fits the field whole - as wide as the field when the field is the narrow side, as tall as it when the
+   height is. It used to take the field's whole height and only cap its width, so a field narrower than the shape
+   squeezed the picture sideways. The shape comes from preview-b.js (--mv3-ar, with the margin around the frame). */
 .mv3-stage{
-  height:100%; max-height:100%; max-width:100%; aspect-ratio:9/16;
+  width:min(100cqw, 100cqh * var(--mv3-ar, .5625)); height:auto; max-width:100%; max-height:100%; aspect-ratio:9/16;
   position:relative;
   background:#000; border:1px solid var(--border); border-radius:var(--r-sm);
   color:var(--muted); font-size:11px;
