@@ -112,7 +112,7 @@ export function createChat(make) {
     paintAtts: () => _paintAtts(),
     attach: (path, name, o) => _attach(path, name, o),
     // (phase V6) A recipe came or went: what is attached finds its slots again, and nothing stays armed.
-    reslot: () => _reslot(),
+    reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
     // (phase V6) The right column shows this: '' this project, 'shelf:<id>' a shelf of the description's, 'images'
@@ -214,6 +214,7 @@ export function createChat(make) {
       if (d['']) { d[k] = d['']; delete d['']; keep(S.keys.draft, d); }
     }
     _key = k;
+    _armed = null;
     _thread = [];
     const m = _memo.get(k);
     _pending = m ? m.pending : new Set();
@@ -379,7 +380,7 @@ export function createChat(make) {
   }
 
   // A recipe came or went: what lies in no slot of it finds one, in the order it was attached.
-  function _reslot() {
+  function _reslot(o) {
     _armed = null;
     const z = _zone();
     if (z) {
@@ -387,7 +388,8 @@ export function createChat(make) {
       const loose = [];
       for (const a of _atts) {
         const p = z.parts.find(x => x.kind === _kindOf(a));
-        if (p && _keysOf(p).includes(a.slot)) keep.push(a); else loose.push(a);
+        const placed = o && o.unplaced ? a.slot !== undefined : (p && _keysOf(p).includes(a.slot));
+        if (placed) keep.push(a); else loose.push(a);
       }
       _atts = keep;
       for (const a of loose) {
@@ -977,7 +979,7 @@ export function createChat(make) {
     const t = el('div', 'mv3-ig-card'
       + (it.state === 'pending' ? ' is-busy' : it.state === 'failed' ? ' is-fail' : '')
       + (_atts.some(a => a.path === it.path) ? ' on' : ''));
-    t.style.aspectRatio = String(it.aspect || '1:1').replace(':', '/');
+    if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
     t.title = it.name || '';
     if (it.state === 'done' && it.kind === 'video' && it.video) return _clipTile(t, it);
     if (it.state === 'done' && it.path) {

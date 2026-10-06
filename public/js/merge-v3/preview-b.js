@@ -1570,7 +1570,9 @@ function _wireTransport() {
     // space in whatever field is focused, not play.
     if (Layers.blocked()) return;
     if (e.code !== 'Space') return;
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))) return;
+    // Typing - a field, or an editable place (the video chat's recipe request, phase V6: its spaces were swallowed
+    // and the preview played).
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || e.target.isContentEditable) return;
     e.preventDefault();
     toggle();
   });

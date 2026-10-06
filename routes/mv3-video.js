@@ -216,6 +216,29 @@ async function _work(o) {
 // record, and a card left 'writing' by an app that closed fails when the thread is read (lib/mv3-chat.js).
 const WRITE_AT_ONCE = 3;
 const GAP = /\[([^\[\]\n]{1,600})\]/g;
+// A reference however it was written - {{image:1}}, {{ Image : 1 }} - is rendered for the model the same
+// (lib/video-models.js render): every check and the translator read it in ONE form, so it is put in that form first.
+const REF_ANY = /\{\{\s*(image|video|audio)\s*:\s*(\d+)\s*\}\}/gi;
+const _strictRefs = (p) => String(p || '').replace(REF_ANY, (all, k, n) => '{{' + k.toLowerCase() + ':' + (+n) + '}}');
+// A place that only says how long and what shape the clip is (the page fills it from the column) - not a name.
+const SIZE_WORDS = /\b(total|length|duration|long|about|around|in|of|a|the|and|sec|secs|second|seconds|s|vertical|horizontal|square|portrait|landscape|aspect|ratio|format|frame|clip)\b/gi;
+const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+/g, ' ').replace(/\d+(\.\d+)?/g, ' ')
+  .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
+const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && m.card.type === 'prompt' && m.card.state === 'writing').length;
+
+// The pictures the WRITER looks at, made small first (review V6): a character's sheet is 4K, and the writer only has
+// to see what is in it - the aggregator gets each picture fitted to its own limits when the clip is asked for.
+async function _hostForWriter(paths) {
+  const { toDiskExisting: abs } = require('../lib/media');
+  return Promise.all(paths.map(async (p) => {
+    if (FAKE.on()) return FAKE.host(p);
+    const file = abs(p);
+    if (!file || !fs.existsSync(file)) throw new Error('no such picture: ' + p);
+    const buf = await require('sharp')(file, { failOn: 'none' }).rotate()
+      .resize({ width: 1536, height: 1536, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+    return require('../lib/helpers').uploadToPublicHost(buf, { ext: 'jpg', verify: true });
+  }));
+}
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
 
@@ -251,12 +274,12 @@ async function _writeCard(cardId, kick, o) {
     let picUrls = [];
     const pics = o.media.filter(m => m.kind === 'image').map(m => m.path);
     if (pics.length) {
-      try { picUrls = await require('../lib/mv3-gens').hostRefs(pics); }
+      try { picUrls = await _hostForWriter(pics); }
       catch (e) { console.warn('[mv3-video] write: the writer will not see the pictures -', e.message); }
     }
     const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls, thread: [],
                                        skill: { text: o.body }, params: o.params, max: o.max, recipe: true });
-    out = t.prompt ? { state: 'ready', prompt: t.prompt, writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
+    out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
       : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
   } catch (e) {
     out = { state: 'failed', error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
@@ -294,18 +317,18 @@ router.post('/mv3/video/write', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-    const writing = CHAT.read(project, KIND).filter(m => m.card && m.card.type === 'prompt' && m.card.state === 'writing').length;
-    if (writing >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+    if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
 
     const recipe = _recipeOf(b.recipe);
     kick = 'w' + crypto.randomBytes(8).toString('hex');
     // The kick is alive BEFORE its card exists: a read in between must not take the card for a dead writer's.
     CHAT.writing.add(kick);
     const refs = mm.media.map(m => m.path);
-    const rc = CHAT.add({ project, kind: KIND, role: 'agent', text: filled, refs, media: mm.media,
+    const rc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs, media: mm.media,
                           card: { type: 'recipe', recipe, head, values, filled, body } });
     const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs, media: mm.media,
-                          card: { type: 'prompt', state: 'writing', kick, from: rc.id, recipe, model: s.model, agg: rt.fits[0].agg, params: s.params } });
+                          card: { type: 'prompt', state: 'writing', kick, startedAt: new Date().toISOString(), from: rc.id, recipe,
+                                  model: s.model, agg: rt.fits[0].agg, params: s.params } });
     res.json({ success: true, recipe: rc.id, card: pc.id });
     _writeCard(pc.id, kick, { model: s.model, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax });
   } catch (err) {
@@ -320,7 +343,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
   const b = req.body || {};
   try {
     const project = String(b.project || '').trim();
-    const prompt = String(b.prompt == null ? '' : b.prompt).replace(/\r\n/g, '\n').slice(0, 30000);
+    const prompt = _strictRefs(String(b.prompt == null ? '' : b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       if (String(x.project || '') !== project || !x.card || x.card.type !== 'prompt') { why = [404, 'no such card']; return false; }
@@ -356,11 +379,13 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+    if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
     kick = 'w' + crypto.randomBytes(8).toString('hex');
     CHAT.writing.add(kick);
     const ok = CHAT.update(m.id, (x) => {
       if (!x.card || x.card.state === 'writing' || x.card.state === 'sent') return false;
-      Object.assign(x.card, { state: 'writing', kick, model: s.model, agg: rt.fits[0].agg, params: s.params, prompt: '', error: '', edited: false, writer: '', fell: '' });
+      Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), model: s.model, agg: rt.fits[0].agg, params: s.params,
+                              prompt: '', error: '', edited: false, writer: '', fell: '' });
     });
     if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
     res.json({ success: true, card: m.id });
@@ -377,7 +402,7 @@ function _refsWrong(prompt, media) {
   const have = { image: 0, video: 0, audio: 0 };
   for (const m of media) if (have[m.kind] != null) have[m.kind]++;
   const word = { image: 'picture', video: 'clip', audio: 'sound' };
-  for (const [, k, n] of String(prompt).matchAll(/\{\{(image|video|audio):(\d+)\}\}/g)) {
+  for (const [, k, n] of _strictRefs(prompt).matchAll(/\{\{(image|video|audio):(\d+)\}\}/g)) {
     if (+n < 1 || +n > have[k]) return 'the prompt names ' + word[k] + ' ' + n + ', and ' + (have[k] ? 'only ' + have[k] + (have[k] === 1 ? ' is' : ' are') : 'none is') + ' attached';
   }
   return '';
@@ -386,7 +411,8 @@ function _refsWrong(prompt, media) {
 // A short name for what a card makes - the Alerts row and the shelf say it: the first place the person changed,
 // else the recipe's title.
 function _saidOf(rc, prompt) {
-  const vals = ((rc && rc.card && rc.card.values) || []).map(v => String(v || '').trim()).filter(Boolean);
+  const gaps = [...String((rc && rc.card && rc.card.head) || '').matchAll(GAP)].map(g => g[1]);
+  const vals = ((rc && rc.card && rc.card.values) || []).map((v, i) => (gaps[i] != null && _isSize(gaps[i]) ? '' : String(v || '').trim())).filter(Boolean);
   const title = rc && rc.card && rc.card.recipe ? rc.card.recipe.title : '';
   return (vals[0] || title || String(prompt || '')).replace(/\s+/g, ' ').slice(0, 200);
 }
@@ -396,6 +422,7 @@ function _saidOf(rc, prompt) {
 router.post('/mv3/video/card/:id/make', (req, res) => {
   const b = req.body || {};
   let kick = '';
+  const ids = [];
   try {
     const project = String(b.project || '').trim();
     const m = _cardOf(req.params.id, project, 'prompt');
@@ -403,7 +430,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompt is still being written' });
     if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'it was made already - "again" makes another' });
     if (m.card.state !== 'ready') return res.status(409).json({ success: false, error: 'the prompt was not written - write it again' });
-    const prompt = String(b.prompt == null ? m.card.prompt : b.prompt).replace(/\r\n/g, '\n').trim().slice(0, 30000);
+    const prompt = _strictRefs(String(b.prompt == null ? m.card.prompt : b.prompt).replace(/\r\n/g, '\n')).trim().slice(0, 30000);
     if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
     const s = _settings(Object.assign({ model: m.card.model, params: m.card.params, agg: m.card.agg }, b));
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
@@ -432,11 +459,10 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     };
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
-    const ids = [];
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
         project, send: m.id, kick, where, stage: zh ? 'translating the prompt to Chinese' : 'asking ' + rt.fits[0].aggLabel,
-        model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, skill, ready: true,
+        model: s.model, agg: rt.fits[0].agg, prompt, said, params: s.params, media: mm.media, skill, ready: true, zh,
       }).id);
     }
     CHAT.update(m.id, (x) => {
@@ -448,6 +474,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     res.json({ success: true, card: m.id, genIds: ids, agg: rt.fits[0].agg });
     _make({ ids, kick, prompt, writer: m.card.writer || '', zh, max: Math.min(...rt.fits.map(p => p.promptMax || 30000)) });
   } catch (err) {
+    // What was made before the break is failed in its own words - nothing of it was asked for.
+    for (const id of ids) VGENS.abandon(id, kick, err);
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/make]', err.message);
     if (!res.headersSent) res.status(500).json({ success: false, error: err.message });

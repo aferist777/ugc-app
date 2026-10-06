@@ -409,12 +409,12 @@
 }
 .vc-fold:hover{ color:var(--ink) }
 .vc-back{ font-size:10px }
-.vc-body{
+.vc-req-body{
   display:block; width:100%; min-height:160px; padding:8px; resize:vertical;
   border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
   font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.vc-body:focus{ outline:none; border-color:var(--primary) }
+.vc-req-body:focus{ outline:none; border-color:var(--primary) }
 .vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .vc-card-acts.is-quiet{ gap:12px }
 .vc-go{ font-weight:700 }
@@ -441,9 +441,9 @@
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
 .vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 /* The 中文 box on a waiting card (phase V6), and what a made card says of its language. */
-.vc-zh{ display:inline-flex; align-items:center; gap:4px; font:600 11px/1 var(--font); color:var(--ink); cursor:pointer; user-select:none }
-.vc-zh[hidden]{ display:none }
-.vc-zh input{ margin:0; accent-color:var(--primary); cursor:pointer }
+.vc-zh-box{ display:inline-flex; align-items:center; gap:4px; font:600 11px/1 var(--font); color:var(--ink); cursor:pointer; user-select:none }
+.vc-zh-box[hidden]{ display:none }
+.vc-zh-box input{ margin:0; accent-color:var(--primary); cursor:pointer }
 .vc-zh-line{ font:600 9.5px/1.3 var(--font); color:var(--muted) }
 .vc-zh-line.is-fell{ color:var(--gold) }
 .vc-prompt-sent.is-zh{ color:var(--muted) }

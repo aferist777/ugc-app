@@ -215,7 +215,8 @@ function VIDEOS(ctx) {
     // The shape: with a picture Grok takes the picture's, and Seedance's frames take theirs.
     if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
-      const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && (p.picturesAs === 'frame' || p.picturesAs === 'fl')));
+      const as = _skill ? 'refs' : p.picturesAs;
+      const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && (as === 'frame' || as === 'fl')));
       const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
         r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => setParam('aspect', v));
       sel.disabled = fixed;
@@ -230,7 +231,7 @@ function VIDEOS(ctx) {
     if (fam === 'seedance') {
       _row(box, 'sound', _select('mv3-vc-audio', 'Seedance makes its own sound', [{ value: 'on', text: 'with sound' }, { value: 'off', text: 'silent' }],
         p.audio === false ? 'off' : 'on', (v) => setParam('audio', v === 'on')));
-      if (n > 0) {
+      if (n > 0 && !_skill) {
         _row(box, 'pictures are', _select('mv3-vc-as', 'What the attached pictures are for', [
           { value: 'refs', text: 'references' },
           { value: 'frame', text: 'the first frame', disabled: n !== 1, title: 'one picture' },
@@ -367,8 +368,10 @@ function VIDEOS(ctx) {
   const _partOf = (k) => (k === 'video' || k === 'audio' ? k : 'image');
   function _slotsOf(kind) {
     if (!_skill) return null;
+    const seen = new Map();
+    const uniq = (k) => { const n = (seen.get(k) || 0) + 1; seen.set(k, n); return n === 1 ? k : k + '-' + n; };
     return (_skill.slots || []).filter(s => _partOf(s.kind) === kind).map(s => ({
-      key: String(s.key || s.kind), role: s.role || '', kind: s.kind,
+      key: uniq(String(s.key || s.kind)), role: s.role || '', kind: s.kind,
       label: String(GENERIC.includes(s.key) ? (s.role || s.key) : s.key).replace(/[-_]+/g, ' '),
       min: Math.max(0, +s.min || 0), max: Math.max(1, +s.max || 1, +s.min || 0), required: !!s.required, hint: s.hint || '',
     }));
@@ -498,7 +501,7 @@ function VIDEOS(ctx) {
   const REF_WORD = { image: 'picture', video: 'clip', audio: 'sound' };
   const REF_KIND = { picture: 'image', clip: 'video', sound: 'audio' };
   // The writer's neutral references as the person reads and writes them: {{image:1}} <-> [picture 1].
-  const toShown = (p) => String(p || '').replace(/\{\{(image|video|audio):(\d+)\}\}/g, (a, k, n) => '[' + REF_WORD[k] + ' ' + n + ']');
+  const toShown = (p) => String(p || '').replace(/\{\{\s*(image|video|audio)\s*:\s*(\d+)\s*\}\}/gi, (a, k, n) => '[' + REF_WORD[k.toLowerCase()] + ' ' + (+n) + ']');
   const toNeutral = (p) => String(p || '').replace(/\[(picture|clip|sound) (\d+)\]/gi, (a, k, n) => '{{' + REF_KIND[k.toLowerCase()] + ':' + n + '}}');
   let _wantRecipe = false;      // "change the values" pressed: the request shows though a prompt card waits
   let _cardEls = null;          // the foot's request while it shows
@@ -614,7 +617,7 @@ function VIDEOS(ctx) {
       const fold = el('button', 'vc-fold', 'the whole recipe ▸');
       fold.type = 'button';
       bodyTa = document.createElement('textarea');
-      bodyTa.className = 'vc-body';
+      bodyTa.className = 'vc-req-body';
       bodyTa.hidden = true;
       bodyTa.spellcheck = false;
       bodyTa.value = body;
@@ -740,12 +743,17 @@ function VIDEOS(ctx) {
         recipe: { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill) },
         head, values, body, media: b.media,
       });
-      if (!d || !d.success) { note(btn, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) {
+        const at = _cardEls && _cardEls.go && _cardEls.go.isConnected ? _cardEls.go : btn;
+        note(at, 'Not sent.', (d && d.error) || 'the server did not answer');
+        return;
+      }
       _wantRecipe = false;
       await ctx.reload(true);
     } finally {
       _writingNow = false;
       if (btn.isConnected) btn.disabled = isMC();
+      _freshenRequest();
     }
   }
 
@@ -769,7 +777,7 @@ function VIDEOS(ctx) {
       const strip = el('div', 'mv3-ig-prog');
       box.appendChild(strip);
       progs.set('w:' + m.id, startInlineProgress(strip, {
-        label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(m.at) || 0,
+        label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       }));
       return box;
     }
@@ -800,7 +808,10 @@ function VIDEOS(ctx) {
     const again = el('button', 'vc-link', 'again - a copy to change and make');
     again.type = 'button';
     again.addEventListener('click', async () => {
+      if (again.disabled) return;
+      again.disabled = true;
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/again', { project: m.project });
+      if (again.isConnected) again.disabled = false;
       if (!d || !d.success) { note(again, 'Not copied.', (d && d.error) || 'the server did not answer'); return; }
       ctx.reload(true);
     });
@@ -846,7 +857,7 @@ function VIDEOS(ctx) {
     const price = el('span', 'vc-card-why');
     go.addEventListener('click', () => _make(m, go));
     // The 中文 box (the owner: ticked on the prompt, right before it is sent; Seedance only - PLAN V-I).
-    const zh = el('label', 'vc-zh');
+    const zh = el('label', 'vc-zh-box');
     const zcb = document.createElement('input');
     zcb.type = 'checkbox';
     // Remembered per model - every waiting card of this model follows.
@@ -886,6 +897,16 @@ function VIDEOS(ctx) {
           : '≈' + money(pr.usd * n) + ' · ' + pr.secs + ' s · ' + pr.res + ' · ' + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
   }
 
+  // Whether a card can go to the model chosen now - the card's own attachments are the server's to check.
+  function _readyFor(m) {
+    if (!_table) return ['No video models.', _err || 'reading the models…'];
+    const mm = model(), r = rec();
+    if (!mm || !mm.usable) return ['Not available now.', (mm && mm.why) || 'no model can be asked'];
+    if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
+    if ((m.media || []).length && !_table.r2) return ['Attachments need R2.', 'The models read pictures from a public link - set R2 on Admin → API keys.'];
+    return '';
+  }
+
   async function _make(m, go) {
     const l = _live.get(m.id);
     if (!l || go.disabled) return;
@@ -893,7 +914,7 @@ function VIDEOS(ctx) {
     if (mm && mm.family !== _familyOf(m.card.model)) return _rewrite(m, go);
     const prompt = toNeutral(l.ta.value).trim();
     if (!prompt) { note(go, 'The prompt is empty.', 'Write what the clip shows, or write it again.'); return; }
-    const why = _ready();
+    const why = _readyFor(m);
     if (why) { note(go, why[0], why[1]); return; }
     go.disabled = true;
     try {
@@ -914,6 +935,8 @@ function VIDEOS(ctx) {
 
   async function _rewrite(m, btn) {
     if (isMC()) { note(btn, 'No writer here.', 'Kling motion control has no writer - pick another model on the left.'); return; }
+    const why = _readyFor(m);
+    if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
     try {
       const b = _body();
@@ -1043,7 +1066,15 @@ function VIDEOS(ctx) {
       body: _body,
       // The recipe in use goes with the draft, per project (phase V5) - and the zone is laid out by its slots.
       draftExtra: () => (_skill ? { skill: _skill } : null),
-      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _wantRecipe = false; _cardEls = null; _paintRecipe(); ctx.paintAtts(); _paintFoot(); },
+      draftLoad: (x) => {
+        _skill = (x && x.skill && x.skill.text) ? x.skill : null;
+        if (_skill && _skill.orig == null) _skill.orig = _skill.text;
+        _wantRecipe = false;
+        _cardEls = null;
+        _paintRecipe();
+        if (ctx.atts().some(a => a.slot === undefined)) ctx.reslot({ unplaced: true }); else ctx.paintAtts();
+        _paintFoot();
+      },
       onPen: () => _paintRecipe(),
     },
 

@@ -254,7 +254,7 @@ export async function openCatalog(o) {
     filters: (was.filters && typeof was.filters === 'object') ? was.filters : {}, sort: was.sort || 'heat', q: '',
     pick: inUse, inUse, edits: new Map(), more: false, fetching: false, error: '',
   };
-  if (inUse) _st.edits.set(inUse, { text: String(o.recipe.text || ''), slots: JSON.parse(JSON.stringify(o.recipe.slots || [])) });
+  if (inUse) _st.edits.set(inUse, { text: String(o.recipe.text || ''), slots: JSON.parse(JSON.stringify(o.recipe.slots || [])), title: String(o.recipe.title || '') });
   // A case in use may be past the first cases drawn: all of them then, so its tile is there to be shown.
   if (inUse && /^case:/.test(inUse)) _st.more = true;
   _build();
@@ -283,7 +283,7 @@ async function _fetch() {
   if (!_w) return;
   _st.fetching = false;
   if (!d || !d.success) _st.error = (d && d.error) || 'the server did not answer';
-  else await _load();
+  else { _full.clear(); await _load(); }
   if (!_w) return;
   _paintLeft();
   _paintGrid();
@@ -847,7 +847,7 @@ async function _reloadPresets(pickId, said) {
   if (!_w || !r || !r.success) return;
   _data = Object.assign({}, _data, { presets: r.presets || [], deleted: r.deleted || [] });
   for (const k of [..._full.keys()]) if (k.startsWith('preset:')) _full.delete(k);
-  for (const k of [..._st.edits.keys()]) if (k.startsWith('preset:') && k !== _st.inUse) _st.edits.delete(k);
+  for (const k of [..._st.edits.keys()]) if (k.startsWith('preset:')) _st.edits.delete(k);
   if (pickId) _st.pick = 'preset:' + pickId;
   else if (_st.pick && _st.pick.startsWith('preset:') && !r.presets.some(p => 'preset:' + p.id === _st.pick)) _st.pick = null;
   _st.said = said || '';
@@ -1105,7 +1105,9 @@ function _slotsBox(it, ed) {
       const b = el('button', 'vc-link', t);
       b.type = 'button';
       b.addEventListener('click', () => {
-        ed.slots.push({ key: k + (ed.slots.length + 1), kind: k, role: k === 'video' ? 'motion' : k === 'audio' ? 'music' : 'person', min: 1, max: 1, required: false, hint: '' });
+        let n = ed.slots.length + 1;
+        while (ed.slots.some(s => s.key === k + n)) n++;
+        ed.slots.push({ key: k + n, kind: k, role: k === 'video' ? 'motion' : k === 'audio' ? 'music' : 'person', min: 1, max: 1, required: false, hint: '' });
         paint();
       });
       adds.appendChild(b);
