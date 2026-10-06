@@ -83,8 +83,14 @@ function _mediaOf(list) {
   for (let i = 0; i < media.length; i++) {
     const abs = toDiskExisting(media[i].path);
     if (!abs || !fs.existsSync(abs)) return { error: 'attachment ' + (i + 1) + ' is not in the library any more' };
-    // Clips and sounds as references come with V7: their cutting and fitting is not here yet.
-    if (media[i].kind !== 'image' && !FAKE.on()) return { error: 'clips and sounds as references are not ready yet - pictures only for now' };
+    // (phase V7) A clip or a sound goes as the part the person chose: its start and end come with it, and the part is
+    // checked against the file itself when it is prepared - before the money (lib/video-prep.js).
+    if (media[i].kind !== 'image') {
+      const m = media[i];
+      if (!(m.in >= 0 && m.out > m.in && m.out <= 3600)) {
+        return { error: (m.kind === 'video' ? 'a clip' : 'a sound') + ' came without the part of it to send - attach it again' };
+      }
+    }
   }
   if (media.length && !KEYS.r2() && !FAKE.on()) {
     return { error: 'attachments need R2 (Admin -> API keys) - the models read them from a public link' };
@@ -183,12 +189,7 @@ async function _work(o) {
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.text, lang: 'en', writer: t.translated ? 'translated' : '' };
     } else {
-      let picUrls = [];
-      const pics = o.media.filter(m => m.kind === 'image').map(m => m.path);
-      if (pics.length) {
-        try { picUrls = await require('../lib/mv3-gens').hostRefs(pics); }
-        catch (e) { console.warn('[mv3-video] send: the writer will not see the pictures -', e.message); }
-      }
+      const picUrls = await _writerSees(o.media, 'send');
       const t = await AGENT.thinkVideo({ model: o.model, text: o.text, media: o.media, picUrls, thread: o.before,
                                          skill: o.skill, params: o.params, max: o.pair.promptMax });
       if (t.ask) {
@@ -336,6 +337,27 @@ async function _hostForWriter(paths) {
     return require('../lib/helpers').uploadToPublicHost(buf, { ext: 'jpg', verify: true });
   }));
 }
+// What the WRITER sees: the pictures, made small (review V6), then THREE FRAMES of every clip - the start, the middle
+// and the end of its part - in the order the clips are listed (phase V7; lib/mv3-video-rules.js listing says so). What
+// cannot be hosted is left out with a warning: the writer works from the words then, as before.
+async function _writerSees(media, why) {
+  const list = Array.isArray(media) ? media : [];
+  const pics = list.filter(m => m.kind === 'image').map(m => m.path);
+  let urls = [];
+  if (pics.length) {
+    try { urls = await _hostForWriter(pics); }
+    catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see the pictures -', e.message); return []; }
+  }
+  for (const m of list.filter(x => x.kind === 'video')) {
+    try {
+      if (FAKE.on()) { urls.push(FAKE.host(m.path), FAKE.host(m.path), FAKE.host(m.path)); continue; }
+      const abs = toDiskExisting(m.path);
+      const bufs = await require('../lib/video-prep').frames(abs, { from: m.in, to: m.out });
+      for (const b of bufs) urls.push(await require('../lib/helpers').uploadToPublicHost(b, { ext: 'jpg', verify: true }));
+    } catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see a clip -', e.message); }
+  }
+  return urls;
+}
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
 
@@ -368,12 +390,7 @@ function _cardOf(id, project, type) {
 async function _writeCard(cardId, kick, o) {
   let out;
   try {
-    let picUrls = [];
-    const pics = o.media.filter(m => m.kind === 'image').map(m => m.path);
-    if (pics.length) {
-      try { picUrls = await _hostForWriter(pics); }
-      catch (e) { console.warn('[mv3-video] write: the writer will not see the pictures -', e.message); }
-    }
+    const picUrls = await _writerSees(o.media, 'write');
     const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls, thread: [],
                                        skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep });
     out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
