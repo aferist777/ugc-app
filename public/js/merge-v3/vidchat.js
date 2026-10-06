@@ -401,8 +401,16 @@ function VIDEOS(ctx) {
       })), p.mode || 'normal', (v) => setParam('mode', v)));
     }
     if (fam === 'seedance') {
-      _row(box, 'sound', _select('mv3-vc-audio', 'Seedance makes its own sound', [{ value: 'on', text: 'with sound' }, { value: 'off', text: 'silent' }],
-        p.audio === false ? 'off' : 'on', (v) => setParam('audio', v === 'on')));
+      // (phase V7.4, the owner's answer 4) With a clip attached the sound can be the CLIP's: Seedance makes none, and the
+      // clip's part is laid under the video when it lands.
+      const withClip = _takes('video') && _clips().length > 0;
+      const opts = [{ value: 'on', text: withClip ? 'the model\'s sound' : 'with sound' }];
+      if (withClip) opts.push({ value: 'clip', text: 'the clip\'s sound' });
+      opts.push({ value: 'off', text: 'silent' });
+      const now = withClip && p.sound === 'clip' ? 'clip' : (p.sound === 'clip' || p.audio !== false ? 'on' : 'off');
+      const sel = _select('mv3-vc-audio', withClip ? 'Seedance makes its own sound - or the first clip\'s sound is laid under the video when it lands' : 'Seedance makes its own sound',
+        opts, now, (v) => { setParam('audio', v === 'on'); setParam('sound', v === 'clip' ? 'clip' : ''); });
+      _row(box, 'sound', sel);
       if (n > 0 && !_skill) {
         const alone = 'only without clips and sounds';
         _row(box, 'pictures are', _select('mv3-vc-as', 'What the attached pictures are for', [
@@ -416,10 +424,10 @@ function VIDEOS(ctx) {
       _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
         { value: 'video', text: 'as in the clip (up to 30 s)' }, { value: 'image', text: 'as on the picture (up to 10 s)' },
       ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); }));
-      if (r.keepSound) {
-        _row(box, 'sound', _select('mv3-vc-keep', 'The clip\'s own sound', [{ value: 'on', text: 'keep the clip\'s sound' }, { value: 'off', text: 'silent' }],
-          p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
-      }
+      // The clip's sound: Replicate's Kling keeps it itself; on kie it is laid under the video when it lands (V7.4).
+      _row(box, 'sound', _select('mv3-vc-keep', r.keepSound ? 'The clip\'s own sound - Kling keeps it' : 'The clip\'s own sound - laid under the video when it lands',
+        [{ value: 'on', text: 'keep the clip\'s sound' }, { value: 'off', text: 'silent' }],
+        p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
       const std = el('button', 'mv3-c-btn mv3-vc-std', 'standard prompt');
       std.type = 'button';
       std.title = 'Put the standard prompt back in the box: ' + (_table.standardPrompt || '');
@@ -684,7 +692,8 @@ function VIDEOS(ctx) {
     return '';
   }
 
-  function _body() {
+  // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go (V7.4).
+  function _body(cardMedia) {
     const m = model(), r = rec();
     const p = params();
     const fam = m.family;
@@ -703,13 +712,18 @@ function VIDEOS(ctx) {
       return _kind(a) === 'image' && !_skill ? frame(i) : '';
     };
     const fmt = (Store.timeline() || {}).format || '9:16';
+    // (phase V7.4) Seedance's sound from the clip: its own off, the first clip's part laid under when it lands - only
+    // while a clip goes with it (remembered otherwise, and the model's own sound stands in).
+    const clipSound = fam === 'seedance' && p.sound === 'clip'
+      && (cardMedia ? cardMedia.some(a => a && a.kind === 'video') : atts.some(a => _kind(a) === 'video'));
     return {
       model: m.id, agg: r.agg,
       params: {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
-        audio: p.audio !== false, mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
+        audio: clipSound ? false : (p.sound === 'clip' || p.audio !== false), sound: clipSound ? 'clip' : '',
+        mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
       media: atts.map((a) => Object.assign({
         path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
@@ -1243,7 +1257,7 @@ function VIDEOS(ctx) {
     try {
       clearTimeout(_patchT.get(m.id));
       _patchT.delete(m.id);
-      const b = _body();
+      const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
         boardId: l.two ? ((_chosenBoard(l) || {}).id || '') : undefined,
@@ -1263,7 +1277,7 @@ function VIDEOS(ctx) {
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
     try {
-      const b = _body();
+      const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/rewrite', { project: m.project, model: b.model, agg: b.agg, params: b.params });
       if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
       await ctx.reload(true);
@@ -1645,6 +1659,8 @@ function VIDEOS(ctx) {
       ['took', g.secs ? g.secs + 's' : ''],
       ['cost', g.credits ? g.credits + ' kie credits (≈' + money(g.credits * 0.005) + ')' : ''],
       ['references', (g.media || []).length ? String(g.media.length) : ''],
+      // (phase V7.4) Where the model did not keep the clip's sound itself.
+      ['sound', g.underlay === 'laid' ? 'the clip\'s sound, laid under it' : (g.underlay || '')],
       ['writer', g.fell && !/^sent in English/.test(g.fell) ? 'sent as typed - ' + g.fell : (g.writer || '')],
       ['language', g.lang === 'zh' ? 'sent in 中文' : /^sent in English/.test(g.fell || '') ? g.fell : ''],
       ['in 中文', g.lang === 'zh' ? (g.sent || '') : ''],
