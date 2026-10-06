@@ -62,7 +62,7 @@ const COUNTS = [1, 2];
 const KINDS = ['image', 'video', 'audio'];
 
 router.get('/mv3/video/matrix', (_req, res) => {
-  try { res.json(Object.assign({ success: true }, VM.matrix(), { board: _boardInfo() })); }
+  try { res.json(Object.assign({ success: true }, VM.matrix(), { board: _boardInfo(), frame: _boardInfo(FRAME_QUALITY) })); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -239,18 +239,75 @@ const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && m
 const BOARD_ENGINE = 'nano-banana-2';
 const BOARD_QUALITY = '4K';
 const BOARD_AT_ONCE = CHAT.BOARD_AT_ONCE;
-function _boardInfo() {
+function _boardInfo(quality) {
   const MV = require('../lib/mv3-img');
   const e = MV.ENGINES[BOARD_ENGINE];
   if (!e) return null;
+  const q = quality || BOARD_QUALITY;
   return {
-    engine: BOARD_ENGINE, label: e.label, quality: BOARD_QUALITY,
+    engine: BOARD_ENGINE, label: e.label, quality: q,
     providers: MV.PROVIDER_ORDER.filter(p => e.providers[p]).map(p => ({
       agg: p, label: MV.PROVIDER_LABELS[p], usable: VM.usable(p), why: VM.usable(p) ? '' : (KEYS.why(p) || ''),
-      price: ((e.providers[p].price || {})[BOARD_QUALITY]) == null ? null : e.providers[p].price[BOARD_QUALITY],
+      price: ((e.providers[p].price || {})[q]) == null ? null : e.providers[p].price[q],
       maxRefs: e.providers[p].maxRefs || 0,
     })),
   };
+}
+
+// ── The frame-swap (phase V7.6, the owner 2026-10-07: dancer-swap-room) ───────────────────────────────────────────
+// Two steps with NO writer, Kling motion control's: 1 · a PICTURE - a frame of the dance clip redrawn with the person in
+// the dancer's place, the room, pose, light and angle kept (nano-banana-2 at 2K - the owner's answer 2: Kling takes
+// 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that picture with the same part of the clip.
+// The card is made at the press, from the recipe's own words; always a stop after the picture. It rides on the
+// storyboard's machinery (`board`, its records, its row, `boardsOf`, the retry's home) with `kind: 'frame'`: the picture
+// is drawn from [the frame, the person] - Image 1 the room, Image 2 the person - and the video takes the chosen picture
+// IN PLACE OF the person's.
+const FRAME_QUALITY = '2K';
+const FRAME_R2 = 'the picture goes to Kling from a public link - that needs R2 (Admin -> API keys)';
+function _frameSwapOf(recipe, claimed) {
+  const r = recipe || {};
+  try {
+    if (r.kind === 'preset') {
+      const p = require('../lib/video-presets-store').get(r.id);
+      if (p) return !!(p.twoStep && p.twoStep.kind === 'frame-swap');
+    }
+  } catch (e) { /* the store cannot answer */ }
+  return !!claimed;
+}
+// The words the picture model reads: the clip's frame is Image 1, the person Image 2; anything else named goes.
+function _frameWords(prompt) {
+  return String(prompt || '').replace(REF_ANY, (all, k, n) => {
+    const kind = k.toLowerCase();
+    if (kind === 'video' && +n === 1) return 'Image 1';
+    if (kind === 'image' && +n === 1) return 'Image 2';
+    return '';
+  }).replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:])/g, '$1').trim();
+}
+// What a frame-swap must be able to do before its card is made, and again before its picture is paid for: Kling
+// motion control, ONE picture and ONE clip, a link for the picture (R2), an aggregator that draws from two pictures.
+function _frameWrong(model, agg, params, media) {
+  const list = media || [];
+  if (_family(model) !== 'kmc') return 'the picture-then-video recipe is Kling motion control\'s - pick it';
+  if (list.filter(x => x.kind === 'image').length !== 1 || list.filter(x => x.kind === 'video').length !== 1) {
+    return 'it takes one picture of your character and one dance clip';
+  }
+  if (!KEYS.r2() && !FAKE.on()) return FRAME_R2;
+  const pv = _boardProvider(2);
+  if (pv.error) return 'the picture cannot be drawn - ' + pv.error;
+  const rt = _routeOf(model, agg, params, list, 'xxx');
+  return rt.error || '';
+}
+// The shape the picture is drawn in: the clip's own, snapped to one the picture model makes.
+function _shapeOf(w, h) {
+  if (!(w > 0 && h > 0)) return '9:16';
+  const r = w / h;
+  let best = '9:16', d = Infinity;
+  for (const a of VR.BOARD_ASPECTS) {
+    const [x, y] = a.split(':').map(Number);
+    const dd = Math.abs(Math.log((x / y) / r));
+    if (dd < d) { d = dd; best = a; }
+  }
+  return best;
 }
 // Who draws it: the first aggregator in the pictures chat's order with a key that takes this many pictures.
 function _boardProvider(refs) {
@@ -440,6 +497,8 @@ router.post('/mv3/video/write', (req, res) => {
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
     const twoStep = _twoStepOf(b.recipe, b.twoStep);
     if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
+    // (phase V7.6) A picture-then-video recipe has no writer - its card is started, not written.
+    if (_frameSwapOf(b.recipe, b.frameSwap)) return res.status(400).json({ success: false, error: 'this recipe is Kling motion control\'s two steps, with no writer - pick Kling and start it' });
     const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
     if (!head) return res.status(400).json({ success: false, error: 'the recipe has no request to fill in' });
     const body = String(b.body || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
@@ -473,6 +532,44 @@ router.post('/mv3/video/write', (req, res) => {
   }
 });
 
+// (phase V7.6) A frame-swap's card, at the press - no writer: the picture's prompt is the recipe's first step as the
+// person left it, the video's Kling's standard prompt; the moment of the clip the picture is drawn from starts at the
+// part's first frame. Nothing is paid here.
+router.post('/mv3/video/frameswap', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const project = String(b.project || '').trim();
+    if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
+    const s = _settings(b);
+    if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
+    if (!_frameSwapOf(b.recipe, b.frameSwap)) return res.status(400).json({ success: false, error: 'this recipe is not a picture-then-video one' });
+    const step = _strictRefs(String(b.step || '').replace(/\r\n/g, '\n')).trim().slice(0, 6000);
+    if (!step) return res.status(400).json({ success: false, error: 'the recipe has no words for the picture' });
+    const mm = _mediaOf(b.media);
+    if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+    const wrong = _frameWrong(s.model, s.agg, s.params, mm.media);
+    if (wrong) return res.status(400).json({ success: false, error: wrong });
+    const clip = mm.media.find(x => x.kind === 'video');
+    // The clip as it is seen decides the picture's shape.
+    let shape = '9:16';
+    try {
+      const pr = await require('../lib/media-probe').probe(toDiskExisting(clip.path));
+      const seen = require('../lib/video-prep').seen(pr);
+      shape = _shapeOf(seen.w, seen.h);
+    } catch (e) { /* the default shape */ }
+    const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
+    const recipe = _recipeOf(b.recipe);
+    const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: mm.media.map(m => m.path), media: mm.media,
+                          card: { type: 'prompt', state: 'ready', recipe, model: s.model, agg: rt.fits[0].agg, params: s.params,
+                                  prompt: VM.STANDARD_MC_PROMPT, writer: '',
+                                  board: { kind: 'frame', prompt: step, at: clip.in || 0, aspect: shape, genIds: [], chosen: '' } } });
+    res.json({ success: true, card: pc.id });
+  } catch (err) {
+    console.error('[mv3-video/frameswap]', err.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // The person's edit of a prompt card - while it is not made yet.
 router.patch('/mv3/video/card/:id', (req, res) => {
   const b = req.body || {};
@@ -481,6 +578,8 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const prompt = b.prompt == null ? null : _strictRefs(String(b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
     const board = b.board == null ? null : String(b.board).replace(/\r\n/g, '\n').slice(0, 6000);
     const chosen = b.chosen == null ? null : String(b.chosen);
+    // (phase V7.6) A frame-swap's moment: within the part of the clip that goes.
+    const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       if (String(x.project || '') !== project || !x.card || x.card.type !== 'prompt') { why = [404, 'no such card']; return false; }
@@ -491,11 +590,18 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
       // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
       if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
+        const W = x.card.board.kind === 'frame' ? 'picture' : 'storyboard';
         const g = CHAT.boardsOf(x).find(y => y.id === chosen);
-        if (!g) { why = [404, 'no such storyboard on this card']; return false; }
-        if (!CHAT.boardReady(g)) { why = [409, g.gone ? 'that storyboard is not on the Images shelf any more' : 'only a storyboard that has landed can be chosen']; return false; }
+        if (!g) { why = [404, 'no such ' + W + ' on this card']; return false; }
+        if (!CHAT.boardReady(g)) { why = [409, g.gone ? 'that ' + W + ' is not on the Images shelf any more' : 'only a ' + W + ' that has landed can be chosen']; return false; }
         x.card.board.chosen = chosen;
         changed = true;
+      }
+      if (x.card.board && x.card.board.kind === 'frame' && at != null) {
+        const clip = (x.media || []).find(y => y.kind === 'video') || {};
+        const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
+        const v = Math.round(Math.max(lo, Math.min(hi, at)) * 100) / 100;
+        if (x.card.board.at !== v) { x.card.board.at = v; changed = true; }
       }
       if (!changed) return false;
     });
@@ -516,6 +622,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     const m = _cardOf(req.params.id, project, 'prompt');
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
+    if (m.card.board && m.card.board.kind === 'frame') return res.status(400).json({ success: false, error: 'a picture-then-video card has no writer - it is Kling motion control\'s: pick it on the left' });
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
     const s = _settings(b);
@@ -586,32 +693,45 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
     const s = _settings(Object.assign({ model: m.card.model, params: m.card.params, agg: m.card.agg }, b));
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
+    const frame = !!(m.card.board && m.card.board.kind === 'frame');
     if (_family(s.model) !== _family(m.card.model)) {
-      return res.status(400).json({ success: false, error: 'this prompt was written for ' + _labelOf(m.card.model) + ' - write it again for ' + _labelOf(s.model) });
+      return res.status(400).json({ success: false, error: frame ? 'a picture-then-video card is Kling motion control\'s - pick it on the left'
+        : 'this prompt was written for ' + _labelOf(m.card.model) + ' - write it again for ' + _labelOf(s.model) });
     }
     const mm = _mediaOf(m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
     if (m.card.board) {
       // The sheet the video follows: the one the page sends, else the card's chosen one while it can be followed, else
-      // the newest that landed and is still on the shelf (review V8).
+      // the newest that landed and is still on the shelf (review V8). A frame-swap's picture the same way (V7.6).
+      const W = frame ? 'picture' : 'storyboard';
       const boards = CHAT.boardsOf(m);
       const want = String(b.boardId || '');
       let g = null;
       if (want) {
         g = boards.find(x => x.id === want);
-        if (!g) return res.status(409).json({ success: false, error: 'that storyboard is not this card\'s - choose one of its own' });
-        if (g.gone) return res.status(409).json({ success: false, error: 'that storyboard is not on the Images shelf any more - choose another, or draw one' });
-        if (!CHAT.boardReady(g)) return res.status(409).json({ success: false, error: 'that storyboard is not ready' });
+        if (!g) return res.status(409).json({ success: false, error: 'that ' + W + ' is not this card\'s - choose one of its own' });
+        if (g.gone) return res.status(409).json({ success: false, error: 'that ' + W + ' is not on the Images shelf any more - choose another, or draw one' });
+        if (!CHAT.boardReady(g)) return res.status(409).json({ success: false, error: 'that ' + W + ' is not ready' });
       } else {
         const ready = boards.filter(CHAT.boardReady);
         g = ready.find(x => x.id === m.card.board.chosen) || ready[ready.length - 1] || null;
         if (!g) {
           return res.status(409).json({ success: false, error: boards.some(x => x.state === 'pending')
-            ? 'the storyboard is still being drawn - the video follows it' : 'make the storyboard first - the video follows it' });
+            ? 'the ' + W + ' is still being drawn - the video follows it' : 'make the ' + W + ' first - the video follows it' });
         }
       }
       boardId = g.id;
+    }
+    if (frame) {
+      // The chosen picture IN PLACE OF the person's (V7.6): Kling takes one picture - the room with the person in it now -
+      // and the same part of the clip.
+      const g = CHAT.boardsOf(m).find(x => x.id === boardId);
+      const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'person', label: 'picture' }]);
+      if (sb.error) return res.status(400).json({ success: false, error: /R2/.test(sb.error) ? FRAME_R2 : 'the picture is not on the Images shelf any more - choose another, or draw one' });
+      mm.media = sb.media.concat(mm.media.filter(x => x.kind !== 'image'));
+    } else if (m.card.board) {
+      const g = CHAT.boardsOf(m).find(x => x.id === boardId);
       // The sheet is one more picture - said as such when the column's model takes fewer than the card was written for.
       const seat = _seatWrong(s.model, s.agg, s.params, mm.media);
       if (seat) return res.status(400).json({ success: false, error: seat });
@@ -637,7 +757,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     const recipe = m.card.recipe || (rc && rc.card.recipe) || null;
     const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
-    const said = _saidOf(rc, prompt);
+    // A card with no recipe card of its own (a frame-swap, V7.6) is said by its recipe's title.
+    const said = rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
     const where = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
@@ -699,7 +820,7 @@ async function _make(o) {
 
 // A two-step card's storyboard: a picture record and its row at the press (no writer - its prompt is on the card),
 // the drawing behind the answer. Another press draws another; the card chooses which one the video follows.
-router.post('/mv3/video/card/:id/board', (req, res) => {
+router.post('/mv3/video/card/:id/board', async (req, res) => {
   const b = req.body || {};
   let kick = '';
   try {
@@ -709,22 +830,45 @@ router.post('/mv3/video/card/:id/board', (req, res) => {
     if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
     if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
+    // (phase V7.6) A frame-swap's first step is a PICTURE of the clip's frame with the person in it, not a sheet.
+    const frame = m.card.board.kind === 'frame';
+    const W = frame ? 'picture' : 'storyboard';
     // A made card draws too: it is made again from its field, and another sheet may be what the next attempt follows.
     const typed = String(b.board != null ? b.board : m.card.board.prompt).replace(/\r\n/g, '\n').trim().slice(0, 6000);
-    if (!typed) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
+    if (!typed) return res.status(400).json({ success: false, error: 'the ' + W + ' prompt is empty' });
     const all = _mediaOf(m.media);
     if (all.error) return res.status(400).json({ success: false, error: all.error });
     const pics = all.media.filter(x => x.kind === 'image');
     // The video it is for must be able to take it, send it and follow it - before the sheet is paid for.
-    const seat = _twoStepWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
+    const seat = frame ? _frameWrong(m.card.model, m.card.agg, m.card.params || {}, all.media)
+      : _twoStepWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
     if (seat) return res.status(400).json({ success: false, error: seat });
     // What the picture model reads: the references in words (the card keeps what was typed).
-    const prompt = _boardWords(typed, pics.length);
-    if (!prompt) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
-    const pv = _boardProvider(pics.length);
+    const prompt = frame ? _frameWords(_strictRefs(typed)) : _boardWords(typed, pics.length);
+    if (!prompt) return res.status(400).json({ success: false, error: 'the ' + W + ' prompt is empty' });
+    const pv = _boardProvider(frame ? 2 : pics.length);
     if (pv.error) return res.status(400).json({ success: false, error: pv.error });
     const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
-    if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' storyboards are being drawn already - wait for one' });
+    if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });
+    // The frame-swap's room: the clip's frame at the moment chosen, cut at the press (the owner's answer 1: the part's first
+    // frame unless another is picked), kept in media/work under the card's name - the same moment is cut once.
+    let refs = pics.map(x => x.path);
+    let at = null;
+    if (frame) {
+      const clip = all.media.find(x => x.kind === 'video');
+      const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
+      at = Math.round(Math.max(lo, Math.min(hi, b.at != null && Number.isFinite(+b.at) ? +b.at : (+m.card.board.at || lo))) * 100) / 100;
+      const name = 'vframe_' + String(m.id).replace(/[^a-z0-9]/gi, '').slice(-16) + '_' + Math.round(at * 100) + '.jpg';
+      const abs = path.join(MEDIA.work, name);
+      if (!fs.existsSync(abs)) {
+        let buf;
+        try { buf = await require('../lib/video-prep').still(toDiskExisting(clip.path), at); }
+        catch (e) { return res.status(400).json({ success: false, error: 'the frame could not be taken from the clip - ' + e.message }); }
+        fs.mkdirSync(MEDIA.work, { recursive: true });
+        fs.writeFileSync(abs, buf);
+      }
+      refs = ['/media/work/' + name, pics[0].path];
+    }
     const w0 = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
@@ -736,19 +880,20 @@ router.post('/mv3/video/card/:id/board', (req, res) => {
     kick = 'b' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);
     const g = GENS.create({
-      project, send: m.id, board: true, kick, where, stage: 'asking ' + pv.label, prompt, said: 'storyboard · ' + title,
-      engine: BOARD_ENGINE, provider: pv.provider, quality: BOARD_QUALITY, aspect: m.card.board.aspect || '16:9',
-      refs: pics.map(x => x.path),
+      project, send: m.id, board: true, kick, where, stage: 'asking ' + pv.label, prompt, said: W + ' · ' + title,
+      engine: BOARD_ENGINE, provider: pv.provider, quality: frame ? FRAME_QUALITY : BOARD_QUALITY,
+      aspect: m.card.board.aspect || (frame ? '9:16' : '16:9'), refs,
     });
     CHAT.update(m.id, (x) => {
       if (!x.card || !x.card.board) return false;
       x.card.board.genIds = (x.card.board.genIds || []).concat([g.id]).slice(-20);
       if (x.card.board.prompt !== typed) { x.card.board.prompt = typed; x.card.board.edited = true; }
+      if (frame && at != null) x.card.board.at = at;
     });
     res.json({ success: true, genId: g.id, provider: pv.provider });
     (async () => {
       try { await GENS.submit(g.id, { prompt }, kick); }
-      catch (e) { console.warn('[mv3-video] storyboard:', e.message); }
+      catch (e) { console.warn('[mv3-video] ' + W + ':', e.message); }
       finally { GENS.asking.delete(kick); }
     })();
   } catch (err) {

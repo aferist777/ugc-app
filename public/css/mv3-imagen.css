@@ -526,6 +526,12 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-step{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-top:2px }
 .vc-prompt-ta.is-board{ min-height:70px }
 .vc-boards{ display:flex; flex-wrap:wrap; gap:6px; align-items:flex-start }
+/* (phase V7.6) A frame-swap's moment: the clip's frame there, and the slider over the part that goes. */
+.vc-moment{ display:flex; gap:10px; align-items:flex-start; margin:2px 0 4px }
+.vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:#000; object-fit:contain }
+.vc-moment-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
+.vc-moment-side input[type=range]{ width:100%; margin:0 }
+.vc-moment-at{ font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
 .vc-boards:empty{ display:none }
 .vc-board{
   position:relative; width:120px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
