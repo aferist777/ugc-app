@@ -37,6 +37,7 @@ const VGENS = require('../lib/mv3-video-gens');
 const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
+const VR = require('../lib/mv3-video-rules');
 const KEYS = require('../lib/agg-keys');
 const FAKE = require('../lib/fake-agg');
 const { MEDIA } = require('../lib/config');
@@ -235,7 +236,7 @@ const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && m
 // sheet chosen on the card goes as the LAST picture of the clip, after the card's own.
 const BOARD_ENGINE = 'nano-banana-2';
 const BOARD_QUALITY = '4K';
-const BOARD_AT_ONCE = 2;
+const BOARD_AT_ONCE = CHAT.BOARD_AT_ONCE;
 function _boardInfo() {
   const MV = require('../lib/mv3-img');
   const e = MV.ENGINES[BOARD_ENGINE];
@@ -270,6 +271,57 @@ function _seatWrong(model, agg, params, media) {
   const n = list.filter(x => x.kind === 'image').length;
   return 'the storyboard goes to the video as one more picture after your ' + n + ' - ' + rt.error;
 }
+
+// What a two-step card must be able to do before its writer is asked, and again before its sheet is paid for (review
+// V8): no frame among its pictures (beside the sheet the model reads every picture as a reference), a link for the sheet
+// (it always goes to the video as a picture - R2), a sheet that can be drawn with its pictures (nano-banana-2 takes 14),
+// and the seat. '' when it can, else why in words.
+const BOARD_R2 = 'the storyboard goes to the video model as a picture, from a public link - that needs R2 (Admin -> API keys)';
+function _twoStepWrong(model, agg, params, media) {
+  const list = media || [];
+  if (list.some(x => x.kind === 'image' && /^frame-/.test(String(x.role || '')))) {
+    return 'a first or last frame cannot go with a storyboard - the video follows the sheet: attach that picture as a reference';
+  }
+  if (!KEYS.r2() && !FAKE.on()) return BOARD_R2;
+  const pv = _boardProvider(list.filter(x => x.kind === 'image').length);
+  if (pv.error) return 'the storyboard cannot be drawn - ' + pv.error;
+  return _seatWrong(model, agg, params, list);
+}
+
+// Whether a recipe is a two-step one is the CATALOG's to say (review V8): a draft saved before V8 carries no flag, and a
+// recipe whose first step is not a storyboard - a character sheet made first - is one step here (lib/cookbook-lib.js
+// twoStepOf). The page's word stands only where the catalog cannot answer.
+function _twoStepOf(recipe, claimed) {
+  const r = recipe || {};
+  const story = (ts) => !!(ts && (ts.kind || 'storyboard') === 'storyboard');
+  try {
+    if (r.kind === 'example') return false;
+    const VC = require('../lib/video-catalog');
+    if (r.kind === 'template') {
+      const t = ((VC.vendor() || {}).templates || []).find(x => x && x.id === r.id);
+      if (t) return story(t.twoStep);
+    }
+    if (r.kind === 'case') {
+      const c = (VC.index().cases || []).find(x => x && x.s === r.id);
+      if (c) return !!c.ts;
+    }
+    if (r.kind === 'preset') {
+      const p = require('../lib/video-presets-store').get(r.id);
+      if (p) return story(p.twoStep);
+    }
+  } catch (e) { /* the catalog cannot answer */ }
+  return !!claimed;
+}
+
+// The storyboard prompt goes to a PICTURE model, which reads references as words (review V8): the card's pictures,
+// {{image:N}}, become "Image N" (the way lib/mv3-prompt-rules.js has them named); what a picture model cannot see - the
+// sheet itself, a clip, a sound - goes.
+function _boardWords(prompt, pics) {
+  return String(prompt || '').replace(REF_ANY, (all, k, n) => (k.toLowerCase() === 'image' && +n >= 1 && +n <= pics ? 'Image ' + (+n) : ''))
+    .replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:])/g, '$1').trim();
+}
+// The video prompt of a two-step card names its sheet - the picture after the card's own.
+const _namesSheet = (prompt, k) => _strictRefs(prompt).includes('{{image:' + k + '}}');
 
 // The pictures the WRITER looks at, made small first (review V6): a character's sheet is 4K, and the writer only has
 // to see what is in it - the aggregator gets each picture fitted to its own limits when the clip is asked for.
@@ -327,8 +379,17 @@ async function _writeCard(cardId, kick, o) {
     out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
       : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
     if (t.prompt && o.twoStep) {
-      out.boardPrompt = String(t.board || '');
-      out.boardAspect = t.boardAspect || (['9:16', '16:9', '1:1'].includes((o.params || {}).aspect) ? o.params.aspect : '16:9');
+      const pics = o.media.filter(m => m.kind === 'image').length;
+      const k = pics + 1;
+      // The video follows its sheet (review V8): a prompt that does not name it gets the sentence that does, and one
+      // that names a picture the video will not have fails here - before the sheet is paid for, not at the make.
+      if (!_namesSheet(out.prompt, k)) out.prompt = (out.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
+      const wrong = _refsWrong(out.prompt, o.media.concat([BOARD_SEAT]));
+      if (wrong) out = { state: 'failed', error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' (the storyboard is picture ' + k + ') - write it again' };
+      else {
+        out.boardPrompt = _boardWords(t.board, pics);
+        out.boardAspect = t.boardAspect || (VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9');
+      }
     }
   } catch (e) {
     out = { state: 'failed', error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
@@ -359,7 +420,7 @@ router.post('/mv3/video/write', (req, res) => {
     const s = _settings(b);
     if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
-    const twoStep = !!b.twoStep;
+    const twoStep = _twoStepOf(b.recipe, b.twoStep);
     if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
     const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
     if (!head) return res.status(400).json({ success: false, error: 'the recipe has no request to fill in' });
@@ -370,7 +431,7 @@ router.post('/mv3/video/write', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-    const seat = twoStep ? _seatWrong(s.model, s.agg, s.params, mm.media) : '';
+    const seat = twoStep ? _twoStepWrong(s.model, s.agg, s.params, mm.media) : '';
     if (seat) return res.status(400).json({ success: false, error: seat });
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
 
@@ -409,7 +470,14 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       let changed = false;
       if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
       if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
-      if (x.card.board && chosen != null && CHAT.boardsOf(x).some(g => g.id === chosen) && x.card.board.chosen !== chosen) { x.card.board.chosen = chosen; changed = true; }
+      // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
+      if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
+        const g = CHAT.boardsOf(x).find(y => y.id === chosen);
+        if (!g) { why = [404, 'no such storyboard on this card']; return false; }
+        if (!CHAT.boardReady(g)) { why = [409, g.gone ? 'that storyboard is not on the Images shelf any more' : 'only a storyboard that has landed can be chosen']; return false; }
+        x.card.board.chosen = chosen;
+        changed = true;
+      }
       if (!changed) return false;
     });
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
@@ -440,7 +508,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
-    const seat = m.card.board ? _seatWrong(s.model, s.agg, s.params, mm.media) : '';
+    const seat = m.card.board ? _twoStepWrong(s.model, s.agg, s.params, mm.media) : '';
     if (seat) return res.status(400).json({ success: false, error: seat });
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
     kick = 'w' + crypto.randomBytes(8).toString('hex');
@@ -449,6 +517,8 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       if (!x.card || x.card.state === 'writing' || x.card.state === 'sent') return false;
       Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), model: s.model, agg: rt.fits[0].agg, params: s.params,
                               prompt: '', error: '', edited: false, writer: '', fell: '' });
+      // Its sheets stay on the card, none chosen: the new prompts may be for another sheet (review V8).
+      if (x.card.board) x.card.board.chosen = '';
     });
     if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
     res.json({ success: true, card: m.id });
@@ -505,18 +575,35 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
     if (m.card.board) {
+      // The sheet the video follows: the one the page sends, else the card's chosen one while it can be followed, else
+      // the newest that landed and is still on the shelf (review V8).
       const boards = CHAT.boardsOf(m);
-      boardId = String(b.boardId || m.card.board.chosen || '');
-      if (!boardId) {
-        const done = boards.filter(g => g.state === 'done' && g.imagePath);
-        boardId = done.length ? done[done.length - 1].id : '';
+      const want = String(b.boardId || '');
+      let g = null;
+      if (want) {
+        g = boards.find(x => x.id === want);
+        if (!g) return res.status(409).json({ success: false, error: 'that storyboard is not this card\'s - choose one of its own' });
+        if (g.gone) return res.status(409).json({ success: false, error: 'that storyboard is not on the Images shelf any more - choose another, or draw one' });
+        if (!CHAT.boardReady(g)) return res.status(409).json({ success: false, error: 'that storyboard is not ready' });
+      } else {
+        const ready = boards.filter(CHAT.boardReady);
+        g = ready.find(x => x.id === m.card.board.chosen) || ready[ready.length - 1] || null;
+        if (!g) {
+          return res.status(409).json({ success: false, error: boards.some(x => x.state === 'pending')
+            ? 'the storyboard is still being drawn - the video follows it' : 'make the storyboard first - the video follows it' });
+        }
       }
-      const g = boards.find(x => x.id === boardId);
-      if (!g) return res.status(409).json({ success: false, error: 'make the storyboard first - the video follows it' });
-      if (g.state !== 'done' || !g.imagePath) return res.status(409).json({ success: false, error: 'that storyboard is not ready' });
-      const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }]);
-      if (sb.error) return res.status(400).json({ success: false, error: 'the storyboard is not on the Images shelf any more - make it again' });
+      boardId = g.id;
+      // The sheet is one more picture - said as such when the column's model takes fewer than the card was written for.
+      const seat = _seatWrong(s.model, s.agg, s.params, mm.media);
+      if (seat) return res.status(400).json({ success: false, error: seat });
       const pics = mm.media.filter(x => x.kind === 'image');
+      if (!_namesSheet(prompt, pics.length + 1)) {
+        return res.status(400).json({ success: false, error: 'the video prompt does not name the storyboard - it is [picture ' + (pics.length + 1) + ']: put it where the clip should follow the sheet' });
+      }
+      // In its own words: a sheet gone from the shelf, or no R2 to send it by.
+      const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }]);
+      if (sb.error) return res.status(400).json({ success: false, error: /R2/.test(sb.error) ? BOARD_R2 : 'the storyboard is not on the Images shelf any more - choose another, or draw one' });
       mm.media = pics.concat(sb.media, mm.media.filter(x => x.kind !== 'image'));
     }
     const wrong = _refsWrong(prompt, mm.media);
@@ -599,14 +686,17 @@ router.post('/mv3/video/card/:id/board', (req, res) => {
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
     if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
     if (m.card.state === 'sent') return res.status(409).json({ success: false, error: 'its video was made - "again" makes a copy to change' });
-    const prompt = String(b.board != null ? b.board : m.card.board.prompt).replace(/\r\n/g, '\n').trim().slice(0, 6000);
-    if (!prompt) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
+    const typed = String(b.board != null ? b.board : m.card.board.prompt).replace(/\r\n/g, '\n').trim().slice(0, 6000);
+    if (!typed) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
     const all = _mediaOf(m.media);
     if (all.error) return res.status(400).json({ success: false, error: all.error });
     const pics = all.media.filter(x => x.kind === 'image');
-    // The video it is for must be able to take it - before the sheet is paid for.
-    const seat = _seatWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
+    // The video it is for must be able to take it, send it and follow it - before the sheet is paid for.
+    const seat = _twoStepWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
     if (seat) return res.status(400).json({ success: false, error: seat });
+    // What the picture model reads: the references in words (the card keeps what was typed).
+    const prompt = _boardWords(typed, pics.length);
+    if (!prompt) return res.status(400).json({ success: false, error: 'the storyboard prompt is empty' });
     const pv = _boardProvider(pics.length);
     if (pv.error) return res.status(400).json({ success: false, error: pv.error });
     const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
@@ -629,7 +719,7 @@ router.post('/mv3/video/card/:id/board', (req, res) => {
     CHAT.update(m.id, (x) => {
       if (!x.card || !x.card.board) return false;
       x.card.board.genIds = (x.card.board.genIds || []).concat([g.id]).slice(-20);
-      if (x.card.board.prompt !== prompt) { x.card.board.prompt = prompt; x.card.board.edited = true; }
+      if (x.card.board.prompt !== typed) { x.card.board.prompt = typed; x.card.board.edited = true; }
     });
     res.json({ success: true, genId: g.id, provider: pv.provider });
     (async () => {

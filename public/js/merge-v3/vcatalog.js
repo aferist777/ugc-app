@@ -111,6 +111,8 @@ function _needsOf(slots) {
   if (req.some(s => s.kind === 'audio')) out.push('audio');
   return out;
 }
+// Two steps HERE are a storyboard drawn first (phase V8): another kind of first step (V7's frame swap) is not one.
+const _story = (ts) => (ts && (ts.kind || 'storyboard') === 'storyboard' ? 1 : 0);
 function _refsWord(it) {
   const n = it.refs || {};
   const parts = [];
@@ -137,7 +139,7 @@ function _items() {
       kind: 'template', id: t.id, title: (t.title && t.title.en) || t.id, sub: (t.description && t.description.en) || '',
       poster: top ? '/api/mv3/video/catalog/poster/' + encodeURIComponent(top.s) : '', media: top ? top.ms : '',
       needs: _needsOf(slots), slots, refs: { img, exact: true, vid: req.filter(s => s.kind === 'video').length, aud: req.filter(s => s.kind === 'audio').length },
-      a: null, d: null, sp: t.speech ? 1 : 0, ts: t.twoStep ? 1 : 0, lc: '', v: '', cat: t.category, tp: t.id,
+      a: null, d: null, sp: t.speech ? 1 : 0, ts: _story(t.twoStep), lc: '', v: '', cat: t.category, tp: t.id,
       h: top ? top.h : 0, st: 0, dt: '', written: 'seedance', count: t.cases || 0,
       search: _lc([t.id, t.title && t.title.en, t.title && t.title.zh, (t.tags || []).join(' '), t.description && t.description.en].join(' ')),
     });
@@ -176,7 +178,7 @@ function _items() {
       needs: _needsOf(slots), slots,
       refs: { img: req.filter(s => s.kind !== 'video' && s.kind !== 'audio').reduce((n, s) => n + (s.min || 0), 0), exact: true,
               vid: req.filter(s => s.kind === 'video').length, aud: req.filter(s => s.kind === 'audio').length },
-      a: p.aspect || null, d: p.duration || null, sp: 0, ts: p.twoStep ? 1 : 0, lc: '', v: '', cat: p.category || '', tp: '',
+      a: p.aspect || null, d: p.duration || null, sp: 0, ts: _story(p.twoStep), lc: '', v: '', cat: p.category || '', tp: '',
       h: 0, st: 0, dt: String(p.updated || '').slice(0, 10), written: '', models: p.models || [],
       search: _lc([p.title, p.summary, (p.tags || []).join(' ')].join(' ')),
     });
@@ -189,9 +191,10 @@ function _items() {
 function _fits(it, m) {
   if (!m) return false;
   const fam = m.family;
-  if (it.kind === 'preset') return (it.models || []).includes(m.id);
   // (phase V8) A storyboard first, then the video from it with the person's pictures: Seedance - Grok takes one picture.
+  // Before the presets' own list (review V8): a two-step preset naming another model is still Seedance's.
   if (it.ts && fam !== 'seedance') return false;
+  if (it.kind === 'preset') return (it.models || []).includes(m.id);
   if (fam === 'kmc') return false;
   const L = _limits(m);
   const r = it.refs || {};
@@ -988,7 +991,13 @@ async function _paintRight() {
     if (it.d && pr && pr.secs && pr.secs !== it.d) fit.appendChild(el('div', 'vc-warn', 'it asks for ' + it.d + ' s - ' + m.label + ' makes ' + pr.secs));
     if (!m.usable) fit.appendChild(el('div', 'vc-warn', m.why || 'no aggregator can be asked for this model'));
     if (!_fits(it, m)) fit.appendChild(el('div', 'vc-warn', 'it does not fit ' + m.label + ' - pick a model it fits above'));
-    if (it.ts) fit.appendChild(el('div', null, '2 steps: a storyboard picture first (nano-banana-2, 4K, ≈$0.09), then the video from it'));
+    if (it.ts) {
+      // The sheet's price as the chat will ask it (review V8): the first aggregator with a key, from the chat's table.
+      const bi = _st.matrix && _st.matrix.board;
+      const bp = bi && (bi.providers || []).find(p => p.usable);
+      fit.appendChild(el('div', null, '2 steps: a storyboard picture first (' + (bi ? bi.label + ', ' + bi.quality : 'nano-banana-2, 4K')
+        + (bp && bp.price != null ? ', ≈' + money(bp.price) + ' on ' + bp.label : '') + '), then the video from it'));
+    }
   }
   scroll.appendChild(fit);
 

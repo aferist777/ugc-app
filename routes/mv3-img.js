@@ -82,7 +82,8 @@ router.put('/mv3/img/settings', (req, res) => {
 
 router.get('/mv3/img/feed', (req, res) => {
   try {
-    res.json({ success: true, items: GENS.list(String(req.query.project || '')) });
+    // A storyboard of the video chat (phase V8, PLAN V-A) is its card's, not this chat's: it is on the Images shelf.
+    res.json({ success: true, items: GENS.list(String(req.query.project || '')).filter(g => !g.board) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

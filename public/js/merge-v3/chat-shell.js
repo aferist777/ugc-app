@@ -347,7 +347,7 @@ export function createChat(make) {
       const p = z.parts.find(x => x.kind === kind);
       if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
       const n = _atts.filter(a => _kindOf(a) === kind).length;
-      if (n >= p.room) { _say('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.'); return; }
+      if (n >= p.room) { _say(p.full || ('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.')); return; }
       slot = _slotFor(p);
     } else {
       const room = set.room();

@@ -461,8 +461,10 @@
 .vc-board img{ display:block; width:100%; height:auto }
 .vc-board:hover{ border-color:var(--muted) }
 .vc-board.is-chosen{ border-color:var(--primary); box-shadow:0 0 0 2px var(--primary) }
-.vc-board.is-busy{ width:240px; cursor:default; border-style:dashed }
+.vc-board.is-busy{ width:240px; max-width:100%; cursor:default; border-style:dashed }
 .vc-board.is-busy .mv3-ig-prog{ min-width:0; border:0 }
-.vc-board.is-bad{ width:240px; padding:6px 8px; cursor:default; border-color:var(--danger); font:600 9.5px/1.4 var(--font); color:var(--danger) }
+.vc-board.is-bad{ width:240px; max-width:100%; padding:6px 8px; cursor:default; border-color:var(--danger); font:600 9.5px/1.4 var(--font); color:var(--danger) }
+.vc-board.is-gone{ opacity:.45; border-style:dashed; cursor:default }
+.vc-boards.is-made .vc-board{ cursor:zoom-in }
 .vc-board-note{ font:600 10px/1.3 var(--font); color:var(--muted) }
 .vc-go.is-waiting{ opacity:.55 }
