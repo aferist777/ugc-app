@@ -71,7 +71,8 @@ async function _json(url, opts) {
 // what has to be judged. Asking only about the derived path called a blank card healthy.
 export async function auditThumbs(items) {
   const payload = items
-    .filter(it => it && it.media && /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(String(it.media)))
+    // A sound has no picture to make a thumbnail of - a .webm one too (review V7).
+    .filter(it => it && it.media && it.kind !== 'sounds' && /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(String(it.media)))
     .map(it => ({ id: it.id, video: it.media, thumb: it.thumb || '' }));
   if (!payload.length) return { need: [], link: [], ok: 0, missing: [], total: 0 };
   return _json('/api/media/thumbs/audit', {

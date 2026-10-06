@@ -536,6 +536,8 @@ function _beginDrag(e, t, c, el) {
     mate: mateClip ? { id: mateClip.id, from: mateTrack.id, kind: mateTrack.kind, to: mateTrack.id } : null,
     el, mateEl: mateClip ? document.querySelector(`.mv3b-clip[data-clip="${mateClip.id}"]`) : null,
     start: +c.start, moved: false,
+    // (review V7) A still is no clip for the video chat: it lights no part of the zone.
+    still: isStill(c),
   };
   document.body.classList.add('mv3b-dragging');
   e.preventDefault();
@@ -583,7 +585,7 @@ function _moveDrag(e) {
   if (!_drag.moved && Math.abs(e.clientX - _drag.x0) < SLOP && Math.abs(e.clientY - _drag.y0) < SLOP) return;
   // Past the slop the hand has really gone somewhere - up out of the lanes too, which moves no clip.
   _drag.far = true;
-  if (!_drag.edge && !_drag.words) _hintDrop(_dropAt(e, _drag.kind));
+  if (!_drag.edge && !_drag.words) _hintDrop(_drag.still ? null : _dropAt(e, _drag.kind));
   const z = _zoom();
   const dx = (e.clientX - _drag.x0) / z;
 
@@ -658,12 +660,18 @@ function _endDrag(e) {
   _drag = null;
   document.body.classList.remove('mv3b-dragging');
   // Let go over the video chat's attachments (phase V7): the clip goes there, the lanes are drawn back as they were.
-  const into = (d.far && !d.edge && !d.words && e && e.clientX != null) ? _dropAt(e, d.kind) : null;
+  const into = (d.far && !d.edge && !d.words && !d.still && e && e.clientX != null) ? _dropAt(e, d.kind) : null;
   _hintDrop(null);
   if (into) {
     _clipOut(d, into.dataset.dropKind);
     _build();
     return;
+  }
+  // (review V7) Let go over a chat but not on a part that takes it: nothing happens - not a move of the clip along its
+  // lane by however far the hand travelled.
+  if (d.far && !d.edge && e && e.clientX != null) {
+    const at = document.elementFromPoint(e.clientX, e.clientY);
+    if (at && at.closest && at.closest('#mv3-vc, #mv3-pc')) { _build(); return; }
   }
   // Pressed and let go without moving: that is a click, and a click on a clip selects it.
   // One clip, replacing whatever the band had - picking a single thing is how you say "this

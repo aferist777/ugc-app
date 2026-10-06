@@ -142,8 +142,11 @@ export function openTrim(opts) {
   media.addEventListener('loadedmetadata', () => show(from), { once: true });
 
   // Over the zone, beside the place that opened it, inside the window.
+  // The zone is drawn again under it (its cell replaced), so the place it was first opened beside is kept (review V7).
+  let at0 = null;
   const place = () => {
-    const a = o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : { left: 16, top: window.innerHeight - 16, width: 0 };
+    if (o.anchor && o.anchor.isConnected) { const rr = o.anchor.getBoundingClientRect(); at0 = { left: rr.left, top: rr.top, width: rr.width }; }
+    const a = at0 || { left: 16, top: window.innerHeight - 16, width: 0 };
     const w = Math.min(420, window.innerWidth - 24);
     box.style.width = w + 'px';
     box.style.left = Math.round(Math.max(12, Math.min(window.innerWidth - w - 12, a.left + a.width / 2 - w / 2))) + 'px';

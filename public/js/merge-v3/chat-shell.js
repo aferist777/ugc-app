@@ -687,7 +687,10 @@ export function createChat(make) {
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
       } else bad = (d && d.error) || 'it could not be added';
     }
-    _say(bad ? 'Not added: ' + bad : '');
+    // (review V7) What the attaching said of a file that came in ("…the first 15 s go", why it was not taken) stays: only
+    // the "adding…" line goes, or the words of what was not added stand in its place.
+    if (bad) _say('Not added: ' + bad);
+    else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
     _loadCats();
   }
 

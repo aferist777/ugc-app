@@ -121,7 +121,7 @@ function _titleOf(key) {
   catch (e) { return ''; }
 }
 
-router.post('/mv3/video/send', (req, res) => {
+router.post('/mv3/video/send', async (req, res) => {
   const b = req.body || {};
   let kick = '';
   try {
@@ -136,7 +136,8 @@ router.post('/mv3/video/send', (req, res) => {
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
-    const skill = (isMC || b.write === false) ? null : _skill(b.skill);
+    // (review V7) A picture-then-video recipe is Kling's own two steps and has no writer: it steers none.
+    const skill = (isMC || b.write === false || _frameSwapOf(b.skill, b.skill && b.skill.frameSwap)) ? null : _skill(b.skill);
 
     // What is attached, each checked to be in the library; who can take it.
     const mm = _mediaOf(b.media);
@@ -145,6 +146,9 @@ router.post('/mv3/video/send', (req, res) => {
     const rt = _routeOf(model, b.agg, params, media, isMC ? text : 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
     const fits = rt.fits;
+    // (review V7) What the first rung's preparation would refuse - before the writer is paid. Counted after this wait.
+    const fw = await _filesWrong(fits[0], media);
+    if (fw) return res.status(400).json({ success: false, error: fw });
     if (VGENS.runningSends(project) >= AT_ONCE) {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
@@ -190,8 +194,8 @@ async function _work(o) {
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.text, lang: 'en', writer: t.translated ? 'translated' : '' };
     } else {
-      const picUrls = await _writerSees(o.media, 'send');
-      const t = await AGENT.thinkVideo({ model: o.model, text: o.text, media: o.media, picUrls, thread: o.before,
+      const sees = await _writerSees(o.media, 'send');
+      const t = await AGENT.thinkVideo({ model: o.model, text: o.text, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: o.before,
                                          skill: o.skill, params: o.params, max: o.pair.promptMax });
       if (t.ask) {
         for (const id of o.ids) VGENS.refuse(id, 'the writer asked a question instead', o.kick);
@@ -297,6 +301,44 @@ function _frameWrong(model, agg, params, media) {
   const rt = _routeOf(model, agg, params, list, 'xxx');
   return rt.error || '';
 }
+// (review V7) The frames a frame-swap cut (media/work/vframe_*) go once no picture record names them any more - a picture
+// retried from Alerts sends its frame again, so one stays while its record does (the pictures chat trims its records);
+// an hour's grace covers a frame cut a moment before its record was written. A while after the start, then daily.
+function _sweepFrames() {
+  try {
+    const dir = MEDIA.work;
+    const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => /^vframe_.*\.jpg$/i.test(f)) : [];
+    if (!names.length) return;
+    let recs = [];
+    try { const l = JSON.parse(fs.readFileSync(GENS.FILE, 'utf8')); recs = Array.isArray(l) ? l : (l.items || []); } catch (e) { return; }
+    const named = new Set();
+    for (const g of recs) for (const r of (g && g.refs) || []) named.add(String(r).split('?')[0].split('/').pop());
+    for (const f of names) {
+      if (named.has(f)) continue;
+      const p = path.join(dir, f);
+      try { if (Date.now() - fs.statSync(p).mtimeMs > 3600000) fs.unlinkSync(p); } catch (e) { /* in use, or gone */ }
+    }
+  } catch (e) { console.warn('[mv3-video] frames sweep:', e.message); }
+}
+setTimeout(_sweepFrames, 60000).unref();
+setInterval(_sweepFrames, 24 * 3600000).unref();
+router._sweepFrames = _sweepFrames;          // for the stands
+
+// (review V7) Each clip and sound as the first rung would prepare it - its part in the file, its shape in the rung's
+// window, a sound that has one - asked BEFORE anything is paid: a writer, a storyboard or a frame-swap picture is not
+// bought for a video that can never be made. '' or the words.
+async function _filesWrong(pair, media) {
+  const VP = require('../lib/video-prep');
+  for (const m of media || []) {
+    if (!m || (m.kind !== 'video' && m.kind !== 'audio')) continue;
+    const abs = toDiskExisting(m.path);
+    if (!abs || !fs.existsSync(abs)) return (m.kind === 'video' ? 'a clip' : 'a sound') + ' is not in the library any more';
+    const why = await VP.dryCheck(abs, pair, m);
+    if (why) return (m.kind === 'video' ? 'a clip' : 'a sound') + ' cannot go to ' + pair.label + ' - ' + why;
+  }
+  return '';
+}
+
 // The shape the picture is drawn in: the clip's own, snapped to one the picture model makes.
 function _shapeOf(w, h) {
   if (!(w > 0 && h > 0)) return '9:16';
@@ -398,23 +440,30 @@ async function _hostForWriter(paths) {
 // What the WRITER sees: the pictures, made small (review V6), then THREE FRAMES of every clip - the start, the middle
 // and the end of its part - in the order the clips are listed (phase V7; lib/mv3-video-rules.js listing says so). What
 // cannot be hosted is left out with a warning: the writer works from the words then, as before.
+// (review V7) It answers { urls, seen } - what the writer is told it sees is what it gets: the pictures all or none,
+// each clip's THREE frames or none of them (one short and the next clip's frames were read as this one's end).
 async function _writerSees(media, why) {
   const list = Array.isArray(media) ? media : [];
   const pics = list.filter(m => m.kind === 'image').map(m => m.path);
   let urls = [];
+  const seen = { pics: true, clips: [] };
   if (pics.length) {
     try { urls = await _hostForWriter(pics); }
-    catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see the pictures -', e.message); return []; }
+    catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see the pictures -', e.message); urls = []; seen.pics = false; }
   }
   for (const m of list.filter(x => x.kind === 'video')) {
+    let three = [];
     try {
-      if (FAKE.on()) { urls.push(FAKE.host(m.path), FAKE.host(m.path), FAKE.host(m.path)); continue; }
-      const abs = toDiskExisting(m.path);
-      const bufs = await require('../lib/video-prep').frames(abs, { from: m.in, to: m.out });
-      for (const b of bufs) urls.push(await require('../lib/helpers').uploadToPublicHost(b, { ext: 'jpg', verify: true }));
-    } catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see a clip -', e.message); }
+      if (FAKE.on()) three = [FAKE.host(m.path), FAKE.host(m.path), FAKE.host(m.path)];
+      else {
+        const abs = toDiskExisting(m.path);
+        const bufs = await require('../lib/video-prep').frames(abs, { from: m.in, to: m.out });
+        if (bufs.length === 3) for (const b of bufs) three.push(await require('../lib/helpers').uploadToPublicHost(b, { ext: 'jpg', verify: true }));
+      }
+    } catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see a clip -', e.message); three = []; }
+    if (three.length === 3) { urls.push(...three); seen.clips.push(true); } else seen.clips.push(false);
   }
-  return urls;
+  return { urls, seen };
 }
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
@@ -448,8 +497,8 @@ function _cardOf(id, project, type) {
 async function _writeCard(cardId, kick, o) {
   let out;
   try {
-    const picUrls = await _writerSees(o.media, 'write');
-    const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls, thread: [],
+    const sees = await _writerSees(o.media, 'write');
+    const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
                                        skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep });
     out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
       : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
@@ -486,7 +535,7 @@ function _settings(b) {
   return { model, params, agg: String(b.agg || '') };
 }
 
-router.post('/mv3/video/write', (req, res) => {
+router.post('/mv3/video/write', async (req, res) => {
   const b = req.body || {};
   let kick = '';
   try {
@@ -510,6 +559,9 @@ router.post('/mv3/video/write', (req, res) => {
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
     const seat = twoStep ? _twoStepWrong(s.model, s.agg, s.params, mm.media) : '';
     if (seat) return res.status(400).json({ success: false, error: seat });
+    // (review V7) The clips and sounds as the first rung would take them - before the writer (and a sheet) is paid.
+    const fw = await _filesWrong(rt.fits[0], mm.media);
+    if (fw) return res.status(400).json({ success: false, error: fw });
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
 
     const recipe = _recipeOf(b.recipe);
@@ -549,6 +601,8 @@ router.post('/mv3/video/frameswap', async (req, res) => {
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const wrong = _frameWrong(s.model, s.agg, s.params, mm.media);
     if (wrong) return res.status(400).json({ success: false, error: wrong });
+    const fw0 = await _filesWrong(_routeOf(s.model, s.agg, s.params, mm.media, 'xxx').fits[0], mm.media);
+    if (fw0) return res.status(400).json({ success: false, error: fw0 });
     const clip = mm.media.find(x => x.kind === 'video');
     // The clip as it is seen decides the picture's shape.
     let shape = '9:16';
@@ -698,7 +752,9 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       return res.status(400).json({ success: false, error: frame ? 'a picture-then-video card is Kling motion control\'s - pick it on the left'
         : 'this prompt was written for ' + _labelOf(m.card.model) + ' - write it again for ' + _labelOf(s.model) });
     }
-    const mm = _mediaOf(m.media);
+    // (review V7) A frame-swap's video takes the DRAWN picture in place of the person's: the person's own picture is not
+    // needed any more, and one gone from the Library must not stop a paid picture from being used.
+    const mm = _mediaOf(frame ? (m.media || []).filter(x => x && x.kind !== 'image') : m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
     if (m.card.board) {
@@ -785,7 +841,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       x.genId = x.genIds[0];
     });
     res.json({ success: true, card: m.id, genIds: ids, agg: rt.fits[0].agg });
-    _make({ ids, kick, prompt, writer: m.card.writer || '', zh, max: Math.min(...rt.fits.map(p => p.promptMax || 30000)) });
+    _make({ ids, kick, prompt, writer: m.card.writer || '', zh, english: _family(s.model) === 'kmc', max: Math.min(...rt.fits.map(p => p.promptMax || 30000)) });
   } catch (err) {
     // What was made before the break is failed in its own words - nothing of it was asked for.
     for (const id of ids) VGENS.abandon(id, kick, err);
@@ -800,6 +856,16 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
 async function _make(o) {
   try {
     const over = { prompt: o.prompt, writer: o.writer, lang: 'en' };
+    // (review V7) Kling motion control reads English only: a card's prompt edited in another language is translated,
+    // as the plain send does - and refused in words when it cannot be.
+    if (o.english && !AGENT.english(o.prompt)) {
+      if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
+      for (const id of o.ids) VGENS.stage(id, 'translating the prompt', o.kick);
+      const t = await AGENT.toEnglish(o.prompt);
+      if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
+      if (t.text && t.text.length > o.max) { for (const id of o.ids) VGENS.refuse(id, 'the English is longer than the model takes (' + t.text.length + ' > ' + o.max + ')', o.kick); return; }
+      Object.assign(over, { prompt: t.text, writer: t.translated ? 'translated' : over.writer });
+    }
     if (o.zh) {
       if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
       let tr;
@@ -850,6 +916,12 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     if (pv.error) return res.status(400).json({ success: false, error: pv.error });
     const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
     if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });
+    // (review V7) The video's clips and sounds as its rung would take them: no picture is bought for a video that cannot be.
+    const vr = _routeOf(m.card.model, m.card.agg, m.card.params || {}, all.media, 'xxx');
+    if (!vr.error) {
+      const fw = await _filesWrong(vr.fits[0], all.media);
+      if (fw) return res.status(400).json({ success: false, error: fw });
+    }
     // The frame-swap's room: the clip's frame at the moment chosen, cut at the press (the owner's answer 1: the part's first
     // frame unless another is picked), kept in media/work under the card's name - the same moment is cut once.
     let refs = pics.map(x => x.path);
@@ -864,8 +936,8 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
         let buf;
         try { buf = await require('../lib/video-prep').still(toDiskExisting(clip.path), at); }
         catch (e) { return res.status(400).json({ success: false, error: 'the frame could not be taken from the clip - ' + e.message }); }
-        fs.mkdirSync(MEDIA.work, { recursive: true });
-        fs.writeFileSync(abs, buf);
+        // Whole or not at all (review V7): the same moment reuses this file, so a half-written one would be sent on.
+        require('../lib/atomic-write').writeFileAtomic(abs, buf);
       }
       refs = ['/media/work/' + name, pics[0].path];
     }
@@ -877,6 +949,13 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     // shelf, where a picture of the chats is shown (js/alerts-bell.js reveals only 'pictures' and 'videos').
     const where = Object.assign({}, w0, { spot: Object.assign({}, w0.spot || {}, { view: 'storyboard' }) });
     const title = (m.card.recipe && m.card.recipe.title) || 'video';
+    // (review V7) The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
+    // the card is read again and the count asked again here, in the tick the record is written.
+    const m2 = _cardOf(req.params.id, project, 'prompt');
+    if (!m2 || !m2.card.board) return res.status(409).json({ success: false, error: 'the card is not in the thread any more' });
+    if (CHAT.boardsOf(m2).filter(x => x.state === 'pending').length >= BOARD_AT_ONCE) {
+      return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });
+    }
     kick = 'b' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);
     const g = GENS.create({

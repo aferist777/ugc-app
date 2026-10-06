@@ -481,6 +481,15 @@ router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) =>
       // Every set, whatever its format: an archive of layout 6 can still hold talking-head timelines,
       // and the upgrade is what rewrites them (lib/timeline-convert.js). On a set already in layout 6
       // that is all it does.
+      // An archive of format 6 IS layout 6, whatever groups it carries (review V7): the library's own mark never
+      // travels, and a set of the media alone - no project-list.json, no merge.json - was read as layout 5 and
+      // upgraded over: every sound claimed into media/work, the Sounds categories dropped, and any work or voice
+      // file its stores did not name set aside with the staging, which is then deleted. The mark is the staging's
+      // only - library.json is never merged.
+      if (Number(state.version) >= 6 && !fs.existsSync(path.join(lib, 'data', 'library.json'))) {
+        fs.mkdirSync(path.join(lib, 'data'), { recursive: true });
+        writeFileAtomic(path.join(lib, 'data', 'library.json'), JSON.stringify({ layout: 6, since: new Date().toISOString(), staged: true }, null, 2));
+      }
       {
         const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace(/^\[(upgrade|timelines)\]/, '[data-io] staged set:')) });
         r.upgraded = !!u.upgraded;

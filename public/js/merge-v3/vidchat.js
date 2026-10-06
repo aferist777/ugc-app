@@ -137,9 +137,12 @@ function VIDEOS(ctx) {
     const k = _kind(a);
     if (k === 'image') return;
     let dur = +a.dur || 0;
+    const key0 = ctx.key();
     // Measured when the shelf did not know its length - and a clip's file taken as a sound, which may have none.
     if (!dur || (k === 'audio' && /\.(mp4|mov|m4v|webm|mkv|avi)(\?|$)/i.test(a.path))) {
       const d = await json('/api/media/probe?src=' + encodeURIComponent(a.path));
+      // (review V7) Another project opened meanwhile: its own attachment of the same file is not this one.
+      if (ctx.key() !== key0) return;
       if (d && d.success && +d.duration > 0) dur = Math.round(+d.duration * 100) / 100;
       if (d && d.success && ((k === 'video' && !(d.w > 0)) || (k === 'audio' && !d.audio))) {
         ctx.detach(a.path);
@@ -169,6 +172,8 @@ function VIDEOS(ctx) {
   }
 
   // The part chosen by hand: the clip (or the sound) in a panel over the zone, its window within what the model takes.
+  // The attachment whose part window is open - the window goes with it when it is taken off (review V7).
+  let _trimPath = '';
   function _trimFor(a, cell) {
     const dur = +a.dur || 0;
     if (!dur) { ctx.say('Its length is not known - it cannot be cut.'); return; }
@@ -180,7 +185,10 @@ function VIDEOS(ctx) {
       min: Math.min(rule.min, dur), max: Math.max(Math.min(rule.min, dur), rule.max),
       title: a.name || (k === 'audio' ? 'the sound' : 'the clip'), why: rule.why,
       onChange: (f, t) => ctx.setAtt(a.path, { in: f, out: t }),
+      onClose: () => { if (_trimPath === a.path) _trimPath = ''; },
     });
+    // Set once the window is open: opening closed the one before, whose own close cleared it.
+    _trimPath = a.path;
   }
 
   const _takes = (k) => {
@@ -213,7 +221,10 @@ function VIDEOS(ctx) {
     if (!ctx.shown() || !d.src) return;
     const k = d.kind === 'audio' ? 'audio' : 'video';
     if (!_takes(k)) { ctx.say(((model() || {}).label || 'This model') + ' takes no ' + (k === 'video' ? 'clips' : 'sounds') + '.'); return; }
-    if (ctx.atts().some(x => x.path === d.src)) {
+    const was = ctx.atts().find(x => x.path === d.src);
+    if (was) {
+      // (review V7) One place per file: a clip's sound twin let go over the sounds is not the clip attached already.
+      if (_kind(was) !== k) { ctx.say('This file is attached already as a ' + (_kind(was) === 'video' ? 'clip' : 'sound') + ' - one place per file.'); return; }
       // Attached already: the part the timeline plays replaces the one it had.
       ctx.setAtt(d.src, { in: d.in, out: d.out });
       return;
@@ -495,7 +506,9 @@ function VIDEOS(ctx) {
     // control a recipe only lays out what to attach (phase V7.3) - it stands, and says the box is the prompt.
     // A picture-then-video recipe (V7.6) is Kling motion control's own.
     const seed = _skill.frameSwap ? isMC() : (!_skill.twoStep || (model() || {}).family === 'seedance');
-    box.className = 'mv3-ig-banner mv3-vc-recipe' + (seed ? '' : ' is-off');
+    // A recipe whose places need more than this model takes stands dimmed too, and says so (review V7).
+    const tooMuch = seed ? _recipeOver() : '';
+    box.className = 'mv3-ig-banner mv3-vc-recipe' + (seed && !tooMuch ? '' : ' is-off');
     box.appendChild(el('span', 'k', 'recipe'));
     const t = el('button', 't', _skill.title);
     t.type = 'button';
@@ -507,6 +520,7 @@ function VIDEOS(ctx) {
     if (_skill.frameSwap) box.appendChild(el('span', 'needs', '2 steps - a picture of the dancer\'s room with your character, then Kling moves it'));
     box.appendChild(el('span', 'sp'));
     if (!seed) box.appendChild(el('span', 'why', _skill.frameSwap ? 'these two steps are Kling motion control\'s - pick it' : 'two steps are made by Seedance - pick a Seedance model'));
+    else if (tooMuch) box.appendChild(el('span', 'why', 'it does not fit ' + ((model() || {}).label || 'this model') + ': ' + tooMuch));
     else if (isMC() && !_skill.frameSwap) box.appendChild(el('span', 'why', 'no writer here: the recipe lays out what to attach, the box is Kling\'s prompt'));
     const x = el('button', 'x', '×');
     x.type = 'button';
@@ -647,9 +661,29 @@ function VIDEOS(ctx) {
     return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
       .map(i => ({ kind: 'audio', path: i.media, aspect: '5:2', state: 'done', name: i.name || '', dur: 0, libId: i.id || '' }));
   }
+  // (review V7) What a recipe's places must hold beyond what the chosen model takes ('' when it fits): flat-flythrough's
+  // plan and two renders under Kling, which takes one picture. A picture-then-video recipe is judged by its own rules.
+  function _recipeOver() {
+    if (!_skill || _skill.frameSwap || !_applies()) return '';
+    const r = rec(), m = model();
+    if (!r || !m) return '';
+    const L = r.limits || {};
+    const need = { image: 0, video: 0, audio: 0 };
+    for (const s of _skill.slots || []) if (s && s.required && +s.min > 0) need[_partOf(s.kind)] += +s.min;
+    const room = { image: _picRoom(r), video: L.videos || 0, audio: L.audios || 0 };
+    for (const k of ['image', 'video', 'audio']) {
+      if (need[k] > room[k]) return 'it needs ' + need[k] + ' ' + REF_WORD[k] + (need[k] === 1 ? '' : 's') + ', and ' + m.label + ' takes ' + (room[k] || 'none');
+    }
+    return '';
+  }
+
+  // Whether the recipe in use applies under the chosen model: a picture-then-video one is Kling motion control's, a
+  // two-step one Seedance's. One that does not stands dimmed, and asks nothing of the send (review V7).
+  const _applies = () => !!_skill && (_skill.frameSwap ? isMC() : (!_skill.twoStep || (model() || {}).family === 'seedance'));
+
   // The recipe's first slot that is not filled as far as it must be - the send waits for it.
   function _missing() {
-    if (!_skill) return null;
+    if (!_skill || !_applies()) return null;
     const atts = ctx.atts();
     for (const kind of ['image', 'video', 'audio']) {
       for (const s of (_slotsOf(kind) || [])) {
@@ -666,6 +700,10 @@ function VIDEOS(ctx) {
     const m = model(), r = rec();
     if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
+    // (review V7) A recipe whose places must hold more than this model takes cannot be filled here - said plainly, rather
+    // than blinking a place that can never be filled.
+    const over = _recipeOver();
+    if (over) return ['The recipe does not fit ' + m.label + '.', over + ' - pick another model, or stop using the recipe with the × on its line.'];
     // A recipe's cell that must be filled and is not: nothing is asked, the cell blinks (phase V6).
     const miss = _missing();
     if (miss) {
@@ -683,7 +721,8 @@ function VIDEOS(ctx) {
         return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + (r.duration.min || 3) + '-'
           + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s).'];
       }
-      const words = String(ctx.text() || '').trim();
+      // The box is the prompt - except under a picture-then-video recipe, whose card holds its own (review V7).
+      const words = _skill && _skill.frameSwap ? '' : String(ctx.text() || '').trim();
       if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
     }
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
@@ -748,7 +787,8 @@ function VIDEOS(ctx) {
       // (phase V7) A clip or a sound goes as its part - the server prepares just that.
       }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
-      skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
+      // (review V7) A picture-then-video recipe's words are its picture's prompt: never a writer's recipe.
+      skill: _skill && !_skill.frameSwap ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
   }
 
@@ -1752,7 +1792,11 @@ function VIDEOS(ctx) {
     settings: {
       load,
       paint: () => { paint(); _paintRecipe(); },
-      onAtts: () => { if (_set) _paintParams(); },
+      onAtts: () => {
+        if (_set) _paintParams();
+        // (review V7) A clip taken off while its part window is open takes the window with it.
+        if (_trimPath && !ctx.atts().some(a => a.path === _trimPath)) closeTrim();
+      },
       onCount: _paintPrice,
       onProject: () => { if (_set) _paintParams(); },
       room: _room,
