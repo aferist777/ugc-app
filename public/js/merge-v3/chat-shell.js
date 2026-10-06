@@ -134,6 +134,21 @@ export function createChat(make) {
     over: () => (_ui ? _ui.over : null),
     writing: () => _write,
     saveDraft: () => _draftLater(),
+    // (phase V6) The video chat's builder: the thread's FOOT - its own step, the last thing in the thread -, the input
+    // line shown or hidden, the thread as read, read again, a project for a press made from "no project", and the
+    // results of a message drawn the shell's way inside a card the description draws.
+    foot: () => (_ui ? _ui.foot : null),
+    bar: (show) => { if (_ui) _ui.bar.hidden = !show; },
+    thread: () => _thread,
+    reload: (toEnd) => _reload(toEnd),
+    ensureProject: async () => {
+      if (Store.key()) return Store.key();
+      _adopt = true;
+      try { await _ensureProject(); } catch (e) { _adopt = false; throw e; }
+      return Store.key();
+    },
+    shots: (m, progs) => _shots(m, progs),
+    footChanged: () => { if (_ui) _paintThread(true); },
   };
   const S = make(ctx);
   const T = S.text;
@@ -285,6 +300,7 @@ export function createChat(make) {
   // empty place pressed is ARMED - the next tile or file goes into it, and the right column turns to what suits it;
   // pressed again, it asks this computer for a file. Without a zone it is the one row it always was.
   let _armed = null;            // { kind, slot } - the slot the next attachment goes into
+  let _grew = '';               // the part something was just attached to - its row comes to its end
   const _kindOf = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
   const _zone = () => (typeof set.zone === 'function' ? set.zone() : null);
   const _keysOf = (p) => (p.slots || []).map(s => s.key);
@@ -341,6 +357,7 @@ export function createChat(make) {
     }
     _say('');
     _atts.push({ path, name: name || '', kind, slot });
+    _grew = kind;
     // An armed slot that is full now lets go.
     if (z && _armed && _armed.kind === kind && _armed.slot === slot && slot) {
       const p = z.parts.find(x => x.kind === kind);
@@ -454,8 +471,8 @@ export function createChat(make) {
     }
     _sideways(row);
     box.appendChild(row);
-    // The place that just appeared is where the eye goes: the row comes to its end.
-    requestAnimationFrame(() => { row.scrollLeft = row.scrollWidth; });
+    // The place that just appeared is where the eye goes: after an attachment its row comes to its end.
+    if (_grew === p.kind) { _grew = ''; requestAnimationFrame(() => { row.scrollLeft = row.scrollWidth; }); }
     return box;
   }
 
@@ -566,7 +583,9 @@ export function createChat(make) {
   }
 
   const _sig = (m) => [m.text || ''].concat(_gensOf(m).map(g => g.id + ':' + g.state + ':'
-    + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : ''))).join('|');
+    + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))
+    // (phase V6) A card is drawn again when what it IS changes - never for the text being typed into it.
+    .concat(m.card && typeof S.cardSig === 'function' ? [S.cardSig(m)] : []).join('|');
 
   function _dropProgs(n, landed) {
     for (const [id, p] of n.progs) {
@@ -632,6 +651,8 @@ export function createChat(make) {
   function _paintThread(toEnd) {
     const host = _ui.thread;
     const atEnd = toEnd || host.scrollTop + host.clientHeight >= host.scrollHeight - 40;
+    // (phase V6) The description lays its foot for the thread as it is now - before the empty line is decided.
+    if (typeof S.onThread === 'function') S.onThread(_thread);
     const ids = new Set(_thread.map(m => m.id));
     for (const [id, n] of _nodes) {
       if (ids.has(id)) continue;
@@ -640,8 +661,11 @@ export function createChat(make) {
       _nodes.delete(id);
     }
     let empty = host.querySelector('.mv3-ig-empty');
-    if (!_thread.length) {
-      if (!empty) { empty = el('div', 'mv3-ig-empty'); host.appendChild(empty); }
+    // (phase V6) The foot - a description's own step at the end of the thread (the video chat's recipe card) - stands
+    // for the conversation too: with it there is no "describe a clip".
+    const footed = !!(_ui.foot && _ui.foot.childNodes.length);
+    if (!_thread.length && !footed) {
+      if (!empty) { empty = el('div', 'mv3-ig-empty'); host.insertBefore(empty, _ui.foot); }
       empty.textContent = _key ? T.empty : T.emptyNoProject;
     } else if (empty) empty.remove();
 
@@ -664,10 +688,29 @@ export function createChat(make) {
       if (n.el !== want) host.insertBefore(n.el, want);
       prev = n.el;
     }
+    // The foot stays the last thing in the thread.
+    if (_ui.foot && host.lastChild !== _ui.foot) host.appendChild(_ui.foot);
     if (atEnd) host.scrollTop = host.scrollHeight;
   }
 
+  // (phase V6) What a message's results look like - the shots, their countdowns and the facts - for a description that
+  // draws the rest of the bubble itself (the video chat's prompt card).
+  function _shots(m, progs) {
+    const gens = _gensOf(m);
+    if (!gens.length) return null;
+    const box = document.createDocumentFragment();
+    const wrap = el('div', 'mv3-ig-shots' + (gens.length > 1 ? ' is-many' : ''));
+    for (const g of gens) wrap.appendChild(_shot(g, progs));
+    box.append(wrap, _facts(gens[0]));
+    return box;
+  }
+
   function _bubble(m, progs) {
+    // (phase V6) A card is the description's to draw.
+    if (m.card && typeof S.cardBubble === 'function') {
+      const c = S.cardBubble(m, progs);
+      if (c) return c;
+    }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));
     if (m.text) b.appendChild(el('div', 'mv3-ig-text', m.text));
     if (m.role === 'user' && (m.refs || []).length) {
@@ -770,7 +813,9 @@ export function createChat(make) {
     clearTimeout(_timer);
     _timer = 0;
     if (!_chat) return;
-    const busy = _pending.size || _feed.some(x => x.state === 'pending');
+    const busy = _pending.size || _feed.some(x => x.state === 'pending')
+      // (phase V6) A description's own waiting in the thread - the video chat's card being written.
+      || (typeof S.busy === 'function' && S.busy(_thread));
     _timer = setTimeout(() => { _timer = 0; if (_chat && !document.hidden) _reload(); else _schedule(); }, busy ? POLL_MS : IDLE_MS);
   }
   function _stop() { clearTimeout(_timer); _timer = 0; }
@@ -1137,6 +1182,9 @@ export function createChat(make) {
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
     bar.append(ta, pen, nBtn, go);
+    // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
+    const foot = el('div', 'mv3-ig-foot');
+    thread.appendChild(foot);
     chat.append(banner, thread, atts, over, file, bar);
 
     const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
@@ -1179,7 +1227,7 @@ export function createChat(make) {
       headL.append(...S.crumbButtons());
     }
 
-    _ui = { root, set: setBox, left, said, chat, banner, thread, atts, over, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, set: setBox, left, said, chat, banner, thread, foot, atts, over, file, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     _wireStripSash(sash, stripBox);
 
     file.addEventListener('change', () => { const f = [...(file.files || [])]; file.value = ''; _upload(f); });

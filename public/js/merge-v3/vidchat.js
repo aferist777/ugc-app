@@ -20,6 +20,8 @@ import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep } from './chat-shell.js';
 import { openCatalog } from './vcatalog.js';
+import { note } from './ask.js';
+import { startInlineProgress } from '../progress.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
 const SHOW_ATTS = 9;                       // the old row's places at most (the zone grows instead - phase V6)
@@ -286,6 +288,8 @@ function VIDEOS(ctx) {
     _set.fall.textContent = notes.join(' · ');
     _last.model = (model() || {}).id || _last.model;
     _remember();
+    _freshenCards();
+    _freshenRequest();
   }
 
   // ── The catalog and its recipe (phase V5; placed by phase V6) ─────────────
@@ -302,7 +306,7 @@ function VIDEOS(ctx) {
     box.textContent = '';
     box.hidden = !_skill;
     if (!_skill) return;
-    const used = ctx.writing() && !isMC();
+    const used = !isMC();
     box.className = 'mv3-ig-banner mv3-vc-recipe' + (used ? '' : ' is-off');
     box.appendChild(el('span', 'k', 'recipe'));
     const t = el('button', 't', _skill.title);
@@ -312,14 +316,11 @@ function VIDEOS(ctx) {
     box.appendChild(t);
     if (_edited(_skill)) box.appendChild(el('i', null, 'edited'));
     box.appendChild(el('span', 'sp'));
-    if (!used) {
-      box.appendChild(el('span', 'why', isMC() ? 'Kling motion control has no writer - not used with it'
-        : 'the writer is off (✎) - your words go as typed'));
-    }
+    if (!used) box.appendChild(el('span', 'why', 'Kling motion control has no writer - pick another model'));
     const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
-    x.addEventListener('click', () => { _skill = null; ctx.reslot(); ctx.saveDraft(); _paintRecipe(); });
+    x.addEventListener('click', () => { _skill = null; _wantRecipe = false; ctx.reslot(); ctx.saveDraft(); _paintRecipe(); _paintFoot(); });
     box.appendChild(x);
   }
   // The catalog opens on the recipe in use when there is one (the owner, 2026-10-06), with the chat's own edits.
@@ -335,15 +336,21 @@ function VIDEOS(ctx) {
     _last.model = u.model;
     _last.params[u.model] = Object.assign({}, _last.params[u.model] || {}, u.params || {});
     _remember();
+    const was = _skill;
     _skill = u.skill ? {
       id: u.skill.id, kind: u.skill.kind, title: u.skill.title, v: u.skill.v,
       text: u.skill.text, orig: u.skill.orig != null ? u.skill.orig : u.skill.text, slots: u.skill.slots || [],
+      // What was written in the places of the same recipe stays (matched by each place's own words).
+      vals: was && was.id === u.skill.id && was.kind === u.skill.kind ? (was.vals || []) : [],
     } : null;
+    _wantRecipe = true;
     if (_set) { _set.model.value = u.model; _paintModel(true); }
     // What was attached before finds the recipe's slots.
     ctx.reslot();
     ctx.saveDraft();
     _paintRecipe();
+    _cardEls = null;
+    _paintFoot();
   }
 
   function _room() {
@@ -470,10 +477,483 @@ function VIDEOS(ctx) {
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
         audio: p.audio !== false, mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
-      media: atts.map((a) => ({ path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)) })),
+      media: atts.map((a) => ({
+        path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
+        label: (a.slot && slots.get(_kind(a) + ':' + a.slot) || {}).label || '',
+      })),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
       skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
+  }
+
+  // ── The step-by-step builder (phase V6, the owner 2026-10-06) ─────────────
+  // A recipe chosen, the chat is a BUILDER: there is no input line - the person writes in the cards. At the foot of the
+  // thread stands the recipe's REQUEST, its places [like this] framed in gold - dashed while a place still holds the
+  // recipe's example, solid once it is the person's - with the rest of the recipe folded under it (unfolded, it is
+  // edited right there); the press under it sends the request to the writer alone (POST /write). The writer's answer
+  // is a PROMPT CARD the person edits; the press under that makes the video (POST /card/:id/make). The foot holds the
+  // one step that comes next: this recipe's prompt card not made yet, or the request again - filled in as it was left,
+  // for the next variant. The plain chat, without a recipe, stays one press (the owner).
+  const GAP_RE = /\[([^\[\]\n]{1,600})\]/g;
+  const REF_WORD = { image: 'picture', video: 'clip', audio: 'sound' };
+  const REF_KIND = { picture: 'image', clip: 'video', sound: 'audio' };
+  // The writer's neutral references as the person reads and writes them: {{image:1}} <-> [picture 1].
+  const toShown = (p) => String(p || '').replace(/\{\{(image|video|audio):(\d+)\}\}/g, (a, k, n) => '[' + REF_WORD[k] + ' ' + n + ']');
+  const toNeutral = (p) => String(p || '').replace(/\[(picture|clip|sound) (\d+)\]/gi, (a, k, n) => '{{' + REF_KIND[k.toLowerCase()] + ':' + n + '}}');
+  let _wantRecipe = false;      // "change the values" pressed: the request shows though a prompt card waits
+  let _cardEls = null;          // the foot's request while it shows
+  let _writingNow = false;
+  const _live = new Map();      // card id -> its controls, while it waits to be made (price and button follow the column)
+  const _cardN = new Map();     // card id -> how many clips it makes
+  const _patchT = new Map();
+
+  // The recipe's text as the builder reads it: the request (its first paragraph) and the rest.
+  function _split(text) {
+    const t = String(text || '').replace(/\r\n/g, '\n');
+    const m = /\n[ \t]*\n/.exec(t);
+    return m ? { head: t.slice(0, m.index).trim(), body: t.slice(m.index).trim() } : { head: t.trim(), body: '' };
+  }
+  const _gaps = (head) => [...String(head || '').matchAll(GAP_RE)].map(m => m[1]);
+  // A place that only says how long and what shape the clip is - "[Total length 15 seconds, vertical 9:16.]": those are
+  // the column's settings, so the code fills it from them (grey, not a place to write in).
+  const SIZE_WORDS = /\b(total|length|duration|long|about|around|in|of|a|the|and|sec|secs|second|seconds|s|vertical|horizontal|square|portrait|landscape|aspect|ratio|format|frame|clip)\b/gi;
+  const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+/g, ' ').replace(/\d+(\.\d+)?/g, ' ')
+    .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
+  function _sizeWords() {
+    const r = rec(), p = params();
+    if (!r) return '';
+    const secs = r.duration.fromClip ? 0 : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
+    const fmt = (Store.timeline() || {}).format || '9:16';
+    const ar = (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]);
+    const shape = !ar ? '' : ar === '9:16' ? 'vertical 9:16' : ar === '16:9' ? 'horizontal 16:9' : ar === '1:1' ? 'square 1:1' : 'shape ' + ar;
+    return [secs ? secs + ' seconds' : '', shape].filter(Boolean).join(', ') + '.';
+  }
+  // What the person wrote in each place, kept by the place's own words: a request changed in the popup keeps what still
+  // fits it.
+  function _syncVals(head) {
+    const gaps = _gaps(head);
+    const old = Array.isArray(_skill.vals) ? _skill.vals : [];
+    const used = new Set();
+    _skill.vals = gaps.map((ex, i) => {
+      if (old[i] && old[i].ex === ex) { used.add(i); return old[i]; }
+      const j = old.findIndex((o, k) => o && o.ex === ex && !used.has(k));
+      if (j >= 0) { used.add(j); return old[j]; }
+      return { ex, v: null };
+    });
+  }
+  const _valOf = (i) => (_skill && _skill.vals && _skill.vals[i] && _skill.vals[i].v) || null;
+  const _familyOf = (id) => ((models().find(m => m.id === id) || {}).family || '');
+  const _labelOf = (id) => ((models().find(m => m.id === id) || {}).label || id || '');
+  const _where = (key) => ({
+    page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&open=videos',
+    label: 'Merge · ' + (Store.title() || 'project') + ' · videos', spot: { key, view: 'videos' },
+  });
+  const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  // This recipe's newest prompt card while it is not made - being written, waiting, or failed (its "write it again" is
+  // the step): the step that comes next. Once it is made, the request comes back for the next variant.
+  function _openCard() {
+    if (!_skill) return null;
+    const cards = ctx.thread().filter(m => m.card && m.card.type === 'prompt' && m.card.recipe && m.card.recipe.id === _skill.id);
+    const last = cards.length ? cards[cards.length - 1] : null;
+    return last && last.card.state !== 'sent' ? last : null;
+  }
+  // "change the values": the request again, under the card that waits.
+  function _changeLink() {
+    const change = el('button', 'vc-link', 'change the values');
+    change.type = 'button';
+    change.title = 'The request again, under this card, to fill in otherwise';
+    change.addEventListener('click', () => { _wantRecipe = true; _paintFoot(); });
+    return change;
+  }
+
+  // The foot: the request, or nothing while this recipe's prompt card waits. `quiet` - laid during a paint of the thread.
+  function _paintFoot(quiet) {
+    const foot = ctx.foot();
+    if (!foot) return;
+    ctx.bar(!_skill);
+    const show = !!_skill && (!_openCard() || _wantRecipe);
+    const key = _skill ? [_skill.kind, _skill.id, _split(_skill.text).head].join('|') : '';
+    if (!show) {
+      _cardEls = null;
+      if (foot.childNodes.length) { foot.textContent = ''; if (!quiet) ctx.footChanged(); }
+      return;
+    }
+    if (_cardEls && _cardEls.key === key && foot.contains(_cardEls.box)) { _freshenRequest(); return; }
+    foot.textContent = '';
+    foot.appendChild(_requestCard(key));
+    if (!quiet) ctx.footChanged();
+  }
+
+  function _requestCard(key) {
+    const { head, body } = _split(_skill.text);
+    _syncVals(head);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-request');
+    const h = el('div', 'vc-card-h');
+    h.append(el('span', 'k', 'recipe'), el('span', 't', _skill.title));
+    box.appendChild(h);
+    const req = el('div', 'vc-req');
+    const places = [];
+    let last = 0;
+    let i = 0;
+    for (const m of head.matchAll(GAP_RE)) {
+      if (m.index > last) req.appendChild(document.createTextNode(head.slice(last, m.index)));
+      req.appendChild(_place(i, m[1], places));
+      last = m.index + m[0].length;
+      i++;
+    }
+    if (last < head.length) req.appendChild(document.createTextNode(head.slice(last)));
+    box.appendChild(req);
+    if (places.some(p => !p.auto)) {
+      box.appendChild(el('div', 'vc-card-note', 'Write your own over the places in gold - until you do, they hold the recipe\'s example, and it goes as it is.'));
+    }
+    // The rest of the recipe: folded; unfolded, edited right here (the owner).
+    let bodyTa = null;
+    let back = null;
+    if (body) {
+      const fold = el('button', 'vc-fold', 'the whole recipe ▸');
+      fold.type = 'button';
+      bodyTa = document.createElement('textarea');
+      bodyTa.className = 'vc-body';
+      bodyTa.hidden = true;
+      bodyTa.spellcheck = false;
+      bodyTa.value = body;
+      back = el('button', 'vc-link vc-back', 'back to the original');
+      back.type = 'button';
+      back.hidden = !_edited(_skill);
+      const grow = () => { bodyTa.style.height = 'auto'; bodyTa.style.height = Math.min(520, bodyTa.scrollHeight + 2) + 'px'; };
+      fold.addEventListener('click', () => {
+        bodyTa.hidden = !bodyTa.hidden;
+        fold.textContent = bodyTa.hidden ? 'the whole recipe ▸' : 'the whole recipe ▾';
+        if (!bodyTa.hidden) grow();
+      });
+      bodyTa.addEventListener('input', () => {
+        _skill.text = _split(_skill.text).head + '\n\n' + bodyTa.value;
+        back.hidden = !_edited(_skill);
+        grow();
+        _paintRecipe();
+        ctx.saveDraft();
+      });
+      back.addEventListener('click', () => {
+        const was = _split(_skill.text).head;
+        _skill.text = _skill.orig;
+        ctx.saveDraft();
+        _paintRecipe();
+        if (_split(_skill.orig).head !== was) { _cardEls = null; _paintFoot(); return; }
+        bodyTa.value = _split(_skill.orig).body;
+        back.hidden = true;
+        grow();
+      });
+      const row = el('div', 'vc-fold-row');
+      row.append(fold, back);
+      box.append(row, bodyTa);
+    }
+    const acts = el('div', 'vc-card-acts');
+    const go = el('button', 'mv3-c-btn vc-go', 'write the prompt');
+    go.type = 'button';
+    const why = el('span', 'vc-card-why');
+    go.addEventListener('click', () => _write(go));
+    acts.append(go, why);
+    box.appendChild(acts);
+    _cardEls = { key, box, places, go, why };
+    _freshenRequest();
+    return box;
+  }
+
+  // One place of the request: the person's words, or the recipe's example until they write over it.
+  function _place(i, ex, places) {
+    if (_isSize(ex)) {
+      const sp = el('span', 'vc-place is-auto', _sizeWords());
+      sp.title = 'The length and the shape on the left - the recipe said: ' + ex;
+      places.push({ i, auto: true, el: sp });
+      return sp;
+    }
+    const v = _valOf(i);
+    const sp = el('span', 'vc-place ' + (v ? 'is-changed' : 'is-example'), v || ex);
+    sp.contentEditable = 'plaintext-only';
+    sp.tabIndex = 0;
+    sp.dataset.i = String(i);
+    const paint = () => {
+      const mine = !!_valOf(i);
+      sp.classList.toggle('is-changed', mine);
+      sp.classList.toggle('is-example', !mine);
+      sp.title = mine ? 'Yours - the recipe\'s example was: ' + ex : 'The recipe\'s example - write your own over it';
+    };
+    paint();
+    // An example is taken whole at the first press: typing replaces it.
+    sp.addEventListener('focus', () => {
+      if (_valOf(i)) return;
+      setTimeout(() => { if (document.activeElement === sp) window.getSelection().selectAllChildren(sp); }, 0);
+    });
+    sp.addEventListener('input', () => {
+      const t = sp.textContent.replace(/\s+/g, ' ').trim();
+      _skill.vals[i] = { ex, v: t && t !== ex ? t : null };
+      paint();
+      ctx.saveDraft();
+    });
+    sp.addEventListener('blur', () => {
+      if (sp.textContent.trim()) return;
+      sp.textContent = ex;
+      _skill.vals[i] = { ex, v: null };
+      paint();
+      ctx.saveDraft();
+    });
+    // Enter goes on to the next place - a place is one line. A tick later: the rest of the key's own events land in
+    // THIS place first, and would otherwise collapse the next place's example taken whole.
+    sp.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const next = places.find(p => p.i > i && !p.auto);
+      setTimeout(() => { if (next) next.el.focus(); else sp.blur(); }, 0);
+    });
+    places.push({ i, auto: false, el: sp });
+    return sp;
+  }
+
+  // What follows the column: the length and shape place, and whether the request can go.
+  function _freshenRequest() {
+    if (!_cardEls) return;
+    for (const p of _cardEls.places) if (p.auto) p.el.textContent = _sizeWords();
+    const m = model();
+    const mc = isMC();
+    _cardEls.go.disabled = mc || _writingNow;
+    _cardEls.why.textContent = mc ? 'Kling motion control has no writer - pick another model on the left.'
+      : m ? 'The writer turns it into a prompt for ' + m.label + ' - you read it and edit it before anything is made.' : '';
+  }
+
+  async function _write(btn) {
+    if (_writingNow || !_skill) return;
+    if (isMC()) { note(btn, 'No writer here.', 'Kling motion control has no writer - pick another model on the left.'); return; }
+    const why = _ready();
+    if (why) { note(btn, why[0], why[1]); return; }
+    _writingNow = true;
+    btn.disabled = true;
+    try {
+      let key;
+      try { key = await ctx.ensureProject(); }
+      catch (e) { note(btn, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
+      const { head, body } = _split(_skill.text);
+      const values = _gaps(head).map((ex, i) => (_isSize(ex) ? _sizeWords() : _valOf(i)));
+      const b = _body();
+      const d = await _post('/api/mv3/video/write', {
+        project: key, model: b.model, agg: b.agg, params: b.params,
+        recipe: { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill) },
+        head, values, body, media: b.media,
+      });
+      if (!d || !d.success) { note(btn, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      _wantRecipe = false;
+      await ctx.reload(true);
+    } finally {
+      _writingNow = false;
+      if (btn.isConnected) btn.disabled = isMC();
+    }
+  }
+
+  // ── The cards in the thread ──
+  const _cardSig = (m) => {
+    const c = m.card;
+    return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).join(',')].join(':');
+  };
+  const _busy = (thread) => thread.some(m => m.card && m.card.type === 'prompt' && m.card.state === 'writing');
+
+  function _cardBubble(m, progs) {
+    const c = m.card;
+    if (c.type === 'recipe') return _sentRequest(m);
+    _live.delete(m.id);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-' + c.state);
+    const h = el('div', 'vc-card-h');
+    h.append(el('span', 'k', 'prompt'), el('span', 't', c.recipe && c.recipe.title ? c.recipe.title : ''));
+    if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
+    box.appendChild(h);
+    if (c.state === 'writing') {
+      const strip = el('div', 'mv3-ig-prog');
+      box.appendChild(strip);
+      progs.set('w:' + m.id, startInlineProgress(strip, {
+        label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(m.at) || 0,
+      }));
+      return box;
+    }
+    if (c.state === 'failed') {
+      box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
+      const acts = el('div', 'vc-card-acts');
+      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      again.type = 'button';
+      again.addEventListener('click', () => _rewrite(m, again));
+      acts.appendChild(again);
+      if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
+      box.appendChild(acts);
+      return box;
+    }
+    if (c.state === 'ready') return _readyCard(m, box);
+    // Made: what was sent, and the clips it made under it.
+    box.appendChild(el('div', 'vc-prompt-sent', toShown(c.prompt)));
+    const shots = ctx.shots(m, progs);
+    if (shots) box.appendChild(shots);
+    const acts = el('div', 'vc-card-acts is-quiet');
+    const again = el('button', 'vc-link', 'again - a copy to change and make');
+    again.type = 'button';
+    again.addEventListener('click', async () => {
+      const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/again', { project: m.project });
+      if (!d || !d.success) { note(again, 'Not copied.', (d && d.error) || 'the server did not answer'); return; }
+      ctx.reload(true);
+    });
+    acts.appendChild(again);
+    box.appendChild(acts);
+    return box;
+  }
+
+  // A prompt card waiting to be made: the prompt to edit, the count, the price, and the press that makes the video.
+  function _readyCard(m, box) {
+    const c = m.card;
+    if (c.edited) box.querySelector('.vc-card-h').appendChild(el('i', null, 'edited'));
+    const ta = document.createElement('textarea');
+    ta.className = 'vc-prompt-ta';
+    ta.spellcheck = true;
+    ta.value = toShown(c.prompt);
+    ta.title = 'The prompt the model gets. [picture 1], [clip 1] name what is attached - by its number in its part.';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
+    requestAnimationFrame(grow);
+    const save = () => {
+      clearTimeout(_patchT.get(m.id));
+      _patchT.delete(m.id);
+      return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, prompt: toNeutral(ta.value) }, 'PATCH');
+    };
+    ta.addEventListener('input', () => {
+      grow();
+      clearTimeout(_patchT.get(m.id));
+      _patchT.set(m.id, setTimeout(save, 600));
+    });
+    ta.addEventListener('blur', () => { if (_patchT.has(m.id)) save(); });
+    box.appendChild(ta);
+    const acts = el('div', 'vc-card-acts');
+    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    nBtn.type = 'button';
+    nBtn.title = 'How many to make from it. Each is its own attempt.';
+    nBtn.addEventListener('click', () => {
+      _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
+      nBtn.textContent = '×' + _cardN.get(m.id);
+      _freshenCards();
+    });
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'make');
+    go.type = 'button';
+    const price = el('span', 'vc-card-why');
+    go.addEventListener('click', () => _make(m, go));
+    acts.append(nBtn, go, price);
+    if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
+    box.appendChild(acts);
+    const l = { m, ta, go, price, save };
+    _live.set(m.id, l);
+    _freshenOne(m.id, l);
+    return box;
+  }
+
+  // The prices and the presses of the waiting cards follow the column: another kind of model means writing again.
+  function _freshenCards() {
+    for (const [id, l] of _live) {
+      if (!l.go.isConnected) { _live.delete(id); continue; }
+      _freshenOne(id, l);
+    }
+  }
+  function _freshenOne(id, l) {
+    const m = model();
+    const pr = priceNow();
+    const n = _cardN.get(id) || 1;
+    const other = m && _familyOf(l.m.card.model) && m.family !== _familyOf(l.m.card.model);
+    l.go.textContent = other ? 'write it again for ' + m.label : 'make' + (n > 1 ? ' ' + n : '');
+    l.go.classList.toggle('is-make', !other);
+    l.price.textContent = other ? 'it was written for ' + _labelOf(l.m.card.model)
+      : !pr || pr.none ? (m ? m.label + ' · no published price' : '')
+        : pr.fromClip ? '≈' + money(pr.per) + ' per second of clip · ' + (m ? m.label : '')
+          : '≈' + money(pr.usd * n) + ' · ' + pr.secs + ' s · ' + pr.res + ' · ' + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
+  }
+
+  async function _make(m, go) {
+    const l = _live.get(m.id);
+    if (!l || go.disabled) return;
+    const mm = model();
+    if (mm && mm.family !== _familyOf(m.card.model)) return _rewrite(m, go);
+    const prompt = toNeutral(l.ta.value).trim();
+    if (!prompt) { note(go, 'The prompt is empty.', 'Write what the clip shows, or write it again.'); return; }
+    const why = _ready();
+    if (why) { note(go, why[0], why[1]); return; }
+    go.disabled = true;
+    try {
+      clearTimeout(_patchT.get(m.id));
+      _patchT.delete(m.id);
+      const b = _body();
+      const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
+        project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
+      });
+      if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
+      _cardN.delete(m.id);
+      await ctx.reload(true);
+    } finally {
+      if (go.isConnected) go.disabled = false;
+    }
+  }
+
+  async function _rewrite(m, btn) {
+    if (isMC()) { note(btn, 'No writer here.', 'Kling motion control has no writer - pick another model on the left.'); return; }
+    btn.disabled = true;
+    try {
+      const b = _body();
+      const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/rewrite', { project: m.project, model: b.model, agg: b.agg, params: b.params });
+      if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+      await ctx.reload(true);
+    } finally {
+      if (btn.isConnected) btn.disabled = false;
+    }
+  }
+
+  // A request as it was sent: the places as the person left them - theirs in solid gold, the example's dashed - and
+  // what was attached, by the name of its slot.
+  function _sentRequest(m) {
+    const c = m.card;
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-request is-sent');
+    const h = el('div', 'vc-card-h');
+    h.append(el('span', 'k', 'recipe'), el('span', 't', (c.recipe && c.recipe.title) || ''));
+    if (c.recipe && c.recipe.edited) h.appendChild(el('i', null, 'edited'));
+    box.appendChild(h);
+    const req = el('div', 'vc-req');
+    const head = c.head || '';
+    let last = 0;
+    let i = 0;
+    for (const g of head.matchAll(GAP_RE)) {
+      if (g.index > last) req.appendChild(document.createTextNode(head.slice(last, g.index)));
+      const v = (c.values || [])[i];
+      const mine = v != null && String(v).trim() && String(v).trim() !== g[1];
+      req.appendChild(el('span', 'vc-place ' + (_isSize(g[1]) ? 'is-auto' : mine ? 'is-changed' : 'is-example'), mine ? String(v).trim() : g[1]));
+      last = g.index + g[0].length;
+      i++;
+    }
+    if (last < head.length) req.appendChild(document.createTextNode(head.slice(last)));
+    box.appendChild(req);
+    const media = m.media || [];
+    if (media.length) {
+      const row = el('div', 'mv3-ig-msg-refs');
+      const count = { image: 0, video: 0, audio: 0 };
+      for (const a of media) {
+        const k = count[a.kind] != null ? a.kind : 'image';
+        count[k]++;
+        const cell = el('div', 'mv3-ig-msg-ref');
+        if (k === 'image') {
+          const img = document.createElement('img');
+          img.src = '/api/thumb?src=' + encodeURIComponent(a.path) + '&v=strip';
+          img.loading = 'lazy'; img.decoding = 'async';
+          cell.appendChild(img);
+          cell.addEventListener('mouseenter', () => ctx.peekShow('/api/thumb?src=' + encodeURIComponent(a.path) + '&v=main', cell));
+          cell.addEventListener('mouseleave', ctx.peekHide);
+        }
+        cell.appendChild(el('span', 'n', String(count[k])));
+        cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
+        const wrap = el('div', 'vc-ref');
+        wrap.appendChild(cell);
+        if (a.label) wrap.appendChild(el('span', 'lab', a.label));
+        row.appendChild(wrap);
+      }
+      box.appendChild(row);
+    }
+    return box;
   }
 
   return {
@@ -524,6 +1004,11 @@ function VIDEOS(ctx) {
       { id: 'lookbooks', label: 'lookbooks', load: () => _loadShelf('lookbooks') },
     ],
     shelfFor: _shelfFor,
+    // (phase V6) The builder's cards in the thread, drawn here; the request at the thread's foot.
+    cardBubble: _cardBubble,
+    cardSig: _cardSig,
+    busy: _busy,
+    onThread: () => _paintFoot(true),
     resultPath: (g) => g.videoPath,
 
     settings: {
@@ -538,7 +1023,7 @@ function VIDEOS(ctx) {
       body: _body,
       // The recipe in use goes with the draft, per project (phase V5) - and the zone is laid out by its slots.
       draftExtra: () => (_skill ? { skill: _skill } : null),
-      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _paintRecipe(); ctx.paintAtts(); },
+      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _wantRecipe = false; _cardEls = null; _paintRecipe(); ctx.paintAtts(); _paintFoot(); },
       onPen: () => _paintRecipe(),
     },
 

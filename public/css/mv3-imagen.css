@@ -375,3 +375,68 @@
 .mv3-ig-over{ flex:0 0 auto; display:flex; align-items:center; gap:6px; min-width:0; padding:5px 10px 0 }
 .mv3-ig-over[hidden]{ display:none }
 .mv3-ig-over .mv3-c-btn{ padding:2px 8px }
+
+/* ── The video chat's step-by-step builder (phase V6, the owner 2026-10-06) ──
+   A recipe chosen, the input line goes and the person writes in the cards: the recipe's request at the thread's foot -
+   its places in GOLD (asked for by the owner: an exception to "gold once per surface"), dashed while a place holds the
+   recipe's example, solid once it is the person's - and the writer's prompt card, edited before the video is made. */
+.mv3-ig-bar[hidden]{ display:none }
+.mv3-ig-foot:empty{ display:none }
+.mv3-ig-foot{ display:flex; flex-direction:column }
+.vc-card{ max-width:min(640px, 100%); width:100% }
+.vc-card-h{ display:flex; align-items:baseline; gap:7px; min-width:0 }
+.vc-card-h .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--accent) }
+.vc-card-h .t{ flex:0 1 auto; min-width:0; font:700 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.vc-card-h .m{ flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); white-space:nowrap }
+.vc-card-h i{ font:600 10px/1 var(--font); font-style:normal; color:var(--gold) }
+.vc-req{ font:500 12px/1.75 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
+.vc-place{
+  padding:1px 5px; margin:0 1px; border-radius:var(--r-xs);
+  border:1px dashed var(--gold); background:oklch(.8 .12 85 / .07); outline:none;
+  -webkit-box-decoration-break:clone; box-decoration-break:clone;
+}
+.vc-place.is-example{ color:var(--muted) }
+.vc-place.is-changed{ border-style:solid; color:var(--ink); background:oklch(.8 .12 85 / .13) }
+.vc-place[contenteditable]{ cursor:text }
+.vc-place[contenteditable]:focus{ border-style:solid; box-shadow:0 0 0 2px oklch(.8 .12 85 / .25); color:var(--ink) }
+/* The length and the shape - the column's, filled in by the code: grey, not a place to write in. */
+.vc-place.is-auto{ border:1px solid var(--border); background:var(--surface-2); color:var(--muted) }
+.vc-card-note{ font:500 10px/1.45 var(--font); color:var(--muted) }
+.vc-fold-row{ display:flex; align-items:center; gap:12px }
+.vc-fold{
+  padding:0; border:0; background:none; cursor:pointer;
+  font:600 10px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted; text-underline-offset:2px;
+}
+.vc-fold:hover{ color:var(--ink) }
+.vc-back{ font-size:10px }
+.vc-body{
+  display:block; width:100%; min-height:160px; padding:8px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
+  font:500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.vc-body:focus{ outline:none; border-color:var(--primary) }
+.vc-card-acts{ display:flex; align-items:center; flex-wrap:wrap; gap:8px }
+.vc-card-acts.is-quiet{ gap:12px }
+.vc-go{ font-weight:700 }
+.vc-go.is-make{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); padding:4px 14px }
+.vc-go.is-make:hover:not([disabled]){ background:var(--primary); color:var(--primary-ink); filter:brightness(1.1) }
+.vc-go[disabled]{ opacity:.45; cursor:default }
+.vc-card-why{ flex:1 1 180px; min-width:0; font:600 10px/1.4 var(--font); color:var(--muted) }
+.vc-n{
+  height:24px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 10.5px/22px var(--font); cursor:pointer;
+}
+.vc-n:hover{ color:var(--ink); border-color:var(--border-soft) }
+.vc-prompt-ta{
+  display:block; width:100%; min-height:90px; padding:8px 9px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
+  font:500 11.5px/1.55 var(--font);
+}
+.vc-prompt-ta:focus{ outline:none; border-color:var(--primary) }
+.vc-prompt-sent{
+  padding:7px 9px; border-left:2px solid var(--border); background:var(--surface-2); border-radius:var(--r-xs);
+  font:500 11px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word;
+}
+.vc-card.is-sent .vc-req, .vc-card.is-prompt.is-sent .vc-prompt-sent{ opacity:.92 }
+.vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
+.vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
