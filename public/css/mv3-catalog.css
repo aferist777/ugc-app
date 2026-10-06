@@ -209,18 +209,22 @@
   .vc-tiles{grid-template-columns:repeat(auto-fill, minmax(112px, 1fr))}
 }
 
-/* ── in the chat: the catalog button and the skill above the box ── */
-.vc-chip-skill{
-  display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; padding:2px 4px 2px 9px;
-  border:1px solid var(--primary); border-radius:var(--pill); background:var(--primary-soft);
-  font:600 10px/16px var(--font); color:var(--ink);
+/* ── in the chat (phase V6): the recipe in use, on the line above the thread ── */
+.mv3-vc-recipe{display:flex; align-items:center; gap:7px; min-width:0}
+.mv3-vc-recipe .k{flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--accent)}
+.mv3-vc-recipe .t{
+  flex:0 1 auto; min-width:0; padding:0; border:0; background:none; cursor:pointer;
+  font:700 11.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  text-decoration:underline dotted; text-underline-offset:3px;
 }
-.vc-chip-skill span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.vc-chip-skill i{font-style:normal; color:var(--gold)}
-.vc-chip-skill.is-off{opacity:.55}
-.vc-chip-skill button{
-  width:16px; height:16px; padding:0; border:0; border-radius:var(--pill); background:none;
-  color:var(--muted); font:600 11px/16px var(--font); cursor:pointer;
+.mv3-vc-recipe .t:hover{color:var(--primary)}
+.mv3-vc-recipe i{flex:0 0 auto; font:600 10px/1 var(--font); font-style:normal; color:var(--gold)}
+.mv3-vc-recipe .needs,
+.mv3-vc-recipe .why{flex:0 1 auto; min-width:0; font:600 10px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-vc-recipe .sp{flex:1 1 auto}
+.mv3-vc-recipe .x{
+  flex:0 0 auto; width:18px; height:18px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted); font:600 11px/16px var(--font); cursor:pointer;
 }
-.vc-chip-skill button:hover{color:var(--danger)}
-.vc-needs{font:600 9.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-vc-recipe .x:hover{color:var(--danger); border-color:var(--danger)}
+.mv3-vc-recipe.is-off .k, .mv3-vc-recipe.is-off .t{opacity:.55}

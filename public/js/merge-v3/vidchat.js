@@ -136,6 +136,10 @@ function VIDEOS(ctx) {
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
       })), _last.model, (v) => { _last.model = v; _remember(); _paintModel(true); ctx.paintAtts(); });
       _row(host, 'model', mSel);
+      // What the chosen model does and what to attach - under its dropdown (phase V6, the owner: the line above the
+      // thread is the recipe's now).
+      const brief = el('div', 'mv3-vc-brief');
+      host.appendChild(brief);
       const aSel = document.createElement('select');
       aSel.id = 'mv3-vc-agg';
       aSel.title = 'Who is asked';
@@ -146,7 +150,7 @@ function VIDEOS(ctx) {
       const cost = el('div', 'mv3-ig-cost');
       const fall = el('div', 'mv3-ig-fall');
       host.append(cost, fall);
-      _set = { model: mSel, agg: aSel, box, cost, fall };
+      _set = { model: mSel, brief, agg: aSel, box, cost, fall };
     }
     _paintModel(false);
   }
@@ -179,9 +183,9 @@ function VIDEOS(ctx) {
       ctx.placeholder('');
       if (changed && ctx.text() === std) ctx.setText('');
     }
-    ctx.banner(m.brief + (isMC() ? ' Clips as references arrive in a later step.' : ''));
+    _set.brief.textContent = m.brief + (isMC() ? ' Clips as references arrive in a later step.' : '');
     _paintParams();
-    _paintOver();
+    _paintRecipe();
   }
 
   function _paintParams() {
@@ -279,9 +283,11 @@ function VIDEOS(ctx) {
     _remember();
   }
 
-  // ── The catalog and its recipe (phase V5) ─────────────────────────────────
-  // Above the box: `catalog`, and the recipe in use - its name, "edited", a cross - and what it wants attached. The
-  // recipe is the writer's: with the pen off, or for Kling motion control (no writer), it stands dimmed and is not sent.
+  // ── The catalog and its recipe (phase V5; placed by phase V6) ─────────────
+  // The recipe in use stands on the line above the thread (the owner, 2026-10-06): its name - pressed, the catalog
+  // opens on it -, "edited", what it wants attached, and a cross. The recipe is the writer's: with the pen off, or for
+  // Kling motion control (no writer), it stands dimmed and is not sent.
+  const _edited = (s) => !!s && (s.orig != null ? s.text !== s.orig : !!s.edited);
   function _needsWord(slots) {
     const req = (slots || []).filter(s => s.required && s.min > 0);
     if (!req.length) return '';
@@ -289,38 +295,43 @@ function VIDEOS(ctx) {
     const word = (s) => s.min + ' ' + (s.kind === 'video' ? 'clip' : s.kind === 'audio' ? 'sound' : (SAID[s.role] || '') + 'picture') + (s.min === 1 ? '' : 's');
     return 'wants ' + req.map(word).join(' + ');
   }
-  function _paintOver() {
-    const box = ctx.over();
+  function _paintRecipe() {
+    // The row over the box held the catalog and the recipe until V6; both moved (the crumb, the line above).
+    const over = ctx.over();
+    if (over) over.hidden = true;
+    const box = ctx.bannerBox();
     if (!box) return;
     box.textContent = '';
-    box.hidden = false;
-    const cat = el('button', 'mv3-c-btn', 'catalog');
-    cat.type = 'button';
-    cat.title = 'Recipes for this model: the cookbook\'s templates and cases, Grok\'s examples, your presets';
-    cat.addEventListener('click', _openCat);
-    box.appendChild(cat);
+    box.hidden = !_skill;
     if (!_skill) return;
     const used = ctx.writing() && !isMC();
-    const chip = el('span', 'vc-chip-skill' + (used ? '' : ' is-off'));
-    chip.appendChild(el('span', null, 'recipe: ' + _skill.title));
-    if (_skill.edited) chip.appendChild(el('i', null, 'edited'));
-    const x = el('button', null, '×');
+    box.className = 'mv3-ig-banner mv3-vc-recipe' + (used ? '' : ' is-off');
+    box.appendChild(el('span', 'k', 'recipe'));
+    const t = el('button', 't', _skill.title);
+    t.type = 'button';
+    t.title = 'Open it in the catalog';
+    t.addEventListener('click', _openCat);
+    box.appendChild(t);
+    if (_edited(_skill)) box.appendChild(el('i', null, 'edited'));
+    const needs = _needsWord(_skill.slots);
+    if (needs) box.appendChild(el('span', 'needs', needs));
+    box.appendChild(el('span', 'sp'));
+    if (!used) {
+      box.appendChild(el('span', 'why', isMC() ? 'Kling motion control has no writer - not used with it'
+        : 'the writer is off (✎) - your words go as typed'));
+    }
+    const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
-    x.addEventListener('click', () => { _skill = null; ctx.saveDraft(); _paintOver(); });
-    chip.appendChild(x);
-    chip.title = isMC() ? 'Kling motion control has no writer - the recipe is not used with it'
-      : used ? 'The writer follows this recipe for your next messages, and fills its gaps from what you write'
-        : 'The writer is off (✎): your words go as typed and the recipe is not used';
-    box.appendChild(chip);
-    const needs = _needsWord(_skill.slots);
-    if (needs) box.appendChild(el('span', 'vc-needs', needs));
+    x.addEventListener('click', () => { _skill = null; ctx.saveDraft(); _paintRecipe(); });
+    box.appendChild(x);
   }
+  // The catalog opens on the recipe in use when there is one (the owner, 2026-10-06), with the chat's own edits.
   async function _openCat() {
     if (!_table) await load();
     const m = model(), r = rec();
     if (!_table) return;
-    openCatalog({ matrix: _table, model: m ? m.id : '', agg: r ? r.agg : '', onUse: _onUse });
+    openCatalog({ matrix: _table, model: m ? m.id : '', agg: r ? r.agg : '', onUse: _onUse, recipe: _skill });
   }
   // `use` in the catalog: its model, the settings it suggests, its recipe.
   function _onUse(u) {
@@ -329,13 +340,13 @@ function VIDEOS(ctx) {
     _last.params[u.model] = Object.assign({}, _last.params[u.model] || {}, u.params || {});
     _remember();
     _skill = u.skill ? {
-      id: u.skill.id, kind: u.skill.kind, title: u.skill.title, v: u.skill.v, edited: !!u.skill.edited,
-      text: u.skill.text, slots: u.skill.slots || [],
+      id: u.skill.id, kind: u.skill.kind, title: u.skill.title, v: u.skill.v,
+      text: u.skill.text, orig: u.skill.orig != null ? u.skill.orig : u.skill.text, slots: u.skill.slots || [],
     } : null;
     if (_set) { _set.model.value = u.model; _paintModel(true); }
     ctx.paintAtts();
     ctx.saveDraft();
-    _paintOver();
+    _paintRecipe();
   }
 
   function _room() {
@@ -376,14 +387,14 @@ function VIDEOS(ctx) {
       },
       media: atts.map((a, i) => ({ path: a.path, kind: 'image', role: role(i) })),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
-      skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _skill.edited, text: _skill.text } : undefined,
+      skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
   }
 
   return {
     name: 'videos',
     kind: 'clip',
-    ids: { root: 'mv3-vc', head: 'mv3-vc-head', crumb: 'mv3-lib-vgen' },
+    ids: { root: 'mv3-vc', head: 'mv3-vc-head', headL: 'mv3-vc-headl', crumb: 'mv3-lib-vgen' },
     keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
     maxAtts: SHOW_ATTS,
     counts: [1, 2],
@@ -425,7 +436,7 @@ function VIDEOS(ctx) {
 
     settings: {
       load,
-      paint: () => { paint(); _paintOver(); },
+      paint: () => { paint(); _paintRecipe(); },
       onAtts: () => { if (_set) _paintParams(); },
       onCount: _paintPrice,
       onProject: () => { if (_set) _paintParams(); },
@@ -434,8 +445,8 @@ function VIDEOS(ctx) {
       body: _body,
       // The recipe in use goes with the draft, per project (phase V5).
       draftExtra: () => (_skill ? { skill: _skill } : null),
-      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _paintOver(); },
-      onPen: () => _paintOver(),
+      draftLoad: (x) => { _skill = (x && x.skill && x.skill.text) ? x.skill : null; _paintRecipe(); },
+      onPen: () => _paintRecipe(),
     },
 
     // A finished clip in the thread: its poster - a press plays it - and "to timeline" under it.
@@ -489,7 +500,9 @@ function VIDEOS(ctx) {
       openViewer([{ id: it.libId || it.video, kind: 'birols', media: it.video, thumb: it.poster || it.video, name: it.name || '' }], 0);
     },
 
-    headButtons: () => {
+    headButtons: () => [],
+    // ONE catalog, right beside "/ generate video" (the owner, 2026-10-06); with a recipe in use it opens on it.
+    crumbButtons: () => {
       const b = el('button', 'mv3-c-btn mv3-vc-cat', 'catalog');
       b.type = 'button';
       b.title = 'Recipes for this model: the cookbook\'s templates and cases, Grok\'s examples, your presets';

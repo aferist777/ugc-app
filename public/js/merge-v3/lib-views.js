@@ -31,8 +31,9 @@ let _caps = false;           // the captions view is up
 let _held = false;           // the room is taken
 let _frame = 0;
 let _capsBack = null;        // what "Library" does over the captions
-// The chats, by name: { root, head, crumb } element ids, onBack (leave it for the shelf), onYield (another
-// chat took the base), onCrumb (the pale crumb pressed), talk (the project has a conversation there).
+// The chats, by name: { root, head, headL, crumb } element ids (headL: buttons right beside the crumb - the video
+// chat's catalog, phase V6), onBack (leave it for the shelf), onYield (another chat took the base), onCrumb (the pale
+// crumb pressed), talk (the project has a conversation there).
 const _chats = new Map();
 
 /** What shows: 'captions', the name of a chat, or 'shelf'. */
@@ -43,7 +44,7 @@ export const isChat = () => _base !== 'shelf';
 
 /** A chat says who it is, where its box, buttons and crumb are, and what pressing back and the crumb do. */
 export function registerChat(name, o) {
-  const c = Object.assign({ root: '', head: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null, talk: false }, o || {});
+  const c = Object.assign({ root: '', head: '', headL: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null, talk: false }, o || {});
   _chats.set(name, c);
   // Its crumb opens it from the shelf; pressed while the chat shows, it does nothing - and never reaches the
   // panel header, whose press folds the panel.
@@ -166,6 +167,8 @@ function _paint() {
     }
     const head = $(c.head);
     if (head) head.hidden = !on;
+    const headL = c.headL ? $(c.headL) : null;
+    if (headL) headL.hidden = !on;
   }
   const cap = $('mv3-lib-cap');
   if (cap) {

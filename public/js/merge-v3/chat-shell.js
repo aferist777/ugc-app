@@ -117,8 +117,10 @@ export function createChat(make) {
     text: () => (_ui ? _ui.ta.value : ''),
     setText: (v) => { if (!_ui) return; _ui.ta.value = String(v || ''); _grow(); _draftLater(); },
     placeholder: (v) => { if (_ui) _ui.ta.placeholder = String(v || T.placeholder); },
-    // (phase V3) The line above the thread - what the chosen model does and what to attach. Empty hides it.
+    // (phase V3) The line above the thread. Empty hides it. (phase V6) The video chat fills it itself - the recipe in
+    // use - through bannerBox().
     banner: (v) => { if (!_ui) return; _ui.banner.textContent = String(v || ''); _ui.banner.hidden = !v; },
+    bannerBox: () => (_ui ? _ui.banner : null),
     // (phase V5) The row just above the box that a description fills (the video chat: its catalog and the skill in
     // use), and whether the writer is on.
     over: () => (_ui ? _ui.over : null),
@@ -936,6 +938,12 @@ export function createChat(make) {
       });
       head.append(wipe, ...S.headButtons());
     }
+    // (phase V6) Buttons right beside the chat's crumb - the video chat's catalog.
+    const headL = S.ids.headL ? $(S.ids.headL) : null;
+    if (headL && typeof S.crumbButtons === 'function') {
+      headL.textContent = '';
+      headL.append(...S.crumbButtons());
+    }
 
     _ui = { root, set: setBox, left, said, chat, banner, thread, atts, over, file, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     _wireStripSash(sash, stripBox);
@@ -998,7 +1006,7 @@ export function createChat(make) {
     // "Library" in the header leaves the chat; the pale crumb on the shelf opens it; another chat coming
     // forward lets this one go (lib-views wires all three).
     Views.registerChat(S.name, {
-      root: S.ids.root, head: S.ids.head, crumb: S.ids.crumb, crumbTitle: T.crumb,
+      root: S.ids.root, head: S.ids.head, headL: S.ids.headL || '', crumb: S.ids.crumb, crumbTitle: T.crumb,
       onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => open(),
     });
     // Back from another tab or window: the countdowns catch up at once rather than at the next tick.

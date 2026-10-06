@@ -239,17 +239,22 @@ function _sorted(list) {
 
 // ── The window ──────────────────────────────────────────────────────────────
 /**
- * Open the catalog. o: { matrix, model, agg, onUse(result) } - `matrix` is the chat's model table, `model` and `agg`
- * what the chat has chosen. `onUse` is handed { model, params, skill }.
+ * Open the catalog. o: { matrix, model, agg, onUse(result), recipe } - `matrix` is the chat's model table, `model` and
+ * `agg` what the chat has chosen, `recipe` the one the chat uses (phase V6: the window opens ON it, with the chat's own
+ * text and slots). `onUse` is handed { model, params, skill }.
  */
 export async function openCatalog(o) {
   if (_w) return;
   const was = stored(LS, {});
+  const inUse = o.recipe && o.recipe.kind && o.recipe.id ? o.recipe.kind + ':' + o.recipe.id : null;
   _st = {
     matrix: o.matrix, chatModel: o.model, model: o.model, agg: o.agg, onUse: o.onUse,
     filters: (was.filters && typeof was.filters === 'object') ? was.filters : {}, sort: was.sort || 'heat', q: '',
-    pick: null, edits: new Map(), more: false, fetching: false, error: '',
+    pick: inUse, inUse, edits: new Map(), more: false, fetching: false, error: '',
   };
+  if (inUse) _st.edits.set(inUse, { text: String(o.recipe.text || ''), slots: JSON.parse(JSON.stringify(o.recipe.slots || [])) });
+  // A case in use may be past the first cases drawn: all of them then, so its tile is there to be shown.
+  if (inUse && /^case:/.test(inUse)) _st.more = true;
   _build();
   _paintLeft();
   _w.grid.appendChild(el('div', 'vc-note', 'reading the catalog…'));
@@ -258,6 +263,10 @@ export async function openCatalog(o) {
   _paintLeft();
   _paintGrid();
   _paintRight();
+  if (inUse) {
+    const t = _w.grid.querySelector('.vc-tile[data-k="' + CSS.escape(inUse) + '"]');
+    if (t) t.scrollIntoView({ block: 'center' });
+  }
   // The cookbook's cases are fetched the first time the window opens without them (PLAN V-D).
   const st = _data.cat.status || {};
   if (st.templates && st.cases === 'missing' && !_fetchTried) _fetch();
@@ -344,7 +353,7 @@ function _paintLeft() {
     sel.appendChild(op);
   }
   if (m) sel.value = m.id;
-  sel.addEventListener('change', () => { _st.model = sel.value; _st.pick = null; _stopHover(); _paintLeft(); _paintGrid(false); _paintRight(); });
+  sel.addEventListener('change', () => { _st.model = sel.value; _st.pick = _st.inUse || null; _stopHover(); _paintLeft(); _paintGrid(false); _paintRight(); });
   inner.append(el('div', 'vc-lab', 'model'), sel);
   if (m) {
     const facts = el('div', 'vc-facts');
@@ -445,6 +454,22 @@ function _paintGrid(keep = true) {
   }
   if (m && m.family === 'kmc' && !all.length) {
     G.appendChild(el('div', 'vc-note', m.label + ' has no recipes yet: its presets - a picture and a clip of the moves, like "swap the dancer for my character" - come with clips as references.'));
+  }
+  // The recipe the chat uses, when its tile is not among these: why, in words (it still shows on the right).
+  if (_st.inUse && !shown.some(it => _key(it) === _st.inUse)) {
+    const used = _items().find(it => _key(it) === _st.inUse);
+    if (used) {
+      const n = el('div', 'vc-note vc-inuse-note');
+      if (!_fits(used, m)) n.textContent = 'The recipe in use - ' + used.title + ' - does not fit ' + (m ? m.label : 'this model') + '.';
+      else {
+        n.append('The recipe in use - ' + used.title + ' - is hidden by the filters. ');
+        const c = el('button', 'vc-link', 'clear them');
+        c.type = 'button';
+        c.addEventListener('click', () => { _st.filters = {}; _st.q = ''; _paintLeft(); _paintGrid(false); });
+        n.appendChild(c);
+      }
+      G.appendChild(n);
+    }
   }
   const tpl = by('template').sort((a, b) => _catRank(a.cat) - _catRank(b.cat) || b.count - a.count);
   _section(G, 'Templates', tpl, all.filter(it => it.kind === 'template').length, 'Recipes of the awesome-seedance cookbook: the writer follows the structure and fills the gaps from your message.');
@@ -648,7 +673,8 @@ async function _paintRight() {
   const scroll = el('div', 'vc-right-in');
   R.appendChild(scroll);
 
-  scroll.appendChild(el('div', 'vc-kindline', KIND_WORD[it.kind] + (it.kind === 'case' && it.v ? ' · Seedance ' + it.v : '') + (it.kind === 'example' ? ' · ' + (it.bucket || '') : '')));
+  scroll.appendChild(el('div', 'vc-kindline', KIND_WORD[it.kind] + (it.kind === 'case' && it.v ? ' · Seedance ' + it.v : '') + (it.kind === 'example' ? ' · ' + (it.bucket || '') : '')
+    + (_st.inUse === want ? ' · in use in the chat' : '')));
   scroll.appendChild(el('h4', 'vc-title', it.title));
   if (it.kind === 'case' && it.sub) scroll.appendChild(el('div', 'vc-zh', it.sub));
   const desc = it.kind === 'template' ? ((d.tpl.description && d.tpl.description.en) || '')
@@ -666,6 +692,7 @@ async function _paintRight() {
     if (it.written === 'seedance' && m.family === 'grok') fit.appendChild(el('div', 'vc-warn', 'written for Seedance - the writer will make a short Grok prompt of it'));
     if (it.d && pr && pr.secs && pr.secs !== it.d) fit.appendChild(el('div', 'vc-warn', 'it asks for ' + it.d + ' s - ' + m.label + ' makes ' + pr.secs));
     if (!m.usable) fit.appendChild(el('div', 'vc-warn', m.why || 'no aggregator can be asked for this model'));
+    if (!_fits(it, m)) fit.appendChild(el('div', 'vc-warn', 'it does not fit ' + m.label + ' - pick a model it fits above'));
   }
   scroll.appendChild(fit);
 
@@ -703,8 +730,10 @@ async function _paintRight() {
   const foot = el('div', 'vc-right-foot');
   const use = el('button', 'mv3-c-btn vc-use', 'use');
   use.type = 'button';
-  use.disabled = !m || !m.usable;
-  use.title = !m ? '' : m.usable ? 'Close the catalog and write with this recipe in the chat - ' + m.label : (m.why || 'no key for this model');
+  const fits = !!m && _fits(it, m);
+  use.disabled = !m || !m.usable || !fits;
+  use.title = !m ? '' : !m.usable ? (m.why || 'no key for this model') : !fits ? 'It does not fit ' + m.label
+    : 'Close the catalog and write with this recipe in the chat - ' + m.label;
   use.addEventListener('click', () => _use(it, d, ed));
   foot.appendChild(use);
   R.appendChild(foot);
@@ -823,7 +852,7 @@ function _use(it, d, ed) {
   const orig = (d.skill && d.skill.text) || '';
   const skill = {
     id: it.id, kind: it.kind, title: it.title, v: (d.skill && d.skill.v) || '',
-    edited: ed.text !== orig, text: ed.text, slots: ed.slots,
+    edited: ed.text !== orig, text: ed.text, orig, slots: ed.slots,
   };
   const done = _st.onUse;
   _close();
