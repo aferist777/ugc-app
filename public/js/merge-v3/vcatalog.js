@@ -4,8 +4,9 @@
    A window over the page (js/layers.js: Escape closes it, the page's shortcuts wait), three columns:
 
      left    the MODEL - the chat's own dropdown, and what is true of it (who can be asked, how long it takes,
-             how fine it gets, whether it speaks) - then a search, the filters with their counts (one group's
-             chips are "or", the groups "and") and the order
+             how fine it gets, whether it speaks) - then a search, the category under it, the filters - each a
+             dropdown of several values that stays open while they are picked, with their counts (a filter's values
+             are "or", the filters "and") and a hint on its name (phase V6) - and the order
      centre  what fits THAT model and the filters, by kind: the cookbook's templates and cases, Grok's examples,
              the person's presets. Every tile is a box of one shape (3:4) with its poster cut to fill it; a case's
              clip plays in it while the pointer rests there (one at a time, nothing fetched before)
@@ -289,6 +290,8 @@ async function _fetch() {
 
 function _close() {
   if (!_w) return;
+  _ddClose();
+  _tipHide();
   _stopHover();
   keep(LS, { filters: _st.filters, sort: _st.sort });
   Layers.close(_w.layer);
@@ -331,15 +334,37 @@ function _paintFoot() {
     a('https://github.com/YouMind-OpenLab/awesome-grok-imagine-prompts', 'YouMind'), ' (CC BY 4.0 compilation), each prompt © its author');
 }
 
-// ── Left: the model, the filters ────────────────────────────────────────────
+// ── Left: the model, the search, the category, the filters ──────────────────
+// (phase V6, the owner 2026-10-06) The category is a dropdown right under the search; every filter is a dropdown of its
+// own that takes several values and STAYS OPEN while they are picked - the tiles follow each press at once - and its
+// name says, under the pointer, what it sorts by. Within a filter the values are "or", between filters "and"; each
+// value counts what would be shown with it, the other filters as they are.
+const HINTS = {
+  cat: 'The cookbook\'s six categories - what kind of video a recipe is for. One picked, its templates become a filter of their own.',
+  src: 'Which kinds to show: templates (the cookbook\'s recipes), cases (real prompts with their videos), examples (Grok b-roll prompts), presets (yours).',
+  needs: 'What you have to attach for it: nothing, pictures, a clip, a sound. "unsure" - its prompt speaks of references without saying how many.',
+  shape: 'The frame it was made in: vertical 9:16, horizontal 16:9, square 1:1. "not said" - it does not say.',
+  len: 'How long its clip runs.',
+  speech: 'Whether someone speaks in it - a line said on camera.',
+  two: 'Two-step recipes make a storyboard picture first, then the video from it.',
+  ver: 'The Seedance version a case was made with.',
+  lang: 'The language a case\'s own prompt is written in.',
+  tpl: 'The template of this category a case is filed under.',
+  sort: 'The order of the cases: hottest, steadiest (they came out well when made again), newest.',
+};
+
 function _paintLeft() {
   if (!_w) return;
+  _ddClose();
+  _tipHide();
   const L = _w.left;
   const scroll = L.querySelector('.vc-left-in');
   const top = scroll ? scroll.scrollTop : 0;
   L.textContent = '';
   const inner = el('div', 'vc-left-in');
   L.appendChild(inner);
+  // An open list hangs under its button: the column scrolling away from it closes it.
+  inner.addEventListener('scroll', () => { _ddClose(); _tipHide(); }, { passive: true });
   const m = _model();
   _w.sub.textContent = m ? '· ' + m.label : '';
 
@@ -363,8 +388,8 @@ function _paintLeft() {
       facts.appendChild(c);
     }
     const res = [...new Set([].concat(...m.records.map(r => r.resolutions)))];
-    const top = res.sort((a, b) => parseInt(b, 10) - parseInt(a, 10))[0];
-    facts.appendChild(el('div', 'vc-fact', [m.speaks ? 'speaks' : 'no speech', top ? 'up to ' + top : '', 'takes ' + _wait(m.wait || 60)].filter(Boolean).join(' · ')));
+    const topRes = res.sort((a, b) => parseInt(b, 10) - parseInt(a, 10))[0];
+    facts.appendChild(el('div', 'vc-fact', [m.speaks ? 'speaks' : 'no speech', topRes ? 'up to ' + topRes : '', 'takes ' + _wait(m.wait || 60)].filter(Boolean).join(' · ')));
     inner.appendChild(facts);
   }
 
@@ -377,41 +402,54 @@ function _paintLeft() {
   q.addEventListener('input', () => { _st.q = q.value; _paintGrid(false); _paintCounts(); });
   inner.appendChild(q);
 
+  // The category - one, or all - right under the search, then the filters (once there is something to filter).
+  _w.dds = [];
+  _w.catSel = null;
+  if (_data) {
+    const groups = _groups(m);
+    const cat = groups.find(g => g.key === 'cat');
+    if ((_st.filters.cat || []).length > 1) _st.filters.cat = _st.filters.cat.slice(0, 1);
+    const cs = document.createElement('select');
+    cs.className = 'vc-catsel';
+    const all = document.createElement('option');
+    all.value = ''; all.textContent = 'all categories';
+    cs.appendChild(all);
+    for (const [v, t] of cat.values) {
+      const op = document.createElement('option');
+      op.value = v; op.dataset.t = t; op.textContent = t;
+      cs.appendChild(op);
+    }
+    cs.value = (_st.filters.cat || [])[0] || '';
+    cs.addEventListener('change', () => {
+      if (cs.value) _st.filters.cat = [cs.value]; else delete _st.filters.cat;
+      // A category changed: the templates of another category go.
+      delete _st.filters.tpl;
+      _st.more = false;
+      _paintLeft();
+      _paintGrid(false);
+    });
+    const lab = el('div', 'vc-lab vc-has-tip', 'category');
+    _tipOn(lab, HINTS.cat);
+    _tipOn(cs, HINTS.cat);
+    inner.append(lab, cs);
+    _w.catSel = { el: cs, g: cat };
+    const tpl = groups.find(g => g.key === 'tpl');
+    if (tpl) inner.appendChild(_dd(tpl));
+    inner.appendChild(el('div', 'vc-lab', 'filters'));
+    for (const g of groups) if (g.key !== 'cat' && g.key !== 'tpl') inner.appendChild(_dd(g));
+  }
+
   const sort = document.createElement('select');
   sort.className = 'vc-sort';
-  sort.title = 'The order of the cases';
   for (const [v, t] of [['heat', 'hottest first'], ['steady', 'steadiest first'], ['new', 'newest first']]) {
     const op = document.createElement('option'); op.value = v; op.textContent = t; sort.appendChild(op);
   }
   sort.value = _st.sort;
   sort.addEventListener('change', () => { _st.sort = sort.value; _paintGrid(false); });
-  inner.append(el('div', 'vc-lab', 'order'), sort);
+  const sl = el('div', 'vc-lab vc-has-tip', 'order');
+  _tipOn(sl, HINTS.sort);
+  inner.append(sl, sort);
 
-  // The filters - once there is something to filter.
-  _w.chips = [];
-  for (const g of (_data ? _groups(m) : [])) {
-    inner.appendChild(el('div', 'vc-lab', g.label));
-    const row = el('div', 'vc-chips');
-    for (const [v, t] of g.values) {
-      const c = el('button', 'vc-chip', '');
-      c.type = 'button';
-      c.dataset.g = g.key; c.dataset.v = v;
-      c.append(el('span', null, t), el('b', null, ''));
-      c.addEventListener('click', () => {
-        const cur = new Set(_st.filters[g.key] || []);
-        if (cur.has(v)) cur.delete(v); else cur.add(v);
-        _st.filters[g.key] = [...cur];
-        // A category changed: the template chips of another category go.
-        if (g.key === 'cat') delete _st.filters.tpl;
-        _st.more = false;
-        if (g.key === 'cat') _paintLeft(); else _paintCounts();
-        _paintGrid(false);
-      });
-      row.appendChild(c);
-      _w.chips.push({ el: c, g, v });
-    }
-    inner.appendChild(row);
-  }
   const clear = el('button', 'vc-clear', 'clear the filters');
   clear.type = 'button';
   clear.addEventListener('click', () => { _st.filters = {}; _st.q = ''; _st.more = false; _paintLeft(); _paintGrid(false); });
@@ -420,18 +458,140 @@ function _paintLeft() {
   inner.scrollTop = top;
 }
 
-// Each chip counts what would be shown with it, the other groups as they are.
+// One filter: a button with its name and what is chosen; pressed, its list opens under it.
+function _dd(g) {
+  const box = el('div', 'vc-dd');
+  const b = el('button', 'vc-dd-b');
+  b.type = 'button';
+  b.dataset.g = g.key;
+  const val = el('span', 'vc-dd-v', 'any');
+  b.append(el('span', 'vc-dd-n', g.label), val, el('i', null, '▾'));
+  _tipOn(b, HINTS[g.key]);
+  b.addEventListener('click', () => {
+    if (_ddList && _ddList.g.key === g.key) _ddClose();
+    else _ddOpen(g, b);
+  });
+  box.appendChild(b);
+  _w.dds.push({ g, btn: b, val });
+  return box;
+}
+
+// The open list: a row per value with its box and its count, "any" on top to let go of them all. A press changes the
+// tiles at once and leaves the list open; a press outside it, its button again, Escape (it is a layer of its own, over
+// the window's), the column scrolling or the window changing close it.
+let _ddList = null;          // { g, btn, el, rows, layer, off }
+function _ddOpen(g, btn) {
+  _ddClose();
+  _tipHide();
+  const list = el('div', 'vc-dd-list');
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-multiselectable', 'true');
+  const any = el('button', 'vc-dd-any', 'any - let go of them all');
+  any.type = 'button';
+  any.addEventListener('click', () => { delete _st.filters[g.key]; _afterFilter(); });
+  list.appendChild(any);
+  const rows = [];
+  for (const [v, t] of g.values) {
+    const row = el('label', 'vc-dd-row');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.addEventListener('change', () => {
+      const cur = new Set(_st.filters[g.key] || []);
+      if (cb.checked) cur.add(v); else cur.delete(v);
+      if (cur.size) _st.filters[g.key] = [...cur]; else delete _st.filters[g.key];
+      _afterFilter();
+    });
+    const n = el('b', null, '');
+    row.append(cb, el('span', null, t), n);
+    list.appendChild(row);
+    rows.push({ v, cb, n, row });
+  }
+  _w.box.appendChild(list);
+  const r = btn.getBoundingClientRect();
+  const below = window.innerHeight - r.bottom - 12;
+  list.style.left = Math.round(r.left) + 'px';
+  list.style.width = Math.round(Math.max(r.width, 190)) + 'px';
+  if (below >= 160 || below >= r.top - 12) {
+    list.style.top = Math.round(r.bottom + 3) + 'px';
+    list.style.maxHeight = Math.round(below) + 'px';
+  } else {
+    list.style.bottom = Math.round(window.innerHeight - r.top + 3) + 'px';
+    list.style.maxHeight = Math.round(r.top - 12) + 'px';
+  }
+  const layer = Layers.open(list, { name: 'catalog filter', modal: false, onEsc: _ddClose });
+  const off = (e) => { if (!list.contains(e.target) && !btn.contains(e.target)) _ddClose(); };
+  document.addEventListener('mousedown', off, true);
+  window.addEventListener('resize', _ddClose);
+  _ddList = { g, btn, el: list, rows, layer, off };
+  btn.classList.add('is-open');
+  _paintCounts();
+}
+function _ddClose() {
+  const d = _ddList;
+  if (!d) return;
+  _ddList = null;
+  document.removeEventListener('mousedown', d.off, true);
+  window.removeEventListener('resize', _ddClose);
+  Layers.close(d.layer);
+  d.el.remove();
+  d.btn.classList.remove('is-open');
+}
+function _afterFilter() {
+  _st.more = false;
+  _paintCounts();
+  _paintGrid(false);
+}
+
+// What a filter shows, under the pointer - at once, beside the column (the browser's own title waits and says less).
+let _tip = null;
+function _tipOn(node, text) {
+  if (!text) return;
+  node.addEventListener('pointerenter', () => _tipShow(node, text));
+  node.addEventListener('pointerleave', _tipHide);
+}
+function _tipShow(node, text) {
+  _tipHide();
+  if (!_w || (_ddList && _ddList.btn === node)) return;
+  const t = el('div', 'vc-tip', text);
+  _w.box.appendChild(t);
+  const r = node.getBoundingClientRect();
+  const col = _w.left.getBoundingClientRect();
+  t.style.left = Math.round(Math.max(r.right, col.right) + 10) + 'px';
+  t.style.top = Math.round(Math.max(8, Math.min(window.innerHeight - t.offsetHeight - 8, r.top))) + 'px';
+  _tip = t;
+}
+function _tipHide() {
+  if (_tip) { _tip.remove(); _tip = null; }
+}
+
+// Each value counts what would be shown with it, the other filters as they are.
 function _paintCounts() {
-  if (!_w || !_w.chips || !_data) return;
+  if (!_w || !_data) return;
   const m = _model();
   const items = _items().filter(it => _fits(it, m));
   const groups = _groups(m);
-  for (const { el: c, g, v } of _w.chips) {
+  const count = (g, v) => items.filter(it => _passes(it, groups, g.key) && g.of(it).includes(v)).length;
+  for (const d of _w.dds || []) {
+    const sel = _st.filters[d.g.key] || [];
+    d.val.textContent = sel.length ? d.g.values.filter(([v]) => sel.includes(v)).map(([, t]) => t).join(', ') || 'any' : 'any';
+    d.btn.classList.toggle('has-value', sel.length > 0);
+  }
+  if (_w.catSel) {
+    const g = _w.catSel.g;
+    for (const op of _w.catSel.el.options) {
+      if (!op.value) continue;
+      op.textContent = op.dataset.t + ' (' + count(g, op.value) + ')';
+    }
+  }
+  if (_ddList) {
+    const g = _ddList.g;
     const sel = _st.filters[g.key] || [];
-    const n = items.filter(it => _passes(it, groups, g.key) && g.of(it).includes(v)).length;
-    c.classList.toggle('is-on', sel.includes(v));
-    c.classList.toggle('is-none', !n && !sel.includes(v));
-    c.querySelector('b').textContent = n ? String(n) : '';
+    for (const r of _ddList.rows) {
+      r.cb.checked = sel.includes(r.v);
+      const n = count(g, r.v);
+      r.n.textContent = n ? String(n) : '';
+      r.row.classList.toggle('is-none', !n && !r.cb.checked);
+    }
   }
 }
 

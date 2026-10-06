@@ -59,17 +59,52 @@
   background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
 }
 .vc-q:focus{outline:none; border-color:var(--primary)}
-.vc-chips{display:flex; flex-wrap:wrap; gap:4px}
-.vc-chip{
-  display:inline-flex; align-items:center; gap:5px; padding:2px 8px;
-  border:1px solid var(--border); border-radius:var(--pill); background:var(--surface-2);
-  color:var(--ink); font:600 10px/16px var(--font); cursor:pointer;
+/* The category - one, or all - and the filters: each a dropdown of several values that stays open (phase V6). */
+.vc-catsel{
+  width:100%; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
 }
-.vc-chip b{font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums}
-.vc-chip:hover{border-color:var(--muted)}
-.vc-chip.is-on{background:var(--primary-soft); border-color:var(--primary)}
-.vc-chip.is-on b{color:var(--ink)}
-.vc-chip.is-none{opacity:.42}
+.vc-has-tip{cursor:help}
+.vc-dd{margin-top:5px}
+.vc-dd-b{
+  display:flex; align-items:center; gap:6px; width:100%; height:28px; padding:0 8px;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--ink); cursor:pointer; text-align:left;
+}
+.vc-dd-b:hover{border-color:var(--muted)}
+.vc-dd-n{flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent)}
+.vc-dd-v{
+  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font:600 10.5px/1 var(--font); color:var(--muted); text-align:right;
+}
+.vc-dd-b i{flex:0 0 auto; font-style:normal; font-size:9px; color:var(--muted)}
+.vc-dd-b.has-value{border-color:var(--primary); background:var(--primary-soft)}
+.vc-dd-b.has-value .vc-dd-v{color:var(--ink)}
+.vc-dd-b.is-open{border-color:var(--primary)}
+.vc-dd-list{
+  position:fixed; z-index:5; overflow-y:auto; padding:4px;
+  background:var(--surface); border:1px solid var(--primary); border-radius:var(--r-xs); box-shadow:var(--shadow);
+}
+.vc-dd-any{
+  display:block; width:100%; padding:4px 6px 6px; border:0; background:none; text-align:left; cursor:pointer;
+  font:600 10px/1.3 var(--font); color:var(--muted); text-decoration:underline; text-underline-offset:2px;
+}
+.vc-dd-any:hover{color:var(--ink)}
+.vc-dd-row{
+  display:flex; align-items:center; gap:7px; padding:4px 6px; border-radius:var(--r-xs);
+  font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none;
+}
+.vc-dd-row:hover{background:var(--surface-2)}
+.vc-dd-row input{margin:0; accent-color:var(--primary); cursor:pointer}
+.vc-dd-row span{flex:1 1 auto; min-width:0}
+.vc-dd-row b{font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums}
+.vc-dd-row.is-none{opacity:.42}
+/* What a filter shows, beside the column, at once. */
+.vc-tip{
+  position:fixed; z-index:6; max-width:270px; padding:7px 9px; pointer-events:none;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs); box-shadow:var(--shadow);
+  font:500 10.5px/1.45 var(--font); color:var(--ink);
+}
 .vc-clear{
   margin-top:14px; padding:0; border:0; background:none; color:var(--muted);
   font:600 10px/1.2 var(--font); cursor:pointer; text-decoration:underline;
