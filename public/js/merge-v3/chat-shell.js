@@ -531,7 +531,10 @@ export function createChat(make) {
       }
       const keys = _keysOf(p);
       for (const a of mine.filter(x => !keys.includes(x.slot))) row.appendChild(_cell(_filled(a, num(a)), 'other', ''));
-      if (mine.length < p.room) row.appendChild(_empty(p, { key: '', label: 'other', hint: p.other || '' }, false, false));
+      // "other" only where the room is more than the recipe's own places can still take (phase V7.5: Kling's one clip
+      // is the recipe's "moves" - an "other" beside it offered a second clip the model does not take).
+      const open = p.slots.reduce((n, s) => n + Math.max(0, s.max - mine.filter(a => a.slot === s.key).length), 0);
+      if (mine.length < p.room && p.room - mine.length > open) row.appendChild(_empty(p, { key: '', label: 'other', hint: p.other || '' }, false, false));
     } else {
       for (const a of mine) row.appendChild(_cell(_filled(a, num(a)), '', ''));
       if (mine.length < p.room) row.appendChild(_empty(p, null, false, false));

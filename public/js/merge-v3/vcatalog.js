@@ -1006,7 +1006,10 @@ async function _paintRight() {
   scroll.appendChild(_slotsBox(it, ed));
 
   // The skill - editable, with the way back.
-  const sh = el('div', 'vc-hdr', 'skill - the recipe the writer follows');
+  // Kling motion control has no writer (phase V7.3): there a recipe only lays out what to attach.
+  const noWriter = !!(m && m.family === 'kmc');
+  const sh = el('div', 'vc-hdr', noWriter ? 'skill - for a model with a writer; ' + m.label + ' has none: the box in the chat is its prompt'
+    : 'skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');
   ta.className = 'vc-skill';

@@ -309,7 +309,7 @@ function VIDEOS(ctx) {
       host.textContent = '';
       const mSel = _select('mv3-vc-model', 'The model - each its own price', models().map(m => ({
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
-      })), _last.model, (v) => { _last.model = v; _remember(); _paintModel(true); ctx.paintAtts(); });
+      })), _last.model, (v) => { _last.model = v; _recipeParams(v); _remember(); _paintModel(true); ctx.paintAtts(); });
       _row(host, 'model', mSel);
       // What the chosen model does and what to attach - under its dropdown (phase V6, the owner: the line above the
       // thread is the recipe's now).
@@ -519,6 +519,17 @@ function VIDEOS(ctx) {
     if (!_table) return;
     openCatalog({ matrix: _table, model: m ? m.id : '', agg: r ? r.agg : '', onUse: _onUse, recipe: _skill });
   }
+  // A recipe's settings follow it to another model the person picks while it is in use (phase V7.5: the dancer's
+  // "the clip's sound" chosen under Kling is Seedance's too) - only what the person has not set on that model.
+  function _recipeParams(modelId) {
+    const sp = _skill && _skill.params;
+    if (!sp || !modelId) return;
+    const cur = _last.params[modelId] || {};
+    const add = {};
+    for (const [k, v] of Object.entries(sp)) if (!(k in cur)) add[k] = v;
+    if (Object.keys(add).length) _last.params[modelId] = Object.assign({}, cur, add);
+  }
+
   // `use` in the catalog: its model, the settings it suggests, its recipe.
   function _onUse(u) {
     if (!u || !u.model) return;
@@ -530,6 +541,8 @@ function VIDEOS(ctx) {
       id: u.skill.id, kind: u.skill.kind, title: u.skill.title, v: u.skill.v,
       text: u.skill.text, orig: u.skill.orig != null ? u.skill.orig : u.skill.text, slots: u.skill.slots || [],
       twoStep: !!u.skill.twoStep,
+      // (phase V7.5) The settings it suggests, for every model of its list the person goes on to (`_recipeParams`).
+      params: Object.assign({}, u.params || {}),
       // What was written in the places of the same recipe stays (matched by each place's own words).
       vals: was && was.id === u.skill.id && was.kind === u.skill.kind ? (was.vals || []) : [],
     } : null;
