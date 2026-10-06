@@ -161,6 +161,9 @@ export function openTrim(opts) {
   setTimeout(() => { if (_open && _open.box === box) document.addEventListener('pointerdown', away, true); }, 0);
   window.addEventListener('resize', place);
   if (film) _filmstrip(film, o.src, dur, () => !!_open && _open.box === box);
+  // A part the model does not take as it was (another model, another orientation) is brought within it as the window
+  // opens - what the window shows is what goes.
+  if (Math.abs(from - (+o.from || 0)) > 0.005 || (o.to != null && Math.abs(to - +o.to) > 0.005)) changed();
 }
 
 // The strip of frames under the window: a second, silent copy of the clip is sought frame after frame and each drawn

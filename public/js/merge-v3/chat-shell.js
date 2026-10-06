@@ -935,7 +935,8 @@ export function createChat(make) {
   async function _send() {
     if (_sending || !_ui) return;
     const ta = _ui.ta;
-    const text = ta.value.trim();
+    // (phase V7.3) A description may stand in for an empty box - Kling motion control's standard prompt.
+    const text = ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : '');
     if (!text) {
       ta.focus();
       ta.classList.add('is-bad');

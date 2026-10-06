@@ -130,8 +130,9 @@ router.post('/mv3/video/send', (req, res) => {
     const model = String(b.model || '');
     if (!VM.MODELS.some(m => m.id === model)) return res.status(400).json({ success: false, error: 'no such model: ' + model });
     const isMC = /^kmc/.test(model);
-    const text = String(b.text || '').trim().slice(0, 30000);
-    if (!text && !isMC) return res.status(400).json({ success: false, error: 'say what to make' });
+    // Kling motion control's box IS its prompt (phase V7.3): an empty one sends the standard prompt, said as the turn.
+    const text = String(b.text || '').trim().slice(0, 30000) || (isMC ? VM.STANDARD_MC_PROMPT : '');
+    if (!text) return res.status(400).json({ success: false, error: 'say what to make' });
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.

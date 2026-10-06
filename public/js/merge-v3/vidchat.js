@@ -190,6 +190,23 @@ function VIDEOS(ctx) {
     return k === 'video' ? L.videos > 0 : k === 'audio' ? L.audios > 0 : L.images > 0;
   };
 
+  // A clip or a sound kept with a draft that has left the library since (deleted on its shelf): it goes from the zone,
+  // in words - a picture does the same when its miniature does not load (the shell). One that MOVED is followed.
+  async function _dropGone() {
+    const list = ctx.atts().filter(a => _kind(a) !== 'image');
+    if (!list.length) return;
+    const k = ctx.key();
+    const gone = [];
+    await Promise.all(list.map(async (a) => {
+      const r = await fetch('/api/media/probe?src=' + encodeURIComponent(a.path)).catch(() => null);
+      if (r && r.status === 404) gone.push(a);
+    }));
+    if (ctx.key() !== k || !gone.length) return;
+    for (const a of gone) ctx.detach(a.path);
+    ctx.say(gone.length === 1 ? 'A ' + (_kind(gone[0]) === 'video' ? 'clip' : 'sound') + ' of the zone is not in the library any more.'
+      : gone.length + ' clips and sounds of the zone are not in the library any more.');
+  }
+
   // A clip let go over the zone from a lane of the timeline (timeline-b.js): the part of its file the timeline plays.
   window.addEventListener('mv3:clip-out', (ev) => {
     const d = ev.detail || {};
@@ -223,7 +240,8 @@ function VIDEOS(ctx) {
     // (phase V7) With a reference clip a rate's second figure is the one asked (lib/video-models.js price), and the
     // clip's seconds count: Kling is billed by the seconds of the moves, kie's Seedance by the clip's AND the video's.
     const clips = media ? media.filter(x => x && x.kind === 'video') : (_takes('video') ? _clips() : []);
-    const vidIn = clips.reduce((s, a) => s + _span(a), 0);
+    // Kling follows ONE clip - the first; Seedance's clips count together.
+    const vidIn = r.duration.fromClip ? _span(clips[0] || {}) : clips.reduce((s, a) => s + _span(a), 0);
     const rate = (r.rates || {})[res];
     const per = Array.isArray(rate) ? rate[clips.length ? 1 : 0] : (rate == null ? null : rate);
     if (per == null) return { none: true, res };
@@ -340,9 +358,11 @@ function VIDEOS(ctx) {
       ctx.placeholder('');
       if (changed && ctx.text() === std) ctx.setText('');
     }
-    _set.brief.textContent = m.brief + (isMC() ? ' Clips as references arrive in a later step.' : '');
+    _set.brief.textContent = m.brief;
     _paintParams();
     _paintRecipe();
+    // Kling motion control has no writer: a recipe there only lays out what to attach, and the box comes back.
+    _paintFoot();
   }
 
   function _paintParams() {
@@ -463,10 +483,10 @@ function VIDEOS(ctx) {
     box.textContent = '';
     box.hidden = !_skill;
     if (!_skill) return;
-    const used = !isMC();
-    // A two-step recipe is Seedance's (review V8): under another model it stands dimmed and says so.
+    // A two-step recipe is Seedance's (review V8): under another model it stands dimmed and says so. Under Kling motion
+    // control a recipe only lays out what to attach (phase V7.3) - it stands, and says the box is the prompt.
     const seed = !_skill.twoStep || (model() || {}).family === 'seedance';
-    box.className = 'mv3-ig-banner mv3-vc-recipe' + (used && seed ? '' : ' is-off');
+    box.className = 'mv3-ig-banner mv3-vc-recipe' + (seed ? '' : ' is-off');
     box.appendChild(el('span', 'k', 'recipe'));
     const t = el('button', 't', _skill.title);
     t.type = 'button';
@@ -476,8 +496,8 @@ function VIDEOS(ctx) {
     if (_edited(_skill)) box.appendChild(el('i', null, 'edited'));
     if (_skill.twoStep) box.appendChild(el('span', 'needs', '2 steps - a storyboard, then the video'));
     box.appendChild(el('span', 'sp'));
-    if (!used) box.appendChild(el('span', 'why', 'Kling motion control has no writer - pick another model'));
-    else if (!seed) box.appendChild(el('span', 'why', 'two steps are made by Seedance - pick a Seedance model'));
+    if (!seed) box.appendChild(el('span', 'why', 'two steps are made by Seedance - pick a Seedance model'));
+    else if (isMC()) box.appendChild(el('span', 'why', 'no writer here: the recipe lays out what to attach, the box is Kling\'s prompt'));
     const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
@@ -621,7 +641,6 @@ function VIDEOS(ctx) {
     const m = model(), r = rec();
     if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
-    if (isMC()) return ['Not yet.', 'Kling motion control needs a clip of the moves - clips as references arrive in a later step.'];
     // A recipe's cell that must be filled and is not: nothing is asked, the cell blinks (phase V6).
     const miss = _missing();
     if (miss) {
@@ -632,6 +651,16 @@ function VIDEOS(ctx) {
     }
     const n = _pics().length;
     const L = r.limits || {};
+    // (phase V7.3) Kling motion control: ONE picture - the person and the place - and ONE clip - the moves; the box is
+    // its prompt, in English (translated when not), up to its limit.
+    if (isMC()) {
+      if (n !== 1 || _clips().length !== 1) {
+        return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + (r.duration.min || 3) + '-'
+          + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s).'];
+      }
+      const words = String(ctx.text() || '').trim();
+      if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
+    }
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
     if (n > _picRoom(r)) {
       return ['Too many pictures.', _seat() ? 'Room for ' + _picRoom(r) + ': the storyboard goes to ' + m.label + ' as one more picture, and it is drawn with these.'
@@ -773,8 +802,11 @@ function VIDEOS(ctx) {
   function _paintFoot(quiet) {
     const foot = ctx.foot();
     if (!foot) return;
-    ctx.bar(!_skill);
-    const show = !!_skill && (_wantRecipe || !_recipeCards().length);
+    // Kling motion control has no writer (the owner's answer 5, phase V7): a recipe there only lays out what to attach,
+    // the box stays its prompt and the send is one press - no request, no cards.
+    const builder = !!_skill && !isMC();
+    ctx.bar(!builder);
+    const show = builder && (_wantRecipe || !_recipeCards().length);
     const key = _skill ? [_skill.kind, _skill.id, _split(_skill.text).head].join('|') : '';
     if (!show) {
       _cardEls = null;
@@ -1501,6 +1533,8 @@ function VIDEOS(ctx) {
                ok: (f) => /^audio\//.test(f.type || '') || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i.test(f.name || ''),
                att: (i) => ({ path: i.audioPath, name: i.name, dur: +i.duration || 0 }) },
     },
+    // (phase V7.3) Kling motion control's empty box sends its standard prompt.
+    emptyText: () => (isMC() && _table ? _table.standardPrompt || '' : ''),
     // (phase V7) Clips and sounds in the zone: the part that goes, what the cell says of it, and what the model takes.
     takes: _takes,
     attState: _attState,
@@ -1569,6 +1603,7 @@ function VIDEOS(ctx) {
         _paintRecipe();
         if (ctx.atts().some(a => a.slot === undefined)) ctx.reslot({ unplaced: true }); else ctx.paintAtts();
         _paintFoot();
+        _dropGone();
       },
       onPen: () => _paintRecipe(),
     },

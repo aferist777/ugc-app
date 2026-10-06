@@ -619,7 +619,7 @@ function _paintGrid(keep = true) {
     G.appendChild(el('div', 'vc-note', (st.why || 'the cookbook is not installed') + '.'));
   }
   if (m && m.family === 'kmc' && !all.length) {
-    G.appendChild(el('div', 'vc-note', m.label + ' has no recipes yet: its presets - a picture and a clip of the moves, like "swap the dancer for my character" - come with clips as references.'));
+    G.appendChild(el('div', 'vc-note', m.label + ' has no recipes here: a picture (the person and the place) and a clip of the moves are all it takes - attach them in the chat, the box is its prompt.'));
   }
   // The recipe the chat uses, when its tile is not among these: why, in words (it still shows on the right).
   if (_st.inUse && !shown.some(it => _key(it) === _st.inUse)) {
