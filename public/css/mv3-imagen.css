@@ -94,6 +94,8 @@
 .mv3-pc.is-narrow .mv3-ig-bar{ flex-wrap:wrap; gap:6px; padding:8px 10px }
 .mv3-pc.is-narrow .mv3-ig-say{ flex:1 1 100%; order:-1 }
 .mv3-pc.is-narrow .mv3-ig-bar .pen{ margin-left:auto }
+/* (phase V15) The video chat has no pen in its bar: the count goes to the right. */
+.mv3-pc.is-narrow .mv3-ig-bar .n:first-of-type{ margin-left:auto }
 
 /* ── middle: the conversation ── */
 .mv3-ig-chat{ flex:1 1 auto; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
@@ -505,10 +507,33 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-card.is-sent .vc-req{ opacity:.92 }
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
 .vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-/* The 中文 box on a written card (phase V6). */
-.vc-zh-box{ display:inline-flex; align-items:center; gap:4px; font:600 11px/1 var(--font); color:var(--ink); cursor:pointer; user-select:none }
-.vc-zh-box[hidden]{ display:none }
-.vc-zh-box input{ margin:0; accent-color:var(--primary); cursor:pointer }
+/* (phase V15) The video chat's switches in its column - the writer, the storyboard, 中文 - and the almanac at its foot. */
+.mv3-vc-switches{ display:flex; flex-direction:column; gap:5px; margin:9px 0 0 }
+.mv3-vc-switches:empty{ display:none }
+.mv3-vc-sw{
+  display:flex; align-items:center; gap:8px; width:100%; height:26px; padding:0 8px;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--muted);
+  font:600 10.5px/1 var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-vc-sw .k{ flex:1 1 auto; text-align:left; color:var(--ink) }
+.mv3-vc-sw .v{ flex:0 0 auto; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase }
+.mv3-vc-sw.on{ border-color:var(--primary); background:var(--primary-soft) }
+.mv3-vc-sw.on .v{ color:var(--primary) }
+.mv3-vc-sw:hover:not([disabled]){ border-color:var(--muted) }
+.mv3-vc-sw[disabled]{ opacity:.5; cursor:default }
+.mv3-vc-check{ display:flex; align-items:center; gap:7px; padding:2px 2px; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none }
+.mv3-vc-check input{ margin:0; accent-color:var(--primary); cursor:pointer }
+.mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
+.mv3-vc-check.is-off input{ cursor:default }
+.mv3-vc-almanac{
+  flex:0 0 auto; display:block; width:100%; height:32px; margin:0; padding:0 12px;
+  border:0; border-top:1px solid var(--border); border-radius:0; background:var(--surface-2); color:var(--ink);
+  font:700 11px/32px var(--font); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-vc-almanac:hover{ background:var(--primary-soft); color:var(--primary) }
+.mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
+.mv3-pc.is-narrow .mv3-vc-sw{ width:auto; height:24px }
+.mv3-pc.is-narrow .mv3-vc-almanac{ width:auto; height:24px; margin:4px 10px 6px; border:1px solid var(--border); border-radius:var(--r-xs); line-height:22px }
 
 /* A two-step card (phase V8): the storyboard part, then the video part; the sheets drawn, the chosen one framed. */
 .vc-step{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-top:2px }
@@ -676,16 +701,10 @@ audio.vtrim-media{ background:none; height:32px }
   .pk-grid{ --pk-h:132px }
 }
 
-/* ── The prompt reference behind "/" (phase V14, the owner 2026-10-07; js/merge-v3/vhelp.js) ──
-   A window beside the field it serves, half the attachment picker, no backdrop: the sections on the left - the ones in
-   development dimmed and saying so -, the tips on the right: a still that plays under the pointer, the name, the
-   category, the words. A press copies: the tip blinks and a note sits on the prompt field for a moment. */
-.hp-btn{
-  flex:0 0 auto; width:30px; height:30px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:700 13px/28px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.hp-btn:hover{ color:var(--ink); border-color:var(--border-soft) }
-.vc-card-acts .hp-btn{ width:24px; height:24px; font-size:12px; line-height:22px }
+/* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
+   A window beside the column, clear of the prompt field, half the attachment picker, no backdrop: the sections on the
+   left - the ones in development dimmed and saying so -, the tips on the right: a still that plays under the pointer, the
+   name, the category, the words. A press copies: the tip blinks and a note sits on the prompt field for a moment. */
 .hp{
   position:fixed; z-index:9300; display:flex; flex-direction:column; min-height:0;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);

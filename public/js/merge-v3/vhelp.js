@@ -1,13 +1,13 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — the video chat's PROMPT REFERENCE behind "/" (phase V14, the owner 2026-10-07; docs/local-app/PLAN.md
-   "Фаза V14").
+   MERGE — the video chat's PROMPT REFERENCE, the ALMANAC (phase V14, the owner 2026-10-07; since V15 the button at the
+   foot of the chat's left column - it was "/" by the send; docs/local-app/PLAN.md "Фаза V14", "Фаза V15").
 
-   A small window beside the field it serves - the input of the chat, or the prompt of a builder's card -, half the size
-   of the attachment picker, laid out like a reference book: the SECTIONS on the left - Camera movement with its seven
-   categories, the others "in development", each saying what it will hold - and the TIPS of the open one on the right:
-   a still that plays while the pointer rests on it, the name, the category and the words. A press COPIES the tip (the
-   owner's answer 3): the tip blinks, a note over the prompt field says it was copied, and the window stays open for the
-   next one. Escape, the cross, "/" again and a press anywhere else close it.
+   A small window beside the column, clear of the prompt field it serves - the chat's box, or a card's prompt, whichever
+   was typed in last -, half the size of the attachment picker, laid out like a reference book: the SECTIONS on the left
+   - Camera movement with its seven categories, the others "in development", each saying what it will hold - and the
+   TIPS of the open one on the right: a still that plays while the pointer rests on it, the name, the category and the
+   words. A press COPIES the tip (the owner's answer 3): the tip blinks, a note over the prompt field says it was copied,
+   and the window stays open for the next one. Escape, the cross, the button again and a press anywhere else close it.
 
    The sections are data: public/presets/helper/index.json lists them, each ready one with its file (camera.json, made
    by tools/fetch-camera.js). A section is added there, not here.
@@ -39,12 +39,13 @@ const _lc = (s) => String(s || '').toLowerCase();
 export const helpOpen = () => !!_w;
 
 /**
- * Opens the reference beside `anchor` (the "/" pressed). `field` is the prompt field a copied tip is for - the note
- * says so over it. `prefer`: 'above' (the chat's input, at the foot of the chat) or 'below' (a card's prompt, which the
- * window must not cover). `note()`: a line over the camera tips for the chosen model, or ''.
+ * Opens the reference beside `anchor` (the button pressed). `field()` is the prompt field a copied tip is for - asked
+ * at every copy, so the note stands over the one typed in last. `prefer`: 'beside' (the almanac at the foot of the
+ * chat's column - the window right of it), 'above' or 'below' (clear of the field). `note()`: a line over the camera
+ * tips for the chosen model, or ''.
  */
 export async function openHelp(o) {
-  // "/" pressed again: the window it opened closes.
+  // The almanac pressed again: the window it opened closes.
   if (_w && _w.anchor === o.anchor) { closeHelp(); return; }
   closeHelp();
   const was = _stored();
@@ -72,9 +73,9 @@ export function closeHelp() {
 function _build(o) {
   const box = el('div', 'hp');
   box.setAttribute('role', 'dialog');
-  box.setAttribute('aria-label', 'Prompt reference');
+  box.setAttribute('aria-label', 'Almanac');
   const head = el('div', 'hp-head');
-  head.append(el('b', null, 'Prompt reference'), el('span', 'hp-sub', 'press a tip to copy it'));
+  head.append(el('b', null, 'Almanac'), el('span', 'hp-sub', 'press a tip to copy it'));
   const x = el('button', 'hp-x', '✕');
   x.type = 'button';
   x.title = 'Close (Esc)';
@@ -98,14 +99,15 @@ function _build(o) {
   box.append(head, body);
   document.body.appendChild(box);
 
-  const place = () => _place(box, o.anchor, o.prefer, o.field);
-  // A press anywhere but in the window - or on the "/" that opened it, which toggles - closes it.
+  const fieldOf = () => (typeof o.field === 'function' ? o.field() : o.field);
+  const place = () => _place(box, o.anchor, o.prefer, fieldOf());
+  // A press anywhere but in the window - or on the button that opened it, which toggles - closes it.
   const away = (e) => {
     const t = e.target;
     if (!t || box.contains(t) || (o.anchor && (o.anchor === t || o.anchor.contains(t)))) return;
     closeHelp();
   };
-  _w = { box, side, main, q, count, note, list, anchor: o.anchor, field: o.field, noteOf: o.note, layer: null, away, place };
+  _w = { box, side, main, q, count, note, list, anchor: o.anchor, fieldOf, noteOf: o.note, layer: null, away, place };
   _w.layer = Layers.open(box, { name: 'prompt reference', modal: false, onEsc: closeHelp });
   document.addEventListener('mousedown', away, true);
   window.addEventListener('resize', place);
@@ -114,12 +116,28 @@ function _build(o) {
   place();
 }
 
-// Clear of the "/" pressed AND of the field it serves - above both when there is room there (the chat's input), below
-// both for a card's prompt -, so the field stays in sight for the note and the paste; the right edge at the "/", the
-// whole window inside the page (a window too small for that is the one case it covers them).
+// Clear of the button pressed AND of the field it serves - above both when there is room there (the chat's input),
+// below both for a card's prompt -, so the field stays in sight for the note and the paste; the right edge at the
+// button, the whole window inside the page (a window too small for that is the one case it covers them).
 function _place(box, anchor, prefer, field) {
   const a = anchor ? anchor.getBoundingClientRect() : { top: innerHeight - 60, bottom: innerHeight - 30, right: innerWidth - 20 };
   const f = field && field.isConnected ? field.getBoundingClientRect() : null;
+  // (phase V15) 'beside': the almanac at the foot of the chat's left column - the window stands right of the column,
+  // above the prompt field when there is room there, else under it, else level with the button's foot. A narrow chat
+  // (its settings folded over the box) leaves too little room right of the button: the window then stands over both.
+  if (prefer === 'beside' && innerWidth - a.right - 20 >= 640) {
+    const left = a.right + 8;
+    const w = Math.min(W_MAX, innerWidth - left - 12);
+    let top, h;
+    if (f && f.width && f.top - 16 >= 320) { h = Math.min(H_MAX, f.top - 16); top = f.top - 8 - h; }
+    else if (f && f.width && innerHeight - f.bottom - 16 >= 320) { h = Math.min(H_MAX, innerHeight - f.bottom - 16); top = f.bottom + 8; }
+    else { h = Math.max(220, Math.min(H_MAX, a.bottom - 16)); top = Math.max(8, a.bottom - h); }
+    box.style.width = w + 'px';
+    box.style.height = h + 'px';
+    box.style.left = Math.round(left) + 'px';
+    box.style.top = Math.round(top) + 'px';
+    return;
+  }
   const r = f && f.width ? { top: Math.min(a.top, f.top), bottom: Math.max(a.bottom, f.bottom), right: a.right } : a;
   const w = Math.min(W_MAX, innerWidth - 24);
   const above = r.top - 16, below = innerHeight - r.bottom - 16;
@@ -256,9 +274,15 @@ function _tile(it, catLabel) {
 
 // ── Copying ─────────────────────────────────────────────────────────────────
 async function _toClipboard(text) {
-  try {
-    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
-  } catch (e) { /* the fallback below */ }
+  if (navigator.clipboard && window.isSecureContext) {
+    // A browser that asks the person first can leave the promise hanging - after a second the fallback below, still
+    // within the press's moment of activation.
+    const ok = await Promise.race([
+      navigator.clipboard.writeText(text).then(() => true, () => false),
+      new Promise(r => setTimeout(() => r(false), 1000)),
+    ]);
+    if (ok) return true;
+  }
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.setAttribute('readonly', '');
@@ -278,7 +302,7 @@ async function _copy(it, tile) {
   void tile.offsetWidth;
   tile.classList.add(ok ? 'is-blink' : 'is-fail');
   setTimeout(() => tile.classList.remove('is-blink', 'is-fail'), 1000);
-  _toast(_w.field, ok ? 'Copied: ' + it.name + ' - paste it into the prompt (Ctrl+V)' : 'Could not copy - the words are selected: copy them yourself', !ok);
+  _toast(_w.fieldOf(), ok ? 'Copied: ' + it.name + ' - paste it into the prompt (Ctrl+V)' : 'Could not copy - the words are selected: copy them yourself', !ok);
   // Not copied: its words are selected, one Ctrl+C away.
   if (!ok) _select(tile.querySelector('.hp-text'));
 }

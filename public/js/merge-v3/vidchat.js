@@ -331,12 +331,54 @@ function VIDEOS(ctx) {
       _row(host, 'aggregator', aSel, 'is-prov');
       const box = el('div', 'mv3-vc-params');
       host.appendChild(box);
+      // (phase V15) The writer, the storyboard and 中文 - the switches of how the message goes.
+      const sw = el('div', 'mv3-vc-switches');
+      host.appendChild(sw);
       const cost = el('div', 'mv3-ig-cost');
       const fall = el('div', 'mv3-ig-fall');
       host.append(cost, fall);
-      _set = { model: mSel, brief, agg: aSel, box, cost, fall };
+      _set = { model: mSel, brief, agg: aSel, box, sw, cost, fall };
+      // The prompt field typed in last - the almanac's note lands there (the chat's box, or a card's prompt).
+      if (!ui.root.dataset.vcFocus) {
+        ui.root.dataset.vcFocus = '1';
+        ui.root.addEventListener('focusin', (e) => {
+          const t = e.target;
+          if (t && t.matches && t.matches('textarea.mv3-ig-say, textarea.vc-prompt-ta:not(.is-board)')) _lastField = t;
+        });
+      }
     }
     _paintModel(false);
+  }
+
+  // The switches (phase V15, the owner 2026-10-07): the writer - it was the pen in the bar - and 中文, one box for every
+  // send and every card (it was on each card).
+  const _zhOn = () => { const m = model(); return !!params().zh && !!m && (m.langs || []).includes('zh'); };
+  function _paintSwitches() {
+    if (!_set) return;
+    const m = model();
+    const box = _set.sw;
+    box.textContent = '';
+    if (!m) return;
+    const wr = el('button', 'mv3-vc-sw' + (ctx.writing() && !isMC() ? ' on' : ''));
+    wr.type = 'button';
+    wr.append(el('span', 'k', 'writer'), el('span', 'v', isMC() ? 'none' : ctx.writing() ? 'on' : 'off'));
+    wr.disabled = isMC();
+    wr.title = isMC() ? 'Kling motion control has no writer - the box is its prompt'
+      : ctx.writing() ? 'The writer is on: a prompt engineer writes your message into the prompt this model wants. Press to send your words as typed (translated into English when they are not).'
+        : 'Your words go as typed (translated into English when they are not). Press to let the writer - a prompt engineer - write the prompt.';
+    wr.addEventListener('click', () => ctx.setWriting(!ctx.writing()));
+    box.appendChild(wr);
+    const zhOk = (m.langs || []).includes('zh');
+    const zh = el('label', 'mv3-vc-check' + (zhOk ? '' : ' is-off'));
+    const zcb = document.createElement('input');
+    zcb.type = 'checkbox';
+    zcb.checked = _zhOn();
+    zcb.disabled = !zhOk;
+    zcb.addEventListener('change', () => { setParam('zh', zcb.checked); _paintPrice(); });
+    zh.append(zcb, el('span', null, '中文'));
+    zh.title = zhOk ? 'Send the prompt in Chinese (Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes. Every send and every card of this model.'
+      : m.label + ' reads English only';
+    box.appendChild(zh);
   }
 
   function _paintModel(changed) {
@@ -443,6 +485,7 @@ function VIDEOS(ctx) {
       std.addEventListener('click', () => ctx.setText(_table.standardPrompt || ''));
       box.appendChild(std);
     }
+    _paintSwitches();
     _paintPrice();
   }
 
@@ -701,15 +744,25 @@ function VIDEOS(ctx) {
   }
   // Uploads first for clips: it is where clips from this computer go.
   const FIRST = { image: 'images', video: 'uploads', audio: 'sounds' };
-  // ── The prompt reference behind "/" (phase V14, the owner 2026-10-07; vhelp.js) ──
-  // Between the count and the send - and on a written card between its count and its make: a tip pressed there is
-  // copied, and the note says so on the field this "/" belongs to.
+  // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
+  // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
+  // field typed in last - the chat's box, or the prompt of a card.
   const _helpNote = () => (isMC() ? 'Kling motion control: the camera follows your clip - a camera tip may not take.' : '');
-  function _helpBtn(fieldOf, prefer) {
-    const b = el('button', 'hp-btn', '/');
+  let _lastField = null;
+  const _seen = (e) => !!(e && e.isConnected && e.offsetParent !== null);
+  function _fieldForHelp() {
+    if (_seen(_lastField)) return _lastField;
+    const ui = ctx.ui();
+    if (ui && _seen(ui.ta)) return ui.ta;
+    // A recipe in use: the box is hidden - the newest card's prompt.
+    const cards = ui ? [...ui.thread.querySelectorAll('textarea.vc-prompt-ta:not(.is-board)')] : [];
+    return cards[cards.length - 1] || null;
+  }
+  function _almanacBtn() {
+    const b = el('button', 'mv3-vc-almanac', 'almanac');
     b.type = 'button';
-    b.title = 'Prompt reference - camera moves and more: press a tip to copy it';
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: fieldOf(), prefer, note: _helpNote }); });
+    b.title = 'The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt';
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, prefer: 'beside', note: _helpNote }); });
     return b;
   }
 
@@ -835,6 +888,8 @@ function VIDEOS(ctx) {
       && (cardMedia ? cardMedia.some(a => a && a.kind === 'video') : atts.some(a => _kind(a) === 'video'));
     return {
       model: m.id, agg: r.agg,
+      // (phase V15) The column's 中文: the written prompt goes in Chinese (Seedance; the server checks the model too).
+      zh: _zhOn(),
       params: {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
@@ -1268,16 +1323,9 @@ function VIDEOS(ctx) {
     go.type = 'button';
     const price = el('span', 'vc-card-why');
     go.addEventListener('click', () => _make(m, go));
-    // The 中文 box (the owner: ticked on the prompt, right before it is sent; Seedance only - PLAN V-I).
-    const zh = el('label', 'vc-zh-box');
-    const zcb = document.createElement('input');
-    zcb.type = 'checkbox';
-    // Remembered per model - every waiting card of this model follows.
-    zcb.addEventListener('change', () => { setParam('zh', zcb.checked); _freshenCards(); });
-    zh.append(zcb, el('span', null, '中文'));
-    zh.title = 'Send the prompt in Chinese (experimental, Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes.';
-    // (phase V14) The prompt reference beside the count, its copies for this card's prompt.
-    acts.append(nBtn, _helpBtn(() => ta, 'below'), zh, go, price);
+    // (phase V15, the owner's answers 2 and 4) Neither the 中文 box nor "/" stands on a card any more: the card follows the
+    // column's 中文, and the almanac is the column's - its note lands on this prompt when it was typed in last.
+    acts.append(nBtn, go, price);
     if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
     // A made card: a copy of it, to change and make apart from this one.
     if (c.state === 'sent') {
@@ -1298,7 +1346,7 @@ function VIDEOS(ctx) {
     // The attempts: every make of the card, each with the sheet it followed and its clips - repainted in place.
     const tries = el('div', 'vc-tries');
     box.appendChild(tries);
-    const l = { m, ta, go, price, save, zh, zcb, two, tries, triesSig: '', triesProgs: new Map() };
+    const l = { m, ta, go, price, save, two, tries, triesSig: '', triesProgs: new Map() };
     _live.set(m.id, l);
     if (two) _paintBoards(m.id, l);
     _paintTries(m.id, l);
@@ -1379,10 +1427,6 @@ function VIDEOS(ctx) {
     const again = l.m.card.state === 'sent' || (l.m.genIds || []).length > 0;
     l.go.textContent = other && !seedOnly ? 'write it again for ' + m.label : (again ? 'make again' : 'make') + (n > 1 ? ' ×' + n : '');
     l.go.classList.toggle('is-make', !other || seedOnly);
-    if (l.zh) {
-      l.zh.hidden = !!other || !(m && (m.langs || []).includes('zh'));
-      l.zcb.checked = !!params().zh;
-    }
     if (l.two) {
       const has = !!_chosenBoard(l);
       const drawing = (l.m.boards || []).some(g => g.state === 'pending');
@@ -1404,7 +1448,7 @@ function VIDEOS(ctx) {
         : !pr || pr.none ? (m ? m.label + ' · no published price' : '')
           : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (m ? m.label : '')
             : '≈' + money(pr.usd * n) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
-              + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + longer;
+              + (m ? m.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + longer + (_zhOn() ? ' · in 中文' : '');
   }
 
   // Whether a card can go to the model chosen now - the card's own attachments are the server's to check.
@@ -1445,7 +1489,7 @@ function VIDEOS(ctx) {
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
         boardId: l.two ? ((_chosenBoard(l) || {}).id || '') : undefined,
-        zh: !!(l.zh && !l.zh.hidden && l.zcb.checked),
+        zh: _zhOn(),
       });
       if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
       _cardN.delete(m.id);
@@ -1813,8 +1857,9 @@ function VIDEOS(ctx) {
     onAttach: (a) => { _onAttach(a); },
     trimFor: _trimFor,
     onHide: () => { closeTrim(); closeHelp(); },
-    // (phase V14) The prompt reference "/" between the count and the send.
-    barButtons: () => [_helpBtn(() => (ctx.ui() || {}).ta, 'above')],
+    // (phase V15, the owner 2026-10-07) The writer is a switch of the column, and the almanac stands at its foot.
+    penInBar: false,
+    columnFoot: () => [_almanacBtn()],
     // (phase V6) The builder's cards in the thread, drawn here; the request at the thread's foot.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
@@ -1849,7 +1894,7 @@ function VIDEOS(ctx) {
         _paintFoot();
         _dropGone();
       },
-      onPen: () => _paintRecipe(),
+      onPen: () => { _paintRecipe(); _paintSwitches(); },
     },
 
     // A finished clip in the thread: its poster - a press plays it, and it can be dragged onto a lane (phase V13: the

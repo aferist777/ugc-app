@@ -172,6 +172,8 @@ export function createChat(make) {
     // use), and whether the writer is on.
     over: () => (_ui ? _ui.over : null),
     writing: () => _write,
+    // (phase V15) The writer switched from the description's own control (the video chat's column).
+    setWriting: (v) => _setWriting(v),
     saveDraft: () => _draftLater(),
     // (phase V6) The video chat's builder: the thread's FOOT - its own step, the last thing in the thread -, the input
     // line shown or hidden, the thread as read, read again, a project for a press made from "no project", and the
@@ -1074,6 +1076,22 @@ export function createChat(make) {
     }
   }
 
+  // The writer on or off - the pen in the bar, or (phase V15) the description's own switch through ctx.setWriting.
+  function _paintPen() {
+    const pen = _ui && _ui.pen;
+    if (!pen) return;
+    pen.classList.toggle('on', _write);
+    pen.title = _write
+      ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
+      : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
+  }
+  function _setWriting(v) {
+    _write = !!v;
+    keep(S.keys.write, _write);
+    _paintPen();
+    if (typeof set.onPen === 'function') set.onPen(_write);
+  }
+
   function _grow() {
     const ta = _ui.ta;
     // Empty, it is one line - measured, the placeholder of a box not laid out yet would make it tall.
@@ -1301,7 +1319,8 @@ export function createChat(make) {
     const setBox = el('div', 'mv3-ig-set');
     const left = el('div', 'mv3-ig-scroll');
     const said = el('div', 'mv3-ig-said');
-    setBox.append(left, said);
+    // (phase V15) A description's own foot of the column, under everything - the video chat's almanac.
+    setBox.append(left, said, ...(typeof S.columnFoot === 'function' ? S.columnFoot() : []));
 
     const chat = el('div', 'mv3-ig-chat');
     const banner = el('div', 'mv3-ig-banner');
@@ -1329,17 +1348,16 @@ export function createChat(make) {
     ta.rows = 1;
     ta.placeholder = T.placeholder;
     // THE WRITER: on, the message is rewritten into the shape the chosen model wants; off, the words go
-    // exactly as typed.
-    const pen = el('button', 'pen', '✎');
-    pen.type = 'button';
+    // exactly as typed. (phase V15) A description that keeps its own switch for it in its column has no pen here.
+    const pen = S.penInBar === false ? null : el('button', 'pen', '✎');
+    if (pen) pen.type = 'button';
     const nBtn = el('button', 'n', '×1');
     nBtn.type = 'button';
     nBtn.title = 'How many to make at once. Each is its own attempt.';
     const go = el('button', 'b', '>');
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
-    // (phase V14) A description's own buttons between the count and the send - the video chat's prompt reference "/".
-    bar.append(ta, pen, nBtn, ...(typeof S.barButtons === 'function' ? S.barButtons() : []), go);
+    bar.append(...[ta, pen, nBtn, go].filter(Boolean));
     // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
     const foot = el('div', 'mv3-ig-foot');
     thread.appendChild(foot);
@@ -1402,14 +1420,10 @@ export function createChat(make) {
       nBtn.textContent = '×' + _n;
       set.onCount();
     });
-    const paintPen = () => {
-      pen.classList.toggle('on', _write);
-      pen.title = _write
-        ? 'The writer is on: your message is rewritten into the shape this model wants. Press to send your words exactly as typed.'
-        : 'Sending your words exactly as typed. Press to let the writer shape them for this model.';
-    };
-    pen.addEventListener('click', () => { _write = !_write; keep(S.keys.write, _write); paintPen(); if (typeof set.onPen === 'function') set.onPen(_write); });
-    paintPen();
+    if (pen) {
+      pen.addEventListener('click', () => _setWriting(!_write));
+      _paintPen();
+    }
     go.addEventListener('click', () => _send());
     ta.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); _send(); }

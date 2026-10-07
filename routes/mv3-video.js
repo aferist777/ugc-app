@@ -138,6 +138,8 @@ router.post('/mv3/video/send', async (req, res) => {
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
     // (review V7) A picture-then-video recipe is Kling's own two steps and has no writer: it steers none.
     const skill = (isMC || b.write === false || _frameSwapOf(b.skill, b.skill && b.skill.frameSwap)) ? null : _skill(b.skill);
+    // (phase V15) The column's 中文: the prompt goes in Chinese - only where the model reads it (Seedance).
+    const zh = !!b.zh && ((VM.MODELS.find(x => x.id === model) || {}).langs || []).includes('zh');
 
     // What is attached, each checked to be in the library; who can take it.
     const mm = _mediaOf(b.media);
@@ -168,13 +170,13 @@ router.post('/mv3/video/send', async (req, res) => {
     for (let i = 0; i < n; i++) {
       ids.push(VGENS.create({
         project, send: msgId, kick, where, stage: first,
-        model, agg: fits[0].agg, prompt: text, said: text, params, media, skill,
+        model, agg: fits[0].agg, prompt: text, said: text, params, media, skill, zh,
       }).id);
     }
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path) });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
-    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill, ids, kick, before, pair: fits[0] });
+    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill, ids, kick, before, pair: fits[0], zh });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/send]', err.message);
@@ -204,6 +206,19 @@ async function _work(o) {
       }
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
+    }
+    over.lang = 'en';
+    // (phase V15) 中文: the finished English into Chinese once for every clip - the references and every quoted line stay
+    // as they are; what is not translated whole goes in English, and the record says why (as a card's make does).
+    if (o.zh) {
+      if (!o.ids.some(id => VGENS.ours(id, o.kick))) return;
+      for (const id of o.ids) VGENS.stage(id, 'translating the prompt to Chinese', o.kick);
+      let tr;
+      try { tr = await AGENT.toChinese(over.prompt); } catch (e) { tr = { fail: e.message }; }
+      const max = o.pair.promptMax || 30000;
+      if (tr.text && tr.text.length > max) tr = { fail: 'the Chinese is longer than the model takes (' + tr.text.length + ' > ' + max + ')' };
+      if (tr.text) Object.assign(over, { sent: tr.text, lang: 'zh' });
+      else over.fell = [over.fell, 'sent in English - ' + String(tr.fail || 'it was not translated').slice(0, 200)].filter(Boolean).join(' · ');
     }
     // Each on its own: one that breaks off (a store write that failed after its paid ask) is not every one's end.
     const done = await Promise.allSettled(o.ids.map(id => VGENS.submit(id, over, o.kick)));
