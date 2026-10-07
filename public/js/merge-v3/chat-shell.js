@@ -146,13 +146,6 @@ export function createChat(make) {
     atts: () => _real(),
     // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
     holeWhy: () => _holeWhy(),
-    // (phase V15) Whether anything attached answers `fn` - read without laying out the zone, so the zone's own room
-    // (the storyboard's seat) can ask it.
-    anyAtt: (fn) => _atts.some(a => !a.hole && fn(a)),
-    // (phase V15) One thing put in another's place - its number stays (the storyboard drawn again).
-    replace: (oldPath, path, name, o) => _replace(oldPath, path, name, o),
-    // (phase V15) A send of the description's own: { text, body, over, from } - see _send.
-    sendNow: (o) => _send(o || {}),
     // (phase V16) The zone replaced by these attachments ({ path, kind, role, label, in, out }) - a message's, put back
     // for the next variant; [] empties it.
     useAtts: (list) => _useAtts(list),
@@ -491,23 +484,6 @@ export function createChat(make) {
       if (_pickAt && _pickAt.target === was) { _pickAt.target = hole; _pickAt.filled = false; }
       _trimHoles();
     } else _atts.splice(i, 1);
-    _attSeq++;
-    _paintAtts();
-    _paintStrip();
-    _draftLater();
-  }
-
-  // (phase V15) One thing in another's place: its number, its slot and its place in the row stay; what it carries
-  // (poster, length, part, role, name) is its own.
-  function _replace(oldPath, path, name, o) {
-    const i = _atts.findIndex(a => a.path === oldPath);
-    if (i < 0) { _attach(path, name, o); return; }
-    if (!path || _atts.some(a => a.path === path)) return;
-    const was = _atts[i];
-    const att = { path, name: name || '', kind: _kindOf(was), slot: was.slot };
-    for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
-    _atts[i] = att;
-    if (typeof S.onAttach === 'function') S.onAttach(att);
     _attSeq++;
     _paintAtts();
     _paintStrip();
@@ -1256,19 +1232,14 @@ export function createChat(make) {
   function _stop() { clearTimeout(_timer); _timer = 0; }
 
   // ── Sending ───────────────────────────────────────────────────────────────
-  // `o` (phase V15) - a send of the description's own: `text` in place of the box (the box is left as it is), `body` in
-  // place of set.body(), `over` laid over the request, `from` the button its notes stand on. The video chat's
-  // storyboard card sends its words this way, with the sheet among the pictures.
-  async function _send(o) {
+  async function _send() {
     if (_sending || !_ui) return;
     const ta = _ui.ta;
-    const own = !!(o && o.text != null);
-    const at = (o && o.from) || _ui.go;
+    const at = _ui.go;
     // (phase V7.3) A description may stand in for an empty box - Kling motion control's standard prompt.
-    const text = own ? String(o.text).trim() : (ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : ''));
+    const text = ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : '');
     // (phase V16) A description may let the box go empty - the video chat's writer makes a clip from the attachments.
-    if (!text && (own || !(typeof S.emptyOk === 'function' && S.emptyOk()))) {
-      if (own) { note(at, 'Nothing to send.', 'Its words are empty.'); return; }
+    if (!text && !(typeof S.emptyOk === 'function' && S.emptyOk())) {
       ta.focus();
       ta.classList.add('is-bad');
       setTimeout(() => ta.classList.remove('is-bad'), 900);
@@ -1290,7 +1261,7 @@ export function createChat(make) {
       const key = Store.key();
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, (o && o.body) || set.body(), {
+        body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it.
           where: {
@@ -1298,10 +1269,11 @@ export function createChat(make) {
             label: 'Merge · ' + (Store.title() || 'project') + ' · ' + S.name,
             spot: { key, view: S.name },
           },
-        }, (o && o.over) || {})),
+        })),
       });
       if (!d || !d.success) { note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
-      if (!own) { ta.value = ''; _grow(); }
+      ta.value = '';
+      _grow();
       // (phase V16) What the description does once a send is in (the video chat: the zone emptied - its attachments are
       // packed into the writer's message).
       if (typeof S.afterSend === 'function') S.afterSend(d);
@@ -1310,7 +1282,7 @@ export function createChat(make) {
       await _reload(true);
     } finally {
       _sending = false;
-      if (_ui) { _ui.go.disabled = false; if (!own) _ui.ta.focus(); }
+      if (_ui) { _ui.go.disabled = false; _ui.ta.focus(); }
     }
   }
 

@@ -66,8 +66,6 @@ function VIDEOS(ctx) {
   // (phase V15, the owner 2026-10-07) The column's STORYBOARD: ticked, under Seedance, with the writer, without a recipe
   // (a recipe decides its own steps). ">" then writes and draws a sheet and stops; the video is made from its card.
   const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && !_skill && ctx.writing(); };
-  // Its sheet put among the pictures - the room the seat kept for it is its own then.
-  let _attachingSheet = false;
   // The catalog's recipe in use (phase V5) - kept with the draft, per project, until its cross.
   let _skill = null;
   // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
@@ -654,8 +652,8 @@ function VIDEOS(ctx) {
   // - Seedance's alone, the only family that makes one (review V8: under Grok the seat took its one place) - and the
   // sheet is drawn WITH the card's pictures, which nano-banana-2 takes up to 14 of.
   const _seat = () => ((_skill && _skill.twoStep && (model() || {}).family === 'seedance')
-    // (phase V15) The column's storyboard keeps its sheet's place until the sheet is among the pictures.
-    || (_boardOn() && !_attachingSheet && !ctx.anyAtt(a => _kind(a) === 'image' && a.role === 'storyboard')) ? 1 : 0);
+    // (phase V15) The column's storyboard keeps its sheet's place: the sheet goes to the video as one more picture.
+    || _boardOn() ? 1 : 0);
   // (phase V15) What a sheet of the column's storyboard costs: the first aggregator that draws from this many pictures.
   function _sheetPrice(n) {
     const info = _table && _table.board;
@@ -935,14 +933,13 @@ function VIDEOS(ctx) {
   }
 
   // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go (V7.4).
-  // `opt.video` (phase V15): the video of a storyboard card - its sheet goes, whatever the storyboard box says.
-  function _body(cardMedia, opt) {
+  function _body(cardMedia) {
     const m = model(), r = rec();
     const p = params();
     const fam = m.family;
     // (phase V15) The column's storyboard is drawn from the pictures - an older sheet among them is not one of them (the
     // new sheet takes its place when it lands).
-    const boarding = _boardOn() && !(opt && opt.video);
+    const boarding = _boardOn();
     const atts = ctx.atts().filter(a => !(boarding && _kind(a) === 'image' && a.role === 'storyboard'));
     const as = p.picturesAs || 'refs';
     // What each picture is for: a recipe's slot says (its role - person, product... - or a frame), otherwise Seedance's
@@ -1327,6 +1324,7 @@ function VIDEOS(ctx) {
     // (phase V16) The writer's message is drawn anew only when it first has a prompt (or fails without one): its variants,
     // its clips and its prices are its sub-project's, painted in place.
     if (c.plain) return [c.type, 'plain', (c.versions || []).length ? 'v' : (c.state || '') + ':' + (c.error || '')].join(':');
+    if (c.type === 'board') return [c.type, ((c.board || {}).versions || []).length || (c.board || {}).prompt ? 'v' : (c.state || '') + ':' + (c.error || '')].join(':');
     return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).length].join(':');
   };
   const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
@@ -1579,7 +1577,8 @@ function VIDEOS(ctx) {
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
-        boardId: l.two ? ((_chosenBoard(l) || {}).id || '') : undefined,
+        // (phase V16) A storyboard card's video follows the sheet its prompt variant was written with.
+        boardId: l.two ? ((_chosenBoard(l) || {}).id || '') : (l.boardId || undefined),
         zh: _zhOn(),
         ver: l.ver || undefined,
       });
@@ -1827,8 +1826,6 @@ function VIDEOS(ctx) {
           for (const b of two.strip.querySelectorAll('.vc-board[data-id]')) b.classList.toggle('is-chosen', b.dataset.id === x.id);
           two.sig = _boardSig(l, _chosenBoard(l));
           _freshenOne(id, l);
-          // (phase V15) A storyboard of the column: the one chosen is the one among the pictures.
-          if (l.story) _putSheet(x);
         }, ok, two.W));
       } else if (g.state === 'pending') {
         two.strip.appendChild(_boardBusy(g, two.progs, g.id, two.W));
@@ -1845,139 +1842,300 @@ function VIDEOS(ctx) {
       if (!(l.el || l.go).isConnected) { _forget(id); continue; }
       const now = thread.find(x => x.id === id);
       if (now) l.m = now;
-      // (phase V16) The writer's message: its steps and their variants, painted again in place.
+      // (phase V16) The writer's message and the storyboard's: their steps and variants, painted again in place.
       if (l.review) { _paintReview(id, l); continue; }
+      if (l.story) { _paintStory(id, l); continue; }
       if (l.two) _paintBoards(id, l);
       if (l.tries) _paintTries(id, l);
       _freshenOne(id, l);
     }
   }
 
-  // ── The column's storyboard (phase V15, the owner 2026-10-07) ──
-  // Its card: the words it was drawn for, its sheets - pressed, one is chosen, the newest that landed until then -, and
-  // two presses: "make the video" (the same words, the chosen sheet among the pictures, to the writer - only by this
-  // press: the owner's answer 1) and "draw again" (the V8 press, another sheet from the same prompt). The sheet's prompt
-  // under its fold.
+  // ── The column's storyboard (phase V15; a sub-project message since V16 - the owner 2026-10-07) ──
+  // ">" with the storyboard box ticked writes the sheet's prompt into a message of its own, and from there every paid step
+  // waits for its press (the owner, V16 answer 5): "draw the storyboard", "write the video" - the video's prompt from the
+  // same words with the chosen sheet among the pictures - and "make the video". Its steps: the storyboard prompt (every
+  // writing a variant) · the storyboard (the sheets - the one shown is the one the video follows) · the video prompt
+  // (every writing a variant, each with the sheet it was written for) · the video (the clips).
   function _storyCard(m, progs) {
     const c = m.card;
     _forget(m.id);
-    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-board is-' + c.state);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-board is-steps is-' + c.state);
     const h = el('div', 'vc-card-h');
-    h.append(el('span', 'k', 'storyboard'), el('span', 't', String(c.text || '').replace(/\s+/g, ' ').slice(0, 80)));
+    h.append(el('span', 'k', 'storyboard'), el('span', 't', _words(c.text).slice(0, 90) || 'from the attachments alone'));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
     box.appendChild(h);
-    if (c.state === 'writing') {
-      const strip = el('div', 'mv3-ig-prog');
-      box.appendChild(strip);
-      progs.set('w:' + m.id, startInlineProgress(strip, {
-        label: 'writing the storyboard prompt…', key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
-      }));
-      return box;
-    }
-    if (c.state === 'failed') {
+    const B = c.board || {};
+    if (!((B.versions || []).length || B.prompt)) {
+      if (c.state === 'writing') {
+        const strip = el('div', 'mv3-ig-prog');
+        box.appendChild(strip);
+        progs.set('w:' + m.id, startInlineProgress(strip, {
+          label: 'writing the storyboard prompt…', key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        }));
+        return box;
+      }
       box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
       const acts = el('div', 'vc-card-acts');
       const again = el('button', 'mv3-c-btn vc-go', 'write it again');
       again.type = 'button';
       again.addEventListener('click', () => _rewrite(m, again));
       acts.appendChild(again);
+      if ((m.media || []).length) acts.appendChild(_backLink(m));
       box.appendChild(acts);
       return box;
     }
-    const strip = el('div', 'vc-boards');
-    box.appendChild(strip);
-    const acts = el('div', 'vc-card-acts');
-    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
-    go.type = 'button';
-    const price = el('span', 'vc-card-why');
-    acts.append(go, price);
-    const redo = el('button', 'mv3-c-btn vc-go', 'draw again');
-    redo.type = 'button';
-    const rprice = el('span', 'vc-card-why');
-    const acts2 = el('div', 'vc-card-acts');
-    acts2.append(redo, rprice);
-    box.append(acts, acts2);
-    const more = el('div', 'mv3-ig-more');
-    const mb = el('button', 'mv3-ig-more-b', 'the storyboard prompt');
-    mb.type = 'button';
-    const said = el('div', 'mv3-ig-more-body vc-story-prompt', (c.board && c.board.prompt) || '');
-    said.hidden = true;
-    mb.addEventListener('click', () => { said.hidden = !said.hidden; mb.textContent = said.hidden ? 'the storyboard prompt' : 'less'; });
-    more.append(mb, said);
-    box.appendChild(more);
-    const two = { bta: null, go: redo, price: rprice, strip, sig: '', progs: new Map(), busy: false, W: 'storyboard' };
-    redo.addEventListener('click', (e) => _drawBoard(m, two, redo, e));
-    const l = { m, ta: null, go, price, save: null, two, tries: null, triesSig: '', triesProgs: new Map(), story: true };
-    go.addEventListener('click', () => _makeFromStory(m, go));
+    const steps = stepCard(m.id);
+    box.append(...steps.parts);
+    const l = { m, el: box, steps, story: true, ta: null, go: null, price: null, save: null, two: null, tries: null,
+                bta: null, drawGo: null, drawPrice: null, ver: '', vmodel: '', boardId: '' };
     _live.set(m.id, l);
-    _paintBoards(m.id, l);
-    _freshenStory(m.id, l);
+    _paintStory(m.id, l);
     return box;
   }
+  // The sheet the video follows: the one shown on its step when it has landed, else the one the card chose, else the
+  // newest that landed.
+  function _chosenSheet(l) {
+    const done = (l.m.boards || []).filter(_boardOk);
+    const chosen = (l.m.card.board || {}).chosen;
+    return done.find(g => g.id === l.steps.shown('board')) || done.find(g => g.id === chosen) || done[done.length - 1] || null;
+  }
+  function _paintStory(id, l) {
+    const m = l.m, c = m.card, B = c.board || {};
+    const patch = (b) => _post('/api/mv3/video/card/' + encodeURIComponent(m.id), Object.assign({ project: m.project }, b), 'PATCH');
+    // A card written before V16 has its one sheet prompt and no list: that one is its only variant.
+    const bv = (B.versions || []).length ? B.versions : [{ id: 'b0', prompt: B.prompt, aspect: B.aspect, edited: !!B.edited }];
+    const bvars = bv.map(v => ({ key: v.id, sig: '', v }));
+    if (c.state === 'writing' && c.writing === 'board') bvars.push({ key: 'writing', sig: 'writing', writing: true });
+    const sheets = (m.boards || []).map(g => ({ key: g.id, sig: g.state + ':' + (g.imagePath || '') + ':' + (g.error || '') + ':' + (g.gone ? 1 : 0), g }));
+    const vvars = (c.versions || []).map(v => ({ key: v.id, sig: (v.model || '') + ':' + (v.boardId || ''), v }));
+    if (c.state === 'writing' && c.writing === 'video') vvars.push({ key: 'writing', sig: 'writing', writing: true });
+    const clips = _triesOf(m).flatMap((t, i) => t.gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.videoPath || '') + ':' + (g.error || ''), g, t, n: i + 1 })));
+    const say = (x) => { const p = x && x.g && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(x.t ? ctx.stageWords(x.g) : _boardWords(x.g, 'storyboard')); };
+    const steps = [{
+      key: 'board-prompt', title: 'storyboard prompt', word: 'variant', pick: B.cur || 'b0', variants: bvars,
+      note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw the storyboard" draws this one'),
+      body: (x, b, progs) => _boardPromptStep(m, l, x, b, progs),
+      acts: (x, a) => _boardPromptActs(m, l, x, a),
+      page: (x) => { if (x && x.v && (B.versions || []).length && x.key !== B.cur) patch({ bcur: x.key }); },
+      freshen: () => _freshenStory(id, l),
+    }];
+    if (sheets.length) {
+      steps.push({
+        key: 'board', title: 'storyboard', word: 'sheet', pick: B.chosen, variants: sheets,
+        note: (x) => (!x ? '' : x.g.state === 'pending' ? 'being drawn' : !_boardOk(x.g) ? (x.g.gone ? 'not on the Images shelf any more' : 'not drawn')
+          : 'the video follows this one'),
+        body: (x, b, progs) => _sheetStep(m, l, x, b, progs),
+        acts: (x, a) => _sheetActs(m, l, x, a),
+        // The sheet paged to - when it has landed - is the one chosen.
+        page: (x) => { if (x && _boardOk(x.g) && x.key !== B.chosen) patch({ chosen: x.key }); },
+        freshen: (x) => { say(x); _freshenStory(id, l); },
+      });
+    }
+    if (vvars.length) {
+      steps.push({
+        key: 'prompt', title: 'video prompt', word: 'variant', pick: c.cur, variants: vvars,
+        note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
+        body: (x, b, progs) => _videoPromptStep(m, l, x, b, progs),
+        acts: (x, a) => _videoPromptActs(m, l, x, a),
+        page: (x) => { if (x && x.v && x.key !== c.cur) patch({ cur: x.key }); },
+        freshen: () => _freshenStory(id, l),
+      });
+    }
+    if (clips.length) {
+      steps.push({
+        key: 'video', title: 'video', word: 'clip', variants: clips,
+        note: (x) => (x ? 'attempt ' + x.n : ''),
+        body: (x, b, progs) => _videoStep(m, x, b, progs),
+        freshen: say,
+      });
+    }
+    l.steps.paint({ steps });
+  }
+  // 1 · the storyboard prompt: its words to edit (the variant shown), the pictures it is drawn with.
+  function _boardPromptStep(m, l, x, b, progs) {
+    const c = l.m.card;
+    l.bta = null;
+    if (!x || x.writing) {
+      const strip = el('div', 'mv3-ig-prog');
+      b.appendChild(strip);
+      progs.set('w', startInlineProgress(strip, {
+        label: 'writing another variant of the storyboard prompt…', key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      }));
+      return;
+    }
+    if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    const bta = document.createElement('textarea');
+    bta.className = 'vc-prompt-ta is-board';
+    bta.spellcheck = true;
+    bta.maxLength = 6000;
+    bta.value = x.v.prompt || '';
+    bta.title = 'The storyboard sheet\'s prompt - numbered panels, one per beat of the clip; Image 1, Image 2 are the pictures below.';
+    const grow = () => { bta.style.height = 'auto'; bta.style.height = Math.min(320, bta.scrollHeight + 2) + 'px'; };
+    requestAnimationFrame(grow);
+    const key = 'b:' + m.id + ':' + x.key;
+    const save = () => {
+      clearTimeout(_patchT.get(key));
+      _patchT.delete(key);
+      const body = { project: m.project, board: bta.value };
+      if (x.key !== 'b0') body.bver = x.key;
+      return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), body, 'PATCH');
+    };
+    bta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+    b.appendChild(bta);
+    const row = _mediaRow(l.m.media || []);
+    if (row) b.appendChild(row);
+    l.bta = bta;
+  }
+  function _boardPromptActs(m, l, x, a) {
+    l.drawGo = null; l.drawPrice = null;
+    if (!x || x.writing) return;
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'draw the storyboard');
+    go.type = 'button';
+    const two = { bta: l.bta, busy: false };
+    go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
+    const price = el('span', 'vc-card-why');
+    const again = el('button', 'vc-link', 'write it again');
+    again.type = 'button';
+    again.title = 'Another variant of the storyboard prompt from the same words and pictures - this one stays';
+    again.addEventListener('click', () => _rewrite(l.m, again));
+    a.append(go, price, again);
+    if ((l.m.media || []).length) a.appendChild(_backLink(l.m));
+    l.drawGo = go;
+    l.drawPrice = price;
+    _freshenStory(m.id, l);
+  }
+  // 2 · the storyboard: the sheet shown - drawing, drawn (press: large), or why not.
+  function _sheetStep(m, l, x, b, progs) {
+    if (!x) return;
+    const g = x.g;
+    if (g.state === 'pending') { b.appendChild(_boardBusy(g, progs, g.id, 'storyboard')); return; }
+    if (!_boardOk(g)) {
+      b.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+      return;
+    }
+    const ok = (l.m.boards || []).filter(_boardOk);
+    const t = _boardThumb(g, false, null, ok, 'storyboard');
+    t.classList.add('is-big');
+    b.appendChild(t);
+  }
+  function _sheetActs(m, l, x, a) {
+    l.drawGo = null; l.drawPrice = null;
+    const write = el('button', 'mv3-c-btn vc-go is-make', 'write the video');
+    write.type = 'button';
+    write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
+    write.addEventListener('click', () => _writeVideo(l.m, l, write));
+    write.disabled = !(x && _boardOk(x.g));
+    const redo = el('button', 'mv3-c-btn vc-go', 'draw again');
+    redo.type = 'button';
+    redo.title = 'Another sheet from the storyboard prompt chosen on the step before';
+    redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, busy: false }, redo, e));
+    const price = el('span', 'vc-card-why');
+    a.append(write, redo, price);
+    l.drawGo = redo;
+    l.drawPrice = price;
+    _freshenStory(m.id, l);
+  }
+  // "write the video": the writer writes the video's prompt with the sheet shown among the pictures - another variant.
+  async function _writeVideo(m, l, btn) {
+    if (btn.disabled) return;
+    const g = _chosenSheet(l);
+    if (!g) { note(btn, 'No storyboard yet.', 'Draw it first - the video follows it.'); return; }
+    const why = _readyFor(m);
+    if (why) { note(btn, why[0], why[1]); return; }
+    btn.disabled = true;
+    try {
+      const b = _body(m.media || []);
+      const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/video', { project: m.project, model: b.model, agg: b.agg, params: b.params, boardId: g.id });
+      if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+      await ctx.reload(true);
+    } finally {
+      if (btn.isConnected) btn.disabled = false;
+    }
+  }
+  // 3 · the video prompt: its words to edit, the pictures with ITS sheet as the last one.
+  function _videoPromptStep(m, l, x, b, progs) {
+    const c = l.m.card;
+    l.ta = null; l.ver = ''; l.vmodel = ''; l.boardId = ''; l.patchKey = '';
+    if (!x || x.writing) {
+      const strip = el('div', 'mv3-ig-prog');
+      b.appendChild(strip);
+      progs.set('w', startInlineProgress(strip, {
+        label: 'writing the video prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      }));
+      return;
+    }
+    const v = x.v;
+    if (c.error && c.writing !== 'board') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    const ta = document.createElement('textarea');
+    ta.className = 'vc-prompt-ta';
+    ta.spellcheck = true;
+    ta.value = toShown(v.prompt);
+    ta.title = 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
+    requestAnimationFrame(grow);
+    const key = 'p:' + m.id + ':' + v.id;
+    const save = () => {
+      clearTimeout(_patchT.get(key));
+      _patchT.delete(key);
+      return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, prompt: toNeutral(ta.value), ver: v.id }, 'PATCH');
+    };
+    ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+    b.appendChild(ta);
+    const media = l.m.media || [];
+    const sheet = (l.m.boards || []).find(g => g.id === v.boardId);
+    const all = media.filter(a => a.kind === 'image')
+      .concat(sheet && sheet.imagePath ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
+      .concat(media.filter(a => a.kind !== 'image'));
+    const row = _mediaRow(all);
+    if (row) b.appendChild(row);
+    if (sheet && sheet.gone) b.appendChild(el('div', 'mv3-ig-bad', 'Its storyboard is not on the Images shelf any more - write the video again from another sheet.'));
+    Object.assign(l, { ta, save, ver: v.id, vmodel: v.model || c.model, boardId: v.boardId || '', patchKey: key });
+  }
+  function _videoPromptActs(m, l, x, a) {
+    l.go = null; l.price = null;
+    if (!x || x.writing) return;
+    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    nBtn.type = 'button';
+    nBtn.title = 'How many to make from it - each clip is its own variant of the video';
+    nBtn.addEventListener('click', () => {
+      _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
+      nBtn.textContent = '×' + _cardN.get(m.id);
+      _freshenStory(m.id, l);
+    });
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+    go.type = 'button';
+    go.addEventListener('click', () => _make(l.m, go));
+    const price = el('span', 'vc-card-why');
+    const again = el('button', 'vc-link', 'write it again');
+    again.type = 'button';
+    again.title = 'Another variant of the video prompt, with the storyboard chosen on its step - this one stays';
+    again.addEventListener('click', () => _writeVideo(l.m, l, again));
+    a.append(nBtn, go, price, again);
+    l.go = go;
+    l.price = price;
+    _freshenStory(m.id, l);
+  }
+  // The presses follow the column: a storyboard's video is Seedance's; the drawing has its own price.
   function _freshenStory(id, l) {
     const mm = model();
     const seed = !!mm && mm.family === 'seedance';
-    const g = _chosenBoard(l);
-    const drawing = (l.m.boards || []).some(x => x.state === 'pending');
-    l.go.disabled = !g || !seed;
-    l.go.classList.toggle('is-waiting', seed && !g);
-    l.go.title = !seed ? 'The video from a storyboard is made by Seedance - pick a Seedance model on the left'
-      : g ? 'Your words, with this storyboard among the pictures, to the writer - and the video is made'
-        : drawing ? 'The storyboard is being drawn - the video follows it' : 'Draw a storyboard first - the video follows it';
-    const pr = priceNow();
-    const many = ctx.n();
-    l.price.textContent = !seed ? 'a video from a storyboard is Seedance\'s - pick it on the left'
-      : !pr || pr.none || pr.fromClip ? (mm ? mm.label + ' · no published price' : '')
-        : '≈' + money(pr.usd * many) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
-          + mm.label + ' · ' + (rec() ? rec().aggLabel : '') + (_zhOn() ? ' · in 中文' : '');
-    const bp = _boardPrice(l);
-    l.two.price.textContent = bp.text;
-    l.two.go.disabled = !bp.ok || !!l.two.busy || !seed;
-    l.two.go.title = !seed ? 'A storyboard is drawn for Seedance - pick a Seedance model' : bp.ok ? 'Another sheet from the same prompt - the newest is the one the video follows until you choose' : bp.text;
-  }
-  async function _makeFromStory(m, go) {
-    const l = _live.get(m.id);
-    if (!l || go.disabled) return;
-    const g = _chosenBoard(l);
-    if (!g) { note(go, 'No storyboard yet.', (l.m.boards || []).some(x => x.state === 'pending') ? 'It is being drawn - the video follows it.' : 'Draw one - the video follows it.'); return; }
-    if (!_putSheet(g)) { note(go, 'The storyboard could not join the pictures.', ((ctx.ui() || {}).said || {}).textContent || 'there is no room for it'); return; }
-    go.disabled = true;
-    try { await ctx.sendNow({ text: m.card.text, body: _body(null, { video: true }), over: { write: true }, from: go }); }
-    finally { if (go.isConnected) _freshenStory(m.id, l); }
-  }
-  // The sheet among the pictures, as the storyboard: in the storyboard's place when one is there (its number kept), else
-  // after the other pictures. False when it could not go - the zone says why.
-  function _putSheet(g) {
-    if (!_boardOk(g)) return false;
-    const pics = _pics();
-    const here = pics.find(a => a.path === g.imagePath);
-    if (here) {
-      if (here.role !== 'storyboard') ctx.setAtt(g.imagePath, { role: 'storyboard', label: 'storyboard' });
-      return true;
+    if (l.drawGo) {
+      const bp = _boardPrice(l);
+      l.drawPrice.textContent = !seed ? 'a storyboard is drawn for Seedance - pick it on the left' : bp.text;
+      l.drawGo.disabled = !bp.ok || !seed;
     }
-    const old = pics.find(a => a.role === 'storyboard');
-    _attachingSheet = true;
-    try {
-      if (old) ctx.replace(old.path, g.imagePath, 'storyboard', { role: 'storyboard', label: 'storyboard' });
-      else ctx.attach(g.imagePath, 'storyboard', { kind: 'image', role: 'storyboard', label: 'storyboard', atEnd: true });
-    } finally { _attachingSheet = false; }
-    return _pics().some(a => a.path === g.imagePath);
-  }
-  // A sheet of the column's storyboard that lands while the chat is open joins the pictures by itself (the owner: the
-  // person sees it in the chat AND among the attachments). One that landed while the page was away is put there by
-  // "make the video".
-  const _sheetWas = new Map();          // sheet id -> its state at the read before
-  function _landSheets(thread) {
-    const now = new Map();
-    for (const m of thread) {
-      if (!m.card || m.card.type !== 'board') continue;
-      for (const g of m.boards || []) {
-        now.set(g.id, g.state);
-        if (_sheetWas.get(g.id) === 'pending' && _boardOk(g)) _putSheet(g);
+    if (l.go) {
+      _freshenReview(id, l);
+      if (!seed) {
+        l.go.disabled = true;
+        l.go.classList.add('is-make');
+        l.go.textContent = 'make the video';
+        l.price.textContent = 'a video from a storyboard is made by Seedance - pick it on the left';
       }
     }
-    _sheetWas.clear();
-    for (const [k, v] of now) _sheetWas.set(k, v);
   }
 
   // A request as it was sent: the places as the person left them - theirs in solid gold, the example's dashed - and
@@ -2258,7 +2416,7 @@ function VIDEOS(ctx) {
     // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone.
     emptyOk: () => ctx.writing() && !isMC() && ctx.atts().length > 0,
     // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
-    afterSend: (d) => { if (d && d.review) ctx.useAtts([]); },
+    afterSend: (d) => { if (d && (d.review || d.storyboard)) ctx.useAtts([]); },
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },
@@ -2271,7 +2429,7 @@ function VIDEOS(ctx) {
     cardBubble: _cardBubble,
     cardSig: _cardSig,
     busy: _busy,
-    onThread: (thread) => { _paintFoot(true); _freshenLive(thread); _landSheets(thread); },
+    onThread: (thread) => { _paintFoot(true); _freshenLive(thread); },
     resultPath: (g) => g.videoPath,
 
     settings: {

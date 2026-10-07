@@ -588,6 +588,8 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-nav:hover:not([disabled]){ border-color:var(--primary); color:var(--primary) }
 .vc-nav[disabled]{ opacity:.35; cursor:default }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
+/* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
+.vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
 .vc-step:empty{ display:none }
 .vc-go.is-waiting{ opacity:.55 }
 
