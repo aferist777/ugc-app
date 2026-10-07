@@ -132,11 +132,7 @@ router.post('/mv3/video/send', async (req, res) => {
     const isMC = /^kmc/.test(model);
     // Kling motion control's box IS its prompt (phase V7.3): an empty one sends the standard prompt, said as the turn.
     const text = String(b.text || '').trim().slice(0, 30000) || (isMC ? VM.STANDARD_MC_PROMPT : '');
-    // (phase V16, the owner's answer 3) The writer stopping for a look makes a clip from the attachments alone.
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
-    // The storyboard is the writer's too: its sheet is planned from the attachments alone as well.
-    const fromAtts = (review || (!!b.storyboard && b.write !== false && !isMC)) && Array.isArray(b.media) && b.media.length > 0;
-    if (!text && !fromAtts) return res.status(400).json({ success: false, error: 'say what to make' });
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
@@ -149,17 +145,20 @@ router.post('/mv3/video/send', async (req, res) => {
     const mm = _mediaOf(b.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     const media = mm.media;
+    // (phase V16) Seedance's frames: every picture a frame, the first one there.
+    const fr = isMC ? null : _framesOf(model, media);
+    if (fr && fr.error) return res.status(400).json({ success: false, error: fr.error });
+    // (phase V16, the owner's answer 3) The writer stopping for a look makes a clip from the attachments alone, and so does
+    // the storyboard's; frames are written from even with the writer off.
+    const fromAtts = media.length > 0 && !isMC && ((b.write !== false && (review || !!b.storyboard)) || !!fr);
+    if (!text && !fromAtts) return res.status(400).json({ success: false, error: 'say what to make' });
     const rt = _routeOf(model, b.agg, params, media, isMC ? text : 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
     const fits = rt.fits;
     // (review V7) What the first rung's preparation would refuse - before the writer is paid. Counted after this wait.
     const fw = await _filesWrong(fits[0], media);
     if (fw) return res.status(400).json({ success: false, error: fw });
-    // (phase V15) A storyboard among the pictures is followed - a frame beside it would be read as a reference anyway.
     const sheet = media.some(m => m.kind === 'image' && m.role === 'storyboard');
-    if (sheet && media.some(m => m.kind === 'image' && /^frame-/.test(String(m.role || '')))) {
-      return res.status(400).json({ success: false, error: 'a first or last frame cannot go with a storyboard - the video follows the sheet: attach that picture as a reference' });
-    }
     // (phase V15, the owner 2026-10-07) The column's storyboard: the writer writes the sheet's prompt from this message,
     // the sheet is drawn, and it stops there - the video is made from the storyboard's card. Seedance's and the writer's;
     // a recipe draws its own storyboard on its card.
@@ -207,7 +206,9 @@ router.post('/mv3/video/send', async (req, res) => {
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     VGENS.asking.add(kick);
     CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
-    const first = (isMC || b.write === false) ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
+    // (phase V16) With the pen off the words go as typed - except beside frames, which the writer writes all the same.
+    const asTyped = b.write === false && !fr;
+    const first = (isMC || asTyped) ? (AGENT.english(text) ? 'asking ' + fits[0].aggLabel : 'translating the prompt') : 'writing the prompt';
     // Every record has its row: one without would never be ended, and would count against the three at once.
     const where = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
@@ -223,7 +224,7 @@ router.post('/mv3/video/send', async (req, res) => {
     CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path) });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
-    _work({ project, text, model, isMC, asTyped: b.write === false, media, params, skill, ids, kick, before, pair: fits[0], zh });
+    _work({ project, text, model, isMC, asTyped, media, params, skill, ids, kick, before, pair: fits[0], zh, frames: fr });
   } catch (err) {
     if (kick) VGENS.asking.delete(kick);
     console.error('[mv3-video/send]', err.message);
@@ -244,15 +245,17 @@ async function _work(o) {
       over = { prompt: t.text, lang: 'en', writer: t.translated ? 'translated' : '' };
     } else {
       const sees = await _writerSees(o.media, 'send');
-      const t = await AGENT.thinkVideo({ model: o.model, text: o.text, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: o.before,
-                                         skill: o.skill, params: o.params, max: o.pair.promptMax });
+      // (phase V16) Frames: the writer writes them with the words or without, and our opening goes before its prompt.
+      const open = VR.framesOpening(o.frames);
+      const t = await AGENT.thinkVideo({ model: o.model, text: o.text || (o.frames ? NO_WORDS_FRAMES : ''), media: o.media, picUrls: sees.urls, seen: sees.seen,
+                                         thread: o.before, skill: o.skill, params: o.params, max: _roomFor(o.pair.promptMax, open), frames: o.frames || null });
       if (t.ask) {
         for (const id of o.ids) VGENS.refuse(id, 'the writer asked a question instead', o.kick);
         CHAT.add({ project: o.project, kind: KIND, role: 'agent', text: t.ask });
         return;
       }
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
-      over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
+      over = { prompt: o.frames ? _withOpening(t.prompt, o.frames) : t.prompt, fell: t.fell || '', writer: t.writer || '' };
       // (phase V15) A storyboard among the pictures is followed: a prompt that does not name it gets the sentence that does.
       const k = o.media.filter(m => m.kind === 'image').findIndex(m => m.role === 'storyboard') + 1;
       if (k && !_namesSheet(over.prompt, k)) over.prompt = (over.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
@@ -672,17 +675,51 @@ async function _writeCard(cardId, kick, o) {
   } finally { CHAT.writing.delete(kick); }
 }
 
+// (phase V16, the owner 2026-10-07) Seedance's FRAMES ("pictures are"): the first frame - and the last - by their roles,
+// { kind: 'first' | 'fl', first, last, asRefs } with their numbers among the pictures; null when there are none, or
+// { error } in words. With nothing beside them they are the model's own frames; beside a clip or a sound they go as
+// references (Seedance takes frames OR references) - `asRefs` - and the prompt names them.
+function _framesOf(model, media) {
+  if (_family(model) !== 'seedance') return null;
+  const pics = (media || []).filter(m => m.kind === 'image');
+  const first = pics.findIndex(m => m.role === 'frame-first') + 1;
+  const last = pics.findIndex(m => m.role === 'frame-last') + 1;
+  if (!first && !last) return null;
+  if (pics.some(m => m.role === 'storyboard')) return { error: 'a first or last frame cannot go with a storyboard - the video follows the sheet: attach that picture as a reference' };
+  if (!first) return { error: 'a last frame goes with a first frame - attach the first one too' };
+  if (pics.length > (last ? 2 : 1)) return { error: 'with frames only the frames go - take the other pictures off, or send the pictures as references' };
+  return { kind: last ? 'fl' : 'first', first, last, asRefs: (media || []).some(m => m.kind !== 'image') };
+}
+// (phase V16, the owner: "it is important") A frames prompt OPENS with our sentence (lib/mv3-video-rules.js
+// framesOpening) - the writer is told not to write one; a first sentence of its own about starting on the first frame
+// goes all the same, so the model is not told twice.
+function _withOpening(prompt, fr) {
+  const open = VR.framesOpening(fr);
+  let p = String(prompt || '').trim();
+  if (!open) return p;
+  const head = p.match(/^[^.!?]*[.!?]+\s*/);
+  if (head && /\bfirst frame\b/i.test(head[0]) && /\b(?:start|starts|begin|begins|open|opens)\b/i.test(head[0])) p = p.slice(head[0].length).trim();
+  return (open + ' ' + p).trim();
+}
+// What the writer may use of a model's prompt limit when our opening goes before its prompt.
+const _roomFor = (max, open) => (max && open ? Math.max(200, max - open.length - 1) : max);
+
 // (phase V16) The writer of a PLAIN card - the chat's message with the writer stopping for a look: each writing is a
 // VARIANT of the prompt (`versions`, at most 10), the newest chosen; one that fails leaves the variants there were, and
 // says why. Filed only while the card still waits for THIS writer.
 const NO_WORDS = '(Nothing was written - decide what the clip shows from the attachments.)';
+const NO_WORDS_FRAMES = '(Nothing was written - decide a natural motion from the frames.)';
 async function _writePlain(cardId, kick, o) {
   let out;
   try {
     const sees = await _writerSees(o.media, 'review');
-    const t = await AGENT.thinkVideo({ model: o.model, text: o.text || NO_WORDS, media: o.media, picUrls: sees.urls, seen: sees.seen,
-                                       thread: o.before || [], params: o.params, max: o.max, review: true });
-    out = t.prompt ? { prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '' }
+    // (phase V16) Frames: the writer's frames rules, and our opening before its prompt.
+    const fr = _framesOf(o.model, o.media);
+    const frames = fr && !fr.error ? fr : null;
+    const open = VR.framesOpening(frames);
+    const t = await AGENT.thinkVideo({ model: o.model, text: o.text || (frames ? NO_WORDS_FRAMES : NO_WORDS), media: o.media, picUrls: sees.urls, seen: sees.seen,
+                                       thread: o.before || [], params: o.params, max: _roomFor(o.max, open), review: true, frames });
+    out = t.prompt ? { prompt: _strictRefs(frames ? _withOpening(t.prompt, frames) : t.prompt), writer: t.writer || '', fell: t.fell || '' }
       : { error: t.fail || 'the writer answered nothing usable - write it again' };
     if (out.prompt) {
       // A storyboard among the pictures is followed (V15): a prompt that does not name it gets the sentence that does.

@@ -241,6 +241,13 @@
   overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; padding-bottom:3px;
 }
 .mv3-ig-part-off{ padding:4px 0; font:600 9.5px/1.35 var(--font); color:var(--muted); opacity:.75; white-space:nowrap }
+/* (phase V16) A part's own word on its head line: frames beside a clip or a sound go as references. */
+.mv3-ig-part-note{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help;
+  font-weight:600; letter-spacing:0; text-transform:none; color:var(--gold);
+}
+/* (phase V16) A picture that does not go as things are: dimmed, its number and cross as they were. */
+.mv3-ig-att.is-dim img{ opacity:.3 }
 .mv3-ig-cell{ flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:2px }
 .mv3-ig-cell .lab{
   max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted);

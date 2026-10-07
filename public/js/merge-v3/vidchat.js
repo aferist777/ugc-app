@@ -63,9 +63,24 @@ function VIDEOS(ctx) {
     _remember();
   }
   const isMC = () => (model() || {}).family === 'kmc';
+  // (phase V16, the owner 2026-10-07) Seedance's pictures as FRAMES - "pictures are": 'frame' the first frame, 'fl' the first
+  // and the last. The zone's pictures are then those places alone, both required; beside a clip or a sound they go as
+  // references (Seedance takes frames OR references - kie, Replicate and ByteDance all say so), and the prompt names
+  // them. The writer writes the animation from the frames, with the words or without - the server says in its first
+  // sentence that the clip starts exactly on the first frame (and ends exactly on the last).
+  const _asOf = () => { const m = model(); return m && m.family === 'seedance' && !_skill ? (params().picturesAs || 'refs') : 'refs'; };
+  const _framesMode = () => _asOf() === 'frame' || _asOf() === 'fl';
+  function _frameSlots() {
+    const s = [{ key: 'first', label: 'first frame', kind: 'frame-first', role: '', min: 1, max: 1, required: true, hint: 'The video starts exactly on this picture' }];
+    if (_asOf() === 'fl') s.push({ key: 'last', label: 'last frame', kind: 'frame-last', role: '', min: 1, max: 1, required: true, hint: 'The video ends exactly on this picture' });
+    return s;
+  }
+  const _frameKeys = () => _frameSlots().map(s => s.key);
+  const _onlyFrames = () => 'In this mode only the ' + (_asOf() === 'fl' ? 'first and last frames go' : 'first frame goes');
   // (phase V15, the owner 2026-10-07) The column's STORYBOARD: ticked, under Seedance, with the writer, without a recipe
-  // (a recipe decides its own steps). ">" then writes and draws a sheet and stops; the video is made from its card.
-  const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && !_skill && ctx.writing(); };
+  // (a recipe decides its own steps) and not with frames (the sheet goes as a reference). ">" writes its sheet's
+  // prompt, and every paid step waits for its press on its message.
+  const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && !_skill && ctx.writing() && !_framesMode(); };
   // The catalog's recipe in use (phase V5) - kept with the draft, per project, until its cross.
   let _skill = null;
   // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
@@ -125,9 +140,12 @@ function VIDEOS(ctx) {
     }
     return '';
   }
-  // What the zone's cell says of it (the shell asks): red with the reason, or gold seconds when only a part goes.
+  // What the zone's cell says of it (the shell asks): red with the reason, or gold seconds when only a part goes; a picture
+  // beyond the frames' places dimmed, with the reason (phase V16).
   function _attState(a) {
-    if (_kind(a) === 'image') return null;
+    if (_kind(a) === 'image') {
+      return _framesMode() && !_frameKeys().includes(a.slot) ? { off: _onlyFrames() + ' - take this one off, or set "pictures are" to references' } : null;
+    }
     const bad = _spanWrong(a);
     if (bad) return { bad };
     return (+a.dur > _span(a) + 0.05) ? { cut: true } : null;
@@ -377,6 +395,7 @@ function VIDEOS(ctx) {
     // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on.
     const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'
       : _skill ? 'A recipe decides its own steps - a two-step recipe draws its storyboard on its card'
+        : _framesMode() ? 'The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references'
         : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
     const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
     const scb = document.createElement('input');
@@ -463,8 +482,8 @@ function VIDEOS(ctx) {
     // The shape: with a picture Grok takes the picture's, and Seedance's frames take theirs.
     if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
-      const as = _skill || mixed ? 'refs' : p.picturesAs;
-      const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && (as === 'frame' || as === 'fl')));
+      // Frames on their own make the clip in their shape; beside a clip or a sound they go as references.
+      const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && _framesMode() && !mixed));
       const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
         r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => setParam('aspect', v));
       sel.disabled = fixed;
@@ -487,13 +506,13 @@ function VIDEOS(ctx) {
       const sel = _select('mv3-vc-audio', withClip ? 'Seedance makes its own sound - or the first clip\'s sound is laid under the video when it lands' : 'Seedance makes its own sound',
         opts, now, (v) => { setParam('audio', v === 'on'); setParam('sound', v === 'clip' ? 'clip' : ''); });
       _row(box, 'sound', sel);
-      if (n > 0 && !_skill) {
-        const alone = 'only without clips and sounds';
-        _row(box, 'pictures are', _select('mv3-vc-as', 'What the attached pictures are for', [
+      if (!_skill) {
+        // (phase V16) Chosen first, even before a picture: the zone lays out the frames' places for it.
+        _row(box, 'pictures are', _select('mv3-vc-as', 'What the pictures are for: references the video uses, or the frame it starts on (and the one it ends on)', [
           { value: 'refs', text: 'references' },
-          { value: 'frame', text: 'the first frame', disabled: n !== 1 || mixed, title: mixed ? alone : 'one picture' },
-          { value: 'fl', text: 'first and last frames', disabled: n !== 2 || mixed, title: mixed ? alone : 'two pictures' },
-        ], mixed ? 'refs' : (p.picturesAs || 'refs'), (v) => { setParam('picturesAs', v); _paintParams(); }));
+          { value: 'frame', text: 'the first frame' },
+          { value: 'fl', text: 'first and last frames' },
+        ], _asOf(), (v) => { setParam('picturesAs', v); ctx.reslot(); _paintParams(); }));
       }
     }
     if (fam === 'kmc') {
@@ -509,6 +528,10 @@ function VIDEOS(ctx) {
       std.title = 'Put the standard prompt back in the box: ' + (_table.standardPrompt || '');
       std.addEventListener('click', () => ctx.setText(_table.standardPrompt || ''));
       box.appendChild(std);
+    }
+    // (phase V16) With frames the words may be left out - the writer decides the motion from the frames.
+    if (!isMC()) {
+      ctx.placeholder(_framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
     }
     _paintSwitches();
     _paintPrice();
@@ -683,6 +706,7 @@ function VIDEOS(ctx) {
   const GENERIC = ['picture', 'pictures', 'clip', 'clips', 'sound', 'sounds'];
   const _partOf = (k) => (k === 'video' || k === 'audio' ? k : 'image');
   function _slotsOf(kind) {
+    if (kind === 'image' && _framesMode()) return _frameSlots();
     if (!_skill) return null;
     const seen = new Map();
     const uniq = (k) => { const n = (seen.get(k) || 0) + 1; seen.set(k, n); return n === 1 ? k : k + '-' + n; };
@@ -696,10 +720,17 @@ function VIDEOS(ctx) {
     const r = rec(), m = model();
     const lim = r ? r.limits : { images: 0, videos: 0, audios: 0 };
     const who = (m && m.label) || 'This model';
+    // (phase V16) Frames: their places alone; beside a clip or a sound they go as references - said over the zone.
+    const frames = _framesMode();
+    const asRefs = frames && ctx.anyAtt(a => a.kind === 'video' || a.kind === 'audio');
     return { parts: [
-      { kind: 'image', word: 'pictures', one: 'picture', room: Math.min(MAX_PICS, r ? _picRoom(r) : 0), slots: _slotsOf('image'),
-        full: _seat() ? 'Room for ' + (r ? _picRoom(r) : 0) + ' - the storyboard goes to the video as one more picture, and it is drawn with these.' : '',
-        none: who + ' takes no pictures.', other: 'Another picture for the writer to use - anything the recipe did not ask for' },
+      { kind: 'image', word: 'pictures', one: 'picture', room: frames ? _frameSlots().length : Math.min(MAX_PICS, r ? _picRoom(r) : 0), slots: _slotsOf('image'),
+        full: frames ? _onlyFrames() + ' - set "pictures are" to references for more pictures.'
+          : _seat() ? 'Room for ' + (r ? _picRoom(r) : 0) + ' - the storyboard goes to the video as one more picture, and it is drawn with these.' : '',
+        note: asRefs ? 'go as references - may not match exactly' : '',
+        noteLong: asRefs ? 'With a clip or a sound Seedance takes the frames as references: the video aims at them, but may not start and end on them exactly. Without clips and sounds they are the model\'s own frames.' : '',
+        otherLabel: frames ? 'not sent' : '',
+        none: who + ' takes no pictures.', other: frames ? _onlyFrames() + ' - take it off, or set "pictures are" to references' : 'Another picture for the writer to use - anything the recipe did not ask for' },
       { kind: 'video', word: 'clips', one: 'clip', room: lim.videos || 0, slots: _slotsOf('video'),
         none: who + ' takes no clips.', other: 'Another clip for the writer to use - anything the recipe did not ask for' },
       { kind: 'audio', word: 'sounds', one: 'sound', room: lim.audios || 0, slots: _slotsOf('audio'),
@@ -864,6 +895,10 @@ function VIDEOS(ctx) {
 
   // The recipe's first slot that is not filled as far as it must be - the send waits for it.
   function _missing() {
+    if (_framesMode()) {
+      for (const s of _frameSlots()) if (!_pics().some(a => a.slot === s.key)) return Object.assign({ part: 'image', have: 0, frame: true }, s);
+      return null;
+    }
     if (!_skill || !_applies()) return null;
     const atts = ctx.atts();
     for (const kind of ['image', 'video', 'audio']) {
@@ -890,6 +925,14 @@ function VIDEOS(ctx) {
     if (over) return ['The recipe does not fit ' + m.label + '.', over + ' - pick another model, or stop using the recipe with the × on its line.'];
     // A recipe's cell that must be filled and is not: nothing is asked, the cell blinks (phase V6).
     const miss = _missing();
+    if (miss && miss.frame) {
+      ctx.flash(miss.part, miss.key);
+      return ['The ' + miss.label + ' is empty.', miss.hint + ' - press its place, then a picture.'];
+    }
+    // (phase V16) A picture beyond the frames' places does not go - it stands dimmed with the reason.
+    if (_framesMode() && _pics().some(a => !_frameKeys().includes(a.slot))) {
+      return [_onlyFrames() + '.', 'Take the other pictures off, or set "pictures are" to references.'];
+    }
     if (miss) {
       ctx.flash(miss.part, miss.key);
       const what = miss.part === 'video' ? 'clip' : miss.part === 'audio' ? 'sound' : 'picture';
@@ -932,6 +975,7 @@ function VIDEOS(ctx) {
     return '';
   }
 
+  const _ownRole = (a) => a.role === 'voice' || a.role === 'storyboard';
   // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go (V7.4).
   function _body(cardMedia) {
     const m = model(), r = rec();
@@ -941,18 +985,13 @@ function VIDEOS(ctx) {
     // new sheet takes its place when it lands).
     const boarding = _boardOn();
     const atts = ctx.atts().filter(a => !(boarding && _kind(a) === 'image' && a.role === 'storyboard'));
-    const as = p.picturesAs || 'refs';
-    // What each picture is for: a recipe's slot says (its role - person, product... - or a frame), otherwise Seedance's
-    // "pictures are" does.
+    // What each picture is for: its place says - a recipe's slot (its role - person, product... - or a frame), or a frame's
+    // place (phase V16: "pictures are" lays them out in the zone; beside a clip or a sound the server sends them as
+    // references, and the prompt names them).
     const slots = new Map(['image', 'video', 'audio'].flatMap(k => (_slotsOf(k) || []).map(s => [k + ':' + s.key, s])));
-    // Beside a clip or a sound the pictures are references (phase V7) - and beside a storyboard (phase V15).
-    const mixed = boarding || atts.some(a => _kind(a) !== 'image' || a.role === 'storyboard');
-    const frame = (i) => (fam !== 'seedance' || mixed ? '' : as === 'frame' && i === 0 ? 'frame-first'
-      : as === 'fl' ? (i === 0 ? 'frame-first' : i === 1 ? 'frame-last' : '') : '');
-    const role = (a, i) => {
+    const role = (a) => {
       const s = a.slot ? slots.get(_kind(a) + ':' + a.slot) : null;
-      if (s) return /^frame-/.test(s.kind) ? s.kind : s.role;
-      return _kind(a) === 'image' && !_skill ? frame(i) : '';
+      return s ? (/^frame-/.test(s.kind) ? s.kind : s.role) : '';
     };
     const fmt = (Store.timeline() || {}).format || '9:16';
     // (phase V7.4) Seedance's sound from the clip: its own off, the first clip's part laid under when it lands - only
@@ -976,9 +1015,11 @@ function VIDEOS(ctx) {
         mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
       media: atts.map((a) => Object.assign({
-        // (phase V15) A thing that says what it is for - a voice - goes as that; otherwise its slot or the setting decides.
-        path: a.path, kind: _kind(a), role: a.role || role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
-        label: a.label || (a.slot && slots.get(_kind(a) + ':' + a.slot) || {}).label || '',
+        // (phase V15) A thing that says what it is for - a voice, a storyboard - goes as that; otherwise its place decides
+        // (phase V16: a message's attachments put back into the zone keep nothing of their old places - a first frame put
+        // back under "references" is a reference).
+        path: a.path, kind: _kind(a), role: _ownRole(a) ? a.role : role(a),
+        label: (_ownRole(a) && a.label) || ((a.slot && slots.get(_kind(a) + ':' + a.slot)) || {}).label || '',
       // (phase V7) A clip or a sound goes as its part - the server prepares just that.
       }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
@@ -2196,7 +2237,8 @@ function VIDEOS(ctx) {
     _forget(m.id);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
     const h = el('div', 'vc-card-h');
-    h.append(el('span', 'k', 'video'), el('span', 't', _words(c.text).slice(0, 90) || 'from the attachments alone'));
+    const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
+    h.append(el('span', 'k', 'video'), el('span', 't', _words(c.text).slice(0, 90) || (frames ? 'from the frames alone' : 'from the attachments alone')));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
     box.appendChild(h);
     if (!(c.versions || []).length) {
@@ -2413,8 +2455,9 @@ function VIDEOS(ctx) {
     },
     // (phase V7.3) Kling motion control's empty box sends its standard prompt.
     emptyText: () => (isMC() && _table ? _table.standardPrompt || '' : ''),
-    // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone.
-    emptyOk: () => ctx.writing() && !isMC() && ctx.atts().length > 0,
+    // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone - and with frames,
+    // which the writer writes even when it is off.
+    emptyOk: () => !isMC() && ctx.atts().length > 0 && (ctx.writing() || _framesMode()),
     // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
     afterSend: (d) => { if (d && (d.review || d.storyboard)) ctx.useAtts([]); },
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.

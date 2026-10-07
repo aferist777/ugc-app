@@ -146,6 +146,9 @@ export function createChat(make) {
     atts: () => _real(),
     // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
     holeWhy: () => _holeWhy(),
+    // (phase V16) Whether anything attached answers `fn` - read without laying out the zone, so the zone's own words (a
+    // part's note) can ask it.
+    anyAtt: (fn) => _atts.some(a => !a.hole && fn(a)),
     // (phase V16) The zone replaced by these attachments ({ path, kind, role, label, in, out }) - a message's, put back
     // for the next variant; [] empties it.
     useAtts: (list) => _useAtts(list),
@@ -634,6 +637,12 @@ export function createChat(make) {
     const real = mine.filter(a => !a.hole);
     const head = el('div', 'mv3-ig-part-h', p.word);
     if (p.room && !p.off) head.appendChild(el('b', null, real.length + ' / ' + p.room));
+    // (phase V16) A part's own word on its head line - the video chat's frames going as references.
+    if (p.note && p.room && !p.off) {
+      const nt = el('span', 'mv3-ig-part-note', p.note);
+      nt.title = p.noteLong || p.note;
+      head.appendChild(nt);
+    }
     box.appendChild(head);
     const row = el('div', 'mv3-ig-part-row');
     if (!p.room || p.off) {
@@ -669,7 +678,7 @@ export function createChat(make) {
         if (!inS.some(a => a.hole) && inS.length < s.max && mine.length < p.room) row.appendChild(_empty(p, s, false, must));
       }
       const keys = _keysOf(p);
-      const other = { key: '', label: 'other', hint: p.other || '' };
+      const other = { key: '', label: p.otherLabel || 'other', hint: p.other || '' };
       const rest = mine.filter(x => !keys.includes(x.slot));
       for (const a of rest) put(a, other, false);
       // "other" only where the room is more than the recipe's own places can still take (phase V7.5: Kling's one clip
@@ -707,6 +716,10 @@ export function createChat(make) {
       cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
       cell.addEventListener('mouseleave', peekHide);
       cell.title = (a.name || '') + (swap ? (a.name ? ' - ' : '') + 'press to put another in its place' : '');
+      // (phase V16) A picture that does not go as things are - dimmed, its cross kept, the reason on it (the video
+      // chat: one beyond the frames' places).
+      const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
+      if (st.off) { cell.classList.add('is-dim'); cell.title = st.off; }
     } else {
       if (kind === 'video' && a.poster) {
         const img = document.createElement('img');
