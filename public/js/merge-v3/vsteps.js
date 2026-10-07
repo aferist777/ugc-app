@@ -9,10 +9,12 @@
    arrows says so. A step that has just begun, or a variant that has just appeared, is shown by itself; what the
    person paged to is kept across the thread's repaints, by the message's id, for the page's life.
 
-   It knows nothing of videos. The description hands it the steps on every read of the thread:
-     { key, title, word, variants: [{ key, sig }], pick, note(v), body(v, box, progs), acts(v, box), page(v), freshen(v) }
-   `sig` says when a variant's view must be drawn again - never its text, so a prompt being typed is never rebuilt
-   under the typing; `freshen` keeps what changes without a redraw (a price, a countdown's words) up to date.
+   It knows nothing of videos. The description hands it the steps on every read of the thread - { steps, start }:
+     { key, title, word, variants: [{ key, sig }], pick, sig, note(v), body(v, box, progs), acts(v, box), page(v), freshen(v) }
+   A variant's `sig` says when its view must be drawn again - never its text, so a prompt being typed is never rebuilt
+   under the typing; a step's own `sig` (a value, or a function asked at every paint) the same for what it shows of
+   another step - the sheet the video follows; `freshen` keeps what changes without a redraw (a price, a countdown's
+   words) up to date. `start`: the step a message opens on before the person pages anywhere (else its newest).
    ════════════════════════════════════════════════════════════════════════════ */
 
 const _mem = new Map();     // message id -> { step, vars: { [stepKey]: variantKey }, counts: { [stepKey]: n }, n }
@@ -62,6 +64,7 @@ export function stepCard(id) {
     const steps = stepsOf();
     if (!steps.length) return;
     const m = mem();
+    if (m.step == null && spec.start) m.step = spec.start;
     // What has just begun is where the eye goes: a new step, or a new variant of a step.
     if (m.n && steps.length > m.n) m.step = steps[steps.length - 1].key;
     for (const s of steps) {
@@ -91,7 +94,7 @@ export function stepCard(id) {
     sNext.setAttribute('aria-label', sNext.title);
 
     // The step: drawn again only when the step, the variant or what the variant IS has changed.
-    const nsig = s.key + '|' + (v ? v.key + ':' + (v.sig || '') : '') + '|' + (s.sig || '');
+    const nsig = s.key + '|' + (v ? v.key + ':' + (v.sig || '') : '') + '|' + ((typeof s.sig === 'function' ? s.sig() : s.sig) || '');
     if (nsig !== sig) {
       sig = nsig;
       for (const p of progs.values()) p.detach();

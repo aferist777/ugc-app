@@ -546,38 +546,27 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
 .mv3-pc.is-narrow .mv3-vc-almanac{ width:auto; height:24px; margin:4px 10px 6px; border:1px solid var(--border); border-radius:var(--r-xs); line-height:22px }
 
-/* A two-step card (phase V8): the storyboard part, then the video part; the sheets drawn, the chosen one framed. */
-.vc-step{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-top:2px }
+/* A storyboard's (a picture's) prompt and its sheets (phase V8; on the message's steps since V16). */
 .vc-prompt-ta.is-board{ min-height:70px }
-.vc-boards{ display:flex; flex-wrap:wrap; gap:6px; align-items:flex-start }
 /* (phase V7.6) A frame-swap's moment: the clip's frame there, and the slider over the part that goes. */
 .vc-moment{ display:flex; gap:10px; align-items:flex-start; margin:2px 0 4px }
 .vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:#000; object-fit:contain }
 .vc-moment-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
 .vc-moment-side input[type=range]{ width:100%; margin:0 }
 .vc-moment-at{ font:600 10px/1.3 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
-.vc-boards:empty{ display:none }
 .vc-board{
   position:relative; width:120px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); overflow:hidden; cursor:pointer;
 }
 .vc-board img{ display:block; width:100%; height:auto }
 .vc-board:hover{ border-color:var(--muted) }
-.vc-board.is-chosen{ border-color:var(--primary); box-shadow:0 0 0 2px var(--primary) }
 .vc-board.is-busy{ width:240px; max-width:100%; cursor:default; border-style:dashed }
 .vc-board.is-busy .mv3-ig-prog{ min-width:0; border:0 }
 .vc-board.is-bad{ width:240px; max-width:100%; padding:6px 8px; cursor:default; border-color:var(--danger); font:600 9.5px/1.4 var(--font); color:var(--danger) }
 .vc-board.is-gone{ opacity:.45; border-style:dashed; cursor:default }
-/* The attempts of a card (the owner, 2026-10-06: a made card is made again from its own field): one block each, its
-   storyboard small beside its name, its clips under it. */
-.vc-tries{ display:flex; flex-direction:column; gap:8px }
-.vc-tries:empty{ display:none }
-.vc-try{ display:flex; flex-direction:column; gap:5px; padding-top:7px; border-top:1px solid var(--border-soft) }
+/* An attempt's line on the message's video step: which one, when, from which variant. */
 .vc-try-h{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vc-try-h .k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
-.vc-try-sheet{ display:inline-flex; align-items:center; gap:6px }
-.vc-try-sheet .vc-board{ width:44px; cursor:zoom-in }
-.vc-board-note{ font:600 10px/1.3 var(--font); color:var(--muted) }
 /* (phase V16, the owner 2026-10-07) A working message as a SUB-PROJECT of its own (vsteps.js): its steps paged at its top,
    the variants of the step shown at its bottom - the chat does not grow with every attempt. */
 .vc-card.is-steps{ display:flex; flex-direction:column; gap:8px }
@@ -598,7 +587,6 @@ audio.vtrim-media{ background:none; height:32px }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
 .vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
 .vc-step:empty{ display:none }
-.vc-go.is-waiting{ opacity:.55 }
 
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
    As big as the catalog: where things come from on the left, the tiles in the middle - a picture or a clip at its own

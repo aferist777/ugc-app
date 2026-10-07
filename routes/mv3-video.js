@@ -511,7 +511,13 @@ function _boardWhere(project, w) {
 const _verId = () => 'v' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
 // Where a card with something written stands when its writer is done: made, or ready - or failed with nothing at all.
 const _restState = (x) => ((x.card.sends || []).length || (x.genIds || []).length ? 'sent'
-  : (x.card.versions || []).length || (x.card.board && ((x.card.board.versions || []).length || x.card.board.prompt)) ? 'ready' : 'failed');
+  : (x.card.versions || []).length || x.card.prompt || (x.card.board && ((x.card.board.versions || []).length || x.card.board.prompt)) ? 'ready' : 'failed');
+// (phase V16.6) A card written before its prompts had variants has its one prompt and no list: that prompt becomes
+// variant 1 when the next writing lands, so nothing written is lost.
+const _seedVers = (c) => (Array.isArray(c.versions) && c.versions.length ? c.versions
+  : c.prompt ? [{ id: _verId(), at: c.startedAt || '', model: c.model, agg: c.agg, params: c.params, prompt: c.prompt, writer: c.writer || '', fell: c.fell || '', edited: !!c.edited }] : []);
+const _seedBoardVers = (B) => (Array.isArray(B.versions) && B.versions.length ? B.versions
+  : B.prompt ? [{ id: _verId(), at: '', prompt: B.prompt, aspect: B.aspect || '', writer: '', edited: !!B.edited }] : []);
 // The card writing its sheet's prompt - a new one, or `o.card` written again. { card, kick }.
 function _startBoard(o) {
   const kick = 'w' + crypto.randomBytes(8).toString('hex');
@@ -641,14 +647,16 @@ function _cardOf(id, project, type) {
 
 // The writer for one card, behind the answer: what it wrote is filed into the card only while the card is still
 // waiting for THIS writer (a card written again, made, or cleared meanwhile is left alone).
+// (phase V16.6) Every writing is a VARIANT, as the plain chat's are (V16.3): of the video prompt, and of a two-step card's
+// storyboard prompt with it - the newest chosen; one that fails leaves the variants there were, and says why.
 async function _writeCard(cardId, kick, o) {
   let out;
   try {
     const sees = await _writerSees(o.media, 'write');
     const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
                                        skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep });
-    out = t.prompt ? { state: 'ready', prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '', error: '', edited: false }
-      : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
+    out = t.prompt ? { prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '' }
+      : { error: t.fail || 'the writer answered nothing usable - write it again' };
     if (t.prompt && o.twoStep) {
       const pics = o.media.filter(m => m.kind === 'image').length;
       const k = pics + 1;
@@ -656,21 +664,33 @@ async function _writeCard(cardId, kick, o) {
       // that names a picture the video will not have fails here - before the sheet is paid for, not at the make.
       if (!_namesSheet(out.prompt, k)) out.prompt = (out.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
       const wrong = _refsWrong(out.prompt, o.media.concat([BOARD_SEAT]));
-      if (wrong) out = { state: 'failed', error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' (the storyboard is picture ' + k + ') - write it again' };
+      if (wrong) out = { error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' (the storyboard is picture ' + k + ') - write it again' };
       else {
         out.boardPrompt = _boardWords(t.board, pics);
         out.boardAspect = t.boardAspect || (VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9');
       }
     }
   } catch (e) {
-    out = { state: 'failed', error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
   }
   try {
     CHAT.update(cardId, (m) => {
       if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
-      const { boardPrompt, boardAspect, ...rest } = out;
-      Object.assign(m.card, rest);
-      if (m.card.board && boardPrompt != null) Object.assign(m.card.board, { prompt: boardPrompt, aspect: boardAspect, edited: false });
+      if (out.prompt) {
+        const at = new Date().toISOString();
+        const v = { id: _verId(), at, model: o.model, agg: o.agg || m.card.agg, params: o.params, prompt: out.prompt,
+                    writer: out.writer, fell: out.fell, edited: false };
+        m.card.versions = _seedVers(m.card).concat([v]).slice(-10);
+        Object.assign(m.card, { cur: v.id, prompt: v.prompt, model: v.model, agg: v.agg, params: v.params, writer: v.writer, fell: v.fell,
+                                edited: false, error: '' });
+        if (m.card.board && out.boardPrompt != null) {
+          const B = m.card.board;
+          const bv = { id: _verId(), at, prompt: out.boardPrompt, aspect: out.boardAspect, writer: out.writer, edited: false };
+          B.versions = _seedBoardVers(B).concat([bv]).slice(-10);
+          Object.assign(B, { cur: bv.id, prompt: bv.prompt, aspect: bv.aspect, edited: false });
+        }
+      } else m.card.error = out.error;
+      m.card.state = _restState(m);
     });
   } finally { CHAT.writing.delete(kick); }
 }
@@ -796,7 +816,7 @@ router.post('/mv3/video/write', async (req, res) => {
                                   model: s.model, agg: rt.fits[0].agg, params: s.params,
                                   board: twoStep ? { prompt: '', aspect: '', genIds: [], chosen: '' } : undefined } });
     res.json({ success: true, recipe: rc.id, card: pc.id });
-    _writeCard(pc.id, kick, { model: s.model, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax, twoStep });
+    _writeCard(pc.id, kick, { model: s.model, agg: rt.fits[0].agg, filled, body, media: mm.media, params: s.params, max: rt.fits[0].promptMax, twoStep });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/write]', err.message);
@@ -852,7 +872,8 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const prompt = b.prompt == null ? null : _strictRefs(String(b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
     const board = b.board == null ? null : String(b.board).replace(/\r\n/g, '\n').slice(0, 6000);
     const chosen = b.chosen == null ? null : String(b.chosen);
-    // (phase V16) A plain card's prompt variants: `ver` the one edited (the chosen one when none), `cur` the one chosen.
+    // (phase V16) A card's prompt variants: `ver` the one edited (the chosen one when none), `cur` the one chosen; `bver` and
+    // `bcur` the same for a storyboard's prompt.
     const ver = b.ver == null ? null : String(b.ver);
     const cur = b.cur == null ? null : String(b.cur);
     const bver = b.bver == null ? null : String(b.bver);
@@ -867,9 +888,8 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
-      // (phase V16) The sheet's prompt of a storyboard card by variant: `bver` the one edited (the chosen one when none),
-      // `bcur` the one chosen.
-      if (story && x.card.board && Array.isArray(x.card.board.versions) && x.card.board.versions.length) {
+      // (phase V16) A storyboard's prompt by variant - the column's storyboard and (V16.6) a two-step recipe's.
+      if (x.card.board && Array.isArray(x.card.board.versions) && x.card.board.versions.length) {
         const B = x.card.board;
         const pickB = (id) => B.versions.find(v => v.id === id);
         if (bcur != null) {
@@ -881,8 +901,8 @@ router.patch('/mv3/video/card/:id', (req, res) => {
           const v = pickB(bver || B.cur);
           if (v && v.prompt !== board) { Object.assign(v, { prompt: board, edited: true }); if (v.id === B.cur) Object.assign(B, { prompt: board, edited: true }); changed = true; }
         }
-      }
-      if ((x.card.plain || story) && Array.isArray(x.card.versions) && x.card.versions.length) {
+      } else if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
+      if (Array.isArray(x.card.versions) && x.card.versions.length) {
         const pick = (id) => x.card.versions.find(v => v.id === id);
         if (cur != null) {
           const v = pick(cur);
@@ -902,7 +922,6 @@ router.patch('/mv3/video/card/:id', (req, res) => {
           }
         }
       } else if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
-      if (!story && x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
       // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
       if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
         const W = x.card.board.kind === 'frame' ? 'picture' : 'storyboard';
@@ -992,17 +1011,17 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
     kick = 'w' + crypto.randomBytes(8).toString('hex');
     CHAT.writing.add(kick);
+    // (phase V16.6) Another VARIANT: the ones there are stay, and the card shows the chosen one until the new one lands.
     const ok = CHAT.update(m.id, (x) => {
       if (!x.card || x.card.state === 'writing') return false;
-      Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), model: s.model, agg: rt.fits[0].agg, params: s.params,
-                              prompt: '', error: '', edited: false, writer: '', fell: '' });
+      Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), error: '' });
       // Its sheets stay on the card, none chosen: the new prompts may be for another sheet (review V8).
       if (x.card.board) x.card.board.chosen = '';
     });
     if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
     res.json({ success: true, card: m.id });
-    _writeCard(m.id, kick, { model: s.model, filled: rc.card.filled, body: rc.card.body, media: mm.media, params: s.params, max: rt.fits[0].promptMax,
-                             twoStep: !!m.card.board });
+    _writeCard(m.id, kick, { model: s.model, agg: rt.fits[0].agg, filled: rc.card.filled, body: rc.card.body, media: mm.media, params: s.params,
+                             max: rt.fits[0].promptMax, twoStep: !!m.card.board });
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/rewrite]', err.message);
@@ -1119,7 +1138,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const said = m.card.plain || m.card.type === 'board' ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
       : rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
     // (phase V16) The variant of the prompt the person made it from - chosen, and kept with the attempt.
-    const ver = (m.card.plain || m.card.type === 'board') && Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
+    const ver = Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
     const where = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
