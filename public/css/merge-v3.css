@@ -692,8 +692,12 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* WHAT IS PICKED ON THE TIMELINE, over the Library (phase L5, the owner 2026-09-23): a strip
    350px wide that slides in from the panel's right edge while something is picked and out when
    nothing is. Over the Library rather than instead of it, so a clip can be dragged in while the
-   settings of another are open. It carries the panel's own scroll box and padding. */
-#mv3-library{position:relative; overflow:hidden}
+   settings of another are open. It carries the panel's own scroll box and padding.
+   The panel CLIPS rather than hides (2026-10-07): the strip waiting past its right edge is 357px
+   of overflow, and `overflow:hidden` still lets code scroll to it - a scrollIntoView or a focus
+   inside the panel slid the whole panel left under the Setup spine. A clipped box is no scroll
+   container, so nothing scrolls it; `.mv3-panel`'s min-width:0 keeps its flex sizing as it was. */
+#mv3-library{position:relative; overflow:clip}
 .mv3-over{
   position:absolute; top:0; right:0; bottom:0; z-index:5; width:min(350px, 100%);
   display:flex; flex-direction:column;
