@@ -11,13 +11,16 @@
    from the server every few seconds with each countdown drawn from its record's real age and its cross
    letting go of the row, "the result becomes the reference", sending (a project started for a send from
    "no project"), the attachment row, bringing files in, the right column of things to point at behind a
-   sash, the hover peek, and the narrow layout.
+   sash - or, for a description that says where its attachments come from (`pick`, the video chat since
+   phase V13), no column and a picker behind every "+" of the zone (chat-pick.js) -, the hover peek, and
+   the narrow layout.
 
    ── What a description says ─────────────────────────────────────────────────
    Its name and kind, its element ids and storage keys, its words, the settings column (`settings`: load,
    paint, how many attachments fit, what goes into the send), how a finished result is drawn and opened, and
-   where the right column reads from. `createChat(make)` calls `make(ctx)` with the shell's handles (ctx
-   below), so a description keeps its own state in its own closure.
+   where the right column reads from (`feed`, `cats`) or the picker's sources (`pick`). `createChat(make)`
+   calls `make(ctx)` with the shell's handles (ctx below), so a description keeps its own state in its own
+   closure.
 
    ── Why a thread and not a form ─────────────────────────────────────────────
    Making things is iterative. You say a thing, look at it, then say "the same but at night" - and the
@@ -36,12 +39,14 @@
 
    ── The layout ──────────────────────────────────────────────────────────────
    Three columns when the panel is wide: what to make it WITH, the conversation, and a narrow column of
-   everything to point at behind a sash. Narrower than 700px, the settings fold into one row above the input.
+   everything to point at behind a sash (two with a picker: the conversation takes the column's width).
+   Narrower than 700px, the settings fold into one row above the input.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import { setOpenColumn } from './layout.js';
 import * as Views from './lib-views.js';
+import * as Pick from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
 import { askDelete, closeAsk, note } from './ask.js';
 
@@ -152,9 +157,6 @@ export function createChat(make) {
     reslot: (o) => _reslot(o),
     // (phase V6) A slot that must be filled, blinking - the send was refused for it.
     flash: (kind, slot) => _flash(kind, slot),
-    // (phase V6) The right column shows this: '' this project, 'shelf:<id>' a shelf of the description's, 'images'
-    // the Images category last chosen (or the project's own), or an Images category id.
-    column: (id) => _setCat(id),
     place: (item, anchor) => _place(item, anchor),
     peekShow: (src, anchor) => peekShow(src, anchor),
     peekHide: () => peekHide(),
@@ -212,8 +214,8 @@ export function createChat(make) {
     if (!_chat) {
       _stop();
       peekHide();
-      // A sound playing in the column stops with it, and the description lets go of what floats over the chat.
-      if (_sounding) { try { _sounding.audio.pause(); } catch (e) { /* gone */ } _sounding = null; }
+      // The picker goes with the chat, and the description lets go of what floats over it.
+      if (_picking) Pick.closePick();
       if (typeof S.onHide === 'function') S.onHide();
       // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
       for (const n of _nodes.values()) n.away = true;
@@ -241,9 +243,11 @@ export function createChat(make) {
     // Not before the store has read what is open: "nothing yet" is not "no project".
     if (!Store.isReady()) return;
     const k = Store.key() || '';
-    if (_ui) _ui.stripP.textContent = Store.title() || (k ? k : 'no project');
+    if (_ui && _ui.stripP) _ui.stripP.textContent = Store.title() || (k ? k : 'no project');
     if (k === _key) return;
     const was = _key;
+    // The picker was for a place of the project being left.
+    if (_picking) Pick.closePick();
     if (was !== null) {
       _saveDraft(was);
       _memo.set(was, { pending: _pending, attSeq: _attSeq });
@@ -332,17 +336,21 @@ export function createChat(make) {
     if (typeof set.draftLoad === 'function') set.draftLoad(d.extra || null);
   }
 
-  function _say(t) { if (_ui) _ui.said.textContent = t || ''; }
+  // What the chat says - in the picker too while it is open, which covers the column it is written in.
+  function _say(t) {
+    if (_ui) _ui.said.textContent = t || '';
+    if (_picking) Pick.pickSay(t);
+  }
 
   // ── The attachment row ────────────────────────────────────────────────────
   // (phase V6, the owner 2026-10-06) A description may lay it out as a ZONE - set.zone(): { parts: [{ kind, word, room,
   // off, none, slots }] }, the video chat's pictures, clips and sounds side by side. A part shows ONE empty place, and
   // the next appears beside it as things are attached, up to what the model takes - thirty places are never drawn at
   // once - and scrolls sideways. With a recipe a part holds its SLOTS: every cell wears the slot's name, a slot shows one
-  // empty place at a time up to its most, and "other" closes the part for what the recipe did not ask for. A slot's
-  // empty place pressed is ARMED - the next tile or file goes into it, and the right column turns to what suits it;
-  // pressed again, it asks this computer for a file. Without a zone it is the one row it always was.
-  let _armed = null;            // { kind, slot } - the slot the next attachment goes into
+  // empty place at a time up to its most, and "other" closes the part for what the recipe did not ask for. An empty
+  // place pressed opens the picker on it (phase V13) - its slot ARMED while the picker is open, so whatever is pressed
+  // or brought in there goes into it. Without a zone it is the one row it always was.
+  let _armed = null;            // { kind, slot } - the slot the next attachment goes into, while the picker is open
   let _grew = '';               // the part something was just attached to - its row comes to its end
   const _kindOf = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
   const _zone = () => (typeof set.zone === 'function' ? set.zone() : null);
@@ -495,6 +503,7 @@ export function createChat(make) {
     const num = (a) => order.filter(x => _kindOf(x) === _kindOf(a)).indexOf(a) + 1;
     for (const p of z.parts) host.appendChild(_part(p, num));
     set.onAtts();
+    if (_picking) Pick.pickChanged();
   }
 
   // One part of the zone: its word and count, then its cells in a row that scrolls sideways.
@@ -607,32 +616,93 @@ export function createChat(make) {
     return c;
   }
 
-  // An empty place: with a recipe it is a slot's - pressed, it is armed; pressed again (or without a recipe), a file
-  // from this computer.
+  // An empty place - a slot's, with a recipe: pressed, the picker opens on it (phase V13), or - for a description
+  // without one - this computer is asked for a file.
   function _empty(p, s, dim, must) {
     const key = s ? s.key : '';
-    const armed = !!(s && _armed && _armed.kind === p.kind && _armed.slot === key);
     const b = el('button', 'mv3-ig-att-slot', '+');
     b.type = 'button';
-    b.title = (s && s.hint) || (p.slots ? '' : T.slot) || T.slot;
+    b.title = (s && s.hint) || T.slot;
     const c = _cell(b, s ? (s.label || s.key) : '', s && s.hint);
     c.classList.add('is-empty');
     c.dataset.kind = p.kind;
     c.dataset.slot = key;
     if (must) c.classList.add('is-req');
-    if (armed) c.classList.add('is-armed');
     if (dim) { c.classList.add('is-off'); b.disabled = true; return c; }
     b.addEventListener('click', () => {
-      if (s && p.slots && !armed) {
-        _armed = { kind: p.kind, slot: key };
-        _paintAtts();
-        if (typeof S.shelfFor === 'function') _setCat(S.shelfFor(p.kind, s));
-        return;
-      }
+      if (S.pick) { _openPick(p, s); return; }
       const input = _fileOf(p.kind);
       if (input) input.click();
     });
     return c;
+  }
+
+  // ── The picker (phase V13, the owner 2026-10-07) ──────────────────────────
+  // For ONE place: its part, and with a recipe its slot - "other" ('') for what the recipe did not ask for, null for a
+  // part without slots. The slot is armed while the window is open; the window closes by itself once the place is full.
+  let _picking = false;
+  let _pickAt = null;           // { kind, slot } of the place the picker is open on
+  function _openPick(p, s) {
+    const P = S.pick;
+    const kind = p.kind;
+    const slot = s ? s.key : null;
+    _armed = p.slots ? { kind, slot: slot || '' } : null;
+    _picking = true;
+    _pickAt = { kind, slot };
+    if (typeof P.onOpen === 'function') P.onOpen();
+    peekHide();
+    const U = _U(kind);
+    const label = s ? (s.label || s.key || '') : '';
+    Pick.openPick({
+      kind,
+      title: p.word + (label ? ' · ' + label : ''),
+      hint: (s && s.hint) || '',
+      project: { key: _key || '', title: Store.title() || '' },
+      sources: P.sources(kind),
+      start: P.start(kind, s),
+      first: (P.first || {})[kind] || '',
+      left: () => _leftIn(kind, slot),
+      mark: _markOf,
+      press: (it) => {
+        if (_atts.some(a => a.path === it.path)) { _detach(it.path); return; }
+        _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0 });
+      },
+      why: (it) => P.why(it, kind),
+      computer: {
+        word: p.word, hint: (P.upWords || {})[kind] || '',
+        open: () => { const input = _fileOf(kind); if (input) input.click(); },
+        accepts: (f) => !!(U && U.ok(f)),
+        drop: (files) => _upload(files),
+      },
+      onClose: () => { _picking = false; _pickAt = null; _armed = null; if (_ui) _paintAtts(); },
+    });
+  }
+
+  // How many more go into a place: its part's room, less - for a slot - what the slot has, and for "other" the places
+  // the recipe's own slots still hold.
+  function _leftIn(kind, slot) {
+    const z = _zone();
+    const p = z && z.parts.find(x => x.kind === kind);
+    if (!p || !p.room || p.off) return 0;
+    const mine = _atts.filter(a => _kindOf(a) === kind);
+    const free = p.room - mine.length;
+    if (!p.slots || slot == null) return Math.max(0, free);
+    const inS = (k) => mine.filter(a => a.slot === k).length;
+    if (slot === '') return Math.max(0, free - p.slots.reduce((n, x) => n + Math.max(0, x.max - inS(x.key)), 0));
+    const s = p.slots.find(x => x.key === slot);
+    return s ? Math.max(0, Math.min(free, s.max - inS(slot))) : 0;
+  }
+
+  // What a thing is in the zone, as the picker marks it: its place and its number ("person 1", "picture 2").
+  function _markOf(path) {
+    const a = _atts.find(x => x.path === path);
+    if (!a) return '';
+    const k = _kindOf(a);
+    const n = _ordered().filter(x => _kindOf(x) === k).indexOf(a) + 1;
+    const z = _zone();
+    const p = z && z.parts.find(x => x.kind === k);
+    const s = p && p.slots ? p.slots.find(x => x.key === a.slot) : null;
+    return (s ? (s.label || s.key) : p && p.slots ? 'other' : (p && p.one) || S.noun.one) + ' ' + n;
   }
 
   // A row too long for its part scrolls sideways - the wheel too, while it has somewhere to go.
@@ -663,8 +733,19 @@ export function createChat(make) {
   const _fileOf = (k) => (_ui && _ui.files ? _ui.files[k] || null : null);
 
   async function _uploadNow(files) {
-    const all = [...(files || [])].filter(f => f && _kindOfFile(f));
-    if (!all.length) { _say(T.onlyFiles); return; }
+    let all = [...(files || [])].filter(f => f && _kindOfFile(f));
+    // (phase V13) While the picker is open, files are for its place: its kind only, and no more than the place has room
+    // for - the rest would spill into the other slots of the part.
+    let note = '';
+    if (_picking && _pickAt) {
+      const U = _U(_pickAt.kind);
+      const mine = all.filter(f => U && U.ok(f));
+      const room = _leftIn(_pickAt.kind, _pickAt.slot);
+      if (mine.length > room) note = 'Only ' + room + ' more ' + (room === 1 ? 'goes' : 'go') + ' here - the rest were not added.';
+      else if (mine.length < all.length) note = 'Only files of this kind go here - the others were not added.';
+      all = mine.slice(0, room);
+    }
+    if (!all.length) { _say(note || T.onlyFiles); return; }
     // A kind the model takes none of is not brought in at all - it would land on its shelf and go nowhere.
     const z = _zone();
     const partOf = (k) => (z ? z.parts.find(p => p.kind === k) : null);
@@ -674,6 +755,7 @@ export function createChat(make) {
     _made = true;
     _say('adding ' + list.length + ' ' + (list.length === 1 ? 'file' : 'files') + '…');
     let bad = list.length < all.length ? ((partOf(_kindOfFile(all.find(f => !list.includes(f)))) || {}).none || '') : '';
+    const filed = new Set();
     for (const f of list.slice(0, S.maxAtts)) {
       const k = _kindOfFile(f);
       const U = _U(k);
@@ -683,6 +765,7 @@ export function createChat(make) {
       fd.append('project', _key || '');
       const d = await json(U.url, { method: 'POST', body: fd });
       if (d && d.success && d.item) {
+        filed.add(k);
         const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
       } else bad = (d && d.error) || 'it could not be added';
@@ -690,8 +773,11 @@ export function createChat(make) {
     // (review V7) What the attaching said of a file that came in ("…the first 15 s go", why it was not taken) stays: only
     // the "adding…" line goes, or the words of what was not added stand in its place.
     if (bad) _say('Not added: ' + bad);
+    else if (note) _say(note);
     else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
     _loadCats();
+    // The shelf a file was filed on shows it in the picker.
+    if (_picking) for (const k of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '');
   }
 
   // ── The thread ────────────────────────────────────────────────────────────
@@ -720,12 +806,14 @@ export function createChat(make) {
     if (!_chat || !_ui) return;
     const mine = ++_seq;
     const k = _key || '';
+    // The column's own results are read with the thread - when there is a column, and it shows this project's own.
+    const own = !!_ui.list && !_cat;
     const [d, f] = k
       ? await Promise.all([
         json('/api/mv3/chat?project=' + encodeURIComponent(k) + '&kind=' + S.kind),
-        _cat ? null : json(S.feed.url(k)),
+        own ? json(S.feed.url(k)) : null,
       ])
-      : [{ success: true, items: [] }, _cat ? null : { success: true, items: [] }];
+      : [{ success: true, items: [] }, own ? { success: true, items: [] } : null];
     if (mine !== _seq || k !== (_key || '') || !_chat) return;
     if (d && d.success) {
       _thread = d.items || [];
@@ -733,7 +821,7 @@ export function createChat(make) {
       _paintHead();
     }
     // A category is read when it is chosen, not on every tick.
-    if (f && f.success && !_cat) _feed = (f.items || []).map(S.feed.map);
+    if (f && f.success && own) _feed = (f.items || []).map(S.feed.map);
     _landed();
     _paintThread(toEnd);
     _paintStrip();
@@ -995,68 +1083,26 @@ export function createChat(make) {
   }
 
   // ── The right column ──────────────────────────────────────────────────────
-  // This project's own, or a category of the Library's Images - and (phase V6) the shelves a description adds (the video
-  // chat's characters and looks, environments, lookbooks), which an armed slot of a recipe turns the column to.
+  // This project's own, or a category of the Library's Images - the pictures chat's. A description with a picker (the
+  // video chat, phase V13) has none of it: `_ui.list` is null there, and everything here stands down.
   let _cats = [];               // the Images categories, as last read
-  let _lastImgCat = '';         // the Images category last shown - where 'images' goes back to
-  // (phase V7) More shelves with categories a description shows - the video chat's B-roll, Uploads and Sounds:
-  // `S.moreCats` [{ key, label, url, map }]; their places in the dropdown are 'grp:<key>:<category>'.
-  let _more = {};
   async function _loadCats() {
-    if (!_ui) return;
-    const groups = S.moreCats || [];
-    const [d, ...reads] = await Promise.all([json(S.cats.url)].concat(groups.map(g => json(g.url).catch(() => null))));
+    if (!_ui || !_ui.cat) return;
+    const d = await json(S.cats.url);
     _cats = (d && d.success) ? (d.cats || []).filter(c => c && c.id) : [];
-    _more = {};
-    groups.forEach((g, i) => { const r = reads[i]; _more[g.key] = (r && r.success) ? (r.cats || []).filter(c => c && c.id) : []; });
     const sel = _ui.cat;
     sel.innerHTML = '';
     const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
     sel.appendChild(opt('', 'this project'));
-    const shelves = S.shelves || [];
-    let host = sel;
-    if (shelves.length || groups.length) {
-      if (shelves.length) {
-        const g = document.createElement('optgroup');
-        g.label = 'Library';
-        for (const s of shelves) g.appendChild(opt('shelf:' + s.id, s.label));
-        sel.appendChild(g);
-      }
-      host = document.createElement('optgroup');
-      host.label = 'Images';
-      sel.appendChild(host);
-    }
-    for (const c of _cats) host.appendChild(opt(c.id, c.label || c.name || c.id));
-    for (const g of groups) {
-      const og = document.createElement('optgroup');
-      og.label = g.label;
-      og.appendChild(opt('grp:' + g.key + ':', 'all of ' + g.label));
-      for (const c of _more[g.key]) og.appendChild(opt('grp:' + g.key + ':' + c.id, c.label || c.name || c.id));
-      sel.appendChild(og);
-    }
+    for (const c of _cats) sel.appendChild(opt(c.id, c.label || c.name || c.id));
     sel.value = [...sel.options].some(o => o.value === _cat) ? _cat : '';
     if (sel.value !== _cat) { _cat = ''; _reload(); }
   }
-  // A shelf of `S.moreCats` at the project's own category when it has one, else the whole shelf.
-  function _grpOwn(key) {
-    const title = String(Store.title() || '').trim().toLowerCase();
-    // By the bare name - the label carries the count ("Project · 4").
-    const own = title ? (_more[key] || []).find(c => String(c.name || c.label || '').trim().toLowerCase() === title) : null;
-    return 'grp:' + key + ':' + (own ? own.id : '');
-  }
 
-  // The column turned to `id` - by its dropdown, or by an armed slot ('images': the category last shown, else the
-  // project's own, else the first).
+  // The column turned to a category by its dropdown ('' - this project's own).
   function _setCat(id) {
-    if (!_ui) return;
-    let v = String(id || '');
-    if (v === 'images') {
-      const title = String(Store.title() || '').trim().toLowerCase();
-      const own = _cats.find(c => String(c.name || '').trim().toLowerCase() === title);
-      v = (_lastImgCat && _cats.some(c => c.id === _lastImgCat)) ? _lastImgCat : own ? own.id : (_cats[0] ? _cats[0].id : '');
-    }
-    if (/^grp:[^:]+$/.test(v)) v = _grpOwn(v.slice(4));
-    if (v && !v.startsWith('shelf:') && !v.startsWith('grp:')) _lastImgCat = v;
+    if (!_ui || !_ui.cat) return;
+    const v = String(id || '');
     if (v === _cat) return;
     _cat = v;
     _ui.cat.value = [..._ui.cat.options].some(o => o.value === _cat) ? _cat : '';
@@ -1068,19 +1114,8 @@ export function createChat(make) {
   async function _loadStrip() {
     if (!_cat) return _reload();
     const k = _cat;
-    let items = [];
-    if (k.startsWith('shelf:')) {
-      const sh = (S.shelves || []).find(s => 'shelf:' + s.id === k);
-      items = sh ? await sh.load().catch(() => []) : [];
-    } else if (k.startsWith('grp:')) {
-      const [, key, cat] = k.match(/^grp:([^:]+):(.*)$/) || [];
-      const g = (S.moreCats || []).find(x => x.key === key);
-      const d = g ? await json(g.url + (cat ? '&cat=' + encodeURIComponent(cat) : '')) : null;
-      items = g ? (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(g.map) : [];
-    } else {
-      const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
-      items = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
-    }
+    const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
+    const items = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
     if (k !== _cat) return;
     _feed = items;
     _paintStrip();
@@ -1088,7 +1123,7 @@ export function createChat(make) {
 
   // Mixed shapes, stacked in columns: each tile keeps its own shape and goes into the shorter column.
   function _paintStrip() {
-    if (!_ui) return;
+    if (!_ui || !_ui.list) return;
     const host = _ui.list;
     const wide = host.clientWidth - 16;
     const cols = wide >= 330 ? 3 : wide >= 150 ? 2 : 1;
@@ -1106,7 +1141,7 @@ export function createChat(make) {
     host.replaceChildren(...boxes);
     _ui.count.textContent = String(_feed.length);
     if (!_feed.length) {
-      const none = el('div', 'mv3-ig-none', _cat.startsWith('shelf:') ? 'Nothing on this shelf.' : _cat ? 'Nothing in this category.' : 'Nothing made in this project yet.');
+      const none = el('div', 'mv3-ig-none', _cat ? 'Nothing in this category.' : 'Nothing made in this project yet.');
       host.replaceChildren(none, _plusTile());
     }
   }
@@ -1114,10 +1149,8 @@ export function createChat(make) {
   function _plusTile() {
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
-    // (phase V7) A file of the kind the column shows: a clip where it shows clips, a sound where it shows sounds.
-    const k = typeof S.plusKind === 'function' ? S.plusKind(_cat) : 'image';
-    b.title = (S.plusWords && S.plusWords[k]) || T.plus;
-    b.addEventListener('click', () => { const input = _fileOf(k) || _ui.file; if (input) input.click(); });
+    b.title = T.plus;
+    b.addEventListener('click', () => { if (_ui.file) _ui.file.click(); });
     return b;
   }
 
@@ -1127,8 +1160,6 @@ export function createChat(make) {
       + (_atts.some(a => a.path === it.path) ? ' on' : ''));
     if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
     t.title = it.name || '';
-    if (it.state === 'done' && it.kind === 'video' && it.video) return _clipTile(t, it);
-    if (it.state === 'done' && it.kind === 'audio' && it.path) return _soundTile(t, it);
     if (it.state === 'done' && it.path) {
       const img = document.createElement('img');
       img.src = thumbOf(it.path, 'strip');
@@ -1160,84 +1191,6 @@ export function createChat(make) {
     } else {
       t.appendChild(el('span', 'sp', String(it.error || 'failed').slice(0, 70)));
     }
-    return t;
-  }
-
-  // A CLIP in the right column (phase V3): its poster, dragged onto a lane as the clip it is, a press opens it. A clip
-  // is not an attachment until references take clips (phase V7).
-  function _clipTile(t, it) {
-    if (it.poster) {
-      const img = document.createElement('img');
-      img.src = thumbOf(it.poster, 'strip');
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      // A poster gone from the library leaves the tile plain, never a broken picture with its name over it.
-      img.addEventListener('error', () => img.remove(), { once: true });
-      t.appendChild(img);
-    }
-    // (phase V7) Where the model takes clips, a press ATTACHES it - a second takes it back off - and ▶ plays it; where it
-    // takes none, a press plays it as before.
-    const play = el('button', 'mv3-ig-play is-btn', '▶');
-    play.type = 'button';
-    play.title = 'Play it';
-    play.addEventListener('click', (ev) => { ev.stopPropagation(); peekHide(); if (S.openTile) S.openTile(it); });
-    t.appendChild(play);
-    if (it.dur) t.appendChild(el('span', 'mv3-ig-dur', (+it.dur).toFixed(1) + 's'));
-    t.draggable = true;
-    t.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer.effectAllowed = 'copy';
-      ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
-        libId: it.libId || '', src: it.video, thumb: it.poster || '',
-        name: (it.name || '').slice(0, 60), group: it.group || 'birols', dur: +it.dur || 0,
-      }));
-      t.classList.add('is-dragging');
-    });
-    t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
-    if (it.poster) {
-      t.addEventListener('mouseenter', () => peekShow(thumbOf(it.poster, 'main'), t));
-      t.addEventListener('mouseleave', peekHide);
-    }
-    t.addEventListener('click', () => {
-      peekHide();
-      if (typeof S.takes === 'function' && S.takes('video')) {
-        if (_atts.some(a => a.path === it.video)) _detach(it.video);
-        else _attach(it.video, it.name, { kind: 'video', poster: it.poster || '', dur: +it.dur || 0 });
-        _paintStrip();
-      } else if (S.openTile) S.openTile(it);
-    });
-    return t;
-  }
-
-  // A SOUND in the right column (phase V7): its name and length; ▶ plays it here, a press attaches it.
-  let _sounding = null;
-  function _soundTile(t, it) {
-    t.classList.add('is-sound');
-    t.appendChild(el('span', 'snd', '♪'));
-    t.appendChild(el('span', 'nm', it.name || 'sound'));
-    if (it.dur) t.appendChild(el('span', 'mv3-ig-dur', (+it.dur).toFixed(1) + 's'));
-    const play = el('button', 'mv3-ig-play is-btn', '▶');
-    play.type = 'button';
-    play.title = 'Listen';
-    play.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      if (_sounding && _sounding.src === it.path && !_sounding.audio.paused) { _sounding.audio.pause(); return; }
-      if (_sounding) _sounding.audio.pause();
-      const audio = new Audio(it.path);
-      _sounding = { src: it.path, audio };
-      play.textContent = '■';
-      audio.addEventListener('pause', () => { play.textContent = '▶'; }, { once: true });
-      audio.addEventListener('ended', () => { play.textContent = '▶'; }, { once: true });
-      audio.play().catch(() => { play.textContent = '▶'; });
-    });
-    t.appendChild(play);
-    t.title = it.name || '';
-    t.addEventListener('click', () => {
-      if (!(typeof S.takes === 'function' && S.takes('audio'))) { _say('This model takes no sounds.'); return; }
-      if (_atts.some(a => a.path === it.path)) _detach(it.path);
-      else _attach(it.path, it.name, { kind: 'audio', dur: +it.dur || 0 });
-      _paintStrip();
-    });
     return t;
   }
 
@@ -1391,19 +1344,23 @@ export function createChat(make) {
     thread.appendChild(foot);
     chat.append(banner, thread, atts, over, ...Object.values(files), bar);
 
-    const sash = el('div', 'mv3-sash is-v mv3-ig-sash');
-    sash.title = 'Drag to resize · double-click to reset';
-    const stripBox = el('div', 'mv3-ig-strip');
-    const sHead = el('div', 'mv3-ig-strip-head');
-    const stripP = el('span', 'p', Store.title() || Store.key() || 'no project');
-    const count = el('span', 'n', '0');
-    sHead.append(stripP, count);
-    const cat = document.createElement('select');
-    cat.className = 'mv3-ig-cat';
-    cat.title = T.cat;
-    const list = el('div', 'mv3-ig-strip-list');
-    stripBox.append(sHead, cat, list);
-    root.append(setBox, chat, sash, stripBox);
+    // The right column - unless the description picks its attachments in a window (phase V13).
+    let sash = null, stripBox = null, stripP = null, count = null, cat = null, list = null;
+    if (!S.pick) {
+      sash = el('div', 'mv3-sash is-v mv3-ig-sash');
+      sash.title = 'Drag to resize · double-click to reset';
+      stripBox = el('div', 'mv3-ig-strip');
+      const sHead = el('div', 'mv3-ig-strip-head');
+      stripP = el('span', 'p', Store.title() || Store.key() || 'no project');
+      count = el('span', 'n', '0');
+      sHead.append(stripP, count);
+      cat = document.createElement('select');
+      cat.className = 'mv3-ig-cat';
+      cat.title = T.cat;
+      list = el('div', 'mv3-ig-strip-list');
+      stripBox.append(sHead, cat, list);
+      root.append(setBox, chat, sash, stripBox);
+    } else root.append(setBox, chat);
 
     // The panel header's own buttons while the chat shows.
     const head = $(S.ids.head);
@@ -1411,12 +1368,12 @@ export function createChat(make) {
       head.textContent = '';
       const wipe = el('button', 'mv3-iconbtn', '⌫');
       wipe.type = 'button';
-      wipe.title = 'Clear this conversation. Everything made stays in the Library and on the right.';
+      wipe.title = 'Clear this conversation. Everything made stays in the Library' + (list ? ' and on the right.' : '.');
       wipe.addEventListener('click', (ev) => {
         ev.stopPropagation();
         if (!_key) return;
         askDelete(wipe, 'Clear this conversation?',
-          'Everything made stays — in the Library and in the column on the right. Only what was said goes.',
+          'Everything made stays — in the Library' + (list ? ' and in the column on the right' : '') + '. Only what was said goes.',
           async () => {
             await json('/api/mv3/chat?project=' + encodeURIComponent(_key) + '&kind=' + S.kind, { method: 'DELETE' });
             _reload(true);
@@ -1432,12 +1389,12 @@ export function createChat(make) {
     }
 
     _ui = { root, set: setBox, left, said, chat, banner, thread, foot, atts, over, file, files, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
-    _wireStripSash(sash, stripBox);
+    if (sash) _wireStripSash(sash, stripBox);
 
     for (const input of Object.values(files)) {
       input.addEventListener('change', () => { const f = [...(input.files || [])]; input.value = ''; _upload(f); });
     }
-    cat.addEventListener('change', () => _setCat(cat.value || ''));
+    if (cat) cat.addEventListener('change', () => _setCat(cat.value || ''));
     nBtn.addEventListener('click', () => {
       const i = S.counts.indexOf(_n);
       _n = S.counts[(i + 1) % S.counts.length];

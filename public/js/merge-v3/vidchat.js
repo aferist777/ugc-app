@@ -13,7 +13,9 @@
      price of this send; the aggregator beside it with its own rate - the cheapest with a working key by default.
    - A line ABOVE THE THREAD says what the chosen model does and what to attach.
    - Kling motion control has no writer: the box IS its prompt, standing at the standard one when empty.
-   - A clip that lands is not put in the attachment row by itself - it is one press on it in the column.
+   - (phase V13, the owner 2026-10-07) No right column: every "+" of the attachment zone opens the picker on its place
+     (chat-pick.js) - the Library's shelves of that kind and this computer. A clip that lands is not put in the zone by
+     itself - it is one press on it there, under "made in this project".
    - (phase V7) Clips and sounds are references too: from this project's clips, B-roll, Uploads, the Sounds shelf, this
      computer or a lane of the timeline; each goes as the PART of it the person chose (vtrim.js), the first seconds
      the model takes by default, and the price follows that part.
@@ -32,11 +34,6 @@ const SHOW_ATTS = 9;                       // the old row's places at most (the 
 const MAX_PICS = 30;                       // pictures at most, whatever a model says (Seedance 2.5 takes 30)
 const MAX_ATTS = 50;                       // everything attached at most - pictures, clips and sounds
 
-function arOf(i) {
-  const w = +(i.w || (i.meta || {}).w || 0);
-  const h = +(i.h || (i.meta || {}).h || 0);
-  return (w > 0 && h > 0) ? (w + ':' + h) : '1:1';
-}
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function VIDEOS(ctx) {
@@ -622,44 +619,95 @@ function VIDEOS(ctx) {
         none: who + ' takes no sounds.', other: 'Another sound for the writer to use - anything the recipe did not ask for' },
     ] };
   }
-  // An armed slot turns the right column to what suits it (the owner): a person - characters and looks, a place -
-  // environments, clothes - lookbooks, a product, a style or anything else - Images; a clip - Uploads, where clips
-  // brought in from this computer go (the project's category when it has one); a sound - the Sounds shelf.
-  function _shelfFor(kind, s) {
-    const role = (s && s.role) || '';
-    if (kind === 'video') return 'grp:uploads';
-    if (kind === 'audio') return 'grp:sounds';
-    if (kind !== 'image') return '';
-    if (role === 'person') return 'shelf:people';
-    if (role === 'location') return 'shelf:environments';
-    if (role === 'outfit') return 'shelf:lookbooks';
-    return 'images';
-  }
-  // The shelves the column can show: a character's sheet, then its looks, one character after another.
-  async function _loadPeople() {
+  // ── Where attachments come from (phase V13: the picker, chat-pick.js) ─────
+  // Each kind its own shelves; an item is { path, name, sub, cat, thumb, big, poster, aspect, dur, src }.
+  const _gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read' });
+  const _shape = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
+  const _pic = (path, name, sub, x) => Object.assign({ path, name: name || '', sub: sub || '',
+    thumb: thumbOf(path, 'strip'), big: thumbOf(path, 'main') }, x || {});
+  const _clip = (path, poster, name, x) => Object.assign({ path, src: path, poster: poster || '', name: name || '',
+    thumb: poster ? thumbOf(poster, 'strip') : '' }, x || {});
+  // A character's sheet, then its looks, one character after another.
+  async function _people() {
     const [c, l] = await Promise.all([json('/api/library/shelf/characters'), json('/api/library/shelf/looks')]);
-    const chars = (c && c.success) ? c.items || [] : [];
+    if (!c || !c.success) return _gone(c);
+    const chars = c.items || [];
     const looks = (l && l.success) ? l.items || [] : [];
     const out = [];
-    const tile = (i, name) => ({ path: i.media, state: 'done', name: name || i.name || '', libId: i.id || '' });
     for (const ch of chars) {
-      out.push(tile(ch, ch.name));
-      for (const lk of looks.filter(x => (x.meta || {}).charId === ch.id)) out.push(tile(lk, ch.name + ' · ' + lk.name));
+      out.push(_pic(ch.media, ch.name, 'character', { aspect: '16:9' }));
+      for (const lk of looks.filter(x => (x.meta || {}).charId === ch.id)) out.push(_pic(lk.media, lk.name, ch.name + ' · look'));
     }
-    for (const lk of looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId))) out.push(tile(lk, lk.name));
-    return out.filter(x => x.path);
+    for (const lk of looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId))) out.push(_pic(lk.media, lk.name, 'look'));
+    return { items: out.filter(x => x.path) };
   }
-  async function _loadShelf(kind) {
+  async function _flat(kind, aspect) {
     const d = await json('/api/library/shelf/' + kind);
-    return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media)
-      .map(i => ({ path: i.media, state: 'done', name: i.name || '', libId: i.id || '' }));
+    if (!d || !d.success) return _gone(d);
+    return { items: (d.items || []).filter(i => i && i.media).map(i => _pic(i.media, i.name, '', { aspect })) };
   }
-  // (phase V7) Suno's tracks stay on the Music shelf and are offered as sounds from there (their length is measured
-  // when one is attached - the shelf does not know it).
-  async function _loadMusic() {
+  // A media shelf with its categories: Images, B-roll, Uploads, Sounds - read whole, its categories chosen in the window.
+  async function _media(filter, map) {
+    const d = await json('/api/library/shelf/media?filter=' + filter);
+    if (!d || !d.success) return _gone(d);
+    const cats = (d.cats || []).filter(c => c && c.id);
+    const nameOf = new Map(cats.map(c => [c.id, c.name || '']));
+    return { cats, items: (d.items || []).filter(i => i && i.media).map(i => {
+      const m = i.meta || {};
+      return Object.assign(map(i, m), { cat: m.categoryId || '', sub: nameOf.get(m.categoryId || '__uncat__') || '' });
+    }) };
+  }
+  // The clips this chat made in this project.
+  async function _made() {
+    const k = ctx.key();
+    if (!k) return { items: [], why: 'No project is open yet - nothing has been made in it.' };
+    const d = await json('/api/mv3/video/feed?project=' + encodeURIComponent(k));
+    if (!d || !d.success) return _gone(d);
+    return { items: (d.items || []).filter(g => g && g.state === 'done' && g.videoPath).map(g => _clip(g.videoPath, g.posterPath,
+      String(g.said || g.prompt || '').slice(0, 80), { aspect: _shape(g.w, g.h) || (g.params || {}).aspect || '', dur: +g.duration || 0 })) };
+  }
+  // Suno's tracks stay on the Music shelf and are offered as sounds from there (their length is measured when one is
+  // attached - the shelf does not know it).
+  async function _music() {
     const d = await json('/api/library/shelf/music');
-    return ((d && d.success) ? d.items || [] : []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
-      .map(i => ({ kind: 'audio', path: i.media, aspect: '5:2', state: 'done', name: i.name || '', dur: 0, libId: i.id || '' }));
+    if (!d || !d.success) return _gone(d);
+    return { items: (d.items || []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
+      .map(i => ({ path: i.media, src: i.media, name: i.name || '', sub: 'Suno', dur: 0 })) };
+  }
+  const SOURCES = {
+    image: [
+      { id: 'people', label: 'characters & looks', load: _people },
+      { id: 'environments', label: 'environments', load: () => _flat('environments', '3:2') },
+      { id: 'lookbooks', label: 'lookbooks', load: () => _flat('lookbooks', '1:1') },
+      { id: 'images', label: 'Images', load: () => _media('images', (i, m) => _pic(i.media, i.name, '', { aspect: _shape(m.w, m.h) })) },
+    ],
+    video: [
+      { id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' },
+      { id: 'birols', label: 'B-roll', load: () => _media('birols', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
+      { id: 'uploads', label: 'Uploads', load: () => _media('uploads', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
+    ],
+    audio: [
+      { id: 'sounds', label: 'Sounds', load: () => _media('sounds', (i) => ({ path: i.media, src: i.media, name: i.name || '', dur: +i.dur || 0 })) },
+      { id: 'music', label: 'music (Suno)', load: _music },
+    ],
+  };
+  // Where the picker opens: a recipe's slot of pictures by what it is for (the owner) - a person on the characters and
+  // looks, a place on the environments, clothes on the lookbooks, anything else on Images; else ('') where this kind
+  // was last taken from - the picker remembers -, the first time `FIRST`.
+  function _startFor(kind, s) {
+    if (kind !== 'image' || !s || !s.key) return '';
+    return s.role === 'person' ? 'people' : s.role === 'location' ? 'environments' : s.role === 'outfit' ? 'lookbooks' : 'images';
+  }
+  // Uploads first for clips: it is where clips from this computer go.
+  const FIRST = { image: 'images', video: 'uploads', audio: 'sounds' };
+  // What cannot go into the zone at all, said on its tile: a clip or a sound shorter than the model takes (one longer
+  // goes, and only its part is sent).
+  function _pickWhy(it, kind) {
+    if (kind === 'image' || !(+it.dur > 0)) return '';
+    const rule = _spanRule({ kind, path: it.path });
+    const m = model();
+    if (!rule || !m || +it.dur >= rule.min - 0.05) return '';
+    return _s(it.dur) + ' - ' + m.label + ' needs at least ' + _s(rule.min);
   }
   // (review V7) What a recipe's places must hold beyond what the chosen model takes ('' when it fits): flat-flythrough's
   // plan and two renders under Kling, which takes one picture. A picture-then-video recipe is judged by its own rules.
@@ -1693,20 +1741,11 @@ function VIDEOS(ctx) {
     return box;
   }
 
-  // A clip or a sound of a Library shelf as the column shows it (phase V7).
-  const _clipItem = (i) => {
-    const mm = i.meta || {};
-    return { kind: 'video', video: i.media, poster: i.thumb || '', path: i.media,
-      aspect: (mm.w > 0 && mm.h > 0) ? mm.w + ':' + mm.h : '9:16', state: 'done', name: i.name || '',
-      dur: +i.dur || 0, libId: i.id || '', group: i.kind === 'uploads' ? 'uploads' : 'birols' };
-  };
-  const _soundItem = (i) => ({ kind: 'audio', path: i.media, aspect: '5:2', state: 'done', name: i.name || '', dur: +i.dur || 0, libId: i.id || '' });
-
   return {
     name: 'videos',
     kind: 'clip',
     ids: { root: 'mv3-vc', head: 'mv3-vc-head', headL: 'mv3-vc-headl', crumb: 'mv3-lib-vgen' },
-    keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
+    keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1' },
     maxAtts: MAX_ATTS,
     counts: [1, 2],
     noun: { one: 'picture', many: 'pictures' },
@@ -1715,17 +1754,31 @@ function VIDEOS(ctx) {
     eta: 180000,
     progressKey: (g) => 'mv3-video-' + (g.model || ''),
     sendUrl: '/api/mv3/video/send',
-    // A clip that lands is not put in the row by itself: it is one press on it in the column (phase V7).
+    // A clip that lands is not put in the zone by itself: it is one press on it in the picker - "made in this project".
     landAsRef: false,
     text: {
       placeholder: 'Describe a clip, or say what to change.',
       empty: 'Describe a clip. What comes back stays in this project — and on the B-roll shelf.',
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
-      slot: 'From this computer, or press one on the right',
-      plus: 'Add a picture from this computer. It goes into Images and straight into the place above the message box.',
-      cat: "This project's clips, a shelf of the Library, a category of Images, B-roll, Uploads or Sounds - to attach",
+      slot: 'From the Library or this computer',
       crumb: 'Back to the conversation about clips',
+    },
+    // (phase V13, the owner 2026-10-07) No right column: every "+" of the zone opens the picker on its place.
+    pick: {
+      sources: (kind) => SOURCES[kind] || [],
+      start: _startFor,
+      first: FIRST,
+      why: _pickWhy,
+      // The shelf a file from this computer is filed on, and what the picker says of it.
+      lands: { image: 'images', video: 'uploads', audio: 'sounds' },
+      upWords: {
+        image: 'A picture goes into Images, in this project\'s category.',
+        video: 'A clip goes into Uploads, in this project\'s category.',
+        audio: 'A sound goes onto the Sounds shelf, in this project\'s category.',
+      },
+      // A part window left open over the zone goes: the picker covers it.
+      onOpen: () => closeTrim(),
     },
     // (phase V7) Each kind through its own door, filed under the project's category: pictures into Images, clips into
     // Uploads, sounds onto the Sounds shelf - and straight into their part of the zone.
@@ -1741,47 +1794,11 @@ function VIDEOS(ctx) {
     },
     // (phase V7.3) Kling motion control's empty box sends its standard prompt.
     emptyText: () => (isMC() && _table ? _table.standardPrompt || '' : ''),
-    // (phase V7) Clips and sounds in the zone: the part that goes, what the cell says of it, and what the model takes.
-    takes: _takes,
+    // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },
     trimFor: _trimFor,
     onHide: () => closeTrim(),
-    // (phase V7) The column's "+" brings in what the column shows: a clip on B-roll or Uploads, a sound on Sounds.
-    plusKind: (cat) => (/^grp:(birols|uploads):/.test(String(cat || '')) ? 'video' : /^(grp:sounds:|shelf:music$)/.test(String(cat || '')) ? 'audio' : 'image'),
-    plusWords: {
-      video: 'Add a clip from this computer. It goes into Uploads, in this project\'s category, and into the clips of the zone.',
-      audio: 'Add a sound from this computer. It goes onto the Sounds shelf, in this project\'s category, and into the sounds of the zone.',
-    },
-    // (phase V7) Shelves with categories of their own, besides Images: clips from B-roll and Uploads, sounds.
-    moreCats: [
-      { key: 'birols', label: 'B-roll', url: '/api/library/shelf/media?filter=birols', map: _clipItem },
-      { key: 'uploads', label: 'Uploads', url: '/api/library/shelf/media?filter=uploads', map: _clipItem },
-      { key: 'sounds', label: 'Sounds', url: '/api/library/shelf/media?filter=sounds', map: _soundItem },
-    ],
-    // The right column: this project's clips (posters; dragged onto a lane, pressed to play), or a category of Images
-    // (pictures, pressed to attach).
-    feed: {
-      url: (k) => '/api/mv3/video/feed?project=' + encodeURIComponent(k),
-      map: (g) => ({
-        kind: 'video', video: g.videoPath || '', poster: g.posterPath || '', path: g.videoPath || ('pending:' + g.id),
-        aspect: (g.w && g.h) ? g.w + ':' + g.h : ((g.params || {}).aspect || '9:16'), state: g.state,
-        name: g.said || g.prompt || '', error: g.error, dur: g.duration || 0, libId: g.birolId || '', group: 'videochat',
-      }),
-    },
-    cats: {
-      url: '/api/library/shelf/media?filter=images',
-      map: (i) => ({ path: i.media, aspect: arOf(i), state: 'done', name: i.name || '', libId: i.id || '' }),
-      group: 'images',
-    },
-    // (phase V6) The Library's shelves the column can show besides Images - an armed slot of a recipe turns it to one.
-    shelves: [
-      { id: 'people', label: 'characters & looks', load: _loadPeople },
-      { id: 'environments', label: 'environments', load: () => _loadShelf('environments') },
-      { id: 'lookbooks', label: 'lookbooks', load: () => _loadShelf('lookbooks') },
-      { id: 'music', label: 'music (Suno)', load: _loadMusic },
-    ],
-    shelfFor: _shelfFor,
     // (phase V6) The builder's cards in the thread, drawn here; the request at the thread's foot.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
@@ -1818,7 +1835,8 @@ function VIDEOS(ctx) {
       onPen: () => _paintRecipe(),
     },
 
-    // A finished clip in the thread: its poster - a press plays it - and "to timeline" under it.
+    // A finished clip in the thread: its poster - a press plays it, and it can be dragged onto a lane (phase V13: the
+    // right column it used to be dragged from is gone) - and "to timeline" under it.
     shot(g, cell, open) {
       const box = el('div', 'mv3-vc-shot');
       const shape = (g.w && g.h) ? g.w + '/' + g.h : String((g.params || {}).aspect || '9:16').replace(':', '/');
@@ -1829,22 +1847,31 @@ function VIDEOS(ctx) {
         img.src = '/api/thumb?src=' + encodeURIComponent(g.posterPath) + '&v=strip';
         img.alt = g.said || '';
         img.loading = 'lazy'; img.decoding = 'async';
+        img.draggable = false;
         img.addEventListener('error', () => { img.remove(); }, { once: true });
         box.appendChild(img);
       }
       box.appendChild(el('span', 'mv3-ig-play', '▶'));
       if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', (+g.duration).toFixed(1) + 's'));
-      box.title = 'Play it';
+      box.title = 'Play it · drag it onto a lane';
       box.addEventListener('click', open);
+      const item = {
+        clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
+        name: String(g.said || g.prompt || '').slice(0, 60), dur: +g.duration || 0, group: 'videochat',
+      };
+      box.draggable = true;
+      box.addEventListener('dragstart', (ev) => {
+        ev.dataTransfer.effectAllowed = 'copy';
+        ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(item));
+        box.classList.add('is-dragging');
+      });
+      box.addEventListener('dragend', () => box.classList.remove('is-dragging'));
       cell.appendChild(box);
       const acts = el('div', 'mv3-ig-acts');
       const add = el('button', 'mv3-c-btn', 'to timeline');
       add.type = 'button';
       add.title = 'Puts it on the lane above main video, at the playhead, at its own length.';
-      add.addEventListener('click', () => ctx.place({
-        clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
-        name: String(g.said || g.prompt || '').slice(0, 60), dur: +g.duration || 0, group: 'videochat',
-      }, add));
+      add.addEventListener('click', () => ctx.place(item, add));
       acts.append(add);
       cell.appendChild(acts);
     },
@@ -1867,10 +1894,6 @@ function VIDEOS(ctx) {
     view(done, at) {
       openViewer(done.map(x => ({ id: x.id, kind: 'birols', media: x.videoPath, thumb: x.posterPath || x.videoPath,
         name: x.said || x.prompt || '', meta: { date: x.at } })), at);
-    },
-    // A clip pressed in the right column plays.
-    openTile(it) {
-      openViewer([{ id: it.libId || it.video, kind: 'birols', media: it.video, thumb: it.poster || it.video, name: it.name || '' }], 0);
     },
 
     headButtons: () => [],

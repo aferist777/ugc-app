@@ -28,10 +28,10 @@
 
 import * as Layers from '../layers.js';
 import { el, money, json, stored, keep } from './chat-shell.js';
+import { hoverPlayer } from './hover-play.js';
 
 const LS = 'mv3_vc_cat_v1';               // { filters, sort } - the window opens as it was left
 const SHOW_CASES = 240;                    // cases drawn at once; "show N more" for the rest
-const HOVER_MS = 350;
 const KINDS = ['image', 'frame-first', 'frame-last', 'video', 'audio'];
 const ROLES = ['person', 'product', 'outfit', 'location', 'prop', 'style', 'motion', 'music', 'voice'];
 const KIND_WORD = { template: 'template', case: 'case', example: 'example', preset: 'preset' };
@@ -40,7 +40,7 @@ let _data = null;            // { cat, cases, presets }
 let _fetchTried = false;     // the cases are fetched by the window at most once per page
 let _w = null;               // the open window: { ov, layer, ... }
 let _st = null;              // what it shows
-let _hover = null;           // { box, video, timer }
+const _hp = hoverPlayer('vc-vid');   // a case's clip in its tile while the pointer rests there
 
 const _clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const _key = (it) => it.kind + ':' + it.id;
@@ -302,7 +302,7 @@ function _close() {
   if (!_w) return;
   _ddClose();
   _tipHide();
-  _stopHover();
+  _hp.stop();
   keep(LS, { filters: _st.filters, sort: _st.sort });
   Layers.close(_w.layer);
   _w.ov.remove();
@@ -388,7 +388,7 @@ function _paintLeft() {
     sel.appendChild(op);
   }
   if (m) sel.value = m.id;
-  sel.addEventListener('change', () => { _st.model = sel.value; _st.pick = _st.inUse || null; _stopHover(); _paintLeft(); _paintGrid(false); _paintRight(); });
+  sel.addEventListener('change', () => { _st.model = sel.value; _st.pick = _st.inUse || null; _hp.stop(); _paintLeft(); _paintGrid(false); _paintRight(); });
   inner.append(el('div', 'vc-lab', 'model'), sel);
   if (m) {
     const facts = el('div', 'vc-facts');
@@ -608,7 +608,7 @@ function _paintCounts() {
 // ── Centre: the tiles ───────────────────────────────────────────────────────
 function _paintGrid(keep = true) {
   if (!_w || !_data) return;
-  _stopHover();
+  _hp.stop();
   const G = _w.grid;
   const top = keep ? G.scrollTop : 0;
   G.textContent = '';
@@ -742,67 +742,12 @@ function _tile(it) {
   b.addEventListener('click', () => _pick(it));
   // The WHOLE tile is "on it" - the picture, its caption and its line (the owner, 2026-10-06): a clip used to stop
   // the moment the pointer slid from the picture onto the words under it, and start again from the beginning.
+  // It plays ON (hover-play.js): back within a moment it goes on, later from where it was left.
   if (it.media) {
-    b.addEventListener('pointerenter', () => _hoverOn(b, box, it.media));
-    b.addEventListener('pointerleave', () => _hoverOff(b));
+    b.addEventListener('pointerenter', () => _hp.on(b, box, it.media));
+    b.addEventListener('pointerleave', () => _hp.off(b));
   }
   return b;
-}
-
-// The clip plays while the pointer is on its tile - one at a time, nothing fetched before it does - and it plays ON:
-// left and come back to within a moment, it goes on where it was; come back later, and it starts from where it was
-// left rather than from the beginning again.
-const GRACE_MS = 1500;
-const _at = new Map();          // clip -> the moment it was left at
-function _hoverOn(tile, box, src) {
-  if (_hover && _hover.tile === tile) {
-    clearTimeout(_hover.gone);
-    _hover.gone = 0;
-    if (_hover.video) _hover.video.play().catch(() => { /* the clip is gone */ });
-    return;
-  }
-  _stopHover();
-  const h = { tile, src, video: null, timer: 0, gone: 0 };
-  h.timer = setTimeout(() => {
-    const v = document.createElement('video');
-    v.className = 'vc-vid';
-    v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none';
-    const from = _at.get(src) || 0;
-    if (from) v.addEventListener('loadedmetadata', () => { try { if (from < v.duration - 0.25) v.currentTime = from; } catch (e) { /* a stream */ } }, { once: true });
-    v.src = src;
-    box.appendChild(v);
-    v.play().catch(() => { /* the pointer left first, or the clip is gone */ });
-    h.video = v;
-  }, HOVER_MS);
-  _hover = h;
-}
-function _hoverOff(tile) {
-  const h = _hover;
-  if (!h || h.tile !== tile) return;
-  clearTimeout(h.timer);
-  h.timer = 0;
-  if (!h.video) { _hover = null; return; }          // left before it started
-  try { h.video.pause(); } catch (e) { /* gone */ }
-  _keepAt(h);
-  h.gone = setTimeout(() => { if (_hover === h) _stopHover(); }, GRACE_MS);
-}
-function _keepAt(h) {
-  try { if (h.video && h.video.currentTime > 0) _at.set(h.src, h.video.currentTime); } catch (e) { /* gone */ }
-  while (_at.size > 100) _at.delete(_at.keys().next().value);
-}
-function _stopHover() {
-  const h = _hover;
-  if (!h) return;
-  clearTimeout(h.timer);
-  clearTimeout(h.gone);
-  if (h.video) {
-    _keepAt(h);
-    try { h.video.pause(); } catch (e) { /* gone */ }
-    h.video.removeAttribute('src');
-    try { h.video.load(); } catch (e) { /* gone */ }
-    h.video.remove();
-  }
-  _hover = null;
 }
 
 // ── Right: the one picked ───────────────────────────────────────────────────

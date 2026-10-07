@@ -247,9 +247,6 @@
 /* A slot that must be filled, still empty. */
 .mv3-ig-cell.is-req .mv3-ig-att-slot{ border-color:var(--primary); color:var(--primary) }
 .mv3-ig-cell.is-req .lab{ color:var(--ink) }
-/* The slot the next tile or file goes into. */
-.mv3-ig-cell.is-armed .mv3-ig-att-slot{ border-style:solid; border-color:var(--primary); color:var(--primary); background:var(--primary-soft) }
-.mv3-ig-cell.is-armed .lab{ color:var(--primary) }
 .mv3-ig-cell.is-off .mv3-ig-att-slot{ opacity:.35; cursor:default }
 .mv3-ig-cell.is-flash .mv3-ig-att-slot{ animation:mv3-ig-flash .3s ease-in-out 3 }
 @keyframes mv3-ig-flash{ 50%{ border-color:var(--danger); color:var(--danger); background:oklch(.65 .2 25 / .18) } }
@@ -393,17 +390,8 @@
   position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
   background:rgba(0,0,0,.6); color:#fff; font:600 9px/1.3 var(--font); pointer-events:none;
 }
-/* (phase V7) ▶ on a clip or a sound of the right column is its own press - the tile's press attaches it. */
-.mv3-ig-play.is-btn{ pointer-events:auto; border:0; padding:0; cursor:pointer; width:24px; height:24px; font-size:10px }
-.mv3-ig-play.is-btn:hover{ background:var(--primary); color:var(--primary-ink) }
-.mv3-ig-card.is-sound{
-  display:flex; flex-direction:column; justify-content:center; gap:3px; padding:6px 8px 6px 34px; aspect-ratio:auto !important;
-  min-height:44px; cursor:pointer;
-}
-.mv3-ig-card.is-sound .snd{ position:absolute; left:9px; top:50%; transform:translateY(-50%); font:600 15px/1 var(--font); color:var(--muted) }
-.mv3-ig-card.is-sound .nm{ font:600 10px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:26px }
-.mv3-ig-card.is-sound .mv3-ig-play.is-btn{ left:auto; right:4px; top:50%; transform:translateY(-50%) }
-.mv3-ig-card.is-sound .mv3-ig-dur{ position:static; align-self:flex-start; background:none; color:var(--muted); padding:0 }
+/* Dragged onto a lane (phase V13). */
+.mv3-vc-shot.is-dragging{ opacity:.5 }
 /* A clip or a sound in the zone: its poster or a note, the seconds that go; pressed, the part is chosen. */
 .mv3-ig-att.is-clip, .mv3-ig-att.is-sound{ cursor:pointer; display:flex; align-items:center; justify-content:center }
 .mv3-ig-att .ic{ font:600 11px/1 var(--font); color:var(--muted) }
@@ -555,3 +543,135 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-try-sheet .vc-board{ width:44px; cursor:zoom-in }
 .vc-board-note{ font:600 10px/1.3 var(--font); color:var(--muted) }
 .vc-go.is-waiting{ opacity:.55 }
+
+/* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
+   As big as the catalog: where things come from on the left, the tiles in the middle - a picture or a clip at its own
+   shape (one height, the width its shape's, never cut to fit a cell), a sound a row. What is in the zone wears the
+   name of its place in gold, the one gold of the window. */
+.pk-ov{
+  position:fixed; inset:0; z-index:9400;
+  display:flex; align-items:stretch; justify-content:center;
+  background:oklch(0 0 0 / .72); padding:18px;
+}
+.pk{
+  position:relative; display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.pk-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:9px 13px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.pk-head h3{ margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink); white-space:nowrap }
+.pk-hint{ flex:1 1 auto; min-width:0; font:500 11px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pk-room{ flex:0 0 auto; font:600 11px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.pk-close{
+  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer;
+}
+.pk-close:hover{ color:var(--ink) }
+.pk-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:220px minmax(0, 1fr) }
+.pk-side{
+  min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px;
+  padding:10px 12px 14px; border-right:1px solid var(--border);
+}
+.pk-lab{ margin:10px 0 2px; font:700 9px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--accent) }
+.pk-lab:first-child{ margin-top:2px }
+.pk-src{
+  display:block; width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/1.3 var(--font); text-align:left; cursor:pointer;
+}
+.pk-src:hover{ border-color:var(--muted) }
+.pk-src.on{ border-color:var(--primary); background:var(--primary-soft) }
+.pk-src.is-up{ border-style:dashed; background:transparent; color:var(--muted) }
+.pk-src.is-up:hover{ border-style:solid; border-color:var(--primary); color:var(--ink) }
+.pk-up-note{ padding:2px 2px 0; font:500 10px/1.45 var(--font); color:var(--muted) }
+.pk-main{ min-height:0; display:flex; flex-direction:column }
+.pk-bar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-soft) }
+.pk-q{
+  flex:0 1 280px; min-width:120px; height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--bg); color:var(--ink); font:600 11px/24px var(--font);
+}
+.pk-q:focus{ outline:none; border-color:var(--primary) }
+.pk-cat{
+  flex:0 1 260px; min-width:0; height:26px; padding:0 5px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
+}
+.pk-cat[hidden]{ display:none }
+.pk-count{ margin-left:auto; font:600 10.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.pk-grid{
+  --pk-h:176px;
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px;
+  display:flex; flex-wrap:wrap; align-content:flex-start; align-items:flex-start; gap:12px 10px;
+}
+.pk-none{ width:100%; padding:40px 10px; text-align:center; font:600 11px/1.6 var(--font); color:var(--muted) }
+.pk-sentinel{ width:100%; height:1px }
+.pk-tile{ position:relative; display:flex; flex-direction:column; gap:2px; width:calc(var(--pk-h) * var(--ar, .75)); max-width:100%; min-width:0 }
+.pk-hit{ display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:left }
+.pk-box{
+  position:relative; display:block; width:100%; height:var(--pk-h);
+  border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden; background:var(--surface-2);
+}
+.pk-hit:hover .pk-box, .pk-hit:focus-visible .pk-box{ border-color:var(--muted) }
+.pk-hit:focus-visible{ outline:none }
+.pk-box img, .pk-vid{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block }
+.pk-box.is-blank{
+  background:repeating-linear-gradient(45deg,
+    oklch(.23 .018 265), oklch(.23 .018 265) 6px, oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
+}
+.pk-tile.is-on .pk-box{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset }
+.pk-mark{
+  position:absolute; top:4px; left:4px; max-width:calc(100% - 8px); padding:0 5px; border-radius:var(--r-xs);
+  background:var(--gold); color:oklch(.2 .03 85); font:700 9.5px/15px var(--font);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;
+}
+.pk-dur{
+  position:absolute; right:4px; bottom:4px; padding:1px 4px; border-radius:3px;
+  background:rgba(0,0,0,.62); color:#fff; font:600 9px/1.3 var(--font); pointer-events:none;
+}
+.pk-cap{ max-width:100%; font:600 10px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pk-sub{ max-width:100%; font:500 9.5px/1.3 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pk-why{ max-width:100%; font:600 9.5px/1.3 var(--font); color:var(--danger) }
+.pk-tile.is-off .pk-box{ opacity:.4 }
+.pk-tile.is-off .pk-hit{ cursor:default }
+/* ▶: a clip played at once with its sound, a sound listened to. */
+.pk-play{
+  position:absolute; top:calc(var(--pk-h) / 2 - 14px); left:50%; transform:translateX(-50%);
+  width:28px; height:28px; padding:0; border:0; border-radius:50%;
+  background:rgba(0,0,0,.55); color:#fff; font:600 11px/28px var(--font); cursor:pointer;
+}
+.pk-play:hover{ background:var(--primary); color:var(--primary-ink) }
+/* Sounds: rows in columns. */
+.pk-grid.is-rows{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px; align-items:start }
+.pk-tile.is-sound{ width:auto }
+.pk-tile.is-sound .pk-box{ height:44px; display:flex; align-items:center; gap:8px; padding:0 44px 0 10px }
+.pk-note{ flex:0 0 auto; font:600 15px/1 var(--font); color:var(--muted) }
+.pk-snd{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px }
+.pk-tile.is-sound .pk-dur{ position:static; flex:0 0 auto; padding:0; background:none; color:var(--muted); font-size:10px }
+.pk-tile.is-sound .pk-mark{ position:static; flex:0 0 auto; max-width:110px }
+.pk-tile.is-sound .pk-play{ top:8px; left:auto; right:8px; transform:none }
+/* The larger look at a picture: over the half of the window away from the pointer. */
+.pk-peek{
+  position:fixed; z-index:9450; pointer-events:none; padding:5px;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface); box-shadow:var(--shadow);
+}
+.pk-peek img{ display:block; width:auto; height:auto; object-fit:contain }
+/* Files held over the window. */
+.pk-drop{
+  display:none; position:absolute; inset:0; z-index:5; pointer-events:none;
+  align-items:center; justify-content:center; padding:20px; text-align:center;
+  background:oklch(0 0 0 / .55); border:2px dashed var(--primary); border-radius:var(--r);
+  font:700 13px/1.4 var(--font); color:var(--ink);
+}
+.pk.is-drop .pk-drop{ display:flex }
+.pk-foot{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  padding:7px 13px; border-top:1px solid var(--border); background:var(--surface-2);
+}
+.pk-said{ flex:1 1 auto; min-width:0; font:600 10.5px/1.4 var(--font); color:var(--muted) }
+.pk-done{ flex:0 0 auto; padding:3px 14px }
+@media (max-width:760px){
+  .pk-ov{ padding:8px }
+  .pk-body{ grid-template-columns:150px minmax(0, 1fr) }
+  .pk-grid{ --pk-h:132px }
+}
