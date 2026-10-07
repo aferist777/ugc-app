@@ -12,7 +12,9 @@
      (duration, quality, shape, sound, Grok's mode, how Seedance reads the pictures, Kling's orientation) and the
      price of this send; the aggregator beside it with its own rate - the cheapest with a working key by default.
    - A line ABOVE THE THREAD says what the chosen model does and what to attach.
-   - Kling motion control has no writer: the box IS its prompt, standing at the standard one when empty.
+   - Kling motion control's VIDEO has no writer - Kling gets its own prompt. With the writer off the box IS that prompt
+     (empty: the standard one); with it on the box says what to take from which picture, and the first frame is drawn
+     before the video (phase V17).
    - (phase V13, the owner 2026-10-07) No right column: every "+" of the attachment zone opens the picker on its place
      (chat-pick.js) - the Library's shelves of that kind and this computer. A clip that lands is not put in the zone by
      itself - it is one press on it there, under "made in this project".
@@ -477,7 +479,7 @@ function VIDEOS(ctx) {
     _set.brief.textContent = m.brief;
     _paintParams();
     _paintRecipe();
-    // Kling motion control has no writer: a recipe there only lays out what to attach, and the box comes back.
+    // Under Kling motion control a recipe only lays out what to attach (its video has no writer), and the box comes back.
     _paintFoot();
   }
 
@@ -615,8 +617,8 @@ function VIDEOS(ctx) {
 
   // ── The catalog and its recipe (phase V5; placed by phase V6) ─────────────
   // The recipe in use stands on the line above the thread (the owner, 2026-10-06): its name - pressed, the catalog
-  // opens on it -, "edited", what it wants attached, and a cross. The recipe is the writer's: with the pen off, or for
-  // Kling motion control (no writer), it stands dimmed and is not sent.
+  // opens on it -, "edited", what it wants attached, and a cross. The recipe is the writer's: with the pen off it is not
+  // sent, and under Kling motion control (whose video has no writer) it only lays out what to attach.
   const _edited = (s) => !!s && (s.orig != null ? s.text !== s.orig : !!s.edited);
   function _paintRecipe() {
     // The row over the box held the catalog and the recipe until V6; both moved (the crumb, the line above).
@@ -900,7 +902,8 @@ function VIDEOS(ctx) {
     return _s(it.dur) + ' - ' + m.label + ' needs at least ' + _s(rule.min);
   }
   // (review V7) What a recipe's places must hold beyond what the chosen model takes ('' when it fits): flat-flythrough's
-  // plan and two renders under Kling, which takes one picture. A picture-then-video recipe is judged by its own rules.
+  // plan and two renders under Kling with the writer off, which takes one picture (with it on, the first frame takes up
+  // to 13 - V17).
   function _recipeOver() {
     if (!_skill || !_applies()) return '';
     const r = rec(), m = model();
@@ -1038,7 +1041,7 @@ function VIDEOS(ctx) {
       // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
       storyboard: boarding || undefined,
       // (phase V16, the owner) The writer stops for a look: its prompt comes back as a message of its own, and the video is
-      // made from there - "make the video". Kling motion control has no writer.
+      // made from there - "make the video". Under Kling motion control the writer writes the first frame instead (V17).
       review: !boarding && ctx.writing() && !isMC() ? true : undefined,
       params: {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
@@ -1290,7 +1293,7 @@ function VIDEOS(ctx) {
     const mc = isMC();
     _cardEls.go.disabled = mc || _writingNow;
     const two = !!(_skill && _skill.twoStep);
-    _cardEls.why.textContent = mc ? 'Kling motion control has no writer - pick another model on the left.'
+    _cardEls.why.textContent = mc ? 'A recipe is not written for Kling motion control - pick another model on the left.'
       : two && m && m.family !== 'seedance' ? 'A two-step recipe is made by Seedance - pick a Seedance model on the left.'
         : two && m ? 'The writer writes the storyboard\'s prompt and the video\'s for ' + m.label + ' - you read and edit both before anything is made.'
           : m ? 'The writer turns it into a prompt for ' + m.label + ' - you read it and edit it before anything is made.' : '';
@@ -1298,7 +1301,7 @@ function VIDEOS(ctx) {
 
   async function _write(btn) {
     if (_writingNow || !_skill) return;
-    if (isMC()) { note(btn, 'No writer here.', 'Kling motion control has no writer - pick another model on the left.'); return; }
+    if (isMC()) { note(btn, 'Not for Kling.', 'A recipe is not written for Kling motion control - pick another model on the left.'); return; }
     if (_skill.twoStep && (model() || {}).family !== 'seedance') { note(btn, 'Seedance makes this one.', 'A two-step recipe - a storyboard, then the video from it - is made by Seedance: pick it on the left.'); return; }
     const why = _ready();
     if (why) { note(btn, why[0], why[1]); return; }
@@ -1347,8 +1350,8 @@ function VIDEOS(ctx) {
 
   // (phase V16, the owner 2026-10-07) Every working message is a SUB-PROJECT (vsteps.js): its steps paged at its top, the
   // variants of the step shown at its foot - the chat does not grow with every attempt. The plain chat's message and a
-  // one-step recipe's are "prompt" then "video"; one with a picture first - the column's storyboard, a two-step recipe, a
-  // picture-then-video recipe - has four.
+  // one-step recipe's are "prompt" then "video"; one with a picture first - the column's storyboard, a two-step recipe -
+  // has four, and Kling's first frame (V17) three: its prompt, the picture, the video.
   function _cardBubble(m, progs) {
     const c = m.card;
     if (c.type === 'recipe') return _sentRequest(m);
@@ -1403,7 +1406,7 @@ function VIDEOS(ctx) {
     const mm = model();
     // (phase V16) A message makes from the variant shown - written for its own model.
     if (mm && mm.family !== _familyOf(l.vmodel || m.card.model)) {
-      if (l.kind === 'swap') { note(go, 'Kling makes it.', 'A picture-then-video card is made by Kling motion control - pick it on the left.'); return; }
+      if (l.kind === 'swap') { note(go, 'Kling makes it.', 'A first frame\'s video is made by Kling motion control - pick it on the left.'); return; }
       if (l.story) { note(go, 'Seedance makes it.', 'A video that follows a storyboard is made by Seedance - pick a Seedance model on the left.'); return; }
       return _rewrite(m, go);
     }
@@ -1412,7 +1415,7 @@ function VIDEOS(ctx) {
     if (!prompt) { note(go, 'The prompt is empty.', 'Write what the clip shows, or write it again.'); return; }
     const why = _readyFor(m);
     if (why) { note(go, why[0], why[1]); return; }
-    // A two-step recipe's video and a picture-then-video's follow the sheet (the picture) shown on their second step.
+    // A two-step recipe's video and Kling's first frame's follow the sheet (the picture) shown on their second step.
     const follows = l.kind === 'recipe' || l.kind === 'swap';
     const sheet = follows ? _chosenSheet(l) : null;
     if (follows && !sheet) {
@@ -1477,7 +1480,8 @@ function VIDEOS(ctx) {
   // The recipe's own presses on its message: its request again, to fill in otherwise, while the recipe is in use.
   const _ownRecipe = (c) => !!(_skill && c.recipe && c.recipe.id === _skill.id);
 
-  // What the storyboard (a frame-swap's picture, V7.6 - drawn at 2K from two pictures) costs, and whether it can be drawn.
+  // What the storyboard - or Kling's first frame, drawn at 2K from the clip's still and every picture of the person
+  // (V17) - costs, and whether it can be drawn.
   function _boardPrice(l) {
     if (!_table) return { ok: false, text: 'reading the prices…' };
     const frame = l.kind === 'swap';
@@ -1485,7 +1489,8 @@ function VIDEOS(ctx) {
     if (!info) return { ok: false, text: 'the picture engine is not in this program' };
     // The sheet always goes to the video as a picture (review V8): without R2 it would be bought for nothing.
     if (!_table.r2) return { ok: false, text: 'the ' + l.W + ' goes to the video as a picture - set R2 on Admin → API keys' };
-    const n = frame ? 2 : (l.m.media || []).filter(x => x.kind === 'image').length;
+    const pics = (l.m.media || []).filter(x => x.kind === 'image').length;
+    const n = frame ? pics + 1 : pics;
     const p = (info.providers || []).find(x => x.usable && (!n || (x.maxRefs || 1) >= n));
     if (!p) return { ok: false, text: ((info.providers || []).find(x => x.why) || {}).why || (info.label + ' cannot take ' + n + ' pictures') };
     return { ok: true, text: (p.price != null ? '≈' + money(p.price) + ' · ' : '') + info.quality + ' · ' + info.label + ' · ' + p.label };
@@ -1494,7 +1499,7 @@ function VIDEOS(ctx) {
   const _boardOk = (g) => !!(g && g.state === 'done' && g.imagePath && !g.gone);
   // ONE PRESS, ONE SHEET (review V8): the button stays shut from the press until the thread has been read with the new
   // sheet in it, whatever repaints meanwhile, and the second click of a double click is not a press. `two`: { bta - the
-  // prompt field shown, frame, range - a frame-swap's moment, busy }; without a field the card's own prompt is drawn.
+  // prompt field shown, frame, range - the first frame's moment, busy }; without a field the card's own prompt is drawn.
   async function _drawBoard(m, two, btn, e) {
     if (btn.disabled || two.busy || (e && e.detail > 1)) return;
     two.busy = true;
@@ -1505,7 +1510,7 @@ function VIDEOS(ctx) {
       // (phase V17) A moment just moved is written before the picture is drawn from it.
       const live = _live.get(m.id);
       if (live && live.atSave) { await live.atSave; live.atSave = null; }
-      // A frame-swap's picture: its prompt in the neutral references, and the moment of the clip it is drawn from (V7.6).
+      // Kling's first frame: its prompt in the neutral references, and the moment of the clip it is drawn from.
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/board', {
         project: m.project, where: _where(m.project),
         board: two.bta ? (two.frame ? toNeutral(two.bta.value) : two.bta.value) : undefined,
@@ -1568,16 +1573,17 @@ function VIDEOS(ctx) {
     }
   }
 
-  // ── A message with a picture first (phases V15, V8, V7.6; a sub-project since V16 - the owner 2026-10-07) ──
+  // ── A message with a picture first (phases V15, V8, V17; a sub-project since V16 - the owner 2026-10-07) ──
   // Three kinds, one shape. The column's storyboard (`column`): ">" writes the sheet's prompt alone, and every paid step
   // waits for its press (the owner, V16 answer 5) - "draw the storyboard", "write the video" (the video's prompt from the
   // same words with the sheet shown among the pictures), "make the video". A two-step recipe (`recipe`, V8): its writer
-  // wrote both prompts at once, the sheet is drawn by its press, and the video follows the sheet shown. A picture-then-
-  // video recipe (`swap`, V7.6, no writer): the clip's frame at a moment, the person in the dancer's place, drawn by its
-  // press; then Kling moves the picture shown with the same part of the clip. Their steps: the first prompt (every writing
-  // a variant) · the sheet, or the picture (every one drawn a variant - the one shown is the one the video follows) · the
-  // video prompt (every writing a variant) · the video (the clips). A recipe's message has its four steps from the start
-  // and opens on the first; the column's grow as the work goes.
+  // wrote both prompts at once, the sheet is drawn by its press, and the video follows the sheet shown. Kling's first
+  // frame (`swap`, V17 - V7.6's recipe before it): the writer's prompt for a picture of the person's character in the pose
+  // of the clip's still, drawn by its press; then Kling moves the picture shown with the part of the clip from that
+  // moment, by its own prompt. Their steps: the first prompt (every writing a variant) · the sheet, or the picture (every
+  // one drawn a variant - the one shown is the one the video follows) · the video prompt (every writing a variant; not
+  // Kling's) · the video (the clips). A recipe's message and Kling's open on their first step; the column's steps grow as
+  // the work goes.
   const _kindOf = (c) => (c.type === 'board' ? 'column' : c.board && c.board.kind === 'frame' ? 'swap' : 'recipe');
   function _storyCard(m, progs) {
     const c = m.card;
@@ -1903,8 +1909,8 @@ function VIDEOS(ctx) {
     }
     const redo = el('button', 'mv3-c-btn vc-go' + (l.kind === 'column' ? '' : ' is-make'), x ? 'draw again' : 'draw the ' + l.W);
     redo.type = 'button';
-    redo.title = 'Another ' + (l.kind === 'swap' ? 'picture' : 'sheet') + ' from the prompt chosen on the step before';
-    redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: l.kind === 'swap', busy: false }, redo, e));
+    redo.title = 'Another sheet from the prompt chosen on the step before';
+    redo.addEventListener('click', (e) => _drawBoard(l.m, { bta: null, range: null, frame: false, busy: false }, redo, e));
     const price = el('span', 'vc-card-why');
     a.append(redo, price);
     l.drawGo = redo;
@@ -1929,8 +1935,8 @@ function VIDEOS(ctx) {
     }
   }
   // 3 · the video prompt: its words to edit, and what goes with it - the pictures with the sheet as the last one (the
-  // column's: the sheet ITS variant was written with; a recipe's: the one shown on its step), or for a picture-then-video
-  // the picture shown in place of the person's, with the part of the clip.
+  // column's: the sheet ITS variant was written with; a recipe's: the one shown on its step). Kling's first frame has no
+  // such step - its prompt is Kling's own (V17).
   function _videoPromptStep(m, l, x, b, progs) {
     const c = l.m.card;
     l.ta = null; l.ver = ''; l.vmodel = ''; l.boardId = ''; l.patchKey = '';
@@ -1949,8 +1955,7 @@ function VIDEOS(ctx) {
     ta.className = 'vc-prompt-ta';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
-    ta.title = l.kind === 'swap' ? 'The prompt Kling gets - the moves come from the clip, the look from the picture.'
-      : 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
+    ta.title = 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
     requestAnimationFrame(grow);
     const key = 'p:' + m.id + ':' + v.id;
@@ -1967,10 +1972,8 @@ function VIDEOS(ctx) {
     const media = l.m.media || [];
     const sheet = l.kind === 'column' ? (l.m.boards || []).find(g => g.id === v.boardId) : _chosenSheet(l);
     const has = !!(sheet && sheet.imagePath);
-    const all = l.kind === 'swap'
-      ? (has ? [{ path: sheet.imagePath, kind: 'image', label: 'picture' }] : []).concat(media.filter(a => a.kind !== 'image'))
-      : media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
-        .concat(media.filter(a => a.kind !== 'image'));
+    const all = media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
+      .concat(media.filter(a => a.kind !== 'image'));
     const row = _mediaRow(all);
     if (row) b.appendChild(row);
     if (l.kind === 'column' && sheet && sheet.gone) b.appendChild(el('div', 'mv3-ig-bad', 'Its storyboard is not on the Images shelf any more - write the video again from another sheet.'));
@@ -1993,21 +1996,19 @@ function VIDEOS(ctx) {
     go.addEventListener('click', () => _make(l.m, go));
     const price = el('span', 'vc-card-why');
     a.append(nBtn, go, price);
-    if (l.kind !== 'swap') {
-      const again = el('button', 'vc-link', l.kind === 'recipe' ? 'write both again' : 'write it again');
-      again.type = 'button';
-      again.title = l.kind === 'recipe' ? 'Another variant of both prompts - the storyboard\'s and the video\'s - from the same request; these stay'
-        : 'Another variant of the video prompt, with the storyboard shown on its step - this one stays';
-      again.addEventListener('click', () => (l.kind === 'recipe' ? _rewrite(l.m, again) : _writeVideo(l.m, l, again)));
-      a.appendChild(again);
-    }
+    const again = el('button', 'vc-link', l.kind === 'recipe' ? 'write both again' : 'write it again');
+    again.type = 'button';
+    again.title = l.kind === 'recipe' ? 'Another variant of both prompts - the storyboard\'s and the video\'s - from the same request; these stay'
+      : 'Another variant of the video prompt, with the storyboard shown on its step - this one stays';
+    again.addEventListener('click', () => (l.kind === 'recipe' ? _rewrite(l.m, again) : _writeVideo(l.m, l, again)));
+    a.appendChild(again);
     if (l.kind !== 'column' && l.m.card.state === 'sent') a.appendChild(_copyLink(l.m));
     if (l.kind === 'recipe' && _ownRecipe(l.m.card)) a.appendChild(_changeLink());
     l.go = go;
     l.price = price;
     _freshenStory(m.id, l);
   }
-  // The presses follow the column: a storyboard's video is Seedance's, a picture-then-video's Kling motion control's; the
+  // The presses follow the column: a storyboard's video is Seedance's, Kling's first frame's Kling motion control's; the
   // drawing has its own price, and is the card's own model's to judge.
   function _freshenStory(id, l) {
     const mm = model();

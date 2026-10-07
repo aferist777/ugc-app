@@ -137,7 +137,8 @@ router.post('/mv3/video/send', async (req, res) => {
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
-    // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
+    // A catalog's skill is the writer's recipe: none with the pen off, nor for Kling motion control - its video has no
+    // writer, and its first frame's writer (V17) follows the person's words, not a recipe.
     const skill = (isMC || b.write === false) ? null : _skill(b.skill);
     // (phase V15) The column's 中文: the prompt goes in Chinese - only where the model reads it (Seedance).
     const zh = !!b.zh && ((VM.MODELS.find(x => x.id === model) || {}).langs || []).includes('zh');
@@ -216,7 +217,7 @@ router.post('/mv3/video/send', async (req, res) => {
     }
     // (phase V16, the owner 2026-10-07) THE WRITER STOPS FOR A LOOK: the person's turn and a prompt card, the writer behind
     // the answer, and the video made only from the card ("make the video" - /card/:id/make). With the writer off the
-    // words still go as typed, one press; Kling motion control has no writer.
+    // words still go as typed, one press; under Kling motion control the writer writes the first frame (above).
     if (review) {
       if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
       const before0 = CHAT.read(project, KIND).slice(-4).map(m => ({ role: m.role, text: m.text }));
@@ -410,7 +411,7 @@ async function _stillOf(cardId, clip, at) {
 // (phase V17, the owner: "the pose is the most important") A first frame's prompt names the still - the pose comes from
 // it; one that does not gets the sentence that does, at its head.
 const _framePose = (p) => (/\{\{video:1\}\}/.test(p) ? p : ('Keep exactly the pose, the framing and the camera angle of {{video:1}}. ' + p).trim());
-// (review V7) The frames a frame-swap cut (media/work/vframe_*) go once no picture record names them any more - a picture
+// (review V7) The stills of first frames (media/work/vframe_*) go once no picture record names them any more - a picture
 // retried from Alerts sends its frame again, so one stays while its record does (the pictures chat trims its records);
 // an hour's grace covers a frame cut a moment before its record was written. A while after the start, then daily.
 function _sweepFrames() {
@@ -434,7 +435,7 @@ setInterval(_sweepFrames, 24 * 3600000).unref();
 router._sweepFrames = _sweepFrames;          // for the stands
 
 // (review V7) Each clip and sound as the first rung would prepare it - its part in the file, its shape in the rung's
-// window, a sound that has one - asked BEFORE anything is paid: a writer, a storyboard or a frame-swap picture is not
+// window, a sound that has one - asked BEFORE anything is paid: a writer, a storyboard or a first frame is not
 // bought for a video that can never be made. '' or the words.
 async function _filesWrong(pair, media) {
   const VP = require('../lib/video-prep');
@@ -867,7 +868,7 @@ router.post('/mv3/video/write', async (req, res) => {
     if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
     const s = _settings(b);
     if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'a recipe is not written for Kling motion control - send your pictures and the clip from the box' });
     const twoStep = _twoStepOf(b.recipe, b.twoStep);
     if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
     const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
@@ -920,7 +921,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const cur = b.cur == null ? null : String(b.cur);
     const bver = b.bver == null ? null : String(b.bver);
     const bcur = b.bcur == null ? null : String(b.bcur);
-    // (phase V7.6) A frame-swap's moment: within the part of the clip that goes.
+    // A first frame's moment (V17: where the part starts; on a V7.6 card within the part).
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
@@ -1056,7 +1057,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     if (m.card.plain) {
       const s = _settings(b);
       if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-      if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+      if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control takes its own prompt - send your pictures and the clip from the box' });
       const mm = _mediaOf(m.media);
       if (mm.error) return res.status(400).json({ success: false, error: mm.error });
       const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
@@ -1077,7 +1078,7 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
     if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
     const s = _settings(b);
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+    if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'a recipe is not written for Kling motion control - send your pictures and the clip from the box' });
     if (m.card.board && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - pick a Seedance model' });
     const mm = _mediaOf(m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
@@ -1146,17 +1147,17 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
     const frame = !!(m.card.board && m.card.board.kind === 'frame');
     if (_family(s.model) !== _family(m.card.model)) {
-      return res.status(400).json({ success: false, error: frame ? 'a picture-then-video card is Kling motion control\'s - pick it on the left'
+      return res.status(400).json({ success: false, error: frame ? 'a first frame\'s video is made by Kling motion control - pick it on the left'
         : 'this prompt was written for ' + _labelOf(m.card.model) + ' - write it again for ' + _labelOf(s.model) });
     }
-    // (review V7) A frame-swap's video takes the DRAWN picture in place of the person's: the person's own picture is not
+    // (review V7) A first frame's video takes the DRAWN picture in place of the person's: the person's own pictures are not
     // needed any more, and one gone from the Library must not stop a paid picture from being used.
     const mm = _mediaOf(frame ? (m.media || []).filter(x => x && x.kind !== 'image') : m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
     if (m.card.board) {
       // The sheet the video follows: the one the page sends, else the card's chosen one while it can be followed, else
-      // the newest that landed and is still on the shelf (review V8). A frame-swap's picture the same way (V7.6).
+      // the newest that landed and is still on the shelf (review V8). A first frame's picture the same way.
       const W = frame ? 'picture' : 'storyboard';
       const boards = CHAT.boardsOf(m);
       const want = String(b.boardId || '');
@@ -1177,7 +1178,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
       boardId = g.id;
     }
     if (frame) {
-      // The chosen picture IN PLACE OF the person's (V7.6): Kling takes one picture - the room with the person in it now -
+      // The chosen picture IN PLACE OF the person's: Kling takes one picture - the room with the person in it now -
       // and the same part of the clip.
       const g = CHAT.boardsOf(m).find(x => x.id === boardId);
       const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'person', label: 'picture' }]);
@@ -1210,7 +1211,7 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     const recipe = m.card.recipe || (rc && rc.card.recipe) || null;
     const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
-    // A card with no recipe card of its own (a frame-swap, V7.6) is said by its recipe's title; a plain one (V16) by the
+    // A card with no recipe card of its own (V7.6's frame-swap) is said by its recipe's title; a plain one (V16) by the
     // person's words.
     const said = frame && m.card.plain && !String(m.card.text || '').trim() ? 'motion control from its first frame'
       : m.card.plain || m.card.type === 'board' ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
@@ -1301,7 +1302,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
     if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
     if (m.card.state === 'failed') return res.status(409).json({ success: false, error: 'the prompts were not written - write them again' });
-    // (phase V7.6) A frame-swap's first step is a PICTURE of the clip's frame with the person in it, not a sheet.
+    // (phases V7.6, V17) Kling's first frame is a PICTURE of the clip's frame with the person's character in it, not a sheet.
     const frame = m.card.board.kind === 'frame';
     const W = frame ? 'picture' : 'storyboard';
     // A made card draws too: it is made again from its field, and another sheet may be what the next attempt follows.

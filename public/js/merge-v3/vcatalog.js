@@ -951,7 +951,7 @@ async function _paintRight() {
   scroll.appendChild(_slotsBox(it, ed));
 
   // The skill - editable, with the way back.
-  // Kling motion control has no writer (phase V7.3): there a recipe only lays out what to attach.
+  // Under Kling motion control a recipe only lays out what to attach (phase V7.3): its video has no writer.
   const noWriter = !!(m && m.family === 'kmc');
   const sh = el('div', 'vc-hdr', noWriter ? 'skill - for Seedance and Grok; under ' + m.label + ' a recipe only lays out what to attach'
       : 'skill - the recipe the writer follows');

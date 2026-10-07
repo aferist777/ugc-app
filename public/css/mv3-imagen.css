@@ -554,7 +554,7 @@ audio.vtrim-media{ background:none; height:32px }
 
 /* A storyboard's (a picture's) prompt and its sheets (phase V8; on the message's steps since V16). */
 .vc-prompt-ta.is-board{ min-height:70px }
-/* (phase V7.6) A frame-swap's moment: the clip's frame there, and the slider over the part that goes. */
+/* Kling's first frame (V7.6; the chat's own since V17): the clip's frame at the moment, and the slider over the clip. */
 .vc-moment{ display:flex; gap:10px; align-items:flex-start; margin:2px 0 4px }
 .vc-moment-v{ flex:0 0 auto; width:86px; max-height:150px; border-radius:var(--r-xs); background:#000; object-fit:contain }
 .vc-moment-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
