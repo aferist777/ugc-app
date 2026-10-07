@@ -111,10 +111,8 @@ function _needsOf(slots) {
   if (req.some(s => s.kind === 'audio')) out.push('audio');
   return out;
 }
-// Two steps HERE are a storyboard drawn first (phase V8): another kind of first step (V7's frame swap) is not one.
+// Two steps here are a storyboard drawn first (phase V8).
 const _story = (ts) => (ts && (ts.kind || 'storyboard') === 'storyboard' ? 1 : 0);
-// (phase V7.6) A frame-swap: a picture of the clip's frame with the person in it, then Kling moves it - no writer.
-const _swap = (ts) => (ts && ts.kind === 'frame-swap' ? 1 : 0);
 function _refsWord(it) {
   const n = it.refs || {};
   const parts = [];
@@ -180,7 +178,7 @@ function _items() {
       needs: _needsOf(slots), slots,
       refs: { img: req.filter(s => s.kind !== 'video' && s.kind !== 'audio').reduce((n, s) => n + (s.min || 0), 0), exact: true,
               vid: req.filter(s => s.kind === 'video').length, aud: req.filter(s => s.kind === 'audio').length },
-      a: p.aspect || null, d: p.duration || null, sp: 0, ts: _story(p.twoStep), fs: _swap(p.twoStep), lc: '', v: '', cat: p.category || '', tp: '',
+      a: p.aspect || null, d: p.duration || null, sp: 0, ts: _story(p.twoStep), lc: '', v: '', cat: p.category || '', tp: '',
       h: 0, st: 0, dt: String(p.updated || '').slice(0, 10), written: '', models: p.models || [],
       search: _lc([p.title, p.summary, (p.tags || []).join(' ')].join(' ')),
     });
@@ -196,8 +194,6 @@ function _fits(it, m) {
   // (phase V8) A storyboard first, then the video from it with the person's pictures: Seedance - Grok takes one picture.
   // Before the presets' own list (review V8): a two-step preset naming another model is still Seedance's.
   if (it.ts && fam !== 'seedance') return false;
-  // (phase V7.6) A frame-swap is Kling motion control's: its video moves one picture with one clip.
-  if (it.fs && fam !== 'kmc') return false;
   if (it.kind === 'preset') return (it.models || []).includes(m.id);
   if (fam === 'kmc') return false;
   const L = _limits(m);
@@ -222,7 +218,7 @@ function _groups(m) {
       of: it => [it.a ? (['9:16', '16:9', '1:1'].includes(it.a) ? it.a : 'other') : 'none'] },
     { key: 'len', label: 'length', values: [['5', 'up to 5 s'], ['10', '6-10 s'], ['15', '11-15 s'], ['30', '16-30 s'], ['more', 'over 30 s'], ['none', 'not said']], of: it => [_len(it.d)] },
     { key: 'speech', label: 'speech', values: [['yes', 'someone speaks'], ['no', 'no speech']], of: it => [it.sp ? 'yes' : 'no'] },
-    { key: 'two', label: 'steps', values: [['two', 'two-step'], ['one', 'one step']], of: it => [it.ts || it.fs ? 'two' : 'one'] },
+    { key: 'two', label: 'steps', values: [['two', 'two-step'], ['one', 'one step']], of: it => [it.ts ? 'two' : 'one'] },
   ];
   if (m && m.family === 'seedance') g.push({ key: 'ver', label: 'written for Seedance', values: [['2.5', '2.5'], ['2.0', '2.0']], of: it => (it.v ? [it.v] : []) });
   g.push({ key: 'lang', label: 'language of the case', values: [['en', 'English'], ['zh', 'Chinese']], of: it => (it.lc ? [it.lc] : []) });
@@ -726,7 +722,7 @@ function _tile(it) {
     box.appendChild(el('span', 'vc-lead', it.kind === 'template' ? it.sub : (it.sub || it.title)));
   }
   box.appendChild(el('span', 'vc-kind is-' + it.kind, KIND_WORD[it.kind]));
-  if (it.ts || it.fs) box.appendChild(el('span', 'vc-two', '2-step'));
+  if (it.ts) box.appendChild(el('span', 'vc-two', '2-step'));
   b.appendChild(box);
   b.appendChild(el('span', 'vc-cap', it.title));
   const tags = [_refsWord(it)];
@@ -947,13 +943,6 @@ async function _paintRight() {
       fit.appendChild(el('div', null, '2 steps: a storyboard picture first (' + (bi ? bi.label + ', ' + bi.quality : 'nano-banana-2, 4K')
         + (bp && bp.price != null ? ', ≈' + money(bp.price) + ' on ' + bp.label : '') + '), then the video from it'));
     }
-    if (it.fs) {
-      const fi = _st.matrix && _st.matrix.frame;
-      const fp = fi && (fi.providers || []).find(p => p.usable);
-      fit.appendChild(el('div', null, '2 steps, no writer: a picture of the clip\'s frame with your character in the dancer\'s place ('
-        + (fi ? fi.label + ', ' + fi.quality : 'nano-banana-2, 2K') + (fp && fp.price != null ? ', ≈' + money(fp.price) + ' on ' + fp.label : '')
-        + '), then Kling moves it with the same part of the clip - always a stop after the picture'));
-    }
   }
   scroll.appendChild(fit);
 
@@ -964,8 +953,7 @@ async function _paintRight() {
   // The skill - editable, with the way back.
   // Kling motion control has no writer (phase V7.3): there a recipe only lays out what to attach.
   const noWriter = !!(m && m.family === 'kmc');
-  const sh = el('div', 'vc-hdr', it.fs ? 'skill - the picture\'s prompt, step 1 ({{video:1}} is the clip\'s frame, {{image:1}} your character)'
-    : noWriter ? 'skill - for a model with a writer; ' + m.label + ' has none: the box in the chat is its prompt'
+  const sh = el('div', 'vc-hdr', noWriter ? 'skill - for a model with a writer; ' + m.label + ' has none: the box in the chat is its prompt'
       : 'skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');
@@ -1127,8 +1115,6 @@ function _use(it, d, ed) {
     edited: ed.text !== orig, text: ed.text, orig, slots: ed.slots,
     // (phase V8) A storyboard picture first, then the video.
     twoStep: !!it.ts,
-    // (phase V7.6) The picture-then-video recipe: its card is made at the press, with no writer.
-    frameSwap: !!it.fs,
   };
   const done = _st.onUse;
   _close();

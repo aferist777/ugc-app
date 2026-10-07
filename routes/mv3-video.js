@@ -136,8 +136,7 @@ router.post('/mv3/video/send', async (req, res) => {
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
-    // (review V7) A picture-then-video recipe is Kling's own two steps and has no writer: it steers none.
-    const skill = (isMC || b.write === false || _frameSwapOf(b.skill, b.skill && b.skill.frameSwap)) ? null : _skill(b.skill);
+    const skill = (isMC || b.write === false) ? null : _skill(b.skill);
     // (phase V15) The column's 中文: the prompt goes in Chinese - only where the model reads it (Seedance).
     const zh = !!b.zh && ((VM.MODELS.find(x => x.id === model) || {}).langs || []).includes('zh');
 
@@ -326,26 +325,13 @@ function _boardInfo(quality) {
   };
 }
 
-// ── The frame-swap (phase V7.6, the owner 2026-10-07: dancer-swap-room) ───────────────────────────────────────────
-// Two steps with NO writer, Kling motion control's: 1 · a PICTURE - a frame of the dance clip redrawn with the person in
-// the dancer's place, the room, pose, light and angle kept (nano-banana-2 at 2K - the owner's answer 2: Kling takes
-// 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that picture with the same part of the clip.
-// The card is made at the press, from the recipe's own words; always a stop after the picture. It rides on the
-// storyboard's machinery (`board`, its records, its row, `boardsOf`, the retry's home) with `kind: 'frame'`: the picture
-// is drawn from [the frame, the person] - Image 1 the room, Image 2 the person - and the video takes the chosen picture
-// IN PLACE OF the person's.
+// ── Kling motion control's FIRST FRAME (phase V7.6 as a recipe; the chat's own way since V17, the owner 2026-10-08) ──
+// 1 · a PICTURE - a frame of the clip redrawn with the person's character in the pose there (nano-banana-2 at 2K - the
+// owner's answer 2 of V7.6: Kling takes 3850 px, 4K would be scaled down anyway); 2 · the VIDEO - Kling moves that
+// picture with the part of the clip. It rides on the storyboard's machinery (`board`, its records, its row, `boardsOf`,
+// the retry's home) with `kind: 'frame'`, and the video takes the chosen picture IN PLACE OF the person's pictures.
 const FRAME_QUALITY = '2K';
 const FRAME_R2 = 'the picture goes to Kling from a public link - that needs R2 (Admin -> API keys)';
-function _frameSwapOf(recipe, claimed) {
-  const r = recipe || {};
-  try {
-    if (r.kind === 'preset') {
-      const p = require('../lib/video-presets-store').get(r.id);
-      if (p) return !!(p.twoStep && p.twoStep.kind === 'frame-swap');
-    }
-  } catch (e) { /* the store cannot answer */ }
-  return !!claimed;
-}
 // The words the picture model reads: the clip's frame is Image 1, the person Image 2; anything else named goes.
 function _frameWords(prompt) {
   return String(prompt || '').replace(REF_ANY, (all, k, n) => {
@@ -786,8 +772,6 @@ router.post('/mv3/video/write', async (req, res) => {
     if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
     const twoStep = _twoStepOf(b.recipe, b.twoStep);
     if (twoStep && _family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a two-step recipe is made by Seedance - its video takes the storyboard with your pictures' });
-    // (phase V7.6) A picture-then-video recipe has no writer - its card is started, not written.
-    if (_frameSwapOf(b.recipe, b.frameSwap)) return res.status(400).json({ success: false, error: 'this recipe is Kling motion control\'s two steps, with no writer - pick Kling and start it' });
     const head = String(b.head || '').replace(/\r\n/g, '\n').trim().slice(0, 4000);
     if (!head) return res.status(400).json({ success: false, error: 'the recipe has no request to fill in' });
     const body = String(b.body || '').replace(/\r\n/g, '\n').trim().slice(0, 20000);
@@ -820,46 +804,6 @@ router.post('/mv3/video/write', async (req, res) => {
   } catch (err) {
     if (kick) CHAT.writing.delete(kick);
     console.error('[mv3-video/write]', err.message);
-    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// (phase V7.6) A frame-swap's card, at the press - no writer: the picture's prompt is the recipe's first step as the
-// person left it, the video's Kling's standard prompt; the moment of the clip the picture is drawn from starts at the
-// part's first frame. Nothing is paid here.
-router.post('/mv3/video/frameswap', async (req, res) => {
-  const b = req.body || {};
-  try {
-    const project = String(b.project || '').trim();
-    if (!project) return res.status(400).json({ success: false, error: 'open a project first' });
-    const s = _settings(b);
-    if (!VM.MODELS.some(m => m.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
-    if (!_frameSwapOf(b.recipe, b.frameSwap)) return res.status(400).json({ success: false, error: 'this recipe is not a picture-then-video one' });
-    const step = _strictRefs(String(b.step || '').replace(/\r\n/g, '\n')).trim().slice(0, 6000);
-    if (!step) return res.status(400).json({ success: false, error: 'the recipe has no words for the picture' });
-    const mm = _mediaOf(b.media);
-    if (mm.error) return res.status(400).json({ success: false, error: mm.error });
-    const wrong = _frameWrong(s.model, s.agg, s.params, mm.media);
-    if (wrong) return res.status(400).json({ success: false, error: wrong });
-    const fw0 = await _filesWrong(_routeOf(s.model, s.agg, s.params, mm.media, 'xxx').fits[0], mm.media);
-    if (fw0) return res.status(400).json({ success: false, error: fw0 });
-    const clip = mm.media.find(x => x.kind === 'video');
-    // The clip as it is seen decides the picture's shape.
-    let shape = '9:16';
-    try {
-      const pr = await require('../lib/media-probe').probe(toDiskExisting(clip.path));
-      const seen = require('../lib/video-prep').seen(pr);
-      shape = _shapeOf(seen.w, seen.h);
-    } catch (e) { /* the default shape */ }
-    const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
-    const recipe = _recipeOf(b.recipe);
-    const pc = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: mm.media.map(m => m.path), media: mm.media,
-                          card: { type: 'prompt', state: 'ready', recipe, model: s.model, agg: rt.fits[0].agg, params: s.params,
-                                  prompt: VM.STANDARD_MC_PROMPT, writer: '',
-                                  board: { kind: 'frame', prompt: step, at: clip.in || 0, aspect: shape, genIds: [], chosen: '' } } });
-    res.json({ success: true, card: pc.id });
-  } catch (err) {
-    console.error('[mv3-video/frameswap]', err.message);
     if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -603,9 +603,8 @@ function VIDEOS(ctx) {
     box.hidden = !_skill;
     if (!_skill) return;
     // A two-step recipe is Seedance's (review V8): under another model it stands dimmed and says so. Under Kling motion
-    // control a recipe only lays out what to attach (phase V7.3) - it stands, and says the box is the prompt.
-    // A picture-then-video recipe (V7.6) is Kling motion control's own.
-    const seed = _skill.frameSwap ? isMC() : (!_skill.twoStep || (model() || {}).family === 'seedance');
+    // control a recipe only lays out what to attach (phase V7.3) - it stands, and says so.
+    const seed = !_skill.twoStep || (model() || {}).family === 'seedance';
     // A recipe whose places need more than this model takes stands dimmed too, and says so (review V7).
     const tooMuch = seed ? _recipeOver() : '';
     box.className = 'mv3-ig-banner mv3-vc-recipe' + (seed && !tooMuch ? '' : ' is-off');
@@ -617,11 +616,10 @@ function VIDEOS(ctx) {
     box.appendChild(t);
     if (_edited(_skill)) box.appendChild(el('i', null, 'edited'));
     if (_skill.twoStep) box.appendChild(el('span', 'needs', '2 steps - a storyboard, then the video'));
-    if (_skill.frameSwap) box.appendChild(el('span', 'needs', '2 steps - a picture of the dancer\'s room with your character, then Kling moves it'));
     box.appendChild(el('span', 'sp'));
-    if (!seed) box.appendChild(el('span', 'why', _skill.frameSwap ? 'these two steps are Kling motion control\'s - pick it' : 'two steps are made by Seedance - pick a Seedance model'));
+    if (!seed) box.appendChild(el('span', 'why', 'two steps are made by Seedance - pick a Seedance model'));
     else if (tooMuch) box.appendChild(el('span', 'why', 'it does not fit ' + ((model() || {}).label || 'this model') + ': ' + tooMuch));
-    else if (isMC() && !_skill.frameSwap) box.appendChild(el('span', 'why', 'no writer here: the recipe lays out what to attach, the box is Kling\'s prompt'));
+    else if (isMC()) box.appendChild(el('span', 'why', 'no writer here: the recipe lays out what to attach, the box is Kling\'s prompt'));
     const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
@@ -657,8 +655,6 @@ function VIDEOS(ctx) {
       id: u.skill.id, kind: u.skill.kind, title: u.skill.title, v: u.skill.v,
       text: u.skill.text, orig: u.skill.orig != null ? u.skill.orig : u.skill.text, slots: u.skill.slots || [],
       twoStep: !!u.skill.twoStep,
-      // (phase V7.6) Kling's picture-then-video: a card made at the press, no writer.
-      frameSwap: !!u.skill.frameSwap,
       // (phase V7.5) The settings it suggests, for every model of its list the person goes on to (`_recipeParams`).
       params: Object.assign({}, u.params || {}),
       // What was written in the places of the same recipe stays (matched by each place's own words).
@@ -879,7 +875,7 @@ function VIDEOS(ctx) {
   // (review V7) What a recipe's places must hold beyond what the chosen model takes ('' when it fits): flat-flythrough's
   // plan and two renders under Kling, which takes one picture. A picture-then-video recipe is judged by its own rules.
   function _recipeOver() {
-    if (!_skill || _skill.frameSwap || !_applies()) return '';
+    if (!_skill || !_applies()) return '';
     const r = rec(), m = model();
     if (!r || !m) return '';
     const L = r.limits || {};
@@ -892,9 +888,9 @@ function VIDEOS(ctx) {
     return '';
   }
 
-  // Whether the recipe in use applies under the chosen model: a picture-then-video one is Kling motion control's, a
-  // two-step one Seedance's. One that does not stands dimmed, and asks nothing of the send (review V7).
-  const _applies = () => !!_skill && (_skill.frameSwap ? isMC() : (!_skill.twoStep || (model() || {}).family === 'seedance'));
+  // Whether the recipe in use applies under the chosen model: a two-step one is Seedance's. One that does not stands
+  // dimmed, and asks nothing of the send (review V7).
+  const _applies = () => !!_skill && (!_skill.twoStep || (model() || {}).family === 'seedance');
 
   // The recipe's first slot that is not filled as far as it must be - the send waits for it.
   function _missing() {
@@ -951,8 +947,7 @@ function VIDEOS(ctx) {
         return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + (r.duration.min || 3) + '-'
           + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s).'];
       }
-      // The box is the prompt - except under a picture-then-video recipe, whose card holds its own (review V7).
-      const words = _skill && _skill.frameSwap ? '' : String(ctx.text() || '').trim();
+      const words = String(ctx.text() || '').trim();
       if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
     }
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
@@ -1026,8 +1021,7 @@ function VIDEOS(ctx) {
       // (phase V7) A clip or a sound goes as its part - the server prepares just that.
       }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).
-      // (review V7) A picture-then-video recipe's words are its picture's prompt: never a writer's recipe.
-      skill: _skill && !_skill.frameSwap ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
+      skill: _skill ? { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill), text: _skill.text } : undefined,
     };
   }
 
@@ -1112,14 +1106,11 @@ function VIDEOS(ctx) {
   function _paintFoot(quiet) {
     const foot = ctx.foot();
     if (!foot) return;
-    // Kling motion control has no writer (the owner's answer 5, phase V7): a recipe there only lays out what to attach,
-    // the box stays its prompt and the send is one press - no request, no cards. A picture-then-video recipe (V7.6) is
-    // Kling's own two steps: its foot is the START of its card - and under another model it is not used at all.
-    const swap = !!(_skill && _skill.frameSwap);
-    const builder = !!_skill && (swap ? isMC() : !isMC());
+    // Kling motion control's recipe only lays out what to attach (the owner's answer 5, phase V7): no request, no cards.
+    const builder = !!_skill && !isMC();
     ctx.bar(!builder);
     const show = builder && (_wantRecipe || !_recipeCards().length);
-    const key = _skill ? [swap ? 'swap' : '', _skill.kind, _skill.id, _split(_skill.text).head].join('|') : '';
+    const key = _skill ? [_skill.kind, _skill.id, _split(_skill.text).head].join('|') : '';
     if (!show) {
       _cardEls = null;
       if (foot.childNodes.length) { foot.textContent = ''; if (!quiet) ctx.footChanged(); }
@@ -1127,55 +1118,8 @@ function VIDEOS(ctx) {
     }
     if (_cardEls && _cardEls.key === key && foot.contains(_cardEls.box)) { _freshenRequest(); return; }
     foot.textContent = '';
-    foot.appendChild(swap ? _startCard(key) : _requestCard(key));
+    foot.appendChild(_requestCard(key));
     if (!quiet) ctx.footChanged();
-  }
-
-  // (phase V7.6) A picture-then-video recipe's foot: what its two steps are, and the press that makes its card - nothing is
-  // paid there; the moment of the clip, both prompts and every press that costs are on the card.
-  function _startCard(key) {
-    const box = el('div', 'mv3-ig-msg is-agent vc-card is-request');
-    const h = el('div', 'vc-card-h');
-    h.append(el('span', 'k', 'recipe'), el('span', 't', _skill.title));
-    box.appendChild(h);
-    box.appendChild(el('div', 'vc-req', 'Two steps, no writer: 1 · a picture - the dance clip\'s frame with your character in the dancer\'s place; '
-      + '2 · the video - Kling moves that picture with the same part of the clip.'));
-    box.appendChild(el('div', 'vc-card-note', 'Attach the dance clip and your character, then start: the card that comes holds the moment of the clip, '
-      + 'both prompts and the presses that cost - always a stop after the picture.'));
-    const acts = el('div', 'vc-card-acts');
-    const go = el('button', 'mv3-c-btn vc-go', 'start');
-    go.type = 'button';
-    const why = el('span', 'vc-card-why');
-    acts.append(go, why);
-    box.appendChild(acts);
-    go.addEventListener('click', () => _startSwap(go));
-    _cardEls = { key, box, go, why, places: [], swap: true };
-    _freshenRequest();
-    return box;
-  }
-  async function _startSwap(btn) {
-    if (_writingNow || !_skill || !_skill.frameSwap) return;
-    const why = _ready();
-    if (why) { note(btn, why[0], why[1]); return; }
-    _writingNow = true;
-    btn.disabled = true;
-    try {
-      let key;
-      try { key = await ctx.ensureProject(); }
-      catch (e) { note(btn, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
-      const b = _body();
-      const d = await _post('/api/mv3/video/frameswap', {
-        project: key, model: b.model, agg: b.agg, params: b.params, media: b.media, frameSwap: true, step: _skill.text,
-        recipe: { id: _skill.id, kind: _skill.kind, title: _skill.title, v: _skill.v, edited: _edited(_skill) },
-      });
-      if (!d || !d.success) { note(btn, 'Not started.', (d && d.error) || 'the server did not answer'); return; }
-      _wantRecipe = false;
-      await ctx.reload(true);
-    } finally {
-      _writingNow = false;
-      if (btn.isConnected) btn.disabled = false;
-      _freshenRequest();
-    }
   }
 
   function _requestCard(key) {
@@ -1306,15 +1250,6 @@ function VIDEOS(ctx) {
   // What follows the column: the length and shape place, and whether the request can go.
   function _freshenRequest() {
     if (!_cardEls) return;
-    // (phase V7.6) A frame-swap's start: Kling's, nothing paid at it.
-    if (_cardEls.swap) {
-      _cardEls.go.disabled = _writingNow;
-      const fi = _table && _table.frame;
-      const fp = fi && (fi.providers || []).find(p => p.usable);
-      _cardEls.why.textContent = fi ? 'the picture: ' + fi.label + ', ' + fi.quality + (fp && fp.price != null ? ', ≈' + money(fp.price) + ' on ' + fp.label : '')
-        + ' · the video: ' + ((model() || {}).label || 'Kling') + ' by the seconds of the clip' : '';
-      return;
-    }
     for (const p of _cardEls.places) if (p.auto) p.el.textContent = _sizeWords();
     const m = model();
     const mc = isMC();
