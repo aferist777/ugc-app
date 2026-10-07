@@ -131,7 +131,9 @@ router.post('/mv3/video/send', async (req, res) => {
     if (!VM.MODELS.some(m => m.id === model)) return res.status(400).json({ success: false, error: 'no such model: ' + model });
     const isMC = /^kmc/.test(model);
     // Kling motion control's box IS its prompt (phase V7.3): an empty one sends the standard prompt, said as the turn.
-    const text = String(b.text || '').trim().slice(0, 30000) || (isMC ? VM.STANDARD_MC_PROMPT : '');
+    // (phase V17) With the writer on it holds the person's words for the first frame - empty is fine.
+    const mcSteps = isMC && b.write !== false;
+    const text = String(b.text || '').trim().slice(0, 30000) || (isMC && !mcSteps ? VM.STANDARD_MC_PROMPT : '');
     const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
@@ -149,8 +151,43 @@ router.post('/mv3/video/send', async (req, res) => {
     if (fr && fr.error) return res.status(400).json({ success: false, error: fr.error });
     // (phase V16, the owner's answer 3) The writer stopping for a look makes a clip from the attachments alone, and so does
     // the storyboard's; frames are written from even with the writer off.
-    const fromAtts = media.length > 0 && !isMC && ((b.write !== false && (review || !!b.storyboard)) || !!fr);
+    const fromAtts = media.length > 0 && (mcSteps || (!isMC && ((b.write !== false && (review || !!b.storyboard)) || !!fr)));
     if (!text && !fromAtts) return res.status(400).json({ success: false, error: 'say what to make' });
+    // (phase V17, the owner 2026-10-08) Kling motion control STEP BY STEP: the person's pictures and a still of the clip go
+    // to the writer, which writes the first frame's picture prompt into a message of its own; nothing is paid here - the
+    // picture is drawn by its press, and the video made from it by another (the owner's answer 2).
+    if (mcSteps) {
+      const wrong = _frameWrong(model, b.agg, params, media);
+      if (wrong) return res.status(400).json({ success: false, error: wrong });
+      const clip = media.find(x => x.kind === 'video');
+      const pics = media.filter(x => x.kind === 'image');
+      const rt0 = _routeOf(model, b.agg, params, [pics[0], clip], 'xxx');
+      const fw0 = await _filesWrong(rt0.fits[0], [clip]);
+      if (fw0) return res.status(400).json({ success: false, error: fw0 });
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      // The clip's whole length (the message's slider runs over it) and the shape it is seen in (the picture's).
+      let clipDur = 0, shape = '9:16';
+      try {
+        const pr = await require('../lib/media-probe').probe(toDiskExisting(clip.path));
+        clipDur = Math.round((+pr.duration || 0) * 100) / 100;
+        const seen = require('../lib/video-prep').seen(pr);
+        shape = _shapeOf(seen.w, seen.h);
+      } catch (e) { /* the default shape; the slider stays within the part */ }
+      const turn = CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
+      const kickF = 'w' + crypto.randomBytes(8).toString('hex');
+      CHAT.writing.add(kickF);
+      let card;
+      try {
+        card = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: media.map(m => m.path), media,
+                          card: { type: 'prompt', plain: true, state: 'writing', writing: 'board', kick: kickF, startedAt: new Date().toISOString(),
+                                  from: turn.id, text, model, agg: rt0.fits[0].agg, params, prompt: VM.STANDARD_MC_PROMPT, writer: '',
+                                  board: { kind: 'frame', prompt: '', versions: [], at: clip.in || 0, dur: clipDur, len: Math.round(((+clip.out || 0) - (+clip.in || 0)) * 100) / 100,
+                                           aspect: shape, genIds: [], chosen: '' } } });
+      } catch (e) { CHAT.writing.delete(kickF); throw e; }
+      res.json({ success: true, send: card.id, card: card.id, frame: true });
+      _writeFrame(card.id, kickF, { text, media, at: clip.in || 0 });
+      return;
+    }
     const rt = _routeOf(model, b.agg, params, media, isMC ? text : 'xxx');
     if (rt.error) return res.status(400).json({ success: false, error: rt.error });
     const fits = rt.fits;
@@ -332,29 +369,47 @@ function _boardInfo(quality) {
 // the retry's home) with `kind: 'frame'`, and the video takes the chosen picture IN PLACE OF the person's pictures.
 const FRAME_QUALITY = '2K';
 const FRAME_R2 = 'the picture goes to Kling from a public link - that needs R2 (Admin -> API keys)';
-// The words the picture model reads: the clip's frame is Image 1, the person Image 2; anything else named goes.
-function _frameWords(prompt) {
-  return String(prompt || '').replace(REF_ANY, (all, k, n) => {
+// The words the picture model reads: the still of the clip is Image 1, the person's picture k Image k+1; anything else
+// named goes.
+function _frameWords(prompt, n) {
+  return String(prompt || '').replace(REF_ANY, (all, k, i) => {
     const kind = k.toLowerCase();
-    if (kind === 'video' && +n === 1) return 'Image 1';
-    if (kind === 'image' && +n === 1) return 'Image 2';
+    if (kind === 'video' && +i === 1) return 'Image 1';
+    if (kind === 'image' && +i >= 1 && +i <= (n || 1)) return 'Image ' + (+i + 1);
     return '';
   }).replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:])/g, '$1').trim();
 }
-// What a frame-swap must be able to do before its card is made, and again before its picture is paid for: Kling
-// motion control, ONE picture and ONE clip, a link for the picture (R2), an aggregator that draws from two pictures.
+// What Kling's first frame needs before its writer is asked, and again before its picture is paid for: Kling motion
+// control, the person's pictures (one at least - the character) and ONE clip, a link for the picture (R2), a picture
+// model that draws from them and the still, and Kling able to take [a picture, the clip] on the chosen aggregator.
 function _frameWrong(model, agg, params, media) {
   const list = media || [];
-  if (_family(model) !== 'kmc') return 'the picture-then-video recipe is Kling motion control\'s - pick it';
-  if (list.filter(x => x.kind === 'image').length !== 1 || list.filter(x => x.kind === 'video').length !== 1) {
-    return 'it takes one picture of your character and one dance clip';
-  }
+  if (_family(model) !== 'kmc') return 'the first frame is Kling motion control\'s - pick it';
+  const pics = list.filter(x => x.kind === 'image'), clips = list.filter(x => x.kind === 'video');
+  if (!pics.length || clips.length !== 1) return 'it takes your character\'s picture and one clip of the moves';
+  if (list.some(x => x.kind === 'audio')) return 'Kling motion control takes no sound';
   if (!KEYS.r2() && !FAKE.on()) return FRAME_R2;
-  const pv = _boardProvider(2);
-  if (pv.error) return 'the picture cannot be drawn - ' + pv.error;
-  const rt = _routeOf(model, agg, params, list, 'xxx');
+  const pv = _boardProvider(pics.length + 1);
+  if (pv.error) return 'the first frame cannot be drawn - ' + pv.error;
+  const rt = _routeOf(model, agg, params, [pics[0], clips[0]], 'xxx');
   return rt.error || '';
 }
+// The still of the clip at a moment, cut once into media/work under the card's name - the writer reads it and the
+// drawing sends it (review V7: whole or not at all - the same moment reuses the file). Its address; throws in words.
+async function _stillOf(cardId, clip, at) {
+  const name = 'vframe_' + String(cardId).replace(/[^a-z0-9]/gi, '').slice(-16) + '_' + Math.round(at * 100) + '.jpg';
+  const abs = path.join(MEDIA.work, name);
+  if (!fs.existsSync(abs)) {
+    let buf;
+    try { buf = await require('../lib/video-prep').still(toDiskExisting(clip.path), at); }
+    catch (e) { throw new Error('the frame could not be taken from the clip - ' + e.message); }
+    require('../lib/atomic-write').writeFileAtomic(abs, buf);
+  }
+  return '/media/work/' + name;
+}
+// (phase V17, the owner: "the pose is the most important") A first frame's prompt names the still - the pose comes from
+// it; one that does not gets the sentence that does, at its head.
+const _framePose = (p) => (/\{\{video:1\}\}/.test(p) ? p : ('Keep exactly the pose, the framing and the camera angle of {{video:1}}. ' + p).trim());
 // (review V7) The frames a frame-swap cut (media/work/vframe_*) go once no picture record names them any more - a picture
 // retried from Alerts sends its frame again, so one stays while its record does (the pictures chat trims its records);
 // an hour's grace covers a frame cut a moment before its record was written. A while after the start, then daily.
@@ -496,8 +551,13 @@ function _boardWhere(project, w) {
 }
 const _verId = () => 'v' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
 // Where a card with something written stands when its writer is done: made, or ready - or failed with nothing at all.
-const _restState = (x) => ((x.card.sends || []).length || (x.genIds || []).length ? 'sent'
-  : (x.card.versions || []).length || x.card.prompt || (x.card.board && ((x.card.board.versions || []).length || x.card.board.prompt)) ? 'ready' : 'failed');
+const _restState = (x) => {
+  if ((x.card.sends || []).length || (x.genIds || []).length) return 'sent';
+  const B = x.card.board;
+  // (phase V17) A frame card's own words are its picture's prompt - Kling's is put in at its start.
+  if (B && B.kind === 'frame') return (B.versions || []).length || B.prompt ? 'ready' : 'failed';
+  return (x.card.versions || []).length || x.card.prompt || (B && ((B.versions || []).length || B.prompt)) ? 'ready' : 'failed';
+};
 // (phase V16.6) A card written before its prompts had variants has its one prompt and no list: that prompt becomes
 // variant 1 when the next writing lands, so nothing written is lost.
 const _seedVers = (c) => (Array.isArray(c.versions) && c.versions.length ? c.versions
@@ -710,6 +770,44 @@ function _withOpening(prompt, fr) {
 // What the writer may use of a model's prompt limit when our opening goes before its prompt.
 const _roomFor = (max, open) => (max && open ? Math.max(200, max - open.length - 1) : max);
 
+// (phase V17) The writer of Kling's first frame, behind the answer: the still cut at the moment (the file the drawing
+// sends too), hosted with the person's pictures - the writer sees them in that order; every writing a VARIANT of the
+// picture's prompt (`board.versions`), the newest chosen; one that fails leaves the variants there were, and says why.
+async function _writeFrame(cardId, kick, o) {
+  let out;
+  try {
+    const clip = o.media.find(x => x.kind === 'video');
+    const pics = o.media.filter(x => x.kind === 'image');
+    const still = await _stillOf(cardId, clip, o.at);
+    let urls = [];
+    let seen = { still: true, pics: true };
+    try { urls = await _hostForWriter([still].concat(pics.map(p => p.path))); }
+    catch (e) { console.warn('[mv3-video] first frame: the writer will not see the pictures -', e.message); urls = []; seen = { still: false, pics: false }; }
+    const t = await AGENT.thinkFrame({ text: o.text, pictures: pics.length, picUrls: urls, seen });
+    out = t.prompt ? { prompt: _framePose(_strictRefs(t.prompt)), writer: t.writer || '' } : { error: t.fail || 'the writer answered nothing usable - write it again' };
+    if (out.prompt) {
+      const wrong = _refsWrong(out.prompt, o.media);
+      if (wrong) out = { error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' - write it again' };
+    }
+  } catch (e) {
+    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+  }
+  try {
+    CHAT.update(cardId, (m) => {
+      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing' || !m.card.board) return false;
+      const B = m.card.board;
+      if (out.prompt) {
+        const v = { id: _verId(), at: new Date().toISOString(), prompt: out.prompt, aspect: B.aspect || '', writer: out.writer, edited: false };
+        B.versions = _seedBoardVers(B).concat([v]).slice(-10);
+        Object.assign(B, { cur: v.id, prompt: v.prompt, edited: false });
+        m.card.error = '';
+      } else m.card.error = out.error;
+      m.card.writing = '';
+      m.card.state = _restState(m);
+    });
+  } finally { CHAT.writing.delete(kick); }
+}
+
 // (phase V16) The writer of a PLAIN card - the chat's message with the writer stopping for a look: each writing is a
 // VARIANT of the prompt (`versions`, at most 10), the newest chosen; one that fails leaves the variants there were, and
 // says why. Filed only while the card still waits for THIS writer.
@@ -877,9 +975,24 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       }
       if (x.card.board && x.card.board.kind === 'frame' && at != null) {
         const clip = (x.media || []).find(y => y.kind === 'video') || {};
-        const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
-        const v = Math.round(Math.max(lo, Math.min(hi, at)) * 100) / 100;
-        if (x.card.board.at !== v) { x.card.board.at = v; changed = true; }
+        const B = x.card.board;
+        if (+B.dur > 0) {
+          // (phase V17) The moment IS where the part starts: the part follows it with the length the person chose (`len`),
+          // 3 s at least in the clip.
+          const len = Math.max(3, +B.len || ((+clip.out || 0) - (+clip.in || 0)));
+          const v = Math.round(Math.max(0, Math.min(B.dur - 3, at)) * 100) / 100;
+          if (B.at !== v || +clip.in !== v) {
+            B.at = v;
+            clip.in = v;
+            clip.out = Math.round(Math.min(B.dur, v + len) * 100) / 100;
+            changed = true;
+          }
+        } else {
+          // An older card (V7.6): its moment lies within the part that goes.
+          const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
+          const v = Math.round(Math.max(lo, Math.min(hi, at)) * 100) / 100;
+          if (B.at !== v) { B.at = v; changed = true; }
+        }
       }
       if (!changed) return false;
     });
@@ -918,7 +1031,27 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       _writeBoard(m.id, st.kick, { model: s.model, text: m.card.text, media: mm.media, params: s.params });
       return;
     }
-    if (m.card.board && m.card.board.kind === 'frame') return res.status(400).json({ success: false, error: 'a picture-then-video card has no writer - it is Kling motion control\'s: pick it on the left' });
+    // (phase V17) Kling's first frame: its picture's prompt written again - another variant, from the same words and pictures.
+    if (m.card.board && m.card.board.kind === 'frame') {
+      const s = _settings(b);
+      if (_family(s.model) !== 'kmc') return res.status(400).json({ success: false, error: 'the first frame is Kling motion control\'s - pick it on the left' });
+      const mm = _mediaOf(m.media);
+      if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+      const wrong = _frameWrong(s.model, s.agg, s.params, mm.media);
+      if (wrong) return res.status(400).json({ success: false, error: wrong });
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      kick = 'w' + crypto.randomBytes(8).toString('hex');
+      CHAT.writing.add(kick);
+      const ok = CHAT.update(m.id, (x) => {
+        if (!x.card || x.card.state === 'writing') return false;
+        Object.assign(x.card, { state: 'writing', writing: 'board', kick, startedAt: new Date().toISOString(), error: '' });
+      });
+      if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
+      res.json({ success: true, card: m.id });
+      const clip = mm.media.find(x => x.kind === 'video') || {};
+      _writeFrame(m.id, kick, { text: m.card.text || '', media: mm.media, at: +m.card.board.dur > 0 ? (+clip.in || 0) : (+m.card.board.at || +clip.in || 0) });
+      return;
+    }
     // (phase V16) A plain card written again: another variant of its prompt, from the person's words and its attachments.
     if (m.card.plain) {
       const s = _settings(b);
@@ -1079,7 +1212,8 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
     // A card with no recipe card of its own (a frame-swap, V7.6) is said by its recipe's title; a plain one (V16) by the
     // person's words.
-    const said = m.card.plain || m.card.type === 'board' ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
+    const said = frame && m.card.plain && !String(m.card.text || '').trim() ? 'motion control from its first frame'
+      : m.card.plain || m.card.type === 'board' ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
       : rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
     // (phase V16) The variant of the prompt the person made it from - chosen, and kept with the attempt.
     const ver = Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
@@ -1181,9 +1315,9 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
       : _twoStepWrong(m.card.model, m.card.agg, m.card.params || {}, all.media);
     if (seat) return res.status(400).json({ success: false, error: seat });
     // What the picture model reads: the references in words (the card keeps what was typed).
-    const prompt = frame ? _frameWords(_strictRefs(typed)) : _boardWords(typed, pics.length);
+    const prompt = frame ? _frameWords(_strictRefs(typed), pics.length) : _boardWords(typed, pics.length);
     if (!prompt) return res.status(400).json({ success: false, error: 'the ' + W + ' prompt is empty' });
-    const pv = _boardProvider(frame ? 2 : pics.length);
+    const pv = _boardProvider(frame ? pics.length + 1 : pics.length);
     if (pv.error) return res.status(400).json({ success: false, error: pv.error });
     const making = CHAT.boardsOf(m).filter(g => g.state === 'pending').length;
     if (making >= BOARD_AT_ONCE) return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });
@@ -1193,29 +1327,27 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
       const fw = await _filesWrong(vr.fits[0], all.media);
       if (fw) return res.status(400).json({ success: false, error: fw });
     }
-    // The frame-swap's room: the clip's frame at the moment chosen, cut at the press (the owner's answer 1: the part's first
-    // frame unless another is picked), kept in media/work under the card's name - the same moment is cut once.
+    // The first frame's still: the clip's frame at the moment (cut once, `_stillOf`) - on a card that knows its clip's
+    // length (phase V17) the moment is where the part starts; on an older one (V7.6) it lies within the part. The picture
+    // model gets the still and then every picture of the person, in their numbers.
     let refs = pics.map(x => x.path);
     let at = null;
     if (frame) {
       const clip = all.media.find(x => x.kind === 'video');
       const lo = +clip.in || 0, hi = +clip.out > lo ? +clip.out : lo;
-      at = Math.round(Math.max(lo, Math.min(hi, b.at != null && Number.isFinite(+b.at) ? +b.at : (+m.card.board.at || lo))) * 100) / 100;
-      const name = 'vframe_' + String(m.id).replace(/[^a-z0-9]/gi, '').slice(-16) + '_' + Math.round(at * 100) + '.jpg';
-      const abs = path.join(MEDIA.work, name);
-      if (!fs.existsSync(abs)) {
-        let buf;
-        try { buf = await require('../lib/video-prep').still(toDiskExisting(clip.path), at); }
-        catch (e) { return res.status(400).json({ success: false, error: 'the frame could not be taken from the clip - ' + e.message }); }
-        // Whole or not at all (review V7): the same moment reuses this file, so a half-written one would be sent on.
-        require('../lib/atomic-write').writeFileAtomic(abs, buf);
-      }
-      refs = ['/media/work/' + name, pics[0].path];
+      at = +m.card.board.dur > 0 ? lo
+        : Math.round(Math.max(lo, Math.min(hi, b.at != null && Number.isFinite(+b.at) ? +b.at : (+m.card.board.at || lo))) * 100) / 100;
+      let still;
+      try { still = await _stillOf(m.id, clip, at); }
+      catch (e) { return res.status(400).json({ success: false, error: e.message }); }
+      refs = [still].concat(pics.map(x => x.path));
     }
     // Its row, once drawn, leads back to the card - the video is chosen and made there.
     const where = _boardWhere(project, b.where);
     // (phase V15) A storyboard of the column is said by the words it was drawn for.
-    const title = m.card.type === 'board' ? _short(m.card.text) : ((m.card.recipe && m.card.recipe.title) || 'video');
+    // (phase V17) Kling's first frame is said by the person's words too, or as what it is.
+    const title = m.card.type === 'board' ? _short(m.card.text)
+      : frame && m.card.plain ? (_short(m.card.text) || 'first frame') : ((m.card.recipe && m.card.recipe.title) || 'video');
     // (review V7) The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
     // the card is read again and the count asked again here, in the tick the record is written.
     const m2 = _cardOf(req.params.id, project, ['prompt', 'board']);
