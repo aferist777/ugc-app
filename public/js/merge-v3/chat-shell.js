@@ -1338,7 +1338,8 @@ export function createChat(make) {
     const go = el('button', 'b', '>');
     go.type = 'button';
     go.title = 'Send (Enter) · a new line is Shift+Enter';
-    bar.append(ta, pen, nBtn, go);
+    // (phase V14) A description's own buttons between the count and the send - the video chat's prompt reference "/".
+    bar.append(ta, pen, nBtn, ...(typeof S.barButtons === 'function' ? S.barButtons() : []), go);
     // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
     const foot = el('div', 'mv3-ig-foot');
     thread.appendChild(foot);

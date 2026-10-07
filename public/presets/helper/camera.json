@@ -1,0 +1,462 @@
+{
+  "v": 1,
+  "source": {
+    "name": "AI Camera Movements",
+    "url": "https://aicameramovements.com/",
+    "fetched": "2026-10-07",
+    "note": "A free reference for AI filmmakers: each move's name and prompt as the site writes them, its preview made small here."
+  },
+  "cats": [
+    {
+      "id": "dolly-track",
+      "label": "Dolly/Track",
+      "count": 9
+    },
+    {
+      "id": "zoom-lens",
+      "label": "Zoom/Lens",
+      "count": 6
+    },
+    {
+      "id": "drone-crane",
+      "label": "Drone/Crane",
+      "count": 5
+    },
+    {
+      "id": "pan-tilt",
+      "label": "Pan/Tilt",
+      "count": 7
+    },
+    {
+      "id": "physical-moves",
+      "label": "Physical Moves",
+      "count": 11
+    },
+    {
+      "id": "human-camera",
+      "label": "Human Camera",
+      "count": 2
+    },
+    {
+      "id": "specials",
+      "label": "Specials",
+      "count": 6
+    }
+  ],
+  "items": [
+    {
+      "id": "01",
+      "shot": "Shot 01",
+      "cat": "pan-tilt",
+      "name": "Static shot",
+      "prompt": "Camera: locked-off static shot. Movement: hold one fixed camera position for the full clip. Speed: still and steady. Framing: keep the same angle, height, lens distance and composition. End: finish with the same framing and camera position.",
+      "still": "camera/01-static-shot.webp",
+      "loop": "camera/01-static-shot.loop.webp"
+    },
+    {
+      "id": "02",
+      "shot": "Shot 02",
+      "cat": "pan-tilt",
+      "name": "Pan right",
+      "prompt": "Camera: pan right. Movement: rotate the camera horizontally from left to right from one fixed point. Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the right side of the frame. End: settle on a clear final composition.",
+      "still": "camera/02-pan-right.webp",
+      "loop": "camera/02-pan-right.loop.webp"
+    },
+    {
+      "id": "02b",
+      "shot": "Shot 02B",
+      "cat": "pan-tilt",
+      "name": "Pan left",
+      "prompt": "Camera: pan left. Movement: rotate the camera horizontally from right to left from one fixed point. Speed: smooth constant rotation. Framing: keep the horizon level while new space enters from the left side of the frame. End: settle on a clear final composition.",
+      "still": "camera/2b-pan-left.webp",
+      "loop": "camera/2b-pan-left.loop.webp"
+    },
+    {
+      "id": "03",
+      "shot": "Shot 03",
+      "cat": "pan-tilt",
+      "name": "Whip pan right",
+      "prompt": "Camera: whip pan right. Movement: rotate rapidly from the starting direction toward a new target on the right. Speed: fast snap with brief motion blur during the rotation. Framing: begin on one readable composition and land on a second readable target. End: settle into a sharp final frame.",
+      "still": "camera/03-whip-pan-right.webp",
+      "loop": "camera/03-whip-pan-right.loop.webp"
+    },
+    {
+      "id": "03b",
+      "shot": "Shot 03B",
+      "cat": "pan-tilt",
+      "name": "Whip pan left",
+      "prompt": "Camera: whip pan left. Movement: rotate rapidly from the starting direction toward a new target on the left. Speed: fast snap with brief motion blur during the rotation. Framing: begin on one readable composition and land on a second readable target. End: settle into a sharp final frame.",
+      "still": "camera/3b-whip-pan-left.webp",
+      "loop": "camera/3b-whip-pan-left.loop.webp"
+    },
+    {
+      "id": "04",
+      "shot": "Shot 04",
+      "cat": "pan-tilt",
+      "name": "Tilt up",
+      "prompt": "Camera: tilt up. Movement: rotate the camera upward from one fixed point. Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame travels upward. End: land on the upper target.",
+      "still": "camera/04-tilt-up.webp",
+      "loop": "camera/04-tilt-up.loop.webp"
+    },
+    {
+      "id": "04b",
+      "shot": "Shot 04B",
+      "cat": "pan-tilt",
+      "name": "Tilt down",
+      "prompt": "Camera: tilt down. Movement: rotate the camera downward from one fixed point. Speed: smooth constant tilt. Framing: keep the vertical subject or architecture centered as the frame travels downward. End: land on the lower target.",
+      "still": "camera/4b-tilt-down.webp",
+      "loop": "camera/4b-tilt-down.loop.webp"
+    },
+    {
+      "id": "05",
+      "shot": "Shot 05",
+      "cat": "zoom-lens",
+      "name": "Slow zoom in",
+      "prompt": "Camera: slow zoom in. Movement: slowly increase lens focal length toward a tighter frame. Speed: gradual and even. Framing: keep the main visual target readable as it becomes larger in frame. End: finish on a stable tighter composition.",
+      "still": "camera/05-slow-zoom-in.webp",
+      "loop": "camera/05-slow-zoom-in.loop.webp"
+    },
+    {
+      "id": "05b",
+      "shot": "Shot 05B",
+      "cat": "zoom-lens",
+      "name": "Slow zoom out",
+      "prompt": "Camera: slow zoom out. Movement: slowly decrease lens focal length toward a wider frame. Speed: gradual and even. Framing: keep the main visual target readable as more surrounding space appears. End: finish on a stable wider composition.",
+      "still": "camera/5b-slow-zoom-out.webp",
+      "loop": "camera/5b-slow-zoom-out.loop.webp"
+    },
+    {
+      "id": "06",
+      "shot": "Shot 06",
+      "cat": "zoom-lens",
+      "name": "Fast zoom in",
+      "prompt": "Camera: fast zoom in. Movement: quickly increase lens focal length toward the main visual target. Speed: quick decisive zoom. Framing: keep the target centered or clearly readable during the scale change. End: finish on a stable tighter composition.",
+      "still": "camera/06-fast-zoom-in-v2.webp",
+      "loop": "camera/06-fast-zoom-in-v2.loop.webp"
+    },
+    {
+      "id": "06b",
+      "shot": "Shot 06B",
+      "cat": "zoom-lens",
+      "name": "Fast zoom out",
+      "prompt": "Camera: fast zoom out. Movement: quickly decrease lens focal length away from the main visual target. Speed: quick decisive zoom. Framing: keep the target readable as the surrounding space appears. End: finish on a stable wider composition.",
+      "still": "camera/06b-fast-zoom-out-v2.webp",
+      "loop": "camera/06b-fast-zoom-out-v2.loop.webp"
+    },
+    {
+      "id": "07a",
+      "shot": "Shot 07A",
+      "cat": "zoom-lens",
+      "name": "Crash zoom in",
+      "prompt": "Camera: crash zoom in. Movement: snap the lens rapidly toward the main visual target. Speed: very fast and punchy. Framing: keep the target readable through the sudden scale change. End: land on a bold tighter composition.",
+      "still": "camera/07a-crash-zoom-in-v2.webp",
+      "loop": "camera/07a-crash-zoom-in-v2.loop.webp"
+    },
+    {
+      "id": "07b",
+      "shot": "Shot 07B",
+      "cat": "zoom-lens",
+      "name": "Crash zoom out",
+      "prompt": "Camera: crash zoom out. Movement: snap the lens rapidly away from the main visual target. Speed: very fast and punchy. Framing: keep the target readable as the surrounding space appears. End: land on a bold wider composition.",
+      "still": "camera/07b-crash-zoom-out-v2.webp",
+      "loop": "camera/07b-crash-zoom-out-v2.loop.webp"
+    },
+    {
+      "id": "08",
+      "shot": "Shot 08",
+      "cat": "dolly-track",
+      "name": "Dolly in",
+      "prompt": "Camera: dolly in. Movement: move the camera physically forward in a straight line toward the main subject. Speed: smooth controlled push. Framing: keep camera height, lens direction and subject position consistent while distance closes. End: finish in a tighter composition.",
+      "still": "camera/08-dolly-in.webp",
+      "loop": "camera/08-dolly-in.loop.webp"
+    },
+    {
+      "id": "09",
+      "shot": "Shot 09",
+      "cat": "dolly-track",
+      "name": "Dolly out",
+      "prompt": "Camera: dolly out. Movement: move the camera physically backward in a straight line away from the main subject. Speed: smooth controlled retreat. Framing: keep lens direction and camera height consistent while more environment enters frame. End: finish in a wider composition.",
+      "still": "camera/09-dolly-out.webp",
+      "loop": "camera/09-dolly-out.loop.webp"
+    },
+    {
+      "id": "10",
+      "shot": "Shot 10",
+      "cat": "physical-moves",
+      "name": "Truck right",
+      "prompt": "Camera: truck right. Movement: move the camera physically to the right on a straight horizontal path. Speed: smooth constant lateral travel. Framing: keep the lens facing the same direction while the scene slides across frame. End: finish on a clean lateral composition.",
+      "still": "camera/10-truck-right.webp",
+      "loop": "camera/10-truck-right.loop.webp"
+    },
+    {
+      "id": "10b",
+      "shot": "Shot 10B",
+      "cat": "physical-moves",
+      "name": "Truck left",
+      "prompt": "Camera: truck left. Movement: move the camera physically to the left on a straight horizontal path. Speed: smooth constant lateral travel. Framing: keep the lens facing the same direction while the scene slides across frame. End: finish on a clean lateral composition.",
+      "still": "camera/10b-truck-left.webp",
+      "loop": "camera/10b-truck-left.loop.webp"
+    },
+    {
+      "id": "11a",
+      "shot": "Shot 11A",
+      "cat": "physical-moves",
+      "name": "Pedestal up",
+      "prompt": "Camera: pedestal up. Movement: move the entire camera vertically upward in a straight line. Speed: smooth constant lift. Framing: keep the lens level and pointed in the same direction during the vertical move. End: finish with the higher framing clearly readable.",
+      "still": "camera/11a-pedestal-up.webp",
+      "loop": "camera/11a-pedestal-up.loop.webp"
+    },
+    {
+      "id": "11b",
+      "shot": "Shot 11B",
+      "cat": "physical-moves",
+      "name": "Pedestal down",
+      "prompt": "Camera: pedestal down. Movement: move the entire camera vertically downward in a straight line. Speed: smooth constant descent. Framing: keep the lens level and pointed in the same direction during the vertical move. End: finish with the lower framing clearly readable.",
+      "still": "camera/11b-pedestal-down.webp",
+      "loop": "camera/11b-pedestal-down.loop.webp"
+    },
+    {
+      "id": "12",
+      "shot": "Shot 12",
+      "cat": "physical-moves",
+      "name": "Slider right",
+      "prompt": "Camera: slider right. Movement: slide the camera a small distance to the right. Speed: slow controlled constant motion. Framing: keep foreground, subject and background layers readable as parallax shifts. End: finish on a refined composition with the new right-side angle visible.",
+      "still": "camera/12-slider-right.webp",
+      "loop": "camera/12-slider-right.loop.webp"
+    },
+    {
+      "id": "12b",
+      "shot": "Shot 12B",
+      "cat": "physical-moves",
+      "name": "Slider left",
+      "prompt": "Camera: slider left. Movement: slide the camera a small distance to the left. Speed: slow controlled constant motion. Framing: keep foreground, subject and background layers readable as parallax shifts. End: finish on a refined composition with the new left-side angle visible.",
+      "still": "camera/12b-slider-left.webp",
+      "loop": "camera/12b-slider-left.loop.webp"
+    },
+    {
+      "id": "13",
+      "shot": "Shot 13",
+      "cat": "physical-moves",
+      "name": "Push past / pass-by shot",
+      "prompt": "Camera: push past. Movement: move forward past a visible foreground object, edge or opening. Speed: smooth forward glide. Framing: let the foreground pass close to the lens while the space beyond becomes clearer. End: arrive inside or beyond the foreground layer.",
+      "still": "camera/13-push-past-pass-by-shot.webp",
+      "loop": "camera/13-push-past-pass-by-shot.loop.webp"
+    },
+    {
+      "id": "14",
+      "shot": "Shot 14",
+      "cat": "physical-moves",
+      "name": "Arc right",
+      "prompt": "Camera: arc right. Movement: move on a shallow curved path around the main subject toward the right side. Speed: smooth measured curve. Framing: keep distance, height and subject readability consistent while the angle changes. End: finish from a new right-side angle.",
+      "still": "camera/14-arc-right.webp",
+      "loop": "camera/14-arc-right.loop.webp"
+    },
+    {
+      "id": "14b",
+      "shot": "Shot 14B",
+      "cat": "physical-moves",
+      "name": "Arc left",
+      "prompt": "Camera: arc left. Movement: move on a shallow curved path around the main subject toward the left side. Speed: smooth measured curve. Framing: keep distance, height and subject readability consistent while the angle changes. End: finish from a new left-side angle.",
+      "still": "camera/14b-arc-left.webp",
+      "loop": "camera/14b-arc-left.loop.webp"
+    },
+    {
+      "id": "15",
+      "shot": "Shot 15",
+      "cat": "physical-moves",
+      "name": "Orbit clockwise",
+      "prompt": "Camera: clockwise orbit. Movement: circle clockwise around the main subject at a consistent radius. Speed: smooth controlled orbit. Framing: keep the subject centered while the background rotates around them. End: complete the intended arc or full circle with stable framing.",
+      "still": "camera/15-orbit-clockwise.webp",
+      "loop": "camera/15-orbit-clockwise.loop.webp"
+    },
+    {
+      "id": "15b",
+      "shot": "Shot 15B",
+      "cat": "physical-moves",
+      "name": "Orbit counterclockwise",
+      "prompt": "Camera: counterclockwise orbit. Movement: circle counterclockwise around the main subject at a consistent radius. Speed: smooth controlled orbit. Framing: keep the subject centered while the background rotates around them. End: complete the intended arc or full circle with stable framing.",
+      "still": "camera/15b-orbit-counterclockwise.webp",
+      "loop": "camera/15b-orbit-counterclockwise.loop.webp"
+    },
+    {
+      "id": "16",
+      "shot": "Shot 16",
+      "cat": "dolly-track",
+      "name": "Tracking shot",
+      "prompt": "Camera: tracking shot. Movement: move through the scene with the main subject. Speed: match the subject's pace. Framing: keep the subject consistently readable while the environment moves around them. End: maintain a clear moving composition.",
+      "still": "camera/16-tracking-shot.webp",
+      "loop": "camera/16-tracking-shot.loop.webp"
+    },
+    {
+      "id": "17",
+      "shot": "Shot 17",
+      "cat": "dolly-track",
+      "name": "Follow shot / over-the-shoulder",
+      "prompt": "Camera: follow shot from behind. Movement: move behind the subject along their route at shoulder height. Speed: match the subject's pace. Framing: keep the back, shoulder or head as the foreground guide while the route ahead stays readable. End: continue following with the subject leading the frame.",
+      "still": "camera/17-follow-shot-over-the-shoulder.webp",
+      "loop": "camera/17-follow-shot-over-the-shoulder.loop.webp"
+    },
+    {
+      "id": "18",
+      "shot": "Shot 18",
+      "cat": "dolly-track",
+      "name": "Reverse tracking / walk-and-talk",
+      "prompt": "Camera: reverse tracking shot. Movement: move backward in front of the walking subject. Speed: match the subject's forward pace. Framing: keep front-facing face and body framing stable as the background moves behind them. End: hold a clear front-facing moving composition.",
+      "still": "camera/18-reverse-tracking-walk-and-talk.webp",
+      "loop": "camera/18-reverse-tracking-walk-and-talk.loop.webp"
+    },
+    {
+      "id": "19",
+      "shot": "Shot 19",
+      "cat": "dolly-track",
+      "name": "Side tracking",
+      "prompt": "Camera: side tracking shot. Movement: move parallel beside the subject along their direction of travel. Speed: match the subject's motion. Framing: keep the subject in side profile or three-quarter profile at a stable distance. End: continue the parallel movement with clear horizontal motion.",
+      "still": "camera/19-side-tracking.webp",
+      "loop": "camera/19-side-tracking.loop.webp"
+    },
+    {
+      "id": "20",
+      "shot": "Shot 20",
+      "cat": "dolly-track",
+      "name": "Low tracking",
+      "prompt": "Camera: low tracking shot. Movement: move at ground or below-waist height alongside the subject's movement path. Speed: match the subject, footsteps or wheels. Framing: keep the low detail readable while the ground plane moves through frame. End: finish with the low perspective clearly maintained.",
+      "still": "camera/20-low-tracking-v2.webp",
+      "loop": "camera/20-low-tracking-v2.loop.webp"
+    },
+    {
+      "id": "21",
+      "shot": "Shot 21",
+      "cat": "dolly-track",
+      "name": "Vehicle tracking",
+      "prompt": "Camera: vehicle tracking shot. Movement: move with the vehicle along its route. Speed: match the vehicle's pace. Framing: keep the vehicle stable in frame while the road or environment moves past. End: maintain a clear moving vehicle composition.",
+      "still": "camera/21-vehicle-tracking.webp",
+      "loop": "camera/21-vehicle-tracking.loop.webp"
+    },
+    {
+      "id": "22",
+      "shot": "Shot 22",
+      "cat": "dolly-track",
+      "name": "Chase shot",
+      "prompt": "Camera: chase shot. Movement: follow a moving subject quickly along the action route. Speed: fast, reactive and physically close. Framing: keep the subject visible while allowing energetic reframing. End: stay connected to the subject in motion.",
+      "still": "camera/22-chase-shot.webp",
+      "loop": "camera/22-chase-shot.loop.webp"
+    },
+    {
+      "id": "23",
+      "shot": "Shot 23",
+      "cat": "human-camera",
+      "name": "Handheld shot",
+      "prompt": "Camera: handheld shot. Movement: hold the camera at human operator height with natural body movement. Speed: responsive and organic. Framing: keep the subject readable while the frame has subtle sway and micro-adjustments. End: finish with a natural handheld composition.",
+      "still": "camera/23-handheld-shot.webp",
+      "loop": "camera/23-handheld-shot.loop.webp"
+    },
+    {
+      "id": "24",
+      "shot": "Shot 24",
+      "cat": "human-camera",
+      "name": "Body-mounted camera / Snorricam",
+      "prompt": "Camera: body-mounted Snorricam. Movement: keep the camera fixed relative to the subject's torso or face while the subject moves. Speed: match the subject's body motion. Framing: keep the subject close, centered and facing the camera as the background moves around them. End: finish with the subject still locked in frame.",
+      "still": "camera/24-snorricam-v2.webp",
+      "loop": "camera/24-snorricam-v2.loop.webp"
+    },
+    {
+      "id": "25",
+      "shot": "Shot 25",
+      "cat": "drone-crane",
+      "name": "Crane up",
+      "prompt": "Camera: crane up. Movement: travel smoothly upward through open space. Speed: slow controlled vertical lift. Framing: keep the subject or location readable as the camera rises. End: finish with the higher scale clearly visible.",
+      "still": "camera/25-crane-up.webp",
+      "loop": "camera/25-crane-up.loop.webp"
+    },
+    {
+      "id": "25b",
+      "shot": "Shot 25B",
+      "cat": "drone-crane",
+      "name": "Crane down",
+      "prompt": "Camera: crane down. Movement: travel smoothly downward through open space. Speed: slow controlled vertical descent. Framing: keep the subject or location readable as the camera descends. End: finish with the lower subject or destination clearly visible.",
+      "still": "camera/25b-crane-down.webp",
+      "loop": "camera/25b-crane-down.loop.webp"
+    },
+    {
+      "id": "26",
+      "shot": "Shot 26",
+      "cat": "drone-crane",
+      "name": "Drone push in",
+      "prompt": "Camera: drone push in. Movement: fly smoothly forward through open space toward the subject or destination. Speed: controlled aerial glide. Framing: keep the route and destination readable as the camera approaches. End: arrive at a closer aerial composition.",
+      "still": "camera/26-drone-push-in.webp",
+      "loop": "camera/26-drone-push-in.loop.webp"
+    },
+    {
+      "id": "26b",
+      "shot": "Shot 26B",
+      "cat": "drone-crane",
+      "name": "Drone pull back",
+      "prompt": "Camera: drone pull back. Movement: fly smoothly backward away from the subject or destination. Speed: controlled aerial retreat. Framing: keep the subject readable as more landscape appears. End: finish on a wider aerial composition.",
+      "still": "camera/26b-drone-pull-back.webp",
+      "loop": "camera/26b-drone-pull-back.loop.webp"
+    },
+    {
+      "id": "27",
+      "shot": "Shot 27",
+      "cat": "drone-crane",
+      "name": "Helicopter shot",
+      "prompt": "Camera: helicopter-style aerial shot. Movement: move from high altitude along a broad gradual flight path. Speed: steady controlled aerial motion. Framing: keep the landscape or distant moving subject readable at wide scale. End: finish on a stable high-altitude composition.",
+      "still": "camera/27-helicopter-shot.webp",
+      "loop": "camera/27-helicopter-shot.loop.webp"
+    },
+    {
+      "id": "s1",
+      "shot": "Shot S1",
+      "cat": "specials",
+      "name": "First-person view",
+      "prompt": "Camera: first-person view. Movement: move forward at human eye height from the character's perspective. Speed: natural walking or reaching pace. Framing: use visible hands, arms or body edges as the viewer's physical reference. End: arrive at the next point of action from the same point of view.",
+      "still": "camera/s1-first-person-view.webp",
+      "loop": "camera/s1-first-person-view.loop.webp"
+    },
+    {
+      "id": "s2",
+      "shot": "Shot S2",
+      "cat": "specials",
+      "name": "Tilt-shift",
+      "prompt": "Camera: tilt-shift miniature view. Movement: hold or glide from a high angled view over the scene. Speed: small precise movement. Framing: keep a narrow band of sharp focus across the key subject area with soft blur above and below. End: finish with the miniature-scale view intact.",
+      "still": "camera/s2-tilt-shift.webp",
+      "loop": "camera/s2-tilt-shift.loop.webp"
+    },
+    {
+      "id": "s3",
+      "shot": "Shot S3",
+      "cat": "specials",
+      "name": "Infinite zoom",
+      "prompt": "Camera: infinite zoom. Movement: zoom continuously inward toward the exact center target. Speed: smooth accelerating zoom. Framing: keep the circular target centered as it expands. End: finish when the next visual world fills the frame.",
+      "still": "camera/s3-infinite-zoom.webp",
+      "loop": "camera/s3-infinite-zoom.loop.webp"
+    },
+    {
+      "id": "s4",
+      "shot": "Shot S4",
+      "cat": "specials",
+      "name": "Earth zoom out",
+      "prompt": "Camera: earth zoom out. Movement: pull upward from the starting point through street, city, landscape and planet scale. Speed: rapid expanding zoom out. Framing: keep the original location centered as scale grows. End: finish on a planet-scale view with the starting point still implied at center.",
+      "still": "camera/s4-earth-zoom-out.webp",
+      "loop": "camera/s4-earth-zoom-out.loop.webp"
+    },
+    {
+      "id": "s5",
+      "shot": "Shot S5",
+      "cat": "specials",
+      "name": "Time-lapse",
+      "prompt": "Camera: locked-camera time-lapse. Movement: hold one fixed camera position while time moves rapidly forward. Speed: fast time compression with a stable camera. Framing: keep the same composition and horizon as motion passes through the frame. End: finish from the same camera angle with visible passage of time.",
+      "still": "camera/s5-time-lapse.webp",
+      "loop": "camera/s5-time-lapse.loop.webp"
+    },
+    {
+      "id": "s6",
+      "shot": "Shot S6",
+      "cat": "specials",
+      "name": "Pass-through objects",
+      "prompt": "Camera: pass-through movement. Movement: move forward toward a visible object, surface or barrier and continue into the space beyond. Speed: smooth centered glide. Framing: keep the opening or surface centered as the transition point. End: arrive inside the revealed space beyond.",
+      "still": "camera/s6-pass-through-objects.webp",
+      "loop": "camera/s6-pass-through-objects.loop.webp"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "about": "The video chat's prompt reference (phase V14, js/merge-v3/vhelp.js). A section with a file is ready; one without is in development and says what it will hold. A section is added by its file and its line here.",
+  "sections": [
+    { "id": "camera", "label": "Camera movement", "file": "camera.json",
+      "about": "How the camera moves through the shot - 46 moves, each with a looping example." },
+    { "id": "light", "label": "Light",
+      "about": "Time of day, hard and soft light, backlight and rim light, neon, candlelight, practical lamps - and how to ask for them." },
+    { "id": "framing", "label": "Shot size & angle",
+      "about": "From an extreme close-up to an establishing shot; eye level, low and high angle, top-down, Dutch tilt, point of view." },
+    { "id": "lens", "label": "Lens & focus",
+      "about": "Wide, normal and portrait lenses, macro, telephoto compression, shallow depth of field, rack focus." },
+    { "id": "look", "label": "Style & film look",
+      "about": "Film grain, 16 mm, VHS, glossy commercial, documentary, the phone-shot UGC look, colour grades." },
+    { "id": "speed", "label": "Speed & time",
+      "about": "Slow motion, speed ramps, time-lapse, hyperlapse, freeze frames, reverse." },
+    { "id": "acting", "label": "Acting & movement",
+      "about": "How the person moves and plays: gestures, gaze, pace, emotion, talking to the camera." },
+    { "id": "sound", "label": "Sound & speech",
+      "about": "Spoken lines in their own language, voice, ambience, room tone, music - for the models that make sound." },
+    { "id": "cuts", "label": "Transitions between shots",
+      "about": "Shot 1, Shot 2, match cuts, whip transitions, cutting on action - for a clip of several shots." },
+    { "id": "ugc", "label": "UGC techniques",
+      "about": "A selfie at arm's length, a phone's handheld shake, the mirror shot, unboxing, the product held to the camera, a testimonial." }
+  ]
+}

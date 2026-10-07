@@ -26,6 +26,7 @@ import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell } from './chat-shell.js';
 import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
+import { openHelp, closeHelp } from './vhelp.js';
 import { note } from './ask.js';
 import { startInlineProgress } from '../progress.js';
 
@@ -700,6 +701,18 @@ function VIDEOS(ctx) {
   }
   // Uploads first for clips: it is where clips from this computer go.
   const FIRST = { image: 'images', video: 'uploads', audio: 'sounds' };
+  // ── The prompt reference behind "/" (phase V14, the owner 2026-10-07; vhelp.js) ──
+  // Between the count and the send - and on a written card between its count and its make: a tip pressed there is
+  // copied, and the note says so on the field this "/" belongs to.
+  const _helpNote = () => (isMC() ? 'Kling motion control: the camera follows your clip - a camera tip may not take.' : '');
+  function _helpBtn(fieldOf, prefer) {
+    const b = el('button', 'hp-btn', '/');
+    b.type = 'button';
+    b.title = 'Prompt reference - camera moves and more: press a tip to copy it';
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: fieldOf(), prefer, note: _helpNote }); });
+    return b;
+  }
+
   // What cannot go into the zone at all, said on its tile: a clip or a sound shorter than the model takes (one longer
   // goes, and only its part is sent).
   function _pickWhy(it, kind) {
@@ -1263,7 +1276,8 @@ function VIDEOS(ctx) {
     zcb.addEventListener('change', () => { setParam('zh', zcb.checked); _freshenCards(); });
     zh.append(zcb, el('span', null, '中文'));
     zh.title = 'Send the prompt in Chinese (experimental, Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes.';
-    acts.append(nBtn, zh, go, price);
+    // (phase V14) The prompt reference beside the count, its copies for this card's prompt.
+    acts.append(nBtn, _helpBtn(() => ta, 'below'), zh, go, price);
     if (_skill && c.recipe && c.recipe.id === _skill.id) acts.appendChild(_changeLink());
     // A made card: a copy of it, to change and make apart from this one.
     if (c.state === 'sent') {
@@ -1798,7 +1812,9 @@ function VIDEOS(ctx) {
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },
     trimFor: _trimFor,
-    onHide: () => closeTrim(),
+    onHide: () => { closeTrim(); closeHelp(); },
+    // (phase V14) The prompt reference "/" between the count and the send.
+    barButtons: () => [_helpBtn(() => (ctx.ui() || {}).ta, 'above')],
     // (phase V6) The builder's cards in the thread, drawn here; the request at the thread's foot.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
@@ -1815,7 +1831,8 @@ function VIDEOS(ctx) {
         if (_trimPath && !ctx.atts().some(a => a.path === _trimPath)) closeTrim();
       },
       onCount: _paintPrice,
-      onProject: () => { if (_set) _paintParams(); },
+      // The reference was open for the project being left - its field is another project's.
+      onProject: () => { closeHelp(); if (_set) _paintParams(); },
       room: _room,
       zone: _zone,
       ready: _ready,
