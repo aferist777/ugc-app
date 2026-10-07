@@ -718,6 +718,21 @@ function VIDEOS(ctx) {
     return { items: (d.items || []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
       .map(i => ({ path: i.media, src: i.media, name: i.name || '', sub: 'Suno', dur: 0 })) };
   }
+  // (phase V15, the owner 2026-10-07) The Library's saved voices - our own demo of each - among the sounds: listened to
+  // in the picker, attached as a sound whose role is "voice" and whose name is the voice's. Nothing is attached by
+  // itself with a character: whose voice it is, the person says in the message.
+  async function _voices() {
+    const d = await json('/api/library/shelf/voices');
+    if (!d || !d.success) return _gone(d);
+    return { items: (d.items || []).filter(i => i && i.media).map(i => {
+      const m = i.meta || {};
+      const L = m.labels || {};
+      const looks = [L.gender, L.age, L.accent, L.descriptive].filter(Boolean).map(v => String(v).replace(/_/g, ' ')).join(' · ');
+      const whose = (m.characters || []).map(c => c.name + (c.gold ? ' ★' : '')).join(', ');
+      return { path: i.media, src: i.media, name: i.name || '', dur: +m.dur || 0, role: 'voice', label: i.name || '',
+        sub: [looks, whose ? 'voice of ' + whose : ''].filter(Boolean).join(' · ') };
+    }) };
+  }
   const SOURCES = {
     image: [
       { id: 'people', label: 'characters & looks', load: _people },
@@ -733,6 +748,7 @@ function VIDEOS(ctx) {
     audio: [
       { id: 'sounds', label: 'Sounds', load: () => _media('sounds', (i) => ({ path: i.media, src: i.media, name: i.name || '', dur: +i.dur || 0 })) },
       { id: 'music', label: 'music (Suno)', load: _music },
+      { id: 'voices', label: 'voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' },
     ],
   };
   // Where the picker opens: a recipe's slot of pictures by what it is for (the owner) - a person on the characters and
@@ -750,7 +766,7 @@ function VIDEOS(ctx) {
     const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
     if (kind === 'image') return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks'] : at('images') ? ['images'] : [];
     if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : [];
-    return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : [];
+    return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : at('voice') ? ['voices'] : [];
   }
   // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
   // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
@@ -909,8 +925,9 @@ function VIDEOS(ctx) {
         mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
       media: atts.map((a) => Object.assign({
-        path: a.path, kind: _kind(a), role: role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
-        label: (a.slot && slots.get(_kind(a) + ':' + a.slot) || {}).label || '',
+        // (phase V15) A thing that says what it is for - a voice - goes as that; otherwise its slot or the setting decides.
+        path: a.path, kind: _kind(a), role: a.role || role(a, atts.filter(x => _kind(x) === _kind(a)).indexOf(a)),
+        label: a.label || (a.slot && slots.get(_kind(a) + ':' + a.slot) || {}).label || '',
       // (phase V7) A clip or a sound goes as its part - the server prepares just that.
       }, _kind(a) !== 'image' ? { in: +a.in || 0, out: +a.out || 0 } : {})),
       // The catalog's recipe, as it was left (the server keeps it only when the writer will use it).

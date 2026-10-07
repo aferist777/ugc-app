@@ -444,9 +444,10 @@ export function createChat(make) {
       }
     }
     _say('');
-    // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out).
+    // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out); (phase V15)
+    // a thing that says what it is for - a voice from the picker's voices - with its role and its name.
     const att = { path, name: name || '', kind, slot };
-    for (const k of ['poster', 'dur', 'in', 'out']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
+    for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
     if (into) {
       // Its place and its number: what stood there - empty, or the thing the picker was opened on - is replaced.
       _atts[_atts.indexOf(into)] = att;
@@ -637,8 +638,9 @@ export function createChat(make) {
     if (p.kind !== 'image') box.dataset.dropKind = p.kind;
     // A thing, or its empty place, in a cell wearing its slot's name. A slot or a part with an empty place offers no
     // other: that place is where the next one goes.
+    // (phase V15) A voice wears the word, so the message can say whose it is by its number.
     const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
-      : _cell(_filled(a, num(a), p, s), s ? (s.label || s.key) : '', s && s.hint));
+      : _cell(_filled(a, num(a), p, s), a.role === 'voice' ? 'voice' : s ? (s.label || s.key) : '', a.role === 'voice' ? a.label : s && s.hint));
     if (p.slots) {
       for (const s of p.slots) {
         const inS = mine.filter(a => a.slot === s.key);
@@ -830,7 +832,7 @@ export function createChat(make) {
           _detach(it.path);
           return;
         }
-        _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0 });
+        _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0, role: it.role || '', label: it.label || '' });
       },
       why: (it) => P.why(it, kind),
       computer: {
