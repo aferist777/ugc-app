@@ -125,13 +125,14 @@ export function openTrim(opts) {
     if (still) { want = from; if (Math.abs(media.currentTime - from) <= 0.08) shot(); }
     if (typeof o.onChange === 'function') o.onChange(+from.toFixed(2), +to.toFixed(2));
   };
-  // (phase V17) The slider moves the part's start, its length kept (within the clip and what the model takes).
+  // (phase V17) The slider moves the part's start; its end follows the length the person chose (`wantLen` - the window's
+  // own edges set it), so a start pushed to the clip's end and back gets its whole part again.
+  let wantLen = to - from;
   if (still) {
     still.range.addEventListener('input', () => {
       media.pause();
-      const len = Math.max(min, Math.min(max, to - from));
       from = Math.max(0, Math.min(dur - min, +still.range.value || 0));
-      to = Math.min(dur, from + len);
+      to = Math.min(dur, from + Math.max(min, Math.min(max, wantLen)));
       show(from);
       paint();
     });
@@ -168,6 +169,7 @@ export function openTrim(opts) {
   const up = () => {
     document.removeEventListener('pointermove', move);
     drag = null;
+    wantLen = to - from;
     changed();
   };
   win.addEventListener('pointerdown', down('move'));
