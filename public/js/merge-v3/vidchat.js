@@ -364,14 +364,16 @@ function VIDEOS(ctx) {
     const box = _set.sw;
     box.textContent = '';
     if (!m) return;
-    const wr = el('button', 'mv3-vc-sw' + (ctx.writing() && !isMC() ? ' on' : ''));
-    wr.type = 'button';
-    wr.append(el('span', 'k', 'writer'), el('span', 'v', isMC() ? 'none' : ctx.writing() ? 'on' : 'off'));
-    wr.disabled = isMC();
+    // (phase V16, the owner) The writer is a checkbox like the storyboard and 中文 - on by default.
+    const wr = el('label', 'mv3-vc-check' + (isMC() ? ' is-off' : ''));
+    const wcb = document.createElement('input');
+    wcb.type = 'checkbox';
+    wcb.checked = ctx.writing() && !isMC();
+    wcb.disabled = isMC();
+    wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
+    wr.append(wcb, el('span', null, 'writer'));
     wr.title = isMC() ? 'Kling motion control has no writer - the box is its prompt'
-      : ctx.writing() ? 'The writer is on: a prompt engineer writes your message into the prompt this model wants. Press to send your words as typed (translated into English when they are not).'
-        : 'Your words go as typed (translated into English when they are not). Press to let the writer - a prompt engineer - write the prompt.';
-    wr.addEventListener('click', () => ctx.setWriting(!ctx.writing()));
+      : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
     box.appendChild(wr);
     // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on.
     const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'

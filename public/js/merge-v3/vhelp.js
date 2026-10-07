@@ -243,10 +243,9 @@ function _paintList() {
 }
 
 function _tile(it, catLabel) {
+  // (phase V16, the owner) No popup under the pointer: the tile shows its words, a press copies them.
   const t = el('button', 'hp-tile');
   t.type = 'button';
-  // The whole of the words under the pointer - the tile shows four lines of them.
-  t.title = it.prompt + '\n\nPress to copy it, then paste it into your prompt.';
   const pv = el('span', 'hp-pv');
   if (it.still) {
     const img = document.createElement('img');
