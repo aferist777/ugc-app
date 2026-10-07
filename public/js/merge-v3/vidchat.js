@@ -381,22 +381,25 @@ function VIDEOS(ctx) {
     const box = _set.sw;
     box.textContent = '';
     if (!m) return;
-    // (phase V16, the owner) The writer is a checkbox like the storyboard and 中文 - on by default.
-    const wr = el('label', 'mv3-vc-check' + (isMC() ? ' is-off' : ''));
-    const wcb = document.createElement('input');
-    wcb.type = 'checkbox';
-    wcb.checked = ctx.writing() && !isMC();
-    wcb.disabled = isMC();
-    wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
-    wr.append(wcb, el('span', null, 'writer'));
-    wr.title = isMC() ? 'Kling motion control has no writer - the box is its prompt'
-      : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
-    box.appendChild(wr);
-    // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on.
+    // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on
+    // - and (phase V17.1, the owner 2026-10-08) holds it on while it is ticked.
     const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'
       : _skill ? 'A recipe decides its own steps - a two-step recipe draws its storyboard on its card'
         : _framesMode() ? 'The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references'
         : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
+    const held = !bWhy && _boardOn();
+    // (phase V16, the owner) The writer is a checkbox like the storyboard and 中文 - on by default.
+    const wr = el('label', 'mv3-vc-check' + (isMC() ? ' is-off' : held ? ' is-held' : ''));
+    const wcb = document.createElement('input');
+    wcb.type = 'checkbox';
+    wcb.checked = ctx.writing() && !isMC();
+    wcb.disabled = isMC() || held;
+    wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
+    wr.append(wcb, el('span', null, 'writer'));
+    wr.title = isMC() ? 'Kling motion control has no writer - the box is its prompt'
+      : held ? 'The storyboard is written by the writer - untick the storyboard first'
+        : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
+    box.appendChild(wr);
     const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
     const scb = document.createElement('input');
     scb.type = 'checkbox';
@@ -410,7 +413,7 @@ function VIDEOS(ctx) {
       ctx.paintAtts();
     });
     sb.append(scb, el('span', null, 'storyboard'));
-    sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into a sheet of numbered panels, it is drawn (4K), lands here and joins the pictures - and it stops there. "make the video" on its card writes the video from the same words, the sheet among the pictures.';
+    sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into the prompt of a sheet of numbered panels - nothing is paid at ">". On its message "draw the storyboard" draws the sheet (4K), "write the video" writes the video with it among the pictures and "make the video" makes it - each paid step by its own press. While it is ticked the writer stays on.';
     box.appendChild(sb);
     const zhOk = (m.langs || []).includes('zh');
     const zh = el('label', 'mv3-vc-check' + (zhOk ? '' : ' is-off'));

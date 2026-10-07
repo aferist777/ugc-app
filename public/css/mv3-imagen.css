@@ -537,6 +537,8 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-vc-check input{ margin:0; accent-color:var(--primary); cursor:pointer }
 .mv3-vc-check.is-off{ color:var(--muted); opacity:.6; cursor:default }
 .mv3-vc-check.is-off input{ cursor:default }
+/* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
+.mv3-vc-check.is-held, .mv3-vc-check.is-held input{ cursor:default }
 .mv3-vc-almanac{
   flex:0 0 auto; display:block; width:100%; height:32px; margin:0; padding:0 12px;
   border:0; border-top:1px solid var(--border); border-radius:0; background:var(--surface-2); color:var(--ink);
