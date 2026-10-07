@@ -721,13 +721,14 @@ export function createChat(make) {
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
       if (st.off) { cell.classList.add('is-dim'); cell.title = st.off; }
     } else {
-      if (kind === 'video' && a.poster) {
+      // (phase V17) A clip shows its own still when it has one - Kling's first frame, picked on its slider.
+      if (kind === 'video' && (a.still || a.poster)) {
         const img = document.createElement('img');
-        img.src = thumbOf(a.poster, 'strip');
+        img.src = a.still || thumbOf(a.poster, 'strip');
         img.loading = 'lazy';
         img.decoding = 'async';
         cell.appendChild(img);
-        cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.poster, 'main'), cell));
+        cell.addEventListener('mouseenter', () => peekShow(a.still || thumbOf(a.poster, 'main'), cell));
         cell.addEventListener('mouseleave', peekHide);
       } else cell.appendChild(el('span', 'ic', kind === 'audio' ? '♪' : '▶'));
       const secs = (+a.out > +a.in) ? (+a.out - +a.in) : 0;

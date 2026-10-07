@@ -7,8 +7,12 @@
    being moved, and "play the part" plays just that. Every change is the attachment's own (in/out) - kept with the
    draft, and the price follows it.
 
-   openTrim({ anchor, kind, src, poster, dur, from, to, min, max, title, why, onChange(from, to), onClose })
+   openTrim({ anchor, kind, src, poster, dur, from, to, min, max, title, why, still, onChange(from, to), onStill(url), onClose })
    closeTrim()
+
+   (phase V17, the owner 2026-10-08) `still`: Kling motion control's FIRST FRAME. A slider over the clip picks the moment
+   the character is seen best; the part goes FROM there (the window's start follows it, its length kept within what the
+   model takes), and the frame at that moment is handed to `onStill` as a small JPEG - the zone shows it on the clip.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -57,6 +61,22 @@ export function openTrim(opts) {
   media.src = o.src;
   if (o.kind !== 'audio') { media.muted = false; media.playsInline = true; if (o.poster) media.poster = o.poster; }
   box.appendChild(media);
+  // (phase V17) The first frame: its moment on a slider of its own - the part starts there.
+  let still = null;
+  if (o.still && o.kind !== 'audio') {
+    still = _el('div', 'vtrim-still');
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = '0';
+    range.max = String(Math.max(0, dur - min));
+    range.step = '0.04';
+    range.title = 'The first frame: the moment the character is seen best - the moves go from here';
+    const at = _el('span', 'vtrim-still-at');
+    still.append(_el('span', 'k', 'first frame'), range, at);
+    box.appendChild(still);
+    still.range = range;
+    still.at = at;
+  }
 
   const bar = _el('div', 'vtrim-bar' + (o.kind === 'audio' ? '' : ' is-film'));
   // A clip's bar is a strip of its frames (the owner, 2026-10-07: "a strip of frames with the window on it"); a
@@ -84,9 +104,39 @@ export function openTrim(opts) {
     win.style.left = (from / dur * 100) + '%';
     win.style.width = ((to - from) / dur * 100) + '%';
     span.textContent = _t(from) + ' – ' + _t(to) + ' · ' + (to - from).toFixed(1) + ' s go';
+    if (still) { still.range.value = String(from); still.at.textContent = _t(from); }
   };
   const show = (t) => { try { media.currentTime = Math.max(0, Math.min(dur - 0.05, t)); } catch (e) { /* not loaded yet */ } };
-  const changed = () => { if (typeof o.onChange === 'function') o.onChange(+from.toFixed(2), +to.toFixed(2)); };
+  // (phase V17) The first frame, taken once the clip stands on it: a small JPEG for the zone's cell.
+  let want = still ? from : null;
+  const shot = () => {
+    if (!still || want == null || Math.abs(media.currentTime - want) > 0.08 || !media.videoWidth) return;
+    want = null;
+    try {
+      const w = 160, h = Math.max(1, Math.round(w * media.videoHeight / media.videoWidth));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(media, 0, 0, w, h);
+      if (typeof o.onStill === 'function') o.onStill(c.toDataURL('image/jpeg', 0.82));
+    } catch (e) { /* the frame cannot be taken - the poster stays */ }
+  };
+  if (still) media.addEventListener('seeked', shot);
+  const changed = () => {
+    if (still) { want = from; if (Math.abs(media.currentTime - from) <= 0.08) shot(); }
+    if (typeof o.onChange === 'function') o.onChange(+from.toFixed(2), +to.toFixed(2));
+  };
+  // (phase V17) The slider moves the part's start, its length kept (within the clip and what the model takes).
+  if (still) {
+    still.range.addEventListener('input', () => {
+      media.pause();
+      const len = Math.max(min, Math.min(max, to - from));
+      from = Math.max(0, Math.min(dur - min, +still.range.value || 0));
+      to = Math.min(dur, from + len);
+      show(from);
+      paint();
+    });
+    still.range.addEventListener('change', changed);
+  }
 
   // The window: its body moves it, its edges change its length - within [min, max] and the clip.
   let drag = null;

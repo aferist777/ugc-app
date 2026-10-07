@@ -953,7 +953,7 @@ async function _paintRight() {
   // The skill - editable, with the way back.
   // Kling motion control has no writer (phase V7.3): there a recipe only lays out what to attach.
   const noWriter = !!(m && m.family === 'kmc');
-  const sh = el('div', 'vc-hdr', noWriter ? 'skill - for a model with a writer; ' + m.label + ' has none: the box in the chat is its prompt'
+  const sh = el('div', 'vc-hdr', noWriter ? 'skill - for Seedance and Grok; under ' + m.label + ' a recipe only lays out what to attach'
       : 'skill - the recipe the writer follows');
   scroll.appendChild(sh);
   const ta = document.createElement('textarea');

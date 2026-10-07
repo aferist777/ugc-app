@@ -63,6 +63,15 @@ function VIDEOS(ctx) {
     _remember();
   }
   const isMC = () => (model() || {}).family === 'kmc';
+  // (phase V17, the owner 2026-10-08) Kling motion control STEP BY STEP: with the writer on, the person's pictures (the
+  // character - and a place, clothes or a thing, said in the box from which) and a still of the clip go to the writer and
+  // a picture model first; the first frame is drawn, and Kling moves it with the clip from that moment.
+  const _mcSteps = () => isMC() && ctx.writing();
+  // As many pictures as the picture model takes beside the still (nano-banana-2: 14 references, one is the still).
+  const _frameRoom = () => {
+    const ps = ((_table && _table.frame && _table.frame.providers) || []).filter(p => p.usable);
+    return Math.max(1, Math.min(13, (ps.length ? Math.max(...ps.map(p => p.maxRefs || 2)) : 14) - 1));
+  };
   // (phase V16, the owner 2026-10-07) Seedance's pictures as FRAMES - "pictures are": 'frame' the first frame, 'fl' the first
   // and the last. The zone's pictures are then those places alone, both required; beside a clip or a sound they go as
   // references (Seedance takes frames OR references - kie, Replicate and ByteDance all say so), and the prompt names
@@ -186,9 +195,17 @@ function VIDEOS(ctx) {
       if (to - from < rule.min && dur >= rule.min) { to = Math.min(dur, from + rule.min); from = Math.max(0, to - rule.min); }
     }
     ctx.setAtt(a.path, { dur, in: Math.round(from * 100) / 100, out: Math.round(to * 100) / 100 });
+    // (phase V17, the owner 2026-10-08) Kling motion control: the clip opens on its first frame's slider at once.
+    if (k === 'video' && isMC()) { setTimeout(() => _autoStill(a.path), 150); return; }
     if (dur > to - from + 0.05) {
       ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press its seconds to choose another part.');
     }
+  }
+  function _autoStill(path) {
+    const a = ctx.atts().find(x => x.path === path);
+    const ui = ctx.ui();
+    if (!a || !isMC() || !ui) return;
+    _trimFor(a, ui.atts.querySelector('.mv3-ig-att[data-path="' + CSS.escape(path) + '"]'));
   }
 
   // The part chosen by hand: the clip (or the sound) in a panel over the zone, its window within what the model takes.
@@ -199,11 +216,17 @@ function VIDEOS(ctx) {
     if (!dur) { ctx.say('Its length is not known - it cannot be cut.'); return; }
     const k = _kind(a);
     const rule = _spanRule(a) || { min: 0.5, max: dur, why: '' };
+    // (phase V17) Under Kling motion control the part starts on the first frame, picked on a slider.
+    const still = isMC() && k === 'video';
     openTrim({
       anchor: cell, kind: k, src: a.path, poster: a.poster ? thumbOf(a.poster, 'main') : '', dur,
       from: +a.in || 0, to: +a.out || Math.min(dur, rule.max),
       min: Math.min(rule.min, dur), max: Math.max(Math.min(rule.min, dur), rule.max),
-      title: a.name || (k === 'audio' ? 'the sound' : 'the clip'), why: rule.why,
+      title: a.name || (k === 'audio' ? 'the sound' : 'the clip'),
+      why: (still ? (ctx.writing() ? 'Pick the moment your character is seen best: the first frame is drawn from it, and the moves go from there. '
+        : 'Pick the moment the moves start from. ') : '') + rule.why,
+      still,
+      onStill: (url) => ctx.setAtt(a.path, { still: url }),
       onChange: (f, t) => ctx.setAtt(a.path, { in: f, out: t }),
       onClose: () => { if (_trimPath === a.path) _trimPath = ''; },
     });
@@ -340,7 +363,7 @@ function VIDEOS(ctx) {
       host.textContent = '';
       const mSel = _select('mv3-vc-model', 'The model - each its own price', models().map(m => ({
         value: m.id, text: _modelLine(m), disabled: !m.usable, title: m.why,
-      })), _last.model, (v) => { _last.model = v; _recipeParams(v); _remember(); _paintModel(true); ctx.paintAtts(); });
+      })), _last.model, (v) => { _last.model = v; _recipeParams(v); _remember(); _paintModel(); ctx.paintAtts(); });
       _row(host, 'model', mSel);
       // What the chosen model does and what to attach - under its dropdown (phase V6, the owner: the line above the
       // thread is the recipe's now).
@@ -369,7 +392,7 @@ function VIDEOS(ctx) {
         });
       }
     }
-    _paintModel(false);
+    _paintModel();
   }
 
   // The switches (phase V15, the owner 2026-10-07): the writer - it was the pen in the bar - and 中文, one box for every
@@ -389,15 +412,16 @@ function VIDEOS(ctx) {
         : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
     const held = !bWhy && _boardOn();
     // (phase V16, the owner) The writer is a checkbox like the storyboard and 中文 - on by default.
-    const wr = el('label', 'mv3-vc-check' + (isMC() ? ' is-off' : held ? ' is-held' : ''));
+    const wr = el('label', 'mv3-vc-check' + (held ? ' is-held' : ''));
     const wcb = document.createElement('input');
     wcb.type = 'checkbox';
-    wcb.checked = ctx.writing() && !isMC();
-    wcb.disabled = isMC() || held;
+    wcb.checked = ctx.writing();
+    wcb.disabled = held;
     wcb.addEventListener('change', () => ctx.setWriting(wcb.checked));
     wr.append(wcb, el('span', null, 'writer'));
-    wr.title = isMC() ? 'Kling motion control has no writer - the box is its prompt'
-      : held ? 'The storyboard is written by the writer - untick the storyboard first'
+    // (phase V17) Under Kling motion control the writer writes the first frame's picture prompt.
+    wr.title = held ? 'The storyboard is written by the writer - untick the storyboard first'
+      : isMC() ? 'On: the writer reads your pictures and the still of the clip and writes the first frame\'s prompt - you see the prompt, then the picture, then the video, each paid step by its own press. Off: one picture and the clip go straight to Kling.'
         : 'The writer - a prompt engineer - writes the prompt this model wants from your message and attachments. Off: your words go as typed (translated into English when they are not).';
     box.appendChild(wr);
     const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
@@ -428,7 +452,7 @@ function VIDEOS(ctx) {
     box.appendChild(zh);
   }
 
-  function _paintModel(changed) {
+  function _paintModel() {
     if (!_set) return;
     const m = model();
     if (!m) return;
@@ -446,16 +470,10 @@ function VIDEOS(ctx) {
     const want = recOf(m, _last.agg[m.id]) && recOf(m, _last.agg[m.id]).usable ? _last.agg[m.id] : m.defaultAgg;
     if (want) _set.agg.value = want;
     _set.agg.disabled = m.records.filter(r => r.usable).length < 2;
-    // Kling motion control's prompt is the box: the standard one stands there when it is empty; leaving the model
-    // takes it away again if it was not changed.
+    // (phase V17, the owner 2026-10-08) Kling's prompt is put in by the server - the box holds no standard text any more;
+    // one an older draft left there goes. The box's hint is painted with the model's settings.
     const std = _table.standardPrompt || '';
-    if (isMC()) {
-      ctx.placeholder('The prompt Kling gets, in English - the moves come from the clip, the look from the picture.');
-      if (!String(ctx.text()).trim()) ctx.setText(std);
-    } else {
-      ctx.placeholder('');
-      if (changed && ctx.text() === std) ctx.setText('');
-    }
+    if (std && ctx.text() === std) ctx.setText('');
     _set.brief.textContent = m.brief;
     _paintParams();
     _paintRecipe();
@@ -526,16 +544,13 @@ function VIDEOS(ctx) {
       _row(box, 'sound', _select('mv3-vc-keep', r.keepSound ? 'The clip\'s own sound - Kling keeps it' : 'The clip\'s own sound - laid under the video when it lands',
         [{ value: 'on', text: 'keep the clip\'s sound' }, { value: 'off', text: 'silent' }],
         p.keepSound === false ? 'off' : 'on', (v) => setParam('keepSound', v === 'on')));
-      const std = el('button', 'mv3-c-btn mv3-vc-std', 'standard prompt');
-      std.type = 'button';
-      std.title = 'Put the standard prompt back in the box: ' + (_table.standardPrompt || '');
-      std.addEventListener('click', () => ctx.setText(_table.standardPrompt || ''));
-      box.appendChild(std);
     }
-    // (phase V16) With frames the words may be left out - the writer decides the motion from the frames.
-    if (!isMC()) {
-      ctx.placeholder(_framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
-    }
+    // (phase V16) With frames the words may be left out - the writer decides the motion from the frames. (phase V17) Under
+    // Kling the box says what it is for: with the writer, what to take from which picture; without it, Kling's prompt.
+    ctx.placeholder(isMC()
+      ? (ctx.writing() ? 'What to take from which picture - "the character from 1, the place from 2, the hat from 3 on her head" - or nothing, and the writer works it out. Kling gets its own prompt.'
+        : 'The prompt Kling gets, in English - empty, the standard one')
+      : _framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
     _paintSwitches();
     _paintPrice();
   }
@@ -567,6 +582,16 @@ function VIDEOS(ctx) {
       box.textContent = '';
       box.append(el('b', null, sp.usd != null ? '≈' + money(sp.usd) : '—'),
         el('span', null, 'the storyboard first · ' + sp.words + ' · then, by its own press, the video ≈' + money(pr.usd * many)));
+    }
+    // (phase V17) Kling step by step: the first frame first, and the video after it - each by its own press.
+    if (_mcSteps() && pr && !pr.none) {
+      const fi = _table && _table.frame;
+      const fp = fi && (fi.providers || []).find(p => p.usable);
+      box.className = 'mv3-ig-cost';
+      box.textContent = '';
+      box.append(el('b', null, fp && fp.price != null ? '≈' + money(fp.price) : '—'),
+        el('span', null, 'the first frame first' + (fi ? ' · ' + fi.quality + ' · ' + fi.label : '') + ' · then, by its own press, the video '
+          + (pr.usd != null ? '≈' + money(pr.usd * many) : '≈' + money(pr.per) + ' per second of the clip')));
     }
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
@@ -619,7 +644,7 @@ function VIDEOS(ctx) {
     box.appendChild(el('span', 'sp'));
     if (!seed) box.appendChild(el('span', 'why', 'two steps are made by Seedance - pick a Seedance model'));
     else if (tooMuch) box.appendChild(el('span', 'why', 'it does not fit ' + ((model() || {}).label || 'this model') + ': ' + tooMuch));
-    else if (isMC()) box.appendChild(el('span', 'why', 'no writer here: the recipe lays out what to attach, the box is Kling\'s prompt'));
+    else if (isMC()) box.appendChild(el('span', 'why', 'under Kling a recipe only lays out what to attach'));
     const x = el('button', 'x', '×');
     x.type = 'button';
     x.title = 'Stop using this recipe';
@@ -661,7 +686,7 @@ function VIDEOS(ctx) {
       vals: was && was.id === u.skill.id && was.kind === u.skill.kind ? (was.vals || []) : [],
     } : null;
     _wantRecipe = true;
-    if (_set) { _set.model.value = u.model; _paintModel(true); }
+    if (_set) { _set.model.value = u.model; _paintModel(); }
     // What was attached before finds the recipe's slots.
     ctx.reslot();
     ctx.saveDraft();
@@ -689,6 +714,7 @@ function VIDEOS(ctx) {
     return ps.length ? Math.max(...ps.map(p => p.maxRefs || 1)) : 14;
   };
   const _picRoom = (r) => {
+    if (_mcSteps()) return _frameRoom();
     const n = Math.max(0, ((r && r.limits.images) || 0) - _seat());
     return _seat() ? Math.min(n, _boardCap()) : n;
   };
@@ -725,6 +751,7 @@ function VIDEOS(ctx) {
     return { parts: [
       { kind: 'image', word: 'pictures', one: 'picture', room: frames ? _frameSlots().length : Math.min(MAX_PICS, r ? _picRoom(r) : 0), slots: _slotsOf('image'),
         full: frames ? _onlyFrames() + ' - set "pictures are" to references for more pictures.'
+          : _mcSteps() ? 'Up to ' + _frameRoom() + ' pictures - the still of the clip is the picture model\'s other reference.'
           : _seat() ? 'Room for ' + (r ? _picRoom(r) : 0) + ' - the storyboard goes to the video as one more picture, and it is drawn with these.' : '',
         note: asRefs ? 'go as references - may not match exactly' : '',
         noteLong: asRefs ? 'With a clip or a sound Seedance takes the frames as references: the video aims at them, but may not start and end on them exactly. Without clips and sounds they are the model\'s own frames.' : '',
@@ -941,19 +968,27 @@ function VIDEOS(ctx) {
     const n = _pics().length;
     const L = r.limits || {};
     // (phase V7.3) Kling motion control: ONE picture - the person and the place - and ONE clip - the moves; the box is
-    // its prompt, in English (translated when not), up to its limit.
+    // its prompt, in English (translated when not), up to its limit. (phase V17) With the writer on: the person's pictures
+    // - the character, and whatever else they want taken from where - and the clip; the first frame is drawn from them.
     if (isMC()) {
-      if (n !== 1 || _clips().length !== 1) {
-        return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + (r.duration.min || 3) + '-'
-          + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s).'];
+      const secs = (r.duration.min || 3) + '-' + (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30)) + ' s';
+      if (_mcSteps()) {
+        if (n < 1 || _clips().length !== 1) {
+          return ['Kling needs your character and a clip.', 'Pictures: your character - and a place, clothes or a thing if you like (say in the box what to take from which); the clip: the moves (' + secs + ').'];
+        }
+        const fi = _table.frame;
+        if (!fi || !(fi.providers || []).some(p => p.usable)) return ['The first frame cannot be drawn.', ((fi && (fi.providers || []).find(p => p.why)) || {}).why || 'no picture model can be asked'];
+      } else {
+        if (n !== 1 || _clips().length !== 1) return ['Kling needs one picture and one clip.', 'The picture is the person and the place, the clip the moves (' + secs + ').'];
+        const words = String(ctx.text() || '').trim();
+        if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
       }
-      const words = String(ctx.text() || '').trim();
-      if (r.promptMax && words.length > r.promptMax) return ['The prompt is too long.', m.label + ' takes ' + r.promptMax + ' characters - this one is ' + words.length + '.'];
     }
     if (r.needs && r.needs.images && n < r.needs.images) return ['It needs a picture.', m.label + ' on ' + r.aggLabel + ' starts from one.'];
     if (n > _picRoom(r)) {
       return ['Too many pictures.', _seat() ? 'Room for ' + _picRoom(r) + ': the storyboard goes to ' + m.label + ' as one more picture, and it is drawn with these.'
-        : m.label + ' on ' + r.aggLabel + ' takes ' + (L.images || 0) + '.'];
+        : _mcSteps() ? 'Up to ' + _picRoom(r) + ' - the still of the clip is the picture model\'s other reference.'
+          : m.label + ' on ' + r.aggLabel + ' takes ' + (L.images || 0) + '.'];
     }
     // (phase V7) Clips and sounds: as many as the model takes, each with a part it takes.
     const vi = _clips(), au = _sounds();
@@ -2207,10 +2242,10 @@ function VIDEOS(ctx) {
                att: (i) => ({ path: i.audioPath, name: i.name, dur: +i.duration || 0 }) },
     },
     // (phase V7.3) Kling motion control's empty box sends its standard prompt.
-    emptyText: () => (isMC() && _table ? _table.standardPrompt || '' : ''),
+    emptyText: () => (isMC() && !ctx.writing() && _table ? _table.standardPrompt || '' : ''),
     // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone - and with frames,
     // which the writer writes even when it is off.
-    emptyOk: () => !isMC() && ctx.atts().length > 0 && (ctx.writing() || _framesMode()),
+    emptyOk: () => ctx.atts().length > 0 && (ctx.writing() || _framesMode()),
     // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
     afterSend: (d) => { if (d && (d.review || d.storyboard)) ctx.useAtts([]); },
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
@@ -2256,7 +2291,7 @@ function VIDEOS(ctx) {
         _dropGone();
       },
       // The storyboard is the writer's: its seat and its price follow the writer too (phase V15).
-      onPen: () => { _paintRecipe(); _paintSwitches(); _paintPrice(); ctx.paintAtts(); },
+      onPen: () => { _paintRecipe(); _paintParams(); ctx.paintAtts(); },
     },
 
     // A finished clip in the thread: its poster - a press plays it, and it can be dragged onto a lane (phase V13: the
