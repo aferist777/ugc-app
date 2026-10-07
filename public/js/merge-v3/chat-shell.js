@@ -153,6 +153,9 @@ export function createChat(make) {
     replace: (oldPath, path, name, o) => _replace(oldPath, path, name, o),
     // (phase V15) A send of the description's own: { text, body, over, from } - see _send.
     sendNow: (o) => _send(o || {}),
+    // (phase V16) The zone replaced by these attachments ({ path, kind, role, label, in, out }) - a message's, put back
+    // for the next variant; [] empties it.
+    useAtts: (list) => _useAtts(list),
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
@@ -505,6 +508,20 @@ export function createChat(make) {
     for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
     _atts[i] = att;
     if (typeof S.onAttach === 'function') S.onAttach(att);
+    _attSeq++;
+    _paintAtts();
+    _paintStrip();
+    _draftLater();
+  }
+
+  // (phase V16) Everything in the zone replaced: a message's attachments put back, or none at all.
+  function _useAtts(list) {
+    _atts = [];
+    _armed = null;
+    for (const a of list || []) {
+      if (!a || !a.path) continue;
+      _attach(a.path, a.name || a.label || '', { kind: a.kind, role: a.role, label: a.label, in: a.in, out: a.out, atEnd: true });
+    }
     _attSeq++;
     _paintAtts();
     _paintStrip();
@@ -1249,7 +1266,8 @@ export function createChat(make) {
     const at = (o && o.from) || _ui.go;
     // (phase V7.3) A description may stand in for an empty box - Kling motion control's standard prompt.
     const text = own ? String(o.text).trim() : (ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : ''));
-    if (!text) {
+    // (phase V16) A description may let the box go empty - the video chat's writer makes a clip from the attachments.
+    if (!text && (own || !(typeof S.emptyOk === 'function' && S.emptyOk()))) {
       if (own) { note(at, 'Nothing to send.', 'Its words are empty.'); return; }
       ta.focus();
       ta.classList.add('is-bad');
@@ -1284,6 +1302,9 @@ export function createChat(make) {
       });
       if (!d || !d.success) { note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
       if (!own) { ta.value = ''; _grow(); }
+      // (phase V16) What the description does once a send is in (the video chat: the zone emptied - its attachments are
+      // packed into the writer's message).
+      if (typeof S.afterSend === 'function') S.afterSend(d);
       _saveDraft(_key || '');
       if (d.send) _sendSeq.set(d.send, _attSeq);
       await _reload(true);

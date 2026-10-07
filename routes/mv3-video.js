@@ -132,7 +132,9 @@ router.post('/mv3/video/send', async (req, res) => {
     const isMC = /^kmc/.test(model);
     // Kling motion control's box IS its prompt (phase V7.3): an empty one sends the standard prompt, said as the turn.
     const text = String(b.text || '').trim().slice(0, 30000) || (isMC ? VM.STANDARD_MC_PROMPT : '');
-    if (!text) return res.status(400).json({ success: false, error: 'say what to make' });
+    // (phase V16, the owner's answer 3) The writer stopping for a look makes a clip from the attachments alone.
+    const review = !!b.review && !isMC && b.write !== false && !b.storyboard;
+    if (!text && !(review && Array.isArray(b.media) && b.media.length)) return res.status(400).json({ success: false, error: 'say what to make' });
     const params = (b.params && typeof b.params === 'object') ? b.params : {};
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     // A catalog's skill is the writer's recipe: none for Kling motion control (no writer) or with the pen off.
@@ -173,6 +175,25 @@ router.post('/mv3/video/send', async (req, res) => {
       catch (e) { return res.status(e.status || 500).json({ success: false, error: e.message }); }
       res.json({ success: true, send: st.card.id, card: st.card.id, boardId: st.genId });
       _writeBoard(st.card.id, st.kick, st.genId, st.bkick, { model, text, media, params });
+      return;
+    }
+    // (phase V16, the owner 2026-10-07) THE WRITER STOPS FOR A LOOK: the person's turn and a prompt card, the writer behind
+    // the answer, and the video made only from the card ("make the video" - /card/:id/make). With the writer off the
+    // words still go as typed, one press; Kling motion control has no writer.
+    if (review) {
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      const before0 = CHAT.read(project, KIND).slice(-4).map(m => ({ role: m.role, text: m.text }));
+      const turn = CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
+      const kickW = 'w' + crypto.randomBytes(8).toString('hex');
+      CHAT.writing.add(kickW);
+      let card;
+      try {
+        card = CHAT.add({ project, kind: KIND, role: 'agent', text: '', refs: media.map(m => m.path), media,
+                          card: { type: 'prompt', plain: true, state: 'writing', kick: kickW, startedAt: new Date().toISOString(),
+                                  from: turn.id, text, model, agg: fits[0].agg, params, versions: [] } });
+      } catch (e) { CHAT.writing.delete(kickW); throw e; }
+      res.json({ success: true, send: card.id, card: card.id, review: true });
+      _writePlain(card.id, kickW, { model, agg: fits[0].agg, text, media, params, max: fits[0].promptMax, before: before0 });
       return;
     }
     if (VGENS.runningSends(project) >= AT_ONCE) {
@@ -659,6 +680,43 @@ async function _writeCard(cardId, kick, o) {
   } finally { CHAT.writing.delete(kick); }
 }
 
+// (phase V16) The writer of a PLAIN card - the chat's message with the writer stopping for a look: each writing is a
+// VARIANT of the prompt (`versions`, at most 10), the newest chosen; one that fails leaves the variants there were, and
+// says why. Filed only while the card still waits for THIS writer.
+const NO_WORDS = '(Nothing was written - decide what the clip shows from the attachments.)';
+async function _writePlain(cardId, kick, o) {
+  let out;
+  try {
+    const sees = await _writerSees(o.media, 'review');
+    const t = await AGENT.thinkVideo({ model: o.model, text: o.text || NO_WORDS, media: o.media, picUrls: sees.urls, seen: sees.seen,
+                                       thread: o.before || [], params: o.params, max: o.max, review: true });
+    out = t.prompt ? { prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '' }
+      : { error: t.fail || 'the writer answered nothing usable - write it again' };
+    if (out.prompt) {
+      // A storyboard among the pictures is followed (V15): a prompt that does not name it gets the sentence that does.
+      const k = o.media.filter(m => m.kind === 'image').findIndex(m => m.role === 'storyboard') + 1;
+      if (k && !_namesSheet(out.prompt, k)) out.prompt = (out.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
+      const wrong = _refsWrong(out.prompt, o.media);
+      if (wrong) out = { error: 'the writer wrote a prompt that ' + wrong.replace(/^the prompt /, '') + ' - write it again' };
+    }
+  } catch (e) {
+    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+  }
+  try {
+    CHAT.update(cardId, (m) => {
+      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
+      const had = (m.card.versions || []).length;
+      if (out.prompt) {
+        const v = { id: 'v' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'), at: new Date().toISOString(),
+                    model: o.model, agg: o.agg, params: o.params, prompt: out.prompt, writer: out.writer, fell: out.fell, edited: false };
+        m.card.versions = (m.card.versions || []).concat([v]).slice(-10);
+        Object.assign(m.card, { cur: v.id, prompt: v.prompt, model: v.model, agg: v.agg, params: v.params, writer: v.writer, fell: v.fell, edited: false, error: '' });
+      } else m.card.error = out.error;
+      m.card.state = out.prompt || had ? ((m.card.sends || []).length || (m.genIds || []).length ? 'sent' : 'ready') : 'failed';
+    });
+  } finally { CHAT.writing.delete(kick); }
+}
+
 // The settings a card is written for and made with: the model, its aggregator and parameters as the column has them.
 function _settings(b) {
   const model = String(b.model || '');
@@ -763,6 +821,9 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const prompt = b.prompt == null ? null : _strictRefs(String(b.prompt).replace(/\r\n/g, '\n')).slice(0, 30000);
     const board = b.board == null ? null : String(b.board).replace(/\r\n/g, '\n').slice(0, 6000);
     const chosen = b.chosen == null ? null : String(b.chosen);
+    // (phase V16) A plain card's prompt variants: `ver` the one edited (the chosen one when none), `cur` the one chosen.
+    const ver = b.ver == null ? null : String(b.ver);
+    const cur = b.cur == null ? null : String(b.cur);
     // (phase V7.6) A frame-swap's moment: within the part of the clip that goes.
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
     let why = null;
@@ -774,7 +835,26 @@ router.patch('/mv3/video/card/:id', (req, res) => {
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
-      if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
+      if (x.card.plain && Array.isArray(x.card.versions) && x.card.versions.length) {
+        const pick = (id) => x.card.versions.find(v => v.id === id);
+        if (cur != null) {
+          const v = pick(cur);
+          if (!v) { why = [404, 'no such variant of the prompt']; return false; }
+          if (x.card.cur !== v.id) {
+            Object.assign(x.card, { cur: v.id, prompt: v.prompt, model: v.model || x.card.model, agg: v.agg || x.card.agg,
+                                    params: v.params || x.card.params, writer: v.writer || '', fell: v.fell || '', edited: !!v.edited });
+            changed = true;
+          }
+        }
+        if (prompt != null) {
+          const v = pick(ver || x.card.cur);
+          if (v && v.prompt !== prompt) {
+            Object.assign(v, { prompt, edited: true });
+            if (v.id === x.card.cur) Object.assign(x.card, { prompt, edited: true });
+            changed = true;
+          }
+        }
+      } else if (prompt != null && x.card.prompt !== prompt) { x.card.prompt = prompt; x.card.edited = true; changed = true; }
       if (x.card.board && board != null && x.card.board.prompt !== board) { x.card.board.prompt = board; x.card.board.edited = true; changed = true; }
       // Only a sheet of this card that has landed and is still on the shelf can be chosen (review V8).
       if (x.card.board && chosen != null && x.card.board.chosen !== chosen) {
@@ -830,6 +910,27 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
       return;
     }
     if (m.card.board && m.card.board.kind === 'frame') return res.status(400).json({ success: false, error: 'a picture-then-video card has no writer - it is Kling motion control\'s: pick it on the left' });
+    // (phase V16) A plain card written again: another variant of its prompt, from the person's words and its attachments.
+    if (m.card.plain) {
+      const s = _settings(b);
+      if (!VM.MODELS.some(x => x.id === s.model)) return res.status(400).json({ success: false, error: 'no such model: ' + s.model });
+      if (_family(s.model) === 'kmc') return res.status(400).json({ success: false, error: 'Kling motion control has no writer - its box is the prompt' });
+      const mm = _mediaOf(m.media);
+      if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+      const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
+      if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      kick = 'w' + crypto.randomBytes(8).toString('hex');
+      CHAT.writing.add(kick);
+      const ok = CHAT.update(m.id, (x) => {
+        if (!x.card || x.card.state === 'writing') return false;
+        Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), error: '' });
+      });
+      if (!ok || !ok.card || ok.card.kick !== kick) { CHAT.writing.delete(kick); return res.status(409).json({ success: false, error: 'it changed meanwhile' }); }
+      res.json({ success: true, card: m.id });
+      _writePlain(m.id, kick, { model: s.model, agg: rt.fits[0].agg, text: m.card.text, media: mm.media, params: s.params, max: rt.fits[0].promptMax, before: [] });
+      return;
+    }
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
     const s = _settings(b);
@@ -966,8 +1067,12 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     const recipe = m.card.recipe || (rc && rc.card.recipe) || null;
     const skill = recipe ? Object.assign({}, recipe, { text: (rc && rc.card.body) || '' }) : null;
-    // A card with no recipe card of its own (a frame-swap, V7.6) is said by its recipe's title.
-    const said = rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
+    // A card with no recipe card of its own (a frame-swap, V7.6) is said by its recipe's title; a plain one (V16) by the
+    // person's words.
+    const said = m.card.plain ? String(m.card.text || prompt).replace(/\s+/g, ' ').slice(0, 200)
+      : rc ? _saidOf(rc, prompt) : String((recipe && recipe.title) || prompt).replace(/\s+/g, ' ').slice(0, 200);
+    // (phase V16) The variant of the prompt the person made it from - chosen, and kept with the attempt.
+    const ver = m.card.plain && Array.isArray(m.card.versions) && m.card.versions.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
     const where = (b.where && typeof b.where === 'object') ? b.where : {
       page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
       label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
@@ -988,7 +1093,10 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     CHAT.update(m.id, (x) => {
       const at = new Date().toISOString();
       Object.assign(x.card, { state: 'sent', prompt, model: s.model, agg: rt.fits[0].agg, params: s.params, sent: { at, n, zh },
-                              sends: _was(x).concat([{ at, n, zh, boardId, genIds: ids }]) });
+                              sends: _was(x).concat([{ at, n, zh, boardId, genIds: ids, ver }]) });
+      // (phase V16) The variant made from is the chosen one, as the person edited it.
+      const v = ver && Array.isArray(x.card.versions) ? x.card.versions.find(y => y.id === ver) : null;
+      if (v) { if (v.prompt !== prompt) Object.assign(v, { prompt, edited: true }); x.card.cur = v.id; }
       if (x.card.board && boardId) x.card.board.chosen = boardId;
       x.genIds = (x.genIds || []).concat(ids).slice(-40);
       x.genId = x.genIds[0];

@@ -27,7 +27,8 @@ import { createChat, el, money, json, stored, keep, thumbOf, refCell } from './c
 import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
 import { openHelp, closeHelp } from './vhelp.js';
-import { note } from './ask.js';
+import { stepCard } from './vsteps.js';
+import { note, askDelete } from './ask.js';
 import { startInlineProgress } from '../progress.js';
 
 const LS_LAST = 'mv3_vc_last_v1';         // { model, agg: { <model>: agg }, params: { <model>: {...} } }
@@ -967,6 +968,9 @@ function VIDEOS(ctx) {
       zh: _zhOn(),
       // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
       storyboard: boarding || undefined,
+      // (phase V16, the owner) The writer stops for a look: its prompt comes back as a message of its own, and the video is
+      // made from there - "make the video". Kling motion control has no writer.
+      review: !boarding && ctx.writing() && !isMC() ? true : undefined,
       params: {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
@@ -1320,6 +1324,9 @@ function VIDEOS(ctx) {
   // repainted in place (_paintBoards, _paintTries), never under the typing.
   const _cardSig = (m) => {
     const c = m.card;
+    // (phase V16) The writer's message is drawn anew only when it first has a prompt (or fails without one): its variants,
+    // its clips and its prices are its sub-project's, painted in place.
+    if (c.plain) return [c.type, 'plain', (c.versions || []).length ? 'v' : (c.state || '') + ':' + (c.error || '')].join(':');
     return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).length].join(':');
   };
   const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
@@ -1329,6 +1336,7 @@ function VIDEOS(ctx) {
     const c = m.card;
     if (c.type === 'recipe') return _sentRequest(m);
     if (c.type === 'board') return _storyCard(m, progs);
+    if (c.plain) return _reviewCard(m, progs);
     _forget(m.id);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-' + c.state);
     const h = el('div', 'vc-card-h');
@@ -1485,7 +1493,7 @@ function VIDEOS(ctx) {
   // The prices and the presses of the waiting cards follow the column: another kind of model means writing again.
   function _freshenCards() {
     for (const [id, l] of _live) {
-      if (!l.go.isConnected) { _forget(id); continue; }
+      if (!(l.el || l.go).isConnected) { _forget(id); continue; }
       _freshenOne(id, l);
     }
   }
@@ -1494,10 +1502,12 @@ function VIDEOS(ctx) {
     const l = _live.get(id);
     if (l && l.two) { for (const p of l.two.progs.values()) p.detach(); l.two.progs.clear(); }
     if (l && l.triesProgs) { for (const p of l.triesProgs.values()) p.detach(); l.triesProgs.clear(); }
+    if (l && l.steps) l.steps.destroy();
     _live.delete(id);
   }
   function _freshenOne(id, l) {
     if (l.story) { _freshenStory(id, l); return; }
+    if (l.review) { _freshenReview(id, l); return; }
     const m = model();
     const pr = priceOf(rec(), l.m.media || []);
     const n = _cardN.get(id) || 1;
@@ -1546,7 +1556,8 @@ function VIDEOS(ctx) {
     const l = _live.get(m.id);
     if (!l || go.disabled) return;
     const mm = model();
-    if (mm && mm.family !== _familyOf(m.card.model)) {
+    // (phase V16) A writer's message makes from the variant shown - written for its own model.
+    if (mm && mm.family !== _familyOf(l.vmodel || m.card.model)) {
       if (l.two && l.two.frame) { note(go, 'Kling makes it.', 'A picture-then-video card is made by Kling motion control - pick it on the left.'); return; }
       if (l.two) { note(go, 'Seedance makes it.', 'A two-step video follows its storyboard with Seedance - pick a Seedance model on the left.'); return; }
       return _rewrite(m, go);
@@ -1563,13 +1574,14 @@ function VIDEOS(ctx) {
     }
     go.disabled = true;
     try {
-      clearTimeout(_patchT.get(m.id));
-      _patchT.delete(m.id);
+      clearTimeout(_patchT.get(l.patchKey || m.id));
+      _patchT.delete(l.patchKey || m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/make', {
         project: m.project, prompt, n: _cardN.get(m.id) || 1, model: b.model, agg: b.agg, params: b.params, where: _where(m.project),
         boardId: l.two ? ((_chosenBoard(l) || {}).id || '') : undefined,
         zh: _zhOn(),
+        ver: l.ver || undefined,
       });
       if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
       _cardN.delete(m.id);
@@ -1830,9 +1842,11 @@ function VIDEOS(ctx) {
   // Every written card as the thread is read: its sheets and its attempts repainted in place.
   function _freshenLive(thread) {
     for (const [id, l] of _live) {
-      if (!l.go.isConnected) { _forget(id); continue; }
+      if (!(l.el || l.go).isConnected) { _forget(id); continue; }
       const now = thread.find(x => x.id === id);
       if (now) l.m = now;
+      // (phase V16) The writer's message: its steps and their variants, painted again in place.
+      if (l.review) { _paintReview(id, l); continue; }
       if (l.two) _paintBoards(id, l);
       if (l.tries) _paintTries(id, l);
       _freshenOne(id, l);
@@ -1989,23 +2003,202 @@ function VIDEOS(ctx) {
     }
     if (last < head.length) req.appendChild(document.createTextNode(head.slice(last)));
     box.appendChild(req);
-    const media = m.media || [];
-    if (media.length) {
-      const row = el('div', 'mv3-ig-msg-refs');
-      const count = { image: 0, video: 0, audio: 0 };
-      for (const a of media) {
-        const k = count[a.kind] != null ? a.kind : 'image';
-        count[k]++;
-        const cell = refCell(a, k, count[k], { show: ctx.peekShow, hide: ctx.peekHide });
-        cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
-        const wrap = el('div', 'vc-ref');
-        wrap.appendChild(cell);
-        if (a.label) wrap.appendChild(el('span', 'lab', a.label));
-        row.appendChild(wrap);
-      }
-      box.appendChild(row);
-    }
+    const row = _mediaRow(m.media || []);
+    if (row) box.appendChild(row);
     return box;
+  }
+
+  // What a message carries, by kind and number, each with its slot's or its role's name - a recipe's request, a
+  // writer's message (phase V16).
+  function _mediaRow(media) {
+    if (!media.length) return null;
+    const row = el('div', 'mv3-ig-msg-refs');
+    const count = { image: 0, video: 0, audio: 0 };
+    for (const a of media) {
+      const k = count[a.kind] != null ? a.kind : 'image';
+      count[k]++;
+      const cell = refCell(a, k, count[k], { show: ctx.peekShow, hide: ctx.peekHide });
+      cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
+      const wrap = el('div', 'vc-ref');
+      wrap.appendChild(cell);
+      if (a.label) wrap.appendChild(el('span', 'lab', a.label));
+      row.appendChild(wrap);
+    }
+    return row;
+  }
+
+  // ── The writer's message (phase V16, the owner 2026-10-07) ──
+  // With the writer on, ">" packs the words and the attachments into a message of their own - the box and the zone are
+  // emptied - and the writer's prompt comes back in it to look at and edit; only its "make the video" spends. The message
+  // is a SUB-PROJECT (vsteps.js): "prompt" - every writing of it a variant - then "video" - every clip of every attempt a
+  // variant. The variant of the prompt shown is the one made from.
+  const _words = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  function _reviewCard(m, progs) {
+    const c = m.card;
+    _forget(m.id);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
+    const h = el('div', 'vc-card-h');
+    h.append(el('span', 'k', 'video'), el('span', 't', _words(c.text).slice(0, 90) || 'from the attachments alone'));
+    if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
+    box.appendChild(h);
+    if (!(c.versions || []).length) {
+      if (c.state === 'writing') {
+        const strip = el('div', 'mv3-ig-prog');
+        box.appendChild(strip);
+        progs.set('w:' + m.id, startInlineProgress(strip, {
+          label: 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        }));
+        return box;
+      }
+      box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
+      const acts = el('div', 'vc-card-acts');
+      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      again.type = 'button';
+      again.addEventListener('click', () => _rewrite(m, again));
+      acts.appendChild(again);
+      if ((m.media || []).length) acts.appendChild(_backLink(m));
+      box.appendChild(acts);
+      return box;
+    }
+    const steps = stepCard(m.id);
+    box.append(...steps.parts);
+    const l = { m, el: box, steps, ta: null, go: null, price: null, save: null, two: null, tries: null, review: true, ver: '', vmodel: '' };
+    _live.set(m.id, l);
+    _paintReview(m.id, l);
+    return box;
+  }
+  function _paintReview(id, l) {
+    const m = l.m, c = m.card;
+    const vers = (c.versions || []).map(v => ({ key: v.id, sig: v.model, v }));
+    if (c.state === 'writing') vers.push({ key: 'writing', sig: 'writing', writing: true });
+    const steps = [{
+      key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur, variants: vers,
+      note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
+      body: (x, b, progs) => _promptStep(m, l, x, b, progs),
+      acts: (x, a) => _promptActs(m, l, x, a),
+      // The variant paged to is the chosen one (the server keeps it for the next read).
+      page: (x) => { if (x && x.v && x.key !== l.m.card.cur) _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, cur: x.key }, 'PATCH'); },
+      freshen: () => _freshenReview(id, l),
+    }];
+    const clips = _triesOf(m).flatMap((t, i) => t.gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.videoPath || '') + ':' + (g.error || ''), g, t, n: i + 1 })));
+    if (clips.length) {
+      steps.push({
+        key: 'video', title: 'video', word: 'clip', variants: clips,
+        note: (x) => (x ? 'attempt ' + x.n : ''),
+        body: (x, b, progs) => _videoStep(m, x, b, progs),
+        freshen: (x) => { const p = x && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(ctx.stageWords(x.g)); },
+      });
+    }
+    l.steps.paint({ steps });
+  }
+  function _promptStep(m, l, x, b, progs) {
+    const c = l.m.card;
+    l.ta = null; l.ver = ''; l.vmodel = ''; l.patchKey = '';
+    if (!x || x.writing) {
+      const strip = el('div', 'mv3-ig-prog');
+      b.appendChild(strip);
+      progs.set('w', startInlineProgress(strip, {
+        label: 'writing another variant…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      }));
+      return;
+    }
+    const v = x.v;
+    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    const ta = document.createElement('textarea');
+    ta.className = 'vc-prompt-ta';
+    ta.spellcheck = true;
+    ta.value = toShown(v.prompt);
+    ta.title = 'The prompt the model gets - edit it before the video is made. [picture 1], [clip 1] name what is attached, by its number in its part.';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
+    requestAnimationFrame(grow);
+    const key = 'p:' + m.id + ':' + v.id;
+    const save = () => {
+      clearTimeout(_patchT.get(key));
+      _patchT.delete(key);
+      return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, prompt: toNeutral(ta.value), ver: v.id }, 'PATCH');
+    };
+    ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+    b.appendChild(ta);
+    const row = _mediaRow(l.m.media || []);
+    if (row) b.appendChild(row);
+    Object.assign(l, { ta, save, ver: v.id, vmodel: v.model || c.model, patchKey: key });
+  }
+  function _promptActs(m, l, x, a) {
+    l.go = null; l.price = null;
+    if (!x || x.writing) return;
+    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    nBtn.type = 'button';
+    nBtn.title = 'How many to make from it - each clip is its own variant of the video';
+    nBtn.addEventListener('click', () => {
+      _cardN.set(m.id, (_cardN.get(m.id) || 1) === 1 ? 2 : 1);
+      nBtn.textContent = '×' + _cardN.get(m.id);
+      _freshenReview(m.id, l);
+    });
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+    go.type = 'button';
+    go.addEventListener('click', () => _make(l.m, go));
+    const price = el('span', 'vc-card-why');
+    const again = el('button', 'vc-link', 'write it again');
+    again.type = 'button';
+    again.title = 'Another variant of the prompt from the same words and attachments - this one stays';
+    again.addEventListener('click', () => _rewrite(l.m, again));
+    a.append(nBtn, go, price, again);
+    if ((l.m.media || []).length) a.appendChild(_backLink(l.m));
+    l.go = go;
+    l.price = price;
+    _freshenReview(m.id, l);
+  }
+  // The press and the price follow the column: another kind of model than the variant was written for means writing
+  // it again for that one.
+  function _freshenReview(id, l) {
+    // Not "is it on the page": the press is painted the moment its step is built, before the message is put in.
+    if (!l.go) return;
+    const c = l.m.card;
+    const mm = model();
+    const vm = l.vmodel || c.model;
+    const other = !!(mm && _familyOf(vm) && mm.family !== _familyOf(vm));
+    const n = _cardN.get(id) || 1;
+    const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
+    l.go.textContent = other ? 'write it again for ' + mm.label : (made ? 'make the video again' : 'make the video') + (n > 1 ? ' ×' + n : '');
+    l.go.classList.toggle('is-make', !other);
+    l.go.disabled = c.state === 'writing';
+    const pr = priceOf(rec(), l.m.media || []);
+    l.price.textContent = other ? 'this variant was written for ' + _labelOf(vm)
+      : !pr || pr.none ? (mm ? mm.label + ' · no published price' : '')
+        : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
+          : '≈' + money(pr.usd * n) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
+            + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + (_zhOn() ? ' · in 中文' : '');
+  }
+  function _videoStep(m, x, b, progs) {
+    if (!x) return;
+    const t = x.t;
+    const h = el('div', 'vc-try-h');
+    h.appendChild(el('span', 'k', 'attempt ' + x.n));
+    const when = t.at ? new Date(t.at) : null;
+    if (when && !isNaN(when)) h.appendChild(el('span', null, when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })));
+    if (t.zh) h.appendChild(el('span', null, '中文'));
+    const vi = t.ver ? (m.card.versions || []).findIndex(v => v.id === t.ver) : -1;
+    if (vi >= 0 && (m.card.versions || []).length > 1) h.appendChild(el('span', null, 'from prompt variant ' + (vi + 1)));
+    b.appendChild(h);
+    const shots = ctx.shots({ gens: [x.g] }, progs);
+    if (shots) b.appendChild(shots);
+  }
+  // "attachments back to the zone" (the owner's answer 6): this message's attachments in the zone again, for the next
+  // message - what is there now is replaced, after a question.
+  function _backLink(m) {
+    const back = el('button', 'vc-link', 'attachments back to the zone');
+    back.type = 'button';
+    back.title = 'Put this message\'s attachments into the zone again, for the next message';
+    back.addEventListener('click', () => {
+      const list = (m.media || []).filter(a => a && a.path);
+      if (!list.length) return;
+      const put = () => { ctx.useAtts(list); const ui = ctx.ui(); if (ui) ui.ta.focus(); };
+      const n = ctx.atts().length;
+      if (n) askDelete(back, 'Replace what is in the zone?', n + ' attachment' + (n === 1 ? ' is' : 's are') + ' there now - this message\'s ' + list.length + ' come in their place.', put);
+      else put();
+    });
+    return back;
   }
 
   return {
@@ -2062,6 +2255,10 @@ function VIDEOS(ctx) {
     },
     // (phase V7.3) Kling motion control's empty box sends its standard prompt.
     emptyText: () => (isMC() && _table ? _table.standardPrompt || '' : ''),
+    // (phase V16, the owner's answer 3) With the writer on, a message may be the attachments alone.
+    emptyOk: () => ctx.writing() && !isMC() && ctx.atts().length > 0,
+    // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
+    afterSend: (d) => { if (d && d.review) ctx.useAtts([]); },
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },

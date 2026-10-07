@@ -571,6 +571,24 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-try-sheet{ display:inline-flex; align-items:center; gap:6px }
 .vc-try-sheet .vc-board{ width:44px; cursor:zoom-in }
 .vc-board-note{ font:600 10px/1.3 var(--font); color:var(--muted) }
+/* (phase V16, the owner 2026-10-07) A working message as a SUB-PROJECT of its own (vsteps.js): its steps paged at its top,
+   the variants of the step shown at its bottom - the chat does not grow with every attempt. */
+.vc-card.is-steps{ display:flex; flex-direction:column; gap:8px }
+.vc-steps, .vc-vars{ display:flex; align-items:center; gap:6px; min-width:0 }
+.vc-steps[hidden], .vc-vars[hidden], .vc-step-acts[hidden]{ display:none }
+.vc-steps{ padding-bottom:6px; border-bottom:1px solid var(--border-soft) }
+.vc-vars{ padding-top:6px; border-top:1px solid var(--border-soft) }
+.vc-steps-t, .vc-vars-t{ flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.vc-steps-t{ font:700 9.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vc-vars-t{ font:600 10px/1.2 var(--font); color:var(--muted) }
+.vc-nav{
+  flex:0 0 auto; width:24px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--ink); font:700 13px/20px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.vc-nav:hover:not([disabled]){ border-color:var(--primary); color:var(--primary) }
+.vc-nav[disabled]{ opacity:.35; cursor:default }
+.vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
+.vc-step:empty{ display:none }
 .vc-go.is-waiting{ opacity:.55 }
 
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
