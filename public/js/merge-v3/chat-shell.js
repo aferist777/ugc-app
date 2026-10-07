@@ -122,7 +122,7 @@ export function createChat(make) {
   let _sending = false;
   let _n = 1;
   let _write = true;
-  let _atts = [];            // [{ path, name }]
+  let _atts = [];            // [{ path, name }] - in the zone also an empty numbered place, { hole, kind, slot, id }
   let _attSeq = 0;           // moves whenever the row is changed by hand
   const _sendSeq = new Map();   // a send -> the row as it was at the press
   let _pending = new Set();     // results still being made at the last read
@@ -141,8 +141,11 @@ export function createChat(make) {
   const ctx = {
     ui: () => _ui,
     key: () => _key,
-    // In the order their numbers count (phase V6: per part of the zone, per slot of a recipe, then the rest).
-    atts: () => _ordered(),
+    // In the order their numbers count (phase V6: per part of the zone, per slot of a recipe, then the rest) - what goes:
+    // the empty numbered places (phase V15) left out.
+    atts: () => _real(),
+    // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
+    holeWhy: () => _holeWhy(),
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
@@ -327,7 +330,8 @@ export function createChat(make) {
   }
   function _loadDraft(k, memo) {
     const d = stored(S.keys.draft, {})[k] || {};
-    _atts = (Array.isArray(d.atts) ? d.atts : []).filter(a => a && a.path).slice(0, S.maxAtts);
+    // (phase V15) Its empty numbered places too.
+    _atts = (Array.isArray(d.atts) ? d.atts : []).filter(a => a && (a.path || a.hole)).slice(0, S.maxAtts);
     // The row as it was left there is not a change by hand: the counter comes back with it.
     _attSeq = memo ? memo.attSeq : _attSeq + 1;
     if (_ui) {
@@ -352,13 +356,24 @@ export function createChat(make) {
   // empty place at a time up to its most, and "other" closes the part for what the recipe did not ask for. An empty
   // place pressed opens the picker on it (phase V13) - its slot ARMED while the picker is open, so whatever is pressed
   // or brought in there goes into it. Without a zone it is the one row it always was.
+  //
+  // (phase V15, the owner 2026-10-07) A thing taken out of the zone leaves its NUMBERED PLACE EMPTY, so the numbers
+  // after it - and the prompt that names them - stay: picture 1 taken off to put another person in is still picture 1.
+  // An empty place - a hole, { hole, kind, slot, id } in the row - is filled by the next thing for its part or slot,
+  // opens the picker on itself when pressed, and closes with its cross: then the numbers after it move up. One at the
+  // END of its part's numbers holds nothing up and goes by itself. A send waits while one is open (ctx.holeWhy). A thing
+  // in the zone pressed opens the picker on ITS place, on it - another pressed there takes its place and its number; a
+  // clip's or a sound's seconds open the part that goes. The pictures chat has no zone: its row takes a thing out.
   let _armed = null;            // { kind, slot } - the slot the next attachment goes into, while the picker is open
   let _grew = '';               // the part something was just attached to - its row comes to its end
+  let _holeSeq = 0;
   const _kindOf = (a) => (a && (a.kind === 'video' || a.kind === 'audio') ? a.kind : 'image');
   const _zone = () => (typeof set.zone === 'function' ? set.zone() : null);
   const _keysOf = (p) => (p.slots || []).map(s => s.key);
+  const _cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
 
-  // The attachments in the order their numbers count - per part, per slot, then the rest.
+  // The attachments in the order their numbers count - per part, per slot, then the rest. Empty places count too: they
+  // keep their numbers.
   function _ordered() {
     const z = _zone();
     if (!z) return _atts;
@@ -373,6 +388,9 @@ export function createChat(make) {
     for (const a of _atts) if (!out.includes(a)) out.push(a);
     return out;
   }
+  // What goes - the empty places left out.
+  const _real = () => _ordered().filter(a => !a.hole);
+  const _numOf = (a) => _ordered().filter(x => _kindOf(x) === _kindOf(a)).indexOf(a) + 1;
 
   // Which slot of its part an attachment goes into: the armed one while it has room, else the first that MUST still
   // be filled, else the first that may, else "other" ('').
@@ -390,17 +408,34 @@ export function createChat(make) {
     return may ? may.key : '';
   }
 
+  // (phase V15) The place a new thing of this kind goes into, when it is not a new one at the end: the one the picker is
+  // open on, else the first empty numbered place it fits (in the armed slot, with a recipe).
+  function _placeFor(kind) {
+    if (_pickAt && _pickAt.target) {
+      const t = _pickAt.target;
+      return _pickAt.kind === kind && !_pickAt.filled && _atts.includes(t) ? t : null;
+    }
+    const slot = _armed && _armed.kind === kind ? _armed.slot : null;
+    return _ordered().find(a => a.hole && _kindOf(a) === kind && (slot == null || a.slot === slot)) || null;
+  }
+
   function _attach(path, name, o) {
     if (!path || _atts.some(a => a.path === path)) return;
     const kind = (o && (o.kind === 'video' || o.kind === 'audio')) ? o.kind : 'image';
     const z = _zone();
     let slot = '';
+    let into = null;
     if (z) {
       const p = z.parts.find(x => x.kind === kind);
       if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
-      const n = _atts.filter(a => _kindOf(a) === kind).length;
-      if (n >= p.room) { _say(p.full || ('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.')); return; }
-      slot = _slotFor(p);
+      into = _placeFor(kind);
+      if (into) slot = into.slot != null ? into.slot : _slotFor(p);
+      else {
+        // Its places - the empty ones too - are as many as the model takes.
+        const n = _atts.filter(a => _kindOf(a) === kind).length;
+        if (n >= p.room) { _say(p.full || ('This model takes ' + p.room + ' ' + (p.room === 1 ? p.one : p.word) + '.')); return; }
+        slot = _slotFor(p);
+      }
     } else {
       const room = set.room();
       if (_atts.length >= room) {
@@ -412,8 +447,14 @@ export function createChat(make) {
     // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out).
     const att = { path, name: name || '', kind, slot };
     for (const k of ['poster', 'dur', 'in', 'out']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
-    _atts.push(att);
-    _grew = kind;
+    if (into) {
+      // Its place and its number: what stood there - empty, or the thing the picker was opened on - is replaced.
+      _atts[_atts.indexOf(into)] = att;
+      if (_pickAt && _pickAt.target === into) { _pickAt.target = att; _pickAt.filled = true; }
+    } else {
+      _atts.push(att);
+      _grew = kind;
+    }
     if (typeof S.onAttach === 'function') S.onAttach(att);
     // An armed slot that is full now lets go.
     if (z && _armed && _armed.kind === kind && _armed.slot === slot && slot) {
@@ -427,12 +468,66 @@ export function createChat(make) {
     _draftLater();
   }
 
+  // Taken out: in the zone its place stays, empty and numbered (phase V15) - unless nothing comes after it.
   function _detach(path) {
-    _atts = _atts.filter(a => a.path !== path);
+    const i = _atts.findIndex(a => a.path === path);
+    if (i < 0) return;
+    if (_zone()) {
+      const was = _atts[i];
+      const hole = { hole: true, kind: _kindOf(was), slot: was.slot, id: 'h' + Date.now().toString(36) + (++_holeSeq) };
+      _atts[i] = hole;
+      if (_pickAt && _pickAt.target === was) { _pickAt.target = hole; _pickAt.filled = false; }
+      _trimHoles();
+    } else _atts.splice(i, 1);
     _attSeq++;
     _paintAtts();
     _paintStrip();
     _draftLater();
+  }
+
+  // An empty place closed by its cross: the numbers after it move up.
+  function _closeHole(h) {
+    const i = _atts.indexOf(h);
+    if (i < 0) return;
+    _atts.splice(i, 1);
+    _trimHoles();
+    _attSeq++;
+    _paintAtts();
+    _draftLater();
+  }
+
+  // Empty places at the end of a part's numbers hold nothing up: they go - all but the one the picker is open on.
+  function _trimHoles() {
+    const z = _zone();
+    if (!z) return false;
+    const keep = _pickAt && _pickAt.target;
+    let cut = false;
+    for (const p of z.parts) {
+      const mine = _ordered().filter(a => _kindOf(a) === p.kind);
+      for (let i = mine.length - 1; i >= 0 && mine[i].hole && mine[i] !== keep; i--) {
+        _atts.splice(_atts.indexOf(mine[i]), 1);
+        cut = true;
+      }
+    }
+    return cut;
+  }
+
+  // (phase V15) Why a send cannot go yet: the first empty numbered place of a part that takes things - the numbers in
+  // the prompt would move under it. It blinks; null when there is none.
+  function _holeWhy() {
+    const z = _zone();
+    if (!z) return null;
+    for (const p of z.parts) {
+      if (!p.room || p.off) continue;
+      const mine = _ordered().filter(a => _kindOf(a) === p.kind);
+      const h = mine.find(a => a.hole);
+      if (!h) continue;
+      const s = p.slots ? p.slots.find(x => x.key === h.slot) : null;
+      _flashCell(_ui && _ui.atts.querySelector('.mv3-ig-cell.is-hole[data-hole="' + CSS.escape(h.id) + '"]'));
+      return [_cap(s ? (s.label || s.key) : p.one) + ' ' + (mine.indexOf(h) + 1) + ' is empty.',
+        'Put one in its place, or close the place with its ✕ - the numbers after it move up.'];
+    }
+    return null;
   }
 
   function _setAtt(path, patch) {
@@ -447,7 +542,8 @@ export function createChat(make) {
     _draftLater();
   }
 
-  // A recipe came or went: what lies in no slot of it finds one, in the order it was attached.
+  // A recipe came or went: what lies in no slot of it finds one, in the order it was attached. The numbers are counted
+  // anew - its empty places go.
   function _reslot(o) {
     _armed = null;
     const z = _zone();
@@ -455,6 +551,7 @@ export function createChat(make) {
       const keep = [];
       const loose = [];
       for (const a of _atts) {
+        if (a.hole) continue;
         const p = z.parts.find(x => x.kind === _kindOf(a));
         const placed = o && o.unplaced ? a.slot !== undefined : (p && _keysOf(p).includes(a.slot));
         if (placed) keep.push(a); else loose.push(a);
@@ -471,7 +568,9 @@ export function createChat(make) {
 
   function _flash(kind, slot) {
     if (!_ui) return;
-    const c = _ui.atts.querySelector('.mv3-ig-cell.is-empty[data-kind="' + kind + '"][data-slot="' + CSS.escape(slot || '') + '"]');
+    _flashCell(_ui.atts.querySelector('.mv3-ig-cell.is-empty[data-kind="' + kind + '"][data-slot="' + CSS.escape(slot || '') + '"]'));
+  }
+  function _flashCell(c) {
     if (!c) return;
     c.classList.remove('is-flash');
     void c.offsetWidth;
@@ -511,9 +610,11 @@ export function createChat(make) {
   // One part of the zone: its word and count, then its cells in a row that scrolls sideways.
   function _part(p, num) {
     const box = el('div', 'mv3-ig-part is-' + p.kind);
-    const mine = _atts.filter(a => _kindOf(a) === p.kind);
+    // Its places in order - empty ones too (phase V15).
+    const mine = _ordered().filter(a => _kindOf(a) === p.kind);
+    const real = mine.filter(a => !a.hole);
     const head = el('div', 'mv3-ig-part-h', p.word);
-    if (p.room && !p.off) head.appendChild(el('b', null, mine.length + ' / ' + p.room));
+    if (p.room && !p.off) head.appendChild(el('b', null, real.length + ' / ' + p.room));
     box.appendChild(head);
     const row = el('div', 'mv3-ig-part-row');
     if (!p.room || p.off) {
@@ -521,10 +622,10 @@ export function createChat(make) {
       const why = !p.room ? p.none : p.off;
       box.title = why || '';
       box.classList.add('is-off');
-      if (mine.length) {
+      if (real.length) {
         // (phase V7) Attached under a model that took them: they stay in sight, each with its cross, until taken off
         // or another model takes them again - the send says why it will not go with them.
-        for (const a of mine) row.appendChild(_cell(_filled(a, num(a)), '', ''));
+        for (const a of real) row.appendChild(_cell(_filled(a, num(a)), '', ''));
       } else if (p.slots && p.slots.length) {
         for (const s of p.slots) row.appendChild(_empty(p, s, true));
       } else row.appendChild(el('span', 'mv3-ig-part-off', !p.room ? 'none' : 'next step'));
@@ -534,21 +635,28 @@ export function createChat(make) {
     // (phase V7) A clip let go over this part of the zone - from a lane of the timeline - is attached here, the part
     // of its file the timeline plays (timeline-b.js asks for [data-drop-kind]; the description takes 'mv3:clip-out').
     if (p.kind !== 'image') box.dataset.dropKind = p.kind;
+    // A thing, or its empty place, in a cell wearing its slot's name. A slot or a part with an empty place offers no
+    // other: that place is where the next one goes.
+    const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
+      : _cell(_filled(a, num(a), p, s), s ? (s.label || s.key) : '', s && s.hint));
     if (p.slots) {
       for (const s of p.slots) {
         const inS = mine.filter(a => a.slot === s.key);
-        for (const a of inS) row.appendChild(_cell(_filled(a, num(a)), s.label || s.key, s.hint));
-        if (inS.length < s.max && mine.length < p.room) row.appendChild(_empty(p, s, false, inS.length < (s.min || 0)));
+        const must = inS.filter(a => !a.hole).length < (s.min || 0);
+        for (const a of inS) put(a, s, must);
+        if (!inS.some(a => a.hole) && inS.length < s.max && mine.length < p.room) row.appendChild(_empty(p, s, false, must));
       }
       const keys = _keysOf(p);
-      for (const a of mine.filter(x => !keys.includes(x.slot))) row.appendChild(_cell(_filled(a, num(a)), 'other', ''));
+      const other = { key: '', label: 'other', hint: p.other || '' };
+      const rest = mine.filter(x => !keys.includes(x.slot));
+      for (const a of rest) put(a, other, false);
       // "other" only where the room is more than the recipe's own places can still take (phase V7.5: Kling's one clip
       // is the recipe's "moves" - an "other" beside it offered a second clip the model does not take).
       const open = p.slots.reduce((n, s) => n + Math.max(0, s.max - mine.filter(a => a.slot === s.key).length), 0);
-      if (mine.length < p.room && p.room - mine.length > open) row.appendChild(_empty(p, { key: '', label: 'other', hint: p.other || '' }, false, false));
+      if (!rest.some(a => a.hole) && mine.length < p.room && p.room - mine.length > open) row.appendChild(_empty(p, other, false, false));
     } else {
-      for (const a of mine) row.appendChild(_cell(_filled(a, num(a)), '', ''));
-      if (mine.length < p.room) row.appendChild(_empty(p, null, false, false));
+      for (const a of mine) put(a, null, false);
+      if (!mine.some(a => a.hole) && mine.length < p.room) row.appendChild(_empty(p, null, false, false));
     }
     _sideways(row);
     box.appendChild(row);
@@ -558,11 +666,13 @@ export function createChat(make) {
   }
 
   // An attached thing: its picture, its NUMBER - with more than one, the message has to say which is which - and a cross.
-  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go; pressed, the
-  // description opens the part that goes (S.trimFor).
-  function _filled(a, n) {
+  // (phase V7) A clip shows its poster and a sound a note, each with the seconds of it that go. (phase V15) In the zone
+  // (`p` given, with a picker) a press opens the picker on its place, on it; a clip's or a sound's seconds open the part
+  // that goes (S.trimFor).
+  function _filled(a, n, p, s) {
     const kind = _kindOf(a);
-    const cell = el('div', 'mv3-ig-att' + (kind === 'video' ? ' is-clip' : kind === 'audio' ? ' is-sound' : ''));
+    const swap = !!(p && S.pick);
+    const cell = el('div', 'mv3-ig-att' + (kind === 'video' ? ' is-clip' : kind === 'audio' ? ' is-sound' : '') + (swap ? ' is-swap' : ''));
     cell.dataset.path = a.path;
     if (kind === 'image') {
       const img = document.createElement('img');
@@ -574,6 +684,7 @@ export function createChat(make) {
       cell.appendChild(img);
       cell.addEventListener('mouseenter', () => peekShow(thumbOf(a.path, 'main'), cell));
       cell.addEventListener('mouseleave', peekHide);
+      cell.title = (a.name || '') + (swap ? (a.name ? ' - ' : '') + 'press to put another in its place' : '');
     } else {
       if (kind === 'video' && a.poster) {
         const img = document.createElement('img');
@@ -587,21 +698,32 @@ export function createChat(make) {
       const secs = (+a.out > +a.in) ? (+a.out - +a.in) : 0;
       // What the description says of it: `bad` - it cannot go like this, and why; `cut` - only a part of it goes.
       const st = (typeof S.attState === 'function' ? S.attState(a) : null) || {};
-      if (secs) cell.appendChild(el('span', 'dur' + (st.cut ? ' is-cut' : ''), secs.toFixed(1) + 's'));
+      if (secs || +a.dur > 0) {
+        const d = el('button', 'dur' + (st.cut ? ' is-cut' : ''), secs.toFixed(1) + 's');
+        d.type = 'button';
+        d.title = (st.cut ? secs.toFixed(1) + ' s of ' + (+a.dur).toFixed(1) + ' go' : 'all ' + secs.toFixed(1) + ' s go') + ' - press to choose the part';
+        d.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          peekHide();
+          if (typeof S.trimFor === 'function') S.trimFor(a, cell);
+        });
+        cell.appendChild(d);
+      }
       if (st.bad) { cell.classList.add('is-bad'); cell.title = st.bad; }
-      else cell.title = (a.name || '') + (secs ? ' · ' + (st.cut ? secs.toFixed(1) + ' s of ' + (+a.dur).toFixed(1) + ' go' : 'all ' + secs.toFixed(1) + ' s go')
-        + ' - press to choose the part' : '');
+      else cell.title = (a.name || '') + (swap ? (a.name ? ' - ' : '') + 'press to put another in its place, its seconds to choose the part' : '');
+    }
+    if (swap) {
       cell.addEventListener('click', (ev) => {
-        if (ev.target.closest('.x')) return;
+        if (ev.target.closest('.x, .dur')) return;
         peekHide();
-        if (typeof S.trimFor === 'function') S.trimFor(a, cell);
+        _openPick(p, s, a);
       });
     }
     cell.appendChild(el('span', 'n', String(n)));
     const x = el('button', 'x', '✕');
     x.type = 'button';
-    x.title = 'Not this one';
-    x.addEventListener('click', () => _detach(a.path));
+    x.title = swap ? 'Not this one - its place stays, empty, and keeps its number' : 'Not this one';
+    x.addEventListener('click', (ev) => { ev.stopPropagation(); _detach(a.path); });
     cell.appendChild(x);
     return cell;
   }
@@ -639,34 +761,75 @@ export function createChat(make) {
     return c;
   }
 
+  // (phase V15) An empty NUMBERED place - a thing taken out: its number stays, "+" opens the picker on it, the cross
+  // closes it (the numbers after it move up).
+  function _holeCell(p, h, n, s, must) {
+    const box = el('div', 'mv3-ig-att is-hole');
+    const go = el('button', 'go', '+');
+    go.type = 'button';
+    const what = s && s.key ? (s.label || s.key) : p.one;
+    go.title = _cap(what) + ' ' + n + ' is empty - press to put one in its place; the prompt still calls it ' + n;
+    go.addEventListener('click', () => {
+      if (S.pick) { _openPick(p, s, h); return; }
+      const input = _fileOf(p.kind);
+      if (input) input.click();
+    });
+    box.appendChild(go);
+    box.appendChild(el('span', 'n', String(n)));
+    const x = el('button', 'x', '✕');
+    x.type = 'button';
+    x.title = 'Close this place - the numbers after it move up';
+    x.addEventListener('click', () => _closeHole(h));
+    box.appendChild(x);
+    const c = _cell(box, s ? (s.label || s.key) : '', s && s.hint);
+    c.classList.add('is-empty', 'is-hole');
+    if (must) c.classList.add('is-req');
+    c.dataset.kind = p.kind;
+    c.dataset.slot = (s && s.key) || '';
+    c.dataset.hole = h.id;
+    return c;
+  }
+
   // ── The picker (phase V13, the owner 2026-10-07) ──────────────────────────
   // For ONE place: its part, and with a recipe its slot - "other" ('') for what the recipe did not ask for, null for a
   // part without slots. The slot is armed while the window is open; the window closes by itself once the place is full.
+  // (phase V15) `target`: a place that is there - a thing in the zone, or an empty numbered place. The window opens on
+  // the thing's shelf, on it, and what is pressed there takes that place and its number.
   let _picking = false;
-  let _pickAt = null;           // { kind, slot } of the place the picker is open on
-  function _openPick(p, s) {
+  let _pickAt = null;           // { kind, slot, target, filled } of the place the picker is open on
+  function _openPick(p, s, target) {
     const P = S.pick;
     const kind = p.kind;
     const slot = s ? s.key : null;
     _armed = p.slots ? { kind, slot: slot || '' } : null;
     _picking = true;
-    _pickAt = { kind, slot };
+    _pickAt = { kind, slot, target: target || null, filled: false };
     if (typeof P.onOpen === 'function') P.onOpen();
     peekHide();
     const U = _U(kind);
     const label = s ? (s.label || s.key || '') : '';
+    const n = target ? _numOf(target) : 0;
     Pick.openPick({
       kind,
-      title: p.word + (label ? ' · ' + label : ''),
+      title: p.word + (n ? ' · ' + (label || p.one) + ' ' + n : label ? ' · ' + label : ''),
       hint: (s && s.hint) || '',
       project: { key: _key || '', title: Store.title() || '' },
       sources: P.sources(kind),
       start: P.start(kind, s),
       first: (P.first || {})[kind] || '',
-      left: () => _leftIn(kind, slot),
+      select: target && target.path && typeof P.sourceOf === 'function' ? { srcs: P.sourceOf(target.path, kind), path: target.path } : null,
+      left: _pickLeft,
+      room: () => (!_pickAt || !_pickAt.target || _pickAt.filled ? ''
+        : _pickAt.target.hole ? 'its place is empty - one goes here' : 'press another to put it in its place'),
       mark: _markOf,
       press: (it) => {
-        if (_atts.some(a => a.path === it.path)) { _detach(it.path); return; }
+        const here = _atts.find(a => a.path === it.path);
+        if (here) {
+          // Opened on another place: one place per file - it stays where it is.
+          if (_pickAt && _pickAt.target && _pickAt.target !== here) { _say(_cap(_markOf(it.path)) + ' is this one already - one place per file.'); return; }
+          _detach(it.path);
+          return;
+        }
         _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0 });
       },
       why: (it) => P.why(it, kind),
@@ -676,23 +839,42 @@ export function createChat(make) {
         accepts: (f) => !!(U && U.ok(f)),
         drop: (files) => _upload(files),
       },
-      onClose: () => { _picking = false; _pickAt = null; _armed = null; if (_ui) _paintAtts(); },
+      onClose: () => {
+        _picking = false;
+        _pickAt = null;
+        _armed = null;
+        const cut = _trimHoles();
+        if (_ui) _paintAtts();
+        if (cut) _draftLater();
+      },
     });
   }
 
+  // How many more go into the place the picker is open on: one into a place that is there, until it is filled.
+  function _pickLeft() {
+    if (!_pickAt) return 0;
+    if (_pickAt.target) return _pickAt.filled ? 0 : 1;
+    return _leftIn(_pickAt.kind, _pickAt.slot);
+  }
+
   // How many more go into a place: its part's room, less - for a slot - what the slot has, and for "other" the places
-  // the recipe's own slots still hold.
+  // the recipe's own slots still hold. An empty numbered place there is one more that goes (it is filled first).
   function _leftIn(kind, slot) {
     const z = _zone();
     const p = z && z.parts.find(x => x.kind === kind);
     if (!p || !p.room || p.off) return 0;
     const mine = _atts.filter(a => _kindOf(a) === kind);
     const free = p.room - mine.length;
-    if (!p.slots || slot == null) return Math.max(0, free);
+    if (!p.slots || slot == null) return mine.filter(a => a.hole).length + Math.max(0, free);
     const inS = (k) => mine.filter(a => a.slot === k).length;
-    if (slot === '') return Math.max(0, free - p.slots.reduce((n, x) => n + Math.max(0, x.max - inS(x.key)), 0));
+    if (slot === '') {
+      const keys = _keysOf(p);
+      const holes = mine.filter(a => a.hole && !keys.includes(a.slot)).length;
+      return holes + Math.max(0, free - p.slots.reduce((n, x) => n + Math.max(0, x.max - inS(x.key)), 0));
+    }
     const s = p.slots.find(x => x.key === slot);
-    return s ? Math.max(0, Math.min(free, s.max - inS(slot))) : 0;
+    const holes = mine.filter(a => a.hole && a.slot === slot).length;
+    return s ? holes + Math.max(0, Math.min(free, s.max - inS(slot))) : 0;
   }
 
   // What a thing is in the zone, as the picker marks it: its place and its number ("person 1", "picture 2").
@@ -700,7 +882,7 @@ export function createChat(make) {
     const a = _atts.find(x => x.path === path);
     if (!a) return '';
     const k = _kindOf(a);
-    const n = _ordered().filter(x => _kindOf(x) === k).indexOf(a) + 1;
+    const n = _numOf(a);
     const z = _zone();
     const p = z && z.parts.find(x => x.kind === k);
     const s = p && p.slots ? p.slots.find(x => x.key === a.slot) : null;
@@ -742,7 +924,7 @@ export function createChat(make) {
     if (_picking && _pickAt) {
       const U = _U(_pickAt.kind);
       const mine = all.filter(f => U && U.ok(f));
-      const room = _leftIn(_pickAt.kind, _pickAt.slot);
+      const room = _pickLeft();
       if (mine.length > room) note = 'Only ' + room + ' more ' + (room === 1 ? 'goes' : 'go') + ' here - the rest were not added.';
       else if (mine.length < all.length) note = 'Only files of this kind go here - the others were not added.';
       all = mine.slice(0, room);
@@ -1039,7 +1221,8 @@ export function createChat(make) {
       setTimeout(() => ta.classList.remove('is-bad'), 900);
       return;
     }
-    const why = set.ready();
+    // (phase V15) An empty numbered place first: the numbers in the prompt would move under it.
+    const why = _holeWhy() || set.ready();
     if (why) { note(_ui.go, why[0], why[1]); return; }
     _sending = true;
     _ui.go.disabled = true;
@@ -1054,7 +1237,7 @@ export function createChat(make) {
       const key = Store.key();
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ project: key, text, refs: _ordered().map(a => a.path) }, set.body(), {
+        body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it.
           where: {

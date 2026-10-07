@@ -59,7 +59,10 @@ export const pickOpen = () => !!_w;
  *   sources   [{ id, label, load() -> Promise<{ items, cats?, why? }>, empty? }]; an item is
  *             { path, name, sub?, cat?, thumb?, big?, poster?, aspect?, dur?, src? }
  *   start     the source to open on ('' - the one this kind was last taken from, else `first`)
- *   left()    how many more go into the place; mark(path) what it is in the zone ('' - not in it)
+ *   select    (phase V15) { srcs, path } - opened on a thing in the zone: the first of `srcs` that holds it is shown,
+ *             in its category, the thing in view
+ *   left()    how many more go into the place; mark(path) what it is in the zone ('' - not in it); room() the words
+ *             of the place, when it is one that is there ('' - "N more go here")
  *   press(it) attach it, or take it off; why(it) why it cannot go ('' - it can)
  *   computer  { word, hint, open(), accepts(file), drop(files), lands } - `lands` is the source a file goes to
  *   onClose()
@@ -70,8 +73,9 @@ export function openPick(o) {
   _cache.clear();
   const last = _stored()[o.kind];
   const has = (id) => !!id && o.sources.some(s => s.id === id);
-  const src = has(o.start) ? o.start : has(last) ? last : has(o.first) ? o.first : (o.sources[0] || {}).id;
-  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: false };
+  const sel = o.select && o.select.path ? { path: o.select.path, srcs: (o.select.srcs || []).filter(has) } : null;
+  const src = sel && sel.srcs.length ? sel.srcs[0] : has(o.start) ? o.start : has(last) ? last : has(o.first) ? o.first : (o.sources[0] || {}).id;
+  _st = { src, cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: false, sel: sel && sel.srcs.length ? sel : null };
   _build();
   _paintHead();
   _paintSources();
@@ -207,7 +211,8 @@ function _paintHead() {
   _w.hint.textContent = o.hint || '';
   _w.hint.title = o.hint || '';
   const n = Math.max(0, o.left());
-  _w.left.textContent = n ? (n === 1 ? 'one more goes here' : n + ' more go here') : 'no room left';
+  const words = typeof o.room === 'function' ? o.room() : '';
+  _w.left.textContent = words || (n ? (n === 1 ? 'one more goes here' : n + ' more go here') : 'no room left');
 }
 
 function _paintSources() {
@@ -260,7 +265,19 @@ async function _load(keepCat) {
   _st.items = got.items || [];
   _st.cats = (got.cats || []).filter(c => c && c.id && (+c.count > 0 || c.id === _st.cat));
   _st.why = got.why || '';
-  if (!keepCat) {
+  // (phase V15) Opened on a thing in the zone: on its shelf - the next that may hold it when this one does not -, in its
+  // category, the thing in view.
+  let it = null;
+  if (_st.sel) {
+    it = _st.items.find(x => x.path === _st.sel.path) || null;
+    if (!it) {
+      const next = _st.sel.srcs[_st.sel.srcs.indexOf(_st.src) + 1];
+      if (next) { _st.src = next; _paintSources(); _load(); return; }
+      _st.sel = null;
+    }
+  }
+  if (it) _st.cat = it.cat && _st.cats.some(c => c.id === it.cat) ? it.cat : ALL;
+  else if (!keepCat) {
     // The category last shown here in this project, else the project's own, else all of them.
     const was = _catMemo.get(_memoKey());
     const own = _st.cats.find(c => c.id !== UNCAT && _lc(c.name) === _lc(_o.project.title));
@@ -268,6 +285,20 @@ async function _load(keepCat) {
   } else if (_st.cat !== ALL && !_st.cats.some(c => c.id === _st.cat)) _st.cat = ALL;
   _paintCats();
   _paintGrid();
+  if (it) { _st.sel = null; _reveal(it.path); }
+}
+
+// The thing the window was opened on: drawn, in view, blinking once.
+function _reveal(path) {
+  if (!_w) return;
+  const i = _st.list.findIndex(x => x.path === path);
+  if (i < 0) return;
+  while (_st.drawn <= i) _more();
+  const t = [..._w.grid.querySelectorAll('[data-path]')].find(x => x.dataset.path === path);
+  if (!t) return;
+  t.classList.add('is-sel');
+  requestAnimationFrame(() => { if (t.isConnected) t.scrollIntoView({ block: 'center', inline: 'nearest' }); });
+  setTimeout(() => t.classList.remove('is-sel'), 1600);
 }
 
 function _paintCats() {

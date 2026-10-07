@@ -405,6 +405,19 @@
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
 /* Only a part of it goes: its seconds in gold. */
 .mv3-ig-att .dur.is-cut{ color:var(--gold) }
+/* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
+.mv3-ig-att.is-swap{ cursor:pointer }
+.mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
+.mv3-ig-att button.dur:hover{ background:var(--primary); color:var(--primary-ink) }
+/* An empty NUMBERED place - a thing taken out keeps its number: dashed, "+" to fill it, the cross to close it. */
+.mv3-ig-att.is-hole{ border-style:dashed; background:transparent }
+.mv3-ig-att.is-hole .go{
+  position:absolute; inset:0; width:100%; height:100%; padding:0; border:0; background:transparent;
+  color:var(--primary); font:400 12px/1 var(--font); cursor:pointer;
+}
+.mv3-ig-att.is-hole .go:hover{ background:var(--primary-soft) }
+.mv3-ig-att.is-hole .n{ background:var(--primary-soft); color:var(--primary); pointer-events:none }
+.mv3-ig-cell.is-flash .mv3-ig-att.is-hole{ animation:mv3-ig-flash .3s ease-in-out 3 }
 /* A clip from the timeline held over the part that takes it (timeline-b.js). */
 .mv3-ig-part.is-drop{ background:var(--primary-soft); border-radius:var(--r-xs); outline:1px dashed var(--primary); outline-offset:-1px }
 
@@ -645,6 +658,9 @@ audio.vtrim-media{ background:none; height:32px }
     oklch(.23 .018 265), oklch(.23 .018 265) 6px, oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
 }
 .pk-tile.is-on .pk-box{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset }
+/* (phase V15) The thing the picker was opened on, shown once. */
+.pk-tile.is-sel .pk-box{ animation:pk-sel .45s ease-in-out 3 }
+@keyframes pk-sel{ 50%{ box-shadow:0 0 0 3px var(--primary) } }
 .pk-mark{
   position:absolute; top:4px; left:4px; max-width:calc(100% - 8px); padding:0 5px; border-radius:var(--r-xs);
   background:var(--gold); color:oklch(.2 .03 85); font:700 9.5px/15px var(--font);

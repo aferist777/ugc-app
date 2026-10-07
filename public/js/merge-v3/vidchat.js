@@ -111,13 +111,13 @@ function VIDEOS(ctx) {
     const rule = _spanRule(a);
     if (!rule) return ((m && m.label) || 'This model') + ' takes no ' + what + 's.';
     const span = _span(a);
-    if (!(span > 0)) return 'no part of it is chosen - press it';
+    if (!(span > 0)) return 'no part of it is chosen - press its seconds';
     if (+a.dur < rule.min - 0.05) return 'it is ' + _s(a.dur) + ' - ' + m.label + ' needs a ' + what + ' of at least ' + _s(rule.min);
-    if (span < rule.min - 0.05) return 'the part is ' + _s(span) + ' - ' + m.label + ' needs at least ' + _s(rule.min) + ' - press it';
+    if (span < rule.min - 0.05) return 'the part is ' + _s(span) + ' - ' + m.label + ' needs at least ' + _s(rule.min) + ' - press its seconds';
     if (span > rule.max + 0.05) {
       return rule.max < (rule.all || 0) - 0.05
         ? 'with the other ' + what + 's it is more than ' + _s(rule.all) + ' in all - shorten one'
-        : 'the part is ' + _s(span) + ' - ' + m.label + ' takes ' + _s(rule.max) + ' - press it';
+        : 'the part is ' + _s(span) + ' - ' + m.label + ' takes ' + _s(rule.max) + ' - press its seconds';
     }
     return '';
   }
@@ -165,7 +165,7 @@ function VIDEOS(ctx) {
     }
     ctx.setAtt(a.path, { dur, in: Math.round(from * 100) / 100, out: Math.round(to * 100) / 100 });
     if (dur > to - from + 0.05) {
-      ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press it to choose another part.');
+      ctx.say(_s(dur) + ' → ' + (from ? _s(to - from) + ' from ' + _s(from) : 'the first ' + _s(to - from)) + ' go - press its seconds to choose another part.');
     }
   }
 
@@ -744,6 +744,14 @@ function VIDEOS(ctx) {
   }
   // Uploads first for clips: it is where clips from this computer go.
   const FIRST = { image: 'images', video: 'uploads', audio: 'sounds' };
+  // (phase V15) Where a thing in the zone is on the shelves, by its folder - the picker opens there, on it (a clip made
+  // here is on B-roll too: this project's own first).
+  function _sourceOf(path, kind) {
+    const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
+    if (kind === 'image') return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks'] : at('images') ? ['images'] : [];
+    if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : [];
+    return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : [];
+  }
   // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
   // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
   // field typed in last - the chat's box, or the prompt of a card.
@@ -814,6 +822,9 @@ function VIDEOS(ctx) {
     const m = model(), r = rec();
     if (!m || !m.usable) return ['Not available now.', (m && m.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
+    // (phase V15) An empty numbered place: the numbers in the prompt would move under it.
+    const hole = ctx.holeWhy();
+    if (hole) return hole;
     // (review V7) A recipe whose places must hold more than this model takes cannot be filled here - said plainly, rather
     // than blinking a place that can never be filled.
     const over = _recipeOver();
@@ -1828,6 +1839,7 @@ function VIDEOS(ctx) {
       start: _startFor,
       first: FIRST,
       why: _pickWhy,
+      sourceOf: _sourceOf,
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {
