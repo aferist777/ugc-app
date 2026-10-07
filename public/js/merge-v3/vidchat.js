@@ -62,6 +62,11 @@ function VIDEOS(ctx) {
     _remember();
   }
   const isMC = () => (model() || {}).family === 'kmc';
+  // (phase V15, the owner 2026-10-07) The column's STORYBOARD: ticked, under Seedance, with the writer, without a recipe
+  // (a recipe decides its own steps). ">" then writes and draws a sheet and stops; the video is made from its card.
+  const _boardOn = () => { const m = model(); return !!params().storyboard && !!m && m.family === 'seedance' && !_skill && ctx.writing(); };
+  // Its sheet put among the pictures - the room the seat kept for it is its own then.
+  let _attachingSheet = false;
   // The catalog's recipe in use (phase V5) - kept with the draft, per project, until its cross.
   let _skill = null;
   // What is attached, by kind (phase V6: the zone has pictures, clips and sounds).
@@ -368,6 +373,25 @@ function VIDEOS(ctx) {
         : 'Your words go as typed (translated into English when they are not). Press to let the writer - a prompt engineer - write the prompt.';
     wr.addEventListener('click', () => ctx.setWriting(!ctx.writing()));
     box.appendChild(wr);
+    // (phase V15) The storyboard, under the writer: its sheet's prompt is the writer's, so ticking it switches the writer on.
+    const bWhy = m.family !== 'seedance' ? 'A storyboard is drawn for Seedance - pick a Seedance model'
+      : _skill ? 'A recipe decides its own steps - a two-step recipe draws its storyboard on its card'
+        : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
+    const sb = el('label', 'mv3-vc-check' + (bWhy ? ' is-off' : ''));
+    const scb = document.createElement('input');
+    scb.type = 'checkbox';
+    scb.checked = !bWhy && _boardOn();
+    scb.disabled = !!bWhy;
+    scb.addEventListener('change', () => {
+      setParam('storyboard', scb.checked);
+      if (scb.checked && !ctx.writing()) ctx.setWriting(true);
+      _paintSwitches();
+      _paintPrice();
+      ctx.paintAtts();
+    });
+    sb.append(scb, el('span', null, 'storyboard'));
+    sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into a sheet of numbered panels, it is drawn (4K), lands here and joins the pictures - and it stops there. "make the video" on its card writes the video from the same words, the sheet among the pictures.';
+    box.appendChild(sb);
     const zhOk = (m.langs || []).includes('zh');
     const zh = el('label', 'mv3-vc-check' + (zhOk ? '' : ' is-off'));
     const zcb = document.createElement('input');
@@ -509,6 +533,14 @@ function VIDEOS(ctx) {
       box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s')
         + ' · ' + pr.res + ' · ' + r.aggLabel + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
     }
+    // (phase V15) The storyboard first: what the sheet costs now, and the video's price for later - its own press.
+    if (_boardOn() && pr && !pr.none && !pr.fromClip) {
+      const sp = _sheetPrice(_pics().filter(a => a.role !== 'storyboard').length);
+      box.className = 'mv3-ig-cost';
+      box.textContent = '';
+      box.append(el('b', null, sp.usd != null ? '≈' + money(sp.usd) : '—'),
+        el('span', null, 'the storyboard first · ' + sp.words + ' · then, by its own press, the video ≈' + money(pr.usd * many)));
+    }
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
     if (r && r.agg === 'kie' && model() && model().id === 'grok15') notes.push("kie's rate for Grok 1.5 looks like a mistake - the first real clip will show");
@@ -618,7 +650,17 @@ function VIDEOS(ctx) {
   // A two-step recipe's video takes its storyboard as one more picture, after the card's own (phase V8): one place fewer
   // - Seedance's alone, the only family that makes one (review V8: under Grok the seat took its one place) - and the
   // sheet is drawn WITH the card's pictures, which nano-banana-2 takes up to 14 of.
-  const _seat = () => (_skill && _skill.twoStep && (model() || {}).family === 'seedance' ? 1 : 0);
+  const _seat = () => ((_skill && _skill.twoStep && (model() || {}).family === 'seedance')
+    // (phase V15) The column's storyboard keeps its sheet's place until the sheet is among the pictures.
+    || (_boardOn() && !_attachingSheet && !ctx.anyAtt(a => _kind(a) === 'image' && a.role === 'storyboard')) ? 1 : 0);
+  // (phase V15) What a sheet of the column's storyboard costs: the first aggregator that draws from this many pictures.
+  function _sheetPrice(n) {
+    const info = _table && _table.board;
+    if (!info) return { usd: null, words: 'the storyboard engine is not in this program' };
+    const p = (info.providers || []).find(x => x.usable && (!n || (x.maxRefs || 1) >= n));
+    if (!p) return { usd: null, words: ((info.providers || []).find(x => x.why) || {}).why || (info.label + ' cannot take ' + n + ' pictures') };
+    return { usd: p.price, words: info.quality + ' · ' + info.label + ' · ' + p.label };
+  }
   const _boardCap = () => {
     const ps = ((_table && _table.board && _table.board.providers) || []).filter(p => p.usable);
     return ps.length ? Math.max(...ps.map(p => p.maxRefs || 1)) : 14;
@@ -786,7 +828,7 @@ function VIDEOS(ctx) {
     const b = el('button', 'mv3-vc-almanac', 'almanac');
     b.type = 'button';
     b.title = 'The prompt reference - camera moves and more: press a tip to copy it, then paste it into your prompt';
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, prefer: 'beside', note: _helpNote }); });
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); openHelp({ anchor: b, field: _fieldForHelp, note: _helpNote }); });
     return b;
   }
 
@@ -890,17 +932,21 @@ function VIDEOS(ctx) {
   }
 
   // `cardMedia`: a card's own attachments - what it is made with decides whether the clip's sound can go (V7.4).
-  function _body(cardMedia) {
+  // `opt.video` (phase V15): the video of a storyboard card - its sheet goes, whatever the storyboard box says.
+  function _body(cardMedia, opt) {
     const m = model(), r = rec();
     const p = params();
     const fam = m.family;
-    const atts = ctx.atts();
+    // (phase V15) The column's storyboard is drawn from the pictures - an older sheet among them is not one of them (the
+    // new sheet takes its place when it lands).
+    const boarding = _boardOn() && !(opt && opt.video);
+    const atts = ctx.atts().filter(a => !(boarding && _kind(a) === 'image' && a.role === 'storyboard'));
     const as = p.picturesAs || 'refs';
     // What each picture is for: a recipe's slot says (its role - person, product... - or a frame), otherwise Seedance's
     // "pictures are" does.
     const slots = new Map(['image', 'video', 'audio'].flatMap(k => (_slotsOf(k) || []).map(s => [k + ':' + s.key, s])));
-    // Beside a clip or a sound the pictures are references (phase V7).
-    const mixed = atts.some(a => _kind(a) !== 'image');
+    // Beside a clip or a sound the pictures are references (phase V7) - and beside a storyboard (phase V15).
+    const mixed = boarding || atts.some(a => _kind(a) !== 'image' || a.role === 'storyboard');
     const frame = (i) => (fam !== 'seedance' || mixed ? '' : as === 'frame' && i === 0 ? 'frame-first'
       : as === 'fl' ? (i === 0 ? 'frame-first' : i === 1 ? 'frame-last' : '') : '');
     const role = (a, i) => {
@@ -917,6 +963,8 @@ function VIDEOS(ctx) {
       model: m.id, agg: r.agg,
       // (phase V15) The column's 中文: the written prompt goes in Chinese (Seedance; the server checks the model too).
       zh: _zhOn(),
+      // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
+      storyboard: boarding || undefined,
       params: {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
@@ -1272,12 +1320,13 @@ function VIDEOS(ctx) {
     const c = m.card;
     return [c.type, c.state || '', c.error || '', c.model || '', (m.genIds || []).length].join(':');
   };
-  const _busy = (thread) => thread.some(m => (m.card && m.card.type === 'prompt' && m.card.state === 'writing')
+  const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
     || (m.boards || []).some(g => g.state === 'pending'));
 
   function _cardBubble(m, progs) {
     const c = m.card;
     if (c.type === 'recipe') return _sentRequest(m);
+    if (c.type === 'board') return _storyCard(m, progs);
     _forget(m.id);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-' + c.state);
     const h = el('div', 'vc-card-h');
@@ -1446,6 +1495,7 @@ function VIDEOS(ctx) {
     _live.delete(id);
   }
   function _freshenOne(id, l) {
+    if (l.story) { _freshenStory(id, l); return; }
     const m = model();
     const pr = priceOf(rec(), l.m.media || []);
     const n = _cardN.get(id) || 1;
@@ -1678,7 +1728,7 @@ function VIDEOS(ctx) {
       // A frame-swap's picture: its prompt in the neutral references, and the moment of the clip it is drawn from (V7.6).
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/board', two.frame
         ? { project: m.project, board: toNeutral(two.bta.value), at: +two.range.value, where: _where(m.project) }
-        : { project: m.project, board: two.bta.value, where: _where(m.project) });
+        : { project: m.project, board: two.bta ? two.bta.value : undefined, where: _where(m.project) });
       if (!d || !d.success) { note(btn, 'Not drawn.', (d && d.error) || 'the server did not answer'); return; }
       // Read in place - the new countdown is on this card, not at the end of the thread.
       await ctx.reload();
@@ -1763,6 +1813,8 @@ function VIDEOS(ctx) {
           for (const b of two.strip.querySelectorAll('.vc-board[data-id]')) b.classList.toggle('is-chosen', b.dataset.id === x.id);
           two.sig = _boardSig(l, _chosenBoard(l));
           _freshenOne(id, l);
+          // (phase V15) A storyboard of the column: the one chosen is the one among the pictures.
+          if (l.story) _putSheet(x);
         }, ok, two.W));
       } else if (g.state === 'pending') {
         two.strip.appendChild(_boardBusy(g, two.progs, g.id, two.W));
@@ -1780,9 +1832,136 @@ function VIDEOS(ctx) {
       const now = thread.find(x => x.id === id);
       if (now) l.m = now;
       if (l.two) _paintBoards(id, l);
-      _paintTries(id, l);
+      if (l.tries) _paintTries(id, l);
       _freshenOne(id, l);
     }
+  }
+
+  // ── The column's storyboard (phase V15, the owner 2026-10-07) ──
+  // Its card: the words it was drawn for, its sheets - pressed, one is chosen, the newest that landed until then -, and
+  // two presses: "make the video" (the same words, the chosen sheet among the pictures, to the writer - only by this
+  // press: the owner's answer 1) and "draw again" (the V8 press, another sheet from the same prompt). The sheet's prompt
+  // under its fold.
+  function _storyCard(m, progs) {
+    const c = m.card;
+    _forget(m.id);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-board is-' + c.state);
+    const h = el('div', 'vc-card-h');
+    h.append(el('span', 'k', 'storyboard'), el('span', 't', String(c.text || '').replace(/\s+/g, ' ').slice(0, 80)));
+    if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
+    box.appendChild(h);
+    if (c.state === 'writing') {
+      const strip = el('div', 'mv3-ig-prog');
+      box.appendChild(strip);
+      progs.set('w:' + m.id, startInlineProgress(strip, {
+        label: 'writing the storyboard prompt…', key: 'mv3-board-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      }));
+      return box;
+    }
+    if (c.state === 'failed') {
+      box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
+      const acts = el('div', 'vc-card-acts');
+      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      again.type = 'button';
+      again.addEventListener('click', () => _rewrite(m, again));
+      acts.appendChild(again);
+      box.appendChild(acts);
+      return box;
+    }
+    const strip = el('div', 'vc-boards');
+    box.appendChild(strip);
+    const acts = el('div', 'vc-card-acts');
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'make the video');
+    go.type = 'button';
+    const price = el('span', 'vc-card-why');
+    acts.append(go, price);
+    const redo = el('button', 'mv3-c-btn vc-go', 'draw again');
+    redo.type = 'button';
+    const rprice = el('span', 'vc-card-why');
+    const acts2 = el('div', 'vc-card-acts');
+    acts2.append(redo, rprice);
+    box.append(acts, acts2);
+    const more = el('div', 'mv3-ig-more');
+    const mb = el('button', 'mv3-ig-more-b', 'the storyboard prompt');
+    mb.type = 'button';
+    const said = el('div', 'mv3-ig-more-body vc-story-prompt', (c.board && c.board.prompt) || '');
+    said.hidden = true;
+    mb.addEventListener('click', () => { said.hidden = !said.hidden; mb.textContent = said.hidden ? 'the storyboard prompt' : 'less'; });
+    more.append(mb, said);
+    box.appendChild(more);
+    const two = { bta: null, go: redo, price: rprice, strip, sig: '', progs: new Map(), busy: false, W: 'storyboard' };
+    redo.addEventListener('click', (e) => _drawBoard(m, two, redo, e));
+    const l = { m, ta: null, go, price, save: null, two, tries: null, triesSig: '', triesProgs: new Map(), story: true };
+    go.addEventListener('click', () => _makeFromStory(m, go));
+    _live.set(m.id, l);
+    _paintBoards(m.id, l);
+    _freshenStory(m.id, l);
+    return box;
+  }
+  function _freshenStory(id, l) {
+    const mm = model();
+    const seed = !!mm && mm.family === 'seedance';
+    const g = _chosenBoard(l);
+    const drawing = (l.m.boards || []).some(x => x.state === 'pending');
+    l.go.disabled = !g || !seed;
+    l.go.classList.toggle('is-waiting', seed && !g);
+    l.go.title = !seed ? 'The video from a storyboard is made by Seedance - pick a Seedance model on the left'
+      : g ? 'Your words, with this storyboard among the pictures, to the writer - and the video is made'
+        : drawing ? 'The storyboard is being drawn - the video follows it' : 'Draw a storyboard first - the video follows it';
+    const pr = priceNow();
+    const many = ctx.n();
+    l.price.textContent = !seed ? 'a video from a storyboard is Seedance\'s - pick it on the left'
+      : !pr || pr.none || pr.fromClip ? (mm ? mm.label + ' · no published price' : '')
+        : '≈' + money(pr.usd * many) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
+          + mm.label + ' · ' + (rec() ? rec().aggLabel : '') + (_zhOn() ? ' · in 中文' : '');
+    const bp = _boardPrice(l);
+    l.two.price.textContent = bp.text;
+    l.two.go.disabled = !bp.ok || !!l.two.busy || !seed;
+    l.two.go.title = !seed ? 'A storyboard is drawn for Seedance - pick a Seedance model' : bp.ok ? 'Another sheet from the same prompt - the newest is the one the video follows until you choose' : bp.text;
+  }
+  async function _makeFromStory(m, go) {
+    const l = _live.get(m.id);
+    if (!l || go.disabled) return;
+    const g = _chosenBoard(l);
+    if (!g) { note(go, 'No storyboard yet.', (l.m.boards || []).some(x => x.state === 'pending') ? 'It is being drawn - the video follows it.' : 'Draw one - the video follows it.'); return; }
+    if (!_putSheet(g)) { note(go, 'The storyboard could not join the pictures.', ((ctx.ui() || {}).said || {}).textContent || 'there is no room for it'); return; }
+    go.disabled = true;
+    try { await ctx.sendNow({ text: m.card.text, body: _body(null, { video: true }), over: { write: true }, from: go }); }
+    finally { if (go.isConnected) _freshenStory(m.id, l); }
+  }
+  // The sheet among the pictures, as the storyboard: in the storyboard's place when one is there (its number kept), else
+  // after the other pictures. False when it could not go - the zone says why.
+  function _putSheet(g) {
+    if (!_boardOk(g)) return false;
+    const pics = _pics();
+    const here = pics.find(a => a.path === g.imagePath);
+    if (here) {
+      if (here.role !== 'storyboard') ctx.setAtt(g.imagePath, { role: 'storyboard', label: 'storyboard' });
+      return true;
+    }
+    const old = pics.find(a => a.role === 'storyboard');
+    _attachingSheet = true;
+    try {
+      if (old) ctx.replace(old.path, g.imagePath, 'storyboard', { role: 'storyboard', label: 'storyboard' });
+      else ctx.attach(g.imagePath, 'storyboard', { kind: 'image', role: 'storyboard', label: 'storyboard', atEnd: true });
+    } finally { _attachingSheet = false; }
+    return _pics().some(a => a.path === g.imagePath);
+  }
+  // A sheet of the column's storyboard that lands while the chat is open joins the pictures by itself (the owner: the
+  // person sees it in the chat AND among the attachments). One that landed while the page was away is put there by
+  // "make the video".
+  const _sheetWas = new Map();          // sheet id -> its state at the read before
+  function _landSheets(thread) {
+    const now = new Map();
+    for (const m of thread) {
+      if (!m.card || m.card.type !== 'board') continue;
+      for (const g of m.boards || []) {
+        now.set(g.id, g.state);
+        if (_sheetWas.get(g.id) === 'pending' && _boardOk(g)) _putSheet(g);
+      }
+    }
+    _sheetWas.clear();
+    for (const [k, v] of now) _sheetWas.set(k, v);
   }
 
   // A request as it was sent: the places as the person left them - theirs in solid gold, the example's dashed - and
@@ -1893,7 +2072,7 @@ function VIDEOS(ctx) {
     cardBubble: _cardBubble,
     cardSig: _cardSig,
     busy: _busy,
-    onThread: (thread) => { _paintFoot(true); _freshenLive(thread); },
+    onThread: (thread) => { _paintFoot(true); _freshenLive(thread); _landSheets(thread); },
     resultPath: (g) => g.videoPath,
 
     settings: {
@@ -1923,7 +2102,8 @@ function VIDEOS(ctx) {
         _paintFoot();
         _dropGone();
       },
-      onPen: () => { _paintRecipe(); _paintSwitches(); },
+      // The storyboard is the writer's: its seat and its price follow the writer too (phase V15).
+      onPen: () => { _paintRecipe(); _paintSwitches(); _paintPrice(); ctx.paintAtts(); },
     },
 
     // A finished clip in the thread: its poster - a press plays it, and it can be dragged onto a lane (phase V13: the

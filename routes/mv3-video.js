@@ -151,6 +151,30 @@ router.post('/mv3/video/send', async (req, res) => {
     // (review V7) What the first rung's preparation would refuse - before the writer is paid. Counted after this wait.
     const fw = await _filesWrong(fits[0], media);
     if (fw) return res.status(400).json({ success: false, error: fw });
+    // (phase V15) A storyboard among the pictures is followed - a frame beside it would be read as a reference anyway.
+    const sheet = media.some(m => m.kind === 'image' && m.role === 'storyboard');
+    if (sheet && media.some(m => m.kind === 'image' && /^frame-/.test(String(m.role || '')))) {
+      return res.status(400).json({ success: false, error: 'a first or last frame cannot go with a storyboard - the video follows the sheet: attach that picture as a reference' });
+    }
+    // (phase V15, the owner 2026-10-07) The column's storyboard: the writer writes the sheet's prompt from this message,
+    // the sheet is drawn, and it stops there - the video is made from the storyboard's card. Seedance's and the writer's;
+    // a recipe draws its own storyboard on its card.
+    if (b.storyboard) {
+      if (_family(model) !== 'seedance') return res.status(400).json({ success: false, error: 'a storyboard is drawn for Seedance - pick a Seedance model' });
+      if (b.write === false) return res.status(400).json({ success: false, error: 'the storyboard is written by the writer - switch the writer on' });
+      if (skill) return res.status(400).json({ success: false, error: 'a recipe decides its own steps - a two-step recipe draws its storyboard on its card' });
+      if (sheet) return res.status(400).json({ success: false, error: 'a storyboard is among the pictures already - make the video from its card, or take it off to draw a new one' });
+      const wrong = _twoStepWrong(model, b.agg, params, media);
+      if (wrong) return res.status(400).json({ success: false, error: wrong });
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      const turn = CHAT.add({ project, kind: KIND, role: 'user', text, refs: media.map(m => m.path), media });
+      let st;
+      try { st = _startBoard({ project, from: turn.id, text, model, agg: fits[0].agg, params, media, where: b.where }); }
+      catch (e) { return res.status(e.status || 500).json({ success: false, error: e.message }); }
+      res.json({ success: true, send: st.card.id, card: st.card.id, boardId: st.genId });
+      _writeBoard(st.card.id, st.kick, st.genId, st.bkick, { model, text, media, params });
+      return;
+    }
     if (VGENS.runningSends(project) >= AT_ONCE) {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being made already - wait for one of them' });
     }
@@ -206,6 +230,9 @@ async function _work(o) {
       }
       if (t.fail) { for (const id of o.ids) VGENS.refuse(id, t.fail, o.kick); return; }
       over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
+      // (phase V15) A storyboard among the pictures is followed: a prompt that does not name it gets the sentence that does.
+      const k = o.media.filter(m => m.kind === 'image').findIndex(m => m.role === 'storyboard') + 1;
+      if (k && !_namesSheet(over.prompt, k)) over.prompt = (over.prompt + ' Follow the storyboard {{image:' + k + '}} panel by panel, from the first panel to the last.').trim();
     }
     over.lang = 'en';
     // (phase V15) 中文: the finished English into Chinese once for every clip - the references and every quoted line stay
@@ -249,7 +276,7 @@ const _strictRefs = (p) => String(p || '').replace(REF_ANY, (all, k, n) => '{{' 
 const SIZE_WORDS = /\b(total|length|duration|long|about|around|in|of|a|the|and|sec|secs|second|seconds|s|vertical|horizontal|square|portrait|landscape|aspect|ratio|format|frame|clip)\b/gi;
 const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+/g, ' ').replace(/\d+(\.\d+)?/g, ' ')
   .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
-const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && m.card.type === 'prompt' && m.card.state === 'writing').length;
+const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing').length;
 
 // ── The storyboard (phase V8, PLAN V-G; the owner 2026-10-06: 4K, and always a stop after it) ──────────────────
 // A two-step recipe draws a STORYBOARD SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
@@ -439,6 +466,94 @@ function _boardWords(prompt, pics) {
 // The video prompt of a two-step card names its sheet - the picture after the card's own.
 const _namesSheet = (prompt, k) => _strictRefs(prompt).includes('{{image:' + k + '}}');
 
+// ── The column's storyboard (phase V15, the owner 2026-10-07) ───────────────────────────────────────────────────
+// A plain message with the storyboard box ticked: its card ('board' - the words, the pictures, the sheet's prompt, its
+// sheets) and its first sheet's record and Alerts row at the press, the sheet's prompt to the writer behind the answer
+// (step 1 alone, the V8 sheet rules), then the sheet drawn - nano-banana-2 at 4K, filed on Images. Then a STOP (the
+// owner's answer 1): the page puts the sheet among the pictures, and "make the video" on the card sends the same words
+// with it to the writer; "draw again" is the V8 press on the card.
+const _short = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+// Its row, once drawn, leads back to the card - not to the picture on its shelf (js/alerts-bell.js reveals only 'pictures'
+// and 'videos').
+function _boardWhere(project, w) {
+  const w0 = (w && typeof w === 'object') ? w : {
+    page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
+    label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
+  };
+  return Object.assign({}, w0, { spot: Object.assign({}, w0.spot || {}, { view: 'storyboard' }) });
+}
+// The card - a new one, or `o.card` written again - and its sheet, in one go. { card, genId, kick, bkick }.
+function _startBoard(o) {
+  const pics = o.media.filter(x => x.kind === 'image');
+  const pv = _boardProvider(pics.length);
+  if (pv.error) throw Object.assign(new Error('the storyboard cannot be drawn - ' + pv.error), { status: 400 });
+  const kick = 'w' + crypto.randomBytes(8).toString('hex');
+  const bkick = 'b' + crypto.randomBytes(8).toString('hex');
+  // The kicks are alive BEFORE the card and the record exist: a read in between must not take them for dead ones.
+  CHAT.writing.add(kick);
+  GENS.asking.add(bkick);
+  try {
+    let card;
+    if (o.card) {
+      card = CHAT.update(o.card.id, (x) => {
+        if (!x.card || x.card.state === 'writing') return false;
+        Object.assign(x.card, { state: 'writing', kick, startedAt: new Date().toISOString(), model: o.model, agg: o.agg, params: o.params, error: '', writer: '' });
+      });
+      if (!card || !card.card || card.card.kick !== kick) throw Object.assign(new Error('it changed meanwhile'), { status: 409 });
+    } else {
+      card = CHAT.add({ project: o.project, kind: KIND, role: 'agent', text: '', refs: o.media.map(m => m.path), media: o.media,
+                        card: { type: 'board', state: 'writing', kick, startedAt: new Date().toISOString(), from: o.from, text: o.text,
+                                model: o.model, agg: o.agg, params: o.params, board: { prompt: '', aspect: '', genIds: [], chosen: '' } } });
+    }
+    const g = GENS.create({
+      project: o.project, send: card.id, board: true, kick: bkick, where: _boardWhere(o.project, o.where),
+      stage: 'writing the storyboard prompt', prompt: o.text, said: 'storyboard · ' + _short(o.text),
+      engine: BOARD_ENGINE, provider: pv.provider, quality: BOARD_QUALITY,
+      aspect: VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9', refs: pics.map(x => x.path),
+    });
+    CHAT.update(card.id, (x) => {
+      if (!x.card || !x.card.board) return false;
+      x.card.board.genIds = (x.card.board.genIds || []).concat([g.id]).slice(-20);
+    });
+    return { card, genId: g.id, kick, bkick };
+  } catch (e) {
+    CHAT.writing.delete(kick);
+    GENS.asking.delete(bkick);
+    throw e;
+  }
+}
+// Behind the answer: the sheet's prompt filed into the card while the card still waits for THIS writer, then the sheet
+// asked for - or, the prompt not written, the sheet's record refused in words (nothing was paid).
+async function _writeBoard(cardId, kick, genId, bkick, o) {
+  let out;
+  try {
+    const pics = o.media.filter(x => x.kind === 'image').length;
+    const sees = await _writerSees(o.media, 'storyboard');
+    const t = await AGENT.thinkVideo({ model: o.model, text: o.text, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
+                                       params: o.params, boardOnly: true });
+    const board = t.board ? _boardWords(t.board, pics) : '';
+    out = board ? { state: 'ready', writer: t.writer || '', error: '', board,
+                    aspect: t.boardAspect || (VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9') }
+      : { state: 'failed', error: t.fail || 'the writer answered nothing usable - write it again' };
+  } catch (e) {
+    out = { state: 'failed', error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+  }
+  let mine = false;
+  try {
+    CHAT.update(cardId, (m) => {
+      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
+      mine = true;
+      Object.assign(m.card, { state: out.state, writer: out.writer || '', error: out.error || '' });
+      if (out.state === 'ready' && m.card.board) Object.assign(m.card.board, { prompt: out.board, aspect: out.aspect, edited: false });
+    });
+  } finally { CHAT.writing.delete(kick); }
+  try {
+    if (out.state !== 'ready' || !mine) { GENS.refuse(genId, out.state !== 'ready' ? out.error : 'its card stopped waiting for it', bkick); return; }
+    await GENS.submit(genId, { prompt: out.board, aspect: out.aspect, writer: out.writer }, bkick);
+  } catch (e) { console.warn('[mv3-video] storyboard:', e.message); }
+  finally { GENS.asking.delete(bkick); }
+}
+
 // The pictures the WRITER looks at, made small first (review V6): a character's sheet is 4K, and the writer only has
 // to see what is in it - the aggregator gets each picture fitted to its own limits when the clip is asked for.
 async function _hostForWriter(paths) {
@@ -500,10 +615,11 @@ function _recipeOf(r) {
            title: String(o.title || '').slice(0, 160), v: String(o.v || '').slice(0, 40), edited: !!o.edited };
 }
 
-// The thread's own card, or why not.
+// The thread's own card, or why not. `type` - one, or a list (phase V15: a storyboard card draws as a two-step one).
 function _cardOf(id, project, type) {
   const m = CHAT.get(id);
-  if (!m || String(m.project || '') !== String(project || '') || !m.card || m.card.type !== (type || 'prompt')) return null;
+  const types = Array.isArray(type) ? type : [type || 'prompt'];
+  if (!m || String(m.project || '') !== String(project || '') || !m.card || !types.includes(m.card.type)) return null;
   return m;
 }
 
@@ -651,7 +767,10 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
-      if (String(x.project || '') !== project || !x.card || x.card.type !== 'prompt') { why = [404, 'no such card']; return false; }
+      // (phase V15) A storyboard card of the column: only which of its sheets is chosen.
+      const story = !!(x.card && x.card.type === 'board');
+      if (String(x.project || '') !== project || !x.card || (x.card.type !== 'prompt' && !story)) { why = [404, 'no such card']; return false; }
+      if (story && (prompt != null || board != null || at != null)) { why = [400, 'a storyboard card changes only which sheet is chosen']; return false; }
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
       let changed = false;
@@ -688,9 +807,28 @@ router.post('/mv3/video/card/:id/rewrite', (req, res) => {
   let kick = '';
   try {
     const project = String(b.project || '').trim();
-    const m = _cardOf(req.params.id, project, 'prompt');
+    const m = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
+    // (phase V15) The column's storyboard whose prompt was not written: written again, with a sheet of its own at the press.
+    if (m.card.type === 'board') {
+      if (m.card.state !== 'failed') return res.status(409).json({ success: false, error: 'it is written - draw it again on its card' });
+      const s = _settings(b);
+      if (_family(s.model) !== 'seedance') return res.status(400).json({ success: false, error: 'a storyboard is drawn for Seedance - pick a Seedance model' });
+      const mm = _mediaOf(m.media);
+      if (mm.error) return res.status(400).json({ success: false, error: mm.error });
+      const wrong = _twoStepWrong(s.model, s.agg, s.params, mm.media);
+      if (wrong) return res.status(400).json({ success: false, error: wrong });
+      if (_writingIn(project) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      const rt = _routeOf(s.model, s.agg, s.params, mm.media, 'xxx');
+      if (rt.error) return res.status(400).json({ success: false, error: rt.error });
+      let st;
+      try { st = _startBoard({ project, card: m, text: m.card.text, model: s.model, agg: rt.fits[0].agg, params: s.params, media: mm.media, where: b.where }); }
+      catch (e) { return res.status(e.status || 500).json({ success: false, error: e.message }); }
+      res.json({ success: true, card: m.id, boardId: st.genId });
+      _writeBoard(m.id, st.kick, st.genId, st.bkick, { model: s.model, text: m.card.text, media: mm.media, params: s.params });
+      return;
+    }
     if (m.card.board && m.card.board.kind === 'frame') return res.status(400).json({ success: false, error: 'a picture-then-video card has no writer - it is Kling motion control\'s: pick it on the left' });
     const rc = m.card.from ? _cardOf(m.card.from, project, 'recipe') : null;
     if (!rc) return res.status(410).json({ success: false, error: 'the recipe it was written from is not in the thread any more - fill the recipe in again' });
@@ -906,7 +1044,7 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
   let kick = '';
   try {
     const project = String(b.project || '').trim();
-    const m = _cardOf(req.params.id, project, 'prompt');
+    const m = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m) return res.status(404).json({ success: false, error: 'no such card' });
     if (!m.card.board) return res.status(400).json({ success: false, error: 'this card has no storyboard' });
     if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompts are still being written' });
@@ -956,17 +1094,13 @@ router.post('/mv3/video/card/:id/board', async (req, res) => {
       }
       refs = ['/media/work/' + name, pics[0].path];
     }
-    const w0 = (b.where && typeof b.where === 'object') ? b.where : {
-      page: 'merge', href: '/merge?p=' + encodeURIComponent(project) + '&open=videos',
-      label: 'Merge · ' + (_titleOf(project) || 'project') + ' · videos', spot: { key: project, view: 'videos' },
-    };
-    // Its row, once drawn, leads back to the card - the video is chosen and made there - not to the picture on its
-    // shelf, where a picture of the chats is shown (js/alerts-bell.js reveals only 'pictures' and 'videos').
-    const where = Object.assign({}, w0, { spot: Object.assign({}, w0.spot || {}, { view: 'storyboard' }) });
-    const title = (m.card.recipe && m.card.recipe.title) || 'video';
+    // Its row, once drawn, leads back to the card - the video is chosen and made there.
+    const where = _boardWhere(project, b.where);
+    // (phase V15) A storyboard of the column is said by the words it was drawn for.
+    const title = m.card.type === 'board' ? _short(m.card.text) : ((m.card.recipe && m.card.recipe.title) || 'video');
     // (review V7) The awaits above (the clip's checks, the frame cut) leave room for another press or a cleared thread:
     // the card is read again and the count asked again here, in the tick the record is written.
-    const m2 = _cardOf(req.params.id, project, 'prompt');
+    const m2 = _cardOf(req.params.id, project, ['prompt', 'board']);
     if (!m2 || !m2.card.board) return res.status(409).json({ success: false, error: 'the card is not in the thread any more' });
     if (CHAT.boardsOf(m2).filter(x => x.state === 'pending').length >= BOARD_AT_ONCE) {
       return res.status(409).json({ success: false, error: BOARD_AT_ONCE + ' ' + W + 's are being drawn already - wait for one' });

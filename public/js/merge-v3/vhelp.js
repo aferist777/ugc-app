@@ -39,10 +39,9 @@ const _lc = (s) => String(s || '').toLowerCase();
 export const helpOpen = () => !!_w;
 
 /**
- * Opens the reference beside `anchor` (the button pressed). `field()` is the prompt field a copied tip is for - asked
- * at every copy, so the note stands over the one typed in last. `prefer`: 'beside' (the almanac at the foot of the
- * chat's column - the window right of it), 'above' or 'below' (clear of the field). `note()`: a line over the camera
- * tips for the chosen model, or ''.
+ * Opens the reference beside `anchor` - the almanac at the foot of the chat's column. `field()` is the prompt field a
+ * copied tip is for - asked at every copy, so the note stands over the one typed in last. `note()`: a line over the
+ * camera tips for the chosen model, or ''.
  */
 export async function openHelp(o) {
   // The almanac pressed again: the window it opened closes.
@@ -100,7 +99,7 @@ function _build(o) {
   document.body.appendChild(box);
 
   const fieldOf = () => (typeof o.field === 'function' ? o.field() : o.field);
-  const place = () => _place(box, o.anchor, o.prefer, fieldOf());
+  const place = () => _place(box, o.anchor, fieldOf());
   // A press anywhere but in the window - or on the button that opened it, which toggles - closes it.
   const away = (e) => {
     const t = e.target;
@@ -116,16 +115,15 @@ function _build(o) {
   place();
 }
 
-// Clear of the button pressed AND of the field it serves - above both when there is room there (the chat's input),
-// below both for a card's prompt -, so the field stays in sight for the note and the paste; the right edge at the
-// button, the whole window inside the page (a window too small for that is the one case it covers them).
-function _place(box, anchor, prefer, field) {
+// (phase V15) Right of the chat's column - the almanac stands at its foot -, above the prompt field when there is room
+// there, else under it, else level with the button's foot, so the field stays in sight for the note and the paste. A
+// narrow chat (its settings folded over the box) leaves too little room right of the button: the window then stands
+// clear of the button AND the field - above both, or below both -, the whole window inside the page (a window too small
+// for that is the one case it covers them).
+function _place(box, anchor, field) {
   const a = anchor ? anchor.getBoundingClientRect() : { top: innerHeight - 60, bottom: innerHeight - 30, right: innerWidth - 20 };
   const f = field && field.isConnected ? field.getBoundingClientRect() : null;
-  // (phase V15) 'beside': the almanac at the foot of the chat's left column - the window stands right of the column,
-  // above the prompt field when there is room there, else under it, else level with the button's foot. A narrow chat
-  // (its settings folded over the box) leaves too little room right of the button: the window then stands over both.
-  if (prefer === 'beside' && innerWidth - a.right - 20 >= 640) {
+  if (innerWidth - a.right - 20 >= 640) {
     const left = a.right + 8;
     const w = Math.min(W_MAX, innerWidth - left - 12);
     let top, h;
@@ -141,7 +139,7 @@ function _place(box, anchor, prefer, field) {
   const r = f && f.width ? { top: Math.min(a.top, f.top), bottom: Math.max(a.bottom, f.bottom), right: a.right } : a;
   const w = Math.min(W_MAX, innerWidth - 24);
   const above = r.top - 16, below = innerHeight - r.bottom - 16;
-  const up = prefer === 'below' ? !(below >= 320 || below >= above) : (above >= 320 || above >= below);
+  const up = above >= 320 || above >= below;
   const h = Math.max(220, Math.min(H_MAX, up ? above : below));
   box.style.width = w + 'px';
   box.style.height = h + 'px';

@@ -146,6 +146,13 @@ export function createChat(make) {
     atts: () => _real(),
     // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
     holeWhy: () => _holeWhy(),
+    // (phase V15) Whether anything attached answers `fn` - read without laying out the zone, so the zone's own room
+    // (the storyboard's seat) can ask it.
+    anyAtt: (fn) => _atts.some(a => !a.hole && fn(a)),
+    // (phase V15) One thing put in another's place - its number stays (the storyboard drawn again).
+    replace: (oldPath, path, name, o) => _replace(oldPath, path, name, o),
+    // (phase V15) A send of the description's own: { text, body, over, from } - see _send.
+    sendNow: (o) => _send(o || {}),
     n: () => _n,
     say: (t) => _say(t),
     paintAtts: () => _paintAtts(),
@@ -428,7 +435,8 @@ export function createChat(make) {
     if (z) {
       const p = z.parts.find(x => x.kind === kind);
       if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
-      into = _placeFor(kind);
+      // `atEnd` (phase V15): a new place after the others - the storyboard is the last picture.
+      into = o && o.atEnd ? null : _placeFor(kind);
       if (into) slot = into.slot != null ? into.slot : _slotFor(p);
       else {
         // Its places - the empty ones too - are as many as the model takes.
@@ -480,6 +488,23 @@ export function createChat(make) {
       if (_pickAt && _pickAt.target === was) { _pickAt.target = hole; _pickAt.filled = false; }
       _trimHoles();
     } else _atts.splice(i, 1);
+    _attSeq++;
+    _paintAtts();
+    _paintStrip();
+    _draftLater();
+  }
+
+  // (phase V15) One thing in another's place: its number, its slot and its place in the row stay; what it carries
+  // (poster, length, part, role, name) is its own.
+  function _replace(oldPath, path, name, o) {
+    const i = _atts.findIndex(a => a.path === oldPath);
+    if (i < 0) { _attach(path, name, o); return; }
+    if (!path || _atts.some(a => a.path === path)) return;
+    const was = _atts[i];
+    const att = { path, name: name || '', kind: _kindOf(was), slot: was.slot };
+    for (const k of ['poster', 'dur', 'in', 'out', 'role', 'label']) if (o && o[k] != null && o[k] !== '') att[k] = o[k];
+    _atts[i] = att;
+    if (typeof S.onAttach === 'function') S.onAttach(att);
     _attSeq++;
     _paintAtts();
     _paintStrip();
@@ -638,9 +663,11 @@ export function createChat(make) {
     if (p.kind !== 'image') box.dataset.dropKind = p.kind;
     // A thing, or its empty place, in a cell wearing its slot's name. A slot or a part with an empty place offers no
     // other: that place is where the next one goes.
-    // (phase V15) A voice wears the word, so the message can say whose it is by its number.
+    // (phase V15) A voice and a storyboard wear their word, so the message can say what each is by its number.
+    const tag = (a) => (a.role === 'voice' || a.role === 'storyboard' ? a.role : '');
     const put = (a, s, must) => row.appendChild(a.hole ? _holeCell(p, a, num(a), s, must)
-      : _cell(_filled(a, num(a), p, s), a.role === 'voice' ? 'voice' : s ? (s.label || s.key) : '', a.role === 'voice' ? a.label : s && s.hint));
+      : _cell(_filled(a, num(a), p, s), tag(a) || (s ? (s.label || s.key) : ''),
+        a.role === 'voice' ? a.label : a.role === 'storyboard' ? 'The storyboard - the video follows it panel by panel' : s && s.hint));
     if (p.slots) {
       for (const s of p.slots) {
         const inS = mine.filter(a => a.slot === s.key);
@@ -1212,12 +1239,18 @@ export function createChat(make) {
   function _stop() { clearTimeout(_timer); _timer = 0; }
 
   // ── Sending ───────────────────────────────────────────────────────────────
-  async function _send() {
+  // `o` (phase V15) - a send of the description's own: `text` in place of the box (the box is left as it is), `body` in
+  // place of set.body(), `over` laid over the request, `from` the button its notes stand on. The video chat's
+  // storyboard card sends its words this way, with the sheet among the pictures.
+  async function _send(o) {
     if (_sending || !_ui) return;
     const ta = _ui.ta;
+    const own = !!(o && o.text != null);
+    const at = (o && o.from) || _ui.go;
     // (phase V7.3) A description may stand in for an empty box - Kling motion control's standard prompt.
-    const text = ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : '');
+    const text = own ? String(o.text).trim() : (ta.value.trim() || (typeof S.emptyText === 'function' ? String(S.emptyText() || '').trim() : ''));
     if (!text) {
+      if (own) { note(at, 'Nothing to send.', 'Its words are empty.'); return; }
       ta.focus();
       ta.classList.add('is-bad');
       setTimeout(() => ta.classList.remove('is-bad'), 900);
@@ -1225,7 +1258,7 @@ export function createChat(make) {
     }
     // (phase V15) An empty numbered place first: the numbers in the prompt would move under it.
     const why = _holeWhy() || set.ready();
-    if (why) { note(_ui.go, why[0], why[1]); return; }
+    if (why) { note(at, why[0], why[1]); return; }
     _sending = true;
     _ui.go.disabled = true;
     try {
@@ -1234,12 +1267,12 @@ export function createChat(make) {
       if (!Store.key()) {
         _adopt = true;
         try { await _ensureProject(); }
-        catch (e) { _adopt = false; note(_ui.go, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
+        catch (e) { _adopt = false; note(at, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
       }
       const key = Store.key();
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
+        body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, (o && o.body) || set.body(), {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it.
           where: {
@@ -1247,17 +1280,16 @@ export function createChat(make) {
             label: 'Merge · ' + (Store.title() || 'project') + ' · ' + S.name,
             spot: { key, view: S.name },
           },
-        })),
+        }, (o && o.over) || {})),
       });
-      if (!d || !d.success) { note(_ui.go, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
-      ta.value = '';
-      _grow();
+      if (!d || !d.success) { note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      if (!own) { ta.value = ''; _grow(); }
       _saveDraft(_key || '');
       if (d.send) _sendSeq.set(d.send, _attSeq);
       await _reload(true);
     } finally {
       _sending = false;
-      if (_ui) { _ui.go.disabled = false; _ui.ta.focus(); }
+      if (_ui) { _ui.go.disabled = false; if (!own) _ui.ta.focus(); }
     }
   }
 

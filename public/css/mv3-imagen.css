@@ -405,6 +405,8 @@
 .mv3-ig-att.is-bad .dur{ background:var(--danger) }
 /* Only a part of it goes: its seconds in gold. */
 .mv3-ig-att .dur.is-cut{ color:var(--gold) }
+/* (phase V15) The column's storyboard card: its sheet's prompt under the fold, as it was written. */
+.vc-story-prompt{ white-space:pre-wrap; font:500 10.5px/1.45 var(--font); color:var(--muted); max-height:240px; overflow:auto }
 /* (phase V15) In the zone a thing pressed opens the picker on it - its seconds open the part that goes. */
 .mv3-ig-att.is-swap{ cursor:pointer }
 .mv3-ig-att button.dur{ margin:0; border:0; border-radius:0; cursor:pointer; pointer-events:auto; appearance:none }
