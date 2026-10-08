@@ -112,8 +112,9 @@ router.get('/mv3/timelines', (req, res) => {
       let clips = 0;
       for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
-               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), ...OWN.ownerView(t) };
-    }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t) };
+    // (phase V20) The draft first, then newest first.
+    }).sort((a, b) => (b.draft - a.draft) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     // Everyone sees every owner. The picker groups by them; which entries the caller may
     // change is answered per project, from its `owner` against `me`.
     res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines),
@@ -137,11 +138,66 @@ router.get('/mv3/timeline', (req, res) => {
     if (t) _warmProxies(t);
     res.json({
       success: true, version: _revOf(t), key,
-      title: t ? t.title : 'Untitled',
+      title: t ? t.title : 'Untitled', draft: !!(t && t.draft),
       ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
       timeline: t ? { kind: BLANK_KIND, format: t.format || '9:16', tracks: t.tracks } : _emptyBlank(),
     });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── THE DRAFT (phase V20, the owner 2026-10-08) ────────────────────────────
+// Merge with no project open opens THE draft - a Merge project marked `draft`, named "draft <date time>", one at a
+// time - so the timeline and the chats work from the first press, with nothing to name first. What it makes is filed in
+// the category of its name, as any project's. Saved, it is renamed (the categories and the folder follow) and the mark
+// goes; not saved, its timeline and its chats go, and what it filed goes to Uncategorized (lib/project-cats.js
+// release) - what is still being made for it lands there too. Asked at the window's close, at a switch away from it,
+// and at the start after an app that closed without asking (public/js/draft-ask.js).
+const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines[k] && timelines[k].draft) || '';
+function _draftContent(key, t) {
+  let clips = 0;
+  for (const tr of (Array.isArray(t && t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
+  let messages = 0;
+  let made = 0;
+  try { const CHAT = require('../lib/mv3-chat'); messages = CHAT.read(key, 'image').length + CHAT.read(key, 'clip').length; } catch (e) { /* none */ }
+  try { made = require('../lib/mv3-gens').list(key).length + require('../lib/mv3-video-gens').list(key).length; } catch (e) { /* none */ }
+  // What it filed on the shelves - a picture brought into its chat is work begun too.
+  let filed = 0;
+  try { filed = require('../lib/project-cats').filedUnder(require('../lib/mv3-gens').catLabelFor(t && t.title)); } catch (e) { /* none */ }
+  return { clips, messages, made, filed, any: clips + messages + made + filed > 0 };
+}
+
+// GET /api/mv3/draft -> { draft: null | { key, title, content: { clips, messages, made, any } } }
+router.get('/mv3/draft', (req, res) => {
+  try {
+    const s = _read();
+    const key = _draftOf(s.timelines);
+    if (!key) return res.json({ success: true, draft: null });
+    res.json({ success: true, draft: { key, title: s.timelines[key].title || '', content: _draftContent(key, s.timelines[key]) } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// POST /api/mv3/timeline/:key/discard - a draft not saved: what it filed to Uncategorized, its chats and its timeline
+// gone. Only a draft: a project is deleted by its own button, and keeps its categories.
+router.post('/mv3/timeline/:key/discard', (req, res) => {
+  try {
+    const key = String(req.params.key || '');
+    const cur = _read();
+    const rec = cur.timelines[key];
+    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!rec.draft) return res.status(409).json({ success: false, error: 'only a draft is let go of this way - this project is saved' });
+    // What is still being made for it lands in Uncategorized - marked before anything moves, so a result landing
+    // meanwhile goes there too.
+    let waiting = 0;
+    try { waiting = require('../lib/mv3-gens').release(key) + require('../lib/mv3-video-gens').release(key); } catch (e) { console.warn('[mv3] draft: the waiting ones were not marked -', e.message); }
+    let released = {};
+    try { released = require('../lib/project-cats').release(require('../lib/mv3-gens').catLabelFor(rec.title)); }
+    catch (e) { console.warn('[mv3] draft: its category was not let go of -', e.message); }
+    try { const CHAT = require('../lib/mv3-chat'); CHAT.clear(key, 'image'); CHAT.clear(key, 'clip'); } catch (e) { /* nothing said */ }
+    delete cur.timelines[key];
+    const now = new Date().toISOString();
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    res.json({ success: true, released, waiting, version: cur.version + 1 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -366,7 +422,18 @@ router.post('/mv3/timeline/new', (req, res) => {
     let key = '';
     let title = '';
 
-    if (projectId) {
+    // (phase V20) THE draft: the one there is, or a new one named for the moment.
+    if (b.draft) {
+      const was = _draftOf(cur.timelines);
+      if (was) return res.json({ success: true, key: was, version: cur.version, title: cur.timelines[was].title, draft: true });
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const base = 'draft ' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      title = base;
+      for (let n = 2; _titleTaken(cur.timelines, title, null); n++) title = base + ' (' + n + ')';
+      key = 'mv3_' + Date.now();
+      for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
+    } else if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
       if (!p) return res.status(404).json({ success: false, error: 'no such project' });
       // The FIRST free one, the same way a send numbers them: sv3_<id>, then _2, _3. An empty
@@ -406,9 +473,10 @@ router.post('/mv3/timeline/new', (req, res) => {
       format: '9:16',
       tracks: _emptyBlank().tracks,
     };
+    if (b.draft) cur.timelines[key].draft = true;
     const version = cur.version + 1;
     _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, key, version, title });
+    res.json({ success: true, key, version, title, draft: !!b.draft });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -442,13 +510,15 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     const rec = cur.timelines[key];
     if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
     if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
-    if (String(rec.title || '') === title) return res.json({ success: true, title, version: _revOf(rec) });
+    // (phase V20) A draft named is a draft saved - even under the name it had.
+    if (String(rec.title || '') === title && !rec.draft) return res.json({ success: true, title, version: _revOf(rec) });
     if (_titleTaken(cur.timelines, title, key)) {
       return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
     }
 
     const was = String(rec.title || '');
     rec.title = title;
+    delete rec.draft;
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
 
