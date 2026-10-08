@@ -94,6 +94,11 @@ body{
 }
 .nm-b.is-ok{ border-color:var(--primary); background:var(--primary); color:var(--primary-ink) }
 .nm-b[disabled]{ opacity:.55; cursor:default }
+/* The draft's question (js/draft-ask.js, phase V20) - the name box's look, in the middle of the window over a dimmed page. */
+.dr-back{ position:fixed; inset:0; z-index:9690; background:rgba(0,0,0,.45) }
+.nm-box.dr-box{ left:50%; top:32%; transform:translate(-50%, -50%); width:min(380px, calc(100vw - 32px)); gap:8px; padding:14px }
+.dr-holds{ font:500 11.5px/1.45 var(--font); color:var(--ink) }
+.dr-note{ font:500 10px/1.4 var(--font); color:var(--muted) }
 
 /* ── Menus ────────────────────────────────────────────────────────────────────
    A right-click menu or a "+" menu, on the layer stack (js/layers.js). Merge's and the Library's

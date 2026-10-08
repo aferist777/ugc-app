@@ -22,6 +22,7 @@ import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
+import { draftNow, askDraft } from '../draft-ask.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -81,6 +82,8 @@ export function initProjects() {
   sel.addEventListener('change', async () => {
     const want = sel.value;
     if (!want) return;              // the "choose a project" placeholder
+    // (phase V20) Away from the draft with something in it: asked first, and Cancel stays.
+    if (want !== Store.key() && !(await _leaveDraft())) { sel.value = Store.key() || ''; return; }
     _note('opening…');
     try {
       await Store.open(want);
@@ -107,11 +110,41 @@ export function initProjects() {
     const k = Store.key();
     _paintDraft();
     if (k === last) return;
+    // The first project the session really opens - not the empty moment before the store has read one.
+    if (k && !_startAsked) { _startAsked = true; _askAtStart(); }
     last = k;
     _paint();
     _disarm();          // a different project means the armed delete no longer applies
     _cancelRename();    // and that a half-typed name belongs to a project no longer open
   });
+}
+
+// (phase V20) Leaving the draft with something in it - another project opened, a new one made: saved, let go of, or
+// stay. True when the way is open.
+async function _leaveDraft() {
+  if (!Store.isDraft()) return true;
+  const dr = await draftNow();
+  if (!dr || dr.key !== Store.key() || !dr.content || !dr.content.any) return true;
+  const r = await askDraft(dr);
+  if (r.result === 'saved') Store.markSaved(r.title);
+  return r.result === 'saved' || r.result === 'discarded';
+}
+
+// (phase V20) AT THE START, a draft with something in it was left by an app that closed without asking - a crash, a
+// power cut: asked once a session (the app's window is one session), with "Later".
+const SS_ASKED = 'mv3_draft_asked';
+let _startAsked = false;
+async function _askAtStart() {
+  try {
+    if (sessionStorage.getItem(SS_ASKED)) return;
+    sessionStorage.setItem(SS_ASKED, '1');
+  } catch (e) { return; }
+  if (!Store.isDraft()) return;
+  const dr = await draftNow();
+  if (!dr || dr.key !== Store.key() || !dr.content || !dr.content.any) return;
+  const r = await askDraft(dr, { later: true });
+  if (r.result === 'saved') Store.markSaved(r.title);
+  else if (r.result === 'discarded') { _after = 'not saved - what it made is in the Library, in Uncategorized'; await Store.openBlank(); }
 }
 
 // (phase V20) The draft's two buttons: "save" names it, "don't save" lets it go - what it made goes to Uncategorized.
@@ -146,6 +179,7 @@ function _wireNew() {
   // inspector (js/merge-v3/scen-pick.js) - the project itself is made when one is used.
   b.addEventListener('click', () => _kindMenu(b));
   _newBlank = async () => {
+    if (!(await _leaveDraft())) return;
     const today = new Date().toISOString().slice(0, 10);
     const title = await askName({ anchor: b, title: 'New project', value: today + ' - ', select: false, okLabel: 'Create' });
     if (title === null) return;                       // cancelled, not an empty name
@@ -207,6 +241,7 @@ function _kindMenu(anchor) {
   };
   item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
   item('talking head', 'from a scenario - pick or write one', async () => {
+    if (!(await _leaveDraft())) return;
     const P = await import('./scen-pick.js');
     P.start();
   });

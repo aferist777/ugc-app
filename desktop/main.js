@@ -83,6 +83,7 @@ function run() {
   let mainWindow = null;
   let closeConfirmed = false;
   let asking = false;        // the question about a running render is on screen
+  let renderQuitAt = 0;      // "Quit" said to it a moment ago - the close the draft's question makes again is not asked twice
   let serverStopped = false;
 
   const internal = (url) => {
@@ -230,7 +231,7 @@ function run() {
     if (asking) return;
     asking = true;
     try {
-      if (await renderRunning()) {
+      if (Date.now() - renderQuitAt > 120000 && await renderRunning()) {
         const { response } = await dialog.showMessageBox(win, {
           type: 'warning', title: 'UGC Studio', noLink: true,
           message: 'A render is still running',
@@ -238,12 +239,29 @@ function run() {
           buttons: ['Quit', 'Keep working'], defaultId: 1, cancelId: 1,
         });
         if (response !== 0) return;
+        renderQuitAt = Date.now();
       }
+      // (phase V20) The draft: the page asks about it in a window of its own, and closes the window again itself once it
+      // is answered; nothing to ask - no draft, or nothing in it - and the close goes on.
+      if ((await draftAsked(win)) === 'asking') return;
       closeConfirmed = true;
     } finally {
       asking = false;
     }
     if (!win.isDestroyed()) win.close();
+  }
+
+  // The page's answer, in a moment - a page that cannot answer (one still starting, one that hangs) does not hold the
+  // window open.
+  async function draftAsked(win) {
+    try {
+      return await Promise.race([
+        win.webContents.executeJavaScript("window.__ugcDraftAsk ? window.__ugcDraftAsk() : 'none'", true),
+        new Promise((r) => setTimeout(() => r('none'), 3000)),
+      ]);
+    } catch {
+      return 'none';
+    }
   }
 
   async function renderRunning() {

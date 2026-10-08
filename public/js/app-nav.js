@@ -10,6 +10,7 @@
 //   • the Admin entry, on a page whose strip leaves it out.
 
 import { mountAlerts } from './alerts-bell.js';
+import { installCloseAsk } from './draft-ask.js';
 
 function _lightCurrent(nav) {
   const here = location.pathname.replace(/\/+$/, '') || '/';
@@ -82,4 +83,6 @@ export function initNav() {
   // the list is the same wherever you are standing.
   mountAlerts(nav);
   _windowButtons(nav);
+  // (phase V20) The window's close asks about the draft from whichever page is open.
+  installCloseAsk();
 }
