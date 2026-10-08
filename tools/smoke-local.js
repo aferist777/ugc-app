@@ -57,7 +57,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // Admin -> Thanks: the repositories the app is built on
                  '/js/admin-thanks.js',
                  // the 3D Studio (PLAN "3D Studio"): its modules, three.js, a mannequin, a motion library, a piece of furniture
-                 '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
+                 '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.

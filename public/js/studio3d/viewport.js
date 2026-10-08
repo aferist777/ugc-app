@@ -346,11 +346,53 @@ export function createViewport(host, hooks) {
         if (H.onBuilt) H.onBuilt(o.id);
       }).catch((err) => { if (H.onError) H.onError(o, err); }));
     }
+    _poses();
     _boxes();
     invalidate();
     await Promise.all(jobs);
     _boxes();
   }
+
+  // ── The moment of a fragment (3D2) ───────────────────────────────────────
+  // A pose for every object and camera at the playhead (public/js/studio3d/evaluate.js): what has a track in the
+  // open fragment stands where its keys put it; the rest stands in the arrangement. Without a fragment, the arrangement.
+  let poses = null;                     // Map id -> { p, r, s, v, moves } | null
+  function _poses() {
+    for (const o of objs.values()) {
+      const q = poses && poses.get(o.obj.id);
+      _place(o.root, q || o.obj);
+      o.root.visible = !q || q.v !== 0;
+    }
+    for (const c of cams.values()) {
+      const q = poses && poses.get(c.cfg.id);
+      _place(c.root, q ? { p: q.p, r: q.r } : { p: c.cfg.p, r: c.cfg.r });
+      c.root.updateMatrixWorld(true);
+      c.helper.update();
+    }
+  }
+  function setPose(map) {
+    poses = map || null;
+    if (gizmo.dragging) return;          // the handles are moving something: the drag's end will set it
+    _poses();
+    if (gizmo.object === pivot) _attach();
+    invalidate();
+  }
+
+  // "The still ones see-through" (the owner, 2026-10-09): only in the editor's eye, never in a preview or a recording -
+  // the materials go half-clear for the editor's drawing and come back before anything else draws.
+  let ghost = false;
+  const setGhost = (on) => { ghost = !!on; invalidate(); };
+  function _ghostOn() {
+    const mats = new Set();
+    for (const o of objs.values()) {
+      const q = poses && poses.get(o.obj.id);
+      if (!o.figure || (q && q.moves)) continue;
+      o.figure.traverse((n) => { if (n.isMesh && n.material) mats.add(n.material); });
+    }
+    for (const m of mats) { m.transparent = true; m.opacity = 0.2; m.depthWrite = false; }
+    return mats;
+  }
+  function _ghostOff(mats) { for (const m of mats) { m.transparent = false; m.opacity = 1; m.depthWrite = true; } }
 
   // ── Shot cameras ─────────────────────────────────────────────────────────
   function _camBody(color) {
@@ -389,7 +431,8 @@ export function createViewport(host, hooks) {
         cams.set(cfg.id, c);
       }
       c.cfg = cfg;
-      _place(c.root, { p: cfg.p, r: cfg.r });
+      const q = poses && poses.get(cfg.id);
+      _place(c.root, q ? { p: q.p, r: q.r } : { p: cfg.p, r: cfg.r });
       const aspect = ASPECT[cfg.format] || 9 / 16;
       for (const k of [c.cam, c.guide]) { k.fov = fovOf(cfg.focal, cfg.format); k.aspect = aspect; k.updateProjectionMatrix(); }
       c.root.updateMatrixWorld(true);
@@ -441,7 +484,9 @@ export function createViewport(host, hooks) {
     dirty = false;
     for (const o of objs.values()) if (o.box) o.box.update();
     for (const c of cams.values()) { c.root.updateMatrixWorld(true); c.helper.update(); }
+    const clear = ghost ? _ghostOn() : null;
     renderer.render(scene, eye);
+    if (clear) _ghostOff(clear);
     for (const f of tickers) f();
   }
   resize();
@@ -449,7 +494,7 @@ export function createViewport(host, hooks) {
 
   return {
     scene, renderer, invalidate, resize,
-    syncObjects, syncCameras, shotCamera, select, frame,
+    syncObjects, syncCameras, shotCamera, select, frame, setPose, setGhost, ghost: () => ghost,
     setView, view: () => view,
     setInput, input: () => input || 'mouse',
     setMode, mode: () => gizmo.mode, setSnap, snap: () => snapping,

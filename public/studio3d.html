@@ -54,6 +54,7 @@
           <button class="s3-seg-b" type="button" data-mode="scale" title="Size (R)">Size</button>
         </div>
         <button class="s3-seg-b s3-solo" type="button" id="s3-snap" title="Steps of 10 cm, 15° and 0.1 while moving, turning and sizing">Snap</button>
+        <button class="s3-seg-b s3-solo" type="button" id="s3-ghost" title="What does not move in this fragment, see-through - only here, never in a preview or a recording">See-through</button>
         <button class="s3-seg-b s3-solo" type="button" id="s3-frame" title="Bring what is selected - or everything - into view (F)">Fit</button>
         <button class="s3-seg-b s3-solo" type="button" id="s3-input" title="Mouse: left button turns, right moves, wheel zooms. Touchpad: two fingers turn, Shift + two fingers move, pinch zooms. Press to switch."></button>
       </div>
@@ -61,6 +62,8 @@
     </section>
     <aside class="s3-right" id="s3-right"></aside>
   </div>
+  <!-- The tracks of the open fragment (js/studio3d/timeline.js, 3D2). -->
+  <section class="s3-tl" id="s3-tl"></section>
 </main>
 
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>

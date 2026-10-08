@@ -31,7 +31,9 @@ export function paint() {
   if (!sc) { host.textContent = ''; _card = ''; return; }
   _list(sc);
   const one = A.sel.length === 1 ? (sc.objects.find(o => o.id === A.sel[0]) || null) : null;
-  const key = A.sel.length > 1 ? 'many|' + A.sel.length : one ? one.id + '|' + one.kind + '|' + (one.ref ? one.ref.path : '') : A.sel.length ? 'cam' : '';
+  const fr = A.frag();
+  const moves = one && fr ? (fr.tracks[one.id] ? 'm' : 's') + fr.id : '';
+  const key = A.sel.length > 1 ? 'many|' + A.sel.length : one ? one.id + '|' + one.kind + '|' + (one.ref ? one.ref.path : '') + '|' + moves : A.sel.length ? 'cam' : '';
   if (key !== _card || !host.querySelector('.s3-card')) { _card = key; _build(sc, one); }
   else _refresh(one);
 }
@@ -79,6 +81,19 @@ function _build(sc, o) {
     return;
   }
   C.appendChild(el('div', 's3-h', KIND[o.kind]));
+  // Moves in the open fragment (3D2): a track of its own on the timeline. Then the handles and the numbers below key
+  // it at the playhead; without it, they move it in the shared arrangement - in every fragment.
+  const fr = A.frag();
+  if (fr && o.kind !== 'room') {
+    const l = el('label', 's3-check s3-moves');
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = !!fr.tracks[o.id];
+    cb.addEventListener('change', () => A.setMoves(o.id, cb.checked));
+    l.append(cb, document.createTextNode(' moves in “' + (fr.name || 'this fragment') + '”'));
+    l.title = 'Ticked: a track of its own in this fragment, and moving it keys it at the playhead. Unticked: its track and keys go (Ctrl+Z brings them back), and moving it moves it in every fragment.';
+    C.appendChild(l);
+  }
   // Name
   const name = _field('Name', 'text', o.name, (v) => A.change(s => { _obj(s, o.id).name = String(v).slice(0, 80); }));
   name.dataset.k = 'name';
@@ -157,7 +172,11 @@ function _refresh(o) {
     if (k === 'name') v = o.name;
     else if (k === 'color') v = o.color;
     else if (k.startsWith('room.')) v = (o.room || {})[k.slice(5)];
-    else { const [a, i] = k.split('.'); v = o[a] ? o[a][+i] : ''; }
+    else {
+      const [a, i] = k.split('.');
+      const q = (a === 'p' || a === 'r' || a === 's') && A.poseOf(o.id);
+      v = q ? q[a][+i] : o[a] ? o[a][+i] : '';
+    }
     f.value = typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : (v == null ? '' : v);
   }
 }
@@ -212,11 +231,17 @@ function _num(value, step, fn) {
 function _vec3(label, key, o, step, axes) {
   const g = el('div', 's3-vec');
   (axes || ['x', 'y', 'z']).forEach((ax, i) => {
-    const f = _num(o[key] ? o[key][i] : 0, step, (v) => A.change(s => {
-      const t = _obj(s, o.id);
-      if (!t[key]) t[key] = [0, 0, 0];
-      t[key][i] = key === 's' || key === 'box' ? Math.max(0.05, v) : v;
-    }));
+    const q = (key === 'p' || key === 'r' || key === 's') && A.poseOf(o.id);
+    const f = _num(q ? q[key][i] : o[key] ? o[key][i] : 0, step, (v) => {
+      const val = key === 's' || key === 'box' ? Math.max(0.05, v) : v;
+      // Something that moves here: a key at the playhead; anything else: the shared arrangement.
+      if ((key === 'p' || key === 'r' || key === 's') && A.keyValue(o.id, key, i, val)) return;
+      A.change(s => {
+        const t = _obj(s, o.id);
+        if (!t[key]) t[key] = [0, 0, 0];
+        t[key][i] = val;
+      });
+    });
     f.dataset.k = key + '.' + i;
     g.appendChild(_mini(ax, f));
   });
