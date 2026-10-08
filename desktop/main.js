@@ -21,7 +21,7 @@
    window that is already open. A copy on another library takes another lock and runs beside it,
    on a port of its own. */
 
-const { app, BrowserWindow, Menu, clipboard, dialog, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, session, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { createSupervisor } = require('./supervisor');
@@ -90,6 +90,29 @@ function run() {
   };
   // Only web and mail addresses leave the app - never file:, never a scheme a page made up.
   const outside = (url) => { if (/^(https?|mailto):/i.test(url)) shell.openExternal(url); };
+
+  // Full screen and back - F11, and the strip's own button (phase V19). Out of full screen the window is maximised,
+  // with Windows' own title bar.
+  function toggleFull(win) {
+    const full = !win.isFullScreen();
+    if (!full) win.once('leave-full-screen', () => win.maximize());
+    win.setFullScreen(full);
+  }
+  // (phase V19, the owner 2026-10-08) The window's buttons the pages draw at the right of their strip (desktop/preload.js):
+  // minimise, full screen and back, quit - answered for the app's own pages only.
+  const own = (e) => internal(e && e.senderFrame ? e.senderFrame.url : '');
+  ipcMain.on('ugc-window', (e, what) => {
+    if (!own(e)) return;
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win || win.isDestroyed()) return;
+    if (what === 'minimize') win.minimize();
+    else if (what === 'full') toggleFull(win);
+    else if (what === 'close') win.close();
+  });
+  ipcMain.handle('ugc-window-full', (e) => {
+    const win = own(e) ? BrowserWindow.fromWebContents(e.sender) : null;
+    return !!(win && !win.isDestroyed() && win.isFullScreen());
+  });
 
   server.on('ready', (url) => {
     const was = origin;
@@ -178,11 +201,17 @@ function run() {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
+        // The window's buttons the pages draw (phase V19) - three actions, nothing else.
+        preload: path.join(__dirname, 'preload.js'),
         // Pages poll their generations; a minimised window keeps polling, as an app should.
         backgroundThrottling: false,
       },
     });
     win.once('ready-to-show', () => (WINDOWED ? win.showInactive() : win.show()));
+    // The strip's buttons follow full screen, however it was left or taken (F11, the button, Windows).
+    for (const ev of ['enter-full-screen', 'leave-full-screen']) {
+      win.on(ev, () => { if (!win.isDestroyed()) win.webContents.send('ugc-window-full', ev === 'enter-full-screen'); });
+    }
     win.on('close', (e) => confirmClose(e, win));
     win.on('closed', () => {
       mainWindow = null;
@@ -263,9 +292,7 @@ function run() {
     const code = input.code;
     const history = contents.navigationHistory;
     if (code === 'F11' && win) {
-      const full = !win.isFullScreen();
-      if (!full) win.once('leave-full-screen', () => win.maximize());
-      win.setFullScreen(full);
+      toggleFull(win);
     } else if (code === 'F5' || (mod && code === 'KeyR')) {
       if (input.shift || (mod && code === 'F5')) contents.reloadIgnoringCache();
       else contents.reload();

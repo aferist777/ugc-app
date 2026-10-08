@@ -20,6 +20,18 @@
 /* No chips in the header (phase D2, the owner 2026-09-29): the labels that said which page or
    shelf you were on went - the lit link already says it. What stays is what can be pressed. */
 
+/* (phase V19, the owner 2026-10-08) The window's buttons at the far right - in the app only (js/app-nav.js): minimise,
+   into a window, quit; in a window, back to full screen. */
+.sv3-win{ display:flex; align-items:center; gap:2px; flex:0 0 auto; margin-left:10px; padding-left:10px; border-left:1px solid var(--border) }
+.sv3-win-b{
+  display:flex; align-items:center; justify-content:center; width:30px; height:24px; padding:0;
+  border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-win-b[hidden]{ display:none }
+.sv3-win-b:hover{ color:var(--ink); background:var(--surface-2) }
+.sv3-win-b.is-close:hover{ color:#fff; background:var(--danger) }
+.sv3-win-b svg{ width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round }
+
 /* A button that stands in the strip and reads like one of its entries: the render queue on
    Merge (phase R). Same shape as Alerts, without the count. */
 .sv3-nav .sv3-navbtn{
