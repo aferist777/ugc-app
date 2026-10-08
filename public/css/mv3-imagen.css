@@ -533,6 +533,23 @@ audio.vtrim-media{ background:none; height:32px }
 }
 .vc-prompt-ta:focus{ outline:none; border-color:var(--primary) }
 .vc-card.is-sent .vc-req{ opacity:.92 }
+/* (phase V18.3, the owner 2026-10-08) What was asked, at the head of its answer - the person's turn is not drawn apart:
+   the words (folded after three lines), a recipe's request, the attachments. The message drawn at the press says
+   "sending…" until its answer takes its place. */
+.vc-asked{ display:flex; flex-direction:column; gap:6px; min-width:0 }
+.vc-asked-t{
+  font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;
+}
+.vc-asked-t.is-open{ display:block; -webkit-line-clamp:unset }
+.vc-asked-t.is-none{ color:var(--muted) }
+.vc-asked-more{
+  align-self:flex-start; margin-top:-3px; padding:0; border:0; background:none; cursor:pointer;
+  font:600 9.5px/1.3 var(--font); color:var(--muted); text-decoration:underline dotted;
+}
+.vc-asked-more:hover{ color:var(--ink) }
+.vc-sending{ font:600 10px/1.3 var(--font); color:var(--muted); animation:vc-sending 1.2s ease-in-out infinite }
+@keyframes vc-sending{ 50%{ opacity:.45 } }
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
 .vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 /* (phase V15) The video chat's switches in its column - the writer, the storyboard, 中文 (all checkboxes since V16) - and

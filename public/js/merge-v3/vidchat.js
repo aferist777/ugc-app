@@ -1354,7 +1354,6 @@ function VIDEOS(ctx) {
   // has four, and Kling's first frame (V17) three: its prompt, the picture, the video.
   function _cardBubble(m, progs) {
     const c = m.card;
-    if (c.type === 'recipe') return _sentRequest(m);
     if (c.type === 'board' || c.board) return _storyCard(m, progs);
     return _reviewCard(m, progs);
   }
@@ -1605,11 +1604,15 @@ function VIDEOS(ctx) {
     const h = el('div', 'vc-card-h');
     // (phase V17) Kling's first frame of the plain chat is the person's message, not a recipe.
     const own = kind === 'swap' && c.plain;
-    if (kind === 'column') h.append(el('span', 'k', 'storyboard'), el('span', 't', _words(c.text).slice(0, 90) || 'from the attachments alone'));
-    else if (own) h.append(el('span', 'k', 'video'), el('span', 't', _words(c.text).slice(0, 90) || 'from your pictures'));
+    if (kind === 'column') h.appendChild(el('span', 'k', 'storyboard'));
+    else if (own) h.appendChild(el('span', 'k', 'video'));
     else h.append(el('span', 'k', 'recipe'), el('span', 't', (c.recipe && c.recipe.title) || ''));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model) + (kind === 'column' ? '' : own ? ' · the first frame, then the video' : ' · 2 steps')));
     box.appendChild(h);
+    // (phase V18.3) What was asked, at the head - seen on every step.
+    const asked = _askedOf(kind === 'column' || own ? { words: c.text, media: m.media, none: own ? 'from your pictures' : 'from the attachments alone' }
+      : { request: _requestOf(m), media: m.media });
+    if (asked) box.appendChild(asked);
     const B = c.board || {};
     if (!((B.versions || []).length || B.prompt)) {
       // Nothing written yet: the writer at work, or why not.
@@ -1753,8 +1756,6 @@ function VIDEOS(ctx) {
     bta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     b.appendChild(bta);
-    const row = _mediaRow(l.m.media || []);
-    if (row) b.appendChild(row);
     l.bta = bta;
   }
   // 1 · Kling's first frame (V7.6 as a recipe; the chat's own since V17): the moment of the clip it is drawn from and the
@@ -1826,8 +1827,6 @@ function VIDEOS(ctx) {
     bta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     b.appendChild(bta);
-    const row = _mediaRow(l.m.media || []);
-    if (row) b.appendChild(row);
     l.bta = bta;
     l.range = range;
   }
@@ -2041,13 +2040,12 @@ function VIDEOS(ctx) {
 
   // A request as it was sent: the places as the person left them - theirs in solid gold, the example's dashed - and
   // what was attached, by the name of its slot.
-  function _sentRequest(m) {
-    const c = m.card;
-    const box = el('div', 'mv3-ig-msg is-agent vc-card is-request is-sent');
-    const h = el('div', 'vc-card-h');
-    h.append(el('span', 'k', 'recipe'), el('span', 't', (c.recipe && c.recipe.title) || ''));
-    if (c.recipe && c.recipe.edited) h.appendChild(el('i', null, 'edited'));
-    box.appendChild(h);
+  // (phase V18.3) The request card is not drawn apart any more: its request heads the prompt card written from it.
+  function _requestOf(m) {
+    const from = m.card && m.card.from;
+    const rc = from ? (ctx.thread() || []).find(x => x.id === from && x.card && x.card.type === 'recipe') : null;
+    if (!rc) return null;
+    const c = rc.card;
     const req = el('div', 'vc-req');
     const head = c.head || '';
     let last = 0;
@@ -2061,9 +2059,51 @@ function VIDEOS(ctx) {
       i++;
     }
     if (last < head.length) req.appendChild(document.createTextNode(head.slice(last)));
-    box.appendChild(req);
-    const row = _mediaRow(m.media || []);
+    return req;
+  }
+
+  // (phase V18.3, the owner 2026-10-08) WHAT WAS ASKED stands at the head of its answer - the person's turn is not drawn
+  // apart any more: the words whole (folded after three lines), or a recipe's request with its places; the attachments.
+  function _askedOf(o) {
+    const box = el('div', 'vc-asked');
+    if (o.request) box.appendChild(o.request);
+    else {
+      const words = String(o.words || '').trim();
+      if (words || o.none) {
+        const t = el('div', 'vc-asked-t' + (words ? '' : ' is-none'), words || o.none);
+        box.appendChild(t);
+        if (words) _fold(t, 0);
+      }
+    }
+    const row = _mediaRow(o.media || []);
     if (row) box.appendChild(row);
+    return box.childNodes.length ? box : null;
+  }
+  // Long words fold after three lines, and "more" opens them - measured once the message is on screen.
+  function _fold(t, tries) {
+    requestAnimationFrame(() => {
+      if (!t.isConnected || !t.clientHeight) { if (tries < 30) _fold(t, tries + 1); return; }
+      if (t.scrollHeight <= t.clientHeight + 1 || t.nextSibling && t.nextSibling.classList && t.nextSibling.classList.contains('vc-asked-more')) return;
+      const more = el('button', 'vc-asked-more', 'more');
+      more.type = 'button';
+      more.addEventListener('click', () => { const open = t.classList.toggle('is-open'); more.textContent = open ? 'less' : 'more'; });
+      t.after(more);
+    });
+  }
+  // The message drawn at the press (the shell's `sending`): what was asked, and "sending…" until the answer comes.
+  function _sendingCard(o) {
+    const card = ctx.writing() && !isMC() || _mcSteps() || _boardOn();
+    const box = el('div', 'mv3-ig-msg is-agent is-sending' + (card ? ' vc-card' : ''));
+    if (card) {
+      const h = el('div', 'vc-card-h');
+      const m = model();
+      h.appendChild(el('span', 'k', _boardOn() ? 'storyboard' : 'video'));
+      if (m) h.appendChild(el('span', 'm', 'for ' + m.label));
+      box.appendChild(h);
+    }
+    const asked = _askedOf({ words: o.text, media: o.media, none: 'from the attachments alone' });
+    if (asked) box.appendChild(asked);
+    box.appendChild(el('div', 'vc-sending', 'sending…'));
     return box;
   }
 
@@ -2092,7 +2132,6 @@ function VIDEOS(ctx) {
   // recipe's prompt is the same message (V16.6), its request standing above it. The message is a SUB-PROJECT (vsteps.js):
   // "prompt" - every writing of it a variant - then "video" - every clip of every attempt a variant. The variant of the
   // prompt shown is the one made from.
-  const _words = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   // A card written before its prompts had variants has its one prompt and no list: that one is its only variant (`v0`,
   // edited as the card's own).
   const _versOf = (c) => ((c.versions || []).length ? c.versions : c.prompt ? [{ id: 'v0', prompt: c.prompt, model: c.model }] : []);
@@ -2101,12 +2140,15 @@ function VIDEOS(ctx) {
     _forget(m.id);
     const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
     const h = el('div', 'vc-card-h');
-    if (c.plain) {
-      const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
-      h.append(el('span', 'k', 'video'), el('span', 't', _words(c.text).slice(0, 90) || (frames ? 'from the frames alone' : 'from the attachments alone')));
-    } else h.append(el('span', 'k', 'recipe'), el('span', 't', (c.recipe && c.recipe.title) || ''));
+    if (c.plain) h.appendChild(el('span', 'k', 'video'));
+    else h.append(el('span', 'k', 'recipe'), el('span', 't', (c.recipe && c.recipe.title) || ''));
     if (c.model) h.appendChild(el('span', 'm', 'for ' + _labelOf(c.model)));
     box.appendChild(h);
+    // (phase V18.3) What was asked, at the head - seen on every step.
+    const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
+    const asked = _askedOf(c.plain ? { words: c.text, media: m.media, none: frames ? 'from the frames alone' : 'from the attachments alone' }
+      : { request: _requestOf(m), media: m.media });
+    if (asked) box.appendChild(asked);
     if (!_versOf(c).length) {
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
@@ -2189,8 +2231,6 @@ function VIDEOS(ctx) {
     ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
     b.appendChild(ta);
-    const row = _mediaRow(l.m.media || []);
-    if (row) b.appendChild(row);
     Object.assign(l, { ta, save, ver: v.id === 'v0' ? '' : v.id, vmodel: v.model || c.model, patchKey: key });
   }
   function _promptActs(m, l, x, a) {
@@ -2335,6 +2375,16 @@ function VIDEOS(ctx) {
     emptyOk: () => ctx.atts().length > 0 && (ctx.writing() || _framesMode()),
     // (phase V16) The writer's message holds the attachments now: the zone is emptied for the next message.
     afterSend: (d) => { if (d && (d.review || d.storyboard || d.frame)) ctx.useAtts([]); },
+    // (phase V18.3, the owner 2026-10-08) ONE MESSAGE PER SEND: the person's turns are not drawn apart - what was asked
+    // heads its answer - nor is a recipe's request card, which heads the prompt card written from it; the message is
+    // drawn at the press.
+    hidden: (m) => m.role === 'user' || !!(m.card && m.card.type === 'recipe'),
+    askedHead: (m, user) => {
+      const media = (m.media || []).length ? m.media : ((user && user.media) || []);
+      const words = m.asked != null ? m.asked : (user ? user.text : '');
+      return (String(words || '').trim() || media.length) ? _askedOf({ words, media }) : null;
+    },
+    sending: (o) => _sendingCard(o),
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },

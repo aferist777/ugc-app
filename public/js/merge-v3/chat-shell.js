@@ -121,6 +121,8 @@ export function createChat(make) {
   let _timer = 0;
   let _seq = 0;
   let _sending = false;
+  // (phase V18.3) The message drawn at the press, until the answer it was sent for takes its place: { el, id }.
+  let _pend = null;
   let _n = 1;
   let _write = true;
   let _atts = [];            // [{ path, name }] - in the zone also an empty numbered place, { hole, kind, slot, id }
@@ -1077,26 +1079,36 @@ export function createChat(make) {
     // (phase V6) The foot - a description's own step at the end of the thread (the video chat's recipe card) - stands
     // for the conversation too: with it there is no "describe a clip".
     const footed = !!(_ui.foot && _ui.foot.childNodes.length);
-    if (!_thread.length && !footed) {
+    if (!_thread.length && !footed && !_pend) {
       if (!empty) { empty = el('div', 'mv3-ig-empty'); host.insertBefore(empty, _ui.foot); }
       empty.textContent = _key ? T.empty : T.emptyNoProject;
     } else if (empty) empty.remove();
 
     let prev = null;
+    // (phase V18.3) A description may draw a send as ONE message: the person's turn is not drawn apart (`hidden`), and
+    // the answer after it is handed it, to draw what was asked at its head.
+    let asked = null;
     for (const m of _thread) {
+      if (typeof S.hidden === 'function' && S.hidden(m)) {
+        if (m.role === 'user') asked = m;
+        continue;
+      }
       let n = _nodes.get(m.id);
       const sig = _sig(m);
       if (!n || n.sig !== sig) {
         if (n) _dropProgs(n, _landedNow);
         const progs = new Map();
-        const b = _bubble(m, progs);
+        const b = _bubble(m, progs, m.role === 'user' ? null : asked);
         if (n) n.el.replaceWith(b);
+        // The message drawn at the press gives its place to its answer.
+        else if (_pend && _pend.id === m.id) { _pend.el.replaceWith(b); _pend = null; }
         n = { el: b, sig, progs, away: false };
         _nodes.set(m.id, n);
       } else {
         n.away = false;
         for (const g of _gensOf(m)) { const p = n.progs.get(g.id); if (p) p.say(_stageWords(g)); }
       }
+      if (m.role !== 'user') asked = null;
       const want = prev ? prev.nextSibling : host.firstChild;
       if (n.el !== want) host.insertBefore(n.el, want);
       prev = n.el;
@@ -1118,13 +1130,18 @@ export function createChat(make) {
     return box;
   }
 
-  function _bubble(m, progs) {
+  function _bubble(m, progs, asked) {
     // (phase V6) A card is the description's to draw.
     if (m.card && typeof S.cardBubble === 'function') {
       const c = S.cardBubble(m, progs);
       if (c) return c;
     }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));
+    // (phase V18.3) What was asked, at the head of the answer - the description draws it.
+    if (m.role !== 'user' && typeof S.askedHead === 'function') {
+      const h = S.askedHead(m, asked);
+      if (h) b.appendChild(h);
+    }
     if (m.text) b.appendChild(el('div', 'mv3-ig-text', m.text));
     // What the turn pointed at: by kind where the message says (the video chat's `media`), else its pictures.
     const sent = (m.media || []).length ? m.media : (m.refs || []).map(p => ({ path: p, kind: 'image' }));
@@ -1249,6 +1266,20 @@ export function createChat(make) {
     if (why) { note(at, why[0], why[1]); return; }
     _sending = true;
     _ui.go.disabled = true;
+    // (phase V18.3, the owner 2026-10-08) THE MESSAGE IS DRAWN AT THE PRESS - what was asked, and "sending…" - and the
+    // answer takes its place in the thread; a refusal takes it away, the box and the zone left as they were.
+    _dropPend();
+    if (typeof S.sending === 'function') {
+      const pe = S.sending({ text, media: (set.body() || {}).media || [] });
+      if (pe) {
+        _pend = { el: pe, id: '' };
+        const host = _ui.thread;
+        const empty = host.querySelector('.mv3-ig-empty');
+        if (empty) empty.remove();
+        host.insertBefore(pe, _ui.foot && _ui.foot.parentNode === host ? _ui.foot : null);
+        host.scrollTop = host.scrollHeight;
+      }
+    }
     try {
       // A file still on its way into the row goes with this message, not after it.
       if (_uploading) { _say('waiting for the ' + S.noun.one + ' to be added…'); await _uploading.catch(() => {}); _say(''); }
@@ -1270,7 +1301,8 @@ export function createChat(make) {
           },
         })),
       });
-      if (!d || !d.success) { note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      if (!d || !d.success) { _dropPend(); note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
+      if (_pend) _pend.id = d.send || '';
       ta.value = '';
       _grow();
       // (phase V16) What the description does once a send is in (the video chat: the zone emptied - its attachments are
@@ -1280,9 +1312,16 @@ export function createChat(make) {
       if (d.send) _sendSeq.set(d.send, _attSeq);
       await _reload(true);
     } finally {
+      // An answer the thread did not bring back with it: the message drawn at the press goes all the same.
+      _dropPend();
       _sending = false;
       if (_ui) { _ui.go.disabled = false; _ui.ta.focus(); }
     }
+  }
+
+  function _dropPend() {
+    if (_pend) _pend.el.remove();
+    _pend = null;
   }
 
   // The writer on or off - the pen in the bar, or (phase V15) the description's own switch through ctx.setWriting.

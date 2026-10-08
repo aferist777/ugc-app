@@ -258,7 +258,8 @@ router.post('/mv3/video/send', async (req, res) => {
         model, agg: fits[0].agg, prompt: text, said: text, params, media, skill, zh,
       }).id);
     }
-    CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path) });
+    // (phase V18.3) The answer carries what was asked - the words and the attachments - and is drawn as the one message.
+    CHAT.add({ id: msgId, project, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs: media.map(m => m.path), asked: text, media });
     res.json({ success: true, send: msgId, genIds: ids, agg: fits[0].agg });
     // The page's pen off (b.write === false): the words go as typed - translated first when not English.
     _work({ project, text, model, isMC, asTyped, media, params, skill, ids, kick, before, pair: fits[0], zh, frames: fr });
