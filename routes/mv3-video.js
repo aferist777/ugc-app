@@ -689,7 +689,8 @@ function _recipeOf(r) {
 function _cardOf(id, project, type) {
   const m = CHAT.get(id);
   const types = Array.isArray(type) ? type : [type || 'prompt'];
-  if (!m || String(m.project || '') !== String(project || '') || !m.card || !types.includes(m.card.type)) return null;
+  // (phase V21) In the thread of the project asked from - the drafts' conversation for the draft, whatever draft wrote it.
+  if (!m || String(m.project || '') !== CHAT.threadOf(project) || !m.card || !types.includes(m.card.type)) return null;
   return m;
 }
 
@@ -927,7 +928,7 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       const story = !!(x.card && x.card.type === 'board');
-      if (String(x.project || '') !== project || !x.card || (x.card.type !== 'prompt' && !story)) { why = [404, 'no such card']; return false; }
+      if (String(x.project || '') !== CHAT.threadOf(project) || !x.card || (x.card.type !== 'prompt' && !story)) { why = [404, 'no such card']; return false; }
       if (story && at != null) { why = [400, 'a storyboard card has no moment of a clip']; return false; }
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }

@@ -9,7 +9,7 @@
 //   Don't save  lets it go - its timeline and chats go, what it made stays in the Library, in Uncategorized
 //   Cancel      leaves it a draft (Later, at the start)
 //
-//   draftNow()            -> the draft: { key, title, content: { clips, messages, made, filed, any } } or null
+//   draftNow()            -> the draft: { key, title, content: { clips, made, filed, any } } or null
 //   askDraft(dr, { later }) -> Promise<{ result: 'saved' | 'discarded' | 'cancel' | 'later', title? }>
 //   installCloseAsk()     the window's close asks here (window.__ugcDraftAsk): 'none' - close; 'asking' - the
 //                         question is on screen, and the page closes the window again itself once it is answered
@@ -30,10 +30,11 @@ function _el(tag, cls, text) {
   return e;
 }
 
-// What it holds, in a line: "1 clip on the timeline · 2 messages · 1 made · 1 brought in".
+// What it holds, in a line: "1 clip on the timeline · 1 picture or clip made · 1 file in the Library" - not what was said:
+// the drafts' conversation goes on whatever becomes of it (phase V21).
 function _holds(c) {
   const n = (k, one, many) => (k ? k + ' ' + (k === 1 ? one : many) : '');
-  return [n(c.clips, 'clip on the timeline', 'clips on the timeline'), n(c.messages, 'message', 'messages'),
+  return [n(c.clips, 'clip on the timeline', 'clips on the timeline'),
     n(c.made, 'picture or clip made', 'pictures and clips made'), n(c.filed, 'file in the Library', 'files in the Library')]
     .filter(Boolean).join(' · ');
 }

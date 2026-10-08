@@ -157,17 +157,16 @@ const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines
 function _draftContent(key, t) {
   let clips = 0;
   for (const tr of (Array.isArray(t && t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
-  let messages = 0;
+  // (phase V21) What was said is not counted: the drafts' conversation goes on whatever becomes of this draft.
   let made = 0;
-  try { const CHAT = require('../lib/mv3-chat'); messages = CHAT.read(key, 'image').length + CHAT.read(key, 'clip').length; } catch (e) { /* none */ }
   try { made = require('../lib/mv3-gens').list(key).length + require('../lib/mv3-video-gens').list(key).length; } catch (e) { /* none */ }
   // What it filed on the shelves - a picture brought into its chat is work begun too.
   let filed = 0;
   try { filed = require('../lib/project-cats').filedUnder(require('../lib/mv3-gens').catLabelFor(t && t.title)); } catch (e) { /* none */ }
-  return { clips, messages, made, filed, any: clips + messages + made + filed > 0 };
+  return { clips, made, filed, any: clips + made + filed > 0 };
 }
 
-// GET /api/mv3/draft -> { draft: null | { key, title, content: { clips, messages, made, any } } }
+// GET /api/mv3/draft -> { draft: null | { key, title, content: { clips, made, filed, any } } }
 router.get('/mv3/draft', (req, res) => {
   try {
     const s = _read();
@@ -177,8 +176,9 @@ router.get('/mv3/draft', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// POST /api/mv3/timeline/:key/discard - a draft not saved: what it filed to Uncategorized, its chats and its timeline
-// gone. Only a draft: a project is deleted by its own button, and keeps its categories.
+// POST /api/mv3/timeline/:key/discard - a draft not saved: what it filed to Uncategorized, its timeline gone; the
+// drafts' conversation stays as it is (phase V21). Only a draft: a project is deleted by its own button, and keeps
+// its categories.
 router.post('/mv3/timeline/:key/discard', (req, res) => {
   try {
     const key = String(req.params.key || '');
@@ -193,7 +193,6 @@ router.post('/mv3/timeline/:key/discard', (req, res) => {
     let released = {};
     try { released = require('../lib/project-cats').release(require('../lib/mv3-gens').catLabelFor(rec.title)); }
     catch (e) { console.warn('[mv3] draft: its category was not let go of -', e.message); }
-    try { const CHAT = require('../lib/mv3-chat'); CHAT.clear(key, 'image'); CHAT.clear(key, 'clip'); } catch (e) { /* nothing said */ }
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
@@ -519,6 +518,7 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     }
 
     const was = String(rec.title || '');
+    const wasDraft = !!rec.draft;
     rec.title = title;
     delete rec.draft;
     const now = new Date().toISOString();
@@ -540,7 +540,11 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
       }
     } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
 
-    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved });
+    // (phase V21, the owner: answer A) A draft saved takes a copy of the drafts' conversation as its own, and talks in its
+    // own from then on.
+    let copied = 0;
+    if (wasDraft) { try { copied = require('../lib/mv3-chat').copyDraftTo(key); } catch (e) { console.warn('[mv3] draft: its conversation was not copied -', e.message); } }
+    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved, copied });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
