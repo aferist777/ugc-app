@@ -11,8 +11,8 @@
                  figures (by Quaternius) and two libraries of motions, all on ONE 66-bone skeleton - the motions
                  play on either figure. Its art is CC0, its code MIT; both licence files are kept beside them.
                  The figures are the studio's mannequins; their own colours are never shown (a blockout is flat).
-     furniture/  Kenney's Furniture Kit 2.0 (kenney.nl, CC0): the 140 models of its "GLTF format" folder and its
-                 License.txt. Kenney's sizes are its own (a doorway is ~1 unit); the studio scales each model to a
+     furniture/  Kenney's Furniture Kit 2.0 (kenney.nl, CC0): the 140 models of its "GLTF format" folder, its
+                 License.txt, and in preview/ the kit's own isometric picture of each model (the furniture window). Kenney's sizes are its own (a doorway is ~1 unit); the studio scales each model to a
                  real height from its catalogue (public/js/studio3d/catalog.js).
    vendor/ is not in git and ships with the build, like jassub and whisper. */
 
@@ -35,7 +35,9 @@ const KENNEY = {
 };
 const DIR = path.join(__dirname, '..', 'vendor', '3d');
 const MARK = path.join(DIR, 'PINNED.json');
-const PIN = { people: PEOPLE.map(f => f.sha256), kenney: KENNEY.sha256 };
+// `layout` moves when what is taken from the files changes, so an installed copy is laid out again
+// (2: the kit's isometric picture of each model, for the furniture window).
+const PIN = { people: PEOPLE.map(f => f.sha256), kenney: KENNEY.sha256, layout: 2 };
 const optional = process.argv.includes('--optional');
 
 async function download(url, bytes, sha256) {
@@ -57,16 +59,19 @@ async function main() {
   const zip = await download(KENNEY.url, KENNEY.bytes, KENNEY.sha256);
   const archive = await require('unzipper').Open.buffer(zip);
   const furniture = [];
+  const previews = [];
   for (const e of archive.files) {
     const m = /^Models\/GLTF format\/([A-Za-z0-9_]+\.glb)$/.exec(e.path);
+    const p = /^Isometric\/([A-Za-z0-9_]+)_SE\.png$/.exec(e.path);
     if (m) furniture.push([m[1], await e.buffer()]);
+    else if (p) previews.push([p[1] + '.png', await e.buffer()]);
     else if (e.path === 'License.txt') furniture.push(['License.txt', await e.buffer()]);
   }
   if (furniture.length !== KENNEY.models + 1) throw new Error('the furniture kit holds ' + (furniture.length - 1) + ' models, not ' + KENNEY.models);
 
   // Laid out only once everything arrived whole: a broken download leaves the old copy as it was.
   fs.rmSync(DIR, { recursive: true, force: true });
-  for (const [sub, files] of [['people', people], ['furniture', furniture]]) {
+  for (const [sub, files] of [['people', people], ['furniture', furniture], ['furniture/preview', previews]]) {
     fs.mkdirSync(path.join(DIR, sub), { recursive: true });
     for (const [name, buf] of files) fs.writeFileSync(path.join(DIR, sub, name), buf);
   }

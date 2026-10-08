@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>3D Studio</title>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/app-nav.css">
+<!-- For .lib-btn, the one button style every page shares. -->
+<link rel="stylesheet" href="css/lib-viewer.css">
+<!-- The Library picker (.pk-*) the studio borrows from the video chat to choose characters and environments. -->
+<link rel="stylesheet" href="css/mv3-imagen.css">
+<link rel="stylesheet" href="css/studio3d.css">
+<!-- three.js has no bundler here: its modules by name, from its npm package (server.js /vendor/three). -->
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/addons/" } }
+</script>
+</head>
+<body>
+
+<nav class="sv3-nav">
+  <a href="/merge">Merge</a>
+  <a href="/3d">3D Studio</a>
+  <a href="/library">Library</a>
+  <span class="sp"></span>
+</nav>
+
+<!-- The 3D Studio (docs/local-app/PLAN.md "3D Studio - план по этапам"): js/studio3d/. -->
+<main class="s3-app">
+  <div class="s3-bar">
+    <button class="lib-btn" type="button" id="s3-scenes" title="All scenes: open, make, rename, copy, delete">Scenes</button>
+    <button class="s3-name" type="button" id="s3-name" title="Rename the scene"></button>
+    <button class="lib-btn" type="button" id="s3-add">Add ▾</button>
+    <span class="sp"></span>
+    <span class="s3-status" id="s3-status"></span>
+  </div>
+  <div class="s3-body">
+    <aside class="s3-left" id="s3-left"></aside>
+    <section class="s3-stage">
+      <div class="s3-view" id="s3-view"></div>
+      <div class="s3-tools">
+        <div class="s3-seg" title="How the field is looked at">
+          <button class="s3-seg-b on" type="button" data-view="free" title="Free view - turn, move, zoom">Free</button>
+          <button class="s3-seg-b" type="button" data-view="top" title="Straight from the top, no perspective">Top</button>
+          <button class="s3-seg-b" type="button" data-view="front" title="Straight from the front, no perspective">Front</button>
+          <button class="s3-seg-b" type="button" data-view="side" title="Straight from the side, no perspective">Side</button>
+        </div>
+        <div class="s3-seg" title="What the handles do">
+          <button class="s3-seg-b" type="button" data-mode="translate" title="Move (W)">Move</button>
+          <button class="s3-seg-b" type="button" data-mode="rotate" title="Turn (E)">Turn</button>
+          <button class="s3-seg-b" type="button" data-mode="scale" title="Size (R)">Size</button>
+        </div>
+        <button class="s3-seg-b s3-solo" type="button" id="s3-snap" title="Steps of 10 cm, 15° and 0.1 while moving, turning and sizing">Snap</button>
+        <button class="s3-seg-b s3-solo" type="button" id="s3-frame" title="Bring what is selected - or everything - into view (F)">Fit</button>
+        <button class="s3-seg-b s3-solo" type="button" id="s3-input" title="Mouse: left button turns, right moves, wheel zooms. Touchpad: two fingers turn, Shift + two fingers move, pinch zooms. Press to switch."></button>
+      </div>
+      <div class="s3-empty" id="s3-empty" hidden>Add puts a character, a room or furniture into the scene.</div>
+    </section>
+    <aside class="s3-right" id="s3-right"></aside>
+  </div>
+</main>
+
+<script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
+<script type="module" src="js/studio3d/main.js"></script>
+</body>
+</html>

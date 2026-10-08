@@ -104,7 +104,7 @@ app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
-const PAGE_FILES = { '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
