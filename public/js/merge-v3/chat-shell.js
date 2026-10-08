@@ -110,6 +110,9 @@ const _gensOf = (m) => ((m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : 
 /**
  * One chat. `make(ctx)` returns its description; the answer is { open, isOpen, init }.
  */
+// (phase V21) What every draft keeps of the chats in this browser, under one key - as the drafts' conversation is one.
+const DRAFT_LK = 'draft';
+
 export function createChat(make) {
   // ── State ─────────────────────────────────────────────────────────────────
   let _ui = null;            // the chat, built the first time it is shown
@@ -132,6 +135,9 @@ export function createChat(make) {
   let _landedNow = new Set();   // ...and those that landed since the read before it
   const _nodes = new Map();     // message id -> { el, sig, progs: Map(genId -> countdown), away }
   let _adopt = false;           // a project is being made for a send from "no project"
+  // (phase V21) The open project is the draft: what is kept here per project - the words and attachments being
+  // written, which view the panel was left on - is the drafts' own (DRAFT_LK), as their conversation is.
+  let _draftHere = false;
   let _draftT = 0;
   // Per project, what "the result becomes the reference" needs across a trip to another project: the
   // results still being made at the last read there, and the row's hand-change counter.
@@ -222,7 +228,7 @@ export function createChat(make) {
   // being LEFT - the other chat's store listener can run first - and its mark there must stay.
   async function _show(on, remember = true) {
     _chat = !!on;
-    if (remember) Views.rememberView(_key || '', _chat ? S.name : null, S.name);
+    if (remember) Views.rememberView(_lk(_key), _chat ? S.name : null, S.name);
     _paintHead();
     if (!_chat) {
       _stop();
@@ -257,6 +263,16 @@ export function createChat(make) {
     if (!Store.isReady()) return;
     const k = Store.key() || '';
     if (_ui && _ui.stripP) _ui.stripP.textContent = Store.title() || (k ? k : 'no project');
+    // (phase V21) The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
+    // none of them), it stays on the chat it was on, and its conversation is read again (the project's copy). The next
+    // draft opens on the chat the drafts were left on.
+    if (k && k === _key && _draftHere && !Store.isDraft()) {
+      _draftHere = false;
+      const d = stored(S.keys.draft, {});
+      if (d[DRAFT_LK]) { d[k] = d[DRAFT_LK]; delete d[DRAFT_LK]; keep(S.keys.draft, d); }
+      if (_chat) { Views.rememberView(k, S.name); _reload(true); }
+      return;
+    }
     if (k === _key) return;
     const was = _key;
     // The picker was for a place of the project being left.
@@ -273,6 +289,7 @@ export function createChat(make) {
       if (d['']) { d[k] = d['']; delete d['']; keep(S.keys.draft, d); }
     }
     _key = k;
+    _draftHere = !!Store.isDraft();
     _armed = null;
     _thread = [];
     const m = _memo.get(k);
@@ -286,7 +303,7 @@ export function createChat(make) {
     if (!_cat) _feed = [];
     else if (_chat) _loadStrip();
     if (adopt) { Views.rememberView(k, S.name); Views.rememberView('', null, S.name); }
-    const want = adopt || Views.viewOf(k) === S.name;
+    const want = adopt || Views.viewOf(_lk(k)) === S.name;
     if (want !== _chat) _show(want);
     else if (_chat) _reload(true);
     // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
@@ -302,7 +319,10 @@ export function createChat(make) {
   }
 
   // ── What was being written, per project ───────────────────────────────────
-  function _saveDraft(k) {
+  // (phase V21) The key it is kept under: the drafts' own while the project is the draft.
+  const _lk = (k) => (k === _key && _draftHere ? DRAFT_LK : (k || ''));
+  function _saveDraft(k0) {
+    const k = _lk(k0);
     const d = stored(S.keys.draft, {});
     const text = _ui ? _ui.ta.value : ((d[k] || {}).text || '');
     // What the description keeps of its own with the draft (phase V5: the video chat's skill in use).
@@ -316,7 +336,7 @@ export function createChat(make) {
     _draftT = setTimeout(() => _saveDraft(_key || ''), 600);
   }
   function _loadDraft(k, memo) {
-    const d = stored(S.keys.draft, {})[k] || {};
+    const d = stored(S.keys.draft, {})[_lk(k)] || {};
     // (phase V15) Its empty numbered places too.
     _atts = (Array.isArray(d.atts) ? d.atts : []).filter(a => a && (a.path || a.hole)).slice(0, S.maxAtts);
     // The row as it was left there is not a change by hand: the counter comes back with it.
@@ -1692,7 +1712,7 @@ export function createChat(make) {
       new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(_fit); }).observe(root);
     }
 
-    const d = stored(S.keys.draft, {})[_key || ''] || {};
+    const d = stored(S.keys.draft, {})[_lk(_key)] || {};
     ta.value = String(d.text || '');
     _grow();
     set.paint();
