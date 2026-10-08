@@ -67,6 +67,7 @@ let _edits = 0;
 let _key = null;           // which project is open
 let _title = '';
 let _draft = false;        // (phase V20) it is THE draft - not saved yet
+let _misses = 0;           // projects asked for that were not there, one after another (load)
 let _adv = null;          // the project's export settings, as the server holds them
 
 // WHETHER IT MAY BE CHANGED. Read with the project and never changed here: the server decides (in the desktop
@@ -237,8 +238,23 @@ export async function load(k) {
   // another tab, or the app was pointed at another library. Forget it and open empty (R6).
   if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
   if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
+  // (phase V20) A project that is not there any more - a draft let go of, one deleted, an old Alerts link - opens the
+  // draft, not whichever project the server would pick in its place. Its ?p= goes from the address first, or the draft's
+  // load would read it straight back.
+  if (d.key !== want) {
+    // Never round and round: a draft that cannot be had a few times over is an error, not another try.
+    if (_misses++ > 2) { _misses = 0; throw new Error('the project could not be opened'); }
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('p');
+      history.replaceState({}, '', u);
+    } catch (e) {}
+    _remember('');
+    return load('');
+  }
   _timeline = d.timeline;
   _version = d.version;
+  _misses = 0;
   _key = d.key;
   _title = d.title || '';
   _draft = !!d.draft;
