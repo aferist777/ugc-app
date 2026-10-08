@@ -14,8 +14,6 @@ import * as Layers from '../layers.js';
 import * as History from './history.js';
 import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timeline-b.js';
 import { grabFrame } from './preview-b.js';
-import { openPictures } from './picchat.js';
-import { openVideos } from './vidchat.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -101,59 +99,6 @@ function _split() {
   Store.onChange(paint);
   onSelChange(paint);
   onPlayhead(paint);
-}
-
-// ── generate ▾ (phase J1, the owner 2026-10-02) ─────────────────────────────
-// What can be made with a model, right of split. Images is the pictures chat, in the Library panel's
-// place; videos waits for its window to be rebuilt; music is left as it is for now (the owner).
-let _gm = null;
-function _closeGen() {
-  if (!_gm) return;
-  _gm.el.remove();
-  document.removeEventListener('mousedown', _gm.away, true);
-  window.removeEventListener('scroll', _closeGen, true);
-  Layers.close(_gm.layer);
-  _gm = null;
-}
-
-function _genMenu(anchor) {
-  if (_gm) { _closeGen(); return; }
-  const box = document.createElement('div');
-  box.className = 'mv3-plus-menu';
-  const item = (label, sub, on) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'mv3-plus-item';
-    const t = document.createElement('span');
-    t.textContent = label;
-    const s = document.createElement('small');
-    s.textContent = sub;
-    b.append(t, s);
-    b.disabled = !on;
-    if (on) b.addEventListener('click', (e) => { e.stopPropagation(); _closeGen(); on(); });
-    box.appendChild(b);
-  };
-  item('images', 'a picture, talked into being - in the Library panel', () => openPictures());
-  item('videos', 'a clip, talked into being - in the Library panel', () => openVideos());
-  item('music', 'not yet', null);
-  // Fixed to the viewport and parked on the body, under the button.
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  const w = box.offsetWidth, h = box.offsetHeight;
-  box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, r.left))) + 'px';
-  const below = r.bottom + 4;
-  box.style.top = Math.round(below + h <= window.innerHeight - 6 ? below : Math.max(6, r.top - h - 4)) + 'px';
-  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor) _closeGen(); };
-  // A menu, not a window: Escape closes it first and the page keeps its shortcuts (js/layers.js).
-  const layer = Layers.open(box, { modal: false, name: 'generate menu', onEsc: _closeGen });
-  _gm = { el: box, away, layer };
-  document.addEventListener('mousedown', away, true);
-  window.addEventListener('scroll', _closeGen, true);
-}
-
-function _generate() {
-  const b = $('mv3-gen');
-  if (b) b.addEventListener('click', (e) => { e.stopPropagation(); _genMenu(b); });
 }
 
 // ── The preview's quality ───────────────────────────────────────────────────
@@ -274,7 +219,6 @@ export function initBar() {
   _status();
   _zoom();
   _split();
-  _generate();
   _quality();
   const big = $('mv3-pv-big');
   if (big) big.addEventListener('click', _openBig);

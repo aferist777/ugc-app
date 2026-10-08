@@ -27,7 +27,8 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          addCaption as addCapB, setCaptionText as setCapTextB,
          setSubsStyle as setSubsStyleB, setSubsListen as setListenB,
          setCaptionStyle as setCapStyleB, selectedCaptions as capsB, clearSelection as clearSelB,
-         revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB } from './timeline-b.js';
+         revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB,
+         selectTrackById as selectTrackB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
@@ -1055,6 +1056,12 @@ export function initInspector() {
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
   CapView.onApply((id) => { if (_capApply) _capApply(id); });
   Views.onBack('captions', () => clearSelB());
+  // (phase V18.2) The "captions" crumb from another view: the subtitle lane picked - every timeline has one, and it
+  // cannot be removed - and the captions view follows the pick as it always has.
+  Views.onOpen('captions', () => {
+    const subs = (((Store.timeline() || {}).tracks) || []).find(t => t.kind === 'subs');
+    if (subs) selectTrackB(subs.id);
+  });
   // The job of the open project, as it goes. Repainted only while the subtitle lane itself is what
   // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
   Listen.init();

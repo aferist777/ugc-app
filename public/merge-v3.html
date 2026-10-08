@@ -92,17 +92,16 @@
       <section class="mv3-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
         <div class="mv3-panel-head">
-          <!-- Two views (phase J): the shelf, and the pictures chat - "LIBRARY / generate image",
-               a press on "Library" back to the shelf; on the shelf the crumb stays, pale, while the
-               project has a conversation (js/merge-v3/picchat.js). -->
+          <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08): "Library / generate image / generate video /
+               captions", always there, the one showing lit, any other one press away - the generate menu of the
+               timeline went. "Library" is the shelf; the chats are js/merge-v3/picchat.js and vidchat.js; "captions"
+               picks the subtitle lane (js/merge-v3/lib-views.js). In a narrow panel the chats read "image" / "video". -->
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
-          <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button" hidden>/ generate image</button>
-          <!-- The video chat (phase V3, js/merge-v3/vidchat.js) - the same shell, its own crumb, buttons and box. -->
-          <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button" hidden>/ generate video</button>
-          <!-- Its catalog, right beside the crumb (phase V6, the owner 2026-10-06) - shown while the video chat is. -->
+          <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button">/ <span class="lg">generate </span>image</button>
+          <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button">/ <span class="lg">generate </span>video</button>
+          <!-- The video chat's catalog, right beside its crumb (phase V6, the owner 2026-10-06) - shown while it is. -->
           <span class="mv3-pc-head" id="mv3-vc-headl" hidden></span>
-          <!-- Third view (phase K6): captions picked on the timeline - "LIBRARY / captions" (js/merge-v3/lib-views.js). -->
-          <span class="mv3-lib-crumb is-on" id="mv3-lib-cap" hidden>/ captions</span>
+          <button class="mv3-lib-crumb" id="mv3-lib-cap" type="button">/ captions</button>
           <span class="sp"></span>
           <!-- The chat's own buttons, in place of the category and the shelves while it shows. -->
           <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
@@ -170,10 +169,6 @@
           <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
           <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
                   title="Cut the selected clip at the playhead">split</button>
-          <!-- What can be MADE with a model (phase J): images is the pictures chat in the Library
-               panel; videos and music are not here yet. js/merge-v3/bar.js. -->
-          <button class="mv3-iconbtn is-text" id="mv3-gen" type="button"
-                  title="Make something with a model">generate &#9662;</button>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
                is what made the old store's data loss so hard to notice. -->

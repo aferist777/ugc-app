@@ -129,7 +129,6 @@ export function createChat(make) {
   let _pending = new Set();     // results still being made at the last read
   let _landedNow = new Set();   // ...and those that landed since the read before it
   const _nodes = new Map();     // message id -> { el, sig, progs: Map(genId -> countdown), away }
-  let _talk = false;            // the open project has a conversation (the pale crumb)
   let _adopt = false;           // a project is being made for a send from "no project"
   let _draftT = 0;
   // Per project, what "the result becomes the reference" needs across a trip to another project: the
@@ -245,9 +244,9 @@ export function createChat(make) {
     if (_chat && _ui) _ui.ta.focus();
   }
 
-  // The header, the panel's class and the room are lib-views' (K6b): it is told the base and the crumb.
+  // The header, the panel's class and the room are lib-views' (K6b): it is told the base.
   function _paintHead() {
-    Views.setBase(S.name, _chat, _talk);
+    Views.setBase(S.name, _chat);
   }
 
   // ── The project the conversation belongs to ──────────────────────────────
@@ -280,7 +279,6 @@ export function createChat(make) {
     _nodes.clear();
     if (_ui) { const e = _ui.thread.querySelector('.mv3-ig-empty'); if (e) e.remove(); }
     _loadDraft(k, m);
-    _talk = false;
     set.onProject();
     // This project's own results are another project's; a category is the same whatever is open.
     if (!_cat) _feed = [];
@@ -291,16 +289,6 @@ export function createChat(make) {
     else if (_chat) _reload(true);
     // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
     else Views.sync();
-    if (!_chat) _probeTalk(k);
-    _paintHead();
-  }
-
-  // Whether the project has anything to come back to - the pale crumb on the shelf.
-  async function _probeTalk(k) {
-    if (!k) { _talk = false; _paintHead(); return; }
-    const d = await json('/api/mv3/chat?project=' + encodeURIComponent(k) + '&kind=' + S.kind);
-    if (k !== _key) return;
-    _talk = !!(d && d.success && (d.items || []).length);
     _paintHead();
   }
 
@@ -1036,11 +1024,7 @@ export function createChat(make) {
       ])
       : [{ success: true, items: [] }, own ? { success: true, items: [] } : null];
     if (mine !== _seq || k !== (_key || '') || !_chat) return;
-    if (d && d.success) {
-      _thread = d.items || [];
-      _talk = !!_thread.length;
-      _paintHead();
-    }
+    if (d && d.success) _thread = d.items || [];
     // A category is read when it is chosen, not on every tick.
     if (f && f.success && own) _feed = (f.items || []).map(S.feed.map);
     _landed();

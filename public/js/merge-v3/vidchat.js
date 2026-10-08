@@ -2297,7 +2297,7 @@ function VIDEOS(ctx) {
       emptyNoProject: 'Describe a clip. A project is started for it with the first message.',
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
       slot: 'From the Library or this computer',
-      crumb: 'Back to the conversation about clips',
+      crumb: 'The video chat - clips made with a model',
     },
     // (phase V13, the owner 2026-10-07) No right column: every "+" of the zone opens the picker on its place.
     pick: {

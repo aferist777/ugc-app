@@ -10,8 +10,9 @@
      the OVERLAY   captions - it belongs to what is PICKED (inspector.js says when), never remembered:
                    the pick does not survive a reload, and letting go of it puts the base back.
    What shows is the overlay over the base. This module alone writes what follows from that: the panel's
-   class (is-chat / is-captions) and which chat's box and buttons show (is-shown), the header ("Library" a
-   link back, each chat's crumb, "/ captions"), and THE ROOM - the corner of the sashes as far left and down
+   class (is-chat / is-captions) and which chat's box and buttons show (is-shown), the header - the CRUMBS
+   "Library / generate image / generate video / captions", always there, the one showing lit, any other one press
+   away (phase V18.2, the owner 2026-10-08) - and THE ROOM - the corner of the sashes as far left and down
    as it goes while a chat or the captions view can be SEEN, the arrangement there was before put back when
    neither is (layout.js panelRoom). There used to be two owners of the room, and leaving the chat while
    captions showed would have put the corner back under it.
@@ -30,10 +31,11 @@ let _base = 'shelf';         // 'shelf' or the name of a chat
 let _caps = false;           // the captions view is up
 let _held = false;           // the room is taken
 let _frame = 0;
-let _capsBack = null;        // what "Library" does over the captions
+let _capsBack = null;        // what letting go of the captions does (the pick released)
+let _capsOpen = null;        // what the "captions" crumb does from another view (the subtitle lane picked)
 // The chats, by name: { root, head, headL, crumb } element ids (headL: buttons right beside the crumb - the video
-// chat's catalog, phase V6), onBack (leave it for the shelf), onYield (another chat took the base), onCrumb (the pale
-// crumb pressed), talk (the project has a conversation there).
+// chat's catalog, phase V6), onBack (leave it for the shelf), onYield (another chat took the base), onCrumb (its crumb
+// pressed from another view).
 const _chats = new Map();
 
 /** What shows: 'captions', the name of a chat, or 'shelf'. */
@@ -44,23 +46,23 @@ export const isChat = () => _base !== 'shelf';
 
 /** A chat says who it is, where its box, buttons and crumb are, and what pressing back and the crumb do. */
 export function registerChat(name, o) {
-  const c = Object.assign({ root: '', head: '', headL: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null, talk: false }, o || {});
+  const c = Object.assign({ root: '', head: '', headL: '', crumb: '', crumbTitle: '', onBack: null, onYield: null, onCrumb: null }, o || {});
   _chats.set(name, c);
-  // Its crumb opens it from the shelf; pressed while the chat shows, it does nothing - and never reaches the
-  // panel header, whose press folds the panel.
+  // Its crumb opens it from any view - the shelf, the other chat, the captions (the chat's own open lets go of
+  // them); pressed while the chat shows, it does nothing - and never reaches the panel header, whose press folds
+  // the panel.
   const crumb = $(c.crumb);
-  if (crumb) crumb.addEventListener('click', (e) => { e.stopPropagation(); if (top() === 'shelf' && c.onCrumb) c.onCrumb(); });
+  if (crumb) crumb.addEventListener('click', (e) => { e.stopPropagation(); if (top() !== name && c.onCrumb) c.onCrumb(); });
   _paint();
 }
 
 /**
- * A chat says whether it is the base, and whether the open project has a conversation there. It can take
- * the base from another chat (that one is told, onYield) but can only let go of its own.
+ * A chat says whether it is the base. It can take the base from another chat (that one is told, onYield) but can
+ * only let go of its own.
  */
-export function setBase(name, on, talk) {
+export function setBase(name, on) {
   const c = _chats.get(name);
   if (!c) return;
-  if (talk !== undefined) c.talk = !!talk;
   if (on && _base !== name) {
     const was = _chats.get(_base);
     _base = name;
@@ -85,8 +87,10 @@ export function setCaptions(on) {
   _paint();
 }
 
-/** What "Library" in the header does over the captions. */
+/** What letting go of the captions does ("Library" or a chat's crumb pressed over them). */
 export function onBack(view, fn) { if (view === 'captions') _capsBack = fn; }
+/** What the "captions" crumb does from another view (phase V18.2: the inspector picks the subtitle lane). */
+export function onOpen(view, fn) { if (view === 'captions') _capsOpen = fn; }
 
 // ── The view each project was left on ──────────────────────────────────────
 function _views() {
@@ -152,8 +156,7 @@ function _paint() {
   const title = $('mv3-lib-title');
   if (title) {
     title.classList.toggle('is-link', t !== 'shelf');
-    title.title = t === 'captions' ? 'Let go of the captions - back to the Library'
-      : _chats.has(t) ? 'Back to the Library' : '';
+    title.title = t === 'shelf' ? '' : 'Back to the Library';
   }
   for (const [name, c] of _chats) {
     const on = t === name;
@@ -161,7 +164,6 @@ function _paint() {
     if (root) root.classList.toggle('is-shown', on);
     const crumb = $(c.crumb);
     if (crumb) {
-      crumb.hidden = !(on || (t === 'shelf' && c.talk));
       crumb.classList.toggle('is-on', on);
       crumb.title = on ? '' : (c.crumbTitle || '');
     }
@@ -172,23 +174,26 @@ function _paint() {
   }
   const cap = $('mv3-lib-cap');
   if (cap) {
-    cap.hidden = t !== 'captions';
     cap.classList.toggle('is-on', t === 'captions');
+    cap.title = t === 'captions' ? '' : 'The subtitle lane - its look and the caption presets';
   }
   _room();
 }
 
 export function initViews() {
   onColumnOpen(() => _room());
+  // "Library" always lands on the shelf: the captions let go of, then the chat under them left.
   const title = $('mv3-lib-title');
   if (title) {
     title.addEventListener('click', (e) => {
-      const t = top();
-      const fn = t === 'captions' ? _capsBack : (_chats.get(t) || {}).onBack;
-      if (!fn) return;
+      if (top() === 'shelf') return;
       e.stopPropagation();
-      fn();
+      if (_caps && _capsBack) _capsBack();
+      const c = _chats.get(_base);
+      if (c && c.onBack) c.onBack();
     });
   }
+  const cap = $('mv3-lib-cap');
+  if (cap) cap.addEventListener('click', (e) => { e.stopPropagation(); if (top() !== 'captions' && _capsOpen) _capsOpen(); });
   _paint();
 }

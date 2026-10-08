@@ -253,7 +253,7 @@ function PICTURES(ctx) {
       slot: 'A picture to work from - from this computer, or press one on the right',
       plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
       cat: 'This project\'s pictures, or a category of the Library\'s Images',
-      crumb: 'Back to the conversation about pictures',
+      crumb: 'The pictures chat - pictures made with a model',
     },
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || '') },
     // The right column: this project's pictures, or any category of the Library's Images.

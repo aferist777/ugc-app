@@ -1305,6 +1305,12 @@ export function selectClipById(id) {
   _paintSel();
 }
 
+/** Pick a whole lane, by id - what the Library's "captions" crumb means (phase V18.2): the subtitle lane. */
+export function selectTrackById(id) {
+  if (!id || (_selTrack === String(id) && !_sel.size)) return;
+  _selectTrack(id);
+}
+
 /** The selected lane, or null. The inspector asks for this the way it asks for a clip. */
 export function selectedTrack() {
   if (!_selTrack) return null;

@@ -720,7 +720,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-lib-crumb.is-on{opacity:1; color:var(--primary); cursor:default}
 #mv3-library .mv3-panel-title.is-link{cursor:pointer; color:var(--muted)}
 #mv3-library .mv3-panel-title.is-link:hover{color:var(--ink); text-decoration:underline dotted}
-#mv3-library .mv3-panel-head{gap:6px}
+#mv3-library .mv3-panel-head{gap:6px; container:libhead / inline-size}
+/* (phase V18.2) The crumbs are always there: in a narrow panel the chats' read "image" / "video". */
+@container libhead (max-width: 620px){ .mv3-lib-crumb .lg{display:none} }
 .mv3-pc-head{display:flex; align-items:center; gap:5px; flex:0 0 auto}
 .mv3-pc-head[hidden]{display:none}
 #mv3-library.is-chat .mv3-panel-body,
