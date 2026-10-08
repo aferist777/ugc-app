@@ -342,7 +342,10 @@ function _awayFromLane(e) {
   if (!_on || !_selTrack || e.button !== 0) return;
   const t = e.target;
   if (!t || !t.closest) return;
-  if (t.closest('#mv3-over, .mv3b-lbl, .mv3b-clip')) return;
+  // Nor in the captions view beside the strip - its preset tiles and their categories set the lane too - nor on the
+  // Library's "captions" crumb that picked it (phase V18.2: a press on a category let go of the lane, and the panel went
+  // back to the chat under it).
+  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip')) return;
   const top = Layers.top();
   if (top && top.el && top.el.contains && top.el.contains(t)) return;
   _clearSel();
