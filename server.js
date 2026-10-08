@@ -49,6 +49,8 @@ const { generateMissingThumbs } = require('./lib/helpers');
   if (s.added || s.dropped) console.log(`[projects] ${s.added} folder(s) joined the list, ${s.dropped} missing left it`);
   const m = require('./lib/merge-store').sync();
   if (m.added) console.log(`[projects] ${m.added} Merge project folder(s) joined the list`);
+  const d = require('./lib/studio3d-store').sync();
+  if (d.added) console.log(`[projects] ${d.added} 3D Studio scene folder(s) joined the list`);
 }
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
@@ -155,6 +157,7 @@ app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both
 app.use('/api', require('./routes/mv3-img'));
 app.use('/api', require('./routes/mv3-video'));   // the video chat's server (phase V2)
 app.use('/api', require('./routes/mv3-catalog'));   // its catalog (cookbook, examples) and the person's presets (phase V4)
+app.use('/api', require('./routes/studio3d'));   // the 3D Studio's scenes (PLAN "3D Studio")
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Loopback only. There is no sign-in any more, so an app listening on every interface would hand
