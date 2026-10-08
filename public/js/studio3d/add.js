@@ -5,14 +5,17 @@
      Character…     the Library's characters and their looks, through the same picker the video chat uses
                     (merge-v3/chat-pick.js). The character becomes a mannequin of its gender, under its name; the
                     picture pressed - the character's sheet or one of its looks - is its reference for Seedance.
-     Environment…   the Library's environments. The scene's room takes it as its reference (a scene has one room;
-                    the first environment makes it), and the shot camera steps inside if it stood outside.
+     Environment…   the Library's environments: the agent lays the room out from the picture (lib/studio3d-env.js,
+                    3D9) - its size, windows and doors, its LARGE furniture, where the photo was taken from - and it
+                    comes into the scene in one step: the room takes the picture as its reference and the scene as
+                    its photo, an earlier environment's furniture goes, the first camera stands where the photo did.
      Furniture…     Kenney's kit, by group, a picture of each; a press puts one in and the window stays open.
    pickReference() changes the picture an object already in the scene stands for.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
 import { openPick, closePick, pickSay } from '../merge-v3/chat-pick.js';
+import * as THREE from 'three';
 import { FURNITURE, ROOM_COLOR } from './catalog.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -87,24 +90,76 @@ export function addCharacter(A) {
   }, 'Characters are made on the Library\'s Characters shelf.');
 }
 
-export function addEnvironment(A) {
-  _pick('Environment of the scene', 'The room takes it as its reference', [SOURCES.environments], (it) => {
-    const rooms = A.scene.objects.filter(o => o.kind === 'room');
-    if (rooms.length === 1) {
-      A.change(s => { const r = s.objects.find(o => o.id === rooms[0].id); r.ref = _ref(it); r.name = it.name || r.name; });
-      A.select([rooms[0].id]);
-      return;
-    }
-    const room = { w: 5, d: 4, h: 2.7, door: true, window: true };
-    const obj = A.addObject({ kind: 'room', name: it.name || 'Room', asset: 'room', color: ROOM_COLOR, p: [0, 0, 0], ref: _ref(it), room });
-    // The shot camera inside the room, if it stood outside: looking from near the front wall towards the back.
-    A.change(s => {
-      for (const c of s.cameras) {
-        if (Math.abs(c.p[0]) > room.w / 2 - 0.3 || Math.abs(c.p[2]) > room.d / 2 - 0.3) { c.p = [0, 1.55, room.d / 2 - 0.4]; c.r = [-4, 0, 0]; }
-      }
+// The furniture an environment brings: quiet tints, apart from the characters' strong ones - it stands still, and in
+// the recording it is grey anyway (it has no reference of its own).
+const ENV_COLORS = ['#c8b79e', '#a9b9c8', '#b6c7a6', '#c7a9b8', '#a8c6c1', '#c4bfa4', '#b3a9c9', '#c9b2a3'];
+
+// The photo's shape, read off the picture itself: a landscape one is filmed in 16:9, an upright one in 9:16.
+function _shapeOf(path) {
+  return new Promise((res) => {
+    const im = new Image();
+    im.onload = () => res(im.naturalWidth >= im.naturalHeight ? '16:9' : '9:16');
+    im.onerror = () => res('16:9');
+    im.src = thumbOf(path, 'strip');
+  });
+}
+
+/**
+ * An environment's layout put into the scene, as ONE step of Ctrl+Z: the room takes its size and its windows and
+ * doors, the furniture of the environment before it goes and this one's comes in, and the first camera stands
+ * where the photo was taken from. Characters and what the person added stay.
+ */
+function applyLayout(A, it, L, format) {
+  const path = it.path;
+  const ids = [];
+  A.change(s => {
+    s.source = { path, from: 'library' };
+    let room = s.objects.find(o => o.kind === 'room');
+    if (!room) { room = { id: A.newId('o'), kind: 'room', asset: 'room', color: ROOM_COLOR, p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1], char: null }; s.objects.unshift(room); }
+    Object.assign(room, { name: it.name || room.name || 'Room', ref: _ref(it), env: path, p: [0, 0, 0], r: [0, 0, 0],
+      room: { w: L.room.width, d: L.room.depth, h: L.room.height, door: false, window: false, openings: L.openings.map(o => Object.assign({}, o)) } });
+    s.objects = s.objects.filter(o => o.kind === 'room' || o.kind === 'character' || !o.env);
+    L.objects.forEach((o, i) => {
+      const obj = { id: A.newId('o'), kind: 'prop', name: o.name, color: ENV_COLORS[i % ENV_COLORS.length], ref: null, char: null,
+        p: [o.x, 0, o.z], r: [0, o.facing, 0], s: [1, 1, 1], env: path };
+      if (o.model === 'block') Object.assign(obj, { asset: 'block', box: [o.size.width, o.size.height, o.size.depth] });
+      else obj.asset = 'kenney:' + o.model;
+      s.objects.push(obj);
+      ids.push(obj.id);
     });
-    A.select([obj.id]);
-  }, 'Environments are made or brought in on the Library\'s Environments shelf.');
+    const c = s.cameras.find(x => x.id === s.camera) || s.cameras[0];
+    if (c) {
+      // yaw to the right and pitch up, in the order a camera is turned (the scene keeps three.js XYZ degrees)
+      const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(THREE.MathUtils.degToRad(L.camera.pitch), THREE.MathUtils.degToRad(-L.camera.yaw), 0, 'YXZ')), 'XYZ');
+      c.p = [L.camera.x, L.camera.height, L.camera.z];
+      c.r = [e.x, e.y, e.z].map(v => Math.round(THREE.MathUtils.radToDeg(v) * 100) / 100);
+      c.focal = L.camera.focal;
+      c.format = format;
+    }
+  });
+  return ids;
+}
+
+export function addEnvironment(A) {
+  _pick('Environment of the scene', 'Its room and large furniture are laid out from the picture', [SOURCES.environments], async (it) => {
+    const sceneId = A.scene.id;
+    const name = it.name || 'the environment';
+    A.note('Laying out “' + name + '”: the agent is looking at the picture - about half a minute…');
+    const [r, format] = await Promise.all([A.api('POST', '/api/3d/env', { path: it.path }).catch(() => ({ ok: false, j: { error: 'The server did not answer.' } })), _shapeOf(it.path)]);
+    // Gone to another scene meanwhile: the layout is kept with the environment, the next time is free.
+    if (!A.scene || A.scene.id !== sceneId) return;
+    if (!r.ok) { A.note('“' + name + '” could not be laid out: ' + (r.j.error || 'no answer'), true); return; }
+    const ids = applyLayout(A, it, r.j.layout, format);
+    A.select([]);
+    A.vp.frame([]);
+    const n = r.j.layout.objects.length;
+    const said = [n + (n === 1 ? ' piece' : ' pieces') + ' of furniture, ' + r.j.layout.openings.length + ' windows and doors'];
+    if (r.j.described) said.push('its description written into the Library');
+    said.push(r.j.cached ? 'laid out before - free' : '≈ $' + ((r.j.credits || 0) * 0.005).toFixed(3));
+    A.note('“' + name + '”: ' + said.join(' · '));
+    return ids;
+  }, 'Environments are made or brought in on the Library’s Environments shelf.');
 }
 
 /** Choose the picture an object stands for. */

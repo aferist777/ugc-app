@@ -77,7 +77,6 @@ export function createViewport(host, hooks) {
   orbit.enableDamping = false;
   orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   orbit.update();
-  let frozen = null;                    // the free view as it was, to come back to from top/front/side
 
   // ── The handles ──────────────────────────────────────────────────────────
   const gizmo = new TransformControls(eye, dom);
@@ -121,16 +120,22 @@ export function createViewport(host, hooks) {
   new ResizeObserver(resize).observe(host);
 
   // ── Views ────────────────────────────────────────────────────────────────
+  // There is no button for the free view (the owner, 2026-10-09): it is where the field starts, and a straight view
+  // turns into it the moment the person starts turning - from the very direction the straight view looked.
   function setView(v) {
     if (v === view) return;
-    if (view === 'free') frozen = { p: persp.position.clone(), t: orbit.target.clone() };
     view = v;
     const t = orbit.target.clone();
     if (v === 'free') {
+      const dir = ortho.position.clone().sub(orbit.target).normalize();
+      if (Math.abs(dir.y) > 0.999) dir.set(0, 0.999, 0.045).normalize();     // straight down is a pole: lean off it
+      const half = (ortho.top - ortho.bottom) / 2 / ortho.zoom;
+      const dist = THREE.MathUtils.clamp(half / Math.tan(rad(persp.fov / 2)), 0.5, 150);
       eye = persp;
       orbit.object = persp;
       orbit.enableRotate = true;
-      if (frozen) { persp.position.copy(frozen.p); orbit.target.copy(frozen.t); }
+      persp.position.copy(orbit.target).add(dir.multiplyScalar(dist));
+      persp.lookAt(orbit.target);
     } else {
       eye = ortho;
       orbit.object = ortho;
@@ -196,12 +201,33 @@ export function createViewport(host, hooks) {
     if (input === 'mouse') return;                          // OrbitControls zooms, in every view
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (e.ctrlKey) _zoom(Math.exp(-e.deltaY * 0.01));
-    else if (e.shiftKey || eye.isOrthographicCamera) _pan(e.deltaX || (e.shiftKey ? e.deltaY : 0), e.shiftKey ? 0 : e.deltaY);
-    else _turn(e.deltaX * 0.004, e.deltaY * 0.004);
+    // A pinch: soft - a touchpad sends many small steps, and a firm factor made the view jump (the owner, 2026-10-09).
+    if (e.ctrlKey) _zoom(THREE.MathUtils.clamp(Math.exp(-e.deltaY * 0.0035), 0.94, 1.06));
+    else if (e.shiftKey) _pan(e.deltaX || e.deltaY, 0);
+    else { if (view !== 'free') setView('free'); _turn(e.deltaX * 0.004, e.deltaY * 0.004); }
     orbit.update();
     invalidate();
   }, { passive: false, capture: true });
+
+  // A drag with the left button in a straight view - not on the handles - turns it into the free view and turns it.
+  let turning = null;
+  dom.addEventListener('pointerdown', (e) => {
+    turning = view !== 'free' && e.button === 0 && !gizmo.axis ? { x: e.clientX, y: e.clientY, on: false } : null;
+  }, true);
+  dom.addEventListener('pointermove', (e) => {
+    if (!turning || !(e.buttons & 1) || gizmo.dragging) return;
+    if (!turning.on) {
+      if (Math.hypot(e.clientX - turning.x, e.clientY - turning.y) < 5) return;
+      turning.on = true;
+      setView('free');
+    }
+    const k = (2 * Math.PI) / Math.max(200, host.clientHeight);
+    _turn((e.clientX - turning.x) * k, (e.clientY - turning.y) * k);
+    turning.x = e.clientX; turning.y = e.clientY;
+    orbit.update();
+    invalidate();
+  }, true);
+  window.addEventListener('pointerup', () => { turning = null; }, true);
 
   // ── Selecting ────────────────────────────────────────────────────────────
   const ray = new THREE.Raycaster();
@@ -212,6 +238,7 @@ export function createViewport(host, hooks) {
     const d = downAt;
     downAt = null;
     if (!d || d.b !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4 || gizmo.dragging || gizmo.axis) return;
+    // (a drag that turned a straight view into the free one moved more than that, and selects nothing)
     const r = dom.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), eye);
     const targets = [];
@@ -294,7 +321,7 @@ export function createViewport(host, hooks) {
     const jobs = [];
     for (const o of list) {
       const have = objs.get(o.id);
-      const shape = o.kind === 'room' ? JSON.stringify(o.room) : o.asset;
+      const shape = o.kind === 'room' ? JSON.stringify(o.room) : o.asset + (o.box ? JSON.stringify(o.box) : '');
       if (have && have.shape === shape) {
         if (have.obj.color !== o.color) recolor(have.figure, o.color);
         have.obj = o;

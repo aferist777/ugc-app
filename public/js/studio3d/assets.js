@@ -103,8 +103,10 @@ function _wall(w, h, holes, mat) {
 
 /**
  * A room: a floor and four walls that face INWARD and are drawn from their inside only - from outside, the walls
- * nearest the eye vanish and the room stays open to look into, from inside it is closed. A window in the back
- * wall, a door in the right one. No ceiling (3D1).
+ * nearest the eye vanish and the room stays open to look into, from inside it is closed. Its openings are the
+ * windows and doors an environment's layout found (3D9: [{ wall, kind, center, width, height, sill }], the centre
+ * measured along the wall - x for the back and front walls, z for the left and right ones); without them, a window
+ * in the back wall and a door in the right one. No ceiling.
  */
 export function room(spec, color) {
   const { w, d, h } = spec;
@@ -115,20 +117,44 @@ export function room(spec, color) {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
   floor.rotation.x = -Math.PI / 2;
   g.add(floor);
-  const win = spec.window ? [{ x: 0, y: Math.min(0.9, h * 0.33), w: Math.min(1.6, w * 0.45), h: Math.min(1.3, h * 0.45) }] : [];
-  const door = spec.door ? [{ x: Math.min(d / 2 - 0.7, d * 0.25), y: 0, w: 0.9, h: Math.min(2.05, h - 0.2) }] : [];
-  const back = _wall(w, h, win, mat);
+  const holes = { back: [], front: [], left: [], right: [] };
+  if (Array.isArray(spec.openings)) {
+    // Each wall's own left-to-right, as it is looked at from inside: the back and right walls run with +x / +z,
+    // the front and left ones against them.
+    const flip = { back: 1, right: 1, front: -1, left: -1 };
+    for (const o of spec.openings) {
+      const len = o.wall === 'back' || o.wall === 'front' ? w : d;
+      const ow = Math.min(o.width, len - 0.1);
+      const x = Math.max(-len / 2 + ow / 2 + 0.03, Math.min(len / 2 - ow / 2 - 0.03, o.center * flip[o.wall]));
+      const y = Math.max(0.01, Math.min(h - 0.1, o.sill || 0));          // a hole on the edge breaks the wall's triangles
+      holes[o.wall].push({ x, y, w: ow, h: Math.max(0.1, Math.min(o.height, h - y - 0.03)) });
+    }
+  } else {
+    if (spec.window) holes.back.push({ x: 0, y: Math.min(0.9, h * 0.33), w: Math.min(1.6, w * 0.45), h: Math.min(1.3, h * 0.45) });
+    if (spec.door) holes.right.push({ x: Math.min(d / 2 - 0.7, d * 0.25), y: 0.01, w: 0.9, h: Math.min(2.05, h - 0.2) });
+  }
+  const back = _wall(w, h, holes.back, mat);
   back.position.set(0, 0, -d / 2);
-  const front = _wall(w, h, [], mat);
+  const front = _wall(w, h, holes.front, mat);
   front.position.set(0, 0, d / 2);
   front.rotation.y = Math.PI;
-  const left = _wall(d, h, [], mat);
+  const left = _wall(d, h, holes.left, mat);
   left.position.set(-w / 2, 0, 0);
   left.rotation.y = Math.PI / 2;
-  const right = _wall(d, h, door, mat);
+  const right = _wall(d, h, holes.right, mat);
   right.position.set(w / 2, 0, 0);
   right.rotation.y = -Math.PI / 2;
   g.add(back, front, left, right);
+  return g;
+}
+
+/** A plain block standing on the floor, [w, h, d] in metres: what the catalogue has not (a fireplace, a wardrobe). */
+export function block(box, color) {
+  const [bw, bh, bd] = box;
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), clay(color));
+  m.position.y = bh / 2;
+  g.add(m);
   return g;
 }
 
@@ -138,6 +164,7 @@ export async function build(obj) {
   const a = String(obj.asset || '');
   if (a.startsWith('person:')) return _person(a.slice(7), obj.color);
   if (a.startsWith('kenney:')) return _furniture(a.slice(7), obj.color);
+  if (a === 'block') return block(obj.box || [0.8, 1, 0.6], obj.color);
   throw new Error('Unknown model: ' + a);
 }
 

@@ -33,6 +33,8 @@
     <button class="s3-name" type="button" id="s3-name" title="Rename the scene"></button>
     <button class="lib-btn" type="button" id="s3-add">Add ▾</button>
     <span class="sp"></span>
+    <!-- What just happened (an environment laid out, what it cost), apart from whether the scene is saved. -->
+    <span class="s3-note" id="s3-note"></span>
     <span class="s3-status" id="s3-status"></span>
   </div>
   <div class="s3-body">
@@ -40,8 +42,8 @@
     <section class="s3-stage">
       <div class="s3-view" id="s3-view"></div>
       <div class="s3-tools">
-        <div class="s3-seg" title="How the field is looked at">
-          <button class="s3-seg-b on" type="button" data-view="free" title="Free view - turn, move, zoom">Free</button>
+        <!-- No "free" button: the field starts free, and a straight view turns free the moment it is turned (the owner, 2026-10-09). -->
+        <div class="s3-seg" title="Straight views - turn the scene and it is free again">
           <button class="s3-seg-b" type="button" data-view="top" title="Straight from the top, no perspective">Top</button>
           <button class="s3-seg-b" type="button" data-view="front" title="Straight from the front, no perspective">Front</button>
           <button class="s3-seg-b" type="button" data-view="side" title="Straight from the side, no perspective">Side</button>

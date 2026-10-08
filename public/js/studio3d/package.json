@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The 3D Studio's modules are ES modules: the page imports them, and the server require()s the ones that hold no three.js (catalog.js) - Node 24."
+}

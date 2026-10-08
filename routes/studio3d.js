@@ -81,6 +81,22 @@ router.delete('/3d/scenes/:id', (req, res) => {
   }
 });
 
+// An environment of the Library as a blockout (lib/studio3d-env.js): its description - written by the agent and
+// kept in the Library when it had none - and its room, openings, large furniture and camera. Kept with the
+// environment, so asking again is free; `force` asks the agent anew. Paid only when not kept: cents.
+router.post('/3d/env', async (req, res) => {
+  const b = req.body || {};
+  const url = String(b.path || '').trim();
+  if (!url) return res.status(400).json({ success: false, error: 'Which environment?' });
+  try {
+    const r = await require('../lib/studio3d-env').layout(url, { force: !!b.force });
+    res.json(Object.assign({ success: true }, r));
+  } catch (e) {
+    console.warn('[3d env]', url.split('/').pop(), e.message);
+    res.status(e.status || 502).json({ success: false, error: e.message });
+  }
+});
+
 router.post('/3d/scenes/:id/thumb', express.raw({ type: 'image/jpeg', limit: '4mb' }), (req, res) => {
   const buf = req.body;
   if (!Buffer.isBuffer(buf) || buf.length < 100 || buf[0] !== 0xff || buf[1] !== 0xd8) {

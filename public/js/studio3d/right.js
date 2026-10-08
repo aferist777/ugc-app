@@ -12,7 +12,8 @@ import { ASPECT } from './viewport.js';
 
 let A = null;
 let host = null;
-let pv = null;            // { renderer, canvas, frame, built: '<camera id>|<format>' }
+let pv = null;            // { renderer, canvas, frame, photo }
+let overlay = false;      // the scene's photo over the preview, to see whether the blockout sits where the photo is
 const CLAY_BG = 0xc4c4c4;
 const FOCALS = [18, 24, 35, 50, 85];
 
@@ -82,17 +83,38 @@ function _build(c) {
   const wrap = el('div', 's3-pv');
   const frame = el('div', 's3-pv-frame');
   frame.appendChild(pv.canvas);
+  const photo = el('img', 's3-pv-photo');
+  photo.alt = '';
+  frame.appendChild(photo);
   const thirds = el('div', 's3-pv-thirds');
   frame.appendChild(thirds);
+  pv.photo = photo;
   wrap.appendChild(frame);
   box.appendChild(wrap);
   pv.frame = frame;
+  const ph = el('label', 's3-check s3-pv-ph');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = overlay;
+  cb.addEventListener('change', () => { overlay = cb.checked; _values(_cam()); });
+  ph.append(cb, document.createTextNode(' the photo over it'));
+  ph.title = 'The picture the scene was laid out from, half-transparent over what the camera sees';
+  box.appendChild(ph);
   box.appendChild(el('div', 's3-hint', 'What this camera sees. Select it in the scene (its gold body) to move or turn it with the handles.'));
   host.appendChild(box);
   _values(c);
 }
 
 function _values(c) {
+  const src = A.scene && A.scene.source && A.scene.source.path;
+  const ph = host.querySelector('.s3-pv-ph');
+  if (ph) ph.hidden = !src;
+  if (pv.photo) {
+    const want = src && overlay ? '/api/thumb?src=' + encodeURIComponent(src) + '&v=main' : '';
+    if (pv.photo.dataset.src !== want) { pv.photo.dataset.src = want; if (want) pv.photo.src = want; else pv.photo.removeAttribute('src'); }
+    pv.photo.hidden = !want;
+  }
+  if (!c) return;
   host.querySelectorAll('[data-focal]').forEach(b => b.classList.toggle('on', Number(b.dataset.focal) === Number(c.focal)));
   host.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === c.format));
 }

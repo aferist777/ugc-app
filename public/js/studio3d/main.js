@@ -47,6 +47,14 @@ function status(text, bad) {
   el.classList.toggle('is-bad', !!bad);
 }
 
+// A word about what was just done - it stays until the next one, whatever the saving says.
+function note(text, bad) {
+  const el = $('s3-note');
+  el.textContent = text || '';
+  el.title = text || '';
+  el.classList.toggle('is-bad', !!bad);
+}
+
 async function api(method, url, body) {
   const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
   let j = null;
@@ -167,6 +175,7 @@ async function openScene(id) {
   paintAll();
   vp.frame([]);
   status('');
+  note('');
   return true;
 }
 
@@ -286,7 +295,7 @@ const app = {
   get scene() { return S.scene; },
   get sel() { return S.sel; },
   get vp() { return vp; },
-  change, select, addObject, removeSelected, openScene, newScene, forget, status, api, saveNow, nextColor,
+  change, select, addObject, removeSelected, openScene, newScene, forget, status, note, api, saveNow, nextColor,
   newId, cameraColor: () => CAMERA_COLORS[(S.scene ? S.scene.cameras.length : 0) % CAMERA_COLORS.length],
 };
 

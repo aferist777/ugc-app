@@ -112,7 +112,8 @@ function _build(sc, o) {
   // Where it stands
   C.appendChild(_vec3('Position, m', 'p', o, 0.05));
   C.appendChild(_vec3('Turn, °', 'r', o, 5));
-  if (o.kind !== 'room') C.appendChild(_vec3('Scale', 's', o, 0.05));
+  if (o.asset === 'block') C.appendChild(_vec3('Size, m', 'box', o, 0.05, ['w', 'h', 'd']));
+  else if (o.kind !== 'room') C.appendChild(_vec3('Scale', 's', o, 0.05));
   // A room's size
   if (o.kind === 'room') {
     const R = o.room || {};
@@ -124,6 +125,12 @@ function _build(sc, o) {
       g.appendChild(_mini(k, f));
     }
     C.appendChild(_labelled('Room, m', g));
+    if (Array.isArray(R.openings)) {
+      const nw = R.openings.filter(x => x.kind === 'window').length, nd = R.openings.length - nw;
+      C.appendChild(el('div', 's3-hint', 'Windows: ' + nw + ', doors and openings: ' + nd + ' - where the environment has them.'));
+      C.appendChild(_del());
+      return;
+    }
     const opts = el('div', 's3-checks');
     for (const [k, lab] of [['door', 'door'], ['window', 'window']]) {
       const l = el('label', 's3-check');
@@ -202,13 +209,13 @@ function _num(value, step, fn) {
   return i;
 }
 
-function _vec3(label, key, o, step) {
+function _vec3(label, key, o, step, axes) {
   const g = el('div', 's3-vec');
-  ['x', 'y', 'z'].forEach((ax, i) => {
+  (axes || ['x', 'y', 'z']).forEach((ax, i) => {
     const f = _num(o[key] ? o[key][i] : 0, step, (v) => A.change(s => {
       const t = _obj(s, o.id);
       if (!t[key]) t[key] = [0, 0, 0];
-      t[key][i] = key === 's' ? Math.max(0.01, v) : v;
+      t[key][i] = key === 's' || key === 'box' ? Math.max(0.05, v) : v;
     }));
     f.dataset.k = key + '.' + i;
     g.appendChild(_mini(ax, f));
