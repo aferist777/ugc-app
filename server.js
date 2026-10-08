@@ -86,6 +86,17 @@ app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
 app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
+// The 3D Studio (PLAN "3D Studio"): three.js from its npm package - the build and the addons (controls, loaders) -
+// and the mannequins, motions and furniture laid out by tools/fetch-3d.js.
+app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules', 'three', 'build'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
+app.use('/vendor/three/addons', express.static(path.join(__dirname, 'node_modules', 'three', 'examples', 'jsm'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
+app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
