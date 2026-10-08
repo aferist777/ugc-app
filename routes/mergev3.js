@@ -267,6 +267,8 @@ router.put('/mv3/timeline', (req, res) => {
       kind: BLANK_KIND,
       format: clean.format,
       tracks: clean.tracks,
+      // (phase V20) The draft stays the draft across its saves - only "save" takes the mark off.
+      ...(prev && prev.draft ? { draft: true } : {}),
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);

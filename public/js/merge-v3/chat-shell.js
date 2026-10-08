@@ -294,21 +294,11 @@ export function createChat(make) {
     _paintHead();
   }
 
-  // A message from "no project" starts one, named for the day - the person came to make something, and a
-  // dialog about naming things is not what they came for.
+  // (phase V20) No project is the draft - Merge opens it by itself; this is for the rare page that could not.
   async function _ensureProject() {
     if (Store.key()) return;
-    const today = new Date().toISOString().slice(0, 10);
-    let d = null;
-    for (let n = 1; n <= 40 && !(d && d.success); n++) {
-      d = await json('/api/mv3/timeline/new', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: today + ' - untitled' + (n > 1 ? ' ' + n : ''), kind: Store.BLANK_KIND }),
-      });
-      if (d && !d.success && !/already exists/i.test(String(d.error || ''))) break;
-    }
-    if (!d || !d.success) throw new Error((d && d.error) || 'could not start a project for this');
-    await Store.open(d.key);
+    await Store.openBlank();
+    if (!Store.key()) throw new Error('could not open the draft for this');
   }
 
   // ── What was being written, per project ───────────────────────────────────

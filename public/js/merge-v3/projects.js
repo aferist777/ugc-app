@@ -52,15 +52,18 @@ async function _paint() {
     const o = document.createElement('option');
     o.value = p.key;
     // Clip count in the label because two projects from the same day are otherwise told
-    // apart only by their title, and imported titles all start with the date.
-    o.textContent = p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
+    // apart only by their title, and imported titles all start with the date. (phase V20) The draft says what it is.
+    o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
+      : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     sel.appendChild(o);
   }
   // With nothing open the picker must SAY so. Left alone it would show the first project in
   // the list, which reads as "this one is open" when it is not.
   if (openRec) {
     sel.value = open;
-    _note('');
+    // (phase V20) A delete or a draft let go of opens the draft - and says what became of what was there.
+    _note(_after);
+    _after = '';
   } else {
     const o = document.createElement('option');
     o.value = '';
@@ -102,12 +105,28 @@ export function initProjects() {
   let last = Symbol('unpainted');
   Store.onChange(() => {
     const k = Store.key();
+    _paintDraft();
     if (k === last) return;
     last = k;
     _paint();
     _disarm();          // a different project means the armed delete no longer applies
     _cancelRename();    // and that a half-typed name belongs to a project no longer open
   });
+}
+
+// (phase V20) The draft's two buttons: "save" names it, "don't save" lets it go - what it made goes to Uncategorized.
+function _paintDraft() {
+  const d = Store.isDraft();
+  const e = document.getElementById('mv3-project-edit');
+  const x = document.getElementById('mv3-project-del');
+  if (e && !_editing) {
+    e.textContent = d ? 'save' : 'edit';
+    e.title = d ? 'Save this draft under a name - what it made goes into the name\'s category' : 'Rename this project';
+  }
+  if (x && !_armed) {
+    x.textContent = d ? 'don\'t save' : 'delete';
+    x.title = d ? 'Let this draft go - what it made stays in the Library, in Uncategorized' : 'Delete this project';
+  }
 }
 
 // ── New: an empty project, made here rather than sent from Scenarios ────────
@@ -218,7 +237,7 @@ function _cancelRename() {
   _editing = false;
   if (box) { box.hidden = true; box.value = ''; }
   if (sel) sel.hidden = false;
-  if (b) b.textContent = 'edit';
+  if (b) b.textContent = Store.isDraft() ? 'save' : 'edit';
   _note('');
 }
 
@@ -228,9 +247,10 @@ async function _saveRename() {
   if (!box || !key) return _cancelRename();
   const title = box.value.trim();
   if (!title) { _note('a name is needed'); box.focus(); return; }
-  if (title === Store.title()) return _cancelRename();
+  if (title === Store.title() && !Store.isDraft()) return _cancelRename();
+  const saving = Store.isDraft();
 
-  _note('renaming…');
+  _note(saving ? 'saving…' : 'renaming…');
   try {
     const r = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/title', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -240,7 +260,8 @@ async function _saveRename() {
     // A name already taken is not a failure to be swept away - the box stays open with what
     // was typed still in it, because the next thing to do is change one word of it.
     if (!d || !d.success) { _note(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
-    Store.setTitle(d.title);
+    // (phase V20) A draft named is a draft saved.
+    if (saving) Store.markSaved(d.title); else Store.setTitle(d.title);
     _cancelRename();
     await _paint();
   } catch (e) {
@@ -261,12 +282,14 @@ function _wireRename() {
     if (!key) { _note('open a project first'); return; }
     if (!Store.canEdit()) { _note('this project cannot be changed here'); return; }
     _editing = true;
-    box.value = Store.title() || '';
+    // (phase V20) A draft is named the way a new project is: the day, then its name.
+    const draft = Store.isDraft();
+    box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (Store.title() || '');
     box.hidden = false;
     sel.hidden = true;
     b.textContent = 'save';
     box.focus();
-    box.select();
+    if (draft) box.setSelectionRange(box.value.length, box.value.length); else box.select();
   });
 
   box.addEventListener('keydown', (e) => {
@@ -292,7 +315,7 @@ function _disarm() {
   const b = document.getElementById('mv3-project-del');
   _armed = false;
   if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-  if (b) { b.textContent = 'delete'; b.classList.remove('is-armed'); }
+  if (b) { b.textContent = Store.isDraft() ? 'don\'t save' : 'delete'; b.classList.remove('is-armed'); }
 }
 
 function _wireDelete() {
@@ -311,6 +334,8 @@ function _wireDelete() {
     _disarm();
     const key = Store.key();
     if (!key) return;
+    // (phase V20) The draft is not deleted - it is let go of: what it made stays, in Uncategorized.
+    if (Store.isDraft()) { _discard(key); return; }
     // A TALKING HEAD'S FILES (phase C3, the owner 2026-10-05): the last timeline of its project holds the reads,
     // frames and clips in the project's folder, and deleting it asks whether they go too. The pictures and videos
     // on the Library's shelves are not in that folder and stay.
@@ -327,6 +352,18 @@ function _wireDelete() {
     }
     _delete(key, false);
   });
+}
+
+// (phase V20) A draft not saved: its timeline and chats go, what it made stays in the Library, Uncategorized - and a
+// new draft takes its place.
+async function _discard(key) {
+  _note('letting it go…');
+  try {
+    const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/discard', { method: 'POST' }).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    _after = 'not saved - what it made is in the Library, in Uncategorized';
+    await Store.openBlank();
+  } catch (e) { _note(e.message); }
 }
 
 async function _delete(key, files) {

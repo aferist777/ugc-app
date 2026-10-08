@@ -66,6 +66,7 @@ let _version = -1;
 let _edits = 0;
 let _key = null;           // which project is open
 let _title = '';
+let _draft = false;        // (phase V20) it is THE draft - not saved yet
 let _adv = null;          // the project's export settings, as the server holds them
 
 // WHETHER IT MAY BE CHANGED. Read with the project and never changed here: the server decides (in the desktop
@@ -75,14 +76,13 @@ let _canEdit = true;
 export function canEdit() { return _canEdit; }
 function _roMessage() { return 'Read only - this project cannot be changed here.'; }
 
-// NOTHING IS OPEN BY DEFAULT. Walking into Merge shows an empty timeline and the project
-// picker, and the project is chosen deliberately - opening whatever happened to be open last
-// is how you start editing the wrong video without noticing. The one exception is ?p=<key>,
-// which is Scenarios handing over a project it has just written.
-//
-// The remembered-project localStorage key is gone with it: a preference that decides which
-// project you edit is not a preference.
+// (phase V20, the owner 2026-10-08) NOTHING OPEN IS THE DRAFT: Merge with no project to open opens THE draft - one
+// at a time, made when there is none - so the timeline and the chats work from the first press, and naming it waits
+// for "save". ?p=<key> and the project this session was on still come first.
 export function hasProject() { return !!_key; }
+export function isDraft() { return _draft; }
+/** The draft was saved under a name: no longer the draft. */
+export function markSaved(t) { _draft = false; if (t != null) _title = String(t); _emit(); }
 let _timer = null;
 let _saving = false;
 let _dirty = false;
@@ -179,8 +179,8 @@ const SS_OPEN = 'mv3_open_key';
 const _remember = (k) => { try { if (k) sessionStorage.setItem(SS_OPEN, k); else sessionStorage.removeItem(SS_OPEN); } catch (e) { /* a private window */ } };
 const _remembered = () => { try { return sessionStorage.getItem(SS_OPEN) || ''; } catch (e) { return ''; } };
 
-// Back to nothing open. The URL has to be cleared too, or load() would read the project that
-// was just closed straight back out of ?p= - and so does the memory, for the same reason.
+// Back to no project of its own - the draft (phase V20). The URL has to be cleared too, or load() would read the
+// project that was just closed straight back out of ?p= - and so does the memory, for the same reason.
 export async function openBlank() {
   if (_dirty) { try { await save(); } catch (e) {} }
   try {
@@ -206,19 +206,21 @@ export async function load(k) {
   let fromMemory = false;
   if (!want) { want = _remembered(); fromMemory = !!want; }
 
-  // Nothing asked for: the empty timeline, and no project open. Not the newest project -
-  // see hasProject() above.
+  // Nothing asked for: THE DRAFT (phase V20) - the one there is, or a new one. Not the newest project - see
+  // hasProject() above.
   if (!want) {
-    // NOTHING OPEN LOOKS LIKE THE NEW KIND. Walking into Merge with no project shows the
-    // blank-project timeline, because that is what pressing "+ new project" will make - the
-    // empty page should be a preview of where you are going, not of where the editor came
-    // from. Opening a project from the picker still brings its own kind with it.
+    const dr = await fetch('/api/mv3/timeline/new', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: true }),
+    }).then(r => r.json()).catch(() => null);
+    if (dr && dr.success && dr.key) return load(dr.key);
+    // The draft could not be had: the empty timeline, nothing open - edits wait for a project.
     const d = await fetch('/api/mv3/blank?kind=blank').then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the blank timeline');
     _timeline = d.timeline;
     _version = -1;
     _key = null;
     _title = '';
+    _draft = false;
     _adv = null;
     _canEdit = true;
     _base = null;
@@ -239,6 +241,7 @@ export async function load(k) {
   _version = d.version;
   _key = d.key;
   _title = d.title || '';
+  _draft = !!d.draft;
   _adv = d.adv || null;
   _canEdit = d.canEdit !== false;
   _base = clone(d.timeline);        // the floor a later merge measures "what did I change" against
