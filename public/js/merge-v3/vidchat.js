@@ -25,7 +25,7 @@
 
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, money, json, stored, keep, thumbOf, refCell } from './chat-shell.js';
+import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf } from './chat-shell.js';
 import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
 import { openHelp, closeHelp } from './vhelp.js';
@@ -1527,20 +1527,22 @@ function VIDEOS(ctx) {
     }
   }
   // A sheet: a press shows the card's sheets large, hovering shows it bigger.
-  function _boardThumb(g, all, W) {
+  // (phase V18.1, the owner 2026-10-08) `how`: 'big' - the storyboard at the message's width, from the 1280px tier (the
+  // 440px miniature stretched to 600 came out in squares); 'frame' - Kling's first frame at its own shape, at most 320px
+  // high, its box set before the picture loads. No popup under the pointer: the press opens it large.
+  function _boardThumb(g, all, W, how) {
     const word = W || 'storyboard';
-    const t = el('button', 'vc-board');
+    const t = el('button', 'vc-board' + (how ? ' is-' + how : ''));
     t.type = 'button';
     t.dataset.id = g.id;
+    if (how === 'frame') t.style.setProperty('--ar', String(ratioOf(g.aspect)));
     const img = document.createElement('img');
-    img.src = '/api/thumb?src=' + encodeURIComponent(g.imagePath) + '&v=strip';
+    img.src = '/api/thumb?src=' + encodeURIComponent(g.imagePath) + '&v=' + (how ? 'preset' : 'strip');
     img.loading = 'lazy'; img.decoding = 'async'; img.alt = word;
     // Gone from the shelf since it was read: said, and never followed (the server says so too at the next read).
     img.addEventListener('error', () => { t.classList.add('is-gone'); t.title = 'Not on the Images shelf any more'; }, { once: true });
     t.appendChild(img);
     t.title = 'The ' + word + ' · press: large';
-    t.addEventListener('mouseenter', () => ctx.peekShow('/api/thumb?src=' + encodeURIComponent(g.imagePath) + '&v=main', t));
-    t.addEventListener('mouseleave', ctx.peekHide);
     const list = (all && all.length ? all : [g]);
     t.addEventListener('click', () => openViewer(list.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: word })),
       Math.max(0, list.findIndex(x => x.id === g.id))));
@@ -1556,11 +1558,21 @@ function VIDEOS(ctx) {
     const cell = el('div', 'vc-board is-busy');
     const bar = el('div', 'mv3-ig-prog');
     cell.appendChild(bar);
+    // (phase V18.1) Kling's first frame waits in the box it will land in - its shape and size - with the countdown under
+    // it, so nothing moves when the picture comes.
+    let box = cell;
+    if (W === 'picture') {
+      box = el('div', 'vc-frame-busy');
+      cell.className = 'vc-board is-frame is-waiting';
+      cell.style.setProperty('--ar', String(ratioOf(g.aspect)));
+      cell.textContent = '';
+      box.append(cell, bar);
+    }
     progs.set(key, startInlineProgress(bar, {
       label: _boardWords(g, W), key: W === 'picture' ? 'mv3-frame' : 'mv3-board', estimateMs: W === 'picture' ? 60000 : 90000, startedAt: Date.parse(g.at) || 0,
       onCancel: g.alertId ? async () => { await json('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', { method: 'POST' }); ctx.reload(); } : null,
     }));
-    return cell;
+    return box;
   }
   // Every working message as the thread is read: its steps and their variants painted again in place.
   function _freshenLive(thread) {
@@ -1854,9 +1866,7 @@ function VIDEOS(ctx) {
       b.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
       return;
     }
-    const t = _boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W);
-    t.classList.add('is-big');
-    b.appendChild(t);
+    b.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, l.kind === 'swap' ? 'frame' : 'big'));
     // (phase V17) Kling's prompt is its own: said, not a field.
     if (l.kind === 'swap') {
       const clip = (l.m.media || []).find(y => y.kind === 'video') || {};

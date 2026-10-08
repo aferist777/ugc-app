@@ -166,9 +166,11 @@
   position:relative; height:26px; min-width:240px;
   border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
 }
-/* The frame the picture will fill, at the shape that was asked for. */
+/* The frame the picture will fill, at the shape that was asked for - and Kling's first frame waiting (V18.1). */
 .mv3-ig-shot.is-busy{
   min-width:0; width:132px; max-width:100%; height:auto; cursor:default;
+}
+.mv3-ig-shot.is-busy, .vc-board.is-frame.is-waiting{
   background:repeating-linear-gradient(135deg,
     oklch(.27 .02 265) 0 10px, oklch(.24 .02 265) 10px 20px);
 }
@@ -592,6 +594,12 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-step{ display:flex; flex-direction:column; gap:7px; min-width:0 }
 /* The storyboard's step: the sheet shown at the message's width (a press shows the card's sheets large). */
 .vc-board.is-big{ width:100%; max-width:600px; cursor:zoom-in }
+/* (phase V18.1, the owner 2026-10-08) Kling's first frame as a result is shown: its own shape, at most 320px high and
+   never wider than the message - the box is set before the picture loads, and the one it waits in is the same box. */
+.vc-board.is-frame{ width:min(100%, calc(320px * var(--ar, .5625))); aspect-ratio:var(--ar, .5625); cursor:zoom-in }
+.vc-board.is-frame img{ width:100%; height:100%; object-fit:contain }
+.vc-board.is-frame.is-waiting{ cursor:default; border-style:dashed }
+.vc-frame-busy{ display:flex; flex-direction:column; align-items:flex-start; gap:5px; max-width:100% }
 .vc-step:empty{ display:none }
 
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──

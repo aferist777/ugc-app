@@ -97,7 +97,8 @@ export function refCell(a, k, n, peek) {
   return c;
 }
 export const money = (v) => '$' + (+(+v).toFixed(4));
-const ratioOf = (ar) => {
+/** A shape ('9:16') as width over height. */
+export const ratioOf = (ar) => {
   const p = String(ar || '9:16').split(':');
   return (+p[0] || 1) / (+p[1] || 1);
 };
