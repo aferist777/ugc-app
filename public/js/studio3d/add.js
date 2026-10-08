@@ -121,7 +121,7 @@ function applyLayout(A, it, L, format) {
     s.objects = s.objects.filter(o => o.kind === 'room' || o.kind === 'character' || !o.env);
     L.objects.forEach((o, i) => {
       const obj = { id: A.newId('o'), kind: 'prop', name: o.name, color: ENV_COLORS[i % ENV_COLORS.length], ref: null, char: null,
-        p: [o.x, 0, o.z], r: [0, o.facing, 0], s: [1, 1, 1], env: path };
+        p: [o.x, o.y || 0, o.z], r: [0, o.facing, 0], s: [1, 1, 1], env: path };
       if (o.model === 'block') Object.assign(obj, { asset: 'block', box: [o.size.width, o.size.height, o.size.depth] });
       else obj.asset = 'kenney:' + o.model;
       s.objects.push(obj);
@@ -141,25 +141,33 @@ function applyLayout(A, it, L, format) {
   return ids;
 }
 
+/**
+ * Lay an environment of the Library into the open scene: ask the server for its layout (described and laid out by
+ * the agents, or kept from before), then put it in. `it` is a picker item ({ path, name, refKind, refId }).
+ */
+export async function layEnvironment(A, it) {
+  const sceneId = A.scene.id;
+  const name = it.name || 'the environment';
+  A.note('Laying out “' + name + '”: the agent is looking at the picture - about half a minute…');
+  const [r, format] = await Promise.all([A.api('POST', '/api/3d/env', { path: it.path }).catch(() => ({ ok: false, j: { error: 'The server did not answer.' } })), _shapeOf(it.path)]);
+  // Gone to another scene meanwhile: the layout is kept with the environment, the next time is free.
+  if (!A.scene || A.scene.id !== sceneId) return;
+  if (!r.ok) { A.note('“' + name + '” could not be laid out: ' + (r.j.error || 'no answer'), true); return; }
+  const ids = applyLayout(A, it, r.j.layout, format);
+  A.select([]);
+  A.vp.frame([]);
+  const n = r.j.layout.objects.length;
+  const k = r.j.layout.openings.length;
+  const said = [n + (n === 1 ? ' piece' : ' pieces') + ' of furniture, ' + k + (k === 1 ? ' window or door' : ' windows and doors')];
+  if (r.j.described) said.push('its description written into the Library');
+  said.push(r.j.cached ? 'laid out before - free' : '≈ $' + ((r.j.credits || 0) * 0.005).toFixed(3));
+  A.note('“' + name + '”: ' + said.join(' · '));
+  return ids;
+}
+
 export function addEnvironment(A) {
-  _pick('Environment of the scene', 'Its room and large furniture are laid out from the picture', [SOURCES.environments], async (it) => {
-    const sceneId = A.scene.id;
-    const name = it.name || 'the environment';
-    A.note('Laying out “' + name + '”: the agent is looking at the picture - about half a minute…');
-    const [r, format] = await Promise.all([A.api('POST', '/api/3d/env', { path: it.path }).catch(() => ({ ok: false, j: { error: 'The server did not answer.' } })), _shapeOf(it.path)]);
-    // Gone to another scene meanwhile: the layout is kept with the environment, the next time is free.
-    if (!A.scene || A.scene.id !== sceneId) return;
-    if (!r.ok) { A.note('“' + name + '” could not be laid out: ' + (r.j.error || 'no answer'), true); return; }
-    const ids = applyLayout(A, it, r.j.layout, format);
-    A.select([]);
-    A.vp.frame([]);
-    const n = r.j.layout.objects.length;
-    const said = [n + (n === 1 ? ' piece' : ' pieces') + ' of furniture, ' + r.j.layout.openings.length + ' windows and doors'];
-    if (r.j.described) said.push('its description written into the Library');
-    said.push(r.j.cached ? 'laid out before - free' : '≈ $' + ((r.j.credits || 0) * 0.005).toFixed(3));
-    A.note('“' + name + '”: ' + said.join(' · '));
-    return ids;
-  }, 'Environments are made or brought in on the Library’s Environments shelf.');
+  _pick('Environment of the scene', 'Its room and large furniture are laid out from the picture', [SOURCES.environments], (it) => layEnvironment(A, it),
+    'Environments are made or brought in on the Library’s Environments shelf.');
 }
 
 /** Choose the picture an object stands for. */
