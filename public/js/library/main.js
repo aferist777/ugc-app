@@ -15,6 +15,7 @@ import { renderCatBar, closeConfirm } from './cats-bar.js';
 import * as V from './voices.js';
 import * as MU from './music.js';
 import * as SC from './scenarios.js';
+import * as RE from './renders.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
@@ -631,6 +632,12 @@ function _renderGrid() {
     });
     return;
   }
+  // (phase V23) Renders are rows of projects, each opening a strip of its renders - js/library/renders.js. The cards
+  // are the shelf's own; the viewer pages inside the project.
+  if (_shelf === 'renders') {
+    RE.render(_items, { card: _card, open: (it, list) => _open(it, list) });
+    return;
+  }
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
@@ -725,9 +732,11 @@ let _sheetT = null;
 let _shelfRunning = 0;    // what the last read of Lookbooks or Environments said is being made there
 const _watched = (kind, items, running) => (kind === 'characters'
   ? (items || []).some(it => it && it.meta && it.meta.sheetRunning)
-  : (kind === 'lookbooks' || kind === 'environments') && running > 0);
+  // (phase V23) Renders: while posters are being made in the background (lib/render-posters.js).
+  : (kind === 'lookbooks' || kind === 'environments' || kind === 'renders') && running > 0);
 const _shelfSig = (items, running) => (items || [])
-  .map(it => String(it.id) + (it && it.meta && it.meta.sheetRunning ? '*' : '')).join() + '|' + (running || 0);
+  .map(it => String(it.id) + (it && it.meta && it.meta.sheetRunning ? '*' : '') + (it && it.thumb ? '+' : '')
+    + ((it && it.meta && it.meta.dur) ? '~' : '')).join() + '|' + (running || 0);
 
 function _watchShelf() {
   clearTimeout(_sheetT);

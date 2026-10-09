@@ -446,17 +446,36 @@ function _renderFiles() {
   return out;
 }
 
+// BY PROJECT (phase V23, the owner 2026-10-09): every render says which project's folder it is in and that project's
+// title - a project deleted since keeps its folder's name, `nocat` and a loose file are no project - and how long it
+// runs. The page draws a row per project (js/library/renders.js).
+//
+// A POSTER IS MADE, NOT MISSED (V23): a render with none gets one in the background (lib/render-posters.js), which
+// also measures its length; `unreadable` is only a file ffmpeg could not open, `posterPending` one still waiting.
+// `running` is how many are still to be looked at - the page asks again while there are any.
 function _rendersShelf() {
   const dir = FINALS_DIR;
   const files = _renderFiles();
+  const RP = require('../lib/render-posters');
+  const titles = new Map();
+  try {
+    for (const e of require('../lib/projects-store').entries()) {
+      if (e && e.folder) titles.set(String(e.folder).toLowerCase(), String(e.name || e.folder));
+    }
+  } catch (e) { /* no list: folder names */ }
+  const work = [];
   const items = files
-    .map(f => ({ f, m: (() => { try { return fs.statSync(path.join(dir, f)).mtimeMs; } catch (e) { return 0; } })() }))
+    .map(f => { let st = null; try { st = fs.statSync(path.join(dir, f)); } catch (e) { st = null; } return { f, st, m: st ? st.mtimeMs : 0 }; })
     .sort((a, b) => b.m - a.m)
-    .map(({ f, m }) => {
+    .map(({ f, st, m }) => {
       const url = toUrl(path.join(dir, f));
       const turl = VT.thumbUrlFor(url);
       const tabs = path.join(ROOT_DIR, String(turl).replace(/^\/+/, ''));
       const hasThumb = fs.existsSync(tabs);
+      const top = f.includes('/') ? f.split('/')[0] : '';
+      const folder = (!top || top.toLowerCase() === 'nocat') ? '' : top;
+      const known = RP.info(f, st);
+      if (st) work.push({ rel: f, abs: path.join(dir, f), url, hasThumb, st });
       return {
         id: f,
         // The output name is `local_<stamp>_<project title>.mp4`; the stamp is noise on a
@@ -465,18 +484,19 @@ function _rendersShelf() {
         kind: 'renders',
         media: url,
         thumb: hasThumb ? turl : null,
-        meta: { date: m ? new Date(m).toISOString() : null, sizeMb: (() => {
-          try { return Math.round(fs.statSync(path.join(dir, f)).size / 1048576); } catch (e) { return null; }
-        })(),
-        // A MISSING POSTER MEANS THE FILE IS UNREADABLE, and it is worth saying so. Every
-        // render that ffmpeg can open has a poster: the export flow makes one when the render
-        // is kept, and the backlog was filled in. What is left without one is a truncated mp4 -
-        // a render interrupted before its moov index was written - which no player can open.
-        // Cheap on purpose: proving it by reading 56 files on every shelf read would not be.
-        unreadable: !hasThumb },
+        meta: {
+          date: m ? new Date(m).toISOString() : null,
+          sizeMb: st ? Math.round(st.size / 1048576) : null,
+          folder, project: folder ? (titles.get(folder.toLowerCase()) || folder) : null,
+          dur: known.dur || 0,
+          unreadable: !hasThumb && !!known.failed, posterPending: !hasThumb && !known.failed,
+          why: known.failed || '',
+        },
       };
     });
-  return { items, filters: [] };
+  const running = RP.want(work);
+  RP.tidy(files);
+  return { items, filters: [], running };
 }
 
 // ── Scenarios ───────────────────────────────────────────────────────────────

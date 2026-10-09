@@ -557,6 +557,16 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
 }
 
+/* ── Renders: a row per project, opening a strip of its renders (phase V23) ───── */
+.lib-rgroup{ display:flex; flex-direction:column; gap:6px; }
+.lib-rhead{ font:inherit; }
+.lib-rcaret{ flex:0 0 auto; width:12px; color:var(--muted); transition:transform .12s var(--ease); }
+.lib-rgroup.is-open .lib-rcaret{ transform:rotate(90deg); color:var(--ink); }
+.lib-rstrip{ display:none; grid-template-columns:repeat(auto-fill, var(--card-w)); gap:8px; padding:2px 4px 10px 22px; align-content:start; justify-content:start; }
+.lib-rgroup.is-open .lib-rstrip{ display:grid; }
+.lib-rsub{ display:flex; gap:6px; font-variant-numeric:tabular-nums; }
+.lib-rlen{ color:var(--ink); font-weight:600; }
+
 /* ── Music: rows, because there is no picture ─────────────────────────────────
    Built like .lib-srow, but not a button: a music row has three things to press - play,
    and delete, and nothing on the row itself - so the row is a container and the controls
