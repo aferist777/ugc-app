@@ -28,6 +28,7 @@
 
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
+import * as Views from './lib-views.js';
 import { askDelete, short } from './ask.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
@@ -346,6 +347,10 @@ function _awayFromLane(e) {
   // Library's "captions" crumb that picked it (phase V18.2: a press on a category let go of the lane, and the panel went
   // back to the chat under it).
   if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip')) return;
+  // Nor, while the captions view is up, on "Library" or a chat's crumb: their own click lets the pick go (lib-views.js
+  // toBase). Let go here, at the mousedown, the panel jumped back from the corner under the pointer and the click never
+  // landed - "generate video" pressed over the captions showed the shelf (phase V23.5).
+  if (Views.isCaptions() && t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
   const top = Layers.top();
   if (top && top.el && top.el.contains && top.el.contains(t)) return;
   _clearSel();
