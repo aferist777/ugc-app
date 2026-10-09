@@ -154,7 +154,7 @@ function _narrator(id, readingId) {
   return {
     block: P.narratorBlock(pick ? { ...rec, profile: pick.profile } : rec),
     name: rec.name, id: rec.id, ready: !!pick,
-    reading: pick ? { id: pick.id, index: pick.index, total: pick.total, random: pick.random } : null,
+    reading: pick ? { id: pick.id, index: pick.index, total: pick.total, random: pick.random, missing: !!pick.missing } : null,
   };
 }
 
@@ -162,7 +162,7 @@ function _narrator(id, readingId) {
 function _readingLabel(nar) {
   if (!nar.reading || nar.reading.total < 2) return nar.name;
   return `${nar.name}, reading ${nar.reading.index} of ${nar.reading.total}`
-    + (nar.reading.random ? ' (random)' : '');
+    + (nar.reading.missing ? ' (the pinned one is gone - random)' : nar.reading.random ? ' (random)' : '');
 }
 
 // The transcript slice a topic was mined from, or nothing. `sourceId` alone means the whole
@@ -218,7 +218,7 @@ function _keeper(b, build) {
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
         language: b.language, tone: b.tone, scenes: b.scenes,
-        narratorId: b.narratorId, narratorName: b.narratorName, readingIndex: b.readingIndex,
+        narratorId: b.narratorId, narratorName: b.narratorName, readingId: b.readingPin != null ? b.readingPin : b.readingId,
         provider: b.provider, model: b.model, effort: b.effort,
       },
       ...patch,
@@ -294,7 +294,7 @@ router.post('/scriptgen/hooks', (req, res) => {
     return { hooks, narrator: _readingLabel(nar), reading: nar.reading, model: m.model };
   // Five new hooks mean a hook is to be picked again: the one the draft held is cleared with them,
   // or a draft reopened later would show the old hook and hide the five that were paid for.
-  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '' })),
+  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '', usedReadingId: (r.reading && r.reading.id) || '' })),
   { key: _runKey(b), what: 'hooks', model: m.model, effort: m.effort });
 });
 
@@ -337,7 +337,12 @@ router.post('/scriptgen/script', (req, res) => {
       reading: nar.reading,
       model: m.model,
     };
-  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, title: r.title, hook, humanized: false })),
+  }, _keeper(b, (r) => ({
+    paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
+    // (phase V23) What wrote it - the model as normalised, the reading drawn - for the save to record.
+    usedReadingId: (r.reading && r.reading.id) || '', cleaned: null,
+    written: { provider: m.provider, model: m.model, effort: m.effort, readingId: (r.reading && r.reading.id) || '', at: new Date().toISOString() },
+  })),
   { key: _runKey(b), what: 'script', model: m.model, effort: m.effort, scenes: m.scenes });
 });
 
@@ -373,7 +378,10 @@ router.post('/scriptgen/humanize', (req, res) => {
       narrator: _readingLabel(nar),
       reading: nar.reading,
     };
-  }, _keeper(b, (r) => ({ paragraphs: r.paragraphs, humanized: !!r.applied })),
+  }, _keeper(b, (r) => ({
+    paragraphs: r.paragraphs, humanized: !!r.applied,
+    ...(r.applied ? { cleaned: { provider: m.provider, model: m.model, effort: m.effort, at: new Date().toISOString() } } : {}),
+  })),
   { key: _runKey(b), what: 'humanize', model: m.model, effort: m.effort });
 });
 
@@ -487,8 +495,15 @@ router.post('/scriptgen/save', (req, res) => {
     return res.status(400).json({ success: false, error: 'a narrator gender is required (male or female)' });
   }
 
+  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the dropdowns as they are now: the reading
+  // the script was drawn with (a random one included), the model that wrote it and the one that cleaned it.
+  let kept = null;
+  try { kept = b.draftId ? drafts.get(String(b.draftId)) : null; } catch (e) { kept = null; }
+  const wrote = (kept && kept.written) || null;
+  const cleaned = (kept && kept.humanized && kept.cleaned) || null;
+  const readingId = (wrote && wrote.readingId) || (kept && kept.usedReadingId) || b.readingId;
   let nar = { name: '', id: '' };
-  try { if (b.narratorId) nar = _narrator(b.narratorId, b.readingId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
+  try { if (b.narratorId) nar = _narrator(b.narratorId, readingId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
   let srcTitles = { sourceTitle: '', topicTitle: '' };
   try { srcTitles = _sourceText(b.sourceId, b.topicId); } catch (e) { /* same */ }
 
@@ -510,8 +525,10 @@ router.post('/scriptgen/save', (req, res) => {
         ? `reading ${nar.reading.index} of ${nar.reading.total}` : '',
       hook: paragraphs[0] || '', language: String(b.language || ''), tone: String(b.tone || ''),
       // Which aggregator too (phase F3): the same model id can run on two of them.
-      provider: String(b.provider || ''),
-      model: String(b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),
+      provider: String((wrote && wrote.provider) || b.provider || ''),
+      model: String((wrote && wrote.model) || b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),
+      // Cleaned by another model than wrote it (the owner: by the recommendation) - said apart.
+      ...(cleaned ? { cleanedBy: [cleaned.provider, cleaned.model].filter(Boolean).join(' · ') } : {}),
     },
   };
 

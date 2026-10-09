@@ -839,7 +839,8 @@ async function _buildControls(settings) {
   box.appendChild(_ctl('Model', model));
   box.appendChild(effortCtl);
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
-  const want = s.narratorId ? (s.readingIndex ? `${s.narratorId}#${s.readingIndex}` : s.narratorId) : 'neutral';
+  const pin = s.readingId || s.readingIndex;   // a draft from before ids keeps a number - read once (_paintNarrators)
+  const want = s.narratorId ? (pin ? `${s.narratorId}#${pin}` : s.narratorId) : 'neutral';
   await _paintNarrators(want, s.narratorName);
 }
 
@@ -857,9 +858,20 @@ async function _paintNarrators(want, wantName) {
     if (!n.ready) { values.push({ value: n.id, label: n.name + ' — not read' }); continue; }
     if ((n.readings || 1) < 2) { values.push({ value: n.id, label: n.name }); continue; }
     values.push({ value: n.id, label: `${n.name} — random of ${n.readings}` });
-    for (let i = 1; i <= n.readings; i++) values.push({ value: `${n.id}#${i}`, label: `${n.name} — reading ${i}` });
+    // (phase V23) BY ID: "reading 2" pinned by its number became the old third one when the first was deleted.
+    const reads = n.readingList || [];
+    reads.forEach((r, i) => values.push({ value: `${n.id}#${r.id}`, label: `${n.name} — reading ${i + 1}` }));
   }
   let pick = cur || 'neutral';
+  // A draft from before ids pinned "#2": the second reading AS IT IS NOW, once, and saved by its id.
+  {
+    const [nid, ri] = String(pick).split('#');
+    const nar = list.find(n => String(n.id) === nid);
+    if (nar && /^\d+$/.test(ri || '')) {
+      const r = (nar.readingList || [])[parseInt(ri, 10) - 1];
+      if (r) { pick = `${nid}#${r.id}`; if (_gen && _gen.draftId) _queueDraft(); }
+    }
+  }
   const note = $('mk-nar-note');
   note.hidden = true;
   if (!values.some(v => v.value === pick) && pick !== 'neutral') {
@@ -870,7 +882,7 @@ async function _paintNarrators(want, wantName) {
       // the choice falls back to the narrator itself, a reading picked at random - and says so.
       pick = nid;
       note.hidden = false;
-      note.textContent = `Reading ${ri} of ${nar.name} is gone - one of its readings is picked at random now. Pin another if it matters.`;
+      note.textContent = `The pinned reading of ${nar.name} is gone - one of its readings is picked at random now. Pin another if it matters.`;
       if (_gen && _gen.draftId) _queueDraft();
     } else {
       const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
@@ -889,14 +901,15 @@ const _controlsReady = () => !!$('mk-c-lang');
 function _opts() {
   if (!_controlsReady()) return {};
   const nar = $('mk-c-narrator');
-  const [narratorId, readingIndex] = String(nar.value).split('#');
+  const [narratorId, readingPin] = String(nar.value).split('#');
   return {
     language: $('mk-c-lang').value,
     scenes: parseInt($('mk-c-scenes').value, 10),
     tone: $('mk-c-tone').value,
     narratorId,
-    readingId: readingIndex || '',
-    readingIndex: readingIndex || '',
+    // The reading pinned in the dropdown, by its id (phase V23) - '' is random.
+    readingId: readingPin || '',
+    readingPin: readingPin || '',
     // The name alone, not the option's label ("Azazin — reading 2"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
@@ -968,7 +981,7 @@ function _payload() {
     humanized: !!_gen.humanized,
     settings: {
       language: o.language, tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName, readingIndex: o.readingIndex,
+      narratorId: o.narratorId, narratorName: o.narratorName, readingId: o.readingPin, readingIndex: '',
       provider: o.provider, model: o.model, effort: o.effort,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
@@ -1067,7 +1080,8 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     hooks: (full && full.hooks) || [],
     paragraphs: (full && full.paragraphs) || [],
     humanized: !!(full && full.humanized),
-    readingId: '',
+    // (phase V23) The reading the stages drew with, kept in the draft - a reload no longer forgets it.
+    readingId: (full && full.usedReadingId) || '',
   };
   _paintFrom();
   $('mk-topic').value = full ? (full.topic || full.topicTitle || '') : (topic ? topic.title : '');

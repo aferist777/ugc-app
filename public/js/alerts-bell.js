@@ -116,20 +116,39 @@ function _hrefOf(rec) {
 // expected to take. Only before there is any history at all does a built-in number stand in, and it
 // is replaced the first time something of that kind finishes. Every poll recomputes it, so it ticks
 // down by itself and jumps the moment a fragment lands.
+//
+// BY MODEL (phase V23, V-F): a Seedance clip and a Grok one, a nano-banana picture and a gpt one, are not one kind of
+// wait. The last few of the same kind AND the same model (`engine`, the aggregator after " @ " left off) first, then
+// of the kind, then the built-in number. The MIDDLE of them, not the mean: one row resumed after the app was closed
+// for an hour would pull a mean of six far out. A row of the fake aggregator ("FAKE ·" in its title) is twenty
+// seconds of nothing and is not counted.
 const KEEP_FOR_AVERAGE = 6;
-const GUESS_MS = { clip: 5 * 60000, frame: 90000, lookbook: 60000, environment: 60000, music: 2 * 60000 };
+const GUESS_MS = { clip: 5 * 60000, video: 5 * 60000, frame: 90000, picture: 75000, lookbook: 60000, environment: 60000, music: 2 * 60000 };
 const GUESS_OTHER_MS = 2 * 60000;
 
-function _typical(what) {
+const _model = (r) => String((r && r.engine) || '').split(' @ ')[0].trim();
+const _fake = (r) => /(^|·\s*)FAKE\s*·/.test(String((r && r.title) || ''));
+function _median(list) {
+  const s = list.slice().sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function _past(match) {
   const past = [];
   for (const r of _items) {
-    if (r.what !== what || r.state !== 'done' || !r.doneAt) continue;
+    if (r.state !== 'done' || !r.doneAt || _fake(r) || !match(r)) continue;
     const ms = Date.parse(r.doneAt) - Date.parse(r.startedAt);
     if (ms > 0) past.push(ms);
     if (past.length >= KEEP_FOR_AVERAGE) break;
   }
-  if (!past.length) return GUESS_MS[what] || GUESS_OTHER_MS;
-  return past.reduce((a, x) => a + x, 0) / past.length;
+  return past;
+}
+function _typical(what, model) {
+  const same = model ? _past(r => r.what === what && _model(r) === model) : [];
+  if (same.length) return _median(same);
+  const kind = _past(r => r.what === what);
+  if (kind.length) return _median(kind);
+  return GUESS_MS[what] || GUESS_OTHER_MS;
 }
 
 // The wait, in milliseconds, or 0 when nothing is running.
@@ -138,7 +157,7 @@ function _leftMs() {
   let most = 0;
   for (const r of _items) {
     if (!_running(r)) continue;
-    const left = _typical(r.what) - (now - (Date.parse(r.startedAt) || now));
+    const left = _typical(r.what, _model(r)) - (now - (Date.parse(r.startedAt) || now));
     most = Math.max(most, left);
   }
   return Math.max(0, most);

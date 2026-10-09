@@ -124,7 +124,7 @@ function _filterRow() {
 // "written from" is painted before these, by the source's live name. [key, label, whole row wide].
 const ORIGIN_ROWS = [
   ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
-  ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
+  ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
