@@ -340,7 +340,8 @@ const _strictRefs = (p) => String(p || '').replace(REF_ANY, (all, k, n) => '{{' 
 const SIZE_WORDS = /\b(total|length|duration|long|about|around|in|of|a|the|and|sec|secs|second|seconds|s|vertical|horizontal|square|portrait|landscape|aspect|ratio|format|frame|clip)\b/gi;
 const _isSize = (g) => /\d/.test(g) && !String(g).replace(/\d+(\.\d+)?\s*:\s*\d+/g, ' ').replace(/\d+(\.\d+)?/g, ' ')
   .replace(SIZE_WORDS, ' ').replace(/[\s.,;:!?()'"\-–—]+/g, '');
-const _writingIn = (project) => CHAT.read(project, KIND).filter(m => m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing').length;
+// (phase V23) Counted on the raw thread - the whole read folded in every record just to count cards.
+const _writingIn = (project) => CHAT.writingCount(project);
 
 // ── The storyboard (phase V8, PLAN V-G; the owner 2026-10-06: 4K, and always a stop after it) ──────────────────
 // A two-step recipe draws a STORYBOARD SHEET first - a picture of the pictures chat (lib/mv3-gens.js: its record, its
@@ -1157,11 +1158,14 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     const mm = _mediaOf(frame ? (m.media || []).filter(x => x && x.kind !== 'image') : m.media);
     if (mm.error) return res.status(400).json({ success: false, error: mm.error });
     let boardId = '';
+    // The pictures' records, read once for this press however many times the sheets are looked up (phase V23).
+    let _pics = null;
+    const picsAll = () => (_pics || (_pics = require('../lib/mv3-gens').listAll()));
     if (m.card.board) {
       // The sheet the video follows: the one the page sends, else the card's chosen one while it can be followed, else
       // the newest that landed and is still on the shelf (review V8). A first frame's picture the same way.
       const W = frame ? 'picture' : 'storyboard';
-      const boards = CHAT.boardsOf(m);
+      const boards = CHAT.boardsOf(m, picsAll());
       const want = String(b.boardId || '');
       let g = null;
       if (want) {
@@ -1182,12 +1186,12 @@ router.post('/mv3/video/card/:id/make', (req, res) => {
     if (frame) {
       // The chosen picture IN PLACE OF the person's: Kling takes one picture - the room with the person in it now -
       // and the same part of the clip.
-      const g = CHAT.boardsOf(m).find(x => x.id === boardId);
+      const g = CHAT.boardsOf(m, picsAll()).find(x => x.id === boardId);
       const sb = _mediaOf([{ path: g.imagePath, kind: 'image', role: 'person', label: 'picture' }]);
       if (sb.error) return res.status(400).json({ success: false, error: /R2/.test(sb.error) ? FRAME_R2 : 'the picture is not on the Images shelf any more - choose another, or draw one' });
       mm.media = sb.media.concat(mm.media.filter(x => x.kind !== 'image'));
     } else if (m.card.board) {
-      const g = CHAT.boardsOf(m).find(x => x.id === boardId);
+      const g = CHAT.boardsOf(m, picsAll()).find(x => x.id === boardId);
       // The sheet is one more picture - said as such when the column's model takes fewer than the card was written for.
       const seat = _seatWrong(s.model, s.agg, s.params, mm.media);
       if (seat) return res.status(400).json({ success: false, error: seat });

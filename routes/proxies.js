@@ -26,6 +26,7 @@ const router     = express.Router();
 const { MEDIA_DIR, PROJECTS_DIR, TEMP_DIR, DATA_DIR } = require('../lib/config');
 const { toDisk, toDiskWithin } = require('../lib/media');
 const BUSY = require('../lib/render-busy');
+const _hearing = () => { try { return require('../lib/whisper-local').hearing(); } catch (e) { return false; } };
 
 // ── GET /api/ffmpeg/preview-proxy?src=<webPath> ───────────────────────────────
 // Lightweight ~480p transcode of a clip for the BROWSER PREVIEW only (the final
@@ -132,8 +133,9 @@ function _pumpProxies() {
   if (_pqBusy) return;
   const next = _pq[0];
   if (!next) return;
-  // A warm-up waits for the export to finish; a live request does not - a person is watching.
-  if (!next.live && BUSY.busy()) {
+  // A warm-up waits for the export to finish - and (phase V23) for recognition on this computer, which wants the same
+  // processor; a live request does not - a person is watching.
+  if (!next.live && (BUSY.busy() || _hearing())) {
     if (!_pqTimer) _pqTimer = setTimeout(() => { _pqTimer = null; _pumpProxies(); }, 2000);
     return;
   }

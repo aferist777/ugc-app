@@ -82,6 +82,15 @@ router.get('/mv3/video/catalog/poster/:slug', async (req, res) => {
   } catch (e) { res.status((e && e.status) || 502).json({ success: false, error: (e && e.message) || String(e) }); }
 });
 
+// (phase V23) A case's clip: from the disk once it has been kept, from goodcase meanwhile (lib/video-catalog.js clipOf).
+router.get('/mv3/video/catalog/media/:slug', (req, res) => {
+  try {
+    const c = CAT.clipOf(req.params.slug);
+    if (c.abs) { res.set('Cache-Control', 'private, max-age=86400'); return res.sendFile(c.abs); }
+    res.redirect(302, c.url);
+  } catch (e) { res.status((e && e.status) || 502).json({ success: false, error: (e && e.message) || String(e) }); }
+});
+
 // ── The person's presets ────────────────────────────────────────────────────
 router.get('/mv3/video/presets', (_req, res) => {
   try { res.json(Object.assign({ success: true }, PRESETS.list())); } catch (e) { _err(res, e); }

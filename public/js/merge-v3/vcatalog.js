@@ -41,6 +41,8 @@ let _fetchTried = false;     // the cases are fetched by the window at most once
 let _w = null;               // the open window: { ov, layer, ... }
 let _st = null;              // what it shows
 const _hp = hoverPlayer('vc-vid');   // a case's clip in its tile while the pointer rests there
+// (phase V23) Through the server, which keeps it on disk after the first time (routes/mv3-catalog.js).
+const _clipUrl = (slug) => '/api/mv3/video/catalog/media/' + encodeURIComponent(slug);
 
 const _clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const _key = (it) => it.kind + ':' + it.id;
@@ -137,7 +139,7 @@ function _items() {
     const top = hottest.get(t.id);
     out.push({
       kind: 'template', id: t.id, title: (t.title && t.title.en) || t.id, sub: (t.description && t.description.en) || '',
-      poster: top ? '/api/mv3/video/catalog/poster/' + encodeURIComponent(top.s) : '', media: top ? top.ms : '',
+      poster: top ? '/api/mv3/video/catalog/poster/' + encodeURIComponent(top.s) : '', media: (top && top.ms) ? _clipUrl(top.s) : '',
       needs: _needsOf(slots), slots, refs: { img, exact: true, vid: req.filter(s => s.kind === 'video').length, aud: req.filter(s => s.kind === 'audio').length },
       a: null, d: null, sp: t.speech ? 1 : 0, ts: _story(t.twoStep), lc: '', v: '', cat: t.category, tp: t.id,
       h: top ? top.h : 0, st: 0, dt: '', written: 'seedance', count: t.cases || 0,
@@ -154,7 +156,7 @@ function _items() {
     if (!c.ri && !c.rv && !c.ra) needs.push('none');
     out.push({
       kind: 'case', id: c.s, title: c.t, sub: c.tz || '', creator: c.cr,
-      poster: c.ps ? '/api/mv3/video/catalog/poster/' + encodeURIComponent(c.s) : '', media: c.ms || '',
+      poster: c.ps ? '/api/mv3/video/catalog/poster/' + encodeURIComponent(c.s) : '', media: c.ms ? _clipUrl(c.s) : '',
       needs, refs: { img: c.ri, exact: !!c.rx, vid: c.rv, aud: c.ra },
       a: c.a, d: c.d, sp: c.sp, ts: c.ts, lc: c.lc, v: c.v, cat: c.cat || '', tp: c.tp || '',
       h: c.h, st: c.st, dt: c.dt, written: 'seedance', rg: c.rg, rm: c.rm,

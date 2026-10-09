@@ -12,7 +12,8 @@
        library's cache/poses/, and removed again at the end if this run made it;
      - the settings view: no secret and no retired key reaches the page;
      - the routes that were removed still answer 404;
-     - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js).
+     - every package.json dependency is thanked on Admin -> Thanks (public/js/admin-thanks.js);
+     - (said, not failed) whether whisper.cpp for recognition on this computer is in vendor/whisper.
    It spends nothing: no request here starts a generation or a render.
 
    Exit code 1 on a 5xx, a network error, a leaked key, or a removed route that answers. A 4xx on
@@ -201,6 +202,14 @@ function getRoutes() {
   const unthanked = deps.filter(d => !thanked.includes('npm: ' + JSON.stringify(d)));
   if (unthanked.length) { failed++; console.log('!! not on Admin -> Thanks: ' + unthanked.join(', ')); }
   console.log(`thanks: ${deps.length - unthanked.length}/${deps.length} dependencies thanked`);
+
+  // (phase V23) Recognition on this computer needs whisper.cpp in vendor/ - laid out by npm install, and optional
+  // there, so its absence is SAID, not failed: captions are still heard by Groq.
+  if (process.platform === 'win32') {
+    const exe = path.join(APP_DIR, 'vendor', 'whisper', 'whisper-cli.exe');
+    console.log(fs.existsSync(exe) ? 'whisper: vendor/whisper/whisper-cli.exe is there'
+      : '!! whisper: vendor/whisper/whisper-cli.exe is missing - recognition on this computer will not work (npm install, or node tools/fetch-whisper.js)');
+  }
 
   process.exitCode = failed ? 1 : 0;
 })();

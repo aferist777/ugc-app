@@ -7,8 +7,7 @@
 
      the program      whisper.cpp with OpenBLAS - ships with the app (npm install), nothing to do here
      the model        574 MB - the first local recognition downloads it anyway; here it can be done ahead
-     the NVIDIA build 674 MB (about 1.1 GB on disk) - only by this button (the owner's decision), and only
-                      when the computer has an NVIDIA card: twelve times faster than the processor
+     (phase V23, the owner 2026-10-09) no field about the graphics card - another computer has another one
 
    GET /api/speech/local is read when the pane shows, and every second while something downloads.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -19,7 +18,6 @@
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function mb(b) { return Math.round((+b || 0) / 1e6) + ' MB'; }
-  function gb(b) { return ((+b || 0) / 1e9).toFixed(1) + ' GB'; }
 
   function row(title, sub, right) {
     var r = el('div', 'loc-row');
@@ -68,7 +66,7 @@
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
       return;
     }
-    var p = state.program, m = state.model, c = state.cuda;
+    var p = state.program, m = state.model;
 
     body.appendChild(el('div', 'dio-sec', 'The program'));
     body.appendChild(row('whisper.cpp ' + p.version + ' · OpenBLAS', p.present
@@ -80,31 +78,15 @@
     var mright;
     if (m.downloading) mright = bar(m.downloading);
     else if (m.present) mright = del('model');
+    else if (m.partial) mright = btn('Continue the download (' + mb(m.bytes - m.partial) + ' left)', function () { post('/api/speech/local/download', 'model'); }, true);
     else mright = btn('Download (' + mb(m.bytes) + ')', function () { post('/api/speech/local/download', 'model'); }, true);
     body.appendChild(row(m.name + ' · ' + mb(m.bytes), m.present
       ? 'Downloaded into this library\'s cache - recognition here needs no internet.'
       : (m.error ? 'The last download failed: ' + m.error : 'Not downloaded yet. The first recognition on this computer downloads it anyway; here it can be done ahead of time.'),
     mright));
 
-    body.appendChild(el('div', 'dio-sec', 'The graphics card'));
-    if (!c.gpu) {
-      // An NVIDIA build already on disk keeps its Delete even when no card answers now (review K1b).
-      body.appendChild(row('No NVIDIA graphics card', c.present
-        ? 'The NVIDIA build is installed (about ' + gb(c.disk) + ') but no card answers now - recognition runs on the processor.'
-        : 'Recognition runs on the processor - about 0.7 s for every second of sound.', c.present ? del('cuda') : null));
-    } else {
-      var cright, csub;
-      if (c.downloading) { cright = bar(c.downloading); csub = 'Downloading the NVIDIA build - it is unpacked into this library\'s cache when it arrives.'; }
-      else if (c.present) {
-        cright = del('cuda');
-        csub = c.failed ? 'Installed, but it failed once since the app started - the processor is used until the next start.'
-          : 'Installed: recognition runs on the card, about twelve times faster than on the processor.';
-      } else {
-        cright = btn('Download the NVIDIA build (' + mb(c.bytes) + ')', function () { post('/api/speech/local/download', 'cuda'); }, true);
-        csub = (c.error ? 'The last download failed: ' + c.error + ' ' : '') + 'About ' + gb(c.disk) + ' on disk once unpacked. Without it, recognition runs on the processor.';
-      }
-      body.appendChild(row(c.gpu, csub, cright));
-    }
+    // (phase V23, the owner 2026-10-09) No field about the graphics card: another computer has another one. A build for
+    // NVIDIA cards already fetched is still used by the server when a card answers (lib/whisper-local.js).
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status' + (msgErr ? ' err' : ''), msg);
     body.appendChild(s);
