@@ -733,7 +733,13 @@ export function borrow(on) {
   const want = !!on;
   if (_borrowed === want) return;
   _borrowed = want;
-  if (!_borrowed) { _still = null; _pair = null; _crop = null; _filmStop(); _firstStep(false); }
+  if (!_borrowed) {
+    _still = null; _pair = null; _crop = null; _filmStop(); _firstStep(false);
+    // The buttons the borrower laid over the stage go with the loan (phase V24: a talking head's
+    // crosses stayed over the next project's empty preview).
+    const stage = document.getElementById(STAGE);
+    if (stage) stage.querySelectorAll('.mv3-stage-ctl').forEach(x => x.remove());
+  }
   if (_borrowed) pause();
   // The stage lent to the workshop shows no captions (the painter drew none there either).
   CapLayer.show(!_borrowed);

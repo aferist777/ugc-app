@@ -32,6 +32,7 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
+import * as ScenPick from './scen-pick.js';
 import { lock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 
@@ -267,6 +268,9 @@ function _paintRoute() {
 async function _adopt() {
   const key = Store.key() || '';
   if (key === _key) return;
+  // The project being left lets go of what its step was doing - a read playing, a trial, the
+  // buttons it laid over the stage (phase V24) - before the next one is set up.
+  _leave();
   _key = key;
   _pid = projectIdOf(key);
   _project = null;
@@ -275,6 +279,9 @@ async function _adopt() {
   _step = _pid ? 'setup' : 'timeline';
   _paintRoute();
   _lend();
+  // A project opened in any way - the dropdown, a delete, "don't save", a link - is the project
+  // shown: the scenario list of "+ new project" gives way to it (phase V24, the owner 2026-10-09).
+  ScenPick.stop();
   _repaint();
   if (!_pid) return;
   try {

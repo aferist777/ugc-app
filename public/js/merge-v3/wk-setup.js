@@ -334,12 +334,11 @@ function _whoHalf(chosen) {
   if (chosen) return { src: _faceOf(chosen).src, caption: chosen.name + ' · no look yet' };
   return { src: '', caption: '' };
 }
-// ...and the lower. A place on trial has no caption: `select` stands at the foot of the half,
-// exactly where the caption would be, and says what the picture is about.
+// ...and the lower: the place on trial, else the one written - with no caption either way (phase V24,
+// the owner 2026-10-09: the word "environment" under the place said nothing the picture did not).
 function _whereHalf() {
   const cast = _casting();
-  if (_try.place) return { src: _try.place, caption: '' };
-  return { src: cast.locationImage || '', caption: cast.locationImage ? 'environment' : '' };
+  return { src: _try.place || cast.locationImage || '', caption: '' };
 }
 
 function _stage(chosen) {
@@ -394,14 +393,23 @@ function _clearHalf(half, what) {
   else _patch({ locationId: '', locationImage: '' });
 }
 
+// THE BUTTONS THIS STEP LAYS OVER THE STAGE - a half's cross, the acts along a picture's foot, the
+// dressing's `apply` - all wear `mv3-stage-ctl`: the stage given back to the timeline drops them
+// (js/merge-v3/preview-b.js, borrow), and so does leaving the step or the project (phase V24 - they
+// stayed over another project's empty preview).
+function _dropStageCtl() {
+  const stage = document.getElementById('mv3-stage');
+  if (stage) stage.querySelectorAll('.mv3-stage-ctl').forEach(x => x.remove());
+}
+
 function _stageClears(top, bottom) {
   const stage = document.getElementById('mv3-stage');
   if (!stage) return;
-  // An older paint's button, if the stage kept one: this step has none now.
-  stage.querySelectorAll('.mv3-wk-clear, .mv3-wk-apply, .mv3-wk-sacts').forEach(x => x.remove());
+  // An older paint's buttons, if the stage kept them.
+  _dropStageCtl();
   const cast = _casting();
   const mk = (half, what, title) => {
-    const b = _el('button', 'mv3-wk-clear' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
+    const b = _el('button', 'mv3-wk-clear mv3-stage-ctl' + (half === 'bottom' ? ' is-bottom' : ''), '✕');
     b.type = 'button';
     b.title = title;
     b.disabled = _saving;
@@ -429,7 +437,7 @@ function _stageActs(acts) {
   stage.querySelectorAll('.mv3-wk-sacts').forEach(x => x.remove());
   const list = Array.isArray(acts) ? acts.filter(Boolean) : [];
   if (!list.length) return;
-  const bar = _el('div', 'mv3-wk-sacts');
+  const bar = _el('div', 'mv3-wk-sacts mv3-stage-ctl');
   for (const a of list) {
     const b = _el('button', 'mv3-wk-sact' + (a.go ? ' is-go' : ''), a.label);
     b.type = 'button';
@@ -1171,4 +1179,8 @@ export function leave() {
   VOICE.leave();
   FRAG.leave();
   _noTry();
+  // What it laid over the stage goes with it, and so does a countdown of its own (the server keeps
+  // making it; coming back puts the countdown back at its real age - wk-maker.js).
+  _dropStageCtl();
+  onlyHere(null);
 }
