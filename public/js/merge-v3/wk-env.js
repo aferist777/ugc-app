@@ -31,7 +31,7 @@ import { askDelete } from './ask.js';
 import { derived } from '../chars-store.js';
 import {
   el, MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
-  holdProgress, endProgress,
+  holdProgress, endProgress, shelfHead,
 } from './wk-maker.js';
 
 let _envs = null;                  // the shelf; read when first needed, again after every change
@@ -77,8 +77,8 @@ function _forget() {
 }
 
 // ── The head of the panel ───────────────────────────────────────────────────
+// The tabs on the left and the title on the right, as on the looks (phase V24; js/merge-v3/wk-maker.js).
 function _bar(head, api, here) {
-  const acts = el('div', 'mv3-wk-bar');
   const tab = (label, title, id) => {
     const b = el('button', 'mv3-sc-tab' + (here === id ? ' is-on' : ''), label);
     b.type = 'button';
@@ -87,16 +87,14 @@ function _bar(head, api, here) {
     else b.addEventListener('click', () => api.go(id));
     return b;
   };
-  acts.append(
-    tab('environment', 'The saved environments', 'env'),
-    tab('create environment', 'Make one from a photo or a sentence', 'newenv'),
-  );
   const x = el('button', 'mv3-iconbtn', '✕');
   x.type = 'button';
   x.title = 'Back to setting & voice';
   x.addEventListener('click', () => api.go('hub'));
-  acts.appendChild(x);
-  head.appendChild(acts);
+  shelfHead(head, [
+    tab('environment', 'The saved environments', 'env'),
+    tab('create environment', 'Make one from a photo or a sentence', 'newenv'),
+  ], x);
 }
 
 // ── One place on a shelf ────────────────────────────────────────────────────

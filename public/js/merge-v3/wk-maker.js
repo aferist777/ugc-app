@@ -18,6 +18,19 @@ export const el = (tag, cls, text) => {
   return e;
 };
 
+// ── The head of a shelf ─────────────────────────────────────────────────────
+// Its tabs on the LEFT, the step's title on the right, and the cross that leaves the shelf at the
+// far right, where it always was (phase V24, the owner 2026-10-09: "create look" and "create
+// lookbook" first, the title after them). `head` is the step's header (js/merge-v3/wk-setup.js
+// paint), which already holds the title; css/merge-v3.css `.is-tabs-left` lays the row out.
+export function shelfHead(head, tabs, close) {
+  const bar = el('div', 'mv3-wk-bar');
+  for (const t of tabs) if (t) bar.appendChild(t);
+  head.classList.add('is-tabs-left');
+  head.prepend(bar);
+  if (close) head.appendChild(close);
+}
+
 // ── A gentler wheel ─────────────────────────────────────────────────────────
 // A touchpad in this window moves the workshop a long way for a short gesture: the panel is a tall
 // column of small rows, and one flick jumps past the whole thing (the owner, 2026-09-22). So the

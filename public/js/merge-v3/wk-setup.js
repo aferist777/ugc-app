@@ -67,7 +67,7 @@ import * as VOICE from './wk-voice.js';
 import * as FRAG from './wk-fragments.js';
 import {
   MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
-  holdProgress, endProgress, onlyHere, softScroll,
+  holdProgress, endProgress, onlyHere, softScroll, shelfHead,
 } from './wk-maker.js';
 
 const PEEK_MS = 260;                     // hover before the enlargement appears
@@ -231,10 +231,11 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // THE TITLE LINE IS TWO COLUMNS (the owner, 2026-09-22): what this step is on the left, and on
-  // the right where the whole script stands - the counters and `generate all`, hung there by the
-  // script pane itself (js/merge-v3/wk-fragments.js, _counters). A shelf hangs its own bar in the
-  // same place, and only one of them is ever on screen.
+  // THE TITLE LINE IS TWO COLUMNS (the owner, 2026-09-22; turned round in phase V24, 2026-10-09):
+  // on the left `generate all` and where the whole script stands - the counters, hung there by the
+  // script pane itself (js/merge-v3/wk-fragments.js, _counters) - and what this step is on the
+  // right. A shelf hangs its own tabs on the left the same way (wk-maker.js shelfHead), with its
+  // cross at the far right; only one of them is ever on screen.
   const head = _el('div', 'mv3-ins-head is-wk');
   const txt = _el('div', 'mv3-ins-head-txt');
   txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
@@ -614,7 +615,6 @@ function _paintLookbooks(host, head, c) {
     holdProgress('lookbooks', { label: 'Dressing ' + c.name, estimateMs: 90000, startedAt: Date.parse(rec.startedAt) || 0 });
     _followDress(rec.id);
   });
-  const acts = _el('div', 'mv3-wk-bar');
   const mk = (label, title, on, primary) => {
     const b = _el('button', 'mv3-sc-tab' + (primary ? ' is-on' : ''), label);
     b.type = 'button';
@@ -622,16 +622,14 @@ function _paintLookbooks(host, head, c) {
     if (on) b.addEventListener('click', on); else b.disabled = true;
     return b;
   };
-  acts.append(
-    mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
-    mk('create lookbook', 'Make one from a photo and a sentence', () => _go('newlb'), false),
-  );
   const back = _el('button', 'mv3-iconbtn', '\u2715');
   back.type = 'button';
   back.title = 'Back to the casting';
   back.addEventListener('click', () => _go('cast'));
-  acts.appendChild(back);
-  head.appendChild(acts);
+  shelfHead(head, [
+    mk('create look', 'Dress ' + c.name + ' in one of these', null, true),
+    mk('create lookbook', 'Make one from a photo and a sentence', () => _go('newlb'), false),
+  ], back);
 
   if (_lbs === null) {
     host.appendChild(_note('reading the lookbooks…'));
@@ -650,17 +648,12 @@ function _paintLookbooks(host, head, c) {
   for (const p of _lbs) {
     const path = String((p && p.path) || p || '');
     if (!path) continue;
-    // The first press picks the outfit; `apply` then stands on the picked tile itself (owner,
-    // 2026-09-21) - the act on the thing it acts on, not on the stage across the window.
+    // The first press picks the outfit - its tile is dimmed - and `apply` stands on the STAGE, at
+    // the seam between the person and the outfit (phase V24, the owner 2026-10-09; _showDressing).
     grid.appendChild(_lbTile(path, path === _lbPick, () => {
       _lbPick = (_lbPick === path ? '' : path);
       _ctx.repaint();
-    }, {
-      label: _dressing ? 'dressing…' : 'apply',
-      title: 'Dress ' + c.name + ' in this outfit and save it as a look',
-      busy: _dressing,
-      on: () => _apply(c),
-    }));
+    }, true));
   }
   host.appendChild(grid);
   if (!_lbs.length) host.appendChild(_note('No lookbooks yet. Make one with "create lookbook".'));
@@ -668,12 +661,21 @@ function _paintLookbooks(host, head, c) {
 
 // ── What the stage shows while an outfit is being chosen ────────────────────
 // The person on top, the outfit below: the dressing IS that sentence, shown before it is paid
-// for. The stage has no button here - `apply` is on the picked tile - so the two pictures are
-// all that is on it. Nothing is under the shelf either: a row that appears there when an outfit
-// is picked pushes the shelf about while it is being read.
+// for. With an outfit picked, `apply` stands at the SEAM of the two halves, gold (phase V24, the
+// owner 2026-10-09) - the act between the two things it joins; it used to stand on the picked tile.
+// Nothing is under the shelf: a row that appears there when an outfit is picked pushes the shelf
+// about while it is being read.
 function _showDressing(c) {
   PV.showPair(derived(_faceOf(c).src, 'main'), _lbPick ? derived(_lbPick, 'main') : '');
   _stageClears('', '');
+  const stage = document.getElementById('mv3-stage');
+  if (!stage || !_lbPick) return;
+  const b = _el('button', 'mv3-wk-apply mv3-stage-ctl', _dressing ? 'dressing…' : 'apply');
+  b.type = 'button';
+  b.title = 'Dress ' + c.name + ' in this outfit and save it as a look';
+  b.disabled = _dressing;
+  b.addEventListener('click', (e) => { e.stopPropagation(); _apply(c); });
+  stage.appendChild(b);
 }
 
 // ── Making a lookbook ───────────────────────────────────────────────────────
@@ -722,7 +724,6 @@ function _paintNewLookbook(host, head, c) {
     holdProgress('newlb', { label: 'Making the lookbook', estimateMs: 45000, startedAt: Date.parse(rec.startedAt) || 0 });
     _followLb(rec.id);
   });
-  const acts = _el('div', 'mv3-wk-bar');
   const back = _el('button', 'mv3-sc-tab', 'create look');
   back.type = 'button';
   back.title = 'Back to the shelf of outfits';
@@ -734,8 +735,7 @@ function _paintNewLookbook(host, head, c) {
   x.type = 'button';
   x.title = 'Back to the casting';
   x.addEventListener('click', () => _go('cast'));
-  acts.append(back, here, x);
-  head.appendChild(acts);
+  shelfHead(head, [back, here], x);
 
   // LEFT: the shelf this one is drawn from. Picking a lookbook here puts it in the field on
   // the right as the base - which is what "make another one like that, but ..." means - and
@@ -823,10 +823,10 @@ function _paintNewLookbook(host, head, c) {
 // Used by both shelves - the one that picks what to WEAR and the one that picks what a new
 // lookbook is BASED on - because a lookbook is the same thing on either, and so is getting
 // rid of one. The cross asks first; deleting is the only act here that cannot be undone.
-// `act` is the button the PICKED tile carries - the dressing shelf's `apply`; the other shelf
-// has none, picking there is the whole act.
-function _lbTile(path, on, pick, act) {
-  const tile = _el('button', 'mv3-wk-tile is-lb' + (on ? ' is-on' : ''));
+// `dim`: the dressing shelf dims the picture of the PICKED outfit (phase V24, the owner 2026-10-09)
+// - its `apply` is on the stage now; the other shelf does not, picking there is the whole act.
+function _lbTile(path, on, pick, dim) {
+  const tile = _el('button', 'mv3-wk-tile is-lb' + (on ? ' is-on' : '') + (on && dim ? ' is-dim' : ''));
   tile.type = 'button';
   tile.title = path.split('/').pop();
   const img = _el('img', 'mv3-wk-face');
@@ -840,15 +840,6 @@ function _lbTile(path, on, pick, act) {
   x.title = 'Delete this lookbook';
   x.addEventListener('click', (e) => { e.stopPropagation(); _askDeleteLb(tile, path); });
   tile.appendChild(x);
-
-  if (on && act) {
-    const b = _el('button', 'mv3-wk-tileact', act.label);
-    b.type = 'button';
-    b.title = act.title || '';
-    b.disabled = !!act.busy;
-    b.addEventListener('click', (e) => { e.stopPropagation(); act.on(); });
-    tile.appendChild(b);
-  }
 
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {

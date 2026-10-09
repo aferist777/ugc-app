@@ -1332,6 +1332,14 @@ body.mv3-locked #mv3-timeline{
 .mv3-panel-body.is-wk{padding:0; overflow:hidden}
 .mv3-wk-setup{display:flex; flex-direction:column; height:100%; min-height:0; position:relative}
 .mv3-ins-head.is-wk{margin:0; padding:9px 9px 6px; gap:8px; align-items:flex-start; flex-wrap:wrap}
+/* THE BUTTONS ON THE LEFT, THE TITLE ON THE RIGHT (phase V24, the owner 2026-10-09): a shelf's tabs -
+   "create look", "create lookbook", the environments' two - or the script's `generate all` and its
+   counters come first, the step's title stands at the right end of the row, and a shelf's cross
+   stays at the far right where it was (js/merge-v3/wk-maker.js shelfHead, wk-fragments.js _counters). */
+.mv3-ins-head.is-wk.is-tabs-left > .mv3-ins-head-txt{text-align:right}
+.mv3-ins-head.is-wk.is-tabs-left > .mv3-wk-bar,
+.mv3-ins-head.is-wk.is-tabs-left > .mv3-ins-head-act.is-counters{margin-left:0}
+.mv3-ins-head.is-wk.is-tabs-left > .mv3-iconbtn{flex:0 0 auto}
 .mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
 .mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
 .mv3-wk-lbl{font:700 8.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
@@ -1354,8 +1362,9 @@ body.mv3-locked #mv3-timeline{
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
 }
 .mv3-wk-tile.is-on .mv3-wk-name{color:var(--gold)}
-/* The tile's own button - `apply` on the lookbook picked for a dressing (owner, 2026-09-21): the
-   act stands on the thing it acts on, not on the stage across the window. */
+/* The tile's own button - `select` on the picked look and on the picked environment (owner,
+   2026-09-21): the act stands on the thing it acts on. (The dressing's `apply` stood here too; since
+   phase V24 it stands on the stage, .mv3-wk-apply.) */
 .mv3-wk-tileact{
   position:absolute; left:50%; bottom:7px; transform:translateX(-50%); z-index:2;
   padding:4px 12px; border-radius:var(--pill); cursor:pointer;
@@ -1370,6 +1379,9 @@ body.mv3-locked #mv3-timeline{
 /* The same size as a face - one grid, one rhythm - and SQUARE, which is the shape a
    lookbook is generated in. */
 .mv3-wk-tile.is-lb .mv3-wk-face{aspect-ratio:1/1; object-position:center}
+/* The outfit picked for a dressing is dimmed a little (phase V24, the owner 2026-10-09): it is on the
+   stage now, with its `apply`, and the shelf stays readable around it. */
+.mv3-wk-tile.is-lb.is-dim .mv3-wk-face{filter:brightness(.55)}
 .mv3-wk-tile.is-add{
   aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
   color:var(--muted); font:400 20px/1 var(--font); border-style:dashed;
@@ -1501,9 +1513,18 @@ body.mv3-locked #mv3-timeline{
 .mv3-sc-lines.is-short{min-height:74px; margin:8px 9px 0; width:calc(100% - 18px); font-size:11px}
 .mv3-wk-mode{flex:1 1 auto; min-width:0}
 
-/* The stage has no button of its own (the owner, 2026-09-21): `select` stands on the picked look
-   and on the picked environment - the act on the thing it acts on (.mv3-wk-tileact above) - and
-   the stage carries only the crosses (.mv3-wk-clear below). */
+/* The stage carries the crosses (.mv3-wk-clear below) and, while an outfit is picked for a dressing,
+   its `apply` (phase V24, the owner 2026-10-09): gold, at the SEAM between the person above and the
+   outfit below - the act between the two things it joins. `select` stays on the picked look and on
+   the picked environment (.mv3-wk-tileact above). */
+.mv3-wk-apply{
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:3;
+  padding:6px 18px; border-radius:var(--pill); cursor:pointer;
+  border:1px solid var(--gold); background:var(--gold); color:var(--bg);
+  font:700 11px/1 var(--font); letter-spacing:.02em; box-shadow:var(--shadow); white-space:nowrap;
+}
+.mv3-wk-apply:hover{filter:brightness(1.08)}
+.mv3-wk-apply[disabled]{opacity:.6; cursor:default}
 
 /* The one row that spends money sits under what it will spend it on. Scoped: the inspector
    has a .mv3-ins-row of its own, and this is a different thing in a different place. */
@@ -1652,10 +1673,10 @@ body.mv3-locked #mv3-timeline{
    gold and three zones in gold, one above the other - voice, first frames, video - each a drawer
    with its own `generate` at the foot. Gold because a field is a state the person sets, the same
    gold as a chosen tile. */
-/* Where the whole script stands is the RIGHT-HAND COLUMN OF THE STEP'S HEADER (the owner,
-   2026-09-22): the three boxes and `generate all`, beside the name of the step. In the header the
-   boxes do not stretch - the title has the width - and the whole block drops to its own line when
-   the panel is too narrow to hold both (the header wraps, .mv3-ins-head.is-wk). */
+/* Where the whole script stands is IN THE STEP'S HEADER (the owner, 2026-09-22): `generate all` and
+   the three boxes - on the left of the row since phase V24, the name of the step on the right
+   (.is-tabs-left above). In the header the boxes do not stretch - the title has the width - and the
+   title drops to its own line when the panel is too narrow to hold both (the header wraps). */
 .mv3-ins-head-act.is-counters{margin-left:auto; gap:8px}
 .mv3-ins-head-act.is-counters .mv3-wk-fstats{flex:0 0 auto; margin:0}
 .mv3-ins-head-act.is-counters .mv3-wk-fstat{flex:0 0 auto}

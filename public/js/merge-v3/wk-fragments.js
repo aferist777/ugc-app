@@ -978,14 +978,15 @@ function _standing(p) {
   };
 }
 
-// The counters, in the RIGHT-HAND COLUMN OF THE PANEL'S HEADER (the owner, 2026-09-22): three
-// boxes - read, frames, clips - with the count and its name side by side, and `generate all` at
-// the end of the row. They used to stand over the right column; the header is where the eye goes
-// first and the step's own title is all that was in it.
+// The counters, in THE PANEL'S HEADER (the owner, 2026-09-22): three boxes - read, frames, clips -
+// with the count and its name side by side. Since phase V24 (the owner, 2026-10-09) `generate all`
+// comes FIRST, the boxes after it, and the step's title stands on the right of the row
+// (`.is-tabs-left`, the shelves' heads do the same - js/merge-v3/wk-maker.js shelfHead).
 function _counters(host, p, lines) {
   if (!host) return;
   const s = _standing(p);
   const top = el('div', 'mv3-ins-head-act is-counters');
+  _chainButton(top, p, lines);
   const stat = el('div', 'mv3-wk-fstats');
   const cell = (num, label, done, title) => {
     const c = el('div', 'mv3-wk-fstat' + (done ? ' is-done' : ''));
@@ -999,8 +1000,8 @@ function _counters(host, p, lines) {
   cell(s.frames + '/' + s.framesAsked, 'frames', s.framesDone, 'Frames in the pool, of the set asked for');
   cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
   top.appendChild(stat);
-  _chainButton(top, p, lines);
-  host.appendChild(top);
+  host.classList.add('is-tabs-left');
+  host.prepend(top);
 }
 
 // ── `generate all`: every stage in one press (phase W3c) ────────────────────
