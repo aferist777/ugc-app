@@ -43,7 +43,7 @@ import { takeOf, isRead, isLive, liveLines } from './scen-api.js';
 import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
-import { askDelete } from './ask.js';
+import { askDelete, askChoice } from './ask.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 
 // What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
@@ -272,9 +272,18 @@ const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged'
 const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
 const _clipsOf = (p, l) => (((l && l.video) || {})[_variant(p)] || []);
 
+// (phase V23, the owner 2026-10-09) A clip CHOSEN BY HAND in the takes is the line's clip whatever it was made
+// from - the timeline lays it too (lib/frag-mirror.js) - and the line counts as settled: `generate all` leaves it.
+// A new clip or a new read clears the choice (routes/scen3.js).
+const _chosenOf = (p, l) => {
+  const id = String(((l && l.chosen) || {})[_variant(p)] || '');
+  return id ? (_clipsOf(p, l).find(c => c.id === id) || null) : null;
+};
 function _clipOf(p, l, i) {
   const clips = _clipsOf(p, l);
   if (!clips.length) return null;
+  const hand = _chosenOf(p, l);
+  if (hand) return hand;
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   if (!fr) return null;
   const picked = clips.find(c => c.id === String(((l.pick || {})[_variant(p)]) || ''));
@@ -282,11 +291,21 @@ function _clipOf(p, l, i) {
   const mine = clips.filter(c => c.fromFrame === fr);
   return mine.length ? mine[mine.length - 1] : null;
 }
+// Fresh: made from the frame the line opens on, of the words it says now, lipsynced to the read it has now (V23 -
+// a read again is another performance; a clip from before the read was recorded counts as fresh).
+function _clipFresh(p, l, i, c) {
+  if (!c) return false;
+  const fr = String((_frameFor(p, l, i).v || {}).id || '');
+  const take = _take(l);
+  return !!fr && c.fromFrame === fr && c.said === _saidOf(p, l) && (!c.fromAudio || !take || c.fromAudio === take.path);
+}
 function _clipState(p, l, i) {
   const c = _clipOf(p, l, i);
   if (!c) return 'none';
-  return c.said === _saidOf(p, l) ? 'ok' : 'stale';
+  return _clipFresh(p, l, i, c) ? 'ok' : 'stale';
 }
+// The line has its clip: a fresh one, or one the person chose by hand.
+const _clipSettled = (p, l, i) => _clipState(p, l, i) === 'ok' || !!_chosenOf(p, l);
 
 // ── One player for the panel ────────────────────────────────────────────────
 let _audio = null;
@@ -500,7 +519,7 @@ function _clipWork(p, lines) {
   lines.forEach((l, i) => {
     if (!isLive(l)) return;                 // taken off the script (Z): not filmed
     if (_clipping.has(i)) return;
-    if (_clipState(p, l, i) === 'ok') return;
+    if (_clipSettled(p, l, i)) return;
     const can = _clipReady(p, l, i);
     if (can) out.push({ i, cost: can.cost });
   });
@@ -514,9 +533,10 @@ function _clipWork(p, lines) {
 // /scen3/fragments/clips), every fragment gets its journal row from the press, and the server sends
 // them a second apart without waiting for any. The panel adopts the rows and shows each fragment
 // waiting, the same way it does after a reload.
-async function _makeClips(p) {
+async function _makeClips(p, only) {
   try {
-    const r = await _post('/api/scen3/fragments/clips', { projectId: p.id, key: (_ctx && _ctx.key) || '' });
+    const r = await _post('/api/scen3/fragments/clips', { projectId: p.id, key: (_ctx && _ctx.key) || '',
+      ...(only ? { only: [...only] } : {}) });
     _lookedClips = '';                    // adopt the rows this call just made
     _pickUpClips();
     const queued = (r.queued || []).length;
@@ -531,6 +551,8 @@ async function _makeClips(p) {
 async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
   const withClips = !!(opts && opts.clips);
+  // (phase V23) `generate all` names the lines its question priced; the zone's own button asks for every one.
+  const only = (opts && opts.only) || null;
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
@@ -554,11 +576,11 @@ async function _writeVideo(p, opts) {
   }
   if (withClips && !_readErr) {
     const now = _ctx.project || p;
-    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines);
+    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines).filter(x => !only || only.has(x.i));
     if (want.length) {
       _writing = 'clips';
       _ctx.repaint();
-      await _makeClips(now);
+      await _makeClips(now, only);
     }
   }
   _writing = '';
@@ -1003,7 +1025,7 @@ function _standing(p) {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
     frames: have, framesAsked: asked, framesDone: have >= asked && !_drawing.size && have > 0,
-    clips: live.filter(x => _clipState(p, x.l, x.i) === 'ok').length,
+    clips: live.filter(x => _clipSettled(p, x.l, x.i)).length,
   };
 }
 
@@ -1039,7 +1061,36 @@ function _counters(host, p, lines) {
 // spend is said before it starts and confirmed by a second press - the frames are dollars (the
 // reads and the prompts are credits), and a set is only drawn when there is none.
 let _chain = '';                          // '' | 'voice+frames' | 'video'
-let _chainArmed = false;
+
+// WHAT THE WHOLE RUN WILL DO, AND COST (phase V23, the owner 2026-10-09: it always asks, in a window). The clips
+// of the lines this very run reads cannot be priced exactly - their reads do not exist yet - so they are estimated:
+// the line's earlier read when it has one, else its characters at about fifteen a second. `only` is every line the
+// question priced, and the clips stage asks for no other.
+const CHARS_PER_SEC = 15;
+const _readChars = (l) => String((l && (l.tagged || l.text)) || '').replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().length;
+function _chainEstimate(p, lines, w) {
+  const tier = _tier();
+  const ceiling = _ceiling();
+  const can = !w.missing.length && !!_video().quality && (w.pool > 0 || w.frames > 0);
+  const now = (can && w.pool) ? _clipWork(p, lines) : [];
+  const only = new Set(now.map(x => x.i));
+  let chars = 0, later = 0, laterCost = 0, tooLong = 0;
+  for (const { l, i } of liveLines(lines)) {
+    const willRead = _canRead() && !isRead(l);
+    if (willRead) chars += _readChars(l);
+    if (!can || only.has(i) || _clipping.has(i) || _clipSettled(p, l, i)) continue;
+    const take = _take(l);
+    const readNow = _readState(l) === 'ok' && !!take;
+    if (!readNow && !willRead) continue;
+    if (!_frameFor(p, l, i).v && !w.frames) continue;
+    const dur = readNow ? take.dur : ((take && take.dur) || _readChars(l) / CHARS_PER_SEC);
+    if (dur > ceiling) { tooLong++; continue; }
+    later++;
+    laterCost += tier ? dur * tier.pricePerSec : 0;
+    only.add(i);
+  }
+  return { now: now.length, nowCost: now.reduce((a, x) => a + x.cost, 0), later, laterCost, tooLong, chars, only };
+}
 
 function _chainWork(p, lines) {
   const missing = _missing(p);
@@ -1074,16 +1125,14 @@ function _chainButton(host, p, lines) {
   // What the whole run costs, as far as it can be known before it starts: the frames of a set that
   // is not there yet, and the clips of the fragments that could be clipped this moment. The clips
   // of lines this run will read are paid for when the video stage gets to them and are named then.
-  const dollars = (w.frames ? w.frames * FRAME_PRICE : 0) + (w.clipCost || 0);
-  const price = dollars ? _money(dollars) : '';
   const b = el('button', 'mv3-wk-gen mv3-wk-genall',
     _chain === 'tags' ? 'tags…' : _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video, clips…'
-      : _chainArmed ? (price ? price + ' · go?' : 'go?') : 'generate all');
+      : 'generate all');
   b.type = 'button';
   // NOT WHILE A FRAME IS RED (phase V24, the owner 2026-10-09): every choice is made first - the chain
   // would otherwise run on choices nobody made, or skip the read for want of a voice without a word.
   const needs = Object.values(_needs(p));
-  b.disabled = busy || !lines.length || needs.length > 0 || (!w.anything && !_chainArmed);
+  b.disabled = busy || !lines.length || needs.length > 0 || !w.anything;
   b.title = needs.length ? 'Choose first: ' + needs.join(', ')
     : w.missing.length
     ? 'The frames and the video need ' + w.missing.join(' and ') + ' - the voice can be read without them'
@@ -1094,13 +1143,8 @@ function _chainButton(host, p, lines) {
         w.frames ? w.frames + ' frames drawn · ' + _money(w.frames * FRAME_PRICE) : '',
         w.video ? w.video + (w.video === 1 ? ' animation prompt' : ' animation prompts') : '',
         w.clips ? w.clips + (w.clips === 1 ? ' clip' : ' clips') + ' · ' + _money(w.clipCost) : '',
-      ].filter(Boolean).join(', ') + '. The voice and the frames together, then the video and the clips.'
-      + (price ? ' Press again to confirm - the frames and the clips cost money.' : '');
-  b.addEventListener('click', () => {
-    if (price && !_chainArmed) { _chainArmed = true; _ctx.repaint(); return; }
-    _chainArmed = false;
-    _generateAll(p, lines);
-  });
+      ].filter(Boolean).join(', ') + '. The voice and the frames together, then the video and the clips. It asks first.';
+  b.addEventListener('click', () => _askChain(b, p, lines));
   host.appendChild(b);
 }
 
@@ -1109,7 +1153,31 @@ async function _untilDrawn() {
   for (let k = 0; k < 1200 && _drawing.size; k++) await new Promise(r => setTimeout(r, 500));
 }
 
-async function _generateAll(p, lines) {
+// The question (phase V23): every stage of the run with what it spends - credits for the mark-up, the reads and the
+// prompts, dollars for the frames and the clips - and the clips of this run's own reads as an estimate.
+function _askChain(anchor, p, lines) {
+  if (_chain) return;
+  const w = _chainWork(p, lines);
+  if (!w.anything) return;
+  const e = _chainEstimate(p, lines, w);
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const rows = [];
+  if (w.tags) rows.push('mark-up: ' + plural(w.tags, 'line', 'lines') + ' (credits)');
+  if (w.voice) rows.push('read: ' + plural(w.voice, 'line', 'lines') + ' · about ' + e.chars + ' characters (ElevenLabs credits)');
+  if (w.frames) rows.push('frames: ' + w.frames + ' × ' + _money(FRAME_PRICE) + ' = ' + _money(w.frames * FRAME_PRICE));
+  if (w.video) rows.push('animation prompts: ' + w.video + ' (credits)');
+  if (e.now) rows.push('clips now: ' + e.now + ' · ' + _money(e.nowCost));
+  if (e.later) rows.push('clips of the lines this run reads: about ' + e.later + ' · about ' + _money(e.laterCost));
+  if (e.tooLong) rows.push('left out - longer than ' + _ceiling() + ' s: ' + plural(e.tooLong, 'line', 'lines'));
+  const dollars = (w.frames ? w.frames * FRAME_PRICE : 0) + e.nowCost + e.laterCost;
+  if (dollars) rows.push('in all: ' + (e.later ? 'about ' : '') + _money(dollars) + ' and the credits');
+  askChoice(anchor, 'Generate all?', rows, [
+    { label: 'Run it', kind: 'yes', on: () => _generateAll(p, lines, e.only) },
+    { label: 'Cancel' },
+  ], { stay: true });
+}
+
+async function _generateAll(p, lines, only) {
   if (_chain) return;
   if (Object.keys(_needs(p)).length) return;   // a red frame first (phase V24)
   const w = _chainWork(p, lines);
@@ -1137,7 +1205,7 @@ async function _generateAll(p, lines) {
     // The last stage is the whole video zone: the place, the animation prompts, and then the clips
     // of every fragment that can have one - including the lines this very run has just read.
     const now = _ctx.project;
-    await _writeVideo(now, { clips: true });
+    await _writeVideo(now, { clips: true, only: only || null });
   } catch (e) {
     _readErr = 'The chain stopped: ' + e.message;
   }
@@ -1474,7 +1542,10 @@ function _stageVideo(host, p, lines) {
   const motion = _envMotion(p);
   const live = _live(lines);
   const written = live.filter(_animated).length;
-  const done = !!motion && live.length > 0 && written === live.length && !why;
+  // (phase V23, the owner: "так") Done when every line of the video HAS ITS CLIP - fresh, or chosen by hand - and
+  // nothing is being made; the prompts are only the way there.
+  const s = _standing(p);
+  const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
   const { body, foot } = _stage(host, 'video', {
     step: 4, half: true,
@@ -1482,7 +1553,7 @@ function _stageVideo(host, p, lines) {
     // first and are quick, go by the estimate of a clip (N3).
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
-    summary: written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
+    summary: 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
   _needEnvMeta();
   const v = _video();
@@ -1745,6 +1816,18 @@ function _closeMenu() {
   _menu = null;
 }
 
+// READ / READ AGAIN (phase V23, the owner 2026-10-09): the line's menu and the button beside its words ask the same
+// questions - a voice chosen, the script marked up, the voice free. { label, why, on } - `on` is null when it cannot.
+function _readAct(p, l, i) {
+  const rs = _readState(l);
+  const busy = VOICE.reading().busy;
+  const why = !_canRead() ? 'choose a voice first'
+    : !VOICE.canSpeak(p) ? 'mark the script up first - stage 1'
+      : busy ? 'the voice is busy' : '';
+  const va = _api.voiceApi();
+  return { label: rs === 'none' ? 'read' : 'read again', why, on: why ? null : () => VOICE.readLine(va, i) };
+}
+
 function _rowMenu(ev, row, p, l, i, n) {
   _closeMenu();
   const box = el('div', 'mv3-plus-menu');
@@ -1758,15 +1841,8 @@ function _rowMenu(ev, row, p, l, i, n) {
     box.appendChild(b);
   };
 
-  const va = _api.voiceApi();
-  const rs = _readState(l);
-  const busy = VOICE.reading().busy;
-  const canRead = _canRead() && VOICE.canSpeak(p);
-  item(rs === 'none' ? 'read' : 'read again',
-    !_canRead() ? 'choose a voice first'
-      : !VOICE.canSpeak(p) ? 'mark the script up first - stage 1'
-        : busy ? 'the voice is busy' : 'in place of the take it has',
-    (canRead && !busy) ? () => VOICE.readLine(va, i) : null);
+  const ra = _readAct(p, l, i);
+  item(ra.label, ra.why || 'in place of the take it has', ra.on);
 
   item('remove line', 'out of the video, kept in the project', () => {
     askDelete(row, 'Take fragment ' + n + ' out of the video?',
@@ -1856,11 +1932,23 @@ function _fragment(host, p, l, i) {
     host.appendChild(acts);
     setTimeout(() => { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }, 0);
   } else {
+    // The read beside the words (phase V23): not while they are being edited - the words are saved first.
+    const row = el('div', 'mv3-wk-fwrow');
+    const ra = _readAct(p, l, i);
+    const reading = (VOICE.reading().lines || []).includes(i);
+    const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+    rb.type = 'button';
+    rb.disabled = !ra.on || reading;
+    rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
+      : (ra.label === 'read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
+    if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
+    row.appendChild(rb);
     const words = el('div', 'mv3-wk-fwords is-edit');
     _sayWords(words, shown || '…');
     words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');
     words.addEventListener('click', () => { _editWords = i; _wordsDraft = shown; _ctx.repaint(); });
-    host.appendChild(words);
+    row.appendChild(words);
+    host.appendChild(row);
   }
   if (rs === 'stale') {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
@@ -1899,7 +1987,9 @@ function _fragment(host, p, l, i) {
       const on = !!(now && c.id === now.id);
       const r = el('button', 'mv3-wk-vrow is-take' + (on ? ' is-on' : ''));
       r.type = 'button';
-      r.title = on ? 'This is the fragment\'s clip' : 'Make this the fragment\'s clip';
+      const stale = !_clipFresh(p, l, i, c);
+      r.title = on ? 'This is the fragment\'s clip' + (stale ? ' - stale, chosen by hand' : '')
+        : 'Make this the fragment\'s clip - on the timeline too' + (stale ? ', stale as it is' : '');
       if (c.thumb) {
         const img = el('img', 'mv3-wk-vshot');
         img.alt = '';
@@ -1908,7 +1998,7 @@ function _fragment(host, p, l, i) {
         r.appendChild(img);
       }
       r.appendChild(el('span', 'mv3-wk-vname', 'take · ' + (c.dur ? c.dur.toFixed(1) + ' s' : '')));
-      if (c.said !== _saidOf(p, l)) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
+      if (stale) r.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
       if (on) r.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
       if (!on) r.addEventListener('click', () => _pickClip(i, c.id));
       host.appendChild(r);

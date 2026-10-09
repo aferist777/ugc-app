@@ -2558,6 +2558,8 @@ async function _speakOne(key, ctx, i) {
     if (!l) return;
     l.audio = l.audio || { plain: null, tagged: null };
     l.audio[ctx.variant] = take;
+    // A new read is asked for a new performance: a clip chosen by hand for the old one is the line's no longer (V23).
+    if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
     fresh.updatedAt = take.at;
   });
   if (saved) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T')
@@ -3006,6 +3008,13 @@ function _normLine(l) {
     pick:    {
       plain:  String((s.pick || {}).plain  || ''),
       tagged: String((s.pick || {}).tagged || ''),
+    },
+    // (phase V23, the owner 2026-10-09) A clip CHOSEN BY HAND in the fragment's takes: it is the line's clip on the
+    // timeline even when it is stale - made from another frame, other words or another read. Cleared by a new clip and
+    // by a new read of the line.
+    chosen:  {
+      plain:  String((s.chosen || {}).plain  || ''),
+      tagged: String((s.chosen || {}).tagged || ''),
     },
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
@@ -4300,6 +4309,8 @@ router.post('/scen3/fragments/pick-clip', (req, res) => {
       return res.status(404).json({ success: false, error: 'no such clip on this fragment' });
     }
     p.lines[i].pick = { ...(p.lines[i].pick || {}), [variant]: want };
+    // Chosen by hand (V23): the line's clip on the timeline whether or not it is fresh.
+    p.lines[i].chosen = { ...(p.lines[i].chosen || {}), [variant]: want };
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     MIRROR.touch(p.id, { project: p });   // the timeline mirrors the lines (T'): a clip picked
@@ -4513,11 +4524,17 @@ router.post('/scen3/fragments/clip', async (req, res) => {
 // Does this fragment already have its clip - a take made from the frame it opens on, of the words
 // it says now? The same question the panel asks (js/merge-v3/wk-fragments.js, _clipState), asked
 // here because the server is the one deciding what to pay for.
+// (phase V23) A clip is fresh only when it was lipsynced to the read the line has NOW - a read again with the same
+// words is another performance (a clip with no read recorded, made before that was kept, counts as fresh). A clip
+// CHOSEN BY HAND counts too: the person decided what the line's clip is.
 function _clipDone(proj, i) {
   const plan = _clipPlan(proj, i);
   if (plan.skipped) return false;
   const takes = (plan.line.video || {})[plan.variant] || [];
-  return takes.some(c => c && c.path && c.fromFrame === plan.frame.id && c.said === plan.said);
+  const hand = String(((plan.line.chosen || {})[plan.variant]) || '');
+  if (hand && takes.some(c => c && c.path && c.id === hand)) return true;
+  return takes.some(c => c && c.path && c.fromFrame === plan.frame.id && c.said === plan.said
+    && (!c.fromAudio || c.fromAudio === plan.take.path));
 }
 
 // Where a clip was asked from, for the Alerts list: this fragment of this project. The page sends
@@ -4577,8 +4594,12 @@ router.post('/scen3/fragments/clips', (req, res) => {
         && String(r.job.params.file.projectId) === id)
       .map(r => Number(r.job.params.file.line)));
 
+    // (phase V23) Only the lines the person was asked about: `generate all` names the ones its question priced, and a
+    // line that was not in the question is not paid for. Without a list, every line that needs a clip.
+    const only = Array.isArray(b.only) ? new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0)) : null;
     const queued = [], skipped = [];
     for (let i = 0; i < lines.length; i++) {
+      if (only && !only.has(i)) continue;
       if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
       const plan = _clipPlan(proj, i);
       if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
@@ -4650,6 +4671,7 @@ JOBS.register('clip', {
     if (at >= 0) takes[at] = clip; else takes.push(clip);
     line.video[variant] = takes;
     line.pick = { ...(line.pick || {}), [variant]: clip.id };
+    if (line.chosen) line.chosen = { ...line.chosen, [variant]: '' };
     proj.updatedAt = clip.at;
     _saveProjects(list);
     MIRROR.touch(proj.id, { project: proj });   // the timeline mirrors the lines (T'): a clip filed

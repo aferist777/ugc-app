@@ -59,7 +59,9 @@ function _panel(anchor, text, sub, buttons, opts) {
   if (sub) {
     const s = document.createElement('span');
     s.className = 'mv3-ask-s';
-    s.textContent = sub;
+    // A list - one thing per line (phase V23: what `generate all` will do, stage by stage).
+    if (Array.isArray(sub)) { s.classList.add('is-lines'); s.textContent = sub.join('\n'); }
+    else s.textContent = sub;
     el.appendChild(s);
   }
 
@@ -119,7 +121,7 @@ export function askDelete(anchor, text, sub, onYes) {
 /**
  * A question with more than two answers (phase C3: delete the timeline only, or its files too). `choices`:
  * [{ label, kind: 'yes' (the destructive one, in red) | undefined, on }]; a choice without `on` only closes.
- * `opts.stay` - not closed by scrolling (an anchor that does not scroll: the project bar).
+ * `opts.stay` - not closed by scrolling (an anchor that does not scroll: the project bar). `sub` may be a list of lines.
  */
 export function askChoice(anchor, text, sub, choices, opts) {
   _panel(anchor, text, sub, choices || [], opts);
