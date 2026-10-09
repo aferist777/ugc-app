@@ -489,6 +489,7 @@ let _writeAt = 0;                         // ...since when (N3)
 function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
+  if (!_video().quality) return null;       // the quality is the person's to choose (phase V24)
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
   if (take.dur > _ceiling()) return null;
@@ -862,6 +863,31 @@ function _missing(p) {
 // voice just taken is on the character record and the project copy before either is read again.
 const _canRead = () => !!(_api && VOICE.canRead(_api.voiceApi()));
 
+// WHAT IS NOT CHOSEN YET (phase V24, the owner 2026-10-09): a field with a choice still to make wears
+// a RED dashed frame instead of the gold one, and `generate all` waits for every one of them. A project
+// made since starts at none - the mood, the shot, the amount, the spread, the quality (routes/scen3.js
+// _normVideo) - and the voice is missing while neither the character nor the project has one. Read from
+// the project alone, because the header's `generate all` is painted before the fields and also while a
+// fragment is open, when the fields are not painted at all.
+function _needs(p) {
+  const v = (p && p.video) || {};
+  const out = {};
+  if (!v.mood) out.mood = 'a mood';
+  if (!_canRead()) out.voice = 'a voice';
+  const f = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean);
+  if (f.length) out.frames = f.join(', ');
+  if (!v.quality) out.video = 'the quality';
+  return out;
+}
+// The "none" a menu shows while nothing is chosen in it: the first line, and it cannot be chosen back.
+function _noneOption(sel, word) {
+  const o = el('option', '', word || 'none');
+  o.value = '';
+  o.disabled = true;
+  o.selected = true;
+  sel.appendChild(o);
+}
+
 // ── The general zone: the whole video, in three stages ──────────────────────
 // (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W.) The one mood every stage
 // reads from, in gold; then three zones in gold, one above the other - voice, first frames, video -
@@ -894,10 +920,11 @@ function _all(host, p, lines) {
 // beside the name - a border says it without a word, and four of them say the whole thing at a
 // glance.
 function _stage(host, id, spec) {
-  // Blocked outranks done: a pool made before the character was taken off is not a field at rest.
-  const done = !!spec.done && !spec.blocked;
+  // Blocked outranks done: a pool made before the character was taken off is not a field at rest. And
+  // a choice not made (`need`, phase V24) outranks both: the frame is red and dashed until it is made.
+  const done = !!spec.done && !spec.blocked && !spec.need;
   const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
-    + (spec.blocked ? ' is-blocked' : '') + (spec.half ? ' is-half' : '')
+    + (spec.blocked ? ' is-blocked' : '') + (spec.need ? ' is-need' : '') + (spec.half ? ' is-half' : '')
     + (spec.work ? ' is-working' : ''));
   // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
   // 3 draw, 4 film - the order they actually work in, said once and visibly.
@@ -913,10 +940,12 @@ function _stage(host, id, spec) {
   head.appendChild(el('span', '', spec.name));
   // What the field IS, and then where it stands. The second used to appear only when the drawer
   // was shut; with nothing to shut, it belongs in the head all the time.
-  const sub = spec.blocked ? 'needs ' + spec.why
-    : [spec.sub, spec.summary].filter(Boolean).join(' · ');
-  if (sub) head.appendChild(el('span', 'mv3-wk-vsub', sub));
-  if (spec.blocked) head.title = 'Still missing: ' + spec.why;
+  const sub = spec.need ? 'choose ' + spec.need
+    : spec.blocked ? 'needs ' + spec.why
+      : [spec.sub, spec.summary].filter(Boolean).join(' · ');
+  if (sub) head.appendChild(el('span', 'mv3-wk-vsub' + (spec.need ? ' is-need' : ''), sub));
+  if (spec.need) head.title = 'Choose ' + spec.need + ' - nothing in this field is made until it is chosen';
+  else if (spec.blocked) head.title = 'Still missing: ' + spec.why;
   box.appendChild(head);
   host.appendChild(box);
   const body = el('div', 'mv3-wk-stage-body');
@@ -1020,7 +1049,7 @@ function _chainWork(p, lines) {
   // Stage one is its own step now (Z2): the chain does it first, and the read waits for it.
   const tags = VOICE.untagged(p).length;
   const voice = _canRead() ? live.filter(l => !isRead(l)).length : 0;
-  const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 4) : 0;
+  const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 0) : 0;
   // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
   // (frames above) can give it one.
   const video = (!missing.length && (pool || frames)) ? live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length : 0;
@@ -1051,8 +1080,12 @@ function _chainButton(host, p, lines) {
     _chain === 'tags' ? 'tags…' : _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video, clips…'
       : _chainArmed ? (price ? price + ' · go?' : 'go?') : 'generate all');
   b.type = 'button';
-  b.disabled = busy || !lines.length || (!w.anything && !_chainArmed);
-  b.title = w.missing.length
+  // NOT WHILE A FRAME IS RED (phase V24, the owner 2026-10-09): every choice is made first - the chain
+  // would otherwise run on choices nobody made, or skip the read for want of a voice without a word.
+  const needs = Object.values(_needs(p));
+  b.disabled = busy || !lines.length || needs.length > 0 || (!w.anything && !_chainArmed);
+  b.title = needs.length ? 'Choose first: ' + needs.join(', ')
+    : w.missing.length
     ? 'The frames and the video need ' + w.missing.join(' and ') + ' - the voice can be read without them'
     : !w.anything ? 'Everything that can be made is made'
       : 'In one press: ' + [
@@ -1078,6 +1111,7 @@ async function _untilDrawn() {
 
 async function _generateAll(p, lines) {
   if (_chain) return;
+  if (Object.keys(_needs(p)).length) return;   // a red frame first (phase V24)
   const w = _chainWork(p, lines);
   if (!w.anything) return;
   _readErr = '';
@@ -1128,16 +1162,18 @@ function _stageMood(host, p, lines) {
   const want = VOICE.untagged(p);
   const done = live.length > 0 && !want.length;
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
+  const need = _needs(p).mood;
   const { body } = _stage(host, 'mood', {
     step: 1, half: true, bare: true,     // its button stands on the mood's own line, not in a foot
     // One call to an agent has no halfway point, so this fills by an estimate that learns (N3).
     work: g.tagging ? () => _byTime(g.tagAt, 'tag') : null,
-    name: 'mood', sub: 'and the tags of the read', done,
+    name: 'mood', sub: 'and the tags of the read', done, need,
     summary: want.length ? want.length + (want.length === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
   });
   const row = el('div', 'mv3-wk-fsets');
   const mood = el('select', 'mv3-wk-vsel is-small is-wide');
   mood.title = 'The emotion of the whole video: the read, the frames and the clips all follow it';
+  if (!now) _noneOption(mood, 'mood: none');
   for (const m of (_kit && _kit.moods) || []) {
     const o = el('option', '', 'mood: ' + m.label);
     o.value = m.id;
@@ -1157,8 +1193,9 @@ function _stageMood(host, p, lines) {
   body.appendChild(under);
   _genButton(under, {
     label: g.tagging ? 'tagging…' : 'generate',
-    disabled: g.busy || !_kit || !live.length || !want.length,
-    title: !want.length ? 'Every line has its tags. Change the words of one and it comes back here.'
+    disabled: g.busy || !_kit || !live.length || !want.length || !!need,
+    title: need ? 'Choose a mood first - the script is marked up by it'
+      : !want.length ? 'Every line has its tags. Change the words of one and it comes back here.'
       : 'Read the script and put the [tags] of this mood between the words - '
         + want.length + (want.length === 1 ? ' line' : ' lines') + '. Costs credits, not dollars.',
     on: () => VOICE.tagAll(_api.voiceApi()),
@@ -1181,7 +1218,9 @@ function _stageVoice(host, p, lines) {
     // nothing to count, so that one goes by the estimate (N3).
     work: g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
       : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
-    name: 'voice', sub: 'ElevenLabs v3', done,
+    // Red while there is no voice to read in at all - the character has none and the project has
+    // chosen none (phase V24, the owner 2026-10-09).
+    name: 'voice', sub: 'ElevenLabs v3', done, need: _needs(p).voice,
     summary: read + '/' + live.length + ' read',
   });
   VOICE.paintRow(body, _api.voiceApi());
@@ -1229,6 +1268,9 @@ function _stageFrames(host, p) {
     work: (_planning || _drawing.size) ? () => _framesPart(p) : null,
     name: 'first frames', sub: 'a set for the video', done: s.framesDone,
     blocked, why: missing.join(' and '),
+    // Red until the shot, the amount and the spread are chosen (phase V24) - and that outranks the
+    // dimming: the menus are the way out of it, so the field must not look shut.
+    need: _needs(p).frames,
     summary: s.frames + '/' + s.framesAsked + ' drawn' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
   });
   const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
@@ -1250,6 +1292,7 @@ function _stageFrames(host, p) {
   const sets = el('div', 'mv3-wk-fsets');
   const framing = el('select', 'mv3-wk-vsel is-small is-model');
   framing.title = 'The shot size every frame of the set is made in';
+  if (!set) _noneOption(framing);
   for (const s of (_kit && _kit.sets) || []) {
     const o = el('option', '', s.label);
     o.value = s.id;
@@ -1263,16 +1306,18 @@ function _stageFrames(host, p) {
   // what they are called everywhere else, including in the project's own field.
   const spread = el('select', 'mv3-wk-vsel is-small is-model');
   spread.title = 'How the fragments take their frames from the set: cycle - the pool in turn; random - one drawn for each fragment';
+  if (!v.spread) _noneOption(spread);
   for (const id of ['cycle', 'random']) {
     const o = el('option', '', id);
     o.value = id;
-    if ((v.spread || 'cycle') === id) o.selected = true;
+    if (v.spread === id) o.selected = true;
     spread.appendChild(o);
   }
   spread.disabled = _saving || _planning;
   spread.addEventListener('change', () => _saveVideo({ spread: spread.value }));
   const count = el('select', 'mv3-wk-vsel is-small is-tier');
   count.title = 'How many variations of the shot the set holds';
+  if (!v.frames) _noneOption(count);
   for (let k = 1; k <= ((_kit && _kit.setMax) || 5); k++) {
     const o = el('option', '', '× ' + k);
     o.value = String(k);
@@ -1307,7 +1352,7 @@ function _stageFrames(host, p) {
 
   // `generate`: the price first, the set on the second press. What was drawn is not here: it is
   // on the shelf under the four fields (_shelfFrames), where there is width for it.
-  _framesButton(foot);
+  _framesButton(foot, p);
 }
 
 // ── FRAMES: the shelf of what has been drawn (phase R, the owner 2026-09-22) ──
@@ -1396,15 +1441,20 @@ function _shelfFrames(host, p) {
 
 // The one button of the first-frames field, kept apart from the field itself so the shelf could
 // move out from between them.
-function _framesButton(foot) {
-  const n = _video().frames || 4;
+function _framesButton(foot, p) {
+  const n = _video().frames || 0;
   const busy = _planning || _drawing.size > 0;
+  // What it waits for, in words (phase V24): the character in a look and the place, the three choices
+  // of this field, and the mood the frames are drawn in.
+  const needs = _needs(p);
+  const wait = [..._missing(p), needs.frames, needs.mood].filter(Boolean);
   _genButton(foot, {
     label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',
-    cap: busy ? '' : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
-    disabled: busy || !_kit,
-    title: 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn at once - nano-banana-2, 2K, '
-      + _money(FRAME_PRICE) + ' each. Press again to confirm.',
+    cap: busy ? '' : wait.length ? 'needs ' + wait.join(', ') : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
+    disabled: busy || !_kit || wait.length > 0,
+    title: wait.length ? 'First: ' + wait.join(', ')
+      : 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn at once - nano-banana-2, 2K, '
+        + _money(FRAME_PRICE) + ' each. Press again to confirm.',
     on: () => {
       if (!_armedSet) { _armedSet = true; _ctx.repaint(); return; }
       _armedSet = false;
@@ -1414,23 +1464,24 @@ function _framesButton(foot) {
 }
 
 // VIDEO - the model and the tier, how the PLACE moves (W3a) and the animation of the PERSON, line
-// by line (W3b); the clips themselves come with F4. Shut until there is a FIRST FRAME to animate
-// (the owner, 2026-09-21): a clip is made from a frame, so before the set exists this zone has
-// nothing to be about.
+// by line (W3b); the clips themselves come with F4. OPEN FROM THE START (phase V24, the owner
+// 2026-10-09): the model and the quality are chosen at the beginning, and the field is red until the
+// quality is; what it still waits for - the character, the place, a first frame to animate - is said
+// on its `generate`, which stays shut until they are there.
 function _stageVideo(host, p, lines) {
   const missing = _missing(p);
   const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
   const motion = _envMotion(p);
   const live = _live(lines);
   const written = live.filter(_animated).length;
-  const done = !!motion && live.length > 0 && written === live.length;
+  const done = !!motion && live.length > 0 && written === live.length && !why;
+  const need = _needs(p).video;
   const { body, foot } = _stage(host, 'video', {
     step: 4, half: true,
     // The clips that have landed, plus the ones in flight; the place and the prompts, which come
     // first and are quick, go by the estimate of a clip (N3).
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
-    name: 'video', sub: 'the place, then the person', done,
-    blocked: !!why, why,
+    name: 'video', sub: 'the place, then the person', done, need,
     summary: written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
   _needEnvMeta();
@@ -1440,6 +1491,7 @@ function _stageVideo(host, p, lines) {
   const sets = el('div', 'mv3-wk-fsets');
   const tier = el('select', 'mv3-wk-vsel is-small is-tier');
   tier.title = 'How sharp the clips are, and what a second of them costs';
+  if (!v.quality) _noneOption(tier);
   for (const q of (_kit && _kit.qualities) || []) {
     const o = el('option', '', q.label + ' · $' + q.pricePerSec + '/s');
     o.value = q.id;
@@ -1501,6 +1553,9 @@ function _stageVideo(host, p, lines) {
   // The clips are the dollars in this zone, so the button shows the price and waits for a second
   // press when there are any - the words before them are credits and go on the first.
   const armed = _armedVideo && clips.length > 0;
+  // What the press still waits for (phase V24): the field is open, its `generate` is not - the
+  // character and the place, a first frame to animate, the quality, and the mood the person moves in.
+  const wait = [why, need, _needs(p).mood].filter(Boolean);
   _genButton(foot, {
     label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…'
       : _writing === 'lines' ? 'writing…'
@@ -1509,16 +1564,17 @@ function _stageVideo(host, p, lines) {
     // What this press will SPEND and how long the video is - and nothing else (the owner,
     // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
     // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
-    cap: busy ? whole : [
+    cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
       _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
       whole,
     ].filter(Boolean).join(' · '),
-    disabled: busy || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
-    title: 'The place, then how the person moves on every line, then the clips of the fragments that'
-      + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
-      + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
-      + (clips.length ? ' Press again to confirm.' : ''),
+    disabled: busy || wait.length > 0 || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
+    title: wait.length ? 'First: ' + wait.join(', ')
+      : 'The place, then how the person moves on every line, then the clips of the fragments that'
+        + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
+        + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
+        + (clips.length ? ' Press again to confirm.' : ''),
     on: () => {
       if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
       _armedVideo = false;
@@ -2173,6 +2229,7 @@ function _clipCol(p, l, i, rs, take) {
   let ready = false;
   if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
+  else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…'); }
   const price = ready && tier ? _money(take.dur * tier.pricePerSec) : '';

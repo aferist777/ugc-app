@@ -1749,6 +1749,12 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-stage-head .mv3-wk-vsub{text-transform:none; letter-spacing:0; font-weight:400; flex:1 1 auto; min-width:0}
 .mv3-wk-stage.is-blocked{opacity:.55}
 .mv3-wk-stage.is-blocked .mv3-wk-stage-head .mv3-wk-vsub{color:var(--warn, oklch(.72 .15 75))}
+/* A CHOICE NOT MADE (phase V24, the owner 2026-10-09): the frame is RED and dashed in place of the gold
+   until it is made - the mood, the voice, the shot, the amount, the spread, the quality - and it is
+   never dimmed: its menus are the way out. The number and the line that says what to choose go red too. */
+.mv3-wk-stage.is-need{border-color:var(--danger); border-style:dashed; opacity:1}
+.mv3-wk-stage.is-need .mv3-wk-znum{border-color:var(--danger); background:var(--danger); filter:none}
+.mv3-wk-stage-head .mv3-wk-vsub.is-need{color:var(--danger)}
 .mv3-wk-stage-body{display:flex; flex-direction:column; gap:6px}
 .mv3-wk-stage-body .mv3-wk-vrow.is-now{margin:0}
 /* margin-top:auto keeps the foot at the bottom of a field stretched to its neighbour. */

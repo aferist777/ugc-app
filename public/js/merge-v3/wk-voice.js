@@ -117,9 +117,19 @@ const _sub = (v) => [v.descriptive, v.gender, v.age && String(v.age).replace(/_/
   .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
 
 const _saved = (rec) => (rec && Array.isArray(rec.voices) ? rec.voices : []);
+// What the character HAS, as the panel shows it: their list - and a `voice` the list does not hold
+// (6 of the owner's 48, set before the list existed) as itself, with no demo of ours. The server reads
+// in it (routes/scen3.js, _castVoice), so the panel must not say they have none and paint the field
+// red (phase V24). Shown only: what is written back is the list as it is (_take).
+const _mine = (rec) => {
+  const list = _saved(rec);
+  const id = String((rec && rec.voice) || '');
+  return (id && !list.some(v => v && String(v.voiceId) === id))
+    ? list.concat([{ voiceId: id, name: 'their voice', sample: '' }]) : list;
+};
 const _active = (rec) => {
   const id = String((rec && rec.voice) || '');
-  return _saved(rec).find(v => String(v.voiceId) === id) || null;
+  return _mine(rec).find(v => String(v.voiceId) === id) || null;
 };
 
 // ── The voice row ───────────────────────────────────────────────────────────
@@ -130,7 +140,7 @@ const _active = (rec) => {
 export function paintRow(host, api) {
   const rec = api.char();
   const pick = api.pick();
-  const mine = _saved(rec);
+  const mine = _mine(rec);
   const now = _active(rec);
 
   const row = el('div', 'mv3-wk-vrow is-now');
@@ -212,7 +222,7 @@ export function paintPicker(host, api) {
   const rec = api.char();
   if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
 
-  const mine = _saved(rec);
+  const mine = _mine(rec);
   const now = String((rec && rec.voice) || '');
   const own = api.pick();
 

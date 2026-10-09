@@ -2166,19 +2166,14 @@ const VD = require('../lib/voice-demo');
 const VSHELF = require('../lib/voice-shelf');
 
 
-// Everything the Video section needs to draw itself: how the character may move, which
-// lipsync model is wired up, and what the two quality tiers cost. The prompts come with
-// it so the page can show exactly what will be sent, without a second round trip.
+// What the general zone's menus offer: the quality tiers with what a second of them costs, and the
+// moods. No defaults (phase V24): a project made since starts at none and the person chooses - the
+// presets, the models and the defaults this used to send were read by nobody.
 router.get('/scen3/motion-presets', (_req, res) => {
   res.json({
     success: true,
-    presets: MP.MOTION_PRESETS,
-    defaultPreset: MP.DEFAULT_PRESET,
-    models: MP.VIDEO_MODELS,
     qualities: MP.VIDEO_QUALITIES,
-    defaultQuality: MP.DEFAULT_QUALITY,
     moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about })),
-    defaultMood: MP.DEFAULT_MOOD,
   });
 });
 
@@ -3049,30 +3044,53 @@ const VOICE_PROVIDERS = ['elevenlabs'];
 // how the character moves, and how sharp the result is. The kie model id is deliberately
 // NOT stored — it is derived from the quality at render time, so a tier being renamed
 // upstream does not leave old projects pointing at a model that no longer exists.
+//
+// CHOSEN, NOT ASSUMED (phase V24, the owner 2026-10-09). A project made since carries `v: 2`, and its
+// choices start at NONE - '' for the mood, the quality, the shot size and the spread, 0 for how many -
+// until the person makes them; the panel's fields are red while one is missing and nothing fills it
+// in here. An older project keeps the defaults it was always read with: 70 of the owner's 80 had no
+// mood stored and were marked up in 'sincere'.
 const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
+  const chosen = s.v === 2;
+  const n = parseInt(s.frames, 10);
   return {
+    ...(chosen ? { v: 2 } : {}),
     // Which way the fragments step makes its clips (docs/local-app/PLAN.md, fragments): one clip per
     // line through Kling avatar, or - not built yet - one wide shot over several lines through
     // Seedance. Kling until the other exists.
     mode:    s.mode === 'seedance' ? 'seedance' : 'kling',
     // The emotion of the whole video (lib/motion-presets.js, MOODS): what the directing agent reads
     // every shot and animation prompt from.
-    mood:    MP.moodById(s.mood) ? s.mood : MP.DEFAULT_MOOD,
+    mood:    MP.moodById(s.mood) ? s.mood : (chosen ? '' : MP.DEFAULT_MOOD),
     model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
-    quality: MP.qualityById(s.quality) ? s.quality : MP.DEFAULT_QUALITY,
+    quality: MP.qualityById(s.quality) ? s.quality : (chosen ? '' : MP.DEFAULT_QUALITY),
     // The set of first frames (docs/local-app/PLAN.md, phase W2): the shot size it is made in (the
     // ids of FRAME_SETS below), how many, and what the person asked for in words.
-    framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : 'half',
-    frames:  Math.max(1, Math.min(5, parseInt(s.frames, 10) || 4)),
+    framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : (chosen ? '' : 'half'),
+    frames:  n >= 1 ? Math.min(5, n) : (chosen ? 0 : 4),
     wish:    String(s.wish || '').slice(0, 600),
     // How the lines take frames from that set (the owner, 2026-09-21): the pool in turn, or a
     // frame drawn for each line - drawn once and always the same one, so a repaint does not
     // reshuffle the video (_frameOfLine).
-    spread:  s.spread === 'random' ? 'random' : 'cycle',
+    spread:  (s.spread === 'random' || s.spread === 'cycle') ? s.spread : (chosen ? '' : 'cycle'),
   };
 };
+// What a project made since phase V24 has not chosen yet, of the choices a step needs, in words -
+// '' when nothing is missing (an older project never misses any: its defaults stand).
+function _unchosen(video, which) {
+  const v = video || {};
+  const words = {
+    mood: !v.mood && 'the mood (field 1)',
+    framing: !v.framing && 'the shot size (field 3)',
+    frames: !v.frames && 'how many frames (field 3)',
+    spread: !v.spread && 'how the fragments take their frames (field 3)',
+    quality: !v.quality && 'the quality of the clips (field 4)',
+  };
+  const miss = which.map(k => words[k]).filter(Boolean);
+  return miss.length ? 'choose ' + miss.join(', ') + ' first' : '';
+}
 const _normVoice = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const p = (s.ttsParams && typeof s.ttsParams === 'object') ? s.ttsParams : {};
@@ -3220,6 +3238,8 @@ router.post('/scen3/projects', (req, res) => {
       vertical: scen.vertical,
       product: scen.product,
       roles: scen.roles,
+      // Its choices start at none and are made by the person (phase V24, _normVideo).
+      video: { v: 2 },
       createdAt: now, updatedAt: now,
     }, now);
     list.unshift(rec);
@@ -3701,11 +3721,16 @@ router.post('/scen3/frames/plan', async (req, res) => {
     if (!cast.obrazImage || !cast.locationImage) {
       return res.status(400).json({ success: false, error: 'cast the character in a look and set the place first' });
     }
+    // A choice not made yet is said, never filled in (phase V24): the frames are drawn in the mood,
+    // the shot size, the number and the spread the person chose.
+    const video = _normVideo(proj.video);
+    const missing = _unchosen(video, ['mood', 'framing', 'frames', 'spread']);
+    if (missing) return res.status(400).json({ success: false, error: missing });
     const set = _frameSet(b.set);
     if (!set) return res.status(400).json({ success: false, error: 'no such shot size' });
-    const n = Math.max(1, Math.min(FRAME_SET_MAX, parseInt(b.n, 10) || 4));
+    const n = Math.max(1, Math.min(FRAME_SET_MAX, parseInt(b.n, 10) || video.frames || 4));
     const wish = String(b.wish || '').trim().slice(0, 600);
-    const mood = _normVideo(proj.video).mood;
+    const mood = video.mood;
 
     const ref = await _frameRef(id, cast);
     const pose = _poseFor(set.poseId, set.group);
@@ -3910,6 +3935,9 @@ async function _writePrompts(id, want) {
     const pool = _framePool(proj);
     if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip is made from one'), { status: 400 });
     const video = _normVideo(proj.video);
+    // The person moves in the mood they chose (phase V24): not chosen yet is said, not assumed.
+    const missing = _unchosen(video, ['mood']);
+    if (missing) throw Object.assign(new Error(missing), { status: 400 });
     const mood = MP.moodById(video.mood) || MP.MOODS[0];
     const set = _frameSet(video.framing) || _frameSet('half');
 
@@ -4293,6 +4321,10 @@ function _clipPlan(proj, i) {
   const video = _normVideo(proj.video);
   const voice = _normVoice(proj.voice);
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
+  // The clip is made in the quality the person chose (phase V24) - before the money, a missing one is
+  // a fragment skipped in words.
+  const missing = _unchosen(video, ['quality']);
+  if (missing) return { skipped: missing };
   const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
   if (!said.trim()) return { skipped: 'this fragment has no words' };
