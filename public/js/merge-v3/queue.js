@@ -101,6 +101,8 @@ function _row(it, refresh) {
                         + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : '')))
                  : it.status === 'failed' ? 'failed'
                  : it.armed ? ('in line' + (it.ahead ? ' · ' + it.ahead + ' ahead' : ' · next'))
+                 // (phase V23) Stopped by a closed or restarted app: Render all starts it over.
+                 : it.interrupted ? 'interrupted · Render all starts it over'
                  : 'queued';
   top.appendChild(st);
   main.appendChild(top);

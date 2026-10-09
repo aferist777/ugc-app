@@ -1,0 +1,100 @@
+// "THE APP WAS UPDATED" (phase V23, the owner 2026-10-09).
+//
+// A new commit lands in the program folder while the app is open (the server says so - lib/app-update.js): a chip
+// stands in the strip LEFT of the wait and Alerts, a short notice says it once, and the chip opens a window to restart
+// and update. Only in the app window (the owner's answer 5): the restart is the desktop shell's (desktop/preload.js
+// `restart`, desktop/main.js) - it asks about a running render first, as closing the window does - and in a browser
+// there is nothing to restart from a page.
+
+import * as Layers from './layers.js';
+
+const EVERY_MS = 60000;
+const NOTICE_MS = 9000;
+
+let _nav = null;
+let _chip = null;
+let _state = null;
+let _timer = null;
+let _open = false;
+
+function _el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+/** In the app window only: start looking for a new version. */
+export function mountUpdate(nav) {
+  const W = window.ugcWindow;
+  if (!nav || _nav || !W || typeof W.restart !== 'function') return;
+  _nav = nav;
+  _check();
+  _timer = setInterval(_check, EVERY_MS);
+  window.addEventListener('beforeunload', () => clearInterval(_timer));
+}
+
+async function _check() {
+  let d = null;
+  try { d = await fetch('/api/app/update').then(r => r.json()); } catch (e) { return; }
+  if (!d || !d.success || !d.changed) return;
+  _state = d;
+  _paintChip();
+  if (!d.announced) {
+    _notice(d);
+    try { await fetch('/api/app/update/announced', { method: 'POST' }); } catch (e) { /* said again next time */ }
+  }
+}
+
+function _paintChip() {
+  if (_chip || !_nav) return;
+  _chip = _el('button', 'sv3-navbtn sv3-upd', 'Updated');
+  _chip.type = 'button';
+  _chip.title = 'A new version of the app is in its folder - restart to use it';
+  _chip.addEventListener('click', _ask);
+  // Left of the wait, which stands left of Alerts: the two read as one thing (js/alerts-bell.js).
+  const at = _nav.querySelector('.sv3-al-wait') || _nav.querySelector('.sv3-alerts') || _nav.querySelector('a[href="/admin"]');
+  _nav.insertBefore(_chip, at);
+}
+
+// Once: the toasts' own corner, the same look as a finished generation (css/app-nav.css).
+function _notice(d) {
+  let box = document.querySelector('.sv3-toasts');
+  if (!box) { box = _el('div', 'sv3-toasts'); document.body.appendChild(box); }
+  const t = _el('div', 'sv3-toast is-update');
+  t.appendChild(_el('span', 'sv3-toast-mark', '↻'));
+  const main = _el('span', 'sv3-al-main');
+  main.appendChild(_el('span', 'sv3-al-title', 'The app was updated'));
+  main.appendChild(_el('span', 'sv3-al-where', d.subject || 'restart it to use the new version'));
+  t.appendChild(main);
+  t.addEventListener('click', () => { t.remove(); _ask(); });
+  box.appendChild(t);
+  setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, NOTICE_MS);
+}
+
+function _ask() {
+  if (_open) return;
+  _open = true;
+  const back = _el('div', 'dr-back');
+  const box = _el('div', 'nm-box dr-box');
+  box.setAttribute('role', 'dialog');
+  box.appendChild(_el('div', 'nm-t', 'The app was updated'));
+  const d = _state || {};
+  if (d.subject) box.appendChild(_el('div', 'dr-holds', d.subject));
+  box.appendChild(_el('div', 'dr-note', 'Restart to use the new version. What you have open is saved'
+    + (d.renderBusy ? '; a render is running - you will be asked about it first.' : '.')));
+  const row = _el('div', 'nm-r');
+  const go = _el('button', 'nm-b is-ok', 'Restart and update');
+  const later = _el('button', 'nm-b', 'Later');
+  for (const b of [go, later]) b.type = 'button';
+  row.append(go, later);
+  box.appendChild(row);
+  document.body.append(back, box);
+  let layer = null;
+  const close = () => { back.remove(); box.remove(); if (layer) Layers.close(layer); _open = false; };
+  go.addEventListener('click', () => { close(); window.ugcWindow.restart(); });
+  later.addEventListener('click', close);
+  back.addEventListener('click', close);
+  layer = Layers.open(box, { name: 'the update', onEsc: close });
+  go.focus();
+}

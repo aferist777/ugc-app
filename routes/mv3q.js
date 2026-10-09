@@ -210,7 +210,7 @@ router.get('/mv3q', (req, res) => {
   const s = read();
   // Same leftover, shown honestly: a row cannot be rendering when nothing is.
   if (!_active && s.items.some(x => x.status === 'running')) {
-    for (const it of s.items) if (it.status === 'running') it.status = it.url ? 'done' : 'queued';
+    for (const it of s.items) if (it.status === 'running') _interrupted(it);
     write(s);
   }
   // How many are in line before each armed entry - across everyone, because the encoder is
@@ -225,7 +225,9 @@ router.get('/mv3q', (req, res) => {
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   // `running` is the machine's, not the person's: the encoder is busy for everyone.
-  res.json({ success: true, waiting, running: !!_active, admin: OWN.isAdmin(req.user), items });
+  // `busy`: any render at all - Export -> Render runs outside the queue (lib/render-busy.js); the shell asks about it before
+  // the app stops (desktop/main.js, phase V23).
+  res.json({ success: true, waiting, running: !!_active, busy: BUSY.busy(), admin: OWN.isAdmin(req.user), items });
 });
 
 router.post('/mv3q/add', (req, res) => {
@@ -280,12 +282,15 @@ router.post('/mv3q/run', (req, res) => {
     // leftover: the server was restarted mid-encode, or a scenario job's poll died with it.
     // Left alone it sits at the head of the list for ever and everything behind it waits on
     // a render that finished, failed or was never going to happen.
-    if (it.status === 'running' && !_active) { it.status = it.url ? 'done' : 'queued'; freed++; }
-    if (it.status === 'queued' && !it.armed && _canSee(it, req)) { it.armed = true; armed++; }
+    if (it.status === 'running' && !_active) { _interrupted(it); freed++; }
+    if (it.status === 'queued' && !it.armed && _canSee(it, req)) { it.armed = true; it.interrupted = false; armed++; }
   }
   write(s);
-  if (!_active) next();
-  res.json({ success: true, already: !!_active, freed, armed });
+  // (phase V23) Whether one was ALREADY rendering - read before this call starts one, or a render it just started
+  // answered `already` too.
+  const was = !!_active;
+  if (!was) next();
+  res.json({ success: true, already: was, started: !was && !!_active, freed, armed });
 });
 
 // Clearing has two meanings and the caller has to say which. A finished entry stays in the
@@ -365,6 +370,21 @@ function removeByUrl(url) {
   return before - s.items.length;
 }
 
+// A ROW INTERRUPTED (phase V23): an entry the app was closed or restarted in the middle of goes back to waiting for
+// Render all - it stayed armed and "next" for ever, and Render all only counts what is not armed.
+function _interrupted(it) {
+  if (it.url) { it.status = 'done'; return; }
+  it.status = 'queued'; it.armed = false; it.interrupted = true;
+  it.percent = 0; it.remain = null; it.phase = null;
+}
+try {
+  const s0 = read();
+  if (s0.items.some(x => x.status === 'running') || s0.running) {
+    for (const it of s0.items) if (it.status === 'running') _interrupted(it);
+    s0.running = false;
+    write(s0);
+  }
+} catch (e) { console.warn('[mv3q] could not put interrupted renders back in line:', e.message); }
 // What a render interrupted by a closed app or a crash left: nothing renders while the server starts (phase V23).
 try { JOB.sweepDrafts(); } catch (e) { console.warn('[mv3q] could not clear unfinished renders:', e.message); }
 

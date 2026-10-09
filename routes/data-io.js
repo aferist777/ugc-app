@@ -216,7 +216,9 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
     _sweepOld();
 
     const id = crypto.randomBytes(8).toString('hex');
-    const stamp = new Date().toISOString().slice(0, 10);
+    // The day HERE, not in Greenwich: after midnight local time the UTC date is still yesterday (phase V23).
+    const d0 = new Date();
+    const stamp = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
     const short = id.slice(0, 6);
     const takenAt = new Date().toISOString();
 

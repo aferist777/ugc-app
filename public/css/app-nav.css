@@ -101,6 +101,10 @@
   font:600 10px/1.2 var(--font); color:var(--muted);
 }
 .sv3-al-wait[hidden]{display:none}
+/* (phase V23) A new version of the app is in its folder: the chip left of the wait, the window to restart. */
+.sv3-nav .sv3-navbtn.sv3-upd{ align-self:center; margin-right:6px; padding:3px 9px; border-radius:999px;
+  border-color:var(--primary); color:var(--primary); font-size:10.5px }
+.sv3-nav .sv3-navbtn.sv3-upd:hover{ background:var(--primary); color:var(--primary-ink, #fff) }
 .sv3-al-where{ font:400 10px/1.35 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* While it runs and says what it is doing - the analyses a clip makes before it renders. */
 .sv3-al-where.is-stage{ color:var(--gold, #d8b45a); }

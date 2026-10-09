@@ -109,6 +109,7 @@ function run() {
     if (what === 'minimize') win.minimize();
     else if (what === 'full') toggleFull(win);
     else if (what === 'close') win.close();
+    else if (what === 'restart') restartApp(win);
   });
   ipcMain.handle('ugc-window-full', (e) => {
     const win = own(e) ? BrowserWindow.fromWebContents(e.sender) : null;
@@ -231,16 +232,7 @@ function run() {
     if (asking) return;
     asking = true;
     try {
-      if (Date.now() - renderQuitAt > 120000 && await renderRunning()) {
-        const { response } = await dialog.showMessageBox(win, {
-          type: 'warning', title: 'UGC Studio', noLink: true,
-          message: 'A render is still running',
-          detail: 'Quitting stops it. It goes back to the Merge queue and starts over with Render all.',
-          buttons: ['Quit', 'Keep working'], defaultId: 1, cancelId: 1,
-        });
-        if (response !== 0) return;
-        renderQuitAt = Date.now();
-      }
+      if (Date.now() - renderQuitAt > 120000 && !(await askRender(win, 'Quit'))) return;
       // (phase V20) The draft: the page asks about it in a window of its own, and closes the window again itself once it
       // is answered; nothing to ask - no draft, or nothing in it - and the close goes on.
       if ((await draftAsked(win)) === 'asking') return;
@@ -249,6 +241,36 @@ function run() {
       asking = false;
     }
     if (!win.isDestroyed()) win.close();
+  }
+
+  // A render still running, asked about before the app stops - the close, and the restart for a new version. `verb` is
+  // the button: 'Quit' or 'Restart'. True when the person says go on.
+  async function askRender(win, verb) {
+    if (!(await renderRunning())) return true;
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning', title: 'UGC Studio', noLink: true,
+      message: 'A render is still running',
+      detail: (verb === 'Restart' ? 'Restarting' : 'Quitting') + ' stops it. It goes back to the Merge queue and starts over with Render all.',
+      buttons: [verb, 'Keep working'], defaultId: 1, cancelId: 1,
+    });
+    if (response !== 0) return false;
+    renderQuitAt = Date.now();
+    return true;
+  }
+
+  // (phase V23, the owner 2026-10-09: the whole app, not the server alone) A new version is in the program folder: the
+  // app starts again on it. A running render is asked about first; the draft is not - it is on the disk, and the new run
+  // opens it as it was. will-quit stops the server and its ffmpeg as on any quit.
+  async function restartApp(win) {
+    if (asking || closeConfirmed) return;
+    asking = true;
+    let go = false;
+    try { go = await askRender(win, 'Restart'); } finally { asking = false; }
+    if (!go) return;
+    log.line('restarting for a new version');
+    closeConfirmed = true;
+    app.relaunch();
+    app.quit();
   }
 
   // The page's answer, in a moment - a page that cannot answer (one still starting, one that hangs) does not hold the
@@ -267,7 +289,9 @@ function run() {
   async function renderRunning() {
     try {
       const r = await fetch(origin + '/api/mv3q', { signal: AbortSignal.timeout(1500) });
-      return !!(await r.json()).running;
+      // The queue's own, or any render - Export -> Render runs outside the queue (`busy`, lib/render-busy.js; V23).
+      const d = await r.json();
+      return !!(d.running || d.busy);
     } catch {
       return false;
     }

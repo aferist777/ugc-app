@@ -56,7 +56,9 @@ export function askDraft(dr, o) {
     inp.maxLength = 120;
     inp.spellcheck = false;
     inp.placeholder = 'Name';
-    inp.value = new Date().toISOString().slice(0, 10) + ' - ';
+    // Today here, not in Greenwich (phase V23).
+    const d0 = new Date();
+    inp.value = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0') + ' - ';
     const err = _el('div', 'nm-err');
     const row = _el('div', 'nm-r');
     const save = _el('button', 'nm-b is-ok', 'Save');

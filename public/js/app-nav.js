@@ -11,6 +11,7 @@
 
 import { mountAlerts } from './alerts-bell.js';
 import { installCloseAsk } from './draft-ask.js';
+import { mountUpdate } from './app-update.js';
 
 function _lightCurrent(nav) {
   const here = location.pathname.replace(/\/+$/, '') || '/';
@@ -82,6 +83,8 @@ export function initNav() {
   // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so
   // the list is the same wherever you are standing.
   mountAlerts(nav);
+  // (phase V23) A new version in the program folder: a chip left of the wait and Alerts, in the app window only.
+  mountUpdate(nav);
   _windowButtons(nav);
   // (phase V20) The window's close asks about the draft from whichever page is open.
   installCloseAsk();
