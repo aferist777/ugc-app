@@ -863,28 +863,26 @@ function _unlinkUnused(paths, doomed) {
 
 // A record store: how to read its list, where the list lives inside the file, which
 // fields the page may set, and which files belong to one entry.
-// `thumbPath` is patchable for the same reason the rest of this goes through PATCH at all:
-// the media shelf reads `thumb` from the RECORD, not from disk, so the thumbnail repair in
-// the Library has to write the new path back. It cannot write biroly.json server-side - that
-// store is browser-owned and biroly-server-sync would overwrite it within two seconds - so
-// the repair takes the established route: PATCH here, then the page patches localStorage.
+// `thumbPath` is patchable because the media shelf reads `thumb` from the RECORD, not from disk, so the thumbnail
+// repair in the Library writes the new path back through PATCH. (These stores were once the browser's, kept in step
+// through localStorage - `lsKey` - by the Birols page's sync; that page is gone, and the key with it, phase V23.)
 const RECORD_STORES = {
   birols: {
-    file: BIROLY_FILE, lsKey: 'biroly_archive_v1',
+    file: BIROLY_FILE,
     read: () => { const s = _read(BIROLY_FILE, {}); return Array.isArray(s.archive) ? s.archive : []; },
     write: (list) => { const s = _read(BIROLY_FILE, {}); s.archive = list; _write(BIROLY_FILE, s); },
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel', 'thumbPath'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   hooks: {
-    file: HOOKS_FILE, lsKey: 'hooks_archive_v1',
+    file: HOOKS_FILE,
     read: () => { const l = _read(HOOKS_FILE, []); return Array.isArray(l) ? l : []; },
     write: (list) => _write(HOOKS_FILE, list),
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel', 'thumbPath'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   obrazy: {
-    file: OBRAZY_FILE, lsKey: 'obrazy',
+    file: OBRAZY_FILE,
     read: () => { const l = _read(OBRAZY_FILE, []); return Array.isArray(l) ? l : []; },
     write: (list) => _write(OBRAZY_FILE, list),
     fields: ['name'],
@@ -902,12 +900,10 @@ const RECORD_STORES = {
       try { return obrazAbsFolder(o.name || '', o.id); } catch (e) { return null; }
     },
   },
-  // The one server-owned store here, so lsKey is null: there is no browser copy to patch
-  // after a write, and a page that treats null as "nothing to do" is already the behaviour
-  // everywhere lsKey is read. thumbPath is not patchable either - the shelf builds its
-  // thumb URL through /api/thumb, so there is no stored path that could go stale.
+  // thumbPath is not patchable here - the shelf builds its thumb URL through /api/thumb, so there is no stored path
+  // that could go stale.
   images: {
-    file: IMG.FILE, lsKey: null,
+    file: IMG.FILE,
     read: IMG.read,
     write: IMG.write,
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
@@ -915,7 +911,7 @@ const RECORD_STORES = {
   },
   // (phase V7) The Sounds shelf - server-owned like images (lib/sounds-store.js).
   sounds: {
-    file: SND.FILE, lsKey: null,
+    file: SND.FILE,
     read: SND.read,
     write: SND.write,
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
@@ -963,12 +959,12 @@ router.patch('/library/item/:kind/:id', (req, res) => {
       item = store.read().find(x => x && String(x.id) === id) || it;
     }
     // The page needs this to patch localStorage, so send back what to look for.
-    res.json({ success: true, kind, id, patch, item, lsKey: store.lsKey });
+    res.json({ success: true, kind, id, patch, item });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 /* ── Trimming an uploaded clip, once ─────────────────────────────────────────
-   POST /api/library/item/:kind/:id/trim { in, out } -> { success, kind, id, patch, lsKey }
+   POST /api/library/item/:kind/:id/trim { in, out } -> { success, kind, id, patch }
 
    THE FILE IS CUT, ONCE, AND THE RECORD MOVES TO THE CUT. Who may be is _canTrim's answer:
    every clip on Uploads and Hooks, and a birol only if it was uploaded by hand. After this the
@@ -1083,7 +1079,7 @@ router.post('/library/item/:kind/:id/trim', async (req, res) => {
     }
 
     console.log('[library/trim]', kind, id, from, '->', videoPath, a + 's..' + b + 's');
-    res.json({ success: true, kind, id, patch, lsKey: store.lsKey });
+    res.json({ success: true, kind, id, patch });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1153,7 +1149,7 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     }
     store.write(list.filter(x => x !== it));
     // `spared` is a file another record is still using, so it stayed put.
-    res.json({ success: true, kind, id, removed, spared, lsKey: store.lsKey });
+    res.json({ success: true, kind, id, removed, spared });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1234,7 +1230,7 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
       // Another shelf is another folder.
       SHELF.placeRecords([{ kind: to, rec: it }]);
       const placed = src.read().find(x => x && String(x.id) === id) || it;
-      return res.json({ success: true, kind: to, id, item: placed, lsKey: src.lsKey });
+      return res.json({ success: true, kind: to, id, item: placed });
     }
 
     // Different stores: build the record the destination expects, then write the
@@ -1278,7 +1274,7 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     // wait for the next time a browser pushed the hooks archive - which the Merge page never
     // does - so it sat on the shelf with no number at all.
     if (to === 'hooks') { try { require('../lib/hook-ids').assign([moved.videoPath]); } catch (e) {} }
-    res.json({ success: true, kind: to, id, item: moved, lsKey: dst.lsKey, fromLsKey: src.lsKey });
+    res.json({ success: true, kind: to, id, item: moved });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1366,7 +1362,7 @@ router.post('/library/broken/clean', (_req, res) => {
         return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
       }
       store.write(next);
-      for (const id of doomed) dropped.push({ id, store: kind, lsKey: store.lsKey });
+      for (const id of doomed) dropped.push({ id, store: kind });
     }
     // Nothing is unlinked: the whole point is that these records have no file.
     res.json({ success: true, dropped, count: dropped.length });
@@ -1419,7 +1415,7 @@ function _dupeGroups() {
       const brief = (e) => ({ id: String(e.id), name: String(e.name || ''), categoryId: e.categoryId || '',
         categoryLabel: e.categoryLabel || '', date: e.date || null, hasPrompt: !!e.prompt });
       out.push({
-        store: kind, lsKey: store.lsKey, videoPath,
+        store: kind, videoPath,
         file: videoPath.split('/').pop(),
         keep: brief(sorted[0]),
         drop: sorted.slice(1).map(brief),
@@ -1462,7 +1458,7 @@ router.post('/library/dupes/clean', (_req, res) => {
         return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
       }
       store.write(next);
-      for (const id of doomed) dropped.push({ id, store: kind, lsKey: store.lsKey });
+      for (const id of doomed) dropped.push({ id, store: kind });
     }
     // No file is unlinked here, by design: every dropped record shares its video and its
     // thumbnail with the copy that stays.
@@ -1532,7 +1528,7 @@ router.post('/library/media/record', (req, res) => {
     // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
     try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
     if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
-    res.json({ success: true, item, kind, lsKey: store.lsKey });
+    res.json({ success: true, item, kind });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1586,7 +1582,7 @@ function _reassign(kind, fromId, toId, toLabel) {
     n++;
   }
   if (n) store.write(list);
-  return { moved: n, lsKey: store.lsKey };
+  return { moved: n };
 }
 
 // All three lists in one request. The dropdown on a card has to offer the list belonging to
@@ -1629,8 +1625,8 @@ router.patch('/library/cats/:id', (req, res) => {
     // The label changes, the folder moves with every path under it, and the copies of the
     // label on the records are refreshed.
     const cat = SHELF.renameCategory(kind, id, label);
-    const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);
-    res.json({ success: true, cat, renamed: true, moved, lsKey });
+    const { moved } = _reassign(kind, id, cat.id, cat.label);
+    res.json({ success: true, cat, renamed: true, moved });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
@@ -1656,7 +1652,7 @@ router.delete('/library/cats/:id', (req, res) => {
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    let affected = 0, removedFiles = [], sparedFiles = [], lsKey = null;
+    let affected = 0, removedFiles = [], sparedFiles = [];
     if (mode === 'delete') {
       const { store, list, inKind } = _kindRecords(kind);
       const doomed = list.filter(e => inKind(e) && String(e.categoryId || '') === id);
@@ -1669,13 +1665,11 @@ router.delete('/library/cats/:id', (req, res) => {
       sparedFiles.push(...r.kept);
       if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
       affected = doomed.length;
-      lsKey = store.lsKey;
     } else {
       const { list, inKind } = _kindRecords(kind);
       const ids = new Set(list.filter(e => inKind(e) && String(e.categoryId || '') === id).map(e => String(e.id)));
       const r = _reassign(kind, id, '', '');
       affected = r.moved;
-      lsKey = r.lsKey;
       // Uncategorized is a folder too: the files go to nocat, and every path to them follows.
       const { list: now } = _kindRecords(kind);
       SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
@@ -1686,7 +1680,7 @@ router.delete('/library/cats/:id', (req, res) => {
     if (LC.isOwn(kind, id)) { LC.remove(kind, id); disposition = 'removed'; }
     else { disposition = 'orphan'; }          // nothing to store: it lived on its records alone
     SHELF.dropEmptyFolder(kind, folder);
-    res.json({ success: true, id, kind, mode, affected, removedFiles, sparedFiles, disposition, lsKey });
+    res.json({ success: true, id, kind, mode, affected, removedFiles, sparedFiles, disposition });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 

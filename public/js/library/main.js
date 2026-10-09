@@ -392,9 +392,6 @@ let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
 const _catsFor = (kind) => _catsByKind[kind] || [];
 async function _loadCats() {
   try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] }; }
-  // Merge builds its media-bar category filters from localStorage, so a name given here has
-  // to be written there too or Merge would never offer it.
-  A.mirrorCatsToMerge(_catsByKind);
 }
 
 // A <select> for one field of one item. Options are filled on first interaction, not up

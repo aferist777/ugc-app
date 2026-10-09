@@ -528,8 +528,6 @@ router.keepSourceTitle = function keepSourceTitle(sourceId, title) {
 router.GENDERS = GENDERS;
 
 
-// ── Duplicate: same content, fresh id + dates, " copy" appended to the title ─
-
 // ── Delete one scenario (single id only, never a bulk wipe) ─────────────────
 // A scenario the generator wrote from a source's topic is one of that topic's "written" marks
 // (routes/scriptgen.js, save). The mark goes with it (phase D5): the topic would otherwise go on
@@ -1992,8 +1990,6 @@ router.post('/scen3/gen/dress', async (req, res) => {
   }
 });
 
-// ── Mix 2–5 lookbooks into one new lookbook ─────────────────────────────────
-
 // ── Save a dressed result as an obraz on the character ──────────────────────
 // The user chose that dressed looks join the character's own library, so they show up on the Library's
 // Characters shelf too. Writes are APPEND-ONLY and done here, on the server, so a racing writer cannot drop
@@ -2063,14 +2059,7 @@ async function _saveObraz(b) {
 }
 
 
-// ── Delete one obraz ────────────────────────────────────────────────────────
-// Removes exactly one record and its own folder. Guarded so it can only ever
-// unlink inside obrazy/, and it refuses to write when the library will not parse.
-
-// ── Finalize a finished task ────────────────────────────────────────────────
-// A shared poll dropped the result into uploads/. This copies a
-// lookbook candidate into the lookbook base, and builds the preview for
-// whatever came out, so the popup never has to fetch a full-size file.
+// ── Filing a finished picture ───────────────────────────────────────────────
 // Filing a finished picture where it belongs: a lookbook or an environment onto its shelf, with its
 // description, the photo it was made from and a preview for the centre column. A FUNCTION for the
 // same reason _saveObraz is one - a generation started in Merge is finished by the server
@@ -2158,8 +2147,6 @@ async function _fileGenerated(kind, src, b) {
 
   return { path: finalUrl, preview: previewUrl, ...(from ? { from } : {}) };
 }
-
-// The route is the old Scenarios page, which still files its own results.
 
 // ── voice moods ─────────────────────────────────────────────────────────────
 // A mood is what the user picks in Montage; its `tags` are the ONLY ones the tagging
@@ -4684,39 +4671,6 @@ JOBS.register('clip', {
     return { taskId: out.taskId, engine: out.engine, file: out.file };
   },
 });
-
-/* ── A copy of somebody's project, owned by whoever asked ────────────────────
-   POST /api/scen3/projects/:id/copy -> { success, project }
-
-   The one way to work on a project that is not yours. The whole record comes across -
-   lines with their reads and clips, casting, the mix workspace with every frame, the reel -
-   and the copy is the caller's from the start. Media files are shared with the original:
-   neither project writes to them, and look-frame deletion already counts every project
-   that still points at a file before removing it.
-
-   Work in flight does NOT come across. A pending frame generation and a rendering line are
-   tasks bound to the original's id; carried over, the watcher would file one result into
-   two projects. The copy starts with nothing pending.
-   ──────────────────────────────────────────────────────────────────────────── */
-
-// ── video: starting a render ────────────────────────────────────────────────
-// One line per call. The page walks the list itself so a clip appears the moment it is
-// ready, and so Stop means something; the server's job is to refuse what cannot work,
-// start the task and remember it.
-//
-// The answer is NOT waited for here. A render outlives any request, so the task is
-// handed to a watcher that files it even if the page is closed, and the page follows
-// along through /scen3/video/state.
-
-// ── Stop waiting on one fragment's render ────────────────────────────────────
-// What this does NOT do is stop the renderer. kie.ai exposes no cancel for a job in flight,
-// so pretending otherwise would be a lie in a button: if the clip does finish it is already
-// paid for. What this does is release the fragment - the marker goes, the watcher notices on
-// its next tick that the line no longer points at its task and stops - so the card comes back
-// and can be rendered again.
-//
-// The taskId must be sent and must match. A cancel that arrives after the user has already
-// re-rendered would otherwise throw away the NEW job's marker and leave it running unwatched.
 
 // ── the voice library ────────────────────────────────────────────────────────
 // A proxy, for one reason above all: the ElevenLabs key stays on the server. It also trims

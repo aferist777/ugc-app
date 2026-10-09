@@ -357,7 +357,7 @@ export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb
 // opens the panel when something is picked, and a lane is something.
 function _afterSelB() {
   const n = _sel.size + (_selTrack ? 1 : 0);
-  for (const cb of _selSubs) { try { cb(n); } catch (e) {} }
+  for (const cb of _selSubs) { try { cb(n); } catch { /* a listener's own trouble */ } }
 }
 
 function _paintSel() {
@@ -799,7 +799,7 @@ function _wireLane(lane, t) {
     e.preventDefault();
     lane.classList.remove('is-drop');
     let data = null;
-    try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch (err) { return; }
+    try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { return; }
     if (!data || !data.src) return;
     const r = lane.getBoundingClientRect();
     _drop(t.id, (e.clientX - r.left) / _zoom(), data);
@@ -1062,7 +1062,7 @@ function _headMoved() {
   if (!_on) return;
   const c = document.getElementById('mv3-tl-clock');
   if (c) c.textContent = _clockText(_playhead);
-  for (const cb of _headSubs) { try { cb(_playhead); } catch (e) {} }
+  for (const cb of _headSubs) { try { cb(_playhead); } catch { /* a listener's own trouble */ } }
 }
 
 function _seekTo(t) {

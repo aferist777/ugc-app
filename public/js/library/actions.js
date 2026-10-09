@@ -1,55 +1,12 @@
 // LIBRARY — the actions: rename, favourite, category, delete, upload.
 //
-// Every action is server-first: the endpoint writes the data file, and only then does
-// this module patch the matching localStorage key.
-//
-// That second write is not belt-and-braces, it is the whole trick. biroly.json,
-// hooks-archive.json and obrazy.json are owned by the BROWSER — biroly-server-sync.js
-// and friends push a whole-localStorage snapshot every 2s from whatever page is open.
-// Those loops hash localStorage each tick and push only when it changed, so:
-//   - patch localStorage too, and an open Birols tab agrees and stays quiet;
-//   - skip it, and the next edit in that tab pushes a snapshot built on the stale copy,
-//     silently resurrecting whatever was deleted here.
-// If the key is absent (this browser has never opened Birols) there is nothing to
-// clobber and nothing to patch.
+// Every action is the server's: the endpoint writes the store and answers. (Until phase V23 this module also kept
+// browser-owned copies of the archives in localStorage in step - the Birols page pushed them back every two seconds.
+// That page and its sync are gone and nothing reads those keys (js/storage-sync.js blocks them), so the copies went.)
 
 import { askName } from '../name-box.js';
 
 const CHAR_KIND = 'characters';
-
-function _lsRead(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw == null) return undefined;              // absent: no local copy to keep in step
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? v : undefined;
-  } catch (e) { return undefined; }
-}
-function _lsPatch(key, id, patch) {
-  if (!key) return;
-  const list = _lsRead(key);
-  if (!list) return;
-  const it = list.find(x => x && String(x.id) === String(id));
-  if (!it) return;
-  Object.assign(it, patch);
-  try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {}
-}
-function _lsDrop(key, id) {
-  if (!key) return;
-  const list = _lsRead(key);
-  if (!list) return;
-  const next = list.filter(x => !(x && String(x.id) === String(id)));
-  if (next.length === list.length) return;
-  try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {}
-}
-function _lsUnshift(key, rec) {
-  if (!key || !rec) return;
-  const list = _lsRead(key);
-  if (!list) return;
-  if (list.some(x => x && x.videoPath === rec.videoPath)) return;
-  list.unshift(rec);
-  try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {}
-}
 
 async function _json(url, opts) {
   const r = await fetch(url, opts);
@@ -82,14 +39,12 @@ export async function auditThumbs(items) {
 }
 
 // Point a record at a thumbnail. The file alone changes nothing on the shelf - the media
-// shelf reads `thumb` from the record - and the store is browser-owned, so this takes the
-// same PATCH + localStorage patch every other edit takes.
+// shelf reads `thumb` from the record.
 async function saveThumbPath(it, thumbPath) {
-  const p = await _json(_itemUrl(it), {
+  await _json(_itemUrl(it), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ thumbPath }),
   });
-  _lsPatch(p.lsKey, it.id, { thumbPath });
   return thumbPath;
 }
 
@@ -131,11 +86,10 @@ export async function renameItem(it, anchor) {
       body: JSON.stringify({ name }),
     });
   } else {
-    const d = await _json(_itemUrl(it), {
+    await _json(_itemUrl(it), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    _lsPatch(d.lsKey, it.id, { name });
   }
   return name;
 }
@@ -143,11 +97,10 @@ export async function renameItem(it, anchor) {
 // ── Favourite ───────────────────────────────────────────────────────────────
 export async function toggleFavorite(it) {
   const favorite = !(it.meta && it.meta.favorite);
-  const d = await _json(_itemUrl(it), {
+  await _json(_itemUrl(it), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ favorite }),
   });
-  _lsPatch(d.lsKey, it.id, { favorite });
   return favorite;
 }
 
@@ -159,46 +112,6 @@ export async function loadCats() {
 }
 
 // ── Category vocabulary: create, rename, reorder, delete ─────────────────────
-// Renaming or deleting a category rewrites `categoryId`/`categoryLabel` across many records
-// at once, so the localStorage mirror is patched the same way rather than per record. Every
-// endpoint reports which store it touched (`lsKey`) and how many records moved.
-const _isUploadRec = (e) => !!(e && (e.source === 'upload' || e.categoryId === '__uploads__'));
-const _ofKind = (e, kind) => (kind === 'hooks' ? true : _isUploadRec(e) === (kind === 'uploads'));
-
-function _lsReassign(key, kind, fromId, toId, toLabel) {
-  if (!key) return;
-  const list = _lsRead(key);
-  if (!list) return;
-  let n = 0;
-  for (const e of list) {
-    if (!_ofKind(e, kind) || String((e && e.categoryId) || '') !== String(fromId)) continue;
-    e.categoryId = toId || '';
-    e.categoryLabel = toLabel || '';
-    if (kind === 'uploads') e.source = 'upload';
-    n++;
-  }
-  if (n) { try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {} }
-}
-function _lsDropByCat(key, kind, catId) {
-  if (!key) return;
-  const list = _lsRead(key);
-  if (!list) return;
-  const next = list.filter(e => !(_ofKind(e, kind) && String((e && e.categoryId) || '') === String(catId)));
-  if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
-}
-
-// The Merge media bars build their category filters from these localStorage keys
-// (getTypeCategories in public/js/biroly-archive.js), so a name given here has to be
-// written there too or Merge would never offer it. Birols are left alone on purpose —
-// that list belongs to the Birols tab.
-const MERGE_CAT_KEYS = { hooks: 'hooks_cats', uploads: 'uploads_cats' };
-function _mirrorToMerge(byKind) {
-  for (const [kind, key] of Object.entries(MERGE_CAT_KEYS)) {
-    const cats = (byKind && byKind[kind]) || [];
-    try { localStorage.setItem(key, JSON.stringify(cats.map(c => ({ id: c.id, label: c.label })))); } catch (e) {}
-  }
-}
-
 export async function addCat(kind, label) {
   const d = await _json('/api/library/cats', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -215,7 +128,6 @@ export async function renameCat(kind, id, label) {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind, label }),
   });
-  if (d.moved) _lsReassign(d.lsKey, kind, id, d.cat.id, d.cat.label);
   return d;
 }
 
@@ -232,36 +144,25 @@ export async function deleteCat(kind, id, mode) {
   const d = await _json('/api/library/cats/' + encodeURIComponent(id)
     + '?kind=' + encodeURIComponent(kind) + '&media=' + (mode === 'delete' ? 'delete' : 'move'),
     { method: 'DELETE' });
-  if (d.mode === 'delete') _lsDropByCat(d.lsKey, kind, id);
-  else _lsReassign(d.lsKey, kind, id, '', '');
   return d;
 }
 
-export { _mirrorToMerge as mirrorCatsToMerge };
-// Both fields go, not just the id: the label is a denormalised copy that
-// public/js/biroly-archive.js reads to draw a heading, and without it that heading falls back
-// to "Category (abc123)". Renaming a category rewrites the same copy for the same reason.
+// Both fields go, not just the id: the label is a denormalised copy kept beside it on the record.
 export async function setCategory(it, categoryId, categoryLabel) {
-  const d = await _json(_itemUrl(it), {
+  await _json(_itemUrl(it), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ categoryId, categoryLabel: categoryLabel || '' }),
   });
-  // categoryLabel is carried alongside categoryId everywhere else in the archive;
-  // keep the local copy consistent with it rather than half-updated.
-  _lsPatch(d.lsKey, it.id, { categoryId, categoryLabel: categoryLabel || '' });
   return categoryId;
 }
 
 // ── Trimming, once ──────────────────────────────────────────────────────────
-// The server cuts the file and moves the record to the cut; the browser's copy of the archive
-// is told the same thing at once, or the next push from this page would put the record back
-// on the long file. The original file is left where it was - see the route.
+// The server cuts the file and moves the record to the cut. The original file is left where it was - see the route.
 export async function trimItem(it, inS, outS) {
   const d = await _json(_itemUrl(it) + '/trim', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ in: inS, out: outS }),
   });
-  _lsPatch(d.lsKey, it.id, d.patch);
   return d.patch;
 }
 
@@ -277,9 +178,7 @@ export async function createCategory(kind, label) {
 
 // ── Kind ────────────────────────────────────────────────────────────────────
 // birols <-> uploads is one field in one store; anything involving hooks is a record
-// moving between two files. The server does both so a move cannot land half-applied;
-// here the job is only to keep the local copies in step, which for a cross-store move
-// means dropping from one key and prepending to the other.
+// moving between two files. The server does both so a move cannot land half-applied.
 export const KINDS = [
   { id: 'birols',  label: 'Birol' },
   { id: 'uploads', label: 'Upload' },
@@ -288,19 +187,10 @@ export const KINDS = [
 
 export async function setKind(it, kind) {
   if (kind === it.kind) return it.kind;
-  const d = await _json(_itemUrl(it) + '/kind', {
+  await _json(_itemUrl(it) + '/kind', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind }),
   });
-  if (d.fromLsKey && d.fromLsKey !== d.lsKey) {
-    _lsDrop(d.fromLsKey, it.id);
-    _lsUnshift(d.lsKey, d.item);
-  } else if (d.item) {
-    // Same store: mirror exactly the fields the server decided. Moving to birols leaves
-    // `source` undefined, and JSON.stringify drops undefined keys, so assigning it is
-    // how the field gets removed from the local copy too.
-    _lsPatch(d.lsKey, it.id, { source: d.item.source, categoryId: d.item.categoryId });
-  }
   return kind;
 }
 
@@ -343,8 +233,7 @@ export async function deleteItem(it) {
     await _json('/api/char-store/' + encodeURIComponent(it.id), { method: 'DELETE' });
     return true;
   }
-  const d = await _json(_itemUrl(it), { method: 'DELETE' });
-  _lsDrop(d.lsKey, it.id);
+  await _json(_itemUrl(it), { method: 'DELETE' });
   return true;
 }
 
@@ -367,13 +256,12 @@ export async function uploadVideos(files, kind, onEach) {
       fd.append('video', f);
       fd.append('name', f.name.replace(/\.[^.]+$/, ''));
       const up = await _json('/api/biroly/upload', { method: 'POST', body: fd });
-      const rec = await _json('/api/library/media/record', {
+      await _json('/api/library/media/record', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // trimmable: a file brought in by hand may be trimmed once, in the viewer. Nothing
         // generated carries this - those are trimmed on the timeline without a new file.
         body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind, trimmable: true }),
       });
-      _lsUnshift(rec.lsKey, rec.item);
       ok++;
     } catch (e) { /* one bad file must not stop the batch */ }
   }
@@ -382,7 +270,7 @@ export async function uploadVideos(files, kind, onEach) {
 
 // One call per picture, not the two a video takes. data/images.json is server-owned, so
 // /api/images/upload receives the file, makes the thumbnails and files the record in the same
-// request - and there is no localStorage copy to unshift into afterwards.
+// request.
 export async function uploadImages(files, onEach) {
   let ok = 0;
   const list = Array.from(files || []);
@@ -425,9 +313,7 @@ export async function uploadSounds(files, onEach, categoryId) {
 //
 // Cleaning is two calls on purpose. Media records are this module's own store, but looks are
 // already handled by POST /api/obrazy/prune-missing, which drops looks with no surviving image
-// AND sweeps geni.json alongside; reusing it beats writing that logic twice. It hands back the
-// kept lists, and those MUST be written to localStorage: obrazy and all_geni_v1 are
-// browser-owned, so leaving the local copies stale would let the next 2s push restore them.
+// AND sweeps geni.json alongside; reusing it beats writing that logic twice.
 export async function findBroken() {
   return _json('/api/library/broken');
 }
@@ -437,23 +323,11 @@ export async function cleanBroken() {
 
   const d = await _json('/api/library/broken/clean', { method: 'POST' });
   out.media = d.count || 0;
-  const byKey = {};
-  for (const r of (d.dropped || [])) (byKey[r.lsKey] = byKey[r.lsKey] || []).push(r.id);
-  for (const [key, ids] of Object.entries(byKey)) {
-    const list = _lsRead(key);
-    if (!list) continue;
-    const gone = new Set(ids.map(String));
-    const next = list.filter(e => !(e && gone.has(String(e.id))));
-    if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
-  }
 
   try {
     const p = await _json('/api/obrazy/prune-missing', { method: 'POST' });
     out.looks = (p.removedObrazy || []).length;
     out.geni = p.removedGeniCount || 0;
-    // write back what the server kept, or the local copies would push the removed ones again
-    if (Array.isArray(p.obrazy)) { try { localStorage.setItem('obrazy', JSON.stringify(p.obrazy)); } catch (e) {} }
-    if (Array.isArray(p.geni))   { try { localStorage.setItem('all_geni_v1', JSON.stringify(p.geni)); } catch (e) {} }
   } catch (e) { out.looksError = e.message; }
 
   return out;
@@ -467,21 +341,8 @@ export async function findDupes() {
   return _json('/api/library/dupes');
 }
 
-// The localStorage patch is what makes this stick. This store belongs to the browser: an open
-// Birols or Character tab pushes its whole localStorage every 2s, so dropping the records only
-// on the server would be undone within seconds by that push.
 export async function cleanDupes() {
-  const d = await _json('/api/library/dupes/clean', { method: 'POST' });
-  const byKey = {};
-  for (const r of (d.dropped || [])) (byKey[r.lsKey] = byKey[r.lsKey] || []).push(r.id);
-  for (const [key, ids] of Object.entries(byKey)) {
-    const list = _lsRead(key);
-    if (!list) continue;
-    const gone = new Set(ids.map(String));
-    const next = list.filter(e => !(e && gone.has(String(e.id))));
-    if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
-  }
-  return d;
+  return _json('/api/library/dupes/clean', { method: 'POST' });
 }
 
 // Media records live under their kind (birols / uploads / hooks); the file shelves are
