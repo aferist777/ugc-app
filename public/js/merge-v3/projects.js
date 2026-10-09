@@ -378,7 +378,7 @@ function _wireDelete() {
     try { rec = (await Store.list()).find(p => p.key === key) || null; } catch (e) { rec = null; }
     if (rec && rec.ownFiles) {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
-        'Its reads, frames and clips are in the project folder. The pictures and videos on the Library shelves stay either way.', [
+        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
           { label: 'And its files', kind: 'yes', on: () => _delete(key, true) },
           { label: 'Cancel' },

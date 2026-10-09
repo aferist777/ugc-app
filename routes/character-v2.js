@@ -31,7 +31,6 @@ const { reasonOf } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
 const WATCH = require('../lib/cv2-watch');
-const { addPendingTask } = require('../lib/pending-tasks');
 
 // Only the two the flow has a meaning for: 3:2 builds the house format, and match_input_image
 // edits a photo where it stands. Anything else would be a request the design cannot honour, so
@@ -182,9 +181,7 @@ async function _submitPortrait(b, hooks) {
       onStep: hooks && hooks.onStep,
     });
 
-    // Same bucket either way, so the page's one polling path resolves both.
-    addPendingTask(sub.taskId, 'work', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
-    // And the server watches it to the end itself. The page's poll used to be the only thing
+    // The server watches it to the end itself. The page's poll used to be the only thing
     // driving this to a conclusion, which meant closing the tab abandoned a paid-for
     // generation. Now the page's poll only READS what the watcher already found.
     WATCH.watch(sub.taskId, MEDIA.work, 'generated');

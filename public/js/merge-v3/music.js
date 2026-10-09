@@ -9,11 +9,13 @@
    so this panel reads the same list every other page reads. Nothing about the music
    library lives in a browser.
 
-   THE GENERATOR asks Suno through kie.ai, which was already wired up server-side:
+   THE GENERATOR asks Suno through kie.ai, and the SERVER sees it through (phase V23):
 
-     POST /api/audio/suno/generate      { style, title, targetDuration } -> { taskId }
-     GET  /api/audio/suno/status/:id    -> pending | success + audioPath | failed
-     POST /api/audio/suno/library       saves the finished track for every page
+     POST /api/audio/suno/generate      { style, title, targetDuration, where } -> { taskId, alertId }
+     GET  /api/alerts/:alertId          the generation's row in Alerts - followed here until it ends
+
+   The server files both variants Suno makes as two tracks, "<title> · 1" and "<title> · 2" (routes/music.js);
+   this panel writes nothing to the list, it only reads it again when the row is done.
 
    What reaches the model is one line of text. That is the whole API for taste: there is
    no BPM field, no instrument list, no mood enum - `style` is prose and Suno reads it.
@@ -22,11 +24,10 @@
    a setting, and a track can come back near it rather than on it.
 
    LENGTH IS NOT ASKED FOR EITHER. Suno returns two variants of a minute and a half to
-   two and a half, which the status endpoint crossfades into one three-to-five minute
-   track, and the `duration` parameter that would change that works on one model only.
-   So the length is taken rather than requested: the library keeps the whole track and
-   the clip on the lane is cut to the video. One generation can therefore bed a short
-   ad and a long one without being made twice.
+   two and a half, and the `duration` parameter that would change that works on one model
+   only. So the length is taken rather than requested: the clip on the lane is cut to the
+   video, and when the variant chosen is shorter than the video, the other variant of the
+   same generation follows it, the two crossing over three seconds (the owner, 2026-10-09).
 
    One detail worth stating because it has bitten before: the play button's label
    follows the AUDIO's own play/pause/ended events, not the click. Toggling a label on
@@ -94,17 +95,24 @@ function _videoLength() {
 }
 
 // The lane gets EXACTLY the video, whatever length the track happens to be. Longer than
-// the video and it is cut; shorter and it is laid down again until the picture is covered,
-// with the last copy cut. Suno decides how long a track is - three to five minutes usually,
-// but a failed crossfade leaves half of that - and a bed that stops before the last frame
-// is the one outcome worth writing a loop to avoid. Trimmed and repeated, never re-encoded:
-// the library keeps one track and every project takes the shape it needs from it.
+// the video and it is cut; shorter and the rest is laid after it until the picture is covered,
+// with the last piece cut. A bed that stops before the last frame is the one outcome worth
+// writing a loop to avoid. Trimmed and laid again, never re-encoded: the library keeps the
+// tracks and every project takes the shape it needs from them.
+//
+// WHAT FOLLOWS (phase V23, the owner 2026-10-09): the OTHER VARIANT of the same generation, then
+// the first again, and so on - each coming in three seconds before the one before it ends, the
+// earlier fading out as the later fades in (the clips' own fadeOut / fadeIn, which the preview
+// and the render both play). A track with no twin - one made before both were kept - is laid
+// again end to end, as it always was.
 const MAX_REPEATS = 40;
+const XF = 3;
 
-async function _add(url, title, opts) {
-  const once = !!(opts && opts.once);
-  const src = await _probeAudio(url);
-  const full = src > 0 ? src : FALLBACK_DUR;
+async function _add(t, list) {
+  const twin = t.gen ? (list || []).find(x => x && x.gen === t.gen && x.id !== t.id && x.audioPath) : null;
+  const order = twin ? [t, twin] : [t];
+  const lens = await Promise.all(order.map(x => _probeAudio(x.audioPath)));
+  const fulls = lens.map(v => (v > 0 ? v : FALLBACK_DUR));
   const want = _videoLength();
   const r2 = (v) => Math.round(v * 100) / 100;
   Store.mutate(tl => {
@@ -114,22 +122,24 @@ async function _add(url, title, opts) {
     // FROM NOUGHT, UNDER what is already on the lane: audio lanes carry everything - a birol's
     // sound, a voice, a bed - and they are mixed, not replaced; the lane draws the bed first,
     // beneath the rest.
-    let at = 0;
-    // Up to the end of the video, counting from wherever this one begins. `once` is the clip
-    // panel's Repeat, which promises one copy and means it.
-    let left = once ? full : (want > 0 ? Math.max(0, want - at) : full);
+    const end = want > 0 ? want : fulls[0];
     // Collected rather than pushed one by one, because where the run goes in the lane is the
     // other half of what "under" means: a clip earlier in the list is drawn first, and drawn
     // first is drawn underneath. A bed belongs beneath the sounds it is a bed for.
     const made = [];
-    for (let n = 0; left > 0.05 && n < MAX_REPEATS; n++) {
-      const dur = Math.min(left, full);
-      made.push({
+    let at = 0;
+    let crossing = false;
+    for (let n = 0; n < MAX_REPEATS; n++) {
+      const k = n % order.length;
+      const full = fulls[k];
+      const dur = r2(Math.min(full, end - at));
+      if (dur <= 0.05) break;
+      const c = {
         id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) + n,
-        src: url, thumb: null, name: title || 'music', libId: null,
-        start: at,
-        dur: r2(dur),
-        srcDur: r2(src),
+        src: order[k].audioPath, thumb: null, name: order[k].title || 'music', libId: null,
+        start: r2(at),
+        dur,
+        srcDur: r2(lens[k]),
         trimIn: 0, trimOut: r2(Math.max(0, full - dur)), speed: 1,
         // Backing music under a voice: full volume would bury the talking head, so it
         // starts at half.
@@ -139,9 +149,15 @@ async function _add(url, title, opts) {
         // and the one thing that must tell them apart is the transcriber - captions made from the
         // sound are made from the voice, never from the music under it (subs-b.js).
         bed: true,
-      });
-      at = r2(at + dur);
-      left = r2(left - dur);
+      };
+      if (crossing) c.fadeIn = XF;
+      made.push(c);
+      const stop = r2(at + dur);
+      if (stop >= end - 0.05) break;
+      // Not covered yet. The other variant comes in three seconds early, the two crossing - when this
+      // one is long enough to give them up; the same track again starts where it stops.
+      crossing = !!twin && dur > XF * 2;
+      if (crossing) { c.fadeOut = XF; at = r2(stop - XF); } else at = stop;
     }
     tr.clips.unshift(...made);
   });
@@ -182,10 +198,12 @@ function _rows(box, list, onChanged) {
 
     const add = _el('button', 'mv3-mus-btn', '＋');
     add.type = 'button';
-    add.title = 'Add to the Music track, after whatever is already there';
+    // (phase V23) The other variant of its generation follows when this one is shorter than the video.
+    const twin = t.gen && list.some(x => x && x.gen === t.gen && x.id !== t.id);
+    add.title = 'Lay it on the lane, cut to the video' + (twin ? ' - the other variant follows if this one is shorter, crossing over 3 s' : '');
     add.addEventListener('click', async () => {
       add.disabled = true;
-      try { await _add(t.audioPath, t.title); } finally { add.disabled = false; }
+      try { await _add(t, list); } finally { add.disabled = false; }
     });
     row.appendChild(add);
 
@@ -281,28 +299,24 @@ async function _generate(panel, foot, redraw) {
       }),
     }).then(r => r.json());
     if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'kie.ai refused the job');
+    if (!d.alertId) throw new Error('it was asked for, but its row in Alerts was not written - it will not be filed');
 
-    let audioPath = null;
-    // Every four seconds for twenty minutes. Suno usually answers inside three, but the
-    // second variant is what the status endpoint waits for and it can lag well behind the
-    // first - giving up early is how a paid job gets thrown away a few seconds short.
-    for (let i = 0; i < 300; i++) {
+    // THE SERVER SEES IT THROUGH (phase V23): the row in Alerts is followed until it ends - both variants are
+    // downloaded and filed by then. Twenty minutes is the row's own limit; a blip in reading it is not a failure.
+    // Gone is not failed: the row was cleared from Alerts, and what it made is on the list.
+    for (;;) {
       await _sleep(4000);
-      const s = await fetch('/api/audio/suno/status/' + encodeURIComponent(d.taskId)).then(r => r.json());
-      if (!s || !s.success) continue;                     // a blip in polling is not a failure
-      if (s.state === 'failed') throw new Error(s.error || 'Suno could not make that one');
-      if (s.state === 'success' && s.audioPath) { audioPath = s.audioPath; break; }
-      prog.say(s.stage === 'FIRST_SUCCESS' ? 'first half is in, waiting for the second…' : 'writing the track…');
+      let it, status = 0;
+      try { const r = await fetch('/api/alerts/' + encodeURIComponent(d.alertId)); status = r.status; it = ((await r.json()) || {}).item; }
+      catch (e) { continue; }
+      if (!it) { if (status === 404) break; continue; }
+      if (it.state === 'done') break;
+      if (it.state === 'failed') throw new Error(it.error || 'Suno could not make that one');
+      prog.say(it.stage || 'writing the track…');
     }
-    if (!audioPath) throw new Error('gave up waiting for Suno');
 
-    const id = 'suno_' + Date.now();
-    await fetch('/api/audio/suno/library', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, title, audioPath, style }),
-    });
     prog.finish();
-    say('"' + title + '" is in the library.');
+    say('"' + title + '" is in the library - two variants, · 1 and · 2.');
     // Into the library and NOT onto the lane. A generated track is a candidate, not a
     // decision: you listen to it first, and often to the one before it again. It arrives at
     // the top of the list - the server unshifts it - and the panel opens on that list, so

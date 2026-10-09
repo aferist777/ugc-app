@@ -99,8 +99,10 @@ async function runBlank(item) {
   }
 
   // Into the folder of the project the entry's timeline belongs to (lib/shelf-files.js).
+  // Written under a draft name the shelf does not show, and given its own at the end (lib/mv3b-job.js, drafts).
   const name = 'mv3q_' + Date.now() + '.mp4';
-  const out = path.join(require('../lib/shelf-files').rendersDir(item.key).dir, name);
+  const final = path.join(require('../lib/shelf-files').rendersDir(item.key).dir, name);
+  const out = JOB.draftOf(final);
   _startedAt = Date.now();
   const done = BUSY.start();
   _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
@@ -142,21 +144,22 @@ async function runBlank(item) {
         if (it && it.phase !== phase) { it.phase = phase; it.percent = 0; it.remain = null; write(t); }
       };
       try {
-        const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase));
+        const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase), final);
         const said = [...(built.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) warning = said.join('; ');
       } catch (e) {
-        try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
         ok = false; error = e.message;
       }
     }
+    // A failed render leaves nothing behind - its draft and whatever the passes wrote beside it.
+    if (!ok) JOB.dropDraft(out);
     done();
     _active = null;
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
       it.phase = null;
-      if (ok) { it.status = 'done'; it.url = toUrl(out); it.warning = warning; }
+      if (ok) { it.status = 'done'; it.url = toUrl(final); it.warning = warning; }
       else { it.status = 'failed'; it.error = error; it.log = log.slice(-800); }
       it.tookMs = Date.now() - _startedAt;
     }
@@ -167,6 +170,7 @@ async function runBlank(item) {
     _proc = null; _active = null;
     done();
     built.dispose();
+    JOB.dropDraft(out);
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = e.message; }
@@ -360,6 +364,9 @@ function removeByUrl(url) {
   if (s.items.length !== before) write(s);
   return before - s.items.length;
 }
+
+// What a render interrupted by a closed app or a crash left: nothing renders while the server starts (phase V23).
+try { JOB.sweepDrafts(); } catch (e) { console.warn('[mv3q] could not clear unfinished renders:', e.message); }
 
 module.exports = router;
 module.exports.fileFinished = fileFinished;

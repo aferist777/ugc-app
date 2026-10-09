@@ -657,7 +657,14 @@ function _sounds(tl, t) {
       if (!(v > 0)) continue;
       const s = +c.start, e = s + (+c.dur);
       if (t < s - 0.0001 || t >= e) continue;
-      out.push({ c, gain: Math.min(1, v) });
+      // (phase V23) Its own fades, as the render's afade draws them (lib/mv3b-render.js soundFades).
+      const d = Math.max(0, +c.dur || 0);
+      let fi = Math.max(0, Math.min(d, +c.fadeIn || 0)), fo = Math.max(0, Math.min(d, +c.fadeOut || 0));
+      if (fi + fo > d && fi + fo > 0) { const k = d / (fi + fo); fi *= k; fo *= k; }
+      let f = 1;
+      if (fi > 0) f = Math.min(f, Math.max(0, (t - s) / fi));
+      if (fo > 0) f = Math.min(f, Math.max(0, (e - t) / fo));
+      out.push({ c, gain: Math.min(1, v * f) });
     }
   }
   return out;

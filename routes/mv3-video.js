@@ -82,7 +82,7 @@ function _mediaOf(list) {
   })).filter(m => m.path);
   for (let i = 0; i < media.length; i++) {
     const abs = toDiskExisting(media[i].path);
-    if (!abs || !fs.existsSync(abs)) return { error: 'attachment ' + (i + 1) + ' is not in the library any more' };
+    if (!abs || !fs.existsSync(abs)) return { error: 'attachment ' + (i + 1) + (media[i].label ? ' («' + media[i].label + '»)' : '') + ' is not in this library' };
     // (phase V7) A clip or a sound goes as the part the person chose: its start and end come with it, and the part is
     // checked against the file itself when it is prepared - before the money (lib/video-prep.js).
     if (media[i].kind !== 'image') {

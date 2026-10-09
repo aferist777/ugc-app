@@ -52,7 +52,6 @@ const { generateMissingThumbs } = require('./lib/helpers');
   const d = require('./lib/studio3d-store').sync();
   if (d.added) console.log(`[projects] ${d.added} 3D Studio scene folder(s) joined the list`);
 }
-const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── One person ──────────────────────────────────────────────────────────────
 // The desktop app has no sign-in: whoever opens the window is its user. Routes still read
@@ -212,13 +211,10 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     try { require('./lib/gen-jobs').resume(); }
     catch (e) { console.warn('[gen-jobs] could not resume:', e.message); }
 
-    // Recover any unfinished generation tasks from previous session
-    recoverPendingTasks()
-      .then(recovered => {
-        if (recovered.length)
-          console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
-      })
-      .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
+    // (phase V23) The old recovery of unfinished tasks is gone: the Alerts rows above see every portrait and sheet
+    // through, into the character's folder. Its store is left over in older libraries, and nothing reads it.
+    try { require('fs').rmSync(require('path').join(require('./lib/config').DATA_DIR, 'pending-tasks.json'), { force: true }); }
+    catch (e) { /* held open: it stays, unread */ }
   }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });
 

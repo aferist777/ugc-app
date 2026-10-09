@@ -37,8 +37,10 @@ router.post('/mv3b/render', async (req, res) => {
     if (ready.error) return res.status(400).json({ success: false, error: ready.error });
 
     // Into the folder of the project the timeline belongs to (lib/shelf-files.js).
+    // Written under a draft name the shelf does not show, and given its own at the end (lib/mv3b-job.js, drafts).
     const name = 'mv3b_' + Date.now() + '.mp4';
-    const out = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
+    const final = path.join(require('../lib/shelf-files').rendersDir(String((req.body || {}).key || '')).dir, name);
+    const out = JOB.draftOf(final);
     // `span` is the length the current phase's ffmpeg position counts up to: the film, then the
     // film at its new speed, then that and the tail.
     const job = { id, status: 'running', phase: 'render', url: null, error: null, warning: null, log: '',
@@ -62,7 +64,7 @@ router.post('/mv3b/render', async (req, res) => {
     });
     proc.on('close', async (code) => {
       ready.dispose();
-      if (code !== 0 || !fs.existsSync(out)) { done(); job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
+      if (code !== 0 || !fs.existsSync(out)) { JOB.dropDraft(out); done(); job.status = 'failed'; job.error = 'ffmpeg exited ' + code; return; }
       const s = ready.settings;
       const spans = { speeding: ready.dur / s.speed, tail: ready.dur / s.speed + s.tailMinutes * 60 };
       try {
@@ -70,19 +72,19 @@ router.post('/mv3b/render', async (req, res) => {
           const ph = phase === 'speed' ? 'speeding' : phase;
           if (job.phase !== ph) { job.phase = ph; job.span = spans[ph] || 0; job.phaseAt = Date.now(); }
           job.at = at;
-        });
+        }, final);
         const said = [...(ready.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) job.warning = said.join('; ');
-        job.status = 'done'; job.url = toUrl(out);
+        job.status = 'done'; job.url = toUrl(final);
       } catch (e) {
         // Not a render with a setting quietly missing: the file goes, and the reason is said.
-        try { fs.rmSync(out, { force: true }); } catch (e2) { /* held open */ }
+        JOB.dropDraft(out);
         job.status = 'failed'; job.error = e.message;
       } finally {
         done();
       }
     });
-    proc.on('error', (e) => { ready.dispose(); done(); job.status = 'failed'; job.error = e.message; });
+    proc.on('error', (e) => { ready.dispose(); JOB.dropDraft(out); done(); job.status = 'failed'; job.error = e.message; });
 
     res.json({ success: true, jobId: id, w: ready.w, h: ready.h, dur: ready.dur });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

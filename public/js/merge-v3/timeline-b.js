@@ -1160,6 +1160,9 @@ export function splitAtPlayhead() {
       b.id = _id();
       b.start = at;
       b.dur = right;
+      // (phase V23) A sound's fade belongs to its own end: the left half keeps the fade in, the right the fade out.
+      delete b.fadeIn;
+      delete c.fadeOut;
       if (c.reversed) {
         // Played backwards, the first half on the timeline is the END of the source window.
         b.trimIn = _r2(+c.trimIn || 0);

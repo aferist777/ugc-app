@@ -429,6 +429,7 @@ function _voicesShelf() {
 // existing. The export flow deletes the file when you press Cancel on the preview, so "kept" and
 // "on the shelf" cannot drift apart. An item's id is its path inside the renders folder.
 const VID_RE = /\.(mp4|mov|webm|mkv)$/i;
+const JOB = require('../lib/mv3b-job');
 
 function _renderFiles() {
   const dir = FINALS_DIR;
@@ -436,9 +437,10 @@ function _renderFiles() {
   let ents = [];
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
   for (const d of ents) {
-    if (d.isFile() && VID_RE.test(d.name)) out.push(d.name);
+    // A render still in the works (its draft name, lib/mv3b-job.js) is not on the shelf yet.
+    if (d.isFile() && VID_RE.test(d.name) && !JOB.isDraft(d.name)) out.push(d.name);
     else if (d.isDirectory() && d.name !== 'thumbs') {
-      try { for (const f of fs.readdirSync(path.join(dir, d.name))) if (VID_RE.test(f)) out.push(`${d.name}/${f}`); } catch (e) { /* unreadable */ }
+      try { for (const f of fs.readdirSync(path.join(dir, d.name))) if (VID_RE.test(f) && !JOB.isDraft(f)) out.push(`${d.name}/${f}`); } catch (e) { /* unreadable */ }
     }
   }
   return out;

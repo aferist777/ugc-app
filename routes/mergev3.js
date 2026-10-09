@@ -596,9 +596,14 @@ router.delete('/mv3/timeline/:key', (req, res) => {
         proj = e;
       }
     }
+    // (phase V23) Its two conversations and the finished records of what was made for it go too, whichever way it is
+    // deleted; what was made stays on the shelves. Asked before the timeline goes: a draft's is the drafts' conversation.
+    const CHAT = require('../lib/mv3-chat');
+    const talk = CHAT.threadOf(key) === CHAT.DRAFT ? null : key;
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    if (talk) { try { CHAT.forget(talk); } catch (e) { console.warn('[mv3] the chats of a deleted project were not cleared -', e.message); } }
     let files = null;
     if (proj) {
       const { moved } = require('../lib/projects-store').remove(proj.id);

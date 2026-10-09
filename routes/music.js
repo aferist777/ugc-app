@@ -2,11 +2,16 @@
 
 // Music for the timeline: Suno tracks made through kie.ai, and the small library of the ones kept.
 //
-//   POST   /api/audio/suno/generate          { style, title, ... } -> { taskId }
-//   GET    /api/audio/suno/status/:taskId    pending | success { audioPath } | failed
+//   POST   /api/audio/suno/generate          { style, title, where, ... } -> { taskId, alertId }
 //   GET    /api/audio/suno/library           { list }
-//   POST   /api/audio/suno/library           { id, title, audioPath, style }
 //   DELETE /api/audio/suno/library/:id
+//
+// TWO TRACKS PER GENERATION (phase V23, the owner 2026-10-09): Suno makes two variants at once, and both are kept -
+// two files, `suno_<task>_1.mp3` and `_2.mp3`, and two records side by side, "<title> · 1" and "<title> · 2", with
+// the generation (`gen`) and the variant (`variant`) on them. Merge's music panel lays the other variant after the
+// one chosen when that one is shorter than the video, crossing into it over three seconds (merge-v3/music.js).
+// Only the server writes them: the panel follows the generation's Alerts row (lib/gen-jobs.js) and reads the list.
+// Older generations were joined into one file; their variants were not kept apart, and they stay as they are.
 //
 // The addresses keep their /audio/ prefix: Merge's music lane and the Library's music shelf call
 // them. Everything else the old routes/audio.js held - voices and voice design, TTS, avatars,
@@ -16,9 +21,9 @@ const express    = require('express');
 const path       = require('path');
 const fs         = require('fs');
 const axios      = require('axios');
-const ffmpegPath = require('ffmpeg-static');
 const { writeFileAtomic } = require('../lib/atomic-write');
-const { KIE_BASE, MEDIA, TEMP_DIR, DATA_DIR } = require('../lib/config');
+const { KIE_BASE, MEDIA, DATA_DIR } = require('../lib/config');
+const REFUSAL = require('../lib/gen-refusal');
 const { kieHeaders } = require('../lib/helpers');
 
 const router = express.Router();
@@ -32,11 +37,30 @@ function _saveSunoLib(list) {
   try { writeFileAtomic(SUNO_LIB_FILE, JSON.stringify(list, null, 2)); } catch {}
 }
 
+// ONE RECORD PER FILE (phase V23). Until then the music panel wrote a second record of every track the server had
+// filed already (`suno_<time>` beside `suno_<task>`): the one named after its file stays, the others go. At start.
+function _dedupeSunoLib() {
+  const list = _loadSunoLib();
+  if (!Array.isArray(list) || !list.length) return 0;
+  const stem = (p) => String(p || '').split('/').pop().replace(/\.[^.]+$/, '');
+  const best = new Map();
+  for (const t of list) {
+    if (!t || !t.audioPath) continue;
+    const was = best.get(t.audioPath);
+    if (!was || (t.id === stem(t.audioPath) && was.id !== stem(was.audioPath))) best.set(t.audioPath, t);
+  }
+  const keep = list.filter(t => !t || !t.audioPath || best.get(t.audioPath) === t);
+  if (keep.length === list.length) return 0;
+  _saveSunoLib(keep);
+  console.log('[music] ' + (list.length - keep.length) + ' second record(s) of the same track removed');
+  return list.length - keep.length;
+}
+try { _dedupeSunoLib(); } catch (e) { console.warn('[music] the music list was not tidied:', e.message); }
+
 // POST /api/audio/suno/generate
 // Body: { style, title, negativeTags, styleWeight, weirdnessConstraint, model, targetDuration }
 // targetDuration (sec) is informational — Suno V4/V5 in customMode always generates two
-// ~1:30-2:30 variants per request, which the status endpoint concatenates (crossfade) into a
-// single 3-5 min track. We log the target to help debugging; downstream concat doesn't gate on it.
+// ~1:30-2:30 variants per request, kept as two tracks (above).
 // WHERE kie IS TOLD TO REPORT. kie's Suno endpoint used here (/api/v1/generate, docs.kie.ai/old-model/suno-api/
 // generate-music) REQUIRES a callback address, and kie POSTs every finished task to it - the track links, the
 // title, the style. This app never reads a callback (the task is polled, the status route below and
@@ -52,7 +76,7 @@ async function _submitSuno(b) {
   if (!style) throw Object.assign(new Error('a style is needed'), { status: 400 });
   const BG_SUFFIX = ', background music for UGC short video, non-intrusive, subtle energy, no lyrics';
   const fullStyle = (style + BG_SUFFIX).slice(0, 1000);
-  if (targetDuration) console.log(`[audio/suno/generate] target ${targetDuration}s — will concat both Suno variants for ~3-5 min coverage`);
+  if (targetDuration) console.log(`[audio/suno/generate] target ${targetDuration}s - two variants come back, both kept`);
   const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/generate`,
       {
@@ -103,63 +127,20 @@ router.post('/audio/suno/generate', async (req, res) => {
   }
 });
 
-// Helper: FFmpeg-concatenate two MP3 URLs into a single file with crossfade.
-// Suno returns 2 ~1:30-2:30 variants per request (sunoData[0] and sunoData[1]) — we
-// download both, then chain them via acrossfade=d=1 for a ~3-5 minute background
-// track. The crossfade hides the timbre shift between the two variants.
-async function _concatSunoVariants(urlA, urlB, taskId) {
-  const tmpA = path.join(TEMP_DIR, `suno_tmp_${taskId}_a.mp3`);
-  const tmpB = path.join(TEMP_DIR, `suno_tmp_${taskId}_b.mp3`);
-  // NAMED AFTER THE TASK, not the clock: this answer is asked for twice now - by the window that
-  // is watching and by the server's runner (lib/gen-jobs.js) - and a name with the time in it
-  // made every extra reading another copy of the same track.
-  const outName = `suno_${taskId}.mp3`;
-  const outPath = path.join(MEDIA.audio, outName);
-  if (fs.existsSync(outPath)) return outName;
-
-  const [resA, resB] = await Promise.all([
-    axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 }),
-    axios({ url: urlB, method: 'GET', responseType: 'arraybuffer', timeout: 90000 }),
-  ]);
-  fs.writeFileSync(tmpA, Buffer.from(resA.data));
-  fs.writeFileSync(tmpB, Buffer.from(resB.data));
-
-  await new Promise((resolve, reject) => {
-    const { spawn } = require('child_process');
-    const args = [
-      '-y',
-      '-i', tmpA,
-      '-i', tmpB,
-      '-filter_complex', '[0:a][1:a]acrossfade=d=1:c1=tri:c2=tri[a]',
-      '-map', '[a]',
-      '-c:a', 'libmp3lame',
-      '-b:a', '192k',
-      outPath,
-    ];
-    // ffmpegPath, not the bare name. This line asked the PATH for an ffmpeg and there is
-    // none on it here, so every concat since it was written has thrown ENOENT and quietly
-    // fallen back to the first variant alone - half the track, with the other half already
-    // downloaded and sitting next to it. Everything else in this file uses ffmpeg-static.
-    const proc = spawn(ffmpegPath, args, { windowsHide: true });
-    let stderr = '';
-    proc.stderr.on('data', c => { stderr += c.toString(); });
-    proc.on('error', reject);
-    proc.on('close', code => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg concat failed (${code}): ${stderr.slice(-300)}`));
-    });
-  });
-
-  // Clean up temp files (don't await — fire-and-forget)
-  fs.unlink(tmpA, () => {});
-  fs.unlink(tmpB, () => {});
-  return outName;
+// WHERE THE ANSWER ABOUT ONE GENERATION COMES FROM: the server's runner (lib/gen-jobs.js) asks every few seconds.
+// Each variant is downloaded once, under the task's name - asked again, the files already there are the answer.
+async function _fetchVariant(url, name) {
+  const dest = path.join(MEDIA.audio, name);
+  if (!fs.existsSync(dest)) {
+    const r = await axios({ url, method: 'GET', responseType: 'arraybuffer', timeout: 90000 });
+    // Written beside and renamed: a download cut off half way must not look like a track.
+    const part = dest + '.part';
+    fs.writeFileSync(part, Buffer.from(r.data));
+    fs.renameSync(part, dest);
+  }
+  return '/media/audio/' + name;
 }
 
-// GET /api/audio/suno/status/:taskId
-// WHERE THE ANSWER ABOUT ONE TRACK COMES FROM, whoever is asking: the window that is watching it,
-// or the server's own runner (lib/gen-jobs.js) for somebody who has walked away. Downloading and
-// joining happen once per task, so both may ask and one file lands.
 async function _pollSuno(taskId) {
   const statusRes = await axios.get(
     `${KIE_BASE}/api/v1/generate/record-info`,
@@ -169,52 +150,23 @@ async function _pollSuno(taskId) {
   const status = data?.status;  // PENDING | TEXT_SUCCESS | FIRST_SUCCESS | SUCCESS | *_FAILED
   const FAILED = ['CREATE_TASK_FAILED', 'GENERATE_AUDIO_FAILED', 'SENSITIVE_WORD_ERROR', 'CALLBACK_EXCEPTION'];
 
-  // Only treat as success once BOTH variants are ready (Suno fills sunoData[0]
-  // at FIRST_SUCCESS then sunoData[1] later at SUCCESS). If we concat too early
-  // we'd only get one ~2 min track. So gate on SUCCESS specifically.
+  // Only once BOTH variants are ready: Suno fills sunoData[0] at FIRST_SUCCESS and sunoData[1] later, at SUCCESS.
   if (status === 'SUCCESS') {
-    const urlA = data?.response?.sunoData?.[0]?.audioUrl;
-    const urlB = data?.response?.sunoData?.[1]?.audioUrl;
-    if (!urlA) return { state: 'pending' };
-    // If only one variant came back (rare), save it alone — better than failing.
-    if (!urlB) {
-      const filename = `suno_${taskId}.mp3`;
-      const destPath = path.join(MEDIA.audio, filename);
-      if (!fs.existsSync(destPath)) {
-        const r = await axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 });
-        fs.writeFileSync(destPath, Buffer.from(r.data));
-      }
-      return { state: 'success', audioPath: `/media/audio/${filename}`, concatenated: false };
-    }
-    // Both variants present — concat via crossfade into one 3-5 min track.
-    try {
-      const outName = await _concatSunoVariants(urlA, urlB, taskId);
-      return { state: 'success', audioPath: `/media/audio/${outName}`, concatenated: true };
-    } catch (e) {
-      console.error('[audio/suno/status] concat failed, falling back to single track:', e.message);
-      const filename = `suno_${taskId}.mp3`;
-      const destPath = path.join(MEDIA.audio, filename);
-      if (!fs.existsSync(destPath)) {
-        const r = await axios({ url: urlA, method: 'GET', responseType: 'arraybuffer', timeout: 90000 });
-        fs.writeFileSync(destPath, Buffer.from(r.data));
-      }
-      return { state: 'success', audioPath: `/media/audio/${filename}`, concatenated: false };
-    }
+    const urls = (data?.response?.sunoData || []).map(x => x && x.audioUrl).filter(Boolean).slice(0, 2);
+    if (!urls.length) return { state: 'pending' };
+    // One variant alone (rare) is kept alone.
+    const variants = [];
+    for (let i = 0; i < urls.length; i++) variants.push(await _fetchVariant(urls[i], `suno_${taskId}_${i + 1}.mp3`));
+    return { state: 'success', audioPath: variants[0], variants };
   }
-  if (FAILED.includes(status)) return { state: 'failed', error: data?.errorMessage || status };
+  // A refusal of the words (SENSITIVE_WORD_ERROR) is answered the same every time: no paid retry (lib/gen-refusal.js).
+  if (FAILED.includes(status)) {
+    const error = data?.errorMessage || status;
+    return { state: 'failed', error, refused: REFUSAL.isRefusal(status + ' ' + error) };
+  }
   // FIRST_SUCCESS = first variant ready, second still cooking — keep polling
-  return { state: 'pending', stage: status };
+  return { state: 'pending', stage: status === 'FIRST_SUCCESS' ? 'the first variant is in, waiting for the second' : '' };
 }
-
-router.get('/audio/suno/status/:taskId', async (req, res) => {
-  const { taskId } = req.params;
-  try {
-    res.json({ success: true, ...(await _pollSuno(taskId)) });
-  } catch (err) {
-    console.error('[audio/suno/status]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.message });
-  }
-});
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
 // A track asked for in Merge is a row in the journal, and the server sees it through: five
@@ -228,16 +180,18 @@ JOBS.register('music', {
   poll: (rec) => _pollSuno(rec.taskIds[0]),
   file: async (rec, out) => {
     const r = ((rec.job || {}).params || {}).request || {};
-    const id = 'suno_' + rec.taskIds[0];
+    const gen = String(rec.taskIds[0]);
+    const title = String(r.title || 'UGC Background').slice(0, 80);
+    const variants = (out.variants && out.variants.length) ? out.variants : [out.audioPath];
     const lib = _loadSunoLib();
-    if (!lib.some(x => x && x.id === id)) {
-      lib.unshift({
-        id, title: String(r.title || 'UGC Background').slice(0, 80), audioPath: out.audioPath,
-        style: String(r.style || ''), createdAt: new Date().toISOString(),
-      });
-      _saveSunoLib(lib);
-    }
-    return { path: out.audioPath, media: 'audio', title: String(r.title || '') };
+    const now = new Date().toISOString();
+    // The two side by side, the first on top - the list is newest first.
+    const add = variants.map((audioPath, i) => ({
+      id: 'suno_' + gen + '_' + (i + 1), title: variants.length > 1 ? title + ' · ' + (i + 1) : title, audioPath,
+      style: String(r.style || ''), createdAt: now, gen, variant: i + 1,
+    })).filter(t => !lib.some(x => x && (x.id === t.id || x.audioPath === t.audioPath)));
+    if (add.length) { lib.unshift(...add); _saveSunoLib(lib); }
+    return { path: variants[0], media: 'audio', title, variants };
   },
   submit: async (request) => ({ taskId: await _submitSuno(request || {}) }),
 });
@@ -245,16 +199,6 @@ JOBS.register('music', {
 
 // GET /api/audio/suno/library
 router.get('/audio/suno/library', (_req, res) => res.json({ success: true, list: _loadSunoLib() }));
-
-// POST /api/audio/suno/library — save a generated track
-router.post('/audio/suno/library', (req, res) => {
-  const { id, title, audioPath, style } = req.body;
-  if (!id || !audioPath) return res.status(400).json({ success: false, error: 'id and audioPath required' });
-  const lib = _loadSunoLib();
-  lib.unshift({ id, title: title || 'Untitled', audioPath, style: style || '', createdAt: new Date().toISOString() });
-  _saveSunoLib(lib);
-  res.json({ success: true });
-});
 
 // DELETE /api/audio/suno/library/:id
 router.delete('/audio/suno/library/:id', (req, res) => {

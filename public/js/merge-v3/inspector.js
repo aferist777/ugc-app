@@ -389,6 +389,15 @@ function _blankSound(host, track, c, set, pair) {
     ? 'Muted is the bottom of the travel.'
     : 'Silent. Raise it to hear this clip in the preview and in the export.'));
 
+  // (phase V23) Its own fades - the two variants of a Suno track cross into each other over three seconds.
+  const secs = (v) => (v > 0 ? (+v).toFixed(1) + 's' : 'off');
+  host.appendChild(C.row('Fade in', C.slider({
+    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeIn || 0), fmt: secs, onChange: (v) => set('fadeIn', v),
+  })));
+  host.appendChild(C.row('Fade out', C.slider({
+    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeOut || 0), fmt: secs, onChange: (v) => set('fadeOut', v),
+  })));
+
   host.appendChild(C.row('Speed', C.pair(
     C.slider({
       min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,

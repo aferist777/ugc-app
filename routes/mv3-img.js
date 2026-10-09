@@ -192,9 +192,22 @@ async function _work(o) {
 // Read whole rather than paged. A project's conversation is bounded by what one person typed
 // into it, and the pictures inside it are thumbnails on demand - so the whole of it costs less
 // than the paging would.
+// (phase V23) An attachment of the video chat that is not in this library - a card brought by Import without its
+// character or place - is marked `gone`: the card says what is missing before anything is pressed.
+function _markGone(items) {
+  const seen = new Map();
+  const here = (p) => {
+    if (!seen.has(p)) { let abs = null; try { abs = toDiskExisting(p); } catch (e) { abs = null; } seen.set(p, !!(abs && fs.existsSync(abs))); }
+    return seen.get(p);
+  };
+  return items.map(m => (!m || !Array.isArray(m.media) || !m.media.some(a => a && a.path && !here(String(a.path).split('?')[0]))) ? m
+    : Object.assign({}, m, { media: m.media.map(a => (a && a.path && !here(String(a.path).split('?')[0])) ? Object.assign({}, a, { gone: true }) : a) }));
+}
+
 router.get('/mv3/chat', (req, res) => {
   try {
-    res.json({ success: true, items: CHAT.read(String(req.query.project || ''), req.query.kind) });
+    const items = CHAT.read(String(req.query.project || ''), req.query.kind);
+    res.json({ success: true, items: req.query.kind === 'clip' ? _markGone(items) : items });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

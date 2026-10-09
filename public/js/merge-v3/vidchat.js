@@ -1396,6 +1396,12 @@ function VIDEOS(ctx) {
     if (!mm || !mm.usable) return ['Not available now.', (mm && mm.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
     // A two-step card always sends a picture - its storyboard (review V8).
+    // (phase V23) A card brought by Import without its character or place: what is missing, before the press.
+    const gone = (m.media || []).filter(a => a && a.gone);
+    if (gone.length) {
+      const what = gone.map(a => a.label ? '«' + a.label + '»' : (a.kind === 'video' ? 'a clip' : a.kind === 'audio' ? 'a sound' : 'a picture')).join(', ');
+      return ['Not in this library.', what + (gone.length === 1 ? ' is' : ' are') + ' not here - it stayed in the library this chat came from. Send it again with another in its place.'];
+    }
     if (((m.media || []).length || m.card.board) && !_table.r2) return ['Attachments need R2.', (m.card.board ? 'The ' + (m.card.board.kind === 'frame' ? 'picture' : 'storyboard') + ' goes to the video as a picture - ' : 'The models read pictures ') + 'from a public link: set R2 on Admin → API keys.'];
     return '';
   }
@@ -2119,7 +2125,8 @@ function VIDEOS(ctx) {
       count[k]++;
       const cell = refCell(a, k, count[k], { show: ctx.peekShow, hide: ctx.peekHide });
       cell.title = (REF_WORD[k] + ' ' + count[k]) + (a.label ? ' - ' + a.label : '');
-      const wrap = el('div', 'vc-ref');
+      const wrap = el('div', 'vc-ref' + (a.gone ? ' is-gone' : ''));
+      if (a.gone) cell.title += ' - not in this library';
       wrap.appendChild(cell);
       if (a.label) wrap.appendChild(el('span', 'lab', a.label));
       row.appendChild(wrap);

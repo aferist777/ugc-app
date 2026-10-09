@@ -24,7 +24,6 @@ const {
 const { reasonOf, rehost, isFetchFailure, PROVIDER_LABELS } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
-const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
   loadChars, findChar, upsertChar, patchChar, deleteChar,
@@ -131,7 +130,6 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     }
     stage('asking the engines');
     const sub = await _sheetTask(prompt, imageUrl, charId, alertId);
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
     // What actually drew it, not what the ladder hoped for: a step can be skipped or refuse,
     // and the record is what Regenerate later reads. sheetJob is what makes the SECOND half of
     // the walk possible - a task that is accepted and then fails resumes below the steps that
@@ -211,7 +209,6 @@ function _sheetLetGo(charId, taskId) {
     patchChar(charId, { sheetTask: null, sheetJob: null, sheetNote: null,
       sheetError: 'the sheet was let go of', sheetLetGo: taskId ? String(taskId) : null });
   } catch (e) { /* the character is gone */ }
-  if (taskId) { try { removePendingTask(taskId); } catch (e) { /* not pending */ } }
 }
 
 // The fields a fresh submit writes. Kept in one place because the two callers - the background
@@ -551,7 +548,6 @@ async function _retrySheetElsewhere(c, why) {
       // where this one actually got to.
       sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [sub.provider]) },
     });
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId: c.id });
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
     return { taskId: sub.taskId, note };
   } catch (e) {
@@ -582,15 +578,12 @@ async function _resolveSheet(taskId, charId, kind) {
   // Read again after the wait: a cancel that landed meanwhile, or a character deleted meanwhile.
   const now = findChar(charId);
   if (!now) return { state: 'failed', error: 'the character was deleted' };
-  if (letGo(now)) { removePendingTask(taskId); return { state: 'failed', error: 'the sheet was let go of' }; }
+  if (letGo(now)) return { state: 'failed', error: 'the sheet was let go of' };
   if (result.state === 'success') {
     patchChar(charId, {
       [field]: result.imagePath, [field + 'Task']: null, sheetError: null, sheetNote: null, sheetJob: null,
     });
-    removePendingTask(taskId);
   } else if (result.state === 'failed') {
-    removePendingTask(taskId);
-
     // A task can be accepted and fail LATER - ModelRateLimitError arrives a minute after the
     // submit was taken happily. That failure is exactly as recoverable as one at submit time,
     // and the caller is still sitting here waiting, so it is retried on the next aggregator

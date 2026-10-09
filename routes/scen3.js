@@ -1775,15 +1775,26 @@ function _keepEnvMotion(url, motion) {
   return entry;
 }
 const _envMotionOf = (url) => String((SHELF_META.read('environments')[String(url || '')] || {}).motion || '');
-async function _askEnvMotion(url) {
-  const imageUrl = await _hostLocal(url);
-  const motion = _cleanText(await _ask([{ role: 'user', content: [
-    { type: 'text', text: ENV_MOTION_ASK },
-    { type: 'image_url', image_url: { url: imageUrl } },
-  ] }])).slice(0, 600);
-  if (!motion) throw new Error('the agent said nothing about this place');
-  console.log('[scen3/env/motion] ' + String(url).split('/').pop() + ' -> ' + motion.length + 'ch');
-  return _keepEnvMotion(url, motion);
+// ONE ANALYSIS PER PLACE AT A TIME (phase V23, the rest of X0): several clips started together on a place with no
+// motion yet all wait for the same answer - each used to ask the agent for its own.
+const _envMotionAsking = new Map();      // address -> the analysis under way
+
+function _askEnvMotion(url) {
+  const key = String(url);
+  const live = _envMotionAsking.get(key);
+  if (live) return live;
+  const p = (async () => {
+    const imageUrl = await _hostLocal(url);
+    const motion = _cleanText(await _ask([{ role: 'user', content: [
+      { type: 'text', text: ENV_MOTION_ASK },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ] }])).slice(0, 600);
+    if (!motion) throw new Error('the agent said nothing about this place');
+    console.log('[scen3/env/motion] ' + String(url).split('/').pop() + ' -> ' + motion.length + 'ch');
+    return _keepEnvMotion(url, motion);
+  })().finally(() => { _envMotionAsking.delete(key); });
+  _envMotionAsking.set(key, p);
+  return p;
 }
 
 router.post('/scen3/env/motion', async (req, res) => {
