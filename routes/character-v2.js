@@ -110,14 +110,22 @@ router.post('/character-v2/analyze', async (req, res) => {
 const JOBS = require('../lib/gen-jobs');
 const ALERTS = require('../lib/alerts');
 
+// PAID ONCE (phase V22, the owner 2026-10-09: "as in the chats"). The row is marked `asked` just before each
+// create that costs money and the mark is taken back when the aggregator ANSWERS no (lib/cv2-run.js `onAsk` /
+// `onStep`); a create with no answer stops the ladder. A row found with no task, `asked`, and its asking not alive
+// here - the app was closed in the middle of it - may have been paid for: it says so, and nothing asks again by itself.
+const NOT_ASKED = 'the app was closed before the portrait was asked for - try again';
+const MAYBE_PAID = 'the app was closed while the portrait was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again';
+
 JOBS.register('portrait', {
   timeoutMs: 20 * 60 * 1000,
   poll: async (rec) => {
     // Written at the press, before the ladder has answered: no task yet is "not started" - while the
     // asking is alive in this process. A row the app was closed on in the middle of it gets no task ever.
     if (!rec.taskIds[0]) {
-      return _asking.has(((rec.job || {}).params || {}).kick) ? { state: 'pending' }
-        : { state: 'failed', error: 'the app was closed before the portrait was asked for - try again' };
+      const p = (rec.job || {}).params || {};
+      if (_asking.has(p.kick)) return { state: 'pending' };
+      return { state: 'failed', error: p.asked ? MAYBE_PAID : NOT_ASKED };
     }
     const seen = WATCH.peek(rec.taskIds[0]);
     if (seen && seen.state === 'success') return { state: 'success', imagePath: seen.imagePath };
@@ -127,7 +135,18 @@ JOBS.register('portrait', {
     return await resolveTask(rec.taskIds[0], MEDIA.work, 'generated');
   },
   file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
-  submit: async (request) => ({ taskId: (await _submitPortrait(request || {})).taskId }),
+  // Its asking is still going on (a row let go of while the ladder was answering): asked again now, two
+  // tasks would race for one row.
+  busy: (rec) => _asking.has((((rec.job || {}).params || {}).kick) || ''),
+  // Asked for again from Alerts: the row runs again at once with no task, on a kick of its own, and the asking
+  // goes on behind it as on the first press - marked `asked` and stopped on no answer the same way.
+  submit: async (request, row) => {
+    const b = { ...(request || {}) };
+    if (!String(b.prompt || '').trim()) throw new Error('prompt is required');
+    const kick = _kickToken();
+    _asking.add(kick);
+    return { stage: 'asking the engine', params: { kick, asked: false }, later: () => _askBehind(row.id, kick, b) };
+  },
 });
 
 // ── POST /api/character-v2/generate ──────────────────────────────────────────
@@ -139,8 +158,8 @@ JOBS.register('portrait', {
 // one hands every engine a fixed 9:16 - correct for the page it was written for, and the exact
 // opposite of what this one needs.
 // The asking itself, as a function: the server asks again when somebody presses retry in the
-// Alerts list, and that has to be the same request.
-async function _submitPortrait(b) {
+// Alerts list, and that has to be the same request. `hooks` are the ladder's onAsk / onStep.
+async function _submitPortrait(b, hooks) {
   {
     const prompt = String(b.prompt || '').trim();
     if (!prompt) throw Object.assign(new Error('prompt is required'), { status: 400 });
@@ -157,6 +176,8 @@ async function _submitPortrait(b) {
       prompt,
       imageUrls: hasRef ? [await _refUrl(b)] : [],
       aspect,
+      onAsk: hooks && hooks.onAsk,
+      onStep: hooks && hooks.onStep,
     });
 
     // Same bucket either way, so the page's one polling path resolves both.
@@ -172,6 +193,27 @@ async function _submitPortrait(b) {
 
 // The askings alive in this process, by the token their row carries (job.params.kick) - see the poll.
 const _asking = new Set();
+const _kickToken = () => 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// The asking behind a row's answer - the first press's and a retry's: it hands the row its task, or fails it
+// with the reason. The row is marked `asked` just before each create that costs money, and the mark is taken
+// back on an answered no (PAID ONCE, above).
+async function _askBehind(alertId, kick, b) {
+  try {
+    const sub = await _submitPortrait(b, {
+      onAsk: () => ALERTS.update(alertId, { params: { asked: true } }),
+      onStep: () => ALERTS.update(alertId, { params: { asked: false } }),
+    });
+    // A row let go of meanwhile stays let go of (update leaves it alone): the task was paid for when
+    // the ladder accepted it, the watcher still files it into media/work, and nothing follows it.
+    ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
+  } catch (err) {
+    console.error('[cv2/generate]', err.response?.data || err.message);
+    ALERTS.fail(alertId, reasonOf(err));       // a row let go of is left as it is (lib/alerts.js)
+  } finally {
+    _asking.delete(kick);
+  }
+}
 
 router.post('/character-v2/generate', async (req, res) => {
   const b = req.body || {};
@@ -184,7 +226,7 @@ router.post('/character-v2/generate', async (req, res) => {
   if (!b.where || typeof b.where !== 'object') b.where = { page: 'library', href: '/library?shelf=characters&make=1', label: 'Library · New Character · portrait' };
   {
     if (!String(b.prompt || '').trim()) return res.status(400).json({ success: false, error: 'prompt is required' });
-    const kick = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const kick = _kickToken();
     _asking.add(kick);                           // before the row: JOBS.submitted polls straight away
     let alertId = '';
     try {
@@ -199,17 +241,7 @@ router.post('/character-v2/generate', async (req, res) => {
       return res.status(500).json({ success: false, error: 'the Alerts row could not be written: ' + e.message });
     }
     res.json({ success: true, alertId });
-    try {
-      const sub = await _submitPortrait(b);
-      // A row let go of meanwhile stays let go of (update leaves it alone): the task was paid for when
-      // the ladder accepted it, the watcher still files it into media/work, and nothing follows it.
-      ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
-    } catch (err) {
-      console.error('[cv2/generate]', err.response?.data || err.message);
-      ALERTS.fail(alertId, reasonOf(err));       // a row let go of is left as it is (lib/alerts.js)
-    } finally {
-      _asking.delete(kick);
-    }
+    await _askBehind(alertId, kick, b);
     return;
   }
 });

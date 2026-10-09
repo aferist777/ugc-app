@@ -21,7 +21,7 @@ const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
   uploadToPublicHost, resolveTask, resolveLocalMedia,
 } = require('../lib/helpers');
-const { reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
+const { reasonOf, rehost, isFetchFailure, PROVIDER_LABELS } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -73,17 +73,18 @@ _tidyAfterTheCharacterPage();
 // `charId` is how the attempt in progress reaches the page: each failure writes a line onto the
 // record, and the page reads it while it waits - so a Replicate that cannot fetch the reference
 // reads as "trying kie.ai" rather than as an error.
-// The sheet's ladder, walked. Which engine, which aggregator and at which tier are no
-// longer arguments: they are the `sheet` ladder in settings, so the page that used to
-// send them and the record that used to remember them both stop being the authority.
 //
-// `skip` is the poll-time half: a task that was accepted and only then failed resumes
-// below the aggregators that have already had their turn.
-function _sheetTask(prompt, imageUrl, charId, skip) {
+// PAID ONCE (phase V22, the owner 2026-10-09: "as in the chats"): the row is marked `asked` just
+// before each create that costs money, and the mark is taken back when the aggregator ANSWERS no;
+// a create with no answer stops the ladder (lib/cv2-run.js). There is no retry around it any more:
+// the old one read a status off the ladder's own error, which has none, so it never fired - and on
+// a 5xx it would have paid for the same sheet twice.
+function _sheetTask(prompt, imageUrl, charId, alertId) {
   return RUN.runImageLadder('sheet', {
     prompt, imageUrls: [imageUrl], aspect: '16:9',
-    skip: skip || [],
+    onAsk: () => { if (alertId) ALERTS.update(alertId, { params: { asked: true } }); },
     onStep: ({ label, error, next }) => {
+      if (alertId) ALERTS.update(alertId, { params: { asked: false } });
       if (!charId) return;
       const note = next
         ? (label + ' could not: ' + String(error).slice(0, 160) + ' — trying ' + next + '…')
@@ -93,44 +94,16 @@ function _sheetTask(prompt, imageUrl, charId, skip) {
   });
 }
 
-// Submit one sheet, retrying the answers that mean "not now" rather than "no".
-//
-//   429  Replicate throttles predictions to a burst of 1 while the account has < $5 credit, and
-//        Google answers the same code when it is out of capacity - measured on the SECOND of two
-//        OpenRouter calls twenty seconds apart, where the first had just succeeded.
-//   5xx  the aggregator itself stumbling; the request was never seen by the model.
-//
-// A failed submit costs nothing, so retrying is only a question of patience. Honors retry_after.
-const _RETRY_AT = new Set([429, 500, 502, 503, 504]);
-async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
-  const MAX = 4;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      // Each round walks the WHOLE ladder; the wait below is only for the case where every
-      // step said "not now", which is a reason to be patient rather than to give up.
-      return await _sheetTask(prompt, imageUrl, charId);
-    } catch (e) {
-      const status     = e.response && e.response.status;
-      const retryAfter = parseInt(e.response && e.response.data && e.response.data.retry_after, 10);
-      if (_RETRY_AT.has(status) && attempt < MAX) {
-        const waitMs = (retryAfter > 0 ? retryAfter : (status === 429 ? 12 : 4)) * 1000;
-        console.warn(`[char-store] ${label} got ${status} — retry ${attempt}/${MAX - 1} in ${waitMs / 1000}s`);
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      throw e;
-    }
-  }
-}
-
 // Generate the SINGLE combined reference sheet (large portrait + full-body
-// turnaround on one 4K 16:9 image) in the BACKGROUND, retrying on throttle.
+// turnaround on one 4K 16:9 image) in the BACKGROUND.
 // The taskId is patched onto the char as soon as it is submitted; the runner (lib/gen-jobs.js)
 // resolves it through the Alerts row. Fire-and-forget: a failed sheet stays null, with its reason.
 // `alertId` is the row written at the press (_openSheetRow). The kickoff moves its stage as it goes,
 // hands it the task once the ladder accepts, and stops at the next step if the row was let go of - a
 // sheet cancelled while its face is still being uploaded is never asked for at all.
-async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId, kick) {
+// `src` is what it is drawn from: `{ buf }` - a face, uploaded and read here - or `{ prompt, imageUrl }`
+// a retry from Alerts still has from the last attempt.
+async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
   // The row as it was when this kickoff started: let go of since, or started again from Alerts (a new
   // startedAt - that run is the retry's, not this one's), and this kickoff stops at its next step.
   const born = alertId ? ((ALERTS.get(alertId) || {}).startedAt || '') : '';
@@ -140,16 +113,22 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId, kick) {
     // Hosted here rather than in the request. Verified, because an engine handed a link it
     // cannot read fails ten seconds after being charged, and a presigned link has an expiry of
     // its own - so a cached one is not evidence that it still works.
-    stage('uploading the face');
-    const imageUrl = await uploadToPublicHost(faceBuffer, { verify: true });
-    if (gone()) return _sheetLetGo(charId, '');
+    let imageUrl = src.imageUrl || '';
+    if (!imageUrl) {
+      stage('uploading the face');
+      imageUrl = await uploadToPublicHost(src.buf, { verify: true });
+      if (gone()) return _sheetLetGo(charId, '');
+    }
     // Built here too, so the framing agent's call happens on this background path and never
     // delays the save's own response.
-    stage('reading the body');
-    const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
-    if (gone()) return _sheetLetGo(charId, '');
+    let prompt = src.prompt || '';
+    if (!prompt) {
+      stage('reading the body');
+      prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
+      if (gone()) return _sheetLetGo(charId, '');
+    }
     stage('asking the engines');
-    const sub = await _sheetTaskRetry(prompt, imageUrl, 'sheet', charId);
+    const sub = await _sheetTask(prompt, imageUrl, charId, alertId);
     addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
     // What actually drew it, not what the ladder hoped for: a step can be skipped or refuse,
     // and the record is what Regenerate later reads. sheetJob is what makes the SECOND half of
@@ -167,8 +146,8 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts, alertId, kick) {
     // six-minute wait ending in "the sheet did not arrive", which says nothing about why. With
     // the reason on the record, the page can say it the moment it happens.
     //
-    // Reached only once EVERY aggregator has refused: the cascade above is what a single refusal
-    // now costs.
+    // Reached once EVERY aggregator has refused - the cascade above is what a single refusal now
+    // costs - or when one gave no answer and may have taken the money (V22): then it says so.
     const why = reasonOf(e);
     console.warn('[char-store] sheet submit failed everywhere:', why);
     patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || 'the sheet could not be submitted') });
@@ -351,8 +330,7 @@ router.post('/char-store/create', async (req, res) => {
     // kickoff, where the waiting was always meant to happen.
 
     // Save the character immediately (sheet pending), and generate the combined reference sheet in
-    // the BACKGROUND below - retrying throttle - so a low-credit Replicate 429 (burst limit) never
-    // blocks the save.
+    // the BACKGROUND below, so a slow upload or a busy aggregator never blocks the save.
     const rec = {
       id:           charId,
       name:         charName,
@@ -389,9 +367,9 @@ router.post('/char-store/create', async (req, res) => {
       return;
     }
 
-    // Background: the combined sheet, retrying throttle. Its Alerts row (opened above) is what the
-    // page follows; lib/gen-jobs.js resolves the task into the character's folder.
-    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure }, alertId, row.kick)
+    // Background: the combined sheet. Its Alerts row (opened above) is what the page follows;
+    // lib/gen-jobs.js resolves the task into the character's folder.
+    _kickoffSheets(charId, { buf: faceBuffer }, { realismMarkers, figure }, alertId, row.kick)
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -506,10 +484,8 @@ router.post('/char-store/regen-ref', async (req, res) => {
     // has. From a face it says "build it like this" instead, the same as the first attempt did -
     // also right, because that IS a first attempt, just a second time.
     // The same kickoff the first attempt used - the same stages, the same row - so a regeneration and a
-    // first sheet cannot drift apart. Through the retrying wrapper inside it: two sheets asked of Google
-    // within a minute is enough to be told "Resource exhausted", and a Regenerate that gives up on the
-    // first 429 is a Regenerate that fails for a reason that would have cleared by itself.
-    _kickoffSheets(charId, src.buf, {
+    // first sheet cannot drift apart.
+    _kickoffSheets(charId, { buf: src.buf }, {
       realismMarkers: req.body && req.body.realismMarkers,
       figure: req.body && req.body.figure,
     }, alertId, row.kick).catch(e => console.warn('[char-store/regen-ref] sheet kickoff failed:', e.message));
@@ -520,14 +496,25 @@ router.post('/char-store/regen-ref', async (req, res) => {
 });
 
 // A sheet task that was accepted and then failed, handed to the next aggregator that has not been
-// asked yet. Returns { taskId, note } if there was somewhere to go, or null once there is not.
+// asked yet. Returns { taskId, note } if there was somewhere to go, { unsure } when the next one gave
+// no answer and may have taken the money, or null once there is nowhere left.
 //
 // Nothing is recomputed: the prompt cost a call to the framing agent and the reference is already
 // hosted, so sheetJob carries both. `tried` grows with each hop, which is what stops this from
 // walking in a circle.
+//
+// PAID ONCE (V22): the aggregator being asked is written onto the record (`sheetJob.asking`) just
+// before its create and taken off when it answers. Found there - the app was closed in the middle of
+// it - the hop may have been paid for, and it is not asked for again.
 async function _retrySheetElsewhere(c, why) {
   const job = c && c.sheetJob;
   if (!job || !job.prompt || !job.imageUrl) return null;
+  const aggName = (a) => PROVIDER_LABELS[L.AGG_TO_MATRIX[a] || a] || String(a);
+  if (job.asking) {
+    const who = aggName(job.asking);
+    return { unsure: 'the app was closed while the sheet was being asked for on ' + who
+      + ' - it may have been paid for and not followed; look at ' + who + '\'s own history before asking again' };
+  }
   const tried = Array.isArray(job.tried) ? job.tried : [];
   try {
     // Replicate takes the job and only discovers a minute later that it cannot read the
@@ -544,10 +531,11 @@ async function _retrySheetElsewhere(c, why) {
     // NOT rebuilt: it cost a call to the framing agent, and it describes the same person.
     const sub = await RUN.runImageLadder('sheet', {
       prompt: job.prompt, imageUrls: [imageUrl], aspect: '16:9', skip: tried,
+      onAsk: (agg) => { try { patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: agg } }); } catch (e) {} },
       onStep: ({ label, error, next }) => {
         try {
-          patchChar(c.id, { sheetNote: label + ' could not: ' + String(error).slice(0, 160)
-            + (next ? ' — trying ' + next + '…' : '') });
+          patchChar(c.id, { sheetJob: { ...job, imageUrl, asking: null }, sheetNote: label + ' could not: '
+            + String(error).slice(0, 160) + (next ? ' — trying ' + next + '…' : '') });
         } catch (e) {}
       },
     });
@@ -565,6 +553,7 @@ async function _retrySheetElsewhere(c, why) {
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
     return { taskId: sub.taskId, note };
   } catch (e) {
+    if (e && e.unsure) return { unsure: reasonOf(e) };
     console.warn('[char-store] nowhere left to retry the sheet:', reasonOf(e));
     return null;
   }
@@ -606,14 +595,18 @@ async function _resolveSheet(taskId, charId, kind) {
     // rather than reported. sheetJob carries everything needed for that: the same prompt, the
     // same reference, and who has already been asked.
     const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
-    if (next) return { state: 'pending', taskId: next.taskId, note: next.note };
+    if (next && next.taskId) return { state: 'pending', taskId: next.taskId, note: next.note };
+    // The next aggregator gave no answer (V22): it may have started the sheet - said so, not the
+    // first task's error.
+    const why = (next && next.unsure) || result.error || 'the generation failed';
 
     // Kept on the record as well as answered here: whoever opens this character next deserves
     // to know why it has no sheet, not just that it has none.
     patchChar(charId, {
       [field + 'Task']: null, sheetJob: null,
-      sheetError: String(result.error || 'the generation failed'),
+      sheetError: String(why),
     });
+    if (next && next.unsure) return { state: 'failed', error: next.unsure };
   }
   return result;
 }
@@ -624,6 +617,10 @@ async function _resolveSheet(taskId, charId, kind) {
 const JOBS = require('../lib/gen-jobs');
 const ALERTS = require('../lib/alerts');
 
+// PAID ONCE (V22): a row with no task whose kickoff is not alive here and that is marked `asked` was
+// closed on in the middle of a create - it may have been paid for, and it says so instead of "try again".
+const SHEET_MAYBE_PAID = 'the app was closed while the sheet was being asked for - it may have been paid for and not followed; look at the aggregator\'s own history before asking again';
+
 JOBS.register('sheet', {
   timeoutMs: 30 * 60 * 1000,
   // The row is written at the press, before anything is uploaded (_openSheetRow): until the kickoff
@@ -631,32 +628,37 @@ JOBS.register('sheet', {
   poll: (rec) => {
     const p = (rec.job || {}).params || {};
     if (rec.taskIds[0]) return _resolveSheet(rec.taskIds[0], p.charId, 'sheet');
-    return _kicking.has(p.kick) ? { state: 'pending' }
-      : { state: 'failed', error: 'the app was closed before the sheet was asked for - try again' };
+    if (_kicking.has(p.kick)) return { state: 'pending' };
+    return { state: 'failed', error: p.asked ? SHEET_MAYBE_PAID : 'the app was closed before the sheet was asked for - try again' };
   },
   file: async (_rec, out) => ({ path: out.imagePath, media: 'image' }),
   // Let go of in Alerts: the character stops waiting for this sheet (lib/gen-jobs.js cancelled).
   cancel: (rec) => _sheetLetGo(((rec.job || {}).params || {}).charId, rec.taskIds[0] || ''),
+  // Its kickoff is still going on (a row let go of while the face was uploading or the ladder was
+  // answering): asked again now, two sheets would be paid for and race for one row.
+  busy: (rec) => _kicking.has((((rec.job || {}).params || {}).kick) || ''),
   // Asked for again from Alerts. A row written at the press carries the character in `request`; an
   // older one only in `params`, which retry() does not hand over - so both are read. The same prompt and
   // reference when the record still has them; otherwise from the character's own picture, the way a
-  // regeneration starts, because a sheet that failed has had its job cleared.
+  // regeneration starts, because a sheet that failed has had its job cleared. What can refuse is checked
+  // here; then the row runs again at once with no task, on a kick of its own, and the kickoff goes on
+  // behind it as on the first press - the same stages, the same `asked` mark (V22).
   submit: async (request, rec) => {
     const id = String((request || {}).charId || ((rec && rec.job && rec.job.params) || {}).charId || '');
     const c = findChar(id);
     if (!c) throw new Error('that character is gone');
     if (_runningSheet(id, rec && rec.id)) throw new Error('another 4K sheet for this character is being made - wait for it, or let it go first');
-    let job = c.sheetJob;
-    if (!job || !job.prompt || !job.imageUrl) {
-      const src = _identitySource(c, {});
-      if (!src) throw new Error('nothing to draw it from - this character has no sheet, no saved face and no files');
-      const imageUrl = await uploadToPublicHost(src.buf, { verify: true });
-      job = { prompt: await buildSheetPrompt(imageUrl, { figure: c.figure || '' }), imageUrl };
-    }
-    const sub = await RUN.runImageLadder('sheet', { prompt: job.prompt, imageUrls: [job.imageUrl], aspect: '16:9' });
-    patchChar(c.id, { ..._sheetPatch(sub, job.prompt, job.imageUrl) });
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId: c.id });
-    return { taskId: sub.taskId, params: { charId: String(c.id), request: { charId: String(c.id) } } };
+    const job = c.sheetJob;
+    const src = (job && job.prompt && job.imageUrl) ? { prompt: job.prompt, imageUrl: job.imageUrl } : _identitySource(c, {});
+    if (!src) throw new Error('nothing to draw it from - this character has no sheet, no saved face and no files');
+    const kick = _kickToken();
+    _kicking.add(kick);
+    patchChar(c.id, { sheetError: null, sheetNote: 'Preparing the sheet…', sheetLetGo: null });
+    return {
+      stage: 'starting',
+      params: { charId: String(c.id), kick, asked: false, request: { charId: String(c.id) } },
+      later: () => _kickoffSheets(c.id, src, { figure: c.figure || '' }, rec.id, kick),
+    };
   },
 });
 
