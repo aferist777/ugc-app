@@ -150,6 +150,9 @@ function _build() {
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
   const grid = el('div', 'pk-grid');
+  // NO MENU ON A TILE (phase V23, as on the Library's shelves, V13.1): the window's own "Save image as" would save the
+  // miniature, not the file. The hover's video and the sound rows are tiles too.
+  grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
   main.append(bar, grid);
   const body = el('div', 'pk-body');
   body.append(side, main);

@@ -154,6 +154,28 @@ function _ready() {
   if (_on && !_playing) _repaint();
 }
 
+// THE CLIP'S POSTER WHILE ITS FILE OPENS (phase V23, L7; the owner: "у всех на миг"). A clip carries its miniature
+// (`thumb` - a Library drop, the mirror's clip); until the video has a frame decoded, that stands in its place and in
+// its shape - better than black, if only for a moment. A frame from near the start of the source: a trimmed clip's is
+// not the frame under the playhead, which is accepted. Only pictures - an /api/thumb address or an image file - and
+// never in a screenshot, which waits for the real frame.
+const _posters = new Map();      // thumb address -> Image
+const POSTER_RE = /^\/api\/thumb\?|\.(jpe?g|png|webp)(\?|$)/i;
+function _posterOf(c) {
+  const u = String((c && c.thumb) || '');
+  if (!u || !POSTER_RE.test(u)) return null;
+  let im = _posters.get(u);
+  if (!im) {
+    if (_posters.size > 300) _posters.clear();
+    im = new Image();
+    im.decoding = 'async';
+    im.addEventListener('load', _ready);
+    im.src = u;
+    _posters.set(u, im);
+  }
+  return im.naturalWidth ? im : null;
+}
+
 function _el(src, rev) {
   const key = _key(src, rev);
   if (_media.has(key)) return _media.get(key);
@@ -480,7 +502,11 @@ function _paint() {
         }
       }
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
-      if (!el.videoWidth) continue;               // nothing decoded yet
+      if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens (V23)
+        const pic = _shooting ? null : _posterOf(c);
+        if (pic) _show(pic, pic.naturalWidth, pic.naturalHeight, c, gaps);
+        continue;
+      }
       _show(el, el.videoWidth, el.videoHeight, c, gaps);
     } else {
       if (!el.naturalWidth) { missing++; continue; }

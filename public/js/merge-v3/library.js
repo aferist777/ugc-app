@@ -79,6 +79,8 @@ function _note(text, isError) {
 function _tile(it, i) {
   const cell = document.createElement('div');
   cell.className = 'mv3-tile' + (it.meta && it.meta.favorite ? ' is-fav' : '');
+  // No menu on a tile (phase V23, the owner: one rule everywhere): "Save image as" would save the miniature.
+  cell.addEventListener('contextmenu', (e) => e.preventDefault());
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
   const hid = (it.meta || {}).hookId || null;
