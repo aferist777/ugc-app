@@ -30,7 +30,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const sharp = require('sharp');
 const CFG = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const ALERTS = require('../lib/alerts');
@@ -213,30 +212,19 @@ async function _work(kind, type, alertId, kick, sendId, request) {
   }
 }
 
-// A photo from this computer, into Images - converted to JPEG when the shelf would not take it as it
-// is (AVIF, GIF, TIFF), and recognised by its bytes so the same photo twice is one picture. A phone's
-// HEIC cannot be read: the sharp this app ships decodes AV1 inside HEIF but not HEVC (review I), so it
-// is turned down in words rather than failing somewhere later.
+// A photo from this computer, into Images - in a format the shelf and the aggregators take (AVIF, GIF,
+// TIFF become JPEG; lib/image-in.js, shared with every other door since phase V24), and recognised by
+// its bytes so the same photo twice is one picture.
 router.post('/makechat/:kind/photo', async (req, res) => {
   try {
     const sp = _spec(req);
     const b = req.body || {};
     const raw = String(b.dataUrl || '').replace(/^data:[^;,]*;base64,/i, '');
-    let buf = Buffer.from(raw, 'base64');
-    if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable picture' });
-    if (buf.length > PHOTO_MAX) return res.status(400).json({ success: false, error: 'that picture is over 30 MB' });
-    let meta = null;
-    try { meta = await sharp(buf).metadata(); } catch (e) { meta = null; }
-    const fmt = (meta && meta.format) || '';
-    if (!fmt) return res.status(400).json({ success: false, error: 'that file is not a picture' });
-    const HEIC = 'a HEIC photo cannot be read here - save it as JPEG first';
-    if (fmt === 'heif' && String(meta.compression || '').toLowerCase() === 'hevc') return res.status(400).json({ success: false, error: HEIC });
-    let ext = { jpeg: 'jpg', png: 'png', webp: 'webp' }[fmt] || '';
-    if (!ext) {
-      try { buf = await sharp(buf).rotate().jpeg({ quality: 92 }).toBuffer(); }
-      catch (e) { return res.status(400).json({ success: false, error: fmt === 'heif' ? HEIC : 'that picture could not be read (' + fmt + ')' }); }
-      ext = 'jpg';
-    }
+    const got = Buffer.from(raw, 'base64');
+    if (!got.length) return res.status(400).json({ success: false, error: 'unreadable picture' });
+    if (got.length > PHOTO_MAX) return res.status(400).json({ success: false, error: 'that picture is over 30 MB' });
+    const pic = await require('../lib/image-in').sendable(got);
+    const buf = pic.buf, ext = pic.ext;
 
     const IMG = require('../lib/images-store');
     const LC = require('../lib/library-cats');

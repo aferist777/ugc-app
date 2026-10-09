@@ -55,9 +55,11 @@ async function _refUrl(body) {
   } else {
     throw new Error('no reference image was sent');
   }
-  // verify reads the link back before it is handed to an engine. One round trip against a
-  // generation that fails ten seconds after being paid for.
-  return await uploadToPublicHost(buf, { verify: true });
+  // In a format the engines take (phase V24, lib/image-in.js): a photo brought in as AVIF, GIF or a
+  // phone's HEIC went up as it was. verify reads the link back before it is handed to an engine -
+  // one round trip against a generation that fails ten seconds after being paid for.
+  const pic = await require('../lib/image-in').sendable(buf);
+  return await uploadToPublicHost(pic.buf, { verify: true, ext: pic.ext });
 }
 
 // ── POST /api/character-v2/analyze ───────────────────────────────────────────

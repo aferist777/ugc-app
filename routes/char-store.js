@@ -116,7 +116,9 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     let imageUrl = src.imageUrl || '';
     if (!imageUrl) {
       stage('uploading the face');
-      imageUrl = await uploadToPublicHost(src.buf, { verify: true });
+      // In a format the engines take (phase V24, lib/image-in.js).
+      const pic = await require('../lib/image-in').sendable(src.buf);
+      imageUrl = await uploadToPublicHost(pic.buf, { verify: true, ext: pic.ext });
       if (gone()) return _sheetLetGo(charId, '');
     }
     // Built here too, so the framing agent's call happens on this background path and never

@@ -20,6 +20,8 @@ const fs      = require('fs');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const path    = require('path');
 const sharp   = require('sharp');
+// A picture brought in, in a format the aggregators take (phase V24).
+const IMGIN   = require('../lib/image-in');
 
 const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
@@ -1550,15 +1552,15 @@ function _unstash(token) {
   _refUrls.delete(token);
 }
 
-// A data URL from the page -> the bytes, what they are, and a token for them.
+// A data URL from the page -> the bytes, what they are, and a token for them. In a format the
+// aggregators take (phase V24, lib/image-in.js): an AVIF went up as it was, named .heic, and kie
+// answered "File type not supported" after the press.
 async function _takeUpload(dataUrl) {
-  const raw = String(dataUrl || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
-  const buf = Buffer.from(raw, 'base64');
-  if (!buf.length) throw Object.assign(new Error('unreadable photo'), { status: 400 });
-  let fmt = '';
-  try { fmt = (await sharp(buf).metadata()).format || ''; } catch (e) {}
-  if (!fmt) throw Object.assign(new Error('that file is not a picture'), { status: 400 });
-  const ext = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif', heif: 'heic', avif: 'avif', tiff: 'tif' }[fmt] || 'jpg';
+  const raw = String(dataUrl || '').replace(/^data:[^;,]*;base64,/i, '');
+  const got = Buffer.from(raw, 'base64');
+  if (!got.length) throw Object.assign(new Error('unreadable photo'), { status: 400 });
+  const pic = await IMGIN.sendable(got);
+  const buf = pic.buf, ext = pic.ext;
   const token = _stashRef(buf, ext);
   let url = '';
   try {
@@ -1575,10 +1577,13 @@ async function _takeUpload(dataUrl) {
 async function _reuseUpload(token) {
   const file = _stashed(token);
   if (!file) throw Object.assign(new Error('the photo is no longer here - add it again'), { status: 400, gone: true });
-  const buf = fs.readFileSync(file);
+  let buf = fs.readFileSync(file);
   let url = _refUrls.get(token);
   if (!url) {
-    url = await H.uploadToPublicHost(buf, { ext: path.extname(file).slice(1) || 'jpg' });
+    // A photo stashed before phase V24 may be in a format the aggregators refuse: made sendable now.
+    const pic = await IMGIN.sendable(buf);
+    buf = pic.buf;
+    url = await H.uploadToPublicHost(buf, { ext: pic.ext });
     _refUrls.set(token, url);
   }
   return { token, url, buf };

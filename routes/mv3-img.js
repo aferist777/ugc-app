@@ -216,24 +216,32 @@ router.delete('/mv3/chat', (req, res) => {
 // to - so a reference brought in by hand is findable tomorrow beside the pictures made from it.
 //
 // The extension is KEPT rather than normalised: a PNG with the background erased is one of the
-// things people attach, and rewriting it to .jpg would flatten the transparency onto black.
-const EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
+// things people attach, and rewriting it to .jpg would flatten the transparency onto black. A picture
+// in a format the aggregators refuse - AVIF, GIF, TIFF, a phone's HEIC - is turned into a JPEG once it
+// is down (phase V24, lib/image-in.js); before, it was only renamed .png and failed after the press.
+const IMGIN = require('../lib/image-in');
 const _upload = multer({
   storage: multer.diskStorage({
     destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
     filename: (_q, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
       cb(null, 'mref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
-        + (EXTS.includes(ext) ? ext : '.png'));
+        + (IMGIN.IN_EXTS.includes(ext) ? ext : '.png'));
     },
   }),
   limits: { fileSize: 64 * 1024 * 1024 },
-  fileFilter: (_q, file, cb) => cb(null, /^image\//.test(file.mimetype) || EXTS.includes(path.extname(file.originalname).toLowerCase())),
+  fileFilter: (_q, file, cb) => cb(null, /^image\//.test(file.mimetype) || IMGIN.IN_EXTS.includes(path.extname(file.originalname).toLowerCase())),
 });
 
 router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to the project's category
+  let abs = req.file.path;
+  try { abs = await IMGIN.sendableFile(abs); }
+  catch (e) {
+    try { fs.rmSync(req.file.path, { force: true }); } catch (x) { /* it is going anyway */ }
+    return res.status(e.status || 400).json({ success: false, error: e.message });
+  }
+  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it to the project's category
   const b = req.body || {};
   try {
     // The same category the project's generations use, by the same rule - see catLabelFor.

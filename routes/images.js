@@ -21,12 +21,13 @@ const { MEDIA } = require('../lib/config');
 const IMG = require('../lib/images-store');
 const LC  = require('../lib/library-cats');
 
-const EXTS  = ['.jpg', '.jpeg', '.png', '.webp'];
-const MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-
 // The extension is KEPT rather than normalised to .jpg. A PNG with the background erased is
 // one of the things this shelf is for, and rewriting it to .jpg would flatten the
-// transparency onto black before anything had a chance to look at it.
+// transparency onto black before anything had a chance to look at it. Any OTHER picture - AVIF,
+// GIF, TIFF, a phone's HEIC - is taken and turned into a JPEG once it is down (phase V24,
+// lib/image-in.js): it used to be turned away as "no file", or kept in a format the aggregators
+// refuse.
+const IMGIN = require('../lib/image-in');
 const _upload = multer({
   storage: multer.diskStorage({
     destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) {} cb(null, MEDIA.work); },
@@ -35,19 +36,25 @@ const _upload = multer({
       // shot_ rather than img_ for a frame off the preview: the prefix is the only clue on
       // disk about where a file came from, and these accumulate fast.
       const pre = /\/images\/shot$/.test(String(_q.path || '')) ? 'shot_' : 'img_';
-      cb(null, pre + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (EXTS.includes(ext) ? ext : '.png'));
+      cb(null, pre + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (IMGIN.IN_EXTS.includes(ext) ? ext : '.png'));
     },
   }),
   limits: { fileSize: 64 * 1024 * 1024 },
   fileFilter: (_q, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, MIMES.includes(file.mimetype) || EXTS.includes(ext));
+    cb(null, /^image\//.test(file.mimetype) || IMGIN.IN_EXTS.includes(ext));
   },
 });
 
 router.post('/images/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-  const imagePath = '/media/work/' + req.file.filename;      // IMG.add moves it to its category's folder
+  let abs = req.file.path;
+  try { abs = await IMGIN.sendableFile(abs); }
+  catch (e) {
+    try { fs.rmSync(req.file.path, { force: true }); } catch (x) { /* it is going anyway */ }
+    return res.status(e.status || 400).json({ success: false, error: e.message });
+  }
+  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it to its category's folder
   const raw = String((req.body || {}).name || '').trim();
   const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
     || path.basename(req.file.originalname, path.extname(req.file.originalname));
