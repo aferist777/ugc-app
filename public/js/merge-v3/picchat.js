@@ -18,6 +18,7 @@ import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { note } from './ask.js';
 import { createChat, el, thumbOf, money, json, stored, keep } from './chat-shell.js';
+import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
 const MAX_ATTS = 5;
 const LS_LAST = 'mv3-imagen-last';       // the model choice - the key the window this replaced used
@@ -255,7 +256,8 @@ function PICTURES(ctx) {
       cat: 'This project\'s pictures, or a category of the Library\'s Images',
       crumb: 'The pictures chat - pictures made with a model',
     },
-    upload: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || '') },
+    // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in (phase V24).
+    upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
     // The right column: this project's pictures, or any category of the Library's Images.
     feed: {
       url: (k) => '/api/mv3/img/feed?project=' + encodeURIComponent(k),

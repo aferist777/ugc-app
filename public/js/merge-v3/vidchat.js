@@ -26,6 +26,7 @@
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf } from './chat-shell.js';
+import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
 import { openHelp, closeHelp } from './vhelp.js';
@@ -2359,7 +2360,7 @@ function VIDEOS(ctx) {
     // (phase V7) Each kind through its own door, filed under the project's category: pictures into Images, clips into
     // Uploads, sounds onto the Sounds shelf - and straight into their part of the zone.
     uploads: {
-      image: { url: '/api/mv3/img/upload', field: 'image', accept: 'image/*', ok: (f) => /^image\//.test(f.type || ''),
+      image: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile,
                att: (i) => ({ path: i.imagePath, name: i.name }) },
       video: { url: '/api/mv3/video/upload', field: 'video', accept: 'video/*,.mov,.mkv,.m4v',
                ok: (f) => /^video\//.test(f.type || '') || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(f.name || ''),

@@ -75,6 +75,23 @@ router.use('/images/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 
+// ── A picture the page cannot show, made one it can ─────────────────────────
+//
+//   POST /api/images/sendable     { dataUrl }  -> { dataUrl, converted, from }
+//
+// (phase V24) A phone's HEIC picked in a field that shows its picture before anything is sent - the
+// makers of Setup, New Character: the browser cannot draw a HEIC, so the page asks for it as a JPEG
+// first (js/picture-file.js). Nothing is written anywhere; the bytes go back as they came, or as a JPEG.
+router.post('/images/sendable', async (req, res) => {
+  try {
+    const raw = String((req.body || {}).dataUrl || '').replace(/^data:[^;,]*;base64,/i, '');
+    const pic = await IMGIN.sendable(Buffer.from(raw, 'base64'));
+    res.json({ success: true, converted: pic.converted, from: pic.from, dataUrl: 'data:' + pic.type + ';base64,' + pic.buf.toString('base64') });
+  } catch (e) {
+    res.status(e.status || 500).json({ success: false, error: e.message });
+  }
+});
+
 // ── A frame off the Merge preview ───────────────────────────────────────────
 //
 //   POST /api/images/shot     multipart, field `image`  -> the filed record

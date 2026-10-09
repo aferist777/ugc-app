@@ -19,6 +19,7 @@ import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
 import * as MC from './makechat.js';
+import { PICTURE_ACCEPT } from '../picture-file.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -1095,7 +1096,7 @@ function _paintUpload() {
   if (_filter === 'images') {
     btn.textContent = 'Upload images';
     btn.title = 'Add pictures to the library. A PNG keeps its transparency.';
-    if (inp) inp.accept = 'image/*';
+    if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
   // (phase V7) Sounds go into the category open on the chips, if one is.

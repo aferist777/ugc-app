@@ -21,6 +21,7 @@
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from './viewer.js';
 import { nonsense, MIN_WORDS_ALONE } from '../merge-v3/wk-maker.js';
+import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
 const POLL_MS = 4000;
 const PLACES = 5;
@@ -177,7 +178,7 @@ function createMaker(kind) {
 
     const file = document.createElement('input');
     file.type = 'file';
-    file.accept = 'image/*';
+    file.accept = PICTURE_ACCEPT;
     file.hidden = true;
     _root.appendChild(file);
 
@@ -215,7 +216,7 @@ function createMaker(kind) {
     ta.addEventListener('input', () => { _grow(); _paintAtts(); _remember(); });
     // A picture pasted into the box is the picture of the message.
     ta.addEventListener('paste', (e) => {
-      const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type || ''));
+      const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(isPictureFile);
       if (!f) return;
       e.preventDefault();
       _upload(f);
@@ -230,7 +231,7 @@ function createMaker(kind) {
     _root.addEventListener('dragleave', (e) => { if (!_root.contains(e.relatedTarget)) _root.classList.remove('is-drag'); });
     _root.addEventListener('drop', (e) => {
       _root.classList.remove('is-drag');
-      const f = e.dataTransfer && [...(e.dataTransfer.files || [])].find(x => /^image\//.test(x.type || ''));
+      const f = e.dataTransfer && [...(e.dataTransfer.files || [])].find(isPictureFile);
       if (!f) return;
       e.preventDefault();
       _upload(f);
@@ -412,7 +413,7 @@ function createMaker(kind) {
   // A photo from this computer: into Images first, so the message can point at it for good. Sending
   // waits while one is on its way, and when two are, the newer one is the picture (review I).
   async function _upload(f) {
-    if (!/^image\//.test(f.type || '')) { _say('that file is not a picture'); return; }
+    if (!isPictureFile(f)) { _say('that file is not a picture'); return; }
     if (f.size > 30 * 1024 * 1024) { _say('that picture is ' + Math.round(f.size / 1048576) + ' MB - the limit is 30'); return; }
     const my = ++_upSeq;
     _uploading++;

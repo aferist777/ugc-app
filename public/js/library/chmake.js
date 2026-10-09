@@ -27,6 +27,7 @@ import * as SavePanel from './character/save-panel.js';
 import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './character/presets.js';
 import { genName } from './character/schema.js';
 import { startProgress, lockControls } from '../progress.js';
+import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
@@ -774,20 +775,19 @@ const _UPLOAD_MAX = 20 * 1024 * 1024;
 function _wireUpload() {
   const drop = $('chm-drop');
   const inp = document.createElement('input');
-  inp.type = 'file'; inp.id = 'chm-upload'; inp.accept = 'image/*'; inp.hidden = true;
+  inp.type = 'file'; inp.id = 'chm-upload'; inp.accept = PICTURE_ACCEPT; inp.hidden = true;
   drop.appendChild(inp);
-  const take = (file) => {
+  // A phone's HEIC too - made a JPEG by the server first, the page cannot show one (phase V24).
+  const take = async (file) => {
     if (!file) return;
-    if (!/^image\//.test(file.type || '')) { _status('That file is not a picture', 'err'); return; }
+    if (!isPictureFile(file)) { _status('That file is not a picture', 'err'); return; }
     if (file.size > _UPLOAD_MAX) { _status('That picture is ' + Math.round(file.size / 1048576) + ' MB - the limit is 20', 'err'); return; }
-    const fr = new FileReader();
-    fr.onerror = () => _status('Could not read that file', 'err');
-    fr.onload = () => {
-      if (_busy || _waiting() || (_root && _root.dataset.stage === 'save')) { _status('Busy - drop it again in a moment', 'err'); return; }
-      _status('');
-      _showFace(String(fr.result), 'upload');
-    };
-    fr.readAsDataURL(file);
+    let url = '';
+    try { url = await pictureDataUrl(file); }
+    catch (e) { _status('Could not read that file: ' + e.message, 'err'); return; }
+    if (_busy || _waiting() || (_root && _root.dataset.stage === 'save')) { _status('Busy - drop it again in a moment', 'err'); return; }
+    _status('');
+    _showFace(url, 'upload');
   };
   inp.addEventListener('change', () => { const f = (inp.files && inp.files[0]) || null; inp.value = ''; take(f); });
   drop.addEventListener('click', (e) => {

@@ -36,6 +36,7 @@ import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
 import { trimmer } from './trim.js';
 import { DRAG_TYPE } from './store.js';
 import { setOpenColumn } from './layout.js';
+import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
 import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
@@ -511,13 +512,13 @@ function _lock(on) {
   document.querySelectorAll('#mv3-library .mv3-plus').forEach(b => { b.disabled = on; });
 }
 
-const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
 
 // The same flow with one call instead of two: data/images.json is server-owned, so
 // /api/images/upload takes the file, makes the thumbnails and files the record in one
 // request. Nothing here has to unshift into localStorage afterwards.
 async function _uploadImages(files) {
-  const pics = (files || []).filter(f => /^image\//.test(f.type || '') || IMAGE_RE.test(f.name || ''));
+  // Any picture, a phone's HEIC too: the server makes it a JPEG on the way in (phase V24).
+  const pics = (files || []).filter(isPictureFile);
   const skipped = (files || []).length - pics.length;
   if (!pics.length) {
     _status('Only pictures can go on this shelf', true);
@@ -705,7 +706,7 @@ function _setTab(tab) {
   // accept pictures and films everywhere - so on a clip shelf the dialog offered pictures that
   // were then dropped with a "skipped" line, which read as pictures being allowed there.
   const inp = document.getElementById('mv3-lib-file');
-  if (inp) inp.accept = _isImages() ? 'image/*' : 'video/*';
+  if (inp) inp.accept = _isImages() ? PICTURE_ACCEPT : 'video/*';
   _load();
 }
 

@@ -10,6 +10,7 @@
 import * as Layers from '../layers.js';
 import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
+import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -83,14 +84,11 @@ export function nonsense(s) {
 // ── A picture from this computer ────────────────────────────────────────────
 // Read once and kept as a data URL: it is what the server takes, and holding the File would mean
 // reading it again on every repaint. Anything that is not an image is simply not taken.
-export function readPicture(file) {
-  return new Promise((resolve, reject) => {
-    if (!file || !/^image\//.test(file.type)) return reject(new Error('that is not a picture'));
-    const fr = new FileReader();
-    fr.onload = () => resolve({ name: file.name || 'photo', dataUrl: String(fr.result || '') });
-    fr.onerror = () => reject(new Error('could not read the file'));
-    fr.readAsDataURL(file);
-  });
+// A phone's HEIC too - known by its name when it has no type - made a JPEG first: the page cannot
+// show one (phase V24, js/picture-file.js).
+export async function readPicture(file) {
+  if (!isPictureFile(file)) throw new Error('that is not a picture');
+  return { name: file.name || 'photo', dataUrl: await pictureDataUrl(file) };
 }
 
 /**
@@ -123,7 +121,7 @@ export function dropField({ src, empty, onFile, onClear, onOpen }) {
   }
   const input = el('input');
   input.type = 'file';
-  input.accept = 'image/*';
+  input.accept = PICTURE_ACCEPT;
   input.hidden = true;
   input.addEventListener('change', () => { if (input.files && input.files[0]) onFile(input.files[0]); });
   drop.addEventListener('click', () => { if (src) onOpen(); else input.click(); });
