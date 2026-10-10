@@ -926,14 +926,20 @@ function _all(host, p, lines) {
   // field stands - dashed while there is work in it, solid when there is none. They do not open
   // and shut any more: four fields side by side hold what four drawers held, and a drawer that
   // shuts itself is one more thing to reopen.
-  const top = el('div', 'mv3-wk-zrow');
-  host.appendChild(top);
-  _stageMood(top, p, lines);
-  _stageVoice(top, p, lines);
-  const low = el('div', 'mv3-wk-zrow');
-  host.appendChild(low);
-  _stageFrames(low, p);
-  _stageVideo(low, p, lines);
+  //
+  // TWO COLUMNS, NOT TWO ROWS (phase V26.1, the owner 2026-10-10): the voice field grew a row of its
+  // own settings and the video field below it had room to spare. In rows a field is as tall as its
+  // neighbour, so the voice could not grow without the mood growing with it; in columns each field
+  // is as tall as what it holds, and the lower field of a column takes what is left.
+  const cols = el('div', 'mv3-wk-zcols');
+  const left = el('div', 'mv3-wk-zcol');
+  const right = el('div', 'mv3-wk-zcol');
+  cols.append(left, right);
+  host.appendChild(cols);
+  _stageMood(left, p, lines);
+  _stageFrames(left, p);
+  _stageVoice(right, p, lines);
+  _stageVideo(right, p, lines);
   _shelfFrames(host, p);
 }
 
@@ -1283,7 +1289,9 @@ function _stageVoice(host, p, lines) {
   const g = VOICE.reading();
   const live = _live(lines);
   const read = live.filter(isRead).length;
-  const done = live.length > 0 && read === live.length && !g.busy;
+  // Read with other settings than the project's now (V26.1): still read, but work left in this field.
+  const redo = live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
+  const done = live.length > 0 && read === live.length && !redo.length && !g.busy;
   const untagged = VOICE.untagged(p).length;
   const { body, foot } = _stage(host, 'voice', {
     step: 2, half: true,
@@ -1294,25 +1302,105 @@ function _stageVoice(host, p, lines) {
     // Red while there is no voice to read in at all - the character has none and the project has
     // chosen none (phase V24, the owner 2026-10-09).
     name: 'voice', sub: 'ElevenLabs v3', done, need: _needs(p).voice,
-    summary: read + '/' + live.length + ' read',
+    summary: read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : ''),
   });
   VOICE.paintRow(body, _api.voiceApi());
   const has = _canRead();
   const will = live.filter(l => !isRead(l)).length;
+  const again = redo.filter(w => w === 'stability').length;
+  const retime = redo.length - again;
+  // HOW IT IS SPOKEN, in one row with the button (the owner, 2026-10-10): the stability on the left,
+  // the speed beside it, `generate` on the right - and what the press will do on a line of its own
+  // under them, which is the height the field gained and the video field below gave up.
+  foot.classList.add('is-voice');
+  const ctl = el('div', 'mv3-wk-vctl');
+  foot.appendChild(ctl);
+  _voiceSettings(ctl, p, g.busy);
   const label = g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
     : g.lines.length ? 'reading…' : 'generate';
-  _genButton(foot, {
+  const todo = [will && will + ' to read', again && again + ' to read again', retime && retime + ' to retime'].filter(Boolean);
+  const cap = !has || !live.length ? '' : g.busy ? '' : untagged ? 'stage 1 first'
+    : todo.length ? todo.join(' · ') : 'every line is read';
+  foot.appendChild(el('div', 'mv3-wk-vsub mv3-wk-vcap', cap || ' '));
+  _genButton(ctl, {
     label,
-    cap: !has || !live.length ? '' : g.busy ? '' : untagged ? 'stage 1 first'
-      : will ? will + (will === 1 ? ' line' : ' lines') + ' · one a second' : 'every line is read',
-    disabled: !has || g.busy || !live.length || !will || !!untagged,
+    disabled: !has || g.busy || !live.length || !(will + redo.length) || !!untagged,
     title: !has ? 'Choose a voice first - a character with one, or one for the project'
       : untagged ? 'The script is not marked up yet: ' + untagged + (untagged === 1 ? ' line has' : ' lines have')
         + ' no tags. Stage 1 - the mood field - does that, and the read follows the tags.'
-        : !will ? 'Every line is read'
-          : 'Read every line that needs it (' + will + '), one a second - ElevenLabs v3, by the tags the mood put in',
+        : !(will + redo.length) ? 'Every line is read, with these settings'
+          : [will && 'Read every line that needs it (' + will + '), one a second - ElevenLabs v3, by the tags the mood put in.',
+            again && 'Read again the ' + again + (again === 1 ? ' line' : ' lines') + ' read with another stability - ElevenLabs, credits.',
+            retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
+            redo.length && 'A clip made from the old read will need making again.'].filter(Boolean).join(' '),
     on: () => VOICE.generate(_api.voiceApi()),
   });
+}
+
+// THE STABILITY AND THE SPEED of the read (phase V26.1, the owner 2026-10-10) - one each for the
+// whole video, kept on the project. Changing either touches no read: the lines read before stay read,
+// and the field's `generate` redoes them - a read again for the stability, a retiming for the speed.
+const STABILITY = [
+  { v: 0, label: 'creative', tip: 'More emotional and expressive - and more likely to stray from the words' },
+  { v: 0.5, label: 'natural', tip: 'Balanced - the closest to the voice as it was recorded' },
+  { v: 1, label: 'robust', tip: 'Very even - follows the tags less' },
+];
+const SPEED = { min: 0.7, max: 1.2, step: 0.05 };
+function _voiceSettings(foot, p, busy) {
+  const now = VOICE.params(p);
+  const stab = el('select', 'mv3-wk-vsel is-small is-stab');
+  for (const s of STABILITY) {
+    const o = el('option', '', s.label);
+    o.value = String(s.v);
+    o.title = s.tip;
+    if (s.v === now.stability) o.selected = true;
+    stab.appendChild(o);
+  }
+  stab.disabled = busy || _saving;
+  stab.addEventListener('change', () => _saveVoice({ stability: +stab.value, speed: VOICE.params(p).speed }));
+  const sw = el('label', 'mv3-wk-vlab');
+  sw.title = 'How steady the voice is. ElevenLabs v3 knows three: creative, natural, robust. A line read before keeps its read until generate reads it again.';
+  sw.append(el('span', '', 'stability'), stab);
+  const speed = el('input', 'mv3-wk-vnum');
+  speed.type = 'number';
+  speed.min = String(SPEED.min);
+  speed.max = String(SPEED.max);
+  speed.step = String(SPEED.step);
+  speed.value = String(now.speed);
+  speed.disabled = busy || _saving;
+  speed.addEventListener('change', () => {
+    const n = Math.round(Math.min(SPEED.max, Math.max(SPEED.min, parseFloat(speed.value) || 1)) / SPEED.step) * SPEED.step;
+    const v = Math.round(n * 100) / 100;
+    speed.value = String(v);
+    if (v !== VOICE.params(p).speed) _saveVoice({ stability: VOICE.params(p).stability, speed: v });
+  });
+  const pw = el('label', 'mv3-wk-vlab');
+  pw.title = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
+    + '. Applied here after the read, so the voice keeps its pitch and a new speed costs nothing.';
+  pw.append(el('span', '', 'speed'), speed);
+  foot.append(sw, pw);
+}
+
+// The read's settings, onto the project - shown at once, confirmed by the answer.
+async function _saveVoice(ttsParams) {
+  const p = _ctx && _ctx.project;
+  if (!p) return;
+  p.voice = { ...(p.voice || {}), ttsParams };
+  _saving = true;
+  _said = '';
+  _ctx.repaint();
+  try {
+    const r = await fetch('/api/scen3/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, voice: { ttsParams } }),
+    }).then(x => x.json());
+    if (!r || !r.success) throw new Error((r && r.error) || 'refused');
+    p.voice = r.project.voice;
+  } catch (e) {
+    _said = 'Could not save it: ' + e.message;
+  }
+  _saving = false;
+  _ctx.repaint();
 }
 
 // A menu with its name to the left of it, and the name carries the explanation. A `label` rather

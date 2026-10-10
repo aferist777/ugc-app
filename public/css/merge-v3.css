@@ -1691,8 +1691,11 @@ body.mv3-locked #mv3-timeline{
    in it, solid gold when there is none. The number sits ON the corner of the frame, over the line
    itself, which is why the frame is the positioned one. Both boxes of a row are given the same
    height, so the two frames read as one pair rather than two loose cards. */
-.mv3-wk-zrow{display:flex; align-items:stretch; gap:10px}
-.mv3-wk-zrow > .mv3-wk-stage{flex:1 1 0; min-width:0}
+/* Two columns of fields (phase V26.1): mood over first frames, voice over video. Each field is as
+   tall as what it holds; the lower one of a column takes what is left, so the two columns end level. */
+.mv3-wk-zcols{display:flex; align-items:stretch; gap:10px}
+.mv3-wk-zcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column}
+.mv3-wk-zcol > .mv3-wk-stage:last-child{flex:1 1 auto}
 .mv3-wk-stage{
   position:relative;
   margin:0 0 10px; padding:8px 10px 9px; border:1px dashed var(--gold); border-radius:var(--r-sm);
@@ -2091,3 +2094,18 @@ body.mv3-locked #mv3-timeline{
   position:absolute; top:3px; left:3px; width:5px; height:5px; z-index:2; pointer-events:none;
   border-radius:50%; background:var(--accent); box-shadow:0 0 0 1px oklch(0 0 0 / .55);
 }
+
+/* THE VOICE FIELD'S ONE ROW (phase V26.1, the owner 2026-10-10): the stability and the speed on the
+   left and `generate` on the right, never wrapping; under them, on a line of its own, what the press
+   will do - the line the field grew by, and the video field below it gave up. */
+.mv3-wk-stage-foot.is-voice{flex-direction:column; align-items:stretch; gap:3px}
+.mv3-wk-vctl{display:flex; align-items:center; gap:8px; flex-wrap:nowrap}
+.mv3-wk-vctl .mv3-wk-gen{margin-left:auto}
+.mv3-wk-vcap{min-height:12px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-wk-vlab{flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
+.mv3-wk-vlab .mv3-wk-vsel.is-small{flex:0 0 auto; width:auto}
+.mv3-wk-vnum{
+  width:52px; padding:3px 4px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--bg); color:var(--ink); font:600 10px/1.3 var(--font);
+}
+.mv3-wk-vnum[disabled]{opacity:.6}

@@ -39,7 +39,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { el } from './wk-maker.js';
-import { isRead, plainWords, isLive } from './scen-api.js';
+import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -470,11 +470,32 @@ async function _take(api, card) {
 // hand, and editing a line makes its read stale by itself. Unread or stale is the one rule,
 // shared with the counters and the Library spine (js/merge-v3/scen-api.js, isRead).
 //
-// The read is the standard one: eleven_multilingual_v2, no tags, no parameters (decided with the
-// owner; moods and tags are a conversation of their own). That is what a project with no voice
-// settings gets, and none are set here.
+// The read is ElevenLabs v3 by the tags of the mood (phase W), with the project's stability and
+// speed (V26.1, below). A setting changed after a read does not make the read stale - it is still
+// the line's words - it only leaves the line to be redone by the voice field's `generate`.
 const _needs = (l) => isLive(l) && !isRead(l);
 const _tagged = (l) => !!String((l && l.tagged) || '').trim();
+
+// HOW THE SCRIPT IS SPOKEN (phase V26.1, the owner 2026-10-10): one stability and one speed for the
+// video, kept on the project (`voice.ttsParams`, normalised by routes/scen3.js). A take remembers what
+// it was spoken with; one from before was spoken at natural and 1.
+export const params = (p) => {
+  const t = ((p && p.voice) || {}).ttsParams || {};
+  return { stability: Number.isFinite(+t.stability) ? +t.stability : 0.5, speed: +t.speed || 1 };
+};
+/** What a READ line was spoken with that the project no longer says: 'stability' (read it again -
+ *  ElevenLabs), 'speed' (retimed here, free) or '' - the same rule as the server's _unsettled. */
+export const unsettledBy = (p, l) => {
+  if (!isLive(l) || !isRead(l)) return '';
+  const { take } = takeOf(l);
+  const want = params(p);
+  const st = take.stability === undefined ? 0.5 : +take.stability;
+  if (st !== want.stability) return 'stability';
+  return (+take.speed || 1) !== want.speed ? 'speed' : '';
+};
+/** The lines of the video read with other settings - what the voice field's `generate` redoes. */
+export const unsettled = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
+  .map((l, i) => (unsettledBy(p, l) ? i : -1)).filter(i => i >= 0);
 /** The lines of the video still waiting for their tags - stage 1 (the mood field) is about these. */
 export const untagged = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
   .map((l, i) => ((isLive(l) && !_tagged(l)) ? i : -1)).filter(i => i >= 0);
@@ -571,7 +592,9 @@ export async function generate(api) {
     _rbad = true;
     return _repaint(api);
   }
-  await readAll(api);
+  // ...and the lines read with other settings (V26.1): read again for another stability, retimed
+  // for another speed. Only here - the chain reads what is not read, as it always did.
+  await readAll(api, { settle: true });
 }
 
 // A chunk of lines, spoken now in one call - tagged first where they have no tags yet, because
@@ -631,9 +654,11 @@ export const readLine = (api, i) => _speak(api, [i], false);
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 const WATCH_MS = 1500;
 
-export async function readAll(api) {
+export async function readAll(api, opts) {
   const p = api.project() || {};
-  const want = (Array.isArray(p.lines) ? p.lines : []).map((l, i) => (_needs(l) ? i : -1)).filter(i => i >= 0);
+  const settle = !!(opts && opts.settle);
+  const want = (Array.isArray(p.lines) ? p.lines : [])
+    .map((l, i) => (_needs(l) || (settle && unsettledBy(p, l)) ? i : -1)).filter(i => i >= 0);
   if (!want.length) return;
   _batch = { done: 0, total: want.length };
   _readAt = Date.now();
@@ -642,7 +667,7 @@ export async function readAll(api) {
   try {
     const d = await (await fetch('/api/scen3/voice/speak-all', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: api.projectId() }),
+      body: JSON.stringify({ projectId: api.projectId(), ...(settle ? { settle: true } : {}) }),
     })).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     if (d.queued) _batch = { done: 0, total: d.queued };

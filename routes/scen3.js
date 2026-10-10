@@ -2440,7 +2440,8 @@ async function _speakLine(key, voiceId, model, text, params) {
       voice_settings: {
         stability: typeof params.stability === 'number' ? params.stability : 0.5,
         similarity_boost: 0.75,
-        speed: typeof params.speed === 'number' ? params.speed : 1,
+        // Always 1: v3 takes no speed, so the project's speed is applied to the file afterwards (_tempo).
+        speed: 1,
       },
     },
     { headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
@@ -2533,36 +2534,101 @@ async function _speakOne(key, ctx, i) {
   const name = `v${ctx.id}_${i + 1}_${ctx.variant}_${Date.now()}.mp3`;
   const abs = path.join(ctx.dir, name);
   fs.writeFileSync(abs, buf);
-  const dur = await _audioDur(abs);
+  const { stability, speed } = ctx.voice.ttsParams;
+  // At another speed, the file ElevenLabs sent is kept as it is and the take plays a retimed copy.
+  const play = speed === 1 ? abs : await _tempo(abs, speed);
+  const dur = await _audioDur(play);
   const take = {
-    path: toUrl(abs),
+    path: toUrl(play),
+    ...(play !== abs ? { raw: toUrl(abs) } : {}),
     dur: Math.round(dur * 100) / 100,
     at: new Date().toISOString(),
     said: text,                           // what was actually spoken; the staleness check reads this
+    stability, speed,                     // what it was spoken with (V26.1)
   };
+  return { take: _fileTake(ctx, i, take) };
+}
+
+// The take goes onto its line in one tick, and the timeline follows.
+function _fileTake(ctx, i, take, ifPath) {
   const saved = PROJECTS.apply(ctx.id, (fresh) => {
     fresh.lines = (fresh.lines || []).map(_normLine);
     const l = fresh.lines[i];
     if (!l) return;
     l.audio = l.audio || { plain: null, tagged: null };
+    // A retiming is of THAT take: if the line was read again meanwhile, the new read stands.
+    if (ifPath && ((l.audio[ctx.variant] || {}).path || '') !== ifPath) return;
     l.audio[ctx.variant] = take;
     // A new read is asked for a new performance: a clip chosen by hand for the old one is the line's no longer (V23).
     if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
     fresh.updatedAt = take.at;
   });
   if (saved) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T')
-  return { take };
+  return take;
+}
+
+// A READ AT ANOTHER SPEED (phase V26.1): ffmpeg's atempo keeps the pitch of the voice. The copy is
+// written beside the original with the speed in its name; the original stays, so the next speed is
+// made from what ElevenLabs sent and not from a copy of a copy.
+function _tempo(abs, speed) {
+  const out = abs.replace(/\.mp3$/i, '') + '_x' + speed.toFixed(2) + '_' + Date.now() + '.mp3';
+  return new Promise((resolve, reject) => {
+    let err = '';
+    const proc = require('child_process').spawn(require('ffmpeg-static'),
+      ['-hide_banner', '-loglevel', 'error', '-y', '-i', abs, '-filter:a', 'atempo=' + speed.toFixed(2),
+        '-c:a', 'libmp3lame', '-b:a', '128k', out],
+      { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    proc.stderr.on('data', c => { err += c.toString(); });
+    proc.on('error', reject);
+    proc.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve(out)
+      : reject(new Error('the read could not be retimed' + (err ? ': ' + err.trim().slice(0, 160) : '')))));
+  });
+}
+
+// Was this line read with the settings the project has now? A take from before them was spoken at
+// natural and 1. Only a READ line can be unsettled - one not read is simply to be read.
+function _unsettled(l, ctx) {
+  const t = (l.audio || {})[ctx.variant];
+  if (!t || !t.path || _readNeeds(l, ctx.variant)) return '';
+  const want = ctx.voice.ttsParams;
+  const st = t.stability === undefined ? 0.5 : t.stability;
+  if (st !== want.stability) return 'stability';
+  return (t.speed || 1) !== want.speed ? 'speed' : '';
+}
+
+// ONLY THE SPEED IS OTHER: made again from the original file, free, without ElevenLabs.
+async function _retempoOne(ctx, i) {
+  const t = (ctx.lines[i].audio || {})[ctx.variant];
+  const rawUrl = t.raw || t.path;
+  const rawAbs = toDiskWithin(rawUrl, [CFG.PROJECTS_DIR]);
+  if (!rawAbs || !fs.existsSync(rawAbs)) throw new Error('the original read is gone - read the line again');
+  const speed = ctx.voice.ttsParams.speed;
+  const play = speed === 1 ? rawAbs : await _tempo(rawAbs, speed);
+  const dur = await _audioDur(play);
+  const take = {
+    ...t,
+    path: toUrl(play),
+    dur: Math.round(dur * 100) / 100,
+    at: new Date().toISOString(),
+    speed,
+  };
+  delete take.id;                         // a new file has its own handle (_normTake derives it)
+  if (play === rawAbs) delete take.raw; else take.raw = rawUrl;
+  return { take: _fileTake(ctx, i, take, t.path) };
 }
 
 // Which lines a read is about: the ones named, or every one that needs it. Without an explicit
 // `only` nobody pays twice for the same words.
-function _readWanted(ctx, only) {
+// `settle` (the voice field's own `generate`, V26.1) counts in the lines read with other settings
+// too; the chain and every other caller read only what is not read.
+function _readWanted(ctx, only, settle) {
   const live = (i) => !(ctx.lines[i] || {}).removed;      // a line taken off is not read (phase Z)
   if (Array.isArray(only)) {
     return [...new Set(only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < ctx.lines.length))]
       .filter(live).sort((a, c) => a - c);
   }
-  return ctx.lines.map((_, i) => i).filter(i => live(i) && _readNeeds(ctx.lines[i], ctx.variant));
+  return ctx.lines.map((_, i) => i).filter(i => live(i)
+    && (_readNeeds(ctx.lines[i], ctx.variant) || (settle && _unsettled(ctx.lines[i], ctx))));
 }
 
 // The project as it is NOW - with every take these reads filed - for the page to paint from.
@@ -2614,9 +2680,13 @@ router.post('/scen3/voice/speak', async (req, res) => {
 async function _readQueue(key, ctx, only) {
   const st = _reads.get(ctx.id);
   const going = [];
+  let spoken = 0;
   for (const i of only) {
-    if (going.length) await _wait(READ_GAP_MS);
-    going.push(_speakOne(key, ctx, i).then(
+    // A line that is read and only at another speed is retimed here, without ElevenLabs - and
+    // without the gap, which is there for ElevenLabs (V26.1).
+    const retime = _unsettled(ctx.lines[i], ctx) === 'speed';
+    if (!retime && spoken++) await _wait(READ_GAP_MS);
+    going.push((retime ? _retempoOne(ctx, i) : _speakOne(key, ctx, i)).then(
       (out) => { if (out.skipped) st.skipped.push(i + 1); else st.done++; },
       (e) => {
         const why = _elError(e);
@@ -2647,7 +2717,7 @@ router.post('/scen3/voice/speak-all', (req, res) => {
 
     const ctx = _readCtx(proj);
     if (!ctx.cast.has) return res.status(400).json({ success: false, error: ctx.cast.reason });
-    const only = _readWanted(ctx, b.only);
+    const only = _readWanted(ctx, b.only, !!b.settle);
     if (!only.length) return res.json({ success: true, queued: 0, state: null });
 
     const st = {
@@ -2930,6 +3000,12 @@ function _normTake(t) {
     // A clip's poster frame. The cards show stills only — the clip itself belongs to a
     // viewer, not to a list of ten of them all decoding at once.
     thumb:   String(s.thumb || ''),
+    // For an audio take (phase V26.1): what it was spoken with, and - when it was retimed - the
+    // file ElevenLabs sent, so another speed is made from it again rather than from a copy.
+    // A take from before carries none: it was spoken at natural and 1.
+    ...(s.raw ? { raw: String(s.raw) } : {}),
+    ...(s.stability !== undefined && s.stability !== null && s.stability !== '' ? { stability: +s.stability } : {}),
+    ...(s.speed ? { speed: +s.speed } : {}),
   };
 }
 
@@ -3120,9 +3196,26 @@ const _normVoice = (v) => {
     // The one switch. It decides what the cards show, what Voice all produces, and
     // which take the counters read. Locked to plain while there is nothing tagged.
     variant:   s.variant === 'tagged' ? 'tagged' : 'plain',
-    ttsParams: { stability: +p.stability || 0.5, speed: +p.speed || 1 },
+    ttsParams: _ttsParams(p),
   };
 };
+// HOW THE SCRIPT IS SPOKEN (phase V26.1, the owner 2026-10-10): one stability and one speed for the
+// whole video. v3 knows three stabilities - creative 0, natural 0.5, robust 1 - so anything else is
+// put on the nearest (`+p.stability || 0.5` used to turn creative into natural). The speed is OURS,
+// not ElevenLabs': v3 takes none, so a read is spoken at 1 and then retimed (_tempo), 0.7-1.2.
+const STABILITIES = [0, 0.5, 1];
+const SPEED_MIN = 0.7;
+const SPEED_MAX = 1.2;
+function _ttsParams(p) {
+  const s = Number(p && p.stability);
+  const v = Number(p && p.speed);
+  return {
+    stability: Number.isFinite(s) && p.stability !== '' && p.stability !== null
+      ? STABILITIES.reduce((a, c) => (Math.abs(c - s) < Math.abs(a - s) ? c : a), 0.5) : 0.5,
+    speed: Number.isFinite(v) && v > 0
+      ? Math.round(Math.min(SPEED_MAX, Math.max(SPEED_MIN, v)) * 20) / 20 : 1,
+  };
+}
 
 const _projSummary = p => ({
   id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type,
