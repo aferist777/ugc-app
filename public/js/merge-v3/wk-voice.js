@@ -491,8 +491,10 @@ export const unsettledBy = (p, l) => {
   const want = params(p);
   const st = take.stability === undefined ? 0.5 : +take.stability;
   if (st !== want.stability) return 'stability';
-  return (+take.speed || 1) !== want.speed ? 'speed' : '';
+  return (+take.speed || 1) !== speedOf(p, l) ? 'speed' : '';
 };
+/** The speed a line is read at: its own, set in its fragment, else the project's (V26.1). */
+export const speedOf = (p, l) => (+(l && l.speed) || params(p).speed);
 /** The lines of the video read with other settings - what the voice field's `generate` redoes. */
 export const unsettled = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
   .map((l, i) => (unsettledBy(p, l) ? i : -1)).filter(i => i >= 0);

@@ -2096,12 +2096,13 @@ body.mv3-locked #mv3-timeline{
 }
 
 /* THE VOICE FIELD'S ONE ROW (phase V26.1, the owner 2026-10-10): the stability and the speed on the
-   left and `generate` on the right, never wrapping; under them, on a line of its own, what the press
-   will do - the line the field grew by, and the video field below it gave up. */
-.mv3-wk-stage-foot.is-voice{flex-direction:column; align-items:stretch; gap:3px}
-.mv3-wk-vctl{display:flex; align-items:center; gap:8px; flex-wrap:nowrap}
+   left and `generate` on the right, never wrapping. What the press will do is in its tooltip. */
+.mv3-wk-stage-foot.is-voice{flex-direction:column; align-items:stretch; container-type:inline-size}
+.mv3-wk-vctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; row-gap:4px}
+/* A narrow field: the two words go (they are in the tooltips), so the row still holds the button; narrower
+   still, the button drops under the menus rather than out of the field. */
+@container (max-width: 330px){ .mv3-wk-vctl .mv3-wk-vlab > span{display:none} .mv3-wk-vctl{gap:6px} }
 .mv3-wk-vctl .mv3-wk-gen{margin-left:auto}
-.mv3-wk-vcap{min-height:12px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-wk-vlab{flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 .mv3-wk-vlab .mv3-wk-vsel.is-small{flex:0 0 auto; width:auto}
 .mv3-wk-vnum{
@@ -2109,3 +2110,26 @@ body.mv3-locked #mv3-timeline{
   background:var(--bg); color:var(--ink); font:600 10px/1.3 var(--font);
 }
 .mv3-wk-vnum[disabled]{opacity:.6}
+
+/* The line's own speed in its fragment, between `read` and play (V26.1): gold while it is the line's own,
+   with the way back to the project's beside it. */
+.mv3-wk-fwrow > .mv3-wk-vlab.is-line, .mv3-wk-fwrow > .mv3-wk-vplay{margin-top:-2px}
+.mv3-wk-vlab.is-own .mv3-wk-vnum{border-color:var(--gold); color:var(--gold)}
+.mv3-wk-vback{flex:0 0 auto; padding:0 4px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font)}
+.mv3-wk-vback:hover:not(:disabled){color:var(--primary)}
+/* Read, beside play on a row of the list (V26.1): a send mark, then a read-again mark. */
+.mv3-wk-vplay.is-send{font-size:10px}
+.mv3-wk-vplay.is-send.is-busy{animation:mv3-wk-pulse 1.1s ease-in-out infinite}
+
+/* THE CLIPS OF A LINE, in a window (V26.1): every clip, playable, `use` on all but the one in use. */
+.mv3-wk-cwin{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center; background:oklch(0 0 0 / .72); padding:24px}
+.mv3-wk-cwin-box{display:flex; flex-direction:column; gap:10px; max-width:min(920px, 94vw); max-height:92vh; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r)}
+.mv3-wk-cwin-head{display:flex; align-items:center; gap:8px; font:700 10px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold)}
+.mv3-wk-cwin-x{margin-left:auto; padding:2px 6px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 12px/1 var(--font)}
+.mv3-wk-cwin-x:hover{color:var(--ink)}
+.mv3-wk-cwin-grid{display:flex; flex-wrap:wrap; gap:10px; overflow:auto}
+.mv3-wk-cwin-card{display:flex; flex-direction:column; gap:5px; width:170px; padding:5px; border:1px solid var(--border); border-radius:var(--r-sm)}
+.mv3-wk-cwin-card.is-on{border-color:var(--primary)}
+.mv3-wk-cwin-card video{width:100%; aspect-ratio:9/16; object-fit:contain; background:#000; border-radius:var(--r-xs)}
+.mv3-wk-cwin-meta{display:flex; align-items:center; gap:6px}
+.mv3-wk-cwin-meta .mv3-wk-vuse{margin-left:auto; padding:2px 10px; font-size:10px}

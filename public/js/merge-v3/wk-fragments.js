@@ -1310,18 +1310,14 @@ function _stageVoice(host, p, lines) {
   const again = redo.filter(w => w === 'stability').length;
   const retime = redo.length - again;
   // HOW IT IS SPOKEN, in one row with the button (the owner, 2026-10-10): the stability on the left,
-  // the speed beside it, `generate` on the right - and what the press will do on a line of its own
-  // under them, which is the height the field gained and the video field below gave up.
+  // the speed beside it, `generate` on the right. What the press will do is said on the button
+  // itself, under the pointer - a line of it under the row was one thing said twice (the owner).
   foot.classList.add('is-voice');
   const ctl = el('div', 'mv3-wk-vctl');
   foot.appendChild(ctl);
   _voiceSettings(ctl, p, g.busy);
   const label = g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
     : g.lines.length ? 'reading…' : 'generate';
-  const todo = [will && will + ' to read', again && again + ' to read again', retime && retime + ' to retime'].filter(Boolean);
-  const cap = !has || !live.length ? '' : g.busy ? '' : untagged ? 'stage 1 first'
-    : todo.length ? todo.join(' · ') : 'every line is read';
-  foot.appendChild(el('div', 'mv3-wk-vsub mv3-wk-vcap', cap || ' '));
   _genButton(ctl, {
     label,
     disabled: !has || g.busy || !live.length || !(will + redo.length) || !!untagged,
@@ -1332,7 +1328,7 @@ function _stageVoice(host, p, lines) {
           : [will && 'Read every line that needs it (' + will + '), one a second - ElevenLabs v3, by the tags the mood put in.',
             again && 'Read again the ' + again + (again === 1 ? ' line' : ' lines') + ' read with another stability - ElevenLabs, credits.',
             retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
-            redo.length && 'A clip made from the old read will need making again.'].filter(Boolean).join(' '),
+            redo.length && 'A line with a clip keeps it on the timeline until a new one is made.'].filter(Boolean).join(' '),
     on: () => VOICE.generate(_api.voiceApi()),
   });
 }
@@ -1369,16 +1365,39 @@ function _voiceSettings(foot, p, busy) {
   speed.value = String(now.speed);
   speed.disabled = busy || _saving;
   speed.addEventListener('change', () => {
-    const n = Math.round(Math.min(SPEED.max, Math.max(SPEED.min, parseFloat(speed.value) || 1)) / SPEED.step) * SPEED.step;
-    const v = Math.round(n * 100) / 100;
+    const v = _speedVal(speed.value);
     speed.value = String(v);
-    if (v !== VOICE.params(p).speed) _saveVoice({ stability: VOICE.params(p).stability, speed: v });
+    if (v !== VOICE.params(p).speed) _saveSpeed({ speed: v });
   });
   const pw = el('label', 'mv3-wk-vlab');
   pw.title = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
-    + '. Applied here after the read, so the voice keeps its pitch and a new speed costs nothing.';
+    + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch,'
+    + ' and the timeline follows. A line given its own speed in its fragment keeps it.';
   pw.append(el('span', '', 'speed'), speed);
   foot.append(sw, pw);
+}
+
+// A speed typed in, put on the scale the server keeps: 0.7-1.2 in steps of 0.05.
+const _speedVal = (raw) => Math.round(Math.round(Math.min(SPEED.max, Math.max(SPEED.min, parseFloat(raw) || 1)) / SPEED.step) * SPEED.step * 100) / 100;
+
+// THE SPEED, the project's or a line's (phase V26.1, the owner 2026-10-10): saved and applied in one call
+// (routes/scen3.js, /scen3/voice/speed) - the reads are retimed before the answer, the timeline follows.
+async function _saveSpeed(body) {
+  const p = _ctx && _ctx.project;
+  if (!p) return;
+  _saving = true;
+  _readErr = '';
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/voice/speed', { projectId: p.id, ...body });
+    _adopt(r);
+    if ((r.failed || []).length) _readErr = 'Not retimed: line ' + r.failed.map(x => x.line).join(', ') + ' - ' + r.failed[0].error;
+    Store.refresh().catch(() => {});
+  } catch (e) {
+    _readErr = 'The speed was not changed: ' + e.message;
+  }
+  _saving = false;
+  _ctx.repaint();
 }
 
 // The read's settings, onto the project - shown at once, confirmed by the answer.
@@ -1812,6 +1831,8 @@ function _row(p, l, i, n) {
     if (_open !== i) { _open = i; _remember(); }
     _ctx.repaint();
   }));
+  // ...and READ IT, beside its play (the owner, 2026-10-10).
+  row.appendChild(_rowRead(p, l, i));
 
   // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
   // and the row is read for its words.
@@ -1896,6 +1917,118 @@ async function _setOff(i, want) {
   _ctx.repaint();
 }
 
+// READ, on a row of the list (the owner, 2026-10-10): a send mark while the line has no read of the words it
+// has, a read-again mark once it has. Pressed, it reads at once - credits, the voice field's settings, no
+// question - and does not open or shut the fragment.
+function _rowRead(p, l, i) {
+  const ra = _readAct(p, l, i);
+  const reading = (VOICE.reading().lines || []).includes(i);
+  const has = isRead(l);
+  const b = el('button', 'mv3-wk-vplay is-send' + (reading ? ' is-busy' : ''), reading ? '…' : has ? '↻' : '➤');
+  b.type = 'button';
+  b.disabled = !ra.on || reading;
+  b.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
+    : has ? "Read this line again - ElevenLabs, with the voice field's settings, in place of the take it has"
+      : "Read this line - ElevenLabs, with the voice field's settings";
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (b.disabled || !ra.on) return;
+    b.disabled = true;
+    ra.on();
+  });
+  return b;
+}
+
+// THE LINE'S SPEED, in its fragment (the owner, 2026-10-10): the project's until it is changed here, then
+// the line's own - the project's speed does not touch it - with a way back.
+function _lineSpeed(p, l, i) {
+  const own = +l.speed > 0;
+  const proj = VOICE.params(p).speed;
+  const box = el('label', 'mv3-wk-vlab is-line' + (own ? ' is-own' : ''));
+  box.title = own ? "This line's own speed - the project's (" + proj + ') does not touch it. The read is retimed at once, free.'
+    : "The speed of this line's read - the project's, " + proj + ". Changed here, it becomes this line's own; the read is retimed at once, free.";
+  const inp = el('input', 'mv3-wk-vnum');
+  inp.type = 'number';
+  inp.min = String(SPEED.min);
+  inp.max = String(SPEED.max);
+  inp.step = String(SPEED.step);
+  inp.value = String(VOICE.speedOf(p, l));
+  inp.disabled = _saving || VOICE.reading().busy;
+  inp.addEventListener('change', () => {
+    const v = _speedVal(inp.value);
+    inp.value = String(v);
+    if (v !== VOICE.speedOf(p, l)) _saveSpeed({ line: i, lineSpeed: v });
+  });
+  box.append(el('span', '', 'speed'), inp);
+  if (own) {
+    const back = el('button', 'mv3-wk-vback', '↺');
+    back.type = 'button';
+    back.title = "Back to the project's speed (" + proj + ')';
+    back.disabled = inp.disabled;
+    back.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); _saveSpeed({ line: i, lineSpeed: null }); });
+    box.appendChild(back);
+  }
+  return box;
+}
+
+// THE CLIPS OF A LINE, in a window (the owner, 2026-10-10): each one plays there, and `use` makes it the line's -
+// on the timeline too, stale or not (`/scen3/fragments/pick-clip`, V23). A layer (js/layers.js): Escape closes it.
+let _cwin = null;
+function _closeClipWindow() {
+  if (!_cwin) return;
+  _cwin.el.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) { /* gone */ } });
+  _cwin.el.remove();
+  Layers.close(_cwin.layer);
+  _cwin = null;
+}
+function _clipWindow(p, l, i, n) {
+  _closeClipWindow();
+  const shade = el('div', 'mv3-wk-cwin');
+  const box = el('div', 'mv3-wk-cwin-box');
+  const head = el('div', 'mv3-wk-cwin-head');
+  head.appendChild(el('span', '', 'fragment ' + n + ' · its clips'));
+  const x = el('button', 'mv3-wk-cwin-x', '✕');
+  x.type = 'button';
+  x.title = 'Close (Esc)';
+  x.addEventListener('click', _closeClipWindow);
+  head.appendChild(x);
+  box.appendChild(head);
+  const grid = el('div', 'mv3-wk-cwin-grid');
+  const now = _clipOf(p, l, i);
+  for (const c of _clipsOf(p, l).filter(c => c && c.path).slice().reverse()) {
+    const on = !!(now && now.id === c.id);
+    const stale = !_clipFresh(p, l, i, c);
+    const card = el('div', 'mv3-wk-cwin-card' + (on ? ' is-on' : ''));
+    const v = document.createElement('video');
+    v.src = c.path;
+    if (c.thumb) v.poster = c.thumb;
+    v.controls = true;
+    v.preload = 'metadata';
+    v.playsInline = true;
+    // One at a time: a second clip started stops the first.
+    v.addEventListener('play', () => { grid.querySelectorAll('video').forEach(o => { if (o !== v) o.pause(); }); });
+    card.appendChild(v);
+    const meta = el('div', 'mv3-wk-cwin-meta');
+    meta.appendChild(el('span', 'mv3-wk-vname', c.dur ? c.dur.toFixed(1) + ' s' : 'take'));
+    if (stale) meta.appendChild(el('span', 'mv3-wk-fstale', 'stale'));
+    if (on) meta.appendChild(el('span', 'mv3-wk-vtag', 'the clip'));
+    else {
+      const use = el('button', 'mv3-wk-vuse', 'use');
+      use.type = 'button';
+      use.title = "Make this the fragment's clip - on the timeline too" + (stale ? ', stale as it is' : '');
+      use.addEventListener('click', async () => { use.disabled = true; await _pickClip(i, c.id); _closeClipWindow(); });
+      meta.appendChild(use);
+    }
+    card.appendChild(meta);
+    grid.appendChild(card);
+  }
+  box.appendChild(grid);
+  shade.appendChild(box);
+  shade.addEventListener('mousedown', (e) => { if (e.target === shade) _closeClipWindow(); });
+  document.body.appendChild(shade);
+  _cwin = { el: shade, layer: Layers.open(shade, { modal: true, name: 'clips of a fragment', onEsc: _closeClipWindow }) };
+}
+
 // ── The right-click menu of a row ───────────────────────────────────────────
 // A menu layer (js/layers.js), the same shape the scenarios list uses: Escape closes it and the
 // page keeps its own shortcuts. It holds what a line can have DONE to it - which is why `read
@@ -1936,6 +2069,12 @@ function _rowMenu(ev, row, p, l, i, n) {
 
   const ra = _readAct(p, l, i);
   item(ra.label, ra.why || 'in place of the take it has', ra.on);
+
+  // CHOOSE A CLIP (the owner, 2026-10-10): every clip the line has, in a window, each to be watched there
+  // and picked - a line keeps the clip it had when its read is redone, and this is the way to another.
+  const clips = _clipsOf(p, l).filter(c => c && c.path);
+  item('choose a clip', clips.length ? clips.length + (clips.length === 1 ? ' take' : ' takes') + ' · watch and pick' : 'no clips yet',
+    clips.length ? () => _clipWindow(p, l, i, n) : null);
 
   item('remove line', 'out of the video, kept in the project', () => {
     askDelete(row, 'Take fragment ' + n + ' out of the video?',
@@ -2036,6 +2175,10 @@ function _fragment(host, p, l, i) {
       : (ra.label === 'read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
     if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
     row.appendChild(rb);
+    // THE LINE'S OWN SPEED and its play, between the read and the words (the owner, 2026-10-10): a new
+    // speed retimes this read at once - the timeline and the play follow.
+    row.appendChild(_lineSpeed(p, l, i));
+    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
     const words = el('div', 'mv3-wk-fwords is-edit');
     _sayWords(words, shown || '…');
     words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');

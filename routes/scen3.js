@@ -2534,7 +2534,11 @@ async function _speakOne(key, ctx, i) {
   const name = `v${ctx.id}_${i + 1}_${ctx.variant}_${Date.now()}.mp3`;
   const abs = path.join(ctx.dir, name);
   fs.writeFileSync(abs, buf);
-  const { stability, speed } = ctx.voice.ttsParams;
+  const { stability } = ctx.voice.ttsParams;
+  const speed = _speedOf(line, ctx);
+  // Read again only because the settings changed - the same words - and the line's clip stays the
+  // line's until a new one is made (the owner, 2026-10-10).
+  const keep = !!_unsettled(line, ctx);
   // At another speed, the file ElevenLabs sent is kept as it is and the take plays a retimed copy.
   const play = speed === 1 ? abs : await _tempo(abs, speed);
   const dur = await _audioDur(play);
@@ -2546,11 +2550,15 @@ async function _speakOne(key, ctx, i) {
     said: text,                           // what was actually spoken; the staleness check reads this
     stability, speed,                     // what it was spoken with (V26.1)
   };
-  return { take: _fileTake(ctx, i, take) };
+  return { take: _fileTake(ctx, i, take, '', keep) };
 }
 
 // The take goes onto its line in one tick, and the timeline follows.
-function _fileTake(ctx, i, take, ifPath) {
+// `keep` (phase V26.1, the owner 2026-10-10): the read is redone only because the stability or the speed
+// changed - the same words - so the clip the line has now (chosen by hand, else the last made from this
+// frame and this read) is CHOSEN for it and stays on the timeline with its own sound until a new clip is
+// made. Otherwise a new read is asked for a new performance and the choice goes (V23).
+function _fileTake(ctx, i, take, ifPath, keep, quiet) {
   const saved = PROJECTS.apply(ctx.id, (fresh) => {
     fresh.lines = (fresh.lines || []).map(_normLine);
     const l = fresh.lines[i];
@@ -2558,12 +2566,14 @@ function _fileTake(ctx, i, take, ifPath) {
     l.audio = l.audio || { plain: null, tagged: null };
     // A retiming is of THAT take: if the line was read again meanwhile, the new read stands.
     if (ifPath && ((l.audio[ctx.variant] || {}).path || '') !== ifPath) return;
+    const held = keep ? _clipNow(fresh, l, i, ctx.variant) : '';
     l.audio[ctx.variant] = take;
-    // A new read is asked for a new performance: a clip chosen by hand for the old one is the line's no longer (V23).
-    if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
+    if (held) l.chosen = { ...(l.chosen || {}), [ctx.variant]: held };
+    else if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
     fresh.updatedAt = take.at;
   });
-  if (saved) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T')
+  // The timeline mirrors the lines (T') - unless the caller re-lays it once itself, after several (`quiet`).
+  if (saved && !quiet) MIRROR.touch(saved.id, { project: saved });
   return take;
 }
 
@@ -2593,16 +2603,37 @@ function _unsettled(l, ctx) {
   const want = ctx.voice.ttsParams;
   const st = t.stability === undefined ? 0.5 : t.stability;
   if (st !== want.stability) return 'stability';
-  return (t.speed || 1) !== want.speed ? 'speed' : '';
+  return (t.speed || 1) !== _speedOf(l, ctx) ? 'speed' : '';
+}
+
+// The speed a line is read at: its own when it has one (set in its fragment), else the project's.
+const _speedOf = (l, ctx) => (l && l.speed) || ctx.voice.ttsParams.speed;
+
+// The clip a line has NOW, by the rule the timeline lays it by (lib/frag-mirror.js _clipOf): chosen by
+// hand, else the last made from the frame it opens on, of these words and this read. '' when none.
+function _clipNow(proj, l, i, variant) {
+  const takes = ((l.video || {})[variant] || []).filter(c => c && c.path);
+  if (!takes.length) return '';
+  const hand = String((l.chosen || {})[variant] || '');
+  if (hand && takes.some(c => c.id === hand)) return hand;
+  const video = _normVideo(proj.video);
+  const frame = _frameOfLine(_framePool(proj), l, i, video.spread, proj.id);
+  if (!frame || !frame.id) return '';
+  const said = variant === 'tagged' ? (l.tagged || '') : (l.text || '');
+  const take = (l.audio || {})[variant];
+  const fresh = takes.filter(c => c.fromFrame === frame.id && c.said === said && (!c.fromAudio || !take || c.fromAudio === take.path));
+  if (!fresh.length) return '';
+  const picked = fresh.find(c => c.id === String((l.pick || {})[variant] || ''));
+  return (picked || fresh[fresh.length - 1]).id;
 }
 
 // ONLY THE SPEED IS OTHER: made again from the original file, free, without ElevenLabs.
-async function _retempoOne(ctx, i) {
+async function _retempoOne(ctx, i, quiet) {
   const t = (ctx.lines[i].audio || {})[ctx.variant];
   const rawUrl = t.raw || t.path;
   const rawAbs = toDiskWithin(rawUrl, [CFG.PROJECTS_DIR]);
   if (!rawAbs || !fs.existsSync(rawAbs)) throw new Error('the original read is gone - read the line again');
-  const speed = ctx.voice.ttsParams.speed;
+  const speed = _speedOf(ctx.lines[i], ctx);
   const play = speed === 1 ? rawAbs : await _tempo(rawAbs, speed);
   const dur = await _audioDur(play);
   const take = {
@@ -2614,7 +2645,7 @@ async function _retempoOne(ctx, i) {
   };
   delete take.id;                         // a new file has its own handle (_normTake derives it)
   if (play === rawAbs) delete take.raw; else take.raw = rawUrl;
-  return { take: _fileTake(ctx, i, take, t.path) };
+  return { take: _fileTake(ctx, i, take, t.path, true, quiet) };
 }
 
 // Which lines a read is about: the ones named, or every one that needs it. Without an explicit
@@ -2735,6 +2766,66 @@ router.post('/scen3/voice/speak-all', (req, res) => {
   } catch (e) {
     console.error('[scen3/voice/speak-all]', e.message);
     if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/* ── The speed of the read, applied at once (phase V26.1, the owner 2026-10-10) ──────────────────
+   POST /api/scen3/voice/speed  { projectId, speed }               the project's speed
+                                { projectId, line, lineSpeed }     a line's own speed; null - back to the project's
+   -> { success, project, retimed, failed }
+
+   The speed is ours, not ElevenLabs' (_tempo), so a new one costs nothing and takes a moment: it is saved,
+   and every read line whose take is at another speed is retimed from its original before the answer - the
+   timeline follows (MIRROR in _fileTake), and a line with a clip keeps that clip until a new one is made.
+   ───────────────────────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/voice/speed', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const hasLine = b.line !== undefined && b.line !== null;
+    const li = parseInt(b.line, 10);
+    if (hasLine && !(li >= 0 && li < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
+    if (!hasLine && !(Number(b.speed) > 0)) return res.status(400).json({ success: false, error: 'speed is required' });
+    const st = _reads.get(id);
+    if (st && st.running) return res.status(409).json({ success: false, error: 'the script is being read - change the speed when it is done' });
+
+    const saved = PROJECTS.apply(id, (fresh) => {
+      if (hasLine) {
+        fresh.lines = (fresh.lines || []).map(_normLine);
+        const l = fresh.lines[li];
+        if (Number(b.lineSpeed) > 0) l.speed = _ttsParams({ speed: b.lineSpeed }).speed;
+        else delete l.speed;
+      } else {
+        const v = _normVoice(fresh.voice);
+        fresh.voice = { ...(fresh.voice || {}), ttsParams: { ...v.ttsParams, speed: _ttsParams({ speed: b.speed }).speed } };
+      }
+      fresh.updatedAt = new Date().toISOString();
+    });
+    if (!saved) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    const ctx = _readCtx(saved);
+    const want = ctx.lines.map((_, i) => i).filter(i => !ctx.lines[i].removed && _unsettled(ctx.lines[i], ctx) === 'speed');
+    const failed = [];
+    let retimed = 0;
+    await Promise.all(want.map(i => _retempoOne(ctx, i, true).then(() => { retimed++; }, (e) => {
+      console.warn(`[scen3/voice/speed] line ${i + 1}:`, e.message);
+      failed.push({ line: i + 1, error: e.message });
+    })));
+    // The timeline, re-laid ONCE and waited for (as taking a line off is): the page shows it the moment
+    // the answer comes - a new speed is meant to be heard on the timeline at once (the owner).
+    if (retimed) {
+      try { await MIRROR.rebuild(id); }
+      catch (e) { console.warn('[scen3/voice/speed] the timeline was not re-laid:', e.message); }
+    }
+    console.log(`[scen3/voice/speed] ${id}` + (hasLine ? ` line ${li + 1}` : '') + ` retimed=${retimed} failed=${failed.length}`);
+    res.json({ success: true, project: _projNow(id), retimed, failed });
+  } catch (e) {
+    console.error('[scen3/voice/speed]', e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
@@ -3080,6 +3171,9 @@ function _normLine(l) {
       plain:  String((s.chosen || {}).plain  || ''),
       tagged: String((s.chosen || {}).tagged || ''),
     },
+    // (phase V26.1, the owner 2026-10-10) The line's OWN speed, set in its fragment: the project's speed does not
+    // touch it. Absent - the line reads at the project's speed.
+    ...(Number(s.speed) > 0 ? { speed: _ttsParams({ speed: s.speed }).speed } : {}),
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.
