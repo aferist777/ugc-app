@@ -1206,13 +1206,14 @@ export function createChat(make) {
 
   function _bubble(m, progs, asked) {
     // (phase V6) A card is the description's to draw.
+    // (phase V26.5) `asked` - the person's turn this answers, when the description hides the turns (`hidden`).
     if (m.card && typeof S.cardBubble === 'function') {
-      const c = S.cardBubble(m, progs);
+      const c = S.cardBubble(m, progs, asked);
       if (c) return c;
     }
-    // (phase V26.5) Any other message a description draws itself - the frames chat's ideas.
+    // (phase V26.5) Any other message a description draws itself - the frames chat's ideas and its frames.
     if (typeof S.bubble === 'function') {
-      const c = S.bubble(m, progs);
+      const c = S.bubble(m, progs, asked);
       if (c) return c;
     }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));

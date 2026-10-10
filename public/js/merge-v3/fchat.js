@@ -19,9 +19,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { createChat, el, thumbOf, json, money, almanacSoon } from './chat-shell.js';
+import { createChat, el, thumbOf, json, money, refCell, almanacSoon } from './chat-shell.js';
 import { note } from './ask.js';
-import { stepCard } from './vsteps.js';
 import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
@@ -141,28 +140,170 @@ function FRAMES(ctx) {
   ];
   const START = { character: 'people', place: 'environments', frame: 'frames', extra: 'images' };
 
-  // ── The writer's message (as in the video chat, V16) ──────────────────────
-  // With the writer on, ">" sends the words and the pictures, and the writer's prompt comes back in a message of its own
-  // to look at and edit; only its `draw` spends. The message is a SUB-PROJECT (vsteps.js): "prompt" - every writing of it a
-  // variant - then "frame" - every picture drawn from it a variant. The variant of the prompt shown is the one drawn from.
-  const _live = new Map();       // card id -> { m, steps, ta, ver, go, price }
+  // ── A message of this chat (the owner, 2026-10-10, after the first look) ──
+  // ONE MESSAGE PER SEND, all of one kind (the owner's answer (g)): what was asked at its head - the words and the pictures,
+  // by number and field -, then two columns: on the left the PROMPT - with the writer, the field to edit and its variants,
+  // `draw`, `write it again`; without it, what went to the model - and on the right THE FRAME: a box of the project's shape
+  // where the picture lands - empty, then counting down, then the frame -, its arrows through every frame of this message,
+  // the prompt variant it was drawn from, `to frames` / `in frames` and `to reference`. A press on the frame puts it on the
+  // stage, a right-click opens it large.
+  const _live = new Map();       // card id -> { m, left, right, progs, ta, ver, go, price, save, patchKey }
   const _cardN = new Map();      // card id -> how many to draw
   const _patchT = new Map();     // a prompt being typed: its save, a moment later
+  const _verAt = new Map();      // card id -> the variant of the prompt shown
+  const _shotAt = new Map();     // message id -> { i, n } the frame shown, and how many there were
   const COUNTS_D = [1, 2, 4];
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const _cardUrl = (m, tail) => '/api/scen3/fchat/card/' + encodeURIComponent(m.id) + (tail || '');
+  const ROLE_WORD = { character: 'character', place: 'place', frame: 'frame', extra: 'extra' };
 
-  function _cardBubble(m, progs) {
+  // What was asked: the words, and the pictures by number with the field each was in.
+  function _askedHead(words, media) {
+    const h = el('div', 'mv3-fc-asked');
+    if (words) h.appendChild(el('div', 'mv3-fc-asked-t', words));
+    const list = (media || []).filter(a => a && a.path);
+    if (list.length) {
+      const row = el('div', 'mv3-ig-msg-refs');
+      list.forEach((a, i) => {
+        const w = el('div', 'vc-ref');
+        w.appendChild(refCell(a, 'image', i + 1, null));
+        const word = ROLE_WORD[a.role] || '';
+        if (word) w.appendChild(el('span', 'lab', word));
+        row.appendChild(w);
+      });
+      h.appendChild(row);
+    }
+    return h;
+  }
+
+  // THE FRAME BOX: every frame of the message, one at a time, with its arrows; `verOf(g)` - the prompt variant it was
+  // drawn from ('' - none to say). Countdowns go into `progs`.
+  function _shotBox(host, m, gens, progs, verOf) {
+    host.textContent = '';
+    const ar = String(_format()).replace(':', '/');
+    if (!gens.length) {
+      const empty = el('div', 'mv3-fc-shotbox is-empty');
+      empty.style.aspectRatio = ar;
+      empty.appendChild(el('span', null, 'the frame lands here'));
+      host.appendChild(empty);
+      return;
+    }
+    // A new frame of the message is where the eye goes; otherwise the one the person paged to.
+    const was = _shotAt.get(m.id);
+    let i = was ? was.i : gens.length - 1;
+    if (!was || gens.length > was.n) i = gens.length - 1;
+    i = Math.max(0, Math.min(gens.length - 1, i));
+    _shotAt.set(m.id, { i, n: gens.length });
+    const g = gens[i];
+    const box = el('div', 'mv3-fc-shotbox is-' + g.state);
+    box.style.aspectRatio = ar;
+    if (g.state === 'done' && g.imagePath) {
+      const img = document.createElement('img');
+      img.src = thumbOf(g.imagePath, 'strip');
+      img.alt = g.prompt || '';
+      img.title = 'Press to see it on the stage · right-click to open it large';
+      img.addEventListener('click', () => { if (_hooks.stage) _hooks.stage(g.imagePath, 'frame from the chat'); });
+      img.addEventListener('contextmenu', (e) => { e.preventDefault(); _view(gens, i); });
+      img.addEventListener('error', () => { img.replaceWith(el('span', 'mv3-ig-gone', 'not on the disk any more')); }, { once: true });
+      box.appendChild(img);
+    } else if (g.state === 'pending') {
+      const strip = el('div', 'mv3-ig-prog');
+      box.appendChild(strip);
+      progs.set(g.id, startInlineProgress(strip, {
+        label: ctx.stageWords(g), key: 'mv3-imagen-' + (g.engine || ''), estimateMs: 40000, startedAt: Date.parse(g.at) || 0,
+        onCancel: g.alertId ? async () => { await json('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', { method: 'POST' }); ctx.reload(); } : null,
+      }));
+    } else {
+      box.appendChild(el('div', 'mv3-ig-bad', g.error || 'nothing came back'));
+    }
+    host.appendChild(box);
+    if (gens.length > 1) {
+      const nav = el('div', 'vc-vars mv3-fc-shotnav');
+      const prev = el('button', 'vc-nav is-prev', '‹');
+      const next = el('button', 'vc-nav is-next', '›');
+      prev.type = 'button'; next.type = 'button';
+      prev.disabled = i === 0;
+      next.disabled = i === gens.length - 1;
+      prev.title = 'The previous frame of this message';
+      next.title = 'The next frame of this message';
+      const go = (d) => { _shotAt.set(m.id, { i: i + d, n: gens.length }); _shotBox(host, m, gens, progs, verOf); };
+      prev.addEventListener('click', () => go(-1));
+      next.addEventListener('click', () => go(1));
+      nav.append(prev, el('span', 'vc-vars-t', 'frame ' + (i + 1) + ' of ' + gens.length), next);
+      host.appendChild(nav);
+    }
+    const from = verOf ? verOf(g) : '';
+    if (from) host.appendChild(el('div', 'mv3-fc-from', from));
+    if (g.state === 'done' && g.imagePath) host.appendChild(_shotActs(g));
+  }
+
+  // "to frames" - into the set the lines take their frames from; "to reference" - into the base, to change it next.
+  function _shotActs(g) {
+    const acts = el('div', 'mv3-ig-acts mv3-fc-acts');
+    const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
+    const add = el('button', 'mv3-c-btn', inSet() ? 'in frames' : 'to frames');
+    add.type = 'button';
+    add.disabled = inSet();
+    add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
+    add.addEventListener('click', async () => {
+      add.disabled = true;
+      const d = await _post('/api/scen3/fchat/to-set', { genId: g.id });
+      if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
+      add.textContent = 'in frames';
+      if (_hooks.added) _hooks.added(d.project);
+    });
+    const use = el('button', 'mv3-c-btn', 'to reference');
+    use.type = 'button';
+    use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the extra pictures stay';
+    use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
+    acts.append(add, use);
+    return acts;
+  }
+
+  // Every frame of the thread, large - from the 2048px tier.
+  function _view(gens, at) {
+    const done = gens.filter(x => x && x.state === 'done' && x.imagePath);
+    const g = gens[at];
+    import('../library/viewer.js').then(V => V.openViewer(
+      done.map(x => ({ id: x.id, kind: 'images', media: x.imagePath, thumb: x.imagePath, name: x.prompt || '', meta: { date: x.at } })),
+      Math.max(0, done.indexOf(g)), { showSrc: (it) => thumbOf(it.media, 'main') }));
+  }
+
+  // ── Without the writer: what went to the model on the left, the frame on the right ──
+  function _plainBubble(m, progs, asked) {
+    const gens = m.gens || [];
+    const box = el('div', 'mv3-ig-msg is-agent mv3-fc-msg');
+    box.appendChild(_askedHead(m.asked || (asked && asked.text) || (m.loose && gens[0] ? gens[0].said : ''),
+      (m.media && m.media.length) ? m.media : ((asked && asked.media) || [])));
+    const cols = el('div', 'mv3-fc-cols');
+    const left = el('div', 'mv3-fc-left');
+    const right = el('div', 'mv3-fc-right');
+    cols.append(left, right);
+    box.appendChild(cols);
+    const g = gens[gens.length - 1];
+    left.appendChild(el('div', 'mv3-fc-k', 'sent without the writer'));
+    if (g && g.state === 'pending' && !g.taskId) left.appendChild(el('div', 'mv3-fc-note', ctx.stageWords(g)));
+    if (g && g.prompt && g.prompt !== g.said) {
+      const more = el('details', 'mv3-fc-sent');
+      more.appendChild(el('summary', null, 'sent as'));
+      more.appendChild(el('div', 'mv3-fc-sent-t', g.prompt));
+      left.appendChild(more);
+    }
+    if (g && (g.fell || g.writer)) left.appendChild(el('div', 'mv3-fc-note', g.fell || ('put into English by ' + g.writer)));
+    _shotBox(right, m, gens, progs, null);
+    return box;
+  }
+
+  // ── With the writer: the prompt to edit on the left, the frame on the right ──
+  const _versOf = (c) => (c.versions || []);
+  function _cardBubble(m, progs, asked) {
     const c = m.card;
     const was = _live.get(m.id);
-    if (was && was.steps) was.steps.destroy();
+    if (was) { for (const p of was.progs.values()) p.detach(); }
     _live.delete(m.id);
-    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
-    const h = el('div', 'vc-card-h');
-    h.appendChild(el('span', 'k', 'frame'));
-    if (c.model) h.appendChild(el('span', 'm', 'written for ' + c.model));
-    box.appendChild(h);
-    if (!(c.versions || []).length) {
+    const box = el('div', 'mv3-ig-msg is-agent mv3-fc-msg is-card is-' + c.state);
+    box.appendChild(_askedHead(c.text || (asked && asked.text) || '', (m.media && m.media.length) ? m.media : ((asked && asked.media) || [])));
+    if (!_versOf(c).length) {
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
@@ -180,79 +321,84 @@ function FRAMES(ctx) {
       box.appendChild(acts);
       return box;
     }
-    const steps = stepCard(m.id);
-    box.append(...steps.parts);
-    const l = { m, steps, ta: null, ver: '', go: null, price: null };
+    const cols = el('div', 'mv3-fc-cols');
+    const left = el('div', 'mv3-fc-left');
+    const right = el('div', 'mv3-fc-right');
+    cols.append(left, right);
+    box.appendChild(cols);
+    const l = { m, left, right, progs: new Map(), ta: null, ver: '', go: null, price: null, gsig: '' };
     _live.set(m.id, l);
-    _paintCard(l);
+    _paintLeft(l);
+    _paintRight(l);
     return box;
   }
 
-  function _paintCard(l) {
+  // The prompt: the variant shown - the one the person paged to, else the chosen one -, its field and its arrows; the
+  // press and the price under it.
+  function _paintLeft(l) {
     const m = l.m, c = m.card;
-    const vers = (c.versions || []).map(v => ({ key: v.id, sig: v.model, v }));
-    if (c.state === 'writing') vers.push({ key: 'writing', sig: 'writing', writing: true });
-    const steps = [{
-      key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur, variants: vers,
-      note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw" sends this one'),
-      body: (x, b, progs) => _promptBody(l, x, b, progs),
-      acts: (x, a) => _promptActs(l, x, a),
-      // The variant paged to is the chosen one (the server keeps it for the next read).
-      page: (x) => { if (x && x.v && x.key !== l.m.card.cur) _post(_cardUrl(l.m), { project: l.m.project, cur: x.key }, 'PATCH'); },
-      freshen: () => _freshen(l),
-    }];
-    const gens = m.gens || [];
-    if (gens.length) {
-      steps.push({
-        key: 'frame', title: 'frame', word: 'frame', variants: gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.imagePath || '') + ':' + (g.error || ''), g })),
-        body: (x, b, progs) => { if (!x) return; const sh = ctx.shots({ gens: [x.g] }, progs); if (sh) b.appendChild(sh); },
-        freshen: (x) => { const p = x && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(ctx.stageWords(x.g)); },
-      });
-    }
-    l.steps.paint({ steps });
-  }
-
-  function _promptBody(l, x, b, progs) {
-    l.ta = null; l.ver = '';
-    const c = l.m.card;
-    if (!x || x.writing) {
-      const strip = el('div', 'mv3-ig-prog');
-      b.appendChild(strip);
-      progs.set('w', startInlineProgress(strip, {
-        label: 'writing another variant…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || l.m.at) || 0,
-      }));
-      return;
-    }
-    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    const vs = _versOf(c);
+    let vi = vs.findIndex(v => v.id === _verAt.get(m.id));
+    if (vi < 0) vi = vs.findIndex(v => v.id === c.cur);
+    if (vi < 0) vi = vs.length - 1;
+    const v = vs[vi];
+    l.left.textContent = '';
+    l.ta = null; l.ver = v.id;
+    const head = el('div', 'mv3-fc-k', 'prompt' + (c.model ? ' · written for ' + c.model : ''));
+    l.left.appendChild(head);
+    if (c.error) l.left.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
     ta.className = 'vc-prompt-ta';
     ta.spellcheck = true;
-    ta.value = x.v.prompt || '';
+    ta.value = v.prompt || '';
     ta.title = 'The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.';
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
     requestAnimationFrame(grow);
-    const key = 'p:' + l.m.id + ':' + x.v.id;
+    const key = 'p:' + m.id + ':' + v.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
       _patchT.delete(key);
-      return _post(_cardUrl(l.m), { project: l.m.project, ver: x.v.id, prompt: ta.value }, 'PATCH');
+      return _post(_cardUrl(m), { project: m.project, ver: v.id, prompt: ta.value }, 'PATCH');
     };
     ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    b.appendChild(ta);
-    l.ta = ta;
-    l.ver = x.v.id;
-    l.save = save;
-    l.patchKey = key;
-  }
-
-  function _promptActs(l, x, a) {
-    l.go = null; l.price = null;
-    if (!x || x.writing) return;
-    const m = l.m;
+    l.left.appendChild(ta);
+    Object.assign(l, { ta, save, patchKey: key });
+    if (c.state === 'writing') {
+      const strip = el('div', 'mv3-ig-prog');
+      l.left.appendChild(strip);
+      for (const p of l.progs.values()) p.detach();
+      l.progs.clear();
+      l.progs.set('w', startInlineProgress(strip, {
+        label: 'writing another variant…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+      }));
+    }
+    if (vs.length > 1) {
+      const nav = el('div', 'vc-vars');
+      const prev = el('button', 'vc-nav is-prev', '‹');
+      const next = el('button', 'vc-nav is-next', '›');
+      prev.type = 'button'; next.type = 'button';
+      prev.disabled = vi === 0;
+      next.disabled = vi === vs.length - 1;
+      prev.title = 'The previous variant of the prompt';
+      next.title = 'The next variant of the prompt';
+      const go = (d) => {
+        if (_patchT.has(key)) save();
+        const t = vs[vi + d];
+        if (!t) return;
+        _verAt.set(m.id, t.id);
+        if (t.id !== c.cur) _post(_cardUrl(m), { project: m.project, cur: t.id }, 'PATCH');
+        _paintLeft(l);
+      };
+      prev.addEventListener('click', () => go(-1));
+      next.addEventListener('click', () => go(1));
+      nav.append(prev, el('span', 'vc-vars-t', 'variant ' + (vi + 1) + ' of ' + vs.length + ' · "draw" sends this one'), next);
+      l.left.appendChild(nav);
+    }
+    const acts = el('div', 'vc-card-acts');
     const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
     nBtn.type = 'button';
-    nBtn.title = 'How many frames to draw from it - each is its own variant of the frame';
+    nBtn.title = 'How many frames to draw from it - each lands in the box on the right';
     nBtn.addEventListener('click', () => {
       const i = COUNTS_D.indexOf(_cardN.get(m.id) || 1);
       _cardN.set(m.id, COUNTS_D[(i + 1) % COUNTS_D.length]);
@@ -266,11 +412,27 @@ function FRAMES(ctx) {
     const again = el('button', 'vc-link', 'write it again');
     again.type = 'button';
     again.title = 'Another variant of the prompt from the same words and pictures - this one stays';
-    again.addEventListener('click', () => _rewrite(l.m, again));
-    a.append(nBtn, go, price, again);
-    l.go = go;
-    l.price = price;
+    again.addEventListener('click', () => _rewrite(m, again));
+    acts.append(nBtn, go, price, again);
+    l.left.appendChild(acts);
+    Object.assign(l, { go, price });
     _freshen(l);
+  }
+
+  // The frame box of a card: the prompt variant each frame was drawn from, when there is more than one.
+  function _paintRight(l) {
+    const m = l.m, c = m.card;
+    const gens = m.gens || [];
+    l.gsig = gens.map(g => g.id + ':' + g.state + ':' + (g.imagePath || '') + ':' + (g.error || '')).join(',');
+    for (const [k, p] of l.progs) { if (k !== 'w') { p.detach(); l.progs.delete(k); } }
+    const vs = _versOf(c);
+    const verOf = (g) => {
+      if (vs.length < 2) return '';
+      const send = (c.sends || []).find(s => (s.genIds || []).includes(g.id));
+      const k = send ? vs.findIndex(v => v.id === send.ver) : -1;
+      return k >= 0 ? 'from prompt variant ' + (k + 1) : '';
+    };
+    _shotBox(l.right, m, gens, l.progs, verOf);
   }
 
   // The press and the price follow the column: the model it draws with is the one chosen there now.
@@ -310,6 +472,7 @@ function FRAMES(ctx) {
     const d = await _post(_cardUrl(m, '/rewrite'), { project: m.project, engine: (M.engine() || {}).id || '' });
     btn.disabled = false;
     if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+    _verAt.delete(m.id);
     ctx.reload();
   }
 
@@ -364,10 +527,10 @@ function FRAMES(ctx) {
   }
 
   // The sig of a card for the shell: what it IS - never the text being typed into it.
+  // Its frames are not: they change in place (onThread), so a frame landing never rebuilds the prompt being typed.
   const _cardSig = (m) => {
     const c = m.card || {};
-    return [c.state, c.cur, (c.versions || []).map(v => v.id + ':' + v.model).join(','), c.error || '',
-      (m.gens || []).map(g => g.id + ':' + g.state + ':' + (g.imagePath || '') + ':' + (g.error || '')).join(',')].join('|');
+    return [c.state, (c.versions || []).map(v => v.id + ':' + v.model).join(','), c.error || ''].join('|');
   };
 
   return {
@@ -412,7 +575,10 @@ function FRAMES(ctx) {
     // The writer's message is the description's to draw; the shell keeps the thread reading while one is being written.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
-    bubble: (m) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m) : null),
+    // ONE MESSAGE PER SEND (the owner's answer (g)): the person's turn is not drawn apart - what was asked heads its answer.
+    hidden: (m) => m.role === 'user',
+    bubble: (m, progs, asked) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m)
+      : (m.role !== 'user' && (m.gens || []).length ? _plainBubble(m, progs, asked) : null)),
     msgSig: (m) => (Array.isArray(m.ideas) ? (m.used || []).join(',') : ''),
     attsSide: _ideasSide,
     // The idea a message went from is used now; the box is its own again.
@@ -432,8 +598,17 @@ function FRAMES(ctx) {
       return true;
     },
     busy: (thread) => thread.some(m => m.card && m.card.state === 'writing'),
+    // A card's frames and its price follow the thread in place.
     onThread: (thread) => {
-      for (const m of thread) { const l = _live.get(m.id); if (l && l.steps && m.card) { l.m = m; _paintCard(l); } }
+      for (const m of thread) {
+        const l = _live.get(m.id);
+        if (!l || !m.card) continue;
+        l.m = m;
+        const gsig = (m.gens || []).map(g => g.id + ':' + g.state + ':' + (g.imagePath || '') + ':' + (g.error || '')).join(',');
+        if (gsig !== l.gsig) _paintRight(l);
+        else for (const g of m.gens || []) { const p = l.progs.get(g.id); if (p) p.say(ctx.stageWords(g)); }
+        _freshen(l);
+      }
     },
 
     settings: {

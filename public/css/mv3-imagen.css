@@ -907,3 +907,31 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-fc-idea{ display:flex; flex-direction:column; gap:3px }
 .mv3-fc-idea .u{ align-self:flex-start; font:700 8px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
 .mv3-fc-idea.is-used{ border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, var(--surface-2)) }
+/* (phase V26.5, the owner after the first look) A MESSAGE OF THE FRAMES CHAT: what was asked at its head, then the prompt
+   on the left and the frame on the right - a box of the project's shape the picture lands in, its arrows under it. */
+.mv3-fc-msg{ max-width:none; width:100% }
+.mv3-fc-asked{ display:flex; flex-direction:column; gap:5px; padding-bottom:7px; margin-bottom:7px; border-bottom:1px solid var(--border-soft) }
+.mv3-fc-asked-t{ font:600 11.5px/1.4 var(--font); color:var(--ink); white-space:pre-wrap }
+.mv3-fc-asked .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:1px }
+.mv3-fc-asked .vc-ref .lab{ font:600 7.5px/1 var(--font); color:var(--muted) }
+.mv3-fc-cols{ display:flex; gap:10px; align-items:flex-start }
+.mv3-fc-left{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
+.mv3-fc-right{ flex:0 0 150px; display:flex; flex-direction:column; align-items:stretch; gap:4px }
+.mv3-fc-k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+.mv3-fc-note{ font:500 10px/1.35 var(--font); color:var(--muted) }
+.mv3-fc-sent summary{ cursor:pointer; font:600 10px/1.4 var(--font); color:var(--muted) }
+.mv3-fc-sent-t{ margin-top:3px; font:500 10.5px/1.4 var(--font); color:var(--ink); white-space:pre-wrap }
+.mv3-fc-shotbox{
+  position:relative; width:100%; border-radius:var(--r-xs); overflow:hidden; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); background:var(--surface-2);
+}
+.mv3-fc-shotbox.is-empty{ border-style:dashed; border-color:color-mix(in oklch, var(--gold) 55%, transparent) }
+.mv3-fc-shotbox.is-empty span{ padding:0 10px; text-align:center; font:600 9.5px/1.35 var(--font); color:var(--muted) }
+.mv3-fc-shotbox img{ width:100%; height:100%; object-fit:cover; cursor:pointer; display:block }
+.mv3-fc-shotbox .mv3-ig-prog{ position:absolute; left:6px; right:6px; bottom:6px }
+.mv3-fc-shotbox .mv3-ig-bad{ padding:8px; font-size:10px }
+.mv3-fc-shotnav{ justify-content:space-between }
+.mv3-fc-from{ font:600 9px/1.2 var(--font); color:var(--muted); text-align:center }
+.mv3-fc-acts{ display:flex; flex-direction:column; gap:4px }
+.mv3-fc-acts .mv3-c-btn{ width:100% }
+.mv3-pc.is-narrow .mv3-fc-right{ flex-basis:118px }
