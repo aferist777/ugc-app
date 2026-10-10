@@ -19,8 +19,10 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { createChat, el, thumbOf, json, almanacSoon } from './chat-shell.js';
+import { createChat, el, thumbOf, json, money, almanacSoon } from './chat-shell.js';
 import { note } from './ask.js';
+import { stepCard } from './vsteps.js';
+import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -46,6 +48,12 @@ let _auto = {};                // { character, place } - what was put into those
 // The project's format - the set is drawn in it (routes/scen3.js mix.settings.format).
 const _format = () => String((((_proj || {}).mix || {}).settings || {}).format || ((Store.timeline() || {}).format) || '9:16');
 const _cast = () => ((_proj || {}).casting) || {};
+// Where Alerts brings the person back: the project, its setup, this chat.
+const WHERE = (key) => ({
+  page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&view=fchat',
+  label: 'Merge · ' + (Store.title() || 'project') + ' · frames chat',
+  spot: { key, view: 'fchat' },
+});
 
 function FRAMES(ctx) {
   const M = modelColumn(ctx, {
@@ -119,6 +127,185 @@ function FRAMES(ctx) {
   ];
   const START = { character: 'people', place: 'environments', frame: 'frames', prop: 'images' };
 
+  // ── The writer's message (as in the video chat, V16) ──────────────────────
+  // With the writer on, ">" sends the words and the pictures, and the writer's prompt comes back in a message of its own
+  // to look at and edit; only its `draw` spends. The message is a SUB-PROJECT (vsteps.js): "prompt" - every writing of it a
+  // variant - then "frame" - every picture drawn from it a variant. The variant of the prompt shown is the one drawn from.
+  const _live = new Map();       // card id -> { m, steps, ta, ver, go, price }
+  const _cardN = new Map();      // card id -> how many to draw
+  const _patchT = new Map();     // a prompt being typed: its save, a moment later
+  const COUNTS_D = [1, 2, 4];
+  const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const _cardUrl = (m, tail) => '/api/scen3/fchat/card/' + encodeURIComponent(m.id) + (tail || '');
+
+  function _cardBubble(m, progs) {
+    const c = m.card;
+    const was = _live.get(m.id);
+    if (was && was.steps) was.steps.destroy();
+    _live.delete(m.id);
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-prompt is-steps is-' + c.state);
+    const h = el('div', 'vc-card-h');
+    h.appendChild(el('span', 'k', 'frame'));
+    if (c.model) h.appendChild(el('span', 'm', 'written for ' + c.model));
+    box.appendChild(h);
+    if (!(c.versions || []).length) {
+      if (c.state === 'writing') {
+        const strip = el('div', 'mv3-ig-prog');
+        box.appendChild(strip);
+        progs.set('w:' + m.id, startInlineProgress(strip, {
+          label: 'writing the prompt…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        }));
+        return box;
+      }
+      box.appendChild(el('div', 'mv3-ig-bad', c.error || 'it was not written'));
+      const acts = el('div', 'vc-card-acts');
+      const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+      again.type = 'button';
+      again.addEventListener('click', () => _rewrite(m, again));
+      acts.appendChild(again);
+      box.appendChild(acts);
+      return box;
+    }
+    const steps = stepCard(m.id);
+    box.append(...steps.parts);
+    const l = { m, steps, ta: null, ver: '', go: null, price: null };
+    _live.set(m.id, l);
+    _paintCard(l);
+    return box;
+  }
+
+  function _paintCard(l) {
+    const m = l.m, c = m.card;
+    const vers = (c.versions || []).map(v => ({ key: v.id, sig: v.model, v }));
+    if (c.state === 'writing') vers.push({ key: 'writing', sig: 'writing', writing: true });
+    const steps = [{
+      key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur, variants: vers,
+      note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw" sends this one'),
+      body: (x, b, progs) => _promptBody(l, x, b, progs),
+      acts: (x, a) => _promptActs(l, x, a),
+      // The variant paged to is the chosen one (the server keeps it for the next read).
+      page: (x) => { if (x && x.v && x.key !== l.m.card.cur) _post(_cardUrl(l.m), { project: l.m.project, cur: x.key }, 'PATCH'); },
+      freshen: () => _freshen(l),
+    }];
+    const gens = m.gens || [];
+    if (gens.length) {
+      steps.push({
+        key: 'frame', title: 'frame', word: 'frame', variants: gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.imagePath || '') + ':' + (g.error || ''), g })),
+        body: (x, b, progs) => { if (!x) return; const sh = ctx.shots({ gens: [x.g] }, progs); if (sh) b.appendChild(sh); },
+        freshen: (x) => { const p = x && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(ctx.stageWords(x.g)); },
+      });
+    }
+    l.steps.paint({ steps });
+  }
+
+  function _promptBody(l, x, b, progs) {
+    l.ta = null; l.ver = '';
+    const c = l.m.card;
+    if (!x || x.writing) {
+      const strip = el('div', 'mv3-ig-prog');
+      b.appendChild(strip);
+      progs.set('w', startInlineProgress(strip, {
+        label: 'writing another variant…', key: 'mv3-fchat-writer', estimateMs: 20000, startedAt: Date.parse(c.startedAt || l.m.at) || 0,
+      }));
+      return;
+    }
+    if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
+    const ta = document.createElement('textarea');
+    ta.className = 'vc-prompt-ta';
+    ta.spellcheck = true;
+    ta.value = x.v.prompt || '';
+    ta.title = 'The prompt the model gets - edit it before the frame is drawn. image 1, image 2 are the pictures above, by their numbers.';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
+    requestAnimationFrame(grow);
+    const key = 'p:' + l.m.id + ':' + x.v.id;
+    const save = () => {
+      clearTimeout(_patchT.get(key));
+      _patchT.delete(key);
+      return _post(_cardUrl(l.m), { project: l.m.project, ver: x.v.id, prompt: ta.value }, 'PATCH');
+    };
+    ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+    b.appendChild(ta);
+    l.ta = ta;
+    l.ver = x.v.id;
+    l.save = save;
+    l.patchKey = key;
+  }
+
+  function _promptActs(l, x, a) {
+    l.go = null; l.price = null;
+    if (!x || x.writing) return;
+    const m = l.m;
+    const nBtn = el('button', 'vc-n', '×' + (_cardN.get(m.id) || 1));
+    nBtn.type = 'button';
+    nBtn.title = 'How many frames to draw from it - each is its own variant of the frame';
+    nBtn.addEventListener('click', () => {
+      const i = COUNTS_D.indexOf(_cardN.get(m.id) || 1);
+      _cardN.set(m.id, COUNTS_D[(i + 1) % COUNTS_D.length]);
+      nBtn.textContent = '×' + _cardN.get(m.id);
+      _freshen(l);
+    });
+    const go = el('button', 'mv3-c-btn vc-go is-make', 'draw');
+    go.type = 'button';
+    go.addEventListener('click', () => _draw(l, go));
+    const price = el('span', 'vc-card-why');
+    const again = el('button', 'vc-link', 'write it again');
+    again.type = 'button';
+    again.title = 'Another variant of the prompt from the same words and pictures - this one stays';
+    again.addEventListener('click', () => _rewrite(l.m, again));
+    a.append(nBtn, go, price, again);
+    l.go = go;
+    l.price = price;
+    _freshen(l);
+  }
+
+  // The press and the price follow the column: the model it draws with is the one chosen there now.
+  function _freshen(l) {
+    if (!l.go) return;
+    const c = l.m.card;
+    const n = _cardN.get(l.m.id) || 1;
+    const made = (c.sends || []).length > 0 || (l.m.genIds || []).length > 0;
+    l.go.textContent = (made ? 'draw again' : 'draw') + (n > 1 ? ' ×' + n : '');
+    l.go.disabled = c.state === 'writing';
+    const p = M.price();
+    l.price.textContent = p ? (p.approx ? '≈' : '') + money(p.usd * n) + ' · ' + p.model + ' · ' + p.agg : '';
+  }
+
+  async function _draw(l, btn) {
+    const m = l.m;
+    const k = ctx.key();
+    if (!k) return;
+    const why = M.ready();
+    if (why) { note(btn, why[0], why[1]); return; }
+    btn.disabled = true;
+    // What is being typed goes first: the frame is drawn from the prompt as it stands.
+    if (l.patchKey && _patchT.has(l.patchKey) && l.save) await l.save();
+    const col = M.body();
+    const d = await _post(_cardUrl(m, '/draw'), {
+      project: m.project, ver: l.ver, prompt: l.ta ? l.ta.value : undefined,
+      engine: col.engine, provider: col.provider, quality: col.quality, n: _cardN.get(m.id) || 1,
+      where: WHERE(k),
+    });
+    btn.disabled = false;
+    if (!d || !d.success) { note(btn, 'Not drawn.', (d && d.error) || 'the server did not answer'); return; }
+    ctx.reload();
+  }
+
+  async function _rewrite(m, btn) {
+    btn.disabled = true;
+    const d = await _post(_cardUrl(m, '/rewrite'), { project: m.project, engine: (M.engine() || {}).id || '' });
+    btn.disabled = false;
+    if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
+    ctx.reload();
+  }
+
+  // The sig of a card for the shell: what it IS - never the text being typed into it.
+  const _cardSig = (m) => {
+    const c = m.card || {};
+    return [c.state, c.cur, (c.versions || []).map(v => v.id + ':' + v.model).join(','), c.error || '',
+      (m.gens || []).map(g => g.id + ':' + g.state + ':' + (g.imagePath || '') + ':' + (g.error || '')).join(',')].join('|');
+  };
+
   return {
     name: 'frames',
     kind: 'fchat',
@@ -157,11 +344,14 @@ function FRAMES(ctx) {
     columnFoot: () => [almanacSoon()],
     resultPath: (g) => g.imagePath,
     // Alerts brings the person back here: the project, its setup, this chat.
-    where: (key) => ({
-      page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&view=fchat',
-      label: 'Merge · ' + (Store.title() || 'project') + ' · frames chat',
-      spot: { key, view: 'fchat' },
-    }),
+    where: WHERE,
+    // The writer's message is the description's to draw; the shell keeps the thread reading while one is being written.
+    cardBubble: _cardBubble,
+    cardSig: _cardSig,
+    busy: (thread) => thread.some(m => m.card && m.card.state === 'writing'),
+    onThread: (thread) => {
+      for (const m of thread) { const l = _live.get(m.id); if (l && l.steps && m.card) { l.m = m; _paintCard(l); } }
+    },
 
     settings: {
       load: M.load,

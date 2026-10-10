@@ -15,6 +15,9 @@
 //
 //   POST /api/scen3/fchat/send     { project, projectId, text, refs, roles, engine, provider, quality, shot, n, write,
 //                                    where } - a message
+//   PATCH /api/scen3/fchat/card/:id          { project, ver?, prompt?, cur? } - a written prompt edited, or chosen
+//   POST /api/scen3/fchat/card/:id/rewrite   { project, engine } - another variant of the prompt
+//   POST /api/scen3/fchat/card/:id/draw      { project, ver, prompt, engine, provider, quality, n, where } - the money
 //   POST /api/scen3/fchat/to-set   { genId } - a frame of the chat into the project's set
 //   GET  /api/scen3/fchat/feed?project=<key>   the frames this chat made, newest first
 // ════════════════════════════════════════════════════════════════════════════
@@ -68,17 +71,33 @@ router.post('/scen3/fchat/send', (req, res) => {
     const roles = refs.map((x, i) => (ROLES.includes(String((b.roles || [])[i] || '')) ? String(b.roles[i] || '') : ''));
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const write = b.write !== false;
-    // (block C) The writer that stops for a look.
-    if (write) return res.status(400).json({ success: false, error: 'the writer is not ready yet - untick it to send' });
+    const facts = SCEN().fchatFacts(id, String(b.shot || ''));
+    const media = refs.map((p, i) => ({ path: p, kind: 'image', role: roles[i], label: roles[i] }));
+    // THE WRITER STOPS FOR A LOOK (as in the video chat, V16): the person's turn and a prompt card, the writer behind the
+    // answer, and the frame drawn only from the card (`draw`).
+    if (write) {
+      if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+      const before = CHAT.read(key, KIND).slice(-4).map(m => ({ role: m.role, text: m.text }));
+      const turn = CHAT.add({ project: key, kind: KIND, role: 'user', text, refs, media });
+      const kickW = 'w' + crypto.randomBytes(8).toString('hex');
+      CHAT.writing.add(kickW);
+      let card;
+      try {
+        card = CHAT.add({ project: key, kind: KIND, role: 'agent', text: '', refs, media,
+                          card: { type: 'prompt', plain: true, state: 'writing', kick: kickW, startedAt: new Date().toISOString(),
+                                  from: turn.id, text, model: engine, params: { shot: String(b.shot || '') }, versions: [] } });
+      } catch (e) { CHAT.writing.delete(kickW); throw e; }
+      res.json({ success: true, send: card.id, card: card.id, review: true });
+      _writeCard(card.id, kickW, { id, engine, text, refs, roles, facts, before });
+      return;
+    }
     if (GENS.runningSends(key, true) >= AT_ONCE) {
       return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
     }
-    const facts = SCEN().fchatFacts(id, String(b.shot || ''));
     const aspect = (facts && facts.format) || '9:16';
     const msgId = CHAT.newId();
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);
-    const media = refs.map((p, i) => ({ path: p, kind: 'image', role: roles[i], label: roles[i] }));
     CHAT.add({ project: key, kind: KIND, role: 'user', text, refs, media });
     const ids = [];
     for (let i = 0; i < n; i++) {
@@ -116,6 +135,166 @@ async function _light(o) {
     GENS.asking.delete(o.kick);
   }
 }
+
+// ── The writer's card ───────────────────────────────────────────────────────
+const WRITE_AT_ONCE = 3;
+const _verId = () => 'v' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+const _writingIn = (key) => CHAT.read(key, KIND).filter(m => m.card && m.card.state === 'writing').length;
+// Where a card stands when its writer is done: drawn from, written, or failed with nothing at all.
+const _rest = (x) => ((x.card.sends || []).length || (x.genIds || []).length ? 'sent' : (x.card.versions || []).length ? 'ready' : 'failed');
+
+// Every writing is a VARIANT of the prompt (at most 10), the newest chosen; one that fails leaves the variants there
+// were and says why. Filed only while the card still waits for THIS writer. The writer LOOKS at the pictures (hosted
+// once - the same bytes are one upload); pictures it cannot see, it writes without.
+async function _writeCard(cardId, kick, o) {
+  let out;
+  try {
+    let picUrls = [];
+    try { picUrls = await GENS.hostRefs(o.refs); } catch (e) { picUrls = []; }
+    const t = await AGENT.thinkShot({ engine: o.engine, text: o.text, roles: o.roles, facts: o.facts, picUrls, thread: o.before || [] });
+    out = t.prompt ? { prompt: t.prompt, writer: t.writer || '' } : { error: t.fail || 'the writer answered nothing usable - write it again' };
+  } catch (e) {
+    out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
+  }
+  try {
+    CHAT.update(cardId, (m) => {
+      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
+      if (out.prompt) {
+        const v = { id: _verId(), at: new Date().toISOString(), model: o.engine, prompt: out.prompt, writer: out.writer, edited: false };
+        m.card.versions = (m.card.versions || []).concat([v]).slice(-10);
+        Object.assign(m.card, { cur: v.id, prompt: v.prompt, model: v.model, writer: v.writer, edited: false, error: '' });
+      } else m.card.error = out.error;
+      m.card.writing = '';
+      m.card.state = _rest(m);
+    });
+  } finally { CHAT.writing.delete(kick); }
+}
+
+// The card of this chat, by its id, in this project: { m } or { status, error }.
+function _cardOf(req) {
+  const b = req.body || {};
+  const m = CHAT.get(String(req.params.id || ''));
+  if (!m || !m.card || m.card.type !== 'prompt' || String(m.kind || '') !== KIND) return { status: 404, error: 'no such card' };
+  if (String(b.project || '') && String(m.project || '') !== String(b.project)) return { status: 400, error: 'the card is not this project\'s' };
+  return { m };
+}
+
+router.patch('/scen3/fchat/card/:id', (req, res) => {
+  try {
+    const b = req.body || {};
+    const c = _cardOf(req);
+    if (c.error) return res.status(c.status).json({ success: false, error: c.error });
+    const m = CHAT.update(c.m.id, (x) => {
+      const vs = x.card.versions || [];
+      if (b.cur != null) {
+        const v = vs.find(y => y.id === String(b.cur));
+        if (!v) return false;
+        Object.assign(x.card, { cur: v.id, prompt: v.prompt, model: v.model, writer: v.writer, edited: !!v.edited });
+        return undefined;
+      }
+      if (b.prompt == null) return false;
+      const v = vs.find(y => y.id === String(b.ver || x.card.cur || ''));
+      if (!v) return false;
+      const p = String(b.prompt).slice(0, 20000);
+      if (p === v.prompt) return false;
+      Object.assign(v, { prompt: p, edited: true });
+      if (x.card.cur === v.id) Object.assign(x.card, { prompt: p, edited: true });
+      return undefined;
+    });
+    res.json({ success: true, card: m && m.card });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/scen3/fchat/card/:id/rewrite', (req, res) => {
+  try {
+    const b = req.body || {};
+    const c = _cardOf(req);
+    if (c.error) return res.status(c.status).json({ success: false, error: c.error });
+    const m = c.m;
+    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'it is being written' });
+    const engine = MV.ENGINES[String(b.engine || '')] ? String(b.engine) : (m.card.model || '');
+    const key = String(m.project || '');
+    if (_writingIn(key) >= WRITE_AT_ONCE) return res.status(409).json({ success: false, error: WRITE_AT_ONCE + ' prompts are being written already - wait for one of them' });
+    const media = Array.isArray(m.media) ? m.media : [];
+    const refs = media.map(a => String(a.path || '')).filter(Boolean);
+    for (let i = 0; i < refs.length; i++) {
+      const abs = toDiskExisting(refs[i]);
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+    }
+    const roles = media.map(a => (ROLES.includes(String(a.role || '')) ? String(a.role || '') : ''));
+    const { id } = _projectOf({ project: key });
+    const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
+    const kickW = 'w' + crypto.randomBytes(8).toString('hex');
+    CHAT.writing.add(kickW);
+    CHAT.update(m.id, (x) => { Object.assign(x.card, { state: 'writing', kick: kickW, startedAt: new Date().toISOString(), error: '' }); });
+    res.json({ success: true, card: m.id });
+    _writeCard(m.id, kickW, { id, engine, text: m.card.text || '', refs, roles, facts, before: [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The money: the prompt as it stands in the card (edited or not) to the model of the column, n pictures, each its own
+// record and Alerts row at the press - the asking behind the answer, with no pass of any writer.
+router.post('/scen3/fchat/card/:id/draw', (req, res) => {
+  const b = req.body || {};
+  let kick = '';
+  try {
+    const c = _cardOf(req);
+    if (c.error) return res.status(c.status).json({ success: false, error: c.error });
+    const m = c.m;
+    if (m.card.state === 'writing') return res.status(409).json({ success: false, error: 'the prompt is being written' });
+    const vs = m.card.versions || [];
+    const ver = vs.some(v => v.id === String(b.ver || '')) ? String(b.ver) : (m.card.cur || '');
+    const v = vs.find(y => y.id === ver);
+    const prompt = String(b.prompt != null ? b.prompt : (v ? v.prompt : '')).trim().slice(0, 20000);
+    if (!prompt) return res.status(400).json({ success: false, error: 'the prompt is empty' });
+    const engine = String(b.engine || '');
+    if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
+    const key = String(m.project || '');
+    const { id, proj } = _projectOf({ project: key });
+    if (!proj) return res.status(400).json({ success: false, error: 'the project of this card is gone' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const refs = (Array.isArray(m.media) ? m.media : []).map(a => String(a.path || '')).filter(Boolean);
+    for (let i = 0; i < refs.length; i++) {
+      const abs = toDiskExisting(refs[i]);
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+    }
+    if (GENS.runningSends(key, true) >= AT_ONCE) {
+      return res.status(409).json({ success: false, error: AT_ONCE + ' messages are being drawn already - wait for one of them' });
+    }
+    const n = COUNTS.includes(+b.n) ? +b.n : 1;
+    const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
+    const aspect = (facts && facts.format) || '9:16';
+    kick = 'k' + crypto.randomBytes(8).toString('hex');
+    GENS.asking.add(kick);
+    const ids = [];
+    for (let i = 0; i < n; i++) {
+      ids.push(GENS.create({
+        project: key, send: m.id, kick, where: b.where, stage: 'asking ' + (b.provider || 'the model'),
+        engine, provider: b.provider, prompt, said: m.card.text || prompt, aspect, quality: b.quality, refs,
+        frame: true, scen: id,
+      }).id);
+    }
+    CHAT.update(m.id, (x) => {
+      const at = new Date().toISOString();
+      x.card.sends = (x.card.sends || []).concat([{ at, n, genIds: ids, ver }]);
+      x.card.state = 'sent';
+      const y = ver ? (x.card.versions || []).find(z => z.id === ver) : null;
+      if (y) { if (y.prompt !== prompt) Object.assign(y, { prompt, edited: true }); Object.assign(x.card, { cur: y.id, prompt, edited: !!y.edited }); }
+      x.genIds = (x.genIds || []).concat(ids).slice(-40);
+      x.genId = x.genIds[0];
+    });
+    res.json({ success: true, card: m.id, genIds: ids });
+    (async () => {
+      try { await Promise.all(ids.map(gid => GENS.submit(gid, { prompt, writer: m.card.writer || '' }, kick))); }
+      catch (e) { console.warn('[fchat/draw]', e.message); }
+      finally { GENS.asking.delete(kick); }
+    })();
+  } catch (err) {
+    if (kick) GENS.asking.delete(kick);
+    console.error('[fchat/draw]', err.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // `to frames`: a frame of this chat into the project's set - it joins the pool like any frame.
 router.post('/scen3/fchat/to-set', async (req, res) => {
