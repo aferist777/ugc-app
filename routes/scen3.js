@@ -1405,6 +1405,18 @@ const ENV_KEEP =
   ' Keep the SAME place as in the picture - the same architecture, furniture, materials, colours, light and camera -'
   + ' and change only what the prompt asks for.';
 
+// THE TAIL OF A CHANGE (phase V26.4, the owner 2026-10-10). ENV_TAIL describes a photograph being TAKEN - a 28mm lens at
+// chest height, the light of the place - and said after a change it asks the model to take the picture again, which is
+// the redraw a change must not be. What it keeps of ENV_TAIL: the change is a real thing photographed here, the place
+// stays EMPTY, 3:2 with no borders. The framing is the picture's own unless the picture has to be continued to 3:2.
+const ENV_EDIT_TAIL =
+  ' Whatever is changed or added is a real thing photographed in this same place: its real material in crisp, natural detail,'
+  + ' with everyday wear, lit by the same light, with the same perspective and shadows as the rest - not a 3D render, not CGI, not an illustration.'
+  + ' The place stays EMPTY: NO people, no body parts, no reflections or silhouettes of people, no mannequins, no text, no logos, no watermark.';
+const _envEditFrame = (shape) => (shape && shape.extend
+  ? ' 3:2 landscape, filling the whole frame edge to edge, no borders.'
+  : ' 3:2 landscape, the same framing as the picture, no borders.');
+
 // A picture with no place in it lends its atmosphere, not its contents: without this the model
 // puts the cup it was shown on every table of the café it was asked for.
 const ENV_MOOD_ONLY =
@@ -1452,9 +1464,16 @@ async function _sizeOf(input) {
  * briefly: the part of the picture that exists is kept as it is, and it goes on in the same style,
  * light and perspective. The agent is not asked to describe the new part at length; the more it
  * invents there in words, the more the model redraws what was already right.
+ *
+ * CHANGING AN ENVIRONMENT is the same lesson (phase V26.4, the owner 2026-10-10): the prompt is a SHORT instruction -
+ * what changes and where, and what stays - not the whole place described again, which the model took as a picture to
+ * draw anew, so every change redrew everything and a chain of changes was a copy of a copy. Google's guide for
+ * nano-banana edits says the same: "change only <this> to <that>, keep everything else exactly the same". The
+ * description is still of the whole place, as it will be after the change - the frames are composed from it.
  */
 async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, canChoose }) {
   const picked = (choices || []).filter(Boolean);
+  const editing = source === 'saved' && !picked.length;
   const rules = [
     'You are preparing an ENVIRONMENT for a UGC-style video: one real place, photographed empty, that a person will later be put into to speak to the camera.',
     'Decide first whether there is something to make.',
@@ -1475,15 +1494,20 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
   }
   if (note && source === 'photo') rules.push('The text is a change to make to the place.');
   rules.push('Then answer with JSON only: {"ok":true,"prompt":"...","description":"..."}');
-  rules.push('prompt: an image-generation prompt, 150-230 words, for a real photograph of the place: what it is, then the foreground, middle ground and background, left and right - objects, materials and colours - and the light: where it comes from, how soft, how warm, what time of day. The place is EMPTY: no people, no body parts, no mannequins, no text, logos or watermarks. Leave open floor space in several parts of the scene - left, centre and right - where a person could stand or sit facing the camera: the picture will be cut into several vertical frames.');
-  // The one lever every source agrees on, and the one this agent is best placed to pull: it is the
-  // agent that says what the surfaces ARE. A wide scene told only "wood" and "tiles" comes back
-  // with textures that swim.
-  rules.push('In the prompt, name the MATERIAL, the FINISH and the WEAR of every large surface - floor, walls, ceiling if seen, furniture, fabrics - concretely: not "wood" but "worn white-oak boards with visible grain and a few scuffs", not "tiles" but "matte grey ceramic tiles with darker grout lines". Everyday imperfections belong in it: dust, scuffs, fingerprints, creased fabric, faded paint. Write flowing sentences in order, not a list of keywords, and never use words like 8K, ultra-detailed, hyperrealistic or masterpiece.');
+  if (editing) {
+    rules.push('prompt: a SHORT editing instruction for an image model that is given this picture, 40-100 words - not a description of the whole place, which would make the model draw it anew. Start with "Using the provided image of" and the place in a few words, then say ONLY what changes: "change only" the thing (or things) to the new state, where exactly in the picture it is, and, for anything new or changed, its material, finish and colour concretely ("a muted sage-green matte paint", "a tall fiddle-leaf fig in a worn terracotta pot"). For something taken away, say that the space where it was shows what is naturally behind it. Then say what stays, by name: "Keep everything else exactly the same" - the walls, floor, furniture and objects near the change, the light and the framing. Say what is wanted, not what is not; plain sentences, no keyword lists, never words like 8K, ultra-detailed, hyperrealistic or masterpiece. Do not fill the open floor where a person could stand unless the text asks for it.');
+  } else {
+    rules.push('prompt: an image-generation prompt, 150-230 words, for a real photograph of the place: what it is, then the foreground, middle ground and background, left and right - objects, materials and colours - and the light: where it comes from, how soft, how warm, what time of day. The place is EMPTY: no people, no body parts, no mannequins, no text, logos or watermarks. Leave open floor space in several parts of the scene - left, centre and right - where a person could stand or sit facing the camera: the picture will be cut into several vertical frames.');
+    // The one lever every source agrees on, and the one this agent is best placed to pull: it is the
+    // agent that says what the surfaces ARE. A wide scene told only "wood" and "tiles" comes back
+    // with textures that swim.
+    rules.push('In the prompt, name the MATERIAL, the FINISH and the WEAR of every large surface - floor, walls, ceiling if seen, furniture, fabrics - concretely: not "wood" but "worn white-oak boards with visible grain and a few scuffs", not "tiles" but "matte grey ceramic tiles with darker grout lines". Everyday imperfections belong in it: dust, scuffs, fingerprints, creased fabric, faded paint. Write flowing sentences in order, not a list of keywords, and never use words like 8K, ultra-detailed, hyperrealistic or masterpiece.');
+  }
   if (shape && shape.extend && source !== '' && !picked.length) {
     rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
   }
-  rules.push('description: 150 words or more, English, for whoever will later compose frames in this place: what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
+  rules.push('description: 150 words or more, English, for whoever will later compose frames in this place'
+    + (editing ? ' - the whole place as it will be AFTER the change, not the change alone' : '') + ': what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
 
   const ask = rules.join(' ')
     + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
@@ -1690,10 +1714,11 @@ async function _submitEnv(b, hooks) {
 
     // A place picked for a picture that had none keeps the picture only for its atmosphere.
     const mode = choices.length ? 'picked' : source === 'saved' ? 'edit' : source === 'photo' ? 'photo' : 'draw';
+    // A change keeps the picture's own camera and light (phase V26.4): its tail does not describe the photograph again.
     const prompt = plan.prompt
-      + (mode === 'edit' ? ENV_KEEP : '')
+      + (mode === 'edit' ? ENV_KEEP + ENV_EDIT_TAIL + _envEditFrame(shape) : '')
       + (mode === 'picked' && url ? ENV_MOOD_ONLY : '')
-      + ENV_TAIL;
+      + (mode === 'edit' ? '' : ENV_TAIL);
     if (hk.stop && hk.stop()) throw _stopped();
     say('asking for the picture');
     const taskId = await _envTask(prompt, url ? [url] : []);
