@@ -6,8 +6,9 @@
 // A first frame asked for in words, in Setup (public/js/merge-v3/fchat.js). It is the pictures chat's way of asking -
 // the person's turn, a record and an Alerts row for every picture AT THE PRESS, the asking behind the answer
 // (lib/mv3-gens.js, paid once, its cross, its retry from Alerts) - with three differences:
-//   - what it is told: every attached picture is named by the place it was put in (character, place, frame, prop,
-//     other - lib/mv3-agent.js FRAME_ROLES), the frame is drawn in the project's shape, and a `shot` is where its edge is;
+//   - what it is told: every attached picture is named by the field it was put in - the base (character and place, or
+//     the frame being changed) and the extra ones, said in words (lib/mv3-agent.js FRAME_ROLES) -, the frame is drawn in
+//     the project's shape, and a `shot` is where its edge is;
 //   - the writer OFF is not "as typed" (the owner's answer (g)): a light pass puts the words into English and names the
 //     pictures, and the frame is drawn at once;
 //   - what it makes is the PROJECT's: the picture lands in the project's frames folder (`frame`, `scen` on the record),
@@ -37,7 +38,9 @@ const { toDiskExisting } = require('../lib/media');
 const KIND = 'fchat';
 const AT_ONCE = 5;
 const COUNTS = [1, 2, 4];
-const ROLES = ['character', 'place', 'frame', 'prop', ''];
+const ROLES = ['character', 'place', 'frame', 'extra'];
+// A picture's role as the page says it; anything else - a row kept from before the two fields - is an extra one.
+const _roleOf = (r) => (ROLES.includes(String(r || '')) ? String(r) : 'extra');
 const SCEN = () => require('./scen3');
 
 // The talking head a message is for: its timeline key (`sv3_<id>`) and its project, which must be there.
@@ -63,12 +66,12 @@ router.post('/scen3/fchat/send', (req, res) => {
     if (!text) return res.status(400).json({ success: false, error: 'say what the frame is' });
     const engine = String(b.engine || '');
     if (!MV.ENGINES[engine]) return res.status(400).json({ success: false, error: 'no such model: ' + engine });
-    const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
+    const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 6);
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    const roles = refs.map((x, i) => (ROLES.includes(String((b.roles || [])[i] || '')) ? String(b.roles[i] || '') : ''));
+    const roles = refs.map((x, i) => _roleOf((b.roles || [])[i]));
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const write = b.write !== false;
     const facts = SCEN().fchatFacts(id, String(b.shot || ''));
@@ -87,6 +90,8 @@ router.post('/scen3/fchat/send', (req, res) => {
                           card: { type: 'prompt', plain: true, state: 'writing', kick: kickW, startedAt: new Date().toISOString(),
                                   from: turn.id, text, model: engine, params: { shot: String(b.shot || '') }, versions: [] } });
       } catch (e) { CHAT.writing.delete(kickW); throw e; }
+      // The idea the words came from is used now (the owner's answer (d)).
+      _ideaUsed(b.idea, key);
       res.json({ success: true, send: card.id, card: card.id, review: true });
       _writeCard(card.id, kickW, { id, engine, text, refs, roles, facts, before });
       return;
@@ -107,7 +112,9 @@ router.post('/scen3/fchat/send', (req, res) => {
         frame: true, scen: id,
       }).id);
     }
-    CHAT.add({ id: msgId, project: key, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs, media });
+    // The words on the answer itself: the message is drawn whole - what was asked over what came of it (the owner's answer (g)).
+    CHAT.add({ id: msgId, project: key, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs, media, asked: text });
+    _ideaUsed(b.idea, key);
     res.json({ success: true, send: msgId, genIds: ids });
     _light({ text, roles, edge: _edgeOf(facts), ids, kick });
   } catch (err) {
@@ -221,7 +228,7 @@ router.post('/scen3/fchat/card/:id/rewrite', (req, res) => {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    const roles = media.map(a => (ROLES.includes(String(a.role || '')) ? String(a.role || '') : ''));
+    const roles = media.map(a => _roleOf(a.role));
     const { id } = _projectOf({ project: key });
     const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
     const kickW = 'w' + crypto.randomBytes(8).toString('hex');
@@ -297,8 +304,23 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
 });
 
 // ── `ideas` (the owner, 2026-10-10: "a button to analyse both pictures and offer variants") ──
-// The agent looks at what is in the zone - the person's sheet, the place, a prop - and answers five frames in words, as a
-// message of the thread; each is a press away from the message box. Seconds and fractions of a cent: no Alerts row.
+// The agent looks at what is in the zone - the person's sheet and the place (or the frame being changed) and the extra
+// pictures - and answers six frames in words, as a message of the thread; each is a press away from the message box, and
+// one a message went from is marked used. Asked again, it looks again. Seconds and fractions of a cent: no Alerts row.
+function _ideaUsed(idea, key) {
+  if (!idea || typeof idea !== 'object' || !idea.id) return;
+  const i = parseInt(idea.i, 10);
+  if (!(i >= 0)) return;
+  try {
+    CHAT.update(String(idea.id), (m) => {
+      if (!Array.isArray(m.ideas) || String(m.project || '') !== String(key) || i >= m.ideas.length) return false;
+      const used = Array.isArray(m.used) ? m.used.map(Number) : [];
+      if (used.includes(i)) return false;
+      m.used = used.concat([i]);
+      return undefined;
+    });
+  } catch (e) { /* a mark, not the send */ }
+}
 router.post('/scen3/fchat/ideas', async (req, res) => {
   try {
     const b = req.body || {};
@@ -306,14 +328,14 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
-    const roles = refs.map((x, i) => (ROLES.includes(String((b.roles || [])[i] || '')) ? String(b.roles[i] || '') : ''));
-    if (!roles.includes('character') && !roles.includes('place')) return res.status(400).json({ success: false, error: 'put the person or the place above the box first' });
+    const roles = refs.map((x, i) => _roleOf((b.roles || [])[i]));
+    if (!roles.includes('character') && !roles.includes('place') && !roles.includes('frame')) return res.status(400).json({ success: false, error: 'put the person or the place above the box first' });
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    // The frame being changed and the other pictures are not what ideas are about: the person, the place, the props.
-    const keep = refs.map((p, i) => i).filter(i => ['character', 'place', 'prop'].includes(roles[i]));
+    // Everything in the zone: the base and the extra pictures (the owner: ideas with the things attached).
+    const keep = refs.map((p, i) => i);
     const facts = SCEN().fchatFacts(id, String(b.shot || ''));
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(keep.map(i => refs[i])); } catch (e) { picUrls = []; }

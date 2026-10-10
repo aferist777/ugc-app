@@ -898,3 +898,12 @@ audio.vtrim-media{ background:none; height:32px }
   font:500 11px/1.4 var(--font);
 }
 .mv3-fc-idea:hover{ border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, var(--surface-2)) }
+/* (phase V26.5, the owner after the first look) The zone as TWO FIELDS: the base - the person and the place, or the frame
+   being changed - as wide as its places, and the extra pictures taking the rest. */
+.mv3-ig-part.is-group.is-base{ flex:0 0 auto }
+.mv3-ig-part.is-group.is-extra{ flex:1 1 0 }
+/* The ideas in two columns; one a message went from in gold, "used". */
+.mv3-fc-ideaslist{ display:grid; grid-template-columns:1fr 1fr; gap:5px }
+.mv3-fc-idea{ display:flex; flex-direction:column; gap:3px }
+.mv3-fc-idea .u{ align-self:flex-start; font:700 8px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold) }
+.mv3-fc-idea.is-used{ border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, var(--surface-2)) }

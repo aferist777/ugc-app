@@ -27,15 +27,19 @@ import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
-const MAX_ATTS = 8;
+const MAX_ATTS = 6;
 const LS_LAST = 'mv3-fc-last';           // the model choice of this chat
-// The places of the zone, in the order their numbers count. `max` - how many each holds.
-const SLOTS = [
-  { key: 'character', label: 'character', max: 1, hint: 'The person - their look\'s sheet. The frame takes only the person from it, never the sheet itself.' },
-  { key: 'place', label: 'place', max: 1, hint: 'The place - the environment the person is in' },
-  { key: 'frame', label: 'frame', max: 1, hint: 'A frame to change - "to reference" under a frame in the chat puts it here' },
-  { key: 'prop', label: 'prop', max: 3, hint: 'A thing in the frame - a product, an object - drawn exactly as on its picture' },
+// THE ZONE IS TWO FIELDS (the owner, 2026-10-10, after the first look): the BASE - the person and the place, or the frame
+// being changed once one is put there with "to reference" - and the EXTRA pictures, up to four, whatever the person
+// wants in the frame, said in words what each is. The numbers count across both: the base first.
+const BASE_CAST = [
+  { key: 'character', label: 'character', max: 1, min: 0, hint: 'The person - their look\'s sheet. The frame takes only the person from it, never the sheet itself.' },
+  { key: 'place', label: 'place', max: 1, min: 0, hint: 'The place - the environment the person is in' },
 ];
+const BASE_FRAME = [
+  { key: 'frame', label: 'frame', max: 1, min: 0, hint: 'The frame being changed - its cross puts the person and the place back' },
+];
+const EXTRA = { key: 'extra', label: 'extra', max: 4, min: 0, hint: 'Anything else for the frame - a product, an object, a pose to copy; say in the message what it is' };
 // The shot sizes of the set (routes/scen3.js FRAME_SETS) - here only as where the frame's edge is.
 const SHOTS = [['', 'none'], ['selfie', 'selfie'], ['half', 'half body'], ['full', 'full body']];
 
@@ -44,6 +48,8 @@ let _hooks = {};               // { close, stage(path, name) } from the panel
 let _shot = '';                // where the frame's edge is - '' none
 let _shotSel = null;
 let _auto = {};                // { character, place } - what was put into those places from the casting
+let _base = 'cast';            // what the base field holds: 'cast' - the person and the place; 'frame' - a frame to change
+let _armedIdea = null;         // { id, i } - the idea put into the box, marked used when a message goes from it
 
 // The project's format - the set is drawn in it (routes/scen3.js mix.settings.format).
 const _format = () => String((((_proj || {}).mix || {}).settings || {}).format || ((Store.timeline() || {}).format) || '9:16');
@@ -96,11 +102,19 @@ function FRAMES(ctx) {
 
   // ── The zone ──────────────────────────────────────────────────────────────
   function zone() {
+    const room = Math.min(MAX_ATTS, M.room());
+    const base = _base === 'frame' ? BASE_FRAME : BASE_CAST;
+    const extra = Object.assign({}, EXTRA, { max: Math.max(0, Math.min(EXTRA.max, room - base.length)) });
     return { parts: [{
-      kind: 'image', word: 'pictures', one: 'picture', room: Math.min(MAX_ATTS, M.room()), slots: SLOTS.map(s => Object.assign({ min: 0 }, s)),
-      otherLabel: 'other', other: 'Another picture - say in the message what it is for',
+      kind: 'image', word: 'pictures', one: 'picture', room,
+      // The two fields; the shell still knows every slot of the part, in the order the numbers count.
+      slots: base.concat(extra.max ? [extra] : []),
+      groups: [
+        { word: _base === 'frame' ? 'frame to change' : 'person & place', slots: base, cls: 'is-base' },
+        ...(extra.max ? [{ word: 'extra', slots: [extra], labels: false, cls: 'is-extra', note: 'say what each is', noteLong: 'Whatever else goes into the frame - say in your message what each picture is and what to take from it' }] : []),
+      ],
       none: 'This model takes no pictures.',
-      full: 'This model takes ' + Math.min(MAX_ATTS, M.room()) + ' pictures.',
+      full: 'This model takes ' + room + ' pictures.',
     }] };
   }
 
@@ -125,7 +139,7 @@ function FRAMES(ctx) {
     { id: 'environments', label: 'environments', load: () => Src.flat('environments', '3:2') },
     { id: 'images', label: 'Images', load: Src.images },
   ];
-  const START = { character: 'people', place: 'environments', frame: 'frames', prop: 'images' };
+  const START = { character: 'people', place: 'environments', frame: 'frames', extra: 'images' };
 
   // ── The writer's message (as in the video chat, V16) ──────────────────────
   // With the writer on, ">" sends the words and the pictures, and the writer's prompt comes back in a message of its own
@@ -306,16 +320,15 @@ function FRAMES(ctx) {
   function _ideasSide() {
     const b = el('button', 'mv3-fc-ideas', 'ideas');
     b.type = 'button';
-    b.title = 'The agent looks at the person and the place above the box (and a prop) and offers five frames in words - press one to put it into the box. Fractions of a cent.';
+    b.title = 'The agent looks at the pictures above the box - the person, the place, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
     b.addEventListener('click', () => _askIdeas(b));
-    _ideasBtn = b;
     return [b];
   }
   async function _askIdeas(b) {
     const k = ctx.key();
     if (!k || b.disabled) return;
     const atts = ctx.atts();
-    if (!atts.some(a => a.slot === 'character' || a.slot === 'place')) { note(b, 'Nothing to look at.', 'Put the person or the place above the box first.'); return; }
+    if (!atts.some(a => a.slot === 'character' || a.slot === 'place' || a.slot === 'frame')) { note(b, 'Nothing to look at.', 'Put the person or the place above the box first.'); return; }
     b.disabled = true;
     b.textContent = 'thinking…';
     const d = await _post('/api/scen3/fchat/ideas', {
@@ -326,17 +339,26 @@ function FRAMES(ctx) {
     if (!d || !d.success) { note(b, 'No ideas.', (d && d.error) || 'the server did not answer'); return; }
     ctx.reload(true);
   }
+  // Six, in two columns (the owner); one a message went from wears gold and "used".
   function _ideasBubble(m) {
     const box = el('div', 'mv3-ig-msg is-agent mv3-fc-ideasmsg');
     box.appendChild(el('div', 'mv3-ig-text', m.text || 'Ideas for a frame'));
+    const used = new Set((m.used || []).map(Number));
     const list = el('div', 'mv3-fc-ideaslist');
-    for (const idea of m.ideas) {
-      const it = el('button', 'mv3-fc-idea', idea);
+    m.ideas.forEach((idea, i) => {
+      const it = el('button', 'mv3-fc-idea' + (used.has(i) ? ' is-used' : ''));
       it.type = 'button';
-      it.title = 'Put it into the message box - change it as you like, then send';
-      it.addEventListener('click', () => { ctx.setText(idea); const ui = ctx.ui(); if (ui) ui.ta.focus(); });
+      it.appendChild(el('span', 't', idea));
+      if (used.has(i)) it.appendChild(el('span', 'u', 'used'));
+      it.title = (used.has(i) ? 'A frame was asked for from this one. ' : '') + 'Put it into the message box - change it as you like, then send';
+      it.addEventListener('click', () => {
+        ctx.setText(idea);
+        _armedIdea = { id: m.id, i };
+        const ui = ctx.ui();
+        if (ui) ui.ta.focus();
+      });
       list.appendChild(it);
-    }
+    });
     box.appendChild(list);
     return box;
   }
@@ -391,7 +413,24 @@ function FRAMES(ctx) {
     cardBubble: _cardBubble,
     cardSig: _cardSig,
     bubble: (m) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m) : null),
+    msgSig: (m) => (Array.isArray(m.ideas) ? (m.used || []).join(',') : ''),
     attsSide: _ideasSide,
+    // The idea a message went from is used now; the box is its own again.
+    afterSend: () => { _armedIdea = null; },
+    // The frame being changed taken out of the base: the person and the place come back (the owner's answer (v)).
+    onDetach: (a) => {
+      if (!a || a.slot !== 'frame') return false;
+      _base = 'cast';
+      const keep = ctx.zoneAtts().filter(x => x.slot === 'extra' && !x.hole);
+      const c = _cast();
+      const back = [];
+      if (c.obrazImage) back.push({ path: c.obrazImage, name: c.characterName || 'the character', slot: 'character' });
+      if (c.locationImage) back.push({ path: c.locationImage, name: 'the place', slot: 'place' });
+      _auto = { character: c.obrazImage || '', place: c.locationImage || '' };
+      ctx.useAtts(back.concat(keep));
+      ctx.saveDraft();
+      return true;
+    },
     busy: (thread) => thread.some(m => m.card && m.card.state === 'writing'),
     onThread: (thread) => {
       for (const m of thread) { const l = _live.get(m.id); if (l && l.steps && m.card) { l.m = m; _paintCard(l); } }
@@ -409,13 +448,17 @@ function FRAMES(ctx) {
       // What goes with a send besides the words and the pictures: the column, the edge, and what each picture is.
       body: () => Object.assign(M.body(), {
         shot: _shot,
-        roles: ctx.atts().map(a => a.slot || ''),
+        roles: ctx.atts().map(a => a.slot || 'extra'),
         projectId: (_proj && _proj.id) || '',
+        // The idea the words came from - marked used by the server with the send (the owner's answer (d)).
+        idea: _armedIdea,
       }),
-      draftExtra: () => ((_shot || _auto.character || _auto.place) ? { shot: _shot, auto: _auto } : null),
+      draftExtra: () => ((_shot || _auto.character || _auto.place || _base !== 'cast') ? { shot: _shot, auto: _auto, base: _base } : null),
       draftLoad: (x) => {
         _shot = SHOTS.some(s => s[0] === (x && x.shot)) ? x.shot : '';
         _auto = (x && x.auto && typeof x.auto === 'object') ? { character: String(x.auto.character || ''), place: String(x.auto.place || '') } : {};
+        _base = x && x.base === 'frame' ? 'frame' : 'cast';
+        _armedIdea = null;
         if (_shotSel) _shotSel.value = _shot;
       },
     },
@@ -515,6 +558,17 @@ function _fitNow() {
 // took them out while it was open; and the one put there from the casting follows the casting when it changes.
 function _autoCast(opening) {
   if (!_proj || !CHAT.isOpen()) return;
+  // A row kept from before the two fields (places `prop`, `other`) - or a frame left in a base that holds the person and
+  // the place - goes to the extra field.
+  if (opening) {
+    const keys = _base === 'frame' ? ['frame', 'extra'] : ['character', 'place', 'extra'];
+    const real = CHAT.ctx.zoneAtts().filter(a => !a.hole);
+    if (real.some(a => !keys.includes(a.slot))) {
+      CHAT.ctx.useAtts(real.map(a => (keys.includes(a.slot) ? a : Object.assign({}, a, { slot: 'extra' }))));
+    }
+  }
+  // While the base holds a frame being changed, the person and the place stay out (the owner's answer (b)).
+  if (_base === 'frame') return;
   const c = _cast();
   const want = { character: c.obrazImage || '', place: c.locationImage || '' };
   const names = { character: c.characterName || 'the character', place: 'the place' };
@@ -576,13 +630,18 @@ export function hide() {
 
 export const isShown = () => CHAT.isOpen();
 
-/** A frame put into the `frame` place - "to reference" under a result, or a frame of the set. */
+/**
+ * "to reference" (the owner, 2026-10-10): the frame takes the base - the person and the place go from it - and the extra
+ * field stays as it is (the owner's answer (b)). Its cross in the base puts the person and the place back (onDetach).
+ */
 export function toReference(path, name) {
   const z = CHAT.ctx.zoneAtts();
   const was = z.find(a => a.slot === 'frame' && !a.hole);
   if (was && was.path === path) return;
-  if (was) CHAT.ctx.detach(was.path);
-  CHAT.ctx.attach(path, name || 'frame', { slot: 'frame' });
+  const keep = z.filter(a => a.slot === 'extra' && !a.hole && a.path !== path);
+  _base = 'frame';
+  CHAT.ctx.useAtts([{ path, name: name || 'frame', slot: 'frame' }].concat(keep));
+  CHAT.ctx.saveDraft();
 }
 
 export function initFramesChat() { CHAT.init(); }

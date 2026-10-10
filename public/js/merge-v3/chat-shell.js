@@ -510,6 +510,10 @@ export function createChat(make) {
   function _detach(path) {
     const i = _atts.findIndex(a => a.path === path);
     if (i < 0) return;
+    // (phase V26.5) The description hears what was taken out - the frames chat puts the person and the place back when
+    // the frame it was changing goes.
+    const gone = _atts[i];
+    if (typeof S.onDetach === 'function' && S.onDetach(gone) === true) return;
     if (_zone()) {
       const was = _atts[i];
       const hole = { hole: true, kind: _kindOf(was), slot: was.slot, id: 'h' + Date.now().toString(36) + (++_holeSeq) };
@@ -529,7 +533,7 @@ export function createChat(make) {
     _armed = null;
     for (const a of list || []) {
       if (!a || !a.path) continue;
-      _attach(a.path, a.name || a.label || '', { kind: a.kind, role: a.role, label: a.label, in: a.in, out: a.out, atEnd: true });
+      _attach(a.path, a.name || a.label || '', { kind: a.kind, role: a.role, label: a.label, in: a.in, out: a.out, atEnd: true, slot: a.slot });
     }
     _attSeq++;
     _paintAtts();
@@ -659,8 +663,37 @@ export function createChat(make) {
     if (_picking) Pick.pickChanged();
   }
 
+  // (phase V26.5) A part laid out as GROUPS of its slots - the frames chat's two fields, the person and the place, and
+  // what else goes - each a box of its own with its word and count; the numbers still count across the whole part.
+  function _groupBox(p, g, num) {
+    const box = el('div', 'mv3-ig-part is-' + p.kind + ' is-group' + (g.cls ? ' ' + g.cls : ''));
+    const all = _ordered().filter(a => _kindOf(a) === p.kind);
+    const keys = g.slots.map(x => x.key);
+    const mine = all.filter(a => keys.includes(a.slot));
+    const head = el('div', 'mv3-ig-part-h', g.word);
+    head.appendChild(el('b', null, mine.filter(a => !a.hole).length + ' / ' + g.slots.reduce((n, x) => n + x.max, 0)));
+    if (g.note) { const nt = el('span', 'mv3-ig-part-note', g.note); nt.title = g.noteLong || g.note; head.appendChild(nt); }
+    box.appendChild(head);
+    const row = el('div', 'mv3-ig-part-row');
+    for (const sl of g.slots) {
+      const inS = mine.filter(a => a.slot === sl.key);
+      const must = inS.filter(a => !a.hole).length < (sl.min || 0);
+      const lab = g.labels === false ? '' : (sl.label || sl.key);
+      for (const a of inS) row.appendChild(a.hole ? _holeCell(p, a, num(a), sl, must) : _cell(_filled(a, num(a), p, sl), lab, sl.hint));
+      if (!inS.some(a => a.hole) && inS.length < sl.max && all.length < p.room) row.appendChild(_empty(p, sl, false, must));
+    }
+    _sideways(row);
+    box.appendChild(row);
+    return box;
+  }
+
   // One part of the zone: its word and count, then its cells in a row that scrolls sideways.
   function _part(p, num) {
+    if (p.groups && p.room && !p.off) {
+      const frag = document.createDocumentFragment();
+      for (const g of p.groups) frag.appendChild(_groupBox(p, g, num));
+      return frag;
+    }
     const box = el('div', 'mv3-ig-part is-' + p.kind);
     // Its places in order - empty ones too (phase V15).
     const mine = _ordered().filter(a => _kindOf(a) === p.kind);
@@ -1039,9 +1072,11 @@ export function createChat(make) {
   // (phase V6) A card is drawn again when what it IS changes - never for the text being typed into it; its clips are
   // its description's to keep fresh in place (the owner, 2026-10-06: a made card stays a field to edit and make again
   // from, and a clip landing must not rebuild it under the typing).
+  // (phase V26.5) A description may add what else makes a message what it is (`msgSig` - the frames chat's used ideas).
   const _sig = (m) => ((m.card && typeof S.cardSig === 'function') ? [m.text || '', S.cardSig(m)]
     : [m.text || ''].concat(_gensOf(m).map(g => g.id + ':' + g.state + ':'
-      + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))).join('|');
+      + (g.state === 'done' ? _path(g) : g.state === 'failed' ? g.error : '')))).join('|')
+    + (typeof S.msgSig === 'function' ? '|' + S.msgSig(m) : '');
 
   function _dropProgs(n, landed) {
     for (const [id, p] of n.progs) {
