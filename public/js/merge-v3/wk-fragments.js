@@ -1364,17 +1364,39 @@ function _voiceSettings(foot, p, busy) {
   speed.step = String(SPEED.step);
   speed.value = String(now.speed);
   speed.disabled = busy || _saving;
-  speed.addEventListener('change', () => {
-    const v = _speedVal(speed.value);
-    speed.value = String(v);
-    if (v !== VOICE.params(p).speed) _saveSpeed({ speed: v });
-  });
+  _speedLater(speed, 'project', () => VOICE.params(_ctx.project).speed, v => ({ speed: v }));
   const pw = el('label', 'mv3-wk-vlab');
   pw.title = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
     + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch,'
     + ' and the timeline follows. A line given its own speed in its fragment keeps it.';
   pw.append(el('span', '', 'speed'), speed);
   foot.append(sw, pw);
+}
+
+// A SPEED IS APPLIED AFTER A PAUSE (the owner, 2026-10-10): the arrows of the field can be pressed several
+// times in a row, and only where they stop is retimed - each press used to save, repaint and shut the field
+// for the length of a retiming. What is typed waits here, so a repaint in between (a read landing, the
+// watcher) shows it rather than the old speed; Enter does not wait.
+const SPEED_PAUSE_MS = 700;
+let _speedDraft = null;                   // { key, raw } - the field being changed, as typed
+let _speedT = 0;
+function _speedLater(inp, key, now, body) {
+  if (_speedDraft && _speedDraft.key === key) inp.value = _speedDraft.raw;
+  const apply = () => {
+    clearTimeout(_speedT);
+    const d = _speedDraft;
+    _speedDraft = null;
+    if (!d || d.key !== key) return;
+    const v = _speedVal(d.raw);
+    if (v !== now()) _saveSpeed(body(v));
+    else if (_ctx) _ctx.repaint();       // typed back to what it was: show it on the scale
+  };
+  inp.addEventListener('input', () => {
+    clearTimeout(_speedT);
+    _speedDraft = { key, raw: inp.value };
+    _speedT = setTimeout(apply, SPEED_PAUSE_MS);
+  });
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
 }
 
 // A speed typed in, put on the scale the server keeps: 0.7-1.2 in steps of 0.05.
@@ -1813,24 +1835,10 @@ function _row(p, l, i, n) {
   meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
   // The read, playable from the row (owner, 2026-09-21): hearing a line is how it is judged, and
-  // the row is where the eye already is.
-  // Hearing a line is judging it, so the fragment it belongs to comes forward on the right. It
-  // OPENS - it never closes the one already open, which is what a press on the row itself does.
-  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read', () => {
-    _tipHide();
-    _picking = false;
-    _pickView = '';
-    _setPick = '';
-    // THE STAGE FOLLOWS THE READ (Y5, and Z5): the fragment opens on the right AND its picture
-    // goes up - the clip when there is one, standing still with its triangle, otherwise the frame
-    // it opens on (openPicture). Done here rather than left to the repaint, because a press on the
-    // row that is already open used to return early and leave whatever was on the stage - a frame
-    // being tried out in the picker, say - hanging over another fragment.
-    _stagePick = '';
-    _stageFor = i;
-    if (_open !== i) { _open = i; _remember(); }
-    _ctx.repaint();
-  }));
+  // the row is where the eye already is. It PLAYS AND NOTHING ELSE (the owner, 2026-10-10): the
+  // fragment does not open and the stage does not change - it used to bring the fragment forward
+  // (Y5), which turned listening down the script into opening every line of it.
+  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
   // ...and READ IT, beside its play (the owner, 2026-10-10).
   row.appendChild(_rowRead(p, l, i));
 
@@ -1954,11 +1962,7 @@ function _lineSpeed(p, l, i) {
   inp.step = String(SPEED.step);
   inp.value = String(VOICE.speedOf(p, l));
   inp.disabled = _saving || VOICE.reading().busy;
-  inp.addEventListener('change', () => {
-    const v = _speedVal(inp.value);
-    inp.value = String(v);
-    if (v !== VOICE.speedOf(p, l)) _saveSpeed({ line: i, lineSpeed: v });
-  });
+  _speedLater(inp, 'line' + i, () => VOICE.speedOf(_ctx.project, (_ctx.project.lines || [])[i]), v => ({ line: i, lineSpeed: v }));
   box.append(el('span', '', 'speed'), inp);
   if (own) {
     const back = el('button', 'mv3-wk-vback', '↺');

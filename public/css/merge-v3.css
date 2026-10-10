@@ -1845,9 +1845,10 @@ body.mv3-locked #mv3-timeline{
 /* (phase V23) Read / read again, left of the words. */
 .mv3-wk-fwrow{display:flex; align-items:flex-start; gap:8px}
 .mv3-wk-fwrow > .mv3-wk-fwords{flex:1 1 auto; min-width:0}
-.mv3-wk-fread{flex:0 0 auto; margin-top:1px; padding:2px 8px; border:1px solid var(--line); border-radius:999px; background:transparent;
-  font:600 10px/1.4 var(--font); color:var(--ink); cursor:pointer; white-space:nowrap}
-.mv3-wk-fread:hover:not(:disabled){border-color:var(--primary); color:var(--primary)}
+/* `read` / `read again` in the open fragment: gold, the border and the words (the owner, 2026-10-10). */
+.mv3-wk-fread{flex:0 0 auto; margin-top:1px; padding:2px 8px; border:1px solid var(--gold); border-radius:999px; background:transparent;
+  font:600 10px/1.4 var(--font); color:var(--gold); cursor:pointer; white-space:nowrap}
+.mv3-wk-fread:hover:not(:disabled){background:var(--gold); color:var(--bg)}
 .mv3-wk-fread:disabled{opacity:.45; cursor:default}
 /* What the tagger put between the words, in gold (the owner, 2026-09-22): the words are the
    person's, the [tags] are the machine's, and the difference is worth seeing without reading. */
