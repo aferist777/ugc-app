@@ -26,6 +26,7 @@
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf } from './chat-shell.js';
+import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openTrim, closeTrim } from './vtrim.js';
 import { openCatalog } from './vcatalog.js';
@@ -791,42 +792,14 @@ function VIDEOS(ctx) {
   }
   // ── Where attachments come from (phase V13: the picker, chat-pick.js) ─────
   // Each kind its own shelves; an item is { path, name, sub, cat, thumb, big, poster, aspect, dur, src }.
-  const _gone = (d) => ({ items: [], cats: [], why: (d && d.error) || 'the shelf could not be read' });
-  const _shape = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
-  const _pic = (path, name, sub, x) => Object.assign({ path, name: name || '', sub: sub || '',
-    thumb: thumbOf(path, 'strip'), big: thumbOf(path, 'main') }, x || {});
+  // (phase V26.5) The pictures' loaders are shared with the frames chat (chat-sources.js).
+  const _gone = Src.gone;
+  const _shape = Src.shape;
   const _clip = (path, poster, name, x) => Object.assign({ path, src: path, poster: poster || '', name: name || '',
     thumb: poster ? thumbOf(poster, 'strip') : '' }, x || {});
-  // A character's sheet, then its looks, one character after another.
-  async function _people() {
-    const [c, l] = await Promise.all([json('/api/library/shelf/characters'), json('/api/library/shelf/looks')]);
-    if (!c || !c.success) return _gone(c);
-    const chars = c.items || [];
-    const looks = (l && l.success) ? l.items || [] : [];
-    const out = [];
-    for (const ch of chars) {
-      out.push(_pic(ch.media, ch.name, 'character', { aspect: '16:9' }));
-      for (const lk of looks.filter(x => (x.meta || {}).charId === ch.id)) out.push(_pic(lk.media, lk.name, ch.name + ' · look'));
-    }
-    for (const lk of looks.filter(x => !chars.some(ch => ch.id === (x.meta || {}).charId))) out.push(_pic(lk.media, lk.name, 'look'));
-    return { items: out.filter(x => x.path) };
-  }
-  async function _flat(kind, aspect) {
-    const d = await json('/api/library/shelf/' + kind);
-    if (!d || !d.success) return _gone(d);
-    return { items: (d.items || []).filter(i => i && i.media).map(i => _pic(i.media, i.name, '', { aspect })) };
-  }
-  // A media shelf with its categories: Images, B-roll, Uploads, Sounds - read whole, its categories chosen in the window.
-  async function _media(filter, map) {
-    const d = await json('/api/library/shelf/media?filter=' + filter);
-    if (!d || !d.success) return _gone(d);
-    const cats = (d.cats || []).filter(c => c && c.id);
-    const nameOf = new Map(cats.map(c => [c.id, c.name || '']));
-    return { cats, items: (d.items || []).filter(i => i && i.media).map(i => {
-      const m = i.meta || {};
-      return Object.assign(map(i, m), { cat: m.categoryId || '', sub: nameOf.get(m.categoryId || '__uncat__') || '' });
-    }) };
-  }
+  const _people = Src.people;
+  const _flat = Src.flat;
+  const _media = Src.mediaShelf;
   // The clips this chat made in this project.
   async function _made() {
     const k = ctx.key();
@@ -864,7 +837,7 @@ function VIDEOS(ctx) {
       { id: 'people', label: 'characters & looks', load: _people },
       { id: 'environments', label: 'environments', load: () => _flat('environments', '3:2') },
       { id: 'lookbooks', label: 'lookbooks', load: () => _flat('lookbooks', '1:1') },
-      { id: 'images', label: 'Images', load: () => _media('images', (i, m) => _pic(i.media, i.name, '', { aspect: _shape(m.w, m.h) })) },
+      { id: 'images', label: 'Images', load: Src.images },
     ],
     video: [
       { id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' },
@@ -890,7 +863,7 @@ function VIDEOS(ctx) {
   // here is on B-roll too: this project's own first).
   function _sourceOf(path, kind) {
     const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
-    if (kind === 'image') return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks'] : at('images') ? ['images'] : [];
+    if (kind === 'image') return Src.pictureSourceOf(path);
     if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : [];
     return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : at('voice') ? ['voices'] : [];
   }

@@ -86,14 +86,15 @@ let _saving = false;
 //   hub                                 the voice, the lines, the open line
 //   ├── cast ── lookbooks ── newlb      the character, its looks, making a lookbook
 //   ├── env  ── newenv                  the environment, making one
-//   └── voice                           the voice this character is read in
+//   ├── voice                           the voice this character is read in
+//   └── fchat                           the frames chat, in place of the fields (phase V26.5)
 //
 // ?view= in the address opens one of them directly: that is how the Alerts list takes somebody
 // back to the place a generation was started from (js/alerts-bell.js). Read once, when this module
 // is first loaded - which is when the step is opened. Checked against this list rather than
 // against WHERE below it: that one is declared further down, and reading it here would be reading
 // it before it exists.
-const VIEWS = ['hub', 'cast', 'lookbooks', 'newlb', 'env', 'newenv', 'voice'];
+const VIEWS = ['hub', 'cast', 'lookbooks', 'newlb', 'env', 'newenv', 'voice', 'fchat'];
 function _urlView() {
   try {
     const v = new URLSearchParams(location.search).get('view') || '';
@@ -261,7 +262,7 @@ export function paint(host, ctx) {
   // still talking over the environments is a sound with nothing on screen to explain it. The
   // reads playing in the script stop the same way.
   if (_view !== 'voice') VOICE.leave();
-  if (_view !== 'hub' && _view !== 'voice') FRAG.leave();
+  if (_view !== 'hub' && _view !== 'voice' && _view !== 'fchat') FRAG.leave();
   // Arriving somewhere is when to ask the journal whether something of that place is running;
   // a repaint is not.
   if (_view !== _lastView) { _lastView = _view; _lookedFor = {}; }
@@ -276,9 +277,10 @@ export function paint(host, ctx) {
   } else if (_view === 'newenv') {
     ENV.paintMaker(scroll, head, _envApi());
     _stage(chosen);
-  } else if (_view === 'voice') {
+  } else if (_view === 'voice' || _view === 'fchat') {
     // The voices are chosen in the right column, beside the script (owner, 2026-09-21) - with
     // nobody cast too: the project then takes a voice of its own (js/merge-v3/wk-voice.js).
+    // (phase V26.5) The frames chat stands there too, in place of the fields (js/merge-v3/fchat.js).
     FRAG.paint(scroll, ctx, _fragApi(chosen), head);
     _stage(chosen);
   } else if (_view === 'newlb' && who) {
@@ -316,7 +318,7 @@ function _fragApi(chosen) {
     char: () => chosen || null,
     voiceApi: () => _voiceApi(chosen),
     go: _go,
-    // 'hub' or 'voice': the right column is the script's, or the voices being chosen.
+    // 'hub', 'voice' or 'fchat': the fields, the voices being chosen, or the frames chat.
     view: () => _view,
   };
 }
@@ -345,7 +347,7 @@ function _whereHalf() {
 function _stage(chosen) {
   // A line open in the script with a clip or a frame shows THAT: it is what is being judged. The
   // doors are back the moment the line is closed (a second press on its row).
-  const pic = (_view === 'hub' || _view === 'voice') ? FRAG.openPicture(_ctx.project) : null;
+  const pic = (_view === 'hub' || _view === 'voice' || _view === 'fchat') ? FRAG.openPicture(_ctx.project) : null;
   if (pic) {
     // A clip PLAYS here (X4) - and ONLY here: it is put up stopped, with its triangle, and the
     // press that starts it is a press on the stage (the owner, 2026-09-22). Nothing in the panel
@@ -577,6 +579,7 @@ const WHERE = {
   newlb: 'create lookbook',
   env: 'environment',
   newenv: 'create environment',
+  fchat: 'frames chat',
 };
 // Each place, and the places above it. The header draws this as a route with arrows, so what
 // led to what is read left to right.
@@ -588,6 +591,7 @@ const PATH = {
   env: ['env'],
   newenv: ['env', 'newenv'],
   voice: ['voice'],
+  fchat: ['fchat'],
 };
 
 /** The route from the top of the step to where you are - the workshop paints it. */

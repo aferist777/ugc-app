@@ -14,10 +14,10 @@
    pictures come from (`POST /api/mv3/img/send`, the project's pictures, the Library's Images).
    ════════════════════════════════════════════════════════════════════════════ */
 
-import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
 import { note } from './ask.js';
-import { createChat, el, thumbOf, money, json, stored, keep } from './chat-shell.js';
+import { createChat, el, thumbOf } from './chat-shell.js';
+import { modelColumn } from './pic-models.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
 const MAX_ATTS = 5;
@@ -31,206 +31,8 @@ function arOf(i) {
 }
 
 function PICTURES(ctx) {
-  let _table = null;         // the model table, once per page
-  let _tableErr = '';
-  let _set = null;           // the settings' own controls
-
-  // ── The model table, read through the current choice ───────────────────
-  async function _loadTable() {
-    if (_table) { _paintSet(); return; }
-    const d = await json('/api/mv3/img/matrix');
-    if (d && d.success) { _table = d; _tableErr = ''; }
-    else _tableErr = (d && d.error) || 'could not read the model table';
-    _paintSet();
-    ctx.paintAtts();
-  }
-
-  const _engine = () => (_table.engines.find(e => e.id === (_set && _set.eng.value)) || _table.engines[0]);
-
-  // Who can serve this model, at this quality, with this many references - all three are per pairing.
-  function _rungs(e, q, n) {
-    return (e.rows || []).filter(r => (n ? (r.i2i && r.maxRefs >= n) : r.t2i) && (r.tiers || e.tiers).includes(q));
-  }
-  function _houses(e, n) {
-    return (e.rows || []).filter(r => (n ? (r.i2i && r.maxRefs >= n) : r.t2i));
-  }
-  const _usable = (n) => _table.engines.filter(e => e.tiers.some(t => _rungs(e, t, n).length));
-  // THE PAIRING THAT WILL ACTUALLY RUN: the aggregator named, or the first that can do the job.
-  function _rowOf(e, n) {
-    const can = _houses(e, n);
-    return can.find(r => r.provider === (_set && _set.prov.value)) || can[0] || null;
-  }
-  const _dir = (n) => (n ? 'i2i' : 't2i');
-
-  // One kind, and how many is the PAIRING's business: kie takes five pictures for grok, Replicate one.
-  function _room() {
-    if (!_table || !_table.engines.length) return MAX_ATTS;
-    const e = _engine();
-    const rows = (e.rows || []).filter(r => r.i2i);
-    const mine = rows.find(r => r.provider === (_set && _set.prov.value));
-    const most = (mine ? mine.maxRefs : Math.max(1, ...rows.map(r => r.maxRefs || 1))) || 0;
-    return Math.min(MAX_ATTS, most);
-  }
-
-  function _paintSet() {
-    const ui = ctx.ui();
-    if (!ui) return;
-    const host = ui.left;
-    if (!_table || !_table.engines.length) {
-      host.textContent = '';
-      host.appendChild(el('div', 'mv3-ig-fall', _tableErr || (_table ? 'No picture model is available - check the API keys in Admin.' : 'reading the models…')));
-      _set = null;
-      return;
-    }
-    if (!_set) {
-      host.textContent = '';
-      const last = stored(LS_LAST, {});
-      const tl = Store.timeline();
-      const row = (label, ctl, cls) => {
-        const r = el('div', 'mv3-ig-row' + (cls ? ' ' + cls : ''));
-        const l = el('label', null, label);
-        l.htmlFor = ctl.id;
-        r.append(l, ctl);
-        host.appendChild(r);
-      };
-      const prov = document.createElement('select');
-      prov.id = 'mv3-pc-prov';
-      prov.title = 'Who is asked';
-      row('aggregator', prov, 'is-prov');
-      const eng = document.createElement('select');
-      eng.id = 'mv3-pc-eng';
-      eng.title = 'The model';
-      row('model', eng);
-      const q = document.createElement('select');
-      q.id = 'mv3-pc-q';
-      q.title = 'Quality';
-      row('quality', q);
-      // The shape twice: buttons in the wide column, a dropdown in the folded row (the owner's answer 3).
-      const arSel = document.createElement('select');
-      arSel.id = 'mv3-pc-ar';
-      arSel.title = 'Shape';
-      row('shape', arSel, 'is-arsel');
-      host.appendChild(el('div', 'mv3-ig-sep', 'shape'));
-      const arWrap = el('div', 'mv3-ig-ar-row');
-      host.appendChild(arWrap);
-      const cost = el('div', 'mv3-ig-cost');
-      host.appendChild(cost);
-      const fall = el('div', 'mv3-ig-fall');
-      host.appendChild(fall);
-      const fmt = (tl && tl.format) || '9:16';
-      // Last time's choice is what the empty lists are filled towards the first time (a select with no
-      // options cannot hold a value, so it is kept here until they exist).
-      _set = { prov, eng, q, arSel, arWrap, cost, fall, fmt, ar: _table.aspects.includes(last.aspect) ? last.aspect : fmt,
-               want: { provider: last.provider || '', engine: last.engine || '', quality: last.quality || '' } };
-      // The whole chat, not just this column: the pairing decides how many references fit.
-      prov.addEventListener('change', () => { _paintEngines(); ctx.paintAtts(); });
-      eng.addEventListener('change', () => { _paintEngines(); ctx.paintAtts(); });
-      q.addEventListener('change', _paintPrice);
-      arSel.addEventListener('change', () => { _set.ar = arSel.value; _paintAspects(); _paintPrice(); });
-      _paintAspects();
-    }
-    _paintEngines();
-  }
-
-  function _paintEngines() {
-    if (!_set) return;
-    const n = ctx.atts().length;
-    const had = _set.eng.value;
-    const want = had || _set.want.engine;
-    const list = _usable(n).slice().sort((a, b) => a.label.localeCompare(b.label));
-    _set.eng.innerHTML = '';
-    for (const e of list) {
-      const o = document.createElement('option');
-      o.value = e.id;
-      o.textContent = e.label + ' · ' + _dir(n);
-      o.selected = e.id === want;
-      _set.eng.appendChild(o);
-    }
-    // The chosen one cannot take what is attached: SAID, rather than swapped silently.
-    if (want && !list.some(e => e.id === want)) {
-      const was = (_table.engines.find(e => e.id === want) || {}).label || want;
-      _set.eng.value = (list[0] || {}).id || '';
-      if (had) ctx.say(was + ' cannot take ' + n + (n === 1 ? ' reference' : ' references') + ' — using ' + ((list[0] || {}).label || 'nothing'));
-    }
-    _paintProviders();
-    _paintQuality();
-    _set.want = {};                 // remembered choice used once, on the first fill
-  }
-
-  function _paintProviders() {
-    const e = _engine();
-    const can = _houses(e, ctx.atts().length);
-    const want = _set.prov.value || _set.want.provider;
-    _set.prov.innerHTML = '';
-    for (const r of can) {
-      const o = document.createElement('option');
-      o.value = r.provider; o.textContent = r.label;
-      o.selected = r.provider === want;
-      _set.prov.appendChild(o);
-    }
-    if (want && !can.some(r => r.provider === want) && can.length) _set.prov.value = can[0].provider;
-    _set.prov.disabled = can.length < 2;
-  }
-
-  function _paintQuality() {
-    const e = _engine();
-    const want = _set.q.value || _set.want.quality;
-    const row = _rowOf(e, ctx.atts().length);
-    const tiers = (row && row.tiers && row.tiers.length) ? row.tiers : e.tiers;
-    _set.q.innerHTML = '';
-    for (const t of tiers) {
-      const o = document.createElement('option');
-      o.value = t; o.textContent = t;
-      o.selected = (t === want) || (!tiers.includes(want) && t === (tiers.includes(e.def) ? e.def : tiers[0]));
-      _set.q.appendChild(o);
-    }
-    _paintPrice();
-  }
-
-  function _paintPrice() {
-    if (!_set) return;
-    const e = _engine();
-    const q = _set.q.value;
-    const n = ctx.atts().length;
-    const many = ctx.n();
-    const chosen = _rowOf(e, n);
-    const val = chosen ? (chosen.price || {})[q] : null;
-    const box = _set.cost;
-    if (val == null) {
-      box.className = 'mv3-ig-cost is-unknown';
-      box.innerHTML = '<b>&mdash;</b><span>no published price for this one</span>';
-    } else {
-      box.className = 'mv3-ig-cost';
-      box.innerHTML = '<b>' + (chosen.approx ? '≈' : '') + money(val) + '</b>'
-        + '<span>per picture' + (many > 1 ? ' · ' + money(val * many) + ' for ' + many : '') + '</span>';
-    }
-    // WHO CATCHES A REFUSAL, and what that would cost - known before it happens rather than after.
-    const others = _houses(e, n).filter(r => r !== chosen && (r.price || {})[q] != null);
-    _set.fall.innerHTML = others.length
-      ? 'if it refuses: ' + others.map(x => '<b>' + x.label + '</b> ' + money(x.price[q])).join(', ')
-      : '';
-    keep(LS_LAST, { engine: e.id, provider: _set.prov.value, quality: q, aspect: _set.ar });
-  }
-
-  function _paintAspects() {
-    _set.arWrap.textContent = '';
-    _set.arSel.textContent = '';
-    for (const a of _table.aspects) {
-      const b = el('button', 'mv3-ig-ar-b' + (a === _set.ar ? ' on' : ''));
-      b.type = 'button';
-      b.textContent = a;
-      if (a === _set.fmt) {
-        b.appendChild(el('span', 'dot', ' •'));
-        b.title = "the project's own shape";
-      }
-      b.addEventListener('click', () => { _set.ar = a; _paintAspects(); _paintPrice(); });
-      _set.arWrap.appendChild(b);
-      const o = document.createElement('option');
-      o.value = a; o.textContent = a + (a === _set.fmt ? ' •' : '');
-      _set.arSel.appendChild(o);
-    }
-    _set.arSel.value = _set.ar;
-  }
+  // The model, the aggregator, the quality, the shape and the price (phase V26.5: shared with the frames chat).
+  const M = modelColumn(ctx, { lsKey: LS_LAST, maxAtts: MAX_ATTS, shapes: true });
 
   return {
     name: 'pictures',
@@ -271,16 +73,16 @@ function PICTURES(ctx) {
     resultPath: (g) => g.imagePath,
 
     settings: {
-      load: _loadTable,
-      paint: _paintSet,
+      load: M.load,
+      paint: M.paint,
       // The pairing decides how many references fit, so the engines are read again whenever the row changes.
-      onAtts: () => { if (_set) _paintEngines(); },
-      onCount: _paintPrice,
+      onAtts: M.onAtts,
+      onCount: M.onCount,
       // The project's own shape is the dot among the shapes.
-      onProject: () => { if (_set) { _set.fmt = (Store.timeline() || {}).format || '9:16'; _paintAspects(); } },
-      room: _room,
-      ready: () => (_set ? '' : ['No picture model.', _tableErr || 'Check the API keys in Admin.']),
-      body: () => ({ engine: _engine().id, provider: _set.prov.value, quality: _set.q.value, aspect: _set.ar }),
+      onProject: M.onProject,
+      room: M.room,
+      ready: M.ready,
+      body: M.body,
     },
 
     // A finished picture in the thread: a miniature - hovering shows it properly, a press opens it over

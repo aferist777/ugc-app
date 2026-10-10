@@ -24,6 +24,7 @@ import * as Store from './store.js';
 import { initBar } from './bar.js';
 import { initPicChat, openPictures } from './picchat.js';
 import { initVidChat, openVideos } from './vidchat.js';
+import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 
 initNav();
@@ -32,6 +33,7 @@ initViews();
 initLibrary();
 initPicChat();
 initVidChat();
+initFramesChat();
 initTimelineB();
 initPreviewB();
 initExportB();

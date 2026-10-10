@@ -45,6 +45,7 @@ import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
 import { askDelete, askChoice } from './ask.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
+import * as FCHAT from './fchat.js';
 
 // What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
 // button so nothing is spent on a surprise.
@@ -96,6 +97,10 @@ let _picking = false;                     // the open fragment's frame list is d
 let _pickView = '';                       // ...and the frame being looked at in it, on the stage
 let _lookedAt = '';                       // the project the journal was last asked about
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
+// (phase V26.5) The frames chat: a frame of it pressed - on the stage - and whether the script is folded away beside it.
+let _chatPick = null;                     // { path, name }
+const FOLD_KEY = 'mv3_fc_fold_v1';
+let _fold = (() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch (e) { return false; } })();
 // WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING (phase X4, the owner 2026-09-22): its clip, playing,
 // or its frame. The clip when there is one, because that is the thing that was just made; pressing
 // the frame moves the stage to it, and pressing the clip brings it back. Forgotten when another
@@ -765,25 +770,44 @@ export function paint(host, ctx, api, head) {
   if (_stageFor !== _open) { _stageFor = _open; _stagePick = ''; }
 
   host.classList.add('is-split');
+  // (phase V26.5) THE FRAMES CHAT stands where the fields stand (js/merge-v3/fchat.js lays itself over this column), and
+  // the script beside it folds away to the right (the owner, 2026-10-10): a strip at its left edge folds it, the same
+  // strip right of the chat brings it back. A line pressed in the script opens its fragment in the chat's place; the
+  // fragment's cross comes back to the chat.
+  const chat = api.view() === 'fchat' && _open < 0;
+  if (!chat) _chatPick = null;
+  const folded = chat && _fold;
   const left = el('div', 'mv3-wk-half is-frags');
-  host.appendChild(left);
-  host.appendChild(_splitSash(host, left));
-  const right = el('div', 'mv3-wk-half is-guide is-frag');
+  if (!folded) {
+    host.appendChild(left);
+    host.appendChild(_splitSash(host, left));
+  }
+  if (chat) host.appendChild(_foldStrip(folded));
+  const right = el('div', 'mv3-wk-half is-guide is-frag' + (chat ? ' is-fcslot' : _open >= 0 ? ' has-close' : ''));
   host.appendChild(right);
-  _applySplit(host, left);
-  _keepScroll(right, 'r' + _open + ':' + api.view());
+  if (!folded) _applySplit(host, left);
+  if (!chat) _keepScroll(right, 'r' + _open + ':' + api.view());
 
   _pickUpDrawing();
   _pickUpClips();
   VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint (X2)
   // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
   // on the right, with everything else that is set once for the whole video.
-  _list(left, p, lines);
+  if (!folded) _list(left, p, lines);
 
   // Where the whole script stands goes in the panel's HEADER, beside the name of the step (the
   // owner, 2026-09-22): it is about the whole video, and so is the line it now shares.
   _counters(head, p, lines);
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
+  if (chat) {
+    FCHAT.show(right, p, {
+      close: () => { _chatPick = null; api.go('hub'); },
+      stage: (path, name) => { _chatPick = { path, name: name || '' }; _ctx.repaint(); },
+    });
+    _mark();
+    onlyHere(null);
+    return;
+  }
   _notes(right);
   if (!lines.length) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
@@ -854,6 +878,21 @@ function _splitSash(host, col) {
     _ctx.repaint();
   });
   return s;
+}
+
+// The strip that folds the script away beside the frames chat, and brings it back (the owner, 2026-10-10): five pixels
+// wide, the whole height, in gold, its arrow saying which way it goes.
+function _foldStrip(folded) {
+  const b = el('button', 'mv3-wk-fold' + (folded ? ' is-folded' : ''));
+  b.type = 'button';
+  b.title = folded ? 'Show the script' : 'Fold the script away to the right';
+  b.setAttribute('aria-label', b.title);
+  b.addEventListener('click', () => {
+    _fold = !folded;
+    try { localStorage.setItem(FOLD_KEY, _fold ? '1' : '0'); } catch (e) { /* a private window */ }
+    _ctx.repaint();
+  });
+  return b;
 }
 
 function _keepScroll(box, key) {
@@ -1577,8 +1616,15 @@ function _shelfFrames(host, p) {
     summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '') : '',
   });
   const strip = el('div', 'mv3-wk-fset');
-  const add = el('div', 'mv3-wk-fsetfr is-add', '+');
-  add.title = 'In development: a frame made to order, asked for in words. The chat will open over these fields.';
+  // (phase V26.5) THE DOOR TO THE FRAMES CHAT: a frame asked for in words, in place of these fields. It waits, as the
+  // first frames do, for the person in a look and the place.
+  const add = el('button', 'mv3-wk-fsetfr is-add', '+');
+  add.type = 'button';
+  const want = _missing(p);
+  add.disabled = want.length > 0;
+  add.title = want.length ? 'The frames chat needs ' + want.join(' and ') + ' first'
+    : 'The frames chat: describe a frame in words - the person and the place go with it';
+  add.addEventListener('click', () => { if (add.disabled) return; _setPick = ''; _open = -1; _remember(); _api.go('fchat'); });
   strip.appendChild(add);
   const hidden = _off(p);
   const shown = _poolAll(p);
@@ -2134,6 +2180,13 @@ function _tipShow(row, l, i, n) {
 //   |                   |  clip   + make clip                |
 function _fragment(host, p, l, i) {
   const take = _take(l);
+  // (phase V26.5, the owner 2026-10-10) ITS CROSS, top right in gold: the fragment closes - to the whole video, or back to
+  // the frames chat when it was opened from there. A second press on its row does the same, as before.
+  const shut = el('button', 'mv3-wk-fclose', '✕');
+  shut.type = 'button';
+  shut.title = _api.view() === 'fchat' ? 'Close this fragment - back to the frames chat' : 'Close this fragment - back to the whole video';
+  shut.addEventListener('click', () => { _open = -1; _remember(); _ctx.repaint(); });
+  host.appendChild(shut);
   const rs = _readState(l);
   const va = _api.voiceApi();
   const busyRead = VOICE.reading().busy;
@@ -2626,6 +2679,8 @@ export function openPicture(p) {
     const fr = _pool(p).find(v => v.id === _pickView);
     if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
   }
+  // (phase V26.5) A frame of the frames chat pressed: on the stage while the chat shows.
+  if (!l && _chatPick) return { src: derived(_chatPick.path, 'main'), caption: _chatPick.name || 'frame from the chat' };
   if (!l) {
     // No line open: a frame of the pool pressed in the general zone, if one is. The WHOLE strip is
     // searched, switched-off frames included - a dimmed frame pressed is still a frame being looked

@@ -858,3 +858,28 @@ audio.vtrim-media{ background:none; height:32px }
   .hp-body{ grid-template-columns:140px minmax(0, 1fr) }
   .hp-pv{ width:112px; height:63px }
 }
+
+/* ── THE FRAMES CHAT of a talking head (phase V26.5, js/merge-v3/fchat.js) ──
+   In the Setup panel, laid over the place the fields column leaves for it - outside the panel's body, which every
+   paint empties; fchat.js measures that place and puts the chat on it. Its own head line over its two columns. */
+#mv3-inspector{ position:relative }
+#mv3-fc.is-shown{ display:flex; flex-direction:column; position:absolute; z-index:4; overflow:hidden }
+.mv3-ig-top{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:4px 8px 4px 12px;
+  border-bottom:1px solid var(--border-soft); background:var(--surface);
+}
+.mv3-ig-top .sp{ flex:1 1 auto }
+.mv3-ig-top-t{ font:700 9.5px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold) }
+.mv3-ig-main{ flex:1 1 auto; min-height:0; min-width:0; display:flex }
+.mv3-fc-close{ color:var(--gold); border-color:color-mix(in oklch, var(--gold) 60%, transparent) }
+/* The shape, said rather than chosen: always the project's. */
+.mv3-ig-shape{ display:flex; align-items:baseline; gap:6px; padding:6px 0 2px; font:600 10px/1.3 var(--font); color:var(--muted) }
+.mv3-ig-shape .k{ font-size:9.5px; letter-spacing:.03em }
+.mv3-ig-shape b{ color:var(--ink); font-weight:700 }
+.mv3-pc.is-narrow .mv3-ig-shape{ padding:0 }
+.mv3-pc.is-narrow .mv3-ig-shape .k, .mv3-pc.is-narrow .mv3-ig-shape span:last-child{ display:none }
+/* What stands right of the attachment row - the frames chat's `ideas`. */
+.mv3-ig-attsrow{ display:flex; align-items:stretch; min-width:0; border-top:1px solid var(--border-soft) }
+.mv3-ig-attsrow > .mv3-ig-atts{ flex:1 1 auto; min-width:0; border-top:0 }
+/* An almanac still to come: in its place, dimmed, not pressable. */
+.mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ opacity:.45; cursor:default; background:var(--surface-2); color:var(--ink) }

@@ -97,6 +97,14 @@ export function refCell(a, k, n, peek) {
   return c;
 }
 export const money = (v) => '$' + (+(+v).toFixed(4));
+/** (phase V26.5) The almanac of a chat that has none yet: at the foot of the column, dimmed, not pressable. */
+export function almanacSoon() {
+  const b = el('button', 'mv3-vc-almanac is-soon', 'almanac');
+  b.type = 'button';
+  b.disabled = true;
+  b.title = 'In development: how to ask for pictures, and references to place the person by';
+  return b;
+}
 /** A shape ('9:16') as width over height. */
 export const ratioOf = (ar) => {
   const p = String(ar || '9:16').split(':');
@@ -152,6 +160,8 @@ export function createChat(make) {
     // In the order their numbers count (phase V6: per part of the zone, per slot of a recipe, then the rest) - what goes:
     // the empty numbered places (phase V15) left out.
     atts: () => _real(),
+    // (phase V26.5) The zone as it is laid out - its empty numbered places too, each with its slot.
+    zoneAtts: () => _ordered().slice(),
     // (phase V15) Why a send cannot go yet - an empty numbered place, blinking -, or null.
     holeWhy: () => _holeWhy(),
     // (phase V16) Whether anything attached answers `fn` - read without laying out the zone, so the zone's own words (a
@@ -213,14 +223,20 @@ export function createChat(make) {
   const S = make(ctx);
   const T = S.text;
   const set = S.settings;
+  // (phase V26.5) A chat that lives OUTSIDE the Library panel - the frames chat of a talking head, in Setup: no crumb,
+  // no room, no view remembered per project. Its owner shows and hides it (open / close), it carries a head line of its
+  // own over its columns, and a project switch leaves it as it is.
+  const HOSTED = !!S.host;
   _write = stored(S.keys.write, true) !== false;
   const _path = (g) => S.resultPath(g);
 
   // ── The two views ─────────────────────────────────────────────────────────
   /** Every way in: the generate menu, "+" on the shelf, the lane's right-click, ?open=<name>. */
   async function open() {
-    Views.toBase();
-    setOpenColumn('library');
+    if (!HOSTED) {
+      Views.toBase();
+      setOpenColumn('library');
+    } else if (_chat) return;
     await _show(true);
   }
 
@@ -228,7 +244,7 @@ export function createChat(make) {
   // being LEFT - the other chat's store listener can run first - and its mark there must stay.
   async function _show(on, remember = true) {
     _chat = !!on;
-    if (remember) Views.rememberView(_lk(_key), _chat ? S.name : null, S.name);
+    if (remember && !HOSTED) Views.rememberView(_lk(_key), _chat ? S.name : null, S.name);
     _paintHead();
     if (!_chat) {
       _stop();
@@ -254,6 +270,7 @@ export function createChat(make) {
 
   // The header, the panel's class and the room are lib-views' (K6b): it is told the base.
   function _paintHead() {
+    if (HOSTED) { const r = $(S.ids.root); if (r) r.classList.toggle('is-shown', _chat); return; }
     Views.setBase(S.name, _chat);
   }
 
@@ -270,7 +287,7 @@ export function createChat(make) {
       _draftHere = false;
       const d = stored(S.keys.draft, {});
       if (d[DRAFT_LK]) { d[k] = d[DRAFT_LK]; delete d[DRAFT_LK]; keep(S.keys.draft, d); }
-      if (_chat) { Views.rememberView(k, S.name); _reload(true); }
+      if (_chat) { if (!HOSTED) Views.rememberView(k, S.name); _reload(true); }
       return;
     }
     if (k === _key) return;
@@ -302,12 +319,13 @@ export function createChat(make) {
     // This project's own results are another project's; a category is the same whatever is open.
     if (!_cat) _feed = [];
     else if (_chat) _loadStrip();
-    if (adopt) { Views.rememberView(k, S.name); Views.rememberView('', null, S.name); }
-    const want = adopt || Views.viewOf(_lk(k)) === S.name;
+    if (adopt && !HOSTED) { Views.rememberView(k, S.name); Views.rememberView('', null, S.name); }
+    // A hosted chat stays as it was: its owner shows it for the project it holds.
+    const want = HOSTED ? _chat : (adopt || Views.viewOf(_lk(k)) === S.name);
     if (want !== _chat) _show(want);
     else if (_chat) _reload(true);
     // Left on a chat by an earlier visit that never came back to the shelf: the arrangement is put back.
-    else Views.sync();
+    else if (!HOSTED) Views.sync();
     _paintHead();
   }
 
@@ -435,9 +453,20 @@ export function createChat(make) {
     if (z) {
       const p = z.parts.find(x => x.kind === kind);
       if (!p || !p.room || p.off) { _say((p && (p.off || p.none)) || 'This model takes no ' + kind + '.'); return; }
+      // (phase V26.5) A slot named by the description - the frames chat puts the character and the place into their own:
+      // its empty numbered place when it has one, else a new place in it while the slot and the part have room.
+      const named = o && typeof o.slot === 'string' && p.slots ? p.slots.find(s => s.key === o.slot) : null;
       // `atEnd` (phase V15): a new place after the others - the storyboard is the last picture.
-      into = o && o.atEnd ? null : _placeFor(kind);
-      if (into) slot = into.slot != null ? into.slot : _slotFor(p);
+      into = named ? (_atts.find(a => a.hole && _kindOf(a) === kind && a.slot === named.key) || null)
+        : o && o.atEnd ? null : _placeFor(kind);
+      if (named) {
+        slot = named.key;
+        const inS = _atts.filter(a => _kindOf(a) === kind && a.slot === named.key && !a.hole).length;
+        if (!into && (inS >= named.max || _atts.filter(a => _kindOf(a) === kind).length >= p.room)) {
+          _say(_cap(named.label || named.key) + ' has no more room.');
+          return;
+        }
+      } else if (into) slot = into.slot != null ? into.slot : _slotFor(p);
       else {
         // Its places - the empty ones too - are as many as the model takes.
         const n = _atts.filter(a => _kindOf(a) === kind).length;
@@ -1303,8 +1332,9 @@ export function createChat(make) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
           n: _n, write: _write,
-          // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it.
-          where: {
+          // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or (phase V26.5)
+          // the place a hosted chat's description names.
+          where: typeof S.where === 'function' ? S.where(key) : {
             page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&open=' + S.name,
             label: 'Merge · ' + (Store.title() || 'project') + ' · ' + S.name,
             spot: { key, view: S.name },
@@ -1513,7 +1543,8 @@ export function createChat(make) {
 
   function peekShow(src, anchor) {
     peekHide();
-    if (!_ui) return;
+    // (phase V26.5) A description without the peek: a picture is opened by a press (the owner - no hover popups).
+    if (!_ui || S.noPeek) return;
     const box = el('div', 'mv3-ig-peek');
     const img = document.createElement('img');
     img.src = src;
@@ -1560,8 +1591,8 @@ export function createChat(make) {
     if (narrow !== _ui.narrow) {
       _ui.narrow = narrow;
       _ui.root.classList.toggle('is-narrow', narrow);
-      if (narrow) _ui.chat.insertBefore(_ui.set, _ui.atts);
-      else _ui.root.insertBefore(_ui.set, _ui.chat);
+      if (narrow) _ui.chat.insertBefore(_ui.set, _ui.attsAt);
+      else _ui.main.insertBefore(_ui.set, _ui.chat);
     }
     _grow();
     _paintStrip();
@@ -1573,6 +1604,16 @@ export function createChat(make) {
     const root = $(S.ids.root);
     if (!root) return;
     root.textContent = '';
+    // (phase V26.5) A hosted chat has a head line of its own - its name and its buttons - over its columns.
+    let main = root, ownHead = null;
+    if (HOSTED) {
+      const top = el('div', 'mv3-ig-top');
+      top.append(el('span', 'mv3-ig-top-t', T.title || S.name), el('span', 'sp'));
+      ownHead = el('span', 'mv3-pc-head');
+      top.appendChild(ownHead);
+      main = el('div', 'mv3-ig-main');
+      root.append(top, main);
+    }
 
     const setBox = el('div', 'mv3-ig-set');
     const left = el('div', 'mv3-ig-scroll');
@@ -1619,7 +1660,14 @@ export function createChat(make) {
     // (phase V6) The thread's foot: a description's own step, kept the last thing in the thread.
     const foot = el('div', 'mv3-ig-foot');
     thread.appendChild(foot);
-    chat.append(banner, thread, atts, over, ...Object.values(files), bar);
+    // (phase V26.5) What a description stands right of the attachment row - the frames chat's `ideas`.
+    const side = typeof S.attsSide === 'function' ? S.attsSide() : [];
+    let attsAt = atts;
+    if (side.length) {
+      attsAt = el('div', 'mv3-ig-attsrow');
+      attsAt.append(atts, ...side);
+    }
+    chat.append(banner, thread, attsAt, over, ...Object.values(files), bar);
 
     // The right column - unless the description picks its attachments in a window (phase V13).
     let sash = null, stripBox = null, stripP = null, count = null, cat = null, list = null;
@@ -1636,11 +1684,11 @@ export function createChat(make) {
       cat.title = T.cat;
       list = el('div', 'mv3-ig-strip-list');
       stripBox.append(sHead, cat, list);
-      root.append(setBox, chat, sash, stripBox);
-    } else root.append(setBox, chat);
+      main.append(setBox, chat, sash, stripBox);
+    } else main.append(setBox, chat);
 
-    // The panel header's own buttons while the chat shows.
-    const head = $(S.ids.head);
+    // The panel header's own buttons while the chat shows - or a hosted chat's own head line.
+    const head = HOSTED ? ownHead : $(S.ids.head);
     if (head) {
       head.textContent = '';
       const wipe = el('button', 'mv3-iconbtn', '⌫');
@@ -1665,7 +1713,7 @@ export function createChat(make) {
       headL.append(...S.crumbButtons());
     }
 
-    _ui = { root, set: setBox, left, said, chat, banner, thread, foot, atts, over, file, files, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
     if (sash) _wireStripSash(sash, stripBox);
 
     for (const input of Object.values(files)) {
@@ -1722,11 +1770,13 @@ export function createChat(make) {
 
   function init() {
     // "Library" in the header leaves the chat; the pale crumb on the shelf opens it; another chat coming
-    // forward lets this one go (lib-views wires all three).
-    Views.registerChat(S.name, {
-      root: S.ids.root, head: S.ids.head, headL: S.ids.headL || '', crumb: S.ids.crumb, crumbTitle: T.crumb,
-      onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => open(),
-    });
+    // forward lets this one go (lib-views wires all three). A hosted chat is its owner's to show.
+    if (!HOSTED) {
+      Views.registerChat(S.name, {
+        root: S.ids.root, head: S.ids.head, headL: S.ids.headL || '', crumb: S.ids.crumb, crumbTitle: T.crumb,
+        onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => open(),
+      });
+    }
     // Back from another tab or window: the countdowns catch up at once rather than at the next tick.
     document.addEventListener('visibilitychange', () => { if (!document.hidden && _chat) _reload(); });
     window.addEventListener('beforeunload', () => { if (_key !== null) _saveDraft(_key); });
@@ -1734,5 +1784,6 @@ export function createChat(make) {
     _paintHead();
   }
 
-  return { open, init, isOpen: () => _chat };
+  // (phase V26.5) `close` - a hosted chat's owner hides it; `fit` - its place changed size.
+  return { open, init, isOpen: () => _chat, close: () => { if (_chat) _show(false); }, fit: () => _fit(), ctx };
 }
