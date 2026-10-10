@@ -1830,6 +1830,7 @@ const JOBS = require('../lib/gen-jobs');
 // fragment already running, and - when a clip is re-asked with fresh links - which task the record
 // is now following (lib/alerts.js).
 const ALERTS = require('../lib/alerts');
+const REFUSAL = require('../lib/gen-refusal');
 // The project's own timeline is a mirror of its lines (lib/frag-mirror.js, phase T'): every
 // place below that changes what a line HAS asks for it to be laid again.
 const MIRROR = require('../lib/frag-mirror');
@@ -4478,7 +4479,7 @@ router.post('/scen3/fragments/clip', async (req, res) => {
       })
       .catch((e) => {
         console.error('[scen3/fragments/clip]', e.message);
-        ALERTS.fail(rec.id, e.message);
+        ALERTS.fail(rec.id, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
       });
   } catch (e) {
     console.error('[scen3/fragments/clip]', e.message);
@@ -4558,7 +4559,7 @@ async function _clipQueue(queued) {
       })
       .catch((e) => {
         console.error('[scen3/clips] fragment ' + q.line + ':', e.message);
-        ALERTS.fail(q.alertId, e.message);
+        ALERTS.fail(q.alertId, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
       });
   }
 }

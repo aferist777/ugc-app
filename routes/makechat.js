@@ -33,6 +33,7 @@ const crypto = require('crypto');
 const CFG = require('../lib/config');
 const { toUrl } = require('../lib/media');
 const ALERTS = require('../lib/alerts');
+const REFUSAL = require('../lib/gen-refusal');
 const JOBS = require('../lib/gen-jobs');
 const CHAT = require('../lib/makechat');
 const M = require('./scen3').makers;
@@ -206,7 +207,8 @@ async function _work(kind, type, alertId, kick, sendId, request) {
   } catch (e) {
     if (e && e.stopped) return;                    // let go of before the money: nothing to say
     console.warn('[makechat] ' + type + ':', e.message);
-    if (ours()) ALERTS.fail(alertId, e.message, e.refused ? { refused: true } : undefined);
+    // The agent's own "nothing to make", or the picture model refusing the content (phase V10.2): no paid retry.
+    if (ours()) ALERTS.fail(alertId, e.message, e.refused || REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
   } finally {
     M.asking.delete(kick);
   }

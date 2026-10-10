@@ -110,6 +110,7 @@ router.post('/character-v2/analyze', async (req, res) => {
 // because its loop lives in memory and the row does not.
 const JOBS = require('../lib/gen-jobs');
 const ALERTS = require('../lib/alerts');
+const REFUSAL = require('../lib/gen-refusal');
 
 // PAID ONCE (phase V22, the owner 2026-10-09: "as in the chats"). The row is marked `asked` just before each
 // create that costs money and the mark is taken back when the aggregator ANSWERS no (lib/cv2-run.js `onAsk` /
@@ -208,7 +209,9 @@ async function _askBehind(alertId, kick, b) {
     ALERTS.update(alertId, { taskIds: [sub.taskId], engine: sub.engine, stage: '' });
   } catch (err) {
     console.error('[cv2/generate]', err.response?.data || err.message);
-    ALERTS.fail(alertId, reasonOf(err));       // a row let go of is left as it is (lib/alerts.js)
+    // A refusal of the content is `refused` - no paid "try again" (phase V10.2, lib/gen-refusal.js).
+    const why = reasonOf(err);
+    ALERTS.fail(alertId, why, REFUSAL.isRefusal(why) ? { refused: true } : undefined);       // a row let go of is left as it is (lib/alerts.js)
   } finally {
     _asking.delete(kick);
   }

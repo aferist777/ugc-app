@@ -24,6 +24,7 @@ const {
 const { reasonOf, rehost, isFetchFailure, PROVIDER_LABELS } = require('../lib/img-providers');
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
+const REFUSAL = require('../lib/gen-refusal');
 const {
   charFolderName, charAbsFolderRec,
   loadChars, findChar, upsertChar, patchChar, deleteChar,
@@ -151,7 +152,7 @@ async function _kickoffSheets(charId, src, sheetOpts, alertId, kick) {
     const why = reasonOf(e);
     console.warn('[char-store] sheet submit failed everywhere:', why);
     patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || 'the sheet could not be submitted') });
-    if (alertId && !gone()) ALERTS.fail(alertId, String(why || 'the sheet could not be submitted'));
+    if (alertId && !gone()) ALERTS.fail(alertId, String(why || 'the sheet could not be submitted'), !(e && e.unsure) && _refusedEverywhere(e) ? { refused: true } : undefined);
   } finally {
     if (kick) _kicking.delete(kick);
   }
@@ -215,11 +216,11 @@ function _sheetLetGo(charId, taskId) {
 // kickoff and Regenerate - must leave the record in exactly the same shape, or the poll-time
 // fallback works after one of them and not the other.
 function _sheetPatch(sub, prompt, imageUrl) {
-  // Every aggregator this run has finished with - the ones that refused AND the one that
-  // accepted. The poll-time half resumes below them: the step that took the job is not a
-  // step to hand the same job to again.
-  const done = (sub.steps || []).filter(s => s.state !== 'skipped')
-    .map(s => String(s.label).split(' / ')[0]);
+  // Every STEP this run has finished with - the ones that refused AND the one that accepted
+  // (phase V10.2: steps, not aggregators - two steps on one aggregator are two chances). The
+  // poll-time half resumes at the step below them: the step that took the job is not a step to
+  // hand the same job to again.
+  const done = (sub.steps || []).filter(s => s.state !== 'skipped').map(s => String(s.label));
   return {
     sheetTask: sub.taskId,
     imageEngine: sub.engine,
@@ -227,7 +228,7 @@ function _sheetPatch(sub, prompt, imageUrl) {
     sheetQuality: sub.quality,
     sheetError: null,
     sheetNote: null,
-    sheetJob: { engine: sub.engine, quality: sub.quality, prompt, imageUrl, tried: done.length ? done : [sub.provider] },
+    sheetJob: { engine: sub.engine, quality: sub.quality, prompt, imageUrl, tried: done.length ? done : [RUN.stepLabel(sub)] },
     sheetLetGo: null,
   };
 }
@@ -505,9 +506,14 @@ router.post('/char-store/regen-ref', async (req, res) => {
 // PAID ONCE (V22): the aggregator being asked is written onto the record (`sheetJob.asking`) just
 // before its create and taken off when it answers. Found there - the app was closed in the middle of
 // it - the hop may have been paid for, and it is not asked for again.
+// REFUSED ONLY WHEN EVERY STEP REFUSED (phase V10.2, the owner's answer 5a): a step whose model refuses the content hands
+// the sheet on like any failure - another model is another moderation, and the refused task cost nothing - and the row
+// is `refused` (no paid retry from Alerts) only when nothing is left and every step that answered said no to the
+// content. `refusedAll` rides on sheetJob from hop to hop; the answer carries `refused` when nothing is left.
 async function _retrySheetElsewhere(c, why) {
   const job = c && c.sheetJob;
   if (!job || !job.prompt || !job.imageUrl) return null;
+  const refusedAll = job.refusedAll !== false && REFUSAL.isRefusal(why);
   const aggName = (a) => PROVIDER_LABELS[L.AGG_TO_MATRIX[a] || a] || String(a);
   if (job.asking) {
     const who = aggName(job.asking);
@@ -540,21 +546,33 @@ async function _retrySheetElsewhere(c, why) {
     });
     const note = (tried[tried.length - 1] || 'the last step') + ' failed: ' + String(why).slice(0, 120)
       + ' — retrying on ' + sub.provider + '…';
-    const done = (sub.steps || []).filter(s => s.state !== 'skipped')
-      .map(s => String(s.label).split(' / ')[0]);
+    const done = (sub.steps || []).filter(s => s.state !== 'skipped').map(s => String(s.label));
     patchChar(c.id, {
       sheetTask: sub.taskId, imageProvider: sub.provider, imageEngine: sub.engine, sheetNote: note,
       // imageUrl too: it may have moved host on the way here, and the NEXT hop should start from
       // where this one actually got to.
-      sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [sub.provider]) },
+      sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [RUN.stepLabel(sub)]),
+        refusedAll: refusedAll && _allRefused(sub) },
     });
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
     return { taskId: sub.taskId, note };
   } catch (e) {
     if (e && e.unsure) return { unsure: reasonOf(e) };
     console.warn('[char-store] nowhere left to retry the sheet:', reasonOf(e));
-    return null;
+    return { refused: refusedAll && _allRefused(e) };
   }
+}
+
+// Every step that ANSWERED in a walk of the ladder refused the content (a step skipped for a dead key did not answer). A
+// walk with no failed step - the one that took the job - says nothing against it.
+function _allRefused(walk) {
+  const failed = ((walk && walk.steps) || []).filter(s => s.state === 'failed');
+  return failed.every(s => REFUSAL.isRefusal(s.detail));
+}
+// The first walk failed: `refused` only when some step answered and every one that did refused the content.
+function _refusedEverywhere(e) {
+  const failed = ((e && e.steps) || []).filter(s => s.state === 'failed');
+  return failed.length > 0 && failed.every(s => REFUSAL.isRefusal(s.detail));
 }
 
 // RESOLVING ONE SHEET, whoever is asking: the page that is watching it, or the server's own
@@ -591,6 +609,8 @@ async function _resolveSheet(taskId, charId, kind) {
     // same reference, and who has already been asked.
     const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
     if (next && next.taskId) return { state: 'pending', taskId: next.taskId, note: next.note };
+    // Refused: every step said no to the content (a sheet asked for before V10.2, or a T-pose, by its own words).
+    const refused = next && !next.unsure && next.refused !== undefined ? !!next.refused : REFUSAL.isRefusal(result.error);
     // The next aggregator gave no answer (V22): it may have started the sheet - said so, not the
     // first task's error.
     const why = (next && next.unsure) || result.error || 'the generation failed';
@@ -601,7 +621,8 @@ async function _resolveSheet(taskId, charId, kind) {
       [field + 'Task']: null, sheetJob: null,
       sheetError: String(why),
     });
-    if (next && next.unsure) return { state: 'failed', error: next.unsure };
+    if (next && next.unsure) return { state: 'failed', error: next.unsure, refused: false };
+    return { ...result, refused };
   }
   return result;
 }
