@@ -762,7 +762,8 @@ export function paint(host, ctx, api, head) {
   // project was left, then the general zone.
   if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _rightAt.clear(); _tipHide(); }
   _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
-  if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
+  // (phase V26.5) Arriving on the frames chat - its Alerts row, a reload there - is arriving on the chat, not on a fragment.
+  if (_open === null) _open = _asked >= 0 ? _asked : api.view() === 'fchat' ? -1 : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
   // A line taken off (Z4) has no fragment to open: the general zone is where that press lands.
@@ -803,6 +804,8 @@ export function paint(host, ctx, api, head) {
     FCHAT.show(right, p, {
       close: () => { _chatPick = null; api.go('hub'); },
       stage: (path, name) => { _chatPick = { path, name: name || '' }; _ctx.repaint(); },
+      // A frame put into the set: the project as the server has it now - the shelf and the counters follow.
+      added: (project) => { _adopt({ project }); _ctx.repaint(); },
     });
     _mark();
     onlyHere(null);
@@ -940,8 +943,10 @@ function _needs(p) {
   const out = {};
   if (!v.mood) out.mood = 'a mood';
   if (!_canRead()) out.voice = 'a voice';
+  // (phase V26.5, the owner 2026-10-10) THE FIRST FRAMES ARE THERE ONCE THE SET HAS A FRAME - from the frames chat or a
+  // set drawn here: the field's menus are needed only to draw a set, so they are red only while there is none.
   const f = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean);
-  if (f.length) out.frames = f.join(', ');
+  if (f.length && !_pool(p).length) out.frames = f.join(', ');
   if (!v.quality) out.video = 'the quality';
   return out;
 }
@@ -1074,7 +1079,9 @@ function _standing(p) {
   return {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
-    frames: have, framesAsked: asked, framesDone: have >= asked && !_drawing.size && have > 0,
+    // (phase V26.5, the owner 2026-10-10) Done as soon as the set has a frame and nothing is being drawn - how many were
+    // asked for is the field's business while it draws, not a debt the frames chat leaves.
+    frames: have, framesAsked: asked, framesDone: have > 0 && !_drawing.size,
     clips: live.filter(x => _clipSettled(p, x.l, x.i)).length,
   };
 }
@@ -1098,7 +1105,8 @@ function _counters(host, p, lines) {
   };
   const n = s.n;
   cell(s.read + '/' + n, 'read', n > 0 && s.read === n, 'Lines read, of all the lines');
-  cell(s.frames + '/' + s.framesAsked, 'frames', s.framesDone, 'Frames in the pool, of the set asked for');
+  cell(_drawing.size ? s.frames + '/' + s.framesAsked : String(s.frames), 'frames', s.framesDone,
+    _drawing.size ? 'Frames in the pool, of the set being drawn' : 'Frames in the pool - the fragments take theirs from it');
   cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
   top.appendChild(stat);
   host.classList.add('is-tabs-left');
@@ -1512,7 +1520,7 @@ function _stageFrames(host, p) {
     // Red until the shot, the amount and the spread are chosen (phase V24) - and that outranks the
     // dimming: the menus are the way out of it, so the field must not look shut.
     need: _needs(p).frames,
-    summary: s.frames + '/' + s.framesAsked + ' drawn' + (_drawing.size ? ' · drawing ' + _drawing.size : ''),
+    summary: (_drawing.size ? s.frames + '/' + s.framesAsked + ' drawn · drawing ' + _drawing.size : s.frames + (s.frames === 1 ? ' frame' : ' frames') + ' in the set'),
   });
   const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
 
@@ -1660,8 +1668,10 @@ function _shelfFrames(host, p) {
       ids.splice(at < 0 ? ids.length : at, 0, from);
       _saveOrder(p, ids);
     });
-    b.title = (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
+    b.title = (fr.made === 'chat' ? 'from the frames chat · ' : '') + (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
       + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
+    // (phase V26.5) A frame made to order in the frames chat says so on its tile.
+    if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'chat'));
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';
@@ -1695,7 +1705,10 @@ function _framesButton(foot, p) {
   // What it waits for, in words (phase V24): the character in a look and the place, the three choices
   // of this field, and the mood the frames are drawn in.
   const needs = _needs(p);
-  const wait = [..._missing(p), needs.frames, needs.mood].filter(Boolean);
+  // (phase V26.5) The menus are not red once the set has a frame, but a set drawn here still needs them.
+  const v = _video();
+  const menus = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean).join(', ');
+  const wait = [..._missing(p), menus, needs.mood].filter(Boolean);
   _genButton(foot, {
     label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',
     cap: busy ? '' : wait.length ? 'needs ' + wait.join(', ') : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),

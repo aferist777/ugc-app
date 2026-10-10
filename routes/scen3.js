@@ -3035,6 +3035,9 @@ function _normMix(m) {
       // and read by the one that writes the animation prompts (W3b), which is what a clip made from
       // this frame has to continue. Frames drawn before it carry none and are read from the picture.
       moment:  String((v && v.moment) || ''),
+      // (phase V26.5) A frame made to order in the frames chat: 'chat', and the chat's record it came from.
+      made:    (v && v.made === 'chat') ? 'chat' : '',
+      genId:   String((v && v.genId) || ''),
     })).filter(v => v.id && v.path) : [],
     // The order the frames were dragged into (the owner, 2026-09-21), by id. A frame not named
     // here - a new one - keeps its natural place, after the ones that were arranged.
@@ -4450,6 +4453,56 @@ router.post('/scen3/frames/prompt', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── The frames chat (phase V26.5, routes/scen3-fchat.js) ──────────────────────
+// What the chat's writers are told about the project: the shape, the casting, where the frame's edge is (a shot size
+// of the set, or none), the mood, how the look was read - a covered face, the clothes that shot shows - and the light
+// and realism sentences every frame of the set ends with. Read from the project as it is; nothing is asked for.
+function _fchatFacts(projectId, shot) {
+  const p = _loadProjects().find(x => String(x.id) === String(projectId || ''));
+  if (!p) return null;
+  const set = _frameSet(shot);
+  const video = _normVideo(p.video);
+  const mood = video.mood ? MP.moodById(video.mood) : null;
+  const fmt = _normMix(p.mix).settings.format;
+  return {
+    format: FRAG_FORMATS.includes(fmt) ? fmt : '9:16',
+    casting: _normCasting(p.casting),
+    edge: set ? { id: set.id, label: set.label, rule: set.rule, cut: set.cut || '', visible: set.visible } : null,
+    mood: mood ? { label: mood.label, face: mood.face, gestures: mood.gestures } : null,
+    covered: _faceCovered(p),
+    clothes: _clothesShown(p, set ? set.id : 'full'),
+    light: FRAG_LIGHT_MATCH.trim(),
+    real: PERSON_REAL.trim(),
+  };
+}
+
+// A frame of the chat put into the set (`to frames`): it joins the pool like any frame - the lines take from it by the
+// rule (the owner's answer (d): option 1) - marked as made to order, with the prompt it was drawn from. Once per file.
+async function _addChatFrame(projectId, o) {
+  const pathUrl = String((o && o.path) || '');
+  const preview = await _framePreview(pathUrl);
+  let variant = null;
+  let already = false;
+  const saved = PROJECTS.apply(projectId, (fresh) => {
+    fresh.mix = _normMix(fresh.mix);
+    const was = fresh.mix.variants.find(v => v.path === pathUrl);
+    if (was) { variant = was; already = true; return; }
+    variant = {
+      id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      path: pathUrl, preview, prompt: String((o && o.prompt) || '').slice(0, 4000),
+      at: new Date().toISOString(), taskId: '', set: '', framing: String((o && o.shot) || ''), n: 0, moment: '',
+      made: 'chat', genId: String((o && o.genId) || ''),
+    };
+    fresh.mix.variants.push(variant);
+    // A set dragged into an order keeps it: the new frame stands at its end.
+    if (Array.isArray(fresh.mix.order) && fresh.mix.order.length) fresh.mix.order.push(variant.id);
+    fresh.updatedAt = variant.at;
+  });
+  if (!saved) throw Object.assign(new Error('no such project'), { status: 404 });
+  if (!already) MIRROR.touch(saved.id, { project: saved });   // the timeline mirrors the lines (T'): a frame added
+  return { project: _projFull(saved), frameId: variant.id, already };
+}
+
 // The runner's side: wait for kie, land the picture in the project's frames/ once, make its preview
 // and add it to the project's frames - in one burst against the project as it is by then. No line is
 // touched: the lines take from the pool by the rule.
@@ -5026,6 +5079,9 @@ router.loadProjects = _loadProjects;
 // stand in, and which of them a line opens on. One rule, read by the page, by the agent that writes
 // the animation prompts and by the cut on the timeline.
 router.framePool = _framePool;
+// (phase V26.5) The frames chat (routes/scen3-fchat.js).
+router.fchatFacts = _fchatFacts;
+router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
 // The two makers' work and what the Library's chats need around it (routes/makechat.js, phase I): the
 // same submit Merge and "try again" use, the media door, the kicks of the rows written at the press,

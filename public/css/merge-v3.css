@@ -2159,3 +2159,9 @@ body.mv3-locked #mv3-timeline{
   color:var(--gold); font:700 11px/20px var(--font); cursor:pointer;
 }
 .mv3-wk-fclose:hover{ background:color-mix(in oklch, var(--gold) 18%, var(--surface)) }
+/* (phase V26.5) A frame of the set made to order in the frames chat: a small gold word in its corner. */
+.mv3-wk-fsetmade{
+  position:absolute; left:2px; bottom:2px; z-index:2; padding:1px 3px; border-radius:var(--r-xs);
+  background:rgba(0,0,0,.6); color:var(--gold); font:700 7.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
+  pointer-events:none;
+}

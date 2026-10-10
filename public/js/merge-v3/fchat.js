@@ -19,7 +19,8 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { createChat, el, thumbOf, almanacSoon } from './chat-shell.js';
+import { createChat, el, thumbOf, json, almanacSoon } from './chat-shell.js';
+import { note } from './ask.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -96,12 +97,19 @@ function FRAMES(ctx) {
   }
 
   // ── Where pictures come from (the picker) ─────────────────────────────────
-  // This project's frames - the set, and (block B) what this chat drew.
+  // This project's frames: the set, then what this chat drew and is not in the set.
   async function _frames() {
     const vs = (((_proj || {}).mix || {}).variants) || [];
     const ar = _format() === '16:9' ? '16:9' : '9:16';
-    return { items: vs.filter(v => v && v.path).map(v => Src.pic(v.path, 'frame' + (v.n ? ' ' + v.n : ''),
-      v.made === 'chat' ? 'from the chat' : (v.framing || ''), { aspect: ar, thumb: thumbOf(v.preview || v.path, 'strip') })) };
+    const set = vs.filter(v => v && v.path).map(v => Src.pic(v.path, 'frame' + (v.n ? ' ' + v.n : ''),
+      v.made === 'chat' ? 'in the set · from the chat' : 'in the set' + (v.framing ? ' · ' + v.framing : ''),
+      { aspect: ar, thumb: thumbOf(v.preview || v.path, 'strip') }));
+    const k = ctx.key();
+    const d = k ? await json('/api/scen3/fchat/feed?project=' + encodeURIComponent(k)) : null;
+    const inSet = new Set(set.map(x => x.path));
+    const made = ((d && d.success && d.items) || []).filter(g => !inSet.has(g.imagePath))
+      .map(g => Src.pic(g.imagePath, String(g.prompt || '').slice(0, 60), 'from the chat', { aspect: g.aspect || ar }));
+    return { items: set.concat(made) };
   }
   const SOURCES = [
     { id: 'frames', label: 'this project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
@@ -190,6 +198,33 @@ function FRAMES(ctx) {
       img.addEventListener('click', () => { if (_hooks.stage) _hooks.stage(g.imagePath, 'frame from the chat'); else open(); });
       img.addEventListener('contextmenu', (e) => { e.preventDefault(); open(); });
       cell.appendChild(img);
+      // "to frames" - into the set, where the lines take frames from; "to reference" - into the `frame` place, for the
+      // next change.
+      const acts = el('div', 'mv3-ig-acts');
+      const inSet = () => ((((_proj || {}).mix || {}).variants) || []).some(v => v && v.path === g.imagePath);
+      const add = el('button', 'mv3-c-btn', inSet() ? 'in frames' : 'to frames');
+      add.type = 'button';
+      add.disabled = inSet();
+      add.title = inSet() ? 'This frame is in the set' : 'Put it into the set of first frames - the fragments take their frames from it by the rule';
+      add.addEventListener('click', async () => {
+        add.disabled = true;
+        const d = await json('/api/scen3/fchat/to-set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ genId: g.id }) });
+        if (!d || !d.success) { add.disabled = false; note(add, 'Not added.', (d && d.error) || 'the server did not answer'); return; }
+        add.textContent = 'in frames';
+        if (_hooks.added) _hooks.added(d.project);
+      });
+      const use = el('button', 'mv3-c-btn', 'to reference');
+      use.type = 'button';
+      use.title = 'Put it into the "frame" place above the message box, to change it with the next message';
+      use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
+      acts.append(add, use);
+      cell.appendChild(acts);
+      img.addEventListener('error', () => {
+        const gone = el('div', 'mv3-ig-gone', 'not on the disk any more');
+        gone.style.aspectRatio = img.style.aspectRatio;
+        img.replaceWith(gone);
+        add.disabled = true; use.disabled = true;
+      }, { once: true });
     },
     facts: (g) => [
       ['model', (g.engine || '') + ' · ' + (g.provider || '?') + ' · ' + (g.quality || '')],
@@ -197,8 +232,9 @@ function FRAMES(ctx) {
       ['shape', (g.aspect || '') + ((g.w && g.h) ? ' · ' + g.w + '×' + g.h : '')],
       ['took', g.secs ? g.secs + 's' : ''],
       ['references', (g.refs || []).length ? String(g.refs.length) : ''],
-      ['writer', g.fell ? 'sent as typed - ' + g.fell : (g.writer || '')],
-      ['prompt', g.prompt || ''],
+      ['writer', g.fell ? g.fell : (g.writer || '')],
+      ['you said', g.said || ''],
+      ['sent as', (g.prompt && g.prompt !== g.said) ? g.prompt : ''],
     ],
     view(done, at) {
       import('../library/viewer.js').then(V => V.openViewer(
@@ -272,7 +308,8 @@ function _autoCast(opening) {
 }
 
 /**
- * Shown in `slot` - the place the fields column leaves for it - for the project `p`. `hooks`: { close, stage }.
+ * Shown in `slot` - the place the fields column leaves for it - for the project `p`. `hooks`: { close, stage(path, name),
+ * added(project) - a frame went into the set }.
  * Called by every paint of that face; the first one opens it.
  */
 export function show(slot, p, hooks) {
