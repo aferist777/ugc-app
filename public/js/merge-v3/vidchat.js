@@ -304,8 +304,9 @@ function VIDEOS(ctx) {
     if (per == null) return { none: true, res };
     if (r.duration.fromClip) {
       const cap = p.orientation === 'image' ? (r.limits.videoSecsImage || 10) : (r.limits.videoSecs || 30);
-      const secs = vidIn ? Math.min(vidIn, cap) : 0;
-      return { per, res, fromClip: true, secs, usd: secs ? per * secs : null };
+      // (phase V10.2) kie bills Kling by the whole seconds that come back, rounded down.
+      const secs = !vidIn ? 0 : r.billWhole ? Math.max(1, Math.floor(Math.min(vidIn, cap) + 0.001)) : Math.min(vidIn, cap);
+      return { per, res, fromClip: true, whole: !!r.billWhole, secs, usd: secs ? per * secs : null };
     }
     const out = clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
     const withIn = r.agg === 'kie' && (model() || {}).family === 'seedance' && clips.length > 0;
@@ -502,12 +503,18 @@ function VIDEOS(ctx) {
         (v) => { setParam('duration', +v); _paintPrice(); }));
     }
     _row(box, 'quality', _select('mv3-vc-res', 'Resolution', r.resolutions.map(x => ({ value: x, text: x })),
-      r.resolutions.includes(p.resolution) ? p.resolution : r.resDef, (v) => { setParam('resolution', v); _paintPrice(); }));
-    // The shape: with a picture Grok takes the picture's, and Seedance's frames take theirs.
+      r.resolutions.includes(p.resolution) ? p.resolution : r.resDef, (v) => {
+        setParam('resolution', v);
+        _paintPrice();
+        // (phase V10.2) The zone's places can change with it (Grok 1.5 on kie: one picture at 1080p).
+        if (r.limits.imagesAt) ctx.paintAtts();
+      }));
+    // The shape: with a picture Grok takes the picture's (Grok 1.5 on kie: with one - several are references, and the
+    // shape is chosen again), and Seedance's frames take theirs.
     if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
       // Frames on their own make the clip in their shape; beside a clip or a sound they go as references.
-      const fixed = n > 0 && (fam === 'grok' || (fam === 'seedance' && _framesMode() && !mixed));
+      const fixed = n > 0 && ((fam === 'grok' && !(r.aspectWithImages && n > 1)) || (fam === 'seedance' && _framesMode() && !mixed));
       const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
         r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => setParam('aspect', v));
       sel.disabled = fixed;
@@ -598,8 +605,8 @@ function VIDEOS(ctx) {
     }
     const notes = [];
     if (r && r.priceNote) notes.push(r.priceNote);
-    if (r && r.agg === 'kie' && model() && model().id === 'grok15') notes.push("kie's rate for Grok 1.5 looks like a mistake - the first real clip will show");
-    if (r && r.duration.fromClip) notes.push('the most it costs: billed by the seconds that come back');
+    if (r && r.duration.fromClip) notes.push(r.billWhole ? 'the most it costs: billed by the whole seconds that come back, rounded down' : 'the most it costs: billed by the seconds that come back');
+    else if (pr && pr.vidIn && r.agg === 'kie') notes.push('the most it costs: kie.ai has billed a second less');
     // The fallback rung, with its own price (PLAN V-B): asked only when the chosen one turns the clip down.
     const other = r && model() ? model().records.find(x => x.agg !== r.agg && x.usable) : null;
     if (other && !(_table && _table.fake)) {
@@ -716,9 +723,14 @@ function VIDEOS(ctx) {
     const ps = ((_table && _table.board && _table.board.providers) || []).filter(p => p.usable);
     return ps.length ? Math.max(...ps.map(p => p.maxRefs || 1)) : 14;
   };
+  // (phase V10.2) Fewer at some resolutions - Grok 1.5 on kie takes one picture at 1080p.
+  const _imgCap = (r) => {
+    const at = r && r.limits.imagesAt ? r.limits.imagesAt[params().resolution || r.resDef] : null;
+    return at != null ? Math.min(at, r.limits.images || 0) : ((r && r.limits.images) || 0);
+  };
   const _picRoom = (r) => {
     if (_mcSteps()) return _frameRoom();
-    const n = Math.max(0, ((r && r.limits.images) || 0) - _seat());
+    const n = Math.max(0, _imgCap(r) - _seat());
     return _seat() ? Math.min(n, _boardCap()) : n;
   };
   function _room() {
@@ -992,7 +1004,7 @@ function VIDEOS(ctx) {
     if (n > _picRoom(r)) {
       return ['Too many pictures.', _seat() ? 'Room for ' + _picRoom(r) + ': the storyboard goes to ' + m.label + ' as one more picture, and it is drawn with these.'
         : _mcSteps() ? 'Up to ' + _picRoom(r) + ' - the still of the clip is the picture model\'s other reference.'
-          : m.label + ' on ' + r.aggLabel + ' takes ' + (L.images || 0) + '.'];
+          : m.label + ' on ' + r.aggLabel + ' takes ' + _imgCap(r) + (_imgCap(r) < (L.images || 0) ? ' at ' + (params().resolution || r.resDef) : '') + '.'];
     }
     // (phase V7) Clips and sounds: as many as the model takes, each with a part it takes.
     const vi = _clips(), au = _sounds();

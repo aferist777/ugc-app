@@ -503,6 +503,11 @@ let _writeAt = 0;                         // ...since when (N3)
 // How fast they leave is the SERVER's business now (phase X1): one a second, and it does not wait
 // for any of them. The page only asks for the list and follows the rows.
 
+// What a clip of a read this long costs (phase V10.2): kie bills Kling avatar by the WHOLE seconds, rounded down - a read
+// of 7.97 s was billed 7 s (V10.1).
+const _billSecs = (dur) => Math.max(1, Math.floor((+dur || 0) + 0.001));
+const _clipCost = (dur, tier) => (tier ? _billSecs(dur) * tier.pricePerSec : 0);
+
 // Can this line be clipped at all, and what would it cost? The same ladder the server refuses by
 // (routes/scen3.js, _clipPlan), so the page never asks for what will be turned down.
 function _clipReady(p, l, i) {
@@ -512,7 +517,7 @@ function _clipReady(p, l, i) {
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
   if (take.dur > _ceiling()) return null;
-  return { dur: take.dur, cost: tier ? take.dur * tier.pricePerSec : 0 };
+  return { dur: take.dur, cost: _clipCost(take.dur, tier) };
 }
 function _clipWork(p, lines) {
   const out = [];
@@ -1086,7 +1091,7 @@ function _chainEstimate(p, lines, w) {
     const dur = readNow ? take.dur : ((take && take.dur) || _readChars(l) / CHARS_PER_SEC);
     if (dur > ceiling) { tooLong++; continue; }
     later++;
-    laterCost += tier ? dur * tier.pricePerSec : 0;
+    laterCost += _clipCost(dur, tier);
     only.add(i);
   }
   return { now: now.length, nowCost: now.reduce((a, x) => a + x.cost, 0), later, laterCost, tooLong, chars, only };
@@ -2321,8 +2326,8 @@ function _clipCol(p, l, i, rs, take) {
   else if (!fr) cap = 'make the frames first';
   else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
-  else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(take.dur * tier.pricePerSec) : '…'); }
-  const price = ready && tier ? _money(take.dur * tier.pricePerSec) : '';
+  else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
+  const price = ready && tier ? _money(_clipCost(take.dur, tier)) : '';
   // The one paid press in a fragment: the price first, the clip on the second press.
   const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
     busy ? 'making…' : _armedClip === i ? price + '?' : c ? 'again' : 'make clip');
@@ -2334,7 +2339,7 @@ function _clipCol(p, l, i, rs, take) {
   make.title = !ready ? cap
     : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
       + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
-      + take.dur.toFixed(1) + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
+      + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
   make.addEventListener('click', () => {
     if (_armedClip !== i) { _armedClip = i; _ctx.repaint(); return; }
     _armedClip = -1;
