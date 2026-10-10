@@ -59,6 +59,8 @@ function VIDEOS(ctx) {
     return recOf(m, _set && _set.agg.value) || recOf(m, _last.agg[m.id]) || recOf(m, m.defaultAgg) || m.records[0];
   }
   const params = () => { const m = model(); return (m && _last.params[m.id]) || {}; };
+  // (phase V10.2) Seedance's sound beside a clip: 'clip' (the default - laid under), 'on' (its own) or 'off'.
+  const _clipSoundOf = (p) => (['clip', 'on', 'off'].includes(p.clipSound) ? p.clipSound : 'clip');
   function setParam(k, v) {
     const m = model();
     if (!m) return;
@@ -529,13 +531,16 @@ function VIDEOS(ctx) {
     if (fam === 'seedance') {
       // (phase V7.4, the owner's answer 4) With a clip attached the sound can be the CLIP's: Seedance makes none, and the
       // clip's part is laid under the video when it lands.
+      // (phase V10.2, the owner 2026-10-10) With a clip the clip's sound is the DEFAULT: Seedance with its own sound beside a
+      // reference clip said the clip's words over again (V10.1 No 6). The choice beside a clip is remembered on its own
+      // (`clipSound`), so "with sound" chosen for words alone does not turn it back.
       const withClip = _takes('video') && _clips().length > 0;
       const opts = [{ value: 'on', text: withClip ? 'the model\'s sound' : 'with sound' }];
       if (withClip) opts.push({ value: 'clip', text: 'the clip\'s sound' });
       opts.push({ value: 'off', text: 'silent' });
-      const now = withClip && p.sound === 'clip' ? 'clip' : (p.sound === 'clip' || p.audio !== false ? 'on' : 'off');
-      const sel = _select('mv3-vc-audio', withClip ? 'Seedance makes its own sound - or the first clip\'s sound is laid under the video when it lands' : 'Seedance makes its own sound',
-        opts, now, (v) => { setParam('audio', v === 'on'); setParam('sound', v === 'clip' ? 'clip' : ''); });
+      const now = withClip ? _clipSoundOf(p) : (p.audio !== false ? 'on' : 'off');
+      const sel = _select('mv3-vc-audio', withClip ? 'With a clip, the first clip\'s sound is laid under the video when it lands - Seedance\'s own sound would say the clip\'s words over again' : 'Seedance makes its own sound',
+        opts, now, (v) => { if (withClip) setParam('clipSound', v); else setParam('audio', v === 'on'); });
       _row(box, 'sound', sel);
       if (!_skill) {
         // (phase V16) Chosen first, even before a picture: the zone lays out the frames' places for it.
@@ -550,6 +555,12 @@ function VIDEOS(ctx) {
       _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
         { value: 'video', text: 'as in the clip (up to 30 s)' }, { value: 'image', text: 'as on the picture (up to 10 s)' },
       ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); }));
+      // (phase V10.2) Whose background: the picture's, always - Kling puts the moves into the picture's place (V10.1 No 11,
+      // 12; kie's "keep the clip's room" for 3.0 came back on the picture's background too). Said, not chosen.
+      const bg = _select('mv3-vc-bg', 'Kling puts the moves into your picture\'s place - the room of the clip does not come along. For another place, keep the writer on: it draws the first frame with your character there.',
+        [{ value: 'image', text: 'from your picture' }], 'image', () => {});
+      bg.disabled = true;
+      _row(box, 'background', bg);
       // The clip's sound: Replicate's Kling keeps it itself; on kie it is laid under the video when it lands (V7.4).
       _row(box, 'sound', _select('mv3-vc-keep', r.keepSound ? 'The clip\'s own sound - Kling keeps it' : 'The clip\'s own sound - laid under the video when it lands',
         [{ value: 'on', text: 'keep the clip\'s sound' }, { value: 'off', text: 'silent' }],
@@ -1044,9 +1055,11 @@ function VIDEOS(ctx) {
     };
     const fmt = (Store.timeline() || {}).format || '9:16';
     // (phase V7.4) Seedance's sound from the clip: its own off, the first clip's part laid under when it lands - only
-    // while a clip goes with it (remembered otherwise, and the model's own sound stands in).
-    const clipSound = fam === 'seedance' && p.sound === 'clip'
+    // while a clip goes with it. (phase V10.2) Beside a clip that is the default, and the choice there is its own.
+    const withClip = fam === 'seedance'
       && (cardMedia ? cardMedia.some(a => a && a.kind === 'video') : atts.some(a => _kind(a) === 'video'));
+    const besideClip = withClip ? _clipSoundOf(p) : '';
+    const clipSound = besideClip === 'clip';
     return {
       model: m.id, agg: r.agg,
       // (phase V15) The column's 中文: the written prompt goes in Chinese (Seedance; the server checks the model too).
@@ -1060,7 +1073,7 @@ function VIDEOS(ctx) {
         duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
-        audio: clipSound ? false : (p.sound === 'clip' || p.audio !== false), sound: clipSound ? 'clip' : '',
+        audio: besideClip ? besideClip === 'on' : p.audio !== false, sound: clipSound ? 'clip' : '',
         mode: p.mode || 'normal', orientation: p.orientation || 'video', keepSound: p.keepSound !== false,
       },
       media: atts.map((a) => Object.assign({
