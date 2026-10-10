@@ -296,6 +296,38 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
   }
 });
 
+// ── `ideas` (the owner, 2026-10-10: "a button to analyse both pictures and offer variants") ──
+// The agent looks at what is in the zone - the person's sheet, the place, a prop - and answers five frames in words, as a
+// message of the thread; each is a press away from the message box. Seconds and fractions of a cent: no Alerts row.
+router.post('/scen3/fchat/ideas', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { key, id, proj } = _projectOf(b);
+    if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
+    const roles = refs.map((x, i) => (ROLES.includes(String((b.roles || [])[i] || '')) ? String(b.roles[i] || '') : ''));
+    if (!roles.includes('character') && !roles.includes('place')) return res.status(400).json({ success: false, error: 'put the person or the place above the box first' });
+    for (let i = 0; i < refs.length; i++) {
+      const abs = toDiskExisting(refs[i]);
+      if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
+    }
+    // The frame being changed and the other pictures are not what ideas are about: the person, the place, the props.
+    const keep = refs.map((p, i) => i).filter(i => ['character', 'place', 'prop'].includes(roles[i]));
+    const facts = SCEN().fchatFacts(id, String(b.shot || ''));
+    let picUrls = [];
+    try { picUrls = await GENS.hostRefs(keep.map(i => refs[i])); } catch (e) { picUrls = []; }
+    const t = await AGENT.frameIdeas({ roles: keep.map(i => roles[i]), facts, picUrls });
+    if (!t.ideas) return res.status(502).json({ success: false, error: t.fail || 'no ideas came back' });
+    const media = keep.map(i => ({ path: refs[i], kind: 'image', role: roles[i], label: roles[i] }));
+    const m = CHAT.add({ project: key, kind: KIND, role: 'agent', text: 'Ideas for a frame - press one to put it into the box.', refs: media.map(a => a.path), media, ideas: t.ideas });
+    res.json({ success: true, id: m.id, ideas: t.ideas });
+  } catch (e) {
+    console.error('[fchat/ideas]', e.message);
+    if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // `to frames`: a frame of this chat into the project's set - it joins the pool like any frame.
 router.post('/scen3/fchat/to-set', async (req, res) => {
   try {

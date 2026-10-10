@@ -883,3 +883,18 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-attsrow > .mv3-ig-atts{ flex:1 1 auto; min-width:0; border-top:0 }
 /* An almanac still to come: in its place, dimmed, not pressable. */
 .mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ opacity:.45; cursor:default; background:var(--surface-2); color:var(--ink) }
+/* The frames chat's `ideas` (phase V26.5): right of the places above the box, in gold; its answer a list to press. */
+.mv3-fc-ideas{
+  flex:0 0 auto; align-self:center; margin:0 10px 0 4px; height:28px; padding:0 12px; cursor:pointer;
+  border:1px solid var(--gold); border-radius:var(--r-xs); background:transparent; color:var(--gold);
+  font:700 10px/26px var(--font); letter-spacing:.06em; text-transform:uppercase;
+}
+.mv3-fc-ideas:hover{ background:color-mix(in oklch, var(--gold) 16%, transparent) }
+.mv3-fc-ideas:disabled{ opacity:.6; cursor:default }
+.mv3-fc-ideaslist{ display:flex; flex-direction:column; gap:5px; margin-top:6px }
+.mv3-fc-idea{
+  display:block; width:100%; text-align:left; padding:6px 9px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
+  font:500 11px/1.4 var(--font);
+}
+.mv3-fc-idea:hover{ border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, var(--surface-2)) }

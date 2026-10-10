@@ -1175,6 +1175,11 @@ export function createChat(make) {
       const c = S.cardBubble(m, progs);
       if (c) return c;
     }
+    // (phase V26.5) Any other message a description draws itself - the frames chat's ideas.
+    if (typeof S.bubble === 'function') {
+      const c = S.bubble(m, progs);
+      if (c) return c;
+    }
     const b = el('div', 'mv3-ig-msg is-' + (m.role === 'user' ? 'user' : 'agent'));
     // (phase V18.3) What was asked, at the head of the answer - the description draws it.
     if (m.role !== 'user' && typeof S.askedHead === 'function') {

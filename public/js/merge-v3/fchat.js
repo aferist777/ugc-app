@@ -299,6 +299,48 @@ function FRAMES(ctx) {
     ctx.reload();
   }
 
+  // ── `ideas` (the owner, 2026-10-10): right of the places above the box ──
+  // The agent looks at the person's sheet, the place and the props in the zone and answers five frames in words, as a
+  // message of the thread; a press on one puts it into the box. In English (the owner's answer (e)).
+  let _ideasBtn = null;
+  function _ideasSide() {
+    const b = el('button', 'mv3-fc-ideas', 'ideas');
+    b.type = 'button';
+    b.title = 'The agent looks at the person and the place above the box (and a prop) and offers five frames in words - press one to put it into the box. Fractions of a cent.';
+    b.addEventListener('click', () => _askIdeas(b));
+    _ideasBtn = b;
+    return [b];
+  }
+  async function _askIdeas(b) {
+    const k = ctx.key();
+    if (!k || b.disabled) return;
+    const atts = ctx.atts();
+    if (!atts.some(a => a.slot === 'character' || a.slot === 'place')) { note(b, 'Nothing to look at.', 'Put the person or the place above the box first.'); return; }
+    b.disabled = true;
+    b.textContent = 'thinking…';
+    const d = await _post('/api/scen3/fchat/ideas', {
+      project: k, projectId: (_proj && _proj.id) || '', refs: atts.map(a => a.path), roles: atts.map(a => a.slot || ''), shot: _shot,
+    });
+    b.disabled = false;
+    b.textContent = 'ideas';
+    if (!d || !d.success) { note(b, 'No ideas.', (d && d.error) || 'the server did not answer'); return; }
+    ctx.reload(true);
+  }
+  function _ideasBubble(m) {
+    const box = el('div', 'mv3-ig-msg is-agent mv3-fc-ideasmsg');
+    box.appendChild(el('div', 'mv3-ig-text', m.text || 'Ideas for a frame'));
+    const list = el('div', 'mv3-fc-ideaslist');
+    for (const idea of m.ideas) {
+      const it = el('button', 'mv3-fc-idea', idea);
+      it.type = 'button';
+      it.title = 'Put it into the message box - change it as you like, then send';
+      it.addEventListener('click', () => { ctx.setText(idea); const ui = ctx.ui(); if (ui) ui.ta.focus(); });
+      list.appendChild(it);
+    }
+    box.appendChild(list);
+    return box;
+  }
+
   // The sig of a card for the shell: what it IS - never the text being typed into it.
   const _cardSig = (m) => {
     const c = m.card || {};
@@ -348,6 +390,8 @@ function FRAMES(ctx) {
     // The writer's message is the description's to draw; the shell keeps the thread reading while one is being written.
     cardBubble: _cardBubble,
     cardSig: _cardSig,
+    bubble: (m) => (Array.isArray(m.ideas) && m.ideas.length ? _ideasBubble(m) : null),
+    attsSide: _ideasSide,
     busy: (thread) => thread.some(m => m.card && m.card.state === 'writing'),
     onThread: (thread) => {
       for (const m of thread) { const l = _live.get(m.id); if (l && l.steps && m.card) { l.m = m; _paintCard(l); } }
