@@ -48,6 +48,7 @@ import { setOpenColumn } from './layout.js';
 import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
+import * as LK from '../library/links.js';
 import { askDelete, closeAsk, note } from './ask.js';
 
 const POLL_MS = 4000;
@@ -639,6 +640,7 @@ export function createChat(make) {
     if (!_ui) return;
     const host = _ui.atts;
     host.textContent = '';
+    _linkShown = false;
     const z = _zone();
     host.classList.toggle('is-zone', !!z);
     if (!z) {
@@ -852,6 +854,15 @@ export function createChat(make) {
     c.dataset.slot = key;
     if (must) c.classList.add('is-req');
     if (dim) { c.classList.add('is-off'); b.disabled = true; return c; }
+    // (phase V27) The place a clip by a link goes into: how far it is, instead of "+".
+    if (_linking && !_linkShown && !_linking.target && _linking.kind === p.kind && (_linking.slot == null || _linking.slot === key)) {
+      _linkShown = true;
+      c.classList.add('is-linking');
+      b.textContent = _linking.text;
+      b.title = 'A clip by a link is coming in here';
+      b.disabled = true;
+      return c;
+    }
     b.addEventListener('click', () => {
       if (S.pick) { _openPick(p, s); return; }
       const input = _fileOf(p.kind);
@@ -886,6 +897,14 @@ export function createChat(make) {
     c.dataset.kind = p.kind;
     c.dataset.slot = (s && s.key) || '';
     c.dataset.hole = h.id;
+    // (phase V27) The numbered place a clip by a link goes into says how far it is.
+    if (_linking && _linking.target === h) {
+      _linkShown = true;
+      c.classList.add('is-linking');
+      go.textContent = _linking.text;
+      go.title = 'A clip by a link is coming in here';
+      go.disabled = true;
+    }
     return c;
   }
 
@@ -938,6 +957,11 @@ export function createChat(make) {
         accepts: (f) => !!(U && U.ok(f)),
         drop: (files) => _upload(files),
       },
+      // (phase V27) A clip by a link, where the description takes them (`S.links`: { video: true }).
+      link: (S.links && S.links[kind]) ? {
+        hint: 'At the best quality there is, without a login - into Uploads, in this project\'s category, and into this place.',
+        add: (url) => _linkIn(url, kind),
+      } : null,
       onClose: () => {
         _picking = false;
         _pickAt = null;
@@ -995,6 +1019,68 @@ export function createChat(make) {
       e.preventDefault();
       row.scrollLeft += e.deltaY;
     }, { passive: false });
+  }
+
+  // ── A clip by a link (phase V27, the owner 2026-10-12) ──────────────────────
+  // Into the place the picker is open on: the server downloads it (lib/link-queue.js - the best there is, no login) into
+  // Uploads, in the project's category, as this chat's own upload files a clip, and it is attached the moment it is in.
+  // Meanwhile the empty place it goes into says how far (`_linking`, painted by _empty / _holeCell) and the line over the
+  // box the rest; a send waits for it as for an upload. One at a time. Resolves with what to say when it did not come
+  // or did not go into its place ('' - it did).
+  let _linking = null;          // { kind, slot, target, text } while a link comes in
+  let _linkShown = false;       // its place painted already in this paint
+
+  function _linkIn(url, kind) {
+    if (_linking) return Promise.resolve('One link is coming in already - wait for it.');
+    if (_picking && _pickAt && _pickLeft() < 1) return Promise.resolve('This place has no room.');
+    const at = _pickAt ? { kind, slot: _pickAt.slot, target: _pickAt.target && _pickAt.target.hole ? _pickAt.target : null }
+      : { kind, slot: null, target: null };
+    _linking = Object.assign(at, { text: 'reading…' });
+    _made = true;
+    _paintAtts();
+    const run = (async () => {
+      let job = null;
+      try {
+        const jobs = await LK.addLinks([url], { from: 'chat', project: _key || '' });
+        const end = await LK.follow([jobs[0].id], (list) => { if (list[0]) _linkTick(list[0]); });
+        job = end[0] || null;
+      } catch (e) { job = { state: 'error', error: e.message }; }
+      const was = _linking;
+      _linking = null;
+      if (job && job.state === 'done' && job.items && job.items[0]) {
+        const U = _U(kind);
+        const it = job.items[0];
+        const att = U && typeof U.att === 'function' ? U.att(it) : { path: it.videoPath, name: it.name };
+        _say('');
+        _attach(att.path, att.name, Object.assign({}, att, { kind }, typeof was.slot === 'string' && was.slot ? { slot: was.slot } : {}));
+        _loadCats();
+        if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '');
+        if (_atts.some(a => a.path === att.path)) return '';
+        // On the shelf, but the zone did not take it - the model's rules said why, over the box.
+        const said = (_ui && _ui.said && _ui.said.textContent) || 'this place did not take it';
+        return 'In Uploads, but not in its place: ' + said;
+      }
+      if (_ui) _paintAtts();
+      const why = job && job.state === 'stopped' ? 'stopped' : ((job && job.error) || 'it could not be added');
+      _say('Not added: ' + why);
+      return 'Not added: ' + why;
+    })();
+    const all = Promise.all([_uploading, run]);
+    _uploading = all;
+    all.finally(() => { if (_uploading === all) _uploading = null; });
+    return run;
+  }
+
+  // How far, in its place (the percent) and over the box (the rest) - the place changed where it is, the zone not
+  // painted again every second.
+  function _linkTick(j) {
+    if (!_linking) return;
+    const step = String(j.step || '');
+    const pct = /(\d+)%/.exec(step);
+    _linking.text = pct ? pct[1] + '%' : /join/i.test(step) ? 'joining…' : /shelf/i.test(step) ? 'filing…' : 'reading…';
+    const c = _ui && _ui.atts ? _ui.atts.querySelector('.is-linking .mv3-ig-att-slot, .is-linking .go') : null;
+    if (c) c.textContent = _linking.text;
+    _say('link: ' + LK.shortStep(step));
   }
 
   // ── Bringing files in from this computer ──────────────────────────────────

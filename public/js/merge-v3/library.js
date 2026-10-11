@@ -40,6 +40,7 @@ import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
 import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
+import * as LK from '../library/links.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
@@ -395,13 +396,12 @@ function _plusTile() {
   b.textContent = '+';
   b.title = _isImages()
     ? 'Add a picture to images - from this computer, or made here'
-    : 'Add video files to ' + _tab + ' - click, or drop files anywhere on this panel';
+    : 'Add videos to ' + _tab + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
-    // Pictures can be MADE as well as found, so on that shelf the plus asks which. On the
-    // others there is one answer, and a menu with one item is a click nobody asked for.
-    if (_isImages()) _plusMenu(b);
-    else _pickFiles();
+    // Pictures can be MADE as well as found, and a clip can come by a LINK as well as a file (phase V27), so the plus
+    // asks which - on every shelf now.
+    _plusMenu(b);
   });
   return b;
 }
@@ -448,9 +448,15 @@ function _plusMenu(anchor) {
     el.appendChild(b);
   };
 
-  item('load from local', 'pictures from this computer', _pickFiles);
-  // The pictures chat, in this panel's place (phase J).
-  item('generate', 'make one with a model', () => openPictures());
+  if (_isImages()) {
+    item('load from local', 'pictures from this computer', _pickFiles);
+    // The pictures chat, in this panel's place (phase J).
+    item('generate', 'make one with a model', () => openPictures());
+  } else {
+    item('load from local', 'video files from this computer', _pickFiles);
+    // (phase V27) A clip by a link - the field opens where the menu was.
+    item('from a link', 'YouTube, TikTok, Instagram and other sites', () => _linkBox(anchor));
+  }
 
   // Fixed to the viewport and parked on the body: the panel scrolls and clips its own
   // children, and the grid is the thing being scrolled.
@@ -467,6 +473,102 @@ function _plusMenu(anchor) {
   _plus = { el, away, layer };
   document.addEventListener('mousedown', away, true);
   window.addEventListener('scroll', _closePlus, true);
+}
+
+// ── By a link (phase V27) ───────────────────────────────────────────────────
+// The field under the plus, where its menu was: paste, Enter or "add". The server downloads it (lib/link-queue.js) into
+// the shelf open now, as a file brought in; the panel's status line says how far, with a cross that stops it.
+function _linkBox(anchor) {
+  if (_plus) _closePlus();
+  const el = document.createElement('div');
+  el.className = 'mv3-plus-menu mv3-link-box';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = 'a link - YouTube, TikTok, Instagram…';
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.className = 'mv3-link-go';
+  go.textContent = 'add';
+  const row = document.createElement('div');
+  row.className = 'mv3-link-row';
+  row.appendChild(inp);
+  row.appendChild(go);
+  el.appendChild(row);
+  const note = document.createElement('small');
+  note.textContent = 'Into ' + _tab + ', at the best quality, without a login - one link, or several separated by spaces.';
+  el.appendChild(note);
+  const add = () => {
+    const urls = LK.parseLinks(inp.value);
+    if (!urls.length) { note.textContent = 'That is not a link.'; note.classList.add('is-bad'); return; }
+    _closePlus();
+    _addLinks(urls);
+  };
+  go.addEventListener('click', (e) => { e.stopPropagation(); add(); });
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, r.left))) + 'px';
+  const below = r.bottom + 4;
+  el.style.top = Math.round(below + h <= window.innerHeight - 6 ? below : Math.max(6, r.top - h - 4)) + 'px';
+  const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closePlus(); };
+  const layer = Layers.open(el, { modal: false, name: 'add by a link', onEsc: _closePlus });
+  _plus = { el, away, layer };
+  document.addEventListener('mousedown', away, true);
+  window.addEventListener('scroll', _closePlus, true);
+  setTimeout(() => inp.focus(), 0);
+}
+
+let _linking = null;      // { ids, total, kind, landed } while links come in
+
+// The status line with a cross that stops the link coming in.
+function _linkStatus(text, runId) {
+  _status(text);
+  const el = document.getElementById('mv3-lib-status');
+  if (!el || !runId) return;
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'mv3-lib-stop';
+  x.textContent = '✕';
+  x.title = 'Stop this download';
+  x.addEventListener('click', () => LK.stopLink(runId));
+  el.appendChild(x);
+}
+
+async function _addLinks(urls) {
+  if (_isImages()) return;
+  let jobs;
+  try { jobs = await LK.addLinks(urls, { kind: _tab, from: 'merge' }); }
+  catch (e) { _status(e.message, true); return; }
+  if (_linking) { _linking.ids.push(...jobs.map(j => j.id)); _linking.total += jobs.length; return; }
+  _linking = { ids: jobs.map(j => j.id), total: jobs.length, landed: new Set(), reading: null };
+  let ended = [];
+  for (;;) {
+    const ids = _linking.ids.slice();
+    ended = await LK.follow(ids, (list) => {
+      const done = list.filter(j => !LK.isLive(j)).length;
+      const run = list.find(j => j.state === 'running');
+      const fresh = list.filter(j => j.state === 'done' && !_linking.landed.has(j.id));
+      if (fresh.length) {
+        fresh.forEach(j => _linking.landed.add(j.id));
+        // Filed with no category: a category filter would hide what just came in.
+        if (_cat) { _cat = ''; try { localStorage.setItem(catKey(_tab), ''); } catch (e2) { /* private */ } }
+        _linking.reading = _load();
+      }
+      if (run) _linkStatus('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step), run.id);
+    });
+    if (_linking.ids.length === ids.length) break;
+  }
+  if (_linking.reading) await _linking.reading.catch(() => {});
+  const ok = ended.filter(j => j.state === 'done');
+  const bad = ended.filter(j => j.state === 'error');
+  const stopped = ended.filter(j => j.state === 'stopped').length;
+  const clips = ok.reduce((n, j) => n + (j.items || []).length, 0);
+  _linking = null;
+  _status(!bad.length && !stopped ? (clips + ' added')
+    : (ok.length + ' of ' + ended.length + ' added' + (stopped ? ' · ' + stopped + ' stopped' : '') + (bad.length ? ' - ' + bad[0].error : '')),
+  !!bad.length);
 }
 
 function _paint() {
@@ -584,7 +686,13 @@ const _hasFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || 
 function _wireDrop() {
   const panel = document.getElementById('mv3-library');
   if (!panel) return;
+  // (phase V27) A LINK let go over the shelf (dragged out of a browser) comes in as a clip of the shelf open - not over a
+  // chat or the captions, which take nothing of the kind, and not on Images.
+  // A tile of this panel being dragged to a lane is not a link, whatever else the browser put on it.
+  const linkHere = (e) => LK.dragHasLink(e.dataTransfer) && ![...e.dataTransfer.types].includes(DRAG_TYPE)
+    && !_isImages() && !Views.isChat() && !Views.isCaptions();
   panel.addEventListener('dragover', (e) => {
+    if (!_hasFiles(e) && linkHere(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; panel.classList.add('is-drop'); return; }
     if (!_hasFiles(e)) return;
     e.preventDefault();
     // A chat takes its own drops - as attachments, filed once (js/merge-v3/chat-shell.js). A file
@@ -602,6 +710,14 @@ function _wireDrop() {
     if (!e.relatedTarget || !panel.contains(e.relatedTarget)) panel.classList.remove('is-drop');
   });
   panel.addEventListener('drop', (e) => {
+    if (!_hasFiles(e) && linkHere(e)) {
+      const urls = LK.linksIn(e.dataTransfer);
+      if (!urls.length) return;
+      e.preventDefault();
+      panel.classList.remove('is-drop');
+      _addLinks(urls);
+      return;
+    }
     if (!_hasFiles(e)) return;
     e.preventDefault();
     if (Views.isChat() || Views.isCaptions()) return;

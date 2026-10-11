@@ -2362,6 +2362,9 @@ function VIDEOS(ctx) {
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),
     },
+    // (phase V27) A clip comes by a link too - the picker's "from a link", into Uploads in the project's category and into
+    // its place, as a clip from this computer (chat-shell.js _linkIn, lib/link-queue.js).
+    links: { video: true },
     // (phase V7) Each kind through its own door, filed under the project's category: pictures into Images, clips into
     // Uploads, sounds onto the Sounds shelf - and straight into their part of the zone.
     uploads: {

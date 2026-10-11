@@ -65,6 +65,7 @@ export const pickOpen = () => !!_w;
  *             of the place, when it is one that is there ('' - "N more go here")
  *   press(it) attach it, or take it off; why(it) why it cannot go ('' - it can)
  *   computer  { word, hint, open(), accepts(file), drop(files), lands } - `lands` is the source a file goes to
+ *   link      (phase V27) { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
  *   onClose()
  */
 export function openPick(o) {
@@ -243,6 +244,35 @@ function _paintSources() {
   up.addEventListener('click', () => c.open());
   S.appendChild(up);
   S.appendChild(el('div', 'pk-up-note', (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.'));
+  // (phase V27) A clip by a link, where the description takes one (`link`): the server downloads it and it goes into
+  // this place - the place says how far meanwhile.
+  const L = _o.link;
+  if (!L) return;
+  S.appendChild(el('div', 'pk-lab', 'from a link'));
+  const row = el('div', 'pk-link');
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = 'YouTube, TikTok, Instagram…';
+  const b = el('button', 'pk-link-go', 'add');
+  b.type = 'button';
+  row.appendChild(inp);
+  row.appendChild(b);
+  S.appendChild(row);
+  const said = el('div', 'pk-up-note', L.hint || '');
+  S.appendChild(said);
+  const go = async () => {
+    const url = inp.value.trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) { said.textContent = 'That is not a link.'; return; }
+    inp.value = '';
+    b.disabled = true;
+    said.textContent = 'Coming in - its place says how far.';
+    const why = await L.add(url);
+    if (!_w || !said.isConnected) return;
+    b.disabled = false;
+    said.textContent = why || 'In, and in its place.';
+  };
+  b.addEventListener('click', go);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
 }
 
 const _memoKey = () => (_o.project.key || '') + '|' + _st.src;
