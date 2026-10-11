@@ -249,6 +249,8 @@ function _mediaShelf() {
       trimmable: _canTrim(e, _isUpload(e) ? 'uploads' : 'birols'), trimmed: e.trimmed || null,
       // (phase V7) The video chat's column lays a clip out at its own shape.
       w: +e.w || 0, h: +e.h || 0,
+      // (phase V27) Where it came from, when it came by a link; the viewer shows it.
+      link: e.link || '',
     },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
@@ -269,7 +271,7 @@ function _mediaShelf() {
     // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
             hookId: hookIds[String(h.videoPath || '').split('?')[0]] || null,
-            trimmable: _canTrim(h, 'hooks'), trimmed: h.trimmed || null },
+            trimmable: _canTrim(h, 'hooks'), trimmed: h.trimmed || null, link: h.link || '' },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -1473,64 +1475,76 @@ router.post('/library/dupes/clean', (_req, res) => {
 // so a clip you just added is the first card you see.
 router.post('/library/media/record', (req, res) => {
   try {
-    const { videoPath, thumbPath, name, refImage, prompt, categoryLabel } = req.body || {};
-    if (!videoPath || !_onDisk(videoPath)) return res.status(400).json({ success: false, error: 'videoPath must be a file that exists' });
-    // Which kind the clip is filed as follows what the page had open, so uploading while
-    // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
-    // means, and it is where a file you brought in belongs when nothing says otherwise.
-    const kind = ['birols', 'uploads', 'hooks'].includes(String((req.body || {}).kind)) ? String(req.body.kind) : 'uploads';
-    const store = RECORD_STORES[kind];
-    const list = store.read();
-    if (list.some(e => e && e.videoPath === videoPath)) return res.status(409).json({ success: false, error: 'already on the shelf' });
-    const rec = {
-      id: 'lib' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name: String(name || '').trim().slice(0, 120) || String(videoPath).split('/').pop(),
-      prompt: '',
-      videoPath,
-      thumbPath: thumbPath || null,
-      date: new Date().toISOString(),
-    };
-    // Hooks records carry only the basics; an archive record has the generator's fields
-    // too, and `source` is what makes it read as an upload rather than a birol.
-    if (kind !== 'hooks') {
-      Object.assign(rec, { imagePath: thumbPath || null, categoryId: '', categoryLabel: '', status: 'done' });
-      if (kind === 'uploads') rec.source = 'upload';
-    }
-    // FILED UNDER A NAME, not an id. The caller knows it wants "grok-imagine" and has no way
-    // to know which id that resolved to - and LC.add is idempotent by label, handing back the
-    // existing chip rather than making a second one with the same name, so asking for it every
-    // time is the same as asking whether it exists. Hooks have no category machinery.
-    if (categoryLabel && kind !== 'hooks') {
-      try {
-        const { cat } = LC.add(kind === 'uploads' ? 'uploads' : kind, String(categoryLabel));
-        rec.categoryId = cat.id;
-        rec.categoryLabel = cat.label;
-      } catch (e) { console.warn('[media/record] category', categoryLabel, 'failed:', e.message); }
-    }
-    // WHERE IT CAME FROM. A clip animated out of a still keeps a path back to that picture,
-    // so the viewer can show what it was made from - a generated 6 seconds is very hard to
-    // place months later, and the reference frame is the one thing that identifies it.
-    // Only set when given: every other way of filing a record leaves it absent.
-    if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
-    if (prompt) rec.prompt = String(prompt).slice(0, 2000);
-    // CAN BE TRIMMED ONCE. Only a file somebody brought in by hand - the upload flow says so -
-    // and only until it has been trimmed; a generated clip is trimmed on the timeline instead,
-    // without its file ever being rewritten. See POST /library/item/:kind/:id/trim.
-    if ((req.body || {}).trimmable === true) rec.trimmable = true;
-    list.unshift(rec);
-    store.write(list);
-    // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
-    // category's folder, and anything already pointing at it - a take already on a timeline -
-    // follows (lib/shelf-files.js).
-    SHELF.placeRecords([{ kind, rec }]);
-    const item = store.read().find(e => e && e.id === rec.id) || rec;
-    // On the shelf means it can land on a lane: its preview proxy is queued now, and a
-    // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
-    try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
-    if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
+    const { item, kind } = _fileRecord(req.body || {});
     res.json({ success: true, item, kind });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
+
+// The filing itself, for the route above and for a clip that came in by a link (phase V27, lib/link-queue.js): the
+// same record, the same place, the same proxy and hook number as a file brought in by hand. Throws with `status`.
+function _fileRecord(b) {
+  const _no = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
+  const { videoPath, thumbPath, name, refImage, prompt, categoryLabel } = b;
+  if (!videoPath || !_onDisk(videoPath)) throw _no(400, 'videoPath must be a file that exists');
+  // Which kind the clip is filed as follows what the page had open, so uploading while
+  // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
+  // means, and it is where a file you brought in belongs when nothing says otherwise.
+  const kind = ['birols', 'uploads', 'hooks'].includes(String(b.kind)) ? String(b.kind) : 'uploads';
+  const store = RECORD_STORES[kind];
+  const list = store.read();
+  if (list.some(e => e && e.videoPath === videoPath)) throw _no(409, 'already on the shelf');
+  const rec = {
+    id: 'lib' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: String(name || '').trim().slice(0, 120) || String(videoPath).split('/').pop(),
+    prompt: '',
+    videoPath,
+    thumbPath: thumbPath || null,
+    date: new Date().toISOString(),
+  };
+  // Hooks records carry only the basics; an archive record has the generator's fields
+  // too, and `source` is what makes it read as an upload rather than a birol.
+  if (kind !== 'hooks') {
+    Object.assign(rec, { imagePath: thumbPath || null, categoryId: '', categoryLabel: '', status: 'done' });
+    if (kind === 'uploads') rec.source = 'upload';
+  }
+  // FILED UNDER A NAME, not an id. The caller knows it wants "grok-imagine" and has no way
+  // to know which id that resolved to - and LC.add is idempotent by label, handing back the
+  // existing chip rather than making a second one with the same name, so asking for it every
+  // time is the same as asking whether it exists. Hooks have no category machinery.
+  if (categoryLabel && kind !== 'hooks') {
+    try {
+      const { cat } = LC.add(kind === 'uploads' ? 'uploads' : kind, String(categoryLabel));
+      rec.categoryId = cat.id;
+      rec.categoryLabel = cat.label;
+    } catch (e) { console.warn('[media/record] category', categoryLabel, 'failed:', e.message); }
+  }
+  // WHERE IT CAME FROM. A clip animated out of a still keeps a path back to that picture,
+  // so the viewer can show what it was made from - a generated 6 seconds is very hard to
+  // place months later, and the reference frame is the one thing that identifies it.
+  // Only set when given: every other way of filing a record leaves it absent.
+  if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
+  if (prompt) rec.prompt = String(prompt).slice(0, 2000);
+  // CAN BE TRIMMED ONCE. Only a file somebody brought in by hand - the upload flow says so -
+  // and only until it has been trimmed; a generated clip is trimmed on the timeline instead,
+  // without its file ever being rewritten. See POST /library/item/:kind/:id/trim.
+  if (b.trimmable === true) rec.trimmable = true;
+  // (phase V27) A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
+  // spelling of it (lib/ytdlp.js info().key), so the same video is not fetched onto the shelf twice.
+  if (b.link) rec.link = String(b.link).slice(0, 2000);
+  if (b.linkKey) rec.linkKey = String(b.linkKey).slice(0, 200);
+  list.unshift(rec);
+  store.write(list);
+  // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
+  // category's folder, and anything already pointing at it - a take already on a timeline -
+  // follows (lib/shelf-files.js).
+  SHELF.placeRecords([{ kind, rec }]);
+  const item = store.read().find(e => e && e.id === rec.id) || rec;
+  // On the shelf means it can land on a lane: its preview proxy is queued now, and a
+  // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
+  try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
+  if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
+  return { item, kind };
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // CATEGORIES — one list per kind, owned by lib/library-cats.js
@@ -1695,5 +1709,8 @@ router.get('/library/counts', (_req, res) => {
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
+
+// (phase V27) The filing of a clip brought in, for one that came by a link (lib/link-queue.js).
+router.fileRecord = _fileRecord;
 
 module.exports = router;

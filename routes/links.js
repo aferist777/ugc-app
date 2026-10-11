@@ -9,10 +9,20 @@
 // Admin -> This computer shows it (public/js/admin-local.js): which yt-dlp, whose copy (the app's,
 // or the one kept current in the library's cache/yt-dlp/), and what the last check found. The
 // checks themselves run on their own (lib/ytdlp.js startChecks); the button is for "just in case".
+//
+// AND THE CLIPS THAT COME IN BY A LINK (lib/link-queue.js) - the Media shelf, Merge's Library panel, the video chat:
+//
+//   POST /api/links             { urls: [..] | url, kind, project, from } -> { jobs }   one job per link, queued
+//   GET  /api/links?ids=a,b     -> { jobs }   (every job of the last hour without ids)
+//   POST /api/links/:id/stop    -> { job }
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 const YTDLP = require('../lib/ytdlp');
+const LINKS = require('../lib/link-queue');
+
+// One press of "add" is a handful of links, not a list to crawl.
+const MAX_LINKS = 20;
 
 const router = express.Router();
 
@@ -31,6 +41,33 @@ router.get('/ytdlp', async (_req, res) => {
 router.post('/ytdlp/check', async (_req, res) => {
   try { res.json({ success: true, ...(await YTDLP.checkNow()) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/links', async (req, res) => {
+  const b = req.body || {};
+  const raw = Array.isArray(b.urls) ? b.urls : [b.url];
+  const urls = [...new Set(raw.map(u => String(u || '').trim()).filter(Boolean))];
+  if (!urls.length) return res.status(400).json({ success: false, error: 'a link is required' });
+  if (urls.length > MAX_LINKS) return res.status(400).json({ success: false, error: `at most ${MAX_LINKS} links at once` });
+  const bad = urls.find(u => !/^https?:\/\/\S+$/i.test(u));
+  if (bad) return res.status(400).json({ success: false, error: 'that is not a link: ' + bad.slice(0, 80) });
+  if (b.kind != null && !LINKS.KINDS.includes(String(b.kind)) && b.from !== 'chat') {
+    return res.status(400).json({ success: false, error: 'a clip goes to B-rolls, Uploads or Hooks' });
+  }
+  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
+  const jobs = urls.map(url => LINKS.add({ url, kind: String(b.kind || ''), project: b.project, from: b.from }));
+  res.json({ success: true, jobs });
+});
+
+router.get('/links', (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  res.json({ success: true, jobs: LINKS.list(ids) });
+});
+
+router.post('/links/:id/stop', (req, res) => {
+  const job = LINKS.stop(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'no such link' });
+  res.json({ success: true, job });
 });
 
 module.exports = router;

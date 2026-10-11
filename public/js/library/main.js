@@ -21,6 +21,7 @@ import * as MK from './make.js';
 import * as CM from './chmake.js';
 import * as MC from './makechat.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
+import * as LK from './links.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -1096,6 +1097,14 @@ function _paintUpload() {
   const inp = $('lib-file');
   if (!btn) return;
   btn.hidden = _shelf !== 'media';
+  // (phase V27) Clips come by a link too - B-rolls, Uploads, Hooks, not pictures or sounds.
+  const lk = $('lib-link');
+  if (lk) {
+    lk.hidden = !_linkKind();
+    const k = A.KINDS.find(x => x.id === _linkKind());
+    lk.title = 'Add videos from YouTube, TikTok, Instagram and other sites to ' + (k ? k.label + 's' : 'Uploads')
+      + ' - one link per line, or let a link go over the shelf';
+  }
   if (btn.hidden) return;
   // The open KIND decides what can be brought in, so on Images the picker offers pictures
   // and nothing else. Same button, same shelf - only what it accepts changes.
@@ -1117,6 +1126,62 @@ function _paintUpload() {
   const k = A.KINDS.find(x => x.id === _filter);
   btn.textContent = k ? ('Upload to ' + k.label + 's') : 'Upload';
   btn.title = 'Add video files to ' + (k ? k.label + 's' : 'Uploads');
+}
+
+// ── By a link (phase V27) ───────────────────────────────────────────────────
+// The kind a link's clip goes to, as an upload's would: the open one, Uploads on "All"; '' where no clip goes.
+function _linkKind() {
+  if (_shelf !== 'media' || _filter === 'images' || _filter === 'sounds') return '';
+  return A.KINDS.some(k => k.id === _filter) ? _filter : 'uploads';
+}
+
+let _linking = null;      // { ids, total, kind } while links are being brought in
+
+function _openLinks(prefill) {
+  const kind = _linkKind();
+  if (!kind) return;
+  const k = A.KINDS.find(x => x.id === kind);
+  LK.openLinkWindow({ where: k ? k.label + 's' : 'Uploads', prefill, onAdd: (urls) => _addLinks(urls, kind) });
+}
+
+async function _addLinks(urls, kind) {
+  let jobs;
+  try { jobs = await LK.addLinks(urls, { kind, from: 'media' }); }
+  catch (e) { _status(e.message, 'err'); return; }
+  // More while some still come in: they join the same count.
+  if (_linking) { _linking.ids.push(...jobs.map(j => j.id)); _linking.total += jobs.length; return; }
+  _linking = { ids: jobs.map(j => j.id), total: jobs.length, kind, landed: new Set() };
+  const stop = $('lib-link-stop');
+  let ended = [];
+  for (;;) {
+    const ids = _linking.ids.slice();
+    ended = await LK.follow(ids, (list) => {
+      const done = list.filter(j => !LK.isLive(j)).length;
+      const run = list.find(j => j.state === 'running');
+      // Each clip in shows on the shelf at once - the kind it went to, first.
+      const fresh = list.filter(j => j.state === 'done' && !_linking.landed.has(j.id));
+      if (fresh.length) {
+        fresh.forEach(j => _linking.landed.add(j.id));
+        if (_shelf === 'media' && _filter !== _linking.kind) _setFilter(_linking.kind, '');
+        _linking.reading = _load({ checks: true }).then(() => _counts());
+      }
+      if (stop) { stop.hidden = !run; stop.dataset.id = run ? run.id : ''; }
+      if (run) _status('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step));
+    });
+    // Links added while these came in are followed too.
+    if (_linking.ids.length === ids.length) break;
+  }
+  if (stop) stop.hidden = true;
+  // After the last read of the shelf, never before: _load() signs off with _status('') and would wipe the word.
+  if (_linking.reading) await _linking.reading.catch(() => {});
+  const ok = ended.filter(j => j.state === 'done');
+  const bad = ended.filter(j => j.state === 'error');
+  const stopped = ended.filter(j => j.state === 'stopped').length;
+  const clips = ok.reduce((n, j) => n + (j.items || []).length, 0);
+  _linking = null;
+  _status(!bad.length && !stopped ? ('Added ' + clips + (clips === 1 ? ' clip' : ' clips'))
+    : (ok.length + ' of ' + ended.length + ' added' + (stopped ? ' · ' + stopped + ' stopped' : '')
+      + (bad.length ? ' - ' + bad[0].error : '')), bad.length ? 'err' : '');
 }
 
 async function _upload(files) {
@@ -1268,6 +1333,26 @@ function boot() {
       const files = Array.from(inp.files || []);
       inp.value = '';
       _upload(files);
+    });
+  }
+  // (phase V27) By a link: the window, the stop of the one coming in, and a link let go over the shelf.
+  const lk = $('lib-link');
+  if (lk) lk.addEventListener('click', () => _openLinks(''));
+  const stop = $('lib-link-stop');
+  if (stop) stop.addEventListener('click', () => { if (stop.dataset.id) LK.stopLink(stop.dataset.id); });
+  const main = document.querySelector('.lib-main');
+  if (main) {
+    main.addEventListener('dragover', (e) => {
+      if (!_linkKind() || _makingOn || !LK.dragHasLink(e.dataTransfer)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    main.addEventListener('drop', (e) => {
+      if (!_linkKind() || _makingOn || !LK.dragHasLink(e.dataTransfer)) return;
+      const urls = LK.linksIn(e.dataTransfer);
+      if (!urls.length) return;
+      e.preventDefault();
+      _openLinks(urls.join('\n'));
     });
   }
 

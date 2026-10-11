@@ -71,6 +71,8 @@
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
+      <!-- (phase V27) Stops the link being downloaded - shown only while one is (js/library/links.js). -->
+      <button class="lib-btn lib-link-stop" type="button" id="lib-link-stop" hidden title="Stop this download">✕</button>
       <!-- Only appears when two records point at one file; says how many. -->
       <button class="lib-btn" type="button" id="lib-dupes" hidden>Duplicates</button>
       <!-- Only appears when a record points at a file that is not on disk. -->
@@ -79,6 +81,8 @@
       <button class="lib-btn" type="button" id="lib-thumbs" hidden>Thumbnails</button>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
+      <!-- (phase V27) The same clips from a link - YouTube, TikTok, Instagram... - downloaded by the server. -->
+      <button class="lib-btn" type="button" id="lib-link" hidden>From a link</button>
       <!-- accept follows the open kind: js/library/main.js narrows it to pictures on Images. -->
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
     </div>

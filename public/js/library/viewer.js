@@ -49,6 +49,14 @@ function _meta(it) {
   if (m.categoryId) rows.push(['category', m.categoryId]);
   if (m.favorite) rows.push(['favourite', 'yes']);
   if (m.date) rows.push(['date', _fmtDate(m.date)]);
+  // (phase V27) A clip that came by a link: where from, opened in the browser.
+  if (m.link) {
+    const a = document.createElement('a');
+    a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer';
+    a.title = m.link;
+    a.textContent = String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60) + (String(m.link).length > 70 ? '…' : '');
+    rows.push(['link', a]);
+  }
   rows.push(['file', String(it.media || '').split('/').pop()]);
   return rows;
 }

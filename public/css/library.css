@@ -900,6 +900,19 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .mk-pnote{ margin:0; font-size:10.5px; line-height:1.5; color:var(--muted); }
 .mk-pnote code{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:10px; }
 
+/* (phase V27) "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
+.lk-panel{ width:min(520px, 96vw); }
+.lk-ta{
+  font:12px/1.5 var(--font); color:var(--ink); resize:vertical; min-height:96px;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
+}
+.lk-ta:focus{ outline:none; border-color:var(--primary); }
+.lk-row{ display:flex; align-items:center; gap:8px; }
+.lk-row .sp{ flex:1; }
+.lk-said{ font-size:11px; color:var(--danger); }
+/* The download under way can be stopped from the status line it is told in. */
+.lib-link-stop{ padding:1px 7px; font-size:11px; line-height:1.4; }
+
 /* ── The narrators window (phase E6, js/library/narrators.js) ──────────────────
    One window, three columns: the narrators (one always selected), the selected one's samples, its
    voice. The panel, its head and the countdown rows are the generator's (mk-*). */
