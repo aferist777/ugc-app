@@ -1536,8 +1536,8 @@ function _say(text, kind, scenarioId) {
 }
 
 // ── Adding a source ─────────────────────────────────────────────────────────
-// A window on the layer stack. Two routes in: a file from this computer, or a link (locked until a
-// cookie file has been checked against YouTube). The ingest belongs to the module, not the window:
+// A window on the layer stack. Two routes in: a file from this computer, or a link (any site yt-dlp
+// reads, no login - phase V27). The ingest belongs to the module, not the window:
 // closing it leaves the ingest running, and opening it again shows the same countdown.
 let _addWin = null;
 
@@ -1575,22 +1575,12 @@ function _openAddSource() {
           <button class="lib-btn primary" type="button" data-go="file">Add and transcribe</button>
         </section>
         <section class="mk-route" data-r="link" hidden>
-          <div class="mk-lock" data-f="lock" hidden><strong>Links need a YouTube session.</strong><span data-f="why"></span></div>
           <label class="mk-field"><span>Link to a single video</span>
             <input type="text" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
+          <p class="mk-pnote">YouTube, TikTok, Instagram and the other sites yt-dlp reads, at the best quality there
+            is. Without a login: a video a site shows only to signed-in people cannot be fetched - add it as a
+            file then.</p>
           <button class="lib-btn primary" type="button" data-go="link">Fetch and transcribe</button>
-          <div class="mk-cookies">
-            <div class="mk-cookies-head"><span>Cookie file</span><span class="mk-cookies-state" data-f="ck">—</span></div>
-            <p class="mk-pnote">A <code>cookies.txt</code> export in the Netscape format, taken while signed in to
-              YouTube. It is a live session: it stays in <code>data/</code>, is never served, and deleting it
-              here revokes it.</p>
-            <div class="mk-cookies-row">
-              <input type="file" data-f="ckfile" accept=".txt,text/plain">
-              <button class="lib-btn" type="button" data-ck="upload">Upload</button>
-              <button class="lib-btn" type="button" data-ck="verify">Check against YouTube</button>
-              <button class="lib-btn danger" type="button" data-ck="delete">Delete</button>
-            </div>
-          </div>
         </section>
         <div class="mk-job" data-f="job" hidden></div>
       </div>
@@ -1607,57 +1597,11 @@ function _openAddSource() {
   q('[data-x="close"]').addEventListener('click', _closeAddSource);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) _closeAddSource(); });
   const layer = Layers.open(ov, { name: 'add a source', onEsc: _closeAddSource });
-  _addWin = { ov, layer, job, f, q, refreshLink: () => {} };
-
-  const refreshLink = async () => {
-    try {
-      const d = await J.api('/api/sources/ytdlp');
-      const ck = d.cookies || {};
-      f('ck').textContent = (!ck.present ? 'none' : ck.verified ? `checked ${J.fmtDate(ck.verifiedAt)}` : 'uploaded, not checked')
-        + (ck.expiresSoon ? ' · expires within a week' : '');
-      f('lock').hidden = !!d.linksEnabled;
-      f('why').textContent = d.why || '';
-      q('[data-go="link"]').disabled = !d.linksEnabled || !!_ingest;
-      q('[data-ck="verify"]').disabled = !ck.present;
-      q('[data-ck="delete"]').disabled = !ck.present;
-    } catch (e) {
-      f('lock').hidden = false;
-      f('why').textContent = e.message;
-      q('[data-go="link"]').disabled = true;
-    }
-  };
-  _addWin.refreshLink = refreshLink;
-  refreshLink();
+  _addWin = { ov, layer, job, f, q };
 
   q('[data-go="file"]').addEventListener('click', () => _addByFile(f('file'), f('title')));
   q('[data-go="link"]').addEventListener('click', () => _addByLink(f('url')));
-  q('[data-ck="upload"]').addEventListener('click', async () => {
-    const file = f('ckfile').files && f('ckfile').files[0];
-    if (!file) { J.sayJob(job, 'Pick the cookies.txt file first.', true); return; }
-    const form = new FormData();
-    form.append('file', file);
-    J.sayJob(job, 'Storing the cookie file…');
-    try {
-      const d = await J.api('/api/sources/cookies', { method: 'POST', body: form });
-      J.sayJob(job, `Stored — ${d.youtubeEntries} cookies for youtube.com. Now check it against YouTube.`);
-      f('ckfile').value = '';
-    } catch (e) { J.sayJob(job, e.message, true); }
-    refreshLink();
-  });
-  q('[data-ck="verify"]').addEventListener('click', async () => {
-    J.sayJob(job, 'Asking YouTube for a video, twice…');
-    try {
-      const d = await J.api('/api/sources/cookies/verify', { method: 'POST' });
-      J.sayJob(job, `Works — YouTube served "${d.sawTitle}" on ${d.attempts} attempts. Links are open.`);
-    } catch (e) { J.sayJob(job, e.message, true); }
-    refreshLink();
-  });
-  q('[data-ck="delete"]').addEventListener('click', async () => {
-    if (!confirm('Delete the cookie file? Links will be locked again.')) return;
-    try { await J.api('/api/sources/cookies', { method: 'DELETE' }); J.sayJob(job, 'Cookie file deleted.'); }
-    catch (e) { J.sayJob(job, e.message, true); }
-    refreshLink();
-  });
+  f('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addByLink(f('url')); } });
   // An ingest already running: its countdown, and no second one. One that failed while the window
   // was closed: what it said.
   if (_ingest) _showIngest();
@@ -1667,8 +1611,7 @@ function _openAddSource() {
 function _paintIngestButtons() {
   if (!_addWin) return;
   _addWin.q('[data-go="file"]').disabled = !!_ingest;
-  if (_ingest) _addWin.q('[data-go="link"]').disabled = true;
-  else _addWin.refreshLink();                     // the link button again, if links are open
+  _addWin.q('[data-go="link"]').disabled = !!_ingest;
 }
 
 function _showIngest() {

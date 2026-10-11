@@ -122,6 +122,8 @@ app.use('/api', require('./routes/settings'));
 app.use('/api', require('./routes/narrators'));
 // Sources — long videos brought in whole, transcribed, and later mined for topics.
 app.use('/api', require('./routes/sources'));
+// The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
+app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
 app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
@@ -217,6 +219,16 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // through, into the character's folder. Its store is left over in older libraries, and nothing reads it.
     try { require('fs').rmSync(require('path').join(require('./lib/config').DATA_DIR, 'pending-tasks.json'), { force: true }); }
     catch (e) { /* held open: it stays, unread */ }
+
+    // (phase V27) yt-dlp on the nightly channel, kept current: a check now and once a day (lib/ytdlp.js).
+    try { require('./lib/ytdlp').startChecks(); }
+    catch (e) { console.warn('[yt-dlp] could not start its checks:', e.message); }
+    // And no login: the YouTube cookie jar is gone (the owner, 2026-10-12). One left in an older library is a live
+    // session nothing reads any more - it goes.
+    for (const f of ['yt-cookies.txt', 'yt-cookies.json']) {
+      try { require('fs').rmSync(require('path').join(require('./lib/config').DATA_DIR, f), { force: true }); }
+      catch (e) { /* held open: it stays, unread */ }
+    }
   }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });
 

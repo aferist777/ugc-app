@@ -899,20 +899,6 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .mk-route > .lib-btn{ align-self:flex-start; }
 .mk-pnote{ margin:0; font-size:10.5px; line-height:1.5; color:var(--muted); }
 .mk-pnote code{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:10px; }
-/* The lock is the whole point of the link route: it says why, not just no. */
-.mk-lock{
-  display:flex; flex-direction:column; gap:3px; padding:8px 10px;
-  background:oklch(.3 .05 85 / .35); border:1px solid oklch(.5 .09 85);
-  border-radius:var(--r-xs); font-size:11px; color:oklch(.93 .06 85);
-}
-.mk-cookies{
-  margin-top:6px; padding:10px; display:flex; flex-direction:column; gap:7px;
-  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
-}
-.mk-cookies-head{ display:flex; align-items:center; gap:8px; font-size:10.5px; font-weight:700; color:var(--muted); }
-.mk-cookies-state{ margin-left:auto; font-weight:600; }
-.mk-cookies-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.mk-cookies-row input[type=file]{ font:11px var(--font); color:var(--muted); }
 
 /* ── The narrators window (phase E6, js/library/narrators.js) ──────────────────
    One window, three columns: the narrators (one always selected), the selected one's samples, its

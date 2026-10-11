@@ -6,6 +6,7 @@
 //   GET    /api/sources                  -> { sources: [summary] }
 //   GET    /api/sources/:id              -> { source, transcriptChars }
 //   POST   /api/sources/upload           multipart file -> { jobId, source }
+//   POST   /api/sources/link             { url } -> { jobId }   (any site yt-dlp reads, no login)
 //   POST   /api/sources/:id/transcribe   -> { jobId }
 //   POST   /api/sources/:id/topics       -> { jobId }   409 with the running job while one runs
 //   DELETE /api/sources/:id              -> { success, removed, draftsDetached }
@@ -28,7 +29,6 @@
 
 const express = require('express');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const multer = require('multer');
 
@@ -36,7 +36,6 @@ const store = require('../lib/sources-store');
 const STT = require('../lib/stt-replicate');
 const VT = require('../lib/video-thumb');
 const YTDLP = require('../lib/ytdlp');
-const COOKIES = require('../lib/yt-cookies');
 const TOPICS = require('../lib/writing-topics');
 const DRAFTS = require('../lib/script-drafts');
 
@@ -92,13 +91,6 @@ const upload = multer({
     }
     cb(null, true);
   },
-});
-
-// The cookie export is a small text file; it goes to temp, is read once and deleted. It never
-// lands in uploads/ - that directory is served.
-const cookieUpload = multer({
-  dest: os.tmpdir(),
-  limits: { fileSize: COOKIES.MAX_BYTES },
 });
 
 const _jobs = {};
@@ -184,103 +176,6 @@ router.get('/sources/jobs/:jobId', (req, res) => {
   res.json({ success: true, ...job });
 });
 
-// BEFORE /sources/:id, or the parameter swallows it and answers "no such source" — Express
-// matches in the order routes are declared, and "ytdlp" is a perfectly good id as far as the
-// pattern is concerned.
-//
-// What the add-a-source dialog needs to know before it draws itself: is yt-dlp here, is there a
-// working cookie jar, and therefore is the link field usable at all. Asked up front rather than
-// discovered by a failed ingest - a text box that always answers "YouTube asked for a login" is
-// a text box that should have been disabled.
-router.get('/sources/ytdlp', async (_req, res) => {
-  const found = await YTDLP.find();
-  const ck = COOKIES.status();
-  res.json({
-    success: true,
-    available: !!found, version: found ? found.version : '', path: found ? found.path : '',
-    cookies: ck,
-    // The file route never needs any of this. Links need all of it.
-    linksEnabled: !!found && !!ck.present && !!ck.verified,
-    why: !found ? 'yt-dlp is missing from this copy of the app'
-      : !ck.present ? 'no cookie file yet — YouTube asks a program for a login'
-        : !ck.verified ? 'the cookie file has not been checked against YouTube yet' : '',
-  });
-});
-
-// ── the cookie jar ──────────────────────────────────────────────────────────
-// Never returns the contents, only whether there is one and whether it worked.
-
-// Accepts either a pasted body or an uploaded file - the export is a text file, and people
-// arrive with it both ways.
-router.post('/sources/cookies', cookieUpload.single('file'), (req, res) => {
-  try {
-    let text = '';
-    if (req.file) {
-      text = fs.readFileSync(req.file.path, 'utf8');
-      try { fs.unlinkSync(req.file.path); } catch (e) {}
-    } else {
-      text = String((req.body && req.body.text) || '');
-    }
-    if (!text.trim()) return res.status(400).json({ success: false, error: 'no cookie file' });
-    const saved = COOKIES.save(text);
-    // Stored but not yet trusted: verification is a separate, deliberate step.
-    res.json({ success: true, cookies: COOKIES.status(), entries: saved.entries,
-      youtubeEntries: saved.youtubeEntries, expiresSoon: saved.expiresSoon,
-      soonestExpiry: saved.soonestExpiry });
-  } catch (e) {
-    if (req.file) { try { fs.unlinkSync(req.file.path); } catch (e2) {} }
-    res.status(400).json({ success: false, error: e.message });
-  }
-});
-
-// Confirmation, and it is a real request rather than a format check: the jar either gets a
-// video's metadata out of YouTube or it does not. Anything else would unlock the link field for
-// a file that fails on first use.
-//
-// The probe target is the first video ever uploaded to YouTube - nineteen seconds, public, and
-// certain to exist for as long as the site does. Metadata only; nothing is downloaded.
-const VERIFY_URL = 'https://www.youtube.com/watch?v=jNQXAC9IVRw';
-
-// TWO SUCCESSES, NOT ONE, and this was measured rather than assumed. The refusal is
-// probabilistic: from this machine an anonymous metadata call was refused three times out of
-// three, a jar of made-up cookies three out of three - and one earlier attempt through the app
-// went through. One lucky call would otherwise unlock the link field permanently, which is a
-// worse lie than the field staying locked.
-//
-// yt-dlp WRITES BACK to the jar it is given, so the second attempt also proves the file survived
-// being used, which is the state every later ingest will find it in.
-const VERIFY_ATTEMPTS = 2;
-
-router.post('/sources/cookies/verify', async (_req, res) => {
-  if (!COOKIES.exists()) return res.status(400).json({ success: false, error: 'no cookie file to check' });
-  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
-
-  const jar = COOKIES.filePath();
-  const seen = [];
-  for (let i = 1; i <= VERIFY_ATTEMPTS; i++) {
-    try {
-      const meta = await YTDLP.info(VERIFY_URL, { cookies: jar });
-      seen.push(meta.title || '(no title)');
-    } catch (e) {
-      COOKIES.setVerified(false, e.message);
-      return res.status(400).json({
-        success: false, attempt: i, of: VERIFY_ATTEMPTS,
-        error: i === 1 ? e.message
-          : `The first check passed and the second was refused — YouTube's refusal comes and goes, `
-            + `so links would fail unpredictably. ${e.message}`,
-        botCheck: !!e.botCheck, cookies: COOKIES.status(),
-      });
-    }
-  }
-  COOKIES.setVerified(true);
-  res.json({ success: true, cookies: COOKIES.status(), attempts: VERIFY_ATTEMPTS, sawTitle: seen[0] });
-});
-
-router.delete('/sources/cookies', (_req, res) => {
-  const gone = COOKIES.remove();
-  res.json({ success: true, removed: gone, cookies: COOKIES.status() });
-});
-
 router.get('/sources/:id', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
@@ -343,20 +238,8 @@ router.post('/sources/link', async (req, res) => {
   if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
   if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
-  // GATED ON A WORKING COOKIE JAR, and the gate is here rather than only in the interface: a
-  // link without a session gets the login demand after the metadata call, which reads as the
-  // app being broken. Measured on this machine - even the first video ever uploaded to YouTube
-  // is refused to an anonymous program.
-  const ck = COOKIES.status();
-  if (!ck.present) {
-    return res.status(400).json({ success: false, needsCookies: true,
-      error: 'YouTube will not serve videos to a program without a session. Add a cookies.txt '
-        + 'export first, or add this video as a file.' });
-  }
-  if (!ck.verified) {
-    return res.status(400).json({ success: false, needsCookies: true,
-      error: 'The cookie file has not been checked yet. Press Check, or add this video as a file.' });
-  }
+  // (phase V27) NO LOGIN: the cookie jar and the lock it was behind are gone (the owner 2026-10-12).
+  // A video the site keeps for signed-in people is refused in words by lib/ytdlp.js.
 
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: 'reading the link', at: Date.now(), error: null, source: null };
@@ -365,20 +248,26 @@ router.post('/sources/link', async (req, res) => {
   (async () => {
     let id = null;
     try {
-      const jar = COOKIES.filePath();
-      const meta = await YTDLP.info(url, { onProgress: (s) => { job.step = s; }, cookies: jar });
+      const meta = await YTDLP.info(url, { onProgress: (s) => { job.step = s; } });
+      // The same video under another spelling of its address is not fetched twice - one whose file
+      // came in is read again with "transcribe again"; one that failed before its file did is fetched.
+      const had = store.list().find(s => s.videoPath
+        && ((meta.key && s.linkKey === meta.key) || (s.url && s.url === meta.url)));
+      if (had) throw new Error(`This video is a source already: "${had.title || had.id}".`);
       id = store.newId();
       store.ensureDirs();
+      // kind 'youtube' is any link: the records made before other sites were let in say so.
       const rec = store.create({
-        id, kind: 'youtube', title: meta.title, url: meta.url, channel: meta.channel,
+        id, kind: 'youtube', title: meta.label, url: meta.url, linkKey: meta.key, channel: meta.channel,
         seconds: meta.duration, state: 'downloading',
       });
       job.source = store.summary(rec);
       job.sourceId = id;
 
       job.step = 'starting the download';
+      // The best there is (the owner's answer (g)); a post of several videos gives its first.
       await YTDLP.download(url, path.join(store.SOURCES_DIR, id + '.%(ext)s'),
-        { onProgress: (s) => { job.step = s; }, cookies: jar });
+        { onProgress: (s) => { job.step = s; }, items: meta.count > 1 ? '1' : '' });
 
       // yt-dlp names the file by the template, but the extension depends on what it merged, so
       // the file is found rather than assumed.

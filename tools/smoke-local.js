@@ -126,7 +126,10 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/css/cv2-settings.css'], ['GET', '/api/character-v2/ladders'], ['POST', '/api/character-v2/ladders'],
                  ['POST', '/api/character-v2/recover'], ['GET', '/api/character-v2/recovered'], ['GET', '/api/character-v2/trace'],
                  ['GET', '/api/prompts'], ['GET', '/api/status/x'], ['GET', '/api/char-store/ref-status/x'],
-                 ['GET', '/api/library/looks/x'], ['GET', '/api/scen3/look-frames/x']];
+                 ['GET', '/api/library/looks/x'], ['GET', '/api/scen3/look-frames/x'],
+                 // phase V27: the YouTube cookie jar and the lock it kept on links - links go without a login
+                 ['POST', '/api/sources/cookies'], ['POST', '/api/sources/cookies/verify'], ['DELETE', '/api/sources/cookies'],
+                 ['GET', '/api/sources/ytdlp']];
 
 async function call(method, url, body) {
   const t0 = Date.now();

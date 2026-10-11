@@ -10,11 +10,16 @@
      (phase V23, the owner 2026-10-09) no field about the graphics card - another computer has another one
 
    GET /api/speech/local is read when the pane shows, and every second while something downloads.
+
+   (phase V27, the owner 2026-10-12: "давай добавим строку на всякий случай") and the yt-dlp links are
+   read with: its version, whose copy it is, what the last check for a newer nightly build found, and a
+   button to check now - the checks run on their own anyway (lib/ytdlp.js). GET /api/ytdlp.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   var body = document.getElementById('loc-body');
   if (!body) return;
   var state = null, timer = null, shown = false, msg = '', msgErr = false, armed = null;
+  var yt = null, ytBusy = false, ytTimer = null;
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function mb(b) { return Math.round((+b || 0) / 1e6) + ' MB'; }
@@ -59,11 +64,67 @@
       .catch(function (e) { msg = e.message; msgErr = true; paint(); });
   }
 
+  // ── yt-dlp ─────────────────────────────────────────────────────────────────
+  var COPY = {
+    app: 'The copy that ships with the app.',
+    library: 'A newer copy, updated into this library\'s cache - the app\'s own is older.',
+    machine: 'Found on this computer, not the app\'s own - it is updated where it was installed.',
+    env: 'The one YTDLP_PATH points at.',
+  };
+  function when(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  function ytLast(s) {
+    if (!s.checkedAt) return 'Not checked yet - the app checks 15 seconds after it starts and once a day.';
+    var at = 'Checked ' + when(s.checkedAt) + ': ';
+    if (s.result === 'updated') return at + 'updated from ' + s.from + ' to ' + s.to + '.';
+    if (s.result === 'newest') return at + 'this is the newest nightly build.';
+    return at + (s.result === 'skipped' ? '' : 'the check failed - ') + (s.error || 'no reason given') + '.';
+  }
+  function paintYt() {
+    body.appendChild(el('div', 'dio-sec', 'Links (yt-dlp)'));
+    if (!yt) { body.appendChild(el('div', 'dio-status', 'reading…')); return; }
+    if (yt.probing) { body.appendChild(el('div', 'dio-status', 'Looking for yt-dlp…')); return; }
+    if (!yt.available) {
+      body.appendChild(row('yt-dlp', 'Missing from this copy of the app - npm install puts it in vendor/yt-dlp. Links cannot be read.',
+        el('span', 'loc-state bad', 'missing')));
+      return;
+    }
+    var busy = ytBusy || yt.checking;
+    var b = btn(busy ? 'Checking…' : 'Check now', ytCheck);
+    b.disabled = busy;
+    b.title = 'Ask GitHub for a newer nightly build now. The app does this by itself anyway.';
+    body.appendChild(row('yt-dlp ' + yt.version + ' · ' + yt.channel,
+      (COPY[yt.copy] || '') + ' Links from YouTube, TikTok, Instagram and the rest are read with it, without a login. ' + ytLast(yt), b));
+  }
+  function ytLoad() {
+    return fetch('/api/ytdlp').then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.success) yt = d; paint(); ytSchedule(); })
+      .catch(function () { /* the next look tries again */ });
+  }
+  // While a check runs on its own (or a probe is slow), the row is read again until it ends.
+  function ytSchedule() {
+    if (ytTimer) clearTimeout(ytTimer);
+    ytTimer = null;
+    if (!shown || ytBusy || !yt || !(yt.checking || yt.probing)) return;
+    ytTimer = setTimeout(ytLoad, 2000);
+  }
+  function ytCheck() {
+    if (ytBusy) return;
+    ytBusy = true; paint();
+    fetch('/api/ytdlp/check', { method: 'POST' }).then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.success) yt = d; })
+      .catch(function () { /* the row says what the last check found */ })
+      .then(function () { ytBusy = false; paint(); ytSchedule(); });
+  }
+
   function paint() {
     body.textContent = '';
-    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); return; }
+    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); return; }
     if (!state.platform) {
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
+      paintYt();
       return;
     }
     var p = state.program, m = state.model;
@@ -90,6 +151,7 @@
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status' + (msgErr ? ' err' : ''), msg);
     body.appendChild(s);
+    paintYt();
   }
 
   function load() {
@@ -106,7 +168,10 @@
 
   document.addEventListener('adm-pane', function (e) {
     shown = e.detail === 'local';
-    if (shown) load().then(schedule);
-    else if (timer) { clearTimeout(timer); timer = null; }
+    if (shown) { load().then(schedule); ytLoad(); }
+    else {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (ytTimer) { clearTimeout(ytTimer); ytTimer = null; }
+    }
   });
 })();

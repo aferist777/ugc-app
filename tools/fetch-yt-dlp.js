@@ -10,9 +10,13 @@
    from that release's SHA2-256SUMS, so an asset swapped on GitHub after the fact is refused
    rather than shipped. A copy already in place with the right hash is left alone.
 
-   To move the pin: the new release tag, and its SHA2-256SUMS lines for the three files below.
-   This copy stays as it shipped; when YouTube outgrows it, lib/ytdlp.js updates a copy in the
-   library instead. */
+   THE NIGHTLY CHANNEL (phase V27, the owner 2026-10-12): yt-dlp's own README calls it "the
+   recommended channel for regular users" - the stable one comes out about once a month, and the
+   sites it reads change faster than that. Nightly builds are released from their own repository,
+   yt-dlp/yt-dlp-nightly-builds, with the same files and the same SHA2-256SUMS.
+
+   To move the pin: the new nightly tag, and its SHA2-256SUMS lines for the three files below.
+   This copy stays as it shipped; lib/ytdlp.js keeps a copy in the library current instead. */
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -20,12 +24,13 @@ const path = require('path');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
-const VERSION = '2026.08.19';
+const REPO = 'yt-dlp/yt-dlp-nightly-builds';
+const VERSION = '2026.10.10.233141';
 // lib/ytdlp.js looks for the same file names.
 const BUILDS = {
-  win32:  { file: 'yt-dlp.exe',   sha256: '66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a' },
-  darwin: { file: 'yt-dlp_macos', sha256: '0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202' },
-  linux:  { file: 'yt-dlp_linux', sha256: '58162f9bfdc27458ea47bfcb311cf47028f17d8154a8bf7d689861d46399230a' },
+  win32:  { file: 'yt-dlp.exe',   sha256: 'e7cafc44db8aa433da8dd78303b9157f2c1dd509c4cbfcd8418081b7e1d26a7a' },
+  darwin: { file: 'yt-dlp_macos', sha256: 'c8ee97b3f6aa0fb5cbc3f56d772c0d79dc2c5d3d60f3bf0b240d5dd0d461fd25' },
+  linux:  { file: 'yt-dlp_linux', sha256: '60606cef1a65d70f6639a85b45ebb7acf08dbb81831e134dd93939e23ca2b792' },
 };
 const DIR = path.join(__dirname, '..', 'vendor', 'yt-dlp');
 const optional = process.argv.includes('--optional');
@@ -45,7 +50,7 @@ async function main() {
     return;
   }
 
-  const url = `https://github.com/yt-dlp/yt-dlp/releases/download/${VERSION}/${build.file}`;
+  const url = `https://github.com/${REPO}/releases/download/${VERSION}/${build.file}`;
   console.log(`[yt-dlp] downloading ${build.file} ${VERSION} ...`);
   const res = await fetch(url, { signal: AbortSignal.timeout(10 * 60 * 1000) });
   if (!res.ok) throw new Error(`${url} answered ${res.status}`);
@@ -70,7 +75,7 @@ async function main() {
 
 main().catch((e) => {
   if (optional) {
-    console.warn(`[yt-dlp] not fetched: ${e.message}. Links in Sources stay off until `
+    console.warn(`[yt-dlp] not fetched: ${e.message}. Links stay off until `
       + '"node tools/fetch-yt-dlp.js" succeeds.');
     return;
   }

@@ -107,8 +107,8 @@ const GROUPS = [
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
-  { id: 'settings', label: 'Settings, API keys and the YouTube sign-in', secret: true,
-    dirs: [], stores: ['data/settings.json', 'data/yt-cookies.txt', 'data/yt-cookies.json'] },
+  { id: 'settings', label: 'Settings and API keys', secret: true,
+    dirs: [], stores: ['data/settings.json'] },
 ];
 
 // Deliberately absent: cache/ (thumbnails and previews make themselves again, and the export
