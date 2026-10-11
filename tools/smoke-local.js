@@ -96,9 +96,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/js/merge-v3/chatwin.js'], ['GET', '/js/merge-v3/imagen.js'],
                  // phase K1: the page's own listening job - the server listens to the project now
                  ['POST', '/api/stt/timeline'], ['GET', '/api/stt/timeline/x'],
-                 // phase C: routes nothing called - a 501 stub, a write that replaced every look, a delete
+                 // phase C: routes nothing called - a write that replaced every look, a delete
                  // that wiped a look's folder past lib/relocate.js
-                 ['POST', '/api/narrators/x/samples/link'], ['POST', '/api/userdata/obrazy'], ['DELETE', '/api/obrazy/x'],
+                 ['POST', '/api/userdata/obrazy'], ['DELETE', '/api/obrazy/x'],
                  // ...and the probably dead: a list for a gone dropdown, a rename with no page, two reads the
                  // page makes elsewhere, and scratch served over HTTP
                  ['GET', '/api/scen3/projects'], ['PATCH', '/api/narrators/x'], ['GET', '/api/sources/cookies'],

@@ -978,6 +978,12 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .nr-add-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .nr-add-row .sp{ flex:1; }
 .nr-add-row input[type=file]{ font:11px var(--font); color:var(--muted); max-width:190px; }
+/* (phase V27) The link beside its button: the field takes what the row has left. */
+.nr-add-row .nr-url{
+  flex:1; min-width:160px; font:12px var(--font); color:var(--ink);
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:5px 8px;
+}
+.nr-add-row .nr-url:focus{ outline:none; border-color:var(--primary); }
 /* The pager over readings: which one and how many, readable without opening anything. */
 .nr-pager{
   display:flex; align-items:center; gap:6px; padding:5px 7px; background:var(--surface-2);

@@ -72,7 +72,12 @@ const HTML = `
             <input type="file" data-f="file" accept="video/*,audio/*">
             <button class="lib-btn" type="button" data-f="addfile" title="Transcribe the file and keep its words as a sample - a paid call">Transcribe a file</button>
           </div>
-          <p class="mk-pnote">A video or audio file is transcribed - a paid call - and its words become the sample.</p>
+          <div class="nr-add-row">
+            <input type="text" class="nr-url" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
+            <button class="lib-btn" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
+          </div>
+          <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
+            transcribed (a paid call), and its words become the sample.</p>
           <div class="mk-job" data-f="sjob" hidden></div>
         </div>
       </section>
@@ -102,6 +107,8 @@ export async function open() {
   q('new').addEventListener('click', _askName);
   q('addtext').addEventListener('click', _addText);
   q('addfile').addEventListener('click', _addFile);
+  q('addlink').addEventListener('click', _addLink);
+  q('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addLink(); } });
   q('analyse').addEventListener('click', _analyse);
   q('text').addEventListener('input', () => { if (_sel) _typed.set(_sel, q('text').value); });
 
@@ -320,7 +327,7 @@ function _paintLocks() {
   const none = !_sel || !_rec;
   const busy = !none && _running(_sel);
   const reads = (_rec && _rec.readings) || [];
-  for (const k of ['addfile', 'file']) q(k).disabled = none || busy;
+  for (const k of ['addfile', 'file', 'addlink', 'url']) q(k).disabled = none || busy;
   for (const k of ['addtext', 'text']) q(k).disabled = none || busy || _adding;
   q('analyse').disabled = none || busy || !_rec || _rec.words < _rec.minWords;
   q('analyse').textContent = reads.length ? 'Read the voice again' : 'Read the voice';
@@ -336,7 +343,9 @@ function _paintSamples() {
   samples.forEach((s, i) => {
     const card = el('div', 'nr-sample');
     const h = el('div', 'nr-sample-h');
-    h.appendChild(el('b', null, s.label || (s.kind === 'file' ? 'a file' : 'pasted text')));
+    const name = el('b', null, s.label || (s.kind === 'file' ? 'a file' : s.kind === 'link' ? 'a link' : 'pasted text'));
+    if (s.url) name.title = s.url;
+    h.appendChild(name);
     h.appendChild(el('span', null, `${s.words} words`));
     const x = el('button', 'nr-x', '✕');
     x.type = 'button';
@@ -508,6 +517,20 @@ async function _addFile() {
   await _start(id, 'sample', `/api/narrators/${encodeURIComponent(id)}/samples/upload`, { method: 'POST', body: form }, {
     key: `l2-sample|${J.bucket(file.size / 1048576)}mb`, label: `Uploading ${J.mb(file.size)}…`, estimateMs: J.EST.sample(file.size),
   });
+}
+
+// (phase V27) A link instead of a file: the server fetches only its sound, transcribes it and lets it go.
+async function _addLink() {
+  const id = _rec ? String(_rec.narrator.id) : '';
+  if (!id || id !== _sel || _running(id)) return;
+  const input = _win.q('url');
+  const url = input.value.trim();
+  if (!url) { J.sayJob(_win.q('sjob'), 'Paste a link first.', true); return; }
+  if (!confirm('Transcribe the video at this link into a sample?\n\nOnly its sound is fetched. It is a paid speech-to-text call.')) return;
+  input.value = '';
+  await _start(id, 'sample', `/api/narrators/${encodeURIComponent(id)}/samples/link`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
+  }, { key: 'l2-sample|link', label: 'Reading the link…', estimateMs: J.EST.ingestLink });
 }
 
 async function _analyse() {

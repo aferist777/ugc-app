@@ -10,6 +10,7 @@
 //   DELETE /api/narrators/:id                  -> { success }
 //   POST   /api/narrators/:id/samples          { text, label } -> { narrator }
 //   POST   /api/narrators/:id/samples/upload   multipart file -> { jobId }
+//   POST   /api/narrators/:id/samples/link     { url } -> { jobId }   (its sound only, no login - phase V27)
 //   DELETE /api/narrators/:id/samples/:index   -> { narrator }
 //   DELETE /api/narrators/:id/readings/:rid    -> { narrator, readings }
 //   POST   /api/narrators/:id/analyse          { provider, model, effort } -> { jobId }  appends
@@ -32,6 +33,7 @@ const P = require('../lib/writing-prompts');
 const { callJSON, runnable } = require('../lib/llm-json');
 const STT = require('../lib/stt-replicate');
 const WM = require('../lib/writing-models');
+const YTDLP = require('../lib/ytdlp');
 
 const router = express.Router();
 
@@ -167,6 +169,60 @@ router.post('/narrators/:id/samples/upload', upload.single('file'), (req, res) =
       job.at = Date.now();
     } finally {
       try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (e) {}
+    }
+  })();
+});
+
+// (phase V27, the owner 2026-10-12) A LINK becomes a sample the same way: only its sound is fetched (the
+// best there is - the words are what is kept), into the same temp folder, transcribed and deleted. Any
+// site yt-dlp reads, without a login; the same video twice in one narrator is refused.
+router.post('/narrators/:id/samples/link', async (req, res) => {
+  const id = String(req.params.id);
+  const url = String((req.body || {}).url || '').trim();
+  if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
+  if (!store.get(id)) return res.status(404).json({ success: false, error: 'no such narrator' });
+  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
+
+  const jobId = _newJobId();
+  const job = _jobs[jobId] = { state: 'running', step: 'reading the link', at: Date.now(), error: null, narrator: null };
+  res.json({ success: true, jobId });
+
+  (async () => {
+    const stem = `ugc-nsample-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let file = '';
+    try {
+      const meta = await YTDLP.info(url, { onProgress: (s) => { job.step = s; } });
+      const rec = store.get(id);
+      if (!rec) throw new Error('The narrator went away.');
+      const had = (rec.samples || []).find(s => (meta.key && s.linkKey === meta.key) || (s.url && s.url === meta.url));
+      if (had) throw new Error(`This video is a sample of this narrator already: "${had.label || meta.label}".`);
+
+      job.step = 'fetching the sound';
+      await YTDLP.download(url, path.join(os.tmpdir(), stem + '.%(ext)s'),
+        { onProgress: (s) => { job.step = s; }, audioOnly: true, items: meta.count > 1 ? '1' : '' });
+      // The extension is whatever the site's best sound came in, so the file is found, not assumed.
+      const landed = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(stem + '.') && !/\.part$/.test(f))[0];
+      if (!landed) throw new Error('The download finished but left no file behind.');
+      file = path.join(os.tmpdir(), landed);
+
+      const out = await STT.transcribeFile(file, { onProgress: (s) => { job.step = s; } });
+      job.step = 'storing the sample';
+      const saved = store.addSample(id, { kind: 'link', label: meta.label, text: out.text, url: meta.url, linkKey: meta.key });
+      job.state = 'done';
+      job.step = `${store.countWords(out.text)} words from ${Math.round(out.sourceSeconds / 60)} min`;
+      job.narrator = store.summary(saved);
+      job.cost = out.cost;
+      job.at = Date.now();
+    } catch (e) {
+      job.state = 'error';
+      job.error = e.message;
+      job.at = Date.now();
+    } finally {
+      // Whatever came down - the sound, or a part of it - goes: the words are the sample.
+      try {
+        for (const f of fs.readdirSync(os.tmpdir())) if (f.startsWith(stem + '.')) fs.rmSync(path.join(os.tmpdir(), f), { force: true });
+      } catch (e) { /* a file still held stays in the temp folder */ }
     }
   })();
 });
