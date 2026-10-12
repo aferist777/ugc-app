@@ -1,0 +1,73 @@
+/* THE MEDIA TREE (phase V28.4 + V28.5) - js/media-tree.js, in Merge's Library panel and on the Library's Media shelf.
+   Rows of one line: the twisty, the name, a lock for a required category, the "+" and the ✕ on hover, the count.
+   An empty category is pale (and last - the server's order); the selected node is lit; a node a tile can be let go
+   on is outlined while it hangs over it. */
+.mt{
+  height:100%; overflow:auto; padding:4px 4px 10px; box-sizing:border-box;
+  font:500 11.5px/1.25 var(--font); color:var(--ink); user-select:none;
+}
+.mt-row{
+  position:relative; display:flex; align-items:center; gap:3px; min-height:23px; padding-right:5px;
+  border-radius:var(--r-xs); cursor:pointer; transition:background .1s var(--ease);
+}
+.mt-row:hover{background:var(--surface-2)}
+.mt-row.is-sel{background:var(--primary-soft)}
+.mt-row.is-sel .mt-name{color:var(--ink); font-weight:600}
+.mt-row.is-sel::before{content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:2px; background:var(--primary)}
+.mt-row.is-group .mt-name{font:700 10.5px/1.25 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.mt-row.is-group.is-sel .mt-name{color:var(--ink)}
+.mt-row.is-empty{opacity:.42}
+.mt-row.is-empty:hover, .mt-row.is-empty.is-drop{opacity:.8}
+
+.mt-tw{
+  flex:0 0 14px; width:14px; height:18px; padding:0; border:0; background:none; cursor:pointer;
+  color:var(--muted); font:400 9px/18px var(--font); text-align:center; transition:transform .12s var(--ease);
+}
+.mt-tw.is-open{transform:rotate(90deg)}
+.mt-tw:hover{color:var(--ink)}
+.mt-tw[disabled]{cursor:default}
+.mt-name{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mt-lock{flex:0 0 auto; display:inline-flex; color:var(--muted); opacity:.85}
+.mt-n{flex:0 0 auto; min-width:16px; text-align:right; color:var(--muted); font:500 10.5px/1 var(--font); font-variant-numeric:tabular-nums}
+
+/* "+" (a new category of the kind) and ✕ (delete the category): only under the pointer. */
+.mt-act{
+  flex:0 0 auto; width:16px; height:16px; padding:0; display:none; align-items:center; justify-content:center;
+  border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer; font:600 11px/1 var(--font);
+}
+.mt-row:hover .mt-act{display:inline-flex}
+.mt-add:hover{background:var(--primary); color:var(--primary-ink)}
+.mt-x{font-size:9px}
+.mt-x:hover{background:var(--danger); color:oklch(.99 0 0)}
+
+/* A tile hanging over a node that takes it. */
+.mt-row.is-drop{outline:1px dashed var(--primary); outline-offset:-1px; background:var(--primary-soft)}
+/* A category being put in another place. */
+.mt.is-reordering, .mt.is-reordering *{cursor:grabbing !important}
+.mt-row.is-moving{opacity:.55; background:var(--surface-2)}
+
+/* The menu under the right button wears the shared menu's look (css/app-shell.css .mv3-plus-menu). */
+.mt-menu{min-width:190px}
+
+/* Deleting a category: where its media go, and the projects that use them. */
+.mt-pop{
+  position:fixed; z-index:60; width:300px; padding:10px 11px; box-sizing:border-box;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+  font:400 12px/1.4 var(--font); color:var(--ink);
+}
+.mt-pop-head{font-weight:700; margin-bottom:7px; overflow-wrap:anywhere}
+.mt-pop-row{display:flex; gap:7px; align-items:flex-start; cursor:pointer}
+.mt-pop-row input{margin:2px 0 0}
+.mt-pop-note{margin-top:6px; color:var(--muted); font-size:11px}
+.mt-pop-used{margin-top:6px; padding:6px 7px; border-radius:var(--r-xs); background:color-mix(in oklch, var(--danger) 14%, transparent); font-size:11px}
+.mt-pop-used[hidden]{display:none}
+.mt-pop-used-head{color:var(--ink); margin-bottom:3px}
+.mt-pop-used-row{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mt-pop-btns{display:flex; justify-content:flex-end; gap:6px; margin-top:9px}
+.mt-pop-btn{
+  padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--ink); font:600 11px/1 var(--font); cursor:pointer;
+}
+.mt-pop-btn:hover{border-color:var(--primary)}
+.mt-pop-btn.is-danger{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
+.mt-pop-btn[disabled]{opacity:.5; cursor:default}
