@@ -54,6 +54,9 @@ try {
     console.log('[library] required categories:' + (r.made.length ? ' made ' + r.made.join(', ') + ';' : '')
       + r.merged.map(m => ' folded a second ' + m.kind + '/' + m.label + ' into the first (' + m.records + ' records)').join(';'));
   }
+  // And, once per library, what the chats made before V28.4 into "Generated".
+  const g = require('../lib/required-cats').moveChatMade();
+  if (g && (g.images || g.birols)) console.log('[library] made by the chats, into Generated: ' + g.images + ' picture(s), ' + g.birols + ' clip(s)');
 } catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;

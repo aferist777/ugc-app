@@ -148,11 +148,12 @@ router.get('/mv3/timeline', (req, res) => {
 
 // ── THE DRAFT (phase V20, the owner 2026-10-08) ────────────────────────────
 // Merge with no project open opens THE draft - a Merge project marked `draft`, named "draft <date time>", one at a
-// time - so the timeline and the chats work from the first press, with nothing to name first. What it makes is filed in
-// the category of its name, as any project's. Saved, it is renamed (the categories and the folder follow) and the mark
+// time - so the timeline and the chats work from the first press, with nothing to name first. What its chats MAKE goes
+// into "Generated" (phase V28.4) and stays there whatever becomes of it; what is BROUGHT INTO them is filed in the
+// category of its name, as any project's. Saved, it is renamed (the categories and the folder follow) and the mark
 // goes; not saved, its timeline and its chats go, and what it filed goes to Uncategorized (lib/project-cats.js
-// release) - what is still being made for it lands there too. Asked at the window's close, at a switch away from it,
-// and at the start after an app that closed without asking (public/js/draft-ask.js).
+// release). Asked at the window's close, at a switch away from it, and at the start after an app that closed without
+// asking (public/js/draft-ask.js).
 const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines[k] && timelines[k].draft) || '';
 function _draftContent(key, t) {
   let clips = 0;
@@ -186,17 +187,13 @@ router.post('/mv3/timeline/:key/discard', (req, res) => {
     const rec = cur.timelines[key];
     if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
     if (!rec.draft) return res.status(409).json({ success: false, error: 'only a draft is let go of this way - this project is saved' });
-    // What is still being made for it lands in Uncategorized - marked before anything moves, so a result landing
-    // meanwhile goes there too.
-    let waiting = 0;
-    try { waiting = require('../lib/mv3-gens').release(key) + require('../lib/mv3-video-gens').release(key); } catch (e) { console.warn('[mv3] draft: the waiting ones were not marked -', e.message); }
     let released = {};
     try { released = require('../lib/project-cats').release(require('../lib/mv3-gens').catLabelFor(rec.title)); }
     catch (e) { console.warn('[mv3] draft: its category was not let go of -', e.message); }
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, released, waiting, version: cur.version + 1 });
+    res.json({ success: true, released, version: cur.version + 1 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -601,17 +598,13 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     const CHAT = require('../lib/mv3-chat');
     const talk = CHAT.threadOf(key) === CHAT.DRAFT ? null : key;
     // (phase V28.4, the owner 2026-10-12: "раскидывать медиа удаленного проекта по типу медиа в категории uncategorized")
-    // What the project filed under its name on the shelves goes to Uncategorized of its kind, the category with it - as a
-    // draft not saved, above; and what is still being made for it lands there too. Not when another project keeps the
-    // same name (the category is that one's too), and never a required category ("Generated" - lib/project-cats.js).
+    // What was brought into its chats and filed under its name on the shelves goes to Uncategorized of its kind, the
+    // category with it - as a draft not saved, above (what its chats MADE is in "Generated" and stays). Not when another
+    // project keeps the same name (the category is that one's too), and never a required category (lib/project-cats.js).
     const GENS = require('../lib/mv3-gens');
     const label = GENS.catLabelFor(cur.timelines[key].title);
     const shared = Object.keys(cur.timelines).some(k => k !== key && cur.timelines[k]
       && GENS.catLabelFor(cur.timelines[k].title).toLowerCase() === label.toLowerCase());
-    if (!shared) {
-      try { GENS.release(key); require('../lib/mv3-video-gens').release(key); }
-      catch (e) { console.warn('[mv3] delete: the waiting ones were not marked -', e.message); }
-    }
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
