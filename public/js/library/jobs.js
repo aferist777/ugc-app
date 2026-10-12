@@ -74,7 +74,6 @@ export const bucket = (n) => Math.pow(2, Math.round(Math.log2(Math.max(1, +n || 
 // First-run guesses, from what these took on this machine. After one run of a key the countdown
 // is the measured average and these stop mattering.
 export const EST = {
-  ingestFile: (bytes) => Math.max(90000, Math.round((bytes / 1048576) * 400)),
   ingestLink: 300000,
   topics: 45000,
   hooks: 20000,

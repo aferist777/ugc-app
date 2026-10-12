@@ -108,6 +108,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // phase C4: Animate, its window and its routes
                  ['GET', '/api/video/engines'], ['POST', '/api/video/animate'], ['GET', '/api/video/animate/status/x'],
                  ['POST', '/api/video/think'], ['POST', '/api/video/reference'],
+                 // phase V28.1: a source comes in through /api/sources/add/* - the upload and the page-followed link went
+                 ['POST', '/api/sources/upload'], ['POST', '/api/sources/link'],
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],

@@ -12,14 +12,16 @@
    announced, so walking from one page to another does not ring twice for the same picture.
 
    Voices are not here. A read takes seconds, and a list of them would bury the things worth
-   waiting for.
+   waiting for. A source being added is (phase V28.1): its download, transcription and topics are
+   minutes of work the person was let go from, and its row is where they come back to it. Its
+   window flies into the button on the way (flyToAlerts), with a swoosh, and the button answers.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
-const KIND_MARK = { image: '▣', video: '▶', music: '♪' };
+const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓' };
 
 let _btn = null;
 let _menu = null;
@@ -66,6 +68,38 @@ function _ding() {
       osc.stop(now + 1);
     }
   } catch (e) { /* no sound is not a failure of the news */ }
+}
+
+// THE SWOOSH (phase V28.1): a window handed over to Alerts flies into the button with it - noise through a
+// band-pass sweeping down, made here like the bell. Quiet; never a failure of the hand-over.
+function _swoosh() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    _audio = _audio || new Ctx();
+    if (_audio.state === 'suspended') _audio.resume();
+    const now = _audio.currentTime;
+    const dur = 0.42;
+    const buf = _audio.createBuffer(1, Math.ceil(_audio.sampleRate * dur), _audio.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = _audio.createBufferSource();
+    src.buffer = buf;
+    const band = _audio.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.1;
+    band.frequency.setValueAtTime(2800, now);
+    band.frequency.exponentialRampToValueAtTime(320, now + dur);
+    const gain = _audio.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.07);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(band);
+    band.connect(gain);
+    gain.connect(_audio.destination);
+    src.start(now);
+    src.stop(now + dur);
+  } catch (e) { /* no sound is not a failure of the hand-over */ }
 }
 
 // ── what a row knows about itself ───────────────────────────────────────────
@@ -151,13 +185,15 @@ function _typical(what, model) {
   return GUESS_MS[what] || GUESS_OTHER_MS;
 }
 
-// The wait, in milliseconds, or 0 when nothing is running.
+// The wait, in milliseconds, or 0 when nothing is running. A row that knows when it is expected to end (`etaAt`,
+// phase V28.1: a source being added - its download says what is left) is taken at its word.
 function _leftMs() {
   const now = Date.now();
   let most = 0;
   for (const r of _items) {
     if (!_running(r)) continue;
-    const left = _typical(r.what, _model(r)) - (now - (Date.parse(r.startedAt) || now));
+    const eta = Date.parse(r.etaAt || '');
+    const left = eta ? eta - now : _typical(r.what, _model(r)) - (now - (Date.parse(r.startedAt) || now));
     most = Math.max(most, left);
   }
   return Math.max(0, most);
@@ -179,7 +215,7 @@ function _paintWait() {
   const ms = _leftMs();
   _wait.hidden = false;
   _wait.textContent = ms ? _leftSays(ms) : 'any moment now';
-  _wait.title = n + (n === 1 ? ' generation is running' : ' generations are running side by side')
+  _wait.title = n + (n === 1 ? ' thing is running' : ' things are running side by side')
     + '. The wait is the longest of them, from how long the last ones of the same kind took.';
 }
 
@@ -190,8 +226,8 @@ function _paintButton() {
   _btn.classList.toggle('has-running', !!_counts.running);
   _btn.classList.toggle('has-done', !_counts.running && !!_counts.unseen);
   _btn.title = _counts.running
-    ? _counts.running + ' generation' + (_counts.running === 1 ? '' : 's') + ' running'
-    : (_counts.unseen ? 'Something finished' : 'What is being generated');
+    ? _counts.running + ' running'
+    : (_counts.unseen ? 'Something finished' : 'What is being generated or added');
 }
 
 // ── the list ────────────────────────────────────────────────────────────────
@@ -206,9 +242,11 @@ function _row(rec) {
   // sent to a renderer, and a row that only said "Clip - fragment 3" looked stuck (the owner,
   // 2026-09-22). Otherwise, where it was started from.
   const stage = _running(rec) ? String(rec.stage || '') : '';
+  // A finished row may say what came of it in a word (a source: "12 topics").
+  const note = rec.state === 'done' && rec.result && rec.result.note ? String(rec.result.note) : '';
   const under = rec.state === 'failed'
     ? (rec.error || 'it did not come')
-    : (stage || (rec.where && rec.where.label) || '');
+    : (stage || note || (rec.where && rec.where.label) || '');
   main.appendChild(_el('span', 'sv3-al-where' + (stage ? ' is-stage' : ''), under));
   row.appendChild(main);
 
@@ -227,12 +265,12 @@ function _row(rec) {
     const again = _el('button', 'sv3-al-act' + (_armed === rec.id ? ' is-armed' : ''),
       _armed === rec.id ? 'spend again?' : 'retry');
     again.type = 'button';
-    again.title = 'Ask for it again - this spends credits';
+    again.title = rec.retryFree ? 'Go on from where it stopped - this costs nothing' : 'Ask for it again - this spends credits';
     again.addEventListener('click', (e) => {
       e.stopPropagation();
       // Asked before it spends, and the question is the button itself: a second press inside a
-      // few seconds is the answer.
-      if (_armed !== rec.id) {
+      // few seconds is the answer. A retry that costs nothing (a download going on) is one press.
+      if (!rec.retryFree && _armed !== rec.id) {
         _armed = rec.id;
         _paintMenu();
         setTimeout(() => { if (_armed === rec.id) { _armed = null; _paintMenu(); } }, 4000);
@@ -274,7 +312,7 @@ function _paintMenu() {
   _menu.appendChild(head);
 
   const list = _el('div', 'sv3-al-list');
-  if (!_items.length) list.appendChild(_el('div', 'sv3-al-empty', 'Nothing yet. Pictures, video and music show up here while they are made.'));
+  if (!_items.length) list.appendChild(_el('div', 'sv3-al-empty', 'Nothing yet. Pictures, video and music show up here while they are made, and sources while they are added.'));
   for (const rec of _items) list.appendChild(_row(rec));
   _menu.appendChild(list);
 }
@@ -395,6 +433,46 @@ async function _poll() {
   await _json('/api/alerts/notified', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids: fresh.map(r => r.id) }),
+  });
+}
+
+// ── a window handed over (phase V28.1) ──────────────────────────────────────
+/** The button answers: a little bigger for a moment, and two blinks - this is where to look later. The journal is
+ *  read at once, so the new row's count is on it. */
+export function pulseAlerts() {
+  if (!_btn) return;
+  _btn.classList.remove('is-caught');
+  void _btn.offsetWidth;                    // the animation runs again on a second hand-over
+  _btn.classList.add('is-caught');
+  setTimeout(() => { if (_btn) _btn.classList.remove('is-caught'); }, 1000);
+  _poll();
+}
+
+/** `el` - a window - shrinks and flies into the button with a swoosh, and the button answers. Resolves when it has
+ *  landed; the caller then takes the window away. Without the button (a page with no top bar) it only resolves. */
+export function flyToAlerts(el) {
+  return new Promise((resolve) => {
+    if (!_btn || !el || !el.getBoundingClientRect) { pulseAlerts(); resolve(); return; }
+    _swoosh();
+    let reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduce = false; }
+    if (reduce) { pulseAlerts(); resolve(); return; }
+    const a = el.getBoundingClientRect();
+    const b = _btn.getBoundingClientRect();
+    const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+    const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+    el.style.transformOrigin = '50% 50%';
+    el.style.willChange = 'transform, opacity';
+    el.style.transition = 'transform .46s cubic-bezier(.55,.05,.85,.35), opacity .46s ease-in, border-radius .46s ease-in';
+    let landed = false;
+    const land = () => { if (landed) return; landed = true; pulseAlerts(); resolve(); };
+    // The start is made to count (a reflow), so the transition runs from where the window is now.
+    void el.offsetWidth;
+    el.style.transform = `translate(${Math.round(dx)}px, ${Math.round(dy)}px) scale(.04)`;
+    el.style.opacity = '.2';
+    el.style.borderRadius = '48px';
+    el.addEventListener('transitionend', (e) => { if (e.propertyName === 'transform') land(); });
+    setTimeout(land, 650);
   });
 }
 

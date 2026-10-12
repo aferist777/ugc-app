@@ -59,6 +59,17 @@
   display:inline-block; min-width:15px; height:15px; padding:0 4px; border-radius:var(--pill);
   background:var(--danger); color:#fff; font:700 9px/15px var(--font); text-align:center;
 }
+/* A window handed over to Alerts lands here (phase V28.1, js/alerts-bell.js pulseAlerts): the button grows a little
+   and blinks twice, so it is clear where to look later. */
+.sv3-nav .sv3-alerts.is-caught{ animation:sv3-al-caught .9s var(--ease) 1; }
+@keyframes sv3-al-caught{
+  0%{ transform:scale(1); }
+  18%{ transform:scale(1.22); color:var(--ink); background:var(--primary); }
+  36%{ transform:scale(1.12); background:transparent; }
+  54%{ transform:scale(1.12); color:var(--ink); background:var(--primary); }
+  72%{ background:transparent; }
+  100%{ transform:scale(1); }
+}
 /* Something finished while you were looking elsewhere. It goes out when the list is opened. */
 .sv3-alerts.has-done::after{
   content:''; position:absolute; top:4px; right:5px; width:7px; height:7px;

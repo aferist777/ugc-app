@@ -658,9 +658,17 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
    right. Styles came from the retired Library 2 page (l2-*) under the mk- prefix. */
 .lib-make{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
 .mk-src{
-  flex:0 0 200px; min-height:0; display:flex; flex-direction:column; gap:6px;
-  padding:8px; background:var(--surface); border-right:1px solid var(--border);
+  flex:0 1 240px; min-width:170px; min-height:0; display:flex; flex-direction:column; gap:6px;
+  padding:8px; background:var(--surface);
 }
+/* The sash between the column and the generator (phase V28.1): js/library/make.js sets the column's flex-basis,
+   remembered; double-click for the usual width. */
+.mk-sash{
+  flex:0 0 5px; align-self:stretch; cursor:col-resize; background:var(--border);
+  transition:background .12s var(--ease);
+}
+.mk-sash:hover, .mk-sash.on{ background:var(--primary); }
+body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:none; }
 /* The "+" over the column: 20px high, the column's width. */
 .mk-add{
   flex:0 0 20px; height:20px; width:100%; padding:0;
@@ -669,43 +677,44 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   font:700 14px/18px var(--font); cursor:pointer; transition:.12s var(--ease);
 }
 .mk-add:hover{ color:var(--ink); border-color:var(--primary); border-style:solid; }
-.mk-src-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.mk-src-list{ flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
 .mk-src-empty{ padding:8px 2px; font-size:11px; line-height:1.5; color:var(--muted); }
-.mk-src-card{
-  position:relative; display:flex; flex-direction:column; flex:0 0 auto;
+/* A source is a LINE, not a poster (phase V28.1 - a podcast has no picture). */
+.mk-srow{
+  position:relative; display:flex; align-items:flex-start; gap:6px; flex:0 0 auto;
+  padding:6px 26px 6px 7px;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  overflow:hidden; cursor:pointer; transition:.12s var(--ease);
+  cursor:pointer; transition:border-color .12s var(--ease), box-shadow .12s var(--ease);
 }
-.mk-src-card:hover{ border-color:var(--primary); }
-/* The chosen source: gold, three pixels in all - the border and a ring over the poster. */
-.mk-src-card.cur{ border-color:var(--gold); }
-.mk-src-card.cur::after{
-  content:''; position:absolute; inset:0; pointer-events:none;
-  border:2px solid var(--gold); border-radius:inherit;
-}
-.mk-src-thumb{ position:relative; width:100%; aspect-ratio:16 / 9; background:var(--bg); }
-.mk-src-thumb img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
-.mk-src-thumb.pending{
-  background:repeating-linear-gradient(45deg,
-    oklch(.23 .018 265), oklch(.23 .018 265) 6px,
-    oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
-}
-.mk-src-dur{
-  position:absolute; right:4px; bottom:4px; padding:1px 5px; border-radius:var(--r-xs);
-  background:oklch(0 0 0 / .66); color:oklch(.97 0 0);
-  font-size:9.5px; font-weight:600; font-variant-numeric:tabular-nums;
-}
+.mk-srow:hover{ border-color:var(--primary); }
+/* The chosen source: gold, two pixels in all. */
+.mk-srow.cur{ border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
+/* Being added, or waiting for a decision: not pressed - only its cross and its buttons are. */
+.mk-srow.adding, .mk-srow.offer{ cursor:default; }
+.mk-srow.adding:hover, .mk-srow.offer:hover{ border-color:var(--border-soft); }
+.mk-srow.offer{ border-style:dashed; }
+/* Arrived at from an Alerts row: lit for a moment. */
+.mk-srow.flash{ animation:mk-srow-flash 1.4s var(--ease) 1; }
+@keyframes mk-srow-flash{ 0%, 55%{ border-color:var(--primary); box-shadow:0 0 0 2px var(--primary); } 100%{ box-shadow:none; } }
+.mk-srow-k{ flex:0 0 12px; font-size:9px; line-height:16px; color:var(--muted); text-align:center; }
+.mk-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.mk-srow-t{ font-size:11.5px; font-weight:600; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
+.mk-srow-s{ display:flex; flex-wrap:wrap; gap:3px 8px; font-size:10px; line-height:1.4; color:var(--muted); font-variant-numeric:tabular-nums; }
+.mk-srow-pct{ color:var(--ink); font-weight:700; }
+.mk-srow-bar{ height:3px; border-radius:2px; background:var(--bg); overflow:hidden; }
+.mk-srow-bar > i{ display:block; height:100%; background:var(--primary); transition:width .8s linear; }
+.mk-srow-acts{ display:flex; flex-wrap:wrap; gap:6px; margin-top:3px; }
 .mk-x{
-  position:absolute; top:4px; right:4px; z-index:1;
+  position:absolute; top:5px; right:5px; z-index:1;
   width:17px; height:17px; padding:0; border:0; border-radius:50%;
   background:oklch(0 0 0 / .5); color:oklch(.97 0 0);
   font-size:10px; line-height:17px; text-align:center; cursor:pointer;
   opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
 }
-.mk-src-card:hover .mk-x, .mk-x:focus-visible{ opacity:1; }
+.mk-srow:hover .mk-x, .mk-srow.adding .mk-x, .mk-x:focus-visible{ opacity:1; }
 .mk-x:hover{ background:var(--danger); }
-.mk-src-t{ padding:6px 7px 0; font-size:11px; font-weight:600; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
-.mk-src-s{ display:flex; flex-wrap:wrap; gap:6px; padding:2px 7px 6px; font-size:10px; color:var(--muted); }
+/* The first press on the cross of a line being added: it asks. */
+.mk-x.armed{ width:auto; padding:0 7px; border-radius:9px; background:var(--danger); font-weight:700; opacity:1; }
 .mk-src-draft{ color:oklch(.85 .1 85); font-weight:700; }
 
 .mk-main{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
@@ -899,6 +908,22 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .mk-route > .lib-btn{ align-self:flex-start; }
 .mk-pnote{ margin:0; font-size:10.5px; line-height:1.5; color:var(--muted); }
 .mk-pnote code{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:10px; }
+/* What the add window follows (phase V28.1): a read, a question, a vertical video going onto Uploads. */
+.mk-adds-say{ font-size:11px; line-height:1.45; color:var(--ink); }
+.mk-adds-say.err{ color:oklch(.75 .15 25); }
+.mk-adds{ display:flex; flex-direction:column; gap:8px; }
+.mk-adds:empty{ display:none; }
+.mk-addl{
+  position:relative; display:flex; flex-direction:column; gap:5px; padding:8px 30px 8px 10px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.mk-addl-t{ font-size:11.5px; font-weight:600; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
+.mk-addl-s{ font-size:10.5px; line-height:1.45; color:var(--muted); }
+.mk-addl.err .mk-addl-s{ color:oklch(.75 .15 25); }
+.mk-addl-acts{ display:flex; flex-wrap:wrap; gap:6px; }
+.mk-addl .mk-x{ opacity:1; top:7px; right:7px; }
+/* Handed over to Alerts: the window flies into the button (js/alerts-bell.js flyToAlerts), the dimming goes. */
+.mk-ov.is-leaving{ background:transparent; transition:background .4s ease-in; pointer-events:none; }
 
 /* (phase V27) "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
 .lk-panel{ width:min(520px, 96vw); }

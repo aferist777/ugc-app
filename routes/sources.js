@@ -5,8 +5,6 @@
 //
 //   GET    /api/sources                  -> { sources: [summary + progress] }
 //   GET    /api/sources/:id              -> { source, transcriptChars }
-//   POST   /api/sources/upload           multipart file -> { jobId, source }
-//   POST   /api/sources/link             { url } -> { jobId }   (any site yt-dlp reads, no login)
 //   POST   /api/sources/:id/transcribe   -> { jobId } | { alertId } (its way in is retried - phase V28.1)
 //   POST   /api/sources/:id/topics       -> { jobId } | { alertId }   409 with the running job while one runs
 //   DELETE /api/sources/:id              -> { success, removed, draftsDetached }
@@ -27,7 +25,8 @@
 // the records it left mid-way are marked 'interrupted' when the server starts, with the file kept
 // for "transcribe again".
 //
-// Ingest is one job with three visible steps - stored, poster, transcript - because that is
+// Reading a source - on its way in (lib/source-intake.js) or "transcribe again" here - is three visible steps -
+// stored, poster, transcript - because that is
 // how it fails: the copy succeeds, the poster is cheap, and the transcription is the minutes-
 // long part that can come back with nothing. Each step reports before it starts, so a stall
 // says which one is stalling.
@@ -37,12 +36,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
 
 const store = require('../lib/sources-store');
-const STT = require('../lib/stt-replicate');
 const YTDLP = require('../lib/ytdlp');
 const DRAFTS = require('../lib/script-drafts');
 const INTAKE = require('../lib/source-intake');
@@ -80,29 +75,6 @@ function _markInterrupted() {
 }
 _markInterrupted();
 
-const VIDEO_RE = /\.(mp4|mov|webm|mkv|m4v|avi|mp3|m4a|wav|aac|ogg)$/i;
-
-// Straight into uploads/sources under the source's own id: the original name goes in the
-// record, not on disk, so a file called "видео (1).mp4" cannot produce a path that some later
-// tool mis-quotes. The extension is kept because ffmpeg reads the container by it.
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => { store.ensureDirs(); cb(null, store.SOURCES_DIR); },
-    filename: (req, file, cb) => {
-      const ext = (path.extname(file.originalname || '') || '.mp4').toLowerCase();
-      req._srcId = req._srcId || store.newId();
-      cb(null, req._srcId + ext);
-    },
-  }),
-  limits: { fileSize: 8 * 1024 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (!VIDEO_RE.test(file.originalname || '')) {
-      return cb(new Error('Not a video or audio file: ' + (file.originalname || '')));
-    }
-    cb(null, true);
-  },
-});
-
 const _jobs = {};
 const _newJobId = () => 'sj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -122,18 +94,6 @@ async function _process(id, job) {
 }
 
 // ── reading ─────────────────────────────────────────────────────────────────
-
-// A multipart filename arrives as raw bytes, and busboy hands them over decoded as latin-1. A
-// Russian name therefore lands as "ÐÐ°Ð»Ð¾Ð³_Ð½Ð°_Ð¶Ð¸Ð·Ð½Ñ" and follows the source onto its card,
-// its spine and every scenario written from it. Re-reading those bytes as UTF-8 gets the name
-// back; when they are not UTF-8 the round trip produces replacement characters, and then the
-// original string was right to begin with.
-function _utf8Name(name) {
-  const s = String(name || '');
-  if (!s) return '';
-  const back = Buffer.from(s, 'latin1').toString('utf8');
-  return back.includes('�') ? s : back;
-}
 
 router.get('/sources', (_req, res) => {
   try {
@@ -196,131 +156,9 @@ router.get('/sources/:id', (req, res) => {
   res.json({ success: true, source: _withJob(rec) });
 });
 
-// ── ingest ──────────────────────────────────────────────────────────────────
-
-router.post('/sources/upload', (req, res) => {
-  upload.single('file')(req, res, async (err) => {
-    if (err) return res.status(400).json({ success: false, error: err.message });
-    if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
-
-    const id = req._srcId;
-    const videoPath = `${store.SOURCES_URL}/${path.basename(req.file.path)}`;
-    let seconds = 0;
-    try { seconds = await STT.probeDuration(req.file.path); }
-    catch (e) {
-      // Unreadable now means unreadable later: refused here, with the file removed, rather
-      // than kept as a row that can never be transcribed.
-      try { fs.unlinkSync(req.file.path); } catch (e2) {}
-      return res.status(400).json({ success: false, error: e.message });
-    }
-
-    const name = _utf8Name(req.file.originalname) || id;
-    const rec = store.create({
-      id, kind: 'file', title: req.body && req.body.title ? String(req.body.title).slice(0, 200) : name,
-      originalName: name, videoPath, seconds,
-      bytes: req.file.size || 0, state: 'stored',
-    });
-
-    const jobId = _newJobId();
-    const job = _jobs[jobId] = { state: 'running', step: 'stored', at: Date.now(), error: null, source: null, sourceId: id };
-    res.json({ success: true, jobId, source: store.summary(rec) });
-
-    (async () => {
-      try {
-        const saved = await _process(id, job);
-        job.state = 'done';
-        job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
-        job.source = store.summary(saved);
-        job.at = Date.now();
-      } catch (e) {
-        store.update(id, { state: 'error', error: e.message, transcript: { state: 'error' } });
-        job.state = 'error';
-        job.error = e.message;
-        job.source = store.summary(store.get(id) || {});
-        job.at = Date.now();
-      }
-    })();
-  });
-});
-
-// A link becomes a source the same way a file does, with two steps in front: read the metadata,
-// then fetch the video. The metadata comes first on purpose - it is seconds, it catches a
-// playlist, a private video and the bot check, and none of those should leave a half-made
-// record behind.
-router.post('/sources/link', async (req, res) => {
-  const url = String((req.body || {}).url || '').trim();
-  if (!url) return res.status(400).json({ success: false, error: 'a link is required' });
-  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'that is not a URL' });
-  if (!(await YTDLP.find())) return res.status(501).json({ success: false, error: YTDLP.MISSING });
-  // (phase V27) NO LOGIN: the cookie jar and the lock it was behind are gone (the owner 2026-10-12).
-  // A video the site keeps for signed-in people is refused in words by lib/ytdlp.js.
-
-  const jobId = _newJobId();
-  const job = _jobs[jobId] = { state: 'running', step: 'reading the link', at: Date.now(), error: null, source: null };
-  res.json({ success: true, jobId });
-
-  (async () => {
-    let id = null;
-    try {
-      const meta = await YTDLP.info(url, { onProgress: (s) => { job.step = s; } });
-      // The same video under another spelling of its address is not fetched twice - one whose file
-      // came in is read again with "transcribe again"; one that failed before its file did is fetched.
-      const had = store.list().find(s => s.videoPath
-        && ((meta.key && s.linkKey === meta.key) || (s.url && s.url === meta.url)));
-      if (had) throw new Error(`This video is a source already: "${had.title || had.id}".`);
-      id = store.newId();
-      store.ensureDirs();
-      // kind 'youtube' is any link: the records made before other sites were let in say so.
-      const rec = store.create({
-        id, kind: 'youtube', title: meta.label, url: meta.url, linkKey: meta.key, channel: meta.channel,
-        seconds: meta.duration, state: 'downloading',
-      });
-      job.source = store.summary(rec);
-      job.sourceId = id;
-
-      job.step = 'starting the download';
-      // The best there is (the owner's answer (g)); a post of several videos gives its first.
-      await YTDLP.download(url, path.join(store.SOURCES_DIR, id + '.%(ext)s'),
-        { onProgress: (s) => { job.step = s; }, items: meta.count > 1 ? '1' : '' });
-
-      // yt-dlp names the file by the template, but the extension depends on what it merged, so
-      // the file is found rather than assumed.
-      const landed = fs.readdirSync(store.SOURCES_DIR)
-        .filter(f => f.startsWith(id + '.') && VIDEO_RE.test(f))
-        .sort((a, b) => fs.statSync(path.join(store.SOURCES_DIR, b)).size - fs.statSync(path.join(store.SOURCES_DIR, a)).size)[0];
-      if (!landed) throw new Error('The download finished but left no file behind.');
-
-      const abs = path.join(store.SOURCES_DIR, landed);
-      const seconds = await STT.probeDuration(abs).catch(() => rec.seconds || 0);
-      store.update(id, {
-        videoPath: `${store.SOURCES_URL}/${landed}`,
-        bytes: fs.statSync(abs).size,
-        seconds,
-        state: 'stored',
-      });
-
-      const saved = await _process(id, job);
-      job.state = 'done';
-      job.step = `${saved.transcript.cues} cues, ${Math.round(saved.transcript.chars / 1000)}k chars`;
-      job.source = store.summary(saved);
-      job.at = Date.now();
-    } catch (e) {
-      if (id) {
-        // The transcript too, as the upload and transcribe catches do: left 'running', the source
-        // would read as still being read, with no way to read it again.
-        const cur = store.get(id) || {};
-        const t = cur.transcript || null;
-        store.update(id, { state: 'error', error: e.message,
-          transcript: t && t.state === 'ready' ? t : { ...(t || {}), state: 'error' } });
-      }
-      job.state = 'error';
-      job.error = e.message;
-      job.botCheck = !!e.botCheck;
-      job.source = id ? store.summary(store.get(id) || {}) : null;
-      job.at = Date.now();
-    }
-  })();
-});
+// ── reading again ───────────────────────────────────────────────────────────
+// (phase V28.1) A source comes in through POST /sources/add/* (lib/source-intake.js) - the multipart upload and the
+// page-followed link that were here are gone with the page's own ingest.
 
 router.post('/sources/:id/transcribe', async (req, res) => {
   const id = String(req.params.id);

@@ -1,8 +1,9 @@
 // LIBRARY — the scenario generator: "New scenario" on the Scenarios shelf (phase E, the owner
 // 2026-09-29). What Library 2 was, moved to where scenarios are.
 //
-// TWO PARTS, in place of the scenario list. On the LEFT a narrow column of sources - the long videos
-// scripts are written from - with a 20px "+" over it that adds one. On the RIGHT the "Generate script"
+// TWO PARTS, in place of the scenario list. On the LEFT a column of sources - the long videos scripts are written
+// from - as LINES, not posters (phase V28.1, the owner: a podcast has no picture), with a 20px "+" over it that adds
+// one, and a sash between it and the right (its width remembered). On the RIGHT the "Generate script"
 // form; with no source chosen it writes from the topic alone ("without a source"). Choosing a source
 // puts ITS topics on the right instead; choosing a topic brings the form back, filled for that
 // fragment. Pressing the chosen source again lets go of it; "← topics" goes back from the form.
@@ -23,6 +24,7 @@
 import * as J from './jobs.js';
 import * as NR from './narrators.js';
 import * as Layers from '../layers.js';
+import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
 
 const $ = (id) => document.getElementById(id);
 const el = J.el;
@@ -37,8 +39,10 @@ let _gen = null;          // the form's state - which is also what a draft is ma
 let _stage = 'idle';      // idle | hooks | pick | script | working
 let _saveT = null;
 let _reg = null;          // the model registry, read once
-let _pollT = null;        // the sources column's refresh while something is being transcribed
-let _ingest = null;       // { jobId, startedAt, key, label, estimateMs, step } - an ingest running
+let _pollT = null;        // the sources column's refresh while something is being added or transcribed
+let _pollMs = 0;
+let _tickT = null;        // the time left on the lines being added, every second between two reads
+let _stopArmed = '';      // the source whose cross says "really?" - the next press stops it
 // sourceId -> { kind: 'topics'|'transcribe', jobId, startedAt, rows, step, followed } - see _followSrcJob
 const _srcJobs = new Map();
 const _srcLast = new Map();  // sourceId -> { text, err } - what its last job said, when it failed
@@ -46,10 +50,11 @@ const _following = new Map();  // draftId -> { jobId, run, rows } - the stages t
 
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
-  <aside class="mk-src">
-    <button class="mk-add" id="mk-add" type="button" title="Add a source - a long video, or its audio">+</button>
+  <aside class="mk-src" id="mk-src">
+    <button class="mk-add" id="mk-add" type="button" title="Add a source - a long video, by a link or from a file">+</button>
     <div class="mk-src-list" id="mk-src-list"></div>
   </aside>
+  <div class="mk-sash" id="mk-sash" title="Drag to resize, double-click for the usual width"></div>
   <section class="mk-main">
     <div class="mk-said" id="mk-said" hidden></div>
     <div class="mk-view" id="mk-topics" hidden>
@@ -132,6 +137,9 @@ function _build() {
   _built = true;
 
   $('mk-add').addEventListener('click', _openAddSource);
+  _wireSash();
+  // Questions about a link left waiting before a reload are the add window's again (phase V28.1).
+  _loadAsks();
   $('mk-mine').addEventListener('click', _mineTopics);
   $('mk-src-off').addEventListener('click', () => _chooseSource(null));
   $('mk-to-topics').addEventListener('click', () => { if (_src) _showTopics(); });
@@ -179,10 +187,45 @@ export async function open(opts) {
   await _flushDraft();
   await Promise.all([_readSources(), _readDrafts()]);
   _paintSources();
+  if (o.sourceId) { await showSource(o.sourceId, { opening: true }); return; }
   if (o.draftId && await _resumeDraft(o.draftId)) return;
   _src = null;
   _paintSources();
   await _enterScript({});
+}
+
+/**
+ * A source by its id - an Alerts row leads here (phase V28.1, ?shelf=scenarios&make=1&src=): its topics when it is a
+ * source, its line in the column, lit, while it is being added or waits for a decision. `opening`: the layout was
+ * just opened for it, and a form is put up when there are no topics to show.
+ */
+export async function showSource(id, { opening = false } = {}) {
+  _build();
+  if (!opening) {
+    await _flushDraft();
+    await _readSources();
+    _paintSources();
+  }
+  const it = _sources.find(s => String(s.id) === String(id));
+  if (it && _choosable(it)) {
+    if (_src && String(_src.id) === String(id)) { await _refreshSource(); if (_src) _showTopics(); }
+    else await _chooseSource(it);
+  } else if (opening) {
+    _src = null;
+    _paintSources();
+    await _enterScript({});
+  }
+  _flashRow(id);
+}
+
+// Lit for a moment, and brought into view.
+function _flashRow(id) {
+  const row = document.querySelector(`#mk-src-list .mk-srow[data-id="${CSS.escape(String(id))}"]`);
+  if (!row) return;
+  row.scrollIntoView({ block: 'nearest' });
+  row.classList.remove('flash');
+  void row.offsetWidth;
+  row.classList.add('flash');
 }
 
 /** Leave the layout: what is typed is saved; what runs keeps running. */
@@ -194,7 +237,7 @@ export async function close() {
 // ── Sources: the column ─────────────────────────────────────────────────────
 // Being read: the states only a running job leaves behind (routes/sources.js LIVE), or a transcript
 // under way. A source that failed is never "being read", whatever its transcript still says.
-const READING = new Set(['stored', 'downloading', 'transcribing']);
+const READING = new Set(['waiting', 'downloading', 'copying', 'stored', 'transcribing']);
 const _reading = (s) => !!s && s.state !== 'error'
   && (READING.has(s.state) || !!(s.transcript && s.transcript.state === 'running'));
 
@@ -216,72 +259,229 @@ async function _readDrafts() {
   try { _drafts = (await J.api('/api/scriptgen/drafts')).drafts || []; } catch (e) { /* the last list stands */ }
 }
 
-// While a source is being fetched or read, the column asks again every few seconds - the job that
-// does it belongs to whoever started it, and a card saying "transcribing…" forever is the one thing
-// the column must not do.
+// While a source is being added, fetched or read, the column asks again - every 2 s while one is being added (its
+// bar and its time), every 5 s otherwise: the work belongs to the server, and a line saying "transcribing…" forever is
+// the one thing the column must not do. Between two reads the time left counts down by itself.
 function _pollWhileBusy() {
-  const busy = _sources.some(_reading);
+  const adding = _sources.some(s => s.progress);
+  const busy = adding || _sources.some(_reading);
+  const ms = adding ? 2000 : 5000;
+  if (_pollT && (!busy || _pollMs !== ms)) { clearInterval(_pollT); _pollT = null; }
   if (busy && !_pollT) {
+    _pollMs = ms;
     _pollT = setInterval(async () => {
       await _readSources();
       if (_built) _paintSources();
       if (_src) {
         const fresh = _sources.find(s => String(s.id) === String(_src.id));
         const was = (_src.transcript || {}).state;
-        if (fresh && (fresh.state !== _src.state || (fresh.transcript || {}).state !== was)) await _refreshSource();
+        if (fresh && (fresh.state !== _src.state || (fresh.transcript || {}).state !== was
+          || (fresh.topics || 0) !== ((_src.topics || []).length))) await _refreshSource();
+        else if (fresh && fresh.progress && _view === 'topics') _reattachSrcJob(_src);
       }
-    }, 5000);
-  } else if (!busy && _pollT) { clearInterval(_pollT); _pollT = null; }
+    }, ms);
+  }
+  if (adding && !_tickT) _tickT = setInterval(_tickLeft, 1000);
+  else if (!adding && _tickT) { clearInterval(_tickT); _tickT = null; }
 }
+
+const _leftSays = (ms) => '~' + J.clock(Math.max(0, Math.ceil(ms / 1000))) + ' left';
+function _tickLeft() {
+  document.querySelectorAll('#mk-src-list [data-end]').forEach((n) => { n.textContent = _leftSays(+n.dataset.end - Date.now()); });
+}
+const _ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+const STEP_WORD = { download: 'downloading', copy: 'copying', process: 'transcribing', topics: 'finding topics' };
+// A line that is a source to write from: not one being added, not one waiting for a decision.
+const _offer = (it) => it.state === 'nospeech' || it.state === 'notopics';
+const _choosable = (it) => !!it && !it.progress && !_offer(it);
 
 function _stateLine(it) {
   const t = it.transcript || {};
-  if (it.state === 'error') return /interrupted/i.test(it.error || '') ? 'interrupted' : 'failed';
-  if (it.state === 'downloading') return 'downloading…';
+  const way = it.intake || null;
+  if (it.state === 'nospeech') return 'no speech - not a source';
+  if (it.state === 'notopics') return 'no topics - not a source';
+  if (it.state === 'error') {
+    const cut = /interrupted/i.test(it.error || '') ? 'interrupted' : 'failed';
+    // Its way in is an Alerts row (phase V28.1): "retry" is there.
+    return way && way.alertId ? cut + ' - retry in Alerts' : cut;
+  }
+  if (it.state === 'downloading' || it.state === 'waiting') return 'downloading…';
   if (_reading(it)) return 'transcribing…';
   if (t.state !== 'ready') return 'no transcript';
   const run = _srcJobs.get(String(it.id));
   if (run && run.kind === 'topics') return 'finding topics…';
+  if (!it.topics && way && (way.interrupted || way.error)) return 'no topics yet - retry in Alerts';
   return it.topics ? `${it.topicsUsed || 0} of ${it.topics} topics used` : 'no topics yet';
 }
+
+// While only a share and a time move (a source being added, read every 2 s), the lines are updated IN PLACE: a line
+// made anew under the pointer loses the press that straddles it - the cross of a download would not stop it.
+let _painted = '';
+const _lineKey = (it) => [it.id, it.state, it.title, it.seconds, it.topics, it.topicsUsed, _stateLine(it),
+  _drafts.filter(d => String(d.sourceId) === String(it.id)).length, !!(_src && String(_src.id) === String(it.id)),
+  _stopArmed === String(it.id), it.progress ? it.progress.step + '/' + it.progress.place : ''].join('|');
 
 function _paintSources() {
   const box = $('mk-src-list');
   if (!box) return;
+  const key = _sources.map(_lineKey).join('\n');
+  if (key && key === _painted && box.childElementCount === _sources.length) { _paintProgress(box); return; }
+  _painted = key;
   box.textContent = '';
   if (!_sources.length) {
     box.appendChild(el('div', 'mk-src-empty', 'No sources yet. A long video, added with +, becomes material to write from.'));
     return;
   }
+  for (const it of _sources) box.appendChild(_srcLine(it));
+}
+
+function _paintProgress(box) {
   for (const it of _sources) {
-    const card = el('div', 'mk-src-card' + (_src && String(_src.id) === String(it.id) ? ' cur' : ''));
-    card.title = it.title + (_src && String(_src.id) === String(it.id) ? '\nPress again to write without a source' : '');
-    const box2 = el('div', 'mk-src-thumb' + (it.thumb ? '' : ' pending'));
-    if (it.thumb) {
-      const img = el('img');
-      img.loading = 'lazy';
-      img.alt = it.title;
-      img.src = it.thumb;
-      box2.appendChild(img);
-    }
-    if (it.seconds) box2.appendChild(el('span', 'mk-src-dur', J.clock(it.seconds)));
-    const x = el('button', 'mk-x', '✕');
-    x.type = 'button';
-    x.title = 'Delete this source, its video and its transcript';
-    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it); });
-    box2.appendChild(x);
-    card.appendChild(box2);
-    card.appendChild(el('div', 'mk-src-t', it.title));
-    const sub = el('div', 'mk-src-s');
-    sub.appendChild(el('span', null, _stateLine(it)));
-    const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
-    if (nd) sub.appendChild(el('span', 'mk-src-draft', nd === 1 ? '1 draft' : `${nd} drafts`));
-    card.appendChild(sub);
-    card.addEventListener('click', () => _chooseSource(it));
-    // Its own menu (phase F2) - and never Electron's "Save image as" on the poster.
-    card.addEventListener('contextmenu', (e) => { e.preventDefault(); _sourceMenu(e, it); });
-    box.appendChild(card);
+    const p = it.progress;
+    if (!p) continue;
+    const row = box.querySelector(`.mk-srow[data-id="${CSS.escape(String(it.id))}"]`);
+    if (!row) continue;
+    const pct = row.querySelector('.mk-srow-pct');
+    if (pct) pct.textContent = Math.round(p.pct * 100) + '%';
+    const left = row.querySelector('[data-end]');
+    if (left) { left.dataset.end = String(Date.now() + p.leftMs); left.textContent = _leftSays(p.leftMs); }
+    const fill = row.querySelector('.mk-srow-bar > i');
+    if (fill) fill.style.width = (p.pct * 100).toFixed(1) + '%';
+    row.title = it.title + '\n' + (p.words || '') + '\nIt is being added - follow it in Alerts';
   }
+}
+
+// A LINE (phase V28.1): a mark, the name, what it is at, its length and drafts, a cross at the top right. One being
+// added has its share done and the time left, and is not pressed - its cross stops it, twice ("really?"). One with
+// nothing to write from offers to go onto Uploads.
+function _srcLine(it) {
+  const id = String(it.id);
+  const p = it.progress || null;
+  const offer = _offer(it);
+  const cur = !!(_src && String(_src.id) === id);
+  const row = el('div', 'mk-srow' + (cur ? ' cur' : '') + (p ? ' adding' : '') + (offer ? ' offer' : ''));
+  row.dataset.id = id;
+  row.title = it.title + (cur ? '\nPress again to write without a source' : '');
+  row.appendChild(el('span', 'mk-srow-k', '▶'));
+  const main = el('div', 'mk-srow-main');
+  main.appendChild(el('div', 'mk-srow-t', it.title));
+  const sub = el('div', 'mk-srow-s');
+  if (p) {
+    sub.appendChild(el('span', 'mk-srow-pct', Math.round(p.pct * 100) + '%'));
+    const left = el('span', null, _leftSays(p.leftMs));
+    left.dataset.end = String(Date.now() + p.leftMs);
+    sub.appendChild(left);
+    sub.appendChild(el('span', null, p.step === 'wait' ? (p.place ? `${_ordinal(p.place)} in the queue` : 'waiting') : (STEP_WORD[p.step] || p.step)));
+    row.title = it.title + '\n' + (p.words || '') + '\nIt is being added - follow it in Alerts';
+  } else {
+    sub.appendChild(el('span', null, _stateLine(it)));
+    if (it.seconds) sub.appendChild(el('span', null, J.clock(it.seconds)));
+    const nd = _drafts.filter(d => String(d.sourceId) === id).length;
+    if (nd) sub.appendChild(el('span', 'mk-src-draft', nd === 1 ? '1 draft' : `${nd} drafts`));
+  }
+  main.appendChild(sub);
+  if (p) {
+    const bar = el('div', 'mk-srow-bar');
+    const fill = el('i');
+    fill.style.width = (p.pct * 100).toFixed(1) + '%';
+    bar.appendChild(fill);
+    main.appendChild(bar);
+  }
+  if (offer) {
+    const acts = el('div', 'mk-srow-acts');
+    const up = el('button', 'lib-btn', 'Put on Uploads');
+    up.type = 'button';
+    up.title = 'The video goes onto Uploads in Media, and is not kept as a source';
+    up.addEventListener('click', (e) => { e.stopPropagation(); _sourceToUploads(it, up); });
+    acts.appendChild(up);
+    main.appendChild(acts);
+  }
+  row.appendChild(main);
+  const x = el('button', 'mk-x' + (p && _stopArmed === id ? ' armed' : ''), p && _stopArmed === id ? 'really?' : '✕');
+  x.type = 'button';
+  if (p) {
+    x.title = p.step === 'topics'
+      ? 'Stop finding its topics - its words stay, and "Find topics" finds them later'
+      : 'Stop adding it - it is removed, with what was downloaded';
+    x.addEventListener('click', (e) => { e.stopPropagation(); _stopAdding(it); });
+  } else {
+    x.title = offer ? 'Delete it, and its file' : 'Delete this source, its video and its transcript';
+    x.addEventListener('click', (e) => { e.stopPropagation(); _deleteSource(it); });
+  }
+  row.appendChild(x);
+  if (_choosable(it)) {
+    row.addEventListener('click', () => _chooseSource(it));
+    // Its own menu (phase F2) - never Electron's.
+    row.addEventListener('contextmenu', (e) => { e.preventDefault(); _sourceMenu(e, it); });
+  } else row.addEventListener('contextmenu', (e) => e.preventDefault());
+  return row;
+}
+
+// The cross of a line being added: the first press asks ("really?" for 3 s), the second stops it.
+async function _stopAdding(it) {
+  const id = String(it.id);
+  if (_stopArmed !== id) {
+    _stopArmed = id;
+    _paintSources();
+    setTimeout(() => { if (_stopArmed === id) { _stopArmed = ''; _paintSources(); } }, 3000);
+    return;
+  }
+  _stopArmed = '';
+  try { await J.api('/api/sources/' + encodeURIComponent(id) + '/stop', { method: 'POST' }); }
+  catch (e) { _say(e.message, 'err'); }
+  // The server lets go of the work first - a download killed, a call dropped - and only then of the source.
+  setTimeout(async () => { await _readSources(); _paintSources(); }, 1200);
+}
+
+// Nothing to write from (phase V28.1): onto Uploads in Media, and the line goes.
+async function _sourceToUploads(it, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await J.api('/api/sources/' + encodeURIComponent(it.id) + '/to-uploads', { method: 'POST' });
+    _say(`"${it.title}" is on Uploads in Media.`, 'ok');
+  } catch (e) { _say(e.message, 'err'); if (btn) btn.disabled = false; }
+  await _readSources();
+  _paintSources();
+}
+
+// ── The sash between the column and the generator (phase V28.1) ──
+const LS_SRC_W = 'lib_mk_src_w';
+const SRC_W = { def: 240, min: 170, max: 560 };
+const MAIN_MIN = 420;
+function _clampSrcW(v) {
+  const host = $('lib-make');
+  let max = SRC_W.max;
+  if (host && host.clientWidth) max = Math.min(max, host.clientWidth - MAIN_MIN - 5);
+  return Math.round(Math.max(SRC_W.min, Math.min(Math.max(SRC_W.min, max), v)));
+}
+function _wireSash() {
+  const sash = $('mk-sash');
+  const col = $('mk-src');
+  if (!sash || !col) return;
+  let w = SRC_W.def;
+  try { const v = +localStorage.getItem(LS_SRC_W); if (v > 0) w = v; } catch (e) { /* the usual width */ }
+  col.style.flexBasis = w + 'px';
+  const keep = () => { try { localStorage.setItem(LS_SRC_W, String(w)); } catch (e) { /* this view only */ } };
+  sash.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const from = e.clientX;
+    // From what is DRAWN: a narrower window may have squeezed the column below what was remembered.
+    const start = Math.round(col.getBoundingClientRect().width) || w;
+    document.body.classList.add('mk-resizing');
+    sash.classList.add('on');
+    const move = (ev) => { w = _clampSrcW(start + ev.clientX - from); col.style.flexBasis = w + 'px'; };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mk-resizing');
+      sash.classList.remove('on');
+      keep();
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => { w = _clampSrcW(SRC_W.def); col.style.flexBasis = w + 'px'; keep(); });
 }
 
 // Choosing a source shows its topics; choosing the chosen one again - or its ✕ - lets go of it and
@@ -372,7 +572,8 @@ function _paintTopics(rec) {
   }
   if (t.state !== 'ready') {
     const e = el('div', 'mk-empty', rec.state === 'error'
-      ? `This source failed: ${rec.error || 'unknown reason'}` : 'No transcript yet.');
+      ? `This source failed: ${rec.error || 'unknown reason'}${rec.intake && rec.intake.alertId ? ' - its row in Alerts has "retry".' : ''}`
+      : 'No transcript yet.');
     box.appendChild(e);
     if (rec.videoPath && !_srcJobs.has(String(rec.id))) {
       // An ingest killed by a server restart, or one that failed: its file is here, so it can be read
@@ -630,6 +831,8 @@ function _srcTiming(kind, rec) {
 function _reattachSrcJob(rec) {
   const id = String(rec.id);
   const host = $('mk-topics-job');
+  const adding = (_sources.find(s => String(s.id) === id) || {}).progress;
+  if (adding) { J.sayJob(host, `${adding.words} · ${Math.round(adding.pct * 100)}% - follow it in Alerts`); return; }
   const run = _srcJobs.get(id);
   if (!run) {
     const last = _srcLast.get(id);
@@ -687,6 +890,8 @@ async function _mineTopics() {
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/topics`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
     });
+    // Its way in was cut off (phase V28.1): the server retried its Alerts row - the work is that row's.
+    if (d.alertId) { await _afterRetry(); return; }
     run = { kind: 'topics', jobId: d.jobId, startedAt: Date.now(), rows: [], step: '' };
   } catch (e) {
     if (e.status === 409 && e.data && e.data.jobId) run = { kind: 'topics', jobId: e.data.jobId, startedAt: e.data.startedAt || Date.now(), rows: [], step: '' };
@@ -704,7 +909,11 @@ async function _transcribeAgain(rec) {
   if (_srcJobs.has(id)) return;
   if (!confirm(`Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`)) return;
   try {
-    const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, { method: 'POST' });
+    // On the generator's model: when it has no topics yet, they are found after the words (phase V28.1).
+    const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
+    });
+    if (d.alertId) { await _afterRetry(); return; }
     if (!_srcJobs.has(id)) {
       _srcJobs.set(id, { kind: 'transcribe', jobId: d.jobId, startedAt: Date.now(), rows: [], step: '' });
       _followSrcJob(id);
@@ -714,6 +923,15 @@ async function _transcribeAgain(rec) {
     _paintSources();
     await _refreshSource();              // the failed view and its paid button go at once
   } catch (e) { J.sayJob($('mk-topics-job'), e.message, true); }
+}
+
+// A source's own button retried its way in: the row in Alerts runs again, and the line in the column shows it.
+async function _afterRetry() {
+  _say('It goes on from where it stopped - follow it in Alerts.');
+  pulseAlerts();
+  await _readSources();
+  _paintSources();
+  await _refreshSource();
 }
 
 // ── The form ────────────────────────────────────────────────────────────────
@@ -1535,20 +1753,28 @@ function _say(text, kind, scenarioId) {
   box.appendChild(x);
 }
 
-// ── Adding a source ─────────────────────────────────────────────────────────
-// A window on the layer stack. Two routes in: a file from this computer, or a link (any site yt-dlp
-// reads, no login - phase V27). The ingest belongs to the module, not the window:
-// closing it leaves the ingest running, and opening it again shows the same countdown.
+// ── Adding a source (phase V28.1) ───────────────────────────────────────────
+// A window on the layer stack: a link, or a file from this computer - its PATH, handed over by the app's own window
+// (desktop/preload.js), and the server copies it. The SERVER reads it and decides by the frame (lib/source-intake.js):
+// a horizontal video becomes a source and the window flies into Alerts, where its whole way in goes on; a vertical
+// or square one, or one whose frame the site did not name, is asked about here; a sound alone is "in development".
+// The window is free again at once - links are added one after another and downloaded in turn. What it still follows
+// (a read, a question, a vertical video going onto Uploads) belongs to the module, not the window: closed and opened
+// again it is all there, and a question survives a reload (GET /api/sources/add).
 let _addWin = null;
+const _adds = new Map();       // readId -> the read, as the server last said it
+let _addsT = null;
+let _addSaid = null;           // { text, err } - the window's own word: "paste a link first", a refusal
 
-let _ingestLast = '';      // what the last ingest said when it failed - shown when the window opens
+const _post = (url, body) => J.api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
 function _closeAddSource() {
   if (!_addWin) return;
   const w = _addWin;
   _addWin = null;
-  // Its row goes with it; the ingest runs on and is shown again when the window is.
-  if (_ingest && _ingest.row) { _ingest.row.detach(); _ingest.row = null; }
+  _addSaid = null;
+  // What has ended is let go of with the window; what still runs or waits for an answer stays.
+  for (const [id, r] of _adds) if (_addSettled(r)) _adds.delete(id);
   w.ov.remove();
   Layers.close(w.layer);
 }
@@ -1562,33 +1788,32 @@ function _openAddSource() {
         <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button></div>
       <div class="mk-panel-body">
         <div class="mk-choice">
-          <button class="mk-choice-btn cur" type="button" data-route="file">From a file</button>
-          <button class="mk-choice-btn" type="button" data-route="link">From a link</button>
+          <button class="mk-choice-btn cur" type="button" data-route="link">From a link</button>
+          <button class="mk-choice-btn" type="button" data-route="file">From a file</button>
         </div>
-        <section class="mk-route" data-r="file">
-          <label class="mk-field"><span>Video or audio file</span><input type="file" data-f="file" accept="video/*,audio/*"></label>
-          <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
-            <input type="text" data-f="title" placeholder="What this source is"></label>
-          <p class="mk-pnote">The file is kept whole, so frames and fragments can be cut from it later. Reckon about a
-            gigabyte for fifty minutes. Once the words are in, its topics are found straight away -
-            both are paid calls to the model.</p>
-          <button class="lib-btn primary" type="button" data-go="file">Add and transcribe</button>
-        </section>
-        <section class="mk-route" data-r="link" hidden>
+        <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>
             <input type="text" data-f="url" placeholder="https://www.youtube.com/watch?v=…"></label>
-          <p class="mk-pnote">YouTube, TikTok, Instagram and the other sites yt-dlp reads, at the best quality there
-            is. Without a login: a video a site shows only to signed-in people cannot be fetched - add it as a
-            file then.</p>
-          <button class="lib-btn primary" type="button" data-go="link">Fetch and transcribe</button>
+          <button class="lib-btn primary" type="button" data-go="link">Add</button>
         </section>
-        <div class="mk-job" data-f="job" hidden></div>
+        <section class="mk-route" data-r="file" hidden>
+          <label class="mk-field"><span>Video file</span><input type="file" data-f="file" accept="video/*"></label>
+          <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
+            <input type="text" data-f="title" placeholder="What this source is"></label>
+          <button class="lib-btn primary" type="button" data-go="file">Add</button>
+        </section>
+        <p class="mk-pnote">A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or
+          copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once. A vertical or
+          square one is asked about: onto Uploads in Media, or a source after all. A sound without a picture - in
+          development. Links are read without a login: a video a site shows only to signed-in people - add it as a
+          file. The transcription and the topics are paid calls.</p>
+        <div class="mk-adds-say" data-f="said" hidden></div>
+        <div class="mk-adds" data-f="adds"></div>
       </div>
     </div>`;
   document.body.appendChild(ov);
   const q = (s) => ov.querySelector(s);
   const f = (name) => q(`[data-f="${name}"]`);
-  const job = f('job');
   const route = (r) => {
     ov.querySelectorAll('.mk-choice-btn').forEach(b => b.classList.toggle('cur', b.dataset.route === r));
     ov.querySelectorAll('.mk-route').forEach(s => { s.hidden = s.dataset.r !== r; });
@@ -1597,116 +1822,184 @@ function _openAddSource() {
   q('[data-x="close"]').addEventListener('click', _closeAddSource);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) _closeAddSource(); });
   const layer = Layers.open(ov, { name: 'add a source', onEsc: _closeAddSource });
-  _addWin = { ov, layer, job, f, q };
+  _addWin = { ov, layer, q, f };
 
-  q('[data-go="file"]').addEventListener('click', () => _addByFile(f('file'), f('title')));
-  q('[data-go="link"]').addEventListener('click', () => _addByLink(f('url')));
-  f('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addByLink(f('url')); } });
-  // An ingest already running: its countdown, and no second one. One that failed while the window
-  // was closed: what it said.
-  if (_ingest) _showIngest();
-  else if (_ingestLast) J.sayJob(job, _ingestLast, true);
+  q('[data-go="link"]').addEventListener('click', () => _addLink(f('url')));
+  f('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addLink(f('url')); } });
+  q('[data-go="file"]').addEventListener('click', () => _addFile(f('file'), f('title')));
+  setTimeout(() => { if (_addWin && _addWin.ov === ov) f('url').focus(); }, 0);
+  _paintAdds();
 }
 
-function _paintIngestButtons() {
-  if (!_addWin) return;
-  _addWin.q('[data-go="file"]').disabled = !!_ingest;
-  _addWin.q('[data-go="link"]').disabled = !!_ingest;
+function _addSay(text, err) {
+  _addSaid = text ? { text, err: !!err } : null;
+  _paintAdds();
 }
 
-function _showIngest() {
-  if (!_addWin || !_ingest) return;
-  if (_ingest.row) _ingest.row.detach();
-  _ingest.row = J.startJob(_addWin.job, { key: _ingest.key, label: _ingest.label, estimateMs: _ingest.estimateMs, startedAt: _ingest.startedAt });
-  if (_ingest.step) _ingest.row.say(_ingest.step);
-  _paintIngestButtons();
-}
-
-async function _addByFile(input, titleIn) {
-  if (_ingest) return;
-  const file = input.files && input.files[0];
-  if (!file) { J.sayJob(_addWin.job, 'Pick a file first.', true); return; }
-  const form = new FormData();
-  form.append('file', file);
-  const title = titleIn.value.trim();
-  if (title) form.append('title', title);
-  _ingestLast = '';
-  _ingest = { startedAt: Date.now(), key: `l2-ingest|file|${J.bucket(file.size / 1048576)}mb`, label: `Uploading ${J.mb(file.size)}…`, estimateMs: J.EST.ingestFile(file.size) };
-  _showIngest();
+async function _addLink(input) {
+  const url = input.value.trim();
+  if (!url) { _addSay('Paste a link first.', true); return; }
+  _addSay('');
   try {
-    const d = await J.api('/api/sources/upload', { method: 'POST', body: form });
-    await _followIngest(d.jobId, d.source && d.source.id);
+    const d = await _post('/api/sources/add/link', { url, mineWith: J.modelChoice() || {} });
+    input.value = '';
+    _track(d.read);
+  } catch (e) { _addSay(e.message, true); }
+}
+
+async function _addFile(input, titleIn) {
+  const file = input.files && input.files[0];
+  if (!file) { _addSay('Pick a file first.', true); return; }
+  // The app's own window says where the file lies; the server copies it from there itself, so leaving the page
+  // cuts nothing off. A browser tab cannot say.
+  const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
+  let where = '';
+  try { where = typeof pathOf === 'function' ? String(pathOf(file) || '') : ''; } catch (e) { where = ''; }
+  if (!where) { _addSay('Adding a file works in the app\'s own window - it hands the file over. Here, add it by a link.', true); return; }
+  _addSay('');
+  try {
+    const d = await _post('/api/sources/add/file', { path: where, title: titleIn.value.trim(), mineWith: J.modelChoice() || {} });
     input.value = '';
     titleIn.value = '';
-  } catch (e) { _ingestFailed(e); }
+    _track(d.read);
+  } catch (e) { _addSay(e.message, true); }
 }
 
-async function _addByLink(urlIn) {
-  if (_ingest) return;
-  const url = urlIn.value.trim();
-  if (!url) { J.sayJob(_addWin.job, 'Paste a link first.', true); return; }
-  _ingestLast = '';
-  _ingest = { startedAt: Date.now(), key: 'l2-ingest|link', label: 'Reading the link…', estimateMs: J.EST.ingestLink };
-  _showIngest();
-  try {
-    const d = await J.api('/api/sources/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-    await _followIngest(d.jobId, '');
-    urlIn.value = '';
-  } catch (e) { _ingestFailed(e); }
+// ── What the window follows ──
+const _linkEnded = (r) => !!(r.link && ['done', 'error', 'stopped'].includes(r.link.state));
+function _addSettled(r) {
+  if (!r) return true;
+  if (r.state === 'uploads') return r.from === 'link' ? _linkEnded(r) : !!r.landed;
+  return ['audio', 'error', 'dropped', 'source'].includes(r.state);
+}
+const _addPending = (r) => r.state === 'reading' || (r.state === 'uploads' && !_addSettled(r));
+
+function _track(read) {
+  if (!read || !read.id) return;
+  _adds.set(read.id, read);
+  _landRead(read);
+  _paintAdds();
+  _followAdds();
 }
 
-async function _followIngest(jobId, knownId) {
-  await _readSources();
-  _paintSources();
-  // A link has no record until its metadata is read: the column is read again when it appears, so
-  // its card shows "downloading…" and the column's own poll takes over from there.
-  let seen = !!knownId;
-  const job = await J.pollJob('/api/sources/jobs', jobId, (j) => {
-    if (!seen && j.sourceId) { seen = true; _readSources().then(() => _paintSources()); }
-    if (!j.step || !_ingest) return;
-    _ingest.step = j.step;
-    if (_ingest.row) _ingest.row.say(j.step);
-  });
-  if (_ingest && _ingest.row) _ingest.row.finish();
-  _ingest = null;
-  const id = knownId || (job && job.source && job.source.id) || '';
-  _closeAddSource();
-  await _afterIngest(id);
+function _followAdds() {
+  if (_addsT || ![..._adds.values()].some(_addPending)) return;
+  _addsT = setInterval(async () => {
+    const pending = [..._adds.values()].filter(_addPending);
+    if (!pending.length) { clearInterval(_addsT); _addsT = null; return; }
+    for (const r of pending) {
+      let fresh = null;
+      try { fresh = (await J.api('/api/sources/add/' + encodeURIComponent(r.id))).read; }
+      catch (e) { fresh = { ...r, state: 'error', error: e.status === 404 ? 'lost - add it again' : e.message }; }
+      if (!_adds.has(r.id)) continue;
+      _adds.set(r.id, fresh);
+      _landRead(fresh);
+    }
+    _paintAdds();
+  }, 1000);
 }
 
-function _ingestFailed(e) {
-  const row = _ingest && _ingest.row;
-  if (row && _addWin) row.fail(e.message);
-  else {
-    if (row) row.detach();
-    if (_addWin) J.sayJob(_addWin.job, e.message, true);
-    else _say('Adding the source failed: ' + e.message, 'err');
-  }
-  _ingestLast = e.message;
-  _ingest = null;
-  _paintIngestButtons();
+// A read that became a source is handed over: the window flies into Alerts and is closed; the new line is in the
+// column at once. A vertical one landed on Uploads leaves the column alone.
+function _landRead(r) {
+  if (!r || r.state !== 'source' || !_adds.has(r.id)) return;
+  _adds.delete(r.id);
   _readSources().then(() => _paintSources());
+  if (_addWin) {
+    const w = _addWin;
+    w.ov.classList.add('is-leaving');
+    flyToAlerts(w.ov.querySelector('.mk-panel')).then(() => { if (_addWin === w) _closeAddSource(); });
+  } else pulseAlerts();
 }
 
-// The words are in. The new source is chosen and its topics found - but only when the form holds
-// nothing it would lose (a generation running, a script half written); otherwise it simply appears
-// in the column, and the person chooses it when they are ready.
-async function _afterIngest(id) {
-  await Promise.all([_readSources(), _readDrafts()]);
-  _paintSources();
-  if (!id) return;
-  const it = _sources.find(s => String(s.id) === String(id));
-  if (!it) return;
-  // Chosen already - somebody pressed its card to watch it: read it again rather than let go of it.
-  if (_src && String(_src.id) === String(id)) {
-    await _refreshSource();
-    if (_src && _view !== 'topics') _showTopics();
-  } else {
-    const free = !_busy() && !_saveT
-      && !(_gen && ((_gen.hooks || []).length || (_gen.paragraphs || []).length || $('mk-topic').value.trim()));
-    if (!free) { _say('The new source is in the column - choose it when the script in hand is done.'); return; }
-    await _chooseSource(it);
+async function _answer(r, as) {
+  try {
+    const d = await _post('/api/sources/add/' + encodeURIComponent(r.id) + '/answer', { as });
+    if (as === 'drop') { _adds.delete(r.id); _paintAdds(); return; }
+    _adds.set(r.id, d.read);
+    _landRead(d.read);
+    _paintAdds();
+    _followAdds();
+  } catch (e) {
+    _adds.set(r.id, { ...r, state: 'error', error: e.message });
+    _paintAdds();
   }
-  const t = (_src && _src.transcript) || {};
-  if (_src && String(_src.id) === String(id) && t.state === 'ready' && !((_src.topics || []).length)) _mineTopics();
+}
+
+// The questions left waiting - from before a reload - are the window's again.
+async function _loadAsks() {
+  try {
+    const d = await J.api('/api/sources/add');
+    for (const r of d.asks || []) if (!_adds.has(r.id)) _adds.set(r.id, r);
+  } catch (e) { /* none to show */ }
+}
+
+const _dims = (a) => (a && a.w && a.h ? `${a.w}×${a.h}` : '') + (a && a.seconds ? (a.w ? ' · ' : '') + J.clock(a.seconds) : '');
+
+function _paintAdds() {
+  if (!_addWin) return;
+  const said = _addWin.f('said');
+  said.hidden = !_addSaid;
+  said.textContent = _addSaid ? _addSaid.text : '';
+  said.classList.toggle('err', !!(_addSaid && _addSaid.err));
+  const box = _addWin.f('adds');
+  box.textContent = '';
+  const list = [..._adds.values()].sort((a, b) => (b.at || 0) - (a.at || 0));
+  for (const r of list) box.appendChild(_addLine(r));
+}
+
+function _addLine(r) {
+  const line = el('div', 'mk-addl');
+  line.appendChild(el('div', 'mk-addl-t', r.title || r.url || 'a file'));
+  const say = (text, err) => { const s = el('div', 'mk-addl-s', text); if (err) line.classList.add('err'); line.appendChild(s); };
+  const acts = el('div', 'mk-addl-acts');
+  const btn = (label, title, on, cls) => {
+    const b = el('button', 'lib-btn' + (cls ? ' ' + cls : ''), label);
+    b.type = 'button';
+    if (title) b.title = title;
+    if (on) b.addEventListener('click', on); else b.disabled = true;
+    acts.appendChild(b);
+    return b;
+  };
+  if (r.state === 'reading') say(r.step || 'reading…');
+  else if (r.state === 'ask') {
+    const a = r.ask || {};
+    if (a.kind === 'unknown') {
+      say('The site did not say what this is' + (a.seconds ? ` (${J.clock(a.seconds)})` : '') + ' - a video, or a sound?');
+      btn('A video with topics - a source', 'Downloaded, transcribed and its topics found, in Alerts', () => _answer(r, 'source'), 'primary');
+      btn('A video - onto Uploads', 'Downloaded onto Uploads in Media, nothing read out of it', () => _answer(r, 'uploads'));
+      btn('A sound - in development', 'A sound without a picture cannot be added yet');
+    } else {
+      say(`A ${a.kind === 'square' ? 'square' : 'vertical'} video (${_dims(a)}). It goes onto Uploads in Media - unless it has topics to write from.`);
+      btn('Onto Uploads', 'Downloaded onto Uploads in Media, nothing read out of it', () => _answer(r, 'uploads'), 'primary');
+      btn('It has topics - add it as a source', 'Yes, this vertical video is a source: downloaded, transcribed and its topics found, in Alerts', () => _answer(r, 'source'));
+    }
+  } else if (r.state === 'uploads') {
+    const lj = r.link || null;
+    const item = (lj && lj.items && lj.items[0]) || r.item || null;
+    if (lj && lj.state === 'error') say(lj.error || 'it did not come', true);
+    else if (lj && lj.state === 'stopped') say('stopped');
+    else if ((lj && lj.state === 'done') || r.landed) {
+      say('On Uploads in Media.');
+      if (item && item.id) btn('show', 'The clip on the Media shelf', () => _showOnMedia(item.id));
+    } else say((lj ? lj.step : r.step) || 'onto Uploads…');
+  } else if (r.state === 'audio') say(r.step || 'Audio only - in development.');
+  else if (r.state === 'error') say(r.error || 'it failed', true);
+  if (acts.childNodes.length) line.appendChild(acts);
+  // A line that has ended is let go of by its cross; a question is let go of too (nothing was downloaded).
+  if (r.state === 'ask' || _addSettled(r)) {
+    const x = el('button', 'mk-x', '✕');
+    x.type = 'button';
+    x.title = r.state === 'ask' ? 'Let go of it - nothing was downloaded' : 'Take this line away';
+    x.addEventListener('click', () => { if (r.state === 'ask') _answer(r, 'drop'); else { _adds.delete(r.id); _paintAdds(); } });
+    line.appendChild(x);
+  }
+  return line;
+}
+
+function _showOnMedia(itemId) {
+  const href = '/library?shelf=media&sel=' + encodeURIComponent(itemId);
+  _closeAddSource();
+  const ask = new CustomEvent('ugc:goto', { detail: { href }, cancelable: true });
+  if (window.dispatchEvent(ask)) location.href = href;
 }
