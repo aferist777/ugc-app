@@ -145,16 +145,13 @@ function _paintMake() {
   if (nh) nh.hidden = !_narrOn;
 }
 
-// The open shelf's area, in place of the shelf. Lines typed into a scenario and not saved are not
-// thrown away without a word, and a picture shelf's column lets go first - a voice demo must not play
-// on under the area.
+// The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (phase V28.2:
+// they save themselves), and a picture shelf's column lets go first - a voice demo must not play on under
+// the area.
 async function _openMaker(opts) {
   const m = MAKERS[_shelf];
   if (!m) return;
-  if (_shelf === 'scenarios' && _makingOn !== 'scenarios' && SC.unsaved()) {
-    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
-    SC.drop();
-  }
+  if (_shelf === 'scenarios') SC.flush();
   if (PICKABLE.has(_shelf)) INFO.leave();
   _makingOn = _shelf;
   if (_narrOn) { _narrOn = false; NR.close(); }   // an Alerts row leads into the generator from the narrators
@@ -239,11 +236,8 @@ function _newMenu(anchor) {
 }
 
 function _newBlank() {
-  // Once saved the shelf is read again on it, and the column is painted over the lines typed into the open one.
-  if (SC.unsaved()) {
-    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
-    SC.drop();
-  }
+  // Once saved the shelf is read again on it - the lines typed into the open one are stored before its column is
+  // painted over (js/library/scenarios.js).
   openScenario(null, {
     closeOnSave: true,
     saved: (rec) => {
@@ -929,12 +923,9 @@ function _select(kind) {
     else _closeNarrators();
     return;
   }
-  // Lines typed into a scenario and not saved are not thrown away without a word.
-  if (_shelf === 'scenarios' && SC.unsaved()
-    && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'media') _stopHearing();  // nor a sound or a track
-  if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
+  if (_shelf === 'scenarios') SC.leave();  // and the lines typed are stored, an answer on its way dropped
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
   if (_narrOn) { NR.close(); _narrOn = false; }
@@ -1334,8 +1325,8 @@ async function _goToPlace(p) {
   // Media's kind first (the tree's node): switching to the shelf reads it with it.
   if (p.mkind && _tree) { _tree.select(p.mkind, false); _node = _tree.selected(); }
   if (p.kind !== _shelf) {
-    _select(p.kind);                              // it asks about unsaved lines itself
-    if (_shelf !== p.kind) return;                // the person kept them
+    _select(p.kind);
+    if (_shelf !== p.kind) return;
   }
   _closeNarrators();                              // what the address names is under them
   if (p.make && MAKERS[p.kind]) {

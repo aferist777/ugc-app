@@ -8,7 +8,13 @@
 // rule of the picture shelves: opening the shelf selects the first, a delete falls back to the
 // first, a reload keeps the one that was selected. The column holds the whole scenario: its title
 // and fields, where it came from when the generator wrote it, its lines - editable in one textarea,
-// one line per line, because editing a script is reading it top to bottom - and Delete.
+// one line per line, because editing a script is reading it top to bottom - "Make video" and Delete.
+//
+// NOTHING TO SAVE BY HAND (phase V28.2, the owner 2026-10-12: "сохранение должно быть автоматическим после любых
+// изменений в сценарии"): a field is saved the moment it is chosen, the lines a moment after the typing stops, when the
+// textarea is left, and before anything paints the column again or leads away from it. Where "Save" was stands "Make
+// video" ("чтобы после прочтения можно было сразу начать делать видео в merge"): the talking head made from the
+// scenario, and Merge opened on it - what "use" does in Merge's picker.
 //
 // DRAFTS HEAD THE LIST (phase E4): a script the generator is still writing, one row each, saying how
 // far it got. A draft is not selected - pressing it continues it in the generator (js/library/make.js).
@@ -25,6 +31,7 @@
 
 import { askName } from '../name-box.js';
 import * as Layers from '../layers.js';
+import { talkingHead } from '../merge-v3/scen-api.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -95,7 +102,6 @@ function _filterRow() {
     if (cur && ![...sel.options].some(o => o.value === cur)) add(cur, (cur === NONE ? 'no ' + f.label : cur) + ' · 0');
     sel.value = cur;
     sel.addEventListener('change', () => {
-      if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { sel.value = cur; return; }
       if (sel.value) _filters[f.key] = sel.value; else delete _filters[f.key];
       _saveFilters();
       _keep = '';
@@ -108,7 +114,6 @@ function _filterRow() {
     x.type = 'button';
     x.title = 'Show every scenario again';
     x.addEventListener('click', () => {
-      if (_dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
       _filters = {};
       _saveFilters();
       _keep = '';
@@ -140,15 +145,8 @@ function _paintSel() {
   document.querySelectorAll('#lib-grid .lib-srow').forEach(r => r.classList.toggle('cur', r.dataset.id === _sel));
 }
 
-// The textarea holds work that is not saved yet: leaving the scenario asks first.
-function _dirty() {
-  const ta = document.querySelector('#lib-info-body .lib-sc-ta');
-  return !!(ta && ta.dataset.was != null && ta.value !== ta.dataset.was);
-}
-
-// Pressing the selected row again reads it again too, so it asks as well.
+// Pressing the selected row again reads it again too - after its lines are in the store (`_pane`).
 function _pick(it) {
-  if (_dirty() && !confirm('The lines of this scenario have changes that are not saved. Leave them?')) return;
   _sel = String(it.id);
   if (_keep && _keep !== _sel) _keep = '';
   _paintSel();
@@ -223,6 +221,9 @@ function _pane() {
   const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
   if (!pane || !body) return null;
   _closeFieldMenu();   // its field is about to be painted again
+  // What was typed into the scenario on show goes to the store before the column is painted again - and before it is
+  // read again, which waits for it (_show).
+  if (_auto) { _flushing = _flushA(_auto); _auto = null; }
   pane.hidden = false;
   body.className = 'lib-info-body is-scenarios';
   body.textContent = '';
@@ -384,10 +385,8 @@ function _fieldMenu(anchor, m) {
         // The second press - only once the count has come back.
         if (row.dataset.count == null) return;
         const count = Number(row.dataset.count || 0);
-        // The list is drawn again when scenarios change or a filter stood on this value - and a drawing
-        // of the list paints the column again, so typed lines not saved are asked about first.
-        const onFilter = String(_filters[m.field] || '').toLowerCase() === String(r.value).toLowerCase();
-        if ((count || onFilter) && _dirty() && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) { back(); return; }
+        // The list may be drawn again (scenarios carried it, or a filter stood on it): the column's lines are
+        // saved before it is painted again (`_pane`).
         _closeFieldMenu();
         await _removeValue(m.field, r.value, count, () => m.onRemoved(r.value));
       });
@@ -540,7 +539,7 @@ async function _paintFields(box, s) {
 }
 
 // A fact in the column's grid (phase G4/G5): its name above its value, two to a row; `wide` takes the
-// whole row - the long ones, a source's or a topic's name. An empty fact is left out.
+// whole row - the long ones, a source's or a topic's name. An empty fact is left out. Returns the value's node.
 function _row(box, label, value, wide) {
   if (!value) return;
   const c = _el('div', 'lib-sc-cell' + (wide ? ' is-wide' : ''));
@@ -549,6 +548,7 @@ function _row(box, label, value, wide) {
   v.title = value;
   c.appendChild(v);
   box.appendChild(c);
+  return v;
 }
 
 async function _show(it) {
@@ -557,6 +557,8 @@ async function _show(it) {
   if (!body || !it) return;
   body.appendChild(_el('div', 'lib-sc-title', it.name));
   let s = null;
+  await _flushing;
+  if (my !== _seq) return;
   try {
     const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(it.id)).then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'it could not be read');
@@ -575,7 +577,7 @@ async function _show(it) {
   body.appendChild(facts);
   await _paintFields(facts, s);
   if (my !== _seq) return;
-  _row(facts, 'lines', String(lines.length));
+  const count = _row(facts, 'lines', String(lines.length));
   _row(facts, 'edited', _fmtDate(s.updatedAt || s.createdAt));
 
   const fold = _el('details', 'lib-sc-origin');
@@ -597,7 +599,8 @@ async function _show(it) {
   }
   body.appendChild(fold);
 
-  body.appendChild(_el('div', 'lib-info-sec', 'Lines · ' + lines.length));
+  const linesHead = _el('div', 'lib-info-sec', 'Lines · ' + lines.length);
+  body.appendChild(linesHead);
   const edit = _el('div', 'lib-sc-edit');
   const ta = _el('textarea', 'lib-sc-ta');
   ta.spellcheck = false;
@@ -607,23 +610,28 @@ async function _show(it) {
   edit.appendChild(ta);
 
   const foot = _el('div', 'lib-sc-foot');
-  const save = _el('button', 'lib-btn', 'Save');
-  save.type = 'button';
-  save.title = 'Save the lines (Ctrl+Enter)';
+  const make = _el('button', 'lib-btn primary', 'Make video');
+  make.type = 'button';
+  make.title = 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
   const del = _el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this scenario';
-  foot.append(save, st, _el('span', 'sp'), del);
+  foot.append(make, st, _el('span', 'sp'), del);
   body.appendChild(edit);
-  // The foot is the column's last child, stuck to its bottom edge (phase F6): Save and Delete are
+  // The foot is the column's last child, stuck to its bottom edge (phase F6): Make video and Delete are
   // in sight however long the lines are.
   body.appendChild(foot);
 
-  save.addEventListener('click', () => _save(s, ta, save, st));
-  ta.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); save.click(); }
+  // The lines save themselves (phase V28.2): a moment after the typing stops, and when the textarea is left.
+  const a = { s, ta, st, count, linesHead, timer: null, busy: null, empty: false };
+  _auto = a;
+  ta.addEventListener('input', () => {
+    clearTimeout(a.timer);
+    a.timer = setTimeout(() => _flushA(a), AUTOSAVE_MS);
   });
+  ta.addEventListener('blur', () => _flushA(a));
+  make.addEventListener('click', () => _makeVideo(a, make));
   del.addEventListener('click', () => _delete(s, del));
 
   // A script needs no inner scrolling when it fits; past that the textarea scrolls.
@@ -637,45 +645,98 @@ async function _show(it) {
   _say = null;
 }
 
-async function _save(s, ta, btn, st) {
-  // Blank lines are separators people leave while editing, not lines of script: they are dropped
-  // rather than saved as empty ones, which also stops a stray trailing newline adding a line.
-  const lines = ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
-  if (!lines.length) { st.textContent = 'Nothing to save - every line is empty.'; st.className = 'lib-sc-status err'; return; }
-  btn.disabled = true;
-  st.textContent = 'saving…';
-  st.className = 'lib-sc-status';
+// ── The lines, saved by themselves (phase V28.2) ─────────────────────────────
+const AUTOSAVE_MS = 800;
+let _auto = null;                    // the column on show: { s, ta, st, count, linesHead, timer, busy, empty }
+let _flushing = Promise.resolve();   // the save of a column painted over, which a new reading waits for
+
+// The lines as a script: blank lines are separators people leave while editing, not lines of script - they
+// are dropped rather than saved as empty ones, which also stops a stray trailing newline adding a line.
+const _linesOf = (ta) => ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
+
+// What is typed and not stored yet, stored now - one save at a time, each after the one before it. Resolves to
+// false when the lines could not be kept (empty, refused, the scenario gone).
+function _flushA(a) {
+  if (!a) return Promise.resolve(true);
+  clearTimeout(a.timer);
+  a.timer = null;
+  a.busy = (a.busy || Promise.resolve(true)).then(() => _save(a));
+  return a.busy;
+}
+
+async function _save(a, keepalive) {
+  const value = a.ta.value;
+  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  // Typed back to what is stored: nothing to save, and "every line is empty" is not true any more.
+  if (value === a.ta.dataset.was) { if (a.empty) { a.empty = false; say(''); } return true; }
+  const lines = _linesOf(a.ta);
+  a.empty = !lines.length;
+  if (a.empty) { say('Every line is empty - not saved; the scenario keeps the lines it had.', 'err'); return false; }
+  if (!keepalive) say('saving…');
   try {
     // Only what the column edits: the title it painted may have been renamed since, in Merge. And an
     // EDIT, so a scenario deleted meanwhile is not made again from these lines alone.
     const r = await fetch('/api/scen3/scenarios', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: s.id, lines, edit: true }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: !!keepalive,
+      body: JSON.stringify({ id: a.s.id, lines, edit: true }),
     });
+    if (keepalive) return true;
     const d = await r.json().catch(() => null);
     if (r.status === 404) {
-      ta.dataset.was = ta.value;                // nothing left to save it into - leaving is not a loss
-      if (_hooks.status) _hooks.status('"' + (s.title || 'untitled') + '" was deleted elsewhere', 'err');
+      a.ta.dataset.was = value;                 // nothing left to save it into
+      if (_hooks.status) _hooks.status('"' + (a.s.title || 'untitled') + '" was deleted elsewhere', 'err');
       _sel = '';
       if (_hooks.reload) await _hooks.reload();
       if (_hooks.counts) _hooks.counts();
-      return;
+      return false;
     }
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    ta.dataset.was = ta.value;
-    _keep = String(s.id);
-    // Said after the reload repaints the column (the row's line count comes from the store).
-    _say = { id: String(s.id), text: 'Saved · ' + lines.length + (lines.length === 1 ? ' line' : ' lines'), kind: 'ok' };
-    if (_hooks.reload) await _hooks.reload();
+    a.ta.dataset.was = value;
+    // The row, the head of the lines and their count say what is stored now - in place: painting the column
+    // again would take the textarea from under the typing.
+    const n = lines.length;
+    const it = _items.find(x => String(x.id) === String(a.s.id));
+    if (it) {
+      it.meta = { ...(it.meta || {}), lines: n };
+      const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(a.s.id)) + '"] .lib-srow-s');
+      if (row) row.textContent = _tail(it.meta);
+    }
+    a.linesHead.textContent = 'Lines · ' + n;
+    if (a.count) { a.count.textContent = String(n); a.count.title = String(n); }
+    say('saved · ' + n + (n === 1 ? ' line' : ' lines'), 'ok');
+    return true;
   } catch (e) {
-    st.textContent = 'Not saved: ' + e.message;
-    st.className = 'lib-sc-status err';
+    say('Not saved: ' + e.message, 'err');
+    return false;
+  }
+}
+
+// Closing the window is leaving the lines: a save still waiting out its pause goes now.
+window.addEventListener('pagehide', () => {
+  if (_auto && _auto.ta.value !== _auto.ta.dataset.was && _linesOf(_auto.ta).length) _save(_auto, true);
+});
+
+// MAKE VIDEO: the lines stored first - a project is made from what is STORED - then the talking head (its own
+// copy of the lines and its empty timeline), and Merge opened on its setup.
+async function _makeVideo(a, btn) {
+  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
+  btn.disabled = true;
+  if (!(await _flushA(a))) { btn.disabled = false; return; }
+  say('making the project…');
+  try {
+    const key = await talkingHead(a.s.id);
+    location.href = '/merge?p=' + encodeURIComponent(key) + '&step=setup';
+  } catch (e) {
+    say('Not made: ' + e.message, 'err');
     btn.disabled = false;
   }
 }
 
 async function _delete(s, btn) {
   if (!confirm('Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.')) return;
+  // Its lines are not saved on the way out: it is going.
+  if (_auto && String(_auto.s.id) === String(s.id)) { clearTimeout(_auto.timer); _auto.ta.dataset.was = _auto.ta.value; }
   btn.disabled = true;
   try {
     const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(r => r.json());
@@ -690,21 +751,16 @@ async function _delete(s, btn) {
   }
 }
 
-/** Lines typed and not saved - the page asks before the shelf is left. */
-export function unsaved() { return _dirty(); }
-
-/** Lines typed and not saved, dropped: the person agreed to leave them (the generator opened over
- *  them), and must not be asked again about lines no longer on screen. */
-export function drop() {
-  const ta = document.querySelector('#lib-info-body .lib-sc-ta');
-  if (ta && ta.dataset.was != null) ta.value = ta.dataset.was;
-}
+/** The lines typed into the scenario on show, stored now - the page is about to put something in its place. */
+export function flush() { return _flushA(_auto); }
 
 /** The scenario to select at the next render - one the generator has just saved. */
 export function select(id) { _sel = String(id || ''); _keep = _sel; }
 
-// Leaving the shelf: an answer on its way is dropped, and coming back opens on the first scenario.
+// Leaving the shelf: the lines typed are stored, an answer on its way is dropped, and coming back opens on
+// the first scenario.
 export function leave() {
+  if (_auto) { _flushing = _flushA(_auto); _auto = null; }
   _seq++;
   _sel = '';
   _say = null;
