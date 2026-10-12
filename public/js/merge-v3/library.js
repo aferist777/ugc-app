@@ -48,7 +48,12 @@ const _kind = () => (_node && _node.kind) || '';
 const _isImages = () => _kind() === 'images';
 const _isAudio = () => AUDIO.has(_kind()) || (_node && _node.key === 'audio');
 // Where a clip brought in lands: the kind selected, or Uploads under Video (the owner: "загрузка в него - в Uploads").
-const _videoKind = () => (VIDEO.has(_kind()) ? _kind() : (_node && _node.key === 'video') ? 'uploads' : '');
+// (second round) Generated takes B-rolls (with no category - its Uncategorized); Talking heads takes nothing.
+const _videoKind = () => (VIDEO.has(_kind()) ? _kind() : (_node && _node.key === 'video') ? 'uploads'
+  : (_node && _node.key === 'generated') ? 'birols' : '');
+const _isHeads = () => _kind() === 'heads';
+// Where a clip brought in lands, in words: a B-roll comes in with no category - Generated's Uncategorized.
+const _landName = (kind) => (kind === 'birols' ? 'Generated · Uncategorized' : _tree.kindLabel(kind));
 const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : it.kind === 'images' ? 'image' : 'video');
 
@@ -100,6 +105,10 @@ const _mmss = (s) => {
 // Square, thumbnail only, with two controls that appear on hover: the star at the
 // top left, the ✕ at the top right. Both stopPropagation - without it either one
 // would also open the viewer underneath.
+// (second round) A talking head is its project's while the project lives: no star, no cross, no category - looked at, and
+// dragged onto a lane of any project. One kept from a deleted project (`meta.kept`) is the library's, and goes like any.
+const _fixed = (it) => it.kind === 'heads' && !(it.meta && it.meta.kept);
+
 function _tile(it, list) {
   const cell = document.createElement('div');
   const audio = AUDIO.has(it.kind);
@@ -109,7 +118,9 @@ function _tile(it, list) {
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
   const hid = (it.meta || {}).hookId || null;
-  cell.title = [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ');
+  cell.title = it.kind === 'heads'
+    ? [(it.meta || {}).project, it.name, _mmss(it.dur), (it.meta || {}).used ? 'on a timeline' : ''].filter(Boolean).join(' · ')
+    : [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ');
 
   if (audio) {
     const note = document.createElement('span');
@@ -159,6 +170,27 @@ function _tile(it, list) {
     tag.className = 'mv3-tile-hid';
     tag.textContent = hid;
     cell.appendChild(tag);
+  }
+  // A talking head: its line's number, and a mark when this take is on a timeline (the one the project uses).
+  if (it.kind === 'heads') {
+    const tag = document.createElement('span');
+    tag.className = 'mv3-tile-hid' + ((it.meta || {}).used ? ' is-used' : '');
+    tag.textContent = (it.meta || {}).line ? 'L' + it.meta.line : '';
+    if (tag.textContent) cell.appendChild(tag);
+  }
+
+  if (_fixed(it)) {
+    cell.draggable = true;
+    cell.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ libId: it.id, src: it.media, thumb: it.thumb || null, name: it.name || '',
+        group: it.kind, dur: +it.dur || 0, media: 'video', bed: false }));
+      e.dataTransfer.setData(DRAG_MEDIA + 'video', '1');
+      cell.classList.add('is-dragging');
+    });
+    cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
+    cell.addEventListener('click', () => openViewer(list, list.indexOf(it), _viewerOpts()));
+    return cell;
   }
 
   const star = document.createElement('button');
@@ -429,9 +461,14 @@ function _plusTile() {
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
   b.textContent = '+';
+  if (_isHeads()) {
+    b.disabled = true;
+    b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
+    return b;
+  }
   b.title = _isImages() ? 'Add a picture to Images - from this computer, or made here'
     : _isAudio() ? 'Add music or sounds from this computer'
-    : 'Add videos to ' + _tree.kindLabel(_videoKind()) + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
+    : 'Add videos to ' + _landName(_videoKind()) + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     _plusMenu(b);
@@ -536,7 +573,7 @@ function _linkBox(anchor) {
   row.appendChild(go);
   el.appendChild(row);
   const note = document.createElement('small');
-  note.textContent = 'Into ' + _tree.kindLabel(kind) + ', at the best quality, without a login - one link, or several separated by spaces.';
+  note.textContent = 'Into ' + _landName(kind) + ', at the best quality, without a login - one link, or several separated by spaces.';
   el.appendChild(note);
   const add = () => {
     const urls = LK.parseLinks(inp.value);
@@ -579,9 +616,12 @@ function _linkStatus(text, runId) {
 
 // What came in is filed with no category: a node that would not show it gives way to its kind (Video shows them all).
 function _showLanded(kind) {
-  if (!_node || _node.key === 'video' || _node.key === kind) return false;
+  // A B-roll with no category is Generated's Uncategorized (second round) - B-rolls shows only its categories.
+  const home = kind === 'birols' ? 'birols:__uncat__' : kind;
+  if (!_node || _node.key === 'video' || _node.key === home) return false;
   if (_node.key === 'audio' && AUDIO.has(kind)) return false;
-  _tree.select(kind, true);
+  if (kind === 'birols' && _node.key === 'generated') return false;
+  _tree.select(home, true);
   return true;
 }
 
@@ -679,7 +719,7 @@ async function _upload(files, what) {
     return _uploadAs(snd, list.length, 'sounds', 'sound', (l, on) => uploadSounds(l, on, cat));
   }
   const kind = _videoKind();
-  if (!kind) return;
+  if (!kind) { if (_isHeads()) _status('Talking heads come from the talking-head projects', true); return; }
   const vids = list.filter(f => /^video\//.test(f.type || '') || VIDEO_RE.test(f.name || ''));
   return _uploadAs(vids, list.length, kind, 'clip', (l, on) => uploadVideos(l, kind, on));
 }

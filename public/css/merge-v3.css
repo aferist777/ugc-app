@@ -617,6 +617,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   letter-spacing:.03em; pointer-events:none;
 }
 .mv3-tile-none{font-size:9px; color:var(--muted); text-align:center; padding:2px}
+/* (second round) A talking head's line - lit when this take is the one on a timeline. */
+.mv3-tile-hid.is-used{background:color-mix(in oklch, var(--success) 70%, black); color:oklch(.99 0 0)}
 
 /* ── The two per-tile controls ────────────────────────────────────────────────
    Star top left, delete top right, both revealed on hover. They sit ON the image,

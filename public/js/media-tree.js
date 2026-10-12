@@ -3,25 +3,28 @@
    media: Merge's Library panel (js/merge-v3/library.js) and the Library's Media shelf (js/library/main.js). The
    gallery is on the left, this tree on the right:
 
-     Video   -> B-rolls, Hooks, Uploads -> their categories
-     Images  -> its categories
-     Audio   -> Music, SFX -> categories
+     VIDEO   -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
+     IMAGES  -> its categories
+     AUDIO   -> Music, SFX -> categories
 
    It is read in one answer (GET /api/library/tree, routes/library.js _tree): every node { key, label, count, q, kind?,
    cat?, locked?, empty?, uncat?, children? }. Pressing a node SELECTS it and the page shows everything under it
-   (`q` is what the shelf is asked: a group, or a kind and a category). Branches open by their ▸ (the owner) and what
-   is open is remembered, so is the node selected - per page.
+   (`q` is what the shelf is asked: a group, or a kind and a category). A branch opens on a DOUBLE press of its row or a
+   press of its ▸ (the owner, second round), and what is open is remembered, so is the node selected - per page. The
+   three top nodes are an accordion: one open, the others folded - what is open inside them stays as it was.
 
    CATEGORIES, both ways the owner asked for: the chips' gestures - "+" on a kind's row makes one, a double press on
    its name renames it, the ✕ on hover deletes it (the media moved to Uncategorized, or deleted with them - then the
-   projects using them are named), pressing and dragging puts it in another place - and the same three in a menu
-   under the right button. A REQUIRED category (lib/library-cats.js REQUIRED) carries a lock: never renamed, deleted
-   or moved, and always first. An EMPTY one is pale and last (the server orders them).
+   projects using them are named) - and the same in a menu under the right button. The order is the server's: the
+   locked first, the rest alphabetical, the EMPTY ones pale and last (second round: no order by hand any more). A
+   REQUIRED category (lib/library-cats.js REQUIRED) - and Generated, Hooks, Uploads - carries a lock. A project of
+   Talking heads is not a category: nothing is made, renamed or deleted there.
 
-   A TILE LET GO ON A NODE: on a category of its kind - filed under it; on Uncategorized - its category taken off; on
-   another kind of video (or one of its categories) - moved to that kind. A picture never becomes a clip, nor a clip
-   a picture. A tile says what it is with setMediaDrag(); the kind rides in a type of its own, the only part of a
-   drag a page can read before the drop.
+   A TILE LET GO ON A NODE: on a category of its kind - filed under it; on Uncategorized, or on the kind itself - its
+   category taken off (on B-rolls or on Generated: a B-roll with none, Generated's Uncategorized - the owner); on another
+   kind of video (or one of its categories) - moved to that kind. A picture never becomes a clip, nor a clip a picture;
+   a talking head is its project's and goes nowhere. A tile says what it is with setMediaDrag(); the kind rides in a type
+   of its own, the only part of a drag a page can read before the drop.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -34,7 +37,6 @@ const UNCAT = '__uncat__';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds']);
 const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track' };
-const DRAG_SLOP = 4;
 
 const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 
@@ -50,11 +52,23 @@ function _dragKind(dt) {
   return t ? t.slice(KIND_TYPE.length) : '';
 }
 
+// Where a node files what is let go on it: { kind, cat } ('' = no category), or null where nothing goes. Generated and
+// B-rolls are a B-roll with no category (Generated's Uncategorized); a kind is its own Uncategorized; Talking heads and
+// Music take nothing.
+function _target(n) {
+  if (!n) return null;
+  if (n.key === 'generated') return { kind: 'birols', cat: '' };
+  if (!n.kind || n.kind === 'heads' || n.kind === 'music') return null;
+  const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
+  return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
+}
+
 // What letting an item of kind `from` go on a node does: 'cat' (file it there), 'kind' (another kind of video), or ''.
 function _dropAction(n, from) {
-  if (!n || !n.kind || !from) return '';
-  if (n.kind === from) return n.cat ? 'cat' : '';
-  if (VIDEO.has(n.kind) && VIDEO.has(from)) return 'kind';
+  const t = _target(n);
+  if (!t || !from) return '';
+  if (t.kind === from) return 'cat';
+  if (VIDEO.has(t.kind) && VIDEO.has(from)) return 'kind';
   return '';
 }
 
@@ -91,8 +105,8 @@ export function createTree(host, o) {
   const parentOf = new Map();
   let open = new Set(_ls(K_OPEN, ['video', 'audio']));
   let sel = String(_ls(K_SEL, '') || opt.fallback);
-  let suppressClick = false;
   let loaded = false;       // the first answer has been painted
+  let lastPress = { key: '', at: 0 };
 
   const el = _el('div', 'mt');
   el.setAttribute('role', 'tree');
@@ -129,10 +143,17 @@ export function createTree(host, o) {
     return nodes;
   }
 
+  // The top nodes are an accordion (the owner): opening one folds the others; what is open inside them stays.
+  const _isTop = (key) => nodes.some(n => n.key === key);
+  function _openOne(key) {
+    open.add(key);
+    if (_isTop(key)) for (const n of nodes) if (n.key !== key) open.delete(n.key);
+  }
+
   function _openTo(key) {
     let p = parentOf.get(key);
     let changed = false;
-    while (p) { if (!open.has(p)) { open.add(p); changed = true; } p = parentOf.get(p); }
+    while (p) { if (!open.has(p)) { _openOne(p); changed = true; } p = parentOf.get(p); }
     if (changed) _lsSet(K_OPEN, [...open]);
     return changed;
   }
@@ -155,13 +176,13 @@ export function createTree(host, o) {
   }
 
   function _row(n, depth) {
-    const isGroup = !n.kind;
-    const isCat = !!n.cat && !n.uncat;
+    const isGroup = depth === 0;
+    const isCat = !!n.cat && !n.uncat && !n.project;
     const row = _el('div', 'mt-row' + (isGroup ? ' is-group' : '') + (n.key === sel ? ' is-sel' : '')
       + (n.empty ? ' is-empty' : '') + (n.locked ? ' is-locked' : '') + (isCat ? ' is-cat' : ''));
     row.dataset.key = n.key;
     row.setAttribute('role', 'treeitem');
-    row.style.paddingLeft = (4 + depth * 13) + 'px';
+    row.style.paddingLeft = (3 + depth * 11) + 'px';
     const has = !!(n.children && n.children.length);
     if (has) row.setAttribute('aria-expanded', open.has(n.key) ? 'true' : 'false');
 
@@ -205,14 +226,16 @@ export function createTree(host, o) {
     }
     row.appendChild(_el('span', 'mt-n', String(n.count || 0)));
 
+    // A press selects; the second press of a double one does not read the gallery again.
     row.addEventListener('click', () => {
-      if (suppressClick) { suppressClick = false; return; }
+      const again = lastPress.key === n.key && Date.now() - lastPress.at < 450;
+      lastPress = { key: n.key, at: Date.now() };
+      if (again && n.key === sel) return;
       select(n.key, true);
     });
-    if (isCat && n.own && !n.locked) {
-      name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
-      _wireReorder(row, n);
-    }
+    // A double press opens or folds a branch (the owner, second round); on a category's name it renames it.
+    if (has) row.addEventListener('dblclick', (e) => { e.preventDefault(); toggle(n.key); });
+    if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
 
     // A tile let go here.
@@ -237,7 +260,7 @@ export function createTree(host, o) {
   }
 
   function toggle(key) {
-    if (open.has(key)) open.delete(key); else open.add(key);
+    if (open.has(key)) open.delete(key); else _openOne(key);
     _lsSet(K_OPEN, [...open]);
     paint();
   }
@@ -269,20 +292,22 @@ export function createTree(host, o) {
   // ── A tile let go on a node ──
   async function _take(n, it) {
     const act = _dropAction(n, it.kind);
-    const catId = n.cat && n.cat !== UNCAT ? n.cat : '';
-    const catName = catId ? (n.name || n.label) : '';
+    const t = _target(n);
+    if (!act || !t) return;
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
+    // Where it is now, in words: a B-roll with no category is Generated's Uncategorized.
+    const where = t.cat ? n.label : (t.kind === 'birols' ? 'Generated · Uncategorized' : kindLabel(t.kind) + ' · Uncategorized');
     try {
       if (act === 'cat') {
-        if ((it.cat || '') === catId) return;
-        await A.setCategory(item, catId, catName);
-        await _after('"' + (it.name || 'It') + '" is in ' + (catId ? n.label : 'Uncategorized'), { moved: it });
+        if ((it.cat || '') === t.cat) return;
+        await A.setCategory(item, t.cat, t.name);
+        await _after('"' + (it.name || 'It') + '" is in ' + where, { moved: it });
       } else if (act === 'kind') {
         // Off its own kind's category first: a category is one kind's, and kept across it would come back as a stray.
         if (it.cat) await A.setCategory(item, '', '');
-        await A.setKind(item, n.kind);
-        if (catId) await A.setCategory({ kind: n.kind, id: it.id }, catId, catName);
-        await _after('"' + (it.name || 'It') + '" moved to ' + kindLabel(n.kind) + (catId ? ' · ' + n.label : ''), { moved: it });
+        await A.setKind(item, t.kind);
+        if (t.cat) await A.setCategory({ kind: t.kind, id: it.id }, t.cat, t.name);
+        await _after('"' + (it.name || 'It') + '" moved to ' + (t.kind === 'birols' && !t.cat ? where : kindLabel(t.kind) + (t.cat ? ' · ' + n.label : '')), { moved: it });
       }
     } catch (e) { opt.status('Could not move it: ' + e.message, true); await load(); }
   }
@@ -428,7 +453,7 @@ export function createTree(host, o) {
     const items = [];
     const kindNode = n.kind && !n.cat && CATABLE.has(n.kind) ? n : (n.cat ? byKey.get(n.kind) : null);
     if (kindNode && CATABLE.has(kindNode.kind)) items.push(['New category', 'in ' + kindNode.label, () => _newCat(kindNode, row)]);
-    if (n.cat && !n.uncat) {
+    if (n.cat && !n.uncat && !n.project) {
       if (n.locked) items.push(['Required', 'it cannot be renamed or deleted', null]);
       else if (n.own) {
         items.push(['Rename', n.label, () => _rename(n, row)]);
@@ -455,50 +480,6 @@ export function createTree(host, o) {
     _m = { el: m, away, layer };
     document.addEventListener('mousedown', away, true);
     window.addEventListener('scroll', _closeMenu, true);
-  }
-
-  // ── Another place for a category: press it and drag ──
-  // Among its kind's own categories (never above the required ones, which are always first). The server keeps the
-  // empty ones last whatever the order says.
-  function _wireReorder(row, n) {
-    row.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      const y0 = e.clientY;
-      let moving = false;
-      const move = (ev) => {
-        if (!moving) {
-          if (Math.abs(ev.clientY - y0) < DRAG_SLOP) return;
-          moving = true;
-          row.classList.add('is-moving');
-          el.classList.add('is-reordering');
-        }
-        const over = document.elementFromPoint(ev.clientX, ev.clientY);
-        const target = over && over.closest ? over.closest('.mt-row.is-cat') : null;
-        if (!target || target === row || target.parentElement !== el) return;
-        const tn = byKey.get(target.dataset.key);
-        if (!tn || tn.kind !== n.kind || tn.locked || !tn.own) return;
-        const r = target.getBoundingClientRect();
-        el.insertBefore(row, ev.clientY > r.top + r.height / 2 ? target.nextSibling : target);
-      };
-      const up = async () => {
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', up);
-        if (!moving) return;
-        row.classList.remove('is-moving');
-        el.classList.remove('is-reordering');
-        suppressClick = true;
-        setTimeout(() => { suppressClick = false; }, 0);
-        const ids = [...el.querySelectorAll('.mt-row.is-cat')]
-          .map(r => byKey.get(r.dataset.key)).filter(c => c && c.kind === n.kind && c.own && !c.locked).map(c => c.cat);
-        const locked = _siblingCats(n.kind).filter(c => c.locked).map(c => c.cat);
-        try {
-          await A.setCatOrder(n.kind, locked.concat(ids));
-          await _after('Order saved', { cats: n.kind });
-        } catch (err) { opt.status(err.message, true); await load(); }
-      };
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', up);
-    });
   }
 
   return {

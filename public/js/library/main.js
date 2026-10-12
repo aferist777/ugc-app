@@ -183,9 +183,12 @@ function _initTree() {
 }
 
 function _showLanded(kind) {
-  if (!_tree || !_node || _node.key === 'video' || _node.key === kind) return false;
+  // A B-roll with no category is Generated's Uncategorized (second round) - B-rolls shows only its categories.
+  const home = kind === 'birols' ? 'birols:__uncat__' : kind;
+  if (!_tree || !_node || _node.key === 'video' || _node.key === home) return false;
   if (_node.key === 'audio' && AUDIO.has(kind)) return false;
-  _tree.select(kind, false);
+  if (kind === 'birols' && _node.key === 'generated') return false;
+  _tree.select(home, false);
   _node = _tree.selected();
   return true;
 }
@@ -239,8 +242,13 @@ const _KINDABLE = new Set(['birols', 'uploads', 'hooks']);
 // was already there.
 const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 
+// (second round) A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
+// deleted project (`meta.kept`) is the library's and is deleted like anything.
+const _fixed = (it) => it.kind === 'heads' && !(it.meta && it.meta.kept);
+
 function _actionsFor(it) {
   const out = [];
+  if (_fixed(it)) return out;
   if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: 'Rename' });
   if (_FAVABLE.has(it.kind)) {
     const on = !!(it.meta && it.meta.favorite);
@@ -482,16 +490,18 @@ function _card(it, extra) {
     });
     box.appendChild(star);
   }
-  const x = document.createElement('button');
-  x.type = 'button';
-  x.className = 'lib-x';
-  x.textContent = '✕';
-  x.title = 'Delete';
-  x.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    try { await _apply(await _runAction('del', it)); } catch (err) { _status(err.message, 'err'); }
-  });
-  box.appendChild(x);
+  if (!_fixed(it)) {
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'lib-x';
+    x.textContent = '✕';
+    x.title = 'Delete';
+    x.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await _apply(await _runAction('del', it)); } catch (err) { _status(err.message, 'err'); }
+    });
+    box.appendChild(x);
+  }
   card.appendChild(box);
 
   const name = document.createElement('div');
@@ -501,6 +511,17 @@ function _card(it, extra) {
     tag.className = 'lib-hid';
     tag.textContent = hookId;
     name.appendChild(tag);
+  }
+  // (second round) A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
+  if (it.kind === 'heads') {
+    const m = it.meta || {};
+    card.title = [m.project, it.name, m.used ? 'on a timeline' : ''].filter(Boolean).join('\n');
+    if (m.used) {
+      const tag = document.createElement('b');
+      tag.className = 'lib-hid is-used';
+      tag.textContent = 'in use';
+      name.appendChild(tag);
+    }
   }
   name.appendChild(document.createTextNode(it.name));
   card.appendChild(name);
@@ -512,8 +533,9 @@ function _card(it, extra) {
       try { await _apply(await _runAction('rename', it)); } catch (err) { _status(err.message, 'err'); }
     });
   }
-  // (phase V28.5) On Media a card is dragged onto a node of the tree - another category, another kind of video.
-  if (_shelf === 'media') {
+  // (phase V28.5) On Media a card is dragged onto a node of the tree - another category, another kind of video (not a
+  // talking head, which is its project's).
+  if (_shelf === 'media' && !_fixed(it)) {
     card.draggable = true;
     card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it); });
   }
@@ -1032,8 +1054,7 @@ function _paintUpload() {
   const lk = $('lib-link');
   if (lk) {
     lk.hidden = !_linkKind();
-    const k = A.KINDS.find(x => x.id === _linkKind());
-    lk.title = 'Add videos from YouTube, TikTok, Instagram and other sites to ' + (k ? k.label + 's' : 'Uploads')
+    lk.title = 'Add videos from YouTube, TikTok, Instagram and other sites to ' + _landName(_linkKind())
       + ' - one link per line, or let a link go over the shelf';
   }
   if (btn.hidden) return;
@@ -1064,18 +1085,32 @@ function _paintUpload() {
     btn.title = 'Pick Music or SFX in the tree first';
     return;
   }
+  if (kind === 'heads') {
+    btn.textContent = 'Upload';
+    btn.disabled = true;
+    btn.title = 'Talking heads come from the talking-head projects - nothing is uploaded here';
+    return;
+  }
   if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
-  const k = A.KINDS.find(x => x.id === _linkKind());
-  btn.textContent = 'Upload to ' + (k ? k.label + 's' : 'Uploads');
-  btn.title = 'Add video files to ' + (k ? k.label + 's' : 'Uploads');
+  btn.textContent = 'Upload to ' + _landName(_linkKind());
+  btn.title = 'Add video files to ' + _landName(_linkKind());
 }
 
 // ── By a link (phase V27) ───────────────────────────────────────────────────
 // The kind a link's clip goes to, as an upload's would: the kind selected, Uploads under Video; '' where no clip goes.
+// Where a clip brought in lands, in words (second round): a B-roll comes in with no category - Generated's Uncategorized.
+function _landName(kind) {
+  if (kind === 'birols') return 'Generated · Uncategorized';
+  const k = A.KINDS.find(x => x.id === kind);
+  return k ? k.label + 's' : 'Uploads';
+}
+
 function _linkKind() {
   if (_shelf !== 'media' || !_node) return '';
   if (VIDEO.has(_mkind())) return _mkind();
+  // (second round) Generated takes B-rolls (with no category - its Uncategorized); Talking heads takes nothing.
+  if (_node.key === 'generated') return 'birols';
   return _node.key === 'video' ? 'uploads' : '';
 }
 
@@ -1084,8 +1119,7 @@ let _linking = null;      // { ids, total, kind } while links are being brought 
 function _openLinks(prefill) {
   const kind = _linkKind();
   if (!kind) return;
-  const k = A.KINDS.find(x => x.id === kind);
-  LK.openLinkWindow({ where: k ? k.label + 's' : 'Uploads', prefill, onAdd: (urls) => _addLinks(urls, kind) });
+  LK.openLinkWindow({ where: _landName(kind), prefill, onAdd: (urls) => _addLinks(urls, kind) });
 }
 
 async function _addLinks(urls, kind) {
@@ -1165,6 +1199,7 @@ async function _upload(files) {
     return;
   }
   if (_node && _node.key === 'audio') { if (btn) btn.disabled = false; _status('Pick Music or SFX in the tree first', 'err'); return; }
+  if (kind === 'heads') { if (btn) btn.disabled = false; _status('Talking heads come from the talking-head projects', 'err'); return; }
   // The kind selected decides where the clips are filed: looking at Hooks and pressing Upload means "add hooks"; under
   // Video they go to Uploads, which is what a file brought in from outside is. They arrive with no category - filed
   // afterwards, on the tree or in the viewer - and the kind is shown so they are seen.

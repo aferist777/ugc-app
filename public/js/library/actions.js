@@ -131,13 +131,6 @@ export async function renameCat(kind, id, label) {
   return d;
 }
 
-export async function setCatOrder(kind, order) {
-  return _json('/api/library/cats/order', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind, order }),
-  });
-}
-
 // mode 'move' clears the category off its clips; mode 'delete' removes the clips and their
 // files. The caller is responsible for having said which, in words, before getting here.
 export async function deleteCat(kind, id, mode) {

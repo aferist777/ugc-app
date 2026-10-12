@@ -313,6 +313,8 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-card.is-playing{ border-color:var(--accent); }
 .lib-card.is-playing .lib-snd{ color:var(--accent); animation:lib-hear 1s ease-in-out infinite alternate; }
 @keyframes lib-hear{ from{ transform:scale(1); } to{ transform:scale(1.15); } }
+/* (second round) A talking head whose take is on a timeline. */
+.lib-hid.is-used{ background:color-mix(in oklch, var(--success) 70%, black); color:oklch(.99 0 0); }
 /* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{
   padding:3px 5px; font-size:9.5px; line-height:1.25; color:var(--muted);
