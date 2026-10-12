@@ -349,7 +349,7 @@ function _mediaShelf(opts) {
       thumb: h.thumb,
       dur: h.dur,
       meta: { categoryId: h.projectId, project: h.title, line: h.line, variant: h.variant, used: used.has(h.path),
-              date: h.at || null, favorite: false, said: h.said },
+              date: h.at || null, favorite: false, said: h.said, kept: !!h.kept },
     }));
   }
 
@@ -1045,6 +1045,15 @@ const RECORD_STORES = {
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.audioPath],
   },
+  // (phase V28.4, second round) The talking heads KEPT from deleted projects (lib/heads.js, data/heads.json): deleted one
+  // by one, with the file. A take of a project that is still there is not here - it is the project's.
+  heads: {
+    file: require('../lib/heads').FILE,
+    read: () => require('../lib/heads').readKept(),
+    write: (list) => require('../lib/heads').writeKept(list),
+    fields: [],
+    files: (e) => [e.path],
+  },
   // (phase V28.4) The music (lib/music-store.js): no categories; a track goes with its file, as everything on Media
   // (the owner); its name is the record's `title`.
   music: {
@@ -1268,6 +1277,7 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be deleted here` });
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
+    if (!it && kind === 'heads') return res.status(409).json({ success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
     if (!it) return res.status(404).json({ success: false, error: 'not found' });
 
     if (withFiles) {

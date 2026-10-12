@@ -380,7 +380,7 @@ function _wireDelete() {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
         'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, in Uncategorized.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
-          { label: 'And its files', kind: 'yes', on: () => _delete(key, true) },
+          { label: 'And its files', kind: 'yes', on: () => _askHeads(b, key) },
           { label: 'Cancel' },
         ], { stay: true });   // the bar does not scroll; a project still opening scrolls the page under it
       return;
@@ -401,18 +401,43 @@ async function _discard(key) {
   } catch (e) { _note(e.message); }
 }
 
-async function _delete(key, files) {
+// (phase V28.4, second round, the owner: "при удалении проекта спрашивать про удаление исходников с головами") A project
+// deleted with its files and talking heads made in it: keep them in the Library (Generated · Talking heads · <the
+// project>, deleted there one by one) or let them go with the project.
+async function _askHeads(anchor, key) {
+  const m = /^sv3_(\d+)/.exec(String(key || ''));
+  let n = 0;
+  if (m) {
+    try {
+      const d = await fetch('/api/library/shelf/media?filter=heads&cat=' + encodeURIComponent(m[1])).then(r => r.json());
+      n = ((d && d.items) || []).length;
+    } catch (e) { n = 0; }
+  }
+  if (!n) { _delete(key, true); return; }
+  askChoice(anchor, 'Its ' + n + (n === 1 ? ' talking head' : ' talking heads') + '?',
+    'Every take made in this project. Kept, they stay in the Library - Generated · Talking heads · «' + (Store.title() || 'this project')
+      + '» - until you delete them there; a timeline of another project that uses one keeps it.', [
+      { label: 'Keep in the Library', kind: 'yes', on: () => _delete(key, true, 'keep') },
+      { label: 'Delete them too', on: () => _delete(key, true, 'delete') },
+      { label: 'Cancel' },
+    ], { stay: true });
+}
+
+async function _delete(key, files, heads) {
   _note('deleting…');
   try {
-    const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + (files ? '?files=1' : ''), { method: 'DELETE' }).then(r => r.json());
+    const q = files ? '?files=1' + (heads ? '&heads=' + heads : '') : '';
+    const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + q, { method: 'DELETE' }).then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     // Back to nothing open rather than to whatever is left. Deleting a project and finding
     // yourself editing a different one is how the wrong video gets edited.
     const kept = d.files && d.files.kept;
     // (phase V28.4) What it filed under its name on the shelves is in Uncategorized now.
     const loose = Object.values(d.released || {}).includes('released');
+    const heads = d.files && d.files.heads;
     _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
-      loose ? 'what it filed is in the Library, in Uncategorized' : ''].filter(Boolean).join(' · ');
+      loose ? 'what it filed is in the Library, in Uncategorized' : '',
+      heads ? heads + (heads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _note(e.message); }
 }

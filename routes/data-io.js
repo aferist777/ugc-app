@@ -68,10 +68,11 @@ const VOLUME_BYTES = 1024 * 1024 * 1024;
 // pictures. Take the projects without the media and the other machine gets timelines that
 // point at nothing at all.
 const GROUPS = [
-  { id: 'media', label: 'Media library (pictures, b-roll, uploads, sounds, work files, voice, music, video sources)',
+  { id: 'media', label: 'Media library (pictures, b-roll, uploads, sounds, work files, voice, music, video sources, kept talking heads)',
     dirs: ['media/images', 'media/birols', 'media/uploads', 'media/sounds', 'media/work', 'media/voice', 'media/audio', 'media/sources',
-           'data/transcripts'],
-    stores: ['data/sources.json', 'data/images.json', 'data/biroly.json', 'data/sounds.json', 'data/library-cats.json', 'data/suno-lib.json'], heavy: true },
+           'media/heads', 'data/transcripts'],
+    stores: ['data/sources.json', 'data/images.json', 'data/biroly.json', 'data/sounds.json', 'data/library-cats.json', 'data/suno-lib.json',
+             'data/heads.json'], heavy: true },
   { id: 'renders', label: 'Finished renders',
     dirs: ['media/renders'], stores: [], heavy: true },
   // A project's folder holds its voice, frames, clips and timelines; the timelines point at the

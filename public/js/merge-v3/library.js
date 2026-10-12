@@ -194,6 +194,7 @@ function _tile(it, list) {
   }
 
   const star = document.createElement('button');
+  if (it.kind === 'heads') star.hidden = true;            // a kept talking head: no favourite to set
   star.type = 'button';
   star.className = 'mv3-tile-btn mv3-tile-star';
   star.textContent = '★';

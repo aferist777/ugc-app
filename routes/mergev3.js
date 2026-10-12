@@ -614,8 +614,14 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     if (talk) { try { CHAT.forget(talk); } catch (e) { console.warn('[mv3] the chats of a deleted project were not cleared -', e.message); } }
     let files = null;
     if (proj) {
+      // (phase V28.4, second round) Its talking heads kept in the library first, when the person said so (?heads=keep).
+      let heads = 0;
+      if (String(req.query.heads || '') === 'keep') {
+        try { heads = require('../lib/heads').keep(proj.id); }
+        catch (e) { console.warn('[mv3] delete: the talking heads were not kept -', e.message); }
+      }
       const { moved } = require('../lib/projects-store').remove(proj.id);
-      files = { removed: true, kept: moved };
+      files = { removed: true, kept: moved, heads };
     }
     let released = {};
     if (!shared) {
