@@ -5,6 +5,10 @@
 //   POST   /api/audio/suno/generate          { style, title, where, ... } -> { taskId, alertId }
 //   GET    /api/audio/suno/library           { list }
 //   DELETE /api/audio/suno/library/:id
+//   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer (phase V28.4)
+//
+// The list itself is lib/music-store.js (data/suno-lib.json), shared with the Library's Media shelf (Audio -> Music),
+// which deletes a track with its file (routes/library.js, kind 'music').
 //
 // TWO TRACKS PER GENERATION (phase V23, the owner 2026-10-09): Suno makes two variants at once, and both are kept -
 // two files, `suno_<task>_1.mp3` and `_2.mp3`, and two records side by side, "<title> · 1" and "<title> · 2", with
@@ -21,20 +25,19 @@ const express    = require('express');
 const path       = require('path');
 const fs         = require('fs');
 const axios      = require('axios');
-const { writeFileAtomic } = require('../lib/atomic-write');
-const { KIE_BASE, MEDIA, DATA_DIR } = require('../lib/config');
+const crypto     = require('crypto');
+const multer     = require('multer');
+const { KIE_BASE, MEDIA } = require('../lib/config');
+const MUSIC = require('../lib/music-store');
 const REFUSAL = require('../lib/gen-refusal');
 const { kieHeaders } = require('../lib/helpers');
 
 const router = express.Router();
 
 // ── Suno music library ────────────────────────────────────────────────────────
-const SUNO_LIB_FILE = path.join(DATA_DIR, 'suno-lib.json');
-function _loadSunoLib() {
-  try { return JSON.parse(fs.readFileSync(SUNO_LIB_FILE, 'utf8')); } catch { return []; }
-}
+const _loadSunoLib = () => MUSIC.read();
 function _saveSunoLib(list) {
-  try { writeFileAtomic(SUNO_LIB_FILE, JSON.stringify(list, null, 2)); } catch {}
+  try { MUSIC.write(list); } catch (e) { console.warn('[music] the list was not written:', e.message); }
 }
 
 // ONE RECORD PER FILE (phase V23). Until then the music panel wrote a second record of every track the server had
@@ -183,12 +186,20 @@ JOBS.register('music', {
     const gen = String(rec.taskIds[0]);
     const title = String(r.title || 'UGC Background').slice(0, 80);
     const variants = (out.variants && out.variants.length) ? out.variants : [out.audioPath];
+    // (phase V28.4) Each one's length, kept on its record: the Media shelf's tile says it, a lane lays it at its width.
+    const lens = [];
+    for (const p of variants) {
+      let d = 0;
+      try { d = (await require('../lib/media-probe').probe(path.join(MEDIA.audio, path.basename(String(p))))).duration; } catch (e) { /* unread */ }
+      lens.push(Math.round((d || 0) * 100) / 100);
+    }
+    // ── From here to the write: one tick. ──
     const lib = _loadSunoLib();
     const now = new Date().toISOString();
     // The two side by side, the first on top - the list is newest first.
     const add = variants.map((audioPath, i) => ({
       id: 'suno_' + gen + '_' + (i + 1), title: variants.length > 1 ? title + ' · ' + (i + 1) : title, audioPath,
-      style: String(r.style || ''), createdAt: now, gen, variant: i + 1,
+      style: String(r.style || ''), createdAt: now, gen, variant: i + 1, duration: lens[i] || 0,
     })).filter(t => !lib.some(x => x && (x.id === t.id || x.audioPath === t.audioPath)));
     if (add.length) { lib.unshift(...add); _saveSunoLib(lib); }
     return { path: variants[0], media: 'audio', title, variants };
@@ -204,6 +215,38 @@ router.get('/audio/suno/library', (_req, res) => res.json({ success: true, list:
 router.delete('/audio/suno/library/:id', (req, res) => {
   _saveSunoLib(_loadSunoLib().filter(t => t.id !== req.params.id));
   res.json({ success: true });
+});
+
+// ── A track from this computer (phase V28.4, the owner 2026-10-12: "музыка - пока тоже файл") ─────────────
+// Into media/work first (multer), then lib/music-store.js measures it, moves it into media/audio/ and files it first.
+const MUSIC_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus'];
+const _uploadMusic = multer({
+  storage: multer.diskStorage({
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) { /* exists */ } cb(null, MEDIA.work); },
+    filename: (_q, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const stem = require('../lib/names').folderName(path.basename(file.originalname, path.extname(file.originalname)), 'track');
+      cb(null, stem + '_' + crypto.randomBytes(2).toString('hex') + (MUSIC_EXTS.includes(ext) ? ext : '.mp3'));
+    },
+  }),
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (_q, file, cb) => cb(null, /^audio\//.test(file.mimetype) || MUSIC_EXTS.includes(path.extname(file.originalname).toLowerCase())),
+});
+
+router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'no music - mp3, wav, m4a, aac, ogg, flac or opus' });
+  try {
+    const name = String((req.body || {}).name || '').trim() || path.basename(req.file.originalname).replace(/\.[^.]+$/, '');
+    const item = await MUSIC.add('/media/work/' + req.file.filename, { name });
+    res.json({ success: true, item });
+  } catch (e) {
+    try { fs.unlinkSync(req.file.path); } catch (er) { /* gone or moved */ }
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
+router.use('/audio/music/upload', (err, _req, res, _next) => {
+  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 
 module.exports = router;

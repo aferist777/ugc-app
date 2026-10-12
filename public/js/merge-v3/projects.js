@@ -378,7 +378,7 @@ function _wireDelete() {
     try { rec = (await Store.list()).find(p => p.key === key) || null; } catch (e) { rec = null; }
     if (rec && rec.ownFiles) {
       askChoice(b, 'Delete «' + (Store.title() || 'this project') + '»?',
-        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way.', [
+        'Its reads, frames and clips are in the project folder. Its chats go with the timeline; the pictures and videos on the Library shelves stay either way, in Uncategorized.', [
           { label: 'Timeline only', on: () => _delete(key, false) },
           { label: 'And its files', kind: 'yes', on: () => _delete(key, true) },
           { label: 'Cancel' },
@@ -409,7 +409,10 @@ async function _delete(key, files) {
     // Back to nothing open rather than to whatever is left. Deleting a project and finding
     // yourself editing a different one is how the wrong video gets edited.
     const kept = d.files && d.files.kept;
-    _after = kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '';
+    // (phase V28.4) What it filed under its name on the shelves is in Uncategorized now.
+    const loose = Object.values(d.released || {}).includes('released');
+    _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
+      loose ? 'what it filed is in the Library, in Uncategorized' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _note(e.message); }
 }

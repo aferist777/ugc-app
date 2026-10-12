@@ -177,8 +177,8 @@ router.get('/mv3/draft', (req, res) => {
 });
 
 // POST /api/mv3/timeline/:key/discard - a draft not saved: what it filed to Uncategorized, its timeline gone; the
-// drafts' conversation stays as it is (phase V21). Only a draft: a project is deleted by its own button, and keeps
-// its categories.
+// drafts' conversation stays as it is (phase V21). Only a draft: a project is deleted by its own button (which lets go
+// of its categories the same way since phase V28.4).
 router.post('/mv3/timeline/:key/discard', (req, res) => {
   try {
     const key = String(req.params.key || '');
@@ -574,8 +574,8 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
     // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
     // clips - goes with its last timeline (PROJECTS.remove: what another project, timeline or shelf still points
-    // at is moved to media/work first). The Library's categories named after the project are not in that folder
-    // and stay, with what was made into them. Refused while something is still being made for the project: a
+    // at is moved to media/work first). The Library's categories named after the project are not in that folder: what
+    // is in them goes to Uncategorized (phase V28.4, below). Refused while something is still being made for the project: a
     // clip landing in a folder that is gone would be lost, and it was paid for.
     let proj = null;
     if (String(req.query.files || '') === '1') {
@@ -600,6 +600,18 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     // deleted; what was made stays on the shelves. Asked before the timeline goes: a draft's is the drafts' conversation.
     const CHAT = require('../lib/mv3-chat');
     const talk = CHAT.threadOf(key) === CHAT.DRAFT ? null : key;
+    // (phase V28.4, the owner 2026-10-12: "раскидывать медиа удаленного проекта по типу медиа в категории uncategorized")
+    // What the project filed under its name on the shelves goes to Uncategorized of its kind, the category with it - as a
+    // draft not saved, above; and what is still being made for it lands there too. Not when another project keeps the
+    // same name (the category is that one's too), and never a required category ("Generated" - lib/project-cats.js).
+    const GENS = require('../lib/mv3-gens');
+    const label = GENS.catLabelFor(cur.timelines[key].title);
+    const shared = Object.keys(cur.timelines).some(k => k !== key && cur.timelines[k]
+      && GENS.catLabelFor(cur.timelines[k].title).toLowerCase() === label.toLowerCase());
+    if (!shared) {
+      try { GENS.release(key); require('../lib/mv3-video-gens').release(key); }
+      catch (e) { console.warn('[mv3] delete: the waiting ones were not marked -', e.message); }
+    }
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
@@ -609,7 +621,12 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const { moved } = require('../lib/projects-store').remove(proj.id);
       files = { removed: true, kept: moved };
     }
-    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files });
+    let released = {};
+    if (!shared) {
+      try { released = require('../lib/project-cats').release(label); }
+      catch (e) { console.warn('[mv3] delete: its category was not let go of -', e.message); }
+    }
+    res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines), files, released });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

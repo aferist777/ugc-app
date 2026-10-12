@@ -7,6 +7,7 @@
 //                                             environments | media
 //   GET /api/library/info/:kind/:id     what the right column says about one tile
 //   GET /api/library/counts             one number per shelf, for the switcher
+//   GET /api/library/tree               the media tree: Video, Images, Audio with their kinds and categories (V28.4)
 //   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
 //
 // `thumb` is what the grid draws and `media` is what the viewer opens. They are
@@ -43,6 +44,17 @@ const VT = require('../lib/video-thumb');
 const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
 const SND = require('../lib/sounds-store');
+const MUSIC = require('../lib/music-store');
+
+// (phase V28.4) The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
+// folded into the first - before anything reads a category. The library has been upgraded by now (server.js).
+try {
+  const r = require('../lib/required-cats').ensure();
+  if (r.made.length || r.merged.length) {
+    console.log('[library] required categories:' + (r.made.length ? ' made ' + r.made.join(', ') + ';' : '')
+      + r.merged.map(m => ' folded a second ' + m.kind + '/' + m.label + ' into the first (' + m.records + ' records)').join(';'));
+  }
+} catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -221,7 +233,10 @@ function _posterOf(thumb, video) {
   return (t && _onDisk(t)) ? t : null;
 }
 
-function _mediaShelf() {
+// (phase V28.4) `opts.music`: Suno's tracks and the ones brought in (lib/music-store.js) as a sixth kind, `music` - only
+// when asked for (Audio -> Music in the media tree): every other reader of this shelf - the video chat, the pictures
+// chat, the Library's chats, the 3D Studio, Media's checks - reads it as it always was.
+function _mediaShelf(opts) {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
   const hooks = _read(path.join(DATA_DIR, 'hooks-archive.json'), []);
@@ -300,7 +315,20 @@ function _mediaShelf() {
     meta: { categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite, source: e.source || 'upload' },
   }));
 
-  const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).filter(i => _onDisk(i.media));
+  // (phase V28.4) Music - no categories, no picture; its length kept on the record (measured once for the older ones).
+  const fromMusic = !(opts && opts.music) ? [] : MUSIC.read().filter(t => t && t.audioPath).map(t => ({
+    id: String(t.id || t.audioPath),
+    name: String(t.title || '').trim() || 'track',
+    kind: 'music',
+    media: String(t.audioPath),
+    thumb: null,
+    dur: +t.duration || 0,
+    meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''),
+            source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0 },
+  }));
+  if (fromMusic.some(m => !(m.dur > 0))) MUSIC.fillLengths();
+
+  const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).filter(i => _onDisk(i.media));
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
@@ -354,6 +382,65 @@ function _mediaCats(items, kind, labelFor) {
   }));
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
+
+// ── The media tree (phase V28.4 + V28.5, the owner 2026-10-12) ───────────────
+// One answer for both places that draw it - Merge's Library panel and the Library's Media shelf (js/media-tree.js):
+//   Video -> B-rolls, Hooks, Uploads -> their categories       Images -> its categories       Audio -> Music, SFX -> categories
+// Every node: { key, label, count, q, children? } - `q` is what the shelf is asked for it (`group`, or `filter` and `cat`),
+// `key` what a page remembers it by. A kind's categories: the REQUIRED first (`locked`, even when empty), then those
+// with something in them in the stored order, then Uncategorized, then the empty ones (`empty`, drawn pale - the
+// owner: "пустые категории бледные и внизу списка"). A kind with no categories at all is a leaf.
+// SFX is the Sounds shelf's kind; Music has no categories.
+const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'Images', music: 'Music', sounds: 'SFX' };
+const GROUPS = { video: ['birols', 'hooks', 'uploads'], images: ['images'], audio: ['music', 'sounds'] };
+
+function _tree() {
+  const { items, labelFor } = _mediaShelf({ music: true });
+  const byKind = {};
+  for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
+  const kindNode = (kind, key, label) => {
+    const list = byKind[kind] || [];
+    const node = { key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind } };
+    if (!LC.KINDS.includes(kind)) return node;
+    const counts = {};
+    let uncat = 0;
+    for (const i of list) {
+      const c = (i.meta || {}).categoryId;
+      if (c && c !== UPLOADS_CAT) counts[c] = (counts[c] || 0) + 1;
+      else uncat++;
+    }
+    const cats = LC.listFor(kind, counts, labelFor);
+    if (!cats.length) return node;
+    const one = (c) => ({
+      key: kind + ':' + c.id, kind, cat: c.id, label: c.title || c.label, name: c.label, count: c.count,
+      locked: !!c.locked, own: !!c.own, orphan: !!c.orphan, empty: !(c.count > 0), q: { filter: kind, cat: c.id },
+    });
+    const locked = cats.filter(c => c.locked)
+      .sort((a, b) => LC.requiredAt(kind, a.label) - LC.requiredAt(kind, b.label));
+    node.children = [
+      ...locked.map(one),
+      ...cats.filter(c => !c.locked && c.count > 0).map(one),
+      { key: kind + ':' + UNCAT, kind, cat: UNCAT, label: 'Uncategorized', count: uncat, uncat: true, empty: !uncat,
+        q: { filter: kind, cat: UNCAT } },
+      ...cats.filter(c => !c.locked && !(c.count > 0)).map(one),
+    ];
+    return node;
+  };
+  const group = (key, label, kinds) => {
+    const children = kinds.map(k => kindNode(k));
+    return { key, label, count: children.reduce((n, c) => n + c.count, 0), q: { group: key }, children };
+  };
+  return [
+    group('video', 'Video', GROUPS.video),
+    kindNode('images', 'images', 'Images'),
+    group('audio', 'Audio', GROUPS.audio),
+  ];
+}
+
+router.get('/library/tree', (_req, res) => {
+  try { res.json({ success: true, nodes: _tree() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
 
 // ── Voices ──────────────────────────────────────────────────────────────────
 // Every voice we have taken that has our own demo on disk. The demo is the point: a
@@ -602,15 +689,19 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    const { items, filters, labelFor, labelKeys, running } = build();
     // Filtering happens here rather than in the page, so the count the page shows is the
-    // count it received. Media takes two: the kind, and the category within it.
+    // count it received. Media takes two: the kind, and the category within it - or (phase V28.4) a GROUP of kinds,
+    // a top node of the media tree: video (B-rolls, Hooks, Uploads), images, audio (music, sounds).
     const f = String(req.query.filter || '');
     const cat = String(req.query.cat || '');
+    const grp = GROUPS[String(req.query.group || '')] || null;
+    const { items, filters, labelFor, labelKeys, running } = kind === 'media'
+      ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')) }) : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
-    const cats = (kind === 'media') ? _mediaCats(items, f, labelFor) : [];
+    const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
     let shown = items;
+    if (grp) shown = shown.filter(i => grp.includes(i.kind));
     if (f) shown = shown.filter(i => i.kind === f);
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
@@ -808,7 +899,7 @@ function _pathsInUse(doomed) {
   const skip = new Set((doomed || []).map(String));
   const used = new Set();
   // birols and uploads are one file; the pictures too, since a picture's own copy beside it now goes with it.
-  for (const kind of ['birols', 'hooks', 'images', 'sounds']) {
+  for (const kind of ['birols', 'hooks', 'images', 'sounds', 'music']) {
     let list = [];
     try { list = RECORD_STORES[kind].read(); } catch (e) { continue; }
     for (const e of list) {
@@ -919,6 +1010,15 @@ const RECORD_STORES = {
     fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.audioPath],
   },
+  // (phase V28.4) The music (lib/music-store.js): no categories; a track goes with its file, as everything on Media
+  // (the owner); its name is the record's `title`.
+  music: {
+    file: MUSIC.FILE,
+    read: MUSIC.read,
+    write: MUSIC.write,
+    fields: ['name', 'favorite'],
+    files: (e) => [e.audioPath],
+  },
 };
 // Uploads are birols with a flag, so they share the store.
 RECORD_STORES.uploads = RECORD_STORES.birols;
@@ -951,6 +1051,8 @@ router.patch('/library/item/:kind/:id', (req, res) => {
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
     if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
+    // (phase V28.4) A track's name is its title: the music panel and the video chat read that.
+    if (kind === 'music' && 'name' in patch) { patch.title = patch.name; delete patch.name; }
 
     Object.assign(it, patch);
     store.write(list);
@@ -1606,7 +1708,7 @@ router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
     for (const k of LC.KINDS) {
-      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own }));
+      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title }));
     }
     res.json({ success: true, byKind });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1628,6 +1730,7 @@ router.patch('/library/cats/:id', (req, res) => {
     const label = String((req.body || {}).label || '').trim();
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be renamed.' });
     if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
 
     // An orphan becomes a real category first, under the name its records carry.
@@ -1666,6 +1769,8 @@ router.delete('/library/cats/:id', (req, res) => {
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
+    // Refused BEFORE its media are moved or deleted below.
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be deleted.' });
     let affected = 0, removedFiles = [], sparedFiles = [];
     if (mode === 'delete') {
       const { store, list, inKind } = _kindRecords(kind);

@@ -520,6 +520,8 @@ router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) =>
   }
   // Timelines and projects arrived behind the stores' backs.
   try { require('../lib/merge-store').invalidate(); } catch {}
+  // (phase V28.4) An archive can bring a required category of its own - a second "Generated": folded into ours.
+  try { require('../lib/required-cats').ensure(); } catch (e) { console.warn('[data-io] required categories:', e.message); }
   // Thumbnails in an archive may have been cut at an older, smaller size.
   if (sets.some((s) => s.files)) require('../lib/thumb-refresh').again();
   res.json({ success: !sets.some((s) => s.error), sets, error: (sets.find((s) => s.error) || {}).error });
