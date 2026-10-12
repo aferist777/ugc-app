@@ -21,6 +21,9 @@ import * as MC from './makechat.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
+import * as Layers from '../layers.js';
+import { openScenario } from '../scen-window.js';
+import { talkingHead } from '../merge-v3/scen-api.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -68,7 +71,7 @@ let _checksDue = false;
 const MAKERS = {
   scenarios: {
     mod: MK, host: 'lib-make', label: 'New scenario', back: '← Scenarios',
-    title: 'Write a scenario - from a source, or from a topic alone',
+    title: 'A new scenario - written by hand, or generated in a narrator’s voice',
     backTitle: 'Back to the list of scenarios - what is being written goes on',
   },
   characters: {
@@ -160,6 +163,70 @@ async function _closeMaker(then, after) {
   await _load({ keepScroll: true });
   _counts();
   if (after) after();
+}
+
+// ── "New scenario": blank or narrator (phase V28.2) ──────────────────────────
+// The owner 2026-10-12: "при нажатии new scenario делаем дропдаун с выбором blank и narrator. blank будет открывать попап,
+// как при создании сценария в merge, а при клике narrator переходить в generate script". Blank is Merge's own scenario
+// window (js/scen-window.js): saved - the shelf again, on it; used - a talking head made from it, and Merge opened on it.
+// A menu like Merge's "+ new project": a layer, so Escape and a press outside close it, and the same press does too.
+let _newPop = null;
+function _closeNewMenu() {
+  if (!_newPop) return;
+  const p = _newPop;
+  _newPop = null;
+  p.el.remove();
+  document.removeEventListener('mousedown', p.away, true);
+  Layers.close(p.layer);
+}
+
+function _newMenu(anchor) {
+  if (_newPop) { _closeNewMenu(); return; }
+  const menu = document.createElement('div');
+  menu.className = 'mv3-plus-menu';
+  const item = (label, sub, on) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-plus-item';
+    const t = document.createElement('span');
+    t.textContent = label;
+    const s = document.createElement('small');
+    s.textContent = sub;
+    b.append(t, s);
+    b.addEventListener('click', (e) => { e.stopPropagation(); _closeNewMenu(); on(); });
+    menu.appendChild(b);
+  };
+  item('blank', 'write the lines yourself', _newBlank);
+  item('narrator', 'generate a script in a narrator’s voice - from a source or a topic', () => _openMaker());
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.left))) + 'px';
+  menu.style.top = Math.round(r.bottom + 4) + 'px';
+  const away = (e) => { if (!menu.contains(e.target) && !anchor.contains(e.target)) _closeNewMenu(); };
+  _newPop = { el: menu, away, layer: Layers.open(menu, { modal: false, name: 'new scenario', onEsc: _closeNewMenu }) };
+  document.addEventListener('mousedown', away, true);
+}
+
+function _newBlank() {
+  // Once saved the shelf is read again on it, and the column is painted over the lines typed into the open one.
+  if (SC.unsaved()) {
+    if (!confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
+    SC.drop();
+  }
+  openScenario(null, {
+    closeOnSave: true,
+    saved: (rec) => {
+      _counts();
+      if (_shelf !== 'scenarios' || _makingOn) return;
+      SC.select(rec.id);
+      _load({ keepScroll: true }).then(() => _status('Saved “' + (rec.title || 'untitled') + '”'));
+    },
+    // Merge's "use": the talking head made from it, and Merge opened on its setup.
+    use: async (rec) => {
+      const key = await talkingHead(rec.id);
+      location.href = '/merge?p=' + encodeURIComponent(key) + '&step=setup';
+    },
+  });
 }
 
 // ── The media tree (phase V28.5) ─────────────────────────────────────────────
@@ -1323,7 +1390,8 @@ function boot() {
   MC.environments.init(chatHooks);
   MC.lookbooks.init(chatHooks);
   const nb = $('lib-new');
-  if (nb) nb.addEventListener('click', () => _openMaker());
+  // Scenarios asks which (phase V28.2); the other shelves open their making area.
+  if (nb) nb.addEventListener('click', () => (_shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
   if (bb) bb.addEventListener('click', () => _closeMaker());
 

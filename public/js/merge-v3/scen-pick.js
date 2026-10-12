@@ -33,14 +33,13 @@ import { askDelete } from './ask.js';
 import { setOpenColumn, roomForWork, onColumnOpen } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
+import { openScenario } from '../scen-window.js';
 
 // THE CATEGORY (phase E7, the owner 2026-09-29; one dropdown since F8, 2026-09-30): all · saved -
 // written by hand, no provenance - · each source the generator wrote from · no source - generated
 // from a topic alone - · archive. The sources are grouped by id on the server and named by their
 // CURRENT title, and the list is read again every time it opens: a source renamed in the Library
 // is renamed here, even with the picker already open.
-const MIN_LINES = 3;          // routes/scen3.js refuses a NEW scenario below this
-
 let _active = false;
 let _rows = [];
 let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
@@ -407,243 +406,27 @@ function _disarm() {
 }
 
 // ── Making the project ──────────────────────────────────────────────────────
-// Two things are made, and the second is why a talking-head project is in Merge's picker from
-// the start: the project itself (its own copy of the lines), and the EMPTY timeline it will be
-// assembled into, keyed to it. Without that second one, a project made today would be invisible
-// here until its first assembly, and tomorrow there would be no way back into it.
+// The project and its empty timeline are made by `talkingHead` (js/merge-v3/scen-api.js, shared with the
+// Library's scenario window since phase V28.2), and opened here on its setup step.
 // It THROWS when it cannot (phase Y1). It used to swallow its own failure into an `alert`, which
 // meant the window that called it could not tell success from failure either: the button stayed
 // down and the window stayed open with nothing said in it. Who called this is who knows where to
 // put the news - a button in the list, a line in the form.
 async function _use(scenarioId) {
-  const p = await API.project(scenarioId);
-  const d = await fetch('/api/mv3/timeline/new', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId: p.id }),
-  }).then(r => r.json());
-  if (!d || !d.success) throw new Error((d && d.error) || 'the timeline was refused');
-  await Store.open(d.key);
+  const key = await API.talkingHead(scenarioId);
+  await Store.open(key);
   // The picker has done its job - left only now that the project is open: left before, the panel
   // would belong for a moment to whatever was open before it, and a blank project has no Setup
   // (phase L), so the Library would flash up in its place.
   stop();
   roomForWork();                        // a new talking head is opened to be built
   WK.setStep('setup');
-  return d.key;
+  return key;
 }
 
 // ── The scenario itself, read or written ────────────────────────────────────
-// One form for both: reading an existing scenario and writing a new one differ by what is
-// in the fields, not by what the fields are. `save` keeps it in the library; `use` makes a
-// project from it - saving first, because a project is made from what is STORED.
-export async function openForm(summary) {
-  const isNew = !summary;
-  let rec = { id: null, title: '', lines: [], vertical: '', product: '', roles: [] };
-  const ov = _el('div', 'mv3-x-ov');
-  const box = _el('div', 'mv3-x is-scen');
-  ov.appendChild(box);
-
-  const head = _el('div', 'mv3-x-head');
-  const h3 = document.createElement('h3');
-  h3.textContent = isNew ? 'New scenario' : 'Scenario';
-  head.appendChild(h3);
-  const close = _el('button', 'mv3-x-close', '✕');
-  close.type = 'button';
-  head.appendChild(close);
-  box.appendChild(head);
-
-  const body = _el('div', 'mv3-x-body');
-  box.appendChild(body);
-
-  const field = (label, node) => {
-    const row = _el('div', 'mv3-x-row');
-    const l = document.createElement('label');
-    l.textContent = label;
-    row.append(l, node);
-    body.appendChild(row);
-    return node;
-  };
-  const input = (placeholder, listId) => {
-    const i = _el('input', 'mv3-sc-inp');
-    i.type = 'text';
-    if (placeholder) i.placeholder = placeholder;
-    if (listId) i.setAttribute('list', listId);
-    return i;
-  };
-
-  const title = field('Title', input('what this ad is called'));
-  const vertical = field('Vertical', input('optional', 'mv3-sc-verticals'));
-  const product = field('Product', input('optional', 'mv3-sc-products'));
-  const role = field('Role', input('optional', 'mv3-sc-roles'));
-  const gender = field('Narrator', (() => {
-    const s = document.createElement('select');
-    for (const [v, t] of [['', 'any - every character is offered'], ['female', 'female'], ['male', 'male']]) {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = t;
-      s.appendChild(o);
-    }
-    return s;
-  })());
-  // The suggestions are values used before, collected from saved scenarios - a hint, never
-  // a list of allowed answers, which is why these are datalists and not selects.
-  for (const id of ['mv3-sc-verticals', 'mv3-sc-products', 'mv3-sc-roles']) {
-    if (!document.getElementById(id)) {
-      const dl = document.createElement('datalist');
-      dl.id = id;
-      document.body.appendChild(dl);
-    }
-  }
-
-  body.appendChild(_el('div', 'mv3-x-hdr', 'The lines'));
-  const lines = _el('textarea', 'mv3-sc-lines');
-  lines.spellcheck = false;
-  lines.placeholder = 'One line per row. Each line becomes one fragment: it is spoken in one take and animated as one clip.';
-  body.appendChild(lines);
-  const count = _el('p', 'mv3-x-note');
-  body.appendChild(count);
-  body.appendChild(_el('p', 'mv3-x-note',
-    'This is the scenario in the library. A project made from it keeps its own copy of the text, '
-    + 'so editing here never changes a project that already exists.'));
-
-  const foot = _el('div', 'mv3-x-foot');
-  const note = _el('span', 'mv3-x-note');
-  const save = _el('button', 'mv3-c-btn', 'save');
-  save.type = 'button';
-  save.title = 'Keep it in the library';
-  // `use` worn like `save` and standing at the far right, away from it (phase I2, the owner
-  // 2026-10-01). For a scenario in the archive the same place says `restore`: the row and its menu
-  // offer nothing to build with until it is back, and neither does this window.
-  let archived = !!(summary && summary.archived);
-  const use = _el('button', 'mv3-c-btn mv3-x-use');
-  use.type = 'button';
-  const dressUse = () => {
-    use.textContent = archived ? 'restore' : 'use';
-    use.title = archived ? 'Put it back in the library' : 'Save it and make a project from it';
-  };
-  dressUse();
-  foot.append(save, note, use);
-  box.appendChild(foot);
-
-  const linesOf = () => lines.value.split('\n').map(s => s.trim()).filter(Boolean);
-  const gate = () => {
-    const n = linesOf().length;
-    const why = !title.value.trim() ? 'A title is needed.'
-      : n < MIN_LINES ? `At least ${MIN_LINES} lines are needed - there ${n === 1 ? 'is' : 'are'} ${n}.`
-        : '';
-    count.textContent = why || `${n} lines - ${n} fragments.`;
-    // An EDIT is never refused by the server, only a new scenario is: a half-typed title
-    // must not be able to fail a save of something that already exists.
-    save.disabled = !!why && isNew;
-    use.disabled = !!why && !archived;           // a restore needs no valid text
-    return why;
-  };
-  title.addEventListener('input', gate);
-  lines.addEventListener('input', gate);
-
-  const layer = Layers.open(ov, { name: 'scenario', onEsc: () => _closeForm(ov, layer) });
-  close.addEventListener('click', () => _closeForm(ov, layer));
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) _closeForm(ov, layer); });
-  document.body.appendChild(ov);
-
-  // The suggestions and, for an existing scenario, its text: both are a request away, and
-  // the window is already on screen while they arrive.
-  API.options().then((o) => {
-    const fill = (id, values) => {
-      const dl = document.getElementById(id);
-      if (!dl) return;
-      dl.textContent = '';
-      for (const v of (values || [])) {
-        const opt = document.createElement('option');
-        opt.value = v;
-        dl.appendChild(opt);
-      }
-    };
-    fill('mv3-sc-verticals', o.verticals);
-    fill('mv3-sc-products', o.products);
-    fill('mv3-sc-roles', o.roles);
-  }).catch(() => { /* suggestions are a convenience */ });
-
-  if (!isNew) {
-    note.textContent = 'reading…';
-    try {
-      rec = await API.get(summary.id);
-      title.value = rec.title || '';
-      vertical.value = rec.vertical || '';
-      product.value = rec.product || '';
-      const r0 = (rec.roles || [])[0] || {};
-      role.value = r0.name || '';
-      gender.value = ['male', 'female'].includes(String(r0.gender || '')) ? r0.gender : '';
-      lines.value = (rec.lines || []).map(l => l.text || '').join('\n');
-      archived = !!rec.archived;
-      dressUse();
-      note.textContent = '';
-    } catch (e) {
-      note.textContent = 'Could not read it: ' + e.message;
-    }
-  }
-  gate();
-  title.focus();
-
-  const collect = () => ({
-    id: rec.id || undefined,
-    title: title.value.trim(),
-    // The scenario's own type, not a fixed one: it is a field now (phase F7), set in the Library.
-    type: (rec && rec.type) || 'talking_head',
-    vertical: vertical.value.trim(),
-    product: product.value.trim(),
-    // One role, the narrator: the store keeps a list, and nothing offers a second one.
-    roles: (role.value.trim() || gender.value) ? [{ id: 'r0', name: role.value.trim(), gender: gender.value }] : [],
-    lines: linesOf().map(text => ({ text })),
-  });
-
-  const store = async () => {
-    note.textContent = 'saving…';
-    const saved = await API.save(collect());
-    rec = saved;
-    note.textContent = 'saved';
-    _load();                       // the list behind the window shows the new title
-    return saved;
-  };
-
-  save.addEventListener('click', async () => {
-    save.disabled = true;
-    try { await store(); } catch (e) { note.textContent = e.message; }
-    save.disabled = false;
-  });
-  use.addEventListener('click', async () => {
-    if (archived) {
-      use.disabled = true;
-      note.textContent = 'restoring…';
-      try {
-        // By the list's id when the record could not be read (review I): rec.id is null then.
-        await API.archive(rec.id || summary.id, false);
-        archived = false;
-        dressUse();
-        note.textContent = 'back in the library';
-        _load();
-      } catch (e) {
-        note.textContent = e.message;
-      }
-      gate();
-      return;
-    }
-    if (gate()) return;
-    use.disabled = true;
-    try {
-      const saved = await store();
-      await _use(saved.id);
-      // THE WINDOW GOES (phase Y1, the owner 2026-09-22). `_use` leaves the picker and opens the
-      // project on its step, and this modal used to stay on top of it - with the page's shortcuts
-      // switched off underneath, because a modal layer holds them.
-      _closeForm(ov, layer);
-    } catch (e) {
-      note.textContent = e.message;
-      use.disabled = false;
-    }
-  });
-}
-
-function _closeForm(ov, layer) {
-  Layers.close(layer);
-  try { ov.remove(); } catch (e) { /* already gone */ }
+// The window is shared with the Library (js/scen-window.js, phase V28.2): here a save reads the list
+// behind it again, and `use` makes the project and opens it.
+export function openForm(summary) {
+  return openScenario(summary, { saved: () => _load(), use: (rec) => _use(rec.id) });
 }

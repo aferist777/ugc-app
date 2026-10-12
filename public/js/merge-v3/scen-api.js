@@ -76,6 +76,19 @@ export const remove = (id) =>
 export const project = (scenarioId) => _post('/api/scen3/projects', { scenarioId }).then(d => d.project);
 
 /**
+ * A TALKING HEAD from a scenario - what `use` does, in Merge and in the Library (phase V28.2): the project
+ * (its own copy of the lines) and the EMPTY timeline it will be assembled into, keyed to it. Without that
+ * second one a project made today would be invisible in Merge's picker until its first assembly, and
+ * tomorrow there would be no way back into it. Returns the timeline's key - what Merge opens.
+ */
+export async function talkingHead(scenarioId) {
+  const p = await project(scenarioId);
+  const d = await _post('/api/mv3/timeline/new', { projectId: p.id });
+  if (!d.key) throw new Error('the timeline was refused');
+  return d.key;
+}
+
+/**
  * The take a line is read BY now, and the words it should have said. A line with its words
  * marked up ([tags]) is read by its tagged take - ElevenLabs v3 performs the tags; one without, by
  * the plain take. Which is how a project read before the tags keeps its reads until a line is read
