@@ -1,61 +1,56 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the Library panel: four groups, category filter, thumbnails, popup.
+   MERGE v3 — the Library panel: the gallery on the left, the media tree on the right (phase V28.4, the owner
+   2026-10-12: "в правом столбце древовидное отображение медиа директории ... при клике на главную категорию
+   отображается все что есть по категории"). The tree is js/media-tree.js - the same one the Library's Media shelf
+   shows; a sash between them, its width remembered, a double press for the default.
 
-   The backend already had exactly this shape. `media` is ONE shelf holding every
-   kind, split by a filter, and it hands back the category list for whichever
-   kind is open:
+   The node selected in the tree is what the gallery shows - its `q` is what the media shelf is asked:
 
-     GET /api/library/shelf/media?filter=birols|hooks|uploads|images[&cat=<id>]
+     GET /api/library/shelf/media?group=video|images|audio | filter=<kind>[&cat=<id>]
        -> { items, shown, total, filters, cats }
 
-   so the four buttons and the dropdown are one endpoint, and the numbers they show
-   come from the same response that fills the grid. A count here cannot disagree with
-   what clicking it yields.
+   Thumbnails ONLY. The grid points an <img> at `thumb` and nothing loads the full media until the viewer opens. A
+   SOUND or a TRACK has no picture: its tile is a note with its length, and a press plays it right there - no window
+   (the owner: "воспроизведение по клику на аудио без попапов. Клик в другом месте останавливает проигрывание").
 
-   There is no "all" button any more: it showed every group mixed together, and
-   the category filter has no meaning across them (a birol tag and a hook tag are
-   different lists). Every view is one group now.
+   A tile is dragged onto a lane (it says what it is - video, picture or sound - and a lane takes only its own,
+   timeline-b.js) or onto a node of the tree (another category, another kind of video - js/media-tree.js).
 
-   Thumbnails ONLY. The grid points an <img> at `thumb` and nothing loads the full
-   media until the popup opens. For a clip that is a jpg already on disk; for an
-   image it is /api/thumb, so even a 4K still never reaches a 65px cell.
-
-   The star and the ✕ go through js/library/actions.js - the Library page's own
-   module, not a copy. That matters for more than tidiness: those functions patch the
-   matching localStorage key after the server write, and its header explains why. The
-   birol and hook archives are browser-owned and pushed as whole snapshots by
-   biroly-server-sync.js from whatever page is open, so writing only to the server
-   here would let an open Birols tab push its stale copy back and resurrect exactly
-   what was just deleted.
+   The star and the ✕ go through js/library/actions.js - the Library page's own module, not a copy.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
 import * as Layers from '../layers.js';
-import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages,
+import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages, uploadSounds, uploadMusic,
          loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
 import { trimmer } from './trim.js';
-import { DRAG_TYPE } from './store.js';
+import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
 import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
 import * as LK from '../library/links.js';
+import { createTree, setMediaDrag } from '../media-tree.js';
 
-const LS_TAB = 'mv3_lib_tab';
-const TABS = ['birols', 'hooks', 'uploads', 'images'];
-// Stills are a kind on the same shelf as the clips, so the only thing this group does
-// differently is what it accepts on the way in - one endpoint instead of two, because
-// data/images.json is server-owned. Everything else is the same request.
-const _isImages = () => _tab === 'images';
-// One key per group: the category lists are per-group, so a category chosen in birols
-// means nothing in hooks and must not be carried across.
-const catKey = (tab) => 'mv3_lib_cat_' + tab;
+const VIDEO = new Set(['birols', 'hooks', 'uploads']);
+const AUDIO = new Set(['music', 'sounds']);
+const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
+const LS_TREE_W = 'mv3_lib_tree_w';
+const TREE_DEF = 180, TREE_MIN = 120, TREE_MAX = 420;
 
-let _items = [];      // what the grid is showing, and what the popup pages through
-let _tab = 'birols';
-let _cat = '';
-let _seq = 0;         // guards against a slow response for a group you have left
+let _items = [];      // what the grid is showing, and what the viewer pages through
+let _tree = null;
+let _node = null;     // the tree's selected node - what the gallery shows
+let _seq = 0;         // guards against a slow response for a node you have left
+
+const _kind = () => (_node && _node.kind) || '';
+const _isImages = () => _kind() === 'images';
+const _isAudio = () => AUDIO.has(_kind()) || (_node && _node.key === 'audio');
+// Where a clip brought in lands: the kind selected, or Uploads under Video (the owner: "загрузка в него - в Uploads").
+const _videoKind = () => (VIDEO.has(_kind()) ? _kind() : (_node && _node.key === 'video') ? 'uploads' : '');
+const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
+const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : it.kind === 'images' ? 'image' : 'video');
 
 function _body() { return document.querySelector('#mv3-library .mv3-panel-body'); }
 
@@ -66,28 +61,72 @@ function _note(text, isError) {
   const d = document.createElement('div');
   d.className = 'mv3-empty';
   const t = document.createElement('b');
-  t.textContent = isError ? 'Could not load' : _tab;
+  t.textContent = isError ? 'Could not load' : ((_node && _node.label) || 'Library');
   const s = document.createElement('span');
   s.textContent = text;
   d.appendChild(t); d.appendChild(s);
   b.appendChild(d);
 }
 
+// ── Hearing a sound or a track, right on its tile ──────────────────────────
+// One at a time; a press anywhere else stops it.
+let _hear = null;
+function _stopHearing() {
+  if (!_hear) return;
+  try { _hear.audio.pause(); } catch (e) { /* gone */ }
+  document.removeEventListener('mousedown', _hear.away, true);
+  if (_hear.cell) _hear.cell.classList.remove('is-playing');
+  _hear = null;
+}
+function _play(it, cell) {
+  if (_hear && _hear.id === it.id) { _stopHearing(); return; }
+  _stopHearing();
+  const audio = new Audio(it.media);
+  const away = (e) => { if (!cell.contains(e.target)) _stopHearing(); };
+  _hear = { id: it.id, audio, cell, away };
+  cell.classList.add('is-playing');
+  audio.addEventListener('ended', () => { if (_hear && _hear.audio === audio) _stopHearing(); });
+  document.addEventListener('mousedown', away, true);
+  audio.play().catch(() => { _stopHearing(); _status('That file will not play', true); });
+}
+
+const _mmss = (s) => {
+  if (!(s > 0)) return '';
+  const m = Math.floor(s / 60);
+  return m + ':' + String(Math.round(s - m * 60)).padStart(2, '0');
+};
+
 // ── One tile ────────────────────────────────────────────────────────────────
 // Square, thumbnail only, with two controls that appear on hover: the star at the
 // top left, the ✕ at the top right. Both stopPropagation - without it either one
-// would also open the popup underneath.
-function _tile(it, i) {
+// would also open the viewer underneath.
+function _tile(it, list) {
   const cell = document.createElement('div');
-  cell.className = 'mv3-tile' + (it.meta && it.meta.favorite ? ' is-fav' : '');
+  const audio = AUDIO.has(it.kind);
+  cell.className = 'mv3-tile' + (audio ? ' is-sound' : '') + (it.meta && it.meta.favorite ? ' is-fav' : '');
   // No menu on a tile (phase V23, the owner: one rule everywhere): "Save image as" would save the miniature.
   cell.addEventListener('contextmenu', (e) => e.preventDefault());
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
   const hid = (it.meta || {}).hookId || null;
-  cell.title = [hid, it.name, it.kind, (it.meta || {}).categoryId].filter(Boolean).join(' · ');
+  cell.title = [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ');
 
-  if (it.thumb) {
+  if (audio) {
+    const note = document.createElement('span');
+    note.className = 'mv3-tile-note';
+    note.textContent = '♪';
+    cell.appendChild(note);
+    const nm = document.createElement('span');
+    nm.className = 'mv3-tile-sname';
+    nm.textContent = it.name || '';
+    cell.appendChild(nm);
+    if (it.dur) {
+      const d = document.createElement('span');
+      d.className = 'mv3-tile-dur';
+      d.textContent = _mmss(it.dur);
+      cell.appendChild(d);
+    }
+  } else if (it.thumb) {
     const img = document.createElement('img');
     // lazy + async: a group runs to hundreds of clips and most are below the fold.
     img.loading = 'lazy';
@@ -132,9 +171,7 @@ function _tile(it, i) {
     star.disabled = true;
     try {
       await toggleFavorite(it);
-      // Reload rather than re-sorting here: favourites-first is the SERVER's ordering
-      // (see _mediaShelf), and a second comparator in the page is a second answer that
-      // would drift. A starred clip has to jump to the top left, which is what this does.
+      // Reload rather than re-sorting here: favourites-first is the SERVER's ordering.
       await _load();
     } catch (err) { alert(err.message); star.disabled = false; }
   });
@@ -152,43 +189,45 @@ function _tile(it, i) {
     if (!confirm(deleteWarning(it))) return;
     del.disabled = true;
     try {
+      if (_hear && _hear.id === it.id) _stopHearing();
       await deleteItem(it);
-      await _load();
+      await _reload();
     } catch (err) { alert(err.message); del.disabled = false; }
   });
   cell.appendChild(del);
 
-  // Draggable onto a timeline lane. What the payload does NOT carry is the kind: the
-  // lane it lands on decides that. The old editor filed a drop by what was dragged,
-  // which is how clips dropped on the Halfers lane ended up on the Birols track.
+  // Draggable onto a timeline lane - what it is rides along (DRAG_MEDIA), and the lane decides whether it takes it -
+  // and onto a node of the tree (setMediaDrag).
   cell.draggable = true;
   cell.addEventListener('dragstart', (e) => {
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'copyMove';
+    const media = _mediaOf(it);
     e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({
       libId: it.id, src: it.media, thumb: it.thumb || null, name: it.name || '',
-      // Which shelf it came off. Blank projects need it: a birol lands with its sound
-      // switched OFF, and nothing else about the payload says it is one. The talking-head
-      // timeline never reads this.
-      group: _tab,
+      // Which shelf it came off. Blank projects need it: a birol lands with its sound switched OFF.
+      group: it.kind,
       // Carried so the clip can be laid down at its real width immediately. 0 means the
       // shelf does not know, and the lane will read it off the file instead.
       dur: +it.dur || 0,
+      media,
+      // (phase V28.4) A track of music lies under the rest as a bed: half volume, never transcribed.
+      bed: it.kind === 'music',
     }));
+    e.dataTransfer.setData(DRAG_MEDIA + media, '1');
+    setMediaDrag(e.dataTransfer, it);
     cell.classList.add('is-dragging');
   });
   cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
 
-  cell.addEventListener('click', () => openViewer(_items, i, _viewerOpts()));
+  if (audio) cell.addEventListener('click', () => _play(it, cell));
+  else cell.addEventListener('click', () => openViewer(list, list.indexOf(it), _viewerOpts()));
   return cell;
 }
 
 // ── What can be done to a clip from inside the viewer ───────────────────────
-// A clip is sorted while it is being LOOKED AT - that is when you know what it is - and sending
-// somebody to the Library page to do it means finding the clip a second time. So the viewer
-// carries it all: the KIND and the CATEGORY in the right column (the same controls the Library
-// page puts there, through the same shared calls in library/actions.js, which keep the
-// browser's copy of the archive in step), a way to make a category that does not exist yet,
-// and - for a clip somebody uploaded - the one trim it is allowed, under the video.
+// A clip is sorted while it is being LOOKED AT - that is when you know what it is. So the viewer carries the KIND and
+// the CATEGORY in the right column (the same calls as the Library page, js/library/actions.js), a way to make a
+// category that does not exist yet, and - for a clip somebody uploaded - the one trim it is allowed.
 const CATABLE = new Set(['birols', 'uploads', 'hooks', 'images']);
 // The kinds a clip can be moved between. These three and no others: a still lives in a
 // different store and is not a clip to be re-filed as one.
@@ -214,9 +253,7 @@ function _viewerRows(item) {
 }
 
 // ── kind ──
-// Moving a clip to another kind moves it off this shelf, so the viewer - which pages through
-// this shelf - closes, and the grid is read again. Staying open on a clip that is no longer
-// here would be paging through something that is not the grid behind it.
+// Moving a clip to another kind moves it off this shelf, so the viewer closes and the grid is read again.
 function _kindSelect(item) {
   const sel = document.createElement('select');
   sel.className = 'lib-view-sel';
@@ -237,7 +274,7 @@ function _kindSelect(item) {
       closeViewer();
       _status('Moved to ' + label + 's.');
       setTimeout(() => _status(''), 2400);
-      await _load();
+      await _reload();
     } catch (e) {
       _status('Could not move it: ' + e.message, true);
       sel.value = item.kind;
@@ -248,10 +285,8 @@ function _kindSelect(item) {
 }
 
 // ── category, and making one ──
-// The whole list for the item's kind, not just the categories that happen to have something in
-// the grid: a new clip belongs in a category that may still be empty. The first line makes a
-// new one - named in a small box, created for this kind, and given to this clip in the same
-// breath, because nobody makes a category except to put something in it.
+// The whole list for the item's kind - a new clip belongs in a category that may still be empty. The first line makes
+// a new one, named in a small box and given to this clip in the same breath.
 function _categorySelect(item) {
   const sel = document.createElement('select');
   sel.className = 'lib-view-sel';
@@ -268,7 +303,7 @@ function _categorySelect(item) {
     sel.appendChild(none);
     for (const c of (list || [])) {
       const o = document.createElement('option');
-      o.value = c.id; o.textContent = c.label;
+      o.value = c.id; o.textContent = c.title || c.label;
       sel.appendChild(o);
     }
     sel.value = current;
@@ -293,9 +328,8 @@ function _categorySelect(item) {
       if (item.meta) item.meta.categoryId = id;
       _status('Filed under ' + (label || 'no category') + '.');
       setTimeout(() => _status(''), 2200);
-      // The grid behind is filtered by category, so the clip may have to leave it - reloaded
-      // rather than patched, because which tiles belong on screen is the server's answer.
-      _load();
+      // The grid behind may be one category: the clip may have to leave it - read again, the counts too.
+      _reload();
     } catch (e) {
       _status('Could not change the category: ' + e.message, true);
       sel.value = current;
@@ -315,7 +349,8 @@ function _categorySelect(item) {
       return;
     }
     const id = sel.value;
-    file(id, id ? ((sel.selectedOptions[0] || {}).textContent || '') : '');
+    const c = (((_allCats || {})[item.kind]) || []).find(x => x.id === id);
+    file(id, id ? (c ? c.label : ((sel.selectedOptions[0] || {}).textContent || '')) : '');
   });
   return sel;
 }
@@ -327,7 +362,7 @@ async function _askCategoryName(anchor, kind, onMade) {
     anchor, title: 'New ' + kind.replace(/s$/, '') + ' category', okLabel: 'Create', maxLength: 60,
     check: (name) => {
       const taken = ((_allCats || {})[kind] || []).find(c => String(c.label).toLowerCase() === name.toLowerCase());
-      return taken ? 'There is already a category called ' + taken.label + '.' : '';
+      return taken ? 'There is already a category called ' + (taken.title || taken.label) + '.' : '';
     },
     submit: async (name) => (await createCategory(kind, name)).cat,
   });
@@ -385,36 +420,36 @@ function _underStage(item, video) {
   return wrap;
 }
 
-// The upload cell, first in the grid. A tile-sized target rather than a header
-// button because that is where files are dropped, and the two ways in should look
-// like the same thing. It takes the top-left slot, so favourites lead the CLIPS
-// rather than the grid.
+// The upload cell, first in the grid. A tile-sized target rather than a header button because that is where files are
+// dropped, and the two ways in should look like the same thing. What it offers follows the node (the owner): clips -
+// a file or a link; pictures - a file, or made here; a sound or a track - a file.
 function _plusTile() {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
   b.textContent = '+';
-  b.title = _isImages()
-    ? 'Add a picture to images - from this computer, or made here'
-    : 'Add videos to ' + _tab + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
+  b.title = _isImages() ? 'Add a picture to Images - from this computer, or made here'
+    : _isAudio() ? 'Add music or sounds from this computer'
+    : 'Add videos to ' + _tree.kindLabel(_videoKind()) + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
-    // Pictures can be MADE as well as found, and a clip can come by a LINK as well as a file (phase V27), so the plus
-    // asks which - on every shelf now.
     _plusMenu(b);
   });
   return b;
 }
 
-function _pickFiles() {
+let _pickFor = '';        // what the file dialog is open for: '' (the node's own), 'music' or 'sounds'
+function _pickFiles(what) {
   const inp = document.getElementById('mv3-lib-file');
-  if (inp) inp.click();
+  if (!inp) return;
+  _pickFor = what || '';
+  inp.accept = _isImages() ? PICTURE_ACCEPT : _isAudio() ? AUDIO_ACCEPT : 'video/*';
+  inp.click();
 }
 
-// ── The two ways a picture gets onto the shelf ──────────────────────────────
-// A small menu under the plus rather than a second tile beside it: they are two answers to
-// one question - where is this picture coming from - and two tiles would read as two
-// different things to add.
+// ── The ways something gets onto the shelf ──────────────────────────────────
+// A small menu under the plus rather than a second tile beside it: they are answers to
+// one question - where is this coming from.
 let _plus = null;
 
 function _closePlus() {
@@ -449,11 +484,14 @@ function _plusMenu(anchor) {
   };
 
   if (_isImages()) {
-    item('load from local', 'pictures from this computer', _pickFiles);
+    item('load from local', 'pictures from this computer', () => _pickFiles());
     // The pictures chat, in this panel's place (phase J).
     item('generate', 'make one with a model', () => openPictures());
+  } else if (_isAudio()) {
+    if (_kind() !== 'sounds') item('music from this computer', 'a track - mp3, wav, m4a…', () => _pickFiles('music'));
+    if (_kind() !== 'music') item('sounds from this computer', 'sound effects, into SFX' + (_catOf() ? ' · ' + _node.label : ''), () => _pickFiles('sounds'));
   } else {
-    item('load from local', 'video files from this computer', _pickFiles);
+    item('load from local', 'video files from this computer', () => _pickFiles());
     // (phase V27) A clip by a link - the field opens where the menu was.
     item('from a link', 'YouTube, TikTok, Instagram and other sites', () => _linkBox(anchor));
   }
@@ -477,9 +515,11 @@ function _plusMenu(anchor) {
 
 // ── By a link (phase V27) ───────────────────────────────────────────────────
 // The field under the plus, where its menu was: paste, Enter or "add". The server downloads it (lib/link-queue.js) into
-// the shelf open now, as a file brought in; the panel's status line says how far, with a cross that stops it.
+// the kind selected (Uploads under Video), as a file brought in; the panel's status line says how far, with a cross.
 function _linkBox(anchor) {
   if (_plus) _closePlus();
+  const kind = _videoKind();
+  if (!kind) return;
   const el = document.createElement('div');
   el.className = 'mv3-plus-menu mv3-link-box';
   const inp = document.createElement('input');
@@ -495,7 +535,7 @@ function _linkBox(anchor) {
   row.appendChild(go);
   el.appendChild(row);
   const note = document.createElement('small');
-  note.textContent = 'Into ' + _tab + ', at the best quality, without a login - one link, or several separated by spaces.';
+  note.textContent = 'Into ' + _tree.kindLabel(kind) + ', at the best quality, without a login - one link, or several separated by spaces.';
   el.appendChild(note);
   const add = () => {
     const urls = LK.parseLinks(inp.value);
@@ -536,13 +576,22 @@ function _linkStatus(text, runId) {
   el.appendChild(x);
 }
 
+// What came in is filed with no category: a node that would not show it gives way to its kind (Video shows them all).
+function _showLanded(kind) {
+  if (!_node || _node.key === 'video' || _node.key === kind) return false;
+  if (_node.key === 'audio' && AUDIO.has(kind)) return false;
+  _tree.select(kind, true);
+  return true;
+}
+
 async function _addLinks(urls) {
-  if (_isImages()) return;
+  const kind = _videoKind();
+  if (!kind) return;
   let jobs;
-  try { jobs = await LK.addLinks(urls, { kind: _tab, from: 'merge' }); }
+  try { jobs = await LK.addLinks(urls, { kind, from: 'merge' }); }
   catch (e) { _status(e.message, true); return; }
   if (_linking) { _linking.ids.push(...jobs.map(j => j.id)); _linking.total += jobs.length; return; }
-  _linking = { ids: jobs.map(j => j.id), total: jobs.length, landed: new Set(), reading: null };
+  _linking = { ids: jobs.map(j => j.id), total: jobs.length, kind, landed: new Set(), reading: null };
   let ended = [];
   for (;;) {
     const ids = _linking.ids.slice();
@@ -552,9 +601,8 @@ async function _addLinks(urls) {
       const fresh = list.filter(j => j.state === 'done' && !_linking.landed.has(j.id));
       if (fresh.length) {
         fresh.forEach(j => _linking.landed.add(j.id));
-        // Filed with no category: a category filter would hide what just came in.
-        if (_cat) { _cat = ''; try { localStorage.setItem(catKey(_tab), ''); } catch (e2) { /* private */ } }
-        _linking.reading = _load();
+        if (!_showLanded(_linking.kind)) _linking.reading = _reload();
+        else _linking.reading = _tree.load();
       }
       if (run) _linkStatus('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step), run.id);
     });
@@ -572,6 +620,7 @@ async function _addLinks(urls) {
 }
 
 function _paint() {
+  _stopHearing();
   const b = _body();
   if (!b) return;
   b.textContent = '';
@@ -583,21 +632,23 @@ function _paint() {
   if (!_items.length) {
     const s = document.createElement('span');
     s.className = 'mv3-grid-note';
-    s.textContent = _cat ? 'nothing in this category' : 'empty - drop files here';
+    s.textContent = _node && _node.cat ? 'nothing in this category' : 'empty - drop files here';
     b.appendChild(grid);
     b.appendChild(s);
     return;
   }
-  _items.forEach((it, i) => grid.appendChild(_tile(it, i)));
+  // The viewer pages through what it can show - not the sounds, which play on their tiles.
+  const seen = _items.filter(it => !AUDIO.has(it.kind));
+  _items.forEach((it) => grid.appendChild(_tile(it, seen)));
   b.appendChild(grid);
 }
 
 // ── Upload ──────────────────────────────────────────────────────────────────
-// uploadVideos() is the Library page's own two-step: /api/biroly/upload owns the
-// file AND makes its thumbnail, then /api/library/media/record files the record
-// under the given kind. So a drop lands in whichever group is open, and the new
-// tile arrives with a real thumbnail rather than a full video in a 65px box.
+// Into the node selected: clips into its kind (Uploads under Video), pictures onto Images, sounds into SFX (the category
+// selected, if one is), tracks into Music. Filed with no category - the node gives way to its kind when it would not
+// show them.
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)$/i;
+const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i;
 
 function _status(text, bad) {
   const el = document.getElementById('mv3-lib-status');
@@ -607,75 +658,49 @@ function _status(text, bad) {
   el.classList.toggle('is-bad', !!bad);
 }
 
-// Locked while files are in flight: switching group mid-upload would file the rest
-// of the batch under a different kind than the one you dropped them on.
+// Locked while files are in flight: another node mid-upload would file the rest elsewhere.
 function _lock(on) {
-  document.querySelectorAll('#mv3-library .mv3-seg-btn').forEach(b => { b.disabled = on; });
-  const sel = document.getElementById('mv3-lib-cat');
-  if (sel) sel.disabled = on;
   document.querySelectorAll('#mv3-library .mv3-plus').forEach(b => { b.disabled = on; });
+  const t = document.getElementById('mv3-lib-tree');
+  if (t) t.classList.toggle('is-locked', on);
 }
 
-
-// The same flow with one call instead of two: data/images.json is server-owned, so
-// /api/images/upload takes the file, makes the thumbnails and files the record in one
-// request. Nothing here has to unshift into localStorage afterwards.
-async function _uploadImages(files) {
-  // Any picture, a phone's HEIC too: the server makes it a JPEG on the way in (phase V24).
-  const pics = (files || []).filter(isPictureFile);
-  const skipped = (files || []).length - pics.length;
-  if (!pics.length) {
-    _status('Only pictures can go on this shelf', true);
-    return;
+async function _upload(files, what) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (_isImages()) return _uploadAs(list.filter(isPictureFile), list.length, 'images', 'image', (l, on) => uploadImages(l, on));
+  if (_isAudio()) {
+    const to = what || (_kind() === 'music' ? 'music' : _kind() === 'sounds' ? 'sounds' : '');
+    if (!to) { _status('Pick Music or SFX in the tree first - or press + and say which', true); return; }
+    const snd = list.filter(f => /^audio\//.test(f.type || '') || AUDIO_RE.test(f.name || ''));
+    if (to === 'music') return _uploadAs(snd, list.length, 'music', 'track', (l, on) => uploadMusic(l, on));
+    const cat = _kind() === 'sounds' ? _catOf() : '';
+    return _uploadAs(snd, list.length, 'sounds', 'sound', (l, on) => uploadSounds(l, on, cat));
   }
+  const kind = _videoKind();
+  if (!kind) return;
+  const vids = list.filter(f => /^video\//.test(f.type || '') || VIDEO_RE.test(f.name || ''));
+  return _uploadAs(vids, list.length, kind, 'clip', (l, on) => uploadVideos(l, kind, on));
+}
+
+async function _uploadAs(good, all, kind, noun, send) {
+  const skipped = all - good.length;
+  if (!good.length) { _status('Only ' + noun + 's can go here', true); return; }
   _lock(true);
-  _status('uploading 0/' + pics.length + '…');
+  _status('uploading 0/' + good.length + '…');
+  let r = null;
   try {
-    const r = await uploadImages(pics, (i, n, name) => _status('uploading ' + i + '/' + n + ' · ' + name));
+    r = await send(good, (i, n, name) => _status('uploading ' + i + '/' + n + ' · ' + name));
     const failed = r.total - r.ok;
-    _status(failed ? (failed + ' of ' + r.total + ' failed') + (skipped ? ', ' + skipped + ' not an image' : '')
-                   : (r.ok + ' added') + (skipped ? ', ' + skipped + ' skipped (not an image)' : ''), !!failed);
-    // Filed with no category, so a category filter would hide what you just added.
-    if (r.ok && _cat) {
-      _cat = '';
-      try { localStorage.setItem(catKey(_tab), ''); } catch (e2) {}
-    }
+    _status(failed ? (failed + ' of ' + r.total + ' failed') + (skipped ? ', ' + skipped + ' skipped' : '')
+                   : (r.ok + ' added') + (skipped ? ', ' + skipped + ' skipped (not a ' + noun + ')' : ''), !!failed);
   } catch (e) {
     _status(e.message, true);
   } finally {
     _lock(false);
-    await _load();
-  }
-}
-
-async function _upload(files) {
-  if (_isImages()) return _uploadImages(files);
-  const vids = (files || []).filter(f => /^video\//.test(f.type || '') || VIDEO_RE.test(f.name || ''));
-  const skipped = (files || []).length - vids.length;
-  if (!vids.length) {
-    _status('Only video files can go on this shelf', true);
-    return;
-  }
-  _lock(true);
-  _status('uploading 0/' + vids.length + '…');
-  try {
-    const r = await uploadVideos(vids, _tab, (i, n, name) => _status('uploading ' + i + '/' + n + ' · ' + name));
-    const failed = r.total - r.ok;
-    _status(failed ? (failed + ' of ' + r.total + ' failed') + (skipped ? ', ' + skipped + ' not video' : '')
-                   : (r.ok + ' added') + (skipped ? ', ' + skipped + ' skipped (not video)' : ''), !!failed);
-    // A new record is filed with NO category (/api/library/media/record takes only the
-    // kind), so with a category filter on, an upload would land outside the current view
-    // and read as having done nothing. Clearing the filter is the only way the files you
-    // just added are the files you see.
-    if (r.ok && _cat) {
-      _cat = '';
-      try { localStorage.setItem(catKey(_tab), ''); } catch (e2) {}
-    }
-  } catch (e) {
-    _status(e.message, true);
-  } finally {
-    _lock(false);
-    await _load();      // the shelf sorts newest first, so the new clips land beside the +
+    // The shelf sorts newest first, so what came in lands beside the +.
+    if (r && r.ok && kind !== 'sounds' && _showLanded(kind)) await _tree.load();
+    else await _reload();
   }
 }
 
@@ -686,11 +711,11 @@ const _hasFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || 
 function _wireDrop() {
   const panel = document.getElementById('mv3-library');
   if (!panel) return;
-  // (phase V27) A LINK let go over the shelf (dragged out of a browser) comes in as a clip of the shelf open - not over a
-  // chat or the captions, which take nothing of the kind, and not on Images.
+  // (phase V27) A LINK let go over the shelf (dragged out of a browser) comes in as a clip of the kind selected - not
+  // over a chat or the captions, which take nothing of the kind, and not on Images or Audio.
   // A tile of this panel being dragged to a lane is not a link, whatever else the browser put on it.
   const linkHere = (e) => LK.dragHasLink(e.dataTransfer) && ![...e.dataTransfer.types].includes(DRAG_TYPE)
-    && !_isImages() && !Views.isChat() && !Views.isCaptions();
+    && !!_videoKind() && !Views.isChat() && !Views.isCaptions();
   panel.addEventListener('dragover', (e) => {
     if (!_hasFiles(e) && linkHere(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; panel.classList.add('is-drop'); return; }
     if (!_hasFiles(e)) return;
@@ -735,75 +760,17 @@ function _wireDrop() {
   }
 }
 
-// ── The category dropdown ───────────────────────────────────────────────────
-// Options come from the response, and the server builds them BEFORE applying the
-// category filter - so choosing one does not make every other option read 0.
-//
-// EMPTY CATEGORIES ARE NOT OFFERED. The category lists are shared across groups
-// (a tag made for hooks is in the same list a birol can use), so most groups only
-// ever fill a handful of them; listing the rest made the dropdown mostly dead
-// options that lead to an empty grid. Uncategorized is dropped by the same rule -
-// it is a count like any other, and at 0 there is nothing behind it.
-//
-// Returns true when the selected category is no longer on offer, so the caller can
-// reload. Resetting it here alone would leave the select reading "all" over a grid
-// that is still filtered by the category that vanished.
-function _paintCats(cats, groupCount) {
-  const sel = document.getElementById('mv3-lib-cat');
-  if (!sel) return false;
-  sel.textContent = '';
-  const all = document.createElement('option');
-  all.value = '';
-  all.textContent = 'all' + (groupCount != null ? ' · ' + groupCount : '');
-  sel.appendChild(all);
-  for (const c of (cats || [])) {
-    if (!(+c.count > 0)) continue;
-    const o = document.createElement('option');
-    o.value = c.id;
-    o.textContent = c.label || c.name || c.id;
-    sel.appendChild(o);
-  }
-  const dropped = !!_cat && !Array.from(sel.options).some(o => o.value === _cat);
-  if (dropped) {
-    _cat = '';
-    try { localStorage.setItem(catKey(_tab), ''); } catch (e) {}
-  }
-  sel.value = _cat;
-  return dropped;
-}
-
-// The counts sit on the buttons' tooltips rather than in their labels: the labels are
-// the group names, and three labels plus three numbers do not fit the header.
-function _paintCounts(d) {
-  for (const f of (d.filters || [])) {
-    const el = document.querySelector(`.mv3-seg-btn[data-tab="${f.id}"]`);
-    const n = String(f.label || '').split('·').pop().trim();
-    if (el && n) el.title = f.id + ' · ' + n;
-  }
-}
-
-function _groupCount(d) {
-  const f = (d.filters || []).find(x => x.id === _tab);
-  const n = f ? parseInt(String(f.label).split('·').pop().trim(), 10) : NaN;
-  return isNaN(n) ? null : n;
-}
-
+// ── Reading the shelf for the node selected ─────────────────────────────────
 async function _load() {
   const mine = ++_seq;
+  if (!_node) return;
   _note('loading…');
-  const q = new URLSearchParams({ filter: _tab });
-  if (_cat) q.set('cat', _cat);
+  const q = new URLSearchParams(_node.q || {});
   try {
     const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
     if (!d || !d.success) throw new Error((d && d.error) || 'shelf refused');
     _items = (d.items || []).filter(i => i && i.media);
-    _paintCounts(d);
-    // The selected category can stop existing between loads - the last clip in it gets
-    // deleted, or moved to another group. Then this list is the wrong one and has to be
-    // fetched again unfiltered. Terminates after one retry: _cat is '' by now, and the
-    // "all" option is always present.
-    if (_paintCats(d.cats, _groupCount(d))) return _load();
     _paint();
   } catch (e) {
     if (mine !== _seq) return;
@@ -811,76 +778,52 @@ async function _load() {
   }
 }
 
-function _setTab(tab) {
-  _tab = TABS.indexOf(tab) >= 0 ? tab : 'birols';
-  document.querySelectorAll('.mv3-seg-btn').forEach(b => {
-    b.classList.toggle('is-on', b.dataset.tab === _tab);
-  });
-  try {
-    localStorage.setItem(LS_TAB, _tab);
-    _cat = localStorage.getItem(catKey(_tab)) || '';
-  } catch (e) { _cat = ''; }
-  // WHAT THE FILE DIALOG OFFERS follows the shelf. One input serves all four, and it used to
-  // accept pictures and films everywhere - so on a clip shelf the dialog offered pictures that
-  // were then dropped with a "skipped" line, which read as pictures being allowed there.
-  const inp = document.getElementById('mv3-lib-file');
-  if (inp) inp.accept = _isImages() ? PICTURE_ACCEPT : 'video/*';
-  _load();
-}
+// The gallery and the tree's numbers together - after anything that adds, deletes or moves.
+function _reload() { return Promise.all([_load(), _tree ? _tree.load() : null]); }
 
-// Show a particular group, optionally scrolled to one category, and open the panel if it
-// is the collapsed one. Used after a screenshot: the picture has just been filed somewhere,
-// and being shown where beats being told.
-//
-// The category is matched by LABEL rather than id because the caller knows what it asked
-// the server for ("Screenshots") and not which id that resolved to. A label that is not in
-// this group's list simply leaves the filter alone rather than emptying the grid.
-export async function showGroup(tab, catLabel) {
-  if (TABS.indexOf(tab) < 0) return;
+// Show a particular kind, optionally on one of its categories by NAME, and open the panel if it is the folded one.
+// Used after a screenshot: the picture has just been filed under "Screenshots", and being shown where beats being told.
+export async function showGroup(kind, catLabel) {
+  if (!_tree) return;
   setOpenColumn('library');
   Views.toBase();
   Views.toShelf();
-  _setTab(tab);
-  if (!catLabel) return;
-  // _setTab kicks off its own load; this one runs after it and is what actually filters.
-  await _load();
-  const sel = document.getElementById('mv3-lib-cat');
-  const opt = sel && [...sel.options].find(o => o.textContent.split('·')[0].trim().toLowerCase() === String(catLabel).toLowerCase());
-  if (!opt) return;
-  _cat = opt.value;
-  try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
-  await _load();
+  await _tree.load();
+  const k = _tree.node(kind);
+  if (!k) return;
+  const want = String(catLabel || '').toLowerCase();
+  const c = want ? (k.children || []).find(x => String(x.name || x.label).toLowerCase() === want) : null;
+  _tree.select(c ? c.key : kind, true);
 }
 
 // ── One file, shown on its shelf (phase L4, the owner 2026-09-23) ───────────
-// Where the Alerts row of a picture that has landed leads (js/alerts-bell.js, js/merge-v3/main.js):
-// the images shelf, open on the category the picture was filed in - a project's pictures go under
-// the project's own (lib/mv3-gens.js) - and its tile in view and lit until the shelf is painted
-// again. Looked for across the whole shelf first: the category the shelf was last left on need not
-// be the one it is in.
+// Where the Alerts row of a picture or a clip that has landed leads (js/alerts-bell.js, js/merge-v3/main.js): its kind
+// and category selected in the tree, its tile in view and lit until the shelf is painted again.
+const _KIND_OF_PATH = [['/media/birols/', 'birols'], ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'],
+  ['/media/images/', 'images'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music']];
 export async function reveal(path) {
   const want = String(path || '').split('?')[0];
-  if (!want) return false;
+  if (!want || !_tree) return false;
   setOpenColumn('library');
   Views.toBase();
   Views.toShelf();
-  const tab = want.startsWith('/media/birols/') ? 'birols' : want.startsWith('/media/uploads/') ? 'uploads' : 'images';
-  _setTab(tab);
-  _cat = '';
-  await _load();
-  const it = _items.find(x => String(x.media || '').split('?')[0] === want);
+  // Its kind by where it lives - a clip of B-roll's archive under media/uploads/ is an upload.
+  const kind = (_KIND_OF_PATH.find(([p]) => want.startsWith(p)) || [])[1] || 'images';
+  let it = null;
+  try {
+    const d = await fetch('/api/library/shelf/media?filter=' + kind).then(r => r.json());
+    it = ((d && d.items) || []).find(x => String(x.media || '').split('?')[0] === want) || null;
+  } catch (e) { it = null; }
   if (!it) {
-    _status((tab === 'images' ? 'That picture' : 'That clip') + ' is no longer on the shelf', true);
+    _status(kind === 'images' ? 'That picture is no longer on the shelf' : 'That clip is no longer on the shelf', true);
     setTimeout(() => _status(''), 5000);
     return false;
   }
+  await _tree.load();
   const cat = String((it.meta || {}).categoryId || '');
-  const sel = document.getElementById('mv3-lib-cat');
-  if (cat && sel && [...sel.options].some(o => o.value === cat)) {
-    _cat = cat;
-    await _load();
-  }
-  try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
+  _tree.selectFor(kind, cat || '__uncat__', false);
+  _node = _tree.selected();
+  await _load();
   const cell = [...document.querySelectorAll('#mv3-library .mv3-tile')].find(c => c.dataset.media === want);
   if (!cell) return false;
   cell.classList.add('is-found');
@@ -890,26 +833,45 @@ export async function reveal(path) {
   return true;
 }
 
-export function initLibrary() {
-  document.querySelectorAll('.mv3-seg-btn').forEach(b => {
-    b.addEventListener('click', (e) => {
-      // The collapsed column is itself a button that opens the panel; without this a
-      // click on a group button would bubble up and read as "open me" as well.
-      e.stopPropagation();
-      _setTab(b.dataset.tab);
-    });
+// ── The sash between the gallery and the tree ───────────────────────────────
+// The tree is on the right: dragging LEFT makes it wider. Remembered; a double press gives the default back.
+function _wireTreeSash() {
+  const sash = document.getElementById('mv3-lib-sash');
+  const box = document.getElementById('mv3-lib-tree');
+  if (!sash || !box) return;
+  const apply = (w) => {
+    // Never more than 60% of the row: the gallery keeps room for a column of tiles in a narrow panel.
+    const row = box.parentElement ? box.parentElement.getBoundingClientRect().width : 0;
+    const max = row > 0 ? Math.max(TREE_MIN, Math.min(TREE_MAX, row * 0.6)) : TREE_MAX;
+    const v = Math.max(TREE_MIN, Math.min(max, Math.round(w)));
+    box.style.flexBasis = v + 'px';
+    return v;
+  };
+  let saved = 0;
+  try { saved = parseInt(localStorage.getItem(LS_TREE_W) || '', 10); } catch (e) { saved = 0; }
+  apply(saved || TREE_DEF);
+  sash.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const from = e.clientX;
+    const base = box.getBoundingClientRect().width;
+    document.body.classList.add('mv3-resize-v');
+    const move = (ev) => apply(base - (ev.clientX - from));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-v');
+      try { localStorage.setItem(LS_TREE_W, String(Math.round(box.getBoundingClientRect().width))); } catch (err) { /* a private window */ }
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
   });
+  sash.addEventListener('dblclick', () => {
+    apply(TREE_DEF);
+    try { localStorage.setItem(LS_TREE_W, String(TREE_DEF)); } catch (e) { /* a private window */ }
+  });
+}
 
-  const sel = document.getElementById('mv3-lib-cat');
-  if (sel) {
-    sel.addEventListener('click', (e) => e.stopPropagation());
-    sel.addEventListener('change', () => {
-      _cat = sel.value || '';
-      try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
-      _load();
-    });
-  }
-
+export function initLibrary() {
   const inp = document.getElementById('mv3-lib-file');
   if (inp) {
     inp.addEventListener('change', () => {
@@ -918,14 +880,31 @@ export function initLibrary() {
       // needed, or picking the same file twice fires no change event.
       const files = Array.from(inp.files || []);
       inp.value = '';
-      _upload(files);
+      _upload(files, _pickFor);
     });
   }
   _wireDrop();
+  _wireTreeSash();
   // Back from the pictures chat with something made or added: the shelf reads again (phase J).
-  window.addEventListener('mv3:lib-reload', () => _load());
+  window.addEventListener('mv3:lib-reload', () => _reload());
 
-  let saved = null;
-  try { saved = localStorage.getItem(LS_TAB); } catch (e) {}
-  _setTab(saved && saved !== 'media' ? saved : 'birols');
+  // (phase V28.4) The shelf buttons the panel had (birols / hooks / uploads / images) were remembered as `mv3_lib_tab`:
+  // the first time, the tree opens on the same one; the old keys go.
+  let fallback = 'birols';
+  try {
+    const old = localStorage.getItem('mv3_lib_tab');
+    if (old && ['birols', 'hooks', 'uploads', 'images'].includes(old)) fallback = old;
+    for (const k of Object.keys(localStorage)) if (k === 'mv3_lib_tab' || k.startsWith('mv3_lib_cat_')) localStorage.removeItem(k);
+  } catch (e) { /* a private window */ }
+
+  const host = document.getElementById('mv3-lib-tree');
+  if (!host) return;
+  host.addEventListener('click', (e) => e.stopPropagation());     // the folded column's press must not see it
+  _tree = createTree(host, {
+    page: 'mv3', fallback,
+    status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
+    onSelect: (n) => { _node = n; _load(); },
+    onChanged: () => _load(),
+  });
+  _tree.load().then(() => { _node = _tree.selected(); _load(); });
 }

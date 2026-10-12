@@ -491,13 +491,8 @@ function _blankVideoTrack(host, track) {
 }
 
 function _blankAudioTrack(host, track) {
-  // THE OTHER EDITOR'S MUSIC PANEL, on this lane. It is the same two questions - make one, or
-  // take one already made - and the same thirty chips answer them, so it is the same module
-  // told which lane to write to rather than a second copy of it drifting away from the first.
-  //
-  // The lane's master volume lives inside it, on the library half, where it was put for a
-  // reason worth keeping: under a form for music that does not exist yet it is one more
-  // control between the chips and the button that makes them into something.
+  // THE MUSIC PANEL, on this lane: the lane's master volume and the generator (js/merge-v3/music.js). The tracks
+  // themselves are in the Library panel, Audio -> Music, dragged onto a lane from there (phase V28.4).
   M.setMusicDest(track.id);
   M.renderMusicTrack(host, track);
 
@@ -997,9 +992,6 @@ window.addEventListener('resize', () => { if (oneB() || trackB() || multiB() > 1
 function _render() {
   const host = _host();
   const over = _overHost();
-  // Both are rebuilt wholesale, so a music preview would keep playing with its stop button
-  // thrown away. Stop it before the rebuild rather than orphan it.
-  M.stopPreview();
   if (host) {
     host.textContent = '';
     // A step may lay the panel out itself (js/merge-v3/wk-setup.js); this is where that

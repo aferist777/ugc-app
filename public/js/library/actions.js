@@ -225,6 +225,8 @@ export function deleteWarning(it) {
   }
   // (phase V7) A sound has no picture: the file alone goes.
   if (it.kind === 'sounds') return 'Delete the sound "' + (it.name || '') + '"?\n\nThe sound file is removed from disk.';
+  // (phase V28.4, the owner) A track goes with its file, as everything on Media.
+  if (it.kind === 'music') return 'Delete the track "' + (it.name || '') + '"?\n\nThe music file is removed from disk.';
   return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
 }
 
@@ -301,6 +303,24 @@ export async function uploadSounds(files, onEach, categoryId) {
       fd.append('name', f.name.replace(/\.[^.]+$/, ''));
       if (categoryId) fd.append('categoryId', categoryId);
       await _json('/api/sounds/upload', { method: 'POST', body: fd });
+      ok++;
+    } catch (e) { /* one bad file must not stop the batch */ }
+  }
+  return { ok, total: list.length };
+}
+
+// (phase V28.4) Music from this computer into Media -> Audio -> Music (routes/music.js; no categories) - one call each.
+export async function uploadMusic(files, onEach) {
+  let ok = 0;
+  const list = Array.from(files || []);
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (onEach) onEach(i + 1, list.length, f.name);
+    try {
+      const fd = new FormData();
+      fd.append('music', f);
+      fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+      await _json('/api/audio/music/upload', { method: 'POST', body: fd });
       ok++;
     } catch (e) { /* one bad file must not stop the batch */ }
   }

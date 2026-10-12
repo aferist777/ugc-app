@@ -17,6 +17,8 @@
      without this; the music generator in the inspector is what needs it here. -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/merge-v3.css">
+<!-- The media tree beside the Library panel's gallery (js/media-tree.js, phase V28.4). -->
+<link rel="stylesheet" href="css/media-tree.css">
 <!-- The pictures chat in the Library panel (js/merge-v3/picchat.js, phase J). -->
 <link rel="stylesheet" href="css/mv3-imagen.css">
 <link rel="stylesheet" href="css/mv3-catalog.css">
@@ -104,34 +106,26 @@
           <span class="mv3-pc-head" id="mv3-vc-headl" hidden></span>
           <button class="mv3-lib-crumb" id="mv3-lib-cap" type="button">/ captions</button>
           <span class="sp"></span>
-          <!-- The chat's own buttons, in place of the category and the shelves while it shows. -->
+          <!-- The chat's own buttons, while it shows. -->
           <span class="mv3-pc-head" id="mv3-pc-head" hidden></span>
           <span class="mv3-pc-head" id="mv3-vc-head" hidden></span>
-          <!-- Categories of whichever group is open. Its options come from the same
-               response that fills the grid, so it can never offer a category that
-               is not there. -->
-          <select class="mv3-cat" id="mv3-lib-cat" title="Filter by category"></select>
-          <!-- Four groups, one endpoint: they are the kind filters of the media shelf
-               (see js/merge-v3/library.js). Glued to the right edge by the .sp above;
-               the title ellipsises before this group shrinks. -->
-          <div class="mv3-seg">
-            <button class="mv3-seg-btn" type="button" data-tab="birols">birols</button>
-            <button class="mv3-seg-btn" type="button" data-tab="hooks">hooks</button>
-            <button class="mv3-seg-btn" type="button" data-tab="uploads">uploads</button>
-            <!-- Still pictures: the media shelf's fourth kind, alongside the clips. -->
-            <button class="mv3-seg-btn" type="button" data-tab="images">images</button>
-          </div>
         </div>
         <!-- Upload progress and refusals. Its own element, outside the body: the body
              is emptied and rebuilt on every load, which would wipe the message. -->
         <div class="mv3-libstatus" id="mv3-lib-status" hidden></div>
-        <div class="mv3-panel-body"></div>
+        <!-- THE GALLERY AND THE MEDIA TREE (phase V28.4, the owner 2026-10-12): what the tree has selected is what the
+             gallery shows (js/merge-v3/library.js, js/media-tree.js); the sash between them sets the tree's width. -->
+        <div class="mv3-lib-row" id="mv3-lib-row">
+          <div class="mv3-panel-body"></div>
+          <div class="mv3-lib-sash" id="mv3-lib-sash" title="Drag to resize the tree, double-click for the default width"></div>
+          <div class="mv3-lib-tree" id="mv3-lib-tree"></div>
+        </div>
         <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
         <div class="mv3-pc" id="mv3-pc"></div>
         <div class="mv3-pc is-video" id="mv3-vc"></div>
         <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
         <div class="mv3-cap" id="mv3-cap"></div>
-        <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,
+        <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only (set for the node selected),
              so the drop path checks the files itself. -->
         <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>
         <!-- WHAT IS PICKED ON THE TIMELINE - a clip, a lane, several clips - slides in over the

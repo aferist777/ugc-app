@@ -11,12 +11,10 @@
   margin-right:min(350px, 100%); background:var(--bg) }
 #mv3-library.is-captions .mv3-cap{ display:flex }
 .mv3-col.is-collapsed .mv3-cap{ display:none !important }
-#mv3-library.is-captions .mv3-panel-body,
+#mv3-library.is-captions .mv3-lib-row,
 #mv3-library.is-captions .mv3-libstatus,
 #mv3-library.is-captions .mv3-pc,
-#mv3-library.is-captions .mv3-pc-head,
-#mv3-library.is-captions #mv3-lib-cat,
-#mv3-library.is-captions .mv3-seg{ display:none !important }
+#mv3-library.is-captions .mv3-pc-head{ display:none !important }
 
 /* The categories, and how far the making is. */
 .mv3-cap-top{ flex:0 0 auto; padding:8px 10px 6px; border-bottom:1px solid var(--border-soft) }

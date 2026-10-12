@@ -1,13 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the Music panels. Phase I5.
-
-   The saved-tracks library is server-side already (routes/music.js):
-
-     GET    /api/audio/suno/library        -> { list: [{id, title, audioPath, style}] }
-     DELETE /api/audio/suno/library/:id
-
-   so this panel reads the same list every other page reads. Nothing about the music
-   library lives in a browser.
+   MERGE v3 — the music panel of an audio lane: the GENERATOR. Phase I5; since phase V28.4 (the owner 2026-10-12) the
+   tracks themselves are in the Library panel - Audio -> Music in its tree (js/merge-v3/library.js) - and one is laid
+   on a lane by dragging it there, as it is, from where it is let go (no cutting to the video any more); two of them
+   overlapping cross into each other by themselves (js/sound/fades.js). The saved-tracks half of this panel went.
 
    THE GENERATOR asks Suno through kie.ai, and the SERVER sees it through (phase V23):
 
@@ -15,30 +10,18 @@
      GET  /api/alerts/:alertId          the generation's row in Alerts - followed here until it ends
 
    The server files both variants Suno makes as two tracks, "<title> · 1" and "<title> · 2" (routes/music.js);
-   this panel writes nothing to the list, it only reads it again when the row is done.
+   this panel writes nothing to the list.
 
    What reaches the model is one line of text. That is the whole API for taste: there is
    no BPM field, no instrument list, no mood enum - `style` is prose and Suno reads it.
    So the chips ARE the prompt, joined with commas, and the BPM slider writes "N BPM"
    into the same line. Worth knowing before trusting it: the tempo is a strong hint, not
    a setting, and a track can come back near it rather than on it.
-
-   LENGTH IS NOT ASKED FOR EITHER. Suno returns two variants of a minute and a half to
-   two and a half, and the `duration` parameter that would change that works on one model
-   only. So the length is taken rather than requested: the clip on the lane is cut to the
-   video, and when the variant chosen is shorter than the video, the other variant of the
-   same generation follows it, the two crossing over three seconds (the owner, 2026-10-09).
-
-   One detail worth stating because it has bitten before: the play button's label
-   follows the AUDIO's own play/pause/ended events, not the click. Toggling a label on
-   click is how a button ends up reading "pause" over a track that stopped by itself.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import * as C from './controls.js';
 import { startInlineProgress, lockControls } from '../progress.js';
-
-let _audio = null;      // the one preview player; a second would be two tracks at once
 
 function _el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -46,25 +29,6 @@ function _el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
-
-export function stopPreview() {
-  if (!_audio) return;
-  try { _audio.pause(); } catch (e) {}
-  _audio = null;
-}
-
-// How long an audio file is, asked of the browser. Resolves 0 rather than rejecting: a
-// file that will not report its length still gets placed, just with a fallback length.
-function _probeAudio(src) {
-  return new Promise(resolve => {
-    const a = new Audio();
-    a.preload = 'metadata';
-    a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
-    a.addEventListener('error', () => resolve(0), { once: true });
-    a.src = src;
-  });
-}
-const FALLBACK_DUR = 30;
 
 // WHERE MUSIC LANDS. A project has up to four audio lanes and this panel is opened on one of
 // them, so the destination is TOLD rather than assumed.
@@ -77,9 +41,8 @@ function _lane(tl) {
   return tl.tracks.find(t => t && t.id === _dest) || null;
 }
 
-// How long the video actually is: every track except this one. Measuring the music lane
-// too would be circular - laying down a bed would make the video longer, which would make
-// the next bed longer again, and a two-minute ad would grow a five-minute score.
+// How long the video actually is: every track except this one - said to Suno as the length wanted (it is a hint; Suno
+// makes what it makes).
 function _videoLength() {
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return 0;
@@ -92,138 +55,6 @@ function _videoLength() {
     }
   }
   return Math.round(end * 100) / 100;
-}
-
-// The lane gets EXACTLY the video, whatever length the track happens to be. Longer than
-// the video and it is cut; shorter and the rest is laid after it until the picture is covered,
-// with the last piece cut. A bed that stops before the last frame is the one outcome worth
-// writing a loop to avoid. Trimmed and laid again, never re-encoded: the library keeps the
-// tracks and every project takes the shape it needs from them.
-//
-// WHAT FOLLOWS (phase V23, the owner 2026-10-09): the OTHER VARIANT of the same generation, then
-// the first again, and so on - each coming in three seconds before the one before it ends, the
-// earlier fading out as the later fades in (the clips' own fadeOut / fadeIn, which the preview
-// and the render both play). A track with no twin - one made before both were kept - is laid
-// again end to end, as it always was.
-const MAX_REPEATS = 40;
-const XF = 3;
-
-async function _add(t, list) {
-  const twin = t.gen ? (list || []).find(x => x && x.gen === t.gen && x.id !== t.id && x.audioPath) : null;
-  const order = twin ? [t, twin] : [t];
-  const lens = await Promise.all(order.map(x => _probeAudio(x.audioPath)));
-  const fulls = lens.map(v => (v > 0 ? v : FALLBACK_DUR));
-  const want = _videoLength();
-  const r2 = (v) => Math.round(v * 100) / 100;
-  Store.mutate(tl => {
-    const tr = _lane(tl);
-    if (!tr) return;
-    if (!Array.isArray(tr.clips)) tr.clips = [];
-    // FROM NOUGHT, UNDER what is already on the lane: audio lanes carry everything - a birol's
-    // sound, a voice, a bed - and they are mixed, not replaced; the lane draws the bed first,
-    // beneath the rest.
-    const end = want > 0 ? want : fulls[0];
-    // Collected rather than pushed one by one, because where the run goes in the lane is the
-    // other half of what "under" means: a clip earlier in the list is drawn first, and drawn
-    // first is drawn underneath. A bed belongs beneath the sounds it is a bed for.
-    const made = [];
-    let at = 0;
-    let crossing = false;
-    for (let n = 0; n < MAX_REPEATS; n++) {
-      const k = n % order.length;
-      const full = fulls[k];
-      const dur = r2(Math.min(full, end - at));
-      if (dur <= 0.05) break;
-      const c = {
-        id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) + n,
-        src: order[k].audioPath, thumb: null, name: order[k].title || 'music', libId: null,
-        start: r2(at),
-        dur,
-        srcDur: r2(lens[k]),
-        trimIn: 0, trimOut: r2(Math.max(0, full - dur)), speed: 1,
-        // Backing music under a voice: full volume would bury the talking head, so it
-        // starts at half.
-        volume: 0.5, reversed: false,
-        transition: null, animation: null, filter: null,
-        // A BED, said on the clip: on a blank project's audio lane it sits among voices and sounds,
-        // and the one thing that must tell them apart is the transcriber - captions made from the
-        // sound are made from the voice, never from the music under it (subs-b.js).
-        bed: true,
-      };
-      if (crossing) c.fadeIn = XF;
-      made.push(c);
-      const stop = r2(at + dur);
-      if (stop >= end - 0.05) break;
-      // Not covered yet. The other variant comes in three seconds early, the two crossing - when this
-      // one is long enough to give them up; the same track again starts where it stops.
-      crossing = !!twin && dur > XF * 2;
-      if (crossing) { c.fadeOut = XF; at = r2(stop - XF); } else at = stop;
-    }
-    tr.clips.unshift(...made);
-  });
-}
-
-// ── The library list ────────────────────────────────────────────────────────
-function _rows(box, list, onChanged) {
-  box.textContent = '';
-  if (!list.length) {
-    box.appendChild(_el('div', 'mv3-c-hint', 'No saved tracks yet.'));
-    return;
-  }
-  for (const t of list) {
-    const row = _el('div', 'mv3-mus-row');
-    const name = _el('span', 'mv3-mus-name', (t.title || 'track') + (t.style ? ' · ' + t.style : ''));
-    name.title = name.textContent;
-    row.appendChild(name);
-
-    const play = _el('button', 'mv3-mus-btn', '▶');
-    play.type = 'button';
-    play.title = 'Preview';
-    play.addEventListener('click', () => {
-      // Same file playing -> this is a stop. Different file -> switch to it.
-      if (_audio && _audio.dataset.src === t.audioPath) { stopPreview(); play.textContent = '▶'; return; }
-      stopPreview();
-      const a = new Audio(t.audioPath);
-      a.dataset.src = t.audioPath;
-      _audio = a;
-      const mark = () => {
-        const on = !a.paused;
-        play.textContent = on ? '❚❚' : '▶';
-        play.title = on ? 'Stop' : 'Preview';
-      };
-      for (const ev of ['play', 'pause', 'ended']) a.addEventListener(ev, mark);
-      a.play().catch(() => { play.title = 'Could not play'; });
-    });
-    row.appendChild(play);
-
-    const add = _el('button', 'mv3-mus-btn', '＋');
-    add.type = 'button';
-    // (phase V23) The other variant of its generation follows when this one is shorter than the video.
-    const twin = t.gen && list.some(x => x && x.gen === t.gen && x.id !== t.id);
-    add.title = 'Lay it on the lane, cut to the video' + (twin ? ' - the other variant follows if this one is shorter, crossing over 3 s' : '');
-    add.addEventListener('click', async () => {
-      add.disabled = true;
-      try { await _add(t, list); } finally { add.disabled = false; }
-    });
-    row.appendChild(add);
-
-    const del = _el('button', 'mv3-mus-btn danger', '🗑');
-    del.type = 'button';
-    del.title = 'Delete from the library';
-    del.addEventListener('click', async () => {
-      // Removes the record from the shared music library, which every page reads - so
-      // unlike taking a clip off the timeline, this one asks.
-      if (!confirm('Delete "' + (t.title || 'track') + '" from the music library?')) return;
-      del.disabled = true;
-      try {
-        await fetch('/api/audio/suno/library/' + encodeURIComponent(t.id), { method: 'DELETE' });
-        if (onChanged) onChanged();
-      } catch (e) { alert(e.message); del.disabled = false; }
-    });
-    row.appendChild(del);
-
-    box.appendChild(row);
-  }
 }
 
 // ── The generator ───────────────────────────────────────────────────────────
@@ -244,7 +75,6 @@ const CHIP_GROUPS = [
 // inspector redraws on every store change, which includes the one this panel causes.
 const _picked = new Set();
 let _bpm = 90;
-let _view = 'saved';
 let _busy = false;
 let _said = '';
 // The panel that is mid-generation, kept so a rebuild can put the SAME node back rather
@@ -316,15 +146,13 @@ async function _generate(panel, foot, redraw) {
     }
 
     prog.finish();
-    say('"' + title + '" is in the library - two variants, · 1 and · 2.');
-    // Into the library and NOT onto the lane. A generated track is a candidate, not a
-    // decision: you listen to it first, and often to the one before it again. It arrives at
-    // the top of the list - the server unshifts it - and the panel opens on that list, so
-    // the thing just made is the thing under the cursor.
-    _view = 'saved';
+    say('"' + title + '" is in the Library - Audio · Music, two variants, · 1 and · 2. Drag one onto the lane.');
+    // Into the library and NOT onto the lane. A generated track is a candidate, not a decision: you listen to it first.
+    // The Library panel shows it - Music selected in its tree, the new ones first.
     _busy = false;
     _genNode = null;
     if (redraw) redraw();
+    try { (await import('./library.js')).showGroup('music'); } catch (e) { /* the panel is optional */ }
   } catch (e) {
     // The row stays where it is, wearing the reason. Nothing redraws this panel on a
     // failure - the store did not change - so the message has to survive in place, and
@@ -379,70 +207,30 @@ function _renderGenerator(host, redraw) {
   const foot = _el('div', 'mv3-mus-foot');
   const go = C.button('Generate', () => _generate(panel, foot, redraw));
   go.classList.add('mv3-mus-go');
-  go.disabled = !_picked.size || !len || _busy;
-  go.title = !len ? 'Put something on the timeline first'
-           : !_picked.size ? 'Pick at least one chip'
-           : 'Cut to the timeline: ' + len.toFixed(1) + 's. Suno returns 3-5 minutes and the library keeps all of it.';
+  go.disabled = !_picked.size || _busy;
+  go.title = !_picked.size ? 'Pick at least one chip'
+           : 'Two variants come back, kept as two tracks in the Library panel (Audio · Music)' + (len ? ' - asked for about ' + len.toFixed(1) + ' s' : '');
   foot.appendChild(go);
   panel.appendChild(foot);
   if (_said) panel.appendChild(_el('div', 'mv3-c-hint', _said));
 }
 
-// Back to the library whenever the panel is opened afresh. The view is module state so it
-// survives the inspector's constant redrawing, which is what a half-picked set of chips
-// needs - but it should not mean that selecting the track a day later still opens on a
-// form. Left alone mid-generation: the running job reports from that panel.
-export function resetView() { if (!_busy) { _view = 'saved'; _said = ''; } }
+/** Kept for the inspector: the panel has one view now. */
+export function resetView() { if (!_busy) _said = ''; }
 
 export function renderMusicTrack(host, track) {
-  // The two ways to get music onto the lane, side by side at the top: make one, or take
-  // one already made. A tab rather than both stacked - the library is a scrolling list and
-  // the generator is thirty chips, and either one buries the other underneath it.
-  const tabs = _el('div', 'mv3-mus-tabs');
-  for (const [id, label] of [['gen', 'Generate'], ['saved', 'Saved']]) {
-    const t = _el('button', 'mv3-mus-tab' + (_view === id ? ' on' : ''), label);
-    t.type = 'button';
-    t.dataset.view = id;
-    // Free to switch mid-generation: the panel is held by _genNode rather than rebuilt, so
-    // going to look at the library and coming back finds the same spinner still counting.
-    t.addEventListener('click', () => { _view = id; _said = ''; render(); });
-    tabs.appendChild(t);
-  }
-  host.appendChild(tabs);
-
-  // Redrawn in place rather than through the inspector: this switch is a view, not an
-  // edit, and there is nothing in the store for it to change.
+  // The lane's master volume first: a setting for the music already down.
+  host.appendChild(C.row('Volume', C.volume(
+    track.volume != null ? track.volume : 0.5,
+    (v) => Store.mutate(tl => { const t = _lane(tl); if (t) t.volume = v; }),
+  )));
+  host.appendChild(_el('div', 'mv3-c-sep'));
   const body = _el('div');
   host.appendChild(body);
   const render = () => {
     body.textContent = '';
-    for (const t of tabs.children) t.classList.toggle('on', t.dataset.view === _view);
-    if (_view === 'gen') { _renderGenerator(body, render); return; }
-    // What the generator has to say, said in the half it sends you to.
-    if (_said) body.appendChild(_el('div', 'mv3-c-hint', _said));
-
-    // The lane's master volume belongs to the library half. It is a setting for music that
-    // is already down, and under a form for music that does not exist yet it is one more
-    // control between the chips and the button that makes them into something.
-    body.appendChild(C.row('Volume', C.volume(
-      track.volume != null ? track.volume : 0.5,
-      (v) => Store.mutate(tl => { const t = _lane(tl); if (t) t.volume = v; }),
-    )));
-    body.appendChild(_el('div', 'mv3-c-sep'));
-
-    const box = _el('div', 'mv3-mus-list');
-    body.appendChild(box);
-    const load = () => {
-      box.textContent = '';
-      box.appendChild(_el('div', 'mv3-c-hint', 'Loading…'));
-      fetch('/api/audio/suno/library')
-        .then(r => r.json())
-        .then(d => _rows(box, (d && d.list) || [], load))
-        .catch(e => { box.textContent = ''; box.appendChild(_el('div', 'mv3-c-hint', e.message)); });
-    };
-    load();
-    body.appendChild(C.hint('＋ adds it to the lane, cut to the timeline · ▶ previews · 🗑 removes it from the library for every page.'));
+    _renderGenerator(body, render);
   };
   render();
+  body.appendChild(C.hint('The tracks are in the Library panel - Audio · Music: a press on a tile plays it, drag it onto this lane. Two overlapping cross into each other by themselves.'));
 }
-

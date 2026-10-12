@@ -23,6 +23,7 @@ import { paintCaptions } from './subs-b.js';
 import * as CapLayer from '../captions/layer.js';
 import { wirePlace, paintHandles, liveOf } from './place-b.js';
 import { isStill } from './store.js';
+import { fadesOf } from '../sound/fades.js';
 import { setPlayhead, setFormat } from './timeline-b.js';
 
 const STAGE = 'mv3-stage';
@@ -674,6 +675,8 @@ let _audio = new Map();      // src -> HTMLAudioElement, one per source
 function _sounds(tl, t) {
   const out = [];
   if (!tl || !Array.isArray(tl.tracks)) return out;
+  // The render's rule (js/sound/fades.js): own fades, and two tracks of music crossing where they overlap.
+  const fades = fadesOf(tl);
   for (const tr of tl.tracks) {
     if (tr.kind !== 'audio') continue;
     const master = (tr.volume == null) ? 1 : +tr.volume;
@@ -683,10 +686,9 @@ function _sounds(tl, t) {
       if (!(v > 0)) continue;
       const s = +c.start, e = s + (+c.dur);
       if (t < s - 0.0001 || t >= e) continue;
-      // (phase V23) Its own fades, as the render's afade draws them (lib/mv3b-render.js soundFades).
-      const d = Math.max(0, +c.dur || 0);
-      let fi = Math.max(0, Math.min(d, +c.fadeIn || 0)), fo = Math.max(0, Math.min(d, +c.fadeOut || 0));
-      if (fi + fo > d && fi + fo > 0) { const k = d / (fi + fo); fi *= k; fo *= k; }
+      // Its fades, as the render's afade draws them.
+      const fd = fades.get(String(c.id)) || { in: 0, out: 0 };
+      const fi = fd.in, fo = fd.out;
       let f = 1;
       if (fi > 0) f = Math.min(f, Math.max(0, (t - s) / fi));
       if (fo > 0) f = Math.min(f, Math.max(0, (e - t) / fo));

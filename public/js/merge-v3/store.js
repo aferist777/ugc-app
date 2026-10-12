@@ -32,6 +32,9 @@ const SAVE_DEBOUNCE = 500;
 // type on purpose: it is how an internal drag is told apart from an OS file drop, so the
 // upload path and the timeline path can never claim each other's drops.
 export const DRAG_TYPE = 'application/x-mv3-clip';
+// (phase V28.4) WHAT a dragged tile is - 'video', 'image' or 'audio' - in a type of its own: a lane reads the types while
+// the tile hangs over it (the data only at the drop) and takes only its own (timeline-b.js laneTakes).
+export const DRAG_MEDIA = 'application/x-mv3-media-';
 
 // A clip whose source is a PICTURE rather than a film. Three modules have to agree about
 // this - the timeline sizes and paints it, the preview loads an <img> instead of a <video>,

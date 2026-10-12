@@ -261,7 +261,8 @@ select.mv3-rr-rf{cursor:pointer}
 .mv3-col:not(.is-collapsed){order:1; flex:1 1 0}
 .mv3-col.is-collapsed:hover{background:color-mix(in oklch, var(--gold) 12%, transparent)}
 .mv3-col.is-collapsed .mv3-panel-head,
-.mv3-col.is-collapsed .mv3-panel-body{display:none}
+.mv3-col.is-collapsed .mv3-panel-body,
+.mv3-col.is-collapsed .mv3-lib-row{display:none}
 /* Not yet: the Library spine of a talking head before anything is on its timeline. Dashed, like a
    field with work still in it, and it says why on hover. */
 .mv3-col.is-collapsed.is-off{border-style:dashed; opacity:.55; cursor:default}
@@ -534,24 +535,34 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:600 10px/19px var(--font); cursor:pointer;
 }
 
-/* ── Shelf switcher ──────────────────────────────────────────────────────────
-   One segmented control rather than four loose buttons: they are four views of the
-   same shelf, and four separate pills would read as four unrelated actions. Glued
-   to the header's right edge by the .sp before it, and flex:0 0 auto so it keeps
-   its size while the title ellipsises. */
-.mv3-seg{
-  display:flex; flex:0 0 auto;
-  border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden;
+/* ── The gallery and the media tree (phase V28.4) ─────────────────────────────
+   One row under the status line: the gallery (.mv3-panel-body, scrolling itself), a sash, the tree on the right
+   (js/media-tree.js; its width set inline by js/merge-v3/library.js and remembered). The inspector slides in over
+   the right edge as before - over the tree, while something is picked (the owner). */
+.mv3-lib-row{flex:1 1 auto; min-height:0; min-width:0; display:flex}
+.mv3-lib-row > .mv3-panel-body{flex:1 1 auto}
+.mv3-lib-sash{
+  flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:var(--border-soft);
+  transition:background .12s var(--ease);
 }
-.mv3-seg-btn{
-  border:0; border-left:1px solid var(--border);
-  background:var(--surface-2); color:var(--muted);
-  font:600 10px/1 var(--font); padding:5px 7px;
-  white-space:nowrap; cursor:pointer; transition:.12s var(--ease);
+.mv3-lib-sash::after{
+  content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
+  border-radius:2px; background:var(--border); opacity:0; transition:opacity .12s var(--ease);
 }
-.mv3-seg-btn:first-child{border-left:0}
-.mv3-seg-btn:hover{color:var(--ink); background:var(--surface)}
-.mv3-seg-btn.is-on{color:var(--primary-ink); background:var(--primary)}
+.mv3-lib-sash:hover{background:oklch(1 0 0 / .10)}
+.mv3-lib-sash:hover::after{opacity:1}
+.mv3-lib-tree{flex:0 0 180px; min-width:0; min-height:0; overflow:hidden; background:var(--bg)}
+.mv3-lib-tree.is-locked{pointer-events:none; opacity:.6}
+
+/* A sound or a track: no picture - a note, its name and its length; a press plays it (and lights it). */
+.mv3-tile.is-sound{flex-direction:column; gap:2px; padding:4px; background:color-mix(in oklch, var(--accent) 7%, var(--surface-2))}
+.mv3-tile-note{font:400 20px/1 var(--font); color:var(--muted)}
+.mv3-tile-sname{max-width:100%; font:500 9.5px/1.2 var(--font); color:var(--ink); text-align:center;
+  overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere}
+.mv3-tile-dur{position:absolute; right:3px; bottom:3px; font:600 9px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.mv3-tile.is-sound.is-playing{border-color:var(--accent); background:color-mix(in oklch, var(--accent) 18%, var(--surface-2))}
+.mv3-tile.is-sound.is-playing .mv3-tile-note{color:var(--accent); animation:mv3-hear 1s ease-in-out infinite alternate}
+@keyframes mv3-hear{from{transform:scale(1)} to{transform:scale(1.15)}}
 
 /* ── Thumbnail grid ──────────────────────────────────────────────────────────
    Thumbnails only. auto-fill so the column count follows the panel width as the
@@ -640,17 +651,6 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-libstatus.is-bad{color:var(--danger)}
 
-/* ── Category dropdown ───────────────────────────────────────────────────────
-   Left of the group buttons. Given real height rather than a squeezed one: a select
-   whose text is clipped is worse than a slightly taller header. */
-.mv3-cat{
-  flex:0 1 auto; min-width:0; max-width:150px; height:23px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 10.5px/21px var(--font); cursor:pointer;
-}
-.mv3-cat:hover{border-color:var(--border-soft)}
-
 /* ── Inspector ────────────────────────────────────────────────────────────────
    One narrow column, so everything is a full-width row and nothing sits side by side:
    at 240px a two-column form is two truncated columns. */
@@ -728,10 +728,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 @container libhead (max-width: 620px){ .mv3-lib-crumb .lg{display:none} }
 .mv3-pc-head{display:flex; align-items:center; gap:5px; flex:0 0 auto}
 .mv3-pc-head[hidden]{display:none}
-#mv3-library.is-chat .mv3-panel-body,
-#mv3-library.is-chat .mv3-libstatus,
-#mv3-library.is-chat #mv3-lib-cat,
-#mv3-library.is-chat .mv3-seg{display:none}
+#mv3-library.is-chat .mv3-lib-row,
+#mv3-library.is-chat .mv3-libstatus{display:none}
 
 /* A folded Library has nothing to slide over. */
 #mv3-library.is-collapsed .mv3-over{display:none}

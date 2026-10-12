@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The sound modules are ES modules: the page imports them and the server require()s them (Node 24) - one rule for the preview and the render."
+}

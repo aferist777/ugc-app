@@ -30,7 +30,7 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import * as Views from './lib-views.js';
 import { askDelete, short } from './ask.js';
-import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
+import { DRAG_TYPE, DRAG_MEDIA, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
 import { retext, isCorrected } from '../captions/words.js';
@@ -222,6 +222,20 @@ function _measure(ids, src) {
   v.src = src;
 }
 
+// (phase V28.4, the owner 2026-10-12: "чтобы не происходила мешанины") WHAT A LANE TAKES: a video lane - films and
+// pictures; an audio lane - sounds, music and films (a film's sound). A tile says what it is (DRAG_MEDIA, js/merge-v3/
+// library.js); one that does not say is taken as before.
+function _laneTakes(kind, media) {
+  if (!media) return true;
+  if (kind === 'video') return media === 'video' || media === 'image';
+  if (kind === 'audio') return media === 'video' || media === 'audio';
+  return false;
+}
+function _mediaOfDrag(dt) {
+  const t = Array.from((dt && dt.types) || []).find(x => x.startsWith(DRAG_MEDIA));
+  return t ? t.slice(DRAG_MEDIA.length) : '';
+}
+
 function _drop(trackId, want, data) {
   const still = isStill({ src: data.src });
   const known = still ? 0 : (+data.dur || 0);
@@ -236,6 +250,7 @@ function _drop(trackId, want, data) {
     const track = t.find(x => x.id === trackId);
     // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
     if (!track || track.kind === 'subs' || track.kind === 'text') return;
+    if (!_laneTakes(track.kind, data.media)) return;
 
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
     // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
@@ -253,9 +268,12 @@ function _drop(trackId, want, data) {
     };
 
     // Dropped straight onto an audio lane: sound only, and audible - somebody putting a file
-    // on the audio side means to hear it.
+    // on the audio side means to hear it. A TRACK OF MUSIC (phase V28.4) lies as it is, from where it was let go: a bed
+    // under the voices - half volume, never transcribed (captions/heard.js isBed) - and where two beds overlap on
+    // one lane they cross into each other by themselves (js/merge-v3/fades.js).
     if (track.kind === 'audio') {
-      track.clips.push({ ...base, id: vidId, volume: 1, pairId: null });
+      if (data.bed) track.clips.push({ ...base, id: vidId, volume: 0.5, bed: true, pairId: null });
+      else track.clips.push({ ...base, id: vidId, volume: 1, pairId: null });
       return;
     }
 
@@ -794,6 +812,7 @@ function _wireLane(lane, t) {
   if (t.kind === 'subs' || t.kind === 'text') return;
   lane.addEventListener('dragover', (e) => {
     if (!_hasClip(e)) return;
+    if (!_laneTakes(t.kind, _mediaOfDrag(e.dataTransfer))) { e.dataTransfer.dropEffect = 'none'; return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     lane.classList.add('is-drop');
