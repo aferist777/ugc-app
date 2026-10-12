@@ -78,6 +78,23 @@ let _adv = null;          // the project's export settings, as the server holds 
 // refused at mutate() with a message rather than accepted here and thrown back one save later.
 let _canEdit = true;
 export function canEdit() { return _canEdit; }
+
+/** (phase V28.4) This clip's file is not on the disk - it is red, to be replaced or removed. */
+export const isGone = (c) => !!(c && c.src && _gone.has(_srcKey(c.src)));
+/** How many pieces of media of the open project have no file - a clip and its sound below it are one. */
+export function goneCount() {
+  if (!_gone.size || !_timeline) return 0;
+  const seen = new Set();
+  for (const t of (_timeline.tracks || [])) for (const c of (t.clips || [])) if (isGone(c)) seen.add(String(c.pairId || c.id));
+  return seen.size;
+}
+/** A file just deleted from the library: the open project's clips on it turn red now. */
+export function markGone(src) {
+  const k = _srcKey(src);
+  if (!k || _gone.has(k)) return;
+  _gone.add(k);
+  _emit();
+}
 function _roMessage() { return 'Read only - this project cannot be changed here.'; }
 
 // (phase V20, the owner 2026-10-08) NOTHING OPEN IS THE DRAFT: Merge with no project to open opens THE draft - one
@@ -92,6 +109,11 @@ let _saving = false;
 let _dirty = false;
 let _subs = [];
 let _status = null;        // last message worth showing the user
+// (phase V28.4) THE FILES OF THIS PROJECT'S CLIPS THAT ARE NOT ON THE DISK - deleted from the library, most often: the
+// server says which as the project opens (`missing`, lib/timeline-media.js), and a file deleted from the Library panel
+// while it is open is added (markGone). A clip on one of them is red (timeline-b.js) until it is replaced or removed.
+let _gone = new Set();
+const _srcKey = (s) => String(s || '').split(/[?#]/)[0];
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -221,6 +243,7 @@ export async function load(k) {
     const d = await fetch('/api/mv3/blank?kind=blank').then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the blank timeline');
     _timeline = d.timeline;
+    _gone = new Set();
     _version = -1;
     _key = null;
     _title = '';
@@ -256,6 +279,7 @@ export async function load(k) {
     return load('');
   }
   _timeline = d.timeline;
+  _gone = new Set((d.missing || []).map(m => _srcKey(m && m.src)).filter(Boolean));
   _version = d.version;
   _misses = 0;
   _key = d.key;

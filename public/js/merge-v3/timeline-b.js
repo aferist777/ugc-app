@@ -236,6 +236,46 @@ function _mediaOfDrag(dt) {
   return t ? t.slice(DRAG_MEDIA.length) : '';
 }
 
+// (phase V28.4, the owner 2026-10-12: "при бросить из библиотеки может быть разница в длительности, поэтому не обрезая и
+// не укорачивая но начало на той же секунде") A TILE LET GO ON A RED CLIP takes its place: the new file from the same
+// second, at its own length - not cut, not shortened - with the clip's volume, speed and effects. A film replacing one
+// half of a film's pair replaces both; a picture has no sound, so the sound half of the pair goes; a sound on the sound
+// half lets go of the picture (it stays red until replaced too).
+function _replace(trackId, clipId, data) {
+  const still = isStill({ src: data.src });
+  const known = still ? 0 : (+data.dur || 0);
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const measure = [];
+  Store.mutate(tl => {
+    const t = tl.tracks;
+    const track = t.find(x => x.id === trackId);
+    if (!track || !_laneTakes(track.kind, data.media)) return;
+    const c = (track.clips || []).find(x => x.id === clipId);
+    if (!c) return;
+    const put = (x) => {
+      const sp = Math.max(0.25, Math.min(4, +x.speed || 1));
+      x.src = data.src; x.thumb = data.thumb || null; x.name = data.name || ''; x.libId = data.libId || null;
+      x.srcDur = known > 0 ? r2(known) : 0;
+      x.trimIn = 0; x.trimOut = 0;
+      // A picture keeps the place's length (it has none of its own); a film or a sound takes its own.
+      if (!still) x.dur = known > 0 ? r2(known / sp) : x.dur;
+      if (!still && !(known > 0)) measure.push(x.id);
+    };
+    put(c);
+    if (!c.pairId) return;
+    for (const other of t) {
+      if (other === track) continue;
+      for (const o of [...(other.clips || [])]) {
+        if (o.pairId !== c.pairId) continue;
+        if (data.media === 'video') { put(o); continue; }
+        if (still && other.kind === 'audio') { other.clips = other.clips.filter(x => x !== o); c.pairId = null; continue; }
+        o.pairId = null; c.pairId = null;
+      }
+    }
+  });
+  if (measure.length) _measure(measure, data.src);
+}
+
 function _drop(trackId, want, data) {
   const still = isStill({ src: data.src });
   const known = still ? 0 : (+data.dur || 0);
@@ -825,6 +865,9 @@ function _wireLane(lane, t) {
     let data = null;
     try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { return; }
     if (!data || !data.src) return;
+    // On a red clip: in its place (phase V28.4).
+    const red = e.target && e.target.closest ? e.target.closest('.mv3b-clip.is-gone') : null;
+    if (red && red.dataset.track === t.id) { _replace(t.id, red.dataset.clip, data); return; }
     const r = lane.getBoundingClientRect();
     _drop(t.id, (e.clientX - r.left) / _zoom(), data);
   });
@@ -950,6 +993,11 @@ function _clipEl(t, c) {
                  (t.kind === 'video' && c.halfer ? ' is-halfer' : '');
   el.dataset.clip = c.id;
   el.dataset.track = t.id;
+  // (phase V28.4) Its file was deleted from the library: red, to be replaced (a tile let go on it) or removed.
+  if (Store.isGone(c)) {
+    el.classList.add('is-gone');
+    el.title = (c.name || 'This clip') + ' - its file was deleted from the library. Let a tile from the Library go on it to replace it, or remove it.';
+  }
   el.style.left = (c.start * _zoom()) + 'px';
   el.style.width = Math.max(2, c.dur * _zoom()) + 'px';
   if (c.thumb && t.kind === 'video') el.style.backgroundImage = `url('${c.thumb}')`;
@@ -965,7 +1013,7 @@ function _clipEl(t, c) {
   }
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
-  cap.textContent = c.name || '';
+  cap.textContent = (Store.isGone(c) ? 'deleted · ' : '') + (c.name || '');
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
@@ -1239,10 +1287,35 @@ let _selKey = null;
 // hand forgets it.
 let _selBack = null;
 
+// (phase V28.4) THE NOTICE OVER THE TIMELINE: media of this project were deleted from the library - said as it opens, until
+// closed (for this opening) or until no red clip is left.
+let _goneShut = '';
+function _paintGone() {
+  const el = document.getElementById('mv3-tl-gone');
+  if (!el) return;
+  const n = Store.goneCount();
+  const key = String(Store.key() || '');
+  if (!n || _goneShut === key) { el.hidden = true; el.textContent = ''; if (!n && _goneShut === key) _goneShut = ''; return; }
+  el.hidden = false;
+  el.textContent = '';
+  const t = document.createElement('span');
+  t.textContent = n + (n === 1 ? ' piece of media' : ' pieces of media') + ' of this project ' + (n === 1 ? 'was' : 'were')
+    + ' deleted from the library - red on the timeline. Let a tile from the Library go on a red clip to replace it, or remove it.';
+  el.appendChild(t);
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'mv3-tl-gone-x';
+  x.textContent = '✕';
+  x.title = 'Close - the clips stay red';
+  x.addEventListener('click', () => { _goneShut = key; _paintGone(); });
+  el.appendChild(x);
+}
+
 function _build() {
   const host = _host();
   if (!host) return;
   host.textContent = '';
+  _paintGone();
 
   const tl = Store.timeline();
   const tracks = (tl && Array.isArray(tl.tracks)) ? tl.tracks : [];

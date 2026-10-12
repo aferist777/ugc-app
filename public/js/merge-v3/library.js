@@ -21,10 +21,10 @@
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
 import * as Layers from '../layers.js';
-import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages, uploadSounds, uploadMusic,
+import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages, uploadSounds, uploadMusic,
          loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
 import { trimmer } from './trim.js';
-import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
+import { DRAG_TYPE, DRAG_MEDIA, markGone } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
@@ -184,13 +184,14 @@ function _tile(it, list) {
   del.title = 'Delete from the library';
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
-    // This removes the record AND its files from disk, so it asks first - with the
-    // Library page's own wording, so the same action never reads two ways.
-    if (!confirm(deleteWarning(it))) return;
+    // This removes the record AND its files from disk, so it asks first - with the Library page's own wording, and the
+    // projects that use it (phase V28.4).
     del.disabled = true;
+    if (!confirm(await deleteQuestion(it))) { del.disabled = false; return; }
     try {
       if (_hear && _hear.id === it.id) _stopHearing();
       await deleteItem(it);
+      markGone(it.media);
       await _reload();
     } catch (err) { alert(err.message); del.disabled = false; }
   });

@@ -554,6 +554,29 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-lib-tree{flex:0 0 180px; min-width:0; min-height:0; overflow:hidden; background:var(--bg)}
 .mv3-lib-tree.is-locked{pointer-events:none; opacity:.6}
 
+/* (phase V28.4) A clip whose file was deleted from the library: red, striped, "deleted · <name>" - to be replaced (a tile
+   let go on it) or removed - and the notice over the timeline that says so as the project opens. */
+.mv3b-clip.is-gone{
+  background-image:repeating-linear-gradient(135deg, color-mix(in oklch, var(--danger) 55%, transparent) 0 6px,
+    color-mix(in oklch, var(--danger) 30%, transparent) 6px 12px) !important;
+  border-color:var(--danger) !important;
+}
+.mv3b-clip.is-gone .mv3b-clip-t{color:oklch(.98 0 0); font-weight:700}
+.mv3-tl-gone{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:5px 10px;
+  background:color-mix(in oklch, var(--danger) 18%, var(--surface)); border-bottom:1px solid var(--danger);
+  font:600 11px/1.35 var(--font); color:var(--ink);
+}
+.mv3-tl-gone[hidden]{display:none}
+.mv3-tl-gone span{flex:1 1 auto; min-width:0}
+.mv3-tl-gone-x{flex:0 0 auto; width:20px; height:20px; padding:0; border:0; border-radius:var(--r-xs); background:none; color:var(--muted); cursor:pointer}
+.mv3-tl-gone-x:hover{background:var(--surface-2); color:var(--ink)}
+.mv3-ins-gone{
+  margin-bottom:10px; padding:8px 9px; border:1px solid var(--danger); border-radius:var(--r-xs);
+  background:color-mix(in oklch, var(--danger) 14%, transparent); font:500 11px/1.4 var(--font); color:var(--ink);
+}
+.mv3-ins-gone b{display:block; margin-bottom:3px}
+
 /* A sound or a track: no picture - a note, its name and its length; a press plays it (and lights it). */
 .mv3-tile.is-sound{flex-direction:column; gap:2px; padding:4px; background:color-mix(in oklch, var(--accent) 7%, var(--surface-2))}
 .mv3-tile-note{font:400 20px/1 var(--font); color:var(--muted)}

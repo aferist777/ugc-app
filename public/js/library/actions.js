@@ -230,6 +230,24 @@ export function deleteWarning(it) {
   return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
 }
 
+// (phase V28.4, the owner 2026-10-12: "при удалении файла обязательно уведомление, что файл используется в проектах и
+// список проектов") The question, with the projects whose timelines hold the file (POST /api/library/usage) - there its
+// clips turn red, to be replaced or removed. A read that fails asks the plain question.
+export async function deleteQuestion(it) {
+  const base = deleteWarning(it);
+  if (!it || !it.media || it.kind === CHAR_KIND) return base;
+  let projects = [];
+  try {
+    const d = await _json('/api/library/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ media: [it.media] }) });
+    projects = d.projects || [];
+  } catch (e) { projects = []; }
+  if (!projects.length) return base;
+  const lines = projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + p.clips + (p.clips === 1 ? ' clip' : ' clips'));
+  if (projects.length > 10) lines.push('  … and ' + (projects.length - 10) + ' more');
+  return base + '\n\nIt is used in ' + projects.length + (projects.length === 1 ? ' project' : ' projects') + ':\n' + lines.join('\n')
+    + '\n\nThere its clips turn red - to be replaced or removed.';
+}
+
 export async function deleteItem(it) {
   if (it.kind === CHAR_KIND) {
     await _json('/api/char-store/' + encodeURIComponent(it.id), { method: 'DELETE' });

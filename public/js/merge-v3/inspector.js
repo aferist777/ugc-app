@@ -929,6 +929,18 @@ function _renderBlankClip(host, { track, clip }) {
   const still = isStill(clip);
   const pair = mateB(clip.id);
 
+  // (phase V28.4) Its file was deleted from the library: said first, with the way to be rid of it - and the way to
+  // replace it, which is a tile from the Library let go on the clip.
+  if (Store.isGone(clip)) {
+    const g = _el('div', 'mv3-ins-gone');
+    g.appendChild(_el('b', null, 'The file of this clip was deleted from the library'));
+    g.appendChild(_el('span', null, 'Let a tile from the Library go on the red clip to replace it - from the same second, at its own length - or remove it.'));
+    host.appendChild(g);
+    host.appendChild(C.row('', C.button('Remove', () => removeB(track.id, clip.id),
+      { danger: true, title: track.kind === 'video' && pair ? 'Its sound goes with it' : 'Take it off the timeline' })));
+    host.appendChild(_el('div', 'mv3-c-sep'));
+  }
+
   if (track.kind === 'subs' || track.kind === 'text') return _blankCaption(host, track, clip);
   if (track.kind === 'audio') return _blankSound(host, track, clip, set, pair);
   if (still) return _blankStill(host, track, clip, set);

@@ -270,7 +270,7 @@ async function _runAction(id, it) {
     return { reload: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
   }
   if (id === 'del') {
-    if (!confirm(A.deleteWarning(it))) return { changed: false };
+    if (!confirm(await A.deleteQuestion(it))) return { changed: false };
     await A.deleteItem(it);
     _items = _items.filter(x => x !== it);
     return { removed: true, reload: true, msg: 'Deleted' };
