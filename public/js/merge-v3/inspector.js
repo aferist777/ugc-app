@@ -9,9 +9,10 @@
      a lane         what applies to the whole lane
      a clip         that clip's own settings; several clips - removing them
 
-   The panel that used to show them is Setup now: the scenario picker that starts a talking head,
-   and the build itself (js/merge-v3/workshop.js). A project that is not a talking head has
-   nothing in it and no spine for it.
+   The panel that used to show them is Setup now: the build of a talking head
+   (js/merge-v3/workshop.js). A project that is not a talking head has nothing in it and no spine
+   for it - the scenarios a talking head is made from are a view of the Library (phase V28.3,
+   js/merge-v3/scen-pick.js).
 
    Lane settings are a STAMP, not an inherited default: choosing a value on a lane writes it
    into every clip on it, overwriting whatever each clip had. The undo arrow is the way back.
@@ -43,7 +44,6 @@ import { overPage } from '../captions/pages.js';
 import { markedColour } from '../captions/style.js';
 import * as WordEdit from './word-edit.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
-import * as ScenPick from './scen-pick.js';
 import * as WK from './workshop.js';
 import { isStill } from './store.js';
 import * as C from './controls.js';
@@ -1011,16 +1011,13 @@ function _render() {
     host.className = 'mv3-panel-body';
   }
   if (over) over.textContent = '';
-  // A PROJECT THAT IS NOT A TALKING HEAD HAS NO SETUP (phase L): the panel is there for the picker
-  // that makes one and for nothing else, and its spine is hidden. Whatever left it open - a blank
-  // project, or nothing, opened after a talking head's setup - the Library is the open panel.
-  if (!ScenPick.active() && !WK.isTalking()) {
+  // A PROJECT THAT IS NOT A TALKING HEAD HAS NO SETUP (phase L), and its spine is hidden. Whatever left
+  // it open - a blank project, or the draft, opened after a talking head's setup - the Library is the
+  // open panel.
+  if (!WK.isTalking()) {
     const ins = document.getElementById('mv3-inspector');
     if (ins && !ins.classList.contains('is-collapsed')) setOpenColumn('library');
   }
-  // Making a talking-head project takes the Setup panel over: there is nothing selected yet, and
-  // the scenario library is what the person is choosing from (js/merge-v3/scen-pick.js).
-  if (ScenPick.active()) { _over(false); return host && ScenPick.paint(host); }
   // A talking-head project is built in a fixed order, and while it is being built the Setup
   // panel belongs to it - the timeline is locked, so nothing on it can be picked anyway.
   if (WK.active()) { _over(false); return host && WK.paint(host); }
@@ -1050,8 +1047,6 @@ export function initInspector() {
   // was last in front, and this is where that memory is allowed to expire. The band changes
   // nothing in the store, so the timeline says so itself.
   onSelB(() => {
-    // Touching the timeline is leaving the picker: what is selected is what the panel is for.
-    if (ScenPick.active() && (oneB() || trackB() || multiB() > 1)) ScenPick.stop();
     // A build step is NOT left that way: selecting a clip while composing frames is a slip of
     // the pointer far more often than it is a decision to go and edit the cut.
     if (WK.active()) return;
@@ -1064,7 +1059,6 @@ export function initInspector() {
     M.resetView();
     render(true);
   });
-  ScenPick.onChange(() => render());
   WK.onChange(() => render());
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
   CapView.onApply((id) => { if (_capApply) _capApply(id); });
@@ -1080,8 +1074,8 @@ export function initInspector() {
   Listen.init();
   Listen.readLocal();
   Listen.onChange(() => {
-    // Not over a talking head's Setup or the scenario picker: render() would rebuild those whole.
-    if (ScenPick.active() || WK.active()) return;
+    // Not over a talking head's Setup: render() would rebuild it whole.
+    if (WK.active()) return;
     const tr = trackB();
     if (!(tr && tr.kind === 'subs' && !oneB() && multiB() <= 1)) return;
     const v = Listen.view(Store.key());

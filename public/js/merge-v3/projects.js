@@ -23,6 +23,7 @@ import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
 import { draftNow, askDraft } from '../draft-ask.js';
+import { openScenarios } from './scen-pick.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -175,8 +176,9 @@ function _wireNew() {
   const b = document.getElementById('mv3-project-new');
   if (!b) return;
   // Two kinds of project, so the button asks which. A blank project is an empty timeline and
-  // is made here; a talking head starts from a scenario, and that picker takes over the
-  // inspector (js/merge-v3/scen-pick.js) - the project itself is made when one is used.
+  // is made here; a talking head starts from a scenario: the Library's "scenarios" view opens in the
+  // project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is made when one
+  // is used.
   b.addEventListener('click', () => _kindMenu(b));
   _newBlank = async () => {
     if (!(await _leaveDraft())) return;
@@ -240,11 +242,9 @@ function _kindMenu(anchor) {
     el.appendChild(btn);
   };
   item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
-  item('talking head', 'from a scenario - pick or write one', async () => {
-    if (!(await _leaveDraft())) return;
-    const P = await import('./scen-pick.js');
-    P.start();
-  });
+  // Nothing asked about the draft (the owner, V28.3 (d)): the view opens in it, and a talking head made from it leaves
+  // it a draft.
+  item('talking head', 'from a scenario - pick or write one', () => { openScenarios(); });
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();

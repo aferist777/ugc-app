@@ -1,6 +1,6 @@
 // THE SCENARIO WINDOW - one scenario read, or a new one written by hand (phase V28.2, the owner 2026-10-12:
 // "blank будет открывать попап, как при создании сценария в merge"). ONE window for two pages: Merge's
-// talking-head picker opens it on a row or on "+ scenario" (js/merge-v3/scen-pick.js), the Library's
+// "scenarios" view opens it on a row or on "+ scenario" (js/merge-v3/scen-pick.js), the Library's
 // "New scenario -> blank" on a new one (js/library/main.js). Its frame and its buttons are css/dialog.css.
 //
 // Reading an existing scenario and writing a new one differ by what is in the fields, not by what the

@@ -2,8 +2,10 @@
    MERGE v3 — the Library panel's views, ONE owner (phase K6b, 2026-10-03; several chats since V1).
 
    The panel shows the shelf, a CHAT (the pictures chat of phase J - and, from phase V3, the video chat:
-   each is chat-shell.js with its own description), or the captions view (phase K6: preset tiles beside the
-   settings of the captions picked on the timeline). Two kinds of state, kept apart:
+   each is chat-shell.js with its own description), the scenarios a talking head is made from (phase V28.3,
+   scen-pick.js - registered the way a chat is, its crumb "scenarios /" left of "Library" and hidden in a
+   talking head), or the captions view (phase K6: preset tiles beside the settings of the captions picked on
+   the timeline). Two kinds of state, kept apart:
      the BASE      the shelf or one chat - remembered per project HERE (viewOf / rememberView), told by
                    the chats; a chat takes or lets go of only ITS OWN base, so two chats never reset each
                    other on a project switch;

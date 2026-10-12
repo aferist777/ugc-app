@@ -112,10 +112,8 @@ let _ask = null;
 export function onColumnAsk(fn) { _ask = typeof fn === 'function' ? fn : null; }
 
 // ── Which panel came forward ────────────────────────────────────────────────
-// Told to whoever holds something in the panel that just folded: the scenario picker is LEFT when
-// the Library comes forward (js/merge-v3/scen-pick.js). A picker running on behind the fold would
-// come back in place of setup the next time the panel opened - and in a project that is not a
-// talking head the folded Setup has no spine to open it by (phase L).
+// Told to whoever cares which of the pair is open: the Library's views take the room only while the
+// panel can be seen (js/merge-v3/lib-views.js).
 const _opened = [];
 export function onColumnOpen(fn) { if (typeof fn === 'function') _opened.push(fn); }
 

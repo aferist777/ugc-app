@@ -1,10 +1,14 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — starting a TALKING HEAD project.
+   MERGE — starting a TALKING HEAD project: the "scenarios" view of the Library panel.
 
-   "+ new project" offers two kinds. A blank project is an empty timeline and starts
-   at once. A talking-head project starts from a SCENARIO - a title and the lines that
-   will be spoken - so this panel takes the inspector over and shows the scenario
-   library: read one, use one, or write one.
+   A talking-head project starts from a SCENARIO - a title and the lines that will be spoken.
+   The scenario library is a VIEW of the Library panel (phase V28.3, the owner 2026-10-12): the
+   crumb "scenarios /" left of "Library", in the draft and in a blank project - never in a talking
+   head, where "scenarios" would read as its own script. It is one of lib-views.js's bases, like
+   the chats: the gallery and the tree give way to it, the corner of the sashes goes left and
+   down, the view is remembered per project, and "Library" goes back to the shelf. "+ new project
+   -> talking head" opens it in the project that is open (a talking head goes to the draft for it).
+   It used to take the Setup panel over, the Library folded to its spine beside it; that went.
 
    READING AND USING ARE NOT THE SAME ACT.
 
@@ -13,40 +17,41 @@
                anything, because at this point there is no project.
      use       makes the project. The lines are copied into it (routes/scen3.js takes a
                snapshot), so editing the scenario afterwards never reaches it, and the
-               same scenario can be used as many times as you like.
+               same scenario can be used as many times as you like. The project open now
+               is left as it is - the draft stays the draft, nothing asked (the owner).
 
    The rest is on the right-click menu, and the two that change the library are deliberately
    different weights: ARCHIVE puts a scenario out of the list and can be taken back, DELETE
    cannot, so it asks first - the same question the timeline asks before dropping a clip.
 
    Nothing here spends anything: a project is a folder and a copy of some text. The
-   generating starts in the workshop that opens afterwards.
-
-   PHASE SCOPE (docs/local-app/PLAN.md, phase B). The workshop is still the Scenarios
-   page, opened on the new project by address. Phases C and D bring it in here as a
-   window over Merge, and this panel stops being a doorway to another page.
+   generating starts in the project's setup, which opens afterwards.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
 import * as Layers from '../layers.js';
 import { askDelete } from './ask.js';
-import { setOpenColumn, roomForWork, onColumnOpen } from './layout.js';
+import { setOpenColumn, roomForWork } from './layout.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
+import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
+
+const NAME = 'scenarios';
+const $ = (id) => document.getElementById(id);
 
 // THE CATEGORY (phase E7, the owner 2026-09-29; one dropdown since F8, 2026-09-30): all · saved -
 // written by hand, no provenance - · each source the generator wrote from · no source - generated
 // from a topic alone - · archive. The sources are grouped by id on the server and named by their
 // CURRENT title, and the list is read again every time it opens: a source renamed in the Library
-// is renamed here, even with the picker already open.
-let _active = false;
+// is renamed here, even with the view already open.
+let _shown = false;
 let _rows = [];
 let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
 let _lib = '';                // '' | 'library1' | 'src:<id>' | 'nosrc' | 'archive'
 let _q = '';
 let _state = '';              // '', 'loading', or an error to show in place of the list
-let _onChange = null;
+let _ui = null;               // { root, filter, search, list } - built the first time the view shows
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -54,37 +59,81 @@ const _el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-const _repaint = () => { if (_onChange) _onChange(); };
 
-/** Is the inspector showing this instead of what is selected? */
-export function active() { return _active; }
-
-/** The inspector hands us its repaint. */
-export function onChange(fn) { _onChange = fn; }
-
-/** Leave the picker - the inspector goes back to showing the selection. */
-export function stop() {
-  if (!_active) return;
-  _active = false;
-  _closeCatMenu();
-  _repaint();
+// ── Where the view may be ───────────────────────────────────────────────────
+// The draft and a blank project (the owner, V28.3 (a)): not a talking head, and not before the store
+// has read what is open.
+function _allowed() {
+  return Store.isReady() && !WK.projectIdOf(Store.key() || '');
 }
 
-// THE LIBRARY COMING FORWARD IS LEAVING THE PICKER (phase L): by its spine, by a pick on the
-// timeline, by the timeline step - the person has gone elsewhere (js/merge-v3/layout.js).
-onColumnOpen((which) => { if (which === 'library') stop(); });
+// The view is remembered per project as the chats' are (lib-views.js), and the drafts share one mark, as their
+// conversation does (chat-shell.js DRAFT_LK).
+let _key = null;              // the project the view follows
+let _draftHere = false;
+const _lk = (k) => (k === _key && _draftHere ? 'draft' : (k || ''));
 
-/** Enter the picker: the inspector column comes forward and the list loads. */
-export async function start() {
-  _active = true;
-  setOpenColumn('inspector');
-  _repaint();
-  await _load();
+function _crumb() {
+  const c = $('mv3-lib-scen');
+  if (c) c.hidden = !_allowed();
 }
 
+/**
+ * Every way in: the crumb, "+ new project -> talking head". A talking head is never where the view is - the draft is
+ * opened for it first.
+ */
+export async function openScenarios() {
+  if (Store.isReady() && WK.projectIdOf(Store.key() || '')) await Store.openBlank();
+  if (!_allowed()) return;
+  Views.toBase();
+  setOpenColumn('library');
+  _show(true);
+}
+
+// `remember` is false when a chat took the base (onYield): that chat writes its own mark.
+function _show(on, remember = true) {
+  _shown = !!on;
+  if (remember) Views.rememberView(_lk(_key), _shown ? NAME : null, NAME);
+  if (!_shown) _closeCatMenu();
+  Views.setBase(NAME, _shown);
+  if (!_shown) return;
+  _build();
+  _paintFilter();
+  _load();
+}
+
+function _onStore() {
+  if (!Store.isReady()) return;
+  _crumb();
+  const k = Store.key() || '';
+  // (phase V20) The draft saved under a name: its own from now on, and it stays on the view it was on.
+  if (k === _key && _draftHere && !Store.isDraft()) {
+    _draftHere = false;
+    if (_shown) Views.rememberView(k, NAME);
+    return;
+  }
+  if (k === _key) return;
+  _key = k;
+  _draftHere = !!Store.isDraft();
+  const want = _allowed() && Views.viewOf(_lk(k)) === NAME;
+  if (want !== _shown) _show(want, false);
+  else if (!_shown) Views.sync();
+}
+
+export function initScenarios() {
+  Views.registerChat(NAME, {
+    root: 'mv3-sc', crumb: 'mv3-lib-scen',
+    crumbTitle: 'The scenarios - "use" one to make a talking head',
+    onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => { openScenarios(); },
+  });
+  Store.onChange(_onStore);
+  _onStore();
+}
+
+// ── The list ────────────────────────────────────────────────────────────────
 async function _load() {
   _state = 'loading';
-  _repaint();
+  _paintList();
   try {
     const d = await API.list(_lib);
     // A source's chip - or "no source" - goes when its last scenario is archived or deleted, here or in
@@ -100,7 +149,8 @@ async function _load() {
     _rows = [];
     _state = 'Could not read the scenarios: ' + e.message;
   }
-  _repaint();
+  _paintFilter();
+  _paintList();
 }
 
 function _filter(id) {
@@ -132,8 +182,8 @@ function _choices() {
 }
 
 // The dropdown: a menu layer under its button (Escape and a press outside close it). A menu rather
-// than a <select>: the panel repaints whenever the project changes, and an open <select> would be
-// closed under the hand. It reads the list again before it opens, so names and counts are now.
+// than a <select>: an open <select> would be closed under the hand by the list read again. It reads the
+// list again before it opens, so names and counts are now.
 let _catMenu = null;
 function _closeCatMenu() {
   if (!_catMenu) return;
@@ -156,9 +206,10 @@ async function _filterMenu() {
   } catch (e) { /* the counts it has will do */ }
   if (!_catOpening) return;                      // pressed again meanwhile: closed
   _catOpening = false;
-  _repaint();                                    // the button's own count, now
-  const anchor = document.querySelector('.mv3-sc-filter');
-  if (!_active || !anchor) return;
+  _paintFilter();                                // the button's own count, now
+  _paintList();
+  const anchor = _ui && _ui.filter;
+  if (!_shown || !anchor) return;
   const el = _el('div', 'mv3-plus-menu mv3-sc-menu');
   let srcHead = false;
   for (const t of _choices()) {
@@ -206,55 +257,53 @@ function _matches(s) {
   return [s.title, s.vertical, s.product, role].join(' ').toLowerCase().includes(q);
 }
 
-// ── The panel ───────────────────────────────────────────────────────────────
-export function paint(host) {
-  // One row: what this panel is, the button that writes a new one, and the filters. They
-  // belong together - all three are about which scenarios are on screen - and the inspector
-  // is narrow enough that a second row of chips would push the list off the bottom.
-  const head = _el('div', 'mv3-ins-head is-scen');
-  const txt = _el('div', 'mv3-ins-head-txt');
-  txt.appendChild(_el('div', 'mv3-ins-title', 'New talking head'));
-  txt.appendChild(_el('div', 'mv3-ins-sub', 'Pick the script it says'));
-  head.appendChild(txt);
-
+// ── The view ────────────────────────────────────────────────────────────────
+// Built once, in its own box of the panel (#mv3-sc): one row - the button that writes a new scenario, the
+// category and the search, all three about which scenarios are on screen - and the list under it. Where you
+// are is the crumb's to say, and "Library" is the way out.
+function _build() {
+  if (_ui) return;
+  const root = $('mv3-sc');
+  if (!root) return;
+  const top = _el('div', 'mv3-scv-top');
   const add = _el('button', 'mv3-sc-new', '+ scenario');
   add.type = 'button';
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
-  head.appendChild(add);
+  top.appendChild(add);
 
   // The category: one button showing the choice and its count; pressing it opens the list.
-  const cur = _choices().find(t => t.id === _lib) || { label: 'all', n: _counts.all || 0 };
-  const pick = _el('button', 'mv3-sc-filter' + (_lib ? ' is-on' : ''));
-  pick.type = 'button';
-  pick.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
-  pick.appendChild(_el('span', 'mv3-sc-filter-t', cur.label));
-  pick.appendChild(_el('span', 'mv3-sc-filter-n', '· ' + cur.n + ' ▾'));
-  pick.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
-  head.appendChild(pick);
-
-  const act = _el('div', 'mv3-ins-head-act');
-  const x = _el('button', 'mv3-iconbtn', '✕');
-  x.type = 'button';
-  x.title = 'Leave this and go back to the timeline';
-  x.addEventListener('click', () => stop());
-  act.appendChild(x);
-  head.appendChild(act);
-  host.appendChild(head);
+  const filter = _el('button', 'mv3-sc-filter');
+  filter.type = 'button';
+  filter.addEventListener('click', (e) => { e.stopPropagation(); _filterMenu(); });
+  top.appendChild(filter);
 
   const search = _el('input', 'mv3-sc-search');
   search.type = 'search';
   search.placeholder = 'search by title, product, role';
-  search.value = _q;
-  search.addEventListener('input', () => { _q = search.value; _paintList(list); });
-  host.appendChild(search);
+  search.addEventListener('input', () => { _q = search.value; _paintList(); });
+  top.appendChild(search);
+  root.appendChild(top);
 
   const list = _el('div', 'mv3-sc-list');
-  host.appendChild(list);
-  _paintList(list);
+  root.appendChild(list);
+  _ui = { root, filter, search, list };
 }
 
-function _paintList(list) {
+function _paintFilter() {
+  if (!_ui) return;
+  const cur = _choices().find(t => t.id === _lib) || { label: 'all', n: _counts.all || 0 };
+  const b = _ui.filter;
+  b.classList.toggle('is-on', !!_lib);
+  b.title = (cur.title ? cur.title + '\n' : '') + 'Which scenarios - press to choose';
+  b.textContent = '';
+  b.appendChild(_el('span', 'mv3-sc-filter-t', cur.label));
+  b.appendChild(_el('span', 'mv3-sc-filter-n', '· ' + cur.n + ' ▾'));
+}
+
+function _paintList() {
+  if (!_ui) return;
+  const list = _ui.list;
   list.textContent = '';
   if (_state === 'loading') { list.appendChild(_el('div', 'mv3-ins-note', 'reading the scenarios…')); return; }
   if (_state) { list.appendChild(_el('div', 'mv3-ins-note is-err', _state)); return; }
@@ -281,7 +330,7 @@ function _paintList(list) {
     go.type = 'button';
     go.title = s.archived
       ? 'Put it back in the library'
-      : 'Make a project from this scenario and open it';
+      : 'Make a talking head from this scenario and open it';
     go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
       if (s.archived) return _archive(s, false);
@@ -349,7 +398,7 @@ function _rowMenu(ev, s, row) {
   };
 
   item('open', 'read and edit the text', () => openForm(s));
-  if (!s.archived) item('use', 'make a project from it', () => _use(s.id).catch(e => alert('Could not make the project: ' + e.message)));
+  if (!s.archived) item('use', 'make a talking head from it', () => _use(s.id).catch(e => alert('Could not make the project: ' + e.message)));
   if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
   else item('archive', 'out of the list, kept', () => _archive(s, true));
   // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
@@ -407,18 +456,13 @@ function _disarm() {
 
 // ── Making the project ──────────────────────────────────────────────────────
 // The project and its empty timeline are made by `talkingHead` (js/merge-v3/scen-api.js, shared with the
-// Library's scenario window since phase V28.2), and opened here on its setup step.
-// It THROWS when it cannot (phase Y1). It used to swallow its own failure into an `alert`, which
-// meant the window that called it could not tell success from failure either: the button stayed
-// down and the window stayed open with nothing said in it. Who called this is who knows where to
-// put the news - a button in the list, a line in the form.
+// Library's scenario window since phase V28.2), and opened here on its setup step. The project left keeps
+// this view as its own: back in the draft, the scenarios are where they were.
+// It THROWS when it cannot (phase Y1): who called this is who knows where to put the news - a button in
+// the list, a line in the form.
 async function _use(scenarioId) {
   const key = await API.talkingHead(scenarioId);
   await Store.open(key);
-  // The picker has done its job - left only now that the project is open: left before, the panel
-  // would belong for a moment to whatever was open before it, and a blank project has no Setup
-  // (phase L), so the Library would flash up in its place.
-  stop();
   roomForWork();                        // a new talking head is opened to be built
   WK.setStep('setup');
   return key;

@@ -101,7 +101,10 @@
           <!-- THE VIEWS ARE CRUMBS (phase V18.2, the owner 2026-10-08): "Library / generate image / generate video /
                captions", always there, the one showing lit, any other one press away - the generate menu of the
                timeline went. "Library" is the shelf; the chats are js/merge-v3/picchat.js and vidchat.js; "captions"
-               picks the subtitle lane (js/merge-v3/lib-views.js). In a narrow panel the chats read "image" / "video". -->
+               picks the subtitle lane (js/merge-v3/lib-views.js). In a narrow panel the chats read "image" / "video".
+               "scenarios /" left of "Library" (phase V28.3, the owner 2026-10-12): the scenarios a talking head is made
+               from, in the draft and a blank project only (js/merge-v3/scen-pick.js). -->
+          <button class="mv3-lib-crumb" id="mv3-lib-scen" type="button" hidden>scenarios /</button>
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
           <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button">/ <span class="lg">generate </span>image</button>
           <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button">/ <span class="lg">generate </span>video</button>
@@ -126,6 +129,8 @@
         <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
         <div class="mv3-pc" id="mv3-pc"></div>
         <div class="mv3-pc is-video" id="mv3-vc"></div>
+        <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
+        <div class="mv3-scv" id="mv3-sc"></div>
         <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
         <div class="mv3-cap" id="mv3-cap"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only (set for the node selected),

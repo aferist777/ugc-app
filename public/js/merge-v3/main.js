@@ -26,6 +26,7 @@ import { initPicChat, openPictures } from './picchat.js';
 import { initVidChat, openVideos } from './vidchat.js';
 import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
+import { initScenarios } from './scen-pick.js';
 
 initNav();
 initLayout();
@@ -33,6 +34,7 @@ initViews();
 initLibrary();
 initPicChat();
 initVidChat();
+initScenarios();
 initFramesChat();
 initTimelineB();
 initPreviewB();

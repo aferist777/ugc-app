@@ -32,7 +32,6 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
-import * as ScenPick from './scen-pick.js';
 import { lock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 
@@ -146,8 +145,7 @@ export function setStep(id) {
 // THE SPINES ARE THE SWITCH (phase L). A press on the folded Library, in a talking head, is the way
 // to the timeline - refused, and the spine says why, until there is something on it; a press on the
 // folded Setup is the way back. A press that asks for the step already open is an ordinary "open
-// this panel" - the scenario picker can hold Setup in the middle of the timeline step - and so is
-// anything outside a talking head.
+// this panel", and so is anything outside a talking head.
 onColumnAsk((col) => {
   if (!_pid) return false;
   const want = col === 'library' ? 'timeline' : col === 'inspector' ? 'setup' : '';
@@ -279,9 +277,6 @@ async function _adopt() {
   _step = _pid ? 'setup' : 'timeline';
   _paintRoute();
   _lend();
-  // A project opened in any way - the dropdown, a delete, "don't save", a link - is the project
-  // shown: the scenario list of "+ new project" gives way to it (phase V24, the owner 2026-10-09).
-  ScenPick.stop();
   _repaint();
   if (!_pid) return;
   try {

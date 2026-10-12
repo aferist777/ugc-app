@@ -709,7 +709,7 @@ const CHAT = createChat(FRAMES);
 // ── Where it stands ──────────────────────────────────────────────────────────
 // The chat lives in the Setup panel but outside its body, which every paint empties: it is laid OVER the place the
 // fields column leaves for it (`slot`), measured after each paint and whenever that place changes size, and it goes
-// the moment the place is no longer on the page - another face of the panel, another step, the scenario picker.
+// the moment the place is no longer on the page - another face of the panel, another step, another project.
 let _slot = null;
 let _ro = null;
 let _mo = null;
