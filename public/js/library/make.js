@@ -140,6 +140,8 @@ function _build() {
   _wireSash();
   // Questions about a link left waiting before a reload are the add window's again (phase V28.1).
   _loadAsks();
+  // A row retried in Alerts - a source's way in going on again: its line says so at once, not at the next reload.
+  window.addEventListener('ugc:alert-retried', () => { if (_built) _readSources().then(() => _paintSources()); });
   $('mk-mine').addEventListener('click', _mineTopics);
   $('mk-src-off').addEventListener('click', () => _chooseSource(null));
   $('mk-to-topics').addEventListener('click', () => { if (_src) _showTopics(); });
@@ -1998,7 +2000,7 @@ function _addLine(r) {
 }
 
 function _showOnMedia(itemId) {
-  const href = '/library?shelf=media&sel=' + encodeURIComponent(itemId);
+  const href = '/library?shelf=media&kind=uploads&sel=' + encodeURIComponent(itemId);
   _closeAddSource();
   const ask = new CustomEvent('ugc:goto', { detail: { href }, cancelable: true });
   if (window.dispatchEvent(ask)) location.href = href;

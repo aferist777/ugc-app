@@ -674,6 +674,9 @@ function _renderGrid() {
       card.classList.toggle('cur', String(it.id) === _sel);
       card.addEventListener('click', () => _pick(it));
     } else {
+      // (phase V28.1) Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
+      // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
+      if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel);
       card.addEventListener('click', () => _open(it));
     }
     grid.appendChild(card);
@@ -1237,11 +1240,14 @@ function _place(u) {
   const q = u.searchParams;
   const kind = q.get('shelf') || '';
   if (!SHELVES[kind]) return null;
-  return { kind, sel: q.get('sel') || '', make: q.get('make') === '1', src: q.get('src') || '' };
+  // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
+  return { kind, sel: q.get('sel') || '', make: q.get('make') === '1', src: q.get('src') || '', mkind: kind === 'media' ? (q.get('kind') || '') : '' };
 }
 
 async function _goToPlace(p) {
   if (!p) return;
+  // Media's kind first: switching to the shelf reads it with the kind it keeps.
+  if (p.mkind) _setFilter(p.mkind, '');
   if (p.kind !== _shelf) {
     _select(p.kind);                              // it asks about unsaved lines itself
     if (_shelf !== p.kind) return;                // the person kept them
@@ -1256,7 +1262,10 @@ async function _goToPlace(p) {
     return;
   }
   if (_makingOn) await _closeMaker(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
-  else if (p.sel) { _sel = p.sel; _scrollSel = true; await _load({ keepScroll: true }); }
+  else if (p.sel || p.mkind) {
+    if (p.sel) { _sel = p.sel; _scrollSel = true; }
+    await _load({ keepScroll: !p.mkind });
+  }
 }
 
 window.addEventListener('ugc:goto', (e) => {
@@ -1285,6 +1294,7 @@ function boot() {
     _shelf = arrive.kind;
     try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
     if (arrive.sel) { _sel = arrive.sel; _scrollSel = true; }
+    if (arrive.mkind) _setFilter(arrive.mkind, '');
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
   }
 
