@@ -29,8 +29,8 @@ const DEF_TL_H   = 290;
 
 const SPINE_W     = 42;    // .mv3-col.is-collapsed in css/merge-v3.css: 34px and a 4px margin each side
 const SASH        = 5;     // must match .mv3-sash in css/merge-v3.css
-// Wide enough that the four shelf buttons always fit the Library header, and that the
-// timeline under it shows its label column and a few seconds of lane.
+// Wide enough that the Library header's crumbs fit, the gallery keeps a column of tiles beside the media tree, and
+// the timeline under it shows its label column and a few seconds of lane.
 const MIN_PANEL   = 380;   // narrowest the OPEN panel may get, beside the spine
 const MIN_PREVIEW = 340;   // the 9:16 stage stops being worth looking at below this
 const MIN_TL_H    = 120;

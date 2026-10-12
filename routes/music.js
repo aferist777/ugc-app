@@ -16,7 +16,7 @@
 // Only the server writes them: the panel follows the generation's Alerts row (lib/gen-jobs.js) and reads the list.
 // Older generations were joined into one file; their variants were not kept apart, and they stay as they are.
 //
-// The addresses keep their /audio/ prefix: Merge's music lane and the Library's music shelf call
+// The addresses keep their /audio/ prefix: Merge's music panel and the media tree's Music call
 // them. Everything else the old routes/audio.js held - voices and voice design, TTS, avatars,
 // speech-to-text, sound effects and the Birols pipeline - went with the pages that used it.
 
@@ -173,7 +173,7 @@ async function _pollSuno(taskId) {
 // ── Alerts ──────────────────────────────────────────────────────────────────
 // A track asked for in Merge is a row in the journal, and the server sees it through: five
 // minutes is long enough to walk away from, and the link Suno hands back does not wait
-// (docs/local-app/PLAN.md, "Alerts"). Unlike a clip, a finished track IS filed - the music shelf
+// (docs/local-app/PLAN.md, "Alerts"). Unlike a clip, a finished track IS filed - Media -> Audio -> Music
 // is where it belongs, and there is nothing to choose between.
 const JOBS = require('../lib/gen-jobs');
 

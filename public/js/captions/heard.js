@@ -40,7 +40,7 @@ export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 
 // MUSIC IS NOT LISTENED TO. A bed runs under the whole video, and heard as sound it took the ground
 // from every voice on top of it - the captions came out of the song. A bed says so on the clip
 // (`bed`, music.js); a bed laid before that was said is known by what it is: a music-panel clip
-// (id m...), no picture half, a track from the music shelf.
+// (id m...), no picture half, a track of the music (Media -> Audio -> Music).
 //
 // OVERLAPS ARE NOT REPRESENTABLE in a flat run, and two people talking at once is not something a
 // transcript can hold either. The main audio lane - where the voice is - keeps its ground; every

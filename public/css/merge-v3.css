@@ -231,7 +231,7 @@ select.mv3-rr-rf{cursor:pointer}
 #mv3-inspector .mv3-panel-head{align-items:center}
 /* The word stays whole: it is the name of the panel, and the route beside it can scroll. */
 #mv3-inspector .mv3-panel-title{flex:0 0 auto}
-/* The title gives way first: it is a label, and the shelf buttons beside it are
+/* The title gives way first: it is a label, and the crumbs and buttons beside it are
    controls. min-width:0 is what actually lets a flex item shrink far enough to
    ellipsise - without it the text sets its own floor and pushes the buttons out. */
 .mv3-panel-title{
@@ -734,8 +734,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-over-body{flex:1; min-height:0; overflow:auto; padding:10px}
 /* ── The Library's two views (phase J, the owner 2026-10-02) ──────────────────
    The shelf, and the pictures chat (css/mv3-imagen.css, js/merge-v3/picchat.js). In the chat the
-   header reads "LIBRARY / generate image" - "Library" is the way back - and the category and the
-   shelf buttons give way to the chat's own two. On the shelf the crumb stays, pale, while the
+   header reads "LIBRARY / generate image" - "Library" is the way back - and the gallery and the
+   media tree give way to the chat. On the shelf the crumb stays, pale, while the
    project has a conversation: one press back to it. */
 .mv3-lib-crumb{
   flex:0 1 auto; min-width:0; padding:0; border:0; background:none; cursor:pointer;
