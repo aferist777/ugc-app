@@ -49,14 +49,18 @@ const MUSIC = require('../lib/music-store');
 // (phase V28.4) The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
 // folded into the first - before anything reads a category. The library has been upgraded by now (server.js).
 try {
-  const r = require('../lib/required-cats').ensure();
+  const RC = require('../lib/required-cats');
+  const r = RC.ensure();
   if (r.made.length || r.merged.length) {
     console.log('[library] required categories:' + (r.made.length ? ' made ' + r.made.join(', ') + ';' : '')
       + r.merged.map(m => ' folded a second ' + m.kind + '/' + m.label + ' into the first (' + m.records + ' records)').join(';'));
   }
-  // And, once per library, what the chats made before V28.4 into "Generated".
-  const g = require('../lib/required-cats').moveChatMade();
-  if (g && (g.images || g.birols)) console.log('[library] made by the chats, into Generated: ' + g.images + ' picture(s), ' + g.birols + ' clip(s)');
+  // And, once per library, what the chats made before V28.4 into "Generated" (pictures) or no category (clips).
+  const g = RC.moveChatMade();
+  if (g && (g.images || g.birols)) console.log('[library] made by the chats: ' + g.images + ' picture(s) into Generated, ' + g.birols + ' clip(s) to no category');
+  // (second round) B-roll's "Generated" of the first round let go of, once.
+  const rb = RC.releaseBrollGenerated();
+  if (rb && rb.had) console.log('[library] B-roll\'s "Generated" let go of: ' + rb.records + ' clip(s) to no category');
 } catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
@@ -331,10 +335,34 @@ function _mediaShelf(opts) {
   }));
   if (fromMusic.some(m => !(m.dur > 0))) MUSIC.fillLengths();
 
-  const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).filter(i => _onDisk(i.media));
+  // (phase V28.4, second round) The talking heads - every take of every line of every talking-head project (lib/heads.js),
+  // only when asked (VIDEO -> Generated -> Talking heads); the project is its category. A take on a timeline is `used`.
+  // Not the library's to delete or re-file while its project lives.
+  let fromHeads = [];
+  if (opts && opts.heads) {
+    const used = require('../lib/timeline-media').allSrcs();
+    fromHeads = require('../lib/heads').list().map(h => ({
+      id: h.id,
+      name: 'Line ' + h.line + ' · ' + String(h.said || '').replace(/\s+/g, ' ').trim().slice(0, 70),
+      kind: 'heads',
+      media: h.path,
+      thumb: h.thumb,
+      dur: h.dur,
+      meta: { categoryId: h.projectId, project: h.title, line: h.line, variant: h.variant, used: used.has(h.path),
+              date: h.at || null, favorite: false, said: h.said },
+    }));
+  }
+
+  const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
+    .filter(i => _onDisk(i.media));
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
+    // (second round) Talking heads after the rest, and read as their projects do: by project, then line by line, the
+    // newest take first.
+    || (Number(a.kind === 'heads') - Number(b.kind === 'heads'))
+    || ((a.kind === 'heads' && b.kind === 'heads')
+      ? (_abc(a.meta.project, b.meta.project) || (a.meta.line - b.meta.line) || (_ts(b.meta.date) - _ts(a.meta.date))) : 0)
     || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
 
@@ -386,25 +414,25 @@ function _mediaCats(items, kind, labelFor) {
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
 
-// ── The media tree (phase V28.4 + V28.5, the owner 2026-10-12) ───────────────
+// ── The media tree (phase V28.4 + V28.5, the owner 2026-10-12; the second round) ──
 // One answer for both places that draw it - Merge's Library panel and the Library's Media shelf (js/media-tree.js):
-//   Video -> B-rolls, Hooks, Uploads -> their categories       Images -> its categories       Audio -> Music, SFX -> categories
+//   VIDEO  -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
+//   IMAGES -> its categories          AUDIO -> Music, SFX -> categories
 // Every node: { key, label, count, q, children? } - `q` is what the shelf is asked for it (`group`, or `filter` and `cat`),
-// `key` what a page remembers it by. A kind's categories: the REQUIRED first (`locked`, even when empty), then those
-// with something in them in the stored order, then Uncategorized, then the empty ones (`empty`, drawn pale - the
-// owner: "пустые категории бледные и внизу списка"). A kind with no categories at all is a leaf.
-// SFX is the Sounds shelf's kind; Music has no categories.
-const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'Images', music: 'Music', sounds: 'SFX' };
-const GROUPS = { video: ['birols', 'hooks', 'uploads'], images: ['images'], audio: ['music', 'sounds'] };
+// `key` what a page remembers it by. In a branch (the owner): the locked first, then those with something in them, then
+// Uncategorized, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; "2026-08-23" before
+// "2026-10-02"). Generated, Hooks and Uploads are locked; so are the required categories.
+// B-rolls has no Uncategorized of its own: a B-roll with no category is Generated's Uncategorized (the owner).
+const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
+const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'] };
+const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
+const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
 function _tree() {
-  const { items, labelFor } = _mediaShelf({ music: true });
+  const { items, labelFor } = _mediaShelf({ music: true, heads: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
-  const kindNode = (kind, key, label) => {
-    const list = byKind[kind] || [];
-    const node = { key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind } };
-    if (!LC.KINDS.includes(kind)) return node;
+  const catsOf = (kind, list, withUncat) => {
     const counts = {};
     let uncat = 0;
     for (const i of list) {
@@ -413,31 +441,58 @@ function _tree() {
       else uncat++;
     }
     const cats = LC.listFor(kind, counts, labelFor);
-    if (!cats.length) return node;
     const one = (c) => ({
       key: kind + ':' + c.id, kind, cat: c.id, label: c.title || c.label, name: c.label, count: c.count,
       locked: !!c.locked, own: !!c.own, orphan: !!c.orphan, empty: !(c.count > 0), q: { filter: kind, cat: c.id },
     });
-    const locked = cats.filter(c => c.locked)
-      .sort((a, b) => LC.requiredAt(kind, a.label) - LC.requiredAt(kind, b.label));
-    node.children = [
-      ...locked.map(one),
-      ...cats.filter(c => !c.locked && c.count > 0).map(one),
-      { key: kind + ':' + UNCAT, kind, cat: UNCAT, label: 'Uncategorized', count: uncat, uncat: true, empty: !uncat,
-        q: { filter: kind, cat: UNCAT } },
-      ...cats.filter(c => !c.locked && !(c.count > 0)).map(one),
+    const by = (a, b) => _abc(a.title || a.label, b.title || b.label);
+    const out = [
+      ...cats.filter(c => c.locked).sort(by).map(one),
+      ...cats.filter(c => !c.locked && c.count > 0).sort(by).map(one),
     ];
+    const unc = { key: kind + ':' + UNCAT, kind, cat: UNCAT, label: 'Uncategorized', count: uncat, uncat: true, empty: !uncat,
+      q: { filter: kind, cat: UNCAT } };
+    if (withUncat && uncat) out.push(unc);
+    out.push(...cats.filter(c => !c.locked && !(c.count > 0)).sort(by).map(one));
+    if (withUncat && !uncat) out.push(unc);
+    return { out, uncat };
+  };
+  const kindNode = (kind, key, label, extra) => {
+    const list = byKind[kind] || [];
+    const node = Object.assign({ key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind } }, extra || {});
+    if (!LC.KINDS.includes(kind)) return node;
+    const { out } = catsOf(kind, list, true);
+    if (LC.listFor(kind, {}, labelFor).length || out.some(c => !c.uncat)) node.children = out;
     return node;
   };
-  const group = (key, label, kinds) => {
-    const children = kinds.map(k => kindNode(k));
-    return { key, label, count: children.reduce((n, c) => n + c.count, 0), q: { group: key }, children };
-  };
-  return [
-    group('video', 'Video', GROUPS.video),
-    kindNode('images', 'images', 'Images'),
-    group('audio', 'Audio', GROUPS.audio),
-  ];
+  // VIDEO -> Generated: B-rolls (its categories, no Uncategorized), Talking heads (a project each), Uncategorized.
+  const birols = byKind.birols || [];
+  const inCat = birols.filter(i => (i.meta || {}).categoryId);
+  const brolls = { key: 'birols', kind: 'birols', label: 'B-rolls', count: inCat.length, q: { filter: 'birols', cat: ANYCAT },
+    children: catsOf('birols', birols, false).out };
+  const heads = byKind.heads || [];
+  const projects = new Map();
+  for (const h of heads) {
+    const id = String((h.meta || {}).categoryId || '');
+    const p = projects.get(id) || { id, title: (h.meta || {}).project || id, n: 0 };
+    p.n++;
+    projects.set(id, p);
+  }
+  const headsNode = { key: 'heads', kind: 'heads', label: 'Talking heads', count: heads.length, q: { filter: 'heads' },
+    children: [...projects.values()].sort((a, b) => _abc(a.title, b.title)).map(p => ({
+      key: 'heads:' + p.id, kind: 'heads', cat: p.id, label: p.title, count: p.n, project: true, q: { filter: 'heads', cat: p.id },
+    })) };
+  if (!headsNode.children.length) delete headsNode.children;
+  const loose = birols.length - inCat.length;
+  const generated = { key: 'generated', label: 'Generated', locked: true, count: birols.length + heads.length, q: { group: 'generated' },
+    children: [brolls, headsNode, { key: 'birols:' + UNCAT, kind: 'birols', cat: UNCAT, label: 'Uncategorized', count: loose,
+      uncat: true, empty: !loose, q: { filter: 'birols', cat: UNCAT } }] };
+  const video = { key: 'video', label: 'VIDEO', q: { group: 'video' },
+    children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
+  video.count = video.children.reduce((n, c) => n + c.count, 0);
+  const audio = { key: 'audio', label: 'AUDIO', q: { group: 'audio' }, children: [kindNode('music'), kindNode('sounds')] };
+  audio.count = audio.children.reduce((n, c) => n + c.count, 0);
+  return [video, kindNode('images', 'images', 'IMAGES'), audio];
 }
 
 router.get('/library/tree', (_req, res) => {
@@ -674,7 +729,8 @@ router.get('/library/shelf/:kind', (req, res) => {
     const cat = String(req.query.cat || '');
     const grp = GROUPS[String(req.query.group || '')] || null;
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
-      ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')) }) : build();
+      ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')) })
+      : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
     const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
@@ -683,6 +739,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     if (f) shown = shown.filter(i => i.kind === f);
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
+      : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
       : (i.meta || {}).categoryId === cat);
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
       filters: filters || [], cats, labelKeys: labelKeys || null, running: running || 0 });
@@ -1686,7 +1743,9 @@ router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
     for (const k of LC.KINDS) {
-      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title }));
+      // (second round) In the tree's order: the locked first, the rest alphabetical.
+      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title }))
+        .sort((a, b) => (Number(!!b.locked) - Number(!!a.locked)) || _abc(a.title || a.label, b.title || b.label));
     }
     res.json({ success: true, byKind });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1722,14 +1781,6 @@ router.patch('/library/cats/:id', (req, res) => {
     const cat = SHELF.renameCategory(kind, id, label);
     const { moved } = _reassign(kind, id, cat.id, cat.label);
     res.json({ success: true, cat, renamed: true, moved });
-  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
-});
-
-router.post('/library/cats/order', (req, res) => {
-  try {
-    const { kind, order } = req.body || {};
-    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    res.json({ success: true, order: LC.setOrder(String(kind), order) });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
@@ -1814,7 +1865,7 @@ router.get('/library/counts', (_req, res) => {
     const out = {};
     for (const [kind, build] of Object.entries(SHELVES)) {
       // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
-      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
+      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

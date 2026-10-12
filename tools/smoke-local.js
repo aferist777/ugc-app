@@ -113,6 +113,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // phase V28.4: the Music shelf is Media -> Audio -> Music; its list and delete went with it and the chips
                  ['GET', '/api/library/shelf/music'], ['GET', '/api/audio/suno/library'], ['DELETE', '/api/audio/suno/library/x'],
                  ['GET', '/js/library/music.js'], ['GET', '/js/library/cats-bar.js'],
+                 // ...and, in its second round, the hand order of the categories (alphabetical now)
+                 ['POST', '/api/library/cats/order'],
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
