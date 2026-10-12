@@ -22,7 +22,6 @@
 // picks the countdown up again instead of paying twice.
 
 import * as J from './jobs.js';
-import * as NR from './narrators.js';
 import * as Layers from '../layers.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
 
@@ -175,7 +174,7 @@ function _build() {
 }
 
 // ── Opening and leaving ─────────────────────────────────────────────────────
-/** The page's hooks: status(text, kind), counts(), openScenario(id) - "Saved · open". */
+/** The page's hooks: status(text, kind), counts(), openScenario(id) - "Saved · open", narrators() - the gear. */
 export function init(hooks) { _hooks = hooks || {}; }
 
 /**
@@ -965,8 +964,8 @@ function _ctl(label, node, extra) {
   return w;
 }
 
-// The narrators window opens from its field (phase G2, the owner 2026-09-30: out of the header, a gear to
-// the right of "Narrator").
+// The narrators open from their field (phase G2, the owner 2026-09-30: a gear to the right of "Narrator") - the
+// narrators AREA since phase V28.2, in place of the generator, with "← Generate script" back to it as it was.
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 function _narratorsGear() {
   const b = el('button', 'mk-gear');
@@ -975,7 +974,7 @@ function _narratorsGear() {
   b.title = 'The narrators - how a script is written';
   b.setAttribute('aria-label', 'Narrators');
   b.innerHTML = GEAR_SVG;
-  b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); NR.open(); });
+  b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (_hooks.narrators) _hooks.narrators(); });
   return b;
 }
 

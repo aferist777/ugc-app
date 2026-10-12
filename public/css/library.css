@@ -830,10 +830,13 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* The download under way can be stopped from the status line it is told in. */
 .lib-link-stop{ padding:1px 7px; font-size:11px; line-height:1.4; }
 
-/* ── The narrators window (phase E6, js/library/narrators.js) ──────────────────
-   One window, three columns: the narrators (one always selected), the selected one's samples, its
-   voice. The panel, its head and the countdown rows are the generator's (mk-*). */
-.nr-panel{ width:min(1180px, 96vw); height:min(820px, 92vh); max-height:none; }
+/* ── The narrators (phase E6; an area since V28.2, js/library/narrators.js) ──────────────────
+   In place of the scenario list or the generator, three columns: the narrators (one always selected), the
+   selected one's samples, its voice. The head and the countdown rows are the generator's (mk-*). */
+.lib-narrators{
+  display:flex; flex-direction:column; flex:1 1 auto; min-height:0; min-width:0;
+  background:var(--surface);
+}
 .nr-said{
   display:flex; align-items:center; gap:10px; flex:0 0 auto;
   padding:6px 12px; font-size:11.5px; color:var(--ink);

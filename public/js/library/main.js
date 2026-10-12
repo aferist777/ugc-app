@@ -18,6 +18,7 @@ import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
 import * as MC from './makechat.js';
+import * as NR from './narrators.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
@@ -91,6 +92,10 @@ const MAKERS = {
   },
 };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
+// THE NARRATORS (phase V28.2, the owner 2026-10-12): an area on the Scenarios shelf over the list or over the generator -
+// "Narrators" beside "New scenario", or the gear by the generator's Narrator field. `_makingOn` stays as it was under it,
+// so "←" goes back to where it was opened from: the list ("← Scenarios") or the generator ("← Generate script").
+let _narrOn = false;
 // The next read of the shelf brings the selected tile into view (a character just saved lands ~23rd).
 let _scrollSel = false;
 let _drafts = [];         // the drafts heading the Scenarios list (phase E)
@@ -116,21 +121,28 @@ function _paintShelves() {
 // ── The making areas ────────────────────────────────────────────────────────
 function _paintMake() {
   if (_makingOn && _makingOn !== _shelf) _makingOn = '';
+  if (_narrOn && _shelf !== 'scenarios') _narrOn = false;
   const m = MAKERS[_shelf];
-  const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split');
+  const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split'), nr = $('lib-narr');
   if (nb) {
-    nb.hidden = !m || !!_makingOn;
+    nb.hidden = !m || !!_makingOn || _narrOn;
     if (m) { nb.textContent = m.label; nb.title = m.title; }
   }
   if (bb) {
-    bb.hidden = !m || !_makingOn;
-    if (m) { bb.textContent = m.back; bb.title = m.backTitle; }
+    bb.hidden = !m || !(_makingOn || _narrOn);
+    if (_narrOn) {
+      bb.textContent = _makingOn ? '← Generate script' : '← Scenarios';
+      bb.title = _makingOn ? 'Back to the generator, as it was' : 'Back to the list of scenarios';
+    } else if (m) { bb.textContent = m.back; bb.title = m.backTitle; }
   }
-  if (split) split.hidden = !!_makingOn;
+  if (nr) nr.hidden = _shelf !== 'scenarios' || _narrOn;
+  if (split) split.hidden = !!_makingOn || _narrOn;
   for (const k of Object.keys(MAKERS)) {
     const h = $(MAKERS[k].host);
-    if (h) h.hidden = _makingOn !== k;
+    if (h) h.hidden = _makingOn !== k || _narrOn;
   }
+  const nh = $('lib-narrators');
+  if (nh) nh.hidden = !_narrOn;
 }
 
 // The open shelf's area, in place of the shelf. Lines typed into a scenario and not saved are not
@@ -145,6 +157,7 @@ async function _openMaker(opts) {
   }
   if (PICKABLE.has(_shelf)) INFO.leave();
   _makingOn = _shelf;
+  if (_narrOn) { _narrOn = false; NR.close(); }   // an Alerts row leads into the generator from the narrators
   _paintMake();
   _status('');
   await m.mod.open(opts || {});
@@ -158,11 +171,29 @@ async function _closeMaker(then, after) {
   const m = MAKERS[_makingOn];
   await m.mod.close();
   _makingOn = '';
+  if (_narrOn) { _narrOn = false; NR.close(); }
   _paintMake();
   if (then) then();
   await _load({ keepScroll: true });
   _counts();
   if (after) after();
+}
+
+// The narrators in place of the list or the generator: hidden, not closed - neither loses anything, and
+// lines typed into the open scenario are where they were on the way back.
+async function _openNarrators() {
+  if (_shelf !== 'scenarios' || _narrOn) return;
+  _narrOn = true;
+  _paintMake();
+  _status('');
+  await NR.open();
+}
+
+function _closeNarrators() {
+  if (!_narrOn) return;
+  _narrOn = false;
+  NR.close();
+  _paintMake();
 }
 
 // ── "New scenario": blank or narrator (phase V28.2) ──────────────────────────
@@ -895,6 +926,7 @@ function _select(kind) {
   // (phase F4); pressing the open shelf otherwise does nothing.
   if (kind === _shelf) {
     if (_makingOn) _closeMaker();
+    else _closeNarrators();
     return;
   }
   // Lines typed into a scenario and not saved are not thrown away without a word.
@@ -905,6 +937,7 @@ function _select(kind) {
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
+  if (_narrOn) { NR.close(); _narrOn = false; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
@@ -1304,6 +1337,7 @@ async function _goToPlace(p) {
     _select(p.kind);                              // it asks about unsaved lines itself
     if (_shelf !== p.kind) return;                // the person kept them
   }
+  _closeNarrators();                              // what the address names is under them
   if (p.make && MAKERS[p.kind]) {
     if (_makingOn !== p.kind) await _openMaker(p.src ? { sourceId: p.src } : undefined);
     // The generator on show, asked for one of its sources: that source, without starting a clean form.
@@ -1373,6 +1407,8 @@ function boot() {
     counts: _counts,
     // "open" beside "Saved": the list again, on that scenario.
     openScenario: (id) => _closeMaker(() => SC.select(id)),
+    // The gear by the Narrator field (phase V28.2): the narrators, and "← Generate script" back.
+    narrators: _openNarrators,
   });
   CM.init({
     // Done: the shelf again, on the character just made - selected, in view, its column open.
@@ -1393,7 +1429,9 @@ function boot() {
   // Scenarios asks which (phase V28.2); the other shelves open their making area.
   if (nb) nb.addEventListener('click', () => (_shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
-  if (bb) bb.addEventListener('click', () => _closeMaker());
+  if (bb) bb.addEventListener('click', () => (_narrOn ? _closeNarrators() : _closeMaker()));
+  const nr = $('lib-narr');
+  if (nr) nr.addEventListener('click', _openNarrators);
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

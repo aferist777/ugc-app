@@ -65,6 +65,9 @@
            New scenario, New Character, New environment, New lookbook (js/library/main.js MAKERS). -->
       <button class="lib-btn primary" type="button" id="lib-new" hidden></button>
       <button class="lib-btn" type="button" id="lib-back" hidden></button>
+      <!-- (phase V28.2) The narrators in place of the list, on Scenarios only - "←" in the place of "New scenario"
+           brings back what was there (js/library/narrators.js). -->
+      <button class="lib-btn" type="button" id="lib-narr" hidden title="The narrators - how a script is written">Narrators</button>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
       <!-- (phase V27) Stops the link being downloaded - shown only while one is (js/library/links.js). -->
@@ -100,6 +103,10 @@
          right. Built the first time "New scenario" is pressed and only hidden after that, so what it
          runs goes on while the list is looked at (js/library/make.js). -->
     <div class="lib-make" id="lib-make" hidden></div>
+    <!-- THE NARRATORS (phase V28.2): the list, the samples and the voice of the selected one, in place of the scenario
+         list or the generator. Built the first time "Narrators" is pressed and only hidden after that, so a sample being
+         transcribed or a voice being read goes on (js/library/narrators.js). -->
+    <div class="lib-narrators" id="lib-narrators" hidden></div>
     <!-- MAKING A CHARACTER (phase H): the parameters, the portrait with its takes, and the save form that
          draws the 4K sheet. Built the first time "New Character" is pressed and only hidden after that,
          so a portrait or a sheet being made goes on while the shelf is looked at (js/library/chmake.js). -->

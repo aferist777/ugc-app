@@ -1,18 +1,20 @@
-// LIBRARY — the narrators window: "Narrators" in the Scenarios header (phase E6, the owner
-// 2026-09-29; a temporary place until the owner names the final one).
+// LIBRARY — the narrators: "Narrators" beside "New scenario" on the Scenarios shelf, an AREA in place of the
+// scenario list (phase V28.2, the owner 2026-10-12: "кнопка будет открывать не попап, а вместо поля сценариев будет
+// отображаться интерфейс настроек и чтений нарраторов"); the gear by the generator's Narrator field leads here too.
+// js/library/main.js shows and hides it, as it does the making areas.
 //
 // A narrator is HOW a script is written: samples of an author's writing in, a description of the
-// voice out ("a reading"), and the generator's form picks one (js/library/make.js). What Library 2
-// kept on a shelf of its own and a dialog is one window here, in three columns: the narrators - ONE
-// ROW ALWAYS SELECTED, as on every Library shelf, with "+ New narrator" opening a name field right in
-// the list (prompt() throws in the app's Electron) - then the selected one's samples, then its voice,
-// a page per reading.
+// voice out ("a reading"), and the generator's form picks one (js/library/make.js). Three columns: the
+// narrators - ONE ROW ALWAYS SELECTED, as on every Library shelf, with "+ New narrator" opening a name
+// field right in the list (prompt() throws in the app's Electron) - then the selected one's samples,
+// then its voice, a page per reading.
 //
-// TWO PAID CALLS, and they belong to the narrator, not to the window: transcribing a file into a
+// TWO PAID CALLS, and they belong to the narrator, not to the area: transcribing a file into a
 // sample, and reading the voice. While one runs, that narrator's buttons are locked and every other
-// narrator is free; closing the window leaves it running, and it does NOT open the window again
+// narrator is free. The area is built the first time it is shown and only HIDDEN after that, so a job
+// goes on when it is left and its row is where it was on the way back; it does NOT bring the area back
 // when it lands (Library 2 did). Its last line - "1234 words from 8 min", or what went wrong - stays
-// with the narrator and is there the next time it is shown. Errors are said inside the window.
+// with the narrator and is there the next time it is shown. Errors are said inside the area.
 //
 // Whatever changes the list of voices - a narrator made or deleted, a reading added or dropped - is
 // announced as `lib:narrators`, and the generator's form rebuilds its narrator list and nothing else.
@@ -22,7 +24,7 @@ import * as Layers from '../layers.js';
 
 const el = J.el;
 
-let _win = null;           // { ov, layer, q } while the window is open
+let _win = null;           // { host, q } once the area is built - it is only hidden after that
 let _list = [];            // narrator summaries
 let _minWords = 500;
 let _sel = '';             // the selected narrator's id
@@ -46,14 +48,11 @@ const _announce = () => document.dispatchEvent(new CustomEvent('lib:narrators'))
 // Busy from the press - the upload of a file comes before its job has a number - to the last line.
 const _running = (id) => { const j = _jobs.get(String(id)); return !!(j && j.busy); };
 
-// ── The window ──────────────────────────────────────────────────────────────
+// ── The area ────────────────────────────────────────────────────────────────
 const HTML = `
-  <div class="mk-panel nr-panel" role="dialog" aria-modal="true" aria-label="Narrators">
     <div class="mk-panel-head">
       <span class="mk-panel-t">Narrators</span>
       <span class="mk-note">how a script is written — writing by an author in, a voice out</span>
-      <span class="sp"></span>
-      <button class="lib-btn" type="button" data-x="close" title="Close (Esc)">✕</button>
     </div>
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
@@ -89,20 +88,14 @@ const HTML = `
           <button class="lib-btn primary" type="button" data-f="analyse" title="Read the voice out of the samples - a paid call">Read the voice</button>
         </div>
       </section>
-    </div>
-  </div>`;
+    </div>`;
 
-/** Open the window on the narrator that was selected last (the first one the first time). */
-export async function open() {
+function _build() {
   if (_win) return;
-  const ov = el('div', 'mk-ov nr-ov');
-  ov.innerHTML = HTML;
-  document.body.appendChild(ov);
-  const q = (name) => ov.querySelector(`[data-f="${name}"]`);
-  ov.querySelector('[data-x="close"]').addEventListener('click', close);
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
-  const layer = Layers.open(ov, { name: 'narrators', onEsc: close });
-  _win = { ov, layer, q };
+  const host = document.getElementById('lib-narrators');
+  host.innerHTML = HTML;
+  const q = (name) => host.querySelector(`[data-f="${name}"]`);
+  _win = { host, q };
 
   q('new').addEventListener('click', _askName);
   q('addtext').addEventListener('click', _addText);
@@ -111,24 +104,20 @@ export async function open() {
   q('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addLink(); } });
   q('analyse').addEventListener('click', _analyse);
   q('text').addEventListener('input', () => { if (_sel) _typed.set(_sel, q('text').value); });
+}
 
+/** Show the area on the narrator that was selected last (the first one the first time), read again. */
+export async function open() {
+  _build();
   await _readList();
-  if (!_win) return;
   if (!_list.some(n => String(n.id) === _sel)) _sel = _list[0] ? String(_list[0].id) : '';
   _paintList();
   await _show();
 }
 
-function close() {
-  if (!_win) return;
+/** The area hidden: a name being typed for a new narrator is let go; the jobs run on. */
+export function close() {
   _closeName();
-  const w = _win;
-  _win = null;
-  _seq++;
-  // The rows go; the jobs behind them run on and keep their last line for next time.
-  for (const j of _jobs.values()) { if (j.row) { j.row.detach(); j.row = null; } }
-  w.ov.remove();
-  Layers.close(w.layer);
 }
 
 function _say(text, isError) {
@@ -201,8 +190,8 @@ function _paintList() {
   if (focused) { const r = box.querySelector(`.nr-row[data-id="${CSS.escape(focused)}"]`); if (r) r.focus(); }
 }
 
-// The name of a new narrator, typed into the list itself. Enter makes it; Escape - its own layer,
-// so the window stays - or pressing "+" again lets it go.
+// The name of a new narrator, typed into the list itself. Enter makes it; Escape (its own layer) or
+// leaving the area lets it go; "+" again only puts the cursor back in it.
 function _askName() {
   if (!_win) return;
   if (_nameBox) { _nameBox.input.focus(); return; }
@@ -331,7 +320,7 @@ function _paintLocks() {
   for (const k of ['addtext', 'text']) q(k).disabled = none || busy || _adding;
   q('analyse').disabled = none || busy || !_rec || _rec.words < _rec.minWords;
   q('analyse').textContent = reads.length ? 'Read the voice again' : 'Read the voice';
-  _win.ov.querySelectorAll('.nr-sample .nr-x, .nr-pager-x').forEach(b => { b.disabled = busy; });
+  _win.host.querySelectorAll('.nr-sample .nr-x, .nr-pager-x').forEach(b => { b.disabled = busy; });
 }
 
 function _paintSamples() {
