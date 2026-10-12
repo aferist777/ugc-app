@@ -3,12 +3,11 @@
 // Music for the timeline: Suno tracks made through kie.ai, and the small library of the ones kept.
 //
 //   POST   /api/audio/suno/generate          { style, title, where, ... } -> { taskId, alertId }
-//   GET    /api/audio/suno/library           { list }
-//   DELETE /api/audio/suno/library/:id
 //   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer (phase V28.4)
 //
-// The list itself is lib/music-store.js (data/suno-lib.json), shared with the Library's Media shelf (Audio -> Music),
-// which deletes a track with its file (routes/library.js, kind 'music').
+// The list itself is lib/music-store.js (data/suno-lib.json): read, starred, renamed and deleted (with its file) as
+// the Library's Media shelf's kind 'music' (routes/library.js) - Audio -> Music in the media tree, in the Library and
+// in Merge's Library panel. Its own list and delete routes went with the Music shelf and the music panel's list.
 //
 // TWO TRACKS PER GENERATION (phase V23, the owner 2026-10-09): Suno makes two variants at once, and both are kept -
 // two files, `suno_<task>_1.mp3` and `_2.mp3`, and two records side by side, "<title> · 1" and "<title> · 2", with
@@ -207,15 +206,6 @@ JOBS.register('music', {
   submit: async (request) => ({ taskId: await _submitSuno(request || {}) }),
 });
 
-
-// GET /api/audio/suno/library
-router.get('/audio/suno/library', (_req, res) => res.json({ success: true, list: _loadSunoLib() }));
-
-// DELETE /api/audio/suno/library/:id
-router.delete('/audio/suno/library/:id', (req, res) => {
-  _saveSunoLib(_loadSunoLib().filter(t => t.id !== req.params.id));
-  res.json({ success: true });
-});
 
 // ── A track from this computer (phase V28.4, the owner 2026-10-12: "музыка - пока тоже файл") ─────────────
 // Into media/work first (multer), then lib/music-store.js measures it, moves it into media/audio/ and files it first.

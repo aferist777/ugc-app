@@ -904,7 +904,7 @@ export function initLibrary() {
     page: 'mv3', fallback,
     status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
     onSelect: (n) => { _node = n; _load(); },
-    onChanged: () => _load(),
+    onChanged: () => _load(),        // awaited by the tree before it says what was done
   });
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
 }

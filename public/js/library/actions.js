@@ -72,7 +72,7 @@ export async function fixThumb(it) {
 //     re-derives the folder from the record would point at a folder that does not exist.
 //     Renaming a look safely means moving the folder and rewriting every URL in the record;
 //     that belongs with the storage rework (moves on rename), not here.
-export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds']);
+export const CAN_RENAME = new Set([CHAR_KIND, 'birols', 'uploads', 'hooks', 'sounds', 'music']);
 
 export async function renameItem(it, anchor) {
   const next = await askName({ anchor, title: 'Rename', value: it.name || '', okLabel: 'Rename' });

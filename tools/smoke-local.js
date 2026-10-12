@@ -110,6 +110,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['POST', '/api/video/think'], ['POST', '/api/video/reference'],
                  // phase V28.1: a source comes in through /api/sources/add/* - the upload and the page-followed link went
                  ['POST', '/api/sources/upload'], ['POST', '/api/sources/link'],
+                 // phase V28.4: the Music shelf is Media -> Audio -> Music; its list and delete went with it and the chips
+                 ['GET', '/api/library/shelf/music'], ['GET', '/api/audio/suno/library'], ['DELETE', '/api/audio/suno/library/x'],
+                 ['GET', '/js/library/music.js'], ['GET', '/js/library/cats-bar.js'],
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],

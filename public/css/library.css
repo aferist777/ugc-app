@@ -124,18 +124,6 @@
   padding:6px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
 }
 .lib-bar .sp{ flex:1; }
-.lib-bar-label{
-  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--muted);
-}
-.lib-filters{ display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
-.lib-filter{
-  padding:4px 10px; border:1px solid var(--border); border-radius:var(--pill);
-  background:var(--surface); color:var(--muted);
-  font:600 11px/1.2 var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.lib-filter:hover{ color:var(--ink); border-color:var(--border-soft); }
-.lib-filter.cur{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
 .lib-status{ font-size:11px; color:var(--muted); }
 .lib-status.err{ color:var(--danger); }
 
@@ -144,6 +132,20 @@
    the looks read as one column. It is the picture shelves' (js/library/info.js) and Voices'
    (js/library/voices.js). */
 .lib-split{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
+/* (phase V28.5) Media's media tree on the right of the grid, a sash between (js/library/main.js _wireTreeSash). */
+.lib-tree-sash{
+  flex:0 0 5px; width:5px; cursor:col-resize; position:relative; background:var(--border);
+  transition:background .12s var(--ease);
+}
+.lib-tree-sash::after{
+  content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
+  border-radius:2px; background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
+}
+.lib-tree-sash:hover{ background:oklch(1 0 0 / .10); }
+.lib-tree-sash:hover::after{ opacity:1; }
+.lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
+body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
+.lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
 .lib-info{
   flex:0 0 33.333%; min-width:0; display:flex; flex-direction:column;
   border-left:1px solid var(--border); background:var(--surface);
@@ -297,7 +299,8 @@
   border:1px solid oklch(.45 .09 25); border-radius:4px; padding:2px 5px;
   pointer-events:none; white-space:nowrap;
 }
-/* A sound (phase V7): no picture - a note in the middle, its length below, ▶ to hear it on the card. */
+/* A sound or a track (phase V7; V28.5): no picture - a note in the middle, its length below; a press on the card plays it
+   and lights it, a press anywhere else stops it (js/library/main.js _hearToggle). */
 .lib-thumb-box.lib-thumb-sound{
   display:flex; align-items:center; justify-content:center;
   background:linear-gradient(180deg, oklch(.25 .03 280), oklch(.21 .02 280));
@@ -307,12 +310,9 @@
   position:absolute; left:5px; bottom:4px; font-size:9px; color:var(--muted);
   font-variant-numeric:tabular-nums; pointer-events:none;
 }
-.lib-snd-play{
-  position:absolute; right:4px; bottom:3px; width:20px; height:20px; padding:0;
-  border:1px solid var(--border); border-radius:50%; background:oklch(.18 .02 280 / .85);
-  color:var(--fg); font-size:9px; line-height:18px; cursor:pointer;
-}
-.lib-snd-play:hover{ border-color:var(--primary); color:var(--primary); }
+.lib-card.is-playing{ border-color:var(--accent); }
+.lib-card.is-playing .lib-snd{ color:var(--accent); animation:lib-hear 1s ease-in-out infinite alternate; }
+@keyframes lib-hear{ from{ transform:scale(1); } to{ transform:scale(1.15); } }
 /* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{
   padding:3px 5px; font-size:9.5px; line-height:1.25; color:var(--muted);
@@ -332,7 +332,6 @@
 .lib-sub{
   display:flex; gap:5px; padding:0 5px 4px; font-size:9px; color:var(--muted); opacity:.8;
 }
-.lib-bar-2{ background:var(--surface); min-height:34px; }
 .lib-empty{
   grid-column:1 / -1; padding:28px 12px; text-align:center;
   font-size:12px; color:var(--muted);
@@ -350,79 +349,6 @@
   font-size:11px; line-height:1; color:oklch(.86 .16 92);
   text-shadow:0 1px 2px oklch(0 0 0 / .8); pointer-events:none;
 }
-
-/* Categories are birol tags and there can be a lot of them, so the row keeps wrapping
-   into more rows of the same chips — and scrolls rather than pushing the grid off screen. */
-/* The category row's height is set by the page — content-sized up to five rows of chips, or
-   whatever the sash was dragged to — so only the scrolling lives here.
-   The wrapper exists so the sash can sit BELOW the scrolling row instead of inside it. As a
-   child of the row it was a flex item on the chips' own axis with flex-basis:100%, which
-   squeezed every chip into a ~94px column and wrapped their labels onto two lines. */
-.lib-cats-wrap{ display:flex; flex-direction:column; flex:0 0 auto; min-height:0; }
-#lib-bar-cats{ align-items:flex-start; overflow-y:auto; overflow-x:hidden; }
-/* Chips wrap onto further rows; align-content keeps the rows their own height instead of
-   stretching them to fill a tall box. */
-#lib-cats{ row-gap:4px; align-content:flex-start; align-items:flex-start; }
-/* The sash: a thin strip under the row. It shows itself on hover — furniture, not a control
-   to hunt for. */
-.lib-sash{
-  flex:0 0 auto; position:relative; height:7px;
-  border-bottom:1px solid var(--border);
-  cursor:row-resize; background:var(--surface);
-  transition:background .12s var(--ease);
-}
-.lib-sash::after{
-  content:''; position:absolute; left:50%; transform:translateX(-50%);
-  bottom:2px; width:34px; height:2px; border-radius:2px;
-  background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
-}
-.lib-sash:hover::after{ opacity:1; }
-.lib-sash:hover{ background:oklch(1 0 0 / .04); }
-/* While dragging the sash the cursor must not flicker into a text caret over the chips. */
-body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-select:none; }
-
-/* ── Category chips: add, delete, reorder ──────────────────────────────────── */
-.lib-cat-add{
-  flex:0 0 auto; width:22px; height:22px; padding:0;
-  border:1px dashed var(--border-soft); border-radius:var(--pill);
-  background:transparent; color:var(--muted);
-  font:600 13px/20px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.lib-cat-add:hover{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
-.lib-cat-add[disabled]{ opacity:.4; cursor:default; }
-.lib-cat-add[disabled]:hover{ color:var(--muted); background:transparent; border-color:var(--border-soft); }
-
-/* A chip that can be dragged needs room on the right for its delete cross. */
-.lib-filter.drag{ position:relative; padding-right:20px; }
-.lib-filter.drag:not(.foreign){ cursor:grab; }
-/* From the Birols tab, or remembered only by its clips: not ours to rename in place. */
-.lib-filter.foreign{ border-style:dashed; }
-.lib-filter.dragging{ opacity:.5; cursor:grabbing; }
-#lib-cats.reordering .lib-filter{ transition:none; }
-.lib-cat-x{
-  position:absolute; top:-4px; right:-2px;
-  width:15px; height:15px; border-radius:50%;
-  background:oklch(0 0 0 / .6); color:oklch(.97 0 0);
-  font-size:9px; line-height:15px; text-align:center;
-  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
-}
-.lib-filter:hover .lib-cat-x{ opacity:1; }
-.lib-cat-x:hover{ background:var(--danger); }
-
-/* ── Delete confirmation ───────────────────────────────────────────────────── */
-.lib-cat-pop{
-  position:fixed; z-index:9600; width:252px; padding:10px;
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.lib-cat-pop-head{ font-size:12px; font-weight:650; color:var(--ink); margin-bottom:7px; }
-.lib-cat-pop-row{
-  display:flex; align-items:center; gap:6px; margin-bottom:5px;
-  font-size:11px; color:var(--ink); cursor:pointer;
-}
-.lib-cat-pop-row input{ margin:0; cursor:pointer; }
-.lib-cat-pop-note{ font-size:10.5px; line-height:1.35; color:var(--muted); margin-bottom:9px; }
-.lib-cat-pop-btns{ display:flex; gap:6px; justify-content:flex-end; }
 
 /* Two records on one file is not a normal state, so this control only appears when there is
    something to clean, and it looks like a warning rather than a feature. */
@@ -566,42 +492,6 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-rgroup.is-open .lib-rstrip{ display:grid; }
 .lib-rsub{ display:flex; gap:6px; font-variant-numeric:tabular-nums; }
 .lib-rlen{ color:var(--ink); font-weight:600; }
-
-/* ── Music: rows, because there is no picture ─────────────────────────────────
-   Built like .lib-srow, but not a button: a music row has three things to press - play,
-   and delete, and nothing on the row itself - so the row is a container and the controls
-   are the buttons. */
-.lib-mus-row{
-  display:flex; align-items:center; gap:10px; width:100%;
-  padding:7px 10px;
-  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  transition:.12s var(--ease);
-}
-.lib-mus-row:hover{ border-color:var(--primary); }
-/* The one that is sounding. Without it, six rows and one player is a guessing game. */
-.lib-mus-row.is-playing{ border-color:var(--primary); background:var(--primary-soft); }
-.lib-mus-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
-.lib-mus-name{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
-/* The prompt the track was made from, clipped to one line: it is for recognising a track,
-   and a wrapped style string turns the list into paragraphs. */
-.lib-mus-style{
-  font-size:10.5px; color:var(--muted);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.lib-mus-len, .lib-mus-date{
-  flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
-}
-.lib-mus-len{ min-width:34px; text-align:right; }
-.lib-mus-len.is-gone{ color:var(--danger); }
-.lib-mus-play, .lib-mus-del{
-  flex:0 0 auto; width:26px; height:26px; padding:0; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--border-soft); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font-size:10px;
-}
-.lib-mus-play:hover:not([disabled]), .lib-mus-del:hover:not([disabled]){ color:var(--ink); border-color:var(--primary); }
-.lib-mus-del:hover:not([disabled]){ color:var(--danger); border-color:var(--danger); }
-.lib-mus-play[disabled], .lib-mus-del[disabled]{ opacity:.4; cursor:default; }
 
 /* ── Scenarios: the selected one, in the right column (phase D5) ──────────────
    The title in the body at its own size - the column's head is upper case and cut to one line -

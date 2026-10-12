@@ -11,9 +11,7 @@
 import { initNav } from '../app-nav.js';
 import { openViewer } from './viewer.js';
 import * as A from './actions.js';
-import { renderCatBar, closeConfirm } from './cats-bar.js';
 import * as V from './voices.js';
-import * as MU from './music.js';
 import * as SC from './scenarios.js';
 import * as RE from './renders.js';
 import * as INFO from './info.js';
@@ -22,12 +20,11 @@ import * as CM from './chmake.js';
 import * as MC from './makechat.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
+import { createTree, setMediaDrag } from '../media-tree.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
-const LS_FILTER = 'library_filter_v1';
-const LS_CAT = 'library_cat_v1';
-const LS_CATS_H = 'library_cats_h_v1';   // the height you dragged the category row to
+const LS_TREE_W = 'library_tree_w_v1';   // (phase V28.5) the media tree's width on Media
 
 const SHELVES = {
   characters:   'Characters',
@@ -35,14 +32,20 @@ const SHELVES = {
   environments: 'Environments',
   media:        'Media',
   voices:       'Voices',
-  music:        'Music',
   renders:      'Renders',
   scenarios:    'Scenarios',
 };
 
 let _shelf = 'characters';
-let _filter = '';         // media: kind
-let _cat = '';            // media: birol category
+// MEDIA'S NODE (phase V28.5, the owner 2026-10-12: "полку media в library сделать таким же форматом - справа древовидный
+// столбец, а слева уже галерея сама"): the media tree's selected node is what the grid shows - Video, a kind, a category;
+// the kind and category rows went. The same tree as Merge's Library panel (js/media-tree.js).
+let _tree = null;
+let _node = null;
+const VIDEO = new Set(['birols', 'hooks', 'uploads']);
+const AUDIO = new Set(['music', 'sounds']);
+const _mkind = () => (_node && _node.kind) || '';
+const _mcat = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 
 // THE SHELVES WHERE ONE TILE IS ALWAYS SELECTED (phase B, the owner 2026-09-29): opening one selects
 // the top-left tile, there is no "nothing selected", and the right column says what the selected one
@@ -55,7 +58,6 @@ let _reqId = 0;
 // Media's three checks are owed once a read asked for them, and are run by whichever read lands
 // last - a newer read that overtakes the one that asked must not drop them.
 let _checksDue = false;
-let _first = true;      // the page's very first read, for restoring a remembered filter
 // THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
 // shelf - Scenarios the generator, Characters New Character, Environments and Lookbooks their chats
 // (js/library/makechat.js). "New …" at the LEFT of the header opens it,
@@ -103,6 +105,9 @@ function _paintShelves() {
   _paintMake();
   // Media's three checks show their buttons only there; leaving Media puts them away at once.
   if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
+  // Media's tree, beside its grid.
+  const onMedia = _shelf === 'media' && !_makingOn;
+  for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
 }
 
 // ── The making areas ────────────────────────────────────────────────────────
@@ -157,131 +162,66 @@ async function _closeMaker(then, after) {
   if (after) after();
 }
 
-// The kind and category are remembered, so every place that changes them goes through
-// here — one writer means the stored pair and the live pair cannot drift apart.
-function _setFilter(filter, cat) {
-  _filter = filter || '';
-  _cat = cat || '';
-  try {
-    localStorage.setItem(LS_FILTER, _filter);
-    localStorage.setItem(LS_CAT, _cat);
-  } catch (e) {}
-}
-
-// One chip row. `cur` is the selected id, `onPick` gets the new one.
-function _chips(box, filters, cur, onPick) {
-  box.textContent = '';
-  const opts = [{ id: '', label: 'All' }].concat(filters || []);
-  for (const o of opts) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'lib-filter' + (o.id === cur ? ' cur' : '');
-    b.textContent = o.label;
-    b.addEventListener('click', () => { if (o.id !== cur) onPick(o.id); });
-    box.appendChild(b);
-  }
-}
-
-function _paintFilters(filters, cats) {
-  const label = $('lib-bar-label');
-  const box = $('lib-filters');
-  const catBar = $('lib-cats-wrap');
-  if (!label || !box || !catBar) return;
-
-  if (!filters || !filters.length) { label.textContent = ''; box.textContent = ''; }
-  else {
-    label.textContent = 'Kind';
-    _chips(box, filters, _filter, (id) => {
-      _setFilter(id, '');          // a category belongs to a kind, so it resets with it
-      _load();
-    });
-  }
-  // Every kind has categories now, so the row is always there on Media. It carries its own
-  // gestures — add, rename, reorder, delete — which is why it is a component and not _chips.
-  catBar.hidden = _shelf !== 'media';
-  if (catBar.hidden) return;
-  renderCatBar($('lib-cats'), cats || [], {
-    kind: _filter,
-    cur: _cat,
-    onFilter: (id) => { _setFilter(_filter, id); _load(); },
-    status: _status,
-    reload: (o) => _load(o),
-    refreshCats: _loadCats,
+// ── The media tree (phase V28.5) ─────────────────────────────────────────────
+// Made once, read again with the shelf; a node pressed reads the shelf for it. What comes in with no category - an
+// upload, a link - shows: a category selected gives way to its kind (Video shows every kind).
+function _initTree() {
+  const host = $('lib-tree');
+  if (!host || _tree) return _tree;
+  _tree = createTree(host, {
+    page: 'lib', fallback: 'video',
+    status: (t, bad) => _status(t, bad ? 'err' : ''),
+    onSelect: (n) => {
+      _node = n;
+      _sel = '';
+      if (_shelf === 'media') _load({ checks: false });
+    },
+    onChanged: (what) => (_shelf === 'media'
+      ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
   });
-  _applyCatHeight();
+  return _tree;
 }
 
-// ── The category row's height ───────────────────────────────────────────────
-// Grows with its contents up to FIVE rows of chips, then scrolls. The sash at the bottom
-// edge overrides that: once you have dragged it, your height is used instead — still capped
-// at five rows, so adding categories can never push the grid off the screen.
-const CAT_ROWS_MAX = 5;
-
-// One row's worth of pixels, measured rather than assumed: chip padding and font come from
-// the stylesheet, and a guessed 23px would drift the moment either changed.
-function _catRowPx() {
-  const bar = $('lib-bar-cats');
-  const chip = bar && bar.querySelector('.lib-filter');
-  if (!chip) return 30;
-  const h = chip.getBoundingClientRect().height;
-  const gap = parseFloat(getComputedStyle($('lib-cats')).rowGap || '4') || 4;
-  return h + gap;
-}
-function _catBarPad() {
-  const bar = $('lib-bar-cats');
-  if (!bar) return 12;
-  const cs = getComputedStyle(bar);
-  return (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-}
-function _catMaxPx() { return Math.round(_catRowPx() * CAT_ROWS_MAX + _catBarPad()); }
-
-function _applyCatHeight() {
-  const wrap = $('lib-cats-wrap');
-  const bar = $('lib-bar-cats');
-  if (!wrap || !bar || wrap.hidden) return;
-  const max = _catMaxPx();
-  let stored = null;
-  try { stored = parseInt(localStorage.getItem(LS_CATS_H) || '', 10); } catch (e) {}
-  if (stored && !isNaN(stored)) {
-    bar.style.height = Math.max(Math.round(_catRowPx() + _catBarPad()), Math.min(stored, max)) + 'px';
-  } else {
-    // No sash set: let the content decide, bounded by five rows.
-    bar.style.height = '';
-    bar.style.maxHeight = max + 'px';
-    return;
-  }
-  bar.style.maxHeight = max + 'px';
+function _showLanded(kind) {
+  if (!_tree || !_node || _node.key === 'video' || _node.key === kind) return false;
+  if (_node.key === 'audio' && AUDIO.has(kind)) return false;
+  _tree.select(kind, false);
+  _node = _tree.selected();
+  return true;
 }
 
-function _wireCatSash() {
-  const sash = $('lib-cats-sash');
-  const bar = $('lib-bar-cats');
-  if (!sash || !bar) return;
+// The tree's width: dragged and remembered, a double press for the default. It is on the right: dragging LEFT widens it.
+const TREE_DEF = 240, TREE_MIN = 150, TREE_MAX = 480;
+function _wireTreeSash() {
+  const sash = $('lib-tree-sash');
+  const box = $('lib-tree');
+  if (!sash || !box) return;
+  const apply = (w) => {
+    const v = Math.max(TREE_MIN, Math.min(TREE_MAX, Math.round(w)));
+    box.style.flexBasis = v + 'px';
+    return v;
+  };
+  let saved = 0;
+  try { saved = parseInt(localStorage.getItem(LS_TREE_W) || '', 10); } catch (e) { saved = 0; }
+  apply(saved || TREE_DEF);
   sash.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    const y0 = e.clientY;
-    const h0 = bar.getBoundingClientRect().height;
-    const min = Math.round(_catRowPx() + _catBarPad());
-    const max = _catMaxPx();
-    document.body.classList.add('lib-rowresize');
-    const move = (ev) => {
-      const h = Math.max(min, Math.min(max, Math.round(h0 + (ev.clientY - y0))));
-      bar.style.height = h + 'px';
-      bar.style.maxHeight = max + 'px';
-    };
+    const from = e.clientX;
+    const base = box.getBoundingClientRect().width;
+    document.body.classList.add('lib-colresize');
+    const move = (ev) => apply(base - (ev.clientX - from));
     const up = () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
-      document.body.classList.remove('lib-rowresize');
-      try { localStorage.setItem(LS_CATS_H, String(Math.round(bar.getBoundingClientRect().height))); } catch (e) {}
+      document.body.classList.remove('lib-colresize');
+      try { localStorage.setItem(LS_TREE_W, String(Math.round(box.getBoundingClientRect().width))); } catch (err) { /* a private window */ }
     };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   });
-  // Double click the sash to hand the height back to the content.
   sash.addEventListener('dblclick', () => {
-    try { localStorage.removeItem(LS_CATS_H); } catch (e) {}
-    _applyCatHeight();
+    apply(TREE_DEF);
+    try { localStorage.setItem(LS_TREE_W, String(TREE_DEF)); } catch (e) { /* a private window */ }
   });
 }
 
@@ -289,7 +229,7 @@ function _wireCatSash() {
 // Which ones an item offers is a property of its shelf, not of the UI: a lookbook file
 // has no favourite flag to set and no category to file it under, a character's name is
 // a label while a lookbook's name IS its filename. The viewer's action row reads it.
-const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
+const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds', 'music']);
 // Which kinds a record can be CONVERTED between. Not the same set as the ones that can be
 // starred: an image and a clip are different files in different stores, and there is no
 // meaning to turning a picture into a birol. The server refuses it too - see the /kind route.
@@ -342,8 +282,12 @@ async function _runAction(id, it) {
 // and would swallow a message set before it.
 async function _apply(r) {
   if (!r) return;
-  // Something gone - deleted, or moved to another kind - is what can change Media's checks.
-  if (r.reload || r.removed) { await _load({ keepScroll: true, checks: !!r.removed }); _counts(); }
+  // Something gone - deleted, or moved to another kind - is what can change Media's checks; and the tree's numbers.
+  if (r.reload || r.removed) {
+    if (_shelf === 'media' && _tree) await _tree.load();
+    await _load({ keepScroll: true, checks: !!r.removed });
+    _counts();
+  }
   else if (r.changed) { _renderGrid(); _showSelected(); }
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
@@ -447,18 +391,26 @@ function _tileSrc(it) {
   return src ? _door(src) : '';
 }
 
-// One sound heard at a time on the Media shelf (phase V7): a second ▶ stops the first.
+// One sound heard at a time on the Media shelf: a press on its card plays it there - no window - and a press on it again,
+// or anywhere else, stops it (the owner, V28.4: "воспроизведение по клику на аудио без попапов").
 let _hearing = null;
-function _hear(src, btn) {
-  if (_hearing && _hearing.src === src && !_hearing.audio.paused) { _hearing.audio.pause(); return; }
-  if (_hearing) _hearing.audio.pause();
-  const audio = new Audio(src);
-  _hearing = { src, audio };
-  btn.textContent = '■';
-  const back = () => { btn.textContent = '▶'; };
-  audio.addEventListener('pause', back, { once: true });
-  audio.addEventListener('ended', back, { once: true });
-  audio.play().catch(back);
+function _stopHearing() {
+  if (!_hearing) return;
+  try { _hearing.audio.pause(); } catch (e) { /* gone */ }
+  document.removeEventListener('mousedown', _hearing.away, true);
+  _hearing.card.classList.remove('is-playing');
+  _hearing = null;
+}
+function _hearToggle(it, card) {
+  if (_hearing && _hearing.id === it.id) { _stopHearing(); return; }
+  _stopHearing();
+  const audio = new Audio(it.media);
+  const away = (e) => { if (!card.contains(e.target)) _stopHearing(); };
+  _hearing = { id: it.id, audio, card, away };
+  card.classList.add('is-playing');
+  audio.addEventListener('ended', () => { if (_hearing && _hearing.audio === audio) _stopHearing(); });
+  document.addEventListener('mousedown', away, true);
+  audio.play().catch(() => { _stopHearing(); _status('That file will not play', 'err'); });
 }
 
 function _card(it, extra) {
@@ -475,9 +427,8 @@ function _card(it, extra) {
   const src = _tileSrc(it);
   const box = document.createElement('div');
   box.className = 'lib-thumb-box' + (src ? '' : ' lib-thumb-pending');
-  if (it.kind === 'sounds') {
-    // (phase V7) A sound has no picture: a note, its length, and ▶ to hear it here - the card itself opens the
-    // viewer, which plays it too.
+  if (AUDIO.has(it.kind)) {
+    // A sound or a track has no picture: a note and its length; the card plays it (_hearToggle).
     box.className = 'lib-thumb-box lib-thumb-sound';
     const note = document.createElement('span');
     note.className = 'lib-snd';
@@ -486,16 +437,10 @@ function _card(it, extra) {
     if (it.dur) {
       const d = document.createElement('span');
       d.className = 'lib-snd-dur';
-      d.textContent = (+it.dur).toFixed(1) + ' s';
+      const m = Math.floor(it.dur / 60);
+      d.textContent = m ? m + ':' + String(Math.round(it.dur - m * 60)).padStart(2, '0') : (+it.dur).toFixed(1) + ' s';
       box.appendChild(d);
     }
-    const play = document.createElement('button');
-    play.type = 'button';
-    play.className = 'lib-snd-play';
-    play.textContent = '▶';
-    play.title = 'Listen';
-    play.addEventListener('click', (e) => { e.stopPropagation(); _hear(it.media, play); });
-    box.appendChild(play);
   } else {
     const img = document.createElement('img');
     img.className = 'lib-thumb';
@@ -559,6 +504,19 @@ function _card(it, extra) {
   }
   name.appendChild(document.createTextNode(it.name));
   card.appendChild(name);
+  // A sound's or a track's name is changed where it is read - it has no window to do it in.
+  if (AUDIO.has(it.kind)) {
+    name.title = it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') + ' - a double press renames it';
+    name.addEventListener('dblclick', async (e) => {
+      e.stopPropagation();
+      try { await _apply(await _runAction('rename', it)); } catch (err) { _status(err.message, 'err'); }
+    });
+  }
+  // (phase V28.5) On Media a card is dragged onto a node of the tree - another category, another kind of video.
+  if (_shelf === 'media') {
+    card.draggable = true;
+    card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it); });
+  }
 
   // Second line: which category this clip is filed under, changeable in place. Only
   // where a category means something — hooks and the image shelves have none.
@@ -613,12 +571,6 @@ function _renderGrid() {
     });
     return;
   }
-  // Music is rows for the same reason Voices are: there is no picture, and a grid of it
-  // would be identical grey squares told apart only by their captions.
-  if (_shelf === 'music') {
-    MU.render(_items, { status: _status, reload: () => _load({ keepScroll: true }) });
-    return;
-  }
   // Scenarios are text, so they are rows too, and one is always selected with the right column
   // about it - see js/library/scenarios.js (phase D5).
   if (_shelf === 'scenarios') {
@@ -636,6 +588,7 @@ function _renderGrid() {
     RE.render(_items, { card: _card, open: (it, list) => _open(it, list) });
     return;
   }
+  _stopHearing();
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
@@ -643,10 +596,12 @@ function _renderGrid() {
   if (!_items.length) {
     const e = document.createElement('div');
     e.className = 'lib-empty';
-    e.textContent = 'Nothing on this shelf' + (_filter || _cat ? ' with this filter.' : ' yet.');
+    e.textContent = _shelf === 'media' ? ('Nothing here' + (_node && _node.cat ? ' in this category.' : ' yet.')) : 'Nothing on this shelf yet.';
     grid.appendChild(e);
     return;
   }
+  // The viewer pages through what it can show - not the sounds and tracks, which play on their cards.
+  const seen = _items.filter(x => !AUDIO.has(x.kind));
 
   for (const it of _items) {
     let sub = null;
@@ -677,7 +632,8 @@ function _renderGrid() {
       // (phase V28.1) Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel);
-      card.addEventListener('click', () => _open(it));
+      if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
+      else card.addEventListener('click', () => _open(it, _shelf === 'media' ? seen : null));
     }
     grid.appendChild(card);
   }
@@ -780,7 +736,6 @@ async function _load(opts) {
   const scroll = (opts && opts.keepScroll && grid0) ? grid0.scrollTop : null;
   if (opts && opts.checks) _checksDue = true;
   const my = ++_reqId;
-  closeConfirm();          // never leave one pointing at a chip that is about to be replaced
   _status('Reading…');
   _paintShelves();
   // The right column belongs to the picture shelves, where it says what the selected tile is, and to
@@ -788,15 +743,9 @@ async function _load(opts) {
   // whole width.
   if (!PICKABLE.has(_shelf) && _shelf !== 'voices' && _shelf !== 'scenarios') INFO.hide();
   try {
-    // The kind and category are Media's, and they are now REMEMBERED across shelf
-    // switches — so they must not be sent to a shelf that has no such kinds. Sending a
-    // remembered filter=uploads to Characters matched nothing and emptied the shelf.
-    const q = [];
-    if (_shelf === 'media') {
-      if (_filter) q.push('filter=' + encodeURIComponent(_filter));
-      if (_cat) q.push('cat=' + encodeURIComponent(_cat));
-    }
-    const url = '/api/library/shelf/' + _shelf + (q.length ? '?' + q.join('&') : '');
+    // Media: what the media tree has selected (its `q`: a group, or a kind and a category).
+    const q = (_shelf === 'media' && _node) ? new URLSearchParams(_node.q || {}).toString() : '';
+    const url = '/api/library/shelf/' + _shelf + (q ? '?' + q : '');
     // Scenarios: the drafts head the list (phase E4), read beside the shelf.
     const draftsP = _shelf === 'scenarios'
       ? fetch('/api/scriptgen/drafts').then(r => r.json()).catch(() => null) : null;
@@ -811,27 +760,6 @@ async function _load(opts) {
     _items = d.items || [];
     _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
     _shelfRunning = d.running || 0;
-    // A remembered kind or category can outlive what it pointed at — a category emptied,
-    // a filter saved before the shelf changed shape. Drop it AND read again: resetting the
-    // chip alone left the grid showing the empty result the dead filter had returned.
-    // This recurses at most once, because the reset filter is always a valid one.
-    if (_shelf === 'media') {
-      const kindRow = (d.filters || []).find(f => f.id === _filter);
-      // On the FIRST load only, a remembered kind that now holds nothing is dropped too.
-      // Clicking an empty kind should show it empty — that is a deliberate choice — but
-      // opening the page onto an empty shelf reads as a broken page, and a filter with
-      // nothing behind it is not a place worth being returned to.
-      const emptyOnOpen = _first && kindRow && d.shown === 0;
-      const deadKind = _filter && !kindRow;
-      const deadCat = _cat && !(d.cats || []).some(c => c.id === _cat);
-      _first = false;
-      if (deadKind || deadCat || emptyOnOpen) {
-        _setFilter((deadKind || emptyOnOpen) ? '' : _filter, '');
-        return _load(opts);        // with what was asked of the first read, checks included
-      }
-    }
-    _first = false;
-    _paintFilters(d.filters, d.cats);
     _renderGrid();
     _showSelected();       // the column follows the shelf it was read with
     // MEDIA'S CHECKS ONLY WHEN THEY CAN HAVE CHANGED (phase D3, the owner 2026-09-29): entering Media,
@@ -884,7 +812,7 @@ function _select(kind) {
   if (_shelf === 'scenarios' && SC.unsaved()
     && !confirm('The lines of the open scenario have changes that are not saved. Leave them?')) return;
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
-  if (_shelf === 'music') MU.stopPreview();  // nor a backing track
+  if (_shelf === 'media') _stopHearing();  // nor a sound or a track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
@@ -1109,33 +1037,46 @@ function _paintUpload() {
       + ' - one link per line, or let a link go over the shelf';
   }
   if (btn.hidden) return;
-  // The open KIND decides what can be brought in, so on Images the picker offers pictures
-  // and nothing else. Same button, same shelf - only what it accepts changes.
-  if (_filter === 'images') {
+  // The NODE selected in the media tree decides what can be brought in and where it lands (phase V28.5).
+  const kind = _mkind();
+  btn.disabled = false;
+  if (kind === 'images') {
     btn.textContent = 'Upload images';
     btn.title = 'Add pictures to the library. A PNG keeps its transparency.';
     if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
-  // (phase V7) Sounds go into the category open on the chips, if one is.
-  if (_filter === 'sounds') {
+  if (kind === 'sounds') {
     btn.textContent = 'Upload sounds';
-    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into the category chosen above, or with none.';
+    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into SFX' + (_mcat() ? ', the category selected' : '') + '.';
     if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
+    return;
+  }
+  if (kind === 'music') {
+    btn.textContent = 'Upload music';
+    btn.title = 'Add tracks - mp3, wav, m4a, ogg, flac - to Music.';
+    if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
+    return;
+  }
+  if (_node && _node.key === 'audio') {
+    btn.textContent = 'Upload';
+    btn.disabled = true;
+    btn.title = 'Pick Music or SFX in the tree first';
     return;
   }
   if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
-  const k = A.KINDS.find(x => x.id === _filter);
-  btn.textContent = k ? ('Upload to ' + k.label + 's') : 'Upload';
+  const k = A.KINDS.find(x => x.id === _linkKind());
+  btn.textContent = 'Upload to ' + (k ? k.label + 's' : 'Uploads');
   btn.title = 'Add video files to ' + (k ? k.label + 's' : 'Uploads');
 }
 
 // ── By a link (phase V27) ───────────────────────────────────────────────────
-// The kind a link's clip goes to, as an upload's would: the open one, Uploads on "All"; '' where no clip goes.
+// The kind a link's clip goes to, as an upload's would: the kind selected, Uploads under Video; '' where no clip goes.
 function _linkKind() {
-  if (_shelf !== 'media' || _filter === 'images' || _filter === 'sounds') return '';
-  return A.KINDS.some(k => k.id === _filter) ? _filter : 'uploads';
+  if (_shelf !== 'media' || !_node) return '';
+  if (VIDEO.has(_mkind())) return _mkind();
+  return _node.key === 'video' ? 'uploads' : '';
 }
 
 let _linking = null;      // { ids, total, kind } while links are being brought in
@@ -1165,8 +1106,8 @@ async function _addLinks(urls, kind) {
       const fresh = list.filter(j => j.state === 'done' && !_linking.landed.has(j.id));
       if (fresh.length) {
         fresh.forEach(j => _linking.landed.add(j.id));
-        if (_shelf === 'media' && _filter !== _linking.kind) _setFilter(_linking.kind, '');
-        _linking.reading = _load({ checks: true }).then(() => _counts());
+        if (_shelf === 'media') _showLanded(_linking.kind);
+        _linking.reading = (_tree ? _tree.load() : Promise.resolve()).then(() => _load({ checks: true })).then(() => _counts());
       }
       if (stop) { stop.hidden = !run; stop.dataset.id = run ? run.id : ''; }
       if (run) _status('link ' + Math.min(done + 1, _linking.total) + '/' + _linking.total + ' · ' + LK.shortStep(run.step));
@@ -1192,38 +1133,45 @@ async function _upload(files) {
   if (!list.length) return;
   const btn = $('lib-upload');
   if (btn) btn.disabled = true;
-  if (_filter === 'images') {
+  const kind = _mkind();
+  const landed = async (k) => { _showLanded(k); if (_tree) await _tree.load(); await _load({ checks: true }); _counts(); };
+  if (kind === 'images') {
     const ri = await A.uploadImages(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
     if (btn) btn.disabled = false;
-    if (ri.ok) { await _load({ checks: true }); _counts(); }
+    if (ri.ok) await landed('images');
     _status(ri.ok === ri.total
       ? ('Uploaded ' + ri.ok + (ri.ok === 1 ? ' image' : ' images'))
       : (ri.ok + ' of ' + ri.total + ' uploaded'), ri.ok === ri.total ? '' : 'err');
     return;
   }
-  if (_filter === 'sounds') {
-    const cat = _cat && _cat !== '__uncat__' ? _cat : '';
+  if (kind === 'music') {
+    const rm = await A.uploadMusic(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
+    if (btn) btn.disabled = false;
+    if (rm.ok) await landed('music');
+    _status(rm.ok === rm.total
+      ? ('Uploaded ' + rm.ok + (rm.ok === 1 ? ' track' : ' tracks'))
+      : (rm.ok + ' of ' + rm.total + ' uploaded - only sound files are taken'), rm.ok === rm.total ? '' : 'err');
+    return;
+  }
+  if (kind === 'sounds') {
+    // Into the category selected, if one is - so it stays where it is looked at.
+    const cat = _mcat();
     const rs = await A.uploadSounds(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), cat);
     if (btn) btn.disabled = false;
-    if (rs.ok) { await _load({ checks: true }); _counts(); }
+    if (rs.ok) { if (_tree) await _tree.load(); await _load({ checks: true }); _counts(); }
     _status(rs.ok === rs.total
       ? ('Uploaded ' + rs.ok + (rs.ok === 1 ? ' sound' : ' sounds'))
       : (rs.ok + ' of ' + rs.total + ' uploaded - only sound files are taken'), rs.ok === rs.total ? '' : 'err');
     return;
   }
-  // The open kind decides where the clips are filed: looking at Hooks and pressing Upload
-  // means "add hooks". With no kind chosen ("All") they go to Uploads, which is what a
-  // file you brought in from outside is. The CATEGORY filter is deliberately ignored —
-  // a clip arrives unfiled and you file it afterwards, from the card or the viewer.
-  const target = A.KINDS.some(k => k.id === _filter) ? _filter : 'uploads';
+  if (_node && _node.key === 'audio') { if (btn) btn.disabled = false; _status('Pick Music or SFX in the tree first', 'err'); return; }
+  // The kind selected decides where the clips are filed: looking at Hooks and pressing Upload means "add hooks"; under
+  // Video they go to Uploads, which is what a file brought in from outside is. They arrive with no category - filed
+  // afterwards, on the tree or in the viewer - and the kind is shown so they are seen.
+  const target = _linkKind() || 'uploads';
   const r = await A.uploadVideos(list, target, (i, n, name) => _status('Uploading ' + i + '/' + n + ' — ' + name));
   if (btn) btn.disabled = false;
-  // Land on the kind the clips went to, so they are visible without hunting.
-  if (r.ok) {
-    _setFilter(target, '');
-    await _load({ checks: true });
-    _counts();
-  }
+  if (r.ok) await landed(target);
   // After the reload, never before: _load() signs off with _status('') and would wipe this.
   _status(r.ok === r.total
     ? ('Uploaded ' + r.ok + (r.ok === 1 ? ' clip' : ' clips'))
@@ -1238,7 +1186,9 @@ async function _upload(files) {
 // page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
 function _place(u) {
   const q = u.searchParams;
-  const kind = q.get('shelf') || '';
+  let kind = q.get('shelf') || '';
+  // (phase V28.5) The Music shelf is Media -> Audio -> Music: an old address lands there.
+  if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', mkind: 'music' };
   if (!SHELVES[kind]) return null;
   // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
   return { kind, sel: q.get('sel') || '', make: q.get('make') === '1', src: q.get('src') || '', mkind: kind === 'media' ? (q.get('kind') || '') : '' };
@@ -1246,8 +1196,8 @@ function _place(u) {
 
 async function _goToPlace(p) {
   if (!p) return;
-  // Media's kind first: switching to the shelf reads it with the kind it keeps.
-  if (p.mkind) _setFilter(p.mkind, '');
+  // Media's kind first (the tree's node): switching to the shelf reads it with it.
+  if (p.mkind && _tree) { _tree.select(p.mkind, false); _node = _tree.selected(); }
   if (p.kind !== _shelf) {
     _select(p.kind);                              // it asks about unsaved lines itself
     if (_shelf !== p.kind) return;                // the person kept them
@@ -1283,8 +1233,15 @@ function boot() {
   try {
     const saved = localStorage.getItem(LS_SHELF);
     if (saved && SHELVES[saved]) _shelf = saved;
-    _filter = localStorage.getItem(LS_FILTER) || '';
-    _cat = localStorage.getItem(LS_CAT) || '';
+    // (phase V28.5) The Music shelf is Media -> Audio -> Music now.
+    else if (saved === 'music') { _shelf = 'media'; localStorage.setItem('lib_tree_sel_v1', JSON.stringify('music')); }
+    // The kind and category the rows remembered become the tree's first node - once - and their keys go.
+    const was = localStorage.getItem('library_filter_v1');
+    if (was != null && localStorage.getItem('lib_tree_sel_v1') == null) {
+      const cat = localStorage.getItem('library_cat_v1') || '';
+      localStorage.setItem('lib_tree_sel_v1', JSON.stringify(!was ? 'video' : (cat ? was + ':' + cat : was)));
+    }
+    for (const k of ['library_filter_v1', 'library_cat_v1', 'library_cats_h_v1']) localStorage.removeItem(k);
   } catch (e) {}
   // The address wins over the remembered shelf, and is then taken off it: a reload is not a second
   // arrival from Alerts.
@@ -1294,7 +1251,7 @@ function boot() {
     _shelf = arrive.kind;
     try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
     if (arrive.sel) { _sel = arrive.sel; _scrollSel = true; }
-    if (arrive.mkind) _setFilter(arrive.mkind, '');
+    if (arrive.mkind) { try { localStorage.setItem('lib_tree_sel_v1', JSON.stringify(arrive.mkind)); } catch (e) { /* a private window */ } }
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
   }
 
@@ -1369,9 +1326,9 @@ function boot() {
     });
   }
 
-  _wireCatSash();
-  window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(() => _load({ checks: true })).then(() => {
+  _wireTreeSash();
+  _initTree();
+  Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).
     if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(arrive.src ? { sourceId: arrive.src } : undefined);

@@ -640,30 +640,6 @@ function _scenariosShelf() {
   return { items, filters: [] };
 }
 
-// The Suno tracks, the same file the Merge music panel reads and writes - not a copy of
-// it. A track is made in one place and listened to in another, and two lists would be two
-// answers to "what music is there".
-function _musicShelf() {
-  const list = _read(path.join(DATA_DIR, 'suno-lib.json'), []);
-  const items = (Array.isArray(list) ? list : [])
-    .filter(t => t && t.audioPath)
-    .map(t => ({
-      id: String(t.id || t.audioPath),
-      name: String(t.title || 'track'),
-      kind: 'music',
-      media: String(t.audioPath),
-      // No picture to show. The row draws its own, and a card grid would be thirty
-      // identical grey squares.
-      thumb: null,
-      meta: {
-        style: String(t.style || ''),
-        date: t.createdAt || null,
-        onDisk: _onDisk(String(t.audioPath)),
-      },
-    }));
-  return { items, filters: [] };
-}
-
 // How many lookbooks or environments are being made right now (phase I) - a chat's, or Merge's maker's.
 // The page asks the shelf again while there are any, so what lands shows up on the grid by itself.
 function _makingNow(type) {
@@ -682,7 +658,6 @@ const SHELVES = {
   looks:        () => ({ items: _looks().items.filter(x => x.media && _onDisk(x.media)), filters: [] }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
-  music:        _musicShelf,
   renders:      _rendersShelf,
   scenarios:    _scenariosShelf,
 };
@@ -1838,7 +1813,8 @@ router.get('/library/counts', (_req, res) => {
   try {
     const out = {};
     for (const [kind, build] of Object.entries(SHELVES)) {
-      try { out[kind] = build().items.length; } catch (e) { out[kind] = 0; }
+      // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
+      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

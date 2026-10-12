@@ -16,6 +16,8 @@
 <!-- The countdown rows of the scenario generator (js/progress.js startInlineProgress). -->
 <link rel="stylesheet" href="css/gen-progress.css">
 <link rel="stylesheet" href="css/library.css">
+<!-- The media tree beside the Media shelf's gallery (js/media-tree.js, phase V28.5). -->
+<link rel="stylesheet" href="css/media-tree.css">
 <!-- Making a character on the Characters shelf (phase H, js/library/chmake.js). -->
 <link rel="stylesheet" href="css/char-make.css">
 <!-- The making chats of Environments and Lookbooks (phase I, js/library/makechat.js). -->
@@ -38,16 +40,12 @@
     <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="lookbooks">Lookbooks<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="environments">Environments<span class="lib-n"></span></button>
-    <!-- Clips and stills together: birols, uploads, hooks and images are its four kinds.
-         Still pictures are brought in, screenshotted off the Merge preview, or generated. -->
+    <!-- Everything a timeline takes - video (B-rolls, Hooks, Uploads), pictures, music and sounds - in a gallery with
+         the media tree beside it (phase V28.5; the Music shelf is Audio -> Music here). -->
     <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
     <!-- Every voice we have taken that has our own demo. Rows rather than cards, with a
          permanent info column - see js/library/voices.js. -->
     <button class="lib-shelf" type="button" data-kind="voices">Voices<span class="lib-n"></span></button>
-    <!-- The Suno tracks, the same data/suno-lib.json the Merge music panel reads and writes.
-         Made in Merge, judged here: comparing backing tracks means playing them next to each
-         other, which a 190px column beside a timeline is the wrong place for. -->
-    <button class="lib-shelf" type="button" data-kind="music">Music<span class="lib-n"></span></button>
     <!-- Text, not pictures: rows like Voices, and a click opens the scenario right here, where
          its lines are. See js/library/scenarios.js. -->
     <button class="lib-shelf" type="button" data-kind="scenarios">Scenarios<span class="lib-n"></span></button>
@@ -59,16 +57,12 @@
   </aside>
 
   <main class="lib-main">
-    <!-- Filter rows, filled from what the shelf actually holds: for Media the kind and
-         then the birol category. Empty rows collapse. -->
     <div class="lib-bar" id="lib-bar">
       <!-- The shelf's making area in place of the shelf, and the way back - at the LEFT of the bar, one in
            the other's place (the owner, phases G3 and H1). Their words come from the shelf that is open:
            New scenario, New Character, New environment, New lookbook (js/library/main.js MAKERS). -->
       <button class="lib-btn primary" type="button" id="lib-new" hidden></button>
       <button class="lib-btn" type="button" id="lib-back" hidden></button>
-      <span class="lib-bar-label" id="lib-bar-label"></span>
-      <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
       <!-- (phase V27) Stops the link being downloaded - shown only while one is (js/library/links.js). -->
@@ -83,25 +77,18 @@
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
       <!-- (phase V27) The same clips from a link - YouTube, TikTok, Instagram... - downloaded by the server. -->
       <button class="lib-btn" type="button" id="lib-link" hidden>From a link</button>
-      <!-- accept follows the open kind: js/library/main.js narrows it to pictures on Images. -->
+      <!-- accept follows the node selected in the media tree (js/library/main.js). -->
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
-    </div>
-    <!-- Categories: grows to five rows of chips, then scrolls. The sash sets the height by
-         hand; double-click it to hand the height back to the content.
-         The sash is a SIBLING of the scrolling row, not a child: inside it, it was a flex
-         item on the same axis as the chips and squeezed them into a narrow column. -->
-    <div class="lib-cats-wrap" id="lib-cats-wrap" hidden>
-      <div class="lib-bar lib-bar-2" id="lib-bar-cats">
-        <span class="lib-bar-label">Category</span>
-        <span class="lib-filters" id="lib-cats"></span>
-      </div>
-      <div class="lib-sash" id="lib-cats-sash" title="Drag to resize, double-click to fit the contents"></div>
     </div>
     <!-- THE RIGHT COLUMN (phase B): the grid keeps two thirds, and the last third says what the
          selected tile is - on Characters, Lookbooks and Environments (js/library/info.js) - or the
          selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
       <div class="lib-grid" id="lib-grid"></div>
+      <!-- THE MEDIA TREE (phase V28.5, the owner 2026-10-12): on Media, what it selects is what the grid shows -
+           the same tree as Merge's Library panel (js/media-tree.js); the sash sets its width. -->
+      <div class="lib-tree-sash" id="lib-tree-sash" hidden title="Drag to resize the tree, double-click for the default width"></div>
+      <aside class="lib-tree" id="lib-tree" hidden></aside>
       <aside class="lib-info" id="lib-info" hidden>
         <div class="lib-info-head" id="lib-info-head"></div>
         <div class="lib-info-body" id="lib-info-body"></div>

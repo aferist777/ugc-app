@@ -809,13 +809,13 @@ function VIDEOS(ctx) {
     return { items: (d.items || []).filter(g => g && g.state === 'done' && g.videoPath).map(g => _clip(g.videoPath, g.posterPath,
       String(g.said || g.prompt || '').slice(0, 80), { aspect: _shape(g.w, g.h) || (g.params || {}).aspect || '', dur: +g.duration || 0 })) };
   }
-  // Suno's tracks stay on the Music shelf and are offered as sounds from there (their length is measured when one is
-  // attached - the shelf does not know it).
+  // The music (Media -> Audio -> Music since phase V28.4: Suno's tracks and the ones brought in) offered as sounds - each
+  // with the length its record keeps.
   async function _music() {
-    const d = await json('/api/library/shelf/music');
+    const d = await json('/api/library/shelf/media?filter=music');
     if (!d || !d.success) return _gone(d);
-    return { items: (d.items || []).filter(i => i && i.media && (i.meta || {}).onDisk !== false)
-      .map(i => ({ path: i.media, src: i.media, name: i.name || '', sub: 'Suno', dur: 0 })) };
+    return { items: (d.items || []).filter(i => i && i.media)
+      .map(i => ({ path: i.media, src: i.media, name: i.name || '', sub: (i.meta || {}).source === 'upload' ? 'music' : 'Suno', dur: +i.dur || 0 })) };
   }
   // (phase V15, the owner 2026-10-07) The Library's saved voices - our own demo of each - among the sounds: listened to
   // in the picker, attached as a sound whose role is "voice" and whose name is the voice's. Nothing is attached by

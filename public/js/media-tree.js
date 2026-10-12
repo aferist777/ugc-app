@@ -259,9 +259,10 @@ export function createTree(host, o) {
 
   const kindLabel = (kind) => ((byKey.get(kind) || {}).label) || kind;
 
+  // After the page has read its gallery again - a read may end by clearing the status line.
   async function _after(msg, what) {
     await load();
-    opt.onChanged(what || {});
+    try { await opt.onChanged(what || {}); } catch (e) { /* the page says its own */ }
     if (msg) opt.status(msg);
   }
 
