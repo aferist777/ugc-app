@@ -1806,6 +1806,32 @@ router.delete('/library/cats/:id', (req, res) => {
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
+// ── WHERE A FILE IS USED (phase V28.4, the owner 2026-10-12) ───────────────────
+// Asked before something is deleted from the library: the projects (the draft too) whose timelines hold it, and how
+// many clips in each - the deleting question names them, and there the clips turn red (lib/timeline-media.js).
+//   POST /api/library/usage { media: [address, ...] }       some files
+//   POST /api/library/usage { kind, cat }                   everything in a category ('__uncat__': in none)
+//   -> { projects: [{ key, title, draft, clips }] }
+router.post('/library/usage', (req, res) => {
+  try {
+    const b = req.body || {};
+    let media = (Array.isArray(b.media) ? b.media : []).map(String).filter(Boolean).slice(0, 5000);
+    if (!media.length && b.kind && RECORD_STORES[String(b.kind)]) {
+      const kind = String(b.kind);
+      const cat = String(b.cat || '');
+      const store = RECORD_STORES[kind];
+      const inKind = LC.KINDS.includes(kind) ? _kindRecords(kind).inKind : () => true;
+      for (const e of store.read()) {
+        if (!e || !inKind(e)) continue;
+        const c = String(e.categoryId || '');
+        if (cat === UNCAT ? (c && c !== UPLOADS_CAT) : c !== cat) continue;
+        for (const p of (store.files ? store.files(e) : [])) if (p) media.push(String(p));
+      }
+    }
+    res.json({ success: true, projects: require('../lib/timeline-media').usage(media) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // Counts for every shelf at once, for the switcher — cheap enough to do on load and
 // it means the page never shows a shelf without saying how much is in it.
 router.get('/library/counts', (_req, res) => {

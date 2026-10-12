@@ -142,6 +142,9 @@ router.get('/mv3/timeline', (req, res) => {
       ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
       timeline: t ? { kind: BLANK_KIND, format: t.format || '9:16', tracks: t.tracks } : _emptyBlank(),
+      // (phase V28.4) The clips whose file is not on the disk - deleted from the library, most often: red on the
+      // timeline, to be replaced or removed, and said once as the project opens (lib/timeline-media.js).
+      missing: t ? require('../lib/timeline-media').missingOf(t) : [],
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

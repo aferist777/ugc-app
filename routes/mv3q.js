@@ -238,6 +238,12 @@ router.post('/mv3q/add', (req, res) => {
     if (!(b.timeline && Array.isArray(b.timeline.tracks))) {
       return res.status(400).json({ success: false, error: 'an entry needs its timeline' });
     }
+    // (phase V28.4) Not with a clip whose file is gone - the render would refuse it anyway (lib/mv3b-job.js prepare).
+    const gone = require('../lib/mv3b-job').missingCount(b.timeline);
+    if (gone) {
+      return res.status(409).json({ success: false, missing: gone,
+        error: gone + (gone === 1 ? ' clip has' : ' clips have') + ' no file - replace or remove ' + (gone === 1 ? 'it' : 'them') + ' (red on the timeline)' });
+    }
     const s = read();
     const item = {
       id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
