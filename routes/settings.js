@@ -19,7 +19,7 @@ const SETTINGS_FILE = path.join(require('../lib/config').DATA_DIR, 'settings.jso
 // a glance to check which bucket an install is pointed at. Masking them would only hide whether
 // the field is filled in correctly.
 const SECRET_KEYS = [
-  'kieApiKey', 'replicateApiKey',
+  'anthropicApiKey', 'kieApiKey', 'replicateApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
 ];

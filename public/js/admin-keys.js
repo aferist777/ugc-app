@@ -7,7 +7,7 @@
    EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
    provider accepted it, amber when it is there but the provider refused it (the reason sits
    under the field), red when it is missing. The check is the same one the Character page
-   runs (GET /api/keys/health: kie.ai, OpenRouter, Replicate, ElevenLabs, Groq); the keys it
+   runs (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq); the keys it
    does not probe - R2 - are green when present, with "not probed" said.
 
    EDITING. Focusing a filled field clears it for typing; leaving it empty puts the mask back.
@@ -16,36 +16,43 @@
 
 (function () {
 
+// (phase V25, the owner 2026-10-13) Claude first; every description says what the key does in the app as it is now.
 const ROWS = [
+  {
+    label: 'Claude (Anthropic):', settingsKey: 'anthropicApiKey', probe: 'anthropic',
+    placeholder: 'sk-ant-••• (console.anthropic.com)',
+    link: 'https://console.anthropic.com/settings/keys', linkText: 'console.anthropic.com → API keys',
+    desc: 'Claude directly - Opus, Sonnet and Haiku 5.5. Used only where you choose it: as a step of the agents\' ladder on AI settings, or as the model of the scenario generator in its form.',
+  },
   {
     label: 'kie.ai API:', settingsKey: 'kieApiKey', probe: 'kie.ai',
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key', linkText: 'kie.ai/api-key',
-    desc: 'Video / avatar generation and the balance counter. Image generation goes through Replicate.',
+    desc: 'Pictures and video in the chats, New Character and the talking head; Suno music; the agents and the scenario generator on Gemini; the 3D Studio\'s Claude. The number beside it is the credit balance.',
   },
   {
     label: 'OpenRouter API:', settingsKey: 'openRouterApiKey', probe: 'openrouter',
     placeholder: 'sk-or-v1-••• (openrouter.ai)',
     link: 'https://openrouter.ai/settings/keys', linkText: 'openrouter.ai → keys',
-    desc: 'Primary text and vision analysis; replaces the kie.ai cascade for prompt engineering when set.',
+    desc: 'Not used at the moment - kept so it can be connected: with a working key it becomes an aggregator of the agents\' ladder on AI settings.',
   },
   {
     label: 'Replicate API:', settingsKey: 'replicateApiKey', probe: 'replicate',
     placeholder: 'r8_••• (replicate.com)',
     link: 'https://replicate.com/account/api-tokens', linkText: 'replicate.com → API tokens',
-    desc: 'Image generation: nano-banana-2, gpt-image-2, seedream-5-lite, qwen-image-edit-plus.',
+    desc: 'Pictures and video in the chats and New Character; transcribing sources and narrator samples; the agents and the scenario generator on Gemini and GPT.',
   },
   {
     label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey', probe: 'elevenlabs',
     placeholder: 'sk_••• (elevenlabs.io)',
     link: 'https://elevenlabs.io/app/settings/api-keys', linkText: 'elevenlabs.io → API keys',
-    desc: 'Speech synthesis (TTS) for scenes, and Voice Design.',
+    desc: 'The talking head\'s voice (text to speech), and the voices of characters from the ElevenLabs library.',
   },
   {
     label: 'Groq (Whisper STT):', settingsKey: 'groqApiKey', probe: 'groq',
     placeholder: 'gsk_••• (console.groq.com)',
     link: 'https://console.groq.com/keys', linkText: 'console.groq.com → API keys',
-    desc: 'Speech-to-Text for subtitles. Model whisper-large-v3-turbo.',
+    desc: 'Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.',
   },
   {
     group: 'R2 · where reference images are hosted',

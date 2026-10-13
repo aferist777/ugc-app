@@ -43,8 +43,10 @@
       + 'is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the '
       + 'last check, is stepped over - and such an aggregator cannot be chosen until its key works. Every model here '
       + 'can see pictures.');
-    p('<b>Cost:</b> a Gemini Flash answer is a fraction of a cent. Not here: the scenario generator, which chooses its '
-      + 'model in its own form for each script - a long script is never handed to a second model.');
+    p('<b>Cost:</b> a Gemini Flash answer is a fraction of a cent. Claude, asked directly with its key on API keys, '
+      + 'thinks briefly here and costs more: about 3-6 cents for a message with two pictures on Opus 5.5, about half that '
+      + 'on Sonnet 5.5, a fraction of a cent on Haiku 5.5. Not here: the scenario generator, which chooses its model in '
+      + 'its own form for each script - a long script is never handed to a second model.');
     return box;
   }
 
