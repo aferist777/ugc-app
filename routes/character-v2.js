@@ -28,7 +28,6 @@ const {
   uploadToPublicHost, callAIVisionWithFallback, parseLooseJson, resolveLocalMedia, resolveTask,
 } = require('../lib/helpers');
 const { reasonOf } = require('../lib/img-providers');
-const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
 const WATCH = require('../lib/cv2-watch');
 
@@ -81,7 +80,7 @@ router.post('/character-v2/analyze', async (req, res) => {
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 45000, ladder: L.getLadder('vision') });
+    }], { timeout: 45000 });
 
     const j = parseLooseJson(raw);
     if (!j || typeof j !== 'object') {

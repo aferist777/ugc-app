@@ -746,16 +746,10 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
   return { kind: plan.kind === 'costume' ? 'costume' : 'outfit', prompt };
 }
 
-// The same ladder the Character page reads photos with, instead of a cascade of this
-// popup's own. One place decides which models look at an image, and every step listed
-// there answered a live call with a real photo. It also reports what went wrong per
-// step - the old path could only say that four models had returned nothing.
-//
-// Required at call time, not at module scope: cv2-ladders reaches img-providers, which
-// reaches helpers, which reaches back here, and that circle resolves to an empty object.
-const _ask = (messages) => H.callAIVisionWithFallback(messages, {
-  ladder: require('../lib/cv2-ladders').getLadder('vision'), timeout: 60000,
-});
+// The agents' ladder (lib/agents.js, phase V25: Admin -> AI settings) - the one New Character reads photos with and the
+// chats' writers write with, instead of a cascade of this popup's own. One place decides which models look at an image,
+// and every step listed there answered a live call with a real photo. It also reports what went wrong per step.
+const _ask = (messages) => H.callAIVisionWithFallback(messages, { timeout: 60000 });
 
 /**
  * THE ONE CALL THAT DECIDES WHAT A LOOKBOOK IS.
