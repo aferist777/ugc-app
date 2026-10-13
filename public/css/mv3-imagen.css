@@ -565,14 +565,17 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-vc-check.is-off input{ cursor:default }
 /* (phase V17.1) The writer held on by the storyboard: on, and not to be unticked from here. */
 .mv3-vc-check.is-held, .mv3-vc-check.is-held input{ cursor:default }
+/* (phase V25, the owner 2026-10-13: "в золотой обводке с закругленными краями и золотым шрифтом чтобы было видно что это
+   кнопка") The almanac of every chat - pictures, video, frames - is a BUTTON in gold, as the frames chat's `ideas`: the
+   width of the column less its margins at the foot of it, a small one in the row above the box when the chat is narrow. */
 .mv3-vc-almanac{
-  flex:0 0 auto; display:block; width:100%; height:32px; margin:0; padding:0 12px;
-  border:0; border-top:1px solid var(--border); border-radius:0; background:var(--surface-2); color:var(--ink);
-  font:700 11px/32px var(--font); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:.12s var(--ease);
+  flex:0 0 auto; display:block; width:auto; height:30px; margin:8px 10px 10px; padding:0 12px;
+  border:1px solid var(--gold); border-radius:var(--r-xs); background:transparent; color:var(--gold);
+  font:700 10.5px/28px var(--font); letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:.12s var(--ease);
 }
-.mv3-vc-almanac:hover{ background:var(--primary-soft); color:var(--primary) }
+.mv3-vc-almanac:hover{ background:color-mix(in oklch, var(--gold) 16%, transparent) }
 .mv3-pc.is-narrow .mv3-vc-switches{ flex-direction:row; flex-wrap:wrap; align-items:center; margin:0 }
-.mv3-pc.is-narrow .mv3-vc-almanac{ width:auto; height:24px; margin:4px 10px 6px; border:1px solid var(--border); border-radius:var(--r-xs); line-height:22px }
+.mv3-pc.is-narrow .mv3-vc-almanac{ height:24px; margin:4px 10px 6px; line-height:22px }
 
 /* A storyboard's (a picture's) prompt and its sheets (phase V8; on the message's steps since V16). */
 .vc-prompt-ta.is-board{ min-height:70px }
@@ -898,8 +901,9 @@ audio.vtrim-media{ background:none; height:32px }
 /* What stands right of the attachment row - the frames chat's `ideas`. */
 .mv3-ig-attsrow{ display:flex; align-items:stretch; min-width:0; border-top:1px solid var(--border-soft) }
 .mv3-ig-attsrow > .mv3-ig-atts{ flex:1 1 auto; min-width:0; border-top:0 }
-/* An almanac still to come: in its place, dimmed, not pressable. */
-.mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ opacity:.45; cursor:default; background:var(--surface-2); color:var(--ink) }
+/* An almanac still to come (the pictures and frames chats): the same gold button - it IS one -, not pressable, its title
+   saying "in development" (V25: no longer dimmed into the column, the owner wants it seen as a button). */
+.mv3-vc-almanac.is-soon, .mv3-vc-almanac.is-soon:hover{ cursor:not-allowed; background:transparent }
 /* The frames chat's `ideas` (phase V26.5): right of the places above the box, in gold; its answer a list to press. */
 .mv3-fc-ideas{
   flex:0 0 auto; align-self:center; margin:0 10px 0 4px; height:28px; padding:0 12px; cursor:pointer;
