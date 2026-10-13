@@ -3325,9 +3325,24 @@ function _normSd(s) {
     frags[k] = {
       prompt: String(f.prompt || '').slice(0, 20000), agent: String(f.agent || '').slice(0, 20000),
       edited: !!f.edited, sig: String(f.sig || ''), writer: String(f.writer || ''), at: String(f.at || ''),
+      // (part 5) Its clips - every take kept, as a line's - and the one chosen by hand, whatever it was made from.
+      clips: (Array.isArray(f.clips) ? f.clips : []).map(_normSdClip).filter(Boolean),
+      chosen: String(f.chosen || ''),
     };
   }
   return { frags };
+}
+// One take of a Seedance fragment: the file, its poster and length, and what it was made from - the frame, the sound
+// it was voiced with (`read` / `ours` / `sample`, which decides what the timeline hears), the model and the quality.
+function _normSdClip(c) {
+  if (!c || typeof c !== 'object' || !c.path) return null;
+  const p = String(c.path);
+  return {
+    id: String(c.id || path.basename(p).replace(/\.[^.]+$/, '')), path: p, thumb: String(c.thumb || ''),
+    dur: +c.dur > 0 ? Math.round(+c.dur * 100) / 100 : 0, frameId: String(c.frameId || ''),
+    sound: TH.soundById(c.sound) ? c.sound : 'read', model: String(c.model || ''), quality: String(c.quality || ''),
+    secs: +c.secs > 0 ? +c.secs : 0, at: String(c.at || ''),
+  };
 }
 
 // What a project made since phase V24 has not chosen yet, of the choices a step needs, in words -
@@ -3810,10 +3825,16 @@ function _sdView(p) {
     const sig = SDP.sigOf({ frameId: fr && fr.id, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place });
     const k = sd.frags[f.key] || null;
     const { paths: _paths, ...rest } = f;
+    const frameId = fr ? fr.id : '';
+    // (part 5) A take is FRESH when it was made from the frame the fragment begins on now (its key is its reads); the
+    // fragment's clip is the one chosen by hand, else the newest fresh one.
+    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: c.frameId === frameId }));
+    const clip = (k && k.chosen && clips.find(c => c.id === k.chosen)) || clips.filter(c => c.fresh).pop() || null;
     return {
-      ...rest, frameId: fr ? fr.id : '', secs: SDP.clipSecs(f), sig,
+      ...rest, frameId, secs: SDP.clipSecs(f), sig,
       prompt: k ? k.prompt : '', edited: !!(k && k.edited), stale: !!(k && k.prompt && k.sig !== sig),
       hasAgent: !!(k && k.agent), writer: k ? k.writer : '',
+      clips, clip, chosen: !!(k && k.chosen && clip && clip.id === k.chosen),
     };
   });
 }
@@ -3925,6 +3946,337 @@ router.post('/scen3/sd/prompt', (req, res) => {
     res.json({ success: true, project: _projFull(saved || proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
+
+/* ── THE CLIP OF A SEEDANCE FRAGMENT (phase V26.8, part 5, the owner 2026-10-13) ───────────────
+   Asked for through the clip routes of a fragment (/scen3/fragments/clip and /clips hand a Seedance project here),
+   addressed by the fragment's FIRST line. The video chat's way to Seedance (lib/video-models.js, the only place a
+   field is written; lib/video-task.js): kie first - Replicate refused our AI faces on Seedance - each rung's
+   references made to its limits (lib/video-prep.js) and hosted fresh on R2.
+
+   What goes: the frame the fragment begins on (@Image1), the character's 4K sheet (@Image2), the sound (@Audio1 - the
+   fragment's read, or a 10 s sample of the voice), the prompt; the clip as long as the fragment's sound, rounded up
+   to the whole second; Seedance's own sound on, except with `ours` (the read as it is).
+
+   EVERYTHING IS SETTLED BEFORE THE MONEY, and said when it cannot be: the model, the quality and the mood chosen, a
+   fragment read and not longer than the model takes, a frame, the look, a voice sample when one is wanted; the place
+   analysed, the prompt written, the sound joined - each a stage of the row. PAID ONCE: `asked` is written just
+   before each paid create; a create with no answer stops the ladder (lib/task-started.js `unsure`); a row found at
+   start with `asked` and no task "may have been paid for" and is not asked again by itself.
+   ─────────────────────────────────────────────────────────────────────────── */
+const VMOD = require('../lib/video-models');
+const VTASK = require('../lib/video-task');
+const FAKE = require('../lib/fake-agg');
+const _sdAsking = new Set();              // the rows being asked for now, in this process - their poll waits
+const SD_BOOT_AT = Date.now();            // ...and every row made since this process started is this process's
+
+// The voice sample for `sample`: the cast voice's demo on the Voices shelf, else the character's own record of it.
+function _sdSample(p) {
+  const cv = _castVoice(p);
+  if (!cv || !cv.has || !cv.id) return '';
+  const shelf = VSHELF.get(cv.id);
+  if (shelf && shelf.demo) return String(shelf.demo);
+  const chars = _read(path.join(DATA_DIR, 'characters.json'));
+  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  for (const ch of arr) {
+    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(cv.id));
+    if (v && v.sample) return String(v.sample);
+  }
+  return '';
+}
+
+// What a clip of the fragment that begins on line `i` would be made of, or why it cannot be.
+function _sdClipPlan(proj, i) {
+  const video = _normVideo(proj.video);
+  const missing = _unchosen(video, ['model', 'quality', 'mood']);
+  if (missing) return { skipped: missing };
+  const f = (_sdView(proj) || []).find(x => x.lines[0] === i);
+  if (!f) return { skipped: 'this fragment is not read yet' };
+  const model = TH.byId(video.model);
+  if (f.tooLong) return { skipped: 'this line is ' + f.dur.toFixed(1) + ' s - longer than ' + (model ? model.label : 'the model') + ' takes' };
+  if (!f.frameId) return { skipped: 'no first frame for this fragment' };
+  const cast = _normCasting(proj.casting);
+  if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
+  const sound = video.sound || TH.soundAuto(proj.lines);
+  const sample = sound === 'sample' ? _sdSample(proj) : '';
+  if (sound === 'sample' && !sample) return { skipped: 'the character’s voice has no sample on the Voices shelf - choose another sound in field 4' };
+  const quality = TH.qualityOf(video.model, video.quality);
+  if (!quality) return { skipped: 'choose the quality of the clips (field 4) first' };
+  return { frag: f, video, sound, sample, quality, cast, cost: +(quality.pricePerSec * f.secs).toFixed(4) };
+}
+function _sdPlanAgain(id, i) {
+  const proj = _loadProjects().find(p => String(p.id) === String(id));
+  if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });
+  const plan = _sdClipPlan(proj, i);
+  if (plan.skipped) throw Object.assign(new Error(plan.skipped), { status: 400 });
+  return { proj, plan };
+}
+
+// One Seedance clip asked for: the place, the prompt and the sound made sure of, the references prepared and hosted,
+// the ladder walked. `onAsk(true|false)` marks the row's `asked` around each paid create.
+async function _submitSdClip(b, onStage, onAsk) {
+  const say = typeof onStage === 'function' ? onStage : () => {};
+  const ask = typeof onAsk === 'function' ? onAsk : () => {};
+  const id = String(b.projectId || '').trim();
+  const i = parseInt(b.line, 10);
+  let { proj, plan } = _sdPlanAgain(id, i);
+  const place = _normCasting(proj.casting).locationImage;
+  if (place && !_envMotionOf(place)) {
+    say('analysis · the place');
+    try { await _askEnvMotion(place); } catch (e) { console.warn('[scen3/sdclip] the place was not analysed:', e.message); }
+    ({ proj, plan } = _sdPlanAgain(id, i));
+  }
+  if (!plan.frag.prompt || (plan.frag.stale && !plan.frag.edited)) {
+    say('writing the prompt');
+    const out = await _writeSdPrompts(id, [plan.frag.key]);
+    if (out.report.failed.length) throw new Error('the prompt was not written: ' + out.report.failed[0].error);
+    ({ proj, plan } = _sdPlanAgain(id, i));
+    if (!plan.frag.prompt) throw new Error('the prompt was not written');
+  }
+  if (!plan.frag.ready) {
+    say('joining the sound');
+    await SDM.build({ ...proj, video: _normVideo(proj.video) });
+    ({ proj, plan } = _sdPlanAgain(id, i));
+    if (!plan.frag.ready) throw new Error('the sound of this fragment could not be joined');
+  }
+  const f = plan.frag;
+  const fr = _framePool(proj).find(v => v.id === f.frameId);
+  const srcs = { frame: fr && fr.path, sheet: plan.cast.obrazImage, sound: plan.sound === 'sample' ? plan.sample : f.audio };
+  const abs = {};
+  for (const [k, u] of Object.entries(srcs)) {
+    abs[k] = u ? toDiskExisting(u) : '';
+    if (!abs[k] || !fs.existsSync(abs[k])) throw new Error('a reference of this clip is not in the library any more: ' + (u || k));
+  }
+  const ladder = VMOD.ladder(plan.video.model, 'kie');
+  if (!ladder.length) throw new Error(VMOD.noRoute(plan.video.model));
+  const format = _normMix(proj.mix).settings.format;
+  const reasons = [];
+  let hosted = null;
+  for (const pair of ladder) {
+    if (!hosted) {
+      say('sending the references');
+      if (FAKE.on()) {
+        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? 10 : f.dur };
+      } else {
+        const VP = require('../lib/video-prep');
+        const one = await VP.image(abs.frame, pair);
+        const two = await VP.image(abs.sheet, pair);
+        const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample' ? { from: 0, to: 10 } : { from: 0, to: f.dur });
+        try {
+          hosted = {
+            frame: await H.uploadToPublicHost(one.buf, { ext: one.ext, verify: true, forceFresh: true }),
+            sheet: await H.uploadToPublicHost(two.buf, { ext: two.ext, verify: true, forceFresh: true }),
+            sound: await H.uploadToPublicHost(snd.file, { ext: 'mp3', verify: true, forceFresh: true }),
+            secs: snd.secs,
+          };
+        } finally { if (typeof snd.drop === 'function') snd.drop(); }
+      }
+    }
+    // The prompt is kept in kie's names (@Image1); another aggregator gets its own ([Image1] on Replicate).
+    const prompt = pair.agg === 'kie' ? f.prompt : f.prompt.replace(/@(Image|Video|Audio)(\d+)/g, '[$1$2]');
+    const req = {
+      prompt,
+      media: [{ kind: 'image', url: hosted.frame }, { kind: 'image', url: hosted.sheet }, { kind: 'audio', url: hosted.sound, in: 0, out: hosted.secs }],
+      params: { resolution: plan.video.quality, duration: f.secs, aspect: FRAG_FORMATS.includes(format) ? format : '9:16', audio: plan.sound !== 'ours' },
+    };
+    try { VMOD.check(pair, req); } catch (e) { reasons.push(pair.aggLabel + ': ' + e.message); continue; }
+    say('asking ' + pair.aggLabel);
+    ask(true);                                    // THE PAID MOMENT
+    let sub;
+    try {
+      sub = await VTASK.submit(pair, req);
+    } catch (e) {
+      const why = String((e && e.message) || e).slice(0, 300);
+      console.warn('[scen3/sdclip]', pair.key, e.unsure ? 'no answer:' : 'refused:', why);
+      if (e.unsure) throw new Error(why + ' - it may have been paid for and not followed; look at ' + pair.aggLabel + '’s own history before asking again');
+      ask(false);
+      reasons.push(pair.aggLabel + ': ' + why);
+      if (REFUSAL.isRefusal(why)) break;            // another aggregator would refuse the same content too
+      continue;
+    }
+    console.log('[scen3/sdclip] ' + id + ' fragment ' + f.n + ' ' + pair.key + ' ' + plan.video.quality + ' ' + f.secs + 's -> ' + String(sub.taskId).slice(0, 24));
+    return {
+      taskId: sub.taskId, engine: pair.key,
+      file: { projectId: id, line: i, key: f.key, frameId: f.frameId, sound: plan.sound, model: plan.video.model, quality: plan.video.quality, secs: f.secs },
+    };
+  }
+  throw new Error(reasons.join(' · ') || 'no aggregator could take it');
+}
+
+// The row is written first; the rest goes on without the page, and what comes of it is written into the row.
+function _sdStartClip(rec, request) {
+  _sdAsking.add(rec.id);
+  const mark = (asked) => {
+    const row = ALERTS.get(rec.id);
+    if (row && row.job) ALERTS.update(rec.id, { job: { ...row.job, params: { ...(row.job.params || {}), asked } } });
+  };
+  return _submitSdClip(request, (s) => ALERTS.update(rec.id, { stage: s }), mark)
+    .then((out) => {
+      ALERTS.update(rec.id, {
+        taskIds: [out.taskId], engine: out.engine, stage: 'rendering',
+        job: { type: 'sdclip', params: { request, file: out.file, asked: true } },
+      });
+    })
+    .catch((e) => {
+      console.error('[scen3/sdclip]', e.message);
+      ALERTS.fail(rec.id, e.message, REFUSAL.isRefusal(e.message) ? { refused: true } : undefined);
+    })
+    .finally(() => _sdAsking.delete(rec.id));
+}
+function _sdRunning(id) {
+  return new Set(ALERTS.list()
+    .filter(r => r.state === 'running' && r.what === 'clip' && r.job && r.job.params && r.job.params.file
+      && String(r.job.params.file.projectId) === String(id))
+    .map(r => Number(r.job.params.file.line)));
+}
+
+// POST /scen3/fragments/clip for a Seedance project.
+function _sdClipRoute(req, res, proj) {
+  const b = req.body || {};
+  const id = String(proj.id);
+  const i = parseInt(b.line, 10);
+  const plan = _sdClipPlan(proj, i);
+  if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
+  if (_sdRunning(id).has(i)) return res.json({ success: true, skipped: 'this fragment is already being made' });
+  const request = { projectId: id, line: i };
+  const rec = JOBS.submitted({
+    kind: 'video', what: 'clip', title: 'Clip · fragment ' + plan.frag.n, where: b.where || null,
+    stage: 'getting ready', taskIds: [],
+    job: { type: 'sdclip', params: { request, file: { projectId: id, line: i } } },
+  });
+  res.json({ success: true, alertId: rec.id });
+  _sdStartClip(rec, request);
+}
+
+// POST /scen3/fragments/clips for a Seedance project: every fragment that needs its clip (or the ones `only` names),
+// a row each at once, then asked a second apart.
+function _sdClipsRoute(req, res, proj) {
+  const b = req.body || {};
+  const id = String(proj.id);
+  const key = String(b.key || '');
+  const title = String(proj.name || proj.title || 'talking head');
+  const only = Array.isArray(b.only) ? new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0)) : null;
+  const busy = _sdRunning(id);
+  const queued = [], skipped = [];
+  for (const f of _sdView(proj) || []) {
+    const i = f.lines[0];
+    if (only && !only.has(i)) continue;
+    if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
+    const plan = _sdClipPlan(proj, i);
+    if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
+    if (!b.again && f.clip) { skipped.push({ line: i + 1, why: 'already clipped' }); continue; }
+    const request = { projectId: id, line: i };
+    const rec = JOBS.submitted({
+      kind: 'video', what: 'clip', title: 'Clip · fragment ' + f.n, where: _whereClip(key, title, i, f.n),
+      stage: 'getting ready', taskIds: [],
+      job: { type: 'sdclip', params: { request, file: { projectId: id, line: i } } },
+    });
+    queued.push({ line: i + 1, alertId: rec.id, request, rec });
+  }
+  console.log('[scen3/sdclips] ' + id + ' queued=' + queued.length + ' skipped=' + skipped.length);
+  res.json({ success: true, queued: queued.map(q => ({ line: q.line, alertId: q.alertId })), skipped });
+  (async () => {
+    for (let k = 0; k < queued.length; k++) {
+      if (k) await _wait(SUBMIT_GAP_MS);
+      _sdStartClip(queued[k].rec, queued[k].request);
+    }
+  })().catch(e => console.error('[scen3/sdclips]', e.message));
+}
+
+// A take chosen by hand (the fragment's takes, or none - back to the newest fresh one). The timeline follows.
+router.post('/scen3/sd/pick', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(x => String(x.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const key = String(b.key || '');
+    const clipId = String(b.clipId || '');
+    const saved = PROJECTS.apply(id, (fresh) => {
+      const sd = _normSd(fresh.sd);
+      const f = sd.frags[key];
+      if (!f || (clipId && !f.clips.some(c => c.id === clipId))) return;
+      f.chosen = clipId;
+      fresh.sd = sd;
+      fresh.updatedAt = new Date().toISOString();
+    });
+    if (saved) MIRROR.touch(saved.id, { project: saved });
+    res.json({ success: true, project: _projFull(saved || proj) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The runner's side: wait for the task, download it ONCE into the project's clips/, make it play in the browser, its
+// poster, its length - and file it as a take of its fragment, the fragment's clip from now on.
+JOBS.register('sdclip', {
+  timeoutMs: 45 * 60 * 1000,
+  poll: async (rec) => {
+    if (!rec.taskIds || !rec.taskIds[0]) {
+      // Still being asked for, in this process: the stage says what is happening. A row made since this process started
+      // is this process's - its asking writes the task into it or fails it (the runner polls a row the moment it is made,
+      // before the asking has begun).
+      if (_sdAsking.has(rec.id) || (Date.parse(rec.startedAt) || 0) >= SD_BOOT_AT) return { state: 'pending' };
+      // Not being asked for and no task: the app was closed meanwhile. Asked - it may have been paid for.
+      const asked = !!(((rec.job || {}).params || {}).asked);
+      return { state: 'failed', error: asked
+        ? 'the app closed while Seedance was being asked - it may have been paid for: look at kie.ai’s history before trying again'
+        : 'the app closed before Seedance was asked - nothing was paid; try again' };
+    }
+    const r = await VTASK.poll(rec.taskIds[0]);
+    if (r.state === 'pending') return { state: 'pending' };
+    if (r.state === 'failed') return { state: 'failed', error: String(r.error || 'Seedance did not make it') };
+    const p = _fileParams(rec);
+    const dir = PROJECTS.dirOf(p.projectId, 'clips');
+    if (!dir) return { state: 'failed', error: 'the project is gone' };
+    const name = 'sd' + String(rec.taskIds[0]).replace(/[^a-z0-9]/gi, '').slice(-20) + '_' + Date.now() + '.mp4';
+    const abs = path.join(dir, name);
+    if (r.local) fs.copyFileSync(toDiskExisting(r.local) || r.local, abs);   // the fake aggregator's clip: a library address
+    else await VTASK.fetchTo(r.url, abs);   // a download that fails throws: the next tick asks and fetches again
+    try { await H.normalizeVideoForBrowser(abs); } catch (e) { console.warn('[scen3/sdclip] normalize failed:', e.message); }
+    return { state: 'success', path: toUrl(abs), dur: await _audioDur(abs), thumb: await _clipPoster(abs, name) };
+  },
+  file: async (rec, landed) => {
+    const p = _fileParams(rec);
+    const clip = _normSdClip({
+      path: landed.path, thumb: landed.thumb, dur: landed.dur, frameId: p.frameId, sound: p.sound,
+      model: p.model, quality: p.quality, secs: p.secs, at: new Date().toISOString(),
+    });
+    const saved = PROJECTS.apply(p.projectId, (fresh) => {
+      const sd = _normSd(fresh.sd);
+      const f = sd.frags[p.key] || { prompt: '', agent: '', edited: false, sig: '', writer: '', at: '', clips: [], chosen: '' };
+      f.clips = f.clips.filter(c => c.id !== clip.id).concat([clip]);
+      f.chosen = '';                            // a new clip is the fragment's: it is what was just paid for
+      sd.frags[p.key] = f;
+      fresh.sd = sd;
+      fresh.updatedAt = clip.at;
+    });
+    if (!saved) throw new Error('the project is gone');
+    MIRROR.touch(saved.id, { project: saved });
+    try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
+    return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
+  },
+  // TRY AGAIN from Alerts: the row restarts at once and the asking goes on behind it - the prompt, the sound and the
+  // references take a while, and the person should see the row running from the press (lib/gen-jobs.js `later`).
+  submit: async (request, rec) => ({
+    stage: 'getting ready', params: { asked: false },
+    later: () => _sdStartClip(ALERTS.get(rec.id) || rec, request),
+  }),
+  busy: (rec) => _sdAsking.has(rec.id),
+});
+
+// For the timeline mirror (lib/frag-mirror.js): a Seedance project's fragments that HAVE a clip, in order - the lines
+// each covers, its clip, what the timeline hears under it (the clip's own sound, or with `ours` the fragment's read)
+// and how long it lies. null for a project that is not filmed by Seedance.
+function _sdCuts(proj) {
+  const view = _sdView(proj);
+  if (!view) return null;
+  return view.filter(f => f.clip).map(f => ({
+    lines: f.lines, clip: f.clip, audio: f.audio, dur: f.dur,
+    ours: f.clip.sound === 'ours',
+    // Seedance voices a fragment in its own time - a little longer than the read, at times: its own sound is given a
+    // breath past the read, never past the clip.
+    len: f.clip.sound === 'ours' ? f.dur : Math.min(f.clip.dur || f.dur, f.dur + 0.6),
+  }));
+}
 
 /* ── A line's animation prompt, by hand ──────────────────────────────────────
    POST /api/scen3/fragments/shot  { projectId, line, patch: { motion?, useAgentMotion? } }
@@ -4952,9 +5304,9 @@ function _clipPlan(proj, i) {
   // one is a fragment skipped in words.
   const missing = _unchosen(video, ['model', 'quality']);
   if (missing) return { skipped: missing };
-  // (phase V26.8) Seedance's clips are being built: until they are, nothing is sent for a project filmed by it - least
-  // of all a Kling clip it did not ask for.
-  if (TH.isSeedance(video.model)) return { skipped: 'Seedance clips are still being built (phase V26.8) - choose kling avatar to film now' };
+  // (phase V26.8) A project filmed by Seedance is clipped by its fragments (_sdClipPlan) - never by a Kling clip it did
+  // not ask for.
+  if (TH.isSeedance(video.model)) return { skipped: 'this project is filmed by Seedance - its fragments are clipped by it' };
   const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
   if (!said.trim()) return { skipped: 'this fragment has no words' };
@@ -5060,6 +5412,8 @@ router.post('/scen3/fragments/clip', async (req, res) => {
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    // (phase V26.8, part 5) A project filmed by Seedance: the fragment's Seedance clip.
+    if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipRoute(req, res, proj);
     const i = parseInt(b.line, 10);
     const plan = _clipPlan(proj, i);
     if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
@@ -5191,6 +5545,8 @@ router.post('/scen3/fragments/clips', (req, res) => {
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    // (phase V26.8, part 5) A project filmed by Seedance: its fragments' Seedance clips.
+    if (TH.isSeedance(_normVideo(proj.video).model)) return _sdClipsRoute(req, res, proj);
     const key = String(b.key || '');
     const title = String(proj.name || proj.title || 'talking head');
     const lines = (proj.lines || []).map(_normLine);
@@ -5438,6 +5794,8 @@ router.framePool = _framePool;
 router.fchatFacts = _fchatFacts;
 router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
+// (phase V26.8) A Seedance project's fragments with their clips, for the timeline mirror.
+router.sdCuts = _sdCuts;
 // The two makers' work and what the Library's chats need around it (routes/makechat.js, phase I): the
 // same submit Merge and "try again" use, the media door, the kicks of the rows written at the press,
 // and the retry request a row keeps.

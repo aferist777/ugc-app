@@ -299,17 +299,20 @@ const _groupWith = (p, i) => { const gs = _merged(p); return gs ? (gs.find(g => 
 const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged' : 'plain');
 const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
 // (phase V26.8) A Seedance project shows none of the Kling clips it may have - the timeline lays none of them either
-// (lib/frag-mirror.js); they come back when the model is Kling again.
-const _clipsOf = (p, l) => (_seedance() ? [] : (((l && l.video) || {})[_variant(p)] || []));
+// (lib/frag-mirror.js); it shows the clips of its FRAGMENTS (part 5), the fragment found by its first line.
+const _sdFragOfLine = (p, l) => _sdFragOf(p, ((p && p.lines) || []).indexOf(l));
+const _clipsOf = (p, l) => (_seedance() ? ((_sdFragOfLine(p, l) || {}).clips || []) : (((l && l.video) || {})[_variant(p)] || []));
 
 // (phase V23, the owner 2026-10-09) A clip CHOSEN BY HAND in the takes is the line's clip whatever it was made
 // from - the timeline lays it too (lib/frag-mirror.js) - and the line counts as settled: `generate all` leaves it.
 // A new clip or a new read clears the choice (routes/scen3.js).
 const _chosenOf = (p, l) => {
+  if (_seedance()) { const f = _sdFragOfLine(p, l); return f && f.chosen ? f.clip : null; }
   const id = String(((l && l.chosen) || {})[_variant(p)] || '');
   return id ? (_clipsOf(p, l).find(c => c.id === id) || null) : null;
 };
 function _clipOf(p, l, i) {
+  if (_seedance()) return (_sdFragOf(p, i) || {}).clip || null;     // (V26.8) chosen by hand, else the newest fresh
   const clips = _clipsOf(p, l);
   if (!clips.length) return null;
   const hand = _chosenOf(p, l);
@@ -325,6 +328,7 @@ function _clipOf(p, l, i) {
 // a read again is another performance; a clip from before the read was recorded counts as fresh).
 function _clipFresh(p, l, i, c) {
   if (!c) return false;
+  if (_seedance()) return !!c.fresh;      // (V26.8) made from the frame its fragment begins on now (routes/scen3.js _sdView)
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   const take = _take(l);
   return !!fr && c.fromFrame === fr && c.said === _saidOf(p, l) && (!c.fromAudio || !take || c.fromAudio === take.path);
@@ -548,7 +552,13 @@ function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
   if (!_video().quality) return null;       // the quality is the person's to choose (phase V24)
-  if (_seedance()) return null;             // (phase V26.8) Seedance's clips are being built - the server refuses them too
+  // (phase V26.8, part 5) A Seedance fragment - by its first line: billed by the whole seconds asked for, its sound
+  // rounded up (lib/sd-prompt.js clipSecs). A line inside a merged fragment is not clipped on its own.
+  if (_seedance()) {
+    const f = _sdFragOf(p, i);
+    if (!f || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
+    return { dur: f.secs, cost: f.secs * ((tier && tier.pricePerSec) || 0) };
+  }
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
   if (take.dur > _ceiling()) return null;
@@ -591,7 +601,7 @@ async function _makeClips(p, only) {
 async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
   // (phase V26.8) The animation prompts and the clips here are Kling's; a Seedance project writes its fragments' own.
-  if (_seedance()) return _writeSdVideo(p);
+  if (_seedance()) return _writeSdVideo(p, opts);
   const withClips = !!(opts && opts.clips);
   // (phase V23) `generate all` names the lines its question priced; the zone's own button asks for every one.
   const only = (opts && opts.only) || null;
@@ -631,8 +641,11 @@ async function _writeVideo(p, opts) {
 }
 
 // (phase V26.8) THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
-// prompt of every fragment that needs one - one request each, a few at once. The clips come with part 5.
-async function _writeSdVideo(p) {
+// prompt of every fragment that needs one - one request each, a few at once - then, asked with `clips`, the clips of
+// the fragments that have none (part 5; `only` - the ones the question of generate all priced).
+async function _writeSdVideo(p, opts) {
+  const withClips = !!(opts && opts.clips);
+  const only = (opts && opts.only) || null;
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
@@ -646,6 +659,15 @@ async function _writeSdVideo(p) {
     if (!_writeAt) _writeAt = Date.now();
     _ctx.repaint();
     await _writeSd(_ctx.project || p, null);
+  }
+  if (withClips && !_readErr) {
+    const now = _ctx.project || p;
+    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : []).filter(x => !only || only.has(x.i));
+    if (want.length) {
+      _writing = 'clips';
+      _ctx.repaint();
+      await _makeClips(now, only);
+    }
   }
   _writing = '';
   _writeAt = 0;
@@ -1146,9 +1168,10 @@ function _standing(p) {
   const have = _pool(p).length;
   const asked = Math.max(have + _drawing.size, ((p.video || {}).frames) || 0);
   // (phase V26.8) Merged, the video is its fragments: every line is read (that is when they merge), and their clips are
-  // Seedance's, which come with the later parts of the phase.
+  // Seedance's (part 5).
   const gs = _merged(p);
-  if (gs) return { n: gs.length, read: gs.length, frames: have, framesAsked: asked, framesDone: have > 0 && !_drawing.size, clips: 0 };
+  if (gs) return { n: gs.length, read: gs.length, frames: have, framesAsked: asked, framesDone: have > 0 && !_drawing.size,
+    clips: gs.filter(g => (_sdFragOf(p, g.lines[0]) || {}).clip).length };
   return {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
@@ -1815,8 +1838,8 @@ function _stageVideo(host, p, lines) {
   const s = _standing(p);
   // (phase V26.8) Seedance's clips are still being built: the field holds its settings and makes nothing yet - and the
   // Kling clips a project may already have are not Seedance's, so they do not make it done.
-  const soon = _seedance() ? 'Seedance clips are still being built (phase V26.8) - the settings are kept' : '';
-  const done = !soon && s.n > 0 && s.clips === s.n && !_clipping.size && !why;
+  const soon = _seedance();
+  const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
   const { body, foot } = _stage(host, 'video', {
     step: 4, half: true,
@@ -1824,7 +1847,7 @@ function _stageVideo(host, p, lines) {
     // first and are quick, go by the estimate of a clip (N3).
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
-    summary: soon ? 'Seedance · prompts ' + _sdFrags(p).filter(f => f.prompt && (!f.stale || f.edited)).length + '/' + _sdFrags(p).length
+    summary: soon ? 'clips ' + s.clips + '/' + s.n + ' · prompts ' + _sdFrags(p).filter(f => f.prompt && (!f.stale || f.edited)).length + '/' + _sdFrags(p).length
       + (motion ? '' : ' · the place is not written')
       : 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
@@ -1910,20 +1933,32 @@ function _stageVideo(host, p, lines) {
   // What the press still waits for (phase V24): the field is open, its `generate` is not - the
   // character and the place, a first frame to animate, the quality, and the mood the person moves in.
   const wait = [why, need, _needs(p).mood].filter(Boolean);
-  // (phase V26.8, part 4) SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
-  // credits, one press. Its clips come with part 5.
+  // (phase V26.8, parts 4-5) SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
+  // credits - then the clips of the fragments that have none, priced, on a second press.
   if (soon) {
     const sdWant = _sdNeeds(p).length;
     _genButton(foot, {
-      label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…' : 'generate',
-      cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ')
-        : [sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : 'prompts written', 'clips: being built', whole].filter(Boolean).join(' · '),
-      disabled: busy || wait.length > 0 || !_place(p) || !_sdFrags(p).length || (!!motion && !sdWant),
+      label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…'
+        : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + _standing(p).n + '…'
+          : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+      cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
+        sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : '',
+        _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
+        clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
+        whole,
+      ].filter(Boolean).join(' · '),
+      disabled: busy || wait.length > 0 || !_place(p) || !_sdFrags(p).length || (!!motion && !sdWant && !clips.length),
       title: wait.length ? 'First: ' + wait.join(', ')
         : !_sdFrags(p).length ? 'Read the lines first - a fragment is filmed to its read'
-          : 'The place, then the Seedance prompt of every fragment that has none - one request each, credits, seconds. A prompt'
-            + ' edited by hand is left alone. The clips are still being built (part 5 of the phase).',
-      on: () => _writeVideo(p, {}),
+          : 'The place, then the Seedance prompt of every fragment that has none (one request each, credits), then the clips of'
+            + ' the fragments that have none - ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
+            + '. A prompt edited by hand is left alone; a fragment that has its clip is not paid for twice.'
+            + (clips.length ? ' Press again to confirm.' : ''),
+      on: () => {
+        if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
+        _armedVideo = false;
+        _writeVideo(p, { clips: true });
+      },
     });
     return;
   }
@@ -2086,7 +2121,7 @@ function _mrow(p, g, lines) {
   };
   dot('ok', 'read');
   dot(_frameFor(p, lines[head], head).v ? 'ok' : 'none', 'frame');
-  dot('none', 'clip');
+  dot(_clipping.has(head) ? 'busy' : _clipState(p, lines[head], head), 'clip');
   row.appendChild(dots);
   row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, { text: words }, head, g.n), TIP_MS); });
   row.addEventListener('mouseleave', _tipHide);
@@ -2227,14 +2262,9 @@ function _mfragment(host, p, g) {
   _pickRow(pickHost, p, l, head);
   const grid2 = el('div', 'mv3-wk-fgrid');
   host.appendChild(grid2);
-  const clip = el('div', 'mv3-wk-fcol is-media');
-  clip.appendChild(_colHead('clip'));
-  const box = el('div', 'mv3-wk-fmedia is-empty');
-  box.appendChild(el('span', '', 'no clip'));
-  clip.appendChild(box);
-  clip.appendChild(el('div', 'mv3-wk-fcap is-why', 'Seedance clips are still being built (phase V26.8)'));
-  grid2.appendChild(clip);
+  grid2.appendChild(_clipCol(p, l, head, _readState(l), _take(l)));
   grid2.appendChild(_sdPromptCol(p, _sdFragOf(p, head)));
+  _takes(host, p, l, head);
 }
 
 // The tick (field 4) and what follows it: merged - the sound of every fragment is joined before the answer; unticked -
@@ -2782,8 +2812,13 @@ function _fragment(host, p, l, i) {
   // (phase V26.8) Filmed by Seedance, a line is a fragment of its own: its Seedance prompt in place of Kling's.
   grid2.appendChild(_seedance() ? _sdPromptCol(p, _sdFragOf(p, i)) : _motionCol(l, i, hasFrame));
 
-  // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
-  // and one of them is the fragment's (F4). Pressing a row makes it that one.
+  _takes(host, p, l, i);
+}
+
+// Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
+// and one of them is the fragment's (F4). Pressing a row makes it that one. (phase V26.8) A Seedance fragment's takes too,
+// by its first line.
+function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
     host.appendChild(el('div', 'mv3-wk-flabel', 'takes'));
@@ -3054,7 +3089,7 @@ function _whereLine(i) {
     href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
     // The label is what a person reads in the journal, so it says the fragment's place in the
     // VIDEO; the address and `spot` keep the real index, which is what the panel opens by.
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + _no(p.lines || [], i),
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + _fragNo(p, p.lines || [], i),
     spot: { key, step: 'setup', line: i + 1 },
   };
 }
@@ -3080,7 +3115,9 @@ let _lookedClips = '';
 async function _pickClip(i, clipId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
-  try { _adopt(await _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId })); }
+  // (phase V26.8) A Seedance fragment's take is chosen on the fragment (/scen3/sd/pick).
+  const f = _seedance() ? _sdFragOf(p, i) : null;
+  try { _adopt(await (f ? _post('/api/scen3/sd/pick', { projectId: p.id, key: f.key, clipId }) : _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId }))); }
   catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
   _ctx.repaint();
 }
@@ -3122,14 +3159,23 @@ function _clipCol(p, l, i, rs, take) {
   const busy = _clipping.has(i);
   let cap;
   let ready = false;
-  if (rs !== 'ok') cap = 'read this line first';
+  let price = '';
+  // (phase V26.8, part 5) A Seedance fragment: its own reasons, its seconds and its price.
+  const sf = _seedance() ? _sdFragOf(p, i) : null;
+  if (_seedance()) {
+    if (!sf) cap = 'read this line first';
+    else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
+    else if (!fr) cap = 'make the frames first';
+    else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
+    else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
+    else { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
+  } else if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
   else if (!_video().model) cap = 'choose the model of the clips first (field 4)';
   else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
-  else if (_seedance()) cap = 'Seedance clips are still being built - choose kling avatar to film now';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
-  const price = ready && tier ? _money(_clipCost(take.dur, tier)) : '';
+  if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
   const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
     busy ? 'making…' : _armedClip === i ? price + '?' : c ? 'again' : 'make clip');
@@ -3137,8 +3183,11 @@ function _clipCol(p, l, i, rs, take) {
   make.disabled = !ready || busy;
   // What the press will actually do: with nothing written yet it is two analyses and then the
   // clip, and that is worth saying before it takes half a minute (phase U4).
-  const needsWords = !_animated(l) || !_envMotion(p);
+  const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));
   make.title = !ready ? cap
+    : sf ? (needsWords ? 'First the place and this fragment’s prompt are written (credits), then the clip. ' : '')
+      + 'Seedance: the frame this fragment begins on, the character’s sheet and its sound go with its prompt. '
+      + sf.secs + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + ' = ' + price + '. Press again to confirm.'
     : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
       + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
       + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
@@ -3152,7 +3201,7 @@ function _clipCol(p, l, i, rs, take) {
   // "rendering" - so the half-minute before anything is sent to Kling is not silence (V2).
   const stage = busy ? String((_clipping.get(i) || {}).stage || '') : '';
   col.appendChild(el('div', 'mv3-wk-fcap' + (ready ? '' : ' is-why'),
-    busy ? (stage || 'making the clip…') : (ready && needsWords) ? 'analysis, then ' + cap : cap));
+    busy ? (stage || 'making the clip…') : (ready && needsWords) ? (sf ? 'the prompt, then ' : 'analysis, then ') + cap : cap));
   return col;
 }
 
