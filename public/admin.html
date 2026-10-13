@@ -22,9 +22,10 @@
 </nav>
 
 <div class="adm-body">
-  <!-- Three panes, one strip. The address carries the pane (#keys, #data, #local), so a reload stays put. -->
+  <!-- Five panes, one strip. The address carries the pane (#keys, #ai, #data, #local, #thanks), so a reload stays put. -->
   <div class="adm-tabs" role="tablist">
     <button class="adm-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="ai">AI settings</button>
     <button class="adm-tab" type="button" role="tab" data-pane="data">Import / Export</button>
     <button class="adm-tab" type="button" role="tab" data-pane="local">This computer</button>
     <button class="adm-tab" type="button" role="tab" data-pane="thanks">Thanks</button>
@@ -42,6 +43,15 @@
     </div>
     <div class="adm-keys" id="adm-keys"></div>
     <div class="adm-status" id="adm-keys-status"></div>
+  </section>
+
+  <!-- The agents' ladder: who reads the words and the pictures, and who if the first is silent (js/admin-ai.js, V25). -->
+  <section class="adm-panel" data-pane="ai" hidden>
+    <div class="adm-head">
+      <span class="adm-title">AI settings</span>
+      <span class="adm-count">the models that read your words and pictures and answer</span>
+    </div>
+    <div class="dio-body" id="ai-body"></div>
   </section>
 
   <!-- Taking the library out as .zip volumes, and bringing volumes in (js/data-io.js). -->
@@ -105,6 +115,7 @@
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
 <script src="js/admin-keys.js"></script>
+<script src="js/admin-ai.js"></script>
 <script src="js/data-io.js"></script>
 <script src="js/admin-local.js"></script>
 <script src="js/admin-thanks.js"></script>
