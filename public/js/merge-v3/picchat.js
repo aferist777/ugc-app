@@ -15,8 +15,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer } from '../library/viewer.js';
-import { note } from './ask.js';
-import { createChat, el, thumbOf } from './chat-shell.js';
+import { createChat, el, thumbOf, almanacSoon } from './chat-shell.js';
 import { modelColumn } from './pic-models.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
@@ -139,20 +138,10 @@ function PICTURES(ctx) {
         { showSrc: (it) => thumbOf(it.media, 'main') });
     },
 
-    // Beside the clear button: the almanac - how each model wants to be asked - and who reads the message.
-    headButtons() {
-      const gear = el('button', 'mv3-iconbtn', '⚙');
-      gear.type = 'button';
-      gear.title = 'The almanac - how each model wants to be asked - and who reads your message';
-      gear.addEventListener('click', async (ev) => {
-        ev.stopPropagation();
-        gear.disabled = true;
-        try { const G = await import('./gear.js'); await G.openGear(); }
-        catch (err) { note(gear, 'Could not open the settings.', String((err && err.message) || err).slice(0, 120)); }
-        finally { gear.disabled = false; }
-      });
-      return [gear];
-    },
+    // (phase V25, the owner 2026-10-13) The almanac at the foot of the column, as in the video chat - still to come, so
+    // dimmed. The gear in the header that opened the models' rules and the analyst's ladder is gone: the ladder is on
+    // Admin -> AI settings.
+    columnFoot: () => [almanacSoon()],
   };
 }
 

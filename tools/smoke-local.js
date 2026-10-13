@@ -115,6 +115,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/js/library/music.js'], ['GET', '/js/library/cats-bar.js'],
                  // ...and, in its second round, the hand order of the categories (alphabetical now)
                  ['POST', '/api/library/cats/order'],
+                 // phase V25: the pictures chat's gear, its window and its settings; no chat clears its conversation
+                 ['GET', '/js/merge-v3/gear.js'], ['GET', '/css/mv3-gear.css'], ['GET', '/api/mv3/img/settings'],
+                 ['PUT', '/api/mv3/img/settings'], ['DELETE', '/api/mv3/chat'],
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],

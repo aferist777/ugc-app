@@ -20,7 +20,7 @@
 //   POST  /api/mv3/video/card/:id/board     (phase V8) a two-step card's STORYBOARD: a picture of the pictures chat's
 //                                           store (nano-banana-2, 4K) with its Alerts row, at the press
 //
-// The thread itself is GET/DELETE /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': old libraries
+// The thread itself is GET /api/mv3/chat?kind=clip (routes/mv3-img.js) - 'clip', not 'video': old libraries
 // hold 'video' messages of a strip that was removed, and a live 'video' would bring them back.
 // Not /api/video/* (gone with Animate) and not /api/mv3/vid/* (smoke expects those to stay 404).
 // ════════════════════════════════════════════════════════════════════════════

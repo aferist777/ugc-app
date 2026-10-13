@@ -7,14 +7,11 @@
 // matrix or its ladders, and nothing there has to change for a model to be added to this list.
 //
 //   GET    /api/mv3/img/matrix              what can be asked for: engines, aggregators, shapes
-//   GET    /api/mv3/img/settings            the analyst's chain and the defaults
-//   PUT    /api/mv3/img/settings            a shallow patch of any of them
 //   GET    /api/mv3/img/feed?project=…      that project's generations, newest first
 //   POST   /api/mv3/img/send                { project, text, refs, engine, provider, quality, aspect,
 //                                             n, write, where } - a message of the pictures chat
 //
-//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first
-//   DELETE /api/mv3/chat?project=…          the whole thread; the pictures stay
+//   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first (no chat clears its thread since V25)
 //
 //   POST   /api/mv3/img/upload               multipart `image` + `project` - a reference from
 //                                            the person's own disk, filed on the images shelf
@@ -40,7 +37,6 @@ const MV = require('../lib/mv3-img');
 const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
-const SET = require('../lib/mv3-settings');
 const IMG = require('../lib/images-store');
 const LC = require('../lib/library-cats');
 const { MEDIA } = require('../lib/config');
@@ -53,30 +49,6 @@ router.get('/mv3/img/matrix', (_req, res) => {
     res.json({ success: true, ...MV.matrix() });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// ── What the gear edits ─────────────────────────────────────────────────────
-// The order aggregators are tried in, per engine; which model does the rewriting; and whether a
-// chain may step over an aggregator whose key is known to be down.
-router.get('/mv3/img/settings', (_req, res) => {
-  try {
-    res.json({
-      success: true, settings: SET.read(),
-      // Who can do the reading, and what each answers to - the same list the chain is built
-      // from, so the panel cannot offer a pairing the walk would not understand.
-      writers: SET.WRITER_PROVIDERS, maxWriterSteps: SET.MAX_WRITER_STEPS,
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-router.put('/mv3/img/settings', (req, res) => {
-  try {
-    res.json({ success: true, settings: SET.patch(req.body || {}) });
-  } catch (e) {
-    res.status(400).json({ success: false, error: e.message });
   }
 });
 
@@ -208,16 +180,6 @@ router.get('/mv3/chat', (req, res) => {
   try {
     const items = CHAT.read(String(req.query.project || ''), req.query.kind);
     res.json({ success: true, items: req.query.kind === 'clip' ? _markGone(items) : items });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// The conversation, not the work. Pictures made in it stay in the library and on the strip -
-// clearing what was said is not a reason to throw away what was paid for.
-router.delete('/mv3/chat', (req, res) => {
-  try {
-    res.json({ success: true, removed: CHAT.clear(String(req.query.project || ''), req.query.kind) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

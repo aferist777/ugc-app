@@ -49,7 +49,7 @@ import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
-import { askDelete, closeAsk, note } from './ask.js';
+import { closeAsk, note } from './ask.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -1814,24 +1814,12 @@ export function createChat(make) {
       main.append(setBox, chat, sash, stripBox);
     } else main.append(setBox, chat);
 
-    // The panel header's own buttons while the chat shows - or a hosted chat's own head line.
+    // The panel header's own buttons while the chat shows - or a hosted chat's own head line. No chat clears its
+    // conversation any more (phase V25, the owner: "везде уходит").
     const head = HOSTED ? ownHead : $(S.ids.head);
     if (head) {
       head.textContent = '';
-      const wipe = el('button', 'mv3-iconbtn', '⌫');
-      wipe.type = 'button';
-      wipe.title = 'Clear this conversation. Everything made stays in the Library' + (list ? ' and on the right.' : '.');
-      wipe.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        if (!_key) return;
-        askDelete(wipe, 'Clear this conversation?',
-          'Everything made stays — in the Library' + (list ? ' and in the column on the right' : '') + '. Only what was said goes.',
-          async () => {
-            await json('/api/mv3/chat?project=' + encodeURIComponent(_key) + '&kind=' + S.kind, { method: 'DELETE' });
-            _reload(true);
-          });
-      });
-      head.append(wipe, ...S.headButtons());
+      head.append(...(typeof S.headButtons === 'function' ? S.headButtons() : []));
     }
     // (phase V6) Buttons right beside the chat's crumb - the video chat's catalog.
     const headL = S.ids.headL ? $(S.ids.headL) : null;

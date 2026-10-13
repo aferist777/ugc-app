@@ -2501,7 +2501,6 @@ function VIDEOS(ctx) {
         name: x.said || x.prompt || '', meta: { date: x.at } })), at);
     },
 
-    headButtons: () => [],
     // ONE catalog, right beside "/ generate video" (the owner, 2026-10-06); with a recipe in use it opens on it.
     crumbButtons: () => {
       const b = el('button', 'mv3-c-btn mv3-vc-cat', 'catalog');
