@@ -359,7 +359,10 @@ function _loadKit(repaint) {
   const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
   Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-sets')]).then(([m, p, s]) => {
     _kit = {
-      qualities: (m && m.qualities) || [],
+      // (phase V26.8) The models of the clips, each with its qualities - Kling avatar and the Seedances - and
+      // Seedance's ways of voicing a clip (lib/th-video.js).
+      models: (m && m.models) || [],
+      sounds: (m && m.sounds) || [],
       moods: (m && m.moods) || [],
       poses: (p && p.poses) || [],
       sets: (s && s.sets) || [],
@@ -519,6 +522,7 @@ function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
   if (!_video().quality) return null;       // the quality is the person's to choose (phase V24)
+  if (_seedance()) return null;             // (phase V26.8) Seedance's clips are being built - the server refuses them too
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
   if (take.dur > _ceiling()) return null;
@@ -560,6 +564,9 @@ async function _makeClips(p, only) {
 
 async function _writeVideo(p, opts) {
   if (_writing || _envWriting) return;
+  // (phase V26.8) The animation prompts and the clips here are Kling's; a Seedance project's come with their part of
+  // the phase, and until then nothing is written or asked for it.
+  if (_seedance()) return;
   const withClips = !!(opts && opts.clips);
   // (phase V23) `generate all` names the lines its question priced; the zone's own button asks for every one.
   const only = (opts && opts.only) || null;
@@ -721,7 +728,12 @@ async function _saveShot(i, patch) {
   _ctx.repaint();
 }
 const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
-const _tier = () => ((_kit && _kit.qualities) || []).find(q => q.id === _video().quality) || ((_kit && _kit.qualities) || [])[0] || null;
+// (phase V26.8) What films the clips - Kling avatar or a Seedance, for the whole video - and the qualities it makes.
+const _modelOf = () => ((_kit && _kit.models) || []).find(m => m.id === _video().model) || null;
+// Seedance is the project's mode: asked of the model when the menus are read, else of the server's own word for it.
+const _seedance = () => { const m = _modelOf(); return m ? m.family === 'seedance' : _video().mode === 'seedance'; };
+const _qualities = () => ((_modelOf() || {}).qualities) || [];
+const _tier = () => _qualities().find(q => q.id === _video().quality) || _qualities()[0] || null;
 const _ceiling = () => ((_tier() || {}).maxAudioSec) || CEILING_FALLBACK;
 const _money = (n) => '$' + (Math.round(n * 100) / 100).toFixed(2);
 
@@ -947,7 +959,9 @@ function _needs(p) {
   // set drawn here: the field's menus are needed only to draw a set, so they are red only while there is none.
   const f = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean);
   if (f.length && !_pool(p).length) out.frames = f.join(', ');
-  if (!v.quality) out.video = 'the quality';
+  // (phase V26.8) The model first - Kling avatar or a Seedance - then the quality it makes.
+  if (!v.model) out.video = 'the model';
+  else if (!v.quality) out.video = 'the quality';
   return out;
 }
 // The "none" a menu shows while nothing is chosen in it: the first line, and it cannot be chosen back.
@@ -984,7 +998,10 @@ function _all(host, p, lines) {
   _stageFrames(left, p);
   _stageVoice(right, p, lines);
   _stageVideo(right, p, lines);
-  _shelfFrames(host, p);
+  // (phase V26.8, the owner 2026-10-13) SEEDANCE HAS MORE TO SET: the video field runs down to the foot of the zone and
+  // the frames shelf, under the four fields at full width otherwise, is as wide as the first-frames field, under it.
+  if (_seedance()) left.classList.add('is-shelved');
+  _shelfFrames(_seedance() ? left : host, p);
 }
 
 // ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
@@ -1129,7 +1146,7 @@ const _readChars = (l) => String((l && (l.tagged || l.text)) || '').replace(/\[[
 function _chainEstimate(p, lines, w) {
   const tier = _tier();
   const ceiling = _ceiling();
-  const can = !w.missing.length && !!_video().quality && (w.pool > 0 || w.frames > 0);
+  const can = !w.missing.length && !!_video().quality && !_seedance() && (w.pool > 0 || w.frames > 0);
   const now = (can && w.pool) ? _clipWork(p, lines) : [];
   const only = new Set(now.map(x => x.i));
   let chars = 0, later = 0, laterCost = 0, tooLong = 0;
@@ -1161,7 +1178,8 @@ function _chainWork(p, lines) {
   const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 0) : 0;
   // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
   // (frames above) can give it one.
-  const video = (!missing.length && (pool || frames)) ? live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length : 0;
+  // (phase V26.8) Kling's animation prompts only: a Seedance project's are written by its own part of the phase.
+  const video = (!missing.length && (pool || frames) && !_seedance()) ? live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length : 0;
   // The clips of the lines that can be clipped NOW. Lines that only become clippable during the
   // chain - read in this very run, or opening on a frame drawn in it - are counted when the video
   // stage is reached, not here: their price cannot be known before they exist.
@@ -1738,7 +1756,10 @@ function _stageVideo(host, p, lines) {
   // (phase V23, the owner: "так") Done when every line of the video HAS ITS CLIP - fresh, or chosen by hand - and
   // nothing is being made; the prompts are only the way there.
   const s = _standing(p);
-  const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
+  // (phase V26.8) Seedance's clips are still being built: the field holds its settings and makes nothing yet - and the
+  // Kling clips a project may already have are not Seedance's, so they do not make it done.
+  const soon = _seedance() ? 'Seedance clips are still being built (phase V26.8) - the settings are kept' : '';
+  const done = !soon && s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
   const { body, foot } = _stage(host, 'video', {
     step: 4, half: true,
@@ -1746,40 +1767,51 @@ function _stageVideo(host, p, lines) {
     // first and are quick, go by the estimate of a clip (N3).
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
-    summary: 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
+    summary: soon ? 'Seedance' + (motion ? '' : ' · the place is not written')
+      : 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
   });
   _needEnvMeta();
   const v = _video();
-  // How the clips are made, one row: the tier on the left, the model beside it (owner). Seedance is
-  // in the list so it is known to be coming, and cannot be picked yet.
+  // WHAT FILMS IT AND HOW SHARP, one row (phase V26.8, the owner 2026-10-13): the model of the whole video - Kling avatar,
+  // a clip per line, or one of the three Seedances - and the qualities that model makes, each with its price a second.
+  // Neither is chosen for a new project (V24): both say none, and the field is red until they are.
+  const models = (_kit && _kit.models) || [];
   const sets = el('div', 'mv3-wk-fsets');
+  const model = el('select', 'mv3-wk-vsel is-small is-model');
+  model.title = 'What films the clips - for the whole video';
+  if (!v.model) _noneOption(model);
+  for (const m of models) {
+    const o = el('option', '', m.label);
+    o.value = m.id;
+    o.title = m.about;
+    if (m.id === v.model) o.selected = true;
+    model.appendChild(o);
+  }
+  model.disabled = _saving || !_kit;
+  model.addEventListener('change', () => {
+    // The quality stays when the new model makes it too; otherwise it is chosen again.
+    const next = models.find(m => m.id === model.value);
+    const keep = !!(next && (next.qualities || []).some(q => q.id === v.quality));
+    _saveVideo({ model: model.value, quality: keep ? v.quality : '' });
+  });
   const tier = el('select', 'mv3-wk-vsel is-small is-tier');
   tier.title = 'How sharp the clips are, and what a second of them costs';
-  if (!v.quality) _noneOption(tier);
-  for (const q of (_kit && _kit.qualities) || []) {
+  if (!v.quality || !v.model) _noneOption(tier);
+  for (const q of v.model ? _qualities() : []) {
     const o = el('option', '', q.label + ' · $' + q.pricePerSec + '/s');
     o.value = q.id;
     if (q.id === v.quality) o.selected = true;
     tier.appendChild(o);
   }
-  tier.disabled = _saving || !_kit;
+  tier.disabled = _saving || !_kit || !v.model;
   tier.addEventListener('change', () => _saveVideo({ quality: tier.value }));
-  const model = el('select', 'mv3-wk-vsel is-small is-model');
-  model.title = 'How clips are made';
-  const kling = el('option', '', 'kling avatar');
-  kling.value = 'kling';
-  kling.title = 'One clip per line: the frame speaks the read';
-  const seed = el('option', '', 'seedance 2.0 mini · soon');
-  seed.value = 'seedance';
-  seed.disabled = true;
-  seed.title = 'In development: one wide shot over several lines, as one clip';
-  model.append(kling, seed);
-  model.value = 'kling';
-  model.disabled = _saving;
   // The model first and the quality after it (the owner, 2026-09-22): what makes the clip, then
   // how good it is - the second only means anything once the first is read.
   sets.append(model, tier);
   body.appendChild(sets);
+  const about = (_modelOf() || {}).about;
+  if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
+  if (_seedance()) _seedanceSettings(body);
 
   // HOW THE PLACE MOVES. One field, because it is one sentence about one picture - and it is the
   // picture's, not this project's: what is written here is what every talking head filmed in this
@@ -1828,13 +1860,13 @@ function _stageVideo(host, p, lines) {
     // What this press will SPEND and how long the video is - and nothing else (the owner,
     // 2026-09-22). The chores it also does - looking at the place, writing the prompts - used to
     // be listed here; they cost credits, not dollars, and the button's own tooltip still says them.
-    cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
+    cap: soon ? 'being built' : busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
       _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
       clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
       whole,
     ].filter(Boolean).join(' · '),
-    disabled: busy || wait.length > 0 || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
-    title: wait.length ? 'First: ' + wait.join(', ')
+    disabled: !!soon || busy || wait.length > 0 || !_place(p) || !live.length || (!!motion && !willWrite && !clips.length),
+    title: soon ? soon : wait.length ? 'First: ' + wait.join(', ')
       : 'The place, then how the person moves on every line, then the clips of the fragments that'
         + ' have none - Kling avatar, ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
         + '. A prompt edited by hand is left alone; a fragment that is already clipped is not paid for twice.'
@@ -1845,6 +1877,78 @@ function _stageVideo(host, p, lines) {
       _writeVideo(p, { clips: true });
     },
   });
+}
+
+// SEEDANCE'S OWN SETTINGS (phase V26.8, the owner 2026-10-13), under the model: whether the lines are merged, how the
+// clip is voiced, how the body moves, the camera. Each says what it does on the line under it (the owner's answer (ш):
+// "пояснение нужно, что это за параметры"). They are kept on the project as they are chosen; the clips that use them
+// come with the later parts of the phase.
+function _seedanceSettings(body) {
+  const v = _video();
+  const longest = ((_qualities()[0] || {}).maxAudioSec) || 15;
+  const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
+  const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));
+
+  // MERGE - by the person's tick, never by itself (the owner): neighbouring lines joined into one clip each.
+  const merge = el('label', 'mv3-wk-fcheck is-off');
+  const tick = el('input');
+  tick.type = 'checkbox';
+  tick.checked = !!v.merge;
+  tick.disabled = true;
+  merge.append(tick, el('span', '', 'merge fragments'));
+  merge.title = 'Being built (phase V26.8)';
+  body.appendChild(merge);
+  why('Joins neighbouring lines into one clip each, up to ' + longest + ' s, once every line is read. A joined fragment'
+    + ' is not edited: untick, change the lines, tick again. Being built.');
+
+  // THE SOUND - how Seedance voices the clip (lib/th-video.js SOUNDS). Not chosen, it goes by the script's language
+  // (the owner's answer (ь)): English - Seedance from the read; anything else - the read as it is.
+  const sounds = (_kit && _kit.sounds) || [];
+  const auto = v.soundAuto || 'read';
+  const cur = v.sound || auto;
+  const sound = el('select', 'mv3-wk-vsel is-small is-model');
+  for (const s of sounds) {
+    const o = el('option', '', s.label);
+    o.value = s.id;
+    o.title = s.about;
+    if (s.id === cur) o.selected = true;
+    sound.appendChild(o);
+  }
+  sound.disabled = _saving || !_kit;
+  sound.addEventListener('change', () => _saveVideo({ sound: sound.value }));
+  row(_labelled('sound', sound, 'How the clip is voiced'));
+  const said = sounds.find(s => s.id === cur);
+  if (said) why(said.about + (v.sound ? '' : ' Chosen by the script’s language - ' + (auto === 'read' ? 'English.' : 'not English.')));
+
+  // GESTURES - how the head, the hands and the body move (the owner's answer (ц)): one way per mood, the project's mood
+  // until another is picked; the face follows the mood always (answer (щ)). Picking the mood itself follows it again.
+  const moods = (_kit && _kit.moods) || [];
+  const gest = el('select', 'mv3-wk-vsel is-small is-model');
+  const curG = v.gestures || v.mood || '';
+  if (!curG) _noneOption(gest, 'as the mood');
+  for (const md of moods) {
+    const o = el('option', '', md.label + (md.gloss ? ' — ' + md.gloss : '') + (md.id === v.mood ? ' (the mood)' : ''));
+    o.value = md.id;
+    if (md.id === curG) o.selected = true;
+    gest.appendChild(o);
+  }
+  gest.disabled = _saving || !_kit;
+  gest.addEventListener('change', () => _saveVideo({ gestures: gest.value === v.mood ? '' : gest.value }));
+  row(_labelled('gestures', gest, 'How the head, the hands and the body move'));
+  why('How the head, the hands and the body move while speaking. It follows the mood (field 1) until you pick another;'
+    + ' the face always follows the mood.');
+
+  // THE CAMERA - one continuous shot (the owner's answer (е)); several shots in one clip are in development.
+  const cam = el('select', 'mv3-wk-vsel is-small is-model');
+  const one = el('option', '', 'one continuous shot');
+  one.value = 'one';
+  const more = el('option', '', 'several shots · soon');
+  more.value = 'more';
+  more.disabled = true;
+  cam.append(one, more);
+  cam.value = 'one';
+  row(_labelled('camera', cam, 'How the clip is shot'));
+  why('One shot from the first word to the last, the camera moving a little.');
 }
 
 function _list(host, p, lines) {
@@ -2625,7 +2729,9 @@ function _clipCol(p, l, i, rs, take) {
   let ready = false;
   if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
+  else if (!_video().model) cap = 'choose the model of the clips first (field 4)';
   else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
+  else if (_seedance()) cap = 'Seedance clips are still being built - choose kling avatar to film now';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
   const price = ready && tier ? _money(_clipCost(take.dur, tier)) : '';

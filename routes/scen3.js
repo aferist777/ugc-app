@@ -2179,19 +2179,22 @@ async function _fileGenerated(kind, src, b) {
 // an accent or a stage direction — neither of which a TTS model can act on.
 const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
+const TH = require('../lib/th-video');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
 const VSHELF = require('../lib/voice-shelf');
 
 
-// What the general zone's menus offer: the quality tiers with what a second of them costs, and the
-// moods. No defaults (phase V24): a project made since starts at none and the person chooses - the
-// presets, the models and the defaults this used to send were read by nobody.
+// What the general zone's menus offer: the models of the clips, each with its qualities and what a
+// second of them costs (phase V26.8, lib/th-video.js), Seedance's ways of voicing a clip, and the
+// moods - with a few words on how each moves the body, for the gestures menu. No defaults (phase
+// V24): a project made since starts at none and the person chooses.
 router.get('/scen3/motion-presets', (_req, res) => {
   res.json({
     success: true,
-    qualities: MP.VIDEO_QUALITIES,
-    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about })),
+    models: TH.models(),
+    sounds: TH.SOUNDS,
+    moods: MP.MOODS.map(m => ({ id: m.id, label: m.label, about: m.about, gloss: m.gloss })),
   });
 });
 
@@ -3254,18 +3257,28 @@ const _normVideo = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const chosen = s.v === 2;
   const n = parseInt(s.frames, 10);
+  // WHAT FILMS IT (phase V26.8, lib/th-video.js): Kling avatar - a clip per line - or one of the Seedance models. Chosen
+  // like the rest since V24: a project made since starts at none - except one that already chose a quality, which was
+  // Kling's (the only model there was), so a project halfway through on Kling stays on it. An older project is Kling.
+  const model = TH.byId(s.model) ? s.model : (chosen && !s.quality ? '' : 'kling');
   return {
     ...(chosen ? { v: 2 } : {}),
-    // Which way the fragments step makes its clips (docs/local-app/PLAN.md, fragments): one clip per
-    // line through Kling avatar, or - not built yet - one wide shot over several lines through
-    // Seedance. Kling until the other exists.
-    mode:    s.mode === 'seedance' ? 'seedance' : 'kling',
+    model,
+    // The family of the model, kept for whatever read `mode` before V26.8.
+    mode:    TH.isSeedance(model) ? 'seedance' : 'kling',
     // The emotion of the whole video (lib/motion-presets.js, MOODS): what the directing agent reads
     // every shot and animation prompt from.
     mood:    MP.moodById(s.mood) ? s.mood : (chosen ? '' : MP.DEFAULT_MOOD),
-    model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
     preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
-    quality: MP.qualityById(s.quality) ? s.quality : (chosen ? '' : MP.DEFAULT_QUALITY),
+    // A quality the model makes - another model's is no choice at all (720p is Kling's and Seedance's, 1080p not mini's).
+    quality: TH.qualityOf(model, s.quality) ? s.quality
+      : (chosen || model !== 'kling' ? '' : MP.DEFAULT_QUALITY),
+    // SEEDANCE'S OWN SETTINGS (phase V26.8; read only while a Seedance model films it). `merge` - the lines joined into
+    // fragments of up to the model's longest clip; `sound` - how the clip is voiced (lib/th-video.js SOUNDS; '' = by the
+    // script's language); `gestures` - whose mood the body moves by ('' = the project's mood).
+    merge:    !!s.merge,
+    sound:    TH.soundById(s.sound) ? s.sound : '',
+    gestures: MP.moodById(s.gestures) ? s.gestures : '',
     // The set of first frames (docs/local-app/PLAN.md, phase W2): the shot size it is made in (the
     // ids of FRAME_SETS below), how many, and what the person asked for in words.
     framing: ['selfie', 'half', 'full'].includes(s.framing) ? s.framing : (chosen ? '' : 'half'),
@@ -3286,6 +3299,7 @@ function _unchosen(video, which) {
     framing: !v.framing && 'the shot size (field 3)',
     frames: !v.frames && 'how many frames (field 3)',
     spread: !v.spread && 'how the fragments take their frames (field 3)',
+    model: !v.model && 'the model of the clips (field 4)',
     quality: !v.quality && 'the quality of the clips (field 4)',
   };
   const miss = which.map(k => words[k]).filter(Boolean);
@@ -3385,7 +3399,9 @@ const _projFull = p => ({
   castVoice: _castVoice(p),
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),
-  video: _normVideo(p.video),
+  // (phase V26.8) With the sound Seedance makes the clip with when none is chosen - by the script's language, the
+  // owner's answer (ь). Said here, never stored: it follows the words.
+  video: { ..._normVideo(p.video), soundAuto: TH.soundAuto(p.lines) },
   mix:   _normMix(p.mix),
 });
 
@@ -4590,10 +4606,13 @@ function _clipPlan(proj, i) {
   const video = _normVideo(proj.video);
   const voice = _normVoice(proj.voice);
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
-  // The clip is made in the quality the person chose (phase V24) - before the money, a missing one is
-  // a fragment skipped in words.
-  const missing = _unchosen(video, ['quality']);
+  // The clip is made by the model and in the quality the person chose (phase V24, V26.8) - before the money, a missing
+  // one is a fragment skipped in words.
+  const missing = _unchosen(video, ['model', 'quality']);
   if (missing) return { skipped: missing };
+  // (phase V26.8) Seedance's clips are being built: until they are, nothing is sent for a project filmed by it - least
+  // of all a Kling clip it did not ask for.
+  if (TH.isSeedance(video.model)) return { skipped: 'Seedance clips are still being built (phase V26.8) - choose kling avatar to film now' };
   const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
   if (!said.trim()) return { skipped: 'this fragment has no words' };

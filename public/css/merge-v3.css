@@ -1648,6 +1648,16 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-zcols{display:flex; align-items:stretch; gap:10px}
 .mv3-wk-zcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column}
 .mv3-wk-zcol > .mv3-wk-stage:last-child{flex:1 1 auto}
+/* (phase V26.8, the owner 2026-10-13) SEEDANCE: the frames shelf stands under the first frames, as wide as they are, and
+   the video field across from them runs down to the foot of the zone. The shelf keeps its own height; the first-frames
+   field above it is the one that takes what is left, so the two columns still end level. */
+.mv3-wk-zcol.is-shelved > .mv3-wk-stage:last-child{flex:0 0 auto}
+.mv3-wk-zcol.is-shelved > .mv3-wk-stage:nth-last-child(2){flex:1 1 auto}
+/* A switch of a field, a box and its word: Seedance's `merge fragments`. Dim while it cannot be ticked. */
+.mv3-wk-fcheck{display:flex; align-items:center; gap:7px; font:600 10.5px/1.3 var(--font); color:var(--ink); cursor:pointer; user-select:none}
+.mv3-wk-fcheck input{margin:0; accent-color:var(--gold); cursor:pointer}
+.mv3-wk-fcheck.is-off{color:var(--muted); opacity:.6; cursor:default}
+.mv3-wk-fcheck.is-off input{cursor:default}
 .mv3-wk-stage{
   position:relative;
   margin:0 0 10px; padding:8px 10px 9px; border:1px dashed var(--gold); border-radius:var(--r-sm);
