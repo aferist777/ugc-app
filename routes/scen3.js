@@ -2180,6 +2180,7 @@ async function _fileGenerated(kind, src, b) {
 const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
+const SDM = require('../lib/sd-merge');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
 const VSHELF = require('../lib/voice-shelf');
@@ -3421,7 +3422,21 @@ const _projFull = p => ({
   // owner's answer (ь). Said here, never stored: it follows the words.
   video: { ..._normVideo(p.video), soundAuto: TH.soundAuto(p.lines) },
   mix:   _normMix(p.mix),
+  merge: _mergeView(p),
 });
+
+// (phase V26.8, part 3) THE MERGED FRAGMENTS of a Seedance project (lib/sd-merge.js), worked out from the lines as they
+// stand: whether the lines can be merged now (and why not), whether `merge fragments` is ticked, and - when it is - the
+// fragments, each with its lines, its length and its sound (`ready` once that is on disk). null for Kling.
+function _mergeView(p) {
+  const video = _normVideo(p.video);
+  if (!TH.isSeedance(video.model)) return null;
+  const pl = SDM.plan({ ...p, video });
+  return {
+    on: !!video.merge, can: pl.can, why: pl.why, cap: pl.cap,
+    groups: video.merge && pl.can ? pl.groups.map(({ paths, ...g }) => g) : [],
+  };
+}
 
 router.get('/scen3/projects/:id', (req, res) => {
   try {
@@ -3466,8 +3481,11 @@ router.post('/scen3/projects', (req, res) => {
         id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;
+      const wasModel = _normVideo(list[i].video).model;
       list[i] = merged;
       _saveProjects(list);
+      // (phase V26.8) The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut.
+      if (video && _normVideo(merged.video).model !== wasModel) MIRROR.touch(merged.id, { project: merged });
       return res.json({ success: true, project: _projFull(merged) });
     }
 
@@ -3675,6 +3693,45 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     console.log('[scen3/line/insert] ' + id + ' a line put in after line ' + (after + 1));
     res.json({ success: true, project: _projFull(saved), index: after + 1 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── MERGE FRAGMENTS (phase V26.8, part 3, the owner 2026-10-13) ─────────────
+   POST /api/scen3/fragments/merge  { projectId, on } -> { success, project, failed }
+
+   The tick in the video field of a Seedance project: neighbouring lines filmed as one clip each, by the rule in
+   lib/sd-merge.js - never by itself, and only once every line is read. Ticked, the sound of every merged fragment
+   that has none is made before the answer (seconds - ffmpeg on short files), so the fragment plays the moment it
+   shows; asked again while ticked, it makes only what is missing (a read retimed since, another model's length).
+   Unticked, the lines are lines again - nothing is deleted.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/fragments/merge', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const on = !!b.on;
+    if (on) {
+      const pl = SDM.plan({ ...proj, video: _normVideo(proj.video) });
+      if (!pl.can) return res.status(400).json({ success: false, error: pl.why });
+    }
+    const saved = PROJECTS.apply(id, (fresh) => {
+      fresh.video = { ...(fresh.video || {}), merge: on };
+      fresh.updatedAt = new Date().toISOString();
+    });
+    if (!saved) return res.status(404).json({ success: false, error: 'no such project' });
+    let failed = [];
+    if (on) {
+      const out = await SDM.build({ ...saved, video: _normVideo(saved.video) });
+      failed = out.failed;
+      console.log('[scen3/fragments/merge] ' + id + ' merged: ' + out.made + ' sound(s) made' + (failed.length ? ', ' + failed.length + ' failed' : ''));
+    } else console.log('[scen3/fragments/merge] ' + id + ' unmerged');
+    res.json({ success: true, project: _projFull(PROJECTS.get(id) || saved), failed });
+  } catch (e) {
+    console.error('[scen3/fragments/merge]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 /* ── A line's animation prompt, by hand ──────────────────────────────────────
