@@ -506,6 +506,10 @@ export const untagged = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
  *  silent tagging inside the read). */
 export const canSpeak = (p) => untagged(p).length === 0;
 
+/** (phase V26.8) What went wrong with the last tagging or read, for the open fragment to say too - a `mood` or a `read`
+ *  pressed there failed out of sight, in the fields of the whole video. null when nothing did. */
+export const failed = () => (_rsaid && _rbad ? _rsaid : null);
+
 /** What the reads are doing: the tagger at work, the lines being spoken (none, one, or a chunk
  *  of three), and the batch "generate" is walking, if any. */
 export const reading = () => ({
@@ -563,6 +567,28 @@ export async function tagAll(api) {
     // Nothing tagged yet: the whole script at once, because the mood briefs describe an ARC and a
     // line marked on its own argues with its neighbours. Otherwise only what is missing.
     await _tag(api, want.length === lines.length ? [] : want);
+  } catch (e) {
+    _rsaid = 'The tagging failed: ' + e.message;
+    _rbad = true;
+  }
+  _tagging = false;
+  _tagAt = 0;
+  _repaint(api);
+}
+
+/**
+ * (phase V26.8, the owner 2026-10-13) ONE LINE MARKED UP - the `mood` of an open fragment: a line put in between two, or
+ * one whose words were changed (a change drops its tags). The tagger marks it by the mood of the video and keeps the arc
+ * of the lines around it (routes/scen3.js, /scen3/voice/tag with `only`).
+ */
+export async function tagLine(api, i) {
+  if (_tagging || _reading.length || _batch) return;
+  _tagging = true;
+  _tagAt = Date.now();
+  _rsaid = ''; _rbad = false;
+  _repaint(api);
+  try {
+    await _tag(api, [i]);
   } catch (e) {
     _rsaid = 'The tagging failed: ' + e.message;
     _rbad = true;

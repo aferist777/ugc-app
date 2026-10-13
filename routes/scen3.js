@@ -2316,7 +2316,13 @@ async function _retagOnce(mood, lines, want) {
   return out;
 }
 
+// (phase V26.8) The tags are written into the lines by their numbers when the tagger answers: a line put in meanwhile
+// waits (_holdLines).
 router.post('/scen3/voice/tag', async (req, res) => {
+  const free = _holdLines((req.body || {}).projectId);
+  try { await _tagRoute(req, res); } finally { free(); }
+});
+async function _tagRoute(req, res) {
   try {
     const id = String((req.body || {}).projectId || '').trim();
     if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
@@ -2420,7 +2426,7 @@ router.post('/scen3/voice/tag', async (req, res) => {
     console.error('[scen3/voice/tag]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
-});
+}
 
 // ── the read: ElevenLabs ─────────────────────────────────────────────────────
 // Two models, and the switch between them is the tag checkbox rather than a separate
@@ -2691,8 +2697,12 @@ const _projNow = (id) => {
 };
 
 // The lines this call is about, spoken together and answered for: one press of a fragment's own
-// button, or an explicit list.
+// button, or an explicit list. (phase V26.8) Each read lands on its line by number: a line put in meanwhile waits.
 router.post('/scen3/voice/speak', async (req, res) => {
+  const free = _holdLines((req.body || {}).projectId);
+  try { await _speakRoute(req, res); } finally { free(); }
+});
+async function _speakRoute(req, res) {
   try {
     const b  = req.body || {};
     const id = String(b.projectId || '').trim();
@@ -2727,7 +2737,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
     console.error('[scen3/voice/speak]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
-});
+}
 
 // THE WHOLE SCRIPT, READ BY THE SERVER. One line a second, and none of them waits for another.
 async function _readQueue(key, ctx, only) {
@@ -2800,7 +2810,12 @@ router.post('/scen3/voice/speak-all', (req, res) => {
    and every read line whose take is at another speed is retimed from its original before the answer - the
    timeline follows (MIRROR in _fileTake), and a line with a clip keeps that clip until a new one is made.
    ───────────────────────────────────────────────────────────────────────────────────────────── */
+// (phase V26.8) The retimed reads land on their lines by number: a line put in meanwhile waits.
 router.post('/scen3/voice/speed', async (req, res) => {
+  const free = _holdLines((req.body || {}).projectId);
+  try { await _speedRoute(req, res); } finally { free(); }
+});
+async function _speedRoute(req, res) {
   try {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
@@ -2849,7 +2864,7 @@ router.post('/scen3/voice/speed', async (req, res) => {
     console.error('[scen3/voice/speed]', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
-});
+}
 
 // How far the read has got. In memory on purpose: it is about a RUN, not about the project, and a
 // run does not survive the app being closed - what it had already spoken does.
@@ -3163,6 +3178,9 @@ function _normLine(l) {
     // whole project. Per line it could drift, and two lines showing different takes
     // of the same read has no meaning.
     frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
+    // (phase V26.8) THE NUMBER THE LINE TAKES ITS FRAME BY, kept: given to every line when one is put in above some of
+    // them (/line/insert), so the lines that moved down a place stay on their frames. Absent - its place in the list.
+    ...(Number.isInteger(s.slot) && s.slot >= 0 ? { slot: s.slot } : {}),
     // TAKEN OFF THE SCRIPT (phase Z, the owner 2026-09-22). A line is never deleted: it is taken
     // off, keeps its place in this list, and can be put back. Keeping its place is the whole point
     // - a line that is not picked by hand takes its first frame from the set BY ITS NUMBER, and a
@@ -3589,6 +3607,73 @@ router.post('/scen3/projects/:id/line/state', async (req, res) => {
     catch (e) { console.warn('[scen3/line/state] the timeline was not re-laid:', e.message); }
     console.log('[scen3/line/state] ' + id + ' line ' + (i + 1) + (off ? ' taken off' : ' restored'));
     res.json({ success: true, project: _projFull(proj) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── A LINE PUT IN (phase V26.8, the owner 2026-10-13) ───────────────────────
+   POST /api/scen3/projects/:id/line/insert  { after, text } -> { success, project, index }
+
+   The "+" on the border under a fragment: a new line below it, with the words typed for it. The
+   script was only ever shortened before (a line is taken off, never deleted, phase Z) - and that is
+   because a line takes its first frame from the set BY ITS NUMBER: moving the lines below down a
+   place would put each of them on another frame, and their clips would drop out of the fragments
+   and off the timeline. So before anything moves, every line is given the number it has now to
+   KEEP (`slot`, read by _frameOfLine instead of the index), and the new line takes the one after the
+   line above it - the next frame of the set (the owner's answer (ф)).
+
+   NOT WHILE ANYTHING IS BEING MADE in the project: a read, a clip, a tagging or a prompt lands on
+   its line by number, and with a line put in above it, it would land on the one above its own. The
+   person is told what to wait for. The timeline is re-laid and WAITED for, as when a line is taken
+   off: its cells are numbered by the lines.
+   ──────────────────────────────────────────────────────────────────────────── */
+// WORK THAT WRITES INTO A LINE BY ITS NUMBER, under way in a project - a tagging, a read by hand, a retiming, an
+// animation prompt being written - counted while it runs (the routes and _writePrompts hold it).
+const _lineWork = new Map();              // projectId -> how many are under way
+function _holdLines(id) {
+  const key = String(id || '');
+  _lineWork.set(key, (_lineWork.get(key) || 0) + 1);
+  return () => {
+    const n = (_lineWork.get(key) || 1) - 1;
+    if (n > 0) _lineWork.set(key, n); else _lineWork.delete(key);
+  };
+}
+// Is anything being made in this project that a line put in would move? '' when nothing is.
+function _scriptBusy(id) {
+  const key = String(id);
+  if (_lineWork.get(key)) return 'a line is being marked up, read or written for';
+  const run = _reads.get(key);
+  if (run && run.running) return 'the script is being read';
+  const clip = ALERTS.list().some(r => r.state === 'running' && r.what === 'clip'
+    && r.job && r.job.params && r.job.params.file && String(r.job.params.file.projectId) === key);
+  return clip ? 'a clip is being made' : '';
+}
+
+router.post('/scen3/projects/:id/line/insert', async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const b = req.body || {};
+    const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
+    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+    const after = parseInt(b.after, 10);
+    if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
+    const busy = _scriptBusy(id);
+    if (busy) return res.status(409).json({ success: false, error: busy + ' - put the line in when it is done' });
+
+    const saved = PROJECTS.apply(id, (fresh) => {
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      fresh.lines.forEach((l, k) => { if (!Number.isInteger(l.slot)) l.slot = k; });
+      const above = fresh.lines[after];
+      fresh.lines.splice(after + 1, 0, _normLine({ text, slot: (above ? above.slot : after) + 1 }));
+      fresh.updatedAt = new Date().toISOString();
+    });
+    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    try { await MIRROR.rebuild(id, { project: saved }); }
+    catch (e) { console.warn('[scen3/line/insert] the timeline was not re-laid:', e.message); }
+    console.log('[scen3/line/insert] ' + id + ' a line put in after line ' + (after + 1));
+    res.json({ success: true, project: _projFull(saved), index: after + 1 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -4100,8 +4185,11 @@ function _frameOfLine(pool, line, i, spread, projectId) {
   if (!pool.length) return null;
   const picked = line && line.frameId ? pool.find(v => v.id === String(line.frameId)) : null;
   if (picked) return picked;
-  if (spread === 'random') return pool[_seed(String(projectId || '') + ':' + i) % pool.length];
-  return pool[i % pool.length];
+  // (phase V26.8) By the number the line KEEPS when it has one (a line was put in above it, /line/insert), else by
+  // its place - the same rule on the page (js/merge-v3/wk-fragments.js, _frameFor).
+  const n = line && Number.isInteger(line.slot) ? line.slot : i;
+  if (spread === 'random') return pool[_seed(String(projectId || '') + ':' + n) % pool.length];
+  return pool[n % pool.length];
 }
 
 // What every animation prompt must obey, whatever the line says. The person is already IN the
@@ -4156,9 +4244,14 @@ function _motionStale(line, envMotion) {
 
 /**
  * Write the animation prompts of a project's lines. The route below is one caller; a clip about
- * to be rendered is the other, asking for the one line it is about (phase U4).
+ * to be rendered is the other, asking for the one line it is about (phase U4). (phase V26.8) The
+ * prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
  */
 async function _writePrompts(id, want) {
+  const free = _holdLines(id);
+  try { return await _writePromptsNow(id, want); } finally { free(); }
+}
+async function _writePromptsNow(id, want) {
   const list = _loadProjects();
   const proj = list.find(x => String(x.id) === id);
   if (!proj) throw Object.assign(new Error('no such project'), { status: 404 });

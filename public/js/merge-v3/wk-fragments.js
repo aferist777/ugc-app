@@ -72,6 +72,10 @@ let _api = null;                          // what the step lends: the character 
 let _open = null;
 let _editWords = -1;                      // the line whose words are open for editing, in the right column
 let _wordsDraft = '';
+// (phase V26.8) A LINE BEING PUT IN: the line it goes under (-1 - none), the words typed for it, and the press on its way.
+let _inserting = -1;
+let _insDraft = '';
+let _insSaving = false;
 let _key = '';                            // the project it belongs to
 let _asked = _urlLine();                  // ?line=N (1-based) - how the Alerts list comes back here
 let _kit = null;                          // tiers, moods, the mannequins and the shot sizes of a set, read once
@@ -260,7 +264,10 @@ function _frameFor(p, l, i) {
   if (picked) return { v: picked, auto: false };
   if (!pool.length) return { v: null, auto: true };
   const spread = String(((p || {}).video || {}).spread || 'cycle');
-  const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + i) % pool.length : i % pool.length;
+  // (phase V26.8) By the number the line KEEPS when one was put in above it (routes/scen3.js, /line/insert), else by its
+  // place in the list.
+  const n = l && Number.isInteger(l.slot) ? l.slot : i;
+  const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + n) % pool.length : n % pool.length;
   return { v: pool[at], auto: true };
 }
 // THE CLIP OF A LINE is the one made from the frame the line OPENS ON - which is the frame it was
@@ -773,7 +780,7 @@ export function paint(host, ctx, api, head) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _rightAt.clear(); _tipHide(); }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); _tipHide(); }
   _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
   // (phase V26.5) Arriving on the frames chat - its Alerts row, a reload there - is arriving on the chat, not on a fragment.
   if (_open === null) _open = _asked >= 0 ? _asked : api.view() === 'fchat' ? -1 : _remembered();
@@ -797,7 +804,8 @@ export function paint(host, ctx, api, head) {
     host.appendChild(_splitSash(host, left));
   }
   if (chat) host.appendChild(_foldStrip(folded));
-  const right = el('div', 'mv3-wk-half is-guide is-frag' + (chat ? ' is-fcslot' : _open >= 0 ? ' has-close' : ''));
+  if (_inserting >= lines.length) _inserting = -1;
+  const right = el('div', 'mv3-wk-half is-guide is-frag' + (chat ? ' is-fcslot' : (_open >= 0 || _inserting >= 0) ? ' has-close' : ''));
   host.appendChild(right);
   if (!folded) _applySplit(host, left);
   if (!chat) _keepScroll(right, 'r' + _open + ':' + api.view());
@@ -829,7 +837,8 @@ export function paint(host, ctx, api, head) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
     return;
   }
-  if (_open < 0) _all(right, p, lines);
+  if (_inserting >= 0) _insertEditor(right, p, lines);
+  else if (_open < 0) _all(right, p, lines);
   else _fragment(right, p, lines[_open], _open);
   // The countdown belongs to the set being drawn, on the stage of the general zone.
   // The countdown belongs to whatever is being made where you are looking: the clip of the open
@@ -2033,12 +2042,16 @@ function _row(p, l, i, n) {
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     _tipHide();
-    if (_open !== i) { _open = i; _picking = false; _pickView = ''; _setPick = ''; _stagePick = ''; _stageFor = i; _remember(); _ctx.repaint(); }
+    if (_open !== i || _inserting >= 0) { _open = i; _inserting = -1; _picking = false; _pickView = ''; _setPick = ''; _stagePick = ''; _stageFor = i; _remember(); _ctx.repaint(); }
     _rowMenu(e, row, p, l, i, n);
   });
+  // (phase V26.8, the owner 2026-10-13) A LINE PUT IN under this one: a "+" in a square on the middle of the row's bottom
+  // border - half on the row, half over the one below, nothing moved - while the pointer is on the row.
+  row.appendChild(_insPlus(i));
   // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
     _tipHide();
+    _inserting = -1;
     _open = _open === i ? -1 : i;
     _picking = false;
     _pickView = '';
@@ -2046,6 +2059,90 @@ function _row(p, l, i, n) {
     _ctx.repaint();
   });
   return row;
+}
+
+// THE "+" UNDER A ROW (phase V26.8). Not while anything is being made in the project: a read, a clip or a prompt lands
+// on its line by number, and a line put in above it would move it (the server refuses too - /line/insert).
+const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made'
+  : (_writing || _chain) ? 'the video is being written for' : '');
+function _insPlus(i) {
+  const why = _insBusy();
+  const plus = el('span', 'mv3-wk-fins' + (why ? ' is-off' : ''), '+');
+  plus.setAttribute('role', 'button');
+  plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
+  plus.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _tipHide();
+    if (why) return;
+    _inserting = i;
+    _insDraft = '';
+    _open = -1;
+    _picking = false;
+    _pickView = '';
+    _remember();
+    _ctx.repaint();
+  });
+  return plus;
+}
+
+// THE NEW LINE'S WORDS, in the right column (phase V26.8): typed and saved, then it is a fragment like any other - it
+// takes the next frame of the set, and is marked up (`mood`) and read in its fragment.
+function _insertEditor(host, p, lines) {
+  const after = _inserting;
+  const cancel = () => { _inserting = -1; _insDraft = ''; _ctx.repaint(); };
+  const shut = el('button', 'mv3-wk-fclose', '✕');
+  shut.type = 'button';
+  shut.title = 'Do not put a line in - back to the whole video';
+  shut.addEventListener('click', cancel);
+  host.appendChild(shut);
+  host.appendChild(el('div', 'mv3-wk-flabel', 'a new line after fragment ' + _no(lines, after)));
+  host.appendChild(el('div', 'mv3-wk-fwhy', 'After: “' + (_words(lines[after]) || '').slice(0, 160) + '”'));
+  const box = el('textarea', 'mv3-wk-ledit is-frag');
+  box.rows = 3;
+  box.placeholder = 'The words of the new line';
+  box.value = _insDraft;
+  box.disabled = _insSaving;
+  box.addEventListener('input', () => { _insDraft = box.value; save.disabled = _insSaving || !box.value.trim(); });
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); cancel(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _insertLine(p, after); }
+  });
+  host.appendChild(box);
+  const acts = el('div', 'mv3-wk-vfoot is-tight');
+  const save = el('button', 'mv3-wk-vuse', _insSaving ? 'putting it in…' : 'put it in');
+  save.type = 'button';
+  save.title = 'Put the line in (Ctrl+Enter)';
+  save.disabled = _insSaving || !_insDraft.trim();
+  save.addEventListener('click', () => _insertLine(p, after));
+  const drop = el('button', 'mv3-wk-vuse', 'cancel');
+  drop.type = 'button';
+  drop.disabled = _insSaving;
+  drop.addEventListener('click', cancel);
+  acts.append(save, drop);
+  host.appendChild(acts);
+  host.appendChild(el('div', 'mv3-wk-fwhy', 'It takes the next frame of the set. Then, in its fragment: mood - its [tags] - and read.'));
+  if (!_insSaving) setTimeout(() => { if (box.isConnected) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } }, 0);
+}
+async function _insertLine(p, after) {
+  const text = _insDraft.trim();
+  if (!text || _insSaving) return;
+  _insSaving = true;
+  _readErr = '';
+  _ctx.repaint();
+  try {
+    const r = await _post('/api/scen3/projects/' + encodeURIComponent(p.id) + '/line/insert', { after, text });
+    _adopt(r);
+    _inserting = -1;
+    _insDraft = '';
+    _open = r.index;
+    _remember();
+    // The route re-laid the timeline before it answered - the cells are numbered by the lines.
+    await Store.refresh();
+  } catch (e) {
+    _readErr = 'The line was not put in: ' + e.message;
+  }
+  _insSaving = false;
+  _ctx.repaint();
 }
 
 // A LINE TAKEN OFF THE SCRIPT (Z4, the owner 2026-09-22), at the foot of the list: dim, unopenable
@@ -2341,6 +2438,19 @@ function _fragment(host, p, l, i) {
   } else {
     // The read beside the words (phase V23): not while they are being edited - the words are saved first.
     const row = el('div', 'mv3-wk-fwrow');
+    // (phase V26.8, the owner 2026-10-13) MOOD - this line alone marked up by the mood of the video: a line put in
+    // between two, or one whose words were changed (a change drops its tags). Red while it has no [tags]: the read is
+    // spoken from them, and the voice will not start without them.
+    const g = VOICE.reading();
+    const marked = !!String(l.tagged || '').trim();
+    const mb = el('button', 'mv3-wk-fread' + (marked ? '' : ' is-need'), g.tagging ? 'mood…' : 'mood');
+    mb.type = 'button';
+    mb.disabled = g.busy || !_video().mood;
+    mb.title = !_video().mood ? 'Choose the mood first (field 1)' : g.busy ? 'The voice is busy'
+      : marked ? 'Mark this line up again by the mood of the video - its [tags], keeping the arc of the lines around it'
+        : 'This line has no [tags] yet: mark it up by the mood of the video - it is read from them';
+    mb.addEventListener('click', () => { if (!mb.disabled) { mb.disabled = true; VOICE.tagLine(va, i); } });
+    row.appendChild(mb);
     const ra = _readAct(p, l, i);
     const reading = (VOICE.reading().lines || []).includes(i);
     const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
@@ -2360,6 +2470,9 @@ function _fragment(host, p, l, i) {
     words.addEventListener('click', () => { _editWords = i; _wordsDraft = shown; _ctx.repaint(); });
     row.appendChild(words);
     host.appendChild(row);
+    // (phase V26.8) A `mood` or a `read` pressed here that failed says so here, not only in the fields of the whole video.
+    const fail = VOICE.failed();
+    if (fail) host.appendChild(_note(fail, true));
   }
   if (rs === 'stale') {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
