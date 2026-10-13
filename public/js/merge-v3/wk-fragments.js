@@ -360,8 +360,9 @@ function _loadKit(repaint) {
   Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-sets')]).then(([m, p, s]) => {
     _kit = {
       // (phase V26.8) The models of the clips, each with its qualities - Kling avatar and the Seedances - and
-      // Seedance's ways of voicing a clip (lib/th-video.js).
-      models: (m && m.models) || [],
+      // Seedance's ways of voicing a clip (lib/th-video.js). A server started before V26.8 answers Kling's qualities
+      // alone: they are Kling's model, so the field still works until the app is restarted.
+      models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'kling avatar', family: 'kling', qualities: m.qualities }] : []),
       sounds: (m && m.sounds) || [],
       moods: (m && m.moods) || [],
       poses: (p && p.poses) || [],
