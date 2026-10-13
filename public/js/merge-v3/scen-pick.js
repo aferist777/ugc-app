@@ -318,14 +318,27 @@ function _paintList() {
   for (const s of rows) {
     const row = _el('div', 'mv3-sc-row' + (s.archived ? ' is-archived' : ''));
     row.title = 'Open the text. Right-click for the rest.';
-    const txt = _el('div', 'mv3-sc-txt');
-    txt.appendChild(_el('b', null, s.title || 'untitled'));
-    txt.appendChild(_el('span', 'mv3-sc-meta', _meta(s)));
-    row.appendChild(txt);
-
-    // The button depends on where the scenario is: an archived one is not offered as something
-    // to build with until it is back in the library.
+    // THE BUTTONS LEFT OF THE TITLE, the cross first (the owner, V28.3): ✕ - use - the title. The button depends on
+    // where the scenario is: an archived one is not offered as something to build with until it is back in the library.
     const acts = _el('div', 'mv3-sc-acts');
+    // OUT OF THE LIST from the row itself (phase I1, the owner 2026-10-01), in two presses: the
+    // first turns the cross into "really?" for three seconds, the second archives. One press would
+    // make a row vanish under a stray click; the archive filter's `restore` brings it back.
+    if (!s.archived) {
+      const armed = !!_armed && _armed.id === s.id;
+      const x = _el('button', 'mv3-sc-btn is-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+      x.type = 'button';
+      x.title = 'Move to the archive - press twice';
+      if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
+      x.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!_armed || _armed.id !== s.id) { _arm(s.id, x); return; }
+        _disarm();
+        for (const b of acts.children) b.disabled = true;
+        _archive(s, true);
+      });
+      acts.appendChild(x);
+    }
     const go = _el('button', 'mv3-sc-btn is-use', s.archived ? 'restore' : 'use');
     go.type = 'button';
     go.title = s.archived
@@ -346,25 +359,12 @@ function _paintList() {
       }
     });
     acts.appendChild(go);
-    // OUT OF THE LIST from the row itself (phase I1, the owner 2026-10-01), in two presses: the
-    // first turns the cross into "really?" for three seconds, the second archives. One press would
-    // make a row vanish under a stray click; the archive filter's `restore` brings it back.
-    if (!s.archived) {
-      const armed = !!_armed && _armed.id === s.id;
-      const x = _el('button', 'mv3-sc-btn is-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
-      x.type = 'button';
-      x.title = 'Move to the archive - press twice';
-      if (armed) _armed.x = x;                   // a repaint inside the three seconds keeps it armed
-      x.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!_armed || _armed.id !== s.id) { _arm(s.id, x); return; }
-        _disarm();
-        for (const b of acts.children) b.disabled = true;
-        _archive(s, true);
-      });
-      acts.appendChild(x);
-    }
     row.appendChild(acts);
+
+    const txt = _el('div', 'mv3-sc-txt');
+    txt.appendChild(_el('b', null, s.title || 'untitled'));
+    txt.appendChild(_el('span', 'mv3-sc-meta', _meta(s)));
+    row.appendChild(txt);
 
     row.addEventListener('click', () => openForm(s));
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _rowMenu(e, s, row); });
