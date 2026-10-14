@@ -50,7 +50,8 @@ let _busy = '';                        // 'search' | 'take:<voice id>' | 'star' 
 let _said = '';                        // what the panel says under the bar
 let _bad = false;                      // ...and whether that is a failure
 let _asked = false;                    // a search has been run, so the pager means something
-let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: '' };
+// English by default (phase V29, the owner 2026-10-14): every script is English, so is the voice that reads it.
+let _q = { search: '', gender: '', age: '', accent: '', descriptives: '', use_cases: '', language: 'en' };
 
 // The reads. "generate" hands the WHOLE script to the server and watches it (phase X2, readAll
 // below); what is left here is the one-line read of a fragment's own button, which answers with the

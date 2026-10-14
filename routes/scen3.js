@@ -2506,6 +2506,9 @@ async function _speakLine(key, voiceId, model, text, params) {
     {
       text,
       model_id: model,
+      // (phase V29) Every line is English, and v3 is told so - its accent does not drift with a name or a loan word.
+      // multilingual_v2 does not take the code (ElevenLabs' reference, 2026-10-14) and is sent nothing.
+      ...(model === EL_MODEL_TAGGED ? { language_code: 'en' } : {}),
       voice_settings: {
         stability: typeof params.stability === 'number' ? params.stability : 0.5,
         similarity_boost: 0.75,
@@ -3493,7 +3496,7 @@ const _projFull = p => ({
   voice: _normVoice(p.voice),
   // (phase V26.8) With the sound Seedance makes the clip with when none is chosen - by the script's language, the
   // owner's answer (ь). Said here, never stored: it follows the words.
-  video: { ..._normVideo(p.video), soundAuto: TH.soundAuto(p.lines) },
+  video: { ..._normVideo(p.video), soundAuto: TH.SOUND_DEFAULT },
   mix:   _normMix(p.mix),
   merge: _mergeView(p),
   sdFrags: _sdView(p),
@@ -3876,7 +3879,7 @@ function _sdSetting(p) {
   const video = _normVideo(p.video);
   return {
     video,
-    sound: video.sound || TH.soundAuto(p.lines),
+    sound: video.sound || TH.SOUND_DEFAULT,
     gestures: SDP.gesturesOf(video),
     place: _envMotionOf(_normCasting(p.casting).locationImage) || '',
   };
@@ -3946,7 +3949,6 @@ async function _writeSdPrompts(id, keys) {
     mood: { label: mood.label, face: mood.face }, gestures: st.gestures, selfie: st.video.framing === 'selfie',
     covered, clothes: _clothesShown(proj0, set ? set.id : 'full'),
   };
-  const lang = SDP.langOf(lines);
   const sheet = await _seeable(cast.obrazImage);
   const write = {};
   const one = async (f) => {
@@ -3956,7 +3958,7 @@ async function _writeSdPrompts(id, keys) {
       const rows = SDP.timings(f, lines);
       const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
-      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, lang, rows, body: t.body, place: st.place });
+      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place });
       write[f.key] = { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() };
       report.written++;
     } catch (e) { report.failed.push({ n: f.n, error: e.message }); }
@@ -4072,7 +4074,7 @@ function _sdClipPlan(proj, i) {
   if (!f.frameId) return { skipped: 'no first frame for this fragment' };
   const cast = _normCasting(proj.casting);
   if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
-  const sound = video.sound || TH.soundAuto(proj.lines);
+  const sound = video.sound || TH.SOUND_DEFAULT;
   const sample = sound === 'sample' ? _sdSample(proj) : '';
   if (sound === 'sample' && !sample) return { skipped: 'the character’s voice has no sample on the Voices shelf - choose another sound in field 4' };
   const quality = TH.qualityOf(video.model, video.quality);

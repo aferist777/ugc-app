@@ -2006,8 +2006,8 @@ function _seedanceSettings(body, p) {
       : 'Joins neighbouring lines into one clip each, up to ' + longest + ' s - the fewest fragments, of the most even'
         + ' lengths. ' + (m.can ? 'Every line is read: it can be ticked.' : (m.why || 'Read every line first') + '.'));
 
-  // THE SOUND - how Seedance voices the clip (lib/th-video.js SOUNDS). Not chosen, it goes by the script's language
-  // (the owner's answer (ь)): English - Seedance from the read; anything else - the read as it is.
+  // THE SOUND - how Seedance voices the clip (lib/th-video.js SOUNDS). Not chosen, it is Seedance from the read (every
+  // script is English since phase V29; it went by the script's language before - the owner's answer (ь)).
   const sounds = (_kit && _kit.sounds) || [];
   const auto = v.soundAuto || 'read';
   const cur = v.sound || auto;
