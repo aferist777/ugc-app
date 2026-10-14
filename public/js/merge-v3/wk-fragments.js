@@ -513,17 +513,16 @@ function _needEnvMeta() {
 const _place = (p) => String(((p || {}).casting || {}).locationImage || '');
 const _envMotion = (p) => String(((_envMeta || {})[_place(p)] || {}).motion || '');
 
-// Written by hand, or by the agent when `motion` is not given. Either way the answer is the entry
-// the store now holds, and the map is put right without reading the whole shelf again.
-async function _saveEnvMotion(p, motion) {
+// Written by the agent (the field to write it by hand went in V26.8). The answer is the entry the store now holds,
+// and the map is put right without reading the whole shelf again.
+async function _writeEnvMotion(p) {
   const path = _place(p);
   if (!path || _envWriting) return;
   _envWriting = true;
   _readErr = '';
   _ctx.repaint();
   try {
-    const body = motion == null ? { path } : { path, motion };
-    const r = await _post('/api/scen3/env/motion', body);
+    const r = await _post('/api/scen3/env/motion', { path });
     _envMeta = { ...(_envMeta || {}), [path]: r.entry || {} };
   } catch (e) {
     _readErr = 'The animation of the place was not written: ' + e.message;
@@ -609,7 +608,7 @@ async function _writeVideo(p, opts) {
   if (!_envMotion(p)) {
     _writing = 'place';
     _writeAt = Date.now();
-    await _saveEnvMotion(p, null);
+    await _writeEnvMotion(p);
     if (_readErr) { _writing = ''; return _ctx.repaint(); }
   }
   const lines = Array.isArray(p.lines) ? p.lines : [];
@@ -651,7 +650,7 @@ async function _writeSdVideo(p, opts) {
     _writing = 'place';
     _writeAt = Date.now();
     _ctx.repaint();
-    await _saveEnvMotion(p, null);
+    await _writeEnvMotion(p);
     if (_readErr) { _writing = ''; return _ctx.repaint(); }
   }
   if (_sdNeeds(_ctx.project || p).length) {
@@ -821,6 +820,11 @@ async function _saveVideo(patch) {
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     p.video = r.project.video;
+    // (phase V26.8, the owner 2026-10-14) What the server works out from these settings comes with them: the merged
+    // fragments, whose longest is the model's (mini 15 s -> 2.5 30 s regroups them), and every fragment's prompt -
+    // written for these settings or not. Taking only `video` left the old groups on screen until a reload.
+    p.merge = r.project.merge;
+    p.sdFrags = r.project.sdFrags;
   } catch (e) {
     _said = 'Could not save it: ' + e.message;
   }
@@ -1822,8 +1826,8 @@ function _framesButton(foot, p) {
   });
 }
 
-// VIDEO - the model and the tier, how the PLACE moves (W3a) and the animation of the PERSON, line
-// by line (W3b); the clips themselves come with F4. OPEN FROM THE START (phase V24, the owner
+// VIDEO - the model and the tier, then `generate`: how the PLACE moves (W3a), the animation of the PERSON, line
+// by line (W3b), and the clips (F4). OPEN FROM THE START (phase V24, the owner
 // 2026-10-09): the model and the quality are chosen at the beginning, and the field is red until the
 // quality is; what it still waits for - the character, the place, a first frame to animate - is said
 // on its `generate`, which stays shut until they are there.
@@ -1848,8 +1852,7 @@ function _stageVideo(host, p, lines) {
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
     name: 'video', sub: 'the place, then the person', done, need,
     summary: soon ? 'clips ' + s.clips + '/' + s.n + ' · prompts ' + _sdFrags(p).filter(f => f.prompt && (!f.stale || f.edited)).length + '/' + _sdFrags(p).length
-      + (motion ? '' : ' · the place is not written')
-      : 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated' + (motion ? '' : ' · the place is not written'),
+      : 'clips ' + s.clips + '/' + s.n + ' · ' + written + '/' + live.length + ' animated',
   });
   _needEnvMeta();
   const v = _video();
@@ -1893,25 +1896,9 @@ function _stageVideo(host, p, lines) {
   const about = (_modelOf() || {}).about;
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
   if (_seedance()) _seedanceSettings(body, p);
-
-  // HOW THE PLACE MOVES. One field, because it is one sentence about one picture - and it is the
-  // picture's, not this project's: what is written here is what every talking head filmed in this
-  // place will animate by.
-  body.appendChild(el('div', 'mv3-wk-flabel', 'environment animation'));
-  const env = el('textarea', 'mv3-wk-ftext-in');
-  env.rows = 2;
-  env.placeholder = _envWriting ? 'the agent is looking at the place…'
-    : 'What moves in the background by itself - a curtain, steam, leaves, traffic far behind. Write it, or press generate.';
-  env.value = 'env' in _drafts ? _drafts.env : motion;
-  env.disabled = _envWriting;
-  env.addEventListener('input', () => { _drafts.env = env.value; });
-  env.addEventListener('change', () => {
-    const w = env.value;
-    delete _drafts.env;
-    if (w.trim() !== motion.trim()) _saveEnvMotion(p, w.trim());
-  });
-  body.appendChild(env);
-  body.appendChild(el('div', 'mv3-wk-fwhy', 'It belongs to the place: every video filmed here animates the same way.'));
+  // How the PLACE moves has no field here (phase V26.8, the owner 2026-10-14: "поле точно не нужно"): `generate` and
+  // a clip have the agent write it first, and its sentence goes into every prompt word for word - which is where it
+  // is put right, in the prompt of a line or a fragment.
 
   // `generate`: the place first when it has nothing written, then the animation of every line that
   // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no
