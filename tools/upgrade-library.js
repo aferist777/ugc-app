@@ -32,7 +32,7 @@ console.log(`library: ${LIB}\nlayout:  ${layout === 0 ? 'empty' : layout}`);
 
 if (APPLY) {
   const r = U.upgrade(LIB, { log: (s) => console.log(s) });
-  if (!r.upgraded && !(r.timelines && r.timelines.converted)) console.log('nothing to upgrade');
+  if (!r.upgraded && !(r.timelines && r.timelines.converted) && !(r.twins && r.twins.dropped)) console.log('nothing to upgrade');
   process.exit(r.newlyMissing && r.newlyMissing.length ? 2 : 0);
 }
 // The timelines' step reads projects/*/merge/, which a layout 5 library does not have yet: counted
@@ -47,6 +47,10 @@ if (layout === 6) {
     }
   }
   console.log(talking ? `talking-head timelines to rewrite: ${talking}` : 'no talking-head timelines');
+  // (V26.8) The doubled cells of an old send (lib/timeline-twins.js), counted without writing.
+  const tw = require('../lib/timeline-twins').dropLibrary(LIB, { dry: true });
+  console.log(tw.dropped ? `doubled cells of an old send to take off: ${tw.dropped} in ${tw.timelines} timeline(s)` : 'no doubled cells');
+  for (const w of tw.which) console.log(`  ${w}`);
 }
 if (layout !== 5) { console.log('nothing to upgrade'); process.exit(0); }
 
