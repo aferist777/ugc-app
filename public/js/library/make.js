@@ -997,7 +997,7 @@ async function _buildControls(settings) {
   box.textContent = '';
   const d = _reg.defaults;
   const s = settings || {};
-  box.appendChild(_ctl('Language', _select('mk-c-lang', _reg.languages, s.language || d.language)));
+  // No Language (phase V29, the owner 2026-10-14): every script is written in English.
   const scenes = el('input');
   scenes.type = 'number';
   scenes.id = 'mk-c-scenes';
@@ -1115,14 +1115,13 @@ async function _paintNarrators(want, wantName) {
   sel.value = pick;
 }
 
-const _controlsReady = () => !!$('mk-c-lang');
+const _controlsReady = () => !!$('mk-c-tone');
 
 function _opts() {
   if (!_controlsReady()) return {};
   const nar = $('mk-c-narrator');
   const [narratorId, readingPin] = String(nar.value).split('#');
   return {
-    language: $('mk-c-lang').value,
     scenes: parseInt($('mk-c-scenes').value, 10),
     tone: $('mk-c-tone').value,
     narratorId,
@@ -1199,7 +1198,7 @@ function _payload() {
     title: $('mk-title').value,
     humanized: !!_gen.humanized,
     settings: {
-      language: o.language, tone: o.tone, scenes: o.scenes,
+      tone: o.tone, scenes: o.scenes,
       narratorId: o.narratorId, narratorName: o.narratorName, readingId: o.readingPin, readingIndex: '',
       provider: o.provider, model: o.model, effort: o.effort,
     },
@@ -1707,7 +1706,7 @@ async function _saveScript() {
         gender: $('mk-gender').value,
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
-        narratorId: o.narratorId, language: o.language, tone: o.tone, provider: o.provider, model: o.model,
+        narratorId: o.narratorId, tone: o.tone, provider: o.provider, model: o.model,
         // The reading the script was ACTUALLY written with: "random" has to resolve to a real one.
         readingId: _gen.readingId || o.readingId,
         sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,

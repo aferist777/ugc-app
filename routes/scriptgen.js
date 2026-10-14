@@ -217,7 +217,7 @@ function _keeper(b, build) {
       // Only when the stage was sent one: the cleaning pass is not, and must not blank the topic.
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
-        language: b.language, tone: b.tone, scenes: b.scenes,
+        tone: b.tone, scenes: b.scenes,
         narratorId: b.narratorId, narratorName: b.narratorName, readingId: b.readingPin != null ? b.readingPin : b.readingId,
         provider: b.provider, model: b.model, effort: b.effort,
       },
@@ -233,7 +233,6 @@ router.get('/scriptgen/models', (_req, res) => {
     success: true,
     // Each model with the effort levels it takes (phase F3); a provider without a key says so.
     providers: WM.providers(hasKey),
-    languages: WM.LANGUAGES,
     tones: WM.TONES,
     scenes: { min: Math.max(WM.SCENES_MIN, MIN_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
     defaults: WM.DEFAULTS,
@@ -284,7 +283,7 @@ router.post('/scriptgen/hooks', (req, res) => {
   _start(res, 'Writing hooks', async (_step, signal) => {
     const data = await callJSON({
       system: P.HOOKS_SYSTEM,
-      user: P.hooksUserPrompt({ topic, language: m.language, tone: m.tone,
+      user: P.hooksUserPrompt({ topic, tone: m.tone,
         narratorBlock: nar.block, sourceText: src.text }),
       schema: P.HOOKS_SCHEMA, name: 'hooks',
       provider: m.provider, model: m.model, effort: m.effort, signal,
@@ -319,9 +318,9 @@ router.post('/scriptgen/script', (req, res) => {
     const data = await callJSON({
       system: withSource ? P.SOURCE_SCRIPT_SYSTEM : P.SCRIPT_SYSTEM,
       user: withSource
-        ? P.sourceScriptUserPrompt({ hook, topic, language: m.language, paragraphs: m.scenes,
+        ? P.sourceScriptUserPrompt({ hook, topic, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, sourceText: src.text })
-        : P.scriptUserPrompt({ topic, language: m.language, paragraphs: m.scenes,
+        : P.scriptUserPrompt({ topic, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, hook }),
       schema: P.SCRIPT_SCHEMA, name: 'script',
       provider: m.provider, model: m.model, effort: m.effort, signal,
@@ -403,7 +402,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
   _start(res, `Rewriting paragraph ${index + 1}`, async (_step, signal) => {
     const data = await callJSON({
       system: P.REWRITE_SYSTEM,
-      user: P.rewriteUserPrompt({ topic, language: m.language, tone: m.tone, script, index }),
+      user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index }),
       schema: P.REWRITE_SCHEMA, name: 'rewrite',
       provider: m.provider, model: m.model, effort: m.effort, signal,
     });
@@ -523,7 +522,7 @@ router.post('/scriptgen/save', (req, res) => {
       narratorReadingId: (nar.reading && nar.reading.id) || '',
       narratorReading: nar.reading && nar.reading.total > 1
         ? `reading ${nar.reading.index} of ${nar.reading.total}` : '',
-      hook: paragraphs[0] || '', language: String(b.language || ''), tone: String(b.tone || ''),
+      hook: paragraphs[0] || '', tone: String(b.tone || ''),
       // Which aggregator too (phase F3): the same model id can run on two of them.
       provider: String((wrote && wrote.provider) || b.provider || ''),
       model: String((wrote && wrote.model) || b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),

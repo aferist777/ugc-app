@@ -494,7 +494,7 @@ router.post('/data/import/finish', express.json({ limit: '1mb' }), (req, res) =>
         writeFileAtomic(path.join(lib, 'data', 'library.json'), JSON.stringify({ layout: 6, since: new Date().toISOString(), staged: true }, null, 2));
       }
       {
-        const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace(/^\[(upgrade|timelines)\]/, '[data-io] staged set:')) });
+        const u = require('../lib/library-upgrade').upgrade(lib, { log: (line) => console.log(line.replace(/^\[(upgrade|timelines|language)\]/, '[data-io] staged set:')) });
         r.upgraded = !!u.upgraded;
         r.setAside = u.upgraded ? u.report.unreferenced : 0;
         r.timelinesRewritten = (u.timelines && u.timelines.converted) || 0;

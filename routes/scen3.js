@@ -88,13 +88,13 @@ function _norm(r, now) {
     // Null for everything written by hand, which is every scenario that existed before
     // generation did.
     origin:    _normOrigin(src.origin),
-    // THE SCENARIO'S OWN LABELS (phase F7): the narrator - the voice of the WRITING, not the reader's
-    // gender, which lives on the role - and the language. `origin` says what the generator used and
-    // stays provenance; these say what the scenario is, editable, and a generated one shows its
-    // origin's values until they are set. null = never set (the origin shows through); an empty
-    // name or language = set to none on purpose.
+    // THE SCENARIO'S OWN LABEL (phase F7): the narrator - the voice of the WRITING, not the reader's
+    // gender, which lives on the role. `origin` says what the generator used and stays provenance; this
+    // says what the scenario is, editable, and a generated one shows its origin's narrator until it is
+    // set. null = never set (the origin shows through); an empty name = set to none on purpose. There is
+    // no language: every scenario is English (phase V29), and a `language` an older record carries is
+    // dropped here like any field this normaliser does not name.
     narrator:  _normNarrator(src.narrator),
-    language:  src.language == null ? null : String(src.language).trim(),
     createdAt: src.createdAt || now,
     updatedAt: src.updatedAt || now,
   };
@@ -105,15 +105,14 @@ function _normNarrator(n) {
   return { id: String(n.id || ''), name: String(n.name || '').trim() };
 }
 
-// What a scenario's narrator and language ARE: its own when set, otherwise what the generator wrote
-// it with. Read by the list, the Library shelf and its filters.
+// What a scenario's narrator IS: its own when set, otherwise what the generator wrote it with. Read by
+// the list, the Library shelf and its filters.
 function effectiveLabels(s) {
   const o = (s && s.origin) || {};
   const nar = s && s.narrator
     ? (s.narrator.name ? { id: s.narrator.id || '', name: s.narrator.name } : null)
     : (o.narratorName ? { id: o.narratorId || '', name: o.narratorName } : null);
-  const language = s && s.language != null ? s.language : (o.language || '');
-  return { narrator: nar, language };
+  return { narrator: nar };
 }
 
 function _normOrigin(o) {
@@ -134,7 +133,6 @@ function _normOrigin(o) {
     // beside the result: reading them together is how you tell a script that kept its promise
     // from one that wandered.
     hook:       String(s.hook       || ''),
-    language:   String(s.language   || ''),
     tone:       String(s.tone       || ''),
     provider:   String(s.provider   || ''),
     model:      String(s.model      || ''),
@@ -307,7 +305,6 @@ const _summary = (s, titles) => ({
   gender: _genderOf(s),
   lib: _libOf(s),
   narrator: effectiveLabels(s).narrator,
-  language: effectiveLabels(s).language,
   // The source it was written from, by id (phase E7): Merge groups the generated ones by it. By id,
   // not by title - the title here is a snapshot, and renaming a source must not split its group.
   sourceId: (s.origin && s.origin.sourceId) || '',
@@ -322,7 +319,7 @@ const _summary = (s, titles) => ({
   createdAt: s.createdAt, updatedAt: s.updatedAt,
 });
 // The full record carries the WHOLE provenance, not the three fields a list row needs: opening
-// one scenario is exactly when the hook, the language and the model become worth reading.
+// one scenario is exactly when the hook, the tone and the model become worth reading.
 const _full = s => {
   const titles = _sourceTitles();
   return { ..._summary(s, titles), lines: s.lines || [], origin: _liveOrigin(s.origin, titles) };

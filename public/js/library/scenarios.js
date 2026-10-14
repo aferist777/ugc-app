@@ -20,7 +20,7 @@
 // far it got. A draft is not selected - pressing it continues it in the generator (js/library/make.js).
 //
 // FILTERS AND FIELDS (phase F7, the owner 2026-09-30): over the list, above the drafts, a dropdown per
-// field - type, role, gender, vertical, product, narrator (the voice of the WRITING), language - with
+// field - type, role, gender, vertical, product, narrator (the voice of the WRITING) - with
 // the values the scenarios really have and how many; the choice is remembered, drafts are not
 // filtered. The same fields are dropdowns in the column, saved the moment one is chosen, each with
 // "new…" for a value nobody has used yet.
@@ -58,7 +58,6 @@ function _tail(m) {
     m.product,
     m.roles,
     m.narrator,
-    m.language,
   ].filter(Boolean).join(' · ');
 }
 
@@ -66,12 +65,14 @@ function _tail(m) {
 const FIELDS = [
   { key: 'type', label: 'type' }, { key: 'role', label: 'role' }, { key: 'gender', label: 'gender' },
   { key: 'vertical', label: 'vertical' }, { key: 'product', label: 'product' },
-  { key: 'narrator', label: 'narrator' }, { key: 'language', label: 'language' },
+  { key: 'narrator', label: 'narrator' },
 ];
 const NONE = '__none__';
 const LS_FILTERS = 'library_sc_filters_v1';
 let _filters = (() => { try { return JSON.parse(localStorage.getItem(LS_FILTERS) || '{}') || {}; } catch (e) { return {}; } })();
 const _saveFilters = () => { try { localStorage.setItem(LS_FILTERS, JSON.stringify(_filters)); } catch (e) { /* this view only */ } };
+// The language filter went with the field (phase V29): a remembered one would leave "clear" over nothing.
+if ('language' in _filters) { delete _filters.language; _saveFilters(); }
 // A scenario opened ON PURPOSE - "open" after the generator saved it, or the one just edited - stays
 // in the list even when the filters would hide it, marked as outside them. Choosing a filter or
 // another row lets it go.
@@ -129,7 +130,7 @@ function _filterRow() {
 // "written from" is painted before these, by the source's live name. [key, label, whole row wide].
 const ORIGIN_ROWS = [
   ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
-  ['language', 'language'], ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
+  ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
@@ -238,13 +239,13 @@ function _empty(note) {
 }
 
 // ── The fields, as dropdowns (phase F7) ─────────────────────────────────────
-// The lists to choose from: the suggestion lists, the narrators, the generator's languages - read
-// once, the narrators again when the narrators window changes them.
+// The lists to choose from: the suggestion lists and the narrators - read once, the narrators again
+// when the narrators window changes them.
 let _lists = null;
 async function _readLists() {
   if (_lists) return _lists;
   const j = (u) => fetch(u).then(r => r.json()).catch(() => null);
-  const [opt, nar, mod] = await Promise.all([j('/api/scen3/options'), j('/api/narrators'), j('/api/scriptgen/models')]);
+  const [opt, nar] = await Promise.all([j('/api/scen3/options'), j('/api/narrators')]);
   _lists = {
     verticals: (opt && opt.options && opt.options.verticals) || [],
     products: (opt && opt.options && opt.options.products) || [],
@@ -252,7 +253,6 @@ async function _readLists() {
     // Neutral is the generator's own voice - not a record in the store, sent beside the list.
     narrators: [...(nar && nar.neutral ? [{ id: String(nar.neutral.id), name: nar.neutral.name }] : []),
       ...((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name }))],
-    languages: (mod && mod.languages) || [],
   };
   return _lists;
 }
@@ -490,7 +490,7 @@ async function _patch(s, patch, what) {
       it.meta = { ...(it.meta || {}), type: d.scenario.type || '', vertical: d.scenario.vertical || '', product: d.scenario.product || '',
         role: role.name || '', gender: role.gender || '',
         roles: role.name ? role.name + (role.gender ? ' (' + String(role.gender)[0] + ')' : '') : '',
-        narrator: (d.scenario.narrator && d.scenario.narrator.name) || '', language: d.scenario.language || '' };
+        narrator: (d.scenario.narrator && d.scenario.narrator.name) || '' };
       const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(s.id)) + '"] .lib-srow-s');
       if (row) row.textContent = _tail(it.meta);
       // The one just edited stays in sight even if it no longer matches, and the filters are counted
@@ -510,8 +510,7 @@ async function _paintFields(box, s) {
   const role = (s.roles || [])[0] || { id: 'r0', name: '', gender: '' };
   const roleOf = (name, gender) => [{ id: role.id || 'r0', name, gender }];
   // What a ✕ may take away (phase G4): the four vocabularies a person types into. talking_head is the
-  // type everything falls back to; gender is two words, narrators go in their own window, languages
-  // are the generator's list.
+  // type everything falls back to; gender is two words, narrators go in their own window.
   const rm = (field, fallback) => ({ field, fallback, can: (v) => !(field === 'type' && v === 'talking_head') });
   _fieldRow(box, 'type', s.type || 'talking_head', opt(_uniq(['talking_head', ..._inUse('type')])),
     v => _patch(s, { type: v || 'talking_head' }, 'type'), { newItem: true, remove: rm('type', 'talking_head') });
@@ -534,8 +533,6 @@ async function _paintFields(box, s) {
     // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
     return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
   }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
-  _fieldRow(box, 'language', s.language || '', opt(_uniq([...L.languages, ..._inUse('language')])),
-    v => _patch(s, { language: v }, 'language'), { none: true });
 }
 
 // A fact in the column's grid (phase G4/G5): its name above its value, two to a row; `wide` takes the

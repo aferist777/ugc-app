@@ -32,7 +32,8 @@ console.log(`library: ${LIB}\nlayout:  ${layout === 0 ? 'empty' : layout}`);
 
 if (APPLY) {
   const r = U.upgrade(LIB, { log: (s) => console.log(s) });
-  if (!r.upgraded && !(r.timelines && r.timelines.converted) && !(r.twins && r.twins.dropped)) console.log('nothing to upgrade');
+  if (!r.upgraded && !(r.timelines && r.timelines.converted) && !(r.twins && r.twins.dropped)
+    && !(r.language && r.language.records)) console.log('nothing to upgrade');
   process.exit(r.newlyMissing && r.newlyMissing.length ? 2 : 0);
 }
 // The timelines' step reads projects/*/merge/, which a layout 5 library does not have yet: counted
@@ -51,6 +52,10 @@ if (layout === 6) {
   const tw = require('../lib/timeline-twins').dropLibrary(LIB, { dry: true });
   console.log(tw.dropped ? `doubled cells of an old send to take off: ${tw.dropped} in ${tw.timelines} timeline(s)` : 'no doubled cells');
   for (const w of tw.which) console.log(`  ${w}`);
+  // (V29) A scenario's language in the stores (lib/drop-language.js), counted without writing.
+  const lg = require('../lib/drop-language').dropLibrary(LIB, { dry: true });
+  console.log(lg.records ? `scenario language to take out: ${lg.records} record(s) in ${lg.stores} store(s)` : 'no scenario language');
+  for (const w of lg.which) console.log(`  ${w}`);
 }
 if (layout !== 5) { console.log('nothing to upgrade'); process.exit(0); }
 
