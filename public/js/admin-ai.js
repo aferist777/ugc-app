@@ -35,7 +35,7 @@
       + 'shaped for the model you chose, a description, a plan. Short calls - words and a few pictures in, a short '
       + 'answer back within a minute.');
     p('<b>Where they work:</b> the pictures chat (the prompt for the picture model); the video chat (the clip\'s '
-      + 'prompt, Kling\'s first frame, putting a prompt into English or Chinese); the frames chat of a talking head '
+      + 'prompt, Kling\'s first frame, putting a prompt or a script\'s lines into English); the frames chat of a talking head '
       + '(the frame\'s prompt, ideas); New Character (reading a photo, framing the 4K sheet); New look, New lookbook '
       + 'and New environment (what to make); the talking head (the mood markup of the script, the plan of the first '
       + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place).');

@@ -50,6 +50,11 @@ function VIDEOS(ctx) {
   _last.agg = _last.agg || {};
   _last.params = _last.params || {};
   const _remember = () => keep(LS_LAST, _last);
+  // (phase V29, the owner 2026-10-14) The 中文 box went: a remembered tick of it goes too.
+  if (Object.values(_last.params).some(p => p && 'zh' in p)) {
+    for (const p of Object.values(_last.params)) if (p) delete p.zh;
+    _remember();
+  }
 
   const models = () => (_table ? _table.models : []);
   const model = () => models().find(m => m.id === (_set && _set.model.value)) || models().find(m => m.usable) || models()[0] || null;
@@ -383,7 +388,7 @@ function VIDEOS(ctx) {
       _row(host, 'aggregator', aSel, 'is-prov');
       const box = el('div', 'mv3-vc-params');
       host.appendChild(box);
-      // (phase V15) The writer, the storyboard and 中文 - the switches of how the message goes.
+      // (phase V15) The writer and the storyboard - the switches of how the message goes (中文 went in phase V29).
       const sw = el('div', 'mv3-vc-switches');
       host.appendChild(sw);
       const cost = el('div', 'mv3-ig-cost');
@@ -402,9 +407,8 @@ function VIDEOS(ctx) {
     _paintModel();
   }
 
-  // The switches (phase V15, the owner 2026-10-07): the writer - it was the pen in the bar - and 中文, one box for every
-  // send and every card (it was on each card).
-  const _zhOn = () => { const m = model(); return !!params().zh && !!m && (m.langs || []).includes('zh'); };
+  // The switches (phase V15, the owner 2026-10-07): the writer - it was the pen in the bar - and the storyboard. The 中文
+  // box beside them went in phase V29 (the owner 2026-10-14): every prompt goes in English.
   function _paintSwitches() {
     if (!_set) return;
     const m = model();
@@ -418,7 +422,7 @@ function VIDEOS(ctx) {
         : _framesMode() ? 'The storyboard goes to the video as a reference picture - not with frames: set "pictures are" to references'
         : !(_table && _table.r2) ? 'The storyboard goes to the video as a picture, from a public link - set R2 on Admin → API keys' : '';
     const held = !bWhy && _boardOn();
-    // (phase V16, the owner) The writer is a checkbox like the storyboard and 中文 - on by default.
+    // (phase V16, the owner) The writer is a checkbox like the storyboard - on by default.
     const wr = el('label', 'mv3-vc-check' + (held ? ' is-held' : ''));
     const wcb = document.createElement('input');
     wcb.type = 'checkbox';
@@ -446,17 +450,6 @@ function VIDEOS(ctx) {
     sb.append(scb, el('span', null, 'storyboard'));
     sb.title = bWhy || 'A storyboard first: the writer turns your message and pictures into the prompt of a sheet of numbered panels - nothing is paid at ">". On its message "draw the storyboard" draws the sheet (4K), "write the video" writes the video with it among the pictures and "make the video" makes it - each paid step by its own press. While it is ticked the writer stays on.';
     box.appendChild(sb);
-    const zhOk = (m.langs || []).includes('zh');
-    const zh = el('label', 'mv3-vc-check' + (zhOk ? '' : ' is-off'));
-    const zcb = document.createElement('input');
-    zcb.type = 'checkbox';
-    zcb.checked = _zhOn();
-    zcb.disabled = !zhOk;
-    zcb.addEventListener('change', () => { setParam('zh', zcb.checked); _paintPrice(); });
-    zh.append(zcb, el('span', null, '中文'));
-    zh.title = zhOk ? 'Send the prompt in Chinese (Seedance): it is translated just before it goes - the references and every quoted line stay as they are, and if the translation fails, the English goes. Every send and every card of this model.'
-      : m.label + ' reads English only';
-    box.appendChild(zh);
   }
 
   function _paintModel() {
@@ -1035,8 +1028,6 @@ function VIDEOS(ctx) {
     const clipSound = besideClip === 'clip';
     return {
       model: m.id, agg: r.agg,
-      // (phase V15) The column's 中文: the written prompt goes in Chinese (Seedance; the server checks the model too).
-      zh: _zhOn(),
       // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
       storyboard: boarding || undefined,
       // (phase V16, the owner) The writer stops for a look: its prompt comes back as a message of its own, and the video is
@@ -1437,7 +1428,6 @@ function VIDEOS(ctx) {
         // (phase V16) The column storyboard's video follows the sheet its prompt variant was written with; the others the
         // one shown.
         boardId: l.kind === 'column' ? (l.boardId || undefined) : sheet ? sheet.id : undefined,
-        zh: _zhOn(),
         ver: l.ver || undefined,
       });
       if (!d || !d.success) { note(go, 'Not made.', (d && d.error) || 'the server did not answer'); return; }
@@ -2289,7 +2279,7 @@ function VIDEOS(ctx) {
       : !pr || pr.none ? (mm ? mm.label + ' · no published price' : '')
         : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
           : '≈' + money(pr.usd * n) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
-            + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '') + (_zhOn() ? ' · in 中文' : '');
+            + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
   }
   function _videoStep(m, x, b, progs) {
     if (!x) return;
@@ -2298,6 +2288,7 @@ function VIDEOS(ctx) {
     h.appendChild(el('span', 'k', 'attempt ' + x.n));
     const when = t.at ? new Date(t.at) : null;
     if (when && !isNaN(when)) h.appendChild(el('span', null, when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })));
+    // An attempt from before phase V29 that went in Chinese says so - its history.
     if (t.zh) h.appendChild(el('span', null, '中文'));
     const vi = t.ver ? (m.card.versions || []).findIndex(v => v.id === t.ver) : -1;
     if (vi >= 0 && (m.card.versions || []).length > 1) h.appendChild(el('span', null, 'from prompt variant ' + (vi + 1)));
@@ -2490,6 +2481,7 @@ function VIDEOS(ctx) {
       // (phase V7.4) Where the model did not keep the clip's sound itself.
       ['sound', g.underlay === 'laid' ? 'the clip\'s sound, laid under it' : (g.underlay || '')],
       ['writer', g.fell && !/^sent in English/.test(g.fell) ? 'sent as typed - ' + g.fell : (g.writer || '')],
+      // A clip from before phase V29 that went in Chinese - its history; every clip since goes in English.
       ['language', g.lang === 'zh' ? 'sent in 中文' : /^sent in English/.test(g.fell || '') ? g.fell : ''],
       ['in 中文', g.lang === 'zh' ? (g.sent || '') : ''],
       ['sent as', (g.prompt && g.said && g.prompt !== g.said) ? g.prompt : ''],
