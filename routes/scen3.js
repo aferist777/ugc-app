@@ -1767,8 +1767,9 @@ router.get('/scen3/env-meta', (_req, res) => {
    PLACE and not to a project (the owner, 2026-09-21): every talking head set here animates the same
    way, so it lives beside the picture in scen3-env-meta.json and every project reads it.
 
-   With `motion` in the body it is written as given - that is the field being edited by hand. Without
-   it the agent looks at the picture and writes one, which is what the video zone's `generate` does.
+   With `motion` in the body it is written as given - that is the Library's environment column, "how it
+   moves", edited by hand (phase V26.8: the video field's box for it went). Without it the agent looks at
+   the picture and writes one, which is what the video zone's `generate` and a clip do.
    People and camera moves are deliberately out: the person is animated by the line's own prompt, and
    a camera move would fight the shot size the frames were drawn in.
    ──────────────────────────────────────────────────────────────────────────── */

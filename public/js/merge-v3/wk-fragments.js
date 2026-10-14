@@ -1897,8 +1897,8 @@ function _stageVideo(host, p, lines) {
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
   if (_seedance()) _seedanceSettings(body, p);
   // How the PLACE moves has no field here (phase V26.8, the owner 2026-10-14: "поле точно не нужно"): `generate` and
-  // a clip have the agent write it first, and its sentence goes into every prompt word for word - which is where it
-  // is put right, in the prompt of a line or a fragment.
+  // a clip have the agent write it first, and its sentence goes into every prompt word for word. It is put right in the
+  // Library's environment column, "how it moves" (public/js/library/info.js) - or in the prompt of a line or a fragment.
 
   // `generate`: the place first when it has nothing written, then the animation of every line that
   // needs one. Both are the agent thinking about pictures - credits, not dollars - so there is no

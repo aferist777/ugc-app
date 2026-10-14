@@ -83,13 +83,55 @@ function _looks(list, hooks, none) {
 // Shown, and written by hand when wanted (phase I, the owner: "показывай, но заполнение этих полей
 // необязательно"): a lookbook's gender and description, a place's description. Empty is fine - nothing
 // asks for them. How a place MOVES is written by the agent the first time a video is filmed there, and
-// edited where it is used; here it is only said.
+// put right HERE (phase V26.8, the owner 2026-10-14: "сделай how it moves редактируемым") - the talking
+// head's video field no longer has a box for it.
 const GENDERS = ['male', 'female', 'unisex'];
+
+const _sent = (r) => r.json().then((d) => { if (!d || !d.success) throw new Error((d && d.error) || 'not saved'); return d; });
 
 function _patch(kind, id, body) {
   return fetch('/api/library/meta/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  }).then(r => r.json()).then((d) => { if (!d || !d.success) throw new Error((d && d.error) || 'not saved'); return d; });
+  }).then(_sent);
+}
+
+// How a place moves keeps its own route, the one the agent writes through (routes/scen3.js, /scen3/env/motion):
+// with `motion` given it is kept as written, an empty one included - then the agent writes it again when the place
+// is next filmed.
+function _motion(path, motion) {
+  return fetch('/api/scen3/env/motion', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, motion }),
+  }).then(_sent);
+}
+
+// One text written by hand: its box, and `save` beside it only while the box differs from what is kept. `store`
+// sends it and answers with what the store now holds; `said` is where the outcome is told.
+function _textEdit(value, placeholder, rows, said, store) {
+  const ta = _el('textarea', 'lib-info-edit');
+  ta.value = value || '';
+  ta.placeholder = placeholder;
+  ta.rows = rows;
+  ta.spellcheck = true;
+  const save = _el('button', 'lib-btn lib-info-save', 'save');
+  save.type = 'button';
+  save.hidden = true;
+  let kept = ta.value;
+  ta.addEventListener('input', () => { save.hidden = ta.value.trim() === kept.trim(); said.textContent = ''; });
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      kept = await store(ta.value);
+      ta.value = kept;
+      save.hidden = true;
+      said.textContent = 'saved';
+    } catch (e) {
+      said.textContent = e.message;
+    }
+    save.disabled = false;
+  });
+  const foot = _el('div', 'lib-info-editfoot');
+  foot.append(said, save);
+  return { ta, foot };
 }
 
 function _about(kind, it, d) {
@@ -122,43 +164,22 @@ function _about(kind, it, d) {
     box.appendChild(row);
   }
 
-  const ta = _el('textarea', 'lib-info-edit');
-  ta.value = d.description || '';
-  ta.placeholder = kind === 'lookbooks'
+  const what = _textEdit(d.description, kind === 'lookbooks'
     ? 'What it is - not written yet. Optional: the dressing reads it.'
-    : 'What the place is - not written yet. Optional: the first frames are composed from it.';
-  ta.rows = 4;
-  ta.spellcheck = true;
-  const save = _el('button', 'lib-btn lib-info-save', 'save');
-  save.type = 'button';
-  save.hidden = true;
-  let kept = ta.value;
-  ta.addEventListener('input', () => { save.hidden = ta.value.trim() === kept.trim(); said.textContent = ''; });
-  save.addEventListener('click', async () => {
-    save.disabled = true;
-    try {
-      const r = await _patch(kind, id, { description: ta.value });
-      kept = r.description;
-      ta.value = kept;
-      save.hidden = true;
-      said.textContent = 'saved';
-    } catch (e) {
-      said.textContent = e.message;
-    }
-    save.disabled = false;
-  });
+    : 'What the place is - not written yet. Optional: the first frames are composed from it.',
+  4, said, async (text) => (await _patch(kind, id, { description: text })).description);
   box.appendChild(_el('div', 'lib-info-k', 'what it is'));
-  box.appendChild(ta);
-  const foot = _el('div', 'lib-info-editfoot');
-  foot.append(said, save);
-  box.appendChild(foot);
+  box.append(what.ta, what.foot);
 
   if (kind === 'environments') {
-    const t = _el('div', 'lib-info-text');
-    t.appendChild(_el('b', null, 'how it moves'));
-    t.appendChild(document.createTextNode(d.motion || 'written when it is first filmed'));
-    if (!d.motion) t.classList.add('is-none');
-    box.appendChild(t);
+    const moved = _el('div', 'lib-info-said');
+    const how = _textEdit(d.motion,
+      'How it moves - not written yet. The agent writes it the first time a video is filmed here.',
+      3, moved, async (text) => String(((await _motion(d.media, text)).entry || {}).motion || ''));
+    how.ta.title = 'What moves in the background by itself. Every video filmed here animates by it, word for word -'
+      + ' a prompt written with the old words is written again.';
+    box.appendChild(_el('div', 'lib-info-k', 'how it moves'));
+    box.append(how.ta, how.foot);
   }
   if (d.from) {
     const t = _el('div', 'lib-info-text');
