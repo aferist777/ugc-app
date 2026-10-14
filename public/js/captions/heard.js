@@ -11,24 +11,22 @@
    re-cut, by anything but the hand that typed them.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** The languages Groq can be told; 'auto' lets it detect. ISO-639-1, as the API takes them. */
+/** Languages by their ISO-639-1 codes, for naming the one a listener heard ("Heard as Russian", lib/whisper-words.js).
+ *  Nobody TELLS the listener a language any more (phase V29, the owner 2026-10-14: the lane's menu went) - it detects. */
 export const LANGS = [
   ['auto', 'detect'], ['ru', 'Russian'], ['en', 'English'], ['uk', 'Ukrainian'], ['es', 'Spanish'],
   ['de', 'German'], ['fr', 'French'], ['it', 'Italian'], ['pt', 'Portuguese'], ['pl', 'Polish'], ['tr', 'Turkish'],
 ];
-const LANG_SET = new Set(LANGS.map(([k]) => k));
 
 /**
- * How the subtitle lane is listened to, as stored on it: `{ lang?, engine? }`, or null when everything is
- * the default - detect the language, ask Groq. `engine: 'local'` is "this computer" (phase K1b).
+ * How the subtitle lane is listened to, as stored on it: `{ engine }`, or null when it is the default - ask Groq.
+ * `engine: 'local'` is "this computer" (phase K1b). The language is always detected: a `lang` an older lane
+ * carries is dropped here (phase V29 - the menu went; every lane of the owner's library was on "detect", so
+ * nothing is heard again or paid twice).
  */
 export function listenOf(lane) {
   const l = (lane && lane.listen) || {};
-  const out = {};
-  const lang = String(l.lang || '');
-  if (lang && lang !== 'auto' && LANG_SET.has(lang)) out.lang = lang;
-  if (l.engine === 'local') out.engine = 'local';
-  return Object.keys(out).length ? out : null;
+  return l.engine === 'local' ? { engine: 'local' } : null;
 }
 
 export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 0;

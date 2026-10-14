@@ -36,7 +36,7 @@ import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
 import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
-import { LANGS, listenOf } from '../captions/heard.js';
+import { listenOf } from '../captions/heard.js';
 import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
@@ -503,7 +503,6 @@ function _blankAudioTrack(host, track) {
 // ── Captions from what was said ─────────────────────────────────────────────
 // The SERVER listens to the project and lays the lines (lib/captions-job.js, phase K1); the strip
 // presses the button and says what the job of THIS project is doing (listen.js).
-const LANG_OPTS = LANGS.map(([k, label]) => [k, label]);
 const ENGINES = [['cloud', 'cloud (Groq)'], ['local', 'this computer']];
 // What the subtitle strip was last built for: while only the words of its status line change (a percent),
 // the line is rewritten in place - rebuilding the strip every 1.5 s tore down an open menu (review K1b).
@@ -572,9 +571,8 @@ function _blankWordsTrack(host, track) {
     // 2026-10-05; a labelled row held only two).
     host.appendChild(C.acts([gen, add, back]));
     if (fixed) host.appendChild(C.hint('Your ' + fixed + ' corrected ' + (fixed === 1 ? 'word goes' : 'words go') + ' with "back to what was heard".', true));
-    // Telling the listener the language helps on a short or quiet opening, where it can guess another one.
+    // No Language row (phase V29, the owner 2026-10-14): the listener detects the language by itself.
     const how = listenOf(track) || {};
-    host.appendChild(C.row('Language', C.select(LANG_OPTS, how.lang || 'auto', (val) => setListenB(track.id, { lang: val }))));
     // WHO LISTENS (phase K1b): Groq, or this computer - which is also where a run goes by itself when Groq
     // cannot be asked. Off when this copy of the app has no recognition of its own.
     const L = Listen.local();
