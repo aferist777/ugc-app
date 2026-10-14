@@ -186,11 +186,16 @@ export async function openScenario(summary, hooks = {}) {
     // One role, the presenter: the store keeps a list, and nothing offers a second one.
     roles: (role.value.trim() || gender.value) ? [{ id: 'r0', name: role.value.trim(), gender: gender.value }] : [],
     lines: linesOf().map(text => ({ text })),
+    // (phase V29, the owner 2026-10-14) Lines typed in another language are kept in English: the server translates them.
+    english: true,
   });
 
   const store = async () => {
-    note.textContent = 'saving…';
+    const sent = lines.value;
+    note.textContent = /(?!\p{Script=Latin})\p{L}/u.test(sent) ? 'translating into English…' : 'saving…';
     rec = await API.save(collect());
+    // What is kept is what the window shows - the English, when the lines were typed in another language.
+    if (lines.value === sent && Array.isArray(rec.lines)) { lines.value = rec.lines.map(l => l.text || '').join('\n'); gate(); }
     note.textContent = 'saved';
     saved(rec);                    // the list behind the window shows the new title
     return rec;

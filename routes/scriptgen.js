@@ -41,6 +41,7 @@ const narrators = require('../lib/narrators-store');
 const sources = require('../lib/sources-store');
 const scen3 = require('./scen3');
 const drafts = require('../lib/script-drafts');
+const AGENT = require('../lib/mv3-agent');
 
 const router = express.Router();
 
@@ -474,10 +475,10 @@ router.delete('/scriptgen/drafts/:id', (req, res) => {
 // ── into the scenarios store ────────────────────────────────────────────────
 // Through the store's own createScenario, which owns the id, the three gates and the
 // normalising. Not over HTTP to ourselves, and not by writing the file from here.
-router.post('/scriptgen/save', (req, res) => {
+router.post('/scriptgen/save', async (req, res) => {
   const b = req.body || {};
   const title = String(b.title || '').trim();
-  const paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
+  let paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
   if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
   // Not while a stage still writes into the draft: saving removes it, and the keeper would bring it
   // back beside the scenario the moment its answer landed.
@@ -492,6 +493,16 @@ router.post('/scriptgen/save', (req, res) => {
   const gender = String(b.gender || '').toLowerCase();
   if (!['male', 'female'].includes(gender)) {
     return res.status(400).json({ success: false, error: 'a narrator gender is required (male or female)' });
+  }
+  // (phase V29, the owner 2026-10-14: "набранное переводится") A paragraph typed or edited in another language goes into
+  // the scenario in English - the writer writes English, so it is a hand's. A stage started meanwhile still stops it.
+  if (paragraphs.some(p => !AGENT.english(p))) {
+    let t;
+    try { t = await AGENT.toEnglishLines(paragraphs); } catch (e) { t = { fail: 'the paragraphs could not be translated: ' + e.message }; }
+    if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+    paragraphs = t.texts.map(p => String(p || '').trim());
+    const run2 = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
+    if (run2) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run2.what}) - save when it has landed.`, ...run2 });
   }
 
   // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the dropdowns as they are now: the reading

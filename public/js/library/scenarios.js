@@ -627,7 +627,8 @@ async function _show(it) {
     clearTimeout(a.timer);
     a.timer = setTimeout(() => _flushA(a), AUTOSAVE_MS);
   });
-  ta.addEventListener('blur', () => _flushA(a));
+  // Leaving the lines is the save that makes them English (phase V29) - never the pause in the typing.
+  ta.addEventListener('blur', () => _flushA(a, true));
   make.addEventListener('click', () => _makeVideo(a, make));
   del.addEventListener('click', () => _delete(s, del));
 
@@ -651,31 +652,37 @@ let _flushing = Promise.resolve();   // the save of a column painted over, which
 // are dropped rather than saved as empty ones, which also stops a stray trailing newline adding a line.
 const _linesOf = (ta) => ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
 
+// (phase V29, the owner 2026-10-14: "набранное переводится") A letter of another script than Latin - the server's
+// own test (lib/mv3-agent.js `english`). Lines with one are made English by the server when they are left.
+const _foreign = (s) => /(?!\p{Script=Latin})\p{L}/u.test(String(s || ''));
+
 // What is typed and not stored yet, stored now - one save at a time, each after the one before it. Resolves to
-// false when the lines could not be kept (empty, refused, the scenario gone).
-function _flushA(a) {
+// false when the lines could not be kept (empty, refused, the scenario gone). `english`: the lines left or about to be
+// made a video of - saved in English, even when the pause in the typing has stored them as typed already.
+function _flushA(a, english) {
   if (!a) return Promise.resolve(true);
   clearTimeout(a.timer);
   a.timer = null;
-  a.busy = (a.busy || Promise.resolve(true)).then(() => _save(a));
+  a.busy = (a.busy || Promise.resolve(true)).then(() => _save(a, false, english));
   return a.busy;
 }
 
-async function _save(a, keepalive) {
+async function _save(a, keepalive, english) {
   const value = a.ta.value;
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  const toEnglish = !!english && !keepalive && _foreign(value);
   // Typed back to what is stored: nothing to save, and "every line is empty" is not true any more.
-  if (value === a.ta.dataset.was) { if (a.empty) { a.empty = false; say(''); } return true; }
+  if (value === a.ta.dataset.was && !toEnglish) { if (a.empty) { a.empty = false; say(''); } return true; }
   const lines = _linesOf(a.ta);
   a.empty = !lines.length;
   if (a.empty) { say('Every line is empty - not saved; the scenario keeps the lines it had.', 'err'); return false; }
-  if (!keepalive) say('saving…');
+  if (!keepalive) say(toEnglish ? 'translating into English…' : 'saving…');
   try {
     // Only what the column edits: the title it painted may have been renamed since, in Merge. And an
     // EDIT, so a scenario deleted meanwhile is not made again from these lines alone.
     const r = await fetch('/api/scen3/scenarios', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: !!keepalive,
-      body: JSON.stringify({ id: a.s.id, lines, edit: true }),
+      body: JSON.stringify({ id: a.s.id, lines, edit: true, ...(toEnglish ? { english: true } : {}) }),
     });
     if (keepalive) return true;
     const d = await r.json().catch(() => null);
@@ -689,6 +696,11 @@ async function _save(a, keepalive) {
     }
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     a.ta.dataset.was = value;
+    // Made English: the field shows what is stored - unless it was typed into while the translation came.
+    if (toEnglish && d.scenario && Array.isArray(d.scenario.lines)) {
+      const now = d.scenario.lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')).join('\n');
+      if (a.ta.value === value) { a.ta.value = now; a.ta.dataset.was = now; }
+    }
     // The row, the head of the lines and their count say what is stored now - in place: painting the column
     // again would take the textarea from under the typing.
     const n = lines.length;
@@ -700,7 +712,7 @@ async function _save(a, keepalive) {
     }
     a.linesHead.textContent = 'Lines · ' + n;
     if (a.count) { a.count.textContent = String(n); a.count.title = String(n); }
-    say('saved · ' + n + (n === 1 ? ' line' : ' lines'), 'ok');
+    say((toEnglish ? 'saved in English · ' : 'saved · ') + n + (n === 1 ? ' line' : ' lines'), 'ok');
     return true;
   } catch (e) {
     say('Not saved: ' + e.message, 'err');
@@ -719,7 +731,7 @@ async function _makeVideo(a, btn) {
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
   if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
   btn.disabled = true;
-  if (!(await _flushA(a))) { btn.disabled = false; return; }
+  if (!(await _flushA(a, true))) { btn.disabled = false; return; }
   say('making the project…');
   try {
     const key = await talkingHead(a.s.id);

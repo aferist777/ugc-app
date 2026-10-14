@@ -403,11 +403,33 @@ router.get('/scen3/scenarios/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// (phase V29, the owner 2026-10-14: "набранное переводится") Lines typed in another language, made English before they
+// are kept - the scenario window's save, the Library column's lines when they are left, a talking head made from a
+// scenario, a line of one edited or put in, the generator's save. { texts, translated } or { fail } in words.
+async function _englishLines(texts) {
+  try { return await AGENT.toEnglishLines(texts); } catch (e) { return { fail: 'the lines could not be translated: ' + e.message }; }
+}
+// The same for ONE prompt typed in a field - a fragment's Seedance prompt, a line's motion, a place's "how it moves", a
+// dressing note: English goes as typed, another language is translated (quoted words too). { text } or { fail }.
+async function _englishText(text) {
+  const t = String(text || '').trim();
+  if (!t || AGENT.english(t)) return { text: t };
+  try { return await AGENT.toEnglish(t); } catch (e) { return { fail: 'it could not be translated: ' + e.message }; }
+}
+
 // ── Upsert by id: creates when the id is unknown, else saves edits in place ──
-// This is what line edits and renames hit (autosaved, no Save button).
-router.post('/scen3/scenarios', (req, res) => {
+// This is what line edits and renames hit (autosaved, no Save button). `english` (phase V29): the lines are made English
+// first - sent by a save the person made on purpose, never by the autosave while they type, which would put the
+// translation in the field under their hands.
+router.post('/scen3/scenarios', async (req, res) => {
   try {
-    const { edit, ...b } = req.body || {};
+    const { edit, english, ...b } = req.body || {};
+    if (english && Array.isArray(b.lines)) {
+      const texts = b.lines.map(l => String((l && typeof l === 'object' ? l.text : l) || ''));
+      const t = await _englishLines(texts);
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      if (t.translated) b.lines = b.lines.map((l, i) => ({ ...(l && typeof l === 'object' ? l : {}), text: t.texts[i] }));
+    }
     const now  = new Date().toISOString();
     const list = _load();
     const i    = b.id != null ? list.findIndex(x => String(x.id) === String(b.id)) : -1;
@@ -724,6 +746,7 @@ async function _readDressing(personUrl, outfitUrl, note, described) {
     'For a costume, say plainly that the person is inside it, that it keeps its own bulk and proportions and does not follow the body underneath, and where the person face shows.',
     'The face always shows fully, uncovered, in an OPEN face opening - never behind mesh, a net, a screen, glass, a visor or a veil. If IMAGE 2 or its description puts one there, write that the opening is open instead.',
     'Never describe the background, the camera or the pose - those stay as they are in IMAGE 1.',
+    'Write the prompt in English, whatever language the person wrote in.',
     'Answer with JSON only: {"kind":"outfit"|"costume","prompt":"..."}',
   ].join(' ')
     + (described ? ' What IMAGE 2 is, as recorded when it was made: "' + String(described).slice(0, 1500) + '".' : '')
@@ -782,6 +805,8 @@ async function _readLookbookIdea(note, imageUrl) {
     'Name the fabric of every item concretely - its fibre and its weave or knit (heavyweight cotton twill, washed linen with natural slubs, fine merino rib knit, raw indigo denim, full-grain leather, wool felt, faux fur) and its finish (matte, brushed, glossy, with a soft sheen) - because the picture is a photograph of real garments, and a fabric that is not named comes out as plastic.',
     'description: 200 words or more, English, written for whoever will later dress a character in this. Say what the look IS, then go through it part by part - head and headwear, shoulders and arms and sleeve length, torso and fastening, waist, hips, legs and hem, feet, hands, and any tail, wings, mask or props. Say how each part sits on a body, what it is made of and what colour it is. For a mascot or full-body costume, say what creature or object it is, how the wearer gets into it, where the wearer face sits and what the proportions are. Be concrete and plain; no marketing language.',
     'A costume ALWAYS leaves the wearer face uncovered in an open face opening, in the prompt and in the description alike: never mesh, a net, a screen, glass, a visor or a veil over it. Whoever wears it will speak to the camera, and the face has to be seen.',
+    // (phase V29) Everything in English, whatever the person typed in.
+    'Write everything in English - the prompt, the description and "why" - whatever language the person wrote in.',
   ].join(' ');
   const ask = rules
     + (note ? ' The person wrote: "' + note + '".' : ' The person wrote nothing.')
@@ -1497,6 +1522,8 @@ async function _readEnvironmentIdea({ note, imageUrl, source, shape, choices, ca
   if (shape && shape.extend && source !== '' && !picked.length) {
     rules.push('The picture is ' + shape.w + 'x' + shape.h + ' and the result is a 3:2 landscape, so it has to be continued to the ' + shape.extend + '. Say so in the prompt in ONE or TWO plain sentences: the place in the picture stays exactly as it is, and it continues to the ' + shape.extend + ' in the same style, light and perspective. Do not describe the added part at length.');
   }
+  // (phase V29) Everything in English, whatever the person typed in.
+  rules.push('Write everything in English - the prompt, the description, "why" and any options - whatever language the person wrote in.');
   rules.push('description: 150 words or more, English, for whoever will later compose frames in this place'
     + (editing ? ' - the whole place as it will be AFTER the change, not the change alone' : '') + ': what the place is; how it is laid out from left to right and from front to back; surfaces, materials and colours; the light - where it comes from, how soft and how warm, what time of day it reads as; where a person can stand or sit and what is behind them there; the camera height. Plain and concrete, no marketing language.');
 
@@ -1825,7 +1852,13 @@ router.post('/scen3/env/motion', async (req, res) => {
       return res.status(400).json({ success: false, error: 'that picture is not an environment' });
     }
 
-    const given = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
+    let given = typeof b.motion === 'string' ? _cleanText(b.motion).slice(0, 600) : null;
+    // (phase V29) Typed in another language, it is kept in English - it goes into the clip's prompt.
+    if (given) {
+      const t = await _englishText(given);
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      given = _cleanText(t.text).slice(0, 600);
+    }
     const entry = given === null ? await _askEnvMotion(url) : _keepEnvMotion(url, given);
     res.json({ success: true, path: url, entry });
   } catch (e) {
@@ -1957,9 +1990,15 @@ JOBS.register('look', {
 async function _submitDress(b) {
   const base = String(b.basePath || '').trim();       // the image being dressed
   const lb   = String(b.lookbookPath || '').trim();   // optional lookbook reference
-  const note = String(b.note || '').trim();           // optional clothing-only steering
+  let note   = String(b.note || '').trim();           // optional clothing-only steering
   if (!base) throw Object.assign(new Error('basePath is required'), { status: 400 });
   if (!lb && !note) throw Object.assign(new Error('pick a lookbook or write a note'), { status: 400 });
+  // (phase V29) A note in another language goes into the picture's prompt in English.
+  if (note) {
+    const t = await _englishText(note);
+    if (t.fail) throw Object.assign(new Error('the note ' + t.fail), { status: 502 });
+    note = t.text;
+  }
 
   const urls = [await _hostLocal(base)];
   let prompt;
@@ -3487,9 +3526,27 @@ router.get('/scen3/projects/:id', (req, res) => {
 
 // Create from a scenario ({ scenarioId }), or upsert an existing project by id
 // so later phases can persist casting / montage onto it.
-router.post('/scen3/projects', (req, res) => {
+router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
+    // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
+    // came in, or brought by an Import - gets them in English, and so does the scenario: what is spoken is English.
+    if (b.id == null && b.scenarioId != null) {
+      const s0 = _load().find(x => String(x.id) === String(b.scenarioId));
+      const texts = s0 ? (s0.lines || []).map(l => String((l && l.text) || '')) : [];
+      if (texts.some(t => t.trim() && !AGENT.english(t))) {
+        const t = await _englishLines(texts);
+        if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+        const all = _load();
+        const k = all.findIndex(x => String(x.id) === String(b.scenarioId));
+        // Written only over the lines it translated: lines edited meanwhile are not put back.
+        if (k >= 0 && JSON.stringify((all[k].lines || []).map(l => String((l && l.text) || ''))) === JSON.stringify(texts)) {
+          all[k] = _norm({ ...all[k], lines: all[k].lines.map((l, i) => ({ ...l, text: t.texts[i] })) }, new Date().toISOString());
+          all[k].updatedAt = new Date().toISOString();
+          _save(all);
+        }
+      }
+    }
     const now  = new Date().toISOString();
     const list = _loadProjects();
 
@@ -3570,8 +3627,17 @@ router.post('/scen3/projects', (req, res) => {
    wherever the line is shown. Putting the text back to what was said is how a line stops being
    stale: the same call, with those words.
    ───────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/projects/:id/line', (req, res) => {
+router.post('/scen3/projects/:id/line', async (req, res) => {
   try {
+    let text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
+    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+    // (phase V29) Typed in another language, the words are made English before they are kept - the field shows the
+    // English. Then the project is read and written in one go, as before.
+    if (!AGENT.english(text)) {
+      const t = await _englishLines([text]);
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      text = String(t.texts[0] || '').trim();
+    }
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === String(req.params.id));
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
@@ -3580,8 +3646,6 @@ router.post('/scen3/projects/:id/line', (req, res) => {
     const lines = (proj.lines || []).map(_normLine);
     const i = parseInt((req.body || {}).index, 10);
     if (!(i >= 0 && i < lines.length)) return res.status(400).json({ success: false, error: 'no such line' });
-    const text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
-    if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
 
     // The words with their [tags], when the page edits those too (Merge, phase W). Kept only when
     // the words in it are these words: tags belong to the words they sit between. Sent nothing, a
@@ -3708,12 +3772,20 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     if (!proj) return res.status(404).json({ success: false, error: 'not found' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const b = req.body || {};
-    const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
+    let text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
     if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
     const after = parseInt(b.after, 10);
     if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
     const busy = _scriptBusy(id);
     if (busy) return res.status(409).json({ success: false, error: busy + ' - put the line in when it is done' });
+    // (phase V29) Typed in another language, it goes in English - and nothing may have started while it was translated.
+    if (!AGENT.english(text)) {
+      const t = await _englishLines([text]);
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      text = String(t.texts[0] || '').replace(/\s+/g, ' ').trim();
+      const busy2 = _scriptBusy(id);
+      if (busy2) return res.status(409).json({ success: false, error: busy2 + ' - put the line in when it is done' });
+    }
 
     const saved = PROJECTS.apply(id, (fresh) => {
       fresh.lines = (fresh.lines || []).map(_normLine);
@@ -3917,7 +3989,7 @@ router.post('/scen3/sd/prompts', async (req, res) => {
   }
 });
 
-router.post('/scen3/sd/prompt', (req, res) => {
+router.post('/scen3/sd/prompt', async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
@@ -3927,7 +3999,13 @@ router.post('/scen3/sd/prompt', (req, res) => {
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const f = (_sdView(proj) || []).find(x => x.key === key);
     if (!f) return res.status(400).json({ success: false, error: 'no such fragment' });
-    const text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
+    let text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
+    // (phase V29) Written by hand in another language, it is kept - and sent - in English.
+    if (text && !b.useAgent) {
+      const t = await _englishText(text);
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      text = String(t.text || '').trim().slice(0, 20000);
+    }
     const saved = PROJECTS.apply(id, (fresh) => {
       const sd = _normSd(fresh.sd);
       const was = sd.frags[key] || { prompt: '', agent: '', edited: false, sig: '', writer: '', at: '' };
@@ -4284,9 +4362,16 @@ function _sdCuts(proj) {
    useAgentMotion puts the agent's back. Written for the words as they are now and the mood as it is
    now, so it is fresh.
    ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/fragments/shot', (req, res) => {
+router.post('/scen3/fragments/shot', async (req, res) => {
   try {
     const b = req.body || {};
+    // (phase V29) A motion written by hand in another language is kept - and sent - in English. First, then the project.
+    let motion = null;
+    if (b.patch && typeof b.patch === 'object' && !b.patch.useAgentMotion && 'motion' in b.patch) {
+      const t = await _englishText(String(b.patch.motion || ''));
+      if (t.fail) return res.status(502).json({ success: false, error: t.fail });
+      motion = t.text;
+    }
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
@@ -4299,7 +4384,7 @@ router.post('/scen3/fragments/shot', (req, res) => {
     const next = { ...was };
     if (patch.useAgentMotion) { next.motion = was.motionAgent || ''; next.motionEdited = false; }
     else if ('motion' in patch) {
-      next.motion = String(patch.motion || '');
+      next.motion = motion != null ? motion : String(patch.motion || '');
       next.motionEdited = next.motion.trim() !== String(was.motionAgent || '').trim();
     }
     next.said = p.lines[i].text;
@@ -5138,9 +5223,12 @@ router.post('/scen3/frames/crop', async (req, res) => {
   }
 });
 
-router.post('/scen3/frames/prompt', (req, res) => {
+router.post('/scen3/frames/prompt', async (req, res) => {
   try {
     const b = req.body || {};
+    // (phase V29) A frame's prompt written by hand in another language is kept - and drawn - in English.
+    const t = await _englishText(String(b.prompt == null ? '' : b.prompt));
+    if (t.fail) return res.status(502).json({ success: false, error: t.fail });
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === String(b.projectId || ''));
     if (!p) return res.status(404).json({ success: false, error: 'no such project' });
@@ -5148,7 +5236,7 @@ router.post('/scen3/frames/prompt', (req, res) => {
     p.mix = _normMix(p.mix);
     const v = p.mix.variants.find(x => x.id === String(b.frameId || ''));
     if (!v) return res.status(404).json({ success: false, error: 'no such frame' });
-    v.prompt = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 4000);
+    v.prompt = String(t.text || '').trim().slice(0, 4000);
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, project: _projFull(p) });
