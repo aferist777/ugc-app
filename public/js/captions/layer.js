@@ -27,7 +27,9 @@ const EMPTY = (w, h) => '[Script Info]\nScriptType: v4.00+\nPlayResX: ' + w + '\
 let _jas = null;
 let _canvas = null;
 let _state = 'off';            // off | starting | ready | failed
-let _ass = '';
+let _ass = '';                 // what the worker draws
+let _full = '';                // the project's
+let _live = false;             // a gesture's captions are drawn instead (setLive)
 let _frame = renderFrame('9:16');
 let _at = 0;
 let _shown = true;
@@ -100,7 +102,27 @@ export function show(on) {
 export function setTimeline(tl) {
   const fmt = (tl && tl.format) || '9:16';
   _frame = renderFrame(fmt);
-  const ass = buildAss(captionLanes(tl), _frame.w, _frame.h) || EMPTY(_frame.w, _frame.h);
+  _full = buildAss(captionLanes(tl), _frame.w, _frame.h) || EMPTY(_frame.w, _frame.h);
+  if (!_live) _push(_full);
+}
+
+/**
+ * A GESTURE IN HAND (phase V30, block 3: a caption dragged on the preview): these captions - the ones on screen,
+ * with their place as the pointer has it - are drawn instead of the project's until `null` gives the project's
+ * back. Nothing is stored; the store hears of the gesture once, when it ends.
+ */
+export function setLive(tl) {
+  if (!tl) {
+    if (!_live) return;
+    _live = false;
+    _push(_full);
+    return;
+  }
+  _live = true;
+  _push(buildAss(captionLanes(tl), _frame.w, _frame.h) || EMPTY(_frame.w, _frame.h));
+}
+
+function _push(ass) {
   if (ass === _ass) return;
   _ass = ass;
   if (_state !== 'ready') return;

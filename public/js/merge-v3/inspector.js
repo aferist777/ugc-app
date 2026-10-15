@@ -41,7 +41,9 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour } from '../captions/style.js';
+import { markedColour, renderFrame } from '../captions/style.js';
+import { pageBox } from '../captions/place.js';
+import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
 import { FONTS as CAP_FONTS, fontOf } from '../captions/fonts.js';
 import * as WK from './workshop.js';
@@ -642,7 +644,8 @@ function _blankWordsTrack(host, track) {
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
+    pages: () => (track.clips || []).map(c => ({ track, clip: c })) });
 
   // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
   const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
@@ -694,12 +697,25 @@ function _presetsHint(host) {
 function _styleRows(host, st, set, o) {
   host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
   // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
-  // thing after the format changes, which a number of pixels would not.
-  host.appendChild(C.row('Nudge', C.slider({
-    min: -0.30, max: 0.30, step: 0.01, value: +st.ty || 0,
+  // thing after the format changes, which a number of pixels would not. ±80% (phase V30, block 3): a page dragged
+  // on the preview anywhere on the frame is still on the slider.
+  const side = +st.tx || 0;
+  const across = Math.abs(side) < 0.005 ? '' : (side < 0 ? 'left ' : 'right ') + Math.abs(Math.round(side * 100)) + '%';
+  // Across, it is moved on the preview only; here it is said, and taken back to the middle.
+  const centre = C.button('centre', () => set({ tx: 0 }), {
+    title: across ? 'Moved ' + across + ' on the preview - back to the middle across' : 'In the middle across - drag it on the preview to move it sideways',
+  });
+  centre.disabled = !across || !Store.canEdit();
+  const sideBox = _el('span', 'mv3-c-marks');
+  if (across) sideBox.appendChild(_el('span', 'mv3-c-num', across));
+  sideBox.appendChild(centre);
+  host.appendChild(C.row('Nudge', C.pair(C.slider({
+    min: -0.80, max: 0.80, step: 0.01, value: +st.ty || 0,
     fmt: (v) => (Math.abs(v) < 0.005 ? 'none' : (v > 0 ? 'down ' : 'up ') + Math.abs(Math.round(v * 100)) + '%'),
     onChange: (v) => set({ ty: v }),
-  })));
+  }), sideBox)));
+  // Under a platform's buttons or text (phase V30, block 3, (с36)): said, never refused - on the preview in red.
+  if (o.pages) _crossHint(host, o.pages());
   // SIZE IS THE FORMAT'S until it is touched (a lane's): "auto" while nobody has chosen. Up to 200, as a
   // style allows - presets go to 170, and a slider stopping at 120 wrote 120 over them.
   const autoS = !!o.autoS;
@@ -770,6 +786,31 @@ function _styleRows(host, st, set, o) {
   }
 }
 
+// WHAT A PLATFORM'S SCREEN COVERS (phase V30, block 3; the owner's (с36): a mark, nothing refused or moved): with
+// TikTok, Shorts or Instagram over the preview, how many of these pages lie under which of its elements - every page
+// of the lane, not only the one on screen.
+function _crossHint(host, items) {
+  const id = Platforms.current();
+  if (!id || !items || !items.length) return;
+  const F = renderFrame('9:16');
+  let n = 0;
+  const groups = new Set();
+  for (const x of items) {
+    if (!x.clip || !x.clip.name || !((+x.clip.dur) > 0)) continue;
+    const b = pageBox(x.clip, x.track.style, x.track.kind === 'subs', F.w, F.h);
+    const hit = Platforms.crossed(b.lines, F.w, F.h);
+    if (!hit.length) continue;
+    n++;
+    for (const h of hit) groups.add(h.g);
+  }
+  if (!n) return;
+  const many = items.length > 1;
+  const h = C.hint((many ? n + (n === 1 ? ' page crosses' : ' pages cross') : 'This page crosses') + ' the '
+    + Platforms.nameOf(id) + ' ' + [...groups].join(' / ') + ' - outlined in red on the preview; drag it clear, or leave it.');
+  h.classList.add('is-warn');
+  host.appendChild(h);
+}
+
 // SEVERAL CAPTIONS (K6): picked by a band, on one lane of words or two - one look for them all, as
 // their own style; anything else picked with them and this is not shown (_renderMany is).
 function _renderCaptions(host, items) {
@@ -791,7 +832,8 @@ function _renderCaptions(host, items) {
   const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
     ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v }), { cut: true });
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+  _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
+    pages: () => items });
   if (items.some(x => x.clip.style)) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
@@ -895,7 +937,8 @@ function _blankCaption(host, track, clip) {
   host.appendChild(_el('div', 'mv3-c-sep'));
   const heard = isHeard(clip);
   _styleRows(host, styleOf(track, fmt, clip), (patch) => setCapStyleB([clip.id], patch, { cut: heard && _cuts(patch) }),
-    { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+    { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
+      pages: () => [{ track, clip }] });
   if (own) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], null, { cut: heard }),
@@ -1093,6 +1136,8 @@ export function initInspector() {
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(() => render());
+  // A platform's screen over the preview, or none: the strip says which pages lie under it (phase V30, block 3).
+  Platforms.onChange(() => render());
 
   // pointerdown/up on the document rather than on the panel: a drag that starts on a
   // slider often ends with the pointer somewhere else entirely, and a listener on the

@@ -122,8 +122,9 @@ export function boxOf(drawn, st, W, H) {
   const top = a.y - _lift(a.an, th);
   let x = a.x - iw / 2 - edge, y = top + up - edge;
   const w = iw + around, h = th - up - down + around;
-  // Back inside the frame (с34). Wider than the frame (never, with lines of 0.78): centred.
-  const fit = (p, size, room) => (size >= room ? (room - size) / 2 - p : p < 0 ? -p : p + size > room ? room - size - p : 0);
+  // Back inside the frame (с34) - past it by more than half a pixel. Wider than the frame (never, with lines of 0.78):
+  // centred.
+  const fit = (p, size, room) => (size >= room ? (room - size) / 2 - p : p < -0.5 ? -p : p + size > room + 0.5 ? room - size - p : 0);
   const dx = fit(x, w, W), dy = fit(y, h, H);
   x += dx; y += dy;
   const lines = [];

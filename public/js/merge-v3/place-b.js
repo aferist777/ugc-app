@@ -135,10 +135,14 @@ function _down(e) {
   const top = id && _api.rectOf ? _api.rectOf(id) : null;
 
   const t = _target();
+  const part = t ? _partAt(p, t.r) : '';
+  // The selected picture's grips come first...
+  if (t && (part === 'size' || part === 'turn')) { _begin(t, p, part, e); e.preventDefault(); return; }
+  // ...then the captions, drawn over every picture (phase V30, block 3: cap-place.js picks and moves them)...
+  if (_api.caption && _api.caption(e, p)) return;
   if (t) {
-    const part = _partAt(p, t.r);
     // A BAND ON TOP IS PICKED BY CLICKING IT, even over the selected picture: it covers that part
-    // of the frame, so that is what the click is on. The selected picture's grips still come first.
+    // of the frame, so that is what the click is on.
     const bandOver = part === 'move' && top && top.band && id !== t.clip.id;
     if (part && !bandOver) { _begin(t, p, part, e); e.preventDefault(); return; }
   }
@@ -162,7 +166,9 @@ function _move(e) {
     const id = _pick(p);
     const top = id && _api.rectOf ? _api.rectOf(id) : null;
     const bandOver = part === 'move' && top && top.band && id !== t.clip.id;
-    _cv.style.cursor = bandOver ? 'pointer' : part === 'move' ? 'move' : part === 'size' ? 'nwse-resize'
+    // A caption under the pointer is what a press takes, but for the grips (cap-place.js).
+    const cap = (part === 'size' || part === 'turn') ? '' : (_api.capHover ? _api.capHover(p) : '');
+    _cv.style.cursor = cap ? cap : bandOver ? 'pointer' : part === 'move' ? 'move' : part === 'size' ? 'nwse-resize'
                      : part === 'turn' ? 'grab' : (id ? 'pointer' : '');
     return;
   }
@@ -261,7 +267,9 @@ export function paintHandles(ctx) {
 
 /**
  * @param canvas the preview's canvas
- * @param api    { rectOf(id), rects(), pad(), frame(), repaint() } - all in FRAME coordinates
+ * @param api    { rectOf(id), rects(), pad(), frame(), repaint(), caption(e, p), capHover(p) } - all in FRAME
+ *               coordinates; `caption` takes a press on a page of captions (true when it did), `capHover` says the
+ *               cursor over one (phase V30, block 3).
  */
 export function wirePlace(canvas, api) {
   _cv = canvas;

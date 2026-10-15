@@ -412,8 +412,14 @@ function _awayFromLane(e) {
   if (Views.isCaptions() && t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
   const top = Layers.top();
   if (top && top.el && top.el.contains && top.el.contains(t)) return;
+  // Nor on a page of captions on the preview (phase V30, block 3): that press picks a lane or moves it (cap-place.js).
+  if (_keepPick && _keepPick(e)) return;
   _clearSel();
 }
+
+let _keepPick = null;
+/** A press that is not "away" from a picked lane though it lands outside the timeline - the preview's caption pages. */
+export function keepPickOn(fn) { _keepPick = typeof fn === 'function' ? fn : null; }
 
 const _selSubs = [];
 export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb); }

@@ -22,6 +22,9 @@ import { paintCaptions } from './subs-b.js';
 // that is not up yet.
 import * as CapLayer from '../captions/layer.js';
 import { wirePlace, paintHandles, liveOf } from './place-b.js';
+// Captions picked and moved on the preview, and the platforms' screens over the frame (phase V30, block 3).
+import * as CapPlace from './cap-place.js';
+import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
 import { setPlayhead, setFormat } from './timeline-b.js';
@@ -517,9 +520,10 @@ function _paint() {
   // OVER EVERY LAYER, like the render burns them. Drawn by libass on its own canvas over the frame
   // (captions/layer.js, K4); the painter is the stand-in while that is not up. A screenshot is saved
   // without them and the server burns them in with the render's own libass (lib/caption-shot.js).
+  // A caption being moved is drawn where the pointer has it (cap-place.js) - the layer is handed it there.
   if (_shooting) { /* burnt in by the server */ }
   else if (CapLayer.ready()) CapLayer.render(_at);
-  else { try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {} }
+  else { try { paintCaptions(_ctx, CapPlace.liveTimeline() || tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {} }
 
   // WHAT IS OUTSIDE THE FRAME, dimmed and edged. It is drawn rather than clipped away because
   // seeing where an insert has got to is the whole reason for the margin - but it must not read
@@ -544,8 +548,10 @@ function _paint() {
     _hctx.clearRect(0, 0, CW, CH);
     _hctx.setTransform(1, 0, 0, 1, PAD, PAD);
     try { paintHandles(_hctx); } catch (e) {}
+    try { CapPlace.paint(_hctx); } catch (e) {}
   } else {
     try { paintHandles(_ctx); } catch (e) {}
+    try { CapPlace.paint(_ctx); } catch (e) {}
   }
 
   _note(gapNote(gaps));
@@ -776,8 +782,9 @@ export function borrow(on) {
     if (stage) stage.querySelectorAll('.mv3-stage-ctl').forEach(x => x.remove());
   }
   if (_borrowed) pause();
-  // The stage lent to the workshop shows no captions (the painter drew none there either).
+  // The stage lent to the workshop shows no captions (the painter drew none there either), nor a platform's screen.
   CapLayer.show(!_borrowed);
+  Platforms.show(!_borrowed);
   document.body.classList.toggle('mv3-workshop', _borrowed);
   _view = { z: 1, x: 0, y: 0 };
   if (_still) _still.box = null;
@@ -1541,8 +1548,10 @@ function _resize() {
     // narrower than the shape used to keep the stage's full height and squeeze the picture sideways.
     stage.style.setProperty('--mv3-ar', String(CW / CH));
   }
-  // The captions' canvas covers the frame exactly - the margin is the editor's, not the film's.
+  // The captions' canvas covers the frame exactly - the margin is the editor's, not the film's. So does a platform's screen.
   CapLayer.place(PAD / CW, PAD / CH, W / CW, H / CH);
+  Platforms.place(PAD / CW, PAD / CH, W / CW, H / CH);
+  Platforms.setFormat(_fmt());
   // The stage is shaped by CSS, so the shape has to reach CSS - on the body, where every rule
   // that depends on it can read it.
   document.body.classList.toggle('mv3-fmt-169', _fmt() === '16:9');
@@ -1566,6 +1575,9 @@ export function mount() {
   Object.assign(_hcv.style, { position: 'absolute', left: '0', top: '0', pointerEvents: 'none' });
   stage.appendChild(_hcv);
   _hctx = _hcv.getContext('2d');
+  // A platform's screen over the captions and under the grips; its marks in the header.
+  Platforms.attach(stage, _hcv);
+  Platforms.mountButtons();
   _resize();
   // The gesture layer is handed what only this module knows: where each insert was actually
   // drawn, and how to make it draw again mid-drag.
@@ -1582,6 +1594,16 @@ export function mount() {
   wirePlace(_cv, {
     rectOf: (id) => _rects.get(id),
     rects: () => _rects,
+    pad: () => PAD,
+    frame: () => ({ w: W, h: H }),
+    repaint: () => { if (_on) _paint(); },
+    caption: (e, p) => CapPlace.down(e, p),
+    capHover: (p) => CapPlace.hover(p),
+  });
+  CapPlace.wireCapPlace({
+    canvas: _cv,
+    on: () => _on && !_borrowed && !_shooting,
+    at: () => _at,
     pad: () => PAD,
     frame: () => ({ w: W, h: H }),
     repaint: () => { if (_on) _paint(); },

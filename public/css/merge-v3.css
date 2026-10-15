@@ -459,6 +459,23 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 
 .mv3-pv-btn[disabled]{opacity:.4; cursor:default}
 
+/* ── The platforms' screens (phase V30, block 3; js/merge-v3/platforms.js) ─────
+   Three one-colour marks right of "Preview"; the one whose screen is over the frame is lit. The screen itself
+   is laid exactly over the frame like the captions' canvas, the mouse passing through it. */
+.mv3-pf{display:flex; align-items:center; gap:4px; flex:0 0 auto}
+.mv3-pf-btn{
+  flex:0 0 auto; width:24px; height:22px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted); cursor:pointer; transition:.12s var(--ease);
+}
+.mv3-pf-btn svg{width:13px; height:13px; fill:currentColor; display:block}
+.mv3-pf-btn:hover{color:var(--ink); border-color:var(--border-soft); background:var(--surface)}
+.mv3-pf-btn.is-on{border-color:var(--primary); color:var(--primary); background:var(--primary-soft)}
+.mv3-pf-btn.is-off{opacity:.4; cursor:default}
+.mv3-pf-btn.is-off:hover{color:var(--muted); border-color:var(--border); background:var(--surface-2)}
+.mv3-pf-over{position:absolute; pointer-events:none; overflow:visible}
+
 /* ── Transport ────────────────────────────────────────────────────────────────
    Bottom left, with the resolution picker immediately right of the buttons. */
 .mv3-pv-bar{
@@ -737,6 +754,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:400 9.5px/1.4 var(--font); color:var(--muted);
 }
 .mv3-c-hint.is-flush{padding-left:0}
+/* Pages under a platform's buttons or text (phase V30, block 3): the red of their marks on the preview. */
+.mv3-c-hint.is-warn{color:var(--danger)}
 /* A row of buttons with no label (phase S2, controls.js acts): they share the strip's whole width and give
    way evenly when it is short - a label that no longer fits ends in "…". */
 .mv3-c-acts{display:flex; align-items:center; gap:4px; padding:3px 0; min-width:0}
