@@ -31,6 +31,8 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          revealSelection as revealSelB, gesture as gestureB, recutLines as recutLinesB,
          selectTrackById as selectTrackB } from './timeline-b.js';
 import * as CapView from './captions-view.js';
+import * as MyPresets from './my-presets.js';
+import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
 import { isHeard } from '../captions/heard.js';
@@ -41,7 +43,7 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame } from '../captions/style.js';
+import { markedColour, renderFrame, resolveStyle } from '../captions/style.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
@@ -547,7 +549,8 @@ function _blankWordsTrack(host, track) {
   const apply = (id) => { const s = presetStyle(id); if (s) setSubsStyleB(track.id, s, isSubs); };
   const pagesNow = (track.clips || []).filter(isHeard).length;
   _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : ''));
-  _presetLine(host, raw, () => apply(raw.preset));
+  // Saved as the lane's style is stored - an automatic size stays automatic.
+  _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw);
 
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
@@ -684,20 +687,39 @@ function _capHead(host, title, sub) {
   host.appendChild(h);
 }
 
-// "based on Red Pop · edited" and the way back to it - a style made from a preset says which.
-function _presetLine(host, style, back, editedAny) {
+// "based on Red Pop · edited" and the way back to it - a style made from a preset says which. Where ONE look is shown (a
+// lane, a line), `save` - what that look is - puts "save as my preset" in the same row, at the top of the strip where it is
+// seen without scrolling (phase V30, block 5, (с49)); a look made from no preset has the row for that button alone.
+function _presetLine(host, style, back, editedAny, save) {
   const id = style && style.preset;
   const name = id ? presetName(id) : '';
-  if (!name) return;
-  const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
-  const row = _el('div', 'mv3-cap-preset');
-  row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
-  if (edited) {
-    const b = C.button('back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
-    b.disabled = !Store.canEdit();
-    row.appendChild(b);
+  if (!name && !save) return;
+  const row = _el('div', 'mv3-cap-preset' + (name ? '' : ' is-plain'));
+  if (name) {
+    const edited = editedAny != null ? !!editedAny : editedKeys(style).length > 0;
+    row.appendChild(_el('span', 'mv3-cap-based', 'based on ' + name + (edited ? ' · edited' : '')));
+    if (edited) {
+      const b = C.button('back to the preset', back, { title: 'Takes away what was changed since ' + name + ' was applied' });
+      b.disabled = !Store.canEdit();
+      row.appendChild(b);
+    }
   }
+  if (save) row.appendChild(_saveMine(save));
   host.appendChild(row);
+}
+
+// SAVE AS MY PRESET (phase V30, block 5; the owner's (с13): with a window for the name). The window offers "My preset" (or
+// "My preset 2"…, (с48)); a taken name - one of the person's or of the app's - is refused in it, in the server's words, and
+// it stays open (с45). The lane or line it is saved from stays as it was (с46); the new tile is shown in `Mine`.
+function _saveMine(lookOf) {
+  const b = C.button('save as my preset', () => {
+    askName({
+      anchor: b.isConnected ? b : null, title: 'Save as my preset', value: MyPresets.freeName(), okLabel: 'Save', maxLength: 60,
+      submit: (name) => MyPresets.save(name, lookOf()),
+    }).then((p) => { if (p && p.id) CapView.showMine(p.id); });
+  }, { title: 'Keeps this look - font, colours, place, effects - as a preset of your own: its tile goes into Mine, to put on any lane or line' });
+  b.classList.add('mv3-cap-save');
+  return b;
 }
 
 // The tiles are always beside the settings when there is room (phase S3, the owner 2026-10-05 - the
@@ -869,7 +891,9 @@ function _blankCaption(host, track, clip) {
   const fmt = (tl && tl.format) || '9:16';
   const own = !!(clip.style && Object.keys(clip.style).length);
   _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
-  if (own) _presetLine(host, clip.style, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }));
+  // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
+  _presetLine(host, own ? clip.style : null, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }),
+    undefined, () => resolveStyle(track.style, clip.style));
   const heardLine = isHeard(clip);
   const area = C.textarea(clip.name || '', (v) => {
     // NEVER THE OLD TEXT OVER A NEWER ONE (review K10): the box writes the WHOLE text, and the line may have
@@ -1120,6 +1144,10 @@ export function initInspector() {
   WK.onChange(() => render());
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
   CapView.onApply((id) => { if (_capApply) _capApply(id); });
+  // The person's own presets (phase V30, block 5): read once, and a change paints the strip - "based on" a preset of theirs
+  // is said once the list is known, and goes when the preset is deleted.
+  MyPresets.onChange(() => render());
+  MyPresets.load();
   Views.onBack('captions', () => clearSelB());
   // (phase V18.2) The "captions" crumb from another view: the subtitle lane picked - every timeline has one, and it
   // cannot be removed - and the captions view follows the pick as it always has.
