@@ -19,6 +19,12 @@
 //   POST /api/speech/local/download { what }    -> { success, state }  'model' | 'cuda', in the background
 //   POST /api/speech/local/remove   { what }    -> { success, state }
 //
+//   GET  /api/mv3/captions/presets               -> { success, presets }   the person's own caption presets (phase V30,
+//                                                 block 5; lib/caption-presets-store.js), newest first
+//   POST /api/mv3/captions/presets { name, style } -> { success, preset, presets }   a new one; a taken name 409 (с45)
+//   POST /api/mv3/captions/presets/rename { id, name } -> { success, preset, presets }
+//   POST /api/mv3/captions/presets/delete { id } -> { success, presets }   at once (с47); projects keep their copy
+//
 // The sound is taken from the SAVED timeline - the page saves what it has before it presses - and the
 // lines are laid on the timeline as it stands when they are ready, not as it stood at the press.
 // ════════════════════════════════════════════════════════════════════════════
@@ -34,6 +40,7 @@ const LOCAL = require('../lib/whisper-local');
 const { KEY_RE } = require('../lib/subs-store');
 const { HEARD } = require('../lib/mv3b-subs');
 const TILES = require('../lib/caption-tiles');
+const MINE = require('../lib/caption-presets-store');
 const { CATEGORIES } = require('../public/js/captions/presets.js');
 
 router.post('/mv3/captions/transcribe', (req, res) => {
@@ -92,10 +99,43 @@ router.get('/mv3/captions/tiles', (req, res) => {
 router.post('/mv3/captions/tiles/make', (req, res) => {
   try {
     const first = String((req.body && req.body.first) || '');
-    res.json({ success: true, ...TILES.make(CATEGORIES.some((c) => c.id === first) ? first : null) });
+    res.json({ success: true, ...TILES.make(first === TILES.MINE_CAT || CATEGORIES.some((c) => c.id === first) ? first : null) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
+});
+
+// ── The person's own presets (phase V30, block 5; lib/caption-presets-store.js) ──
+// A change is answered with the whole list, and the tiles hear of it: a new one's is made first, a deleted one's goes.
+const _presetErr = (res, e) => res.status(e.status || 500).json({ success: false, error: e.message });
+
+router.get('/mv3/captions/presets', (req, res) => {
+  try { res.json({ success: true, presets: MINE.list() }); } catch (e) { _presetErr(res, e); }
+});
+
+router.post('/mv3/captions/presets', (req, res) => {
+  try {
+    const b = req.body || {};
+    const preset = MINE.add(b.name, b.style);
+    TILES.mineChanged();
+    res.json({ success: true, preset, presets: MINE.list() });
+  } catch (e) { _presetErr(res, e); }
+});
+
+router.post('/mv3/captions/presets/rename', (req, res) => {
+  try {
+    const b = req.body || {};
+    const preset = MINE.rename(b.id, b.name);
+    res.json({ success: true, preset, presets: MINE.list() });
+  } catch (e) { _presetErr(res, e); }
+});
+
+router.post('/mv3/captions/presets/delete', (req, res) => {
+  try {
+    MINE.remove((req.body || {}).id);
+    TILES.mineChanged();
+    res.json({ success: true, presets: MINE.list() });
+  } catch (e) { _presetErr(res, e); }
 });
 
 // ── This computer's ear (Admin -> This computer, and the subtitle lane) ─────

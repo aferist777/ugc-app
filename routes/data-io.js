@@ -105,6 +105,11 @@ const GROUPS = [
   // plain list, merged on the way in by id - the newer one wins, the versions of both are kept (lib/library-merge.js).
   { id: 'videopresets', label: 'Video presets',
     dirs: [], stores: ['data/video-presets.json'] },
+  // The person's own caption presets (phase V30, block 5): a plain list with the marks of the deleted ones, merged on the
+  // way in by id - one deleted here is not brought back, a name taken here comes as "Name (2)" (lib/caption-presets-store.js).
+  // Their tiles are cache and make themselves again.
+  { id: 'captionpresets', label: 'Caption presets',
+    dirs: [], stores: ['data/caption-presets.json'] },
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
