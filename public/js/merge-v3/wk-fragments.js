@@ -788,6 +788,47 @@ const _seedance = () => { const m = _modelOf(); return m ? m.family === 'seedanc
 // (the sixth round) Filmed by Seedance FROM THE VOICE'S SAMPLE: nothing is read - the voice field only chooses the voice -
 // and Seedance picks each clip's length, so no price is said beforehand (the owner's answer (я10)).
 const _bySample = () => _seedance() && (_video().sound || 'read') === 'sample';
+
+// THE VOICE'S DEMO, BY THE VOICE SAMPLE (the sixth round, the owner's answer (я7): "генерируем демку после выбора голоса.
+// Кнопка генерации недоступна пока демка не готова ... всплывашку сделаем что демо голоса генерируется"). The server says
+// whether the voice has one (`castVoice.demo`); one without is asked for at once (routes/scen3.js /scen3/voice/demo -
+// ElevenLabs, about ten seconds), once per voice in this page - a failure says so in the voice field, with a way to ask
+// again. While it is missing the voice field is red and the clips wait.
+let _demoFor = '';                        // the voice whose demo is being made now
+let _demoAsked = '';                      // ...the last one asked for (not asked again by itself)
+let _demoErr = '';
+const _demoMissing = (p) => {
+  const cv = (p && p.castVoice) || {};
+  return _bySample() && !!cv.has && !cv.demo;
+};
+function _demoWanted(p) {
+  if (!_demoMissing(p) || _demoFor) return;
+  const id = String(p.castVoice.id || '');
+  if (!id || _demoAsked === id) return;
+  _askDemo(p);
+}
+async function _askDemo(p) {
+  const id = String(p.castVoice.id || '');
+  _demoFor = id;
+  _demoAsked = id;
+  _demoErr = '';
+  _demoPopup(true);
+  _ctx.repaint();
+  try { _adopt(await _post('/api/scen3/voice/demo', { projectId: p.id })); }
+  catch (e) { _demoErr = 'The voice demo was not made: ' + e.message; }
+  _demoFor = '';
+  _demoPopup(false);
+  _ctx.repaint();
+}
+// The popup: over the page's foot, gold, while the demo is being made. It takes no keys and no presses.
+let _demoPop = null;
+function _demoPopup(on) {
+  if (!on) { if (_demoPop) { _demoPop.remove(); _demoPop = null; } return; }
+  if (_demoPop) return;
+  _demoPop = el('div', 'mv3-wk-popup', 'The voice demo is being made - about ten seconds. Seedance takes the voice from it; the clips wait for it.');
+  _demoPop.setAttribute('role', 'status');
+  document.body.appendChild(_demoPop);
+}
 const _qualities = () => ((_modelOf() || {}).qualities) || [];
 const _tier = () => _qualities().find(q => q.id === _video().quality) || _qualities()[0] || null;
 const _ceiling = () => ((_tier() || {}).maxAudioSec) || CEILING_FALLBACK;
@@ -828,6 +869,7 @@ export function paint(host, ctx, api, head) {
   const p = ctx.project;
   if (!p) { host.appendChild(_note('Reading the project…')); return; }
   if (_kit === null) _loadKit(ctx.repaint);
+  _demoWanted(p);
   const lines = Array.isArray(p.lines) ? p.lines : [];
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
@@ -1017,6 +1059,8 @@ function _needs(p) {
   const out = {};
   if (!v.mood) out.mood = 'a mood';
   if (!_canRead()) out.voice = 'a voice';
+  // (the sixth round) By the voice sample the voice is there once its demo is (the owner's answer (я7)).
+  else if (_demoMissing(p)) out.voice = 'a voice with its demo';
   // (phase V26.5, the owner 2026-10-10) THE FIRST FRAMES ARE THERE ONCE THE SET HAS A FRAME - from the frames chat or a
   // set drawn here: the field's menus are needed only to draw a set, so they are red only while there is none.
   const f = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean);
@@ -1468,12 +1512,21 @@ function _stageVoiceSample(host, p) {
   const has = _canRead();
   const { body } = _stage(host, 'voice', {
     step: 2, half: true, work: null,
-    name: 'voice', sub: 'its sample, for Seedance', done: has, need: _needs(p).voice,
-    summary: has ? 'the voice is chosen' : 'no voice yet',
+    name: 'voice', sub: 'its sample, for Seedance', done: has && !_demoMissing(p), need: _needs(p).voice,
+    summary: !has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen',
   });
   VOICE.paintRow(body, _api.voiceApi());
   body.appendChild(el('div', 'mv3-wk-fwhy', 'Seedance takes the timbre from this voice’s demo and says the lines itself - nothing is read.'
     + ' The voice is changed here; the sound is chosen in field 4.'));
+  if (_demoFor) body.appendChild(_note('Making the voice’s demo…'));
+  else if (_demoMissing(p)) {
+    body.appendChild(_note(_demoErr || 'This voice has no demo yet.', !!_demoErr));
+    const again = el('button', 'mv3-wk-vuse', 'make the demo');
+    again.type = 'button';
+    again.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
+    again.addEventListener('click', () => _askDemo(p));
+    body.appendChild(again);
+  }
 }
 
 // THE STABILITY AND THE SPEED of the read (phase V26.1, the owner 2026-10-10) - one each for the
@@ -1918,6 +1971,8 @@ function _stageVideo(host, p, lines) {
   // (phase V26.8, parts 4-5) SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
   // credits - then the clips of the fragments that have none, priced, on a second press.
   if (soon) {
+    // (the sixth round) By the voice sample the clips wait for the voice and its demo too.
+    if (_bySample() && _needs(p).voice) wait.push(_needs(p).voice);
     const sdWant = _sdNeeds(p).length;
     const sample = _bySample();
     const many = (n) => n + (n === 1 ? ' clip' : ' clips');
@@ -3018,6 +3073,7 @@ function _clipCol(p, l, i, rs, take) {
   const sf = _seedance() ? _sdFragOf(p, i) : null;
   if (_seedance()) {
     if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
+    else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 2)';
     else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
     else if (!fr) cap = 'make the frames first';
     else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';

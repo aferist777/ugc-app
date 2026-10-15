@@ -3462,6 +3462,11 @@ const _projSummary = p => ({
 // request per line, every one of them refused for the same reason, and the column reports
 // ten failures without ever naming the cause.
 function _castVoice(p) {
+  const cv = _castVoiceOf(p);
+  // (phase V26.8, sixth round) Whether the voice has a demo - what Seedance takes its timbre from by the voice sample.
+  return cv.has ? { ...cv, demo: !!_sampleOf(cv.id) } : cv;
+}
+function _castVoiceOf(p) {
   const cast = _normCasting((p || {}).casting);
   // The project's own pick reads when there is no character to read for, or the character has
   // no voice of their own (phase W2.5).
@@ -4017,20 +4022,79 @@ const FAKE = require('../lib/fake-agg');
 const _sdAsking = new Set();              // the rows being asked for now, in this process - their poll waits
 const SD_BOOT_AT = Date.now();            // ...and every row made since this process started is this process's
 
-// The voice sample for `sample`: the cast voice's demo on the Voices shelf, else the character's own record of it.
+// The voice sample for `sample`: the cast voice's demo on the Voices shelf, else the character's own record of it -
+// a file that is on disk.
 function _sdSample(p) {
-  const cv = _castVoice(p);
-  if (!cv || !cv.has || !cv.id) return '';
-  const shelf = VSHELF.get(cv.id);
-  if (shelf && shelf.demo) return String(shelf.demo);
+  const cv = _castVoiceOf(p);
+  return cv && cv.has && cv.id ? _sampleOf(cv.id) : '';
+}
+function _sampleOf(voiceId) {
+  const there = (u) => { const abs = u ? toDiskExisting(String(u)) : ''; return !!(abs && fs.existsSync(abs)); };
+  const shelf = VSHELF.get(voiceId);
+  if (shelf && shelf.demo && there(shelf.demo)) return String(shelf.demo);
   const chars = _read(path.join(DATA_DIR, 'characters.json'));
   const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
   for (const ch of arr) {
-    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(cv.id));
-    if (v && v.sample) return String(v.sample);
+    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
+    if (v && v.sample && there(v.sample)) return String(v.sample);
   }
   return '';
 }
+
+/* ── A VOICE'S DEMO, MADE WHEN IT HAS NONE (phase V26.8, sixth round, the owner's answer (я7)) ──────────
+   POST /api/scen3/voice/demo  { projectId }  -> { success, made, project }
+
+   By the voice sample Seedance takes the timbre of the voice's demo. A voice taken from the ElevenLabs library got its
+   demo when it was taken (/scen3/voices/take); a character's voice set before that has none (6 of the owner's 27,
+   2026-10-15). The owner: "генерируем демку после выбора голоса. Кнопка генерации недоступна пока демка не готова" -
+   so the page asks for it the moment a voice without one is chosen in a project filmed by the voice sample, and its
+   buttons wait. The same phrase a take reads (lib/voice-demo.js) - ElevenLabs credits, about ten seconds - filed into
+   media/voice/demos/ and onto the Voices shelf, so it is made once for every project the voice is in. One at a time
+   per voice: a second ask waits for the first.
+   ──────────────────────────────────────────────────────────────────────────── */
+const _demoMaking = new Map();            // voiceId -> the making under way
+function _makeDemo(voiceId, name) {
+  const live = _demoMaking.get(voiceId);
+  if (live) return live;
+  const run = (async () => {
+    const key = _elKey();
+    if (!key) throw Object.assign(new Error('no ElevenLabs key in settings - the voice demo cannot be made'), { status: 400 });
+    const buf = await _speakLine(key, voiceId, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
+    const dir = path.join(CFG.MEDIA.voice, 'demos');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = 'demo_' + voiceId + '_' + Date.now() + '.mp3';
+    fs.writeFileSync(path.join(dir, file), buf);
+    const demo = '/media/voice/demos/' + file;
+    const dur = await _audioDur(path.join(dir, file));
+    await VSHELF.register({ voiceId, name, demo, dur });
+    console.log('[scen3/voice/demo] made for', voiceId, dur.toFixed(1) + 's');
+    return demo;
+  })();
+  _demoMaking.set(voiceId, run);
+  run.then(() => _demoMaking.delete(voiceId), () => _demoMaking.delete(voiceId));
+  return run;
+}
+router.post('/scen3/voice/demo', async (req, res) => {
+  try {
+    const id = String((req.body || {}).projectId || '').trim();
+    const proj = _loadProjects().find(x => String(x.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    const cv = _castVoiceOf(proj);
+    if (!cv.has || !cv.id) return res.status(400).json({ success: false, error: 'choose a voice first' });
+    let made = false;
+    if (!_sampleOf(cv.id)) {
+      await _makeDemo(cv.id, cv.name || (cv.character ? cv.character + ' - voice ' + cv.index : ''));
+      made = true;
+    }
+    res.json({ success: true, made, project: _projFull(_loadProjects().find(x => String(x.id) === id) || proj) });
+  } catch (e) {
+    const d = (e.response && e.response.data) || {};
+    const msg = (d.detail && (d.detail.message || d.detail)) || e.message;
+    console.error('[scen3/voice/demo]', msg);
+    res.status(e.status || 502).json({ success: false, error: String(msg) });
+  }
+});
 
 // What a clip of line `i` would be made of, or why it cannot be.
 function _sdClipPlan(proj, i) {

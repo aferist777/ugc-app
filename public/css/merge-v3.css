@@ -1787,6 +1787,11 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-fins:hover{background:var(--gold); color:var(--bg)}
 .mv3-wk-fins.is-off{opacity:.45; cursor:default}
 .mv3-wk-fins.is-off:hover{background:var(--bg); color:var(--gold)}
+/* (phase V26.8, sixth round) THE POPUP while a voice's demo is being made: over the foot of the page, gold, taking
+   nothing - no keys, no presses. */
+.mv3-wk-popup{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:60; max-width:420px;
+  padding:10px 16px; border:1px solid var(--gold); border-radius:8px; background:var(--bg);
+  font:600 11px/1.45 var(--font); color:var(--gold); box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:none}
 .mv3-wk-ftext{
   flex:1 1 auto; min-width:0; font:400 10.5px/1.4 var(--font); color:var(--ink);
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
