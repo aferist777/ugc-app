@@ -2217,7 +2217,6 @@ async function _fileGenerated(kind, src, b) {
 const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
 const TH = require('../lib/th-video');
-const SDM = require('../lib/sd-merge');
 const SDP = require('../lib/sd-prompt');
 // (phase V26.8) The writer of a Seedance fragment's performance (thinkTalk).
 const AGENT = require('../lib/mv3-agent');
@@ -3136,8 +3135,8 @@ function _normProject(p, now) {
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
-    // (phase V26.8) What Seedance keeps per fragment - its prompt (and, with part 5, its clips) - by the fragment's key.
-    sd:         _normSd(src.sd),
+    // (phase V26.8, sixth round) What Seedance keeps is on each LINE (`sd`, _normLine) - the project's `sd.frags` of the
+    // merged fragments is not carried over.
     createdAt:  src.createdAt || now,
     updatedAt:  src.updatedAt || now,
   };
@@ -3263,6 +3262,9 @@ function _normLine(l) {
     // (phase V26.1, the owner 2026-10-10) The line's OWN speed, set in its fragment: the project's speed does not
     // touch it. Absent - the line reads at the project's speed.
     ...(Number(s.speed) > 0 ? { speed: _ttsParams({ speed: s.speed }).speed } : {}),
+    // (phase V26.8, sixth round, the owner 2026-10-15: "Всегда по одной строке") WHAT SEEDANCE KEEPS FOR THIS LINE - a
+    // line is a fragment of its own: its prompt and its clips (_normSdLine). Absent until it has either.
+    ...(s.sd && typeof s.sd === 'object' ? { sd: _normSdLine(s.sd) } : {}),
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.
@@ -3337,10 +3339,9 @@ const _normVideo = (v) => {
     // A quality the model makes - another model's is no choice at all (720p is Kling's and Seedance's, 1080p not mini's).
     quality: TH.qualityOf(model, s.quality) ? s.quality
       : (chosen || model !== 'kling' ? '' : MP.DEFAULT_QUALITY),
-    // SEEDANCE'S OWN SETTINGS (phase V26.8; read only while a Seedance model films it). `merge` - the lines joined into
-    // fragments of up to the model's longest clip; `sound` - how the clip is voiced (lib/th-video.js SOUNDS; '' = by the
-    // script's language); `gestures` - whose mood the body moves by ('' = the project's mood).
-    merge:    !!s.merge,
+    // SEEDANCE'S OWN SETTINGS (phase V26.8; read only while a Seedance model films it). `sound` - how the clip is voiced
+    // (lib/th-video.js SOUNDS; '' = SOUND_DEFAULT); `gestures` - whose mood the body moves by ('' = the project's mood).
+    // The lines are never merged (the owner 2026-10-15: "Удаляем эту функцию по объединению фрагментов"): `merge` goes.
     sound:    TH.soundById(s.sound) ? s.sound : '',
     gestures: MP.moodById(s.gestures) ? s.gestures : '',
     // The set of first frames (docs/local-app/PLAN.md, phase W2): the shot size it is made in (the
@@ -3354,26 +3355,22 @@ const _normVideo = (v) => {
     spread:  (s.spread === 'random' || s.spread === 'cycle') ? s.spread : (chosen ? '' : 'cycle'),
   };
 };
-// (phase V26.8, part 4) WHAT SEEDANCE KEEPS PER FRAGMENT, by the fragment's key (lib/sd-merge.js - made of the reads it
-// joins, so it holds whichever way the lines are grouped): the prompt as it goes, the writer's own to go back to, whether
-// it was edited by hand, what it was written for (`sig`, lib/sd-prompt.js), who wrote it and when.
-function _normSd(s) {
-  const src = (s && typeof s === 'object') ? s : {};
-  const frags = {};
-  for (const [k, f] of Object.entries((src.frags && typeof src.frags === 'object') ? src.frags : {})) {
-    if (!/^[0-9a-f]{12}$/.test(k) || !f || typeof f !== 'object') continue;
-    frags[k] = {
-      prompt: String(f.prompt || '').slice(0, 20000), agent: String(f.agent || '').slice(0, 20000),
-      edited: !!f.edited, sig: String(f.sig || ''), writer: String(f.writer || ''), at: String(f.at || ''),
-      // (part 5) Its clips - every take kept, as a line's - and the one chosen by hand, whatever it was made from.
-      clips: (Array.isArray(f.clips) ? f.clips : []).map(_normSdClip).filter(Boolean),
-      chosen: String(f.chosen || ''),
-    };
-  }
-  return { frags };
+// (phase V26.8, part 4; on the line since the sixth round) WHAT SEEDANCE KEEPS FOR A LINE: the prompt as it goes, the
+// writer's own to go back to, whether it was edited by hand, what it was written for (`sig`, lib/sd-prompt.js), who
+// wrote it and when; (part 5) its clips - every take kept, as Kling's - and the one chosen by hand, whatever it was made from.
+function _normSdLine(f) {
+  const s = (f && typeof f === 'object') ? f : {};
+  return {
+    prompt: String(s.prompt || '').slice(0, 20000), agent: String(s.agent || '').slice(0, 20000),
+    edited: !!s.edited, sig: String(s.sig || ''), writer: String(s.writer || ''), at: String(s.at || ''),
+    clips: (Array.isArray(s.clips) ? s.clips : []).map(_normSdClip).filter(Boolean),
+    chosen: String(s.chosen || ''),
+  };
 }
-// One take of a Seedance fragment: the file, its poster and length, and what it was made from - the frame, the sound
-// it was voiced with (`read` / `ours` / `sample`, which decides what the timeline hears), the model and the quality.
+// One take of a line filmed by Seedance: the file, its poster and length, and what it was made from - the frame, the
+// sound it was voiced with (`read` / `sample`), the read it heard (`take`, with `read`), the words (`words`, their
+// fingerprint) and the voice (`voice`, with `sample`) - which is what decides whether it is still the line's
+// (_sdFresh) - the model and the quality.
 function _normSdClip(c) {
   if (!c || typeof c !== 'object' || !c.path) return null;
   const p = String(c.path);
@@ -3382,6 +3379,7 @@ function _normSdClip(c) {
     dur: +c.dur > 0 ? Math.round(+c.dur * 100) / 100 : 0, frameId: String(c.frameId || ''),
     sound: TH.soundById(c.sound) ? c.sound : 'read', model: String(c.model || ''), quality: String(c.quality || ''),
     secs: +c.secs > 0 ? +c.secs : 0, at: String(c.at || ''),
+    take: String(c.take || ''), words: String(c.words || ''), voice: String(c.voice || ''),
   };
 }
 
@@ -3498,22 +3496,8 @@ const _projFull = p => ({
   // owner's answer (ь). Said here, never stored: it follows the words.
   video: { ..._normVideo(p.video), soundAuto: TH.SOUND_DEFAULT },
   mix:   _normMix(p.mix),
-  merge: _mergeView(p),
   sdFrags: _sdView(p),
 });
-
-// (phase V26.8, part 3) THE MERGED FRAGMENTS of a Seedance project (lib/sd-merge.js), worked out from the lines as they
-// stand: whether the lines can be merged now (and why not), whether `merge fragments` is ticked, and - when it is - the
-// fragments, each with its lines, its length and its sound (`ready` once that is on disk). null for Kling.
-function _mergeView(p) {
-  const video = _normVideo(p.video);
-  if (!TH.isSeedance(video.model)) return null;
-  const pl = SDM.plan({ ...p, video });
-  return {
-    on: !!video.merge, can: pl.can, why: pl.why, cap: pl.cap,
-    groups: video.merge && pl.can ? pl.groups.map(({ paths, ...g }) => g) : [],
-  };
-}
 
 router.get('/scen3/projects/:id', (req, res) => {
   try {
@@ -3805,76 +3789,22 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── MERGE FRAGMENTS (phase V26.8, part 3, the owner 2026-10-13) ─────────────
-   POST /api/scen3/fragments/merge  { projectId, on } -> { success, project, failed }
+/* ── THE LINES SEEDANCE FILMS, AND THEIR PROMPTS (phase V26.8, part 4, the owner 2026-10-13) ──────────
+   POST /api/scen3/sd/prompts  { projectId, lines? }               -> { success, project, report: { written, failed } }
+   POST /api/scen3/sd/prompt   { projectId, line, prompt }          a prompt edited by hand
+                               { projectId, line, useAgent: true }  back to the writer's own   -> { success, project }
 
-   The tick in the video field of a Seedance project: neighbouring lines filmed as one clip each, by the rule in
-   lib/sd-merge.js - never by itself, and only once every line is read. Ticked, the sound of every merged fragment
-   that has none is made before the answer (seconds - ffmpeg on short files), so the fragment plays the moment it
-   shows; asked again while ticked, it makes only what is missing (a read retimed since, another model's length).
-   Unticked, the lines are lines again - nothing is deleted.
-   ──────────────────────────────────────────────────────────────────────────── */
-router.post('/scen3/fragments/merge', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const id = String(b.projectId || '').trim();
-    const proj = _loadProjects().find(p => String(p.id) === id);
-    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
-    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const on = !!b.on;
-    if (on) {
-      const pl = SDM.plan({ ...proj, video: _normVideo(proj.video) });
-      if (!pl.can) return res.status(400).json({ success: false, error: pl.why });
-    }
-    const saved = PROJECTS.apply(id, (fresh) => {
-      fresh.video = { ...(fresh.video || {}), merge: on };
-      fresh.updatedAt = new Date().toISOString();
-    });
-    if (!saved) return res.status(404).json({ success: false, error: 'no such project' });
-    let failed = [];
-    if (on) {
-      const out = await SDM.build({ ...saved, video: _normVideo(saved.video) });
-      failed = out.failed;
-      console.log('[scen3/fragments/merge] ' + id + ' merged: ' + out.made + ' sound(s) made' + (failed.length ? ', ' + failed.length + ' failed' : ''));
-    } else console.log('[scen3/fragments/merge] ' + id + ' unmerged');
-    res.json({ success: true, project: _projFull(PROJECTS.get(id) || saved), failed });
-  } catch (e) {
-    console.error('[scen3/fragments/merge]', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-/* ── THE FRAGMENTS SEEDANCE FILMS, AND THEIR PROMPTS (phase V26.8, part 4, the owner 2026-10-13) ──────────
-   POST /api/scen3/sd/prompts  { projectId, keys? }                -> { success, project, report: { written, failed } }
-   POST /api/scen3/sd/prompt   { projectId, key, prompt }           a prompt edited by hand
-                               { projectId, key, useAgent: true }   back to the writer's own   -> { success, project }
-
-   A fragment is a merged one, or a read line when the lines are not merged (lib/sd-merge.js fragments). Its prompt is
-   written by ONE request of its own (lib/mv3-agent.js thinkTalk, lib/sd-prompt.js assemble) - the writer sees the frame
-   it begins on and the character's sheet, and is told its lines with their seconds, the mood and the way of moving.
-   `keys` names the fragments to write; without it, every fragment that has no prompt, or one written for other settings
-   and not edited by hand. A few at once. Text in seconds and fractions of a cent: no Alerts row, as the animation
-   prompts of Kling (section 9 of the plan).
+   A LINE IS A FRAGMENT OF ITS OWN (the sixth round, the owner 2026-10-15: "Удаляем эту функцию по объединению
+   фрагментов. Всегда по одной строке") - one clip per line, as Kling. Its prompt is written by ONE request of its own
+   (lib/mv3-agent.js thinkTalk, lib/sd-prompt.js assemble) - the writer sees the frame the line opens on and the
+   character's sheet, and is told the line, the mood and the way of moving - and kept on the line (`sd`, _normSdLine).
+   `lines` names the lines to write; without it, every line that has no prompt, or one written for other settings and
+   not edited by hand. A few at once. Text in seconds and fractions of a cent: no Alerts row, as the animation prompts
+   of Kling (section 9 of the plan). The prompts land on the lines by number: a line put in meanwhile waits (_holdLines).
    ──────────────────────────────────────────────────────────────────────────── */
 const SD_WRITE_AT_ONCE = 3;
 
-// The frame a Seedance fragment begins on: a merged one by ITS number in the set (the owner's answer (л)), or picked by
-// hand on its first line; a line by the line's own rule (_frameOfLine). The page draws by the same rule (wk-fragments.js
-// _frameFor with _groupOf).
-function _sdFrameOf(proj, frag, pool) {
-  const lines = (proj.lines || []).map(_normLine);
-  const i = frag.lines[0];
-  const head = lines[i];
-  const video = _normVideo(proj.video);
-  if (!frag.merged) return _frameOfLine(pool, head, i, video.spread, proj.id);
-  if (!pool.length) return null;
-  const picked = head && head.frameId ? pool.find(v => v.id === String(head.frameId)) : null;
-  if (picked) return picked;
-  const k = frag.n - 1;
-  return video.spread === 'random' ? pool[_seed(String(proj.id || '') + ':g' + k) % pool.length] : pool[k % pool.length];
-}
-
-// What every fragment's prompt is written FOR, as things stand: the effective sound and way of moving, the place.
+// What every line's prompt is written FOR, as things stand: the effective sound and way of moving, the place.
 function _sdSetting(p) {
   const video = _normVideo(p.video);
   return {
@@ -3885,31 +3815,46 @@ function _sdSetting(p) {
   };
 }
 
-// THE FRAGMENTS of a Seedance project, for the page: each with its frame, the seconds its clip is asked for, and its
-// prompt - edited by hand, written for other settings (`stale`) - or none yet. null for Kling.
+// A take of a line is FRESH while the line opens on the frame it was made from and says the words it was made of -
+// with `read`, by the read it heard (a take from before that was recorded counts as fresh, as Kling's).
+function _sdFresh(c, frameId, take, words) {
+  if (c.frameId !== frameId) return false;
+  if (c.words && c.words !== words) return false;
+  return !c.take || !take || c.take === take.path;
+}
+
+// THE LINES OF A SEEDANCE PROJECT, for the page and for the clips: every live line that is read, each with its place in
+// the video (`n`), its read, the frame it opens on, the seconds its clip is asked for, its prompt - edited by hand,
+// written for other settings (`stale`) - or none yet, and its takes (`clip` - chosen by hand, else the newest fresh).
+// A line not read yet is not one of them: there is nothing to film it to. null for Kling.
 function _sdView(p) {
   const st = _sdSetting(p);
   if (!TH.isSeedance(st.video.model)) return null;
-  const proj = { ...p, video: st.video };
-  const sd = _normSd(p.sd);
   const pool = _framePool(p);
-  return SDM.fragments(proj).map(f => {
-    const fr = _sdFrameOf(proj, f, pool);
-    const sig = SDP.sigOf({ frameId: fr && fr.id, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place });
-    const k = sd.frags[f.key] || null;
-    const { paths: _paths, ...rest } = f;
+  const cap = TH.maxSecs(st.video.model);
+  const out = [];
+  let n = 0;
+  (p.lines || []).map(_normLine).forEach((l, i) => {
+    if (l.removed) return;
+    n++;
+    const take = MIRROR.readOf(l);
+    if (!take) return;
+    const fr = _frameOfLine(pool, l, i, st.video.spread, p.id);
     const frameId = fr ? fr.id : '';
-    // (part 5) A take is FRESH when it was made from the frame the fragment begins on now (its key is its reads); the
-    // fragment's clip is the one chosen by hand, else the newest fresh one.
-    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: c.frameId === frameId }));
+    const words = SDP.wordsSig(l);
+    const dur = Math.round((+take.dur || 0) * 100) / 100;
+    const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words, take: take.path });
+    const k = l.sd || null;
+    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: _sdFresh(c, frameId, take, words) }));
     const clip = (k && k.chosen && clips.find(c => c.id === k.chosen)) || clips.filter(c => c.fresh).pop() || null;
-    return {
-      ...rest, frameId, secs: SDP.clipSecs(f), sig,
+    out.push({
+      n, line: i, dur, tooLong: dur > cap + 1e-6, audio: take.path, frameId, secs: SDP.clipSecs(dur), sig, words,
       prompt: k ? k.prompt : '', edited: !!(k && k.edited), stale: !!(k && k.prompt && k.sig !== sig),
       hasAgent: !!(k && k.agent), writer: k ? k.writer : '',
       clips, clip, chosen: !!(k && k.chosen && clip && clip.id === k.chosen),
-    };
+    });
   });
+  return out;
 }
 
 // A picture the writer can look at: its public address (R2, as Kling's writer), or - with nowhere to host it - the
@@ -3924,7 +3869,11 @@ async function _seeable(url) {
   }
 }
 
-async function _writeSdPrompts(id, keys) {
+async function _writeSdPrompts(id, only) {
+  const free = _holdLines(id);
+  try { return await _writeSdPromptsNow(id, only); } finally { free(); }
+}
+async function _writeSdPromptsNow(id, only) {
   const proj0 = _loadProjects().find(x => String(x.id) === String(id));
   if (!proj0) throw Object.assign(new Error('no such project'), { status: 404 });
   const st = _sdSetting(proj0);
@@ -3936,11 +3885,10 @@ async function _writeSdPrompts(id, keys) {
   const pool = _framePool(proj0);
   if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip begins on one'), { status: 400 });
   const view = _sdView(proj0) || [];
-  const want = view.filter(f => !f.tooLong && (Array.isArray(keys) ? keys.includes(f.key) : (!f.prompt || (f.stale && !f.edited))));
+  const want = view.filter(f => !f.tooLong && (Array.isArray(only) ? only.includes(f.line) : (!f.prompt || (f.stale && !f.edited))));
   const report = { written: 0, failed: [] };
   if (!want.length) return { project: proj0, report };
 
-  const proj = { ...proj0, video: st.video };
   const lines = (proj0.lines || []).map(_normLine);
   const mood = MP.moodById(st.video.mood);
   const set = _frameSet(st.video.framing);
@@ -3950,25 +3898,28 @@ async function _writeSdPrompts(id, keys) {
     covered, clothes: _clothesShown(proj0, set ? set.id : 'full'),
   };
   const sheet = await _seeable(cast.obrazImage);
-  const write = {};
+  const write = new Map();                  // line -> what is written for it
   const one = async (f) => {
     try {
-      const fr = pool.find(v => v.id === f.frameId) || _sdFrameOf(proj, f, pool);
+      const fr = pool.find(v => v.id === f.frameId);
       const frame = fr ? await _seeable(fr.preview || fr.path) : '';
-      const rows = SDP.timings(f, lines);
+      const rows = SDP.timings(lines[f.line], f.dur);
       const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
       const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place });
-      write[f.key] = { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() };
+      write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
       report.written++;
     } catch (e) { report.failed.push({ n: f.n, error: e.message }); }
   };
   for (let k = 0; k < want.length; k += SD_WRITE_AT_ONCE) await Promise.all(want.slice(k, k + SD_WRITE_AT_ONCE).map(one));
-  // The writer took a while and other things write this project meanwhile: read again, and only these prompts touched.
+  // The writer took a while and other things write this project meanwhile: read again, and only these prompts touched -
+  // each line's takes and hand choice stay as they are.
   const saved = PROJECTS.apply(id, (fresh) => {
-    const sd = _normSd(fresh.sd);
-    Object.assign(sd.frags, write);
-    fresh.sd = sd;
+    fresh.lines = (fresh.lines || []).map(_normLine);
+    for (const [i, w] of write) {
+      if (!fresh.lines[i]) continue;
+      fresh.lines[i].sd = { ...(fresh.lines[i].sd || _normSdLine(null)), ...w };
+    }
     fresh.updatedAt = new Date().toISOString();
   });
   console.log('[scen3/sd/prompts] ' + id + ' written=' + report.written + ' failed=' + report.failed.length);
@@ -3982,8 +3933,8 @@ router.post('/scen3/sd/prompts', async (req, res) => {
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const keys = Array.isArray(b.keys) ? b.keys.map(String).filter(k => /^[0-9a-f]{12}$/.test(k)) : null;
-    const out = await _writeSdPrompts(id, keys);
+    const only = Array.isArray(b.lines) ? b.lines.map(n => parseInt(n, 10)).filter(n => n >= 0) : null;
+    const out = await _writeSdPrompts(id, only);
     res.json({ success: true, project: _projFull(out.project), report: out.report });
   } catch (e) {
     console.error('[scen3/sd/prompts]', e.message);
@@ -3995,12 +3946,12 @@ router.post('/scen3/sd/prompt', async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.projectId || '').trim();
-    const key = String(b.key || '');
+    const i = parseInt(b.line, 10);
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const f = (_sdView(proj) || []).find(x => x.key === key);
-    if (!f) return res.status(400).json({ success: false, error: 'no such fragment' });
+    const f = (_sdView(proj) || []).find(x => x.line === i);
+    if (!f) return res.status(400).json({ success: false, error: 'no such line, or it is not read yet' });
     let text = String(b.prompt == null ? '' : b.prompt).trim().slice(0, 20000);
     // (phase V29) Written by hand in another language, it is kept - and sent - in English.
     if (text && !b.useAgent) {
@@ -4009,35 +3960,37 @@ router.post('/scen3/sd/prompt', async (req, res) => {
       text = String(t.text || '').trim().slice(0, 20000);
     }
     const saved = PROJECTS.apply(id, (fresh) => {
-      const sd = _normSd(fresh.sd);
-      const was = sd.frags[key] || { prompt: '', agent: '', edited: false, sig: '', writer: '', at: '' };
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      const line = fresh.lines[i];
+      if (!line) return;
+      const was = line.sd || _normSdLine(null);
       if (b.useAgent) {
         if (!was.agent) return;
-        sd.frags[key] = { ...was, prompt: was.agent, edited: false };
+        line.sd = { ...was, prompt: was.agent, edited: false };
       } else {
-        // Written by hand it is the fragment's as things stand now; the same words as the writer's are the writer's.
-        sd.frags[key] = { ...was, prompt: text, edited: !!text && text !== was.agent, sig: text === was.agent ? was.sig : f.sig, at: new Date().toISOString() };
+        // Written by hand it is the line's as things stand now; the same words as the writer's are the writer's.
+        line.sd = { ...was, prompt: text, edited: !!text && text !== was.agent, sig: text === was.agent ? was.sig : f.sig, at: new Date().toISOString() };
       }
-      fresh.sd = sd;
       fresh.updatedAt = new Date().toISOString();
     });
     res.json({ success: true, project: _projFull(saved || proj) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── THE CLIP OF A SEEDANCE FRAGMENT (phase V26.8, part 5, the owner 2026-10-13) ───────────────
+/* ── THE CLIP OF A LINE FILMED BY SEEDANCE (phase V26.8, part 5, the owner 2026-10-13; a line each since the sixth round) ──
    Asked for through the clip routes of a fragment (/scen3/fragments/clip and /clips hand a Seedance project here),
-   addressed by the fragment's FIRST line. The video chat's way to Seedance (lib/video-models.js, the only place a
-   field is written; lib/video-task.js): kie first - Replicate refused our AI faces on Seedance - each rung's
-   references made to its limits (lib/video-prep.js) and hosted fresh on R2.
+   addressed by the line. The video chat's way to Seedance (lib/video-models.js, the only place a field is written;
+   lib/video-task.js): kie first - Replicate refused our AI faces on Seedance - each rung's references made to its
+   limits (lib/video-prep.js) and hosted fresh on R2.
 
-   What goes: the frame the fragment begins on (@Image1), the character's 4K sheet (@Image2), the sound (@Audio1 - the
-   fragment's read, or a 10 s sample of the voice), the prompt; the clip as long as the fragment's sound, rounded up
-   to the whole second; Seedance's own sound on, except with `ours` (the read as it is).
+   What goes: the frame the line opens on (@Image1), the character's 4K sheet (@Image2), the sound (@Audio1 - the
+   line's read, or a 10 s sample of the voice), the prompt; the clip as long as the read, rounded up to the whole
+   second; Seedance's own sound always on - it voices the line itself (the read under a silent clip went in the sixth
+   round: its lips drifted from the read, Ch2 and Ch3).
 
    EVERYTHING IS SETTLED BEFORE THE MONEY, and said when it cannot be: the model, the quality and the mood chosen, a
-   fragment read and not longer than the model takes, a frame, the look, a voice sample when one is wanted; the place
-   analysed, the prompt written, the sound joined - each a stage of the row. PAID ONCE: `asked` is written just
+   line read and not longer than the model takes, a frame, the look, a voice sample when one is wanted; the place
+   analysed and the prompt written - each a stage of the row. PAID ONCE: `asked` is written just
    before each paid create; a create with no answer stops the ladder (lib/task-started.js `unsure`); a row found at
    start with `asked` and no task "may have been paid for" and is not asked again by itself.
    ─────────────────────────────────────────────────────────────────────────── */
@@ -4062,16 +4015,16 @@ function _sdSample(p) {
   return '';
 }
 
-// What a clip of the fragment that begins on line `i` would be made of, or why it cannot be.
+// What a clip of line `i` would be made of, or why it cannot be.
 function _sdClipPlan(proj, i) {
   const video = _normVideo(proj.video);
   const missing = _unchosen(video, ['model', 'quality', 'mood']);
   if (missing) return { skipped: missing };
-  const f = (_sdView(proj) || []).find(x => x.lines[0] === i);
-  if (!f) return { skipped: 'this fragment is not read yet' };
+  const f = (_sdView(proj) || []).find(x => x.line === i);
+  if (!f) return { skipped: 'this line is not read yet' };
   const model = TH.byId(video.model);
   if (f.tooLong) return { skipped: 'this line is ' + f.dur.toFixed(1) + ' s - longer than ' + (model ? model.label : 'the model') + ' takes' };
-  if (!f.frameId) return { skipped: 'no first frame for this fragment' };
+  if (!f.frameId) return { skipped: 'no first frame for this line' };
   const cast = _normCasting(proj.casting);
   if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
   const sound = video.sound || TH.SOUND_DEFAULT;
@@ -4079,7 +4032,8 @@ function _sdClipPlan(proj, i) {
   if (sound === 'sample' && !sample) return { skipped: 'the character’s voice has no sample on the Voices shelf - choose another sound in field 4' };
   const quality = TH.qualityOf(video.model, video.quality);
   if (!quality) return { skipped: 'choose the quality of the clips (field 4) first' };
-  return { frag: f, video, sound, sample, quality, cast, cost: +(quality.pricePerSec * f.secs).toFixed(4) };
+  const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
+  return { frag: f, video, sound, sample, voice, quality, cast, cost: +(quality.pricePerSec * f.secs).toFixed(4) };
 }
 function _sdPlanAgain(id, i) {
   const proj = _loadProjects().find(p => String(p.id) === String(id));
@@ -4105,16 +4059,10 @@ async function _submitSdClip(b, onStage, onAsk) {
   }
   if (!plan.frag.prompt || (plan.frag.stale && !plan.frag.edited)) {
     say('writing the prompt');
-    const out = await _writeSdPrompts(id, [plan.frag.key]);
+    const out = await _writeSdPrompts(id, [i]);
     if (out.report.failed.length) throw new Error('the prompt was not written: ' + out.report.failed[0].error);
     ({ proj, plan } = _sdPlanAgain(id, i));
     if (!plan.frag.prompt) throw new Error('the prompt was not written');
-  }
-  if (!plan.frag.ready) {
-    say('joining the sound');
-    await SDM.build({ ...proj, video: _normVideo(proj.video) });
-    ({ proj, plan } = _sdPlanAgain(id, i));
-    if (!plan.frag.ready) throw new Error('the sound of this fragment could not be joined');
   }
   const f = plan.frag;
   const fr = _framePool(proj).find(v => v.id === f.frameId);
@@ -4154,7 +4102,7 @@ async function _submitSdClip(b, onStage, onAsk) {
     const req = {
       prompt,
       media: [{ kind: 'image', url: hosted.frame }, { kind: 'image', url: hosted.sheet }, { kind: 'audio', url: hosted.sound, in: 0, out: hosted.secs }],
-      params: { resolution: plan.video.quality, duration: f.secs, aspect: FRAG_FORMATS.includes(format) ? format : '9:16', audio: plan.sound !== 'ours' },
+      params: { resolution: plan.video.quality, duration: f.secs, aspect: FRAG_FORMATS.includes(format) ? format : '9:16', audio: true },
     };
     try { VMOD.check(pair, req); } catch (e) { reasons.push(pair.aggLabel + ': ' + e.message); continue; }
     say('asking ' + pair.aggLabel);
@@ -4171,10 +4119,12 @@ async function _submitSdClip(b, onStage, onAsk) {
       if (REFUSAL.isRefusal(why)) break;            // another aggregator would refuse the same content too
       continue;
     }
-    console.log('[scen3/sdclip] ' + id + ' fragment ' + f.n + ' ' + pair.key + ' ' + plan.video.quality + ' ' + f.secs + 's -> ' + String(sub.taskId).slice(0, 24));
+    console.log('[scen3/sdclip] ' + id + ' line ' + (i + 1) + ' ' + pair.key + ' ' + plan.video.quality + ' ' + f.secs + 's -> ' + String(sub.taskId).slice(0, 24));
     return {
       taskId: sub.taskId, engine: pair.key,
-      file: { projectId: id, line: i, key: f.key, frameId: f.frameId, sound: plan.sound, model: plan.video.model, quality: plan.video.quality, secs: f.secs },
+      // What the take is made of - what later tells whether it is still the line's (_sdFresh).
+      file: { projectId: id, line: i, frameId: f.frameId, sound: plan.sound, model: plan.video.model, quality: plan.video.quality, secs: f.secs,
+        take: plan.sound === 'read' ? f.audio : '', words: f.words, voice: plan.sound === 'sample' ? plan.voice : '' },
     };
   }
   throw new Error(reasons.join(' · ') || 'no aggregator could take it');
@@ -4214,7 +4164,7 @@ function _sdClipRoute(req, res, proj) {
   const i = parseInt(b.line, 10);
   const plan = _sdClipPlan(proj, i);
   if (plan.skipped) return res.json({ success: true, skipped: plan.skipped });
-  if (_sdRunning(id).has(i)) return res.json({ success: true, skipped: 'this fragment is already being made' });
+  if (_sdRunning(id).has(i)) return res.json({ success: true, skipped: 'this line is already being filmed' });
   const request = { projectId: id, line: i };
   const rec = JOBS.submitted({
     kind: 'video', what: 'clip', title: 'Clip · fragment ' + plan.frag.n, where: b.where || null,
@@ -4225,8 +4175,8 @@ function _sdClipRoute(req, res, proj) {
   _sdStartClip(rec, request);
 }
 
-// POST /scen3/fragments/clips for a Seedance project: every fragment that needs its clip (or the ones `only` names),
-// a row each at once, then asked a second apart.
+// POST /scen3/fragments/clips for a Seedance project: every line that needs its clip (or the ones `only` names), a row
+// each at once, then asked a second apart.
 function _sdClipsRoute(req, res, proj) {
   const b = req.body || {};
   const id = String(proj.id);
@@ -4236,7 +4186,7 @@ function _sdClipsRoute(req, res, proj) {
   const busy = _sdRunning(id);
   const queued = [], skipped = [];
   for (const f of _sdView(proj) || []) {
-    const i = f.lines[0];
+    const i = f.line;
     if (only && !only.has(i)) continue;
     if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
     const plan = _sdClipPlan(proj, i);
@@ -4260,7 +4210,7 @@ function _sdClipsRoute(req, res, proj) {
   })().catch(e => console.error('[scen3/sdclips]', e.message));
 }
 
-// A take chosen by hand (the fragment's takes, or none - back to the newest fresh one). The timeline follows.
+// A take chosen by hand (the line's Seedance takes, or none - back to the newest fresh one). The timeline follows.
 router.post('/scen3/sd/pick', (req, res) => {
   try {
     const b = req.body || {};
@@ -4268,14 +4218,13 @@ router.post('/scen3/sd/pick', (req, res) => {
     const proj = _loadProjects().find(x => String(x.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
-    const key = String(b.key || '');
+    const i = parseInt(b.line, 10);
     const clipId = String(b.clipId || '');
     const saved = PROJECTS.apply(id, (fresh) => {
-      const sd = _normSd(fresh.sd);
-      const f = sd.frags[key];
-      if (!f || (clipId && !f.clips.some(c => c.id === clipId))) return;
-      f.chosen = clipId;
-      fresh.sd = sd;
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      const sd = fresh.lines[i] && fresh.lines[i].sd;
+      if (!sd || (clipId && !sd.clips.some(c => c.id === clipId))) return;
+      sd.chosen = clipId;
       fresh.updatedAt = new Date().toISOString();
     });
     if (saved) MIRROR.touch(saved.id, { project: saved });
@@ -4284,7 +4233,7 @@ router.post('/scen3/sd/pick', (req, res) => {
 });
 
 // The runner's side: wait for the task, download it ONCE into the project's clips/, make it play in the browser, its
-// poster, its length - and file it as a take of its fragment, the fragment's clip from now on.
+// poster, its length - and file it as a take of its line, the line's clip from now on.
 JOBS.register('sdclip', {
   timeoutMs: 45 * 60 * 1000,
   poll: async (rec) => {
@@ -4317,22 +4266,28 @@ JOBS.register('sdclip', {
     const clip = _normSdClip({
       path: landed.path, thumb: landed.thumb, dur: landed.dur, frameId: p.frameId, sound: p.sound,
       model: p.model, quality: p.quality, secs: p.secs, at: new Date().toISOString(),
+      take: p.take, words: p.words, voice: p.voice,
     });
+    const i = Number(p.line);
+    let filed = false;
     const saved = PROJECTS.apply(p.projectId, (fresh) => {
-      const sd = _normSd(fresh.sd);
-      const f = sd.frags[p.key] || { prompt: '', agent: '', edited: false, sig: '', writer: '', at: '', clips: [], chosen: '' };
-      f.clips = f.clips.filter(c => c.id !== clip.id).concat([clip]);
-      f.chosen = '';                            // a new clip is the fragment's: it is what was just paid for
-      sd.frags[p.key] = f;
-      fresh.sd = sd;
+      fresh.lines = (fresh.lines || []).map(_normLine);
+      const line = fresh.lines[i];
+      if (!line) return;
+      const sd = line.sd || _normSdLine(null);
+      sd.clips = sd.clips.filter(c => c.id !== clip.id).concat([clip]);
+      sd.chosen = '';                           // a new clip is the line's: it is what was just paid for
+      line.sd = sd;
       fresh.updatedAt = clip.at;
+      filed = true;
     });
     if (!saved) throw new Error('the project is gone');
+    if (!filed) throw new Error('line ' + (i + 1) + ' is not in the project any more');
     MIRROR.touch(saved.id, { project: saved });
     try { require('./proxies').warmProxies([landed.path], 480); } catch (e) { /* cosmetic */ }
     return { path: landed.path, preview: landed.thumb || '', media: 'video', line: Number(p.line) + 1, dur: landed.dur };
   },
-  // TRY AGAIN from Alerts: the row restarts at once and the asking goes on behind it - the prompt, the sound and the
+  // TRY AGAIN from Alerts: the row restarts at once and the asking goes on behind it - the place, the prompt and the
   // references take a while, and the person should see the row running from the press (lib/gen-jobs.js `later`).
   submit: async (request, rec) => ({
     stage: 'getting ready', params: { asked: false },
@@ -4341,18 +4296,16 @@ JOBS.register('sdclip', {
   busy: (rec) => _sdAsking.has(rec.id),
 });
 
-// For the timeline mirror (lib/frag-mirror.js): a Seedance project's fragments that HAVE a clip, in order - the lines
-// each covers, its clip, what the timeline hears under it (the clip's own sound, or with `ours` the fragment's read)
-// and how long it lies. null for a project that is not filmed by Seedance.
+// For the timeline mirror (lib/frag-mirror.js): a Seedance project's lines that HAVE a clip, in order - the line, its
+// clip (whose own sound the timeline hears) and how long it lies. null for a project that is not filmed by Seedance.
 function _sdCuts(proj) {
   const view = _sdView(proj);
   if (!view) return null;
   return view.filter(f => f.clip).map(f => ({
-    lines: f.lines, clip: f.clip, audio: f.audio, dur: f.dur,
-    ours: f.clip.sound === 'ours',
-    // Seedance voices a fragment in its own time - a little longer than the read, at times: its own sound is given a
+    line: f.line, clip: f.clip, audio: f.audio, dur: f.dur,
+    // Seedance voices a line in its own time - a little longer than the read, at times: its own sound is given a
     // breath past the read, never past the clip.
-    len: f.clip.sound === 'ours' ? f.dur : Math.min(f.clip.dur || f.dur, f.dur + 0.6),
+    len: Math.min(f.clip.dur || f.dur, f.dur + 0.6),
   }));
 }
 

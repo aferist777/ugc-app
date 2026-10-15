@@ -123,6 +123,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['POST', '/api/scen3/reel/audio'],
                  // phase V17: the picture-then-video recipe's start - Kling motion control's own way since
                  ['POST', '/api/mv3/video/frameswap'],
+                 // phase V26.8, sixth round: a Seedance line is a fragment of its own - the merge tick went
+                 ['POST', '/api/scen3/fragments/merge'],
                  // phase 3: the talking-head editor - its render, its progress, and the overlay
                  // arrangement it handed back to a scenario
                  ['POST', '/api/ffmpeg/render'], ['GET', '/api/ffmpeg/status/x'],

@@ -264,28 +264,12 @@ function _frameFor(p, l, i) {
   if (picked) return { v: picked, auto: false };
   if (!pool.length) return { v: null, auto: true };
   const spread = String(((p || {}).video || {}).spread || 'cycle');
-  // (phase V26.8) A MERGED FRAGMENT opens on one frame, by ITS number in the set (the owner's answer (л) - by the lines'
-  // numbers some frames would go to no fragment at all), or picked by hand on its first line, which is what `i` is.
-  const g = _groupOf(p, i);
-  if (g) {
-    const k = g.n - 1;
-    return { v: pool[spread === 'random' ? _seed(String((p || {}).id || '') + ':g' + k) % pool.length : k % pool.length], auto: true };
-  }
   // (phase V26.8) By the number the line KEEPS when one was put in above it (routes/scen3.js, /line/insert), else by its
   // place in the list.
   const n = l && Number.isInteger(l.slot) ? l.slot : i;
   const at = spread === 'random' ? _seed(String((p || {}).id || '') + ':' + n) % pool.length : n % pool.length;
   return { v: pool[at], auto: true };
 }
-// (phase V26.8, part 3) THE MERGED FRAGMENTS of a Seedance project with `merge fragments` ticked, as the server works
-// them out (routes/scen3.js _mergeView, lib/sd-merge.js) - null when the lines are lines. A fragment is opened, picked
-// and addressed by its FIRST line.
-const _merged = (p) => {
-  const m = p && p.merge;
-  return m && m.on && m.can && Array.isArray(m.groups) && m.groups.length ? m.groups : null;
-};
-const _groupOf = (p, i) => { const gs = _merged(p); return gs ? (gs.find(g => g.lines[0] === i) || null) : null; };
-const _groupWith = (p, i) => { const gs = _merged(p); return gs ? (gs.find(g => g.lines.includes(i)) || null) : null; };
 // THE CLIP OF A LINE is the one made from the frame the line OPENS ON - which is the frame it was
 // given by the rule as often as one picked by hand (phase F4; before the clips existed this read
 // `frameId`, which is empty for every line the pool serves in turn, and would have called every
@@ -299,7 +283,7 @@ const _groupWith = (p, i) => { const gs = _merged(p); return gs ? (gs.find(g => 
 const _variant = (p) => (((p || {}).voice || {}).variant === 'tagged' ? 'tagged' : 'plain');
 const _saidOf = (p, l) => (_variant(p) === 'tagged' ? String((l && l.tagged) || '') : String((l && l.text) || ''));
 // (phase V26.8) A Seedance project shows none of the Kling clips it may have - the timeline lays none of them either
-// (lib/frag-mirror.js); it shows the clips of its FRAGMENTS (part 5), the fragment found by its first line.
+// (lib/frag-mirror.js); it shows the line's Seedance takes (part 5).
 const _sdFragOfLine = (p, l) => _sdFragOf(p, ((p && p.lines) || []).indexOf(l));
 const _clipsOf = (p, l) => (_seedance() ? ((_sdFragOfLine(p, l) || {}).clips || []) : (((l && l.video) || {})[_variant(p)] || []));
 
@@ -328,7 +312,7 @@ function _clipOf(p, l, i) {
 // a read again is another performance; a clip from before the read was recorded counts as fresh).
 function _clipFresh(p, l, i, c) {
   if (!c) return false;
-  if (_seedance()) return !!c.fresh;      // (V26.8) made from the frame its fragment begins on now (routes/scen3.js _sdView)
+  if (_seedance()) return !!c.fresh;      // (V26.8) of the frame, the words and the read the line has now (routes/scen3.js _sdFresh)
   const fr = String((_frameFor(p, l, i).v || {}).id || '');
   const take = _take(l);
   return !!fr && c.fromFrame === fr && c.said === _saidOf(p, l) && (!c.fromAudio || !take || c.fromAudio === take.path);
@@ -551,8 +535,8 @@ function _clipReady(p, l, i) {
   const take = _take(l);
   const tier = _tier();
   if (!_video().quality) return null;       // the quality is the person's to choose (phase V24)
-  // (phase V26.8, part 5) A Seedance fragment - by its first line: billed by the whole seconds asked for, its sound
-  // rounded up (lib/sd-prompt.js clipSecs). A line inside a merged fragment is not clipped on its own.
+  // (phase V26.8, part 5) A line filmed by Seedance: billed by the whole seconds asked for, its read rounded up
+  // (lib/sd-prompt.js clipSecs).
   if (_seedance()) {
     const f = _sdFragOf(p, i);
     if (!f || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
@@ -640,8 +624,8 @@ async function _writeVideo(p, opts) {
 }
 
 // (phase V26.8) THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
-// prompt of every fragment that needs one - one request each, a few at once - then, asked with `clips`, the clips of
-// the fragments that have none (part 5; `only` - the ones the question of generate all priced).
+// prompt of every line that needs one - one request each, a few at once - then, asked with `clips`, the clips of the
+// lines that have none (part 5; `only` - the ones the question of generate all priced).
 async function _writeSdVideo(p, opts) {
   const withClips = !!(opts && opts.clips);
   const only = (opts && opts.only) || null;
@@ -820,10 +804,9 @@ async function _saveVideo(patch) {
     }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'refused');
     p.video = r.project.video;
-    // (phase V26.8, the owner 2026-10-14) What the server works out from these settings comes with them: the merged
-    // fragments, whose longest is the model's (mini 15 s -> 2.5 30 s regroups them), and every fragment's prompt -
-    // written for these settings or not. Taking only `video` left the old groups on screen until a reload.
-    p.merge = r.project.merge;
+    // (phase V26.8, the owner 2026-10-14) What the server works out from these settings comes with them: every line's
+    // Seedance prompt - written for these settings or not - and how long the model takes. Taking only `video` left the
+    // old state on screen until a reload.
     p.sdFrags = r.project.sdFrags;
   } catch (e) {
     _said = 'Could not save it: ' + e.message;
@@ -853,9 +836,6 @@ export function paint(host, ctx, api, head) {
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
   // A line taken off (Z4) has no fragment to open: the general zone is where that press lands.
   if (_open >= 0 && !isLive(lines[_open])) _open = -1;
-  // (phase V26.8) Merged, a line opens the fragment it is in - by that fragment's first line.
-  if (_open >= 0 && _merged(p)) { const g = _groupWith(p, _open); _open = g ? g.lines[0] : -1; }
-  if (_merged(p)) { _inserting = -1; _mergeMissing(p); }
   if (_stageFor !== _open) { _stageFor = _open; _stagePick = ''; }
 
   host.classList.add('is-split');
@@ -1171,11 +1151,6 @@ function _standing(p) {
   const live = liveLines(p.lines);
   const have = _pool(p).length;
   const asked = Math.max(have + _drawing.size, ((p.video || {}).frames) || 0);
-  // (phase V26.8) Merged, the video is its fragments: every line is read (that is when they merge), and their clips are
-  // Seedance's (part 5).
-  const gs = _merged(p);
-  if (gs) return { n: gs.length, read: gs.length, frames: have, framesAsked: asked, framesDone: have > 0 && !_drawing.size,
-    clips: gs.filter(g => (_sdFragOf(p, g.lines[0]) || {}).clip).length };
   return {
     n: live.length,
     read: live.filter(x => isRead(x.l)).length,
@@ -1976,35 +1951,14 @@ function _stageVideo(host, p, lines) {
   });
 }
 
-// SEEDANCE'S OWN SETTINGS (phase V26.8, the owner 2026-10-13), under the model: whether the lines are merged, how the
-// clip is voiced, how the body moves, the camera. Each says what it does on the line under it (the owner's answer (ш):
+// SEEDANCE'S OWN SETTINGS (phase V26.8, the owner 2026-10-13), under the model: how the clip is voiced, how the body
+// moves, the camera. Each says what it does on the line under it (the owner's answer (ш):
 // "пояснение нужно, что это за параметры"). They are kept on the project as they are chosen; the clips that use them
 // come with the later parts of the phase.
 function _seedanceSettings(body, p) {
   const v = _video();
-  const longest = ((_qualities()[0] || {}).maxAudioSec) || 15;
   const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
   const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));
-
-  // MERGE - by the person's tick, never by itself (the owner): neighbouring lines joined into one clip each, once every
-  // line is read (part 3, lib/sd-merge.js). Unticked to change a line, ticked again to merge again.
-  const m = p.merge || {};
-  const gs = _merged(p);
-  const merge = el('label', 'mv3-wk-fcheck' + ((m.can || m.on) && !_merging ? '' : ' is-off'));
-  const tick = el('input');
-  tick.type = 'checkbox';
-  tick.checked = !!m.on;
-  tick.disabled = _merging || (!m.can && !m.on) || VOICE.reading().busy;
-  tick.addEventListener('change', () => _setMerge(p, tick.checked));
-  merge.append(tick, el('span', '', _merging ? 'merge fragments · joining the sound…' : 'merge fragments'));
-  merge.title = !m.can && !m.on ? 'Not yet: ' + (m.why || 'read every line first') : 'Neighbouring lines as one clip each';
-  body.appendChild(merge);
-  const live = liveLines(p.lines || []).length;
-  why(gs ? gs.length + ' fragments from ' + live + ' lines, up to ' + longest + ' s each. A merged fragment is not edited:'
-    + ' untick, change the lines, tick again.'
-    : m.on ? 'Ticked - the lines merge again once every line is read (' + (m.why || '') + ').'
-      : 'Joins neighbouring lines into one clip each, up to ' + longest + ' s - the fewest fragments, of the most even'
-        + ' lengths. ' + (m.can ? 'Every line is read: it can be ticked.' : (m.why || 'Read every line first') + '.'));
 
   // THE SOUND - how Seedance voices the clip (lib/th-video.js SOUNDS). Not chosen, it is Seedance from the read (every
   // script is English since phase V29; it went by the script's language before - the owner's answer (ь)).
@@ -2061,8 +2015,8 @@ function _list(host, p, lines) {
   // sit in grey italics at the foot of the general zone, where somebody scrolling the stages never
   // reached it; here it is the first thing above the script, and it changes with where you are.
   const hint = el('div', 'mv3-wk-fhint', _open < 0
-    ? (_merged(p) ? 'Pick a fragment to look at it. Merged fragments are not edited.' : 'Pick a fragment to work on it. Right-click one for more.')
-    : 'Press fragment ' + _fragNo(p, lines, _open) + ' again to come back to the whole video.');
+    ? 'Pick a fragment to work on it. Right-click one for more.'
+    : 'Press fragment ' + _no(lines, _open) + ' again to come back to the whole video.');
   host.appendChild(hint);
   const list = el('div', 'mv3-wk-flist');
   host.appendChild(list);
@@ -2070,10 +2024,7 @@ function _list(host, p, lines) {
   // out of the way, each with the one act it has (the owner, 2026-09-22). They keep their real
   // places in the script underneath, which is why nothing above them moved when they went.
   const live = liveLines(lines);
-  // (phase V26.8) Merged: the fragments in place of the lines, fewer of them, each in a gold frame.
-  const gs = _merged(p);
-  if (gs) gs.forEach(g => list.appendChild(_mrow(p, g, lines)));
-  else live.forEach((x, pos) => list.appendChild(_row(p, x.l, x.i, pos + 1)));
+  live.forEach((x, pos) => list.appendChild(_row(p, x.l, x.i, pos + 1)));
   const off = lines.map((l, i) => ({ l, i })).filter(x => !isLive(x.l));
   if (off.length) {
     list.appendChild(el('div', 'mv3-wk-flabel is-off', 'taken off the script'));
@@ -2086,62 +2037,24 @@ function _list(host, p, lines) {
   if (_listAt) list.scrollTop = _listAt;
 }
 
-// ── MERGED FRAGMENTS (phase V26.8, part 3, the owner 2026-10-13) ─────────────
-// A MERGED FRAGMENT IN THE LIST: its number, its length, its whole sound, the words of its lines - in a gold frame. It
-// opens like a line does; it has no read, no "+" and no menu - a merged fragment is not edited (the owner's answer (п)).
-function _mrow(p, g, lines) {
-  const head = g.lines[0];
-  const row = el('button', 'mv3-wk-frow is-merged' + (head === _open ? ' is-open' : '') + (g.tooLong ? ' is-long' : ''));
-  row.type = 'button';
-  const meta = el('div', 'mv3-wk-lmeta');
-  meta.appendChild(el('span', 'mv3-wk-lnum', String(g.n)));
-  meta.appendChild(el('span', 'mv3-wk-ldur', g.dur.toFixed(1) + 's'));
-  row.appendChild(meta);
-  row.appendChild(_playBtn(g.ready ? g.audio : '', 'the fragment'));
-  const words = g.lines.map(i => _words(lines[i])).join(' ');
-  row.appendChild(el('div', 'mv3-wk-ftext', words || '(no words)'));
-  const dots = el('div', 'mv3-wk-fdots');
-  const dot = (state, what) => {
-    const d = el('span', 'mv3-wk-fdot is-' + state);
-    d.title = what + ': ' + (state === 'ok' ? 'done' : 'not yet');
-    dots.appendChild(d);
-  };
-  dot('ok', 'read');
-  dot(_frameFor(p, lines[head], head).v ? 'ok' : 'none', 'frame');
-  dot(_clipping.has(head) ? 'busy' : _clipState(p, lines[head], head), 'clip');
-  row.appendChild(dots);
-  row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, { text: words }, head, g.n), TIP_MS); });
-  row.addEventListener('mouseleave', _tipHide);
-  row.addEventListener('contextmenu', (e) => e.preventDefault());
-  row.addEventListener('click', () => {
-    _tipHide();
-    _open = _open === head ? -1 : head;
-    _picking = false;
-    _pickView = '';
-    _remember();
-    _ctx.repaint();
-  });
-  return row;
-}
-
 // ── SEEDANCE'S PROMPTS (phase V26.8, part 4) ────────────────────────────────
-// The fragments Seedance films, as the server works them out (routes/scen3.js _sdView): merged ones, or every read line
-// - each with its frame, the seconds of its clip and its prompt. A fragment is addressed by its first line.
+// The lines Seedance films, as the server works them out (routes/scen3.js _sdView): every read line - a line is a
+// fragment of its own (the sixth round) - each with its frame, the seconds of its clip, its prompt and its takes.
 const _sdFrags = (p) => (Array.isArray(p && p.sdFrags) ? p.sdFrags : []);
-const _sdFragOf = (p, i) => _sdFrags(p).find(f => f.lines[0] === i) || null;
+const _sdFragOf = (p, i) => _sdFrags(p).find(f => f.line === i) || null;
 // The ones whose prompt is to be written: none yet, or written for other settings and not edited by hand. A line too long
 // for the model's clip is not filmed at all.
 const _sdNeeds = (p) => _sdFrags(p).filter(f => !f.tooLong && (!f.prompt || (f.stale && !f.edited)));
-const _sdWriting = new Set();             // the keys being written now ('*' - the field's whole run)
+const _sdWriting = new Set();             // the lines being written now ('*' - the field's whole run)
 
-async function _writeSd(p, keys) {
-  const tag = keys ? keys.join(',') : '*';
+async function _writeSd(p, only) {
+  const tag = only ? only.join(',') : '*';
   if (_sdWriting.has(tag)) return;
   _sdWriting.add(tag);
   _readErr = '';
   _ctx.repaint();
   try {
-    const r = await _post('/api/scen3/sd/prompts', keys ? { projectId: p.id, keys } : { projectId: p.id });
+    const r = await _post('/api/scen3/sd/prompts', only ? { projectId: p.id, lines: only } : { projectId: p.id });
     _adopt(r);
     const bad = ((r.report || {}).failed || [])[0];
     if (bad) _readErr = 'The prompt of fragment ' + bad.n + ' was not written: ' + bad.error;
@@ -2151,14 +2064,14 @@ async function _writeSd(p, keys) {
   _sdWriting.delete(tag);
   _ctx.repaint();
 }
-async function _saveSdPrompt(p, key, body) {
-  try { _adopt(await _post('/api/scen3/sd/prompt', { projectId: p.id, key, ...body })); }
+async function _saveSdPrompt(p, line, body) {
+  try { _adopt(await _post('/api/scen3/sd/prompt', { projectId: p.id, line, ...body })); }
   catch (e) { _readErr = 'The prompt was not saved: ' + e.message; }
   _ctx.repaint();
 }
-const _sdBusy = (f) => _sdWriting.has('*') || _sdWriting.has(f.key);
+const _sdBusy = (f) => _sdWriting.has('*') || _sdWriting.has(String(f.line));
 
-// THE SEEDANCE PROMPT of a fragment, beside its clip: the whole prompt as it goes to Seedance - the pictures named
+// THE SEEDANCE PROMPT of a line, beside its clip: the whole prompt as it goes to Seedance - the pictures named
 // (@Image1 the frame, @Image2 the sheet, @Audio1 the sound), the words with their seconds, the performance, the camera,
 // the place - editable; one edited by hand is never written over; `write` asks the writer for this fragment alone.
 function _sdPromptCol(p, f) {
@@ -2181,7 +2094,7 @@ function _sdPromptCol(p, f) {
   if (f.edited && f.hasAgent) {
     const back = el('button', 'mv3-wk-flink', 'use the writer’s');
     back.type = 'button';
-    back.addEventListener('click', () => { delete _drafts['sd:' + f.key]; _saveSdPrompt(p, f.key, { useAgent: true }); });
+    back.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _saveSdPrompt(p, f.line, { useAgent: true }); });
     act.appendChild(back);
   }
   const w = el('button', 'mv3-wk-flink', busy ? 'writing…' : f.prompt ? 'write again' : 'write');
@@ -2191,94 +2104,18 @@ function _sdPromptCol(p, f) {
     : !_video().mood ? 'Choose the mood first (field 1)'
       : 'The writer looks at the frame and the character’s sheet and writes this fragment’s prompt - credits, seconds'
         + (f.edited ? '. It replaces what was edited by hand.' : '');
-  w.addEventListener('click', () => { delete _drafts['sd:' + f.key]; _writeSd(p, [f.key]); });
+  w.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _writeSd(p, [f.line]); });
   act.appendChild(w);
   col.appendChild(_colHead('seedance prompt', act));
-  const box = _textField('sd', f.key, f.prompt || '', 9,
+  const box = _textField('sd', f.line, f.prompt || '', 9,
     busy ? 'The writer is writing this fragment’s prompt…'
       : 'Not written yet. Press write - or generate in the video field writes every fragment’s. Its clip is '
         + f.secs + ' s: the words with their seconds, the frame it begins on, the character’s sheet, the mood and the gestures.',
-    (v) => _saveSdPrompt(p, f.key, { prompt: v }));
+    (v) => _saveSdPrompt(p, f.line, { prompt: v }));
   box.classList.add('is-tall');
   box.disabled = busy;
   col.appendChild(box);
   return col;
-}
-
-// What a fragment is called: a merged one by its own number, a line by its place in the video (_no).
-const _fragNo = (p, lines, i) => { const g = _groupOf(p, i); return g ? g.n : _no(lines, i); };
-// Which lines a merged fragment is, as a person reads them: "3–4" - their places in the video.
-const _span = (lines, g) => _no(lines, g.lines[0]) + (g.lines.length > 1 ? '–' + _no(lines, g.lines[g.lines.length - 1]) : '');
-
-// A MERGED FRAGMENT, OPEN: its words line by line, read-only; its whole sound (the owner's answer (п) - "проигрываем
-// полное аудио"); the frame it opens on with its prompt and the picker, by its first line; and the clip and the Seedance
-// prompt, which come with the later parts of the phase.
-function _mfragment(host, p, g) {
-  const lines = Array.isArray(p.lines) ? p.lines : [];
-  const head = g.lines[0];
-  const l = lines[head];
-  const shut = el('button', 'mv3-wk-fclose', '✕');
-  shut.type = 'button';
-  shut.title = 'Close this fragment - back to the whole video';
-  shut.addEventListener('click', () => { _open = -1; _remember(); _ctx.repaint(); });
-  host.appendChild(shut);
-  const top = el('div', 'mv3-wk-fwrow');
-  top.appendChild(_playBtn(g.ready ? g.audio : '', 'the fragment'));
-  top.appendChild(el('div', 'mv3-wk-fmhead', (g.lines.length > 1 ? 'lines ' : 'line ') + _span(lines, g) + ' · ' + g.dur.toFixed(1) + ' s'));
-  host.appendChild(top);
-  const words = el('div', 'mv3-wk-fmwords');
-  for (const i of g.lines) {
-    const d = el('div', 'mv3-wk-fwords');
-    _sayWords(d, String((lines[i] || {}).tagged || '').trim() || _words(lines[i]));
-    words.appendChild(d);
-  }
-  host.appendChild(words);
-  if (!g.ready) host.appendChild(_note('Joining the sound of these lines…'));
-  if (g.tooLong) {
-    const m = _modelOf();
-    host.appendChild(_note('This line is ' + g.dur.toFixed(1) + ' s - longer than ' + ((m && m.label) || 'the model') + ' takes ('
-      + ((p.merge || {}).cap || 15) + ' s): untick merge fragments and shorten it, or choose seedance 2.5.', true));
-  }
-  host.appendChild(el('div', 'mv3-wk-fwhy', 'A merged fragment is not edited: untick merge fragments (field 4) to change, read or put in a line - then tick it again.'));
-  const grid = el('div', 'mv3-wk-fgrid');
-  host.appendChild(grid);
-  grid.appendChild(_frameCol(p, l, head));
-  grid.appendChild(_framePromptCol(p, l, head));
-  const pickHost = el('div', 'mv3-wk-fpickwrap');
-  host.appendChild(pickHost);
-  _pickRow(pickHost, p, l, head);
-  const grid2 = el('div', 'mv3-wk-fgrid');
-  host.appendChild(grid2);
-  grid2.appendChild(_clipCol(p, l, head, _readState(l), _take(l)));
-  grid2.appendChild(_sdPromptCol(p, _sdFragOf(p, head)));
-  _takes(host, p, l, head);
-}
-
-// The tick (field 4) and what follows it: merged - the sound of every fragment is joined before the answer; unticked -
-// the lines are lines again. Asked once more, ticked, when a fragment's sound is missing (a read retimed since).
-let _merging = false;
-let _mergeAsked = '';
-async function _setMerge(p, on) {
-  if (_merging) return;
-  _merging = true;
-  _readErr = '';
-  _ctx.repaint();
-  try {
-    const r = await _post('/api/scen3/fragments/merge', { projectId: p.id, on: !!on });
-    _adopt(r);
-    const bad = (r.failed || [])[0];
-    if (bad) _readErr = 'The sound of fragment ' + bad.n + ' was not joined: ' + bad.error;
-  } catch (e) {
-    _readErr = (on ? 'The fragments were not merged: ' : 'The lines were not unmerged: ') + e.message;
-  }
-  _merging = false;
-  _ctx.repaint();
-}
-function _mergeMissing(p) {
-  const miss = (_merged(p) || []).filter(g => g.lines.length > 1 && !g.ready).map(g => g.key).join(',');
-  if (!miss || _merging || _mergeAsked === p.id + ':' + miss) return;
-  _mergeAsked = p.id + ':' + miss;
-  setTimeout(() => _setMerge(p, true), 0);
 }
 
 // WHAT A LINE IS CALLED. Its place among the lines of the VIDEO, counted from one with no gaps -
@@ -2356,7 +2193,7 @@ function _row(p, l, i, n) {
 
 // THE "+" UNDER A ROW (phase V26.8). Not while anything is being made in the project: a read, a clip or a prompt lands
 // on its line by number, and a line put in above it would move it (the server refuses too - /line/insert).
-const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made' : _merging ? 'the lines are being merged'
+const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made'
   : (_writing || _chain) ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
@@ -2446,10 +2283,8 @@ function _offRow(l, i) {
   row.appendChild(el('div', 'mv3-wk-ftext', _words(l) || '(no words)'));
   const back = el('button', 'mv3-wk-vuse', 'restore');
   back.type = 'button';
-  // (phase V26.8) Merged fragments are not edited: the lines are put back once they are lines again.
-  const merged = !!_merged(_ctx && _ctx.project);
-  back.title = merged ? 'Untick merge fragments (field 4) to put a line back' : 'Put this line back where it was in the script';
-  back.disabled = _offing || merged;
+  back.title = 'Put this line back where it was in the script';
+  back.disabled = _offing;
   back.addEventListener('click', () => _setOff(i, false));
   row.appendChild(back);
   row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, l, i, 0), TIP_MS); });
@@ -2689,8 +2524,6 @@ function _tipShow(row, l, i, n) {
 //   | animation prompt  |  frame  (from the pool, or picked) |
 //   |                   |  clip   + make clip                |
 function _fragment(host, p, l, i) {
-  const merged = _groupOf(p, i);
-  if (merged) return _mfragment(host, p, merged);
   const take = _take(l);
   // (phase V26.5, the owner 2026-10-10) ITS CROSS, top right in gold: the fragment closes - to the whole video, or back to
   // the frames chat when it was opened from there. A second press on its row does the same, as before.
@@ -2803,8 +2636,7 @@ function _fragment(host, p, l, i) {
 }
 
 // Every take the line has, under the grid: a fragment can have a clip per frame it was tried on,
-// and one of them is the fragment's (F4). Pressing a row makes it that one. (phase V26.8) A Seedance fragment's takes too,
-// by its first line.
+// and one of them is the fragment's (F4). Pressing a row makes it that one. (phase V26.8) A Seedance line's takes too.
 function _takes(host, p, l, i) {
   const clips = _clipsOf(p, l);
   if (clips.length) {
@@ -3076,7 +2908,7 @@ function _whereLine(i) {
     href: '/merge?p=' + encodeURIComponent(key) + '&step=setup&line=' + (i + 1),
     // The label is what a person reads in the journal, so it says the fragment's place in the
     // VIDEO; the address and `spot` keep the real index, which is what the panel opens by.
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + _fragNo(p, p.lines || [], i),
+    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · fragment ' + _no(p.lines || [], i),
     spot: { key, step: 'setup', line: i + 1 },
   };
 }
@@ -3102,9 +2934,9 @@ let _lookedClips = '';
 async function _pickClip(i, clipId) {
   const p = _ctx && _ctx.project;
   if (!p) return;
-  // (phase V26.8) A Seedance fragment's take is chosen on the fragment (/scen3/sd/pick).
-  const f = _seedance() ? _sdFragOf(p, i) : null;
-  try { _adopt(await (f ? _post('/api/scen3/sd/pick', { projectId: p.id, key: f.key, clipId }) : _post('/api/scen3/fragments/pick-clip', { projectId: p.id, line: i, clipId }))); }
+  // (phase V26.8) A Seedance take is chosen among the line's Seedance takes (/scen3/sd/pick).
+  const route = _seedance() ? '/api/scen3/sd/pick' : '/api/scen3/fragments/pick-clip';
+  try { _adopt(await _post(route, { projectId: p.id, line: i, clipId })); }
   catch (e) { _readErr = 'Could not pick that clip: ' + e.message; }
   _ctx.repaint();
 }
@@ -3147,7 +2979,7 @@ function _clipCol(p, l, i, rs, take) {
   let cap;
   let ready = false;
   let price = '';
-  // (phase V26.8, part 5) A Seedance fragment: its own reasons, its seconds and its price.
+  // (phase V26.8, part 5) A line filmed by Seedance: its own reasons, its seconds and its price.
   const sf = _seedance() ? _sdFragOf(p, i) : null;
   if (_seedance()) {
     if (!sf) cap = 'read this line first';
@@ -3172,8 +3004,8 @@ function _clipCol(p, l, i, rs, take) {
   // clip, and that is worth saying before it takes half a minute (phase U4).
   const needsWords = sf ? (!sf.prompt || (sf.stale && !sf.edited) || !_envMotion(p)) : (!_animated(l) || !_envMotion(p));
   make.title = !ready ? cap
-    : sf ? (needsWords ? 'First the place and this fragment’s prompt are written (credits), then the clip. ' : '')
-      + 'Seedance: the frame this fragment begins on, the character’s sheet and its sound go with its prompt. '
+    : sf ? (needsWords ? 'First the place and this line’s prompt are written (credits), then the clip. ' : '')
+      + 'Seedance: the frame this line opens on, the character’s sheet and its sound go with its prompt. '
       + sf.secs + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + ' = ' + price + '. Press again to confirm.'
     : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
       + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
@@ -3257,7 +3089,7 @@ export function openPicture(p) {
   }
   const c = _clipOf(p, l, _open);
   const fr = _frameFor(p, l, _open).v;
-  const name = 'fragment ' + _fragNo(p, lines, _open);
+  const name = 'fragment ' + _no(lines, _open);
   // The clip, as a film with its own sound, unless the frame was asked for (X4).
   if (c && c.path && _stagePick !== 'frame') {
     // What stands on the stage while the video opens (Z5): the clip's own poster, or - a clip
