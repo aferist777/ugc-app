@@ -18,6 +18,10 @@
    the file, as it always did; Cancel on a render opened from the queue just closes, because
    that file was kept on purpose.
 
+   A RENDER'S SUBTITLES FILE (`<name>.en_US.srt`, phase V30, block 4) goes with it: Save renames it, Cancel deletes
+   it. A box beside the buttons - shown only when the render has one - downloads it with the video; it is off until
+   ticked (the owner's (с38)), and remembered.
+
    THE NAME IS THE PERSON'S. The pattern is a recommendation for creatives that go to Meta -
    the same string becomes the ad name there - so the line beside the field says whether the
    name follows it, and never stops a save that does not.
@@ -46,6 +50,12 @@ const PATTERN = 'vertical_Ingredient_angleScenario_trigger_hookid_character_gend
 const EXAMPLE = 'MaleEnh_RedHoney_ScientistSecret_AUTH_H03_DrFauci_M';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// A render's subtitles file (lib/mv3b-job.js srtOf): `<its name>.en_US.srt` beside it.
+const srtUrlOf = (url) => { const u = String(url || '').split('?')[0]; return /\.[a-z0-9]+$/i.test(u) ? u.replace(/\.[a-z0-9]+$/i, '') + '.en_US.srt' : null; };
+// Downloaded with the video only when ticked; off until the person ticks it (the owner's (с38)), then remembered.
+const LS_SRT = 'mv3_rr_srt_v1';
+const _srtWanted = () => { try { return localStorage.getItem(LS_SRT) === '1'; } catch (e) { return false; } };
 
 // "red honey" -> "RedHoney"; anything that is not a letter or digit goes, so a part can never
 // carry the separator inside it.
@@ -216,8 +226,34 @@ export async function showResult(o) {
   const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
   if (o.fresh) cancel.title = 'Delete this render';
   const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
-  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(cancel); foot.appendChild(save);
+  // THE SUBTITLES FILE beside the render (phase V30, block 4): shown when it has one; downloaded with the video only
+  // when this is ticked - off unless the person ticked it last time (the owner's (с38)).
+  const srtBox = el('span', 'mv3-x-check');
+  const srtLbl = document.createElement('label');
+  const srtOn = document.createElement('input');
+  srtOn.type = 'checkbox';
+  srtOn.checked = _srtWanted();
+  srtOn.addEventListener('change', () => { try { localStorage.setItem(LS_SRT, srtOn.checked ? '1' : '0'); } catch (e) { /* a private window */ } });
+  srtLbl.append(srtOn, el('span', null, '.srt too'));
+  srtBox.appendChild(srtLbl);
+  srtBox.hidden = true;
+  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(srtBox); foot.appendChild(cancel); foot.appendChild(save);
   box.appendChild(foot);
+  // Whether this render has its .srt, and where: asked of the file itself, so a render opened from the queue knows too.
+  const showSrt = async (url) => {
+    state.srt = null;
+    srtBox.hidden = true;
+    const u = srtUrlOf(url);
+    if (!u) return;
+    try {
+      const r = await fetch(u, { method: 'HEAD', cache: 'no-store' });
+      if (!r.ok || state.url !== url) return;
+      state.srt = u;
+      srtBox.hidden = false;
+      srtLbl.title = 'Also download ' + decodeURIComponent(u.split('/').pop()) + ' - the Subtitles lane as classic subtitles, beside the video in the library either way';
+    } catch (e) { /* no file: nothing to offer */ }
+  };
+  showSrt(state.url);
 
   // ── keeping the parts and the name in step ──
   const say = (text, cls) => { hint.textContent = text; hint.title = text; hint.className = 'mv3-rr-hint' + (cls ? ' ' + cls : ''); };
@@ -283,7 +319,11 @@ export async function showResult(o) {
       state.url = d.url; state.saved = true; state.fresh = false;
       v.src = state.url;
       download(state.url);
-      say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + ' · on the Library renders shelf', 'is-good');
+      // Its subtitles file, renamed with it - downloaded too when ticked (с38).
+      state.srt = d.srt || null;
+      srtBox.hidden = !state.srt;
+      if (state.srt && srtOn.checked) download(state.srt);
+      say('saved as ' + decodeURIComponent(String(d.url).split('/').pop()) + (state.srt ? ' + its .srt' : '') + ' · on the Library renders shelf', 'is-good');
       cancel.textContent = 'Close'; cancel.classList.remove('danger'); cancel.title = '';
     } catch (e) {
       say(e.message, 'is-bad');

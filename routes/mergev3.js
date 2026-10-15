@@ -343,7 +343,7 @@ router.post('/mv3/render/finish', (req, res) => {
     if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
     const item = MVQ.fileFinished({ url: b.url, title: b.title, key: b.key, kind: b.kind, dur: b.dur,
                                     owner: OWN.uidOf(req), ownerNick: req.user ? req.user.nickname : null });
-    res.json({ success: true, queueId: item.id });
+    res.json({ success: true, queueId: item.id, srt: _srtUrl(abs) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -361,8 +361,15 @@ function _renameFinal(abs, url, name) {
     const oldT = _thumbAbs(url), newT = _thumbAbs(nextUrl);
     if (oldT && newT && fs.existsSync(oldT)) fs.renameSync(oldT, newT);
   } catch (e) { /* a poster is remade on demand */ }
+  // Its subtitles file takes the same name (phase V30, block 4).
+  try { const s = JOB.srtOf(abs); if (fs.existsSync(s)) fs.renameSync(s, JOB.srtOf(target)); }
+  catch (e) { console.warn('[mv3] a render\'s subtitles file kept its old name:', e.message); }
   return { abs: target, url: nextUrl };
 }
+
+const JOB = require('../lib/mv3b-job');
+// A render's subtitles file, as an address - or null when it has none.
+const _srtUrl = (abs) => { const s = JOB.srtOf(abs); return fs.existsSync(s) ? toUrl(s) : null; };
 
 router.post('/mv3/render/save', async (req, res) => {
   try {
@@ -375,7 +382,7 @@ router.post('/mv3/render/save', async (req, res) => {
     try { thumb = await makeThumb(moved.url); } catch (e) { /* a missing poster is not a reason to lose the render */ }
     const patch = { url: moved.url, title: name };
     const entry = (b.queueId && MVQ.updateEntry(String(b.queueId), patch)) || (MVQ.findByUrl(b.url) && MVQ.updateEntry(MVQ.findByUrl(b.url).id, patch)) || null;
-    res.json({ success: true, url: moved.url, name, thumb: thumb || null, queueId: entry ? entry.id : null });
+    res.json({ success: true, url: moved.url, name, thumb: thumb || null, queueId: entry ? entry.id : null, srt: _srtUrl(moved.abs) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -384,6 +391,8 @@ router.post('/mv3/render/discard', (req, res) => {
     const abs = _finalPath((req.body || {}).url);
     if (!abs) return res.status(400).json({ success: false, error: 'not a render path' });
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    // Its subtitles file with it (phase V30, block 4).
+    try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open: it stays beside nothing */ }
     // The queue entry filed at finish goes with the file.
     try { MVQ.removeByUrl(String((req.body || {}).url || '')); } catch (e) {}
     // Its poster too, if one was made.

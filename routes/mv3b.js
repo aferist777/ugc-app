@@ -72,7 +72,7 @@ router.post('/mv3b/render', async (req, res) => {
           const ph = phase === 'speed' ? 'speeding' : phase;
           if (job.phase !== ph) { job.phase = ph; job.span = spans[ph] || 0; job.phaseAt = Date.now(); }
           job.at = at;
-        }, final);
+        }, final, ready.srt);
         const said = [...(ready.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) job.warning = said.join('; ');
         job.status = 'done'; job.url = toUrl(final);

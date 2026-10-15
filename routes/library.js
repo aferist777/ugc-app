@@ -1269,6 +1269,8 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       if (_unlink(url)) removed.push(base);
       const turl = VT.thumbUrlFor(url);
       if (turl) _unlink(turl);
+      // Its subtitles file beside it (phase V30, block 4).
+      try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open */ }
       return res.json({ success: true, kind, id, removed });
     }
 

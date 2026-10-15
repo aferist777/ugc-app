@@ -47,7 +47,7 @@ export const PAGE = {
 // What a cut of a phrase costs, besides being uneven ((words - n/k)^2 a page). The research's simulator
 // settled on 4 / 6 / 1 for the fewest pages alone; with one more page allowed (at `page`), 5 and 8 keep
 // the weak ends at 0-1% of pages on the recorded words, against 7-15% cut greedily (K2 stand).
-const COST = { weak: 5, enclitic: 8, pair: 10, short: 1, page: 3, flash: 4 };
+const COST = { weak: 5, enclitic: 8, pair: 10, short: 1, page: 3, flash: 4, clause: 4 };
 
 // ── The words ───────────────────────────────────────────────────────────────
 const r2 = (t) => Math.round((+t || 0) * 100) / 100;
@@ -120,31 +120,49 @@ export function endsSentence(t, next, gap) {
 const endsClause = (t) => /[,;:—–…-]$|\.\.\.$/u.test(bare(t));
 
 // ── Lines ───────────────────────────────────────────────────────────────────
+/** Classic subtitles (phase V30, block 4, (с12), (с42)): the `sentences` cut of a lane, and the `.srt` beside a render. */
+export const SENT = {
+  chars: 42,         // a line holds at most this many characters...
+  lines: 2,          // ...and a page at most this many lines
+  pause: 1.0,        // a pause this long ends a page (a shorter one inside a sentence does not)
+  maxDur: 7,         // a page is on screen no longer than this...
+  minDur: 1,         // ...and at least this long when the next one leaves room
+};
+
 /**
  * Where a page of `tokens` (its words as stored - casing is the style's) breaks into lines in style
  * `st` (resolved, size filled in) on a frame `W` wide: the line counts, top first ([2, 3] = two words,
  * then three). The fewest lines no wider than 0.78 of the frame each; among those, the most even, with
  * no weak word at a line's end and no short word alone on a line of a page of three or more; when it is
  * a tie, the lower line the wider. A word wider than the limit alone is a line of its own.
+ * A lane cut in `sentences` (phase V30, block 4) also holds a line to 42 characters; with no style at all
+ * (`st` null - the `.srt`, which a player draws in its own font) the characters are the only measure.
  */
 export function breakLines(tokens, st, W) {
   const n = tokens.length;
   if (n < 2) return n ? [n] : [];
-  const m = meter(st);
+  const m = st ? meter(st) : null;
   const lim = LINE_MAX * W;
-  const runs = tokens.map((t) => m.run(t));
+  const maxC = !st || st.cut === 'sentences' ? SENT.chars : Infinity;
+  const runs = m ? tokens.map((t) => m.run(t)) : null;
+  const lens = tokens.map((t) => [...String(t)].length);
   const widthOf = (a, b) => {
+    if (!m) return 0;
     let adv = 0, chars = 0;
     for (let i = a; i < b; i++) { adv += runs[i].a; chars += runs[i].n; }
     adv += (b - a - 1) * m.space;
     chars += b - a - 1;
     return m.width(adv, chars);
   };
+  const charsOf = (a, b) => { let c = b - a - 1; for (let i = a; i < b; i++) c += lens[i]; return c; };
+  const fits = (a, b) => (!m || widthOf(a, b) <= lim) && charsOf(a, b) <= maxC;
+  // How full a line is (1 = full): its width against the limit - or its characters, where they are what is measured.
+  const full = (w, c) => Math.max(m ? w / lim : 0, maxC < Infinity ? c / maxC : 0);
   // The fewest lines: fill each as far as it goes.
   let k = 0;
   for (let a = 0; a < n;) {
     let b = a + 1;
-    while (b < n && widthOf(a, b + 1) <= lim) b++;
+    while (b < n && fits(a, b + 1)) b++;
     a = b;
     k++;
   }
@@ -158,12 +176,13 @@ export function breakLines(tokens, st, W) {
     for (let b = p; b <= n; b++) {
       for (let a = p - 1; a < b; a++) {
         if (cost[p - 1][a] === INF) continue;
-        const w = widthOf(a, b);
-        if (b - a > 1 && w > lim) continue;
-        let c = 10 * (w / lim) * (w / lim);
+        const w = widthOf(a, b), ch = charsOf(a, b);
+        if (b - a > 1 && !fits(a, b)) continue;
+        const f = full(w, ch);
+        let c = 10 * f * f;
         if (b < n && weakEnd(tokens[b - 1])) c += 3;
-        if (b - a === 1 && n >= 3 && w < lim / 2) c += 4;    // a short word alone on a line
-        c += 0.02 * (w / lim) * (k - p);         // a tie goes to the wider lower line
+        if (b - a === 1 && n >= 3 && f < 0.5) c += 4;    // a short word alone on a line
+        c += 0.02 * f * (k - p);         // a tie goes to the wider lower line
         if (cost[p - 1][a] + c < cost[p][b]) { cost[p][b] = cost[p - 1][a] + c; from[p][b] = a; }
       }
     }
@@ -252,10 +271,18 @@ const lookKey = (l) => (l ? JSON.stringify(l) : '');
  * @param opts.joins   [t] the seams between reads (joinsOf)
  * @param opts.walls   [[from, to]] spans a page does not run into or across - heard captions NOT being cut
  *                     again (recutSome). Unlike a typed line, a wall takes no word away (review K6).
+ * @param opts.srt     cut for the `.srt` beside a render (srt.js): the `sentences` rule by characters only
  * @returns [{ name, start, dur, words: [{ w, s, e, k?, h? }], style?, tx?, ty? }] - captions, heard
+ *
+ * A lane cut in `sentences` (its style's `cut`, phase V30 block 4) - and the `.srt` - is cut as classic subtitles: a
+ * phrase ends only at a hard boundary (a pause of 1 s, not 0.4) or a sentence's end, and a comma is where it is cut
+ * best when it must be; a page holds any number of words in two lines of at most 42 characters (and of 0.78 of the
+ * frame in the lane's font), 7 s at most, and stays up a second when the next page leaves room (SENT).
  */
 export function paginate(words, opts) {
   const o = opts || {};
+  const srt = !!o.srt;
+  const sent = srt || (o.lane && o.lane.cut) === 'sentences';
   const spans = (list) => (list || []).map(([a, b]) => [+a || 0, +b || 0]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
   const typed = spans(o.typed);
   const walls = spans(o.typed).concat(spans(o.walls)).sort((x, y) => x[0] - y[0]);
@@ -296,7 +323,7 @@ export function paginate(words, opts) {
   // 1-2. Boundaries: after each word, what lies between it and the next.
   const midOf = (w) => (w.start + w.end) / 2;
   const between = (a, b) => {
-    if (b.start - a.end >= PAGE.pause - 1e-9) return 'hard';
+    if (b.start - a.end >= (sent ? SENT.pause : PAGE.pause) - 1e-9) return 'hard';
     const am = midOf(a), bm = midOf(b);
     if (walls.some(([s, e]) => s < bm && e > am)) return 'hard';
     if (joins.some((j) => j > am && j <= bm)) return 'hard';
@@ -313,7 +340,7 @@ export function paginate(words, opts) {
     const gap = next ? next.start - w.end : Infinity;
     let end = hard;
     if (!end && endsSentence(w.text, next && next.text, gap)) end = 'sentence';
-    if (!end && cur.length >= 2 && endsClause(w.text)) end = 'clause';
+    if (!end && !sent && cur.length >= 2 && endsClause(w.text)) end = 'clause';
     if (end) { phrases.push({ idx: cur, end }); cur = []; }
   }
 
@@ -322,10 +349,11 @@ export function paginate(words, opts) {
   const styleOf = (look) => {
     const key = lookKey(look);
     if (!styleCache.has(key)) {
-      const st = withAuto(resolveStyle(o.lane, look && look.style), F.w, F.h);
-      const N = +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(o.format);
-      const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
-      const m = meter(st);
+      // The `.srt` has no look: a player draws it in its own font, so its lines are measured in characters.
+      const st = srt ? null : withAuto(resolveStyle(o.lane, look && look.style), F.w, F.h);
+      const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(o.format);
+      const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+      const m = st ? meter(st) : null;
       const lim = LINE_MAX * F.w;
       styleCache.set(key, { st, N, lines, m, lim });
     }
@@ -335,15 +363,16 @@ export function paginate(words, opts) {
   // Does words[a..b) make a page? Joining a flash single to a neighbour (`merging`) is never refused for
   // being short: the joined page is longer than the single it takes in (review K2: with two words a page,
   // the rule against flashes made single-word ones).
+  const maxDur = sent ? SENT.maxDur : PAGE.maxDur;
   const makes = (S, a, b, merging) => {
     const n = b - a;
     if (n === 1) return true;
     if (n > S.N) return false;
     const dur = list[b - 1].end - list[a].start;
-    if (dur > PAGE.maxDur + 1e-9 || (!merging && dur < PAGE.minDur - 1e-9)) return false;
+    if (dur > maxDur + 1e-9 || (!merging && dur < PAGE.minDur - 1e-9)) return false;
     const toks = [];
     for (let i = a; i < b; i++) {
-      if (S.m.text(list[i].text) > S.lim) return false;       // a word wider than a line stands alone
+      if (S.m && S.m.text(list[i].text) > S.lim) return false;       // a word wider than a line stands alone
       toks.push(list[i].text);
     }
     return breakLines(toks, S.st, F.w).length <= S.lines;
@@ -381,6 +410,8 @@ export function paginate(words, opts) {
               if (weakEnd(last)) c += COST.weak;
               if (enclitic(next)) c += COST.enclitic;
               if (pair(last, next)) c += COST.pair;
+              // Inside a sentence (the `sentences` cut), a comma is where a page is best cut.
+              if (sent && !endsClause(last)) c += COST.clause;
             }
             if (list[a0 + b - 1].end - list[a0 + a].start < PAGE.short) c += COST.short;
             if (b - a === 1 && L > 1 && list[a0 + a].end - list[a0 + a].start < PAGE.minDur) c += COST.flash;
@@ -434,6 +465,8 @@ export function paginate(words, opts) {
       const wall = walls.find(([a]) => a >= end - 1e-9);
       const limit = Math.min(nextStart, wall ? wall[0] : Infinity);
       end = (nextStart - end < PAGE.closeGap) ? Math.min(nextStart, limit) : Math.min(end + PAGE.hold, limit);
+      // A classic subtitle stays up a second, where the next one leaves room.
+      if (sent) end = Math.max(end, Math.min(start + SENT.minDur, limit));
       return { start, end: Math.max(end, last.end) };
     });
     // NO PAGE IS ON SCREEN UNDER 0.1 s - the shortest clip a lane keeps; a shorter one was stretched by
@@ -555,12 +588,15 @@ export function overPage(c, laneStyle, format) {
   if (words.length < 2) return null;
   const F = renderFrame(format);
   const st = withAuto(resolveStyle(laneStyle, c && c.style), F.w, F.h);
-  const N = +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);
-  const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+  // A lane cut in `sentences` (phase V30, block 4): any number of words, two lines, up to 7 s.
+  const sent = st.cut === 'sentences';
+  const N = sent ? Infinity : +st.wordsPerLine > 0 ? +st.wordsPerLine : autoWordsPerLine(format);
+  const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+  const maxDur = sent ? SENT.maxDur : PAGE.maxDur;
   if (words.length > N) return words.length + ' words, a page holds ' + N;
   const end = Math.max(...words.map((w) => r2(w.e)));
   const dur = end - r2(words[0].s);
-  if (dur > PAGE.maxDur + 1e-9) return dur.toFixed(1) + ' s of words, a page is up to ' + PAGE.maxDur + ' s';
+  if (dur > maxDur + 1e-9) return dur.toFixed(1) + ' s of words, a page is up to ' + maxDur + ' s';
   const tokens = words.map((w) => String(w.w).trim());
   const m = meter(st);
   if (tokens.some((t) => m.text(t) > LINE_MAX * F.w)) return 'a word wider than a line, which gets a page of its own';
@@ -576,7 +612,7 @@ export const typedOf = (track) => ((track && track.clips) || [])
 
 /** The style fields a heard lane is cut again for: what makes a line wider or narrower, or a page longer. */
 export const CUT_KEYS = ['font', 'bold', 'size', 'sizeAuto', 'casing', 'scaleX', 'spacing', 'outline', 'shadow', 'borderStyle',
-  'effect', 'wordsPerLine', 'lines'];
+  'effect', 'wordsPerLine', 'lines', 'cut'];
 
 /**
  * The lane's HEARD captions cut again by these rules, from the words it holds - or null when it holds

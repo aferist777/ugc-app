@@ -24,7 +24,7 @@ let _busy = false;
 const DEFAULTS = {
   resolution: '', fps: 30, crf: 20, preset: 'veryfast', audioBitrate: '192k',
   eqBrightness: 0, eqContrast: 1, eqSaturation: 1, eqGamma: 1,
-  playbackSpeed: 1, extra1: 'none', extra2: 'none',
+  playbackSpeed: 1, extra1: 'none', extra2: 'none', srt: true,
 };
 
 function _say(msg, kind) {
@@ -232,6 +232,25 @@ function _open() {
   const ga = _slider(0.5, 2, 0.05, adv.eqGamma, v => v.toFixed(2));
   body.appendChild(_row('Gamma (exposure)', ga));
 
+  // THE SUBTITLES FILE (phase V30, block 4, the owner's (с11)): on unless turned off - the Subtitles lane as classic
+  // subtitles beside the video (lib/mv3b-job.js, public/js/captions/srt.js).
+  body.appendChild(_el('div', 'mv3-x-hdr', 'Subtitles'));
+  const srt = document.createElement('input');
+  srt.type = 'checkbox';
+  srt.checked = adv.srt !== false;
+  // A label inside a span: a row's own direct label is its name column (dialog.css).
+  const srtBox = _el('span', 'mv3-x-check');
+  const srtLbl = document.createElement('label');
+  srtLbl.append(srt, _el('span', null, '.srt file beside the video'));
+  srtBox.appendChild(srtLbl);
+  body.appendChild(_row('Subtitles file', srtBox));
+  const subs = (tl.tracks || []).find(t => t.kind === 'subs');
+  const said = !!(subs && (subs.clips || []).some(c => c && c.name));
+  body.appendChild(_el('div', 'mv3-x-note', said
+    ? 'The Subtitles lane as classic subtitles - two lines of up to 42 characters, 1-7 s each - in <name>.en_US.srt next to the video '
+      + '(Meta reads the language from that name). The text lanes are not in it.'
+    : 'The Subtitles lane is empty - no file will be written.'));
+
   body.appendChild(_el('div', 'mv3-x-hdr', 'Extras'));
   const e1 = _select([['none', '— none —'], ['black5', '+ Black tail 5 min'], ['black10', '+ Black tail 10 min'],
     ['black20', '+ Black tail 20 min'], ['black30', '+ Black tail 30 min']], adv.extra1);
@@ -257,6 +276,7 @@ function _open() {
     playbackSpeed: parseFloat(spd._input.value) || 1,
     extra1: e1.value,
     extra2: e2.value,
+    srt: !!srt.checked,
   });
   const save = async () => {
     const a = collect();

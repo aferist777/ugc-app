@@ -144,7 +144,7 @@ async function runBlank(item) {
         if (it && it.phase !== phase) { it.phase = phase; it.percent = 0; it.remain = null; write(t); }
       };
       try {
-        const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase), final);
+        const r = await JOB.finish(out, built.settings, ({ phase }) => mark(phase === 'speed' ? 'speeding' : phase), final, built.srt);
         const said = [...(built.warnings || []), ...((r && r.warnings) || []), ...fonts.warnings()];
         if (said.length) warning = said.join('; ');
       } catch (e) {

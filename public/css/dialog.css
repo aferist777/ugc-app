@@ -39,6 +39,10 @@
 }
 .mv3-x-row input[type=color]{padding:1px; height:23px}
 .mv3-x-note{margin:3px 0 0; font:400 9.5px/1.4 var(--font); color:var(--muted)}
+/* A box with its words, in a row or a foot (phase V30, block 4: the .srt in Export and beside Save & download). */
+.mv3-x-check{display:inline-flex; align-items:center; min-width:0}
+.mv3-x-check label{display:inline-flex; align-items:center; gap:6px; cursor:pointer; font:600 10.5px/1.3 var(--font); color:var(--ink); white-space:nowrap}
+.mv3-x-check input{margin:0; accent-color:var(--primary); cursor:pointer}
 
 .mv3-x-foot{
   display:flex; align-items:center; gap:7px; flex:0 0 auto;

@@ -35,6 +35,10 @@ export const CASINGS = ['none', 'upper', 'lower', 'title'];
 // outline: letters outlined; box: a box behind each line; boxline: a box AND outlined letters.
 export const BORDERS = ['outline', 'box', 'boxline'];
 export const POSITIONS = ['top', 'center', 'bottom'];
+// How a heard lane is cut (phase V30, block 4, (с12)): `pages` - a few words a page (K2); `sentences` - classic
+// subtitles, a sentence or a part of one, two lines of up to 42 characters, 1-7 s (pages.js SENT). The LANE's, never
+// a line's (с43): resolveStyle takes it from the lane only.
+export const CUTS = ['pages', 'sentences'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -46,7 +50,7 @@ export const DEF = {
   outline: 3, shadow: 0, blur: 0,
   scaleX: 100, scaleY: 100, spacing: 0,
   borderStyle: 'outline', pos: 'bottom', tx: 0, ty: 0,
-  wrap: true, wordsPerLine: 0, lines: 2,
+  wrap: true, wordsPerLine: 0, lines: 2, cut: 'pages',
   effect: 'none', appear: 'none', casing: 'none',
   sizeAuto: true,
   // The colour of a word marked to stand out (`k`, K10b) - '' is automatic (markedColour).
@@ -85,6 +89,7 @@ const RULES = {
   wrap: BOOL,
   wordsPerLine: NUM(0, 12, true),
   lines: NUM(1, 3, true),
+  cut: ONE(CUTS),
   effect: ONE(EFFECTS), appear: ONE(APPEARS), casing: ONE(CASINGS),
   sizeAuto: BOOL,
   marked: (v) => (v === '' ? '' : COLOUR(v)),
@@ -154,6 +159,8 @@ export function resolveStyle(laneStyle, clipStyle) {
   const st = Object.assign({}, DEF, lane, own || {});
   delete st.karaoke;                       // read as `effect` above (_legacy)
   st.font = familyOf(st.font);             // a shipped font, whatever an old project named (K5)
+  // The cut is the lane's (phase V30, block 4, (с43)): a Classic preset put on a line gives it the look only.
+  st.cut = lane.cut === 'sentences' ? 'sentences' : 'pages';
   return st;
 }
 
