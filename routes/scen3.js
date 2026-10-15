@@ -3380,6 +3380,8 @@ function _normSdClip(c) {
     sound: TH.soundById(c.sound) ? c.sound : 'read', model: String(c.model || ''), quality: String(c.quality || ''),
     secs: +c.secs > 0 ? +c.secs : 0, at: String(c.at || ''),
     take: String(c.take || ''), words: String(c.words || ''), voice: String(c.voice || ''),
+    // (the sixth round) Where the speech ends in its own sound (lib/speech-end.js) - 0 when it runs to the end.
+    speechEnd: +c.speechEnd > 0 ? Math.round(+c.speechEnd * 100) / 100 : 0,
   };
 }
 
@@ -4018,6 +4020,7 @@ router.post('/scen3/sd/prompt', async (req, res) => {
    ─────────────────────────────────────────────────────────────────────────── */
 const VMOD = require('../lib/video-models');
 const VTASK = require('../lib/video-task');
+const SPEECH = require('../lib/speech-end');
 const FAKE = require('../lib/fake-agg');
 const _sdAsking = new Set();              // the rows being asked for now, in this process - their poll waits
 const SD_BOOT_AT = Date.now();            // ...and every row made since this process started is this process's
@@ -4110,7 +4113,7 @@ function _sdClipPlan(proj, i) {
   if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
   const sound = video.sound || TH.SOUND_DEFAULT;
   const sample = sound === 'sample' ? _sdSample(proj) : '';
-  if (sound === 'sample' && !sample) return { skipped: 'the character’s voice has no sample on the Voices shelf - choose another sound in field 4' };
+  if (sound === 'sample' && !sample) return { skipped: 'the voice has no demo yet - it is made in the voice field (field 2)' };
   const quality = TH.qualityOf(video.model, video.quality);
   if (!quality) return { skipped: 'choose the quality of the clips (field 4) first' };
   const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
@@ -4343,14 +4346,14 @@ JOBS.register('sdclip', {
     if (r.local) fs.copyFileSync(toDiskExisting(r.local) || r.local, abs);   // the fake aggregator's clip: a library address
     else await VTASK.fetchTo(r.url, abs);   // a download that fails throws: the next tick asks and fetches again
     try { await H.normalizeVideoForBrowser(abs); } catch (e) { console.warn('[scen3/sdclip] normalize failed:', e.message); }
-    return { state: 'success', path: toUrl(abs), dur: await _audioDur(abs), thumb: await _clipPoster(abs, name) };
+    return { state: 'success', path: toUrl(abs), dur: await _audioDur(abs), thumb: await _clipPoster(abs, name), speechEnd: await SPEECH.speechEnd(abs) };
   },
   file: async (rec, landed) => {
     const p = _fileParams(rec);
     const clip = _normSdClip({
       path: landed.path, thumb: landed.thumb, dur: landed.dur, frameId: p.frameId, sound: p.sound,
       model: p.model, quality: p.quality, secs: p.secs, at: new Date().toISOString(),
-      take: p.take, words: p.words, voice: p.voice,
+      take: p.take, words: p.words, voice: p.voice, speechEnd: landed.speechEnd,
     });
     const i = Number(p.line);
     let filed = false;
@@ -4382,15 +4385,19 @@ JOBS.register('sdclip', {
 
 // For the timeline mirror (lib/frag-mirror.js): a Seedance project's lines that HAVE a clip, in order - the line, its
 // clip (whose own sound the timeline hears) and how long it lies. null for a project that is not filmed by Seedance.
+// THE CELL ENDS WHERE THE SPEECH ENDS (the sixth round, the owner's answer (я6)), with a breath after it, never past the
+// clip - no fade (answer (я12)). A take from before that was measured: voiced from the read, a breath past the read;
+// by the voice sample, the clip's own length.
+const SD_BREATH = 0.3;
 function _sdCuts(proj) {
   const view = _sdView(proj);
   if (!view) return null;
-  return view.filter(f => f.clip).map(f => ({
-    line: f.line, clip: f.clip, audio: f.audio, dur: f.dur,
-    // Seedance voices a line in its own time - a little longer than the read, at times: a take voiced from the read is
-    // given a breath past the read, never past the clip; one by the voice sample lies for the clip's own length.
-    len: f.clip.sound === 'read' && f.dur > 0 ? Math.min(f.clip.dur || f.dur, f.dur + 0.6) : (f.clip.dur || 0),
-  }));
+  return view.filter(f => f.clip).map(f => {
+    const c = f.clip;
+    const len = c.speechEnd > 0 ? Math.min(c.dur || Infinity, c.speechEnd + SD_BREATH)
+      : c.sound === 'read' && f.dur > 0 ? Math.min(c.dur || f.dur, f.dur + 0.6) : (c.dur || 0);
+    return { line: f.line, clip: c, audio: f.audio, dur: f.dur, len: Math.round(len * 100) / 100 };
+  });
 }
 
 /* ── A line's animation prompt, by hand ──────────────────────────────────────
