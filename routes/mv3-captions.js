@@ -9,8 +9,9 @@
 //                                                 `code` (no-key, no-build, no-sound, too-long) before
 //                                                 anything is spent. `download: true` is the person saying
 //                                                 yes to the speech model when the run falls over here
-//   GET  /api/mv3/captions/state?key=           -> { success, job, last }  the job of that project, or
-//                                                 null and what was last laid (from its subs/ file)
+//   GET  /api/mv3/captions/state?key=           -> { success, job, last, lines }  the job of that project, or
+//                                                 null and what was last laid (from its subs/ file); for a talking
+//                                                 head `lines` - its lines with no caption and why (phase V30)
 //
 //   GET  /api/speech/local                      -> { success, state }  this computer's ear: the program,
 //                                                 the model, the NVIDIA build - present, coming, failed.
@@ -27,6 +28,7 @@ const router = express.Router();
 const OWN = require('../lib/ownership');
 const MSTORE = require('../lib/merge-store');
 const JOB = require('../lib/captions-job');
+const AUTO = require('../lib/captions-auto');
 const GROQ = require('../lib/groq-stt');
 const LOCAL = require('../lib/whisper-local');
 const { KEY_RE } = require('../lib/subs-store');
@@ -66,11 +68,15 @@ router.get('/mv3/captions/state', (req, res) => {
   try {
     const key = String(req.query.key || '');
     // Asked with no project (the smoke check asks every route that way): nothing to say.
-    if (!KEY_RE.test(key)) return res.json({ success: true, job: null, last: null });
+    if (!KEY_RE.test(key)) return res.json({ success: true, job: null, last: null, lines: null });
     const job = JOB.get(key);
+    // (phase V30, block 1) A talking head's lines: how many lie with no caption, why nobody could hear them by itself, and
+    // whether a hearing by itself is about to start (the page keeps asking while it is).
+    let lines = JOB.linesState(key, MSTORE.one(key));
+    if (lines) lines = { ...lines, pending: AUTO.pending(key.slice(4)) };
     // Always: "back to what was heard" shows by what the file says was laid, whatever the job in memory
     // did - a failed one used to hide it for fifteen minutes (review K2).
-    res.json({ success: true, job, last: JOB.last(key) });
+    res.json({ success: true, job, last: JOB.last(key), lines });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

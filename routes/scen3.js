@@ -5946,6 +5946,9 @@ router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
 // (phase V26.8) A Seedance project's fragments with their clips, for the timeline mirror.
 router.sdCuts = _sdCuts;
+// (phase V30, block 1) Is the script being read now? Its captions are heard by themselves after the last read lands
+// (lib/captions-auto.js).
+router.readsRunning = (id) => !!((_reads.get(String(id)) || {}).running);
 // The two makers' work and what the Library's chats need around it (routes/makechat.js, phase I): the
 // same submit Merge and "try again" use, the media door, the kicks of the rows written at the press,
 // and the retry request a row keeps.

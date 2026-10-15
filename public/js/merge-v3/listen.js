@@ -60,11 +60,29 @@ export async function readLocal(force) {
   return _localAsked;
 }
 
+// (phase V30, block 1) What a talking head's lines need: the ones no caption lies over, and why nobody heard them by
+// themselves - or that they are about to be. '' when every line has its captions.
+function _linesNote(s) {
+  const L = s.lines;
+  const j = s.job;
+  if (!L || !L.lane || !(L.bare > 0) || (j && j.state === 'listening')) return '';
+  if (L.pending) return 'New lines are heard in a moment.';
+  const n = L.bare === 1 ? '1 line has' : L.bare + ' lines have';
+  if (L.why) return j && j.state === 'failed' && j.auto ? '' : n + ' no captions - ' + L.why.replace(/^./, (m) => m.toLowerCase());
+  return n + ' no captions yet - Generate from the sound lays them.';
+}
+
 // What the line under the button says.
 function _line(s) {
+  const note = _linesNote(s);
+  const said = _said(s);
+  return [said, note].filter(Boolean).join(' ');
+}
+function _said(s) {
   if (s.refused) return s.refused;
   const j = s.job;
   if (j && j.state === 'listening') {
+    if (j.auto && !j.part && !j.dl && !j.wait && j.where !== 'local') return 'Hearing the new lines - ' + String(j.step || 'starting');
     const step = String(j.step || 'starting');
     if (step === 'collecting the sound' && j.part) return 'Listening - collecting the sound (' + j.part.i + ' of ' + j.part.n + ')';
     if (j.dl) return 'Listening - downloading the speech model ' + Math.floor(100 * j.dl.got / Math.max(1, j.dl.total)) + '% of ' + _mb(j.dl.total);
@@ -83,9 +101,21 @@ function _line(s) {
     // Every word heard lies under lines the person corrected or typed: something WAS said, and the lane is left
     // as it is on purpose (review K10 - it said "Nothing was said" and hid the kept and stale counts).
     const under = !r.lines && r.dropped && ((+r.dropped.fixed || 0) + (+r.dropped.typed || 0)) > 0;
-    out.push(r.lines ? (r.stored ? 'Laid again from what was heard: ' : '') + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
+    // A talking head's new lines, heard by themselves (phase V30, block 1).
+    const lead = r.auto ? 'The new ' + (r.heardLines === 1 ? 'line was' : 'lines were') + ' heard by ' + (r.heardLines === 1 ? 'itself' : 'themselves') + ': '
+      : r.stored ? 'Laid again from what was heard: ' : '';
+    out.push(r.lines ? lead + _n(r.lines, 'page', 'pages') + ' from ' + _n(r.words, 'word', 'words') + '.'
       : under ? 'Every word heard lies under lines you corrected or typed - the lane was left as it was.'
         : 'Nothing was said on those tracks - the lane was left as it was.');
+    // A line heard as other words than the script's (a clip that added its own) is laid as heard; a line never heard is
+    // not laid again from nothing (the owner's (с20), "back to what was heard").
+    const off = r.offScript || [];
+    if (off.length) out.push((off.length === 1 ? 'A line says' : off.length + ' lines say') + ' other words than the script, laid as heard: '
+      + off.slice(0, 3).join(', ') + (off.length > 3 ? '...' : '') + '.');
+    const never = r.unheard || [];
+    if (never.length) out.push('Not heard yet: ' + never.slice(0, 3).join(', ') + (never.length > 3 ? '...' : '') + ' - Generate from the sound hears '
+      + (never.length === 1 ? 'it.' : 'them.'));
+    if (r.restLost) out.push('The other sound on the timeline was not laid again - it has changed since it was heard.');
     if (r.stored) {
       if (r.lines) out.push('Nothing asked, nothing paid.');
     } else if (r.local) {
@@ -125,7 +155,9 @@ export function view(key) {
   const busy = !!(s.job && s.job.state === 'listening');
   // Something was heard and laid for this project (its subs/ file says so): it can be laid again (K2).
   const heard = !!(s.last && s.last.at) || !!(s.job && s.job.state === 'done' && s.job.result && s.job.result.lines);
-  return { busy, line: _line(s), ask: !!(s.job && s.job.state === 'failed' && s.job.code === 'need-model'),
+  // The model is offered too where a talking head's lines wait for it (phase V30): no Groq key, no model.
+  const wantsModel = !!(s.lines && s.lines.bare > 0 && s.lines.missing === 'need-model');
+  return { busy, line: _line(s), ask: !busy && (!!(s.job && s.job.state === 'failed' && s.job.code === 'need-model') || wantsModel),
     again: busy && !!s.job.stored, heard };
 }
 
@@ -160,10 +192,11 @@ async function _poll(first) {
   // Told only when what the strip SAYS changes (review K1): the strip is rebuilt whole, and an open
   // colour or a menu in it would be torn down every second and a half for the same words.
   const before = JSON.stringify(view(k));
-  if (d) { s.job = d.job || null; s.last = d.last || s.last; s.read = true; }
+  if (d) { s.job = d.job || null; s.last = d.last || s.last; s.lines = d.lines || null; s.read = true; }
   const now = s.job;
   const changed = JSON.stringify(view(k)) !== before;
-  if (now && now.state === 'listening') { _schedule(); if (changed) _emit(); return; }
+  // Asked again while it listens - and while a talking head's new lines are about to be heard by themselves.
+  if ((now && now.state === 'listening') || (s.lines && s.lines.pending)) { _schedule(); if (changed) _emit(); return; }
   if (changed) _emit();
   if (now && now.state === 'done' && (!was || was.state === 'listening') && now.result && now.result.rev) {
     await _landed(now.result.rev);
@@ -213,11 +246,18 @@ export async function start(opts) {
   if (k === _key && s.job && s.job.state === 'listening') _schedule();
 }
 
-// A project opened: what is its job doing? Once, and then every 1.5 s while it listens.
+// A project opened: what is its job doing? Once, and then every 1.5 s while it listens. And again whenever the server
+// laid something of its own on it (phase V30): a talking head's cut laid again is when its new lines start to be heard.
+let _seen = 0;
 function _opened() {
   const k = Store.key() || null;
-  if (k === _key) return;
+  const v = Store.version();
+  if (k === _key) {
+    if (k && v > _seen && Store.statusIsInfo() && !_timer) { _seen = v; _poll(true); }
+    return;
+  }
   _key = k;
+  _seen = v;
   if (_timer) { clearTimeout(_timer); _timer = null; }
   if (k) _poll(true);
 }

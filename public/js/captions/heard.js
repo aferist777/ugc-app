@@ -125,7 +125,7 @@ const WORD_MAX = 1.5;                   // a word held longer than this is a tim
 const WORD_CHARS = 60;                  // the longest a stored word is (style.js normalizeWords, words.js LIMITS)
 
 /**
- * @param words     [{ text, start, end }] in timeline seconds
+ * @param words     [{ text, start, end, voice? }] in timeline seconds
  * @param segments  [{ start, end, no_speech_prob, avg_logprob, compression_ratio }] in timeline seconds
  * @param opts.gaps   [[from, to]] where the timeline plays nothing (silencesOf)
  * @param opts.typed  [[from, to]] the lines typed by hand - they own their stretch
@@ -162,7 +162,8 @@ export function cleanWords(words, segments, opts) {
     if (into) end = into[0];
     if (inside(typed, (start + end) / 2)) { dropped.typed++; continue; }
     if (inside(fixed, (start + end) / 2)) { dropped.fixed++; continue; }
-    kept.push({ text, start, end });
+    // A talking head's word keeps the line it was heard from (phase V30, block 1).
+    kept.push(w0.voice ? { text, start, end, voice: String(w0.voice) } : { text, start, end });
   }
   kept.sort((a, b) => a.start - b.start);
   let prevEnd = 0;

@@ -414,6 +414,23 @@ export function retext(words, text, dur) {
   return _done(out.map(_word));
 }
 
+// ── A typed line, timed by its letters (phase V30, block 1) ─────────────────
+/**
+ * The words of a TYPED line of the subtitle lane, timed by "letters + 2" over the whole line, from its start to its end (the
+ * owner's (с5): no sound, no button) - so the spoken word's effect plays on it as on a heard one. Nothing is stored: it is
+ * worked out where the line is drawn (ass.js, the preview's hand painter), and a line retyped or made longer is timed again
+ * by itself. A mark goes with its word, as in retext; paragraphs stay as typed - `paras` holds the words in each.
+ * @returns { words: [{ w, s, e }], paras: [n] } or null - no word, more than 200, or too short for 0.06 s a word
+ */
+export function typedWords(text, dur) {
+  const paras = String(text == null ? '' : text).split('\n').map((p) => _glue(tokensOf(p))).filter((p) => p.length);
+  const all = [].concat(...paras);
+  if (!all.length || all.length > LIMITS.words) return null;
+  const end = cs(dur);
+  if (end < MINC * all.length) return null;
+  return { words: _share(all.map((w) => ({ w })), 0, end), paras: paras.map((p) => p.length) };
+}
+
 // ── The word editor's operations (K10b) ─────────────────────────────────────
 const _at = (ws, i) => (Number.isInteger(i) && i >= 0 && i < ws.length ? ws[i] : null);
 const NO_WORD = { why: 'There is no such word in this line' };

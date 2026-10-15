@@ -794,8 +794,11 @@ function _serverOnly(base, theirs) {
     const kept = new Set((yc || []).filter(isCorrected).map(c => c.id));
     const said1 = (c) => subs && isHeard(c) && !kept.has(c.id);
     // The person's cells: on the subtitle lane in any order (a lay puts the lines back in time
-    // order), elsewhere as they are - on a video lane the order is which one shows.
-    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c));
+    // order), elsewhere as they are - on a video lane the order is which one shows. A talking head's caption
+    // (`voice`, phase V30, block 1) is MOVED by the mirror with its line, a corrected one too: where it stands is
+    // the server's, what it says is the person's.
+    const placeFree = (c) => (subs && c && c.voice ? { ...c, start: 0, dur: 0 } : c);
+    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c)).map(placeFree);
     if (subs ? !_same(byId(own(xc)), byId(own(yc))) : !_same(own(xc), own(yc))) return null;
     if (!_same((xc || []).filter(_isFrag), (yc || []).filter(_isFrag))) frag = true;
     const said = (list) => (list || []).filter(c => !_isFrag(c) && said1(c));

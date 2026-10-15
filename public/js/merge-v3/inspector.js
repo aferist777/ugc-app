@@ -503,7 +503,8 @@ function _blankAudioTrack(host, track) {
 // ── Captions from what was said ─────────────────────────────────────────────
 // The SERVER listens to the project and lays the lines (lib/captions-job.js, phase K1); the strip
 // presses the button and says what the job of THIS project is doing (listen.js).
-const ENGINES = [['cloud', 'cloud (Groq)'], ['local', 'this computer']];
+// The key decides (phase V30, the owner's (с22)): Groq when there is one, this computer when not - or this computer always.
+const ENGINES = [['cloud', 'Groq when there is a key, else this computer'], ['local', 'this computer']];
 // What the subtitle strip was last built for: while only the words of its status line change (a percent),
 // the line is rewritten in place - rebuilding the strip every 1.5 s tore down an open menu (review K1b).
 let _listenShape = null;
@@ -551,7 +552,8 @@ function _blankWordsTrack(host, track) {
     const v = Listen.view(Store.key());
     const gen = C.button(v.busy && !v.again ? 'Listening...' : 'Generate from the sound', () => Listen.start(), {
       title: 'Listens to the audible sound - the main audio lane first, music beds and reversed clips left '
-        + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are.',
+        + 'out - and lays the words on this lane. Lines you typed or corrected stay as they are. In a talking head '
+        + 'every line is heard by itself, its words taken from the script, and a line with a new take is heard by itself.',
     });
     gen.disabled = v.busy || !Store.key() || !Store.canEdit();
     // BACK TO WHAT WAS HEARD (K2): the pages laid again from the answers this project keeps - the hand
@@ -640,7 +642,7 @@ function _blankWordsTrack(host, track) {
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, typedOnly: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
 
   // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
   const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
@@ -688,7 +690,7 @@ function _presetsHint(host) {
 }
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
-// size is still the format's (a caption has no "auto" of its own); `typedOnly` - no word timings here.
+// size is still the format's (a caption has no "auto" of its own); `textLane` - a text lane's: no spoken word there.
 function _styleRows(host, st, set, o) {
   host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
   // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
@@ -734,8 +736,9 @@ function _styleRows(host, st, set, o) {
       C.toggleNamed('auto', !st.marked, (on) => set({ marked: on ? '' : markedColour(st) }),
         'The colour that stands out from this style: the spoken word\'s, or yellow, red or blue'))));
   }
-  if (o.typedOnly && st.effect !== 'none') {
-    host.appendChild(C.hint('A typed line has no word timings: the spoken word plays on heard captions only.'));
+  // A typed line of the subtitle lane plays the spoken word by its letters (phase V30, block 1); a text lane holds titles.
+  if (o.textLane && st.effect !== 'none') {
+    host.appendChild(C.hint('A text lane has no spoken word - it plays on the Subtitles lane.'));
   }
   host.appendChild(C.row('Arrives', C.select(APPEARS, st.appear, (v) => set({ appear: v }))));
 
@@ -788,7 +791,7 @@ function _renderCaptions(host, items) {
   const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
     ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v }), { cut: true });
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, typedOnly: !items.some(x => isHeard(x.clip)), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+  _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
   if (items.some(x => x.clip.style)) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB(ids, null, { cut: true }),
@@ -892,7 +895,7 @@ function _blankCaption(host, track, clip) {
   host.appendChild(_el('div', 'mv3-c-sep'));
   const heard = isHeard(clip);
   _styleRows(host, styleOf(track, fmt, clip), (patch) => setCapStyleB([clip.id], patch, { cut: heard && _cuts(patch) }),
-    { fmt, typedOnly: !heard, marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
+    { fmt, textLane: track.kind !== 'subs', marks: ([clip]).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)) });
   if (own) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], null, { cut: heard }),

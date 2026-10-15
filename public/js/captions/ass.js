@@ -26,6 +26,10 @@
    it turns the text's colour while it is spoken, so it still flashes and its letters stay off the box.
    Casing is applied here, to what is drawn - never to the stored text.
 
+   A TYPED line of the subtitle lane plays the spoken word too (phase V30, block 1, the owner's (с5)): its words are timed by
+   their letters over the whole line (words.js typedWords) here, where it is drawn - nothing stored, the line stays typed for
+   every other rule. A text lane's lines are titles: drawn as typed, as always.
+
    THE LINES ARE BROKEN HERE, not by libass (phase K2): pages.js breakLines() says where - no line wider
    than 0.78 of the frame, the most even, never on a weak word - and the break is written as \N between
    the SAME two words in every layer, so the layers cannot part. libass's own wrap (0.88, the margins)
@@ -39,7 +43,7 @@ import { resolveStyle, withAuto, anchorOf, cased, markedColour } from './style.j
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
-import { spells } from './words.js';
+import { spells, typedWords } from './words.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -264,7 +268,7 @@ export function buildAss(lanes, w, h) {
     if (!clips.length) continue;
     const marks = clips.some(c => { const ws = _wordsOf(c); return !!ws && ws.some(x => x && x.k); });
     const s = make('S' + used.length, withAuto(resolveStyle(track.style), w, h), marks);
-    used.push({ ...s, clips, lane: track.style });
+    used.push({ ...s, clips, lane: track.style, subs: track.kind === 'subs' });
   }
   if (!used.length) return '';
   const first = used[0].st;
@@ -304,12 +308,25 @@ export function buildAss(lanes, w, h) {
       let s = styleOf(u, lane, c);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
-      const words = _wordsOf(c);
+      let words = _wordsOf(c);
+      // A typed line of the subtitle lane with a spoken word: its words timed by their letters (phase V30, block 1).
+      const typed = (!words && u.subs && s.st.effect !== 'none' && !(Array.isArray(c.words) && c.words.length))
+        ? typedWords(c.name, end - start) : null;
       // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
       // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
       // drawn exactly as typed, its spaces and all (review K2).
       const page = { brk: null, text: String(c.name) };
-      if (words) {
+      if (typed) {
+        // Each paragraph broken by the rule, and a break between the paragraphs, as typed.
+        const paras = [];
+        let k = 0;
+        for (const n of typed.paras) { paras.push(typed.words.slice(k, k + n).map(x => String(x.w))); k += n; }
+        const fit = fitText(paras, s.st, w);
+        if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
+        page.brk = _breaks([].concat(...fit.lines));
+        page.text = _joined(typed.words.map(x => String(x.w)), page.brk);
+        words = typed.words;
+      } else if (words) {
         const tokens = words.map(x => String(x.w));
         const fit = fitPage(tokens, s.st, w);
         if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);

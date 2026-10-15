@@ -242,8 +242,10 @@ export function fixJoins(words, joins) {
 const lookKey = (l) => (l ? JSON.stringify(l) : '');
 
 /**
- * @param words   [{ text, start, end, k?, h?, look? }] in timeline seconds; `look` is the own look of the
- *                caption the word came from: { style?, tx?, ty? }; `h` a word a person corrected (K10)
+ * @param words   [{ text, start, end, k?, h?, look?, voice? }] in timeline seconds; `look` is the own look of the
+ *                caption the word came from: { style?, tx?, ty? }; `h` a word a person corrected (K10); `voice` the
+ *                talking-head line it was heard from (phase V30, block 1) - a page never holds words of two lines, and
+ *                carries its line's voice
  * @param opts.lane    the lane's style as stored
  * @param opts.format  the timeline's format ('9:16' | '16:9')
  * @param opts.typed   [[from, to]] the lines typed by hand on the lane
@@ -278,6 +280,7 @@ export function paginate(words, opts) {
     if (w0.k) w.k = true;
     if (w0.h) w.h = true;
     if (w0.look && Object.keys(w0.look).length) w.look = w0.look;
+    if (w0.voice) w.voice = String(w0.voice);
     ws.push(w);
   }
   ws.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -298,6 +301,7 @@ export function paginate(words, opts) {
     if (walls.some(([s, e]) => s < bm && e > am)) return 'hard';
     if (joins.some((j) => j > am && j <= bm)) return 'hard';
     if (lookKey(a.look) !== lookKey(b.look)) return 'hard';
+    if ((a.voice || '') !== (b.voice || '')) return 'hard';
     return '';
   };
   const phrases = [];
@@ -487,6 +491,7 @@ export function paginate(words, opts) {
       if (look.tx != null) c.tx = look.tx;
       if (look.ty != null) c.ty = look.ty;
     }
+    if (first.voice) c.voice = first.voice;
     out.push(c);
   }
   return out;
@@ -505,7 +510,8 @@ export function lookOf(c) {
 /**
  * Every heard word on the lane, back in timeline seconds, with its marks and its caption's look. A caption
  * whose words no longer spell its text (rewritten by hand before K10) is timed for its text first - the
- * person's text is what is cut, never the words it replaced.
+ * person's text is what is cut, never the words it replaced. A talking head's word keeps its line (`voice`,
+ * phase V30, block 1): the pages cut again are still that line's.
  */
 export function wordsOf(track) {
   const out = [];
@@ -521,6 +527,7 @@ export function wordsOf(track) {
       if (w.k) x.k = true;
       if (w.h) x.h = true;
       if (look) x.look = look;
+      if (c.voice) x.voice = String(c.voice);
       out.push(x);
     }
   }
@@ -658,7 +665,7 @@ function _asClips(pages, old, makeId, lane) {
   const taken = new Set((lane || old).map((c) => c && c.id));
   const fresh = () => { let id; do { id = makeId(); } while (taken.has(id)); taken.add(id); return id; };
   const key = (c) => JSON.stringify([r2(c.start), r2(c.dur), c.name, c.words, c.style || null,
-    c.tx == null ? null : c.tx, c.ty == null ? null : c.ty]);
+    c.tx == null ? null : c.tx, c.ty == null ? null : c.ty, c.voice || null]);
   const byKey = new Map(old.map((c) => [key(c), c.id]));
   const used = new Set();
   const made = pages.map((p) => {
@@ -671,6 +678,7 @@ function _asClips(pages, old, makeId, lane) {
     if (p.style) c.style = p.style;
     if (p.tx != null) c.tx = p.tx;
     if (p.ty != null) c.ty = p.ty;
+    if (p.voice) c.voice = p.voice;
     let id = byKey.get(key(c));
     if (!id || used.has(id)) {
       const at = c.start + ((c.words[0] && +c.words[0].s) || 0);

@@ -27,6 +27,7 @@ import { initVidChat, openVideos } from './vidchat.js';
 import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
+import { askModelOnce } from './model-ask.js';
 
 initNav();
 initLayout();
@@ -46,6 +47,9 @@ initInspector();
 initWorkshop();
 initProjects();
 initBar();
+// (phase V30, block 1) The speech model for captions, offered once when the program first starts (js/merge-v3/model-ask.js) -
+// a moment after the page, so a draft left by an app that closed without asking is asked about first.
+setTimeout(() => { askModelOnce().catch(() => {}); }, 2500);
 
 // ?open=pictures in the address, which is how the Alerts list takes somebody back to the chat a
 // picture was asked for in (js/alerts-bell.js). Once, when the project it names has opened. In a

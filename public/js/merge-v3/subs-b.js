@@ -11,7 +11,7 @@ import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, r
   from '../captions/style.js';
 import { cssWeight, fontOf } from '../captions/fonts.js';
 import { fitText, tokensOf } from '../captions/pages.js';
-import { spells } from '../captions/words.js';
+import { spells, typedWords } from '../captions/words.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -123,9 +123,17 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     // rule says where here - and a page holding a word wider than a line is drawn smaller, as there. A
     // line break typed into a caption is a break in both.
     // Typed text is broken in each paragraph it was typed in, at breakable blanks only (review K2).
-    // The words only while they spell the text, as the file has them (ass.js).
-    const words = st.effect === 'karaoke' && spells(c.words, c.name) ? c.words : null;
-    const paras = words ? [words.map(w => String(w.w))] : String(c.name).split('\n').map(tokensOf);
+    // The words only while they spell the text, as the file has them (ass.js) - and a typed line of the subtitle lane
+    // timed by its letters, as the file times it (phase V30, block 1, words.js typedWords), paragraphs as typed.
+    const heard = Array.isArray(c.words) && c.words.length;
+    const typed = st.effect === 'karaoke' && !heard && tr.kind === 'subs' ? typedWords(c.name, +c.dur || 0) : null;
+    const words = typed ? typed.words : (st.effect === 'karaoke' && spells(c.words, c.name) ? c.words : null);
+    let paras = words ? [words.map(w => String(w.w))] : String(c.name).split('\n').map(tokensOf);
+    if (typed) {
+      paras = [];
+      let k = 0;
+      for (const n of typed.paras) { paras.push(typed.words.slice(k, k + n).map(w => String(w.w))); k += n; }
+    }
     let counts = [];
     if (paras.some(p => p.length)) {
       const fit = fitText(paras, st, frame.w);
@@ -142,13 +150,15 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const lines = [];
+    let base = 0;                                      // the first word of the paragraph, in `words`
     paras.forEach((p, n) => {
       if (!p.length) { lines.push({ text: '', words: null }); return; }
       let i = 0;
       for (const k of (counts[n] || [p.length])) {
-        lines.push({ text: p.slice(i, i + k).join(' '), words: words ? words.slice(i, i + k) : null });
+        lines.push({ text: p.slice(i, i + k).join(' '), words: words ? words.slice(base + i, base + i + k) : null });
         i += k;
       }
+      base += p.length;
     });
     // The anchor is the BOTTOM of the block for a bottom caption and its middle for a centred
     // one, so a second line grows upward rather than off the frame.
