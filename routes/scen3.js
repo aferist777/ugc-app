@@ -3922,6 +3922,12 @@ async function _writeSdPromptsNow(id, only) {
     covered, clothes: _clothesShown(proj0, set ? set.id : 'full'),
   };
   const sheet = await _seeable(cast.obrazImage);
+  // (the sixth round, probe P7) Who speaks and, by the voice sample, the voice in words and the mood's own tone - the
+  // caption of a piece of the line that has no [tag] (lib/sd-prompt.js captioned).
+  const cv = _castVoiceOf(proj0);
+  const labels = cv.has ? _voiceLabels(cv.id) : null;
+  const gender = (labels && labels.gender) || String(proj0.gender || '');
+  const said = { gender, voiceWords: SDP.voiceWords(labels, gender), moodTone: (mood.tags || [])[0] || '' };
   const write = new Map();                  // line -> what is written for it
   const one = async (f) => {
     try {
@@ -3930,7 +3936,7 @@ async function _writeSdPromptsNow(id, only) {
       const rows = SDP.rows(lines[f.line]);
       const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs > 0 ? f.dur : 0, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
-      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place });
+      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place, ...said });
       write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
       report.written++;
     } catch (e) { report.failed.push({ n: f.n, error: e.message }); }
@@ -4030,6 +4036,18 @@ const SD_BOOT_AT = Date.now();            // ...and every row made since this pr
 function _sdSample(p) {
   const cv = _castVoiceOf(p);
   return cv && cv.has && cv.id ? _sampleOf(cv.id) : '';
+}
+// A voice's labels (gender, age, accent, descriptive) - the Voices shelf's, else the character's record of the voice.
+function _voiceLabels(voiceId) {
+  const shelf = VSHELF.get(voiceId);
+  if (shelf && shelf.labels) return shelf.labels;
+  const chars = _read(path.join(DATA_DIR, 'characters.json'));
+  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  for (const ch of arr) {
+    const v = (Array.isArray(ch.voices) ? ch.voices : []).find(x => x && String(x.voiceId) === String(voiceId));
+    if (v && v.labels) return v.labels;
+  }
+  return null;
 }
 function _sampleOf(voiceId) {
   const there = (u) => { const abs = u ? toDiskExisting(String(u)) : ''; return !!(abs && fs.existsSync(abs)); };
