@@ -3492,9 +3492,7 @@ const _projFull = p => ({
   castVoice: _castVoice(p),
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),
-  // (phase V26.8) With the sound Seedance makes the clip with when none is chosen - by the script's language, the
-  // owner's answer (ь). Said here, never stored: it follows the words.
-  video: { ..._normVideo(p.video), soundAuto: TH.SOUND_DEFAULT },
+  video: _normVideo(p.video),
   mix:   _normMix(p.mix),
   sdFrags: _sdView(p),
 });
@@ -3560,11 +3558,13 @@ router.post('/scen3/projects', async (req, res) => {
         id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt,
       }, now);
       merged.updatedAt = now;
-      const wasModel = _normVideo(list[i].video).model;
+      const was = _normVideo(list[i].video);
       list[i] = merged;
       _saveProjects(list);
-      // (phase V26.8) The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut.
-      if (video && _normVideo(merged.video).model !== wasModel) MIRROR.touch(merged.id, { project: merged });
+      // (phase V26.8) The timeline lays the clips of the project's mode (lib/frag-mirror.js): another model, another cut -
+      // and another sound (the sixth round: by the voice sample, the reads are not laid).
+      const nowV = _normVideo(merged.video);
+      if (video && (nowV.model !== was.model || nowV.sound !== was.sound)) MIRROR.touch(merged.id, { project: merged });
       return res.json({ success: true, project: _projFull(merged) });
     }
 
@@ -3816,39 +3816,56 @@ function _sdSetting(p) {
 }
 
 // A take of a line is FRESH while the line opens on the frame it was made from and says the words it was made of -
-// with `read`, by the read it heard (a take from before that was recorded counts as fresh, as Kling's).
-function _sdFresh(c, frameId, take, words) {
+// and, by the rule of the sound it was made with (the owner's answer (я16): a take made the other way stays the line's
+// until a new one), with `read` by the read it heard (one from before that was recorded counts as fresh, as Kling's),
+// with `sample` in the voice it was made in.
+function _sdFresh(c, frameId, take, words, voice) {
   if (c.frameId !== frameId) return false;
   if (c.words && c.words !== words) return false;
+  if (c.sound === 'sample') return !c.voice || !voice || c.voice === voice;
   return !c.take || !take || c.take === take.path;
 }
+// (the owner's answer (я17)) A line too long for a clip of the model's length can only be guessed at by `sample` - no
+// length is estimated: it goes as it is, and the open line says so. English is spoken at about 2.5 words a second.
+const SD_WORDS_A_SECOND = 2.5;
+const _wordCount = (l) => String((l && l.text) || '').replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 
-// THE LINES OF A SEEDANCE PROJECT, for the page and for the clips: every live line that is read, each with its place in
-// the video (`n`), its read, the frame it opens on, the seconds its clip is asked for, its prompt - edited by hand,
-// written for other settings (`stale`) - or none yet, and its takes (`clip` - chosen by hand, else the newest fresh).
-// A line not read yet is not one of them: there is nothing to film it to. null for Kling.
+// THE LINES OF A SEEDANCE PROJECT, for the page and for the clips, each with its place in the video (`n`), the frame
+// it opens on, the seconds its clip is asked for, its prompt - edited by hand, written for other settings (`stale`) - or
+// none yet, and its takes (`clip` - chosen by hand, else the newest fresh). BY THE SOUND (the sixth round): with `read`
+// every live line that is read - its read is what Seedance hears, and its length the clip's; with `sample` every live
+// line with words - nothing is read (the owner: "генерировать голоса не нужно"), and the clip's length is Seedance's own
+// (`secs` -1). null for Kling.
 function _sdView(p) {
   const st = _sdSetting(p);
   if (!TH.isSeedance(st.video.model)) return null;
+  const sample = st.sound === 'sample';
   const pool = _framePool(p);
   const cap = TH.maxSecs(st.video.model);
+  const voice = String((_castVoice(p) || {}).id || '');
   const out = [];
   let n = 0;
   (p.lines || []).map(_normLine).forEach((l, i) => {
     if (l.removed) return;
     n++;
     const take = MIRROR.readOf(l);
-    if (!take) return;
+    // With `read` a line not read is no fragment - unless it has takes, made by the voice sample before (the owner's
+    // answer (я16): a take made the other way stays the line's, and on the timeline, until a new one is made).
+    const noRead = !sample && !take;
+    if (sample ? !String(l.text || '').trim() : (noRead && !(l.sd && l.sd.clips.length))) return;
     const fr = _frameOfLine(pool, l, i, st.video.spread, p.id);
     const frameId = fr ? fr.id : '';
     const words = SDP.wordsSig(l);
-    const dur = Math.round((+take.dur || 0) * 100) / 100;
-    const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words, take: take.path });
+    const dur = !sample && take ? Math.round((+take.dur || 0) * 100) / 100 : 0;
+    const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words,
+      take: take && !sample ? take.path : '', voice: sample ? voice : '' });
     const k = l.sd || null;
-    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: _sdFresh(c, frameId, take, words) }));
+    const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: _sdFresh(c, frameId, take, words, voice) }));
     const clip = (k && k.chosen && clips.find(c => c.id === k.chosen)) || clips.filter(c => c.fresh).pop() || null;
     out.push({
-      n, line: i, dur, tooLong: dur > cap + 1e-6, audio: take.path, frameId, secs: SDP.clipSecs(dur), sig, words,
+      n, line: i, dur, tooLong: !sample && dur > cap + 1e-6, audio: take && !sample ? take.path : '', frameId, noRead,
+      secs: sample ? -1 : noRead ? 0 : SDP.clipSecs(dur), sig, words,
+      long: sample && _wordCount(l) > cap * SD_WORDS_A_SECOND,
       prompt: k ? k.prompt : '', edited: !!(k && k.edited), stale: !!(k && k.prompt && k.sig !== sig),
       hasAgent: !!(k && k.agent), writer: k ? k.writer : '',
       clips, clip, chosen: !!(k && k.chosen && clip && clip.id === k.chosen),
@@ -3885,7 +3902,7 @@ async function _writeSdPromptsNow(id, only) {
   const pool = _framePool(proj0);
   if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip begins on one'), { status: 400 });
   const view = _sdView(proj0) || [];
-  const want = view.filter(f => !f.tooLong && (Array.isArray(only) ? only.includes(f.line) : (!f.prompt || (f.stale && !f.edited))));
+  const want = view.filter(f => !f.tooLong && !f.noRead && (Array.isArray(only) ? only.includes(f.line) : (!f.prompt || (f.stale && !f.edited))));
   const report = { written: 0, failed: [] };
   if (!want.length) return { project: proj0, report };
 
@@ -3903,8 +3920,8 @@ async function _writeSdPromptsNow(id, only) {
     try {
       const fr = pool.find(v => v.id === f.frameId);
       const frame = fr ? await _seeable(fr.preview || fr.path) : '';
-      const rows = SDP.timings(lines[f.line], f.dur);
-      const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
+      const rows = SDP.rows(lines[f.line]);
+      const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs > 0 ? f.dur : 0, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
       const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place });
       write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
@@ -4021,7 +4038,7 @@ function _sdClipPlan(proj, i) {
   const missing = _unchosen(video, ['model', 'quality', 'mood']);
   if (missing) return { skipped: missing };
   const f = (_sdView(proj) || []).find(x => x.line === i);
-  if (!f) return { skipped: 'this line is not read yet' };
+  if (!f || f.noRead) return { skipped: video.sound === 'sample' ? 'this line has no words' : 'this line is not read yet - Seedance hears its read' };
   const model = TH.byId(video.model);
   if (f.tooLong) return { skipped: 'this line is ' + f.dur.toFixed(1) + ' s - longer than ' + (model ? model.label : 'the model') + ' takes' };
   if (!f.frameId) return { skipped: 'no first frame for this line' };
@@ -4033,7 +4050,8 @@ function _sdClipPlan(proj, i) {
   const quality = TH.qualityOf(video.model, video.quality);
   if (!quality) return { skipped: 'choose the quality of the clips (field 4) first' };
   const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
-  return { frag: f, video, sound, sample, voice, quality, cast, cost: +(quality.pricePerSec * f.secs).toFixed(4) };
+  // With `sample` Seedance picks the length (-1) and bills what it made: no price beforehand (the owner's answer (я10)).
+  return { frag: f, video, sound, sample, voice, quality, cast, cost: f.secs > 0 ? +(quality.pricePerSec * f.secs).toFixed(4) : null };
 }
 function _sdPlanAgain(id, i) {
   const proj = _loadProjects().find(p => String(p.id) === String(id));
@@ -4081,12 +4099,14 @@ async function _submitSdClip(b, onStage, onAsk) {
     if (!hosted) {
       say('sending the references');
       if (FAKE.on()) {
-        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? 10 : f.dur };
+        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) : f.dur };
       } else {
         const VP = require('../lib/video-prep');
         const one = await VP.image(abs.frame, pair);
         const two = await VP.image(abs.sheet, pair);
-        const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample' ? { from: 0, to: 10 } : { from: 0, to: f.dur });
+        // The sample as long as the model takes a reference sound - all of it when it is shorter (probe P7c: 15 s on 2.0).
+        const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample'
+          ? { from: 0, to: Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) } : { from: 0, to: f.dur });
         try {
           hosted = {
             frame: await H.uploadToPublicHost(one.buf, { ext: one.ext, verify: true, forceFresh: true }),
@@ -4303,9 +4323,9 @@ function _sdCuts(proj) {
   if (!view) return null;
   return view.filter(f => f.clip).map(f => ({
     line: f.line, clip: f.clip, audio: f.audio, dur: f.dur,
-    // Seedance voices a line in its own time - a little longer than the read, at times: its own sound is given a
-    // breath past the read, never past the clip.
-    len: Math.min(f.clip.dur || f.dur, f.dur + 0.6),
+    // Seedance voices a line in its own time - a little longer than the read, at times: a take voiced from the read is
+    // given a breath past the read, never past the clip; one by the voice sample lies for the clip's own length.
+    len: f.clip.sound === 'read' && f.dur > 0 ? Math.min(f.clip.dur || f.dur, f.dur + 0.6) : (f.clip.dur || 0),
   }));
 }
 

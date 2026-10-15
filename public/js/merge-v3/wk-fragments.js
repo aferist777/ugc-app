@@ -539,8 +539,9 @@ function _clipReady(p, l, i) {
   // (lib/sd-prompt.js clipSecs).
   if (_seedance()) {
     const f = _sdFragOf(p, i);
-    if (!f || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
-    return { dur: f.secs, cost: f.secs * ((tier && tier.pricePerSec) || 0) };
+    if (!f || f.noRead || f.tooLong || !f.frameId || !((p.casting || {}).obrazImage)) return null;
+    // By the voice sample the length is Seedance's (-1): no price (the owner's answer (я10)).
+    return f.secs > 0 ? { dur: f.secs, cost: f.secs * ((tier && tier.pricePerSec) || 0) } : { dur: 0, cost: 0, auto: true };
   }
   if (_readState(l) !== 'ok' || !take) return null;
   if (!_frameFor(p, l, i).v) return null;
@@ -784,6 +785,9 @@ const _video = () => (_ctx && _ctx.project && _ctx.project.video) || {};
 const _modelOf = () => ((_kit && _kit.models) || []).find(m => m.id === _video().model) || null;
 // Seedance is the project's mode: asked of the model when the menus are read, else of the server's own word for it.
 const _seedance = () => { const m = _modelOf(); return m ? m.family === 'seedance' : _video().mode === 'seedance'; };
+// (the sixth round) Filmed by Seedance FROM THE VOICE'S SAMPLE: nothing is read - the voice field only chooses the voice -
+// and Seedance picks each clip's length, so no price is said beforehand (the owner's answer (я10)).
+const _bySample = () => _seedance() && (_video().sound || 'read') === 'sample';
 const _qualities = () => ((_modelOf() || {}).qualities) || [];
 const _tier = () => _qualities().find(q => q.id === _video().quality) || _qualities()[0] || null;
 const _ceiling = () => ((_tier() || {}).maxAudioSec) || CEILING_FALLBACK;
@@ -1179,7 +1183,7 @@ function _counters(host, p, lines) {
     stat.appendChild(c);
   };
   const n = s.n;
-  cell(s.read + '/' + n, 'read', n > 0 && s.read === n, 'Lines read, of all the lines');
+  if (!_bySample()) cell(s.read + '/' + n, 'read', n > 0 && s.read === n, 'Lines read, of all the lines');
   cell(_drawing.size ? s.frames + '/' + s.framesAsked : String(s.frames), 'frames', s.framesDone,
     _drawing.size ? 'Frames in the pool, of the set being drawn' : 'Frames in the pool - the fragments take theirs from it');
   cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
@@ -1209,7 +1213,7 @@ function _chainEstimate(p, lines, w) {
   const only = new Set(now.map(x => x.i));
   let chars = 0, later = 0, laterCost = 0, tooLong = 0;
   for (const { l, i } of liveLines(lines)) {
-    const willRead = _canRead() && !isRead(l);
+    const willRead = _canRead() && !_bySample() && !isRead(l);
     if (willRead) chars += _readChars(l);
     if (!can || only.has(i) || _clipping.has(i) || _clipSettled(p, l, i)) continue;
     const take = _take(l);
@@ -1232,7 +1236,7 @@ function _chainWork(p, lines) {
   const live = _live(lines);
   // Stage one is its own step now (Z2): the chain does it first, and the read waits for it.
   const tags = VOICE.untagged(p).length;
-  const voice = _canRead() ? live.filter(l => !isRead(l)).length : 0;
+  const voice = _canRead() && !_bySample() ? live.filter(l => !isRead(l)).length : 0;
   const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 0) : 0;
   // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
   // (frames above) can give it one.
@@ -1410,6 +1414,7 @@ function _stageMood(host, p, lines) {
 // script by the mood and reads every line that needs it, three at a time (ElevenLabs v3). Shut by
 // itself once every line is read.
 function _stageVoice(host, p, lines) {
+  if (_bySample()) return _stageVoiceSample(host, p);
   const g = VOICE.reading();
   const live = _live(lines);
   const read = live.filter(isRead).length;
@@ -1455,6 +1460,20 @@ function _stageVoice(host, p, lines) {
             redo.length && 'A line with a clip keeps it on the timeline until a new one is made.'].filter(Boolean).join(' '),
     on: () => VOICE.generate(_api.voiceApi()),
   });
+}
+
+// (the sixth round) BY THE VOICE'S SAMPLE nothing is read: the field is the voice alone - chosen, it is done (the owner:
+// "Если голос у выбранного персонажа есть, и выбран sample то все окей"), red while there is none.
+function _stageVoiceSample(host, p) {
+  const has = _canRead();
+  const { body } = _stage(host, 'voice', {
+    step: 2, half: true, work: null,
+    name: 'voice', sub: 'its sample, for Seedance', done: has, need: _needs(p).voice,
+    summary: has ? 'the voice is chosen' : 'no voice yet',
+  });
+  VOICE.paintRow(body, _api.voiceApi());
+  body.appendChild(el('div', 'mv3-wk-fwhy', 'Seedance takes the timbre from this voice’s demo and says the lines itself - nothing is read.'
+    + ' The voice is changed here; the sound is chosen in field 4.'));
 }
 
 // THE STABILITY AND THE SPEED of the read (phase V26.1, the owner 2026-10-10) - one each for the
@@ -1885,7 +1904,8 @@ function _stageVideo(host, p, lines) {
   // lines that are in it, added up - which is exactly the length the cut comes to, because a clip
   // is trimmed to its read (lib/frag-mirror.js). A line not read yet has no length to add.
   const secs = live.reduce((a, l) => a + (isRead(l) ? (_take(l) || {}).dur || 0 : 0), 0);
-  const whole = secs ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
+  // (the sixth round) By the voice sample the length is Seedance's, clip by clip: not known beforehand.
+  const whole = secs && !_bySample() ? (Math.round(secs * 10) / 10).toFixed(1) + 's in all' : '';
   // A clip in flight does not shut this button (V4): the planner skips the fragments that are
   // already being made, so `generate` here starts the others.
   const busy = !!_writing || _envWriting;
@@ -1899,22 +1919,24 @@ function _stageVideo(host, p, lines) {
   // credits - then the clips of the fragments that have none, priced, on a second press.
   if (soon) {
     const sdWant = _sdNeeds(p).length;
+    const sample = _bySample();
+    const many = (n) => n + (n === 1 ? ' clip' : ' clips');
     _genButton(foot, {
       label: _writing === 'place' || (_envWriting && !_writing) ? 'the place…' : _writing === 'lines' ? 'writing…'
         : _writing === 'clips' ? 'clips ' + _standing(p).clips + '/' + _standing(p).n + '…'
-          : armed ? _money(clipCost) + ' · go?' : done ? 'again' : 'generate',
+          : armed ? (sample ? 'go?' : _money(clipCost) + ' · go?') : done ? 'again' : 'generate',
       cap: busy ? whole : wait.length ? 'needs ' + wait.join(', ') : [
         sdWant ? sdWant + (sdWant === 1 ? ' prompt' : ' prompts') : '',
         _clipping.size ? _clipping.size + (_clipping.size === 1 ? ' clip running' : ' clips running') : '',
-        clips.length ? clips.length + (clips.length === 1 ? ' clip · ' : ' clips · ') + _money(clipCost) : '',
+        clips.length ? many(clips.length) + (sample ? '' : ' · ' + _money(clipCost)) : '',
         whole,
       ].filter(Boolean).join(' · '),
       disabled: busy || wait.length > 0 || !_place(p) || !_sdFrags(p).length || (!!motion && !sdWant && !clips.length),
       title: wait.length ? 'First: ' + wait.join(', ')
-        : !_sdFrags(p).length ? 'Read the lines first - a fragment is filmed to its read'
-          : 'The place, then the Seedance prompt of every fragment that has none (one request each, credits), then the clips of'
-            + ' the fragments that have none - ' + (clips.length ? clips.length + ' of them for ' + _money(clipCost) : 'none to make')
-            + '. A prompt edited by hand is left alone; a fragment that has its clip is not paid for twice.'
+        : !_sdFrags(p).length ? (sample ? 'Write the lines first' : 'Read the lines first - Seedance hears a line\'s read')
+          : 'The place, then the Seedance prompt of every line that has none (one request each, credits), then the clips of'
+            + ' the lines that have none - ' + (clips.length ? many(clips.length) + (sample ? ', each as long as Seedance makes it' : ' for ' + _money(clipCost)) : 'none to make')
+            + '. A prompt edited by hand is left alone; a line that has its clip is not paid for twice.'
             + (clips.length ? ' Press again to confirm.' : ''),
       on: () => {
         if (clips.length && !_armedVideo) { _armedVideo = true; _ctx.repaint(); return; }
@@ -1960,11 +1982,10 @@ function _seedanceSettings(body, p) {
   const row = (node) => { const r = el('div', 'mv3-wk-fsets'); r.appendChild(node); body.appendChild(r); };
   const why = (text) => body.appendChild(el('div', 'mv3-wk-fwhy', text));
 
-  // THE SOUND - how Seedance voices the clip (lib/th-video.js SOUNDS). Not chosen, it is Seedance from the read (every
-  // script is English since phase V29; it went by the script's language before - the owner's answer (ь)).
+  // THE SOUND - what Seedance hears to voice the line itself (lib/th-video.js SOUNDS): the line's read, or the voice's
+  // sample. Not chosen, it is the read (the owner's answer (я13)).
   const sounds = (_kit && _kit.sounds) || [];
-  const auto = v.soundAuto || 'read';
-  const cur = v.sound || auto;
+  const cur = v.sound || 'read';
   const sound = el('select', 'mv3-wk-vsel is-small is-model');
   for (const s of sounds) {
     const o = el('option', '', s.label);
@@ -1977,7 +1998,7 @@ function _seedanceSettings(body, p) {
   sound.addEventListener('change', () => _saveVideo({ sound: sound.value }));
   row(_labelled('sound', sound, 'How the clip is voiced'));
   const said = sounds.find(s => s.id === cur);
-  if (said) why(said.about + (v.sound ? '' : ' Chosen by the script’s language - ' + (auto === 'read' ? 'English.' : 'not English.')));
+  if (said) why(said.about);
 
   // GESTURES - how the head, the hands and the body move (the owner's answer (ц)): one way per mood, the project's mood
   // until another is picked; the face follows the mood always (answer (щ)). Picking the mood itself follows it again.
@@ -2044,7 +2065,7 @@ const _sdFrags = (p) => (Array.isArray(p && p.sdFrags) ? p.sdFrags : []);
 const _sdFragOf = (p, i) => _sdFrags(p).find(f => f.line === i) || null;
 // The ones whose prompt is to be written: none yet, or written for other settings and not edited by hand. A line too long
 // for the model's clip is not filmed at all.
-const _sdNeeds = (p) => _sdFrags(p).filter(f => !f.tooLong && (!f.prompt || (f.stale && !f.edited)));
+const _sdNeeds = (p) => _sdFrags(p).filter(f => !f.tooLong && !f.noRead && (!f.prompt || (f.stale && !f.edited)));
 const _sdWriting = new Set();             // the lines being written now ('*' - the field's whole run)
 
 async function _writeSd(p, only) {
@@ -2078,7 +2099,7 @@ function _sdPromptCol(p, f) {
   const col = el('div', 'mv3-wk-fcol is-motion');
   if (!f) {
     col.appendChild(_colHead('seedance prompt'));
-    const dead = _dead(9, 'Read this line first - the prompt is written from its read: the words with their seconds.');
+    const dead = _dead(9, _bySample() ? 'This line has no words yet.' : 'Read this line first - Seedance hears its read, and the clip is as long as it.');
     dead.classList.add('is-tall');
     col.appendChild(dead);
     return col;
@@ -2088,7 +2109,7 @@ function _sdPromptCol(p, f) {
   if (f.edited) act.appendChild(el('span', 'mv3-wk-fedited', 'edited by hand'));
   if (f.stale) {
     const s = el('span', 'mv3-wk-fstale', 'written for other settings');
-    s.title = 'The frame, the mood, the gestures, the sound or the place changed since it was written';
+    s.title = 'The frame, the mood, the gestures, the sound, the place, the words, the read or the voice changed since it was written';
     act.appendChild(s);
   }
   if (f.edited && f.hasAgent) {
@@ -2099,18 +2120,20 @@ function _sdPromptCol(p, f) {
   }
   const w = el('button', 'mv3-wk-flink', busy ? 'writing…' : f.prompt ? 'write again' : 'write');
   w.type = 'button';
-  w.disabled = busy || f.tooLong || !_video().mood;
+  w.disabled = busy || f.tooLong || f.noRead || !_video().mood;
   w.title = f.tooLong ? 'This line is longer than the model takes - it is not filmed'
-    : !_video().mood ? 'Choose the mood first (field 1)'
-      : 'The writer looks at the frame and the character’s sheet and writes this fragment’s prompt - credits, seconds'
+    : f.noRead ? 'Read this line first - Seedance hears its read'
+      : !_video().mood ? 'Choose the mood first (field 1)'
+        : 'The writer looks at the frame and the character’s sheet and writes this line’s prompt - credits, seconds'
         + (f.edited ? '. It replaces what was edited by hand.' : '');
   w.addEventListener('click', () => { delete _drafts['sd:' + f.line]; _writeSd(p, [f.line]); });
   act.appendChild(w);
   col.appendChild(_colHead('seedance prompt', act));
   const box = _textField('sd', f.line, f.prompt || '', 9,
     busy ? 'The writer is writing this fragment’s prompt…'
-      : 'Not written yet. Press write - or generate in the video field writes every fragment’s. Its clip is '
-        + f.secs + ' s: the words with their seconds, the frame it begins on, the character’s sheet, the mood and the gestures.',
+      : 'Not written yet. Press write - or generate in the video field writes every line’s. '
+        + (f.secs > 0 ? 'Its clip is ' + f.secs + ' s. ' : 'Seedance picks its length. ')
+        + 'It is written from the line, the frame it opens on, the character’s sheet, the mood and the gestures.',
     (v) => _saveSdPrompt(p, f.line, { prompt: v }));
   box.classList.add('is-tall');
   box.disabled = busy;
@@ -2135,15 +2158,18 @@ function _row(p, l, i, n) {
 
   const meta = el('div', 'mv3-wk-lmeta');
   meta.appendChild(el('span', 'mv3-wk-lnum', String(n)));
-  meta.appendChild(el('span', 'mv3-wk-ldur', take && take.dur ? take.dur.toFixed(1) + 's' : ''));
+  meta.appendChild(el('span', 'mv3-wk-ldur', !_bySample() && take && take.dur ? take.dur.toFixed(1) + 's' : ''));
   row.appendChild(meta);
   // The read, playable from the row (owner, 2026-09-21): hearing a line is how it is judged, and
   // the row is where the eye already is. It PLAYS AND NOTHING ELSE (the owner, 2026-10-10): the
   // fragment does not open and the stage does not change - it used to bring the fragment forward
   // (Y5), which turned listening down the script into opening every line of it.
-  row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
-  // ...and READ IT, beside its play (the owner, 2026-10-10).
-  row.appendChild(_rowRead(p, l, i));
+  // (the sixth round) By the voice sample a line is not read: no play, no read.
+  if (!_bySample()) {
+    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+    // ...and READ IT, beside its play (the owner, 2026-10-10).
+    row.appendChild(_rowRead(p, l, i));
+  }
 
   // No thumbnail between the number and the words (owner): the frame is judged in the fragment,
   // and the row is read for its words.
@@ -2156,7 +2182,7 @@ function _row(p, l, i, n) {
     d.title = what + ': ' + (state === 'ok' ? 'done' : state === 'busy' ? 'being made' : state === 'stale' ? (what === 'shot' ? 'the words or the mood changed since' : 'the words changed since') : 'not yet');
     dots.appendChild(d);
   };
-  dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
+  if (!_bySample()) dot(VOICE.reading().lines.includes(i) ? 'busy' : _readState(l), 'read');
   dot(fr ? 'ok' : 'none', 'frame');
   dot(_clipping.has(i) ? 'busy' : _clipState(p, l, i), 'clip');
   row.appendChild(dots);
@@ -2581,19 +2607,22 @@ function _fragment(host, p, l, i) {
         : 'This line has no [tags] yet: mark it up by the mood of the video - it is read from them';
     mb.addEventListener('click', () => { if (!mb.disabled) { mb.disabled = true; VOICE.tagLine(va, i); } });
     row.appendChild(mb);
-    const ra = _readAct(p, l, i);
-    const reading = (VOICE.reading().lines || []).includes(i);
-    const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
-    rb.type = 'button';
-    rb.disabled = !ra.on || reading;
-    rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
-      : (ra.label === 'read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
-    if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
-    row.appendChild(rb);
-    // THE LINE'S OWN SPEED and its play, between the read and the words (the owner, 2026-10-10): a new
-    // speed retimes this read at once - the timeline and the play follow.
-    row.appendChild(_lineSpeed(p, l, i));
-    row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+    // (the sixth round) By the voice sample a line is not read: its read, its speed and its play are not here.
+    if (!_bySample()) {
+      const ra = _readAct(p, l, i);
+      const reading = (VOICE.reading().lines || []).includes(i);
+      const rb = el('button', 'mv3-wk-fread' + (ra.on ? '' : ' is-off'), reading ? 'reading…' : ra.label);
+      rb.type = 'button';
+      rb.disabled = !ra.on || reading;
+      rb.title = reading ? 'This line is being read' : ra.why ? 'Cannot read now: ' + ra.why
+        : (ra.label === 'read' ? 'Read this line in the chosen voice' : 'Read this line again - in place of the take it has');
+      if (ra.on) rb.addEventListener('click', () => { if (!rb.disabled) { rb.disabled = true; ra.on(); } });
+      row.appendChild(rb);
+      // THE LINE'S OWN SPEED and its play, between the read and the words (the owner, 2026-10-10): a new
+      // speed retimes this read at once - the timeline and the play follow.
+      row.appendChild(_lineSpeed(p, l, i));
+      row.appendChild(_playBtn(take && take.path ? take.path : '', 'the read'));
+    }
     const words = el('div', 'mv3-wk-fwords is-edit');
     _sayWords(words, shown || '…');
     words.title = 'Change the words' + (shown !== _words(l) ? ' - and the [tags] between them' : '');
@@ -2604,7 +2633,13 @@ function _fragment(host, p, l, i) {
     const fail = VOICE.failed();
     if (fail) host.appendChild(_note(fail, true));
   }
-  if (rs === 'stale') {
+  // (the owner's answer (я17)) A long line by the voice sample: a word, no refusal - its length is not estimated.
+  const sdl = _seedance() ? _sdFragOf(p, i) : null;
+  if (sdl && sdl.long) {
+    host.appendChild(_note('A long line - Seedance may not say all of it in one clip of ' + _ceiling() + ' s'
+      + (_ceiling() < 30 ? ' (seedance 2.5 takes up to 30 s)' : '') + '. It goes as it is.', true));
+  }
+  if (rs === 'stale' && !_bySample()) {
     host.appendChild(_note('The words changed after this line was read - read it again, or put the words back.', true));
     const back = el('button', 'mv3-wk-lback is-frag', 'put the words back');
     back.type = 'button';
@@ -2982,12 +3017,13 @@ function _clipCol(p, l, i, rs, take) {
   // (phase V26.8, part 5) A line filmed by Seedance: its own reasons, its seconds and its price.
   const sf = _seedance() ? _sdFragOf(p, i) : null;
   if (_seedance()) {
-    if (!sf) cap = 'read this line first';
+    if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
     else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
     else if (!fr) cap = 'make the frames first';
     else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
     else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
-    else { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
+    else if (sf.secs > 0) { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
+    else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price (the owner's answer (я10))
   } else if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
   else if (!_video().model) cap = 'choose the model of the clips first (field 4)';
@@ -2997,7 +3033,7 @@ function _clipCol(p, l, i, rs, take) {
   if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
   // The one paid press in a fragment: the price first, the clip on the second press.
   const make = el('button', 'mv3-wk-vmore is-small is-media' + (ready ? ' is-go' : ''),
-    busy ? 'making…' : _armedClip === i ? price + '?' : c ? 'again' : 'make clip');
+    busy ? 'making…' : _armedClip === i ? (price ? price + '?' : 'go?') : c ? 'again' : 'make clip');
   make.type = 'button';
   make.disabled = !ready || busy;
   // What the press will actually do: with nothing written yet it is two analyses and then the
@@ -3006,7 +3042,8 @@ function _clipCol(p, l, i, rs, take) {
   make.title = !ready ? cap
     : sf ? (needsWords ? 'First the place and this line’s prompt are written (credits), then the clip. ' : '')
       + 'Seedance: the frame this line opens on, the character’s sheet and its sound go with its prompt. '
-      + sf.secs + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + ' = ' + price + '. Press again to confirm.'
+      + (sf.secs > 0 ? sf.secs + ' s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + ' = ' + price + '.'
+        : 'Seedance picks the length and bills the seconds it makes.') + ' Press again to confirm.'
     : (needsWords ? 'First the analysis - how this place moves and how the person moves on this line - then the clip. ' : '')
       + 'Kling avatar: this frame speaks this read, moving as the animation prompt says. '
       + take.dur.toFixed(1) + ' s - billed ' + _billSecs(take.dur) + ' whole s at ' + (tier ? '$' + tier.pricePerSec + '/s' : '?') + '. Press again to confirm.';
