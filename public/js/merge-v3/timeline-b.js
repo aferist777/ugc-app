@@ -34,6 +34,7 @@ import { DRAG_TYPE, DRAG_MEDIA, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
 import { retext, isCorrected } from '../captions/words.js';
+import { linesOf as docLines, editLine as docEditLine } from '../captions/doc.js';
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 
@@ -1713,6 +1714,123 @@ export function editWords(trackId, clipId, op, opts) {
   }, opts);
   if (!why && !done) why = Store.status() || 'This project cannot be edited here';
   return why ? { why } : null;
+}
+
+// ── The captions view's document (phase V30, block 2) ───────────────────────
+const DOC_CHANGED = 'The line has changed meanwhile - your text was not written over it';
+const DOC_GONE = 'That line is not on the lane any more';
+
+/**
+ * Lines of a lane of words rewritten from the document (captions/doc.js): `ids` - the lines, next to each other in the
+ * document; `painted` - their texts as the document showed them (a line that reads otherwise now was changed meanwhile,
+ * by a lay or another device, and nothing is written over it); `op(track, from, makeId)` - doc.js editLine, splitLine,
+ * joinLines or rewrite with its texts. ONE mutation, one step to undo; nothing changes when it refuses.
+ *
+ * THE PICK STAYS ON A LINE. The captions view - and the document in it - follows the pick, so a picked line that went
+ * into another (a join) hands the pick to that line, and a picked line taken off (its text emptied) to its neighbour or,
+ * with none, to its lane - before the change, or the view would close under the cursor while the store said so.
+ * @returns { ids: the new lines, in order } or { why }
+ */
+export function rewriteLines(trackId, ids, painted, op) {
+  const want = (ids || []).map(String);
+  if (!want.length || typeof op !== 'function') return { why: DOC_GONE };
+  const run = (tl) => {
+    const t = _words(tl, trackId);
+    if (!t) return { why: DOC_GONE };
+    const lines = docLines(t);
+    const from = lines.findIndex(c => c.id === want[0]);
+    if (from < 0) return { why: DOC_GONE };
+    for (let k = 0; k < want.length; k++) {
+      const c = lines[from + k];
+      if (!c || c.id !== want[k]) return { why: DOC_CHANGED };
+      if (painted && painted[k] != null && String(c.name || '') !== String(painted[k])) return { why: DOC_CHANGED };
+    }
+    const r = op(t, from, _id);
+    return r && !r.why ? Object.assign({ t, from, lines }, r) : (r || { why: 'That cannot be done' });
+  };
+  // A dry run on the timeline as it is: which picked lines go, and where the pick goes with them.
+  const dry = run(Store.timeline() || { tracks: [] });
+  if (dry.why) return { why: dry.why };
+  const was = { sel: new Set(_sel), track: _selTrack };
+  const gone = want.filter(id => !dry.ids.includes(id));
+  const moved = gone.some(id => _sel.has(id));
+  if (moved) {
+    _selBack = null;
+    for (const id of gone) _sel.delete(id);
+    if (dry.ids.length) _sel.add(want[0]);
+    else {
+      const nb = dry.lines[dry.from + want.length] || dry.lines[dry.from - 1];
+      if (nb) _sel.add(nb.id);
+      else if (!_sel.size) _selTrack = String(trackId);
+    }
+  }
+  let res = null;
+  const done = Store.mutate(tl => {
+    const r = run(tl);
+    res = r;
+    if (!r.why) r.t.clips = r.clips;
+  });
+  if (!done || !res || res.why) {
+    if (moved) { _sel.clear(); for (const id of was.sel) _sel.add(id); _selTrack = was.track; }
+    return { why: (res && res.why) || Store.status() || 'This project cannot be edited here' };
+  }
+  if (moved) _paintSel();
+  return { ids: res.ids };
+}
+
+/**
+ * Many lines given new texts in ONE mutation - "replace all" (phase V30, block 2): `edits` [{ trackId, id, painted,
+ * text }]. A line that cannot take its text (a limit; changed meanwhile) is left as it is and named in `refused`; the
+ * rest are written. A picked line emptied by it hands the pick to its lane. @returns { done, refused: [{ id, why }] }
+ */
+export function rewriteEach(edits) {
+  const list = (edits || []).filter(e => e && e.id);
+  const apply = (tl) => {
+    const out = { done: 0, refused: [], removed: [] };
+    const byLane = new Map();
+    for (const e of list) {
+      if (!byLane.has(e.trackId)) byLane.set(e.trackId, []);
+      byLane.get(e.trackId).push(e);
+    }
+    for (const [trackId, mine] of byLane) {
+      const t = _words(tl, trackId);
+      if (!t) { for (const e of mine) out.refused.push({ id: e.id, why: DOC_GONE }); continue; }
+      // From the last line back: an emptied line taken off moves none of the others.
+      const order = docLines(t).map(c => c.id);
+      mine.sort((a, b) => order.indexOf(b.id) - order.indexOf(a.id));
+      for (const e of mine) {
+        const lines = docLines(t);
+        const i = lines.findIndex(c => c.id === e.id);
+        if (i < 0) { out.refused.push({ id: e.id, why: DOC_GONE }); continue; }
+        if (e.painted != null && String(lines[i].name || '') !== String(e.painted)) { out.refused.push({ id: e.id, why: DOC_CHANGED }); continue; }
+        const r = docEditLine(t, i, e.text, _id);
+        if (r.why) { out.refused.push({ id: e.id, why: r.why }); continue; }
+        t.clips = r.clips;
+        if (!r.ids.length) out.removed.push({ id: e.id, trackId });
+        out.done++;
+      }
+    }
+    return out;
+  };
+  const tl0 = Store.timeline();
+  if (!tl0) return { done: 0, refused: list.map(e => ({ id: e.id, why: DOC_GONE })) };
+  const dry = apply(JSON.parse(JSON.stringify(tl0)));
+  if (!dry.done) return { done: 0, refused: dry.refused };
+  const was = { sel: new Set(_sel), track: _selTrack };
+  const lost = dry.removed.filter(x => _sel.has(x.id));
+  if (lost.length) {
+    _selBack = null;
+    for (const x of dry.removed) _sel.delete(x.id);
+    if (!_sel.size) _selTrack = String(lost[0].trackId);
+  }
+  let res = null;
+  const done = Store.mutate(tl => { res = apply(tl); });
+  if (!done || !res) {
+    if (lost.length) { _sel.clear(); for (const id of was.sel) _sel.add(id); _selTrack = was.track; }
+    return { done: 0, refused: list.map(e => ({ id: e.id, why: Store.status() || 'This project cannot be edited here' })) };
+  }
+  if (lost.length) _paintSel();
+  return { done: res.done, refused: res.refused };
 }
 
 /** The caption after this one on its lane, by start - for proofreading on into the next line (K10b). */

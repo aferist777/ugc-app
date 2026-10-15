@@ -14,13 +14,21 @@
    tiles are built ONCE and live outside the strip, which is rebuilt on every change: 127 animations
    rebuilt per press would be the page's whole evening.
 
-   Which view shows, the header and the room are lib-views.js's; this only draws the tiles.
+   TWO TABS over them (phase V30, block 2, the owner's (с6), (с29)): `presets` - the tiles - and `text` - the words of the
+   subtitle and text lanes as one document, in the tiles' place (caption-doc.js); the strip on the right stays. The tab
+   last chosen is remembered.
+
+   Which view shows, the header and the room are lib-views.js's; this only draws the tiles and the tabs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
+import * as Doc from './caption-doc.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
+const LS_TAB = 'mv3_cap_tab_v1';
+const TABS = [['presets', 'presets', 'The preset styles - a press applies one to what is picked'],
+  ['text', 'text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
 const POLL_MS = 1500;
 
 // The `presets` switch's memory (K6), forgotten once - here and, through storage-sync, in ui-state.
@@ -37,6 +45,7 @@ let _timer = 0;
 let _shown = false;
 let _asked = false;
 let _cat = _store(LS_CAT, '');
+let _tab = _store(LS_TAB, 'presets') === 'text' ? 'text' : 'presets';
 let _apply = null;
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
 let _reading = false;
@@ -62,6 +71,17 @@ function _build() {
   const status = _el('div', 'mv3-cap-status');
   top.appendChild(chips);
   top.appendChild(status);
+  const tabs = _el('div', 'mv3-cap-tabs');
+  tabs.setAttribute('role', 'tablist');
+  for (const [id, label, title] of TABS) {
+    const b = _el('button', 'mv3-cap-tab', label);
+    b.type = 'button';
+    b.dataset.tab = id;
+    b.title = title;
+    b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => _setTab(id));
+    tabs.appendChild(b);
+  }
   const grid = _el('div', 'mv3-cap-grid');
   for (const p of PRESETS) {
     const btn = _el('button', 'mv3-cap-tile');
@@ -89,10 +109,33 @@ function _build() {
     grid.appendChild(btn);
     _tiles.set(p.id, { btn, box, ed });
   }
-  host.appendChild(top);
-  host.appendChild(grid);
-  _ui = { host, top, chips, status, grid };
+  const presets = _el('div', 'mv3-cap-pane');
+  presets.append(top, grid);
+  const text = _el('div', 'mv3-cap-pane');
+  host.append(tabs, presets, text);
+  Doc.mount(text);
+  _ui = { host, tabs, presets, text, top, chips, status, grid };
   _paintCat();
+  _paintTab();
+}
+
+function _setTab(id) {
+  _tab = id === 'text' ? 'text' : 'presets';
+  _keep(LS_TAB, _tab);
+  _paintTab();
+  Doc.setShown(_shown && _tab === 'text');
+  if (_tab === 'presets') revealLit();
+}
+
+function _paintTab() {
+  if (!_ui) return;
+  for (const b of _ui.tabs.children) {
+    const on = b.dataset.tab === _tab;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  _ui.presets.hidden = _tab !== 'presets';
+  _ui.text.hidden = _tab !== 'text';
 }
 
 function _setCat(id) {
@@ -174,18 +217,20 @@ export function show(target) {
     x.ed.hidden = !(on && t.edited);
   }
   _ui.host.classList.toggle('is-ro', !!t.readOnly);
+  Doc.setShown(_tab === 'text');
   if (!_asked) { _asked = true; _read(true); }
   else if (_state && (_state.making || _incomplete(_state)) && !_timer && !_reading) _read(!_state.making);
 }
 
 export function hide() {
   _shown = false;
+  Doc.setShown(false);
   if (_timer) { clearTimeout(_timer); _timer = 0; }
 }
 
 /** The lit tile brought into view - when the view comes up on a pick that wears a preset. */
 export function revealLit() {
-  if (!_ui) return;
+  if (!_ui || _tab !== 'presets') return;
   const lit = _ui.grid.querySelector('.mv3-cap-tile.is-on:not([hidden])');
   if (lit && lit.scrollIntoView) lit.scrollIntoView({ block: 'nearest' });
 }

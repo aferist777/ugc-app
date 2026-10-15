@@ -686,7 +686,7 @@ function _presetLine(host, style, back, editedAny) {
 // The tiles are always beside the settings when there is room (phase S3, the owner 2026-10-05 - the
 // `presets` switch went: the presets are what the view is for). Only a window too narrow for them says so.
 function _presetsHint(host) {
-  if (_narrow()) host.appendChild(C.hint('The window is too narrow for the presets beside these settings - make it wider.', true));
+  if (_narrow()) host.appendChild(C.hint('The window is too narrow for the presets and the text beside these settings - make it wider.', true));
 }
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
@@ -1110,10 +1110,11 @@ export function initInspector() {
   if (over) {
     // A field of the strip that holds typing not written yet - a caption's text, a word - keeps a newer copy of
     // the project from being adopted under it (store.js setTyping; review K10). Fields that know what they were
-    // painted with say so (`__painted`); the rest are not typing a line.
+    // painted with say so (`__painted`); the rest are not typing a line. A line of the captions view's document
+    // (caption-doc.js, phase V30 block 2) is one of them.
     Store.setTyping(() => {
       const a = document.activeElement;
-      return !!(a && a.__painted != null && a.closest && a.closest('#mv3-over') && a.value !== a.__painted);
+      return !!(a && a.__painted != null && a.closest && a.closest('#mv3-over, #mv3-cap') && a.value !== a.__painted);
     });
     over.addEventListener('focusin', (e) => { _typing = _isTextField(e.target); });
     over.addEventListener('focusout', (e) => {

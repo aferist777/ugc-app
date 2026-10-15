@@ -24,6 +24,8 @@
        that was a word of its own (Whisper hears dashes so) is matched to that word, as any word is.
    No word is shorter than 0.06 s: where a stretch is too short for what is put into it, the words
    beside it share theirs; where the whole line is too short, the change is refused in words.
+   retextLines() is the same over SEVERAL lines at once (phase V30, block 2 - the captions view's document,
+   captions/doc.js): one core, each word coming back with the line it belongs to.
 
    The word editor's operations (K10b) are here too, PURE: each returns { words, name } - the new words
    and the text they spell - or { why } when it cannot be done, decided before anything is changed, or
@@ -219,6 +221,7 @@ function _share(toks, from, to) {
     at += len[i];
     if (t.k) o.k = true;
     if (t.h) o.h = true;
+    if (t.ln != null) o.ln = t.ln;              // the line of a document it belongs to (retextLines)
     return o;
   });
 }
@@ -334,20 +337,70 @@ export function retext(words, text, dur) {
     if (end < MINC * g.length) return _noRoom(g.length, end);
     return _done(_share(g.map((w) => ({ w, h: true })), 0, end));
   }
+  const r = _rewrite(ws, nt, null, end);
+  if (!r.out) return _noRoom(r.n, end);
+  return _done(r.out.map(_word));
+}
+
+/**
+ * The words of SEVERAL lines rewritten at once (phase V30, block 2 - the captions view's document): `words` the old words
+ * of those lines in one time base, `texts` the new lines, `dur` the length of the stretch they share. The same matching
+ * as retext over all of them - a word that stays keeps its moment whichever line it ends up on, so a word moved across
+ * the end of a line takes its time with it - and each word comes back with `ln`, the index of its line. A mark goes with
+ * a word of ITS OWN line (one that opens a line, on that line's first word). The limits of a line - its words, its text -
+ * are the caller's; a word's 60 characters are checked here. An empty text is a line with no words.
+ * @returns { words: [{ w, s, e, k?, h?, ln }] } | { why } | { remove: true } (every line is empty)
+ */
+export function retextLines(words, texts, dur) {
+  const ws = _copy(words);
+  const nt = [], lnOf = [];
+  (texts || []).forEach((tx, k) => {
+    for (const x of wordsIn(String(tx == null ? '' : tx), ws)) { nt.push(x); lnOf.push(k); }
+  });
+  if (!nt.length) return { remove: true };
+  const tooLong = { why: 'A word holds at most ' + LIMITS.word + ' characters' };
+  if (nt.some((t) => String(t).length > LIMITS.word)) return tooLong;
+  const end = _endOf(ws, dur);
+  let out = null;
+  if (!ws.length) {
+    // Nothing timed yet: every line's words by "letters + 2" over the whole stretch, in order.
+    const toks = [];
+    (texts || []).forEach((_, k) => { for (const w of _glue(nt.filter((x, j) => lnOf[j] === k))) toks.push({ w, h: true, ln: k }); });
+    if (end < MINC * toks.length) return _noRoom(toks.length, end);
+    out = _share(toks, 0, end);
+  } else {
+    const r = _rewrite(ws, nt, lnOf, end);
+    if (!r.out) return _noRoom(r.n, end);
+    out = r.out;
+  }
+  if (out.some((w) => String(w.w).length > LIMITS.word)) return tooLong;
+  return { words: out.map((w) => Object.assign(_word(w), { ln: w.ln })) };
+}
+
+/**
+ * The heart of retext: the old words `ws` against the new tokens `nt` (see the header). `lnOf[j]` is the line token j
+ * is on, in a document of several lines (retextLines); null - one line, as retext. @returns { out, n } - the words, each
+ * with `ln` (null when there is no room in the stretch), and how many words were wanted.
+ */
+function _rewrite(ws, nt, lnOf, end) {
+  const lnAt = (j) => (lnOf ? lnOf[j] : 0);
   // A text of marks alone ("...") is a word; otherwise a mark put in goes with a word (_glue's rule). A mark
   // that was a word of its own before ("—" as Whisper heard it) is matched to that word and keeps its time.
-  const marksOnly = !nt.some((x) => keyOf(x));
-  const timed = (x) => marksOnly || !!keyOf(x);
+  // Line by line in a document: a line of marks alone is a word of its own.
+  const worded = new Set();
+  nt.forEach((x, j) => { if (keyOf(x)) worded.add(lnAt(j)); });
+  const timed = (j) => !worded.has(lnAt(j)) || !!keyOf(nt[j]);
 
   const ops = _align(ws.map((w) => keyOf(w.w)), nt.map(keyOf));
   const seq = [];
-  let lead = '';                                             // marks before any word: they go on the next one
+  let lead = '';                                             // marks before a line's first word: they go on it
+  const lineOf = (x) => (x.group ? x.toks[x.toks.length - 1].ln : x.ln);
   // An old word with new text is touched when its text is not what it was (case, a mark - any touch).
   const touch = (x) => { if (x.o != null) x.h = !!(x.hh || ws[x.o].h || x.w !== ws[x.o].w); };
   const withLead = (w) => { if (!lead) return w; const x = lead + ' ' + w; lead = ''; return x; };
-  const glue = (mark) => {
+  const glue = (mark, ln) => {
     const last = seq[seq.length - 1];
-    if (!last) { lead = lead ? lead + ' ' + mark : mark; return; }
+    if (!last || lineOf(last) !== ln) { lead = lead ? lead + ' ' + mark : mark; return; }
     if (last.group) { last.toks[last.toks.length - 1].w += ' ' + mark; return; }
     last.w += ' ' + mark;
     touch(last);
@@ -366,31 +419,38 @@ export function retext(words, text, dur) {
   const flush = () => {
     const { o, n } = blk;
     blk = { o: [], n: [] };
-    const real = [];
+    const real = [];                                         // the new words: { w, ln }, marks glued on
     for (const j of n) {
-      if (!timed(nt[j])) { if (real.length) real[real.length - 1] += ' ' + nt[j]; else glue(nt[j]); continue; }
-      real.push(real.length ? nt[j] : withLead(nt[j]));
+      const ln = lnAt(j);
+      if (!timed(j)) {
+        const r = real[real.length - 1];
+        if (r && r.ln === ln) r.w += ' ' + nt[j];
+        else if (r) lead = lead ? lead + ' ' + nt[j] : nt[j];   // it opens its line: on that line's first word
+        else glue(nt[j], ln);
+        continue;
+      }
+      real.push({ w: withLead(nt[j]), ln });
     }
     if (!real.length) { if (o.length) gone(); return; }     // taken out: a pause
     touchNext = false;                                       // what comes now is marked anyway
     if (o.length === real.length) {                          // another word in each place: its moment
-      o.forEach((i, x) => { const e = { ...ws[i], w: real[x], o: i, hh: true }; touch(e); seq.push(e); });
+      o.forEach((i, x) => { const e = { ...ws[i], w: real[x].w, o: i, hh: true, ln: real[x].ln }; touch(e); seq.push(e); });
       return;
     }
     if (!o.length) {                                         // put where nothing was said
-      seq.push({ group: true, mode: 'gap', toks: real.map((w) => ({ w, h: true })) });
+      seq.push({ group: true, mode: 'gap', toks: real.map((r) => ({ w: r.w, h: true, ln: r.ln })) });
       return;
     }
     // Other words for these: their stretch, shared; a marked word's mark goes to the new word at its place.
     const a = cs(ws[o[0]].s), b = Math.max(a, cs(ws[o[o.length - 1]].e));
-    const W = real.reduce((sum, w) => sum + weight(w), 0);
+    const W = real.reduce((sum, r) => sum + weight(r.w), 0);
     const marks = o.filter((i) => ws[i].k).map((i) => (b > a ? ((cs(ws[i].s) + cs(ws[i].e)) / 2 - a) / (b - a) : 0));
     let acc = 0;
-    const toks = real.map((w) => {
+    const toks = real.map((r) => {
       const lo = acc / W;
-      acc += weight(w);
+      acc += weight(r.w);
       const hi = acc / W;
-      const tk = { w, h: true };
+      const tk = { w: r.w, h: true, ln: r.ln };
       if (marks.some((f) => f >= lo && (f < hi || hi >= 1))) tk.k = true;
       return tk;
     });
@@ -403,15 +463,13 @@ export function retext(words, text, dur) {
       continue;
     }
     flush();
-    const e = { ...ws[i], w: withLead(nt[j]), o: i };       // the same word: its moment
+    const e = { ...ws[i], w: withLead(nt[j]), o: i, ln: lnAt(j) };   // the same word: its moment
     if (touchNext) { e.hh = true; touchNext = false; }
     touch(e);
     seq.push(e);
   }
   flush();
-  const out = _place(seq, end);
-  if (!out) return _noRoom(seq.reduce((n, x) => n + (x.group ? x.toks.length : 1), 0), end);
-  return _done(out.map(_word));
+  return { out: _place(seq, end), n: seq.reduce((m, x) => m + (x.group ? x.toks.length : 1), 0) };
 }
 
 // ── A typed line, timed by its letters (phase V30, block 1) ─────────────────
