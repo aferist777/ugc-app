@@ -12,6 +12,7 @@ import { DEF, renderFrame, autoSize, autoWordsPerLine, anchorOf, captionLanes, r
 import { cssWeight, fontOf } from '../captions/fonts.js';
 import { fitText, tokensOf } from '../captions/pages.js';
 import { spells, typedWords } from '../captions/words.js';
+import { pageBox } from '../captions/place.js';
 
 // The canvas font for a style: the shipped family, quoted ("Exo 2 Black" starts a token with a digit),
 // at the weight its @font-face is declared at (css/caption-fonts.css, K5).
@@ -145,6 +146,9 @@ function _paintLane(ctx, tr, at, W, H, fmt) {
     const lh = Math.max(6, st.size * scale);
     const px = lh / face.line;
     const a = anchorOf(st, W, H);
+    // Never off the frame (phase V30, block 3, (с34)): moved back inside by what the .ass moves it by.
+    const pb = pageBox(c, tr.style, tr.kind === 'subs', frame.w, frame.h);
+    a.x += pb.dx * scale; a.y += pb.dy * scale;
     ctx.save();
     ctx.font = _css(st, px.toFixed(1));
     ctx.textAlign = 'center';

@@ -35,6 +35,9 @@
    the SAME two words in every layer, so the layers cannot part. libass's own wrap (0.88, the margins)
    is only a safety net now. A line somebody typed with a line break is drawn as typed; a page holding a
    word wider than a line is drawn in a smaller size, in a style row of its own, until it fits.
+   How a page is drawn - its words, breaks and size - is place.js drawnPage, the same rule the editor's rectangle
+   of the page is worked out by; a page that would run past an edge of the frame is moved back inside in its
+   \pos (phase V30, block 3, the owner's (с34)), and one that fits is written as it always was.
 
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -42,8 +45,8 @@
 import { resolveStyle, withAuto, anchorOf, cased, markedColour } from './style.js';
 import { assFace } from './fonts.js';
 import { padOf } from './measure.js';
-import { fitPage, fitText, tokensOf } from './pages.js';
-import { spells, typedWords } from './words.js';
+import { spells } from './words.js';
+import { drawnPage, boxOf, gapAfter as _gap } from './place.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -104,18 +107,6 @@ export function karaokeLine(words, tag, casing, brk, mark) {
   }
   return out.join('');
 }
-
-// What follows word i of n: a space, a line break, or nothing after the last.
-const _gap = (i, n, brk) => (i < n - 1 ? (brk && brk.has(i) ? '\\N' : ' ') : '');
-// The page's text, the lines broken where the page breaks (a set of word indices a line ends at).
-const _joined = (tokens, brk) => tokens.map((t, i) => t + _gap(i, tokens.length, brk)).join('');
-// Line counts as the set of word indices a line ends at (the last line's end is no break).
-const _breaks = (counts) => {
-  const brk = new Set();
-  let at = -1;
-  for (const k of (counts || []).slice(0, -1)) { at += k; brk.add(at); }
-  return brk.size ? brk : null;
-};
 
 // ── What a style needs ──────────────────────────────────────────────────────
 const ms = (sec) => Math.max(0, Math.round((+sec || 0) * 1000));
@@ -308,39 +299,17 @@ export function buildAss(lanes, w, h) {
       let s = styleOf(u, lane, c);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
-      let words = _wordsOf(c);
-      // A typed line of the subtitle lane with a spoken word: its words timed by their letters (phase V30, block 1).
-      const typed = (!words && u.subs && s.st.effect !== 'none' && !(Array.isArray(c.words) && c.words.length))
-        ? typedWords(c.name, end - start) : null;
       // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
       // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
-      // drawn exactly as typed, its spaces and all (review K2).
-      const page = { brk: null, text: String(c.name) };
-      if (typed) {
-        // Each paragraph broken by the rule, and a break between the paragraphs, as typed.
-        const paras = [];
-        let k = 0;
-        for (const n of typed.paras) { paras.push(typed.words.slice(k, k + n).map(x => String(x.w))); k += n; }
-        const fit = fitText(paras, s.st, w);
-        if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
-        page.brk = _breaks([].concat(...fit.lines));
-        page.text = _joined(typed.words.map(x => String(x.w)), page.brk);
-        words = typed.words;
-      } else if (words) {
-        const tokens = words.map(x => String(x.w));
-        const fit = fitPage(tokens, s.st, w);
-        if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
-        page.brk = _breaks(fit.lines);
-        page.text = _joined(tokens, page.brk);
-      } else {
-        const paras = String(c.name).split('\n').map(tokensOf);
-        if (paras.some(p => p.length)) {
-          const fit = fitText(paras, s.st, w);
-          if (fit.size < Math.round(+s.st.size || 0)) s = smaller(s, fit.size);
-          if (fit.lines.some(l => l.length > 1)) page.text = paras.map((p, i) => _joined(p, _breaks(fit.lines[i]))).join('\n');
-        }
-      }
-      const place = _place(s.st, s.a);
+      // drawn exactly as typed, its spaces and all (review K2). A typed line of the subtitle lane with a
+      // spoken word is timed by its letters (phase V30, block 1). One rule with the editor's rectangle (place.js).
+      const drawn = drawnPage(c, s.st, u.subs, w, end - start);
+      const box = boxOf(drawn, s.st, w, h);
+      if (drawn.shrink) s = smaller(s, drawn.shrink);
+      const words = drawn.words;
+      const page = { brk: drawn.brk, text: drawn.text };
+      // Never off the frame (phase V30, block 3, (с34)): a page past an edge is drawn moved back inside.
+      const place = _place(s.st, (box.dx || box.dy) ? { ...s.a, x: s.a.x + box.dx, y: s.a.y + box.dy } : s.a);
       if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(s.st, page));
       if (s.layered && s.st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(s.st, words, page.brk));
       dlg(L + 2, start, end, s.name, place + _textBody(c, s.st, words, page));

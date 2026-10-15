@@ -13,7 +13,10 @@
    that has only one weight), 'style' where a family ships both a regular and a bold file and the
    style's own switch chooses. `line` is the height of the font's line in em (what an .ass Fontsize
    measures), (OS/2 winAscent + winDescent) / unitsPerEm of the file. How wide each letter is lives in
-   advances.js, read from the same files (K2, tools/caption-advances.js).
+   advances.js, read from the same files (K2, tools/caption-advances.js). `ink` is how much of that line
+   the letters leave empty above the tallest ("H", "d", "l") and below the lowest ("g", "j", "p", "q", "y"),
+   as fractions of the line - measured on what our ffmpeg's libass draws (phase V30, block 3: a page's
+   rectangle on the preview, captions/place.js, is where its letters are, not the whole of its lines).
 
    Old projects named Windows fonts; they are read as the closest shipped one (the owner's answer 3,
    2026-10-03), Arial as Liberation Sans, which has Arial's metrics.
@@ -22,22 +25,22 @@
 export const FONT_DIR = '/fonts/captions/';
 
 export const FONTS = [
-  { family: 'Montserrat Black', label: 'Montserrat Black', files: { 400: 'Montserrat-Black.ttf' }, bold: false, line: 1.562 },
-  { family: 'Montserrat ExtraBold', label: 'Montserrat ExtraBold', files: { 400: 'Montserrat-ExtraBold.ttf' }, bold: false, line: 1.562 },
-  { family: 'Montserrat', label: 'Montserrat Bold', files: { 700: 'Montserrat-Bold.ttf' }, bold: true, line: 1.562 },
-  { family: 'Inter Black', label: 'Inter Black', files: { 400: 'Inter-Black.ttf' }, bold: false, line: 1.210 },
-  { family: 'Inter ExtraBold', label: 'Inter ExtraBold', files: { 400: 'Inter-ExtraBold.ttf' }, bold: false, line: 1.210 },
-  { family: 'Inter', label: 'Inter Bold', files: { 700: 'Inter-Bold.ttf' }, bold: true, line: 1.210 },
-  { family: 'Oswald', label: 'Oswald Bold', files: { 700: 'Oswald-Bold.ttf' }, bold: true, line: 1.702 },
-  { family: 'Fira Sans Extra Condensed Black', label: 'Fira Sans Condensed Black', files: { 400: 'FiraSansExtraCondensed-Black.ttf' }, bold: false, line: 1.200 },
-  { family: 'Rubik Black', label: 'Rubik Black', files: { 400: 'Rubik-Black.ttf' }, bold: false, line: 1.252 },
-  { family: 'Rubik Mono One', label: 'Rubik Mono One', files: { 400: 'RubikMonoOne-Regular.ttf' }, bold: false, line: 1.238 },
-  { family: 'Unbounded Black', label: 'Unbounded Black', files: { 400: 'Unbounded-Black.ttf' }, bold: false, line: 1.548 },
-  { family: 'Russo One', label: 'Russo One', files: { 400: 'RussoOne-Regular.ttf' }, bold: false, line: 1.205 },
-  { family: 'Exo 2 Black', label: 'Exo 2 Black', files: { 400: 'Exo2-Black.ttf' }, bold: false, line: 1.469 },
-  { family: 'Liberation Sans', label: 'Liberation Sans (Arial)', files: { 400: 'LiberationSans-Regular.ttf', 700: 'LiberationSans-Bold.ttf' }, bold: 'style', line: 1.117 },
-  { family: 'PT Sans', label: 'PT Sans', files: { 400: 'PT_Sans-Web-Regular.ttf', 700: 'PT_Sans-Web-Bold.ttf' }, bold: 'style', line: 1.294 },
-  { family: 'PT Serif', label: 'PT Serif', files: { 400: 'PT_Serif-Web-Regular.ttf', 700: 'PT_Serif-Web-Bold.ttf' }, bold: 'style', line: 1.325 },
+  { family: 'Montserrat Black', label: 'Montserrat Black', files: { 400: 'Montserrat-Black.ttf' }, bold: false, line: 1.562, ink: [0.18, 0.16] },
+  { family: 'Montserrat ExtraBold', label: 'Montserrat ExtraBold', files: { 400: 'Montserrat-ExtraBold.ttf' }, bold: false, line: 1.562, ink: [0.19, 0.16] },
+  { family: 'Montserrat', label: 'Montserrat Bold', files: { 700: 'Montserrat-Bold.ttf' }, bold: true, line: 1.562, ink: [0.20, 0.16] },
+  { family: 'Inter Black', label: 'Inter Black', files: { 400: 'Inter-Black.ttf' }, bold: false, line: 1.210, ink: [0.15, 0.02] },
+  { family: 'Inter ExtraBold', label: 'Inter ExtraBold', files: { 400: 'Inter-ExtraBold.ttf' }, bold: false, line: 1.210, ink: [0.16, 0.02] },
+  { family: 'Inter', label: 'Inter Bold', files: { 700: 'Inter-Bold.ttf' }, bold: true, line: 1.210, ink: [0.16, 0.02] },
+  { family: 'Oswald', label: 'Oswald Bold', files: { 700: 'Oswald-Bold.ttf' }, bold: true, line: 1.702, ink: [0.30, 0.10] },
+  { family: 'Fira Sans Extra Condensed Black', label: 'Fira Sans Condensed Black', files: { 400: 'FiraSansExtraCondensed-Black.ttf' }, bold: false, line: 1.200, ink: [0.09, 0.03] },
+  { family: 'Rubik Black', label: 'Rubik Black', files: { 400: 'Rubik-Black.ttf' }, bold: false, line: 1.252, ink: [0.15, 0.07] },
+  { family: 'Rubik Mono One', label: 'Rubik Mono One', files: { 400: 'RubikMonoOne-Regular.ttf' }, bold: false, line: 1.238, ink: [0.17, 0.19] },
+  { family: 'Unbounded Black', label: 'Unbounded Black', files: { 400: 'Unbounded-Black.ttf' }, bold: false, line: 1.548, ink: [0.26, 0.06] },
+  { family: 'Russo One', label: 'Russo One', files: { 400: 'RussoOne-Regular.ttf' }, bold: false, line: 1.205, ink: [0.18, 0.08] },
+  { family: 'Exo 2 Black', label: 'Exo 2 Black', files: { 400: 'Exo2-Black.ttf' }, bold: false, line: 1.469, ink: [0.28, 0.07] },
+  { family: 'Liberation Sans', label: 'Liberation Sans (Arial)', files: { 400: 'LiberationSans-Regular.ttf', 700: 'LiberationSans-Bold.ttf' }, bold: 'style', line: 1.117, ink: [0.16, 0.00] },
+  { family: 'PT Sans', label: 'PT Sans', files: { 400: 'PT_Sans-Web-Regular.ttf', 700: 'PT_Sans-Web-Bold.ttf' }, bold: 'style', line: 1.294, ink: [0.23, 0.05] },
+  { family: 'PT Serif', label: 'PT Serif', files: { 400: 'PT_Serif-Web-Regular.ttf', 700: 'PT_Serif-Web-Bold.ttf' }, bold: 'style', line: 1.325, ink: [0.21, 0.05] },
 ];
 
 // What an old project - or a preset written for fonts the app cannot ship - named, read as the
