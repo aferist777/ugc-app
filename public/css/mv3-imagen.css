@@ -115,6 +115,19 @@
 }
 .mv3-ig-msg.is-user{ align-self:flex-end; background:var(--surface-2) }
 .mv3-ig-msg.is-agent{ align-self:flex-start }
+/* (phase V31) The cross that takes a message away: on the message's top right corner, over its border so it never covers
+   what the message says; faint, brighter under the pointer; the first press turns it into "really?". */
+.mv3-ig-msg.has-del{ position:relative }
+.mv3-ig-del{
+  position:absolute; top:-7px; right:-7px; z-index:2;
+  min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
+  border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--muted);
+  font:700 9px/16px var(--font); text-align:center; cursor:pointer; opacity:.55;
+}
+.mv3-ig-msg:hover > .mv3-ig-del, .mv3-ig-del:focus-visible{ opacity:1 }
+.mv3-ig-del:hover{ color:var(--ink); border-color:var(--muted) }
+.mv3-ig-del.is-ask{ opacity:1; padding:0 7px; color:#fff; background:var(--danger); border-color:var(--danger); font-size:10px }
+.mv3-ig-del[hidden]{ display:none }
 .mv3-ig-text{ font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word }
 .mv3-ig-note{ font:600 10px/1.4 var(--font); color:var(--muted) }
 .mv3-ig-bad{ font:600 10px/1.5 var(--font); color:var(--danger); max-width:260px }

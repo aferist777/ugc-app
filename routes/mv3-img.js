@@ -12,6 +12,7 @@
 //                                             n, write, where } - a message of the pictures chat
 //
 //   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first (no chat clears its thread since V25)
+//   POST   /api/mv3/chat/delete              { id } - one message taken away, with what goes with it (V31)
 //
 //   POST   /api/mv3/img/upload               multipart `image` + `project` - a reference from
 //                                            the person's own disk, filed on the images shelf
@@ -180,6 +181,18 @@ router.get('/mv3/chat', (req, res) => {
   try {
     const items = CHAT.read(String(req.query.project || ''), req.query.kind);
     res.json({ success: true, items: req.query.kind === 'clip' ? _markGone(items) : items });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// (phase V31, the owner 2026-10-16) One message taken away - the cross in its corner, pressed twice - with what goes with it
+// (lib/mv3-chat.js remove): any of the three chats, the drafts' conversation too. 409 while something in it is being made.
+router.post('/mv3/chat/delete', (req, res) => {
+  try {
+    const r = CHAT.remove(String((req.body || {}).id || ''));
+    if (r.error) return res.status(r.code || 400).json({ success: false, error: r.error });
+    res.json({ success: true, messages: r.messages, records: r.records });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

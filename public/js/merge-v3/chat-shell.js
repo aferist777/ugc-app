@@ -50,6 +50,7 @@ import * as Pick from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
+import * as Layers from '../layers.js';
 
 const POLL_MS = 4000;
 const IDLE_MS = 20000;             // nothing running: an eye on what Alerts may start again
@@ -1248,6 +1249,7 @@ export function createChat(make) {
     // (phase V18.3) A description may draw a send as ONE message: the person's turn is not drawn apart (`hidden`), and
     // the answer after it is handed it, to draw what was asked at its head.
     let asked = null;
+    const busy = _busyIds();
     for (const m of _thread) {
       if (typeof S.hidden === 'function' && S.hidden(m)) {
         if (m.role === 'user') asked = m;
@@ -1259,15 +1261,18 @@ export function createChat(make) {
         if (n) _dropProgs(n, _landedNow);
         const progs = new Map();
         const b = _bubble(m, progs, m.role === 'user' ? null : asked);
+        const del = _delOn(b, m);
         if (n) n.el.replaceWith(b);
         // The message drawn at the press gives its place to its answer.
         else if (_pend && _pend.id === m.id) { _pend.el.replaceWith(b); _pend = null; }
-        n = { el: b, sig, progs, away: false };
+        n = { el: b, sig, progs, away: false, del };
         _nodes.set(m.id, n);
       } else {
         n.away = false;
         for (const g of _gensOf(m)) { const p = n.progs.get(g.id); if (p) p.say(_stageWords(g)); }
       }
+      // (phase V31) Read on every paint: a turn of the person is busy while ITS answers are, and they are other nodes.
+      if (n.del) n.del.hidden = busy.has(m.id);
       if (m.role !== 'user') asked = null;
       const want = prev ? prev.nextSibling : host.firstChild;
       if (n.el !== want) host.insertBefore(n.el, want);
@@ -1276,6 +1281,71 @@ export function createChat(make) {
     // The foot stays the last thing in the thread.
     if (_ui.foot && host.lastChild !== _ui.foot) host.appendChild(_ui.foot);
     if (atEnd) host.scrollTop = host.scrollHeight;
+  }
+
+  // ── A MESSAGE TAKEN AWAY (phase V31, the owner 2026-10-16) ─────────────────
+  // A faint ✕ in the corner of every message of every chat, brighter under the pointer (ч4, ч8). The first press asks
+  // "really?" in its place and the second takes the message away (ч5: "даблкликом с really?") - with what it was asked with
+  // and the records of what it made; the clips and pictures stay on their shelves and on the timeline (ч6, the server's
+  // lib/mv3-chat.js remove). It goes back to ✕ after 3 s, when the pointer leaves the message, or on Escape.
+  function _delOn(b, m) {
+    const x = el('button', 'mv3-ig-del', '✕');
+    x.type = 'button';
+    x.title = 'Delete this message - what it made stays on its shelf and on the timeline';
+    let t = 0;
+    let layer = null;
+    const back = () => {
+      clearTimeout(t);
+      t = 0;
+      if (layer) { Layers.close(layer); layer = null; }
+      x.classList.remove('is-ask');
+      x.textContent = '✕';
+    };
+    x.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (x.disabled) return;
+      if (!x.classList.contains('is-ask')) {
+        x.classList.add('is-ask');
+        x.textContent = 'really?';
+        t = setTimeout(back, 3000);
+        layer = Layers.open(x, { modal: false, onEsc: back, name: 'delete a message' });
+        return;
+      }
+      back();
+      x.disabled = true;
+      const d = await json('/api/mv3/chat/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }),
+      });
+      if (!d || !d.success) {
+        x.disabled = false;
+        if (x.isConnected) note(x, 'Not deleted.', (d && d.error) || 'the app did not answer');
+        return;
+      }
+      // Gone at once; the thread read again takes away what went with it.
+      _thread = _thread.filter(y => y.id !== m.id);
+      _paintThread();
+      _reload();
+    });
+    b.addEventListener('pointerleave', () => { if (x.classList.contains('is-ask')) back(); });
+    b.classList.add('has-del');
+    b.appendChild(x);
+    return x;
+  }
+
+  // What cannot be taken away now (ч7): a message with something still being made in it - a clip or a picture on its
+  // countdown, a card a writer is writing, a storyboard being drawn - and a turn of the person whose answers have one (the
+  // server takes a turn's answers with it).
+  function _busyIds() {
+    const out = new Set();
+    let turn = null;
+    for (const m of _thread) {
+      if (m.role === 'user') { turn = m; continue; }
+      const busy = _gensOf(m).some(g => g && g.state === 'pending') || !!(m.card && m.card.state === 'writing')
+        || (m.boards || []).some(g => g && g.state === 'pending');
+      if (busy) { out.add(m.id); if (turn) out.add(turn.id); }
+    }
+    return out;
   }
 
   // (phase V6) What a message's results look like - the shots, their countdowns and the facts - for a description that
