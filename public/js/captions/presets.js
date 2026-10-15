@@ -12,6 +12,9 @@
    what is changed afterwards lives in the project only (the owner, 2026-10-03).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// The Classic presets are written by hand (phase V30, block 4) and only added to these lists here.
+import { CLASSIC, CLASSIC_CATEGORY } from './presets-classic.js';
+
 export const CATEGORIES = [
   { id: 'viral', label: 'Viral' }, { id: 'pop', label: 'Pop' }, { id: 'karaoke', label: 'Karaoke' },
   { id: 'neon', label: 'Neon' }, { id: 'clean', label: 'Clean' }, { id: 'cinema', label: 'Cinema' },
@@ -146,6 +149,8 @@ export const PRESETS = [
   {"id":"cp-cinema-gold","name":"Cinema Gold","category":"cinema","style":{"font":"PT Serif","size":104,"bold":true,"italic":true,"primary":"#f8fafc","secondary":"#8a9099","highlight":"#ffd700","outlineColor":"#0b0c10","shadowColor":"#b8860b","backColor":"#000000","backAlpha":0,"shadowAlpha":0.69,"outline":4,"shadow":4.5,"blur":0,"spacing":1.5,"borderStyle":"outline","pos":"bottom","tx":0,"ty":-0.08,"wordsPerLine":3,"lines":2,"effect":"pop","appear":"none","casing":"upper","sizeAuto":false}},
   {"id":"cp-red-box","name":"Red Box","category":"viral","style":{"font":"Montserrat ExtraBold","size":109,"bold":true,"italic":false,"primary":"#ffffff","secondary":"#8a9099","highlight":"#ef4444","outlineColor":"#000000","shadowColor":"#000000","backColor":"#000000","backAlpha":0,"shadowAlpha":1,"outline":9,"shadow":0,"blur":0,"spacing":0.5,"borderStyle":"outline","pos":"bottom","tx":0,"ty":-0.08,"wordsPerLine":3,"lines":2,"effect":"box","appear":"none","casing":"upper","sizeAuto":false}},
 ];
+PRESETS.push(...CLASSIC);
+CATEGORIES.push(CLASSIC_CATEGORY);
 
 /** A preset by its id. */
 export const presetOf = (id) => PRESETS.find(p => p.id === id) || null;

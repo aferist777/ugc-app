@@ -514,6 +514,8 @@ let _listenShape = null;
 // The shipped fonts, all with the Russian alphabet (public/js/captions/fonts.js, phase K5).
 const FONTS = CAP_FONTS.map(f => [f.family, f.label]);
 const POS = [['top', 'top'], ['center', 'middle'], ['bottom', 'bottom']];
+// How a heard lane is cut (phase V30, block 4): style.js CUTS.
+const CUT_OPTS = [['pages', 'pages - a few words at a time'], ['sentences', 'sentences - classic subtitles']];
 // What makes a line wider or narrower - or a page hold more - cuts the heard pages again, in the same
 // step (K2, the owner's answer 3): a page cut for one font is not a page in another. The list is pages.js's.
 const CUTS = CUT_KEYS;
@@ -623,24 +625,36 @@ function _blankWordsTrack(host, track) {
         + 'lane cut before, or after cuts of your own',
     });
     recut.disabled = !heard || !Store.canEdit();
-    host.appendChild(C.row('Words', C.pair(C.slider({
-      min: 0, max: 12, step: 1, value: +raw.wordsPerLine || 0,
-      fmt: (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine(fmt) + ')'),
-      onChange: (v) => set({ wordsPerLine: v }),
-    }), recut)));
-    // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
-    const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
-    const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
-    host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
+    // HOW THE LANE IS CUT (phase V30, block 4, (с12), (с42)): a few words a page, or classic subtitles - a sentence or a
+    // part of one in two lines of up to 42 characters. Changing it cuts the heard words again in the same step.
+    const sent = raw.cut === 'sentences';
+    host.appendChild(C.row('Cut', C.pair(C.select(CUT_OPTS, sent ? 'sentences' : 'pages', (v) => set({ cut: v })), sent ? recut : null)));
     const pages = (track.clips || []).filter(c => Array.isArray(c.words) && c.words.length).length;
-    const most = +raw.wordsPerLine > 0 ? +raw.wordsPerLine : autoWordsPerLine(fmt);
-    host.appendChild(C.hint(heard
-      ? 'A page ends at a sentence, at a pause, at a comma after two words, and before a line would run '
-        + 'wider than 78% of the frame - with at most ' + most + (most === 1 ? ' word' : ' words') + '. '
-        + heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
-        + '; changing these cuts them again straight away, lines you typed stay as they are.'
-      : 'How the transcript gets cut into pages. Nothing has been transcribed yet, so this waits '
-        + 'for the first Generate.'));
+    const counted = heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
+      + '; changing this cuts them again straight away, lines you typed stay as they are.';
+    if (sent) {
+      // One rule, no Words or Lines (с42).
+      host.appendChild(C.hint(heard
+        ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
+          + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
+        : 'Classic subtitles, a sentence at a time. Nothing has been transcribed yet, so this waits for the first Generate.'));
+    } else {
+      host.appendChild(C.row('Words', C.pair(C.slider({
+        min: 0, max: 12, step: 1, value: +raw.wordsPerLine || 0,
+        fmt: (v) => (v > 0 ? 'up to ' + v : 'auto (up to ' + autoWordsPerLine(fmt) + ')'),
+        onChange: (v) => set({ wordsPerLine: v }),
+      }), recut)));
+      // Two lines at most to choose from; a style that says three (a preset, a hand) is shown as it is.
+      const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
+      const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
+      host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
+      const most = +raw.wordsPerLine > 0 ? +raw.wordsPerLine : autoWordsPerLine(fmt);
+      host.appendChild(C.hint(heard
+        ? 'A page ends at a sentence, at a pause, at a comma after two words, and before a line would run '
+          + 'wider than 78% of the frame - with at most ' + most + (most === 1 ? ' word' : ' words') + '. ' + counted
+        : 'How the transcript gets cut into pages. Nothing has been transcribed yet, so this waits '
+          + 'for the first Generate.'));
+    }
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
