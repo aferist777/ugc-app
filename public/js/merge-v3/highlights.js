@@ -564,7 +564,9 @@ async function _addTitle(f) {
     // The open one is the page's: one step of its timeline's undo, its own save.
     let ok = false;
     Store.mutate((tl) => { ok = putTitle(tl, text, f.length || f.seconds, () => 'ht' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)); });
-    _say(ok ? 'the title is on top' : 'it has a title already, or two text lanes', !ok);
+    // Ctrl+Z next is the timeline's - it takes the title away - not the field's, which brings back deleted fragments.
+    if (ok) _inField = false;
+    _say(ok ? 'the title is on top - Ctrl+Z takes it away' : 'it has a title already, or two text lanes', !ok);
     _paintCard();
     return;
   }
