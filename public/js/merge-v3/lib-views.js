@@ -100,6 +100,25 @@ export function onBack(view, fn) { if (view === 'captions') _capsBack = fn; }
 /** What the "captions" crumb does from another view (phase V18.2: the inspector picks the subtitle lane). */
 export function onOpen(view, fn) { if (view === 'captions') _capsOpen = fn; }
 
+// (phase V33.3) THE CAPTIONS OF WHAT IS NOT ON THE TIMELINE - a highlights project's ticked fragments (the owner's (х33)). A base
+// view may offer the captions view a target of its own while nothing is picked:
+//   wants()       its crumb would open it now (fragments ticked)
+//   open()        the crumb was pressed: it is up until let go of
+//   active()      it is up
+//   release()     let go of ("Library", the base's own crumb)
+//   render(host)  its strip drawn into the inspector's strip; returns the tiles' target { preset, edited, apply, readOnly }
+// The inspector still decides what the captions view shows - a pick on the timeline comes first - so there is one owner of it.
+let _alt = null;
+let _altPaint = null;
+export function captionsAlt(p) { _alt = p || null; }
+export const altCaptions = () => (_alt && _alt.active() ? _alt : null);
+export const altWants = () => !!(_alt && _alt.wants());
+export function altOpen() { if (_alt) _alt.open(); if (_altPaint) _altPaint(); }
+export function altRelease() { if (_alt) _alt.release(); }
+/** The inspector says how to paint again when the alternative target changes (its fragments ticked or not). */
+export function onAltChange(fn) { _altPaint = fn; }
+export function altChanged() { if (_altPaint) _altPaint(); }
+
 // ── The view each project was left on ──────────────────────────────────────
 function _views() {
   let v = {};

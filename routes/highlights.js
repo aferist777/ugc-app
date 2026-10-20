@@ -13,6 +13,7 @@
 //   POST   /api/highlights/:id/fragments/:n/delete   hidden until the next start (Ctrl+Z brings it back)
 //   POST   /api/highlights/:id/fragments/restore     { n? } -> { n } the last deleted (or n) back, 0 when none
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
+//   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -100,6 +101,21 @@ router.post('/highlights/:id/fragments/restore', (req, res) => {
 router.post('/highlights/:id/fragments/:n/title', (req, res) => {
   try { res.json({ success: true, ...JOB.renameFragment(req.params.id, req.params.n, (req.body || {}).title) }); }
   catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V33.3) One caption style on several made fragments at once - their timelines' subtitle lanes (lib/highlights-cut.js
+// restyle); no undo for several (the owner's (х34)).
+router.post('/highlights/:id/style', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    const b = req.body || {};
+    const ns = new Set((Array.isArray(b.ns) ? b.ns : []).map(Number).filter((n) => n > 0));
+    const keys = (rec.fragments || []).filter((f) => ns.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key).map((f) => f.key);
+    if (!keys.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    const out = CUT.restyle(keys, String(b.preset || ''));
+    res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 router.post('/highlights/:id/retry', async (req, res) => {

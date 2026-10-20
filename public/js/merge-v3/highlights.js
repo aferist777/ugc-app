@@ -26,7 +26,8 @@ import * as Views from './lib-views.js';
 import { setOpenColumn, roomForWork } from './layout.js';
 import { openPopup, closePopup } from './hl-popup.js';
 import * as Layers from '../layers.js';
-import { presetName, editedKeys } from '../captions/preset-use.js';
+import { presetName, presetStyle, editedKeys } from '../captions/preset-use.js';
+import { setSubsStyle } from './timeline-b.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -91,7 +92,7 @@ function _onStore() {
   _openShown = _openN();
   // Another project: what was shown of the last one goes.
   _pid = pid;
-  _rec = null; _prog = null; _live = false; _retry = ''; _sel = _openN(); _checked.clear(); _err = '';
+  _rec = null; _prog = null; _live = false; _retry = ''; _sel = _openN(); _checked.clear(); _err = ''; _multi = false;
   _stopPoll();
   closePopup();
   if (pid) { _show(true); _load(); }
@@ -104,8 +105,12 @@ function _onStore() {
 // inspector's, as in any project - the open fragment's subtitle lane picked.
 function _crumbs() {
   const lib = $('mv3-library');
-  if (lib) lib.classList.toggle('is-hl-cap', !!_pid && (_openN() > 0 || _checked.size > 0));
+  if (lib) lib.classList.toggle('is-hl-cap', !!_pid && (_openN() > 0 || _ticked().length > 0));
+  // The ticks changed under the captions of several: they follow (and go when none is ticked any more).
+  const sig = _multi ? _ticked().map((f) => f.n + ':' + ((_capOfFrag(f) || {}).preset || '')).join(',') : '';
+  if (sig !== _multiSig) { _multiSig = sig; Views.altChanged(); }
 }
+let _multiSig = '';
 
 // The open fragment's caption style, from its timeline as it is now - { preset, name, edited }; the server says it for the
 // others (GET /api/highlights/:id `cap`), read from theirs: the style lives in one place, the fragment's timeline.
@@ -118,6 +123,65 @@ function _capOpen() {
 }
 const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited; };
 let _capShown = '';
+
+// ── The captions of SEVERAL (phase V33.3, block 2; the owner's (х33), (х34)) ─
+// Ticked fragments are what the captions crumb gives a style to - all at once, by the server on their timelines (they are
+// not open), the open one among them too; with nothing ticked, or only the open one, it is the open fragment's lane, as in
+// any project. No undo for several (х34): another style is another press.
+let _multi = false;
+const _ticked = () => _frags().filter((f) => _checked.has(f.n) && f.state === 'ready' && f.key);
+const _multiWanted = () => !!_pid && _ticked().length > 0 && !(_checked.size === 1 && _checked.has(_openN()));
+function _capOfFrag(f) { return f.n === _openN() ? _capOpen() : (f.cap || null); }
+let _applying = false;
+Views.captionsAlt({
+  wants: _multiWanted,
+  open: () => { _multi = true; },
+  active: () => _multi && _multiWanted(),
+  release: () => { _multi = false; },
+  render: (host) => {
+    const list = _ticked();
+    host.appendChild(_el('div', 'mv3-ins-title', 'Captions of ' + list.length + (list.length === 1 ? ' fragment' : ' fragments')));
+    const ul = _el('ul', 'mv3-hl-list');
+    for (const f of list) {
+      const c = _capOfFrag(f);
+      const li = _el('li', null, f.title);
+      if (c && c.name) li.appendChild(_el('span', 'mv3-hl-cap-of', ' · ' + c.name + (c.edited ? ' (edited)' : '')));
+      ul.appendChild(li);
+    }
+    host.appendChild(ul);
+    host.appendChild(_el('p', 'mv3-ins-note', _applying ? 'Putting the style on them…'
+      : 'A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. '
+      + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
+    const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
+    return { preset: ps.size === 1 ? [...ps][0] : '', edited: false, apply: _restyle, readOnly: _applying };
+  },
+});
+
+async function _restyle(presetId) {
+  const list = _ticked();
+  if (!list.length || _applying || !presetId) return;
+  // The OPEN one among them is the page's: a tile on its lane, as anywhere (its save, its one step of the timeline's undo) - a
+  // server's write under an open timeline reads to the page as somebody else's edit. The others are the server's.
+  const open = list.find((f) => f.n === _openN());
+  const rest = list.filter((f) => f !== open);
+  if (open) {
+    const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
+    const st = presetStyle(presetId);
+    if (lane && st) setSubsStyle(lane.id, st, true);
+  }
+  if (!rest.length) { _say('captions: ' + (presetName(presetId) || presetId)); _paintCard(); Views.altChanged(); return; }
+  _applying = true;
+  Views.altChanged();
+  try {
+    const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/style', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ns: rest.map((f) => f.n), preset: presetId }) });
+    const n = d.n + (open ? 1 : 0);
+    _say('captions of ' + n + (n === 1 ? ' fragment' : ' fragments') + ': ' + (d.name || presetId));
+  } catch (e) { _say(e.message, true); }
+  _applying = false;
+  await _load();
+  Views.altChanged();
+}
 
 function _show(on) {
   _shown = !!on;
@@ -412,7 +476,7 @@ function _paintCard() {
     const ul = _el('ul', 'mv3-hl-list');
     for (const f of frags) if (_checked.has(f.n)) ul.appendChild(_el('li', null, f.title));
     card.appendChild(ul);
-    card.appendChild(_el('p', 'mv3-hl-note', 'The style of their captions and rendering them together come with the next steps.'));
+    card.appendChild(_el('p', 'mv3-hl-note', 'Their captions: the captions crumb above puts one style on all of them at once. Rendering them together comes with the next step.'));
     return;
   }
   const f = frags.find((x) => x.n === _sel);

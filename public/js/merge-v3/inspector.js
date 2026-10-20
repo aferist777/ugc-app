@@ -1143,6 +1143,9 @@ function _render() {
   if (one) { _over(true); return _renderBlankClip(over, one); }
   const tr = trackB();
   if (tr) { _over(true); return _renderBlankTrack(over, tr); }
+  // (phase V33.3) Nothing picked, and a view's own captions up (a highlights project's ticked fragments): its strip and target.
+  const alt = Views.altCaptions();
+  if (alt) { _over(true); return alt.render(over); }
   // Nothing picked: the strip goes, and the Library under it is what is left (phase L).
   _over(false);
 }
@@ -1172,13 +1175,16 @@ export function initInspector() {
   // is said once the list is known, and goes when the preset is deleted.
   MyPresets.onChange(() => render());
   MyPresets.load();
-  Views.onBack('captions', () => clearSelB());
+  Views.onBack('captions', () => { const alt = !!Views.altCaptions(); Views.altRelease(); clearSelB(); if (alt) render(true); });
   // (phase V18.2) The "captions" crumb from another view: the subtitle lane picked - every timeline has one, and it
-  // cannot be removed - and the captions view follows the pick as it always has.
+  // cannot be removed - and the captions view follows the pick as it always has. (phase V33.3) Unless a view offers a
+  // target of its own (a highlights project's ticked fragments, lib-views.js captionsAlt): then that, with nothing picked.
   Views.onOpen('captions', () => {
+    if (Views.altWants()) { clearSelB(); Views.altOpen(); return; }
     const subs = (((Store.timeline() || {}).tracks) || []).find(t => t.kind === 'subs');
     if (subs) selectTrackB(subs.id);
   });
+  Views.onAltChange(() => render(true));
   // The job of the open project, as it goes. Repainted only while the subtitle lane itself is what
   // the strip shows: the strip is rebuilt whole, and a caption being typed would lose its cursor.
   Listen.init();
