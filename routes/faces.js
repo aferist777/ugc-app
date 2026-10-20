@@ -7,7 +7,8 @@
      POST /api/faces/:id/done         { frames: [[[x, y, w, h, score], ...], ...], model, delegate, msPerFrame }
      POST /api/faces/:id/fail         { error }
      GET  /api/faces/state            is the window there, what it is counting
-     GET  /api/faces/of?src=<address> where one film stands: ready | counting | waiting | none
+     GET  /api/faces/of?src=<address>[&full=1] where one film stands: ready (its faces with full=1) | counting | waiting |
+                                      failed | none
      POST /api/faces/find { src }     count one film's faces (a clip's "follow the face" switch, block 5) - answers at once
 
    Loopback only, like the whole server: the window is the app's own. */
@@ -35,12 +36,13 @@ router.get('/faces/state', (_req, res) => res.json({ success: true, ...FACES.sta
 router.get('/faces/of', (req, res) => {
   const abs = _film(req.query.src);
   if (!abs) return res.status(404).json({ success: false, error: 'not a film on the disk' });
-  res.json({ success: true, ...FACES.status(abs) });
+  res.json({ success: true, ...FACES.status(abs, String(req.query.full || '') === '1') });
 });
 router.post('/faces/find', (req, res) => {
   const abs = _film((req.body || {}).src);
   if (!abs) return res.status(404).json({ success: false, error: 'not a film on the disk' });
-  FACES.find(abs).catch((e) => { if (!e.cancelled) console.warn('[faces] find:', e.message); });
+  // A film that could not be counted a moment ago (no window) is asked again: the window may be there now.
+  FACES.find(abs).catch((e) => { if (!e.cancelled && !e.noWorker) console.warn('[faces] find:', e.message); });
   res.json({ success: true, ...FACES.status(abs), worker: FACES.workerSeen() });
 });
 

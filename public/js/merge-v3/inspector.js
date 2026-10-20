@@ -53,6 +53,8 @@ import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
 import { setOpenColumn, columnMax } from './layout.js';
+// (phase V33.2) A filled clip's window: fixed, following the face, the middle, whole over its blur, two faces.
+import * as FRAMING from './framing-ui.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -188,13 +190,35 @@ function _pipRows(host, track, c) {
 
 // How a clip meets a frame of another shape. The second row appears only when there is
 // something to decide: a fitted clip loses nothing, so there is no side to pick.
+// (phase V33.2, the owner's (х9)) A filled clip's window may MOVE: "Framing" - fixed (the side kept, as before), following
+// the face, the middle, the whole frame over its blur, two faces as bands - and a shift for the whole clip
+// (public/js/merge-v3/framing-ui.js; the path itself is public/js/framing/path.js, which the render reads too).
 function _frameRows(host, c, set) {
   host.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
     (v) => set('fit', v))));
-  if (c.fit === 'fill') {
+  if (c.fit !== 'fill') return;
+  const mode = (c.frame && c.frame.mode) || 'fixed';
+  const pickFraming = C.select(FRAMING.FRAMINGS, mode, (v) => { FRAMING.choose(c, v, set); });
+  host.appendChild(C.row('Framing', pickFraming));
+  if (mode === 'fixed') {
     host.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center',
       (v) => set('cropAlign', v))));
+  } else if (mode !== 'whole') {
+    host.appendChild(C.row('Shift', C.slider({
+      min: -1, max: 1, step: 0.05, value: +c.frame.shift || 0,
+      fmt: (v) => (Math.abs(v) < 0.01 ? 'none' : (v < 0 ? 'left ' : 'right ') + Math.round(Math.abs(v) * 100) + '%'),
+      onChange: (v) => set('frame', { ...c.frame, shift: v }),
+    })));
   }
+  const note = C.hint(FRAMING.noteOf(c));
+  note.id = 'mv3-framing-note';
+  host.appendChild(note);
+  FRAMING.onNote(() => {
+    const el = document.getElementById('mv3-framing-note');
+    if (el) el.textContent = FRAMING.noteOf(c);
+    // Asked and not found: the switch says what the clip still has.
+    if (FRAMING.failed(c) && pickFraming.isConnected) pickFraming.value = mode;
+  });
 }
 
 // Transition, animation and filter - the values lib/mv3b-render.js builds them from.

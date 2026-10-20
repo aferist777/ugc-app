@@ -37,6 +37,8 @@ import { retext, isCorrected } from '../captions/words.js';
 import { linesOf as docLines, editLine as docEditLine } from '../captions/doc.js';
 import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
+// (phase V33.2) A filled clip's window over time, kept as the render reads it.
+import { normalize as normalizeFrame } from '../framing/path.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -1448,7 +1450,7 @@ export function selectedOne() {
 // NAMED FIELDS ONLY. A key that is not on this list is refused rather than written: a
 // misspelt one would otherwise sit on the clip forever as a property nothing reads, and the
 // control that wrote it would look like it worked.
-const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign',
+const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign', 'frame',
                              'transition', 'animation', 'filter',
                              'tx', 'ty', 'tw', 'angle', 'feather',
                              'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation']);
@@ -1495,6 +1497,13 @@ function _write(c, key, value) {
   // centre - which the preview and the render then showed, as if the choice had been made.
   if (key === 'cropAlign') {
     c.cropAlign = ['left', 'center', 'right', 'top', 'bottom'].indexOf(String(value)) >= 0 ? String(value) : 'center';
+    return;
+  }
+  // (phase V33.2) THE FRAME'S PATH - following the face, the middle, the whole frame over its blur, two bands - or none,
+  // and the fixed `cropAlign` frames the clip again.
+  if (key === 'frame') {
+    const f = normalizeFrame(value);
+    if (f) c.frame = f; else delete c.frame;
     return;
   }
   // A HALFER BAND (lib/mv3b-render.js bandGeom): a switch and four numbers. The numbers stay on the
