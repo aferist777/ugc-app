@@ -107,12 +107,15 @@ router.get('/mv3/timelines', (req, res) => {
   try {
     const s = _read();
     const own = _folderFiles(Object.keys(s.timelines));
-    const list = Object.keys(s.timelines).map(key => {
+    // (phase V33.1) A highlights project is ONE line - its own timeline; its fragments' timelines open from its tiles.
+    const HLS = require('../lib/highlights-store');
+    const list = Object.keys(s.timelines).filter(key => !((HLS.ofKey(key) || {}).n > 0)).map(key => {
       const t = s.timelines[key];
       let clips = 0;
       for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
-               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t) };
+               kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t),
+               ...(HLS.ofKey(key) ? { highlights: true } : {}) };
     // (phase V20) The draft first, then newest first.
     }).sort((a, b) => (b.draft - a.draft) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     // Everyone sees every owner. The picker groups by them; which entries the caller may
@@ -581,6 +584,19 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     // Deleting is the one write nobody but the owner should be able to undo their way out of,
     // so it is held to the same line as the rest - and the admin's on anything.
     if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
+    // (phase V33.1) A HIGHLIGHTS PROJECT is deleted whole by its own timeline: its work stopped, its folder - the fragments'
+    // timelines and pieces - gone; its video stays, a source of the Library. A fragment goes from its tile, not from here.
+    const HLS = require('../lib/highlights-store');
+    const hk = HLS.ofKey(key);
+    if (hk && hk.n > 0) return res.status(409).json({ success: false, error: 'a fragment is deleted on its tile in the highlights field' });
+    if (hk && HLS.entry(hk.id)) {
+      try { require('../lib/highlights-job').stop(hk.id); } catch (e) { /* not at work */ }
+      const rec = HLS.get(hk.id);
+      const row = rec && rec.work && rec.work.alertId;
+      if (row) require('../lib/alerts').cancel(row, 'stopped - the project was deleted');
+      const { moved } = HLS.remove(hk.id);
+      return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 }, released: {} });
+    }
     // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
     // clips - goes with its last timeline (PROJECTS.remove: what another project, timeline or shelf still points
     // at is moved to media/work first). The Library's categories named after the project are not in that folder: what

@@ -47,6 +47,9 @@ const { generateMissingThumbs } = require('./lib/helpers');
 {
   const s = require('./lib/projects-store').sync();
   if (s.added || s.dropped) console.log(`[projects] ${s.added} folder(s) joined the list, ${s.dropped} missing left it`);
+  // (phase V33.1) Before the Merge projects: a highlights project's folder holds timelines too.
+  const h = require('./lib/highlights-store').sync();
+  if (h.added) console.log(`[projects] ${h.added} highlights project folder(s) joined the list`);
   const m = require('./lib/merge-store').sync();
   if (m.added) console.log(`[projects] ${m.added} Merge project folder(s) joined the list`);
   const d = require('./lib/studio3d-store').sync();
@@ -123,6 +126,7 @@ app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the
 app.use('/api', require('./routes/narrators'));
 // Sources — long videos brought in whole, transcribed, and later mined for topics.
 app.use('/api', require('./routes/sources'));
+app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts (phase V33.1)
 // The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
 app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.

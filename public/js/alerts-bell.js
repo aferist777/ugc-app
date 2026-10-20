@@ -21,7 +21,7 @@ import * as Layers from './layers.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
-const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓' };
+const KIND_MARK = { image: '▣', video: '▶', music: '♪', source: '↓', highlights: '✂' };
 
 let _btn = null;
 let _menu = null;
@@ -157,7 +157,8 @@ function _hrefOf(rec) {
 // for an hour would pull a mean of six far out. A row of the fake aggregator ("FAKE ·" in its title) is twenty
 // seconds of nothing and is not counted.
 const KEEP_FOR_AVERAGE = 6;
-const GUESS_MS = { clip: 5 * 60000, video: 5 * 60000, frame: 90000, picture: 75000, lookbook: 60000, environment: 60000, music: 2 * 60000 };
+const GUESS_MS = { clip: 5 * 60000, video: 5 * 60000, frame: 90000, picture: 75000, lookbook: 60000, environment: 60000, music: 2 * 60000,
+  highlights: 10 * 60000 };
 const GUESS_OTHER_MS = 2 * 60000;
 
 const _model = (r) => String((r && r.engine) || '').split(' @ ')[0].trim();
