@@ -19,12 +19,12 @@ const express    = require('express');
 const path       = require('path');
 const fs         = require('fs');
 const { spawn }  = require('child_process');
-const crypto     = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
-const { MEDIA_DIR, PROJECTS_DIR, TEMP_DIR, DATA_DIR } = require('../lib/config');
+const { MEDIA_DIR, PROJECTS_DIR, DATA_DIR } = require('../lib/config');
 const { toDisk, toDiskWithin } = require('../lib/media');
+const PP = require('../lib/preview-proxy');
 const BUSY = require('../lib/render-busy');
 const _hearing = () => { try { return require('../lib/whisper-local').hearing(); } catch (e) { return false; } };
 
@@ -34,34 +34,20 @@ const _hearing = () => { try { return require('../lib/whisper-local').hearing();
 // path+mtime; supports HTTP Range (sendFile) so the preview can seek. On a slow
 // connection this lets the preview stream a small file instead of the full
 // 1080x1920 source. Concurrent requests for the same proxy share one transcode.
-const PREVIEW_CACHE_DIR = path.join(TEMP_DIR, 'preview_proxies');
+// Where a copy lives and how it is encoded are lib/preview-proxy.js's: the highlights cut makes a piece's copy in
+// the pass that cuts it (phase V33.2 block 0).
+const PREVIEW_CACHE_DIR = PP.CACHE_DIR;
 try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true }); } catch {}
 const _proxyInflight = new Map();
 
-const PROXY_HEIGHTS = [360, 480, 720];   // selectable preview qualities (shorter side)
-// lib/library-upgrade.js renames proxies by this same key when the upgrade moves their films.
-function _proxyCachePath(absSrc, h, rev) {
-  let mtime = 0; try { mtime = Math.floor(fs.statSync(absSrc).mtimeMs); } catch {}
-  const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h + (rev ? '|rev' : '')).digest('hex');
-  return path.join(PREVIEW_CACHE_DIR, key + '_' + h + (rev ? '_rev' : '') + '.mp4');
-}
+const PROXY_HEIGHTS = PP.HEIGHTS;   // selectable preview qualities (shorter side)
+const _proxyCachePath = PP.cachePath;
 function _makePreviewProxy(absSrc, outPath, h, rev, low, entry) {
-  // Scale the SHORTER side to <h> (portrait 1080x1920 -> hx.., landscape -> ..xh),
-  // low bitrate, faststart for progressive seeking. Higher h = sharper + heavier.
-  // rev=true also time-reverses video+audio so the preview can play a reversed
-  // insert by simply playing this pre-reversed proxy forward.
   // low=true runs the process below normal priority: a proxy made ahead of time must not
   // take the cores from an export or from a proxy somebody is waiting for right now.
-  const crf = h >= 720 ? '27' : '30';
-  const ab  = h >= 720 ? '96k' : '64k';
-  const vf  = (rev ? 'reverse,' : '') + "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear";
   const args = [
     '-y', ...(low ? ['-threads', '2'] : []), '-i', absSrc,
-    '-vf', vf,
-    ...(rev ? ['-af', 'areverse'] : []),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', ab, '-ar', '44100',
-    '-movflags', '+faststart',
+    ...PP.encodeArgs(h, rev),
     ...(low ? ['-threads', '2'] : []),
     outPath,
   ];
@@ -177,6 +163,15 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     const reqH = parseInt(req.query.h, 10);
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
     const rev = /^(1|true)$/i.test(String(req.query.rev || ''));
+    // (phase V33.2 block 0) A highlights fragment's piece with no copy at this quality yet - cut before its copy was made in
+    // the cutting pass, or the preview set to 360 / 720 - is played AS IT IS (H.264 the size of the video, one layer) and
+    // its copy made behind, at the back of the queue: the picture shows at once instead of after the transcode. Not kept
+    // by the browser, so the next request finds the copy. Every other film waits for its copy as before (a 4K birol).
+    if (!rev && !fs.existsSync(_proxyCachePath(abs, h, false)) && require('../lib/highlights-store').isPiece(abs)) {
+      _ensureProxy(abs, h, false, false).catch(e => { console.warn('[ffmpeg/preview-proxy]', path.basename(abs), e.message); });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.sendFile(abs);
+    }
     let cachePath;
     try { cachePath = await _ensureProxy(abs, h, rev, true); }
     catch (e) { console.warn('[ffmpeg/preview-proxy]', e.message); return res.redirect(302, src); }  // fall back to original
