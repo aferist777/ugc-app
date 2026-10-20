@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "The framing modules are ES modules: the page imports them and the server require()s them (Node 24), as the captions' do."
+}
