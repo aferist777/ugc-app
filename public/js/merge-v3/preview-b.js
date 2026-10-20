@@ -28,6 +28,8 @@ import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
 import { setPlayhead, setFormat } from './timeline-b.js';
+// (phase V33.2) A filled clip's window over time - the one answer the render reads too.
+import { isFramed, windowAt, windowW } from '../framing/path.js';
 
 const STAGE = 'mv3-stage';
 
@@ -233,7 +235,7 @@ export const isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
 // In lane order, bottom layer first - so the LAST one under the pointer is the one on top.
 const _rects = new Map();
 
-function _place(sw, sh, c) {
+function _place(sw, sh, c, tFile) {
   // A gesture in progress holds its numbers rather than writing them: this is where they are
   // read back, so the picture follows the mouse without a store write per pixel.
   const live = liveOf(c.id);
@@ -256,6 +258,34 @@ function _place(sw, sh, c) {
     // frame should not move it, and without this it would jump on the first pixel of the drag.
     return { sx: 0, sy: 0, sw, sh, dx, dy, dw, dh, cx: dx + dw / 2, cy: dy + dh / 2, angle: 0,
              conv: { tw: dw / W, tx: 0.5, ty: 0.5 } };
+  }
+  // (phase V33.2) A clip that FOLLOWS its faces: where its window is at this second of its file (public/js/framing/path.js,
+  // the render's own answer - lib/mv3b-render.js framedChain).
+  if (isFramed(c.frame) && windowW(sw, sh, W / H) < 0.999 && Number.isFinite(tFile)) {
+    const win = windowAt(c.frame, tFile, sw, sh, W / H);
+    const conv = { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 };
+    const base = { dx: 0, dy: 0, dw: W, dh: H, cx: W / 2, cy: H / 2, angle: 0, conv };
+    if (win.kind === 'whole') {
+      // The whole frame by its width over a blurred copy of itself, covering ((х7) Б) - drawn as the render draws it.
+      const s2 = Math.max(W / sw, H / sh);
+      const bw = W / s2, bh = H / s2;
+      const fh = W * (sh / sw);
+      return { ...base, sx: 0, sy: 0, sw, sh, parts: [
+        { sx: (sw - bw) / 2, sy: (sh - bh) / 2, sw: bw, sh: bh, dx: 0, dy: 0, dw: W, dh: H, blur: Math.max(4, Math.round(W * 0.03)) },
+        { sx: 0, sy: 0, sw, sh, dx: 0, dy: (H - fh) / 2, dw: W, dh: fh },
+      ] };
+    }
+    if (win.kind === 'bands') {
+      const half = Math.round(H / 2);
+      const bw = win.bw * sw, bh = win.bh * sh;
+      const at = (x, y) => ({ sx: Math.max(0, Math.min(sw - bw, x * sw - bw / 2)), sy: Math.max(0, Math.min(sh - bh, y * sh - bh / 2)), sw: bw, sh: bh });
+      return { ...base, sx: 0, sy: 0, sw, sh, parts: [
+        { ...at(win.x1, win.y1), dx: 0, dy: 0, dw: W, dh: half },
+        { ...at(win.x2, win.y2), dx: 0, dy: half, dw: W, dh: H - half },
+      ] };
+    }
+    const fw = sh * (W / H);
+    return { ...base, sx: Math.max(0, Math.min(sw - fw, win.x * sw - fw / 2)), sy: 0, sw: fw, sh };
   }
   const s = Math.max(W / sw, H / sh);
   const cw = Math.min(sw, W / s), ch = Math.min(sh, H / s);
@@ -365,6 +395,21 @@ function _srcTime(c, at, elDur) {
 // apart from the effects around it so that the common case - a full-frame clip with nothing
 // set - is still one drawImage and no state to save and restore.
 function _draw(el, r) {
+  // (phase V33.2) A framed clip drawn in more than one piece: the whole frame over its blur, two bands.
+  if (r.parts) {
+    for (const p of r.parts) {
+      if (p.blur) {
+        _ctx.save();
+        const f = _ctx.filter;
+        _ctx.filter = (f && f !== 'none' ? f + ' ' : '') + `blur(${p.blur}px)`;
+        try { _ctx.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx, p.dy, p.dw, p.dh); } catch (e) {}
+        _ctx.restore();
+      } else {
+        try { _ctx.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx, p.dy, p.dw, p.dh); } catch (e) {}
+      }
+    }
+    return;
+  }
   if (!r.placed || (!r.angle && !r.feather)) {
     try { _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh); } catch (e) {}
     return;
@@ -428,9 +473,21 @@ function _note(text) {
 }
 
 // One clip onto the frame: a band, or a picture placed or fitted with its effects.
+// (phase V33.2) The second of the FILE on the screen: the element's own time when it is playing a frame (what is drawn,
+// not where the clock wants it), the clock's otherwise (a poster); a reversed clip's copy runs the file backwards.
+function _fileTime(el, c) {
+  const vid = !!(el && el.tagName === 'VIDEO');
+  let t = vid && el.videoWidth ? (+el.currentTime || 0) : _srcTime(c, _at, vid ? el.duration : NaN);
+  if (_rev(c)) {
+    const src = (+c.srcDur > 0) ? +c.srcDur : (vid && isFinite(el.duration) ? el.duration : 0);
+    if (src > 0) t = src - t;
+  }
+  return t;
+}
+
 function _show(el, sw, sh, c, gaps) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
-  const r = _place(sw, sh, c);
+  const r = _place(sw, sh, c, isFramed(c.frame) ? _fileTime(el, c) : NaN);
   _rects.set(c.id, r);
   _blit(el, r, c, gaps);
 }
