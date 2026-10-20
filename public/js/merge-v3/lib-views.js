@@ -82,6 +82,12 @@ export function toShelf() {
   if (c && c.onBack) c.onBack();
 }
 
+/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library" alone (css/mv3-highlights.css). */
+export function setHighlights(on) {
+  const panel = $('mv3-library');
+  if (panel) panel.classList.toggle('is-hl', !!on);
+}
+
 /** The inspector says whether the captions view is up. */
 export function setCaptions(on) {
   if (_caps === !!on) return;

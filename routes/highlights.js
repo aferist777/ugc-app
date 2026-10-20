@@ -16,6 +16,7 @@ const express = require('express');
 const HL = require('../lib/highlights-store');
 const JOB = require('../lib/highlights-job');
 const YTDLP = require('../lib/ytdlp');
+const ALERTS = require('../lib/alerts');
 
 const router = express.Router();
 
@@ -28,7 +29,9 @@ function view(rec) {
   const { agent, ...rest } = rec;
   const a = agent ? { ...agent } : null;
   if (a) delete a.raw;
-  return { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS };
+  // The video's poster - what a tile shows until its own first frame is made.
+  const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
+  return { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, poster: (src && src.thumbPath) || '' };
 }
 
 router.get('/highlights', (_req, res) => {
@@ -51,8 +54,11 @@ router.get('/highlights/price', (req, res) => {
 router.get('/highlights/:id', (req, res) => {
   const rec = HL.get(req.params.id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such highlights project' });
+  // Whether "retry" has something to go on with, and whether it costs (the row's own answer - lib/alerts.js view).
+  const row = rec.work && rec.work.alertId ? ALERTS.get(rec.work.alertId) : null;
+  const rv = row && row.state === 'failed' && !JOB.live(rec.id) ? ALERTS.view(row) : null;
   res.json({ success: true, project: view(rec), progress: JOB.progress(rec.id), live: JOB.live(rec.id),
-    retry: !JOB.live(rec.id) && rec.work && rec.work.state === 'failed' ? JOB.plan(rec) : '' });
+    retry: rv && rv.retryable ? JOB.plan(rec) : '', retryFree: !!(rv && rv.retryFree), refused: !!(row && row.refused) });
 });
 
 router.post('/highlights/:id/start', async (req, res) => {

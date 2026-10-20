@@ -29,6 +29,8 @@
 <link rel="stylesheet" href="css/caption-fonts.css">
 <!-- The caption presets beside the settings of the picked captions (js/merge-v3/captions-view.js, phase K6). -->
 <link rel="stylesheet" href="css/mv3-captions.css">
+<!-- (phase V33.1) A highlights project: its view, its popup, the caption style picked in it. -->
+<link rel="stylesheet" href="css/mv3-highlights.css">
 </head>
 <body>
 
@@ -105,6 +107,9 @@
                "scenarios /" left of "Library" (phase V28.3, the owner 2026-10-12): the scenarios a talking head is made
                from, in the draft and a blank project only (js/merge-v3/scen-pick.js). -->
           <button class="mv3-lib-crumb" id="mv3-lib-scen" type="button" hidden>scenarios /</button>
+          <!-- (phase V33.1) A highlights project's own view - its tiles and the card of a moment (js/merge-v3/highlights.js);
+               in such a project the crumbs are "highlights / Library" alone (css/mv3-highlights.css). -->
+          <button class="mv3-lib-crumb" id="mv3-lib-hl" type="button" hidden>highlights /</button>
           <span class="mv3-panel-title" id="mv3-lib-title">Library</span>
           <button class="mv3-lib-crumb" id="mv3-lib-gen" type="button">/ <span class="lg">generate </span>image</button>
           <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button">/ <span class="lg">generate </span>video</button>
@@ -131,6 +136,8 @@
         <div class="mv3-pc is-video" id="mv3-vc"></div>
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
         <div class="mv3-scv" id="mv3-sc"></div>
+        <!-- A highlights project's tiles and the card of a moment (phase V33.1, js/merge-v3/highlights.js). -->
+        <div class="mv3-hlv" id="mv3-hl"></div>
         <!-- The caption presets, left of the settings strip while captions are picked (js/merge-v3/captions-view.js). -->
         <div class="mv3-cap" id="mv3-cap"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only (set for the node selected),

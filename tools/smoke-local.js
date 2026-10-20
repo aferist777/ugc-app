@@ -53,6 +53,8 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // caption presets in the Library panel (phase K6)
                  '/js/captions/pages.js', '/js/captions/preset-use.js', '/js/merge-v3/lib-views.js',
                  '/js/merge-v3/captions-view.js', '/css/mv3-captions.css',
+                 // a highlights project: its view, its popup and the caption style picked in it (phase V33.1)
+                 '/js/merge-v3/highlights.js', '/js/merge-v3/hl-popup.js', '/js/merge-v3/hl-style.js', '/css/mv3-highlights.css',
                  // speech recognition on this computer, Admin -> This computer (phase K1b)
                  '/js/admin-local.js',
                  // Admin -> Thanks: the repositories the app is built on

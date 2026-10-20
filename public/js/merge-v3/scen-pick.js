@@ -63,8 +63,10 @@ const _el = (tag, cls, text) => {
 // ── Where the view may be ───────────────────────────────────────────────────
 // The draft and a blank project (the owner, V28.3 (a)): not a talking head, and not before the store
 // has read what is open.
+// (phase V33.1) Nor a highlights project: its crumbs are its own.
+const _hl = (k) => /^hl_/.test(String(k || ''));
 function _allowed() {
-  return Store.isReady() && !WK.projectIdOf(Store.key() || '');
+  return Store.isReady() && !WK.projectIdOf(Store.key() || '') && !_hl(Store.key());
 }
 
 // The view is remembered per project as the chats' are (lib-views.js), and the drafts share one mark, as their
@@ -83,7 +85,7 @@ function _crumb() {
  * opened for it first.
  */
 export async function openScenarios() {
-  if (Store.isReady() && WK.projectIdOf(Store.key() || '')) await Store.openBlank();
+  if (Store.isReady() && (WK.projectIdOf(Store.key() || '') || _hl(Store.key()))) await Store.openBlank();
   if (!_allowed()) return;
   Views.toBase();
   setOpenColumn('library');

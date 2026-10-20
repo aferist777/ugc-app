@@ -27,6 +27,7 @@ import { initVidChat, openVideos } from './vidchat.js';
 import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
+import { initHighlights } from './highlights.js';
 import { askModelOnce } from './model-ask.js';
 
 initNav();
@@ -36,6 +37,7 @@ initLibrary();
 initPicChat();
 initVidChat();
 initScenarios();
+initHighlights();
 initFramesChat();
 initTimelineB();
 initPreviewB();

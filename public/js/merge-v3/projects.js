@@ -24,6 +24,7 @@ import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
 import { draftNow, askDraft } from '../draft-ask.js';
 import { openScenarios } from './scen-pick.js';
+import { createHighlights, homeOf } from './highlights.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -45,7 +46,8 @@ async function _paint() {
   let d = null;
   try { d = await Store.listFull(); } catch (e) { _note(e.message); return; }
   const { list } = d;
-  const open = Store.key();
+  // (phase V33.1) A fragment of a highlights project is not in the list: its project's line stands for it.
+  const open = list.some(p => p.key === Store.key()) ? Store.key() : (homeOf(Store.key()) || Store.key());
   const openRec = open ? list.find(p => p.key === open) : null;
 
   sel.textContent = '';
@@ -56,6 +58,7 @@ async function _paint() {
     // Clip count in the label because two projects from the same day are otherwise told
     // apart only by their title, and imported titles all start with the date. (phase V20) The draft says what it is.
     o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
+      : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     sel.appendChild(o);
   }
@@ -245,6 +248,12 @@ function _kindMenu(anchor) {
   // Nothing asked about the draft (the owner, V28.3 (d)): the view opens in it, and a talking head made from it leaves
   // it a draft.
   item('talking head', 'from a scenario - pick or write one', () => { openScenarios(); });
+  // (phase V33.1, the owner 2026-10-03/04: third) A long video in, vertical shorts out - a project of its own, and its popup.
+  item('highlights', 'a long video → shorts', async () => {
+    if (!(await _leaveDraft())) return;
+    _note('creating…');
+    try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
+  });
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
