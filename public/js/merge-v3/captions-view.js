@@ -14,6 +14,12 @@
    tiles are built ONCE and live outside the strip, which is rebuilt on every change: 127 animations
    rebuilt per press would be the page's whole evening.
 
+   A TILE SHOWS ITS STILL, AND PLAYS ONLY UNDER THE CURSOR (phase V32, the owner 2026-10-20: every loop loaded at once, and
+   slowly). The view asks for the stills alone - the frame at 0.3 s, made beside each loop (г1). The cursor on a tile asks for
+   its loop (once; then kept) and plays it in the tile over the still, from its start every time (г2); the cursor gone, the
+   loop finishes its round and the still comes back (г3) - back while it finishes, it plays on. The view hidden, another
+   category or tab: the still at once.
+
    TWO TABS over them (phase V30, block 2, the owner's (с6), (с29)): `presets` - the tiles - and `text` - the words of the
    subtitle and text lanes as one document, in the tiles' place (caption-doc.js); the strip on the right stays. The tab
    last chosen is remembered.
@@ -49,7 +55,8 @@ const _keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 let _ui = null;
-const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine }
+const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine, img, over, loop, starting, end }
+const _loops = new Map();          // a loop's address -> Promise<Blob>: asked at its first hover, then kept
 const _counts = new Map();         // category ('' for All) -> its number on the chip
 let _target = null;                // what show() was last told: the preset the pick wears
 let _menu = null;
@@ -120,7 +127,7 @@ function _build() {
   _paintTab();
 }
 
-// One tile: the loop when it is made, until then the name in the preset's own font and colour.
+// One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and colour.
 function _tile(p, mine) {
   const btn = _el('button', 'mv3-cap-tile');
   btn.type = 'button';
@@ -143,9 +150,77 @@ function _tile(p, mine) {
   name.appendChild(ed);
   btn.appendChild(box);
   btn.appendChild(name);
+  const t = { btn, box, ed, nm, ph, mine };
   btn.addEventListener('click', () => { if (_apply) _apply(p.id); });
+  btn.addEventListener('pointerenter', () => _enter(t));
+  btn.addEventListener('pointerleave', () => _leave(t));
   if (mine) btn.addEventListener('contextmenu', (e) => { e.preventDefault(); _openMenu(e, p.id, btn); });
-  return { btn, box, ed, nm, ph, mine };
+  return t;
+}
+
+// ── The loop under the cursor (phase V32; the owner's (г2), (г3)) ──────────
+// Played from a fresh blob address each time: the same address would go on from the frame it was left at.
+function _loopOf(url) {
+  let p = _loops.get(url);
+  if (!p) {
+    p = fetch(url).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); });
+    p.catch(() => _loops.delete(url));                // not got: the next hover asks again
+    _loops.set(url, p);
+  }
+  return p;
+}
+
+async function _enter(t) {
+  t.over = true;
+  if (t.end) { clearTimeout(t.end); t.end = 0; }      // back while it finishes its round: it plays on
+  if (t.loop || t.starting || !t.img || !_state || _tab !== 'presets') return;
+  t.starting = true;
+  let url = null;
+  try {
+    url = URL.createObjectURL(await _loopOf(_state.base + encodeURIComponent(t.btn.dataset.id) + '.webp'));
+    const img = new Image();
+    img.className = 'mv3-cap-img';
+    img.alt = '';
+    img.draggable = false;
+    img.src = url;
+    await img.decode();
+    // Left before it could start - the cursor, the view, the tile: nothing is shown, the still stays.
+    if (!t.over || !_shown || !t.btn.isConnected || t.btn.hidden) return;
+    t.box.appendChild(img);
+    t.loop = { img, url, since: performance.now() };
+    url = null;
+    // Its round is counted from the frame it is first painted in.
+    requestAnimationFrame(() => { if (t.loop && t.loop.img === img) t.loop.since = performance.now(); });
+  } catch (e) {
+    /* the loop could not be had: the still stays */
+  } finally {
+    t.starting = false;
+    if (url) URL.revokeObjectURL(url);
+  }
+}
+
+// The cursor gone: the loop plays to the end of its round, then the still (г3) - a little early rather than late, where the
+// next round's first frame would flash (empty, for a fade).
+function _leave(t) {
+  t.over = false;
+  if (!t.loop || t.end) return;
+  const round = ((_state && _state.loop) || 2.5) * 1000;
+  const left = round - ((performance.now() - t.loop.since) % round);
+  t.end = setTimeout(() => { t.end = 0; _stop(t); }, Math.max(0, left - 40));
+}
+
+function _stop(t) {
+  if (t.end) { clearTimeout(t.end); t.end = 0; }
+  if (!t.loop) return;
+  t.loop.img.remove();
+  URL.revokeObjectURL(t.loop.url);
+  t.loop = null;
+}
+
+// The still at once, without finishing the round: the view hidden, another tab, a tile hidden or gone.
+function _stopNow(t) {
+  t.over = false;
+  _stop(t);
 }
 const _title = (name, mine) => name + ' - apply to what is picked' + (mine ? '. Right-click to rename or delete it' : '');
 
@@ -155,7 +230,7 @@ function _syncMine() {
   if (!_ui) return;
   const list = MyPresets.list();
   const want = new Set(list.map((p) => p.id));
-  for (const [id, t] of [..._tiles]) if (t.mine && !want.has(id)) { t.btn.remove(); _tiles.delete(id); }
+  for (const [id, t] of [..._tiles]) if (t.mine && !want.has(id)) { _stopNow(t); t.btn.remove(); _tiles.delete(id); }
   for (const p of list) {
     let t = _tiles.get(p.id);
     if (!t) { t = _tile(p, true); _tiles.set(p.id, t); }
@@ -258,6 +333,7 @@ function _setTab(id) {
   _paintTab();
   Doc.setShown(_shown && _tab === 'text');
   if (_tab === 'presets') revealLit();
+  else for (const t of _tiles.values()) _stopNow(t);
 }
 
 function _paintTab() {
@@ -282,7 +358,10 @@ function _setCat(id) {
 function _paintCat() {
   if (!_ui) return;
   for (const b of _ui.chips.children) b.classList.toggle('is-on', (b.dataset.cat || '') === _cat);
-  for (const { btn } of _tiles.values()) btn.hidden = !!_cat && btn.dataset.cat !== _cat;
+  for (const t of _tiles.values()) {
+    t.btn.hidden = !!_cat && t.btn.dataset.cat !== _cat;
+    if (t.btn.hidden) _stopNow(t);
+  }
   _ui.empty.hidden = !(_cat === MINE && !MyPresets.list().length);
 }
 
@@ -298,7 +377,8 @@ function _paintState() {
     img.decoding = 'async';
     img.draggable = false;
     img.addEventListener('load', () => t.box.classList.add('is-ready'));
-    img.src = _state.base + encodeURIComponent(id) + '.webp';
+    // The still (phase V32); the loop is asked for under the cursor (_enter).
+    img.src = _state.base + encodeURIComponent(id) + (_state.still || '.first.webp');
     t.box.appendChild(img);
     t.img = img;
   }
@@ -356,6 +436,7 @@ export function show(target) {
 export function hide() {
   _shown = false;
   _closeMenu();
+  for (const t of _tiles.values()) _stopNow(t);
   Doc.setShown(false);
   if (_timer) { clearTimeout(_timer); _timer = 0; }
 }
