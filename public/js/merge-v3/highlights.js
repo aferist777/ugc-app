@@ -407,6 +407,8 @@ function _paintCard() {
   name.addEventListener('blur', keep);
   card.appendChild(name);
   if (f.state === 'failed' && f.error) card.appendChild(_el('p', 'mv3-hl-note is-err', 'Not made: ' + f.error));
+  // (phase V33.2) Its faces could not be counted (no app window): framed from the middle - the clip's Framing switch can do it later.
+  if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', f.faceNote + ' - Framing on its clip can follow the face later.'));
   const facts = _el('div', 'mv3-hl-facts');
   const score = _el('span', 'mv3-hl-fact');
   score.appendChild(_el('b', null, String(f.score)));
