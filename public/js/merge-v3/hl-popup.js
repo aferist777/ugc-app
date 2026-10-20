@@ -52,7 +52,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
   let remembered = {};
   try { remembered = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {}; } catch (e) { remembered = {}; }
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
-  const counts = (rec && rec.counts) || [3, 5, 10, 15];
+  const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
   const ask = rec && rec.ask ? rec.ask : {};
   const st = {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
