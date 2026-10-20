@@ -90,6 +90,10 @@ app.use(['/projects', '/media'], require('./lib/moves').redirectMissing);
 app.use('/vendor/jassub', express.static(path.join(__dirname, 'vendor', 'jassub'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
+// MediaPipe's face detector for the highlights shorts' frame (phase V33.2): laid out by tools/fetch-mediapipe.js.
+app.use('/vendor/mediapipe', express.static(path.join(__dirname, 'vendor', 'mediapipe'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 // The 3D Studio (PLAN "3D Studio"): three.js from its npm package - the build and the addons (controls, loaders) -
 // and the mannequins, motions and furniture laid out by tools/fetch-3d.js.
 app.use('/vendor/three/build', express.static(path.join(__dirname, 'node_modules', 'three', 'build'), {
@@ -127,6 +131,7 @@ app.use('/api', require('./routes/narrators'));
 // Sources — long videos brought in whole, transcribed, and later mined for topics.
 app.use('/api', require('./routes/sources'));
 app.use('/api', require('./routes/highlights'));   // a long video into vertical shorts (phase V33.1)
+app.use('/api', require('./routes/faces'));   // the faces of a film, counted by the app's hidden window (phase V33.2)
 // The yt-dlp links are read with: its version and its checks for a newer one (phase V27).
 app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.

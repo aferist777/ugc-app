@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
-    "postinstall": "node tools/fetch-yt-dlp.js --optional && node tools/fetch-jassub.js --optional && node tools/fetch-whisper.js --optional && node tools/fetch-cookbook.js --optional && node tools/fetch-3d.js --optional"
+    "postinstall": "node tools/fetch-yt-dlp.js --optional && node tools/fetch-jassub.js --optional && node tools/fetch-whisper.js --optional && node tools/fetch-cookbook.js --optional && node tools/fetch-3d.js --optional && node tools/fetch-mediapipe.js --optional"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.129.0",

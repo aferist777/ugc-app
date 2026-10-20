@@ -55,6 +55,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/merge-v3/captions-view.js', '/css/mv3-captions.css',
                  // a highlights project: its view, its popup and the caption style picked in it (phase V33.1)
                  '/js/merge-v3/highlights.js', '/js/merge-v3/hl-popup.js', '/js/merge-v3/hl-style.js', '/css/mv3-highlights.css',
+                 // the hidden faces window and MediaPipe's face detector (phase V33.2; laid out by tools/fetch-mediapipe.js)
+                 '/faces-worker.html', '/js/faces-worker.js', '/vendor/mediapipe/vision_bundle.mjs',
+                 '/vendor/mediapipe/wasm/vision_wasm_internal.wasm', '/vendor/mediapipe/blaze_face_full_range.tflite',
                  // speech recognition on this computer, Admin -> This computer (phase K1b)
                  '/js/admin-local.js',
                  // Admin -> Thanks: the repositories the app is built on

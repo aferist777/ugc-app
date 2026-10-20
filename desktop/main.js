@@ -26,6 +26,7 @@ const fs = require('fs');
 const path = require('path');
 const { createSupervisor } = require('./supervisor');
 const { openLog } = require('./log');
+const { createFacesWindow } = require('./faces');
 
 const APP_DIR = path.join(__dirname, '..');
 const DEV = !app.isPackaged;
@@ -78,6 +79,8 @@ function run() {
   const log = openLog(LOGS_DIR, { echo: DEV });
   log.line(`library: ${LIBRARY}`);
   const server = createSupervisor({ appDir: APP_DIR, libraryDir: LIBRARY, log });
+  // (phase V33.2) The hidden window that counts the faces of the highlights shorts (desktop/faces.js).
+  const faces = createFacesWindow({ log });
 
   let origin = null;         // http://127.0.0.1:<port>, once the server answers
   let mainWindow = null;
@@ -122,6 +125,7 @@ function run() {
     log.line(`the server is up at ${url}`);
     if (!was) {
       if (mainWindow) mainWindow.loadURL(url + '/');
+      faces.open(url);
       return;
     }
     if (url === was) return;
@@ -132,6 +136,7 @@ function run() {
         if (at.origin === was) w.loadURL(url + at.pathname + at.search + at.hash);
       } catch { /* a window with no page */ }
     }
+    faces.open(url);   // the faces window is among them; this is where it opens again if its page goes
   });
 
   server.on('failed', async (why) => {
@@ -217,6 +222,7 @@ function run() {
     win.on('close', (e) => confirmClose(e, win));
     win.on('closed', () => {
       mainWindow = null;
+      faces.close();
       app.quit();
     });
     win.loadFile(path.join(__dirname, 'starting.html'));
