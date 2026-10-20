@@ -160,3 +160,6 @@
 .mv3-hl-cap b{color:var(--ink); font-weight:700}
 .mv3-hl-cap-ed{color:var(--accent)}
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
+/* (phase V33.3) The popup's "title on top" box, beside the length and the count */
+.mv3-hlp-tick{cursor:pointer}
+.mv3-hlp-tick input{margin:0; accent-color:var(--primary); cursor:pointer}

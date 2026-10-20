@@ -58,6 +58,8 @@ export function openPopup(id, rec, { onStarted } = {}) {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
     length: lengths[ask.length] ? ask.length : (lengths[remembered.length] ? remembered.length : '30-60'),
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
+    // (phase V33.3) The title on top of every fragment - on unless it was taken off last time (the owner's (х35)).
+    title: ask.title != null ? ask.title !== false : remembered.title !== false,
     style: '', price: null, busy: false, said: '', err: false,
   };
 
@@ -125,7 +127,14 @@ export function openPopup(id, rec, { onStarted } = {}) {
   lw.appendChild(lenSel);
   const cw = _el('label', 'mv3-hlp-lab', 'how many');
   cw.appendChild(cntSel);
-  row.append(lw, cw);
+  const tw = _el('label', 'mv3-hlp-lab mv3-hlp-tick');
+  const titleBox = _el('input');
+  titleBox.type = 'checkbox';
+  titleBox.checked = st.title;
+  titleBox.addEventListener('change', () => { st.title = titleBox.checked; remember(); });
+  tw.append(titleBox, document.createTextNode('title on top'));
+  tw.title = 'The moment\'s headline, in the video\'s own language, at the top of each fragment for its first three seconds - a text line like any other: edit it, move it or delete it on the timeline';
+  row.append(lw, cw, tw);
   body.appendChild(_el('div', 'mv3-x-hdr', 'the fragments'));
   body.appendChild(row);
   body.appendChild(_el('p', 'mv3-x-note', 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.'));
@@ -168,7 +177,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
   _win = { ov, layer, picker };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
-  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count })); } catch (e) { /* private */ } }
+  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, title: st.title })); } catch (e) { /* private */ } }
 
   function takeFile(f) {
     if (!f) return;
@@ -272,7 +281,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
     }
     st.busy = true;
     say('');
-    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) } };
+    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title };
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
     else spec.sourceId = st.sourceId;

@@ -14,6 +14,7 @@
 //   POST   /api/highlights/:id/fragments/restore     { n? } -> { n } the last deleted (or n) back, 0 when none
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
+//   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -115,6 +116,19 @@ router.post('/highlights/:id/style', (req, res) => {
     if (!keys.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
     const out = CUT.restyle(keys, String(b.preset || ''));
     res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V33.3) The title on top added to a made fragment (its card's "add title", the owner's (х35)): its headline in the video's
+// language, or its English title when the agent gave none ((х36)). The one that is OPEN gets it from the page instead.
+router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
+  try {
+    const rec = HL.get(req.params.id);
+    const f = rec && (rec.fragments || []).find((x) => x.n === Number(req.params.n) && !x.deletedAt);
+    if (!f) return res.status(404).json({ success: false, error: 'no such fragment' });
+    if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
+    if (!CUT.addTitle(f.key, f.headline || f.title)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
+    res.json({ success: true });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 

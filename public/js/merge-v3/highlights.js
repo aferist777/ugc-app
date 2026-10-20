@@ -28,6 +28,7 @@ import { openPopup, closePopup } from './hl-popup.js';
 import * as Layers from '../layers.js';
 import { presetName, presetStyle, editedKeys } from '../captions/preset-use.js';
 import { setSubsStyle } from './timeline-b.js';
+import { putTitle, titleLaneOf } from '../captions/title.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -121,7 +122,7 @@ function _capOpen() {
   const name = id ? presetName(id) : '';
   return name ? { preset: id, name, edited: editedKeys(st).length > 0 } : { preset: '', name: '', edited: false };
 }
-const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited; };
+const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited + '|' + !!titleLaneOf(Store.timeline()); };
 let _capShown = '';
 
 // ── The captions of SEVERAL (phase V33.3, block 2; the owner's (х33), (х34)) ─
@@ -519,6 +520,25 @@ function _paintCard() {
     line.title = f.n === _openN() ? 'Another style: the captions crumb above, or the subtitle lane on the timeline'
       : 'Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style';
     card.appendChild(line);
+    // (phase V33.3) The title on top (the owner's (х35)): said when it is there, "add title" when it is not - a fragment made before,
+    // or with the popup's box taken off.
+    const open = f.n === _openN();
+    const lane = open ? titleLaneOf(Store.timeline()) : null;
+    const titled = open ? !!lane : !!(f.cap && f.cap.titled);
+    const tl = _el('div', 'mv3-hl-cap');
+    if (titled) {
+      tl.appendChild(document.createTextNode('title on top: '));
+      const said = lane ? String(((lane.clips || []).find((c) => (+c.start || 0) < 0.05) || {}).name || '') : '';
+      tl.appendChild(_el('b', null, said || 'yes'));
+      tl.title = 'A text line at the top for the first seconds - edit, move or delete it on the timeline';
+    } else {
+      const add = _el('button', 'mv3-c-btn mv3-hl-addtitle', 'add title');
+      add.type = 'button';
+      add.title = 'Its headline at the top for the first three seconds: «' + (f.headline || f.title) + '»';
+      add.addEventListener('click', () => _addTitle(f));
+      tl.appendChild(add);
+    }
+    card.appendChild(tl);
   }
   // Each piece, in the fragment's order, with its time in the video: a hook taken from later is said so.
   const pcs = _el('div', 'mv3-hl-pcs');
@@ -535,6 +555,24 @@ function _paintCard() {
   sec('hook', f.hook);
   sec('why it would work', f.why);
   sec('what is said', f.text);
+}
+
+// ── The title on top added to a made fragment (phase V33.3) ────────────────
+async function _addTitle(f) {
+  const text = f.headline || f.title;
+  if (f.n === _openN()) {
+    // The open one is the page's: one step of its timeline's undo, its own save.
+    let ok = false;
+    Store.mutate((tl) => { ok = putTitle(tl, text, f.length || f.seconds, () => 'ht' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)); });
+    _say(ok ? 'the title is on top' : 'it has a title already, or two text lanes', !ok);
+    _paintCard();
+    return;
+  }
+  try {
+    await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title-on-top', { method: 'POST' });
+    _say('the title is on top of «' + f.title + '»');
+  } catch (e) { _say(e.message, true); }
+  _load();
 }
 
 // ── A fragment deleted, brought back, renamed ───────────────────────────────
