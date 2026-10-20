@@ -3,11 +3,12 @@
    (js/merge-v3/hl-popup.js) and the caption style picked in it (js/merge-v3/hl-style.js, the captions view's tiles).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── The crumbs of a highlights project: "highlights / Library" alone (the owner's (х15)) ── */
+/* ── The crumbs of a highlights project: "highlights / Library" (the owner's (х15)), and "/ captions" while a fragment is open
+      or ticked (phase V33.3, (х33) - highlights.js puts .is-hl-cap on the panel) ── */
 #mv3-library.is-hl #mv3-lib-scen,
 #mv3-library.is-hl #mv3-lib-gen,
 #mv3-library.is-hl #mv3-lib-vgen,
-#mv3-library.is-hl #mv3-lib-cap{display:none !important}
+#mv3-library.is-hl:not(.is-hl-cap) #mv3-lib-cap{display:none !important}
 #mv3-library:not(.is-hl) #mv3-lib-hl{display:none !important}
 
 /* ── The view: shown like a chat - the gallery and the tree give way to it (lib-views.js .is-chat) ── */
@@ -153,3 +154,8 @@
 .mv3-c-btn.mv3-hlp-go{flex:0 0 auto; padding:6px 14px; border-color:var(--primary); background:var(--primary); color:var(--primary-ink); font-size:11px}
 .mv3-c-btn.mv3-hlp-go:hover{background:var(--primary); color:var(--primary-ink); filter:brightness(1.1)}
 .mv3-c-btn.mv3-hlp-go[disabled]{opacity:.45; cursor:default; filter:none}
+
+/* ── The card's line of the captions' style (phase V33.3) ── */
+.mv3-hl-cap{font:500 10px/1.4 var(--font); color:var(--muted); margin:0 0 6px}
+.mv3-hl-cap b{color:var(--ink); font-weight:700}
+.mv3-hl-cap-ed{color:var(--accent)}

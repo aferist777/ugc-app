@@ -20,21 +20,31 @@ const HL = require('../lib/highlights-store');
 const JOB = require('../lib/highlights-job');
 const YTDLP = require('../lib/ytdlp');
 const ALERTS = require('../lib/alerts');
+const MSTORE = require('../lib/merge-store');
+const CUT = require('../lib/highlights-cut');
 
 const router = express.Router();
 
 // When the server starts nothing is at work: a project left running was cut off by the app closing (lib/highlights-job.js).
 JOB.boot();
 
-// What the page is shown of a project: everything but the agent's whole answer, which is the server's business.
-function view(rec) {
+// What the page is shown of a project: everything but the agent's whole answer, which is the server's business. `caps`
+// (phase V33.3): each made fragment's caption style, read from its timeline - for the one project the field shows.
+function view(rec, o) {
   if (!rec) return null;
   const { agent, ...rest } = rec;
   const a = agent ? { ...agent } : null;
   if (a) delete a.raw;
   // The video's poster - what a tile shows until its own first frame is made.
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
-  return { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, poster: (src && src.thumbPath) || '' };
+  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, poster: (src && src.thumbPath) || '' };
+  if (o && o.caps) {
+    out.fragments = (rec.fragments || []).map((f) => {
+      const tl = f.state === 'ready' && f.key ? MSTORE.one(f.key) : null;
+      return tl ? { ...f, cap: CUT.capOf(tl) } : f;
+    });
+  }
+  return out;
 }
 
 router.get('/highlights', (_req, res) => {
@@ -60,7 +70,7 @@ router.get('/highlights/:id', (req, res) => {
   // Whether "retry" has something to go on with, and whether it costs (the row's own answer - lib/alerts.js view).
   const row = rec.work && rec.work.alertId ? ALERTS.get(rec.work.alertId) : null;
   const rv = row && row.state === 'failed' && !JOB.live(rec.id) ? ALERTS.view(row) : null;
-  res.json({ success: true, project: view(rec), progress: JOB.progress(rec.id), live: JOB.live(rec.id),
+  res.json({ success: true, project: view(rec, { caps: true }), progress: JOB.progress(rec.id), live: JOB.live(rec.id),
     retry: rv && rv.retryable ? JOB.plan(rec) : '', retryFree: !!(rv && rv.retryFree), refused: !!(row && row.refused) });
 });
 

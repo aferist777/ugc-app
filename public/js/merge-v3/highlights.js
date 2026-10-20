@@ -26,6 +26,7 @@ import * as Views from './lib-views.js';
 import { setOpenColumn, roomForWork } from './layout.js';
 import { openPopup, closePopup } from './hl-popup.js';
 import * as Layers from '../layers.js';
+import { presetName, editedKeys } from '../captions/preset-use.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -82,6 +83,9 @@ function _onStore() {
     // A fragment's timeline opened (its tile, a reload) or left: its tile is lit or not, and its card shows.
     const n = _openN();
     if (n !== _openShown) { _openShown = n; if (n) _sel = n; _paint(); }
+    // (phase V33.3) The open fragment's captions given another look: its card says it at once.
+    else if (n && n === _sel && _capSig() !== _capShown) _paintCard();
+    _crumbs();
     return;
   }
   _openShown = _openN();
@@ -92,7 +96,28 @@ function _onStore() {
   closePopup();
   if (pid) { _show(true); _load(); }
   else if (_shown) _show(false);
+  _crumbs();
 }
+
+// ── The captions crumb (phase V33.3, the owner's (х33)) ─────────────────────
+// "/ captions" shows in a highlights project while a fragment is open or ticked; what it opens is lib-views.js's and the
+// inspector's, as in any project - the open fragment's subtitle lane picked.
+function _crumbs() {
+  const lib = $('mv3-library');
+  if (lib) lib.classList.toggle('is-hl-cap', !!_pid && (_openN() > 0 || _checked.size > 0));
+}
+
+// The open fragment's caption style, from its timeline as it is now - { preset, name, edited }; the server says it for the
+// others (GET /api/highlights/:id `cap`), read from theirs: the style lives in one place, the fragment's timeline.
+function _capOpen() {
+  const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
+  const st = (lane && lane.style) || {};
+  const id = String(st.preset || '');
+  const name = id ? presetName(id) : '';
+  return name ? { preset: id, name, edited: editedKeys(st).length > 0 } : { preset: '', name: '', edited: false };
+}
+const _capSig = () => { const c = _capOpen(); return c.preset + '|' + c.edited; };
+let _capShown = '';
 
 function _show(on) {
   _shown = !!on;
@@ -104,7 +129,9 @@ export function initHighlights() {
   Views.registerChat(NAME, {
     root: 'mv3-hl', crumb: 'mv3-lib-hl',
     crumbTitle: 'The fragments of this video - and the card of the one pressed',
-    onBack: () => _show(false), onYield: () => { _shown = false; }, onCrumb: () => { setOpenColumn('library'); _show(true); _load(); },
+    onBack: () => _show(false), onYield: () => { _shown = false; },
+    // From the captions view too (phase V33.3): the captions let go of - the pick released - and the tiles are back.
+    onCrumb: () => { Views.toBase(); setOpenColumn('library'); _show(true); _load(); },
   });
   Store.onChange(_onStore);
   _onStore();
@@ -193,6 +220,7 @@ function _arm(what) {
 }
 
 function _paint() {
+  _crumbs();
   if (!_ui || !_shown) return;
   _paintTop();
   _paintField();
@@ -416,6 +444,18 @@ function _paintCard() {
   facts.appendChild(score);
   facts.appendChild(_el('span', 'mv3-hl-fact', _secs(f.seconds)));
   card.appendChild(facts);
+  // (phase V33.3) The style its captions wear - the open one's as its timeline is now, the others' as the server read them.
+  const cap = f.state !== 'ready' ? null : (f.n === _openN() ? _capOpen() : f.cap);
+  _capShown = f.n === _openN() ? _capSig() : '';
+  if (cap) {
+    const line = _el('div', 'mv3-hl-cap');
+    line.appendChild(document.createTextNode('captions: '));
+    line.appendChild(_el('b', null, cap.name || 'a style of its own'));
+    if (cap.name && cap.edited) line.appendChild(_el('span', 'mv3-hl-cap-ed', ' · edited'));
+    line.title = f.n === _openN() ? 'Another style: the captions crumb above, or the subtitle lane on the timeline'
+      : 'Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style';
+    card.appendChild(line);
+  }
   // Each piece, in the fragment's order, with its time in the video: a hook taken from later is said so.
   const pcs = _el('div', 'mv3-hl-pcs');
   (f.pieces || []).forEach((p, k) => {
