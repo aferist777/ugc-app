@@ -25,6 +25,7 @@ import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import { setOpenColumn, roomForWork } from './layout.js';
 import { openPopup, closePopup } from './hl-popup.js';
+import * as Layers from '../layers.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -67,16 +68,26 @@ const _api = async (url, opt) => {
 };
 
 // ── Where the view is ───────────────────────────────────────────────────────
+// The fragment whose timeline is open (its n), 0 for the project's own.
+const _openN = () => { const m = KEY_RE.exec(String(Store.key() || '')); return m && m[2] ? Number(m[2]) : 0; };
+let _openShown = 0;           // the open fragment the tiles were last drawn for
+
 function _onStore() {
   if (!Store.isReady()) return;
   const pid = projectOf(Store.key());
   Views.setHighlights(!!pid);
   const crumb = $('mv3-lib-hl');
   if (crumb) crumb.hidden = !pid;
-  if (pid === _pid) return;
+  if (pid === _pid) {
+    // A fragment's timeline opened (its tile, a reload) or left: its tile is lit or not, and its card shows.
+    const n = _openN();
+    if (n !== _openShown) { _openShown = n; if (n) _sel = n; _paint(); }
+    return;
+  }
+  _openShown = _openN();
   // Another project: what was shown of the last one goes.
   _pid = pid;
-  _rec = null; _prog = null; _live = false; _retry = ''; _sel = 0; _checked.clear(); _err = '';
+  _rec = null; _prog = null; _live = false; _retry = ''; _sel = _openN(); _checked.clear(); _err = '';
   _stopPoll();
   closePopup();
   if (pid) { _show(true); _load(); }
@@ -100,7 +111,23 @@ export function initHighlights() {
   // A row retried in Alerts: read again at once (alerts-bell.js).
   window.addEventListener('ugc:alert-retried', () => { if (_pid) _load(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && _pid && _live && !_timer) _load(); });
+  // CTRL+Z IN THE FIELD brings the deleted fragments back, one by one, the last first (the owner's (х19а)) - "in the field":
+  // the last press of the mouse was in this view. Anywhere else Ctrl+Z is the timeline's (bar.js): taken before it here, in
+  // the capture phase, and only then.
+  document.addEventListener('pointerdown', (e) => { const r = $('mv3-hl'); _inField = !!(r && r.contains(e.target)); }, true);
+  document.addEventListener('keydown', (e) => {
+    if (!_inField || !_shown || !_pid || Layers.blocked()) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const t = e.target;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    const key = String(e.key || '').toLowerCase();
+    if (!(key === 'z' || (!/^[a-z]$/.test(key) && e.code === 'KeyZ'))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    _restore();
+  }, true);
 }
+let _inField = false;
 
 /** "+ new project -> highlights": a new project, opened, and its popup at once. */
 export async function createHighlights() {
@@ -161,8 +188,8 @@ const _frags = () => ((_rec && _rec.fragments) || []).filter((f) => !f.deletedAt
 function _arm(what) {
   _armed = what;
   if (_armT) clearTimeout(_armT);
-  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paintTop(); }, 3000);
-  _paintTop();
+  _armT = setTimeout(() => { _armed = ''; _armT = 0; _paint(); }, 3000);
+  _paint();
 }
 
 function _paint() {
@@ -212,9 +239,15 @@ function _paintTop() {
     }
   } else if (w.state === 'done') {
     const n = _frags().length;
+    const found = (r.fragments || []).length;           // deleted ones too: what the agent found
     const want = r.ask ? r.ask.count : n;
-    state.appendChild(_el('span', 'mv3-hl-words', n >= want ? n + (n === 1 ? ' moment' : ' moments') : 'found ' + n + ' of ' + want));
+    const made = _frags().filter((f) => f.state === 'ready').length;
+    const what = made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
+    state.appendChild(_el('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
   }
+  const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
+  if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
+  if (_said || _err) state.appendChild(_el('span', 'mv3-hl-said' + ((_said && _said.err) || (!_said && _err) ? ' is-err' : ''), _said ? _said.text : _err));
   if (!v && !_live) {
     const add = _el('button', 'mv3-c-btn mv3-hl-add', '+ add video');
     add.type = 'button';
@@ -282,11 +315,18 @@ function _paintField() {
     field.appendChild(grid);
     return;
   }
+  const cutting = (_prog && _prog.fragments) || {};
+  const open = _openN();
   for (const f of frags) {
-    const t = _el('div', 'mv3-hl-tile' + (_sel === f.n ? ' is-sel' : '') + (_checked.has(f.n) ? ' is-checked' : ''));
-    t.title = f.title + '\nPress for its card';
+    // Its own way along (block 3): waiting its turn, being cut, made - its first frame -, or not made.
+    const ready = f.state === 'ready';
+    const failed = f.state === 'failed';
+    const now = cutting[f.n] || null;
+    const t = _el('div', 'mv3-hl-tile' + (_sel === f.n ? ' is-sel' : '') + (open === f.n ? ' is-open' : '') + (_checked.has(f.n) ? ' is-checked' : '')
+      + (ready ? ' is-ready' : ' is-making') + (failed ? ' is-failed' : ''));
+    t.title = f.title + (ready ? '\nPress to open its timeline' : failed ? '\n' + (f.error || 'not made') : '\nBeing made - press for its card');
     const fr = _el('div', 'mv3-hl-frame');
-    const pic = f.thumb || r.poster;
+    const pic = (ready && f.thumb) || r.poster;
     if (pic) fr.style.backgroundImage = 'url("' + pic + '")';
     t.appendChild(fr);
     const cb = _el('input', 'mv3-hl-check');
@@ -296,13 +336,36 @@ function _paintField() {
     cb.addEventListener('click', (e) => e.stopPropagation());
     cb.addEventListener('change', () => { if (cb.checked) _checked.add(f.n); else _checked.delete(f.n); _paint(); });
     t.appendChild(cb);
+    // The cross in the corner, twice ("really?"): the fragment goes - Ctrl+Z in the field brings it back until the app
+    // is started again (the owner's (х19), (х19а)).
+    const armed = _armed === 'del' + f.n;
+    const x = _el('button', 'mv3-hl-x' + (armed ? ' is-armed' : ''), armed ? 'really?' : '✕');
+    x.type = 'button';
+    x.title = 'Delete this fragment - Ctrl+Z here brings it back';
+    x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
+    t.appendChild(x);
     t.appendChild(_el('span', 'mv3-hl-score', String(f.score)));
     if ((f.pieces || []).length > 1) t.appendChild(_el('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
     const foot = _el('div', 'mv3-hl-foot');
     foot.appendChild(_el('div', 'mv3-hl-name', f.title));
-    foot.appendChild(_el('div', 'mv3-hl-step', _secs(f.seconds)));
+    if (!ready && now) {
+      const bar = _el('div', 'mv3-hl-bar');
+      const fill = _el('div', 'mv3-hl-fill');
+      fill.style.width = Math.round(Math.max(0.02, now.pct || 0) * 100) + '%';
+      bar.appendChild(fill);
+      foot.appendChild(bar);
+      foot.appendChild(_el('div', 'mv3-hl-step', now.words || 'cutting'));
+    } else if (failed) {
+      foot.appendChild(_el('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
+    } else foot.appendChild(_el('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
     t.appendChild(foot);
-    t.addEventListener('click', () => { _sel = f.n; _paint(); });
+    t.addEventListener('click', () => {
+      _sel = f.n;
+      _paint();
+      // Made: its timeline opens - the preview shows it, the timeline its cut (the owner: "кликнуть на него для просмотра
+      // фрагмента в превью и отображения нарезки на таймлайне").
+      if (ready && f.key && Store.key() !== f.key) Store.open(f.key).catch((e) => { _err = e.message; _paintTop(); });
+    });
     grid.appendChild(t);
   }
   field.appendChild(grid);
@@ -310,6 +373,10 @@ function _paintField() {
 
 function _paintCard() {
   const card = _ui.card;
+  // The name being typed is not drawn over by the next read of the record.
+  const a = document.activeElement;
+  if (a && card.contains(a) && a.classList.contains('mv3-hl-card-name') && Number(card.dataset.n) === _sel) return;
+  card.dataset.n = String(_sel || 0);
   card.textContent = '';
   const frags = _frags();
   if (_checked.size > 1) {
@@ -325,7 +392,21 @@ function _paintCard() {
     card.appendChild(_el('p', 'mv3-hl-note', frags.length ? 'Press a tile to read its moment.' : (_live ? 'The moments come when the agent has read the video.' : '')));
     return;
   }
-  card.appendChild(_el('div', 'mv3-hl-card-h', f.title));
+  // Its name is edited here (the owner's (х20)): the card's, and its timeline's - the name of the render file after it.
+  const name = _el('input', 'mv3-hl-card-h mv3-hl-card-name');
+  name.type = 'text';
+  name.value = f.title;
+  name.maxLength = 80;
+  name.title = 'The fragment\'s name - its timeline\'s and its render\'s. Enter to keep it, Escape to put it back.';
+  let kept = false;
+  const keep = () => { if (kept) return; kept = true; const v = name.value.trim(); if (v && v !== f.title) _rename(f, v); else name.value = f.title; };
+  name.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); keep(); name.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); kept = true; name.value = f.title; name.blur(); }
+  });
+  name.addEventListener('blur', keep);
+  card.appendChild(name);
+  if (f.state === 'failed' && f.error) card.appendChild(_el('p', 'mv3-hl-note is-err', 'Not made: ' + f.error));
   const facts = _el('div', 'mv3-hl-facts');
   const score = _el('span', 'mv3-hl-fact');
   score.appendChild(_el('b', null, String(f.score)));
@@ -348,6 +429,49 @@ function _paintCard() {
   sec('hook', f.hook);
   sec('why it would work', f.why);
   sec('what is said', f.text);
+}
+
+// ── A fragment deleted, brought back, renamed ───────────────────────────────
+async function _delete(f) {
+  try {
+    await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/delete', { method: 'POST' });
+    // Its timeline open: the project's own takes its place.
+    if (Store.key() === f.key) await Store.open('hl_' + _pid);
+    if (_sel === f.n) _sel = 0;
+    _checked.delete(f.n);
+    _say('deleted «' + f.title + '» - Ctrl+Z here brings it back');
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+async function _restore() {
+  try {
+    const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/restore',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    _say(d.n ? 'brought back' : 'nothing deleted to bring back');
+    if (d.n) _sel = d.n;
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+async function _rename(f, title) {
+  try {
+    await _api('/api/highlights/' + encodeURIComponent(_pid) + '/fragments/' + f.n + '/title',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    // Its timeline open: the store's name follows (the picker shows the project, the strip and the render the fragment).
+    if (Store.key() === f.key) Store.setTitle(title);
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+// A word in the top for a few seconds: what was just done, or why not.
+let _said = null;
+let _saidT = 0;
+function _say(text, err) {
+  _said = text ? { text, err: !!err } : null;
+  if (_saidT) clearTimeout(_saidT);
+  if (text) _saidT = setTimeout(() => { _said = null; _saidT = 0; _paintTop(); }, 5000);
+  _paintTop();
 }
 
 // ── Stop and retry ──────────────────────────────────────────────────────────

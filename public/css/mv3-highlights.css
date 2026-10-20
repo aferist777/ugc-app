@@ -59,13 +59,34 @@
 .mv3-hl-tile.is-ph .mv3-hl-frame{filter:grayscale(.6) brightness(.45)}
 .mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--primary); cursor:pointer}
 .mv3-hl-score{
-  position:absolute; top:5px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
+  position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
   background:oklch(0 0 0 / .65); color:var(--ink); font:700 10px/1.2 var(--font); text-align:center;
 }
 .mv3-hl-pieces{
-  position:absolute; top:26px; right:5px; z-index:2; padding:1px 5px; border-radius:999px;
+  position:absolute; top:49px; right:5px; z-index:2; padding:1px 5px; border-radius:999px;
   background:oklch(0 0 0 / .55); color:var(--accent); font:600 8.5px/1.3 var(--font);
 }
+/* The cross in the corner (х19): pale until the tile is pointed at; armed - "really?" - filled red. */
+.mv3-hl-x{
+  position:absolute; top:5px; right:5px; z-index:3; min-width:20px; height:20px; padding:0 5px;
+  border:1px solid oklch(1 0 0 / .25); border-radius:var(--r-xs); background:oklch(0 0 0 / .6);
+  color:oklch(.9 0 0); font:700 10px/18px var(--font); cursor:pointer; opacity:.35; transition:opacity .12s var(--ease);
+}
+.mv3-hl-tile:hover .mv3-hl-x, .mv3-hl-x.is-armed{opacity:1}
+.mv3-hl-x:hover{border-color:var(--danger); color:var(--danger)}
+.mv3-hl-x.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
+/* Being made: the poster dimmed under its own bar; made: its own first frame; its timeline open: lit. */
+.mv3-hl-tile.is-making .mv3-hl-frame{filter:grayscale(.5) brightness(.5)}
+.mv3-hl-tile.is-open{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary), 0 0 14px oklch(from var(--primary) l c h / .45)}
+.mv3-hl-step.is-err{color:var(--danger)}
+.mv3-hl-said{font:600 10px/1.3 var(--font); color:var(--muted); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-hl-said.is-err{color:var(--danger)}
+.mv3-hl-card-name{
+  display:block; width:100%; padding:3px 5px; margin-bottom:6px; border:1px solid transparent; border-radius:var(--r-xs);
+  background:transparent; font:700 12.5px/1.35 var(--font); color:var(--ink);
+}
+.mv3-hl-card-name:hover{border-color:var(--border)}
+.mv3-hl-card-name:focus{outline:none; border-color:var(--primary); background:var(--bg)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
   background:linear-gradient(to top, oklch(0 0 0 / .85), oklch(0 0 0 / 0));

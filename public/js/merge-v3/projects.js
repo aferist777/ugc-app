@@ -29,6 +29,10 @@ import { createHighlights, homeOf } from './highlights.js';
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
 let _after = '';
+// (phase V33.1) The projects' names as the list last said them - a highlights project's, while one of its fragments is open.
+const _titles = new Map();
+// The project a press of "edit" or "delete" is about: the open timeline's own - or, for a fragment, its project's.
+const _projKey = () => homeOf(Store.key()) || Store.key();
 function _note(text) {
   const el = document.getElementById('mv3-project-note');
   if (el) el.textContent = text || '';
@@ -46,6 +50,8 @@ async function _paint() {
   let d = null;
   try { d = await Store.listFull(); } catch (e) { _note(e.message); return; }
   const { list } = d;
+  _titles.clear();
+  for (const p of list) _titles.set(p.key, p.title);
   // (phase V33.1) A fragment of a highlights project is not in the list: its project's line stands for it.
   const open = list.some(p => p.key === Store.key()) ? Store.key() : (homeOf(Store.key()) || Store.key());
   const openRec = open ? list.find(p => p.key === open) : null;
@@ -287,11 +293,12 @@ function _cancelRename() {
 
 async function _saveRename() {
   const box = document.getElementById('mv3-project-name');
-  const key = Store.key();
+  const key = _projKey();
   if (!box || !key) return _cancelRename();
   const title = box.value.trim();
   if (!title) { _note('a name is needed'); box.focus(); return; }
-  if (title === Store.title() && !Store.isDraft()) return _cancelRename();
+  const was = key === Store.key() ? Store.title() : (_titles.get(key) || '');
+  if (title === was && !Store.isDraft()) return _cancelRename();
   const saving = Store.isDraft();
 
   _note(saving ? 'saving…' : 'renaming…');
@@ -305,7 +312,7 @@ async function _saveRename() {
     // was typed still in it, because the next thing to do is change one word of it.
     if (!d || !d.success) { _note(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
     // (phase V20) A draft named is a draft saved.
-    if (saving) Store.markSaved(d.title); else Store.setTitle(d.title);
+    if (saving) Store.markSaved(d.title); else if (key === Store.key()) Store.setTitle(d.title);
     _cancelRename();
     await _paint();
   } catch (e) {
@@ -328,7 +335,7 @@ function _wireRename() {
     _editing = true;
     // (phase V20) A draft is named the way a new project is: the day, then its name.
     const draft = Store.isDraft();
-    box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (Store.title() || '');
+    box.value = draft ? new Date().toISOString().slice(0, 10) + ' - ' : (_projKey() === key ? (Store.title() || '') : (_titles.get(_projKey()) || ''));
     box.hidden = false;
     sel.hidden = true;
     b.textContent = 'save';
@@ -376,7 +383,7 @@ function _wireDelete() {
       return;
     }
     _disarm();
-    const key = Store.key();
+    const key = _projKey();
     if (!key) return;
     // (phase V20) The draft is not deleted - it is let go of: what it made stays, in Uncategorized.
     if (Store.isDraft()) { _discard(key); return; }

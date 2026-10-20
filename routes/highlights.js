@@ -10,6 +10,9 @@
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
 //   POST   /api/highlights/:id/retry        the same as the row's retry in Alerts -> { alertId }
+//   POST   /api/highlights/:id/fragments/:n/delete   hidden until the next start (Ctrl+Z brings it back)
+//   POST   /api/highlights/:id/fragments/restore     { n? } -> { n } the last deleted (or n) back, 0 when none
+//   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -72,6 +75,21 @@ router.post('/highlights/:id/start', async (req, res) => {
 router.post('/highlights/:id/stop', (req, res) => {
   if (!JOB.stop(req.params.id)) return res.status(409).json({ success: false, error: 'it is not at work' });
   res.json({ success: true });
+});
+
+// A fragment (block 3): deleted - hidden until the app starts again (х19а) -, brought back (Ctrl+Z in the field: the last
+// deleted, or one named), renamed (х20: its card's name and its timeline's).
+router.post('/highlights/:id/fragments/:n/delete', (req, res) => {
+  try { res.json({ success: true, ...JOB.deleteFragment(req.params.id, req.params.n) }); }
+  catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+router.post('/highlights/:id/fragments/restore', (req, res) => {
+  try { res.json({ success: true, n: JOB.restoreFragment(req.params.id, Number((req.body || {}).n) || 0) }); }
+  catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+router.post('/highlights/:id/fragments/:n/title', (req, res) => {
+  try { res.json({ success: true, ...JOB.renameFragment(req.params.id, req.params.n, (req.body || {}).title) }); }
+  catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 router.post('/highlights/:id/retry', async (req, res) => {
