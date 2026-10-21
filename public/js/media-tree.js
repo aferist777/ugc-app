@@ -97,6 +97,13 @@ function _dropAction(n, from, refType) {
   return '';
 }
 
+// WHAT IS NEW (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом, типа которые непросмотренные
+// библиотеки куда добавилось что-то новое"). The server says when the newest thing under each node came (`newest`); a node
+// is NEW - green - while that is later than when it was last opened. Opening a node sees it and everything under it; a
+// branch is green while any node under it is. Kept for the whole app (the Library and Merge alike): seen in one, seen in
+// both. The first time ever, everything there is counts as seen.
+const LS_SEEN = 'ugc_tree_seen_v1';
+
 function _ls(key, fallback) {
   try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
 }
@@ -145,6 +152,34 @@ export function createTree(host, o) {
     }
   }
 
+  let seen = _ls(LS_SEEN, null);
+  let fresh = new Set();          // the keys of the nodes shown green
+  function _computeNew() {
+    if (!seen || typeof seen !== 'object') {
+      seen = {};
+      const all = (list) => { for (const n of list) { seen[n.key] = n.newest || 0; if (n.children) all(n.children); } };
+      all(nodes);
+      _lsSet(LS_SEEN, seen);
+    }
+    // The node being looked at sees what lands in it.
+    const cur = byKey.get(sel);
+    if (cur) _seeAll(cur, false);
+    fresh = new Set();
+    const walk = (n) => {
+      let g = false;
+      if (n.children && n.children.length) { for (const c of n.children) if (walk(c)) g = true; }
+      else g = (n.newest || 0) > (seen[n.key] || 0);
+      if (g) fresh.add(n.key);
+      return g;
+    };
+    for (const n of nodes) walk(n);
+  }
+  function _seeAll(n, save = true) {
+    const go = (x) => { if ((x.newest || 0) > (seen[x.key] || 0)) seen[x.key] = x.newest || 0; if (x.children) x.children.forEach(go); };
+    go(n);
+    if (save) _lsSet(LS_SEEN, seen);
+  }
+
   async function load() {
     let d;
     try { d = await fetch('/api/library/tree').then(r => r.json()); }
@@ -162,6 +197,7 @@ export function createTree(host, o) {
       _lsSet(K_SEL, sel);
     }
     _openTo(sel);
+    _computeNew();
     paint();
     if (loaded && sel !== before && byKey.has(sel)) opt.onSelect(byKey.get(sel));
     loaded = true;
@@ -185,7 +221,10 @@ export function createTree(host, o) {
 
   // The selection moved, nothing opened: the rows stay - a double press on a name must find the row it began on.
   function _mark() {
-    for (const r of el.querySelectorAll('.mt-row')) r.classList.toggle('is-sel', r.dataset.key === sel);
+    for (const r of el.querySelectorAll('.mt-row')) {
+      r.classList.toggle('is-sel', r.dataset.key === sel);
+      r.classList.toggle('is-new', fresh.has(r.dataset.key));
+    }
   }
 
   function paint() {
@@ -203,7 +242,7 @@ export function createTree(host, o) {
   function _row(n, depth) {
     const isGroup = depth === 0;
     const isCat = !!n.cat && !n.uncat && !n.project;
-    const row = _el('div', 'mt-row' + (isGroup ? ' is-group' : '') + (n.key === sel ? ' is-sel' : '')
+    const row = _el('div', 'mt-row' + (isGroup ? ' is-group' : '') + (n.key === sel ? ' is-sel' : '') + (fresh.has(n.key) ? ' is-new' : '')
       + (n.empty ? ' is-empty' : '') + (n.locked ? ' is-locked' : '') + (isCat ? ' is-cat' : ''));
     row.dataset.key = n.key;
     row.setAttribute('role', 'treeitem');
@@ -294,6 +333,9 @@ export function createTree(host, o) {
     if (!byKey.has(key)) return;
     sel = key;
     _lsSet(K_SEL, sel);
+    // Opened: it and everything under it are seen - and its branch is green only while something else in it is new.
+    _seeAll(byKey.get(key));
+    _computeNew();
     if (_openTo(key)) paint(); else _mark();
     const row = el.querySelector('.mt-row.is-sel');
     if (row) row.scrollIntoView({ block: 'nearest' });

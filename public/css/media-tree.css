@@ -68,3 +68,9 @@
 .mt-pop-btn:hover{border-color:var(--primary)}
 .mt-pop-btn.is-danger{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
 .mt-pop-btn[disabled]{opacity:.5; cursor:default}
+
+/* (phase TG, the owner 2026-10-21) A node holding something new since it was last opened: its name and count green, and a
+   dot before the count. Opening it sees it (js/media-tree.js). */
+.mt-row.is-new .mt-name, .mt-row.is-group.is-new .mt-name{ color:var(--accent); }
+.mt-row.is-new .mt-n{ color:var(--accent); font-weight:700; }
+.mt-row.is-new .mt-n::before{ content:'● '; font-size:8px; vertical-align:1px; }

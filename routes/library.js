@@ -562,7 +562,38 @@ function _tree() {
   // (block 6; the owner: "над references") YOUTUBE - the downloaded YouTube videos of the Sources, first of all.
   const youtube = { key: 'youtube', kind: 'youtube', label: 'YOUTUBE', locked: true, count: (byKind.youtube || []).length,
     empty: !(byKind.youtube || []).length, q: { filter: 'youtube' } };
-  return [youtube, references, video, kindNode('images', 'images', 'IMAGES'), audio];
+  const roots = [youtube, references, video, kindNode('images', 'images', 'IMAGES'), audio];
+  _stampNewest(roots, items);
+  return roots;
+}
+
+// (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом ... куда добавилось что-то новое") Every node
+// says when the newest thing under it came (`newest`, ms) - the page lights the nodes holding something newer than when they
+// were last opened (js/media-tree.js). Read by the node's own query, as the shelf filters.
+function _inNode(i, q) {
+  if (!q) return false;
+  if (q.group) return !!(GROUPS[q.group] && GROUPS[q.group].includes(i.kind));
+  if (q.filter && i.kind !== q.filter) return false;
+  const m = i.meta || {};
+  if (q.src) {
+    const [s, fo] = String(q.src).split('/');
+    if (m.categoryId || m.source !== s || (fo && m.folder !== fo)) return false;
+  }
+  if (q.cat) {
+    const c = m.categoryId || '';
+    if (q.cat === UNCAT) { if (c && c !== UPLOADS_CAT) return false; }
+    else if (q.cat === ANYCAT) { if (!c || c === UPLOADS_CAT) return false; }
+    else if (c !== q.cat) return false;
+  }
+  return true;
+}
+function _stampNewest(nodes, items) {
+  for (const n of nodes) {
+    let best = 0;
+    for (const i of items) { if (_inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
+    if (n.children) { _stampNewest(n.children, items); for (const c of n.children) if (c.newest > best) best = c.newest; }
+    n.newest = best;
+  }
 }
 
 router.get('/library/tree', (_req, res) => {
