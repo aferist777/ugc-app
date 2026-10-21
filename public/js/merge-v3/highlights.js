@@ -98,6 +98,8 @@ function _onStore() {
     if (n !== _openShown) { _openShown = n; if (n) _sel = n; _paint(); }
     // (phase V33.3) The open fragment's captions given another look: its card says it at once.
     else if (n && n === _sel && _capSig() !== _capShown) _paintCard();
+    // (phase V33.4) The open fragment edited after its render: "changed since" at once, as it is saved.
+    if (n && _changedSig() !== _changedShown) _paint();
     _crumbs();
     return;
   }
@@ -321,6 +323,7 @@ function _arm(what) {
 function _paint() {
   _crumbs();
   _paintBar();
+  _changedShown = _changedSig();
   if (!_ui || !_shown) return;
   _paintTop();
   _paintField();
@@ -489,6 +492,17 @@ async function _renderAgain(f) {
   _load();
 }
 
+// Whether a fragment's render is behind its timeline: the server says it for every one; the OPEN one is the page's - its
+// timeline's rev as the page last saved it (Store.version()) against the rev it was rendered at.
+function _changed(f) {
+  const rd = f && f.rendered;
+  if (!rd) return false;
+  if (f.n === _openN() && Store.version() >= 0) return Store.version() > (Number(rd.rev) || 0);
+  return !!rd.changed;
+}
+const _changedSig = () => { const f = _frags().find((x) => x.n === _openN()); return f ? String(_changed(f)) : ''; };
+let _changedShown = '';
+
 const _hhmm = (iso) => {
   const d = new Date(iso || '');
   if (isNaN(d)) return '';
@@ -574,7 +588,7 @@ function _paintField() {
     if ((f.pieces || []).length > 1) t.appendChild(_el('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
     // (phase V33.4) Rendered: a mark on its frame - pale, "changed since", when its timeline was edited after.
     if (ready && f.rendered) {
-      const ch = !!f.rendered.changed;
+      const ch = _changed(f);
       const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''), ch ? 'changed since' : '▶ rendered');
       mark.title = 'Rendered: ' + _fileOf(f.rendered.url) + (ch ? ' - its timeline was edited after; Render again to bring it up to date' : '');
       t.appendChild(mark);
@@ -751,7 +765,7 @@ function _renderLine(f) {
     line.appendChild(name);
     const bits = [rd.seconds ? _secs(rd.seconds) : '', _hhmm(rd.at), rd.srt ? '+ .srt' : ''].filter(Boolean);
     if (bits.length) line.appendChild(_el('span', 'mv3-hl-cap-of', ' · ' + bits.join(' · ')));
-    if (rd.changed) {
+    if (_changed(f)) {
       const ch = _el('span', 'mv3-hl-cap-ed', ' · changed since');
       ch.title = 'Its timeline was edited after the render - tick it and Render again';
       line.appendChild(ch);
