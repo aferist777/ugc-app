@@ -13,6 +13,20 @@ const REFS = require('../lib/references-store');
 
 const router = express.Router();
 
+// GET /api/references/stamp -> { n, latest, latestId, title, where }
+// What every page asks every few seconds (js/alerts-bell.js): a post landed while the app was open - a sound of its own,
+// a toast, and the Library and Merge read their tree and gallery again (the owner 2026-10-21: "счетчик не обновился";
+// "добавим новый звук при добавлении медиа через телеграм").
+router.get('/references/stamp', (_req, res) => {
+  try {
+    const list = REFS.read();
+    let top = null;
+    for (const p of list) if (p && (!top || String(p.receivedAt || '') > String(top.receivedAt || ''))) top = p;
+    res.json({ success: true, n: list.length, latest: top ? top.receivedAt || '' : '', latestId: top ? top.id : '',
+      title: top ? top.title || '' : '', where: top ? REFS.labelOf(top.source, top.folder) : '' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.get('/references', (_req, res) => {
   try { res.json({ success: true, sources: REFS.SOURCES, posts: REFS.read() }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }

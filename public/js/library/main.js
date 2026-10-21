@@ -403,6 +403,15 @@ async function _apply(r) {
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
 
+// (phase TG, the owner 2026-10-21: "счетчик не обновился в library после скачивания поста") A post the Telegram bot
+// brought in while this page is open: the tree's numbers, the shelves' counts and Media's gallery read again (the
+// signal is js/alerts-bell.js's, which also chimes).
+window.addEventListener('ugc-references', () => {
+  if (_tree) _tree.load();
+  _counts();
+  if (_shelf === 'media' && !_makingOn) _load({ keepScroll: true, checks: false });
+});
+
 // (phase TG) A post of REFERENCES in the post viewer (js/references/post.js), paging through the posts on view; a post
 // deleted there reads the shelf and the tree again.
 function _openPost(it, file) {

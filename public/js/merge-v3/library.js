@@ -855,6 +855,10 @@ async function _load() {
 // The gallery and the tree's numbers together - after anything that adds, deletes or moves.
 function _reload() { return Promise.all([_load(), _tree ? _tree.load() : null]); }
 
+// (phase TG) A post the Telegram bot brought in while Merge is open: the tree's numbers and the gallery read again (the
+// signal is js/alerts-bell.js's, which also chimes).
+window.addEventListener('ugc-references', () => { _reload(); });
+
 // Show a particular kind, optionally on one of its categories by NAME, and open the panel if it is the folded one.
 // Used after a screenshot: the picture has just been filed under "Screenshots", and being shown where beats being told.
 export async function showGroup(kind, catLabel) {

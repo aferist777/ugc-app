@@ -102,6 +102,64 @@ function _swoosh() {
   } catch (e) { /* no sound is not a failure of the hand-over */ }
 }
 
+// THE TELEGRAM CHIME (phase TG, the owner 2026-10-21: "добавим новый звук при добавлении медиа через телеграм") - a post
+// the bot brought in landed in REFERENCES: three quick rising notes, brighter than the bell, so the two are told apart.
+function _tgChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    _audio = _audio || new Ctx();
+    if (_audio.state === 'suspended') _audio.resume();
+    const now = _audio.currentTime;
+    for (const [hz, at] of [[1046.5, 0], [1318.5, 0.085], [1568, 0.17], [2093, 0.255]]) {
+      const gain = _audio.createGain();
+      gain.connect(_audio.destination);
+      gain.gain.setValueAtTime(0.0001, now + at);
+      gain.gain.exponentialRampToValueAtTime(0.09, now + at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.32);
+      const osc = _audio.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(hz, now + at);
+      osc.connect(gain);
+      osc.start(now + at);
+      osc.stop(now + at + 0.34);
+    }
+  } catch (e) { /* no sound is not a failure of the news */ }
+}
+
+// ── REFERENCES: a post landed (phase TG) ─────────────────────────────────────
+// Read with the journal. A post newer than the last one this window knew of (kept across pages, so walking from one
+// page to the next does not ring again) chimes, says where it went, and tells the page: `ugc-references` on window -
+// the Library and Merge read their tree and gallery again.
+const LS_REFS = 'ugc_refs_seen_v1';
+let _refsSeen = null;
+async function _pollRefs() {
+  const d = await _json('/api/references/stamp');
+  if (!d || !d.success) return;
+  if (_refsSeen === null) {
+    try { _refsSeen = localStorage.getItem(LS_REFS); } catch (e) { _refsSeen = ''; }
+    if (_refsSeen == null) { _refsSeen = d.latest || ''; _keepRefs(); return; }
+  }
+  const was = _refsSeen;
+  if ((d.latest || '') === was) return;
+  _refsSeen = d.latest || '';
+  _keepRefs();
+  try { window.dispatchEvent(new CustomEvent('ugc-references', { detail: d })); } catch (e) { /* an old page */ }
+  if (d.latest && d.latest > was) {
+    _tgChime();
+    const t = _el('div', 'sv3-toast');
+    t.appendChild(_el('span', 'sv3-toast-mark', '✈'));
+    const main = _el('span', 'sv3-al-main');
+    main.appendChild(_el('span', 'sv3-al-title', d.title || 'a post'));
+    main.appendChild(_el('span', 'sv3-al-where', 'from Telegram · REFERENCES · ' + (d.where || '')));
+    t.appendChild(main);
+    t.addEventListener('click', () => _goTo('/library?shelf=media'));
+    _toasts().appendChild(t);
+    setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, TOAST_MS);
+  }
+}
+function _keepRefs() { try { localStorage.setItem(LS_REFS, _refsSeen || ''); } catch (e) { /* a private window */ } }
+
 // ── what a row knows about itself ───────────────────────────────────────────
 function _ago(iso) {
   const t = Date.parse(iso || '');
@@ -498,7 +556,8 @@ export function mountAlerts(nav) {
   nav.insertBefore(_btn, at);
   _paintButton();
   _poll();
-  _timer = setInterval(_poll, POLL_MS);
+  _pollRefs();
+  _timer = setInterval(() => { _poll(); _pollRefs(); }, POLL_MS);
   // The journal is read every few seconds; the wait is recomputed every second from what was read,
   // so it counts down smoothly instead of stepping.
   _tick = setInterval(_paintWait, 1000);
