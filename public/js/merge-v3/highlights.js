@@ -359,7 +359,9 @@ function _paintTop() {
   const state = _el('div', 'mv3-hl-state');
   const w = r.work || {};
   if (_live) {
-    state.appendChild(_el('span', 'mv3-hl-words', _prog ? _prog.words : (STEP[w.step] || w.step || 'at work')));
+    // While the video comes in its words are the line over the field's (phase V33.4): here only what is going.
+    state.appendChild(_el('span', 'mv3-hl-words', _prog ? (_prog.load ? (STEP[_prog.step] || _prog.step) + ' the video' : _prog.words)
+      : (STEP[w.step] || w.step || 'at work')));
     const x = _el('button', 'mv3-c-btn danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? 'really?' : '✕ stop');
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
@@ -526,6 +528,8 @@ const _fileOf = (url) => { try { return decodeURIComponent(String(url).split('/'
 function _paintField() {
   const field = _ui.field;
   field.textContent = '';
+  const wasLoading = _loadShown;
+  _loadShown = false;
   const r = _rec;
   if (!r) return;
   const frags = _frags();
@@ -546,11 +550,26 @@ function _paintField() {
     // Until the agent has answered no tile knows its moment: all of them show the same way along.
     const n = r.ask ? r.ask.count : 0;
     const failed = !_live && (r.work || {}).state === 'failed';
+    // (phase V33.4, the owner 2026-10-21) WHILE THE VIDEO COMES IN - downloaded or copied - its way along is ONE line over the
+    // field, the whole width (`load`); the tiles stand at once with only a turning ring on them. In, the line goes and the
+    // tiles show the steps after it.
+    const loading = !!(_live && _prog && _prog.load);
+    if (loading) field.appendChild(_loadLine(_prog, !wasLoading));
+    _loadShown = loading;
+    // The field is drawn again every 1.5 s: the rings go on turning from where they were, not from the start.
+    const turn = -(Date.now() % 1000) + 'ms';
     for (let k = 0; k < n; k++) {
-      const t = _el('div', 'mv3-hl-tile is-ph' + (failed ? ' is-failed' : ''));
+      const t = _el('div', 'mv3-hl-tile is-ph' + (failed ? ' is-failed' : '') + (loading ? ' is-loading' : ''));
       const fr = _el('div', 'mv3-hl-frame');
       if (r.poster) fr.style.backgroundImage = 'url("' + r.poster + '")';
       t.appendChild(fr);
+      if (loading) {
+        const spin = _el('div', 'mv3-hl-spin');
+        spin.style.animationDelay = turn;
+        t.appendChild(spin);
+        grid.appendChild(t);
+        continue;
+      }
       const foot = _el('div', 'mv3-hl-foot');
       if (_live && _prog) {
         const bar = _el('div', 'mv3-hl-bar');
@@ -650,6 +669,25 @@ function _paintField() {
     grid.appendChild(t);
   }
   field.appendChild(grid);
+}
+
+// The one line over the field while the video comes in (phase V33.4, the owner 2026-10-21): what is going, its own bar (the
+// download's, not the whole job's) and how long is left. A number not known yet - a moving stripe.
+let _loadShown = false;        // the line was there at the last paint: it does not pop up again
+function _loadLine(p, fresh) {
+  const box = _el('div', 'mv3-hl-load' + (fresh ? ' is-new' : ''));
+  const top = _el('div', 'mv3-hl-load-t');
+  top.appendChild(_el('span', 'mv3-hl-load-w', p.words || (p.step === 'copy' ? 'copying the video' : 'downloading the video')));
+  const left = p.load.leftMs;
+  if (left != null && left > 1500) top.appendChild(_el('span', 'mv3-hl-load-l', '~' + _clock(left / 1000) + ' left'));
+  box.appendChild(top);
+  const bar = _el('div', 'mv3-hl-load-bar' + (p.load.frac == null ? ' is-indet' : ''));
+  const fill = _el('i');
+  if (p.load.frac != null) fill.style.width = Math.max(1, Math.round(p.load.frac * 1000) / 10) + '%';
+  else fill.style.animationDelay = -(Date.now() % 1200) + 'ms';
+  bar.appendChild(fill);
+  box.appendChild(bar);
+  return box;
 }
 
 function _paintCard() {

@@ -98,6 +98,29 @@
 .mv3-hl-step{font:600 9px/1.3 var(--font); color:oklch(.85 0 0); overflow-wrap:anywhere}
 .mv3-hl-bar{height:4px; border-radius:2px; background:oklch(1 0 0 / .18); overflow:hidden}
 .mv3-hl-fill{height:100%; background:var(--accent); transition:width .4s linear}
+/* (phase V33.4, the owner 2026-10-21) While the video comes in: ONE line over the tiles, the field's whole width, popping up
+   once; the tiles under it only turn a ring. */
+.mv3-hl-load{
+  position:sticky; top:-10px; z-index:4; margin:-2px 0 10px; padding:8px 11px 9px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.mv3-hl-load.is-new{animation:mv3-hl-pop .28s var(--ease) both}
+@keyframes mv3-hl-pop{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
+.mv3-hl-load-t{display:flex; align-items:baseline; gap:10px; margin-bottom:6px}
+.mv3-hl-load-w{flex:1 1 auto; min-width:0; font:600 11px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-hl-load-l{flex:0 0 auto; font:500 10px/1.3 var(--font); color:var(--muted); white-space:nowrap}
+.mv3-hl-load-bar{height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden}
+.mv3-hl-load-bar > i{display:block; height:100%; width:0; background:var(--accent); border-radius:3px; transition:width .5s linear}
+.mv3-hl-load-bar.is-indet > i{width:30%; animation:mv3-hl-slide 1.2s linear infinite}
+@keyframes mv3-hl-slide{from{transform:translateX(-100%)} to{transform:translateX(340%)}}
+.mv3-hl-tile.is-loading .mv3-hl-frame{filter:grayscale(.6) brightness(.4)}
+.mv3-hl-spin{
+  position:absolute; left:50%; top:50%; z-index:2; width:26px; height:26px; margin:-13px 0 0 -13px;
+  border:3px solid oklch(1 0 0 / .18); border-top-color:var(--accent); border-radius:50%;
+  animation:mv3-hl-turn 1s linear infinite;
+}
+@keyframes mv3-hl-turn{to{transform:rotate(360deg)}}
+
 /* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
 .mv3-hl-fill.is-render{background:var(--primary)}
 .mv3-hl-step.is-warn{color:var(--warn, oklch(.8 .14 75))}
