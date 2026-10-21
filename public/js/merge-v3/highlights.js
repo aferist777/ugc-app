@@ -660,6 +660,15 @@ function _paintField() {
     } else foot.appendChild(_el('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
     t.appendChild(foot);
     t.addEventListener('click', () => {
+      // (phase V33.4, the owner 2026-10-21: "повторный клик на плитку должен снимать выделение и отключать превью с этим фрагментом")
+      // The tile pressed again lets go: no card, and its timeline gives way to the project's own, empty one - the preview stops
+      // showing it. The ticks stay as they are.
+      if (_sel === f.n) {
+        _sel = 0;
+        _paint();
+        if (f.key && Store.key() === f.key) Store.open('hl_' + _pid).catch((e) => { _err = e.message; _paintTop(); });
+        return;
+      }
       _sel = f.n;
       _paint();
       // Made: its timeline opens - the preview shows it, the timeline its cut (the owner: "кликнуть на него для просмотра
