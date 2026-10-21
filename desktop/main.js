@@ -118,6 +118,23 @@ function run() {
     const win = own(e) ? BrowserWindow.fromWebContents(e.sender) : null;
     return !!(win && !win.isDestroyed() && win.isFullScreen());
   });
+  // (phase V33.4, the owner's (х40)) "show in folder": a file of the library shown in Explorer (selected in its folder), or a
+  // folder of it opened - a highlights project's renders. Only an ADDRESS of the library's own (/media/..., /projects/...) is
+  // taken, resolved inside the library and nowhere else: a page never names a path on the disk. Answers whether it was shown.
+  ipcMain.handle('ugc-reveal', (e, url) => {
+    if (!own(e)) return false;
+    let clean = '';
+    try { clean = decodeURIComponent(String(url || '').split(/[?#]/)[0]); } catch { return false; }
+    if (!/^\/(media|projects)\//.test(clean)) return false;
+    const parts = clean.split('/').filter(Boolean);
+    if (parts.some((p) => p === '..' || p === '.')) return false;
+    const abs = path.join(LIBRARY, ...parts);
+    const rel = path.relative(LIBRARY, abs);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !fs.existsSync(abs)) return false;
+    if (fs.statSync(abs).isDirectory()) shell.openPath(abs);
+    else shell.showItemInFolder(abs);
+    return true;
+  });
 
   server.on('ready', (url) => {
     const was = origin;

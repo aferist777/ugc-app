@@ -1109,6 +1109,11 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qrow.is-done .mv3-qrow-s{color:var(--success)}
 .mv3-qrow.is-failed .mv3-qrow-s{color:var(--danger)}
 .mv3-qrow-a{flex:0 0 auto; font-size:10px; color:var(--primary)}
+/* (phase V33.4) A highlights project: one row that opens on its fragments' rows, set in under it. */
+.mv3-qgrp-row{cursor:pointer}
+.mv3-qgrp-row:hover .mv3-qrow-t{color:var(--primary)}
+.mv3-qgrp-kids{margin-left:14px; border-left:2px solid var(--border-soft); border-bottom:1px solid var(--border-soft)}
+.mv3-qgrp:last-child .mv3-qgrp-kids, .mv3-qgrp:last-child > .mv3-qgrp-row:last-child{border-bottom:0}
 /* The clear question sits INSIDE the panel rather than over it: it is about this list, and a
    dialogue that covered the list would hide the very thing being asked about. */
 .mv3-qask{

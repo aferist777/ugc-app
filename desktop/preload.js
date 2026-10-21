@@ -6,7 +6,8 @@
    asked about first. The pages draw the buttons themselves (public/js/app-nav.js); in a browser there is no `ugcWindow`
    and no buttons. The main process answers only the app's own pages (desktop/main.js).
    (phase V28.1) And where a file the person picked lies on this computer: a source added from a file is copied by
-   the server from there (lib/source-intake.js), so leaving the page cuts nothing off. A browser has no such thing. */
+   the server from there (lib/source-intake.js), so leaving the page cuts nothing off. A browser has no such thing.
+   (phase V33.4) And a file or folder of the library shown in Explorer ("show in folder"). */
 
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
@@ -19,6 +20,9 @@ contextBridge.exposeInMainWorld('ugcWindow', {
   isFull: () => ipcRenderer.invoke('ugc-window-full'),
   // A File from an <input type=file> -> its path on disk, '' for one that is not a file on disk.
   pathOf: (file) => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
+  // (phase V33.4) A library address (/media/..., /projects/...) shown in Explorer - a file selected in its folder, a folder
+  // opened. Resolves whether it was shown.
+  reveal: (url) => ipcRenderer.invoke('ugc-reveal', String(url || '')),
   onFull: (fn) => {
     if (typeof fn !== 'function') return;
     ipcRenderer.on('ugc-window-full', (_e, full) => { try { fn(!!full); } catch { /* the page's own */ } });

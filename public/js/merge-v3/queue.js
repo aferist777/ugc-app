@@ -16,6 +16,11 @@
 
    Render all starts what is waiting. The encoder does one at a time, so a started entry may
    still stand in line - the row says how many are ahead.
+
+   A HIGHLIGHTS PROJECT IS ONE ROW (phase V33.4, the owner's (х44), (х44а)): its fragments' entries under "▸ <project> ·
+   highlights · 5 fragments" with their way along all together ("rendering 2 of 5 · 1:30 left", "3 rendered · 2
+   interrupted"); a press opens its fragments' rows, as any. Its own "▶ go on" starts only ITS interrupted and failed
+   renders (POST /api/mv3q/run { hl }) - Render all, as always, starts everything waiting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -109,7 +114,7 @@ function _row(it, refresh) {
 
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
+  sub.textContent = (it.hl ? 'fragment' : it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
   main.appendChild(sub);
 
   // The bar, only while the encoder is on this one. Indeterminate when the phase reports no
@@ -269,10 +274,104 @@ async function _paintList() {
     list.appendChild(e);
   } else {
     const again = () => { _paintList(); _paintBadge(); };
-    for (const it of d.items) list.appendChild(_row(it, again));
+    // A highlights project's entries are one row, where its first one stands (phase V33.4).
+    const groups = new Map();
+    for (const it of d.items) {
+      if (!it.hl) continue;
+      if (!groups.has(it.hl.id)) groups.set(it.hl.id, []);
+      groups.get(it.hl.id).push(it);
+    }
+    const drawn = new Set();
+    for (const it of d.items) {
+      if (!it.hl) { list.appendChild(_row(it, again)); continue; }
+      if (drawn.has(it.hl.id)) continue;
+      drawn.add(it.hl.id);
+      list.appendChild(_group(it.hl.id, groups.get(it.hl.id), again));
+    }
   }
   _pop.appendChild(list);
   _paintBadge();
+}
+
+// ── A highlights project's row (phase V33.4) ────────────────────────────────
+// Which projects' rows are open - kept while the panel repaints on its beat.
+const _openGroups = new Set();
+
+function _group(id, items, refresh) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mv3-qgrp';
+  const n = items.length;
+  const done = items.filter(x => x.status === 'done').length;
+  const running = items.find(x => x.status === 'running') || null;
+  const inLine = items.filter(x => x.status === 'queued' && x.armed).length;
+  const cut = items.filter(x => x.status === 'queued' && !x.armed).length;
+  const failed = items.filter(x => x.status === 'failed').length;
+  const open = _openGroups.has(id);
+
+  const el = document.createElement('div');
+  el.className = 'mv3-qrow mv3-qgrp-row' + (running ? ' is-running' : '');
+  const main = document.createElement('div');
+  main.className = 'mv3-qrow-m';
+  const top = document.createElement('div');
+  top.className = 'mv3-qrow-top';
+  const nm = document.createElement('span');
+  nm.className = 'mv3-qrow-t';
+  nm.textContent = (open ? '▾ ' : '▸ ') + (items[0].hlName || 'highlights');
+  nm.title = open ? 'Close its fragments' : 'Show its fragments';
+  top.appendChild(nm);
+  const st = document.createElement('span');
+  st.className = 'mv3-qrow-s';
+  // Its way along, all together: what is going, then what is made and what was cut off or failed.
+  const live = running || inLine;
+  let left = 0;
+  if (running) left += running.remain != null ? running.remain : 0;
+  st.textContent = live
+    ? 'rendering ' + Math.min(n, done + 1) + ' of ' + n + (left ? ' · ' + _mmss(left) + ' left' : '')
+    : [done ? done + ' rendered' : '', cut ? cut + ' interrupted' : '', failed ? failed + ' failed' : ''].filter(Boolean).join(' · ') || 'queued';
+  top.appendChild(st);
+  main.appendChild(top);
+  const sub = document.createElement('div');
+  sub.className = 'mv3-qrow-sub';
+  sub.textContent = 'highlights · ' + n + (n === 1 ? ' fragment' : ' fragments');
+  main.appendChild(sub);
+  if (running) {
+    const bar = document.createElement('div');
+    const known = !running.phase && running.percent > 0;
+    bar.className = 'mv3-qbar' + (known ? '' : ' is-indet');
+    const fill = document.createElement('i');
+    if (known) fill.style.width = running.percent + '%';
+    bar.appendChild(fill);
+    main.appendChild(bar);
+  }
+  el.appendChild(main);
+
+  const acts = document.createElement('div');
+  acts.className = 'mv3-qrow-acts';
+  // Only its own interrupted and failed ones go on - nobody else's waiting renders start (the owner's (х44)).
+  if (cut || failed) {
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'mv3-qrow-a';
+    go.textContent = '▶ go on';
+    go.title = 'Render this project\'s interrupted and failed fragments - nothing else in the queue starts';
+    go.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await fetch('/api/mv3q/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hl: id }) });
+      refresh();
+    });
+    acts.appendChild(go);
+  }
+  el.appendChild(acts);
+  el.addEventListener('click', () => { if (open) _openGroups.delete(id); else _openGroups.add(id); refresh(); });
+  wrap.appendChild(el);
+
+  if (open) {
+    const kids = document.createElement('div');
+    kids.className = 'mv3-qgrp-kids';
+    for (const it of items) kids.appendChild(_row(it, refresh));
+    wrap.appendChild(kids);
+  }
+  return wrap;
 }
 
 function _open() {

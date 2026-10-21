@@ -382,6 +382,11 @@ function _paintTop() {
   const tr = r.renderTrouble || {};
   if (tr.interrupted) state.appendChild(_el('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
   if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', tr.failed + ' not rendered'));
+  // The project's renders folder, once one is made: Explorer on it (the owner's (х40)).
+  const one = _frags().find((f) => f.rendered && f.rendered.url);
+  const dir = one ? String(one.rendered.url).replace(/[^/]+$/, '') : '';
+  const sf = dir ? _showInFolder(dir, 'Open the folder of this project\'s renders in Explorer') : null;
+  if (sf) state.appendChild(sf);
   const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
   if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
   if (_said || _err) state.appendChild(_el('span', 'mv3-hl-said' + ((_said && _said.err) || (!_said && _err) ? ' is-err' : ''), _said ? _said.text : _err));
@@ -718,6 +723,22 @@ function _paintCard() {
   sec('what is said', f.text);
 }
 
+// "show in folder" (phase V33.4, the owner's (х40)): Explorer on a library file or folder - only in the app's window
+// (desktop/preload.js reveal); a browser has none, and no button.
+function _showInFolder(url, title) {
+  const w = window.ugcWindow;
+  if (!url || !w || typeof w.reveal !== 'function') return null;
+  const b = _el('button', 'mv3-c-btn', 'show in folder');
+  b.type = 'button';
+  b.title = title;
+  b.addEventListener('click', async () => {
+    let ok = false;
+    try { ok = await w.reveal(url); } catch (e) { ok = false; }
+    if (!ok) _say('that file is not in the library any more', true);
+  });
+  return b;
+}
+
 // The card's line about the fragment's render (phase V33.4, the owner's (х42)).
 function _renderLine(f) {
   const line = _el('div', 'mv3-hl-cap mv3-hl-rline');
@@ -741,6 +762,8 @@ function _renderLine(f) {
     play.title = 'Play the render - the result window, as Queue opens it';
     play.addEventListener('click', () => showResult({ url: rd.url, title: f.title, key: f.key, fresh: false }));
     acts.appendChild(play);
+    const shown = _showInFolder(rd.url, 'Show this file in its folder - Explorer, the file picked');
+    if (shown) acts.appendChild(shown);
     line.appendChild(acts);
   } else {
     line.appendChild(document.createTextNode('render: '));
