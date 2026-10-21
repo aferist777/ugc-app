@@ -65,7 +65,8 @@ function PICTURES(ctx) {
       map: (g) => ({ path: g.imagePath, aspect: g.aspect, state: g.state, name: g.prompt || '', error: g.error }),
     },
     cats: {
-      url: '/api/library/shelf/media?filter=images',
+      // (phase TG, block 5d) REFERENCES' pictures are one more category here (`refs=1`).
+      url: '/api/library/shelf/media?filter=images&refs=1',
       map: (i) => ({ path: i.media, aspect: arOf(i), state: 'done', name: i.name || '', libId: i.id || '' }),
       group: 'images',
     },

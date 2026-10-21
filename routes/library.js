@@ -763,11 +763,44 @@ const SHELVES = {
   scenarios:    _scenariosShelf,
 };
 
+// The one category REFERENCES' pictures are under among Images, in the pickers.
+const REF_CAT = '__references__';
+
+// (phase TG, block 5d) THE FILES OF REFERENCES' POSTS, one item each, for what takes a file - the chats' pickers and the
+// pictures chat's column: `type` 'video' or 'photo'; a post's folder (or own category) is the item's category. A long
+// video kept as a tile has no file and is not here.
+function _refFiles(type) {
+  const REFS = require('../lib/references-store');
+  const items = [];
+  const cats = new Map();
+  for (const p of REFS.read()) {
+    if (!p || !Array.isArray(p.media)) continue;
+    const files = p.media.filter(m => m && m.path && m.type === type && _onDisk(m.path));
+    const catId = p.categoryId ? p.categoryId : 'ref:' + p.source + (p.folder ? '/' + p.folder : '');
+    const catName = p.categoryId ? (p.categoryLabel || 'REFERENCES') : REFS.labelOf(p.source, p.folder);
+    files.forEach((m, i) => {
+      if (!cats.has(catId)) cats.set(catId, { id: catId, name: catName, label: catName, count: 0 });
+      cats.get(catId).count++;
+      items.push({
+        id: p.id + ':' + m.id, name: String(p.title || 'post') + (files.length > 1 ? ` · ${i + 1} of ${files.length}` : ''),
+        kind: 'references', media: m.path, thumb: m.thumb || null, dur: +m.dur || 0,
+        meta: { categoryId: catId, date: p.receivedAt || null, w: m.w || 0, h: m.h || 0, post: p.id, author: p.author || '' },
+      });
+    });
+  }
+  return { items, cats: [...cats.values()] };
+}
+
 router.get('/library/shelf/:kind', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
+    // (phase TG, block 5d) REFERENCES' videos for the video chat's picker, by its folders and categories.
+    if (kind === 'media' && String(req.query.filter || '') === 'refvideos') {
+      const { items, cats } = _refFiles('video');
+      return res.json({ success: true, kind, items, total: items.length, shown: items.length, filters: [], cats, labelKeys: null, running: 0 });
+    }
     // Filtering happens here rather than in the page, so the count the page shows is the
     // count it received. Media takes two: the kind, and the category within it - or (phase V28.4) a GROUP of kinds,
     // a top node of the media tree: video (B-rolls, Hooks, Uploads), images, audio (music, sounds).
@@ -795,8 +828,18 @@ router.get('/library/shelf/:kind', (req, res) => {
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
       : (i.meta || {}).categoryId === cat);
+    // (phase TG, block 5d) Images, and REFERENCES' pictures as one more category - for the pictures' pickers and the
+    // pictures chat's column (`refs=1`); the media tree's IMAGES never asks for them.
+    let cats2 = cats;
+    if (kind === 'media' && f === 'images' && String(req.query.refs || '') === '1' && (!cat || cat === REF_CAT)) {
+      const r = _refFiles('photo');
+      for (const i of r.items) i.meta.categoryId = REF_CAT;
+      // The column of the pictures chat asks for one category at a time (`cat`); the pickers read the whole shelf.
+      shown = cat === REF_CAT ? r.items : shown.concat(r.items);
+      if (r.items.length) cats2 = cats.concat([{ id: REF_CAT, name: 'REFERENCES', label: 'REFERENCES · ' + r.items.length, count: r.items.length }]);
+    }
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats, labelKeys: labelKeys || null, running: running || 0 });
+      filters: filters || [], cats: cats2, labelKeys: labelKeys || null, running: running || 0 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

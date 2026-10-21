@@ -373,8 +373,7 @@ async function _runAction(id, it) {
   }
   if (id === 'del' && it.kind === 'references') {
     // (phase TG) A post of REFERENCES goes with its files - its own route.
-    const n = ((it.meta && it.meta.items) || []).length;
-    if (!confirm(`Delete the post "${it.name}"${n ? ` and its ${n} file${n === 1 ? '' : 's'}` : ''}?`)) return { changed: false };
+    if (!confirm(await RP.deleteQuestion(it))) return { changed: false };
     const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
     if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
     _items = _items.filter(x => x !== it);

@@ -836,6 +836,9 @@ function VIDEOS(ctx) {
       { id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' },
       { id: 'birols', label: 'B-roll', load: () => _media('birols', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
       { id: 'uploads', label: 'Uploads', load: () => _media('uploads', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
+      // (phase TG, block 5d) The videos of REFERENCES' posts - by their folders and the owner's categories.
+      { id: 'references', label: 'REFERENCES', load: () => _media('refvideos', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })),
+        empty: 'No videos in REFERENCES yet - send posts to the Telegram bot (Admin -> API keys).' },
     ],
     audio: [
       { id: 'sounds', label: 'Sounds', load: () => _media('sounds', (i) => ({ path: i.media, src: i.media, name: i.name || '', dur: +i.dur || 0 })) },
@@ -857,7 +860,7 @@ function VIDEOS(ctx) {
   function _sourceOf(path, kind) {
     const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
     if (kind === 'image') return Src.pictureSourceOf(path);
-    if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : [];
+    if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : at('references') ? ['references'] : [];
     return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : at('voice') ? ['voices'] : [];
   }
   // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──

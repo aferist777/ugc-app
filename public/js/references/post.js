@@ -41,10 +41,31 @@ const fmtDate = (s) => {
   return isNaN(d) ? String(s) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// ── deleting (block 5d) ──────────────────────────────────────────────────────
+/** The question before a post is deleted - with the projects whose timelines hold its files (POST /api/library/usage), as
+ *  every other tile of the Library asks: there its clips turn red, to be replaced or removed. */
+export async function deleteQuestion(it) {
+  const files = filesOf(it).map(f => f.path).filter(Boolean);
+  let q = `Delete the post "${it.name}"` + (files.length ? ` and its ${files.length} file${files.length === 1 ? '' : 's'}?` : '?');
+  if (!files.length) return q;
+  try {
+    const d = await fetch('/api/library/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ media: files }) }).then(r => r.json());
+    const projects = (d && d.projects) || [];
+    if (projects.length) {
+      q += '\n\nIt is used in ' + projects.length + (projects.length === 1 ? ' project' : ' projects') + ':\n'
+        + projects.slice(0, 10).map(p => '  «' + p.title + '» - ' + p.clips + (p.clips === 1 ? ' clip' : ' clips')).join('\n')
+        + '\n\nThere its clips turn red - to be replaced or removed.';
+    }
+  } catch (e) { /* the plain question */ }
+  return q;
+}
+
 // ── the tile ─────────────────────────────────────────────────────────────────
 let _hover = null;          // { box, tile, timer, hideTimer }
 
-export function decorate(tile, it, open) {
+// `opts.dragFile(dataTransfer, it, file)` (block 5d, Merge): a miniature of the hover is dragged onto a lane.
+export function decorate(tile, it, open, opts) {
   const files = filesOf(it);
   const m = it.meta || {};
   const badge = el('span', 'ref-badge');
@@ -57,14 +78,14 @@ export function decorate(tile, it, open) {
   if (badge.textContent) tile.appendChild(badge);
   tile.title = [it.name, m.author, whereOf(it)].filter(Boolean).join('\n');
   if (files.length > 1) {
-    tile.addEventListener('mouseenter', () => _hoverIn(tile, it, open));
+    tile.addEventListener('mouseenter', () => _hoverIn(tile, it, open, opts));
     tile.addEventListener('mouseleave', () => _hoverOut());
   }
 }
 
-function _hoverIn(tile, it, open) {
+function _hoverIn(tile, it, open, opts) {
   _hoverOut(true);
-  const timer = setTimeout(() => _hoverShow(tile, it, open), 260);
+  const timer = setTimeout(() => _hoverShow(tile, it, open, opts), 260);
   _hover = { tile, timer, box: null, hideTimer: null };
 }
 
@@ -78,7 +99,7 @@ function _hoverOut(now) {
   h.hideTimer = setTimeout(drop, 180);         // time to move the pointer into the popup
 }
 
-function _hoverShow(tile, it, open) {
+function _hoverShow(tile, it, open, opts) {
   if (!_hover || _hover.tile !== tile || !tile.isConnected) return;
   const files = filesOf(it);
   const box = el('div', 'ref-hover');
@@ -90,6 +111,12 @@ function _hoverShow(tile, it, open) {
     if (f.thumb) { const im = el('img'); im.src = f.thumb; im.alt = ''; im.loading = 'lazy'; c.appendChild(im); }
     if (f.type === 'video') c.appendChild(el('span', 'ref-hover-v', '▶'));
     c.addEventListener('click', (e) => { e.stopPropagation(); _hoverOut(true); if (open) open(it, i); });
+    if (opts && typeof opts.dragFile === 'function') {
+      c.draggable = true;
+      c.title += ' - or drag it onto a lane';
+      c.addEventListener('dragstart', (e) => { e.stopPropagation(); opts.dragFile(e.dataTransfer, it, f); });
+      c.addEventListener('dragend', () => _hoverOut(true));
+    }
     grid.appendChild(c);
   });
   box.appendChild(grid);
@@ -371,7 +398,12 @@ function _paintActs(it) {
     // "really?" on the button itself (the owner's way): a second press within a few seconds deletes.
     if (!_v.armed) {
       del.textContent = 'really? delete the post';
-      _v.armed = setTimeout(() => { if (_v) { _v.armed = null; del.textContent = 'Delete'; } }, 4000);
+      _v.armed = setTimeout(() => { if (_v) { _v.armed = null; del.textContent = 'Delete'; } }, 6000);
+      // (block 5d) Its files on a timeline: said before the second press - there its clips turn red.
+      deleteQuestion(it).then((q) => {
+        const m = /It is used in (d+ projects?)/.exec(q);
+        if (m && _v && _cur() === it) _v.ov.querySelector('.ref-said').textContent = 'on the timelines of ' + m[1] + ' - its clips there turn red';
+      });
       return;
     }
     clearTimeout(_v.armed);

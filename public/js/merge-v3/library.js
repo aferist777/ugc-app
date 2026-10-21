@@ -188,28 +188,41 @@ function _tile(it, list) {
       const posts = list.filter(x => x.kind === 'references');
       RP.openPost(posts, posts.indexOf(post), { file, onChanged: () => _reload() });
     };
-    RP.decorate(cell, it, open);
+    // A file onto a lane (block 5d): what a lane takes rides along, as a clip's or a picture's does.
+    const toLane = (dt, post, f) => {
+      const media = f.type === 'video' ? 'video' : 'image';
+      dt.effectAllowed = 'copyMove';
+      dt.setData(DRAG_TYPE, JSON.stringify({ libId: post.id, src: f.path, thumb: f.thumb || null, name: post.name || '',
+        group: media === 'image' ? 'images' : 'uploads', dur: +f.dur || 0, media, bed: false }));
+      dt.setData(DRAG_MEDIA + media, '1');
+    };
+    RP.decorate(cell, it, open, { dragFile: toLane });
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'mv3-tile-btn mv3-tile-del';
     del.textContent = '✕';
     del.title = 'Delete this post and its files';
-    let armed = null;
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!armed) { del.textContent = '?'; del.title = 'Press again to delete'; armed = setTimeout(() => { armed = null; del.textContent = '✕'; }, 3000); return; }
-      clearTimeout(armed);
+      // Asked as every tile here asks - with the projects that hold its files (block 5d).
       del.disabled = true;
+      if (!confirm(await RP.deleteQuestion(it))) { del.disabled = false; return; }
       try {
         const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
         if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
         await _reload();
-      } catch (err) { alert(err.message); del.disabled = false; del.textContent = '✕'; armed = null; }
+      } catch (err) { alert(err.message); del.disabled = false; }
     });
     cell.appendChild(del);
     // Onto a node of the tree (block 5b) - within REFERENCES, or a post of one file out of it.
     cell.draggable = true;
-    cell.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it); });
+    cell.addEventListener('dragstart', (e) => {
+      // A post of one file goes onto a lane as that file; any post goes onto a node of the tree (block 5b).
+      const files = (it.meta && it.meta.items) || [];
+      if (files.length === 1 && !(it.meta && it.meta.remote)) toLane(e.dataTransfer, it, files[0]);
+      else e.dataTransfer.effectAllowed = 'move';
+      setMediaDrag(e.dataTransfer, it);
+    });
     cell.addEventListener('click', () => open(it, 0));
     return cell;
   }

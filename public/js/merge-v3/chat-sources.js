@@ -44,10 +44,12 @@ export async function mediaShelf(filter, map) {
   }) };
 }
 
-export const images = () => mediaShelf('images', (i, m) => pic(i.media, i.name, '', { aspect: shape(m.w, m.h) }));
+// (phase TG, block 5d) REFERENCES' pictures come as one more category of Images (`refs=1`).
+export const images = () => mediaShelf('images&refs=1', (i, m) => pic(i.media, i.name, '', { aspect: shape(m.w, m.h) }));
 
 /** Where a picture is on the shelves, by its folder - the picker opens there, on it. */
 export function pictureSourceOf(path) {
   const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
-  return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks'] : at('images') ? ['images'] : [];
+  return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks']
+    : at('images') || at('references') ? ['images'] : [];
 }
