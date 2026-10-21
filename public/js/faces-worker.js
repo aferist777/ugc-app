@@ -6,9 +6,13 @@
    processor (5.8 and 10.8 ms a frame on the owner's laptop). The frames are counted as they arrive, so the server's
    ffmpeg goes at the detector's pace and nothing is held in memory but one frame.
 
+   WHOLE PEOPLE (phase V33.6; PLAN.md "Фаза V33", V33.6): a film handed out with `people` also has its frames with NO face looked
+   at for people - MediaPipe's EfficientDet-Lite0 (float16: int8 on the graphics card finds nothing), only "person", 28.5 ms a
+   frame on the card - and the answer carries them beside the faces (`people`, one list a frame, empty where a face was).
+
    desktop/faces.js keeps it open, hidden, for as long as the app runs; it can be opened in a tab too (a test). */
 
-import { FaceDetector } from '/vendor/mediapipe/vision_bundle.mjs';
+import { FaceDetector, ObjectDetector } from '/vendor/mediapipe/vision_bundle.mjs';
 
 const FILES = {
   wasmLoaderPath: '/vendor/mediapipe/wasm/vision_wasm_internal.js',
@@ -16,6 +20,9 @@ const FILES = {
 };
 const MODEL = '/vendor/mediapipe/blaze_face_full_range.tflite';
 const MIN_SCORE = 0.5;
+const PEOPLE_MODEL = '/vendor/mediapipe/efficientdet_lite0.tflite';
+const PEOPLE_SCORE = 0.4;
+const PEOPLE_MIN_AREA = 0.01;          // a person smaller than this share of the frame is not one to follow
 
 const el = document.getElementById('faces-state');
 const say = (s) => { if (el) el.textContent = s; };
@@ -24,6 +31,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let det = null;
 let delegate = '';
+let pdet = null;                        // the person detector, made the first time a film asks for people
+let pdelegate = '';
 const counted = { films: 0, frames: 0 };
 window.__faces = { counted, get delegate() { return delegate; } };
 
@@ -41,6 +50,37 @@ async function make(prefer) {
     } catch (e) { last = e; }
   }
   throw last || new Error('the face detector could not start');
+}
+
+// (phase V33.6) The person detector - the graphics card when it can, else the processor (float16 both: 28.5 / 69 ms a frame).
+async function makePeople(prefer) {
+  let last = null;
+  for (const d of prefer) {
+    try {
+      const x = await ObjectDetector.createFromOptions(FILES, {
+        baseOptions: { modelAssetPath: PEOPLE_MODEL, delegate: d }, runningMode: 'IMAGE', scoreThreshold: PEOPLE_SCORE,
+        categoryAllowlist: ['person'], maxResults: 6,
+      });
+      if (pdet) { try { pdet.close(); } catch (e) { /* gone */ } }
+      pdet = x;
+      pdelegate = d;
+      return;
+    } catch (e) { last = e; }
+  }
+  throw last || new Error('the person detector could not start');
+}
+
+function peopleIn(img, fw, fh) {
+  let r;
+  try { r = pdet.detect(img); }
+  catch (e) {
+    if (pdelegate !== 'GPU') throw e;
+    throw Object.assign(e, { gpuLost: true });
+  }
+  return r.detections.filter((d) => d.categories[0] && d.categories[0].score >= PEOPLE_SCORE
+      && (d.boundingBox.width * d.boundingBox.height) / (fw * fh) >= PEOPLE_MIN_AREA)
+    .map((d) => [r3(d.boundingBox.originX / fw), r3(d.boundingBox.originY / fh), r3(d.boundingBox.width / fw), r3(d.boundingBox.height / fh),
+      r3(d.categories[0].score)]);
 }
 
 function boxes(img, fw, fh) {
@@ -66,6 +106,14 @@ async function count(job) {
   let fill = 0;
   let ms = 0;
   const out = [];
+  // (phase V33.6) Whole people in the frames with no face, when the film asks for them. A detector that will not start
+  // leaves the film without people (said in the answer), not without faces.
+  let people = null;
+  let msP = 0, nP = 0, peopleError = '';
+  if (job.people) {
+    try { if (!pdet) await makePeople(['GPU', 'CPU']); people = []; }
+    catch (e) { peopleError = String(e && e.message || e).slice(0, 200); }
+  }
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -86,11 +134,27 @@ async function count(job) {
         out.push(boxes(img, job.fw, job.fh));
       }
       ms += performance.now() - t0;
+      if (people) {
+        let ps = [];
+        if (!out[out.length - 1].length) {
+          const t1 = performance.now();
+          try { ps = peopleIn(img, job.fw, job.fh); }
+          catch (e) {
+            if (!e.gpuLost) throw e;
+            await makePeople(['CPU']);
+            ps = peopleIn(img, job.fw, job.fh);
+          }
+          msP += performance.now() - t1;
+          nP++;
+        }
+        people.push(ps);
+      }
       counted.frames++;
-      if (out.length % 25 === 0) say(`counting ${out.length} / ${job.n} frames (${delegate})`);
+      if (out.length % 25 === 0) say(`counting ${out.length} / ${job.n} frames (${delegate}${people ? ', people ' + pdelegate : ''})`);
     }
   }
-  return { frames: out, msPerFrame: out.length ? ms / out.length : 0 };
+  return { frames: out, msPerFrame: out.length ? ms / out.length : 0, people, peopleError,
+    msPerPeopleFrame: nP ? msP / nP : 0 };
 }
 
 async function loop() {
@@ -111,7 +175,9 @@ async function loop() {
       const got = await count(job);
       await fetch('/api/faces/' + job.id + '/done', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frames: got.frames, model: 'blaze_face_full_range', delegate, msPerFrame: got.msPerFrame }),
+        body: JSON.stringify({ frames: got.frames, model: 'blaze_face_full_range', delegate, msPerFrame: got.msPerFrame,
+          ...(job.people ? { people: got.people, peopleModel: 'efficientdet_lite0', peopleDelegate: pdelegate,
+            msPerPeopleFrame: got.msPerPeopleFrame, peopleError: got.peopleError } : {}) }),
       });
       counted.films++;
       say(`counted ${counted.films} films, ${counted.frames} frames (${delegate}); waiting`);

@@ -1,7 +1,8 @@
 'use strict';
 
 /* fetch-mediapipe.js - puts MediaPipe's face detector into vendor/mediapipe/: the highlights shorts follow the face
-   (phase V33.2; docs/local-app/PLAN.md "Фаза V33", the measurement of 2026-10-21).
+   (phase V33.2; docs/local-app/PLAN.md "Фаза V33", the measurement of 2026-10-21) - and its person detector, for a shot
+   with no face (phase V33.6).
 
    npm install runs it (postinstall, with --optional: no network is a warning, not a failed install).
    By hand, after moving a pin:
@@ -13,7 +14,10 @@
        Chromium runs (the page names it outright instead of letting FilesetResolver test for SIMD and ask for the other);
      - the BlazeFace FULL RANGE model (float16, version 1) from Google's model bucket, by SHA-256. Full range, not short
        range: on the owner's sources it found a face in 76% of the frames against 57%, and in the podcasts' wide two-shots
-       99-100% against 62% (short range does not see a small face); 5.8 ms a frame on the window's GPU.
+       99-100% against 62% (short range does not see a small face); 5.8 ms a frame on the window's GPU;
+     - (phase V33.6) the EfficientDet-Lite0 OBJECT detector (float16, version 1), by SHA-256 - whole PEOPLE, where a
+       highlights short has no face to follow. float16, not int8: int8 on the window's GPU found NOTHING at all (measured
+       2026-10-21); 28.5 ms a frame on the GPU.
    Licences: MediaPipe is Apache-2.0 (its package.json says so; the package carries no text - a note says which it is);
    the model's card gives Apache-2.0 too. */
 
@@ -29,6 +33,11 @@ const PIN = {
     url: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/1/blaze_face_full_range.tflite',
     sha256: '3698b18f063835bc609069ef052228fbe86d9c9a6dc8dcb7c7c2d69aed2b181b',
     file: 'blaze_face_full_range.tflite',
+  },
+  people: {
+    url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',
+    sha256: '4b59100025bea1235a84c1038879a6cccc9f6c49f5e41144e91e74d99e780993',
+    file: 'efficientdet_lite0.tflite',
   },
 };
 const DIR = path.join(__dirname, '..', 'vendor', 'mediapipe');
@@ -73,6 +82,8 @@ async function main() {
   const pk = untar(zlib.gunzipSync(tgz));
   const model = await get(PIN.model.url);
   if (crypto.createHash('sha256').update(model).digest('hex') !== PIN.model.sha256) throw new Error(PIN.model.file + ': not the pinned model');
+  const people = await get(PIN.people.url);
+  if (crypto.createHash('sha256').update(people).digest('hex') !== PIN.people.sha256) throw new Error(PIN.people.file + ': not the pinned model');
 
   fs.rmSync(DIR, { recursive: true, force: true });
   const put = (rel, data) => {
@@ -89,14 +100,17 @@ async function main() {
   put('wasm/vision_wasm_internal.js', noMap(take('wasm/vision_wasm_internal.js').toString('utf8')));
   put('wasm/vision_wasm_internal.wasm', take('wasm/vision_wasm_internal.wasm'));
   put(PIN.model.file, model);
+  put(PIN.people.file, people);
   let declared = 'Apache-2.0';
   try { declared = JSON.parse(take('package.json').toString('utf8')).license || declared; } catch (e) { /* as said above */ }
   put('LICENSES.txt', '@mediapipe/tasks-vision ' + PIN.version + ': ' + declared + ', as its package.json declares; the package carries no licence text.\n'
     + 'https://github.com/google-ai-edge/mediapipe - https://www.apache.org/licenses/LICENSE-2.0\n'
     + PIN.model.file + ' (BlazeFace full range, float16, version 1): Apache-2.0, per its model card.\n'
-    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector\n');
+    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector\n'
+    + PIN.people.file + ' (EfficientDet-Lite0, float16, version 1): Apache-2.0, per its model card.\n'
+    + 'https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector\n');
   fs.writeFileSync(MARK, JSON.stringify(PIN, null, 2));
-  console.log('[mediapipe] ' + PIN.version + ' and ' + PIN.model.file + ' laid out in vendor/mediapipe/');
+  console.log('[mediapipe] ' + PIN.version + ', ' + PIN.model.file + ' and ' + PIN.people.file + ' laid out in vendor/mediapipe/');
 }
 
 main().catch((e) => {
