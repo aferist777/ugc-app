@@ -126,6 +126,7 @@ app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/settings'));
 app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver (phase TG)
 app.use('/api', require('./routes/telegram'));     // the owner's bot: links and media into REFERENCES (phase TG)
+app.use('/api', require('./routes/references'));   // REFERENCES: the posts the bot brought in (phase TG)
 app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder (phase V25)
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
 // how a script is written, routes/scen3.js owns who reads it aloud.
@@ -238,6 +239,9 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // (phase TG) the owner's Telegram bot: its receiver's folder taken, or Telegram asked, while the app is open.
     try { require('./lib/telegram').start(); }
     catch (e) { console.warn('[telegram] could not start:', e.message); }
+    // ...and what it was sent, worked through into REFERENCES (blocks 3-4): what the app closed in the middle of, again.
+    try { require('./lib/references-intake').start(); }
+    catch (e) { console.warn('[references] could not start:', e.message); }
     // And no login: the YouTube cookie jar is gone (the owner, 2026-10-12). One left in an older library is a live
     // session nothing reads any more - it goes.
     for (const f of ['yt-cookies.txt', 'yt-cookies.json']) {

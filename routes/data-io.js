@@ -73,6 +73,9 @@ const GROUPS = [
            'media/heads', 'data/transcripts'],
     stores: ['data/sources.json', 'data/images.json', 'data/biroly.json', 'data/sounds.json', 'data/library-cats.json', 'data/suno-lib.json',
              'data/heads.json'], heavy: true },
+  // (phase TG) REFERENCES: what the Telegram bot brought in - the posts and their files, a folder per source.
+  { id: 'references', label: 'References (posts, links and media sent to the Telegram bot)',
+    dirs: ['media/references'], stores: ['data/references.json'], heavy: true },
   { id: 'renders', label: 'Finished renders',
     dirs: ['media/renders'], stores: [], heavy: true },
   // A project's folder holds its voice, frames, clips and timelines; the timelines point at the
