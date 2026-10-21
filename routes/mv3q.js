@@ -24,6 +24,13 @@
    RENDER ALL. Queuing something does not start it. Render all ARMS the waiting entries, and
    the runner takes armed entries in the order they were queued; each row says how many are
    ahead.
+
+   A HIGHLIGHTS FRAGMENT (phase V33.4, the owner's (х38)-(х44); lib/highlights-render.js). Its entry carries
+   `hl: { id, n }` and comes in ARMED - the project bar's Render is asking for it - without arming anybody else's
+   (addArmed). Its file is named after the fragment's timeline, not mv3q_<number>, and takes the place of the fragment's
+   own earlier render (another file of that name is not touched: "(2)"); done, the fragment's record learns it. The
+   project's renders are stopped together (stopWhere: the waiting ones taken out, the one under the encoder killed and
+   its draft deleted) and gone on with together (armWhere - the Queue's "go on" on the project's row).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -84,11 +91,46 @@ function next() {
   return runBlank(item);
 }
 
+// (phase V33.4) Entries asked to stop while they were being prepared or rendered (stopWhere).
+const _stopping = new Set();
+
+// Take an entry out of the list - one that was stopped.
+function _drop(id) {
+  const t = read();
+  const before = t.items.length;
+  t.items = t.items.filter(x => x.id !== id);
+  if (t.items.length !== before) write(t);
+}
+
+// Where an entry's file goes. A highlights fragment's is named after its timeline (lib/names.js, as the timeline's own
+// file) and takes the place of its own earlier render; anything else's is mv3q_<number> until the result window names it.
+function _finalFor(item) {
+  const dir = require('../lib/shelf-files').rendersDir(item.key).dir;
+  if (!item.hl) return path.join(dir, 'mv3q_' + Date.now() + '.mp4');
+  const { folderName, uniqueName } = require('../lib/names');
+  const t = require('../lib/highlights-render').target(item);
+  const own = t.replace ? path.basename(String(require('../lib/media').toDisk(t.replace) || '')).toLowerCase() : '';
+  let taken = [];
+  try {
+    taken = fs.readdirSync(dir).filter(f => /\.mp4$/i.test(f) && !JOB.isDraft(f) && f.toLowerCase() !== own)
+      .map(f => f.replace(/\.mp4$/i, ''));
+  } catch (e) { /* a new folder */ }
+  return path.join(dir, uniqueName(folderName(t.name, 'render'), taken) + '.mp4');
+}
+
 // Marked running (and _active) before this is called, so nothing starts it twice while the files
 // are being asked about.
 async function runBlank(item) {
   // The same preparation Export -> Render uses (lib/mv3b-job.js): captions included.
   const built = await JOB.prepare(item.timeline, item.id, item.adv);
+  // Stopped while it was being prepared (phase V33.4): it goes without a frame encoded.
+  if (_stopping.has(item.id)) {
+    _stopping.delete(item.id);
+    if (built.dispose) built.dispose();
+    _drop(item.id);
+    _active = null;
+    return next();
+  }
   if (built.error) {
     const t = read();
     const it = t.items.find(x => x.id === item.id);
@@ -100,8 +142,17 @@ async function runBlank(item) {
 
   // Into the folder of the project the entry's timeline belongs to (lib/shelf-files.js).
   // Written under a draft name the shelf does not show, and given its own at the end (lib/mv3b-job.js, drafts).
-  const name = 'mv3q_' + Date.now() + '.mp4';
-  const final = path.join(require('../lib/shelf-files').rendersDir(item.key).dir, name);
+  let final;
+  try { final = _finalFor(item); }
+  catch (e) {
+    built.dispose();
+    const t = read();
+    const it = t.items.find(x => x.id === item.id);
+    if (it) { it.status = 'failed'; it.error = 'no place for its file (' + e.message + ')'; }
+    write(t);
+    _active = null;
+    return next();
+  }
   const out = JOB.draftOf(final);
   _startedAt = Date.now();
   const done = BUSY.start();
@@ -132,6 +183,15 @@ async function runBlank(item) {
   _proc.on('close', async (code) => {
     _proc = null;
     built.dispose();
+    // Stopped under the encoder (phase V33.4): the entry goes, and its draft with it - nothing of it is left.
+    if (_stopping.has(item.id)) {
+      _stopping.delete(item.id);
+      JOB.dropDraft(out);
+      done();
+      _active = null;
+      _drop(item.id);
+      return next();
+    }
     let ok = code === 0 && fs.existsSync(out);
     let error = ok ? null : 'ffmpeg exited ' + code;
     let warning = null;
@@ -155,6 +215,8 @@ async function runBlank(item) {
     if (!ok) JOB.dropDraft(out);
     done();
     _active = null;
+    // Stopped while its finished file was being worked on: it is made, and kept (only an encode can be cut off).
+    _stopping.delete(item.id);
     const t = read();
     const it = t.items.find(x => x.id === item.id);
     if (it) {
@@ -164,10 +226,16 @@ async function runBlank(item) {
       it.tookMs = Date.now() - _startedAt;
     }
     write(t);
+    // (phase V33.4) A highlights fragment's render: its record learns it (lib/highlights-render.js).
+    if (ok && it && it.hl) {
+      try { require('../lib/highlights-render').rendered(it, final); }
+      catch (e) { console.warn('[mv3q] a fragment did not learn of its render:', e.message); }
+    }
     next();
   });
   _proc.on('error', (e) => {
     _proc = null; _active = null;
+    _stopping.delete(item.id);
     done();
     built.dispose();
     JOB.dropDraft(out);
@@ -220,8 +288,14 @@ router.get('/mv3q', (req, res) => {
   for (const it of s.items) {
     if (it.status === 'running' || (it.status === 'queued' && it.armed)) ahead.set(it.id, line++);
   }
+  // (phase V33.4) A highlights fragment's entry says its project's name as it is now - the Queue shows them as one row.
+  const names = new Map();
+  const nameOf = (id) => {
+    if (!names.has(id)) { let e = null; try { e = require('../lib/highlights-store').entry(id); } catch (err) { /* no store */ } names.set(id, e ? e.name : ''); }
+    return names.get(id);
+  };
   const items = s.items.filter(it => _canSee(it, req))
-    .map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null }));
+    .map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null, ...(it.hl ? { hlName: nameOf(it.hl.id) } : {}) }));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
   // `running` is the machine's, not the person's: the encoder is busy for everyone.
@@ -281,6 +355,13 @@ router.delete('/mv3q/:id', (req, res) => {
 // it while the encoder is busy with somebody else's render is fine - the entries are armed
 // and take their turn. Pressing it twice does not start a second runner.
 router.post('/mv3q/run', (req, res) => {
+  // (phase V33.4, the owner's (х44а)) `hl`: only that highlights project's entries - interrupted or failed - go on; nobody
+  // else's waiting ones are started (the Queue's "go on" on the project's row).
+  const hl = String((req.body || {}).hl || '');
+  if (hl) {
+    const n = armWhere(x => !!x.hl && x.hl.id === hl);
+    return res.json({ success: true, armed: n, already: !!_active && n === 0 });
+  }
   const s = read();
   let freed = 0, armed = 0;
   for (const it of s.items) {
@@ -376,6 +457,96 @@ function removeByUrl(url) {
   return before - s.items.length;
 }
 
+// ── Entries put in by the server (phase V33.4: a highlights project's Render) ─
+// In line at once, ARMED - the press was asking for them - and the runner woken; nobody else's waiting entries are armed.
+// `list`: [{ key, title, timeline, adv, dur, hl, rev }]. Returns the new ids, in order.
+function addArmed(list) {
+  const s = read();
+  const ids = [];
+  for (const b of (list || [])) {
+    if (!(b && b.timeline && Array.isArray(b.timeline.tracks))) continue;
+    const item = {
+      id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
+      key: String(b.key || ''), title: String(b.title || 'Untitled').slice(0, 120),
+      kind: 'blank', status: 'queued', addedAt: new Date().toISOString(),
+      timeline: b.timeline, adv: b.adv && typeof b.adv === 'object' ? b.adv : null,
+      url: null, error: null, owner: OWN.uidOf(), ownerNick: null,
+      armed: true, dur: Number(b.dur) > 0 ? Number(b.dur) : null,
+      ...(b.hl ? { hl: { id: String(b.hl.id), n: Number(b.hl.n) } } : {}),
+      ...(b.rev != null ? { rev: Number(b.rev) || 0 } : {}),
+      // One press's entries share it: "rendering 2 of 5" counts them.
+      ...(b.batch ? { batch: String(b.batch) } : {}),
+    };
+    item.summary = summarise(item);
+    s.items.push(item);
+    ids.push(item.id);
+  }
+  write(s);
+  if (ids.length && !_active) next();
+  return ids;
+}
+
+// Entries matching `pred` that are not under the encoder and not done, taken out. Returns how many.
+function removeWhere(pred) {
+  const s = read();
+  const before = s.items.length;
+  s.items = s.items.filter(x => !(pred(x) && x.status !== 'done' && x.id !== _active));
+  if (s.items.length !== before) write(s);
+  return before - s.items.length;
+}
+
+// Entries matching `pred` taken out whatever their state - except the one under the encoder. Returns how many. (A fragment
+// rendered again: its older finished entries, which named the file the new render has taken over.)
+function forgetWhere(pred) {
+  const s = read();
+  const before = s.items.length;
+  s.items = s.items.filter(x => !(pred(x) && x.id !== _active));
+  if (s.items.length !== before) write(s);
+  return before - s.items.length;
+}
+
+// Stopped (the owner's (х43)): the waiting ones taken out, the one under the encoder killed - its entry and its draft go
+// when ffmpeg has exited (runBlank). Returns { removed, stopping } - stopping: one was under the encoder.
+function stopWhere(pred) {
+  const removed = removeWhere(pred);
+  let stopping = false;
+  if (_active) {
+    const it = read().items.find(x => x.id === _active);
+    if (it && pred(it) && it.status === 'running' && !it.phase) {
+      _stopping.add(it.id);
+      stopping = true;
+      if (_proc) { try { _proc.kill(); } catch (e) { /* gone already */ } }
+    }
+  }
+  return { removed, stopping };
+}
+
+// Interrupted or failed entries matching `pred` back in line, armed; the runner woken. Returns how many.
+function armWhere(pred) {
+  const s = read();
+  let n = 0;
+  for (const it of s.items) {
+    if (!pred(it)) continue;
+    if (it.status === 'failed' || (it.status === 'queued' && !it.armed)) {
+      it.status = 'queued'; it.armed = true; it.interrupted = false;
+      it.error = null; it.url = null; it.percent = 0; it.remain = null; it.phase = null;
+      n++;
+    }
+  }
+  if (n) write(s);
+  if (n && !_active) next();
+  return n;
+}
+
+// The entries matching `pred`, each with how many are in line before it (null when it is not in line).
+function entriesOf(pred) {
+  const s = read();
+  const ahead = new Map();
+  let line = 0;
+  for (const it of s.items) if (it.status === 'running' || (it.status === 'queued' && it.armed)) ahead.set(it.id, line++);
+  return s.items.filter(pred).map(it => ({ ...it, ahead: ahead.has(it.id) ? ahead.get(it.id) : null }));
+}
+
 // A ROW INTERRUPTED (phase V23): an entry the app was closed or restarted in the middle of goes back to waiting for
 // Render all - it stayed armed and "next" for ever, and Render all only counts what is not armed.
 function _interrupted(it) {
@@ -383,10 +554,12 @@ function _interrupted(it) {
   it.status = 'queued'; it.armed = false; it.interrupted = true;
   it.percent = 0; it.remain = null; it.phase = null;
 }
+// (phase V33.4, the owner's (х44)) So do the ones that were IN LINE - armed, not reached yet: nothing starts the runner
+// when the server starts, and left armed they said "in line · next" for ever. Nothing goes on by itself after a start.
 try {
   const s0 = read();
-  if (s0.items.some(x => x.status === 'running') || s0.running) {
-    for (const it of s0.items) if (it.status === 'running') _interrupted(it);
+  if (s0.items.some(x => x.status === 'running' || (x.status === 'queued' && x.armed)) || s0.running) {
+    for (const it of s0.items) if (it.status === 'running' || (it.status === 'queued' && it.armed)) _interrupted(it);
     s0.running = false;
     write(s0);
   }
@@ -399,3 +572,9 @@ module.exports.fileFinished = fileFinished;
 module.exports.updateEntry = updateEntry;
 module.exports.findByUrl = findByUrl;
 module.exports.removeByUrl = removeByUrl;
+module.exports.addArmed = addArmed;
+module.exports.removeWhere = removeWhere;
+module.exports.forgetWhere = forgetWhere;
+module.exports.stopWhere = stopWhere;
+module.exports.armWhere = armWhere;
+module.exports.entriesOf = entriesOf;

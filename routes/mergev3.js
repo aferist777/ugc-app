@@ -337,7 +337,6 @@ const MVQ = require('./mv3q');
 const _ROOT_DIR = require('../lib/config').ROOT_DIR;
 const { toUrl } = require('../lib/media');
 const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100);
-const _thumbAbs = (url) => { try { return path.join(_ROOT_DIR, String(thumbUrlFor(url)).replace(/^\/+/, '')); } catch (e) { return null; } };
 
 router.post('/mv3/render/finish', (req, res) => {
   try {
@@ -352,21 +351,20 @@ router.post('/mv3/render/finish', (req, res) => {
 
 // Renames the file (and its poster) to `name` in its own project folder, uniquified. Returns the
 // new url.
+// (phase V33.4) THROUGH lib/relocate.js: the file moves with its poster and its subtitles file (phase V30, block 4), and
+// every store that names them follows - the queue's entry, and a highlights fragment's record of its render among them.
 function _renameFinal(abs, url, name) {
   const want = _safeName(name);
   if (!want || want + '.mp4' === path.basename(abs)) return { abs, url };
   const dir = path.dirname(abs);
   let target = path.join(dir, want + '.mp4');
   for (let n = 2; fs.existsSync(target); n++) target = path.join(dir, `${want} (${n}).mp4`);
-  fs.renameSync(abs, target);
+  const from = toUrl(abs);
   const nextUrl = toUrl(target);
-  try {
-    const oldT = _thumbAbs(url), newT = _thumbAbs(nextUrl);
-    if (oldT && newT && fs.existsSync(oldT)) fs.renameSync(oldT, newT);
-  } catch (e) { /* a poster is remade on demand */ }
-  // Its subtitles file takes the same name (phase V30, block 4).
-  try { const s = JOB.srtOf(abs); if (fs.existsSync(s)) fs.renameSync(s, JOB.srtOf(target)); }
-  catch (e) { console.warn('[mv3] a render\'s subtitles file kept its old name:', e.message); }
+  const files = [[from, nextUrl]];
+  const s = JOB.srtOf(abs);
+  if (fs.existsSync(s)) files.push([toUrl(s), toUrl(JOB.srtOf(target))]);
+  require('../lib/relocate').relocate({ files });
   return { abs: target, url: nextUrl };
 }
 
@@ -384,7 +382,9 @@ router.post('/mv3/render/save', async (req, res) => {
     let thumb = null;
     try { thumb = await makeThumb(moved.url); } catch (e) { /* a missing poster is not a reason to lose the render */ }
     const patch = { url: moved.url, title: name };
-    const entry = (b.queueId && MVQ.updateEntry(String(b.queueId), patch)) || (MVQ.findByUrl(b.url) && MVQ.updateEntry(MVQ.findByUrl(b.url).id, patch)) || null;
+    // Its entry - by its id, or by the address it had (or has: the move rewrote the queue's store too).
+    const byUrl = MVQ.findByUrl(b.url) || MVQ.findByUrl(moved.url);
+    const entry = (b.queueId && MVQ.updateEntry(String(b.queueId), patch)) || (byUrl && MVQ.updateEntry(byUrl.id, patch)) || null;
     res.json({ success: true, url: moved.url, name, thumb: thumb || null, queueId: entry ? entry.id : null, srt: _srtUrl(moved.abs) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

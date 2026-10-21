@@ -15,6 +15,8 @@
 //   POST   /api/highlights/:id/fragments/:n/title    { title } -> { title, timeline }
 //   POST   /api/highlights/:id/style             { ns, preset } -> { n, name } one caption style on several made fragments
 //   POST   /api/highlights/:id/fragments/:n/title-on-top   the title on top added to a made fragment
+//   POST   /api/highlights/:id/render       { ns, adv } -> { queued, skipped }  the ticked rendered together (V33.4)
+//   POST   /api/highlights/:id/render/stop  all of the project's renders stopped (V33.4, the owner's (х43))
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -24,6 +26,7 @@ const YTDLP = require('../lib/ytdlp');
 const ALERTS = require('../lib/alerts');
 const MSTORE = require('../lib/merge-store');
 const CUT = require('../lib/highlights-cut');
+const RENDER = require('../lib/highlights-render');
 
 const router = express.Router();
 
@@ -41,10 +44,15 @@ function view(rec, o) {
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
   const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, poster: (src && src.thumbPath) || '' };
   if (o && o.caps) {
+    // (phase V33.4) And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
+    const rv = RENDER.viewOf(rec);
     out.fragments = (rec.fragments || []).map((f) => {
       const tl = f.state === 'ready' && f.key ? MSTORE.one(f.key) : null;
-      return tl ? { ...f, cap: CUT.capOf(tl) } : f;
+      const r = rv.byN[f.n] || {};
+      return { ...f, ...(tl ? { cap: CUT.capOf(tl) } : {}), rq: r.line || null, rendered: r.render || null };
     });
+    out.rendering = rv.rendering;
+    out.renderTrouble = { interrupted: rv.interrupted, failed: rv.failed };
   }
   return out;
 }
@@ -129,6 +137,21 @@ router.post('/highlights/:id/fragments/:n/title-on-top', (req, res) => {
     if (f.state !== 'ready' || !f.key) return res.status(409).json({ success: false, error: 'the fragment is not made yet' });
     if (!CUT.addTitle(f.key, f.headline || f.title)) return res.status(409).json({ success: false, error: 'it has a title already, or two text lanes' });
     res.json({ success: true });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+
+// (phase V33.4) The ticked fragments rendered together with one set of export settings - into the render queue, armed
+// (lib/highlights-render.js); and all of the project's renders stopped.
+router.post('/highlights/:id/render', (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ success: true, ...RENDER.render(req.params.id, b.ns, b.adv) });
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
+});
+router.post('/highlights/:id/render/stop', (req, res) => {
+  try {
+    if (!HL.get(req.params.id)) return res.status(404).json({ success: false, error: 'no such highlights project' });
+    res.json({ success: true, ...RENDER.stop(req.params.id) });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
