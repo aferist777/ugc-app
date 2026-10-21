@@ -45,9 +45,9 @@ export function closePopup() {
 
 /**
  * Open it for project `id` (its record `rec`: the lengths and counts it offers). `onStarted(alertId)` once the server
- * took the press.
+ * took the press. `url` (phase TG, block 5c) - a link written in already: a long video of REFERENCES sent "to highlights".
  */
-export function openPopup(id, rec, { onStarted } = {}) {
+export function openPopup(id, rec, { onStarted, url } = {}) {
   if (_win) return;
   let remembered = {};
   try { remembered = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {}; } catch (e) { remembered = {}; }
@@ -97,6 +97,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
   link.type = 'text';
   link.placeholder = 'https://www.youtube.com/watch?v=…  - one video';
   link.addEventListener('input', () => { st.url = link.value.trim(); paint(); });
+  if (url) { st.url = String(url).trim(); link.value = st.url; }
   link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
   panes.link = _el('div', 'mv3-hlp-pane');
   panes.link.appendChild(link);

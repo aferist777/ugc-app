@@ -130,6 +130,17 @@ router.post('/references/:id/move', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// GET /api/references/:id/watch -> { url }   (block 5c) a long video kept as a tile, watched from its site: the address of
+// a stream with picture and sound (lib/ytdlp.js streamUrl). Not YouTube's - that one plays in its own player.
+router.get('/references/:id/watch', async (req, res) => {
+  try {
+    const p = REFS.read().find(x => x && String(x.id) === String(req.params.id));
+    if (!p) return res.status(404).json({ success: false, error: 'no such post' });
+    if (!p.link) return res.status(400).json({ success: false, error: 'this post has no link' });
+    res.json({ success: true, url: await require('../lib/ytdlp').streamUrl(p.link) });
+  } catch (e) { res.status(502).json({ success: false, error: e.message }); }
+});
+
 // DELETE /api/references/:id   -> { removed: [file names] }
 // The post and its files go - each file with what is derived from it (its thumbnail, a preview copy: lib/relocate.js
 // siblingsOf) - the record first, in one tick, then the files.

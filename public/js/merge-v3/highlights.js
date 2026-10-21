@@ -247,15 +247,16 @@ export function initHighlights() {
 }
 let _inField = false;
 
-/** "+ new project -> highlights": a new project, opened, and its popup at once. */
-export async function createHighlights() {
+/** "+ new project -> highlights": a new project, opened, and its popup at once. `opts` (phase TG, block 5c): { url } written
+ *  into the popup, `onStarted()` once the server took the press - a long video of REFERENCES sent "to highlights". */
+export async function createHighlights(opts = {}) {
   const d = await _api('/api/highlights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   await Store.open(d.key);
   roomForWork();
   setOpenColumn('library');
   _show(true);
   await _load();
-  _popup();
+  _popup(opts);
 }
 
 // ── The record ──────────────────────────────────────────────────────────────
@@ -303,9 +304,12 @@ function _stopPoll() { if (_timer) { clearTimeout(_timer); _timer = 0; } }
 const _busy = () => !!(_live || (_rec && _rec.rendering));
 let _stoppedNow = false;
 
-function _popup() {
+function _popup(opts = {}) {
   if (!_pid || !_rec) return;
-  openPopup(_pid, _rec, { onStarted: () => { _load(); } });
+  openPopup(_pid, _rec, { url: opts.url || '', onStarted: (...a) => {
+    _load();
+    if (typeof opts.onStarted === 'function') { try { opts.onStarted(...a); } catch (e) { /* the caller's */ } }
+  } });
 }
 
 // ── The view ────────────────────────────────────────────────────────────────

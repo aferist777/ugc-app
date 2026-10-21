@@ -124,6 +124,7 @@ export function openPost(list, at, o) {
         <span class="ref-view-where"></span>
         <span class="lib-view-count"></span>
         <span class="sp"></span>
+        <span class="ref-said"></span>
         <span class="lib-view-acts"></span>
         <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
       </div>
@@ -135,7 +136,6 @@ export function openPost(list, at, o) {
             <span class="ref-strip-n"></span>
             <button class="lib-btn" data-x="all" type="button"></button>
             <span class="sp"></span>
-            <span class="ref-said"></span>
             <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a category of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
           </div>
           <div class="ref-strip"></div>
@@ -183,6 +183,7 @@ function _step(d) {
   _v.at = (_v.at + d + _v.list.length) % _v.list.length;
   _v.file = 0;
   _v.sel = new Set();
+  _v.ov.querySelector('.ref-said').textContent = '';
   _paint();
 }
 
@@ -208,12 +209,33 @@ function _paintStage() {
   stage.textContent = '';
   const m = it.meta || {};
   if (m.remote) {
-    // A long video kept as a tile: its poster; watching it here comes with block 5c.
+    // (block 5c; the owner: "при клике на плитку пользователь видит видео") A long video kept as a tile, WATCHED without
+    // downloading: YouTube in its own player, any other site from the stream yt-dlp names (GET .../watch) - and where a
+    // site gives none, its poster and the way to it in the browser.
     const w = el('div', 'ref-remote');
-    if (m.poster) { const im = el('img', 'lib-view-media'); im.src = m.poster; im.alt = ''; w.appendChild(im); }
     const cap = el('div', 'ref-remote-cap');
-    cap.appendChild(el('span', null, '▷ ' + mmss(m.remote.dur) + ' · not downloaded '));
+    cap.appendChild(el('span', null, '▷ ' + mmss(m.remote.dur) + ' · watched from the site, not downloaded · '));
     if (m.link) { const a = el('a', null, 'open it in the browser'); a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; cap.appendChild(a); }
+    const yt = /youtube/i.test(String(m.remote.site || '')) && m.remote.id;
+    if (yt) {
+      const f = el('iframe', 'ref-player');
+      f.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(m.remote.id) + '?autoplay=1&rel=0&modestbranding=1';
+      f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+      f.allowFullscreen = true;
+      f.referrerPolicy = 'strict-origin-when-cross-origin';
+      w.appendChild(f);
+    } else {
+      const im = el('img', 'lib-view-media');
+      if (m.poster) { im.src = m.poster; im.alt = ''; w.appendChild(im); }
+      const it0 = it;
+      fetch('/api/references/' + encodeURIComponent(it.id) + '/watch').then(r => r.json()).then((d) => {
+        if (!_v || _cur() !== it0 || !d || !d.success) { if (d && !d.success) cap.firstChild.textContent = '▷ ' + mmss(m.remote.dur) + ' · ' + d.error + ' · '; return; }
+        const v = el('video', 'lib-view-media');
+        v.src = d.url; v.controls = true; v.autoplay = true; v.playsInline = true;
+        v.addEventListener('error', () => { cap.firstChild.textContent = '▷ the site would not play it here · '; v.replaceWith(im); }, { once: true });
+        if (im.isConnected) im.replaceWith(v); else w.insertBefore(v, cap);
+      }).catch(() => { /* the poster stays */ });
+    }
     w.appendChild(cap);
     stage.appendChild(w);
     return;
@@ -324,6 +346,24 @@ function _paintActs(it) {
   mv.title = 'Move the whole post';
   mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
   box.appendChild(mv);
+  // (block 5c) A long video kept as a tile goes on from here - and leaves REFERENCES (the owner's answer (о)).
+  if (it.meta && it.meta.remote && it.meta.link) {
+    const src = el('button', 'lib-btn', 'To scenario sources');
+    src.type = 'button';
+    src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. It leaves REFERENCES.';
+    src.addEventListener('click', () => _toSources(it, src));
+    box.appendChild(src);
+    const hl = el('button', 'lib-btn', 'To highlights');
+    hl.type = 'button';
+    hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. It leaves REFERENCES once the project starts.';
+    hl.addEventListener('click', () => {
+      const u = '/merge?highlights=' + encodeURIComponent(it.meta.link) + '&ref=' + encodeURIComponent(it.id);
+      closePost();
+      if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link, it.id);
+      else location.href = u;
+    });
+    box.appendChild(hl);
+  }
   const del = el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
@@ -350,6 +390,57 @@ function _paintActs(it) {
     _paint();
   });
   box.appendChild(del);
+}
+
+// ── to the scenario sources (block 5c) ───────────────────────────────────────
+// The same way in as the Sources' "From a link" (POST /api/sources/add/link; lib/source-intake.js): read, then a source -
+// downloaded, heard and its topics found, one row in Alerts. Paid: asked on the button itself, a second press goes. A
+// vertical or square video is asked about there - from here it was chosen as a source. Once it is a source (or was one
+// already) the post leaves REFERENCES.
+async function _toSources(it, btn) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = '1';
+    btn.textContent = 'paid: hearing + topics - press again';
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'To scenario sources'; } }, 5000);
+    return;
+  }
+  delete btn.dataset.armed;
+  btn.disabled = true;
+  const said = _v.ov.querySelector('.ref-said');
+  const say = (t) => { if (_v && said.isConnected) said.textContent = t; btn.textContent = t.length < 40 ? t : 'To scenario sources'; };
+  say('reading the link…');
+  const api = async (url, body) => {
+    const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+    const d = await r.json().catch(() => null);
+    if (!d || !d.success) throw new Error((d && d.error) || 'no answer');
+    return d;
+  };
+  let read = null;
+  try {
+    read = (await api('/api/sources/add/link', { url: it.meta.link })).read;
+    for (let i = 0; i < 90 && read && read.state === 'reading'; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      read = (await api('/api/sources/add/' + encodeURIComponent(read.id))).read;
+    }
+    if (read && read.state === 'ask') read = (await api('/api/sources/add/' + encodeURIComponent(read.id) + '/answer', { as: 'source' })).read;
+  } catch (e) { say('not added: ' + e.message); btn.disabled = false; return; }
+  const already = read && read.state === 'error' && /source already/i.test(String(read.error || ''));
+  if (!read || (read.state !== 'source' && !already)) {
+    say('not added: ' + ((read && (read.error || read.step)) || 'the link was not read'));
+    btn.disabled = false;
+    btn.textContent = 'To scenario sources';
+    return;
+  }
+  try { await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }); } catch (e) { /* it stays - the source is made */ }
+  if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
+  const words = already ? 'it was a source already - it left REFERENCES' : 'added to the scenario sources - its row is in Alerts';
+  _v.list = _v.list.filter(x => x !== it);
+  if (!_v.list.length) { closePost(); return; }
+  if (_v.at >= _v.list.length) _v.at = _v.list.length - 1;
+  _v.file = 0;
+  _v.sel = new Set();
+  _paint();
+  _v.ov.querySelector('.ref-said').textContent = words;
 }
 
 // ── moving (block 5b) ────────────────────────────────────────────────────────

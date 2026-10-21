@@ -86,6 +86,34 @@ const _OPENERS = { pictures: _pictures, videos: _videos };
   });
 })();
 
+// (phase TG, block 5c; the owner's answer (ю)) ?highlights=<a link>&ref=<a post> - a long video of REFERENCES sent "to
+// highlights": a new highlights project with its popup open and the link written in; once the project starts, the post
+// leaves REFERENCES. From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
+async function _highlightsFrom(url, ref) {
+  const HL = await import('./highlights.js');
+  await HL.createHighlights({ url, onStarted: () => {
+    if (ref) fetch('/api/references/' + encodeURIComponent(ref), { method: 'DELETE' }).catch(() => { /* it stays */ });
+  } });
+}
+window.__ugcHighlightsFrom = (url, ref) => { _highlightsFrom(url, ref).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
+(() => {
+  let url = '', ref = '';
+  try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; ref = q.get('ref') || ''; } catch (e) { return; }
+  if (!url) return;
+  let done = false;
+  Store.onChange(() => {
+    if (done || !Store.key()) return;
+    done = true;
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('highlights');
+      u.searchParams.delete('ref');
+      history.replaceState({}, '', u);
+    } catch (e) { /* a reload would make another project */ }
+    _highlightsFrom(url, ref).catch(e => console.warn('[merge-v3] highlights:', e.message));
+  });
+})();
+
 // ?reveal=<a file> in the address - how the Alerts row of a picture that has landed brings
 // somebody to it (js/alerts-bell.js, phase L4): the Library open on the images shelf, the picture
 // lit. In a talking head the Library comes with the timeline step, so that step is taken first,
