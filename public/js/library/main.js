@@ -25,6 +25,8 @@ import { createTree, setMediaDrag } from '../media-tree.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
+// (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
+import * as RP from '../references/post.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -369,6 +371,15 @@ async function _runAction(id, it) {
     // server's (favourites first, then date). A local repaint would leave it where it was.
     return { reload: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
   }
+  if (id === 'del' && it.kind === 'references') {
+    // (phase TG) A post of REFERENCES goes with its files - its own route.
+    const n = ((it.meta && it.meta.items) || []).length;
+    if (!confirm(`Delete the post "${it.name}"${n ? ` and its ${n} file${n === 1 ? '' : 's'}` : ''}?`)) return { changed: false };
+    const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
+    if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
+    _items = _items.filter(x => x !== it);
+    return { removed: true, reload: true, msg: 'Post deleted' };
+  }
   if (id === 'del') {
     if (!confirm(await A.deleteQuestion(it))) return { changed: false };
     await A.deleteItem(it);
@@ -390,6 +401,15 @@ async function _apply(r) {
   }
   else if (r.changed) { _renderGrid(); _showSelected(); }
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
+}
+
+// (phase TG) A post of REFERENCES in the post viewer (js/references/post.js), paging through the posts on view; a post
+// deleted there reads the shelf and the tree again.
+function _openPost(it, file) {
+  const posts = _items.filter(x => x.kind === 'references');
+  const at = posts.findIndex(x => String(x.id) === String(it.id));
+  if (at < 0) { _status('That post is no longer here', 'err'); return; }
+  RP.openPost(posts, at, { file, onChanged: () => _apply({ removed: true, reload: true, msg: 'Post deleted' }) });
 }
 
 // Open in the viewer, with the same actions available there. `follow` is told every item the viewer
@@ -641,6 +661,8 @@ function _card(it, extra) {
   }
 
   if (extra) card.appendChild(extra);
+  // (phase TG) A post of REFERENCES: how many files, and its miniatures on hover - a press on one opens the post on it.
+  if (it.kind === 'references') RP.decorate(card, it, (post, file) => _openPost(post, file));
   // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
   // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
   // miniature, not the file. What the old menu offered is in the viewer and on the tile.
@@ -747,6 +769,7 @@ function _renderGrid() {
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel);
       if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
+      else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
       else card.addEventListener('click', () => _open(it, _shelf === 'media' ? seen : null));
     }
     grid.appendChild(card);

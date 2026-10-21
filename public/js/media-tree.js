@@ -3,6 +3,7 @@
    media: Merge's Library panel (js/merge-v3/library.js) and the Library's Media shelf (js/library/main.js). The
    gallery is on the left, this tree on the right:
 
+     REFERENCES -> Files, Instagram (Posts, Reels), YouTube (Shorts, Videos), TikTok (Posts, Videos), Other  (phase TG)
      VIDEO   -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
      IMAGES  -> its categories
      AUDIO   -> Music, SFX -> categories
@@ -58,7 +59,8 @@ function _dragKind(dt) {
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
-  if (!n.kind || n.kind === 'heads' || n.kind === 'music') return null;
+  // (phase TG) REFERENCES takes nothing let go on it yet - moving posts is block 5b.
+  if (!n.kind || n.kind === 'heads' || n.kind === 'music' || n.kind === 'references') return null;
   const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
   return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
 }

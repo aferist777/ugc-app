@@ -20,6 +20,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
+// (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
+import * as RP from '../references/post.js';
 import * as Layers from '../layers.js';
 import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages, uploadSounds, uploadMusic,
          loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
@@ -177,6 +179,36 @@ function _tile(it, list) {
     tag.className = 'mv3-tile-hid' + ((it.meta || {}).used ? ' is-used' : '');
     tag.textContent = (it.meta || {}).line ? 'L' + it.meta.line : '';
     if (tag.textContent) cell.appendChild(tag);
+  }
+
+  // (phase TG, block 5) A post of REFERENCES: its count and its hover of miniatures; a press opens the post viewer; the
+  // cross deletes the post ("really?" on the cross itself). Onto a lane - block 5d.
+  if (it.kind === 'references') {
+    const open = (post, file) => {
+      const posts = list.filter(x => x.kind === 'references');
+      RP.openPost(posts, posts.indexOf(post), { file, onChanged: () => _reload() });
+    };
+    RP.decorate(cell, it, open);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'mv3-tile-btn mv3-tile-del';
+    del.textContent = '✕';
+    del.title = 'Delete this post and its files';
+    let armed = null;
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!armed) { del.textContent = '?'; del.title = 'Press again to delete'; armed = setTimeout(() => { armed = null; del.textContent = '✕'; }, 3000); return; }
+      clearTimeout(armed);
+      del.disabled = true;
+      try {
+        const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
+        if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
+        await _reload();
+      } catch (err) { alert(err.message); del.disabled = false; del.textContent = '✕'; armed = null; }
+    });
+    cell.appendChild(del);
+    cell.addEventListener('click', () => open(it, 0));
+    return cell;
   }
 
   if (_fixed(it)) {

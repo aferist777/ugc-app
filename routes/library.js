@@ -355,6 +355,33 @@ function _mediaShelf(opts) {
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
     .filter(i => _onDisk(i.media));
+  // (phase TG, block 5) REFERENCES - one tile per POST, only when asked (the tree's REFERENCES): newest first, after the
+  // rest. A post's files ride along in `meta.items` (the hover's miniatures, the post viewer's strip); a long video kept
+  // as a tile (`meta.remote`) has its poster for `media`.
+  if (opts && opts.refs) {
+    for (const p of require('../lib/references-store').read()) {
+      if (!p || !p.id) continue;
+      const files = (Array.isArray(p.media) ? p.media : []).filter(m => m && m.path);
+      const first = files[0];
+      const one = files.length === 1 && first.type === 'video';
+      items.push({
+        id: String(p.id),
+        name: String(p.title || '').trim() || 'post',
+        kind: 'references',
+        media: first ? first.path : (p.poster || ''),
+        thumb: p.poster || (first && first.thumb) || null,
+        dur: one ? (+first.dur || 0) : (p.remote ? (+p.remote.dur || 0) : 0),
+        meta: {
+          categoryId: p.cat || '', date: p.receivedAt || null, favorite: false,
+          source: p.source || '', folder: p.folder || '', author: p.author || '', link: p.link || '',
+          caption: p.caption || '', note: p.note || '', origin: p.origin || '', postedAt: p.postedAt || '',
+          remote: p.remote || null, poster: p.poster || null,
+          items: files.map(m => ({ id: m.id, type: m.type, path: m.path, thumb: m.thumb || null, w: m.w || 0, h: m.h || 0, dur: m.dur || 0 })),
+          w: (first && first.w) || (p.remote && p.remote.w) || 0, h: (first && first.h) || (p.remote && p.remote.h) || 0,
+        },
+      });
+    }
+  }
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
@@ -363,6 +390,7 @@ function _mediaShelf(opts) {
     || (Number(a.kind === 'heads') - Number(b.kind === 'heads'))
     || ((a.kind === 'heads' && b.kind === 'heads')
       ? (_abc(a.meta.project, b.meta.project) || (a.meta.line - b.meta.line) || (_ts(b.meta.date) - _ts(a.meta.date))) : 0)
+    || (Number(a.kind === 'references') - Number(b.kind === 'references'))
     || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
 
@@ -424,12 +452,14 @@ function _mediaCats(items, kind, labelFor) {
 // "2026-10-02"). Generated, Hooks and Uploads are locked; so are the required categories.
 // B-rolls has no Uncategorized of its own: a B-roll with no category is Generated's Uncategorized (the owner).
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
-const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'] };
+const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'],
+  // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js).
+  references: ['references'] };
 const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
 function _tree() {
-  const { items, labelFor } = _mediaShelf({ music: true, heads: true });
+  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   const catsOf = (kind, list, withUncat) => {
@@ -492,7 +522,21 @@ function _tree() {
   video.count = video.children.reduce((n, c) => n + c.count, 0);
   const audio = { key: 'audio', label: 'AUDIO', q: { group: 'audio' }, children: [kindNode('music'), kindNode('sounds')] };
   audio.count = audio.children.reduce((n, c) => n + c.count, 0);
-  return [video, kindNode('images', 'images', 'IMAGES'), audio];
+  // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
+  // folder per source and its kind of post; the folders are the app's (locked).
+  const refs = byKind.references || [];
+  const nOf = (s, f) => refs.filter(i => i.meta.source === s && (!f || i.meta.folder === f)).length;
+  const references = { key: 'references', label: 'REFERENCES', q: { group: 'references' }, count: refs.length,
+    children: require('../lib/references-store').SOURCES.map((s) => {
+      const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: s.label, locked: true,
+        count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.id } };
+      if (s.folders.length) {
+        node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
+          label: f.label, locked: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id } }));
+      }
+      return node;
+    }) };
+  return [references, video, kindNode('images', 'images', 'IMAGES'), audio];
 }
 
 router.get('/library/tree', (_req, res) => {
@@ -728,7 +772,8 @@ router.get('/library/shelf/:kind', (req, res) => {
     const cat = String(req.query.cat || '');
     const grp = GROUPS[String(req.query.group || '')] || null;
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
-      ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')) })
+      ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
+        refs: f === 'references' || !!(grp && grp.includes('references')) })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
@@ -736,6 +781,12 @@ router.get('/library/shelf/:kind', (req, res) => {
     let shown = items;
     if (grp) shown = shown.filter(i => grp.includes(i.kind));
     if (f) shown = shown.filter(i => i.kind === f);
+    // (phase TG) A REFERENCES folder: "instagram", or "instagram/reels".
+    const src = String(req.query.src || '');
+    if (src) {
+      const [s, fo] = src.split('/');
+      shown = shown.filter(i => i.kind === 'references' && i.meta.source === s && (!fo || i.meta.folder === fo));
+    }
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
@@ -1876,7 +1927,7 @@ router.get('/library/counts', (_req, res) => {
     const out = {};
     for (const [kind, build] of Object.entries(SHELVES)) {
       // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
-      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
+      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

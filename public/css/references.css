@@ -1,0 +1,79 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   REFERENCES (phase TG, block 5) - a post's tile, its hover of miniatures and the post viewer (js/references/post.js).
+   Loaded by the Library and by Merge; the viewer's frame is lib-viewer.css's, these are what a post adds to it.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* How many files a post holds, or ▶ and its length - over the tile's corner. */
+.ref-badge{
+  position:absolute; left:5px; top:5px; z-index:2; pointer-events:none;
+  padding:1px 6px; border-radius:var(--pill, 99px);
+  background:oklch(0 0 0 / .62); color:#fff; font:600 10px/1.5 var(--font); font-variant-numeric:tabular-nums;
+}
+
+/* The hover: every miniature of a post of several. */
+.ref-hover{
+  position:fixed; z-index:9100; max-width:340px; padding:6px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  box-shadow:var(--shadow);
+}
+.ref-hover-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); gap:4px; max-height:300px; overflow-y:auto; }
+.ref-hover-cell{
+  position:relative; aspect-ratio:1; padding:0; border:1px solid var(--border); border-radius:4px;
+  background:var(--bg); overflow:hidden; cursor:pointer;
+}
+.ref-hover-cell:hover{ border-color:var(--primary); }
+.ref-hover-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+.ref-hover-v{
+  position:absolute; right:3px; bottom:3px; padding:0 4px; border-radius:3px;
+  background:oklch(0 0 0 / .6); color:#fff; font-size:9px; line-height:1.5;
+}
+.ref-hover-cap{ margin-top:5px; font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* The post viewer: the stage over the strip of the post's miniatures. One line of head: a long caption-title is cut. */
+.ref-view .lib-view-title{ flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ref-view .lib-view-count, .ref-view-where, .ref-view .lib-view-acts{ flex:0 0 auto; white-space:nowrap; }
+.ref-view-where{
+  font-size:10.5px; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill, 99px); padding:2px 8px;
+}
+.ref-view-mid{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
+.ref-view-mid > .lib-view-stage{ flex:1 1 auto; min-height:0; }
+.ref-strip-bar{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  padding:5px 10px; border-top:1px solid var(--border); background:var(--surface-2);
+  font-size:11px; color:var(--muted);
+}
+.ref-strip-bar .sp{ flex:1; }
+.ref-strip-bar[hidden], .ref-strip[hidden]{ display:none; }
+.ref-strip{
+  display:flex; gap:6px; flex:0 0 auto; padding:7px 10px 9px; overflow-x:auto; overflow-y:hidden;
+  background:var(--surface-2);
+}
+.ref-cell{
+  position:relative; flex:0 0 auto; width:92px; height:92px; border:2px solid transparent; border-radius:6px;
+  background:var(--bg); overflow:hidden; cursor:pointer;
+}
+.ref-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+.ref-cell.is-cur{ border-color:var(--primary); }
+.ref-cell.is-sel{ box-shadow:inset 0 0 0 2px var(--accent); }
+.ref-cell-none{ display:flex; align-items:center; justify-content:center; height:100%; font-size:10px; color:var(--muted); }
+.ref-cell-dur{
+  position:absolute; left:4px; bottom:4px; padding:0 4px; border-radius:3px;
+  background:oklch(0 0 0 / .6); color:#fff; font-size:9.5px; line-height:1.5; font-variant-numeric:tabular-nums;
+}
+/* The tick in the top right corner - selects, never opens. */
+.ref-tick{
+  position:absolute; right:4px; top:4px; width:20px; height:20px; padding:0;
+  border:1.5px solid #fff; border-radius:50%; background:oklch(0 0 0 / .38);
+  color:transparent; font:700 11px/1 var(--font); cursor:pointer;
+}
+.ref-tick:hover{ background:oklch(0 0 0 / .6); }
+.ref-cell.is-sel .ref-tick{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* A long video kept as a tile: its poster, its length, the way to it. */
+.ref-remote{ display:flex; flex-direction:column; align-items:center; gap:8px; max-width:100%; max-height:100%; }
+.ref-remote img{ min-height:0; }
+.ref-remote-cap{ font-size:11.5px; color:var(--muted); }
+.ref-remote-cap a, .lib-view-v a{ color:var(--primary); }
+.ref-none{ font-size:12px; color:var(--muted); }
+.ref-caption{ white-space:pre-wrap; max-height:260px; overflow-y:auto; line-height:1.45; }

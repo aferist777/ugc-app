@@ -1,0 +1,335 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   REFERENCES - A POST (phase TG, block 5; the owner 2026-10-21). ONE module for both places the media tree shows posts:
+   the Library's Media shelf (js/library/main.js) and Merge's Library panel (js/merge-v3/library.js).
+
+     decorate(tile, it)     a post's tile: how many files it holds (or ▶ and its length), and on hover (the owner: "при
+                            наведении на плитку поста показывать во всплывашке все миниатюры поста") every miniature of a
+                            post of several - a press on one opens the post on it
+     openPost(list, at, o)  the post viewer: the file being looked at large, the post's facts on the right, and UNDER the
+                            stage the strip of the post's miniatures, scrolled sideways, with "N selected" (the owner: "клик
+                            по миниатюре - просмотр, галочка в правом верхнем углу - выделение. и добавь кнопку select
+                            all"); the arrows step through the posts; Delete asks "really?" on the button itself.
+                            o.onChanged() - a post deleted: the page reads its gallery again
+   A shelf item of kind 'references' (routes/library.js) carries the post's files in meta.items.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as Layers from '../layers.js';
+
+const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
+const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+const mmss = (s) => {
+  s = Math.round(Number(s) || 0);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
+};
+const filesOf = (it) => ((it && it.meta && it.meta.items) || []);
+const whereOf = (it) => {
+  const m = (it && it.meta) || {};
+  return (SRC_LABEL[m.source] || m.source || '') + (m.folder ? ' · ' + (FOLDER_LABEL[m.folder] || m.folder) : '');
+};
+const fmtDate = (s) => {
+  if (!s) return '';
+  const d = new Date(s);
+  return isNaN(d) ? String(s) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+// ── the tile ─────────────────────────────────────────────────────────────────
+let _hover = null;          // { box, tile, timer, hideTimer }
+
+export function decorate(tile, it, open) {
+  const files = filesOf(it);
+  const m = it.meta || {};
+  const badge = el('span', 'ref-badge');
+  if (m.remote) badge.textContent = '▷ ' + mmss(m.remote.dur || it.dur);
+  else if (files.length > 1) {
+    const v = files.filter(f => f.type === 'video').length;
+    badge.textContent = '⧉ ' + files.length + (v ? ' · ' + v + ' ▶' : '');
+  } else if (files[0] && files[0].type === 'video') badge.textContent = '▶ ' + mmss(files[0].dur || it.dur);
+  else badge.textContent = '';
+  if (badge.textContent) tile.appendChild(badge);
+  tile.title = [it.name, m.author, whereOf(it)].filter(Boolean).join('\n');
+  if (files.length > 1) {
+    tile.addEventListener('mouseenter', () => _hoverIn(tile, it, open));
+    tile.addEventListener('mouseleave', () => _hoverOut());
+  }
+}
+
+function _hoverIn(tile, it, open) {
+  _hoverOut(true);
+  const timer = setTimeout(() => _hoverShow(tile, it, open), 260);
+  _hover = { tile, timer, box: null, hideTimer: null };
+}
+
+function _hoverOut(now) {
+  if (!_hover) return;
+  clearTimeout(_hover.timer);
+  const h = _hover;
+  const drop = () => { if (h.box) h.box.remove(); if (_hover === h) _hover = null; };
+  if (now) { clearTimeout(h.hideTimer); drop(); return; }
+  clearTimeout(h.hideTimer);
+  h.hideTimer = setTimeout(drop, 180);         // time to move the pointer into the popup
+}
+
+function _hoverShow(tile, it, open) {
+  if (!_hover || _hover.tile !== tile || !tile.isConnected) return;
+  const files = filesOf(it);
+  const box = el('div', 'ref-hover');
+  const grid = el('div', 'ref-hover-grid');
+  files.forEach((f, i) => {
+    const c = el('button', 'ref-hover-cell');
+    c.type = 'button';
+    c.title = (f.type === 'video' ? 'video ' + mmss(f.dur) : 'photo') + ' - open the post on it';
+    if (f.thumb) { const im = el('img'); im.src = f.thumb; im.alt = ''; im.loading = 'lazy'; c.appendChild(im); }
+    if (f.type === 'video') c.appendChild(el('span', 'ref-hover-v', '▶'));
+    c.addEventListener('click', (e) => { e.stopPropagation(); _hoverOut(true); if (open) open(it, i); });
+    grid.appendChild(c);
+  });
+  box.appendChild(grid);
+  box.appendChild(el('div', 'ref-hover-cap', files.length + ' files · ' + (it.name || '')));
+  box.addEventListener('mouseenter', () => { if (_hover) clearTimeout(_hover.hideTimer); });
+  box.addEventListener('mouseleave', () => _hoverOut());
+  document.body.appendChild(box);
+  // Beside the tile - to its right, or to its left when the window ends there.
+  const r = tile.getBoundingClientRect();
+  const bw = box.offsetWidth, bh = box.offsetHeight;
+  let x = r.right + 8;
+  if (x + bw > window.innerWidth - 8) x = Math.max(8, r.left - bw - 8);
+  let y = Math.min(Math.max(8, r.top), window.innerHeight - bh - 8);
+  box.style.left = x + 'px';
+  box.style.top = y + 'px';
+  _hover.box = box;
+}
+
+// ── the viewer ───────────────────────────────────────────────────────────────
+let _v = null;      // { ov, layer, list, at, file, sel: Set, o, armed }
+
+export function openPost(list, at, o) {
+  closePost();
+  _hoverOut(true);
+  const posts = (list || []).filter(x => x && x.kind === 'references');
+  if (!posts.length) return;
+  const ov = el('div', 'lib-view-ov ref-view-ov');
+  ov.innerHTML = `
+    <div class="lib-view ref-view">
+      <div class="lib-view-head">
+        <span class="lib-view-title"></span>
+        <span class="ref-view-where"></span>
+        <span class="lib-view-count"></span>
+        <span class="sp"></span>
+        <span class="lib-view-acts"></span>
+        <button class="lib-btn" data-x="close" type="button" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="lib-view-body">
+        <button class="lib-view-arrow" data-x="prev" type="button" title="The previous post (left arrow)">&#8249;</button>
+        <div class="ref-view-mid">
+          <div class="lib-view-stage"></div>
+          <div class="ref-strip-bar">
+            <span class="ref-strip-n"></span>
+            <button class="lib-btn" data-x="all" type="button"></button>
+            <span class="sp"></span>
+          </div>
+          <div class="ref-strip"></div>
+        </div>
+        <button class="lib-view-arrow" data-x="next" type="button" title="The next post (right arrow)">&#8250;</button>
+        <aside class="lib-view-info"></aside>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const layer = Layers.open(ov, { name: 'post-view', onEsc: closePost });
+  _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, armed: null };
+  ov.querySelector('[data-x="close"]').addEventListener('click', closePost);
+  ov.querySelector('[data-x="prev"]').addEventListener('click', () => _step(-1));
+  ov.querySelector('[data-x="next"]').addEventListener('click', () => _step(1));
+  ov.querySelector('[data-x="all"]').addEventListener('click', _selectAll);
+  ov.addEventListener('click', (e) => { if (e.target === ov) closePost(); });
+  document.addEventListener('keydown', _onKey);
+  if (o && Number.isInteger(o.file)) _v.file = o.file;
+  _paint();
+}
+
+export function closePost() {
+  if (!_v) return;
+  _v.ov.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) { /* gone */ } v.removeAttribute('src'); v.load(); });
+  _v.ov.remove();
+  Layers.close(_v.layer);
+  document.removeEventListener('keydown', _onKey);
+  clearTimeout(_v.armed);
+  _v = null;
+}
+
+function _onKey(e) {
+  if (!_v || !Layers.topIs(_v.layer)) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); _step(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); _step(-1); }
+}
+
+function _step(d) {
+  if (!_v || !_v.list.length) return;
+  _v.at = (_v.at + d + _v.list.length) % _v.list.length;
+  _v.file = 0;
+  _v.sel = new Set();
+  _paint();
+}
+
+const _cur = () => (_v ? _v.list[_v.at] : null);
+
+function _paint() {
+  const it = _cur();
+  if (!it) return closePost();
+  const ov = _v.ov;
+  ov.querySelector('.lib-view-title').textContent = it.name || '';
+  ov.querySelector('.ref-view-where').textContent = whereOf(it);
+  ov.querySelector('.lib-view-count').textContent = 'post ' + (_v.at + 1) + ' / ' + _v.list.length;
+  _paintStage();
+  _paintStrip();
+  _paintInfo(it);
+  _paintActs(it);
+}
+
+function _paintStage() {
+  const it = _cur();
+  const stage = _v.ov.querySelector('.lib-view-stage');
+  stage.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) { /* gone */ } v.removeAttribute('src'); v.load(); });
+  stage.textContent = '';
+  const m = it.meta || {};
+  if (m.remote) {
+    // A long video kept as a tile: its poster; watching it here comes with block 5c.
+    const w = el('div', 'ref-remote');
+    if (m.poster) { const im = el('img', 'lib-view-media'); im.src = m.poster; im.alt = ''; w.appendChild(im); }
+    const cap = el('div', 'ref-remote-cap');
+    cap.appendChild(el('span', null, '▷ ' + mmss(m.remote.dur) + ' · not downloaded '));
+    if (m.link) { const a = el('a', null, 'open it in the browser'); a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; cap.appendChild(a); }
+    w.appendChild(cap);
+    stage.appendChild(w);
+    return;
+  }
+  const f = filesOf(it)[_v.file];
+  if (!f) { stage.appendChild(el('div', 'ref-none', 'No file in this post.')); return; }
+  if (f.type === 'video') {
+    const v = el('video', 'lib-view-media');
+    v.src = f.path; v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
+    stage.appendChild(v);
+  } else {
+    const im = el('img', 'lib-view-media');
+    im.src = f.path; im.alt = it.name || '';
+    stage.appendChild(im);
+  }
+}
+
+function _paintStrip() {
+  const it = _cur();
+  const files = filesOf(it);
+  const strip = _v.ov.querySelector('.ref-strip');
+  const bar = _v.ov.querySelector('.ref-strip-bar');
+  strip.textContent = '';
+  // One file, or a tile kept from a long video: nothing to choose between.
+  const show = files.length > 1;
+  strip.hidden = !show;
+  bar.hidden = !show;
+  if (!show) return;
+  files.forEach((f, i) => {
+    const c = el('div', 'ref-cell' + (i === _v.file ? ' is-cur' : '') + (_v.sel.has(f.id) ? ' is-sel' : ''));
+    c.title = (f.type === 'video' ? 'video ' + mmss(f.dur) : 'photo') + (f.w ? ' · ' + f.w + '×' + f.h : '') + ' - a press shows it';
+    if (f.thumb) { const im = el('img'); im.src = f.thumb; im.alt = ''; im.loading = 'lazy'; c.appendChild(im); }
+    else c.appendChild(el('span', 'ref-cell-none', f.type));
+    if (f.type === 'video') c.appendChild(el('span', 'ref-cell-dur', '▶ ' + mmss(f.dur)));
+    const tick = el('button', 'ref-tick', '✓');
+    tick.type = 'button';
+    tick.title = _v.sel.has(f.id) ? 'Selected - press to let go' : 'Select';
+    tick.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_v.sel.has(f.id)) _v.sel.delete(f.id); else _v.sel.add(f.id);
+      _paintStrip();
+    });
+    c.appendChild(tick);
+    c.addEventListener('click', () => { _v.file = i; _paintStage(); _paintStrip(); });
+    strip.appendChild(c);
+  });
+  const n = _v.sel.size;
+  bar.querySelector('.ref-strip-n').textContent = n ? n + ' of ' + files.length + ' selected' : files.length + ' files · none selected';
+  bar.querySelector('[data-x="all"]').textContent = n === files.length ? 'select none' : 'select all';
+  const cur = strip.children[_v.file];
+  if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function _selectAll() {
+  const files = filesOf(_cur());
+  if (_v.sel.size === files.length) _v.sel = new Set();
+  else _v.sel = new Set(files.map(f => f.id));
+  _paintStrip();
+}
+
+function _row(box, k, v) {
+  if (!v) return;
+  const r = el('div', 'lib-view-row');
+  r.appendChild(el('span', 'lib-view-k', k));
+  const val = el('span', 'lib-view-v');
+  if (v instanceof Node) val.appendChild(v); else val.textContent = v;
+  r.appendChild(val);
+  box.appendChild(r);
+}
+
+function _paintInfo(it) {
+  const box = _v.ov.querySelector('.lib-view-info');
+  box.textContent = '';
+  const m = it.meta || {};
+  const files = filesOf(it);
+  _row(box, 'where', whereOf(it));
+  _row(box, 'author', m.author || m.origin);
+  _row(box, 'posted', fmtDate(m.postedAt));
+  _row(box, 'received', fmtDate(m.date));
+  if (m.link) {
+    const a = el('a', null, String(m.link).replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60));
+    a.href = m.link; a.target = '_blank'; a.rel = 'noreferrer'; a.title = m.link;
+    _row(box, 'link', a);
+  }
+  if (files.length) {
+    const p = files.filter(f => f.type === 'photo').length, v = files.length - p;
+    _row(box, 'files', [p ? p + ' photo' + (p === 1 ? '' : 's') : '', v ? v + ' video' + (v === 1 ? '' : 's') : ''].filter(Boolean).join(', '));
+    const f = files[_v.file];
+    if (f && f.w) _row(box, 'this one', f.w + '×' + f.h + (f.dur ? ' · ' + mmss(f.dur) : ''));
+  }
+  _row(box, 'note', m.note);
+  if (m.caption) {
+    const c = el('div', 'ref-caption', m.caption);
+    _row(box, 'caption', c);
+  }
+}
+
+function _paintActs(it) {
+  const box = _v.ov.querySelector('.lib-view-acts');
+  box.textContent = '';
+  const del = el('button', 'lib-btn danger', 'Delete');
+  del.type = 'button';
+  del.title = 'Delete this post and its files';
+  del.addEventListener('click', async () => {
+    // "really?" on the button itself (the owner's way): a second press within a few seconds deletes.
+    if (!_v.armed) {
+      del.textContent = 'really? delete the post';
+      _v.armed = setTimeout(() => { if (_v) { _v.armed = null; del.textContent = 'Delete'; } }, 4000);
+      return;
+    }
+    clearTimeout(_v.armed);
+    _v.armed = null;
+    del.disabled = true;
+    try {
+      const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
+    } catch (e) { del.disabled = false; del.textContent = 'Delete'; alert('Not deleted: ' + e.message); return; }
+    if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
+    _v.list = _v.list.filter(x => x !== it);
+    if (!_v.list.length) return closePost();
+    if (_v.at >= _v.list.length) _v.at = _v.list.length - 1;
+    _v.file = 0;
+    _v.sel = new Set();
+    _paint();
+  });
+  box.appendChild(del);
+}
