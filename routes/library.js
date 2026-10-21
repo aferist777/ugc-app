@@ -372,7 +372,7 @@ function _mediaShelf(opts) {
         thumb: p.poster || (first && first.thumb) || null,
         dur: one ? (+first.dur || 0) : (p.remote ? (+p.remote.dur || 0) : 0),
         meta: {
-          categoryId: p.cat || '', date: p.receivedAt || null, favorite: false,
+          categoryId: p.categoryId || '', categoryLabel: p.categoryLabel || '', date: p.receivedAt || null, favorite: false,
           source: p.source || '', folder: p.folder || '', author: p.author || '', link: p.link || '',
           caption: p.caption || '', note: p.note || '', origin: p.origin || '', postedAt: p.postedAt || '',
           remote: p.remote || null, poster: p.poster || null,
@@ -525,17 +525,20 @@ function _tree() {
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
   const refs = byKind.references || [];
-  const nOf = (s, f) => refs.filter(i => i.meta.source === s && (!f || i.meta.folder === f)).length;
-  const references = { key: 'references', label: 'REFERENCES', q: { group: 'references' }, count: refs.length,
+  const nOf = (s, f) => refs.filter(i => !i.meta.categoryId && i.meta.source === s && (!f || i.meta.folder === f)).length;
+  // `kind` on the root: its "+" makes an own category (block 5b); the sources' folders make none (`noAdd`).
+  const references = { key: 'references', kind: 'references', label: 'REFERENCES', q: { group: 'references' }, count: refs.length,
     children: require('../lib/references-store').SOURCES.map((s) => {
-      const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: s.label, locked: true,
+      const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: s.label, locked: true, noAdd: true,
         count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.id } };
       if (s.folders.length) {
         node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
-          label: f.label, locked: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id } }));
+          label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id } }));
       }
       return node;
     }) };
+  // The owner's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
+  references.children.push(...catsOf('references', refs, false).out);
   return [references, video, kindNode('images', 'images', 'IMAGES'), audio];
 }
 
@@ -785,7 +788,8 @@ router.get('/library/shelf/:kind', (req, res) => {
     const src = String(req.query.src || '');
     if (src) {
       const [s, fo] = src.split('/');
-      shown = shown.filter(i => i.kind === 'references' && i.meta.source === s && (!fo || i.meta.folder === fo));
+      // A post filed under an own category is in that category's folder, not its source's.
+      shown = shown.filter(i => i.kind === 'references' && !i.meta.categoryId && i.meta.source === s && (!fo || i.meta.folder === fo));
     }
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
@@ -1045,6 +1049,15 @@ function _unlinkUnused(paths, doomed) {
 // repair in the Library writes the new path back through PATCH. (These stores were once the browser's, kept in step
 // through localStorage - `lsKey` - by the Birols page's sync; that page is gone, and the key with it, phase V23.)
 const RECORD_STORES = {
+  // (phase TG, block 5b) REFERENCES' posts - here for their own categories (renamed, deleted with their posts or with
+  // the posts let go to their sources' folders). A post's name is `title`, its files several.
+  references: {
+    file: path.join(DATA_DIR, 'references.json'),
+    read: () => require('../lib/references-store').read(),
+    write: (list) => _write(path.join(DATA_DIR, 'references.json'), list),
+    fields: [],
+    files: (e) => [e.poster, ...(Array.isArray(e.media) ? e.media : []).flatMap(m => [m && m.path, m && m.thumb])].filter(Boolean),
+  },
   birols: {
     file: BIROLY_FILE,
     read: () => { const s = _read(BIROLY_FILE, {}); return Array.isArray(s.archive) ? s.archive : []; },
@@ -1882,7 +1895,9 @@ router.delete('/library/cats/:id', (req, res) => {
       affected = r.moved;
       // Uncategorized is a folder too: the files go to nocat, and every path to them follows.
       const { list: now } = _kindRecords(kind);
-      SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
+      // (phase TG) A post let go of goes back to its source's folder - its files several.
+      if (kind === 'references') require('../lib/references-store').placePosts(now.filter(e => e && ids.has(String(e.id))));
+      else SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
     }
     // The clips are resolved; now the chip itself, and its folder.
     let disposition;

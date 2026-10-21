@@ -207,6 +207,9 @@ function _tile(it, list) {
       } catch (err) { alert(err.message); del.disabled = false; del.textContent = '✕'; armed = null; }
     });
     cell.appendChild(del);
+    // Onto a node of the tree (block 5b) - within REFERENCES, or a post of one file out of it.
+    cell.draggable = true;
+    cell.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it); });
     cell.addEventListener('click', () => open(it, 0));
     return cell;
   }

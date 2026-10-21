@@ -36,8 +36,10 @@ export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
 const UNCAT = '__uncat__';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
-const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds']);
-const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track' };
+const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references']);
+const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post' };
+// (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
+const REF_TYPE = 'application/x-ugc-refmedia-';
 
 const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 
@@ -46,6 +48,15 @@ export function setMediaDrag(dt, it) {
   if (!dt || !it || !it.kind) return;
   dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: (it.meta && it.meta.categoryId) || '' }));
   dt.setData(KIND_TYPE + it.kind, '1');
+  if (it.kind === 'references') {
+    const files = (it.meta && it.meta.items) || [];
+    dt.setData(REF_TYPE + (files.length === 1 && !(it.meta && it.meta.remote) ? files[0].type : 'several'), '1');
+  }
+}
+
+function _refType(dt) {
+  const t = Array.from((dt && dt.types) || []).find(x => x.startsWith(REF_TYPE));
+  return t ? t.slice(REF_TYPE.length) : '';
 }
 
 function _dragKind(dt) {
@@ -59,16 +70,27 @@ function _dragKind(dt) {
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
-  // (phase TG) REFERENCES takes nothing let go on it yet - moving posts is block 5b.
-  if (!n.kind || n.kind === 'heads' || n.kind === 'music' || n.kind === 'references') return null;
+  // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
+  // its source's folder.
+  if (n.kind === 'references') { const c = n.cat && n.cat !== UNCAT ? n.cat : ''; return { kind: 'references', cat: c, name: c ? (n.name || n.label) : '' }; }
+  if (!n.kind || n.kind === 'heads' || n.kind === 'music') return null;
   const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
   return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
 }
 
-// What letting an item of kind `from` go on a node does: 'cat' (file it there), 'kind' (another kind of video), or ''.
-function _dropAction(n, from) {
+// What letting an item of kind `from` go on a node does: 'cat' (file it there), 'kind' (another kind of video), 'ref' (a
+// post within REFERENCES), 'out' (a post of one video or one picture out of it - the owner: a post of several goes by its
+// files, from its viewer), or ''.
+function _dropAction(n, from, refType) {
   const t = _target(n);
   if (!t || !from) return '';
+  if (from === 'references') {
+    if (t.kind === 'references') return 'ref';
+    if (refType === 'video' && VIDEO.has(t.kind)) return 'out';
+    if (refType === 'photo' && t.kind === 'images') return 'out';
+    return '';
+  }
+  if (t.kind === 'references') return '';
   if (t.kind === from) return 'cat';
   if (VIDEO.has(t.kind) && VIDEO.has(from)) return 'kind';
   return '';
@@ -209,7 +231,7 @@ export function createTree(host, o) {
       row.appendChild(lock);
     }
     // A kind that can have categories: "+" makes one.
-    if (n.kind && !n.cat && CATABLE.has(n.kind)) {
+    if (n.kind && !n.cat && !n.noAdd && CATABLE.has(n.kind)) {
       const add = _el('button', 'mt-act mt-add', '+');
       add.type = 'button';
       add.tabIndex = -1;
@@ -242,7 +264,7 @@ export function createTree(host, o) {
 
     // A tile let go here.
     row.addEventListener('dragover', (e) => {
-      if (!_dropAction(n, _dragKind(e.dataTransfer))) return;
+      if (!_dropAction(n, _dragKind(e.dataTransfer), _refType(e.dataTransfer))) return;
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
@@ -251,12 +273,12 @@ export function createTree(host, o) {
     row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
     row.addEventListener('drop', (e) => {
       row.classList.remove('is-drop');
-      if (!_dropAction(n, _dragKind(e.dataTransfer))) return;
+      if (!_dropAction(n, _dragKind(e.dataTransfer), _refType(e.dataTransfer))) return;
       e.preventDefault();
       e.stopPropagation();
       let it = null;
       try { it = JSON.parse(e.dataTransfer.getData(MEDIA_DRAG)); } catch (err) { return; }
-      if (it) _take(n, it);
+      if (it) _take(n, it, _refType(e.dataTransfer));
     });
     return row;
   }
@@ -292,14 +314,27 @@ export function createTree(host, o) {
   }
 
   // ── A tile let go on a node ──
-  async function _take(n, it) {
-    const act = _dropAction(n, it.kind);
+  async function _take(n, it, refType) {
+    const act = _dropAction(n, it.kind, refType);
     const t = _target(n);
     if (!act || !t) return;
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category is Generated's Uncategorized.
     const where = t.cat ? n.label : (t.kind === 'birols' ? 'Generated · Uncategorized' : kindLabel(t.kind) + ' · Uncategorized');
     try {
+      // (phase TG, block 5b) A post: filed within REFERENCES, or - one video, one picture - out of it into VIDEO or IMAGES.
+      if (act === 'ref' || act === 'out') {
+        if (act === 'ref' && (it.cat || '') === t.cat) return;
+        const r = await fetch('/api/references/' + encodeURIComponent(it.id) + '/move', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: 'all', to: { kind: t.kind, cat: t.cat, label: t.name } }),
+        }).then(x => x.json());
+        if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
+        if (r.skipped && r.skipped.length && !r.moved) throw new Error(r.skipped[0].why);
+        const there = act === 'ref' ? (t.cat ? 'REFERENCES · ' + n.label : 'its source\'s folder in REFERENCES') : where;
+        await _after('"' + (it.name || 'It') + '" is in ' + there, { moved: it });
+        return;
+      }
       if (act === 'cat') {
         if ((it.cat || '') === t.cat) return;
         await A.setCategory(item, t.cat, t.name);

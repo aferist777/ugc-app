@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { askName } from '../name-box.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -134,6 +135,8 @@ export function openPost(list, at, o) {
             <span class="ref-strip-n"></span>
             <button class="lib-btn" data-x="all" type="button"></button>
             <span class="sp"></span>
+            <span class="ref-said"></span>
+            <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a category of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
           </div>
           <div class="ref-strip"></div>
         </div>
@@ -148,6 +151,10 @@ export function openPost(list, at, o) {
   ov.querySelector('[data-x="prev"]').addEventListener('click', () => _step(-1));
   ov.querySelector('[data-x="next"]').addEventListener('click', () => _step(1));
   ov.querySelector('[data-x="all"]').addEventListener('click', _selectAll);
+  ov.querySelector('[data-x="move"]').addEventListener('click', (e) => {
+    const files = filesOf(_cur()).filter(f => _v.sel.has(f.id));
+    if (files.length) _moveMenu(e.currentTarget, files.map(f => f.id), files);
+  });
   ov.addEventListener('click', (e) => { if (e.target === ov) closePost(); });
   document.addEventListener('keydown', _onKey);
   if (o && Number.isInteger(o.file)) _v.file = o.file;
@@ -155,6 +162,7 @@ export function openPost(list, at, o) {
 }
 
 export function closePost() {
+  _closeMenu();
   if (!_v) return;
   _v.ov.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) { /* gone */ } v.removeAttribute('src'); v.load(); });
   _v.ov.remove();
@@ -255,6 +263,9 @@ function _paintStrip() {
   const n = _v.sel.size;
   bar.querySelector('.ref-strip-n').textContent = n ? n + ' of ' + files.length + ' selected' : files.length + ' files · none selected';
   bar.querySelector('[data-x="all"]').textContent = n === files.length ? 'select none' : 'select all';
+  const mv = bar.querySelector('[data-x="move"]');
+  mv.textContent = n ? `move ${n} to…` : 'move to…';
+  mv.disabled = !n;
   const cur = strip.children[_v.file];
   if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -306,6 +317,13 @@ function _paintInfo(it) {
 function _paintActs(it) {
   const box = _v.ov.querySelector('.lib-view-acts');
   box.textContent = '';
+  // The whole post: into a category of REFERENCES (or back to its source's folder) - and, a post of one video or one
+  // picture, into VIDEO or IMAGES (the owner: one of several goes by its files, from the strip).
+  const mv = el('button', 'lib-btn', 'Move to…');
+  mv.type = 'button';
+  mv.title = 'Move the whole post';
+  mv.addEventListener('click', () => _moveMenu(mv, 'all', filesOf(it), true));
+  box.appendChild(mv);
   const del = el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this post and its files';
@@ -332,4 +350,145 @@ function _paintActs(it) {
     _paint();
   });
   box.appendChild(del);
+}
+
+// ── moving (block 5b) ────────────────────────────────────────────────────────
+// A menu of where the files can go, read from the media tree: REFERENCES' own categories (or back to the post's source
+// folder) and "+ new category", VIDEO's Uploads, B-rolls' categories, Generated · Uncategorized and Hooks, IMAGES and its
+// categories. What cannot take every file chosen is pale with the reason (the owner's answer (ч)): a picture never goes
+// into VIDEO, a video never into IMAGES, a post of several goes out by its files, a tile-only video stays in REFERENCES.
+let _menu = null;
+const VIDEO_KINDS = new Set(['birols', 'uploads', 'hooks']);
+
+function _closeMenu() {
+  if (!_menu) return;
+  _menu.box.remove();
+  Layers.close(_menu.layer);
+  document.removeEventListener('mousedown', _menu.away, true);
+  _menu = null;
+}
+
+function _targets(tree) {
+  const out = [];
+  const ref = tree.find(n => n.key === 'references');
+  out.push({ head: 'REFERENCES' });
+  out.push({ kind: 'references', cat: '', label: '', text: 'the source\'s folder (no category)' });
+  for (const c of ((ref && ref.children) || []).filter(c => c.cat)) out.push({ kind: 'references', cat: c.cat, label: c.name || c.label, text: c.label });
+  out.push({ newCat: true, text: '+ new category…' });
+  const walk = (n, trail, add) => {
+    for (const c of n.children || []) {
+      const p = trail ? trail + ' · ' + c.label : c.label;
+      if (c.kind && (VIDEO_KINDS.has(c.kind) || c.kind === 'images')) {
+        if (c.uncat) add({ kind: c.kind, cat: '', label: '', text: p });
+        else if (c.cat && c.cat !== '__cat__') add({ kind: c.kind, cat: c.cat, label: c.name || c.label, text: p });
+        else if (!c.cat && (c.key === 'uploads' || c.key === 'hooks') && !(c.children || []).some(x => x.uncat)) add({ kind: c.kind, cat: '', label: '', text: p });
+      }
+      walk(c, p, add);
+    }
+  };
+  const video = tree.find(n => n.key === 'video');
+  out.push({ head: 'VIDEO' });
+  if (video) walk(video, '', (t) => out.push(t));
+  const images = tree.find(n => n.key === 'images');
+  out.push({ head: 'IMAGES' });
+  if (images) {
+    const before = out.length;
+    walk(images, 'IMAGES', (t) => out.push(t));
+    if (!out.slice(before).some(t => !t.cat)) out.splice(before, 0, { kind: 'images', cat: '', label: '', text: 'IMAGES · Uncategorized' });
+  }
+  return out;
+}
+
+async function _moveMenu(anchor, ids, files, whole) {
+  _closeMenu();
+  const it = _cur();
+  let tree = [];
+  try { const d = await fetch('/api/library/tree').then(r => r.json()); tree = (d && d.nodes) || []; } catch (e) { tree = []; }
+  if (!_v || _cur() !== it) return;
+  const photos = files.filter(f => f.type === 'photo').length;
+  const videos = files.length - photos;
+  const remote = !!(it.meta && it.meta.remote);
+  const why = (t) => {
+    if (t.kind === 'references') return (whole && (it.meta.categoryId || '') === t.cat) ? 'it is there now' : '';
+    if (remote) return 'a video kept as a tile stays in REFERENCES';
+    if (whole && filesOf(it).length > 1) return 'a post of several goes out by its files - select them below';
+    if (VIDEO_KINDS.has(t.kind)) return photos ? 'pictures do not go into VIDEO' : '';
+    if (t.kind === 'images') return videos ? 'videos do not go into IMAGES' : '';
+    return '';
+  };
+  const box = el('div', 'ref-move');
+  box.appendChild(el('div', 'ref-move-title', whole ? 'Move the post to' : `Move ${files.length} file${files.length === 1 ? '' : 's'} to`));
+  const list = el('div', 'ref-move-list');
+  for (const t of _targets(tree)) {
+    if (t.head) { list.appendChild(el('div', 'ref-move-head', t.head)); continue; }
+    const b = el('button', 'ref-move-it', t.text);
+    b.type = 'button';
+    const no = t.newCat ? '' : why(t);
+    if (no) { b.disabled = true; b.title = no; }
+    b.addEventListener('click', async () => {
+      let to = t;
+      if (t.newCat) {
+        const cat = await askName({
+          anchor: b, title: 'New REFERENCES category', okLabel: 'Create', maxLength: 60,
+          submit: async (name) => {
+            const r = await fetch('/api/library/cats', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ kind: 'references', label: name }) }).then(x => x.json());
+            if (!r || !r.success) throw new Error((r && r.error) || 'not made');
+            return r.cat;
+          },
+        });
+        if (!cat) return;
+        to = { kind: 'references', cat: cat.id, label: cat.label, text: cat.label };
+      }
+      _closeMenu();
+      await _doMove(it, ids, to);
+    });
+    list.appendChild(b);
+  }
+  box.appendChild(list);
+  document.body.appendChild(box);
+  const r = anchor.getBoundingClientRect();
+  const bw = box.offsetWidth, bh = box.offsetHeight;
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - bw - 8)) + 'px';
+  box.style.top = (r.bottom + 4 + bh > window.innerHeight - 8 ? Math.max(8, r.top - bh - 4) : r.bottom + 4) + 'px';
+  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor && !(e.target.closest && e.target.closest('.nm-box'))) _closeMenu(); };
+  document.addEventListener('mousedown', away, true);
+  _menu = { box, away, layer: Layers.open(box, { name: 'ref-move', onEsc: _closeMenu }) };
+}
+
+async function _doMove(it, ids, to) {
+  const said = _v.ov.querySelector('.ref-said');
+  said.textContent = 'moving…';
+  let r = null;
+  try {
+    r = await fetch('/api/references/' + encodeURIComponent(it.id) + '/move', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: ids, to }),
+    }).then(x => x.json());
+    if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
+  } catch (e) { if (_v) said.textContent = 'not moved: ' + e.message; return; }
+  if (!_v) return;
+  const where = (to.kind === 'references' ? 'REFERENCES · ' + (to.cat ? to.label : 'its source folder')
+    : to.kind === 'images' ? 'IMAGES' + (to.cat ? ' · ' + to.label : '')
+    : ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : ''));
+  const skipped = (r.skipped || []).length;
+  if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ moved: it }); } catch (e) { /* the page's */ } }
+  // The post as it is now: gone, filed elsewhere whole, or smaller.
+  const left = r.post;
+  if (left && ids === 'all' && to.kind === 'references') {
+    it.meta = Object.assign({}, it.meta, { categoryId: left.categoryId || '', categoryLabel: left.categoryLabel || '' });
+  } else if (!left) {
+    _v.list = _v.list.filter(x => x !== it);
+    if (!_v.list.length) return closePost();
+    if (_v.at >= _v.list.length) _v.at = _v.list.length - 1;
+  } else {
+    it.meta = Object.assign({}, it.meta, {
+      items: (left.media || []).map(m => ({ id: m.id, type: m.type, path: m.path, thumb: m.thumb || null, w: m.w || 0, h: m.h || 0, dur: m.dur || 0 })),
+      poster: left.poster || null,
+    });
+  }
+  _v.file = 0;
+  _v.sel = new Set();
+  _paint();
+  _v.ov.querySelector('.ref-said').textContent = (r.moved ? r.moved + ' moved to ' + where : 'nothing moved')
+    + (skipped ? ' · ' + skipped + ' stayed: ' + r.skipped[0].why : '');
 }
