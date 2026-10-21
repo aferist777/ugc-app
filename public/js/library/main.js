@@ -338,10 +338,14 @@ const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 
 // (second round) A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
 // deleted project (`meta.kept`) is the library's and is deleted like anything.
-const _fixed = (it) => it.kind === 'heads' && !(it.meta && it.meta.kept);
+const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept))
+  // (phase TG, block 6) A video of YOUTUBE is a source of the scenarios: watched and sent to highlights from here, deleted
+  // only in Scenarios -> sources.
+  || it.kind === 'youtube';
 
 function _actionsFor(it) {
   const out = [];
+  if (it.kind === 'youtube') return [{ id: 'hl', label: 'To highlights', title: 'A new highlights project in Merge on this video - its words are heard once and kept with it' }];
   if (_fixed(it)) return out;
   if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: 'Rename' });
   if (_FAVABLE.has(it.kind)) {
@@ -371,6 +375,8 @@ async function _runAction(id, it) {
     // server's (favourites first, then date). A local repaint would leave it where it was.
     return { reload: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
   }
+  // (block 6) A video of YOUTUBE into a new highlights project, chosen in its popup already.
+  if (id === 'hl') { location.href = '/merge?source=' + encodeURIComponent((it.meta && it.meta.source) || it.id); return { changed: false }; }
   if (id === 'del' && it.kind === 'references') {
     // (phase TG) A post of REFERENCES goes with its files - its own route.
     if (!confirm(await RP.deleteQuestion(it))) return { changed: false };

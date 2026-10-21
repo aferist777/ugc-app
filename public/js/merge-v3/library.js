@@ -109,7 +109,8 @@ const _mmss = (s) => {
 // would also open the viewer underneath.
 // (second round) A talking head is its project's while the project lives: no star, no cross, no category - looked at, and
 // dragged onto a lane of any project. One kept from a deleted project (`meta.kept`) is the library's, and goes like any.
-const _fixed = (it) => it.kind === 'heads' && !(it.meta && it.meta.kept);
+// (phase TG, block 6) A video of YOUTUBE is a source of the scenarios - onto a lane and to highlights, never deleted here.
+const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept)) || it.kind === 'youtube';
 
 function _tile(it, list) {
   const cell = document.createElement('div');
@@ -320,6 +321,14 @@ let _allCats = null;
 // A picture opens at the 2048px preview tier, never the 4K original (phase J4).
 const _viewerOpts = () => ({
   extraRows: _viewerRows, underStage: _underStage,
+  // (block 6) A video of YOUTUBE: a new highlights project on it, chosen in its popup already.
+  actionsFor: (it) => (it && it.kind === 'youtube' ? [{ id: 'hl', label: 'To highlights' }] : []),
+  onAction: (id, it) => {
+    if (id !== 'hl') return null;
+    closeViewer();
+    if (window.__ugcHighlightsFrom) window.__ugcHighlightsFrom('', '', (it.meta && it.meta.source) || it.id);
+    return null;
+  },
   showSrc: (it) => (it.kind === 'images' ? '/api/thumb?src=' + encodeURIComponent(it.media) + '&v=main' : null),
 });
 

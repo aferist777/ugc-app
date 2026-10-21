@@ -46,8 +46,9 @@ export function closePopup() {
 /**
  * Open it for project `id` (its record `rec`: the lengths and counts it offers). `onStarted(alertId)` once the server
  * took the press. `url` (phase TG, block 5c) - a link written in already: a long video of REFERENCES sent "to highlights".
+ * `sourceId` (block 6) - a source of the Library chosen already: a video of the media tree's YOUTUBE sent "to highlights".
  */
-export function openPopup(id, rec, { onStarted, url } = {}) {
+export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   if (_win) return;
   let remembered = {};
   try { remembered = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {}; } catch (e) { remembered = {}; }
@@ -215,7 +216,9 @@ export function openPopup(id, rec, { onStarted, url } = {}) {
     panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading the sources…'));
     try {
       const d = await _api('/api/sources');
-      sources = (d.sources || []).filter((s) => s.media && !s.progress && ['ready', 'stored'].includes(s.state));
+      // (phase TG, block 6) A source whose words could not be heard for the scenarios (`error` with its video on the disk)
+      // is a video all the same - highlights hears its words itself.
+      sources = (d.sources || []).filter((s) => s.media && !s.progress && ['ready', 'stored', 'error'].includes(s.state));
     } catch (e) { sources = []; panes.source.textContent = e.message; return; }
     paintSources();
   }
@@ -312,4 +315,13 @@ export function openPopup(id, rec, { onStarted, url } = {}) {
 
   paint();
   price();
+  if (sourceId) {
+    st.from = 'source';
+    st.sourceId = String(sourceId);
+    loadSources().then(() => {
+      st.source = (sources || []).find((s) => s.id === st.sourceId) || null;
+      if (!st.source) st.sourceId = '';
+      paintSources(); paint(); price();
+    });
+  }
 }

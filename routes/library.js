@@ -355,6 +355,23 @@ function _mediaShelf(opts) {
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
     .filter(i => _onDisk(i.media));
+  // (phase TG, block 6; the owner: "в library на полке media можно смотреть видео скачаные с youtube ... все видео-источники
+  // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
+  // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
+  // highlights - never deleted or moved from here.
+  if (opts && opts.youtube) {
+    for (const s of require('../lib/sources-store').list()) {
+      if (!s || !s.videoPath || !_onDisk(s.videoPath)) continue;
+      const yt = /^youtube:/i.test(String(s.linkKey || '')) || /^https?:\/\/((www|m)\.)?(youtube\.com|youtu\.be)\//i.test(String(s.url || ''));
+      if (!yt) continue;
+      items.push({
+        id: String(s.id), name: String(s.title || '').trim() || 'video', kind: 'youtube', media: s.videoPath,
+        thumb: s.thumbPath && _onDisk(s.thumbPath) ? s.thumbPath : null, dur: +s.seconds || 0,
+        meta: { categoryId: '', date: s.addedAt || null, favorite: false, link: s.url || '', channel: s.channel || '',
+          words: !!(s.words || (s.transcript && s.transcript.length)), source: s.id },
+      });
+    }
+  }
   // (phase TG, block 5) REFERENCES - one tile per POST, only when asked (the tree's REFERENCES): newest first, after the
   // rest. A post's files ride along in `meta.items` (the hover's miniatures, the post viewer's strip); a long video kept
   // as a tile (`meta.remote`) has its poster for `media`.
@@ -391,6 +408,7 @@ function _mediaShelf(opts) {
     || ((a.kind === 'heads' && b.kind === 'heads')
       ? (_abc(a.meta.project, b.meta.project) || (a.meta.line - b.meta.line) || (_ts(b.meta.date) - _ts(a.meta.date))) : 0)
     || (Number(a.kind === 'references') - Number(b.kind === 'references'))
+    || (Number(a.kind === 'youtube') - Number(b.kind === 'youtube'))
     || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
 
@@ -454,12 +472,14 @@ function _mediaCats(items, kind, labelFor) {
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
 const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'],
   // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js).
-  references: ['references'] };
+  references: ['references'],
+  // (phase TG, block 6) YOUTUBE - the sources of the scenarios and of highlights that came from YouTube.
+  youtube: ['youtube'] };
 const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
 function _tree() {
-  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true });
+  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   const catsOf = (kind, list, withUncat) => {
@@ -539,7 +559,10 @@ function _tree() {
     }) };
   // The owner's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
   references.children.push(...catsOf('references', refs, false).out);
-  return [references, video, kindNode('images', 'images', 'IMAGES'), audio];
+  // (block 6; the owner: "над references") YOUTUBE - the downloaded YouTube videos of the Sources, first of all.
+  const youtube = { key: 'youtube', kind: 'youtube', label: 'YOUTUBE', locked: true, count: (byKind.youtube || []).length,
+    empty: !(byKind.youtube || []).length, q: { filter: 'youtube' } };
+  return [youtube, references, video, kindNode('images', 'images', 'IMAGES'), audio];
 }
 
 router.get('/library/tree', (_req, res) => {
@@ -809,7 +832,8 @@ router.get('/library/shelf/:kind', (req, res) => {
     const grp = GROUPS[String(req.query.group || '')] || null;
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
-        refs: f === 'references' || !!(grp && grp.includes('references')) })
+        refs: f === 'references' || !!(grp && grp.includes('references')),
+        youtube: f === 'youtube' || !!(grp && grp.includes('youtube')) })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
@@ -1985,7 +2009,7 @@ router.get('/library/counts', (_req, res) => {
     const out = {};
     for (const [kind, build] of Object.entries(SHELVES)) {
       // (phase V28.4) Media counts its music too - the Music shelf is Audio -> Music there now.
-      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
+      try { out[kind] = (kind === 'media' ? _mediaShelf({ music: true, heads: true, refs: true, youtube: true }) : build()).items.length; } catch (e) { out[kind] = 0; }
     }
     res.json({ success: true, counts: out });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

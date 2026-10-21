@@ -306,7 +306,7 @@ let _stoppedNow = false;
 
 function _popup(opts = {}) {
   if (!_pid || !_rec) return;
-  openPopup(_pid, _rec, { url: opts.url || '', onStarted: (...a) => {
+  openPopup(_pid, _rec, { url: opts.url || '', sourceId: opts.sourceId || '', onStarted: (...a) => {
     _load();
     if (typeof opts.onStarted === 'function') { try { opts.onStarted(...a); } catch (e) { /* the caller's */ } }
   } });

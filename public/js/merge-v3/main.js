@@ -89,17 +89,18 @@ const _OPENERS = { pictures: _pictures, videos: _videos };
 // (phase TG, block 5c; the owner's answer (ю)) ?highlights=<a link>&ref=<a post> - a long video of REFERENCES sent "to
 // highlights": a new highlights project with its popup open and the link written in; once the project starts, the post
 // leaves REFERENCES. From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
-async function _highlightsFrom(url, ref) {
+async function _highlightsFrom(url, ref, sourceId) {
   const HL = await import('./highlights.js');
-  await HL.createHighlights({ url, onStarted: () => {
+  await HL.createHighlights({ url, sourceId, onStarted: () => {
     if (ref) fetch('/api/references/' + encodeURIComponent(ref), { method: 'DELETE' }).catch(() => { /* it stays */ });
   } });
 }
-window.__ugcHighlightsFrom = (url, ref) => { _highlightsFrom(url, ref).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
+window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref, sourceId).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
 (() => {
-  let url = '', ref = '';
-  try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; ref = q.get('ref') || ''; } catch (e) { return; }
-  if (!url) return;
+  // (block 6) ?highlights=&source=<id> - a video of YOUTUBE (a source of the Library) chosen in the popup already.
+  let url = '', ref = '', source = '';
+  try { const q = new URLSearchParams(location.search); url = q.get('highlights') || ''; ref = q.get('ref') || ''; source = q.get('source') || ''; } catch (e) { return; }
+  if (!url && !source) return;
   let done = false;
   Store.onChange(() => {
     if (done || !Store.key()) return;
@@ -108,9 +109,10 @@ window.__ugcHighlightsFrom = (url, ref) => { _highlightsFrom(url, ref).catch(e =
       const u = new URL(location.href);
       u.searchParams.delete('highlights');
       u.searchParams.delete('ref');
+      u.searchParams.delete('source');
       history.replaceState({}, '', u);
     } catch (e) { /* a reload would make another project */ }
-    _highlightsFrom(url, ref).catch(e => console.warn('[merge-v3] highlights:', e.message));
+    _highlightsFrom(url, ref, source).catch(e => console.warn('[merge-v3] highlights:', e.message));
   });
 })();
 
