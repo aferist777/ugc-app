@@ -85,6 +85,23 @@
   color:var(--muted);
 }
 .bk-row:first-child .bk-group{ margin-top:0; padding-top:0; border-top:0; }
+/* (phase TG) The Cloudflare key's check, step by step, with its own "check", and how to get the key. */
+.bk-steps-row{ display:flex; align-items:flex-start; gap:8px; margin-top:2px; }
+.bk-steps{ font-size:10px; line-height:1.45; color:var(--muted); min-width:0; }
+.bk-step.ok{ color:var(--accent); }
+.bk-step.down{ color:var(--gold); }
+.bk-mini{
+  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
+  color:var(--muted); font-size:10px; line-height:1; padding:3px 7px; cursor:pointer;
+}
+.bk-mini:hover:not(:disabled){ color:var(--ink); border-color:var(--primary); }
+.bk-mini:disabled{ opacity:.45; cursor:default; }
+.bk-help{ margin-top:4px; font-size:10px; line-height:1.5; color:var(--muted); }
+.bk-help summary{ cursor:pointer; color:var(--primary); font-weight:600; width:max-content; }
+.bk-help ol{ margin:4px 0 2px; padding-left:18px; }
+.bk-help li{ margin:1px 0; }
+.bk-help a{ color:var(--primary); }
+.bk-help-note{ margin-top:2px; }
 
 /* ── Import / Export ─────────────────────────────────────────────────────── */
 .dio-body{ padding:12px 14px; max-width:760px; }

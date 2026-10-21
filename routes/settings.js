@@ -22,7 +22,12 @@ const SECRET_KEYS = [
   'anthropicApiKey', 'kieApiKey', 'replicateApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
+  // (phase TG) the one Cloudflare key - R2 and the Telegram receiver (lib/cloudflare.js)
+  'cloudflareApiToken',
 ];
+// Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
+// its pair from. A page cannot set it, and a key replaced or removed drops it: a new key is R2's only once IT passed.
+const SERVER_ONLY = ['cloudflareTokenId'];
 
 // Keys of services this app no longer talks to: imgBB, Partner's ingest, and the Telegram
 // bot the server version reported to. A library carried over from the server version can still
@@ -108,7 +113,7 @@ router.post('/settings', (req, res) => {
     const clean = {};
     const gone = [];
     for (const [k, v] of Object.entries(incoming)) {
-      if (RETIRED_KEYS.includes(k)) continue;
+      if (RETIRED_KEYS.includes(k) || SERVER_ONLY.includes(k)) continue;
       if (SECRET_KEYS.includes(k)) {
         if (looksMasked(v)) continue; // ignore echoed masks
         // An empty value is a removal, not a key that happens to be empty.
@@ -118,6 +123,10 @@ router.post('/settings', (req, res) => {
     }
     const updated = { ...current, ...clean };
     for (const k of [...gone, ...RETIRED_KEYS]) delete updated[k];
+    if (gone.includes('cloudflareApiToken')
+        || ('cloudflareApiToken' in clean && String(clean.cloudflareApiToken).trim() !== String(current.cloudflareApiToken || '').trim())) {
+      delete updated.cloudflareTokenId;
+    }
     saveSettings(updated);
     res.json(safeView(updated));
   } catch (err) {

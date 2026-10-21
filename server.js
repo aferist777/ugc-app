@@ -124,6 +124,7 @@ app.use('/api', require('./routes/app-update'));   // a new commit in the progra
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/settings'));
+app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver (phase TG)
 app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder (phase V25)
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
 // how a script is written, routes/scen3.js owns who reads it aloud.
