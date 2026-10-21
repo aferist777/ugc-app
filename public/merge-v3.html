@@ -78,8 +78,12 @@
             title="Delete this project's timeline">delete</button>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
+    <!-- (phase V33.4) In a highlights project only: every fragment ticked, or none - for the render beside it
+         (js/merge-v3/highlights.js). -->
+    <button class="mv3-c-btn" id="mv3-hl-all" type="button" hidden>select all</button>
     <!-- The render window, with the export settings: js/merge-v3/export-b.js. (The queue button
-         that stood here moved into the top strip, beside Alerts - phase R.) -->
+         that stood here moved into the top strip, beside Alerts - phase R.) In a highlights project it renders the
+         ticked fragments, and stops them while they render (phase V33.4). -->
       <button class="mv3-c-btn mv3-x-open" id="mv3-export" type="button"
             title="Render this timeline with FFmpeg">Export</button>
   </div>

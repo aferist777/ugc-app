@@ -27,8 +27,6 @@
 .mv3-hl-state{flex:0 1 auto; display:flex; align-items:center; gap:8px; min-width:0}
 .mv3-hl-words{font:600 10.5px/1.3 var(--font); color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:420px}
 .mv3-hl-words.is-err{color:var(--danger); white-space:normal}
-.mv3-hl-all{display:inline-flex; align-items:center; gap:5px; font:600 10px/1 var(--font); color:var(--muted); cursor:pointer; white-space:nowrap}
-.mv3-hl-all input{margin:0; accent-color:var(--primary); cursor:pointer}
 .mv3-hl-add{color:var(--primary); border-color:var(--primary)}
 .mv3-hl-add.is-big{padding:8px 16px; font-size:12px}
 .mv3-c-btn.is-armed:not(.danger){background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
@@ -100,6 +98,25 @@
 .mv3-hl-step{font:600 9px/1.3 var(--font); color:oklch(.85 0 0); overflow-wrap:anywhere}
 .mv3-hl-bar{height:4px; border-radius:2px; background:oklch(1 0 0 / .18); overflow:hidden}
 .mv3-hl-fill{height:100%; background:var(--accent); transition:width .4s linear}
+/* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
+.mv3-hl-fill.is-render{background:var(--primary)}
+.mv3-hl-step.is-warn{color:var(--warn, oklch(.8 .14 75))}
+.mv3-hl-rendered{
+  position:absolute; top:28px; left:5px; z-index:2; padding:2px 6px; border-radius:999px;
+  background:var(--primary); color:var(--primary-ink); font:700 8.5px/1.3 var(--font); white-space:nowrap;
+}
+.mv3-hl-rendered.is-changed{background:oklch(0 0 0 / .6); color:oklch(.85 0 0); border:1px dashed oklch(1 0 0 / .4)}
+.mv3-hl-again{
+  align-self:flex-start; padding:2px 7px; border:1px solid var(--danger); border-radius:var(--r-xs);
+  background:oklch(0 0 0 / .5); color:oklch(.98 0 0); font:600 9px/1.3 var(--font); cursor:pointer;
+}
+.mv3-hl-again:hover{background:var(--danger)}
+.mv3-hl-rline b{overflow-wrap:anywhere}
+.mv3-hl-meta.is-err{color:var(--danger)}
+.mv3-hl-racts{display:flex; gap:6px; margin-top:4px}
+/* The render button in a highlights project while its renders go: "✕ stop", armed - "really?" - filled red (export-b.js) */
+#mv3-export.is-stop{background:transparent; border-color:var(--danger); color:var(--danger)}
+#mv3-export.is-stop.is-armed{background:var(--danger); border-color:var(--danger); color:oklch(.99 0 0)}
 
 /* The card of the moment pressed */
 .mv3-hl-card-h{font:700 12.5px/1.35 var(--font); color:var(--ink); margin-bottom:6px; overflow-wrap:anywhere}

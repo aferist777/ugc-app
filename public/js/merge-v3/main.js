@@ -15,7 +15,7 @@ import { initLayout, setOpenColumn } from './layout.js';
 import { initLibrary } from './library.js';
 import { initTimelineB, onSelChange as onSelB, mount as mountB } from './timeline-b.js';
 import { initPreviewB, mount as mountPvB } from './preview-b.js';
-import { initExportB } from './export-b.js';
+import { initExportB, paintExportButton } from './export-b.js';
 import { initQueue } from './queue.js';
 import { initInspector } from './inspector.js';
 import { initWorkshop, settled as wkSettled, isTalking, step as wkStep, setStep } from './workshop.js';
@@ -155,7 +155,9 @@ Store.onChange(() => {
 // it - and undo/redo are deliberately NOT in it, because history.js already enables them from
 // the depth of its own stack, which is empty anyway.
 // Split paints itself (js/merge-v3/bar.js): it needs a project AND a clip under the playhead.
-const NEEDS_PROJECT = ['mv3-export', 'mv3-project-del'];
+// The render button is painted by its owner (js/merge-v3/export-b.js): the same rule, and in a highlights project its
+// ticked fragments too (phase V33.4).
+const NEEDS_PROJECT = ['mv3-project-del'];
 Store.onChange(() => {
   const has = Store.hasProject();
   // Somebody else's project counts as none for these: rendering writes export settings, and
@@ -165,6 +167,7 @@ Store.onChange(() => {
     const el = document.getElementById(id);
     if (el) el.disabled = !can;
   }
+  paintExportButton();
   document.body.classList.toggle('mv3-noproject', !has);
 });
 

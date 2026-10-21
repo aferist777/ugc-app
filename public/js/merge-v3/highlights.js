@@ -19,6 +19,14 @@
 
    The record is the server's (GET /api/highlights/:id): read when the project opens and every 1.5 s while it is at work
    (not while the window is hidden), and again when its row is retried in Alerts.
+
+   RENDERING THE TICKED (phase V33.4, the owner's (х38)-(х44)): the project bar's render button is this view's while a
+   highlights project is open (export-b.js setRenderTarget) - "Render 3" for the ticked ones, dim while none is ticked, "✕
+   stop" (twice: "really?") while any of the project's renders is in line; "select all" / "select none" left of it (the
+   field has no box of its own). Its window is Export's, for N fragments (openMany); the server puts them in the render
+   queue (lib/highlights-render.js). Each tile says where its render is - in line, rendering with its bar, interrupted
+   ("go on in Queue"), failed with "render again" - and a rendered one wears "rendered" (pale "changed since" when its
+   timeline was edited after); the top says "rendering 2 of 5 · ~1:30 left"; the card names the file and plays it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -29,6 +37,8 @@ import * as Layers from '../layers.js';
 import { presetName, presetStyle, editedKeys } from '../captions/preset-use.js';
 import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf } from '../captions/title.js';
+import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
+import { showResult } from './render-result.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -62,6 +72,7 @@ let _armed = '';              // 'stop' | 'retry' - the button waiting for its s
 let _armT = 0;
 let _ui = null;
 let _err = '';
+let _rStart = 0;              // (V33.4) when this page first saw the project's renders going - 0 when they are not
 
 const _api = async (url, opt) => {
   let r = null, d = null;
@@ -94,8 +105,12 @@ function _onStore() {
   // Another project: what was shown of the last one goes.
   _pid = pid;
   _rec = null; _prog = null; _live = false; _retry = ''; _sel = _openN(); _checked.clear(); _err = ''; _multi = false;
+  _rStart = 0;
   _stopPoll();
   closePopup();
+  // (phase V33.4) The project bar's render button is this view's while a highlights project is open.
+  setRenderTarget(pid ? TARGET : null);
+  _paintBar();
   if (pid) { _show(true); _load(); }
   else if (_shown) _show(false);
   _crumbs();
@@ -202,7 +217,15 @@ export function initHighlights() {
   _onStore();
   // A row retried in Alerts: read again at once (alerts-bell.js).
   window.addEventListener('ugc:alert-retried', () => { if (_pid) _load(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && _pid && _live && !_timer) _load(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && _pid && _busy() && !_timer) _load(); });
+  // (phase V33.4) "select all" / "select none" in the project bar, left of the render button (the owner's (х38), (х38а)).
+  const all = $('mv3-hl-all');
+  if (all) all.addEventListener('click', () => {
+    const frags = _frags();
+    if (frags.length && frags.every((f) => _checked.has(f.n))) _checked.clear();
+    else for (const f of frags) _checked.add(f.n);
+    _paint();
+  });
   // CTRL+Z IN THE FIELD brings the deleted fragments back, one by one, the last first (the owner's (х19а)) - "in the field":
   // the last press of the mouse was in this view. Anywhere else Ctrl+Z is the timeline's (bar.js): taken before it here, in
   // the capture phase, and only then.
@@ -250,11 +273,22 @@ async function _load() {
   const have = new Set((_rec.fragments || []).filter((f) => !f.deletedAt).map((f) => f.n));
   if (_sel && !have.has(_sel)) _sel = 0;
   for (const n of [..._checked]) if (!have.has(n)) _checked.delete(n);
+  // (phase V33.4) The project's renders: followed while they go; when they are over, how many were made is said.
+  if (_rec.rendering && !_rStart) _rStart = Date.now();
+  else if (!_rec.rendering && _rStart) {
+    const made = _frags().filter((f) => f.rendered && Date.parse(f.rendered.at || '') >= _rStart - 5000).length;
+    _rStart = 0;
+    if (made && !_stoppedNow) _say(made + (made === 1 ? ' fragment rendered' : ' fragments rendered') + ' - Library -> Renders, or the card');
+    _stoppedNow = false;
+  }
   _paint();
   _stopPoll();
-  if (_live) _timer = setTimeout(() => { _timer = 0; if (!document.hidden) _load(); }, POLL_MS);
+  if (_busy()) _timer = setTimeout(() => { _timer = 0; if (!document.hidden) _load(); }, POLL_MS);
 }
 function _stopPoll() { if (_timer) { clearTimeout(_timer); _timer = 0; } }
+// At work - finding, cutting - or rendering: the record is read again on a beat.
+const _busy = () => !!(_live || (_rec && _rec.rendering));
+let _stoppedNow = false;
 
 function _popup() {
   if (!_pid || !_rec) return;
@@ -286,6 +320,7 @@ function _arm(what) {
 
 function _paint() {
   _crumbs();
+  _paintBar();
   if (!_ui || !_shown) return;
   _paintTop();
   _paintField();
@@ -338,6 +373,15 @@ function _paintTop() {
     const what = made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
     state.appendChild(_el('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
   }
+  // (phase V33.4) The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
+  const rd = r.rendering;
+  if (rd) {
+    const k = Math.min(rd.of, rd.done + 1);
+    state.appendChild(_el('span', 'mv3-hl-words', 'rendering ' + k + ' of ' + rd.of + (rd.left > 0 ? ' · ~' + _clock(rd.left) + ' left' : '')));
+  }
+  const tr = r.renderTrouble || {};
+  if (tr.interrupted) state.appendChild(_el('span', 'mv3-hl-meta', tr.interrupted + ' interrupted - go on in Queue'));
+  if (tr.failed) state.appendChild(_el('span', 'mv3-hl-meta is-err', tr.failed + ' not rendered'));
   const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
   if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
   if (_said || _err) state.appendChild(_el('span', 'mv3-hl-said' + ((_said && _said.err) || (!_said && _err) ? ' is-err' : ''), _said ? _said.text : _err));
@@ -348,22 +392,106 @@ function _paintTop() {
     add.addEventListener('click', _popup);
     state.appendChild(add);
   }
-  const frags = _frags();
-  if (frags.length) {
-    const lab = _el('label', 'mv3-hl-all');
-    const cb = _el('input');
-    cb.type = 'checkbox';
-    cb.checked = frags.every((f) => _checked.has(f.n));
-    cb.indeterminate = !cb.checked && frags.some((f) => _checked.has(f.n));
-    cb.addEventListener('change', () => {
-      if (cb.checked) for (const f of frags) _checked.add(f.n); else _checked.clear();
-      _paint();
-    });
-    lab.append(cb, document.createTextNode('select all'));
-    state.appendChild(lab);
-  }
   top.appendChild(state);
 }
+
+// ── The project bar: "select all" and the render button (phase V33.4) ───────
+function _paintBar() {
+  const all = $('mv3-hl-all');
+  if (all) {
+    const frags = _pid ? _frags() : [];
+    all.hidden = !_pid;
+    const every = frags.length > 0 && frags.every((f) => _checked.has(f.n));
+    all.textContent = every ? 'select none' : 'select all';
+    all.title = every ? 'Untick every fragment' : 'Tick every fragment - for the render beside, and for their captions';
+    all.disabled = !frags.length;
+  }
+  paintExportButton();
+}
+
+// What the render button is in a highlights project (export-b.js setRenderTarget).
+const TARGET = {
+  state() {
+    if (_rec && _rec.rendering) {
+      const armed = _armed === 'rstop';
+      return { label: armed ? 'really?' : '✕ stop', stop: true, armed, enabled: true,
+        title: 'Stop rendering this project\'s fragments - all of them; the ones made stay' };
+    }
+    const n = _checked.size;
+    return { label: n ? 'Render ' + n : 'Render', enabled: n > 0,
+      title: n ? 'Render the ' + n + ' ticked ' + (n === 1 ? 'fragment' : 'fragments') + ' - one after another, with one set of settings'
+        : 'Tick the fragments to render (or "select all" on the left)' };
+  },
+  click() {
+    // "really?" pressed just as the last render ended: the press meant "stop", not a new render.
+    if (_armed === 'rstop' && !(_rec && _rec.rendering)) { _armed = ''; _paint(); return; }
+    if (_rec && _rec.rendering) {
+      if (_armed !== 'rstop') { _arm('rstop'); return; }
+      _armed = '';
+      _stopRenders();
+      return;
+    }
+    _renderTicked();
+  },
+};
+
+// The ticked ones, with one set of settings - Export's window for N (the owner's (х39)).
+function _renderTicked() {
+  const pid = _pid;
+  const list = _frags().filter((f) => _checked.has(f.n));
+  if (!pid || !list.length) return;
+  const secs = list.reduce((a, f) => a + (+(f.length || f.seconds) || 0), 0);
+  openMany({
+    count: list.length, seconds: secs, adv: (_rec && _rec.renderAdv) || null,
+    go: async (adv) => {
+      // The open one among them goes as it is on the screen: its last edits saved first.
+      const open = list.find((f) => f.n === _openN());
+      if (open) { try { await Store.flush(); } catch (e) { /* the server's copy is rendered */ } }
+      try {
+        const d = await _api('/api/highlights/' + encodeURIComponent(pid) + '/render', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ns: list.map((f) => f.n), adv }) });
+        if (open && (d.queued || []).includes(open.n)) Store.setAdv(adv);
+        const q = (d.queued || []).length;
+        const sk = d.skipped || [];
+        _say((q ? q + (q === 1 ? ' fragment' : ' fragments') + ' in line to render' : 'nothing to render')
+          + (sk.length ? ' - left out: ' + sk.map((s) => '«' + s.title + '» (' + s.why + ')').join(', ') : ''), !q);
+      } catch (e) { _say(e.message, true); }
+      _rStart = 0;
+      await _load();
+      return null;
+    },
+  });
+}
+
+async function _stopRenders() {
+  try {
+    await _api('/api/highlights/' + encodeURIComponent(_pid) + '/render/stop', { method: 'POST' });
+    _stoppedNow = true;
+    _say('rendering stopped - the ones made stay');
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+// A failed render tried again - the same job, its settings (the queue's ↻).
+async function _renderAgain(f) {
+  const id = f.rq && f.rq.queueId;
+  if (!id) return;
+  try {
+    const r = await fetch('/api/mv3q/retry/' + encodeURIComponent(id), { method: 'POST' });
+    if (!r.ok) throw new Error('the queue did not take it back');
+    _say('«' + f.title + '» in line again');
+  } catch (e) { _say(e.message, true); }
+  _load();
+}
+
+const _hhmm = (iso) => {
+  const d = new Date(iso || '');
+  if (isNaN(d)) return '';
+  const two = (n) => String(n).padStart(2, '0');
+  const today = new Date().toDateString() === d.toDateString();
+  return (today ? '' : d.getDate() + '.' + two(d.getMonth() + 1) + ' ') + two(d.getHours()) + ':' + two(d.getMinutes());
+};
+const _fileOf = (url) => { try { return decodeURIComponent(String(url).split('/').pop()); } catch (e) { return String(url).split('/').pop(); } };
 
 function _paintField() {
   const field = _ui.field;
@@ -439,8 +567,16 @@ function _paintField() {
     t.appendChild(x);
     t.appendChild(_el('span', 'mv3-hl-score', String(f.score)));
     if ((f.pieces || []).length > 1) t.appendChild(_el('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
+    // (phase V33.4) Rendered: a mark on its frame - pale, "changed since", when its timeline was edited after.
+    if (ready && f.rendered) {
+      const ch = !!f.rendered.changed;
+      const mark = _el('span', 'mv3-hl-rendered' + (ch ? ' is-changed' : ''), ch ? 'changed since' : '▶ rendered');
+      mark.title = 'Rendered: ' + _fileOf(f.rendered.url) + (ch ? ' - its timeline was edited after; Render again to bring it up to date' : '');
+      t.appendChild(mark);
+    }
     const foot = _el('div', 'mv3-hl-foot');
     foot.appendChild(_el('div', 'mv3-hl-name', f.title));
+    const rq = ready ? f.rq : null;
     if (!ready && now) {
       const bar = _el('div', 'mv3-hl-bar');
       const fill = _el('div', 'mv3-hl-fill');
@@ -450,6 +586,28 @@ function _paintField() {
       foot.appendChild(_el('div', 'mv3-hl-step', now.words || 'cutting'));
     } else if (failed) {
       foot.appendChild(_el('div', 'mv3-hl-step is-err', 'not made' + (!_live && _retry ? ' - retry above' : '')));
+    } else if (rq && rq.state === 'running') {
+      // (phase V33.4) Its render, where it is (the owner's (х42)).
+      const bar = _el('div', 'mv3-hl-bar');
+      const fill = _el('div', 'mv3-hl-fill is-render');
+      fill.style.width = Math.max(2, rq.percent || 0) + '%';
+      bar.appendChild(fill);
+      foot.appendChild(bar);
+      foot.appendChild(_el('div', 'mv3-hl-step', rq.phase ? 'finishing…'
+        : 'rendering ' + (rq.percent || 0) + '%' + (rq.remain != null ? ' · ' + _clock(rq.remain) : '')));
+    } else if (rq && rq.state === 'line') {
+      foot.appendChild(_el('div', 'mv3-hl-step', 'in line · ' + (rq.ahead ? rq.ahead + ' ahead' : 'next')));
+    } else if (rq && rq.state === 'interrupted') {
+      foot.appendChild(_el('div', 'mv3-hl-step is-warn', 'interrupted - go on in Queue'));
+    } else if (rq && rq.state === 'failed') {
+      const st = _el('div', 'mv3-hl-step is-err', 'render failed');
+      st.title = rq.error || '';
+      foot.appendChild(st);
+      const again = _el('button', 'mv3-hl-again', 'render again');
+      again.type = 'button';
+      again.title = (rq.error ? rq.error + '\n' : '') + 'Put it back in line with the same settings';
+      again.addEventListener('click', (e) => { e.stopPropagation(); _renderAgain(f); });
+      foot.appendChild(again);
     } else foot.appendChild(_el('div', 'mv3-hl-step', ready ? _secs(f.length || f.seconds) : (_live ? 'waiting its turn' : 'not cut yet')));
     t.appendChild(foot);
     t.addEventListener('click', () => {
@@ -477,7 +635,8 @@ function _paintCard() {
     const ul = _el('ul', 'mv3-hl-list');
     for (const f of frags) if (_checked.has(f.n)) ul.appendChild(_el('li', null, f.title));
     card.appendChild(ul);
-    card.appendChild(_el('p', 'mv3-hl-note', 'Their captions: the captions crumb above puts one style on all of them at once. Rendering them together comes with the next step.'));
+    card.appendChild(_el('p', 'mv3-hl-note', 'Their captions: the captions crumb above puts one style on all of them at once. '
+      + 'Rendering them: Render on the right of the project bar - one after another, with one set of settings.'));
     return;
   }
   const f = frags.find((x) => x.n === _sel);
@@ -540,6 +699,8 @@ function _paintCard() {
     }
     card.appendChild(tl);
   }
+  // (phase V33.4) Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
+  if (f.state === 'ready') card.appendChild(_renderLine(f));
   // Each piece, in the fragment's order, with its time in the video: a hook taken from later is said so.
   const pcs = _el('div', 'mv3-hl-pcs');
   (f.pieces || []).forEach((p, k) => {
@@ -555,6 +716,41 @@ function _paintCard() {
   sec('hook', f.hook);
   sec('why it would work', f.why);
   sec('what is said', f.text);
+}
+
+// The card's line about the fragment's render (phase V33.4, the owner's (х42)).
+function _renderLine(f) {
+  const line = _el('div', 'mv3-hl-cap mv3-hl-rline');
+  const rd = f.rendered;
+  const rq = f.rq;
+  if (rd) {
+    line.appendChild(document.createTextNode('render: '));
+    const name = _el('b', null, _fileOf(rd.url));
+    name.title = rd.url;
+    line.appendChild(name);
+    const bits = [rd.seconds ? _secs(rd.seconds) : '', _hhmm(rd.at), rd.srt ? '+ .srt' : ''].filter(Boolean);
+    if (bits.length) line.appendChild(_el('span', 'mv3-hl-cap-of', ' · ' + bits.join(' · ')));
+    if (rd.changed) {
+      const ch = _el('span', 'mv3-hl-cap-ed', ' · changed since');
+      ch.title = 'Its timeline was edited after the render - tick it and Render again';
+      line.appendChild(ch);
+    }
+    const acts = _el('div', 'mv3-hl-racts');
+    const play = _el('button', 'mv3-c-btn', '▶ play');
+    play.type = 'button';
+    play.title = 'Play the render - the result window, as Queue opens it';
+    play.addEventListener('click', () => showResult({ url: rd.url, title: f.title, key: f.key, fresh: false }));
+    acts.appendChild(play);
+    line.appendChild(acts);
+  } else {
+    line.appendChild(document.createTextNode('render: '));
+    line.appendChild(_el('span', null, !rq ? 'not yet - tick it and Render'
+      : rq.state === 'running' ? 'rendering ' + (rq.percent || 0) + '%'
+      : rq.state === 'line' ? 'in line' + (rq.ahead ? ' · ' + rq.ahead + ' ahead' : ' · next')
+      : rq.state === 'interrupted' ? 'interrupted - go on in Queue'
+      : 'failed' + (rq.error ? ': ' + rq.error : '')));
+  }
+  return line;
 }
 
 // ── The title on top added to a made fragment (phase V33.3) ────────────────

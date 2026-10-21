@@ -10,6 +10,11 @@
 
    The settings belong to the PROJECT (POST /api/mv3/adv) and are saved when Render or Add to queue
    is pressed; the render is made from the numbers on screen, and a queued one keeps them.
+
+   SEVERAL AT ONCE (phase V33.4, the owner's (х38), (х39), (х43)). Something else may own the button for a while -
+   a highlights project, whose ticked fragments it renders (merge-v3/highlights.js, setRenderTarget): it says what the
+   button reads ("Render 3", "✕ stop"), whether it can be pressed, and what a press does. Its window is THIS one, the same
+   fields, for N fragments (openMany): "N fragments · 3:47 in all", no "Add to queue" - one Render, at once.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -139,8 +144,7 @@ async function _run(body, adv) {
     body.appendChild(_el('div', 'mv3-rwarn', e.message));
   } finally {
     _busy = false;
-    const b = document.getElementById('mv3-export');
-    if (b) b.disabled = !Store.hasProject();
+    paintExportButton();
   }
 }
 
@@ -166,19 +170,46 @@ function _summary(tl) {
 }
 
 function _open() {
-  _close();
   const tl = Store.timeline();
   if (!tl || !Array.isArray(tl.tracks)) return;
   const s = _summary(tl);
-  const adv = { ...DEFAULTS, ...(Store.adv() || {}) };
-  const wide = tl.format === '16:9';
+  const subs = (tl.tracks || []).find(t => t.kind === 'subs');
+  _window({
+    sum: (tl.format || '9:16') + ' · ' + s.end.toFixed(1) + 's · '
+      + s.pieces + (s.pieces === 1 ? ' piece of picture' : ' pieces of picture') + ' · '
+      + (s.sounds ? s.sounds + (s.sounds === 1 ? ' sound' : ' sounds') : 'no sound'),
+    end: s.end, wide: tl.format === '16:9', adv: Store.adv(),
+    said: !!(subs && (subs.clips || []).some(c => c && c.name)),
+  });
+}
+
+/**
+ * (phase V33.4) The same window for SEVERAL timelines at once - a highlights project's ticked fragments: one set of
+ * settings on all, one Render, no "Add to queue" (the owner's (х39)). `go(adv)` puts them in line and resolves with a
+ * word for the status line; the window closes on the press.
+ * @param {{ count: number, seconds: number, adv: object|null, wide?: boolean, go: (adv: object) => Promise<{ text: string, err?: boolean }> }} o
+ */
+export function openMany(o) {
+  const n = Math.max(0, o.count | 0);
+  _window({
+    sum: n + (n === 1 ? ' fragment' : ' fragments') + ' · ' + _mmss(o.seconds || 0) + ' in all',
+    end: o.seconds || 0, wide: !!o.wide, adv: o.adv, said: true, many: { count: n, go: o.go },
+  });
+}
+
+function _window(o) {
+  _close();
+  const s = { end: o.end || 0 };
+  const adv = { ...DEFAULTS, ...(o.adv || {}) };
+  const wide = !!o.wide;
   const full = wide ? '1920x1080' : '1080x1920';
   const compact = wide ? '1280x720' : '720x1280';
+  const many = o.many || null;
 
   _ov = _el('div', 'mv3-x-ov');
   const box = _el('div', 'mv3-x');
   const head = _el('div', 'mv3-x-head');
-  head.appendChild(_el('h3', null, 'Render'));
+  head.appendChild(_el('h3', null, many ? 'Render ' + many.count + (many.count === 1 ? ' fragment' : ' fragments') : 'Render'));
   const x = _el('button', 'mv3-x-close', '✕');
   x.type = 'button';
   x.addEventListener('click', () => { if (!_busy) _close(); });
@@ -186,10 +217,8 @@ function _open() {
   box.appendChild(head);
 
   const body = _el('div', 'mv3-x-body');
-  body.appendChild(_el('div', 'mv3-x-sum', (tl.format || '9:16') + ' · ' + s.end.toFixed(1) + 's · '
-    + s.pieces + (s.pieces === 1 ? ' piece of picture' : ' pieces of picture') + ' · '
-    + (s.sounds ? s.sounds + (s.sounds === 1 ? ' sound' : ' sounds') : 'no sound')));
-  if (!s.end) body.appendChild(_el('div', 'mv3-rwarn', 'There is nothing on the timeline to render.'));
+  body.appendChild(_el('div', 'mv3-x-sum', o.sum));
+  if (!s.end) body.appendChild(_el('div', 'mv3-rwarn', many ? 'None of them has anything to render.' : 'There is nothing on the timeline to render.'));
 
   body.appendChild(_el('div', 'mv3-x-hdr', 'Video'));
   // The frame is the project's; the file may be written smaller, in the same shape.
@@ -244,9 +273,10 @@ function _open() {
   srtLbl.append(srt, _el('span', null, '.srt file beside the video'));
   srtBox.appendChild(srtLbl);
   body.appendChild(_row('Subtitles file', srtBox));
-  const subs = (tl.tracks || []).find(t => t.kind === 'subs');
-  const said = !!(subs && (subs.clips || []).some(c => c && c.name));
-  body.appendChild(_el('div', 'mv3-x-note', said
+  body.appendChild(_el('div', 'mv3-x-note', many
+    ? 'Each one\'s Subtitles lane as classic subtitles - two lines of up to 42 characters, 1-7 s each - in <name>.en_US.srt next to '
+      + 'its video (Meta reads the language from that name). The text lanes are not in it.'
+    : o.said
     ? 'The Subtitles lane as classic subtitles - two lines of up to 42 characters, 1-7 s each - in <name>.en_US.srt next to the video '
       + '(Meta reads the language from that name). The text lanes are not in it.'
     : 'The Subtitles lane is empty - no file will be written.'));
@@ -294,6 +324,28 @@ function _open() {
   const cancel = _el('button', 'mv3-c-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', () => { if (!_busy) _close(); });
+  // (phase V33.4) Several fragments: one Render, at once - the settings go up with them (the server keeps them on each
+  // one and on the project), and the window closes; their tiles show the way along.
+  if (many) {
+    const all = _el('button', 'mv3-c-btn mv3-x-go', 'Render ' + many.count);
+    all.type = 'button';
+    all.disabled = !s.end || !many.count;
+    all.title = 'Into the render queue at once, one after another, with these settings';
+    all.addEventListener('click', async () => {
+      all.disabled = true;
+      let said = null;
+      try { said = await many.go(collect()); } catch (e) { said = { text: e.message, err: true }; }
+      _close();
+      if (said && said.text) _say(said.text, said.err ? 'err' : '');
+    });
+    foot.append(cancel, all);
+    box.appendChild(foot);
+    _ov.appendChild(box);
+    _ov.addEventListener('mousedown', (e) => { if (e.target === _ov) _close(); });
+    document.body.appendChild(_ov);
+    _layer = Layers.open(_ov, { name: 'render', onEsc: _close });
+    return;
+  }
   // Left of Render, because it is the calmer of the two and the one to reach for when several
   // projects are being set up in a row.
   const queue = _el('button', 'mv3-c-btn', 'Add to queue');
@@ -330,7 +382,31 @@ function _open() {
   _layer = Layers.open(_ov, { name: 'render', onEsc: () => { if (!_busy) _close(); } });
 }
 
+// ── Who owns the button (phase V33.4) ───────────────────────────────────────
+// null: it is Export, for the open timeline. Otherwise { state() -> { label, title, enabled, stop, armed }, click() }.
+let _target = null;
+
+/** Someone else's button for a while (a highlights project's ticked fragments), or Export again (null). */
+export function setRenderTarget(t) {
+  _target = t || null;
+  paintExportButton();
+}
+
+/** The button as it should read now: Export for the open timeline, or what the target says. */
+export function paintExportButton() {
+  const b = document.getElementById('mv3-export');
+  if (!b) return;
+  // Somebody else's project counts as none: rendering writes export settings (js/merge-v3/main.js).
+  const can = Store.hasProject() && Store.canEdit();
+  const st = _target ? _target.state() : null;
+  b.textContent = st ? st.label : 'Export';
+  b.title = st ? st.title : 'Render this timeline with FFmpeg';
+  b.disabled = !can || (st ? !st.enabled : _busy);
+  b.classList.toggle('is-stop', !!(st && st.stop));
+  b.classList.toggle('is-armed', !!(st && st.armed));
+}
+
 export function initExportB() {
   const b = document.getElementById('mv3-export');
-  if (b) b.addEventListener('click', () => _open());
+  if (b) b.addEventListener('click', () => { if (_target) _target.click(); else _open(); });
 }
