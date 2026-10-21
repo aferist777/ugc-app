@@ -42,7 +42,7 @@ function view(rec, o) {
   if (a) delete a.raw;
   // The video's poster - what a tile shows until its own first frame is made.
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
-  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, poster: (src && src.thumbPath) || '' };
+  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label }])), poster: (src && src.thumbPath) || '' };
   if (o && o.caps) {
     // (phase V33.4) And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
     const rv = RENDER.viewOf(rec);

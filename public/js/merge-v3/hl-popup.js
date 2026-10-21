@@ -53,6 +53,8 @@ export function openPopup(id, rec, { onStarted } = {}) {
   try { remembered = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {}; } catch (e) { remembered = {}; }
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
+  // (phase V33.6, the owner's (х54)-(х57)) What kind of video - where the frame looks when there is no face, and what the agent is told.
+  const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, facts: { label: 'facts · commentary' } };
   const ask = rec && rec.ask ? rec.ask : {};
   const st = {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
@@ -60,6 +62,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
     // (phase V33.3) The title on top of every fragment - on unless it was taken off last time (the owner's (х35)).
     title: ask.title != null ? ask.title !== false : remembered.title !== false,
+    kind: kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto'),
     style: '', price: null, busy: false, said: '', err: false,
   };
 
@@ -134,7 +137,16 @@ export function openPopup(id, rec, { onStarted } = {}) {
   titleBox.addEventListener('change', () => { st.title = titleBox.checked; remember(); });
   tw.append(titleBox, document.createTextNode('title on top'));
   tw.title = 'The moment\'s headline, in the video\'s own language, at the top of each fragment for its first three seconds - a text line like any other: edit it, move it or delete it on the timeline';
-  row.append(lw, cw, tw);
+  const kindSel = _el('select', 'mv3-hlp-sel');
+  for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
+  kindSel.value = st.kind;
+  kindSel.addEventListener('change', () => { st.kind = kindSel.value; remember(); });
+  const kw = _el('label', 'mv3-hlp-lab', 'video kind');
+  kw.appendChild(kindSel);
+  kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
+    + 'podcast · interview - the faces; no face: the whole frame; the agent looks for complete thoughts and strong opinions\n'
+    + 'facts · commentary - the faces; no face: the whole frame (text, charts and screens stay whole); the agent looks for a fact with its hook';
+  row.append(lw, cw, kw, tw);
   body.appendChild(_el('div', 'mv3-x-hdr', 'the fragments'));
   body.appendChild(row);
   body.appendChild(_el('p', 'mv3-x-note', 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.'));
@@ -177,7 +189,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
   _win = { ov, layer, picker };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
-  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, title: st.title })); } catch (e) { /* private */ } }
+  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, title: st.title, kind: st.kind })); } catch (e) { /* private */ } }
 
   function takeFile(f) {
     if (!f) return;
@@ -281,7 +293,7 @@ export function openPopup(id, rec, { onStarted } = {}) {
     }
     st.busy = true;
     say('');
-    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title };
+    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind };
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
     else spec.sourceId = st.sourceId;

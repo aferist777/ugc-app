@@ -353,7 +353,9 @@ function _paintTop() {
   const v = r.video;
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
-  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (r.lengths && r.lengths[r.ask.length] ? r.lengths[r.ask.length].label : r.ask.length) + ' · ' + r.ask.count + ' asked'));
+  // (phase V33.6) And the kind of video, when one other than auto was chosen.
+  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label : '';
+  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (r.lengths && r.lengths[r.ask.length] ? r.lengths[r.ask.length].label : r.ask.length) + ' · ' + r.ask.count + ' asked' + kindSaid));
   top.appendChild(what);
 
   const state = _el('div', 'mv3-hl-state');
