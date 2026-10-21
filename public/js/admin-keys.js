@@ -124,7 +124,7 @@ const TG_HOWTO = [
   ['In Telegram open ', ['@BotFather', 'https://t.me/BotFather'], ' and send /newbot.'],
   ['Give the bot a name, then a username that ends in “bot” (for example ugc_studio_inbox_bot).'],
   ['BotFather answers with a token like 123456789:AA… - paste it in the field above and press Save.'],
-  ['Then open your bot by the link that appears here and press Start: from then on it listens to you only.'],
+  ['Then send your bot the code that appears here (or open the link beside it and press Start): from then on it listens to you only.'],
 ];
 const TG_NOTE = 'With the Cloudflare key below working, what you send waits on your Cloudflare while the app is closed; without it, Telegram keeps it for 24 hours.';
 
@@ -457,8 +457,10 @@ function tgPaint(v) {
   if (v.error) box.appendChild(_tgLine('down', '✗ ' + v.error, { button: 'connect', title: 'Look at the keys again and connect', click: tgConnect }));
   const bot = v.bot && v.bot.username ? v.bot.username : '';
   if (bot && v.code) {
-    box.appendChild(_tgLine('down', '✗ not connected yet: open ', { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` },
-      ` and press Start (or send /start ${v.code} to @${bot})`));
+    // The code alone is enough (phase TG, the owner 2026-10-21: "пишет not connected" - Start pressed on the bot itself
+    // sends "/start" without the code).
+    box.appendChild(_tgLine('down', `✗ not connected yet: send the code ${v.code} to @${bot} in Telegram - or open `,
+      { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` }, ' and press Start'));
     _tgTimer = setTimeout(tgLoad, 3000);
   } else if (bot && v.chat) {
     box.appendChild(_tgLine('ok', `✓ @${bot} listens to ${v.chat.name} only`, { button: 'unpair', title: 'Forget this chat - a new code is made', click: tgUnpair }));
@@ -470,6 +472,7 @@ function tgPaint(v) {
   }
   if (v.receiverError) box.appendChild(_tgLine('down', '✗ ' + v.receiverError));
   if (v.conflict) box.appendChild(_tgLine('down', '✗ ' + v.conflict));
+  if (v.delivery) box.appendChild(_tgLine('down', '✗ ' + v.delivery));
   const q = v.queue || {};
   if (q.waiting || q.error) box.appendChild(_tgLine('', `in the queue: ${q.waiting || 0}` + (q.error ? ` · ${q.error} could not be taken` : '')));
 }
