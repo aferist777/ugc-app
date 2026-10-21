@@ -9,7 +9,9 @@
 // downloaded whole videos to paint small cards, which is what made it heavy.
 
 import { initNav } from '../app-nav.js';
-import { openViewer } from './viewer.js';
+import { openViewer, repaint as repaintViewer } from './viewer.js';
+// (phase TG, block 7) Cutting a piece out of any video - one module with Merge's panel and the post viewer.
+import * as Cut from '../cut.js';
 import * as A from './actions.js';
 import * as V from './voices.js';
 import * as SC from './scenarios.js';
@@ -423,7 +425,8 @@ function _openPost(it, file) {
   const posts = _items.filter(x => x.kind === 'references');
   const at = posts.findIndex(x => String(x.id) === String(it.id));
   if (at < 0) { _status('That post is no longer here', 'err'); return; }
-  RP.openPost(posts, at, { file, onChanged: () => _apply({ removed: true, reload: true, msg: 'Post deleted' }) });
+  // Deleted, moved, or a piece cut out of it into a new clip (block 7) - the post viewer says which itself.
+  RP.openPost(posts, at, { file, onChanged: (w) => _apply({ removed: !!(w && w.deleted), reload: true, msg: (w && w.deleted) ? 'Post deleted' : '' }) });
 }
 
 // Open in the viewer, with the same actions available there. `follow` is told every item the viewer
@@ -437,9 +440,16 @@ function _open(it, list, follow) {
   let at = items.indexOf(it);
   if (at < 0) at = items.findIndex(x => x && String(x.id) === String(it.id) && x.kind === it.kind);
   if (at < 0) { _status('That item is no longer on this shelf', 'err'); return; }
+  Cut.reset();
   openViewer(items, at, {
     onIndex: typeof follow === 'function' ? (_i, item) => follow(item) : null,
     actionsFor: _actionsFor,
+    // A video is cut into new pieces under the stage; a piece shows its whole video on a tick (js/cut.js).
+    underStage: (item, video) => Cut.underStage(item, video, {
+      say: (t, err) => _status(t, err ? 'err' : ''),
+      onSaved: (r) => _apply({ reload: true, msg: 'Saved as a new clip in ' + r.where + '.' }),
+    }),
+    videoSrc: Cut.videoSrc,
     // Kind and category belong in the right column rather than the button row: they are
     // states to read off, not actions to fire, and a <select> shows the current value.
     extraRows: (item) => {
@@ -453,6 +463,8 @@ function _open(it, list, follow) {
           () => [{ id: '', label: '— no category —' }].concat(_catsFor(item.kind)),
           (id) => _setCat(item, id), 'Category')]);
       }
+      const orig = Cut.originalRow(item, repaintViewer);
+      if (orig) rows.push(orig);
       return rows;
     },
     onAction: async (id, item) => {

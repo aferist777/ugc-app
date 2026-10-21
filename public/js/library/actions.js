@@ -149,16 +149,6 @@ export async function setCategory(it, categoryId, categoryLabel) {
   return categoryId;
 }
 
-// ── Trimming, once ──────────────────────────────────────────────────────────
-// The server cuts the file and moves the record to the cut. The original file is left where it was - see the route.
-export async function trimItem(it, inS, outS) {
-  const d = await _json(_itemUrl(it) + '/trim', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ in: inS, out: outS }),
-  });
-  return d.patch;
-}
-
 // A category that did not exist a moment ago, for one kind. The server hands back the existing
 // one when the name is already taken (LC.add is idempotent by label), so asking twice is safe.
 export async function createCategory(kind, label) {

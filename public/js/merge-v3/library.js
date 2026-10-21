@@ -24,8 +24,9 @@ import { openViewer, closeViewer, repaint as repaintViewer } from '../library/vi
 import * as RP from '../references/post.js';
 import * as Layers from '../layers.js';
 import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages, uploadSounds, uploadMusic,
-         loadCats, setCategory, setKind, KINDS, trimItem, createCategory } from '../library/actions.js';
-import { trimmer } from './trim.js';
+         loadCats, setCategory, setKind, KINDS, createCategory } from '../library/actions.js';
+// (phase TG, block 7) Cutting a piece out of any video - one module with the Library page and the post viewer.
+import * as Cut from '../cut.js';
 import { DRAG_TYPE, DRAG_MEDIA, markGone } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -319,8 +320,12 @@ const NEW_CAT = '__new__';
 let _allCats = null;
 
 // A picture opens at the 2048px preview tier, never the 4K original (phase J4).
-const _viewerOpts = () => ({
-  extraRows: _viewerRows, underStage: _underStage,
+const _viewerOpts = () => {
+  Cut.reset();
+  return _viewerOptsOf();
+};
+const _viewerOptsOf = () => ({
+  extraRows: _viewerRows, underStage: _underStage, videoSrc: Cut.videoSrc,
   // (block 6) A video of YOUTUBE: a new highlights project on it, chosen in its popup already.
   actionsFor: (it) => (it && it.kind === 'youtube' ? [{ id: 'hl', label: 'To highlights' }] : []),
   onAction: (id, it) => {
@@ -337,7 +342,10 @@ function _viewerRows(item) {
   const rows = [];
   if (KINDABLE.has(item.kind)) rows.push(['kind', _kindSelect(item)]);
   if (CATABLE.has(item.kind)) rows.push(['category', _categorySelect(item)]);
-  // Said once and quietly: it cannot be done again, and what it was cut to is worth knowing.
+  // A piece: its whole video, shown on a tick (js/cut.js).
+  const orig = Cut.originalRow(item, repaintViewer);
+  if (orig) rows.push(orig);
+  // A clip trimmed the old way, once (before phase TG): what it was cut to.
   const tr = item.meta && item.meta.trimmed;
   if (tr) rows.push(['trimmed', (+tr.in).toFixed(1) + 's – ' + (+tr.out).toFixed(1) + 's of the upload']);
   return rows;
@@ -460,55 +468,17 @@ async function _askCategoryName(anchor, kind, onMade) {
   if (cat) await onMade(cat);
 }
 
-// ── the one trim an upload is allowed ──
-// Under the video, and only for a clip that was uploaded by hand and has not been trimmed yet.
-// Saving asks once, because it cannot be undone here: the file is cut, the clip on the shelf
-// becomes the cut, and the trimmer goes away for good. The original stays on disk where it was,
-// so a timeline that already uses the clip is not touched.
+// ── cutting a piece (phase TG, block 7) ──
+// Under any video of the shelf (js/cut.js): the stretch, "Cut…", where the new clip goes - the grid and the tree read
+// again for it. The video itself is not touched.
 function _underStage(item, video) {
-  if (!item || !KINDABLE.has(item.kind)) return null;
-  if (!(item.meta && item.meta.trimmable)) return null;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'mv3-trimbox';
-  const t = trimmer(video);
-  wrap.appendChild(t.el);
-  const save = document.createElement('button');
-  save.type = 'button';
-  save.className = 'mv3-trimbox-save';
-  save.textContent = 'Save trim';
-  save.title = 'Cut the clip to this stretch. It can be done once, and not undone here.';
-  wrap.appendChild(save);
-
-  save.addEventListener('click', async () => {
-    const { in: a, out: b, dur } = t.get();
-    if (!(dur > 0)) return;
-    if (a <= 0.05 && b >= dur - 0.05) { _status('Move a handle first - that is the whole clip.', true); return; }
-    if (!confirm('Trim this clip to ' + a.toFixed(1) + 's – ' + b.toFixed(1) + 's?\n\n'
-      + 'This can be done once. The library will show only the trimmed clip from now on, and there is '
-      + 'no way back to the full length here. Projects that already use it are not affected.')) return;
-    save.disabled = true;
-    save.textContent = 'Trimming…';
-    try {
-      const patch = await trimItem(item, a, b);
-      // The same object the grid and the viewer both hold: changed in place, so the viewer can
-      // simply draw it again - now playing the short file, without a trimmer.
-      item.media = patch.videoPath;
-      if (patch.thumbPath) item.thumb = patch.thumbPath;
-      item.dur = patch.duration || item.dur;
-      item.meta = Object.assign({}, item.meta, { trimmable: false, trimmed: patch.trimmed });
-      t.destroy();
-      repaintViewer();
-      _status('Trimmed to ' + (b - a).toFixed(1) + ' s.');
-      setTimeout(() => _status(''), 2400);
-      _load();
-    } catch (e) {
-      save.disabled = false;
-      save.textContent = 'Save trim';
-      _status('Could not trim it: ' + e.message, true);
-    }
+  return Cut.underStage(item, video, {
+    say: (t, err) => _status(t, !!err),
+    onSaved: (r) => {
+      Promise.resolve(_load()).then(() => _status('Saved as a new clip in ' + r.where + '.'));
+      if (_tree) _tree.load();
+    },
   });
-  return wrap;
 }
 
 // The upload cell, first in the grid. A tile-sized target rather than a header button because that is where files are

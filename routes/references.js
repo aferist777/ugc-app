@@ -102,7 +102,7 @@ router.post('/references/:id/move', async (req, res) => {
         if (m.type === 'video') {
           if (!VIDEO_KINDS.includes(kind)) { skipped.push({ id: m.id, why: 'a video does not go into IMAGES' }); continue; }
           fileRecord({ videoPath: m.path, thumbPath: m.thumb || null, name, kind, categoryLabel: kind === 'hooks' ? '' : label,
-            trimmable: true, link: post.link || '' });
+            trimmable: true, link: post.link || '', original: m.original || null, duration: m.dur || 0, w: m.w || 0, h: m.h || 0 });
         } else {
           if (kind !== 'images') { skipped.push({ id: m.id, why: 'a picture does not go into VIDEO' }); continue; }
           await IMG.add(m.path, { categoryId: cat, categoryLabel: label, name, source: 'upload',
@@ -160,7 +160,10 @@ router.delete('/references/:id', (req, res) => {
     // Only what another post does not point at (a file is one post's - this is a guard, not a rule in use).
     const used = new Set();
     for (const p of REFS.read()) for (const m of (p.media || [])) { if (m.path) used.add(m.path); if (m.thumb) used.add(m.thumb); }
-    const urls = [gone.poster, ...(gone.media || []).flatMap(m => [m.path, m.thumb])].filter(u => u && !used.has(u));
+    // (block 7) A file some piece was cut from stays while the piece is there - its "original".
+    const CUTS = require('../lib/cuts');
+    for (const u of CUTS.originalsInUse()) used.add(u);
+    const urls = [...new Set([gone.poster, ...(gone.media || []).flatMap(m => [m.path, m.thumb])])].filter(u => u && !used.has(u));
     const removed = [];
     for (const u of urls) {
       const abs = toDiskWithin(u, [MEDIA.references]);
@@ -170,6 +173,8 @@ router.delete('/references/:id', (req, res) => {
       try { fs.rmSync(abs, { force: true }); removed.push(path.basename(abs)); } catch (e) { /* held: left */ }
       for (const d of derived) { try { fs.rmSync(d, { force: true }); } catch (e) { /* held */ } }
     }
+    // ...and the whole video of a piece of this post goes once nothing holds it.
+    removed.push(...CUTS.dropOrphans((gone.media || []).map(m => m && m.original && m.original.path)));
     res.json({ success: true, removed });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

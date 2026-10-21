@@ -20,12 +20,14 @@ let _onIndex = null;
 let _onAction = null;
 let _actionsFor = () => [];
 let _extraRows = null;
-// Something a caller hangs UNDER the media on the stage - Merge's trimmer is the one there is.
+// Something a caller hangs UNDER the media on the stage - the cut of a video (js/cut.js) is the one there is.
 // Opt-in: a page that passes nothing gets exactly the viewer it had.
 let _underStage = null;
 // What a PICTURE is drawn from on the stage, when not its own file - Merge shows the 2048px preview
 // tier rather than a 4K original (phase J4). Opt-in, like the rest.
 let _showSrc = null;
+// What a VIDEO plays on the stage, when not its own file - a piece showing its whole video (js/cut.js, phase TG block 7).
+let _videoSrc = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
 // A track has nothing to look at, so it gets a player on the stage instead of a broken picture.
@@ -74,7 +76,7 @@ function _paint() {
   if (isVideo) {
     const v = document.createElement('video');
     v.className = 'lib-view-media';
-    v.src = it.media;
+    v.src = (_videoSrc && _videoSrc(it)) || it.media;
     v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
     stage.appendChild(v);
     if (_underStage) {
@@ -215,6 +217,7 @@ export function openViewer(items, index, opts) {
   _extraRows = typeof o.extraRows === 'function' ? o.extraRows : null;
   _underStage = typeof o.underStage === 'function' ? o.underStage : null;
   _showSrc = typeof o.showSrc === 'function' ? o.showSrc : null;
+  _videoSrc = typeof o.videoSrc === 'function' ? o.videoSrc : null;
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';
@@ -259,6 +262,8 @@ export function closeViewer() {
   _actionsFor = () => [];
   _extraRows = null;
   _showSrc = null;
+  _videoSrc = null;
+  _underStage = null;
   document.removeEventListener('keydown', _onKey);
   if (_layer) { Layers.close(_layer); _layer = null; }
 }

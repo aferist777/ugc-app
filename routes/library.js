@@ -205,26 +205,11 @@ function _looks() {
 const UPLOADS_CAT = '__uploads__';
 const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === UPLOADS_CAT));
 
-// WHO MAY BE TRIMMED - ONCE, and the file is cut (POST /library/item/:kind/:id/trim).
-//
-// A RULE RATHER THAN A MARK written into every existing record. The birol and hook archives
-// belong to the browser: a page pushes its whole copy here every couple of seconds, so a mark
-// added to 82 uploads and 62 hooks on the server would last until the first open tab with an
-// older copy changed anything. A rule read off the record cannot be pushed away.
-//
-//   uploads   every clip on the shelf - it is where hand-brought files go, by definition
-//   hooks     every hook
-//   birols    only one uploaded by hand after trimming existed (the `trimmable` the upload
-//             flow writes); a generated birol is trimmed on the timeline instead
-//
-// And never twice. `trimmed` says so; the file name says so as well - a cut is always written
-// as <name>_trim_<id>.mp4 - which is the half a stale push cannot take back.
-function _canTrim(rec, kind) {
-  if (!rec || rec.trimmed) return false;
-  if (/_trim_[a-z0-9]+\.mp4$/i.test(String(rec.videoPath || '').split('?')[0])) return false;
-  if (kind === 'hooks') return true;
-  if (_isUpload(rec)) return true;
-  return rec.trimmable === true;
+// (phase TG, block 7) A PIECE CUT OUT OF A VIDEO keeps its whole video (lib/cuts.js) - shown to the viewer only while
+// that file is on disk: its "original" tick shows it and cuts from it again.
+function _origMeta(o) {
+  if (!o || !o.path || !_onDisk(o.path)) return null;
+  return { path: o.path, in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: o.name || '' };
 }
 
 // The hook numbers, read once per shelf build rather than once per tile.
@@ -266,9 +251,8 @@ function _mediaShelf(opts) {
       // Present only on clips animated out of a picture; the viewer draws it beside them.
       refImage: (e.refImage && _onDisk(e.refImage)) ? e.refImage : null,
       prompt: e.prompt || '',
-      // Whether the viewer may offer the one trim this clip is allowed, and what it was
-      // trimmed to if that has happened.
-      trimmable: _canTrim(e, _isUpload(e) ? 'uploads' : 'birols'), trimmed: e.trimmed || null,
+      // What an old one-time trim cut it to (before phase TG); a piece cut since keeps its whole video instead.
+      trimmed: e.trimmed || null, original: _origMeta(e.original),
       // (phase V7) The video chat's column lays a clip out at its own shape.
       w: +e.w || 0, h: +e.h || 0,
       // (phase V27) Where it came from, when it came by a link; the viewer shows it.
@@ -293,7 +277,7 @@ function _mediaShelf(opts) {
     // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
             hookId: hookIds[String(h.videoPath || '').split('?')[0]] || null,
-            trimmable: _canTrim(h, 'hooks'), trimmed: h.trimmed || null, link: h.link || '' },
+            trimmed: h.trimmed || null, original: _origMeta(h.original), link: h.link || '' },
   }));
 
   const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
@@ -393,7 +377,8 @@ function _mediaShelf(opts) {
           source: p.source || '', folder: p.folder || '', author: p.author || '', link: p.link || '',
           caption: p.caption || '', note: p.note || '', origin: p.origin || '', postedAt: p.postedAt || '',
           remote: p.remote || null, poster: p.poster || null,
-          items: files.map(m => ({ id: m.id, type: m.type, path: m.path, thumb: m.thumb || null, w: m.w || 0, h: m.h || 0, dur: m.dur || 0 })),
+          items: files.map(m => ({ id: m.id, type: m.type, path: m.path, thumb: m.thumb || null, w: m.w || 0, h: m.h || 0, dur: m.dur || 0,
+            original: _origMeta(m.original) })),
           w: (first && first.w) || (p.remote && p.remote.w) || 0, h: (first && first.h) || (p.remote && p.remote.h) || 0,
         },
       });
@@ -1094,8 +1079,19 @@ function _pathsInUse(doomed) {
       for (const p of [e.videoPath, e.thumbPath, e.imagePath, e.audioPath]) if (p) used.add(String(p).split('?')[0]);
     }
   }
+  // (phase TG, block 7) And what a clip delete must never take: the whole video a piece names (lib/cuts.js), a REFERENCES
+  // post's file, a scenario source's video.
+  for (const r of CUTS.records()) {
+    if (skip.has(r.id)) continue;
+    used.add(r.path);
+    if (r.original && r.original.path) used.add(String(r.original.path).split('?')[0]);
+  }
   return used;
 }
+
+// The whole videos the pieces of `doomed` named - for lib/cuts.js dropOrphans once those records are gone.
+const _originalsOf = (doomed) => (doomed || []).flatMap(e => [e && e.original && e.original.path,
+  ...((e && Array.isArray(e.media)) ? e.media.map(m => m && m.original && m.original.path) : [])]).filter(Boolean);
 
 // What belongs to a file and goes with it: the derivatives a move carries along (lib/relocate.js siblingsOf) -
 // its thumbs/ copy, a clip's poster, a preview, a clip's loudness mark. A picture made by an engine has a 600px
@@ -1272,124 +1268,66 @@ router.patch('/library/item/:kind/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-/* ── Trimming an uploaded clip, once ─────────────────────────────────────────
-   POST /api/library/item/:kind/:id/trim { in, out } -> { success, kind, id, patch }
+/* ── Cutting a piece out of a video (phase TG, block 7) ──────────────────────
+   POST /api/library/cut { src, in, out, to: { kind, cat, label } } -> { success, kind, id, item }
 
-   THE FILE IS CUT, ONCE, AND THE RECORD MOVES TO THE CUT. Who may be is _canTrim's answer:
-   every clip on Uploads and Hooks, and a birol only if it was uploaded by hand. After this the
-   library shows the shorter clip and everything dropped onto a lane from now on is the shorter
-   clip. A generated birol is trimmed on the timeline instead, without its file being rewritten.
+   A PIECE IS A NEW FILE AND A NEW TILE (the owner 2026-10-21, "вариант Б"): cut from `src` between `in` and `out` (its
+   own seconds), filed where the person chose in the window after choosing the stretch - a kind of VIDEO (birols,
+   uploads, hooks; a category by its label, made when new) or REFERENCES (a post of its own: an own category `cat`, or
+   the folder of the site its whole video came from, Files when none). The video it was cut from is not touched.
 
-   THE ORIGINAL STAYS EXACTLY WHERE IT WAS. A timeline that took this clip before it was trimmed
-   points at that path, and moving or deleting the file would turn that project's clip into a
-   hole. Nothing lists it any more - the record points at the new file - so it is out of sight
-   without being gone. There is deliberately no way back in the interface.
+   The piece keeps its whole video (`original`, lib/cuts.js): a piece of a piece names the first one, so its viewer's
+   "original" always shows the whole video and cuts from it again. This replaces the old rule "an upload is trimmed
+   ONCE and its file cut" - a clip trimmed that way keeps what it had (`trimmed`) and has no "original". */
+const CUTS = require('../lib/cuts');
+const CUT_KINDS = ['birols', 'uploads', 'hooks', 'references'];
 
-   Re-encoded rather than stream-copied: a copy can only begin on a keyframe, which lands a
-   second or two away from where the handle was put, and the whole point of a trim is where.
-
-   A hook keeps its number (H07 stays H07): see lib/hook-ids.js carry(). */
-function _probeLen(abs) {
-  const ffmpegPath = require('ffmpeg-static');
-  return new Promise((resolve) => {
-    const proc = require('child_process').spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
-    let out = '';
-    proc.stderr.on('data', c => { out += c.toString(); });
-    proc.on('close', () => {
-      const d = out.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
-      resolve(d ? (+d[1] * 3600 + +d[2] * 60 + parseFloat(d[3])) : 0);
-    });
-    proc.on('error', () => resolve(0));
-  });
-}
-
-router.post('/library/item/:kind/:id/trim', async (req, res) => {
+router.post('/library/cut', async (req, res) => {
+  const b = req.body || {};
+  const to = b.to || {};
+  const kind = String(to.kind || '');
+  const cat = String(to.cat || '');
+  const label = String(to.label || '').trim().slice(0, 60);
+  let made = null, thumbPath = null;
   try {
-    const kind = String(req.params.kind || '');
-    if (!['birols', 'uploads', 'hooks'].includes(kind)) {
-      return res.status(400).json({ success: false, error: 'only clips on birols, uploads or hooks can be trimmed' });
+    if (!CUT_KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'a piece goes into VIDEO or REFERENCES' });
+    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such category in REFERENCES' });
+    made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
+    try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
+
+    if (kind === 'references') {
+      const REFS = require('../lib/references-store');
+      const from = made.root.post;
+      const abs = _absInRoot(made.videoPath);
+      let size = 0;
+      try { size = fs.statSync(abs).size; } catch (e) { size = 0; }
+      const post = REFS.add({
+        source: from ? (from.source || 'other') : 'files', folder: from ? (from.folder || '') : '',
+        categoryId: cat, categoryLabel: cat ? label : '',
+        title: made.name, author: from ? (from.author || '') : '', link: from ? (from.link || '') : (made.root.link || ''),
+        linkKey: '', caption: '', note: '', origin: from ? (from.origin || '') : '', postedAt: from ? (from.postedAt || '') : '',
+        from: 'cut', poster: thumbPath, remote: null,
+        media: [{ id: require('crypto').randomBytes(4).toString('hex'), type: 'video', path: made.videoPath, thumb: thumbPath,
+          w: made.w, h: made.h, dur: Math.round(made.dur * 10) / 10, size, original: made.original }],
+      });
+      REFS.placePosts([REFS.read().find(p => p && p.id === post.id)]);
+      const item = REFS.read().find(p => p && p.id === post.id) || post;
+      try { require('./proxies').warmProxies([item.media[0].path], 480); } catch (e) { /* made when laid */ }
+      console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's -> references', item.media[0].path);
+      return res.json({ success: true, kind, id: item.id, item });
     }
-    const store = RECORD_STORES[kind];
-    const id = String(req.params.id || '');
-    const list = store.read();
-    const it = list.find(x => x && String(x.id) === id);
-    if (!it) return res.status(404).json({ success: false, error: 'not found' });
-    // The store decides the kind, not the address: birols and uploads share one store, so a
-    // request for uploads/<id> can find a birol, and the rule has to see what it really is.
-    const realKind = kind === 'hooks' ? 'hooks' : (_isUpload(it) ? 'uploads' : 'birols');
-    const cutAlready = it.trimmed || /_trim_[a-z0-9]+\.mp4$/i.test(String(it.videoPath || '').split('?')[0]);
-    if (cutAlready) return res.status(409).json({ success: false, error: 'this clip has already been trimmed once' });
-    if (!_canTrim(it, realKind)) {
-      return res.status(409).json({ success: false, error: 'only clips on Uploads or Hooks, or a birol you uploaded, can be trimmed here' });
-    }
 
-    const from = String(it.videoPath || '').split('?')[0];
-    const src = path.join(ROOT_DIR, from.replace(/^\/+/, ''));
-    if (!fs.existsSync(src)) return res.status(410).json({ success: false, error: 'the file is not on disk any more' });
-
-    const full = await _probeLen(src);
-    const a = Math.max(0, Math.round((+req.body.in || 0) * 100) / 100);
-    const b = Math.min(full || Infinity, Math.round((+req.body.out || 0) * 100) / 100);
-    if (!(b - a >= 0.3)) return res.status(400).json({ success: false, error: 'the trimmed clip has to be at least 0.3 seconds long' });
-
-    // Beside the original, under a name that says what it is: same folder, so everything that
-    // serves the original serves this too.
-    const dir = path.dirname(src);
-    const base = path.basename(src, path.extname(src));
-    const fileName = base + '_trim_' + Date.now().toString(36) + '.mp4';
-    const abs = path.join(dir, fileName);
-    const ffmpegPath = require('ffmpeg-static');
-    await new Promise((resolve, reject) => {
-      const proc = require('child_process').spawn(ffmpegPath, [
-        '-hide_banner', '-loglevel', 'error',
-        '-ss', a.toFixed(3), '-t', (b - a).toFixed(3), '-i', src,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-y', abs,
-      ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
-      let err = '';
-      proc.stderr.on('data', c => { err += c.toString(); });
-      proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the clip: ' + err.slice(-200))));
-      proc.on('error', reject);
+    const { item } = _fileRecord({
+      videoPath: made.videoPath, thumbPath, name: made.name, kind, categoryLabel: kind === 'hooks' ? '' : label,
+      original: made.original, duration: made.dur, w: made.w, h: made.h, link: made.root.link || '',
     });
-    const videoPath = '/' + path.relative(ROOT_DIR, abs).split(path.sep).join('/');
-
-    let thumbPath = it.thumbPath || null;
-    try { thumbPath = (await VT.makeThumb(videoPath)).thumb || thumbPath; }
-    catch (e) { console.warn('[library/trim] thumb failed:', e.message); }
-
-    const dur = (await _probeLen(abs)) || Math.round((b - a) * 100) / 100;
-    const patch = {
-      videoPath, thumbPath, duration: Math.round(dur * 100) / 100,
-      trimmable: false,
-      trimmed: { in: a, out: b, from, at: new Date().toISOString(), by: (req.user && req.user.login) || null },
-    };
-    if (kind !== 'hooks') patch.imagePath = thumbPath;
-    // READ AGAIN AND WRITE IN THE SAME TICK (review V2r): the cut, the poster and the probe took seconds, and the
-    // video chat files clips into this store from the server meanwhile (lib/birols-store.js) - the list read
-    // before them would write those records away.
-    const fresh = store.read();
-    const cur = fresh.find(x => x && String(x.id) === id);
-    if (!cur) {
-      for (const u of [videoPath, thumbPath !== it.thumbPath ? thumbPath : '']) if (u) { try { fs.unlinkSync(path.join(ROOT_DIR, String(u).replace(/^\/+/, ''))); } catch (e) { /* gone */ } }
-      return res.status(404).json({ success: false, error: 'the clip was deleted while it was being cut' });
-    }
-    Object.assign(cur, patch);
-    store.write(fresh);
-
-    // Ready for a lane, and a hook is still the same hook.
-    try { require('./proxies').warmProxies([videoPath], 480); } catch (e) {}
-    // A hook keeps its number; a hook that somehow never had one is numbered now, rather than a
-    // trim being the thing that leaves it without.
-    if (kind === 'hooks') {
-      try {
-        const HI = require('../lib/hook-ids');
-        if (!HI.carry(from, videoPath)) HI.assign([videoPath]);
-      } catch (e) {}
-    }
-
-    console.log('[library/trim]', kind, id, from, '->', videoPath, a + 's..' + b + 's');
-    res.json({ success: true, kind, id, patch });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's ->', kind, item.videoPath);
+    res.json({ success: true, kind, id: item.id, item });
+  } catch (e) {
+    // A file made and not filed is nobody's: it goes, with its poster.
+    if (made && made.videoPath) for (const u of [made.videoPath, thumbPath]) if (u) _unlink(u);
+    res.status(e.status || 500).json({ success: false, error: e.message });
+  }
 });
 
 router.delete('/library/item/:kind/:id', (req, res) => {
@@ -1460,6 +1398,8 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       }
     }
     store.write(list.filter(x => x !== it));
+    // A piece's whole video, when nothing holds it any more (phase TG, block 7).
+    if (withFiles) removed.push(...CUTS.dropOrphans(_originalsOf([it])));
     // `spared` is a file another record is still using, so it stayed put.
     res.json({ success: true, kind, id, removed, spared });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1563,6 +1503,11 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     if (it.trimmable) moved.trimmable = true;
     if (it.trimmed) moved.trimmed = it.trimmed;
     if (it.duration) moved.duration = it.duration;
+    // (phase TG, block 7) A piece keeps its whole video wherever it is filed - and where it came from by a link.
+    if (it.original) moved.original = it.original;
+    if (it.w) { moved.w = it.w; moved.h = it.h; }
+    if (it.link) moved.link = it.link;
+    if (it.linkKey) moved.linkKey = it.linkKey;
     if (to === 'hooks') {
       moved.prompt = it.prompt || '';
     } else {
@@ -1834,14 +1779,20 @@ function _fileRecord(b) {
   // Only set when given: every other way of filing a record leaves it absent.
   if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
   if (prompt) rec.prompt = String(prompt).slice(0, 2000);
-  // CAN BE TRIMMED ONCE. Only a file somebody brought in by hand - the upload flow says so -
-  // and only until it has been trimmed; a generated clip is trimmed on the timeline instead,
-  // without its file ever being rewritten. See POST /library/item/:kind/:id/trim.
+  // `trimmable` - a file brought in by hand - is still written by the ways in, and read by nobody since phase TG
+  // block 7: every video of the shelf may be cut into new pieces (POST /library/cut).
   if (b.trimmable === true) rec.trimmable = true;
   // (phase V27) A clip that came in by a link keeps it - the viewer shows it - and what it is known by under every
   // spelling of it (lib/ytdlp.js info().key), so the same video is not fetched onto the shelf twice.
   if (b.link) rec.link = String(b.link).slice(0, 2000);
   if (b.linkKey) rec.linkKey = String(b.linkKey).slice(0, 200);
+  // (phase TG, block 7) A piece cut out of a video: its whole video (lib/cuts.js), its length and frame.
+  if (b.original && b.original.path) {
+    const o = b.original;
+    rec.original = { path: String(o.path), in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: String(o.name || '').slice(0, 120) };
+  }
+  if (+b.duration > 0) rec.duration = Math.round(+b.duration * 100) / 100;
+  if (+b.w > 0 && +b.h > 0) { rec.w = +b.w; rec.h = +b.h; }
   list.unshift(rec);
   store.write(list);
   // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
@@ -1985,6 +1936,7 @@ router.delete('/library/cats/:id', (req, res) => {
       removedFiles.push(...r.removed);
       sparedFiles.push(...r.kept);
       if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
+      removedFiles.push(...CUTS.dropOrphans(_originalsOf(doomed)));
       affected = doomed.length;
     } else {
       const { list, inKind } = _kindRecords(kind);

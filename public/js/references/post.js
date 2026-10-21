@@ -14,6 +14,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
+import { targetsOf } from '../media-targets.js';
+// (block 7) A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
+import * as Cut from '../cut.js';
 import { askName } from '../name-box.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
@@ -173,7 +176,7 @@ export function openPost(list, at, o) {
     </div>`;
   document.body.appendChild(ov);
   const layer = Layers.open(ov, { name: 'post-view', onEsc: closePost });
-  _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, armed: null };
+  _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, armed: null, whole: false };
   ov.querySelector('[data-x="close"]').addEventListener('click', closePost);
   ov.querySelector('[data-x="prev"]').addEventListener('click', () => _step(-1));
   ov.querySelector('[data-x="next"]').addEventListener('click', () => _step(1));
@@ -190,6 +193,7 @@ export function openPost(list, at, o) {
 
 export function closePost() {
   _closeMenu();
+  Cut.closeMenu();
   if (!_v) return;
   _v.ov.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) { /* gone */ } v.removeAttribute('src'); v.load(); });
   _v.ov.remove();
@@ -210,6 +214,7 @@ function _step(d) {
   _v.at = (_v.at + d + _v.list.length) % _v.list.length;
   _v.file = 0;
   _v.sel = new Set();
+  _v.whole = false;
   _v.ov.querySelector('.ref-said').textContent = '';
   _paint();
 }
@@ -219,6 +224,7 @@ const _cur = () => (_v ? _v.list[_v.at] : null);
 function _paint() {
   const it = _cur();
   if (!it) return closePost();
+  _v.whole = false;
   const ov = _v.ov;
   ov.querySelector('.lib-view-title').textContent = it.name || '';
   ov.querySelector('.ref-view-where').textContent = whereOf(it);
@@ -269,10 +275,26 @@ function _paintStage() {
   }
   const f = filesOf(it)[_v.file];
   if (!f) { stage.appendChild(el('div', 'ref-none', 'No file in this post.')); return; }
+  stage.classList.remove('has-under');
   if (f.type === 'video') {
     const v = el('video', 'lib-view-media');
-    v.src = f.path; v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
+    const whole = !!(_v.whole && f.original);
+    v.src = whole ? f.original.path : f.path; v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true;
     stage.appendChild(v);
+    // (block 7) The stretch and "Cut…": a NEW clip wherever it is put; the post keeps this file.
+    const said = _v.ov.querySelector('.ref-said');
+    const box = Cut.cutBox(v, {
+      src: whole ? f.original.path : f.path, start: whole ? f.original : null, whole,
+      here: { kind: 'references', cat: (it.meta && it.meta.categoryId) || '' },
+    }, {
+      say: (t) => { if (_v && said.isConnected) said.textContent = t; },
+      onSaved: (r) => {
+        if (_v && said.isConnected) said.textContent = 'saved as a new clip in ' + r.where;
+        if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ cut: it }); } catch (e) { /* the page's */ } }
+      },
+    });
+    stage.classList.add('has-under');
+    stage.appendChild(box);
   } else {
     const im = el('img', 'lib-view-media');
     im.src = f.path; im.alt = it.name || '';
@@ -306,7 +328,7 @@ function _paintStrip() {
       _paintStrip();
     });
     c.appendChild(tick);
-    c.addEventListener('click', () => { _v.file = i; _paintStage(); _paintStrip(); });
+    c.addEventListener('click', () => { _v.file = i; _v.whole = false; _paintStage(); _paintStrip(); _paintInfo(_cur()); });
     strip.appendChild(c);
   });
   const n = _v.sel.size;
@@ -342,6 +364,8 @@ function _paintInfo(it) {
   const m = it.meta || {};
   const files = filesOf(it);
   _row(box, 'where', whereOf(it));
+  // Filed under an own category of REFERENCES: said beside the site it came from.
+  _row(box, 'category', m.categoryId ? (m.categoryLabel || '') : '');
   _row(box, 'author', m.author || m.origin);
   _row(box, 'posted', fmtDate(m.postedAt));
   _row(box, 'received', fmtDate(m.date));
@@ -355,6 +379,8 @@ function _paintInfo(it) {
     _row(box, 'files', [p ? p + ' photo' + (p === 1 ? '' : 's') : '', v ? v + ' video' + (v === 1 ? '' : 's') : ''].filter(Boolean).join(', '));
     const f = files[_v.file];
     if (f && f.w) _row(box, 'this one', f.w + '×' + f.h + (f.dur ? ' · ' + mmss(f.dur) : ''));
+    // (block 7) A piece cut out of a video: its whole video, on a tick.
+    if (f && f.original) _row(box, 'original', Cut.originalTick(f.original, _v.whole, (on) => { _v.whole = on; _paintStage(); }));
   }
   _row(box, 'note', m.note);
   if (m.caption) {
@@ -491,37 +517,6 @@ function _closeMenu() {
   _menu = null;
 }
 
-function _targets(tree) {
-  const out = [];
-  const ref = tree.find(n => n.key === 'references');
-  out.push({ head: 'REFERENCES' });
-  out.push({ kind: 'references', cat: '', label: '', text: 'the source\'s folder (no category)' });
-  for (const c of ((ref && ref.children) || []).filter(c => c.cat)) out.push({ kind: 'references', cat: c.cat, label: c.name || c.label, text: c.label });
-  out.push({ newCat: true, text: '+ new category…' });
-  const walk = (n, trail, add) => {
-    for (const c of n.children || []) {
-      const p = trail ? trail + ' · ' + c.label : c.label;
-      if (c.kind && (VIDEO_KINDS.has(c.kind) || c.kind === 'images')) {
-        if (c.uncat) add({ kind: c.kind, cat: '', label: '', text: p });
-        else if (c.cat && c.cat !== '__cat__') add({ kind: c.kind, cat: c.cat, label: c.name || c.label, text: p });
-        else if (!c.cat && (c.key === 'uploads' || c.key === 'hooks') && !(c.children || []).some(x => x.uncat)) add({ kind: c.kind, cat: '', label: '', text: p });
-      }
-      walk(c, p, add);
-    }
-  };
-  const video = tree.find(n => n.key === 'video');
-  out.push({ head: 'VIDEO' });
-  if (video) walk(video, '', (t) => out.push(t));
-  const images = tree.find(n => n.key === 'images');
-  out.push({ head: 'IMAGES' });
-  if (images) {
-    const before = out.length;
-    walk(images, 'IMAGES', (t) => out.push(t));
-    if (!out.slice(before).some(t => !t.cat)) out.splice(before, 0, { kind: 'images', cat: '', label: '', text: 'IMAGES · Uncategorized' });
-  }
-  return out;
-}
-
 async function _moveMenu(anchor, ids, files, whole) {
   _closeMenu();
   const it = _cur();
@@ -542,7 +537,7 @@ async function _moveMenu(anchor, ids, files, whole) {
   const box = el('div', 'ref-move');
   box.appendChild(el('div', 'ref-move-title', whole ? 'Move the post to' : `Move ${files.length} file${files.length === 1 ? '' : 's'} to`));
   const list = el('div', 'ref-move-list');
-  for (const t of _targets(tree)) {
+  for (const t of targetsOf(tree)) {
     if (t.head) { list.appendChild(el('div', 'ref-move-head', t.head)); continue; }
     const b = el('button', 'ref-move-it', t.text);
     b.type = 'button';

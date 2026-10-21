@@ -22,6 +22,7 @@ const _fmt = (t) => {
 /**
  * @param video     the <video> the handles scrub and the stretch loops in
  * @param opts.onChange  called with { in, out } whenever a handle is let go
+ * @param opts.start     { in, out } - where the handles start (the whole clip when not given)
  * @returns { el, get, destroy }
  */
 export function trimmer(video, opts) {
@@ -60,7 +61,12 @@ export function trimmer(video, opts) {
   const ready = () => {
     dur = +video.duration || 0;
     if (!(dur > 0)) return;
-    if (!(b > 0)) { a = 0; b = dur; }
+    if (!(b > 0)) {
+      a = 0; b = dur;
+      // Where the handles start, when the caller says (a piece's stretch in its whole video, phase TG block 7).
+      const st = o.start;
+      if (st && +st.out > +st.in) { a = Math.max(0, Math.min(+st.in, dur - MIN_LEN)); b = Math.min(dur, Math.max(+st.out, a + MIN_LEN)); }
+    }
     paint();
   };
   if (video.readyState >= 1) ready();

@@ -1158,38 +1158,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .lib-view-info{ flex-basis:260px }
 .lib-view-info .lib-view-k{ flex-basis:62px }
 
-/* ── The viewer's stage when something hangs under the video ─────────────────
-   The stage centres one thing; with a trimmer under the clip it becomes a column, the video
-   taking what is left above the controls. */
-.lib-view-stage.has-under{ flex-direction:column; gap:10px }
-.lib-view-stage.has-under > .lib-view-media{ min-height:0; flex:1 1 auto }
-
-/* ── The one trim an upload is allowed ─────────────────────────────────────── */
-.mv3-trimbox{ flex:0 0 auto; width:min(560px, 100%); display:flex; align-items:center; gap:10px }
-.mv3-trim{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px }
-.mv3-trim-bar{
-  position:relative; height:26px; border-radius:var(--r-xs);
-  background:var(--surface-2); border:1px solid var(--border);
-}
-.mv3-trim-lit{
-  position:absolute; top:0; bottom:0;
-  background:oklch(.80 .13 205 / .22); border-left:2px solid var(--primary); border-right:2px solid var(--primary);
-}
-.mv3-trim-now{ position:absolute; top:-2px; bottom:-2px; width:1px; background:var(--ink); opacity:.55; pointer-events:none }
-.mv3-trim-h{
-  position:absolute; top:-3px; bottom:-3px; width:12px; margin-left:-6px; padding:0;
-  border:0; border-radius:3px; background:var(--primary); cursor:ew-resize;
-}
-.mv3-trim-h::after{
-  content:''; position:absolute; left:5px; top:8px; bottom:8px; width:2px;
-  background:oklch(.15 0 0 / .45); border-radius:1px;
-}
-.mv3-trim-say{ font:600 10.5px/1.2 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
-.mv3-trimbox-save{
-  flex:0 0 auto; padding:7px 12px; border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary); color:var(--primary-ink, oklch(.15 0 0)); font:700 11px/1 var(--font); cursor:pointer;
-}
-.mv3-trimbox-save[disabled]{ opacity:.55; cursor:default }
+/* The stage with something under the video, and the trimmer - in css/lib-viewer.css (phase TG, block 7: every viewer cuts). */
 
 /* ── Picking a scenario for a talking head ───────────────────────────────────
    The "scenarios" view of the Library panel (phase V28.3; js/merge-v3/scen-pick.js), shown like a chat: the
