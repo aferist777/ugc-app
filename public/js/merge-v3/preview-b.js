@@ -528,6 +528,7 @@ function _paint() {
   const tl = Store.timeline();
   const alive = new Set();
   const gaps = [];
+  _liveVideo = [];
   for (const c of _layers(tl).flatMap(track => _clipsAt(track, _at))) {
     if (!c.src) continue;
     const still = isStill({ src: c.src });
@@ -543,7 +544,9 @@ function _paint() {
       // first seek of a new element always lands; corrections wait until it is ready.
       if (el.__fresh === undefined) el.__fresh = true;
       const busy = !el.__fresh && (el.seeking || el.readyState < 2);
-      if (_playing) {
+      _liveVideo.push(el);
+      // (phase V33.4) Held at the start of playing: placed exactly and kept still, as when paused (play(), below).
+      if (_playing && !_holding) {
         // LET IT PLAY. Setting currentTime every frame is scrubbing, not playing: the decoder
         // starts over on each seek and the picture crawls while the clock runs on - which is
         // exactly what a stuttering preview looks like. So the element runs on its own and is
@@ -731,6 +734,15 @@ function _clock() {
 let _playing = false;
 let _t0 = 0, _at0 = 0;
 let _audio = new Map();      // src -> HTMLAudioElement, one per source
+// THE CLOCK WAITS FOR THE SOUND AT THE START (phase V33.4, the owner 2026-10-21: "первые секунд пять идут без звука, но
+// картинка есть"). Pressed Play, the films and sounds under the playhead are first put in place and HELD still; the clock
+// starts when every one of them can play from there (or after HOLD_MS, whatever is ready). Starting at once left a big file
+// (a 4K piece) behind the clock by the time it could play; each correction landed behind again and the sound stayed silent.
+let _holding = false;
+let _holdT = 0;
+const HOLD_MS = 3000;
+let _liveVideo = [];         // the films the last paint put under the playhead
+let _liveAudio = [];         // the sounds the last sync put under it
 
 // Every audible sound at this moment. A clip at volume 0 is SKIPPED - that is what a muted
 // birol is, and what the subtitle pass will read to decide what to transcribe. Track volume
@@ -771,6 +783,18 @@ function _aud(c) {
   const el = new Audio();
   el.preload = 'auto';
   el.src = rev ? _srcFor(c.src, true) : c.src;
+  // HOW LONG THIS FILE TAKES TO PLAY AGAIN after a seek made while playing (phase V33.4, the owner 2026-10-21: "первые
+  // секунд пять идут без звука, но картинка есть"): from the seek to sound, a half-and-half running average. A big file
+  // read cold (a 4K piece of a highlights fragment, 17 Mbit/s) took 0.4-0.6 s a seek - more than the drift allowed - so the
+  // sound landed behind the clock, sought again, and again, and stayed silent for seconds. _syncAudio aims that far ahead.
+  const landed = () => {
+    if (!el.__seekAt || el.paused) return;
+    const took = (performance.now() - el.__seekAt) / 1000;
+    el.__seekAt = 0;
+    if (took > 0 && took < 5) el.__cost = el.__cost ? el.__cost * 0.5 + took * 0.5 : took;
+  };
+  el.addEventListener('playing', landed);
+  el.addEventListener('seeked', () => { if (el.readyState >= 3) landed(); });
   _audio.set(key, el);
   return el;
 }
@@ -783,30 +807,58 @@ function _syncAudio() {
     if (alive.has(key)) continue;
     try { el.pause(); } catch (e) {}
   }
+  // Sounding: playing and not held at the start (phase V33.4). Held, a sound is put in place exactly and kept still.
+  const run = _playing && !_holding;
+  _liveAudio = [];
   for (const { c, gain } of live) {
     // A reversed clip whose source is not a film - a bare mp3 on an audio lane - has nothing
     // to play: the proxy cannot reverse what it cannot transcode. Silent rather than
     // forwards, because forwards would be the wrong words in the right place.
     if (c.reversed && !_rev(c)) continue;
     const el = _aud(c);
+    _liveAudio.push(el);
     el.volume = gain;
     el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
     const want = _srcTime(c, _at, el.duration);
     // The same busy rule as the picture: no correction while a load is in progress.
     if (el.__fresh === undefined) el.__fresh = true;
     const busy = !el.__fresh && (el.seeking || el.readyState < 2);
-    if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.25)) {
-      try { el.currentTime = Math.max(0, want); } catch (e) {}
+    if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (_holding ? 0.08 : 0.25))) {
+      // While sounding, a correction is aimed where the clock will be when the file plays again - its own measured seek
+      // time (above), at most 2 s - not where the clock is now, or a slow file lands behind every time (phase V33.4).
+      const lead = (run && !el.__fresh) ? Math.min(2, el.__cost || 0) * el.playbackRate : 0;
+      try { el.currentTime = Math.max(0, want + lead); } catch (e) {}
+      if (run) el.__seekAt = performance.now();
       el.__fresh = false;
     }
-    if (_playing && el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
-    if (!_playing && !el.paused) el.pause();
+    if (run && el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
+    if (!run && !el.paused) el.pause();
   }
 }
+
+// Every film and sound under the playhead can play from where it stands: the clock may start (play(), _tick).
+// One that cannot load at all (its file gone - red on the timeline) is not waited for.
+const _canRun = (el, rs) => !!el.error || el.networkState === 3 || (!el.seeking && el.readyState >= rs);
+const _readyToRun = () => _liveAudio.every((el) => _canRun(el, 3)) && _liveVideo.every((el) => _canRun(el, 2));
 
 function _tick() {
   if (!_playing) return;
   const now = performance.now();
+  // (phase V33.4) Held at the start: the clock stands where Play was pressed while the films and sounds are put in place;
+  // it starts the moment they can all play - or after HOLD_MS with what is ready.
+  if (_holding) {
+    _t0 = now; _at0 = _at;
+    _paint();
+    _syncAudio();
+    if (_readyToRun() || now - _holdT >= HOLD_MS) {
+      _holding = false;
+      _t0 = performance.now(); _at0 = _at;
+      _paint();
+      _syncAudio();
+    }
+    _raf = requestAnimationFrame(_tick);
+    return;
+  }
   _at = Math.max(0, _at0 + (now - _t0) / 1000);
   const end = duration();
   if (_at >= end) { _at = end; pause(); _paint(); _clock(); setPlayhead(_at); return; }
@@ -1530,6 +1582,9 @@ export function play() {
   if (!_on || _playing) return;
   if (_at >= duration()) _at = 0;
   _playing = true;
+  // Held until what is under the playhead can play (phase V33.4, _tick).
+  _holding = true;
+  _holdT = performance.now();
   _t0 = performance.now();
   _at0 = _at;
   _syncAudio();
@@ -1540,6 +1595,7 @@ export function play() {
 export function pause() {
   if (!_on || !_playing) return;
   _playing = false;
+  _holding = false;
   cancelAnimationFrame(_raf);
   for (const [, el] of _audio) { try { el.pause(); } catch (e) {} }
   for (const [, el] of _media) { try { if (el.pause) el.pause(); } catch (e) {} }
