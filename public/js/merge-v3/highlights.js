@@ -26,7 +26,7 @@
    field has no box of its own). Its window is Export's, for N fragments (openMany); the server puts them in the render
    queue (lib/highlights-render.js). Each tile says where its render is - in line, rendering with its bar, interrupted
    ("go on in Queue"), failed with "render again" - and a rendered one wears "rendered" (pale "changed since" when its
-   timeline was edited after); the top says "rendering 2 of 5 · ~1:30 left"; the card names the file and plays it.
+   timeline was edited after) and lets go of its tick by itself; the top says "rendering 2 of 5 · ~1:30 left"; the card names the file and plays it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -73,6 +73,7 @@ let _armT = 0;
 let _ui = null;
 let _err = '';
 let _rStart = 0;              // (V33.4) when this page first saw the project's renders going - 0 when they are not
+const _renderSeen = new Map(); // (V33.4) project -> Map(n -> its render's time as this page last saw it)
 
 const _api = async (url, opt) => {
   let r = null, d = null;
@@ -275,6 +276,16 @@ async function _load() {
   const have = new Set((_rec.fragments || []).filter((f) => !f.deletedAt).map((f) => f.n));
   if (_sel && !have.has(_sel)) _sel = 0;
   for (const n of [..._checked]) if (!have.has(n)) _checked.delete(n);
+  // (phase V33.4, the owner 2026-10-21) A fragment whose render has just been made lets go of its tick by itself: its render
+  // is newer than the one this page last saw. One that failed or was stopped keeps it. The first read of a project only looks.
+  const first = !_renderSeen.has(pid);
+  if (first) _renderSeen.set(pid, new Map());
+  const seen = _renderSeen.get(pid);
+  for (const f of (_rec.fragments || [])) {
+    const at = (f.rendered && f.rendered.at) || '';
+    if (!first && at && seen.get(f.n) !== at) _checked.delete(f.n);
+    seen.set(f.n, at);
+  }
   // (phase V33.4) The project's renders: followed while they go; when they are over, how many were made is said.
   if (_rec.rendering && !_rStart) _rStart = Date.now();
   else if (!_rec.rendering && _rStart) {

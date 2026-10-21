@@ -144,7 +144,7 @@ function _row(it, refresh) {
   if (it.status === 'done' && it.url) {
     const a = document.createElement('button');
     a.type = 'button';
-    a.className = 'mv3-qrow-a';
+    a.className = 'mv3-c-btn mv3-qrow-a';
     a.textContent = 'open';
     a.title = 'Play it, name it, save and download it, send it';
     a.addEventListener('click', (e) => {
@@ -185,7 +185,10 @@ function _row(it, refresh) {
 // Clearing with work still waiting is the one press here that cannot be undone, so it asks
 // rather than guesses - and it offers the harmless half as its own answer, because "just tidy
 // away the finished ones" is what is usually meant.
-function _askClear(host, waiting, onDone) {
+// (phase V33.4, the owner 2026-10-21) Right UNDER the row with Render all and Clear - where the press was -, not at the end of
+// the list.
+function _askClear(head, waiting, onDone) {
+  if (_asking) return;
   _asking = true;
   const box = document.createElement('div');
   box.className = 'mv3-qask';
@@ -199,7 +202,7 @@ function _askClear(host, waiting, onDone) {
   const mk = (label, cls, mode) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mv3-btn sm' + (cls ? ' ' + cls : '');
+    b.className = 'mv3-c-btn' + (cls ? ' ' + cls : '');
     b.textContent = label;
     b.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -215,7 +218,7 @@ function _askClear(host, waiting, onDone) {
   };
   row.append(mk('Cancel', '', null), mk('Finished only', '', 'done'), mk('Everything', 'danger', 'all'));
   box.appendChild(row);
-  host.appendChild(box);
+  head.after(box);
 }
 
 async function _paintList() {
@@ -234,7 +237,8 @@ async function _paintList() {
 
   const all = document.createElement('button');
   all.type = 'button';
-  all.className = 'mv3-btn sm primary';
+  // (phase V33.4, the owner) The app's own buttons - `mv3-btn` has no look in Merge, and they drew as the browser's.
+  all.className = 'mv3-c-btn mv3-x-go';
   all.textContent = 'Render all';
   // Yours that have not been started. Once started they are in line whatever the encoder is
   // doing, so the button has nothing left to do for them.
@@ -252,12 +256,12 @@ async function _paintList() {
 
   const clr = document.createElement('button');
   clr.type = 'button';
-  clr.className = 'mv3-btn sm';
+  clr.className = 'mv3-c-btn';
   clr.textContent = 'Clear';
   clr.addEventListener('click', async (e) => {
     e.stopPropagation();
     const left = (d.items || []).filter(x => x.status === 'queued').length;
-    if (left) return _askClear(_pop, left, () => { _paintList(); _paintBadge(); });
+    if (left) return _askClear(head, left, () => { _paintList(); _paintBadge(); });
     await fetch('/api/mv3q/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                      body: JSON.stringify({ mode: 'done' }) });
     _paintList(); _paintBadge();
@@ -351,7 +355,7 @@ function _group(id, items, refresh) {
   if (cut || failed) {
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = 'mv3-qrow-a';
+    go.className = 'mv3-c-btn mv3-qrow-a';
     go.textContent = '▶ go on';
     go.title = 'Render this project\'s interrupted and failed fragments - nothing else in the queue starts';
     go.addEventListener('click', async (e) => {

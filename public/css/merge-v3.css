@@ -1109,6 +1109,16 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qrow.is-done .mv3-qrow-s{color:var(--success)}
 .mv3-qrow.is-failed .mv3-qrow-s{color:var(--danger)}
 .mv3-qrow-a{flex:0 0 auto; font-size:10px; color:var(--primary)}
+/* (phase V33.4, the owner 2026-10-21) The panel's buttons are the app's (.mv3-c-btn, dialog.css): in a row a little lower,
+   "open" and "go on" in the app's colour; a button with nothing to do now is dim, the primary one too. */
+.mv3-qrow-acts .mv3-c-btn{padding:2px 8px}
+.mv3-c-btn.mv3-qrow-a{color:var(--primary); border-color:oklch(from var(--primary) l c h / .45)}
+.mv3-c-btn.mv3-qrow-a:hover{color:var(--primary-ink); background:var(--primary); border-color:var(--primary)}
+.mv3-qhead .mv3-c-btn{text-transform:none; letter-spacing:0}
+.mv3-qhead .mv3-c-btn.mv3-x-go{font-weight:700; color:var(--primary-ink); background:var(--primary); border-color:var(--primary)}
+.mv3-qhead .mv3-c-btn.mv3-x-go:hover:not([disabled]){filter:brightness(1.1)}
+.mv3-qhead .mv3-c-btn[disabled]{opacity:.45; cursor:default; filter:none}
+.mv3-qhead .mv3-c-btn.mv3-x-go[disabled]:hover{background:var(--primary); color:var(--primary-ink); border-color:var(--primary)}
 /* (phase V33.4) A highlights project: one row that opens on its fragments' rows, set in under it. */
 .mv3-qgrp-row{cursor:pointer}
 .mv3-qgrp-row:hover .mv3-qrow-t{color:var(--primary)}
