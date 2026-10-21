@@ -59,6 +59,15 @@ const ROWS = [
     desc: 'Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.',
   },
   {
+    // (phase TG, block 2; the owner: the bot's key "в админке над r2") The owner's own bot: what it is sent goes into
+    // REFERENCES. Under it: who it listens to (the code), how its messages come in, the queue (lib/telegram.js).
+    group: 'Telegram bot · links, photos and videos you send it go into REFERENCES',
+    label: 'Telegram bot token:', settingsKey: 'telegramBotToken', probe: 'telegram', telegram: true,
+    placeholder: '123456789:AA••• (@BotFather)',
+    desc: 'Your own bot: send it links to posts, or photos and videos, from your phone. It answers only you.',
+    link: 'https://t.me/BotFather', linkText: '@BotFather in Telegram',
+  },
+  {
     // (phase TG, the owner 2026-10-21: "хочу решить вопрос одним ключом") ONE key for Cloudflare: R2 is spoken to with the
     // pair made from it, and (block 2) the Telegram receiver is set up with it. Checked step by step once saved
     // (lib/cloudflare.js); the R2 fields below go when it has passed.
@@ -110,15 +119,23 @@ const CF_HOWTO = [
 ];
 const CF_NOTE = 'R2 has to be turned on in the account once (R2 Object Storage in the Cloudflare dashboard). The bucket is found, or made, by the app.';
 const CF_STEP = { key: 'key', account: 'account', bucket: 'bucket', upload: 'upload' };
+// How to make the bot (phase TG, block 2).
+const TG_HOWTO = [
+  ['In Telegram open ', ['@BotFather', 'https://t.me/BotFather'], ' and send /newbot.'],
+  ['Give the bot a name, then a username that ends in “bot” (for example ugc_studio_inbox_bot).'],
+  ['BotFather answers with a token like 123456789:AA… - paste it in the field above and press Save.'],
+  ['Then open your bot by the link that appears here and press Start: from then on it listens to you only.'],
+];
+const TG_NOTE = 'With the Cloudflare key below working, what you send waits on your Cloudflare while the app is closed; without it, Telegram keeps it for 24 hours.';
 
-function _cfHelp() {
+function _help(title, steps, note) {
   const d = document.createElement('details');
   d.className = 'bk-help';
   const s = document.createElement('summary');
-  s.textContent = 'How to get this key';
+  s.textContent = title;
   d.appendChild(s);
   const ol = document.createElement('ol');
-  for (const parts of CF_HOWTO) {
+  for (const parts of steps) {
     const li = document.createElement('li');
     for (const p of parts) {
       if (Array.isArray(p)) {
@@ -133,7 +150,7 @@ function _cfHelp() {
   d.appendChild(ol);
   const n = document.createElement('div');
   n.className = 'bk-help-note';
-  n.textContent = CF_NOTE;
+  n.textContent = note;
   d.appendChild(n);
   return d;
 }
@@ -208,7 +225,15 @@ function buildRow(r) {
     again.title = 'Check the key again: the key, the account, the bucket, an upload';
     sr.append(steps, again);
     side.appendChild(sr);
-    side.appendChild(_cfHelp());
+    side.appendChild(_help('How to get this key', CF_HOWTO, CF_NOTE));
+  }
+  // The bot's state - who it listens to, how messages come in, the queue - with "connect" and "unpair".
+  let tg = null;
+  if (r.telegram) {
+    tg = document.createElement('div');
+    tg.className = 'bk-tg';
+    side.appendChild(tg);
+    side.appendChild(_help('How to make a bot', TG_HOWTO, TG_NOTE));
   }
   line.appendChild(side);
   wrap.appendChild(line);
@@ -219,7 +244,7 @@ function buildRow(r) {
     present: false, mask: '', fromEnv: false,
     mode: 'shown',          // shown | editing | typed | cleared
     health: null,           // { state, detail } from the probe, when there is one
-    r2: !!r.r2, steps, again,
+    r2: !!r.r2, steps, again, tg,
   };
   if (again) again.addEventListener('click', () => cfCheck());
 
@@ -317,6 +342,7 @@ async function load() {
     _loaded = true;
     setStatus('');
     await cfLoad();
+    await tgLoad();
   } catch (e) {
     setStatus('Could not read the current settings — saving is disabled so nothing gets overwritten. ' + e.message, 'err');
   }
@@ -397,6 +423,72 @@ async function cfCheck() {
   }
 }
 
+// ── the bot (phase TG, block 2) ───────────────────────────────────────────
+// Who it listens to (the code until the owner pressed Start), how messages come in, the queue; read again every few
+// seconds while the code is waiting, so the line turns into "listens to you only" as soon as Start is pressed.
+let _tgTimer = null;
+function _tgLine(cls, ...parts) {
+  const e = document.createElement('div');
+  e.className = 'bk-step' + (cls ? ' ' + cls : '');
+  for (const p of parts) {
+    if (p && typeof p === 'object' && p.href) {
+      const a = document.createElement('a');
+      a.href = p.href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = p.text;
+      e.appendChild(a);
+    } else if (p && typeof p === 'object' && p.button) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'bk-mini'; b.textContent = p.button; b.title = p.title || '';
+      b.addEventListener('click', p.click);
+      e.appendChild(document.createTextNode(' '));
+      e.appendChild(b);
+    } else e.appendChild(document.createTextNode(String(p || '')));
+  }
+  return e;
+}
+
+function tgPaint(v) {
+  const row = byKey.get('telegramBotToken');
+  if (!row || !row.tg) return;
+  const box = row.tg;
+  box.textContent = '';
+  clearTimeout(_tgTimer);
+  if (!v || !v.tokenSet) return;
+  if (v.connecting) { box.appendChild(_tgLine('', 'connecting…')); _tgTimer = setTimeout(tgLoad, 2000); return; }
+  if (v.error) box.appendChild(_tgLine('down', '✗ ' + v.error, { button: 'connect', title: 'Look at the keys again and connect', click: tgConnect }));
+  const bot = v.bot && v.bot.username ? v.bot.username : '';
+  if (bot && v.code) {
+    box.appendChild(_tgLine('down', '✗ not connected yet: open ', { href: `https://t.me/${bot}?start=${v.code}`, text: `t.me/${bot}?start=${v.code}` },
+      ` and press Start (or send /start ${v.code} to @${bot})`));
+    _tgTimer = setTimeout(tgLoad, 3000);
+  } else if (bot && v.chat) {
+    box.appendChild(_tgLine('ok', `✓ @${bot} listens to ${v.chat.name} only`, { button: 'unpair', title: 'Forget this chat - a new code is made', click: tgUnpair }));
+  }
+  if (v.mode === 'receiver') {
+    box.appendChild(_tgLine('ok', '✓ messages wait on your Cloudflare (' + (v.receiver ? v.receiver.script : 'receiver') + ') while the app is closed'));
+  } else if (v.mode === 'poll') {
+    box.appendChild(_tgLine('', '· the app reads the bot while it is open - Telegram keeps what you send for 24 hours (the Cloudflare key below keeps it for good)'));
+  }
+  if (v.receiverError) box.appendChild(_tgLine('down', '✗ ' + v.receiverError));
+  if (v.conflict) box.appendChild(_tgLine('down', '✗ ' + v.conflict));
+  const q = v.queue || {};
+  if (q.waiting || q.error) box.appendChild(_tgLine('', `in the queue: ${q.waiting || 0}` + (q.error ? ` · ${q.error} could not be taken` : '')));
+}
+
+async function tgLoad() {
+  try { const v = await fetch('/api/telegram').then(r => r.json()); tgPaint(v && v.success ? v : null); return v; }
+  catch (e) { tgPaint(null); return null; }
+}
+async function tgConnect() {
+  const row = byKey.get('telegramBotToken');
+  if (row && row.tg) { row.tg.textContent = ''; row.tg.appendChild(_tgLine('', 'connecting the bot…')); }
+  try { const v = await fetch('/api/telegram/connect', { method: 'POST' }).then(r => r.json()); tgPaint(v && v.success ? v : null); return v; }
+  catch (e) { tgPaint(null); return null; }
+}
+async function tgUnpair() {
+  try { const v = await fetch('/api/telegram/unpair', { method: 'POST' }).then(r => r.json()); tgPaint(v && v.success ? v : null); }
+  catch (e) { /* the line stays as it was */ }
+}
+
 // ── saving ────────────────────────────────────────────────────────────────
 let _armed = null;
 async function save(btn) {
@@ -428,6 +520,8 @@ async function save(btn) {
     // step at once: only a key that passed becomes R2's.
     await load();
     const cf = payload.cloudflareApiToken ? await cfCheck() : null;
+    // The bot's way in depends on both keys: the receiver needs the Cloudflare key working.
+    if ('telegramBotToken' in payload || 'cloudflareApiToken' in payload) await tgConnect();
     await health(true);
     setStatus('Saved' + (removals ? ` · ${removals} removed` : '') + ' · checked'
       + (cf && cf.check ? (cf.check.ok ? ' · the Cloudflare key works for R2' : ' · the Cloudflare key did not pass - see its steps') : ''),

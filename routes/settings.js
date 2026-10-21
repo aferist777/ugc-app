@@ -24,16 +24,19 @@ const SECRET_KEYS = [
   'r2SecretAccessKey',
   // (phase TG) the one Cloudflare key - R2 and the Telegram receiver (lib/cloudflare.js)
   'cloudflareApiToken',
+  // (phase TG, block 2) the owner's own bot, made at @BotFather (lib/telegram.js) - back from RETIRED_KEYS, where the
+  // server version's reporting bot had left it
+  'telegramBotToken',
 ];
 // Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
 // its pair from. A page cannot set it, and a key replaced or removed drops it: a new key is R2's only once IT passed.
 const SERVER_ONLY = ['cloudflareTokenId'];
 
-// Keys of services this app no longer talks to: imgBB, Partner's ingest, and the Telegram
-// bot the server version reported to. A library carried over from the server version can still
+// Keys of services this app no longer talks to: imgBB, Partner's ingest, and the chat the server version's
+// Telegram bot reported to (its key, telegramBotToken, is the owner's own bot again since phase TG). A library carried over from the server version can still
 // hold them, and they are not in SECRET_KEYS - so they are kept out of the page by name, and
 // dropped from the file on the next save.
-const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl', 'telegramBotToken', 'telegramChatId'];
+const RETIRED_KEYS = ['imgbbApiKey', 'partnerApiKey', 'partnerUrl', 'telegramChatId'];
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
@@ -106,7 +109,7 @@ router.get('/settings', (_req, res) => {
 // There is no reveal. A key's full value never leaves the server through HTTP at all: the Keys
 // tab shows the mask above, and reading a whole one means reading data/settings.json.
 
-router.post('/settings', (req, res) => {
+router.post('/settings', async (req, res) => {
   try {
     const current  = loadSettings();
     const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
@@ -121,12 +124,17 @@ router.post('/settings', (req, res) => {
       }
       clean[k] = v;
     }
-    const updated = { ...current, ...clean };
-    for (const k of [...gone, ...RETIRED_KEYS]) delete updated[k];
-    if (gone.includes('cloudflareApiToken')
-        || ('cloudflareApiToken' in clean && String(clean.cloudflareApiToken).trim() !== String(current.cloudflareApiToken || '').trim())) {
-      delete updated.cloudflareTokenId;
+    const changed = (k) => gone.includes(k)
+      || (k in clean && String(clean[k]).trim() !== String(current[k] || '').trim());
+    // (phase TG) The Telegram receiver goes down while the keys that put it up are still here: the old bot key to
+    // point the bot nowhere, the old Cloudflare key to delete the Worker. The page connects the bot again after the save.
+    if (changed('telegramBotToken') || changed('cloudflareApiToken')) {
+      try { await require('../lib/telegram').dropReceiver(); }
+      catch (e) { console.warn('[settings] the Telegram receiver could not be taken down:', e.message); }
     }
+    const updated = { ...loadSettings(), ...clean };
+    for (const k of [...gone, ...RETIRED_KEYS]) delete updated[k];
+    if (changed('cloudflareApiToken')) delete updated.cloudflareTokenId;
     saveSettings(updated);
     res.json(safeView(updated));
   } catch (err) {

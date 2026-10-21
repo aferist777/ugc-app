@@ -113,8 +113,9 @@ const GROUPS = [
   { id: 'ui', label: 'Interface state',
     dirs: [], stores: ['data/ui-state.json'] },
   // Off by default in the UI. Everything else here is work; this one is credentials.
+  // (phase TG) data/telegram.json - the bot's paired chat and its receiver on Cloudflare - goes with the keys.
   { id: 'settings', label: 'Settings and API keys', secret: true,
-    dirs: [], stores: ['data/settings.json'] },
+    dirs: [], stores: ['data/settings.json', 'data/telegram.json'] },
 ];
 
 // Deliberately absent: cache/ (thumbnails and previews make themselves again, and the export

@@ -102,6 +102,10 @@
 .bk-help li{ margin:1px 0; }
 .bk-help a{ color:var(--primary); }
 .bk-help-note{ margin-top:2px; }
+/* (phase TG, block 2) The bot's state under its field. */
+.bk-tg{ font-size:10px; line-height:1.5; color:var(--muted); margin-top:2px; }
+.bk-tg .bk-step a{ color:var(--primary); }
+.bk-tg .bk-mini{ margin-left:4px; padding:1px 6px; }
 
 /* ── Import / Export ─────────────────────────────────────────────────────── */
 .dio-body{ padding:12px 14px; max-width:760px; }
