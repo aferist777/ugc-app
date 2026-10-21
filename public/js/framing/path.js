@@ -20,12 +20,19 @@
      title, a screen, a drawing - shows the whole frame by its width over a blurred copy of itself ((х7) Б).
    - 'bands' (by hand, (х9)): a shot with two faces shows them as two bands one over the other, each following
      its face; any other shot is framed as 'face'.
+   - (phase V33.6, the owner 2026-10-21, (х54), (х60), (х60а)) WHOLE PEOPLE, where a film's record has them (lib/faces.js
+     `people`, counted in its frames with no face) and the plan is asked to use them (`people`): a shot with NO face, but a
+     person in most of its frames (PERSON_SHARE), follows the largest person as it would a face - the window's middle on the
+     person's - and is marked `by: 'person'`; with no person it is the whole frame over its blur, as before.
+     TWO, STANDING APART - two faces, or two people in a shot with no face, both there for half the shot or more, too far
+     apart for one window - are two bands BY THEMSELVES in 'face' too (`autoBands`, on unless said off), one over the other;
+     close enough for one window, the largest is followed, as before. A person's band shows the person from the top down.
 
    THE RECORD on a clip - `frame`, times in the FILE's seconds (a trim, a split, a copy of the clip keep it right):
      { v, mode: 'face' | 'center' | 'whole' | 'bands', shift (-1..1: the window moved by up to half the room
-       left over, either way), src: { w, h }, shots: [{ t0, t1, kind: 'face' | 'whole' | 'bands',
-       keys: [[t, x]], b1: [[t, x, y]], b2: [[t, x, y]] }], band (the bands' height, a share of the film's),
-       found (a share of frames with a face) }
+       left over, either way), src: { w, h }, shots: [{ t0, t1, kind: 'face' | 'whole' | 'bands', by: 'person' (V33.6,
+       when it follows people, not faces), keys: [[t, x]], b1: [[t, x, y]], b2: [[t, x, y]] }], band (the bands' height, a
+       share of the film's), found (a share of frames with a face) }
      x and y are the window's MIDDLE as fractions of the film's width and height.
    'center' and 'whole' need no faces: the middle (moved by `shift`), or the whole frame over its blur.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -44,6 +51,9 @@ const SPEED = 0.8;          // its top speed, window widths a second
 const EASE = 0.22;          // the share of the way left it covers each frame - a soft start and stop
 const TOL = 0.004;          // how far the kept keys may stray from the camera's own path (a share of the width)
 const BAND_FACE = 3.2;      // a band shows this many face heights of the film
+const PERSON_SHARE = 0.6;   // (V33.6) a shot with no face follows a person who is in at least this share of its frames
+const BOTH = 0.5;           // two are "both there" when each is in at least this share of the shot's frames
+const APART = 0.95;         // (V33.6) two whose span is wider than this many windows do not fit in one: bands
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -162,17 +172,26 @@ function _simplify(pts, tol) {
   return pts.filter((_, i) => keep[i]);
 }
 
+// (phase V33.6) Two tracks too far apart for one window of width `width`: the span of their middles and half of each wide.
+function _apart(a, b, width) {
+  const med = (t, k) => { const v = t.pts.map((p) => p[k]).sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
+  return Math.abs(med(a, 1) - med(b, 1)) + (med(a, 3) + med(b, 3)) / 2 > width * APART;
+}
+
 /**
  * The record a clip keeps, worked out from a film's faces (lib/faces.js's record). `aspect` is the frame's shape (w/h,
- * 9/16), `mode` one of MODES, `shift` -1..1. Pure: the same faces always give the same path.
+ * 9/16), `mode` one of MODES, `shift` -1..1. `people` (V33.6): a shot with no face follows a whole person, where the record
+ * counted them; `autoBands` (V33.6, on unless false): two standing apart are bands by themselves in 'face'. Pure: the same
+ * faces always give the same path.
  */
-export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0 } = {}) {
+export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true } = {}) {
   const md = MODES.includes(mode) ? mode : 'face';
   const f = faces || {};
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: VERSION, mode: md, shift: r3(clamp(+shift || 0, -1, 1)), src, shots: [] };
   const fps = +f.fps || 5;
   const frames = Array.isArray(f.frames) ? f.frames : [];
+  const persons = people && Array.isArray(f.people) ? f.people : null;
   const seconds = +f.seconds || frames.length / fps;
   const width = windowW(src.w, src.h, aspect);
   rec.found = frames.length ? r2(frames.filter((x) => _dedupe(x).length).length / frames.length) : 0;
@@ -184,19 +203,30 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0 } = {}) 
     const i0 = Math.max(0, Math.floor(s.t0 * fps)), i1 = Math.min(frames.length, Math.max(i0 + 1, Math.ceil(s.t1 * fps)));
     const shot = { t0: r3(s.t0), t1: r3(s.t1), kind: 'face' };
     const n = i1 - i0;
-    const tracks = _tracks(frames, i0, i1, fps).sort((a, b) => b.weight - a.weight);
+    let tracks = _tracks(frames, i0, i1, fps).sort((a, b) => b.weight - a.weight);
     const seen = new Set();
     for (const t of tracks) for (const p of t.pts) seen.add(p[0]);
-    if (!tracks.length || seen.size < Math.max(2, NO_FACE * n)) { shot.kind = 'whole'; rec.shots.push(shot); continue; }
+    let byPerson = false;
+    if (!tracks.length || seen.size < Math.max(2, NO_FACE * n)) {
+      // (V33.6) No face: a whole person in most of the shot is followed instead; with none, the whole frame over its blur.
+      const pt = persons ? _tracks(persons, i0, i1, fps).sort((a, b) => b.weight - a.weight) : [];
+      if (!pt.length || pt[0].pts.length < Math.max(2, PERSON_SHARE * n)) { shot.kind = 'whole'; rec.shots.push(shot); continue; }
+      tracks = pt;
+      byPerson = true;
+      shot.by = 'person';
+    }
     const tAt = (k) => r3((i0 + k) / fps);
-    // Two faces, each there for half the shot or more: the bands, when they are asked for.
-    const two = md === 'bands' && tracks.length >= 2 && tracks[1].pts.length >= 0.5 * n && tracks[0].pts.length >= 0.5 * n;
+    // Two, each there for half the shot or more: the bands - asked for, or by themselves when they stand too far apart for
+    // one window (V33.6, (х60а)).
+    const both = tracks.length >= 2 && tracks[1].pts.length >= BOTH * n && tracks[0].pts.length >= BOTH * n;
+    const two = both && (md === 'bands' || (md === 'face' && autoBands !== false && _apart(tracks[0], tracks[1], width)));
     if (two) {
       const pair = [tracks[0], tracks[1]].sort((a, b) => a.pts.reduce((s2, p) => s2 + p[1], 0) / a.pts.length - b.pts.reduce((s2, p) => s2 + p[1], 0) / b.pts.length);
-      const faceH = Math.max(...pair.map((t) => { const hs = t.pts.map((p) => p[4]).sort((a, b) => a - b); return hs[Math.floor(hs.length / 2)]; }));
-      bandHs.push(clamp(faceH * BAND_FACE, 0.45, 1));
+      const tallH = Math.max(...pair.map((t) => { const hs = t.pts.map((p) => p[4]).sort((a, b) => a - b); return hs[Math.floor(hs.length / 2)]; }));
+      // A face's band shows BAND_FACE face heights; a person's, the person (from the top down - room for the head).
+      bandHs.push(clamp(byPerson ? tallH : tallH * BAND_FACE, 0.45, 1));
       shot.kind = 'bands';
-      shot.pair = pair.map((t) => ({ xs: _series(t, i0, i1, 1), ys: _series(t, i0, i1, 2) }));
+      shot.pair = pair.map((t) => ({ xs: _series(t, i0, i1, 1), ys: _series(t, i0, i1, 2), ...(byPerson ? { hs: _series(t, i0, i1, 4), person: true } : {}) }));
       rec.shots.push(shot);
       continue;
     }
@@ -214,8 +244,9 @@ export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0 } = {}) 
       const i0 = Math.max(0, Math.floor(s.t0 * fps));
       const keysOf = (p) => {
         const cx = _camera(p.xs, bw, bw / 2, 1 - bw / 2, fps);
-        // A face sits a little above the band's middle: room for the chin and the shoulders.
-        const cy = _camera(p.ys.map((y) => y + bh * 0.12), bh, bh / 2, 1 - bh / 2, fps);
+        // A face sits a little above the band's middle: room for the chin and the shoulders. A person (V33.6) is shown
+        // from the top of the box down: the band's middle half a band below the person's top.
+        const cy = _camera(p.person ? p.ys.map((y, k) => y - p.hs[k] / 2 + bh / 2) : p.ys.map((y) => y + bh * 0.12), bh, bh / 2, 1 - bh / 2, fps);
         return _simplify(cx.map((x, k) => [r3((i0 + k) / fps), x, cy[k]]), TOL).map(([t, x, y]) => [t, r3(x), r3(y)]);
       };
       s.b1 = keysOf(s.pair[0]);
@@ -362,6 +393,7 @@ export function normalize(frame) {
     if (!s || !Number.isFinite(+s.t0) || !Number.isFinite(+s.t1) || !(+s.t1 > +s.t0)) continue;
     const kind = ['face', 'whole', 'bands'].includes(s.kind) ? s.kind : 'face';
     const shot = { t0: r3(+s.t0), t1: r3(+s.t1), kind };
+    if (s.by === 'person' && kind !== 'whole') shot.by = 'person';
     if (kind === 'face') shot.keys = _keys(s.keys, 2);
     if (kind === 'bands') { shot.b1 = _keys(s.b1, 3); shot.b2 = _keys(s.b2, 3); }
     out.shots.push(shot);
