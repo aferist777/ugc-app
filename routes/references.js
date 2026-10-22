@@ -104,11 +104,13 @@ router.post('/references/:id/move', async (req, res) => {
       REFS.apply((list) => {
         const p = list.find(x => x && String(x.id) === id);
         if (!p) return;
-        if (whole) { p.categoryId = cat; p.categoryLabel = cat ? label : ''; target = p; return; }
+        // Moved by hand is seen: it is not news in the tree any more (`handled`, 2026-10-22).
+        if (whole) { p.categoryId = cat; p.categoryLabel = cat ? label : ''; p.handled = true; target = p; return; }
         // A part: a new post of its own, the rest stays.
         const ids = new Set(chosen.map(m => String(m.id)));
-        const np = { ...p, id: REFS.newId(), categoryId: cat, categoryLabel: cat ? label : '',
-          media: p.media.filter(m => ids.has(String(m.id))), receivedAt: new Date().toISOString() };
+        // It keeps when it came - moved is not new (the tree lights only what the bot brought, 2026-10-22).
+        const np = { ...p, id: REFS.newId(), categoryId: cat, categoryLabel: cat ? label : '', handled: true,
+          media: p.media.filter(m => ids.has(String(m.id))) };
         np.poster = (np.media[0] && np.media[0].thumb) || null;
         p.media = p.media.filter(m => !ids.has(String(m.id)));
         if (ids.has(String((p.media[0] || {}).id)) || !p.media.some(m => m.thumb === p.poster)) p.poster = (p.media[0] && p.media[0].thumb) || null;

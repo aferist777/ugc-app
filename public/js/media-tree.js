@@ -161,6 +161,12 @@ export function createTree(host, o) {
       all(nodes);
       _lsSet(LS_SEEN, seen);
     }
+    // A node seen for the first time - an own category just made, a post just filed into it - is seen as it is: nothing
+    // came into it from outside (the owner 2026-10-22: categories lit "at random" after a move).
+    let met = false;
+    const meet = (list) => { for (const n of list) { if (!(n.key in seen)) { seen[n.key] = n.newest || 0; met = true; } if (n.children) meet(n.children); } };
+    meet(nodes);
+    if (met) _lsSet(LS_SEEN, seen);
     // The node being looked at sees what lands in it.
     const cur = byKey.get(sel);
     if (cur) _seeAll(cur, false);

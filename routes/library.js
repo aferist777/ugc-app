@@ -383,6 +383,8 @@ function _mediaShelf(opts) {
         meta: {
           categoryId: p.categoryId || '', categoryLabel: p.categoryLabel || '', date: p.receivedAt || null, favorite: false,
           source: p.source || '', folder: p.folder || '', author: p.author || '', link: p.link || '',
+          // how it came: "telegram" (the bot), "cut" (a piece made here) - only the bot's are "new" in the tree
+          from: p.from || '', handled: !!p.handled,
           caption: p.caption || '', note: p.note || '', origin: p.origin || '', postedAt: p.postedAt || '',
           remote: p.remote || null, poster: p.poster || null,
           items: files.map(m => ({ id: m.id, type: m.type, path: m.path, thumb: m.thumb || null, w: m.w || 0, h: m.h || 0, dur: m.dur || 0,
@@ -562,7 +564,8 @@ function _tree() {
 
 // (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом ... куда добавилось что-то новое") Every node
 // says when the newest thing under it came (`newest`, ms) - the page lights the nodes holding something newer than when they
-// were last opened (js/media-tree.js). Read by the node's own query, as the shelf filters.
+// were last opened (js/media-tree.js). Read by the node's own query, as the shelf filters - and (2026-10-22) only posts the
+// bot brought count (`_isNews`), so only REFERENCES ever lights.
 function _inNode(i, q) {
   if (!q) return false;
   if (q.group) return !!(GROUPS[q.group] && GROUPS[q.group].includes(i.kind));
@@ -580,10 +583,15 @@ function _inNode(i, q) {
   }
   return true;
 }
+// (the owner 2026-10-22: "почему то подсвечиваются как то рандомно категории в дереве, когда перемещаю из uncategorized.
+// давай подсвечивать новое только в references") Only what the Telegram bot BROUGHT counts: a clip or a picture moved
+// (which stamps its date anew), a piece cut here, a source downloaded - none of them is news. Every other node says 0.
+// A post moved by hand (`handled`) is seen - it does not light the place it was moved to.
+const _isNews = (i) => i.kind === 'references' && (i.meta || {}).from === 'telegram' && !(i.meta || {}).handled;
 function _stampNewest(nodes, items) {
   for (const n of nodes) {
     let best = 0;
-    for (const i of items) { if (_inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
+    for (const i of items) { if (_isNews(i) && _inNode(i, n.q)) { const t = _ts(i.meta && i.meta.date); if (t > best) best = t; } }
     if (n.children) { _stampNewest(n.children, items); for (const c of n.children) if (c.newest > best) best = c.newest; }
     n.newest = best;
   }
@@ -1954,7 +1962,11 @@ router.delete('/library/cats/:id', (req, res) => {
       // Uncategorized is a folder too: the files go to nocat, and every path to them follows.
       const { list: now } = _kindRecords(kind);
       // (phase TG) A post let go of goes back to its source's folder - its files several.
-      if (kind === 'references') require('../lib/references-store').placePosts(now.filter(e => e && ids.has(String(e.id))));
+      if (kind === 'references') {
+        // Let go of by hand: seen, not news in the folders they go back to (2026-10-22).
+        require('../lib/references-store').apply((list) => { for (const e of list) if (e && ids.has(String(e.id))) e.handled = true; });
+        require('../lib/references-store').placePosts(require('../lib/references-store').read().filter(e => e && ids.has(String(e.id))));
+      }
       else SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
     }
     // The clips are resolved; now the chip itself, and its folder.
