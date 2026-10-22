@@ -1,0 +1,200 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   THE AUDIO LAB (phase V34.D) - public/lab/audio.html, js/lab/. Three parts under the top strip:
+     left    the settings column: project, engine, mode, model, length, chips, price, the almanac
+     middle  the CONSTRUCTOR of the open mode - one message of the app with that mode's fields - and what was made
+     right   AUDIO: the gallery and the tree (Music; SFX -> Favorites, Built-in, My sounds)
+   The look is the app's own: its tokens (css/app-shell.css), the media tree's rows (css/media-tree.css), the gold of the
+   chats' almanac button (css/mv3-imagen.css .mv3-vc-almanac) and of a talking head's frames.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.la-sub{flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:7px 18px; background:oklch(.19 .016 265); border-bottom:1px solid var(--border-soft)}
+.la-sub-t{font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold)}
+.la-sub-n{font-size:11px; color:var(--muted)}
+.la-sub .sp{flex:1}
+.la-fake{font:700 10px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--bg); background:var(--accent); padding:4px 8px; border-radius:var(--pill)}
+
+.la-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:270px minmax(420px, 1fr) minmax(460px, 1.1fr); gap:0}
+.la-muted{color:var(--muted)}
+.la-err{color:var(--danger); font-size:11.5px; margin-top:4px}
+.la-err:empty{display:none}
+.sp{flex:1}
+
+/* ── the settings column ── */
+.la-col{min-height:0; overflow-y:auto; padding:14px 14px 18px; border-right:1px solid var(--border-soft); display:flex; flex-direction:column; gap:12px; background:oklch(.185 .015 265)}
+.la-lbl{font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:5px}
+.la-seg{display:flex; gap:0; border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden}
+.la-seg button{flex:1; padding:7px 6px; border:0; background:transparent; color:var(--muted); font:600 11.5px/1 var(--font); cursor:pointer}
+.la-seg button + button{border-left:1px solid var(--border)}
+.la-seg button.on{background:var(--primary-soft); color:var(--ink)}
+.la-sel, .la-in, .la-ta{width:100%; box-sizing:border-box; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:6px 8px}
+.la-sel{padding:5px 6px}
+.la-sel:focus, .la-in:focus, .la-ta:focus{outline:none; border-color:var(--primary)}
+.la-ta{resize:vertical; min-height:64px}
+.la-note{font-size:10.5px; color:var(--muted); line-height:1.4; margin-top:4px}
+.la-len{display:flex; align-items:center; gap:6px}
+.la-len .la-in{width:84px}
+.la-len-auto{font-size:11px; color:var(--muted)}
+.la-chips{display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px}
+.la-chip{padding:3px 8px; border:1px solid var(--border); border-radius:var(--pill); background:transparent; color:var(--ink); font:500 11px/1.3 var(--font); cursor:pointer}
+.la-chip:hover{border-color:var(--muted)}
+.la-chip.on{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.la-chip-g{font:600 9.5px/1 var(--font); color:var(--muted); margin:4px 0 4px}
+.la-price{padding:8px 10px; border:1px dashed var(--border); border-radius:var(--r-xs); font-size:11.5px; line-height:1.4}
+.la-price b{color:var(--gold)}
+.la-col .mv3-vc-almanac{margin:0; width:100%}
+.la-col .mv3-vc-almanac.is-soon{opacity:.75}
+
+/* ── the middle: the constructor and what was made ── */
+.la-mid{min-height:0; overflow-y:auto; padding:16px 18px 24px; display:flex; flex-direction:column; gap:12px}
+.la-make{flex:0 0 auto}
+.la-card{position:relative; padding:12px 14px 14px; border:1px solid var(--gold); border-radius:var(--r-sm); background:var(--bg); display:flex; flex-direction:column; gap:10px}
+.la-card-h{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
+.la-card-h .la-muted{text-transform:none; letter-spacing:0; font-weight:400; font-size:11px}
+.la-bot{display:flex; gap:10px; align-items:flex-start}
+.la-bot-ico{flex:0 0 28px; height:28px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:14px}
+.la-bot-tx{font-size:12.5px; line-height:1.5; color:var(--ink)}
+.la-f{display:flex; flex-direction:column; gap:4px}
+.la-f-h{display:flex; align-items:baseline; gap:8px; font:600 11px/1.2 var(--font); color:var(--ink)}
+.la-f-h small{font-weight:400; color:var(--muted)}
+.la-cnt{margin-left:auto; font:500 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.la-cnt.is-over{color:var(--danger)}
+.la-row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.la-check{display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer}
+.la-knobs{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:6px 10px}
+.la-knobs summary{cursor:pointer; font:600 11px/1.6 var(--font); color:var(--muted)}
+.la-knob{display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:8px; font-size:11.5px; margin-top:6px}
+.la-knob input[type=range]{width:100%}
+.la-knob span:last-child{text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
+.la-go-row{display:flex; align-items:center; gap:10px}
+.la-go{padding:8px 16px; border:1px solid var(--primary); border-radius:var(--r-xs); background:var(--primary); color:var(--primary-ink); font:700 12px/1 var(--font); cursor:pointer}
+.la-go:hover{filter:brightness(1.08)}
+.la-go[disabled]{opacity:.5; cursor:default; filter:none}
+.la-link{border:0; background:none; padding:0; cursor:pointer; color:var(--primary); font:500 11.5px var(--font)}
+.la-link:hover{text-decoration:underline}
+.la-picked{display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted)}
+.la-picked .la-chip{cursor:default}
+
+/* the attachment of Video to Music */
+.la-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
+.la-att.is-drop{border-color:var(--primary); background:var(--primary-soft)}
+.la-att img, .la-att .la-att-ph{flex:0 0 auto; width:48px; height:64px; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
+.la-att-tx{flex:1; min-width:0; font-size:12px}
+.la-att-tx b{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-pick{position:fixed; z-index:9300; width:520px; max-height:70vh; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden}
+.la-pick-tabs{display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--border-soft)}
+.la-pick-grid{flex:1; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; padding:8px}
+.la-pick-it{display:flex; flex-direction:column; gap:3px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
+.la-pick-it:hover{border-color:var(--primary)}
+.la-pick-it img, .la-pick-it .la-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
+.la-pick-it span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* what was made */
+.la-made-h{font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-top:6px}
+.la-made{display:flex; flex-direction:column; gap:8px}
+.la-gen{padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); display:flex; flex-direction:column; gap:7px}
+.la-gen.is-failed{border-color:oklch(.66 .19 25 / .5)}
+.la-gen-h{display:flex; align-items:baseline; gap:8px; font-size:11px; color:var(--muted)}
+.la-gen-h b{color:var(--ink); font-size:12px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.la-gen-h .sp{flex:1}
+.la-state{font:700 9px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; padding:3px 6px; border-radius:var(--pill); background:var(--surface-2); color:var(--muted)}
+.la-state.run{background:var(--primary-soft); color:var(--ink)}
+.la-state.ok{background:oklch(.76 .15 152 / .18); color:var(--success)}
+.la-state.bad{background:oklch(.66 .19 25 / .16); color:var(--danger)}
+.la-x{border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
+.la-x:hover{color:var(--ink)}
+.la-bar{height:4px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden}
+.la-bar i{display:block; width:30%; height:100%; background:var(--gold); animation:la-wait 1.6s ease-in-out infinite}
+@keyframes la-wait{0%{transform:translateX(-100%)} 100%{transform:translateX(340%)}}
+.la-said{font-size:11px; color:var(--muted); line-height:1.4}
+.la-said b{color:var(--ink); font-weight:600}
+.la-res{display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:var(--r-xs); background:var(--bg); cursor:pointer}
+.la-res:hover{background:var(--surface-2)}
+.la-res .la-wave{flex:1; height:26px; min-width:60px}
+.la-res-n{flex:0 1 210px; min-width:0; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-res .la-muted{font-size:10.5px; white-space:nowrap}
+.la-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
+.la-play.on, .la-res.is-playing .la-play{border-color:var(--gold); color:var(--gold)}
+.la-lyr{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:8px 10px; background:var(--bg)}
+.la-lyr-h{display:flex; align-items:baseline; gap:8px; font-weight:600; font-size:12px; margin-bottom:4px}
+.la-lyr pre{margin:0; white-space:pre-wrap; font:12px/1.5 var(--font); color:var(--ink); max-height:150px; overflow:hidden}
+.la-lyr.open pre{max-height:none}
+
+/* ── the right: gallery and tree ── */
+.la-lib{min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) 230px; border-left:1px solid var(--border-soft)}
+.la-gal{min-height:0; overflow-y:auto; padding:12px 12px 20px; position:relative}
+.la-gal.is-drop{outline:1px dashed var(--primary); outline-offset:-6px; background:var(--primary-soft)}
+.la-treebox{min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border-soft); background:oklch(.185 .015 265)}
+.la-tree-h{padding:10px 10px 4px; font:700 9.5px/1 var(--font); letter-spacing:.08em; color:var(--muted)}
+.la-treebox > div:last-child{flex:1; min-height:0}
+.la-gal-head{display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap}
+.la-gal-title{font-size:12.5px; margin-right:auto}
+.la-search{flex:1 1 200px; min-width:150px; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 8px}
+.la-search:focus{outline:none; border-color:var(--primary)}
+.la-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
+.la-btn:hover{border-color:var(--muted)}
+.la-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.la-btn[disabled]{opacity:.5; cursor:default}
+.la-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px}
+.la-empty{grid-column:1/-1; padding:16px 4px; font-size:12px; color:var(--muted)}
+.la-tile{display:flex; flex-direction:column; gap:5px; padding:7px 8px 6px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); cursor:pointer; user-select:none}
+.la-tile:hover{border-color:var(--border)}
+.la-tile.is-playing{border-color:var(--gold)}
+.la-tile-top{display:flex; align-items:center; gap:4px}
+.la-tile-name{flex:1; min-width:0; font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-star, .la-more{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0 2px}
+.la-star.on{color:var(--gold)}
+.la-star:hover, .la-more:hover{color:var(--ink)}
+.la-tile-foot{display:flex; justify-content:space-between; gap:6px; font-size:10px; color:var(--ink)}
+.la-tile-foot .la-muted{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* the waveform (js/lab/audio-play.js) */
+.la-wave{display:block; width:100%; height:34px}
+.la-wave rect{fill:var(--muted); opacity:.75}
+.la-tile.is-playing .la-wave rect, .la-res.is-playing .la-wave rect{fill:var(--gold); opacity:.9}
+.la-wave rect.la-wave-head{fill:#fff; opacity:1}
+.la-wave rect.la-wave-flat{opacity:.35}
+
+/* the tree's rows: css/media-tree.css; here only the box */
+.la-tree{padding-top:2px}
+
+/* ── windows: the cut, the online search, the almanac ── */
+.la-back{position:fixed; inset:0; z-index:9280; background:rgba(0,0,0,.45)}
+.la-win{position:fixed; z-index:9290; left:50%; top:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:86vh;
+  display:flex; flex-direction:column; gap:10px; padding:12px 14px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow)}
+.la-win-head{display:flex; align-items:baseline; gap:10px}
+.la-win-head b{font-size:13px}
+.la-win-head .la-muted{flex:1; min-width:0; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-cut-stage{background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:6px}
+.la-cut-cv{display:block; width:100%; height:120px; cursor:ew-resize; touch-action:none}
+.la-cut-info{font-size:11.5px; color:var(--muted)}
+.la-cut-row{display:flex; align-items:center; gap:8px}
+.la-cut-row .la-sel{width:auto; min-width:160px}
+.la-online{width:min(860px, calc(100vw - 40px)); height:84vh}
+.la-on-bar{display:flex; align-items:center; gap:8px}
+.la-on-bar .la-sel{width:auto; min-width:150px}
+.la-on-list{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px}
+.la-on-row{display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg); flex-wrap:wrap}
+.la-on-tx{flex:1 1 260px; min-width:0; display:flex; flex-direction:column; gap:1px}
+.la-on-tx b{font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-on-tx span{font-size:10.5px}
+.la-on-tags{color:var(--muted); opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-on-wave{width:150px; height:28px}
+.la-on-link{font-size:11px; color:var(--primary); text-decoration:none}
+.la-on-link:hover{text-decoration:underline}
+.la-on-pager{display:flex; align-items:center; justify-content:center; gap:10px; font-size:11px}
+.la-on-foot{display:flex; flex-direction:column; gap:6px; padding-top:8px; border-top:1px solid var(--border-soft)}
+.la-on-gal{display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:11px}
+.la-on-credit{font-size:10.5px; color:var(--muted)}
+.la-about{width:340px}
+.la-about-row{display:grid; grid-template-columns:70px 1fr; gap:8px; font-size:11.5px; padding:2px 0; overflow-wrap:anywhere}
+.la-about-row a{color:var(--primary)}
+.la-menu{z-index:9310}
+
+/* the status line */
+.la-status{flex:0 0 auto; min-height:24px; padding:4px 18px; font-size:11.5px; color:var(--muted); border-top:1px solid var(--border-soft); background:oklch(.19 .016 265); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-status.is-bad{color:var(--danger)}
+
+@media (max-width: 1300px){
+  .la-body{grid-template-columns:240px minmax(380px, 1fr) minmax(380px, 1fr)}
+  .la-lib{grid-template-columns:minmax(0, 1fr) 190px}
+}

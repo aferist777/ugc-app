@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Audio lab</title>
+<!-- THE AUDIO LAB (phase V34.D, the owner 2026-10-22: "давай экспериментировать на отдельной html странице. создай чат
+     функциональный там ... с подключенной базой приложения. чтобы можно было сохранять звуки и музыку"). A page of the app,
+     on the library and the keys of the app that serves it: every press of "generate" is a real generation, filed where the
+     app files it and written into Alerts. When the owner has settled it, it moves into Merge and the Library (V34.E) and
+     this page goes. -->
+<script src="/js/storage-sync.js"></script>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/app-nav.css">
+<link rel="stylesheet" href="css/media-tree.css">
+<link rel="stylesheet" href="css/mv3-imagen.css">
+<link rel="stylesheet" href="css/lab-audio.css">
+</head>
+<body>
+
+<nav class="sv3-nav">
+  <a href="/merge">Merge</a>
+  <a href="/3d">3D Studio</a>
+  <a href="/library">Library</a>
+  <span class="sp"></span>
+</nav>
+
+<div class="la-sub">
+  <span class="la-sub-t">Audio lab</span>
+  <span class="la-sub-n" id="la-sub-n">a test page - every press of "generate" is a real generation on your keys, filed in your library and written into Alerts</span>
+  <span class="sp"></span>
+  <span class="la-fake" id="la-fake" hidden>FAKE aggregator - nothing is paid</span>
+</div>
+
+<main class="la-body">
+  <aside class="la-col" id="la-col"></aside>
+  <section class="la-mid">
+    <div class="la-make" id="la-make"></div>
+    <div class="la-made-h">Made here <span class="la-muted" id="la-made-n"></span></div>
+    <div class="la-made" id="la-made"></div>
+  </section>
+  <section class="la-lib">
+    <div class="la-gal" id="la-gal"></div>
+    <div class="la-treebox"><div class="la-tree-h">AUDIO</div><div id="la-tree"></div></div>
+  </section>
+</main>
+<div class="la-status" id="la-status"></div>
+
+<script type="module" src="js/lab/audio.js"></script>
+</body>
+</html>

@@ -30,7 +30,7 @@ const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
 // '/' opens Merge and '/character' lands on the Library's Characters shelf - both answered by redirects.
-const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
+const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d', '/lab/audio'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // New Character's modules, moved out of the Character page's folder in phase H8
@@ -65,7 +65,10 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // the 3D Studio (PLAN "3D Studio"): its modules, three.js, a mannequin, a motion library, a piece of furniture
                  '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
-                 '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes'];
+                 '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes',
+                 // the audio lab and its server (phase V34.C-D)
+                 '/js/lab/audio.js', '/js/lab/audio-tree.js', '/js/lab/audio-play.js', '/js/lab/audio-cut.js', '/js/lab/audio-online.js',
+                 '/css/lab-audio.css', '/api/audio/catalog', '/api/audio/projects', '/api/audio/gens', '/api/audio/lib/tree', '/api/audio/lib/items'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
