@@ -198,3 +198,17 @@
   .la-body{grid-template-columns:240px minmax(380px, 1fr) minmax(380px, 1fr)}
   .la-lib{grid-template-columns:minmax(0, 1fr) 190px}
 }
+
+/* the almanac's window (js/lab/audio.js openAlmanac) - the chats' .hp frame (css/mv3-imagen.css), V34.A's notes in it */
+.la-alm{z-index:9300}
+.la-alm-g{margin:8px 4px 2px}
+.la-alm-main{min-height:0; overflow-y:auto; padding:10px 12px; display:flex; flex-direction:column; gap:7px}
+.la-alm-note{display:flex; flex-direction:column; gap:4px; text-align:left; padding:8px 10px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); cursor:pointer; font:inherit}
+.la-alm-note:hover{border-color:var(--gold)}
+.la-alm-note.is-advice{border-style:dashed}
+.la-alm-note.is-put{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 14%, var(--bg))}
+.la-alm-text{font-size:12px; line-height:1.45; color:var(--ink)}
+.la-alm-set{font-size:10.5px}
+.la-alm-src{display:flex; flex-wrap:wrap; gap:8px; font-size:10.5px}
+.la-alm-src a{color:var(--primary); text-decoration:none}
+.la-alm-src a:hover{text-decoration:underline}

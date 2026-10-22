@@ -76,7 +76,7 @@ const S = Object.assign({
 }, ls(KEY, {}));
 S.f = Object.assign({
   simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [] },
-  custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', audioWeight: '', variety: '', seconds: 0 },
+  custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
   lyrics: { idea: '' },
   sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
   compose: { prompt: '', seconds: 30, instrumental: true },
@@ -90,7 +90,6 @@ let ALM = null;            // the almanac module, when it is there
 let PROJECTS = [];
 let GENS = [];
 let LIBIDX = new Map();    // path -> a tile of the library (its wave, star, id)
-let _lastField = null;     // where the almanac's note goes
 
 const _proj = () => PROJECTS.find(p => p.key === S.project) || null;
 const _chipsGroups = () => {
@@ -160,7 +159,7 @@ function paintCol() {
     mo.addEventListener('change', () => { S.model = mo.value; save(); });
     box('Model', mo, 'One price for all three.');
   } else if (S.engine === 'eleven') {
-    box('Model', el('div', 'la-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : 'music_v1 (Eleven Music)'));
+    box('Model', el('div', 'la-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
   }
 
   // The length: what a mode takes, 0 - the model decides.
@@ -341,7 +340,6 @@ function _text(obj, key, opts) {
   t.placeholder = o.placeholder || '';
   t.value = obj[key] == null ? '' : String(obj[key]);
   t.addEventListener('input', () => { obj[key] = t.value; save(); });
-  t.addEventListener('focus', () => { _lastField = { el: t, obj, key }; });
   return t;
 }
 function _check(obj, key, label, after) {
@@ -418,8 +416,7 @@ function paintMake() {
     kn.appendChild(el('summary', null, 'fine-tuning (Suno\'s own when untouched)'));
     kn.appendChild(_knob(f, 'styleWeight', 'hold the style', 0, 1, 0.05, 'how closely it keeps to the style'));
     kn.appendChild(_knob(f, 'weirdness', 'weirdness', 0, 1, 0.05, 'how far it may wander'));
-    if (!f.instrumental) kn.appendChild(_knob(f, 'audioWeight', 'audio weight', 0, 1, 0.05, 'not for instrumentals'));
-    kn.appendChild(_knob(f, 'variety', 'variety', 0, 4, 1, '0 off · 1 normal · 4 max: how different the two tracks are'));
+    kn.appendChild(_knob(f, 'variety', 'variety', 0, 4, 1, '0 - your style as written (V6 rewrites it at 1 and up) · 4 max: how different the two tracks are'));
     card.appendChild(kn);
   } else if (S.mode === 'lyrics') {
     card.appendChild(_field('The idea', _text(f, 'idea', { area: true, rows: 2, placeholder: 'e.g. a hopeful song about the first coffee of the morning' }), { max: 200 }));
@@ -596,7 +593,7 @@ function _body() {
     b.projectKind = (_proj() && WRITER_KIND[_proj().kind]) || 'blank';
   } else if (S.mode === 'custom') {
     Object.assign(b, { title: f.title, style: f.style, lyrics: f.lyrics, instrumental: !!f.instrumental, vocal: f.vocal, negative: f.negative,
-      styleWeight: f.styleWeight, weirdness: f.weirdness, audioWeight: f.audioWeight, variety: f.variety, seconds: f.seconds || 0 });
+      styleWeight: f.styleWeight, weirdness: f.weirdness, variety: f.variety, seconds: f.seconds || 0 });
   } else if (S.mode === 'lyrics') b.idea = f.idea;
   else if (S.mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
   else if (S.mode === 'compose') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, instrumental: f.instrumental !== false });
@@ -799,20 +796,58 @@ function _follow() {
   _timer = setInterval(_poll, 3000);
 }
 
-// ── the almanac (V34.A's notes) ─────────────────────────────────────────────
+// ── the almanac (V34.A: public/js/audio/almanac-data.js) ────────────────────
+// Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right; a
+// press puts a note's `text` into the field it is for (`to` - the first one the open mode has; else the mode of the
+// first is opened) and applies its `set` and `seconds` to the mode's controls. An advice note (`to` empty) is read.
+const FIELD_AT = {
+  words: ['simple', 'words'], style: ['custom', 'style'], negative: ['custom', 'negative'], lyrics: ['custom', 'lyrics'],
+  idea: ['lyrics', 'idea'], sound: ['sounds', 'prompt'], sfx: ['sfx', 'prompt'], music: ['compose', 'prompt'],
+};
+const SET_AT = {
+  style_weight: ['custom', 'styleWeight'], weirdness_constraint: ['custom', 'weirdness'], variety: ['custom', 'variety'],
+  vocal_gender: ['custom', 'vocal'], sound_loop: ['sounds', 'loop'], sound_tempo: ['sounds', 'tempo'], sound_key: ['sounds', 'key'],
+  prompt_influence: ['sfx', 'influence'], loop: ['sfx', 'loop'],
+};
 function _almSections() {
-  if (!ALM) return [];
-  const raw = ALM.ALMANAC || ALM.SECTIONS || ALM.default || null;
-  if (!raw) return [];
-  const list = Array.isArray(raw) ? raw : [].concat(raw.music || [], raw.sounds || [], raw.sections || []);
-  return list.filter(s => s && (s.title || s.name) && Array.isArray(s.notes || s.tips || s.items));
+  return (ALM && Array.isArray(ALM.SECTIONS)) ? ALM.SECTIONS.filter(s => s && s.label && Array.isArray(s.notes)) : [];
 }
+const _fieldLabel = (f) => (ALM && ALM.FIELDS && ALM.FIELDS[f] && ALM.FIELDS[f].label) || f;
+function _applyNote(n) {
+  const to = Array.isArray(n.to) ? n.to.filter(f => FIELD_AT[f]) : [];
+  if (!to.length) {
+    // Advice is read - a press copies it, as the video chat's almanac does.
+    try { navigator.clipboard.writeText(String(n.text || '')); } catch (e) { /* not allowed */ }
+    return { said: 'Advice - copied.' };
+  }
+  const here = to.find(f => FIELD_AT[f][0] === S.mode) || to[0];
+  const [mode, key] = FIELD_AT[here];
+  const switched = mode !== S.mode;
+  const f = S.f[mode];
+  const spec = (ALM.FIELDS && ALM.FIELDS[here]) || {};
+  const cur = String(f[key] || '').replace(/\s+$/, '');
+  const next = cur ? cur + (spec.join || ', ') + n.text : String(n.text || '');
+  // Over the field's limit it is not put in - said (V34.A: "за max не вставлять, а сказать").
+  if (spec.max && next.length > spec.max) return { bad: true, said: _fieldLabel(here) + ' is full: ' + cur.length + ' of ' + spec.max + ' characters - make room first.' };
+  f[key] = next;
+  if (mode === 'custom' && here === 'lyrics') f.instrumental = false;
+  for (const [k, v] of Object.entries(n.set || {})) {
+    const at = SET_AT[k];
+    if (at && at[0] === mode) S.f[mode][at[1]] = v;
+  }
+  if (+n.seconds > 0 && (mode === 'sfx' || mode === 'compose')) f.seconds = +n.seconds;
+  save();
+  if (switched) setMode(mode); else { paintCol(); paintMake(); }
+  return { said: '"' + n.title + '" is in ' + _fieldLabel(here) + (switched ? ' - the mode ' + MODE_NAME(mode) + ' is open' : '') + '.' };
+}
+let _almWin = null;
 function openAlmanac(anchor) {
+  if (_almWin) { _almWin.close(); return; }
   const secs0 = _almSections();
-  const win = el('div', 'hp');
+  const win = el('div', 'hp la-alm');
   const head = el('div', 'hp-head');
   head.appendChild(el('b', null, 'Almanac'));
-  head.appendChild(el('span', 'hp-sub', 'a press on a note puts it into the field you were in'));
+  head.appendChild(el('span', 'hp-sub', 'music and sounds · a press puts a note into its field' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
   const x = el('button', 'hp-x', '✕');
   x.type = 'button';
   head.appendChild(x);
@@ -820,50 +855,90 @@ function openAlmanac(anchor) {
   const body = el('div', 'hp-body');
   const side = el('div', 'hp-side');
   const main = el('div', 'la-alm-main');
-  main.style.cssText = 'overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px';
   body.append(side, main);
   win.appendChild(body);
+  // Over the gallery, at the right: the constructor stays in sight, so the note is seen landing in its field.
   const r = anchor.getBoundingClientRect();
-  win.style.left = (r.right + 10) + 'px';
-  win.style.top = '90px';
-  win.style.width = '720px';
-  win.style.height = '70vh';
+  const w = Math.max(520, Math.min(820, window.innerWidth - r.right - 30));
+  win.style.left = Math.round(Math.max(r.right + 10, window.innerWidth - w - 16)) + 'px';
+  win.style.top = '84px';
+  win.style.width = w + 'px';
+  win.style.height = 'calc(100vh - 120px)';
   document.body.appendChild(win);
   const layer = Layers.open(win, { modal: false, onEsc: () => close() });
-  const close = () => { win.remove(); Layers.close(layer); };
+  const close = () => { win.remove(); Layers.close(layer); _almWin = null; };
+  _almWin = { close };
   x.addEventListener('click', close);
-  const show = (s) => {
-    for (const b of side.children) b.classList.toggle('on', b._s === s);
+  const soundy = S.mode === 'sounds' || S.mode === 'sfx';
+  let open = secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
+  let cat = '';
+  const paintSide = () => {
+    side.textContent = '';
+    for (const [g, label] of [['music', 'Music'], ['sound', 'Sounds']]) {
+      const list = secs0.filter(s => s.group === g);
+      if (!list.length) continue;
+      side.appendChild(el('div', 'la-lbl la-alm-g', label));
+      for (const s of list) {
+        const b = el('button', 'hp-sec' + (s === open ? ' on' : ''));
+        b.type = 'button';
+        b.appendChild(el('span', 'nm', s.label));
+        b.appendChild(el('small', null, String(s.notes.length)));
+        b.title = s.about || '';
+        b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); });
+        side.appendChild(b);
+        if (s === open && (s.cats || []).length > 1) {
+          for (const c of s.cats) {
+            const cb = el('button', 'hp-cat' + (cat === c.id ? ' on' : ''));
+            cb.type = 'button';
+            cb.appendChild(el('span', 'nm', c.label));
+            cb.appendChild(el('small', null, String(s.notes.filter(n => n.cat === c.id).length)));
+            cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); });
+            side.appendChild(cb);
+          }
+        }
+      }
+    }
+  };
+  const paintNotes = () => {
     main.textContent = '';
-    for (const n of (s.notes || s.tips || s.items)) {
-      const b = el('button', 'la-lyr');
+    if (!open) return;
+    if (open.about) main.appendChild(el('div', 'la-said', open.about));
+    for (const n of open.notes.filter(x => !cat || x.cat === cat)) {
+      const b = el('button', 'la-alm-note' + ((n.to || []).length ? '' : ' is-advice'));
       b.type = 'button';
-      b.style.cssText = 'text-align:left;cursor:pointer;color:inherit';
-      b.appendChild(el('div', 'la-lyr-h', n.title || n.name || ''));
-      b.appendChild(el('div', 'la-said', n.text || n.body || n.insert || ''));
+      const h = el('div', 'la-lyr-h');
+      h.appendChild(el('span', null, n.title));
+      h.appendChild(el('span', 'sp'));
+      const to = (n.to || []).map(_fieldLabel);
+      h.appendChild(el('span', 'la-muted', to.length ? '→ ' + to.join(', ') : 'advice'));
+      b.appendChild(h);
+      b.appendChild(el('div', 'la-alm-text', n.text));
+      if (n.why) b.appendChild(el('div', 'la-said', n.why));
+      const extra = [];
+      if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
+      if (n.seconds) extra.push(n.seconds + ' s');
+      if (extra.length) b.appendChild(el('div', 'la-muted la-alm-set', 'sets ' + extra.join(' · ')));
+      const srcs = (n.src || []).map(id => ALM.SOURCES && ALM.SOURCES[id]).filter(Boolean);
+      if (srcs.length) {
+        const sr = el('div', 'la-alm-src');
+        for (const s of srcs.slice(0, 4)) {
+          const a = el('a', null, s.name);
+          a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
+          a.addEventListener('click', (e) => e.stopPropagation());
+          sr.appendChild(a);
+        }
+        b.appendChild(sr);
+      }
       b.addEventListener('click', () => {
-        const words = String(n.insert || n.text || '');
-        const t = _lastField;
-        if (!t || !t.el.isConnected) { say('Click into a field of the constructor first.', true); return; }
-        const v = t.el.value;
-        t.el.value = v ? v.replace(/\s*$/, '') + (t.el.tagName === 'TEXTAREA' && /\n/.test(words) ? '\n' : ', ') + words : words;
-        t.obj[t.key] = t.el.value;
-        save();
-        t.el.dispatchEvent(new Event('input'));
-        say('Put into the field.');
+        const r = _applyNote(n);
+        if (!r.bad) { b.classList.add('is-put'); setTimeout(() => b.classList.remove('is-put'), 700); }
+        say(r.said, !!r.bad);
       });
       main.appendChild(b);
     }
   };
-  for (const s of secs0) {
-    const b = el('button', 'hp-sec');
-    b.type = 'button';
-    b._s = s;
-    b.appendChild(el('span', 'nm', s.title || s.name));
-    b.addEventListener('click', () => show(s));
-    side.appendChild(b);
-  }
-  if (secs0.length) show(secs0[0]);
+  paintSide();
+  paintNotes();
 }
 
 // ── start ───────────────────────────────────────────────────────────────────
