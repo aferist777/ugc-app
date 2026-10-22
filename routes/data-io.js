@@ -75,7 +75,9 @@ const GROUPS = [
              'data/heads.json',
              // (phase V34.C) what the "generate audio" constructor asked for and made - its history; the files themselves
              // are AUDIO -> Music and SFX -> My sounds, above. The built-in sounds (vendor/sfx/) are the program's: never here.
-             'data/audio-gens.json'], heavy: true },
+             'data/audio-gens.json',
+             // (phase V34.C) the stars of built-in sounds - links to /sfx/..., never their files.
+             'data/sfx-favorites.json'], heavy: true },
   // (phase TG) REFERENCES: what the Telegram bot brought in - the posts and their files, a folder per source.
   { id: 'references', label: 'References (posts, links and media sent to the Telegram bot)',
     dirs: ['media/references'], stores: ['data/references.json'], heavy: true },

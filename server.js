@@ -106,12 +106,19 @@ app.use('/vendor/three/addons', express.static(path.join(__dirname, 'node_module
 app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
+// (phase V34.C) The built-in sound set - SFX -> Built-in: laid out by tools/fetch-sfx.js (V34.B), part of the program.
+// Its address is a file's address everywhere (lib/media.js toDisk): a clip on a lane, the render, the missing check.
+app.use('/sfx', express.static(require('./lib/media').SFX_DIR, {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
-const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
+// (phase V34.D) /lab/audio - the audio lab, a test page until its chat moves into Merge (V34.E); opened by its address.
+const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html',
+  '/lab/audio': 'lab/audio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -143,6 +150,7 @@ app.use('/api', require('./routes/links'));
 app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
 app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
+app.use('/api', require('./routes/audio-lib'));   // AUDIO's tree in the lab: Music, SFX (Favorites, Built-in, My sounds), Openverse
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
