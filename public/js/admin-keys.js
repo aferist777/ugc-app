@@ -107,6 +107,9 @@ const $ = (id) => document.getElementById(id);
 // HOW TO GET THE CLOUDFLARE KEY (the owner 2026-10-21: the instruction "в дропдауне под новым ключом ... типа хелпера").
 // Cloudflare's own words for its buttons (developers.cloudflare.com, "Create API token"), checked 2026-10-21.
 const CF_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens';
+// R2 of whichever account is signed in (Cloudflare's own deep link, `?to=/:account/...`); after a check, the account's own.
+const CF_R2 = 'https://dash.cloudflare.com/?to=/:account/r2/overview';
+const CF_ACC = (id) => 'https://dash.cloudflare.com/' + encodeURIComponent(id);
 const CF_HOWTO = [
   ['Open ', ['dash.cloudflare.com → My Profile → API Tokens', CF_TOKENS], ' and sign in.'],
   ['Press “Create Token”.'],
@@ -116,8 +119,12 @@ const CF_HOWTO = [
   ['Leave Client IP Address Filtering and TTL empty.'],
   ['Press “Continue to summary”, then “Create Token”.'],
   ['Copy the token - it starts with cfut_ and is shown only once - paste it in the field above and press Save. The app checks it step by step: the key, the account, the bucket, an upload.'],
+  ['Turn R2 on once in ', ['dash.cloudflare.com → R2 Object Storage', CF_R2], ' - Cloudflare asks for a payment card for it, even within the free allowance. Then press “check” beside the steps.'],
+  ['The bucket “ugc-studio” (or the one you had) is then in ', ['dash.cloudflare.com → R2 Object Storage → Buckets', CF_R2], '; the line “bucket” of the check links straight to it.'],
 ];
-const CF_NOTE = 'R2 has to be turned on in the account once (R2 Object Storage in the Cloudflare dashboard). The bucket is found, or made, by the app.';
+// (phase TG, block 8: a new account showed it) Cloudflare asks for a payment card to turn R2 on, even within its free allowance.
+const CF_NOTE = 'The bucket is found, or made, by the app. The free allowance of R2 - 10 GB stored, a million uploads a month - is far '
+  + 'more than the app uses.';
 const CF_STEP = { key: 'key', account: 'account', bucket: 'bucket', upload: 'upload' };
 // How to make the bot (phase TG, block 2).
 const TG_HOWTO = [
@@ -181,7 +188,15 @@ function buildRow(r) {
   field.autocomplete = 'off';
   field.spellcheck = false;
   lbl.htmlFor = field.id = 'bk-' + r.settingsKey;
-  line.appendChild(field);
+  // (phase TG, block 8; the owner 2026-10-22: "сделай инструкции под полями для ключей, а не в правом столбце") The field
+  // and its x in a column of their own - a key's instruction opens UNDER its field.
+  const col = document.createElement('div');
+  col.className = 'bk-col';
+  const frow = document.createElement('div');
+  frow.className = 'bk-frow';
+  frow.appendChild(field);
+  col.appendChild(frow);
+  line.appendChild(col);
 
   // Remove on Save. Where the eye used to be; the opposite of a reveal.
   const x = document.createElement('button');
@@ -189,10 +204,10 @@ function buildRow(r) {
   x.className = 'bk-x';
   x.textContent = '×';
   x.title = 'Remove this key (on Save)';
-  line.appendChild(x);
+  frow.appendChild(x);
 
   // The verdict and the description sit to the RIGHT of the field, on the same line, so a
-  // row is one line tall and twelve keys fit on one screen.
+  // row is one line tall and twelve keys fit on one screen (an instruction, when there is one, under the field).
   const side = document.createElement('div');
   side.className = 'bk-side';
   const state = document.createElement('div');
@@ -225,7 +240,7 @@ function buildRow(r) {
     again.title = 'Check the key again: the key, the account, the bucket, an upload';
     sr.append(steps, again);
     side.appendChild(sr);
-    side.appendChild(_help('How to get this key', CF_HOWTO, CF_NOTE));
+    col.appendChild(_help('How to get this key', CF_HOWTO, CF_NOTE));
   }
   // The bot's state - who it listens to, how messages come in, the queue - with "connect" and "unpair".
   let tg = null;
@@ -233,7 +248,7 @@ function buildRow(r) {
     tg = document.createElement('div');
     tg.className = 'bk-tg';
     side.appendChild(tg);
-    side.appendChild(_help('How to make a bot', TG_HOWTO, TG_NOTE));
+    col.appendChild(_help('How to make a bot', TG_HOWTO, TG_NOTE));
   }
   line.appendChild(side);
   wrap.appendChild(line);
@@ -390,6 +405,15 @@ function cfPaint(v) {
     const e = document.createElement('div');
     e.className = 'bk-step ' + (s.ok ? 'ok' : 'down');
     e.textContent = (s.ok ? '✓ ' : '✗ ') + (CF_STEP[s.id] || s.id) + ' · ' + (s.words || '');
+    // (block 8) Where the bucket is - or where R2 is turned on - in this account of Cloudflare's dashboard.
+    const acc = c.account || v.account, bkt = c.bucket || (s.ok ? v.bucket : '');
+    if (s.id === 'bucket' && acc) {
+      const a = document.createElement('a');
+      a.target = '_blank'; a.rel = 'noopener';
+      if (s.ok && bkt) { a.href = CF_ACC(acc) + '/r2/default/buckets/' + encodeURIComponent(bkt); a.textContent = 'open it in Cloudflare'; }
+      else { a.href = CF_ACC(acc) + '/r2/overview'; a.textContent = 'R2 in this account'; }
+      e.append(' · ', a);
+    }
     row.steps.appendChild(e);
   }
   if (c.ok) {

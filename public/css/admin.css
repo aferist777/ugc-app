@@ -56,6 +56,10 @@
   border-radius:var(--r-xs); padding:4px 6px;
 }
 .bk-field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px oklch(from var(--primary) l c h / .22); }
+/* (phase TG, block 8) The field and its x in a column; a key's instruction opens under them, at their width. */
+.bk-col{ flex:0 0 330px; width:330px; min-width:0; display:flex; flex-direction:column; }
+.bk-frow{ display:flex; align-items:flex-start; gap:6px; }
+.bk-frow .bk-field{ flex:1 1 auto; }
 .bk-x{
   flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
   color:var(--muted); font-size:12px; line-height:1; padding:3px 7px; cursor:pointer;
@@ -88,6 +92,7 @@
 /* (phase TG) The Cloudflare key's check, step by step, with its own "check", and how to get the key. */
 .bk-steps-row{ display:flex; align-items:flex-start; gap:8px; margin-top:2px; }
 .bk-steps{ font-size:10px; line-height:1.45; color:var(--muted); min-width:0; }
+.bk-step a{ color:var(--primary); }
 .bk-step.ok{ color:var(--accent); }
 .bk-step.down{ color:var(--gold); }
 .bk-mini{
@@ -97,6 +102,8 @@
 .bk-mini:hover:not(:disabled){ color:var(--ink); border-color:var(--primary); }
 .bk-mini:disabled{ opacity:.45; cursor:default; }
 .bk-help{ margin-top:4px; font-size:10px; line-height:1.5; color:var(--muted); }
+.bk-col .bk-help{ margin-top:5px; }
+.bk-help[open]{ padding:6px 8px 7px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); }
 .bk-help summary{ cursor:pointer; color:var(--primary); font-weight:600; width:max-content; }
 .bk-help ol{ margin:4px 0 2px; padding-left:18px; }
 .bk-help li{ margin:1px 0; }
