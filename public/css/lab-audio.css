@@ -95,8 +95,9 @@
 .la-pick-it span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 
 /* what was made */
-.la-made-h{font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-top:6px}
-.la-made{display:flex; flex-direction:column; gap:8px}
+.la-madecol{flex:0 0 42%; min-width:300px; min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--bg)}
+.la-made-h{flex:0 0 auto; padding:12px 14px 8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.la-made{flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 14px 20px; display:flex; flex-direction:column; gap:8px}
 .la-gen{padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); display:flex; flex-direction:column; gap:7px}
 .la-gen.is-failed{border-color:oklch(.66 .19 25 / .5)}
 .la-gen-h{display:flex; align-items:baseline; gap:8px; font-size:11px; color:var(--muted)}
@@ -126,37 +127,28 @@
 .la-lyr.open pre{max-height:none}
 
 /* ── the right: gallery and tree ── */
-.la-lib{flex:0 0 46%; min-width:0; min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) 210px; border-left:1px solid var(--border)}
-.la-gal{min-height:0; overflow-y:auto; padding:12px 12px 20px; position:relative}
+/* ── the shelf view ("Library"): Merge's .mv3-lib-row - the grid and the tree ── */
+.la-page .mv3-lib-tree{flex:0 0 220px; overflow:auto}
 .la-gal.is-drop{outline:1px dashed var(--primary); outline-offset:-6px; background:var(--primary-soft)}
-.la-treebox{min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border-soft); background:oklch(.185 .015 265)}
-.la-tree-h{padding:10px 10px 4px; font:700 9.5px/1 var(--font); letter-spacing:.08em; color:var(--muted)}
-.la-treebox > div:last-child{flex:1; min-height:0}
-.la-gal-head{display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap}
-.la-gal-title{font-size:12.5px; margin-right:auto}
+.la-shelf-head{display:flex; align-items:center; gap:6px; margin-bottom:8px}
+/* Merge's sound tiles, a little larger: the name, the length and a thin waveform fit */
+.mv3-grid.la-grid-snd{grid-template-columns:repeat(auto-fill, minmax(92px, 1fr))}
+.mv3-tile.is-sound{justify-content:flex-start; padding-top:8px}
+.mv3-tile.is-sound .mv3-tile-note{font-size:16px}
+.mv3-tile .la-twave{position:absolute; left:6px; right:6px; bottom:15px; width:auto; height:15px}
+.mv3-tile.is-sound .mv3-tile-sname{padding:0 2px}
 .la-search{flex:1 1 200px; min-width:150px; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 8px}
 .la-search:focus{outline:none; border-color:var(--primary)}
 .la-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
 .la-btn:hover{border-color:var(--muted)}
 .la-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
 .la-btn[disabled]{opacity:.5; cursor:default}
-.la-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px}
 .la-empty{grid-column:1/-1; padding:16px 4px; font-size:12px; color:var(--muted)}
-.la-tile{display:flex; flex-direction:column; gap:5px; padding:7px 8px 6px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); cursor:pointer; user-select:none}
-.la-tile:hover{border-color:var(--border)}
-.la-tile.is-playing{border-color:var(--gold)}
-.la-tile-top{display:flex; align-items:center; gap:4px}
-.la-tile-name{flex:1; min-width:0; font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.la-star, .la-more{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0 2px}
-.la-star.on{color:var(--gold)}
-.la-star:hover, .la-more:hover{color:var(--ink)}
-.la-tile-foot{display:flex; justify-content:space-between; gap:6px; font-size:10px; color:var(--ink)}
-.la-tile-foot .la-muted{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 
 /* the waveform (js/lab/audio-play.js) */
 .la-wave{display:block; width:100%; height:34px}
 .la-wave rect{fill:var(--muted); opacity:.75}
-.la-tile.is-playing .la-wave rect, .la-res.is-playing .la-wave rect{fill:var(--gold); opacity:.9}
+.mv3-tile.is-playing .la-wave rect, .la-res.is-playing .la-wave rect{fill:var(--accent); opacity:.95}
 .la-wave rect.la-wave-head{fill:#fff; opacity:1}
 .la-wave rect.la-wave-flat{opacity:.35}
 

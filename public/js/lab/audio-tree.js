@@ -1,6 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE AUDIO LAB - AUDIO's tree and its gallery (phase V34.D, the owner 2026-10-22; moved into Merge's Library panel and
-   the Library's Media shelf in V34.E - js/media-tree.js is not touched until then):
+   the Library's Media shelf in V34.E - js/media-tree.js is not touched until then). Since 2026-10-23 (the owner: "сделай
+   отображение sfx и библиотеки еще нормальным. крошка library доступная но только с музыкой") it is the "Library" view of
+   the lab's Merge page and draws as Merge's shelf does: a grid of square tiles with the "+" first (css/merge-v3.css
+   .mv3-grid, .mv3-tile.is-sound - a note, the name, the length, here a thin waveform too; the star and the cross on the
+   corners), the tree beside it in Merge's rows - REFERENCES, VIDEO and IMAGES asleep, AUDIO awake:
 
      Music
      SFX -> Favorites           every ★ (the built-in set's and the person's own)
@@ -44,15 +48,19 @@ async function api(url, opts) {
 const post = (url, body, method) => api(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
 let _tree = [];
-let _sel = ls(KEY_NODE, 'sfx');
-let _open = new Set(ls(KEY_OPEN, ['sfx', 'builtin', 'mine']));
+let _sel = ls(KEY_NODE, 'music');
+let _open = new Set(ls(KEY_OPEN, ['audio', 'sfx', 'builtin', 'mine']));
+_open.add('audio');            // the one root awake is always open
 let _q = '';
 let _items = [];
 let _treeHost = null, _galHost = null, _say = () => {}, _cutOpen = null, _onlineOpen = null;
 let _reqN = 0;
 
-const _isSfx = (key) => key !== 'music';
+const _isSfx = (key) => key !== 'music' && key !== 'audio';
+// AUDIO itself: the root over Music and SFX.
+const _audio = () => ({ key: 'audio', label: 'AUDIO', count: _tree.reduce((n, x) => n + (+x.count || 0), 0), children: _tree });
 const _find = (key, nodes) => {
+  if (!nodes && key === 'audio') return _audio();
   for (const n of (nodes || _tree)) {
     if (n.key === key) return n;
     const c = n.children && _find(key, n.children);
@@ -112,13 +120,20 @@ function _paintTree() {
   if (!_treeHost) return;
   _treeHost.textContent = '';
   const box = el('div', 'mt la-tree');
+  // Merge's other roots, asleep: the lab is about sound.
+  for (const label of ['REFERENCES', 'VIDEO', 'IMAGES']) {
+    const r = el('div', 'mt-row is-group la-off');
+    r.inert = true;
+    r.append(el('span', 'mt-tw', '▸'), el('span', 'mt-name', label));
+    box.appendChild(r);
+  }
   const walk = (nodes, depth) => {
     for (const n of nodes) {
       box.appendChild(_row(n, depth));
       if (n.children && n.children.length && _open.has(n.key)) walk(n.children, depth + 1);
     }
   };
-  walk(_tree, 0);
+  walk([_audio()], 0);
   _treeHost.appendChild(box);
 }
 function _toggle(key) {
@@ -131,7 +146,7 @@ function _toggle(key) {
 export async function refresh() {
   try { _tree = (await api('/api/audio/lib/tree')).nodes || []; }
   catch (e) { _say('The tree could not be read: ' + e.message, true); return; }
-  if (!_find(_sel)) _sel = 'sfx';
+  if (!_find(_sel)) _sel = 'music';
   _paintTree();
   await _loadItems();
 }
@@ -149,7 +164,7 @@ export async function select(key) {
     }
     return false;
   };
-  walk(_tree, []);
+  walk([_audio()], []);
   for (const k of path) _open.add(k);
   lsSet(KEY_OPEN, [..._open]);
   if (!_isSfx(key)) _q = '';
@@ -254,9 +269,13 @@ function _dropTarget(row, n) {
 }
 
 /** Files from this computer, into a node: Music, or a category of My sounds (one after another). */
-export async function bringIn(files, n) {
+export async function bringIn(files, n, as) {
   const node = n || _find(_sel) || _find('mine');
-  const toMusic = node && node.key === 'music';
+  if (node && (node.key === 'fav' || String(node.key).startsWith('builtin'))) {
+    _say((node.key === 'fav' ? 'Favorites' : 'Built-in') + ' takes no files - let them go on Music or a category of My sounds.', true);
+    return;
+  }
+  const toMusic = as ? as === 'music' : (node && node.key === 'music');
   const cat = toMusic ? '' : (_catOf(node) || '');
   const audio = files.filter(f => /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|webm)$/i.test(f.name));
   if (!audio.length) { _say('Those are not sounds - mp3, wav, m4a, aac, ogg, flac or opus.', true); return; }
@@ -275,31 +294,74 @@ export async function bringIn(files, n) {
   if (ok) select(toMusic ? 'music' : 'mine:' + (cat || UNCAT));
 }
 
-// ── the gallery ──────────────────────────────────────────────────────────────
+// ── the gallery: Merge's shelf grid ───────────────────────────────────────────
 async function _loadItems() {
   const n = ++_reqN;
   const q = _isSfx(_sel) ? _q : '';
-  let d;
-  try { d = await api('/api/audio/lib/items?node=' + encodeURIComponent(_sel) + '&q=' + encodeURIComponent(q)); }
-  catch (e) { if (n === _reqN) _say('The sounds could not be read: ' + e.message, true); return; }
+  let items = [];
+  try {
+    // AUDIO itself: the music and every sound.
+    for (const node of (_sel === 'audio' ? ['music', 'sfx'] : [_sel])) {
+      const d = await api('/api/audio/lib/items?node=' + encodeURIComponent(node) + '&q=' + encodeURIComponent(q));
+      items = items.concat(d.items || []);
+    }
+  } catch (e) { if (n === _reqN) _say('The sounds could not be read: ' + e.message, true); return; }
   if (n !== _reqN) return;
-  _items = d.items || [];
-  _paintGallery(d.total || _items.length);
+  _items = items;
+  _paintGallery();
+}
+
+// The "+" first in the grid, as on Merge's shelf: what it brings in follows the node.
+function _plusTile(node) {
+  const b = el('button', 'mv3-tile mv3-plus', '+');
+  b.type = 'button';
+  const k = node ? node.key : '';
+  if (k === 'fav' || k.startsWith('builtin')) {
+    b.disabled = true;
+    b.title = k === 'fav' ? 'Favorites are the starred sounds - the ★ on a tile' : 'Built into the app - read only';
+    return b;
+  }
+  const pick = (as) => {
+    const inp = el('input');
+    inp.type = 'file'; inp.multiple = true; inp.accept = 'audio/*,.opus';
+    inp.addEventListener('change', () => bringIn(Array.from(inp.files || []), node, as));
+    inp.click();
+  };
+  b.title = k === 'music' ? 'Add music from this computer' : k === 'audio' ? 'Add music or sounds from this computer'
+    : 'Add sounds from this computer' + (node && node.cat && node.cat !== UNCAT ? ' into ' + node.label : '');
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (k !== 'audio') { pick(k === 'music' ? 'music' : 'sounds'); return; }
+    _closeMenu();
+    const m = el('div', 'mv3-plus-menu la-menu');
+    for (const [as, label, sub] of [['music', 'music from this computer', 'a track - mp3, wav, m4a…'], ['sounds', 'sounds from this computer', 'sound effects, into SFX → My sounds']]) {
+      const it = el('button', 'mv3-plus-item');
+      it.type = 'button';
+      it.append(el('span', null, label), el('small', null, sub));
+      it.addEventListener('click', () => { _closeMenu(); pick(as); });
+      m.appendChild(it);
+    }
+    document.body.appendChild(m);
+    const r = b.getBoundingClientRect();
+    m.style.left = Math.round(r.left) + 'px';
+    m.style.top = Math.round(r.bottom + 4) + 'px';
+    _menuEl = m;
+    _menuLayer = Layers.open(m, { modal: false, onEsc: _closeMenu });
+    setTimeout(() => document.addEventListener('mousedown', _away, true), 0);
+  });
+  return b;
 }
 
 let _searchEl = null;
-function _paintGallery(total) {
+function _paintGallery() {
   if (!_galHost) return;
   const node = _find(_sel);
   const keepFocus = _searchEl && document.activeElement === _searchEl;
   const caret = keepFocus ? _searchEl.selectionStart : 0;
   _galHost.textContent = '';
-  const head = el('div', 'la-gal-head');
-  const title = el('div', 'la-gal-title');
-  title.appendChild(el('b', null, node ? node.label : ''));
-  title.appendChild(el('span', 'la-muted', ' · ' + total));
-  head.appendChild(title);
+  // SFX only: the search and the online libraries, over the grid.
   if (_isSfx(_sel)) {
+    const head = el('div', 'la-shelf-head');
     const s = el('input', 'la-search');
     s.type = 'search';
     s.placeholder = 'search SFX - name or tag (whoosh, click, pop…)';
@@ -316,61 +378,51 @@ function _paintGallery(total) {
     on.title = 'Search free (CC0) sound libraries - Freesound and Wikimedia Commons through Openverse - and the galleries to download from yourself';
     on.addEventListener('click', () => { if (_onlineOpen) _onlineOpen(_catOf(node || {}) || ''); });
     head.appendChild(on);
+    _galHost.appendChild(head);
+    if (keepFocus) { s.focus(); try { s.setSelectionRange(caret, caret); } catch (e) { /* type=search */ } }
   } else _searchEl = null;
-  if (node && (node.key === 'music' || _catOf(node) !== null)) {
-    const add = el('button', 'la-btn', '+ files');
-    add.type = 'button';
-    add.title = 'Bring sounds in from this computer - or drop them from Explorer onto a category in the tree';
-    add.addEventListener('click', () => {
-      const inp = el('input');
-      inp.type = 'file'; inp.multiple = true; inp.accept = 'audio/*,.opus';
-      inp.addEventListener('change', () => bringIn(Array.from(inp.files || []), node));
-      inp.click();
-    });
-    head.appendChild(add);
-  }
-  _galHost.appendChild(head);
-  if (keepFocus && _searchEl) { _searchEl.focus(); try { _searchEl.setSelectionRange(caret, caret); } catch (e) { /* type=search */ } }
 
-  const grid = el('div', 'la-grid');
-  if (!_items.length) {
-    const why = _q ? 'Nothing with "' + _q + '" here.'
-      : _sel === 'fav' ? 'No favourites yet - the ★ on any sound puts it here.'
-      : _sel.startsWith('builtin') ? 'The built-in set is not installed yet (it comes with the next npm install).'
-      : 'Nothing here yet - drop files from Explorer onto this category, or make some with the constructor.';
-    grid.appendChild(el('div', 'la-empty', why));
-  }
+  const grid = el('div', 'mv3-grid la-grid-snd');
+  grid.appendChild(_plusTile(node));
   for (const it of _items) grid.appendChild(_tile(it));
   _galHost.appendChild(grid);
+  if (!_items.length) {
+    const why = _q ? 'nothing with "' + _q + '" here'
+      : _sel === 'fav' ? 'no favourites yet - the ★ on a tile puts it here'
+      : _sel.startsWith('builtin') ? 'the built-in set is not installed yet'
+      : 'empty - drop files here or onto a category of the tree';
+    _galHost.appendChild(el('span', 'mv3-grid-note', why));
+  }
 }
 
+// One tile, as Merge's shelf draws a sound: square, a note, its name, its length - and here its waveform.
 function _tile(it) {
-  const t = el('div', 'la-tile' + (it.path === playing() ? ' is-playing' : ''));
+  const t = el('div', 'mv3-tile is-sound' + (it.fav ? ' is-fav' : '') + (it.path === playing() ? ' is-playing' : ''));
   t.dataset.path = it.path;
-  const top = el('div', 'la-tile-top');
-  top.appendChild(el('span', 'la-tile-name', it.name));
-  const star = el('button', 'la-star' + (it.fav ? ' on' : ''), it.fav ? '★' : '☆');
+  t.appendChild(el('span', 'mv3-tile-note', '♪'));
+  t.appendChild(el('span', 'mv3-tile-sname', it.name));
+  t.appendChild(waveEl(it.wave, { cls: 'la-twave' }));
+  if (it.dur) t.appendChild(el('span', 'mv3-tile-dur', secs(it.dur)));
+  const star = el('button', 'mv3-tile-btn mv3-tile-star', '★');
   star.type = 'button';
   star.title = it.fav ? 'Take it out of Favorites' : 'Into Favorites';
   star.addEventListener('click', async (e) => {
     e.stopPropagation();
-    try { await post('/api/audio/lib/fav', { kind: it.kind, id: it.id, path: it.path, on: !it.fav }); it.fav = !it.fav; refresh(); }
-    catch (er) { _say(er.message, true); }
+    star.disabled = true;
+    try { await post('/api/audio/lib/fav', { kind: it.kind, id: it.id, path: it.path, on: !it.fav }); refresh(); }
+    catch (er) { star.disabled = false; _say(er.message, true); }
   });
-  top.appendChild(star);
-  const more = el('button', 'la-more', '⋯');
-  more.type = 'button';
-  more.title = 'Cut, rename, move, about, delete';
-  more.addEventListener('click', (e) => { e.stopPropagation(); _menu(it, more); });
-  top.appendChild(more);
-  t.appendChild(top);
-  t.appendChild(waveEl(it.wave));
-  const foot = el('div', 'la-tile-foot');
-  foot.appendChild(el('span', null, secs(it.dur)));
-  const where = it.kind === 'builtin' ? it.categoryLabel : it.kind === 'music' ? (it.source === 'upload' ? 'brought in' : it.source) : (it.categoryLabel || 'Uncategorized');
-  foot.appendChild(el('span', 'la-muted', where));
-  t.appendChild(foot);
-  t.title = it.name + (it.tags && it.tags.length ? '\n' + it.tags.join(', ') : '');
+  t.appendChild(star);
+  if (it.kind !== 'builtin') {
+    const del = el('button', 'mv3-tile-btn mv3-tile-del', '✕');
+    del.type = 'button';
+    del.title = 'Delete from the library';
+    del.addEventListener('click', (e) => { e.stopPropagation(); _delete(it); });
+    t.appendChild(del);
+  }
+  const where = it.kind === 'builtin' ? 'Built-in · ' + it.categoryLabel : it.kind === 'music' ? 'Music' : 'My sounds · ' + (it.categoryLabel || 'Uncategorized');
+  t.title = [it.name, secs(it.dur), where].filter(Boolean).join(' · ') + (it.tags && it.tags.length ? '\n' + it.tags.join(', ') : '')
+    + '\na press plays it · the right button: cut, rename, move, about';
   t.addEventListener('click', () => playToggle(it.path, t));
   t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(it, t, e); });
   t.draggable = true;
@@ -378,7 +430,9 @@ function _tile(it) {
     e.dataTransfer.setData(TILE_DRAG, JSON.stringify({ kind: it.kind, id: it.id, name: it.name, path: it.path, dur: it.dur }));
     e.dataTransfer.setData('text/plain', it.path);
     e.dataTransfer.effectAllowed = 'copyMove';
+    t.classList.add('is-dragging');
   });
+  t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
   return t;
 }
 
@@ -496,12 +550,12 @@ export function mount(treeHost, galHost, opts) {
   // The playing tile is lit wherever it is drawn again.
   onChange((p) => {
     if (!_galHost) return;
-    for (const t of _galHost.querySelectorAll('.la-tile')) t.classList.toggle('is-playing', !!p && t.dataset.path === p);
+    for (const t of _galHost.querySelectorAll('.mv3-tile.is-sound')) t.classList.toggle('is-playing', !!p && t.dataset.path === p);
   });
   // Files let go on the gallery go into the open node, when it takes files.
   galHost.addEventListener('dragover', (e) => {
     const n = _find(_sel);
-    if (!n || !(n.key === 'music' || _catOf(n) !== null)) return;
+    if (!n || n.key === 'fav' || String(n.key).startsWith('builtin')) return;
     if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
     e.preventDefault();
     galHost.classList.add('is-drop');

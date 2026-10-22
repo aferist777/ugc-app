@@ -964,6 +964,27 @@ function openAlmanac(anchor) {
   paintNotes();
 }
 
+// ── the panel's two views (the owner 2026-10-23: "крошка library доступная но только с музыкой") ─────────────────
+// As Merge's lib-views.js: "Library" is the shelf (the panel without `is-chat`: Merge's grid and tree, only AUDIO awake);
+// "/ generate audio" the constructor. The one showing is lit, the other one press away; remembered.
+const KEY_VIEW = 'ugc_lab_audio_view';
+function setView(v) {
+  const chat = v !== 'shelf';
+  $('#mv3-library').classList.toggle('is-chat', chat);
+  const title = $('#la-lib-title');
+  title.classList.toggle('is-link', chat);
+  title.title = chat ? 'Back to the Library - AUDIO: music and sounds' : '';
+  const crumb = $('#la-crumb-audio');
+  crumb.classList.toggle('is-on', chat);
+  crumb.title = chat ? '' : 'Generate music and sounds';
+  lsSet(KEY_VIEW, chat ? 'chat' : 'shelf');
+}
+function _wireViews() {
+  $('#la-lib-title').addEventListener('click', () => setView('shelf'));
+  $('#la-crumb-audio').addEventListener('click', () => setView('chat'));
+  setView(ls(KEY_VIEW, 'chat'));
+}
+
 // ── start ───────────────────────────────────────────────────────────────────
 async function start() {
   try { CAT = await api('/api/audio/catalog'); } catch (e) { say('The lab could not start: ' + e.message, true); return; }
@@ -978,6 +999,8 @@ async function start() {
   const m = CAT.modes.find(x => x.id === (want || S.mode)) || CAT.modes[0];
   S.mode = m.id; S.engine = m.engine;
   if (!CAT.sunoModels.includes(S.model)) S.model = 'V6';
+  // The two views of the Library panel, by its crumbs: "Library" - the shelf, "generate audio" - the constructor.
+  _wireViews();
   // The project picker in the bar, as in Merge; the timeline below shows its lanes.
   paintProjects();
   $('#mv3-project').addEventListener('change', (e) => setProject(e.target.value, true));

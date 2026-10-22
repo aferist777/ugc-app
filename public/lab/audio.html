@@ -58,17 +58,25 @@
 
       <section class="mv3-panel mv3-col is-chat" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
+        <!-- TWO VIEWS, as Merge's crumbs switch them (the owner 2026-10-23: "крошка library доступная но только с музыкой"):
+             "Library" - the shelf, only AUDIO awake in its tree; "generate audio" - the constructor. -->
         <div class="mv3-panel-head">
-          <span class="mv3-panel-title is-link la-off" inert>Library</span>
+          <span class="mv3-panel-title is-link" id="la-lib-title" title="The Library - AUDIO: music and sounds">Library</span>
           <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ <span class="lg">generate </span>image</button>
           <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ <span class="lg">generate </span>video</button>
-          <button class="mv3-lib-crumb is-on" type="button">/ <span class="lg">generate </span>audio</button>
+          <button class="mv3-lib-crumb is-on" id="la-crumb-audio" type="button">/ <span class="lg">generate </span>audio</button>
           <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ captions</button>
           <span class="sp"></span>
         </div>
-        <!-- What the lab says: a press, a drop, a refusal (the shelf's own status line hides while a chat shows). -->
+        <!-- What the lab says: a press, a drop, a refusal - in both views. -->
         <div class="la-status" id="la-status" hidden></div>
-        <!-- THE "generate audio" VIEW: the settings column, the constructor and what was made, AUDIO's gallery and tree. -->
+        <!-- THE SHELF: Merge's grid and tree (js/lab/audio-tree.js). -->
+        <div class="mv3-lib-row" id="la-shelf">
+          <div class="mv3-panel-body la-gal" id="la-gal"></div>
+          <div class="mv3-lib-sash la-off" inert></div>
+          <div class="mv3-lib-tree" id="la-tree"></div>
+        </div>
+        <!-- "generate audio": the settings column, the constructor, what was made. -->
         <div class="mv3-pc is-shown la-audio" id="la-audio">
           <div class="mv3-ig-set">
             <div class="mv3-ig-scroll" id="la-col"></div>
@@ -76,12 +84,10 @@
           </div>
           <div class="la-mid">
             <div class="la-make" id="la-make"></div>
+          </div>
+          <div class="la-madecol">
             <div class="la-made-h">Made here <span class="la-muted" id="la-made-n"></span></div>
             <div class="la-made" id="la-made"></div>
-          </div>
-          <div class="la-lib">
-            <div class="la-gal" id="la-gal"></div>
-            <div class="la-treebox"><div class="la-tree-h">AUDIO</div><div id="la-tree"></div></div>
           </div>
         </div>
       </section>
