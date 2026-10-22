@@ -1,0 +1,82 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   HOME (the owner 2026-10-22; the approved mockup is docs/local-app/mockups/home.html) - a sub-header of its own under the
+   top strip, and the Overview: blocks in two columns, each in the gold frame of a talking head's field
+   (css/merge-v3.css .mv3-wk-stage), dragged by its head to any place of either column.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the sub-header: the lit tab wears the frames' gold line ── */
+.hm-sub{flex:0 0 auto; display:flex; align-items:stretch; gap:2px; padding:0 18px; background:oklch(.19 .016 265); border-bottom:1px solid var(--border-soft)}
+.hm-tab{position:relative; display:flex; align-items:center; gap:6px; padding:9px 12px 8px; border:0; background:none; cursor:pointer;
+  color:var(--muted); font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase}
+.hm-tab:hover{color:var(--ink)}
+.hm-tab.cur{color:var(--gold)}
+.hm-tab.cur::after{content:''; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; border-radius:2px; background:var(--gold)}
+.hm-sub .sp{flex:1}
+.hm-side{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted)}
+.hm-link{border:0; background:none; padding:0; cursor:pointer; color:var(--muted); font:11px var(--font)}
+.hm-link:hover{color:var(--ink)}
+
+/* ── the body scrolls; the shell's body does not ── */
+.hm-body{flex:1 1 auto; min-height:0; overflow-y:auto}
+.hm-pane{max-width:1480px; margin:0 auto; padding:22px 22px 30px}
+.hm-cols{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start}
+.hm-col{display:flex; flex-direction:column; gap:22px; min-width:0; min-height:120px}
+@media (max-width: 1100px){ .hm-cols{grid-template-columns:1fr} }
+
+/* ── THE GOLD FRAME: dashed while something is left to do in it, solid when nothing is; its name in gold capitals, what it
+   says about itself after it; taken by its head, it moves ── */
+.hm-st{position:relative; padding:12px 14px 13px; border:1px solid var(--gold); border-radius:var(--r-sm); display:flex; flex-direction:column; gap:10px; background:var(--bg)}
+.hm-st.is-todo{border-style:dashed}
+.hm-head{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold); cursor:grab; user-select:none}
+.hm-grip{font-size:12px; letter-spacing:0; color:var(--muted); opacity:.55; margin-right:-2px; transition:opacity .12s}
+.hm-st:hover .hm-grip{opacity:1}
+.hm-what{text-transform:none; letter-spacing:0; font-weight:400; color:var(--muted); font-size:11px}
+.hm-head .sp{flex:1}
+.hm-head a, .hm-head button{font:600 11px var(--font); text-transform:none; letter-spacing:0; color:var(--muted); text-decoration:none; border:0; background:none; padding:0; cursor:pointer}
+.hm-head a:hover, .hm-head button:hover{color:var(--ink)}
+.hm-st.is-dragging{opacity:.35}
+.hm-drop{height:6px; border-radius:var(--pill); background:var(--gold); box-shadow:0 0 0 3px oklch(.78 .12 85 / .2)}
+.hm-empty{font-size:11.5px; color:var(--muted); padding:2px 2px}
+.hm-err{font-size:11.5px; color:var(--danger)}
+
+/* ── Continue ── */
+.hm-projects{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px}
+.hm-proj{display:block; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm); overflow:hidden; text-decoration:none; color:inherit}
+.hm-proj:hover{border-color:var(--border)}
+.hm-thumb{position:relative; width:100%; aspect-ratio:4/5; max-height:150px; background:linear-gradient(160deg, oklch(.3 .03 265), oklch(.21 .02 265)) center/cover no-repeat}
+.hm-kind{position:absolute; left:6px; top:6px; font:700 8.5px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; padding:3px 6px; border-radius:var(--pill); background:oklch(0 0 0 / .5); color:var(--ink)}
+.hm-proj-m{padding:6px 8px 8px}
+.hm-proj-t{font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-proj-d{font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-new{display:flex; gap:6px; flex-wrap:wrap}
+.hm-btn{display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:var(--r-xs); border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font:600 11px var(--font); cursor:pointer; text-decoration:none}
+.hm-btn:hover{border-color:var(--muted)}
+.hm-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.hm-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
+
+/* ── rows: Now, New since ── */
+.hm-rows{display:flex; flex-direction:column; gap:6px}
+.hm-row{display:flex; align-items:center; gap:10px; padding:7px 9px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs)}
+.hm-ico{flex:0 0 22px; height:22px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; background:var(--surface-2); font-size:12px}
+.hm-row.is-bad .hm-ico{color:var(--danger)}
+.hm-tx{flex:1 1 auto; min-width:0}
+.hm-tx b{display:block; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-tx span{display:block; font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hm-go{font:11px var(--font); color:var(--muted); text-decoration:none; white-space:nowrap; border:0; background:none; cursor:pointer; padding:0}
+.hm-go:hover{color:var(--ink)}
+.hm-bar{height:4px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin-top:4px}
+.hm-bar i{display:block; height:100%; background:var(--gold); transition:width .4s var(--ease)}
+.hm-bar.is-wait i{width:30% !important; animation:hm-wait 1.6s ease-in-out infinite}
+@keyframes hm-wait{0%{transform:translateX(-100%)} 100%{transform:translateX(340%)}}
+
+/* ── The app ── */
+.hm-subh{font:700 9px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:4px 0 -2px}
+.hm-tbl{width:100%; border-collapse:collapse; font-size:12px}
+.hm-tbl td{padding:6px 6px; border-top:1px solid var(--border-soft); vertical-align:top}
+.hm-tbl tr:first-child td{border-top:0}
+.hm-tbl td.k{width:140px; font-weight:600; white-space:nowrap}
+.hm-tbl td.r{text-align:right; white-space:nowrap; color:var(--muted); font-size:11px}
+.hm-tbl a{color:var(--primary)}
+.hm-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--border)}
+.hm-dot.ok{background:var(--success)} .hm-dot.down{background:var(--warn, oklch(.72 .15 75))} .hm-dot.no{background:var(--danger)}
+.hm-muted{color:var(--muted)}

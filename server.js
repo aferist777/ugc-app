@@ -71,7 +71,8 @@ app.use('/api', require('./lib/moves').rewriteBodies);
 // Root → Merge (phase H8, the owner 2026-10-01: the app opens on Merge). The Character page is gone -
 // making a character is the Library's Characters shelf now - and its old address, which older Alerts
 // rows still lead to, lands there.
-app.get('/', (_req, res) => res.redirect('/merge'));
+// (the owner 2026-10-22) The app opens on Home - what is going on, what is new, how the keys stand.
+app.get('/', (_req, res) => res.redirect('/home'));
 app.get('/character', (_req, res) => res.redirect('/library?shelf=characters'));
 // The program's own files (public/) REVALIDATE on every load, so an updated page never runs a
 // stale script: 'no-cache' uses ETag/Last-Modified - an unchanged file is a cheap 304.
@@ -110,7 +111,7 @@ app.use('/vendor/3d', express.static(path.join(__dirname, 'vendor', '3d'), {
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
-const PAGE_FILES = { '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
+const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -126,6 +127,7 @@ app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/settings'));
 app.use('/api', require('./routes/cloudflare'));   // the one Cloudflare key: R2 and the Telegram receiver (phase TG)
 app.use('/api', require('./routes/telegram'));     // the owner's bot: links and media into REFERENCES (phase TG)
+app.use('/api', require('./routes/home'));   // what the Home page's blocks read (2026-10-22)
 app.use('/api', require('./routes/references'));   // REFERENCES: the posts the bot brought in (phase TG)
 app.use('/api', require('./routes/ai-settings'));   // Admin -> AI settings: the agents' ladder (phase V25)
 // Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is

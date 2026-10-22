@@ -31,6 +31,14 @@ function _lightCurrent(nav) {
 
 // The Admin entry - API keys, Import / Export - on a page whose strip does not carry one already.
 // There is one person and no sign-in, so there is nobody to hide it from.
+// (the owner 2026-10-22) HOME first in every strip, left of Merge - put in here, so no page's markup has to carry it.
+function _homeLink(nav) {
+  if (nav.querySelector('a[href="/home"]')) return;
+  const a = document.createElement('a');
+  a.href = '/home'; a.textContent = 'Home';
+  nav.insertBefore(a, nav.firstChild);
+}
+
 function _adminLink(nav) {
   if (nav.querySelector('a[href="/admin"]')) return;
   const a = document.createElement('a');
@@ -78,6 +86,7 @@ function _windowButtons(nav) {
 export function initNav() {
   const nav = document.querySelector('.sv3-nav');
   if (!nav) return;
+  _homeLink(nav);
   _adminLink(nav);
   _lightCurrent(nav);
   // What is being generated, on every page (js/alerts-bell.js): the work belongs to the server, so

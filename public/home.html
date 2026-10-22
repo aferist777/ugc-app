@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Home</title>
+<!-- FIRST: hydrate localStorage from the server before page code runs - where the blocks stand (`ugc_home_layout_v1`) and
+     when this page was last visited are kept in the library like every page's own state. -->
+<script src="/js/storage-sync.js"></script>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/app-nav.css">
+<link rel="stylesheet" href="css/home.css">
+</head>
+<body>
+
+<!-- Which entry is lit comes from the address (js/app-nav.js); Home itself is put first by it on every page. -->
+<nav class="sv3-nav">
+  <a href="/merge">Merge</a>
+  <a href="/3d">3D Studio</a>
+  <a href="/library">Library</a>
+  <span class="sp"></span>
+</nav>
+
+<!-- HOME'S OWN SUB-HEADER (the owner 2026-10-22): its tabs on the left, what belongs to the open tab on the right. -->
+<div class="hm-sub" id="hm-sub">
+  <button class="hm-tab cur" type="button" data-tab="overview">Overview</button>
+  <span class="sp"></span>
+  <span class="hm-side" data-for="overview"><button class="hm-link" type="button" id="hm-reset" title="Put the blocks back where they were at first">reset layout</button></span>
+</div>
+
+<main class="hm-body" id="hm-body">
+  <div class="hm-pane" id="hm-overview">
+    <div class="hm-cols" id="hm-cols">
+      <div class="hm-col" data-col="0"></div>
+      <div class="hm-col" data-col="1"></div>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="js/home/main.js"></script>
+</body>
+</html>

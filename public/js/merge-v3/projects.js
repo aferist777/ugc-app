@@ -189,6 +189,26 @@ function _wireNew() {
   // project that is open (phase V28.3, js/merge-v3/scen-pick.js) - the project itself is made when one
   // is used.
   b.addEventListener('click', () => _kindMenu(b));
+  // (Home, the owner 2026-10-22) ?new=menu | blank | talking | highlights - Home's "+" buttons do what this menu's items do,
+  // once the page has its project. Said once: the address forgets it.
+  const want = (() => { try { return new URLSearchParams(location.search).get('new') || ''; } catch (e) { return ''; } })();
+  if (want) {
+    let done = false;
+    Store.onChange(() => {
+      if (done || !Store.key()) return;
+      done = true;
+      try { const u = new URL(location.href); u.searchParams.delete('new'); history.replaceState({}, '', u); } catch (e) { /* a reload asks again */ }
+      if (want === 'blank') { if (_newBlank) _newBlank(); }
+      else if (want === 'talking') openScenarios();
+      else if (want === 'highlights') {
+        (async () => {
+          if (!(await _leaveDraft())) return;
+          _note('creating…');
+          try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
+        })();
+      } else _kindMenu(b);
+    });
+  }
   _newBlank = async () => {
     if (!(await _leaveDraft())) return;
     const today = new Date().toISOString().slice(0, 10);

@@ -30,7 +30,7 @@ const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
 // '/' opens Merge and '/character' lands on the Library's Characters shelf - both answered by redirects.
-const PAGES = ['/', '/character', '/merge', '/library', '/admin', '/3d'];
+const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // New Character's modules, moved out of the Character page's folder in phase H8
@@ -67,7 +67,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
-const REDIRECTS = [['/', '/merge'], ['/character', '/library?shelf=characters']];
+const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl',
