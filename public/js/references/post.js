@@ -403,16 +403,17 @@ function _paintActs(it) {
   if (it.meta && it.meta.remote && it.meta.link) {
     const src = el('button', 'lib-btn', 'To scenario sources');
     src.type = 'button';
-    src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. It leaves REFERENCES.';
+    src.title = 'Add it to the scenario generator\'s sources: downloaded, its words heard and its topics found - the hearing and the topics are paid. Downloaded, this tile is the source.';
     src.addEventListener('click', () => _toSources(it, src));
     box.appendChild(src);
     const hl = el('button', 'lib-btn', 'To highlights');
     hl.type = 'button';
-    hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. It leaves REFERENCES once the project starts.';
+    hl.title = 'A new highlights project in Merge with this video - its length, count and caption style chosen there. The project downloads it first; then this tile is the downloaded video.';
     hl.addEventListener('click', () => {
-      const u = '/merge?highlights=' + encodeURIComponent(it.meta.link) + '&ref=' + encodeURIComponent(it.id);
+      // The tile stays until its video is downloaded for the project (after block 8, the owner's (Y2)).
+      const u = '/merge?highlights=' + encodeURIComponent(it.meta.link);
       closePost();
-      if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link, it.id);
+      if (location.pathname === '/merge' && window.__ugcHighlightsFrom) window.__ugcHighlightsFrom(it.meta.link, '');
       else location.href = u;
     });
     box.appendChild(hl);
@@ -489,16 +490,23 @@ async function _toSources(it, btn) {
     btn.textContent = 'To scenario sources';
     return;
   }
-  try { await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }); } catch (e) { /* it stays - the source is made */ }
-  if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
-  const words = already ? 'it was a source already - it left REFERENCES' : 'added to the scenario sources - its row is in Alerts';
-  _v.list = _v.list.filter(x => x !== it);
-  if (!_v.list.length) { closePost(); return; }
-  if (_v.at >= _v.list.length) _v.at = _v.list.length - 1;
-  _v.file = 0;
-  _v.sel = new Set();
-  _paint();
-  _v.ov.querySelector('.ref-said').textContent = words;
+  // (after block 8; the owner's (Y2): "все видео остаются на своих местах в library") The tile STAYS: the server takes it away
+  // only once its video is a downloaded source, whose tile is then in its place (lib/sources-store.js update). A video that
+  // was a source already is that source's tile - this one is a second of it and goes now.
+  if (already) {
+    try { await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }); } catch (e) { /* hidden behind the source anyway */ }
+    if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
+    _v.list = _v.list.filter(x => x !== it);
+    if (!_v.list.length) { closePost(); return; }
+    if (_v.at >= _v.list.length) _v.at = _v.list.length - 1;
+    _v.file = 0;
+    _v.sel = new Set();
+    _paint();
+    _v.ov.querySelector('.ref-said').textContent = 'it is a source already - its downloaded video is in YouTube · Videos';
+    return;
+  }
+  btn.textContent = 'To scenario sources';
+  _v.ov.querySelector('.ref-said').textContent = 'added to the scenario sources - it is downloaded now (its row is in Alerts); this tile turns into the downloaded video when it is in';
 }
 
 // ── moving (block 5b) ────────────────────────────────────────────────────────

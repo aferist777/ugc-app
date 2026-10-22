@@ -343,16 +343,22 @@ function _mediaShelf(opts) {
   // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
   // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
   // highlights - never deleted or moved from here.
-  if (opts && opts.youtube) {
-    for (const s of require('../lib/sources-store').list()) {
-      if (!s || !s.videoPath || !_onDisk(s.videoPath)) continue;
-      const yt = /^youtube:/i.test(String(s.linkKey || '')) || /^https?:\/\/((www|m)\.)?(youtube\.com|youtu\.be)\//i.test(String(s.url || ''));
-      if (!yt) continue;
+  // (after block 8; the owner 2026-10-22: "в references папка youtube->videos будет источником для scenarios и для
+  // highlights ... корневая youtube убираем") They are REFERENCES -> YouTube -> Videos now (`folder`), beside the videos
+  // kept as tiles, and come with REFERENCES. `ytKeys` - their links' keys: a tile of the same video is not shown twice.
+  const SRCS = require('../lib/sources-store');
+  const ytKeys = new Set();
+  if (opts && (opts.youtube || opts.refs)) {
+    for (const s of SRCS.list()) {
+      if (!s || !s.videoPath || !_onDisk(s.videoPath) || !SRCS.fromYouTube(s)) continue;
+      if (s.linkKey) ytKeys.add(s.linkKey);
       items.push({
         id: String(s.id), name: String(s.title || '').trim() || 'video', kind: 'youtube', media: s.videoPath,
         thumb: s.thumbPath && _onDisk(s.thumbPath) ? s.thumbPath : null, dur: +s.seconds || 0,
         meta: { categoryId: '', date: s.addedAt || null, favorite: false, link: s.url || '', channel: s.channel || '',
-          words: !!(s.words || (s.transcript && s.transcript.length)), source: s.id },
+          words: !!(s.words || (s.transcript && s.transcript.length)), source: s.id, folder: 'videos',
+          // its own `source` names the record; where it lies is told by `site`
+          site: 'youtube' },
       });
     }
   }
@@ -362,6 +368,8 @@ function _mediaShelf(opts) {
   if (opts && opts.refs) {
     for (const p of require('../lib/references-store').read()) {
       if (!p || !p.id) continue;
+      // A video kept as a tile whose video is a downloaded source already: the source's tile is the one (after block 8).
+      if (p.remote && p.linkKey && ytKeys.has(p.linkKey)) continue;
       const files = (Array.isArray(p.media) ? p.media : []).filter(m => m && m.path);
       const first = files[0];
       const one = files.length === 1 && first.type === 'video';
@@ -392,8 +400,8 @@ function _mediaShelf(opts) {
     || (Number(a.kind === 'heads') - Number(b.kind === 'heads'))
     || ((a.kind === 'heads' && b.kind === 'heads')
       ? (_abc(a.meta.project, b.meta.project) || (a.meta.line - b.meta.line) || (_ts(b.meta.date) - _ts(a.meta.date))) : 0)
-    || (Number(a.kind === 'references') - Number(b.kind === 'references'))
-    || (Number(a.kind === 'youtube') - Number(b.kind === 'youtube'))
+    // REFERENCES after the rest - its posts and its downloaded YouTube videos as one, by date.
+    || (Number(a.kind === 'references' || a.kind === 'youtube') - Number(b.kind === 'references' || b.kind === 'youtube'))
     || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
 
@@ -456,10 +464,12 @@ function _mediaCats(items, kind, labelFor) {
 // B-rolls has no Uncategorized of its own: a B-roll with no category is Generated's Uncategorized (the owner).
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
 const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'],
-  // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js).
-  references: ['references'],
-  // (phase TG, block 6) YOUTUBE - the sources of the scenarios and of highlights that came from YouTube.
-  youtube: ['youtube'] };
+  // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js); and (after block 8) the
+  // sources of the scenarios and of highlights downloaded from YouTube, in its YouTube -> Videos.
+  references: ['references', 'youtube'] };
+// Where an item of REFERENCES lies: a post by its site and folder, a downloaded YouTube source in YouTube -> Videos.
+const _siteOf = (i) => (i.kind === 'youtube' ? 'youtube' : (i.meta || {}).source);
+const _inRefs = (i) => i.kind === 'references' || i.kind === 'youtube';
 const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
@@ -529,8 +539,8 @@ function _tree() {
   audio.count = audio.children.reduce((n, c) => n + c.count, 0);
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
-  const refs = byKind.references || [];
-  const nOf = (s, f) => refs.filter(i => !i.meta.categoryId && i.meta.source === s && (!f || i.meta.folder === f)).length;
+  const refs = (byKind.references || []).concat(byKind.youtube || []);
+  const nOf = (s, f) => refs.filter(i => !i.meta.categoryId && _siteOf(i) === s && (!f || i.meta.folder === f)).length;
   // `kind` on the root: its "+" makes an own category (block 5b); the sources' folders make none (`noAdd`).
   const references = { key: 'references', kind: 'references', label: 'REFERENCES', q: { group: 'references' }, count: refs.length,
     children: require('../lib/references-store').SOURCES.map((s) => {
@@ -544,10 +554,8 @@ function _tree() {
     }) };
   // The owner's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
   references.children.push(...catsOf('references', refs, false).out);
-  // (block 6; the owner: "над references") YOUTUBE - the downloaded YouTube videos of the Sources, first of all.
-  const youtube = { key: 'youtube', kind: 'youtube', label: 'YOUTUBE', locked: true, count: (byKind.youtube || []).length,
-    empty: !(byKind.youtube || []).length, q: { filter: 'youtube' } };
-  const roots = [youtube, references, video, kindNode('images', 'images', 'IMAGES'), audio];
+  // (after block 8) No root YOUTUBE any more: its videos are REFERENCES -> YouTube -> Videos (the owner 2026-10-22).
+  const roots = [references, video, kindNode('images', 'images', 'IMAGES'), audio];
   _stampNewest(roots, items);
   return roots;
 }
@@ -558,11 +566,11 @@ function _tree() {
 function _inNode(i, q) {
   if (!q) return false;
   if (q.group) return !!(GROUPS[q.group] && GROUPS[q.group].includes(i.kind));
-  if (q.filter && i.kind !== q.filter) return false;
+  if (q.filter && i.kind !== q.filter && !(q.filter === 'references' && i.kind === 'youtube')) return false;
   const m = i.meta || {};
   if (q.src) {
     const [s, fo] = String(q.src).split('/');
-    if (m.categoryId || m.source !== s || (fo && m.folder !== fo)) return false;
+    if (m.categoryId || _siteOf(i) !== s || (fo && m.folder !== fo)) return false;
   }
   if (q.cat) {
     const c = m.categoryId || '';
@@ -849,20 +857,20 @@ router.get('/library/shelf/:kind', (req, res) => {
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
-        youtube: f === 'youtube' || !!(grp && grp.includes('youtube')) })
+        youtube: f === 'youtube' })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
     const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
     let shown = items;
     if (grp) shown = shown.filter(i => grp.includes(i.kind));
-    if (f) shown = shown.filter(i => i.kind === f);
+    if (f) shown = shown.filter(i => i.kind === f || (f === 'references' && i.kind === 'youtube'));
     // (phase TG) A REFERENCES folder: "instagram", or "instagram/reels".
     const src = String(req.query.src || '');
     if (src) {
       const [s, fo] = src.split('/');
       // A post filed under an own category is in that category's folder, not its source's.
-      shown = shown.filter(i => i.kind === 'references' && !i.meta.categoryId && i.meta.source === s && (!fo || i.meta.folder === fo));
+      shown = shown.filter(i => _inRefs(i) && !i.meta.categoryId && _siteOf(i) === s && (!fo || i.meta.folder === fo));
     }
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId

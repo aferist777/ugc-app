@@ -22,6 +22,8 @@
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
 // (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
+// (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
+import * as YT from '../references/yt.js';
 import * as Layers from '../layers.js';
 import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages, uploadSounds, uploadMusic,
          loadCats, setCategory, setKind, KINDS, createCategory } from '../library/actions.js';
@@ -327,8 +329,17 @@ const _viewerOpts = () => {
 const _viewerOptsOf = () => ({
   extraRows: _viewerRows, underStage: _underStage, videoSrc: Cut.videoSrc,
   // (block 6) A video of YOUTUBE: a new highlights project on it, chosen in its popup already.
-  actionsFor: (it) => (it && it.kind === 'youtube' ? [{ id: 'hl', label: 'To highlights' }] : []),
-  onAction: (id, it) => {
+  actionsFor: (it) => (it && it.kind === 'youtube' ? YT.ytActions(it) : []),
+  onAction: async (id, it) => {
+    if (id === 'srcdel') {
+      let r;
+      try { r = await YT.ytDelete(it); } catch (e) { _status('Not deleted: ' + e.message, true); return { actionsOnly: true }; }
+      if (r.armed) { _status(r.msg); return { actionsOnly: true }; }
+      _status('Source deleted.');
+      _load();
+      if (_tree) _tree.load();
+      return { removed: true };
+    }
     if (id !== 'hl') return null;
     closeViewer();
     if (window.__ugcHighlightsFrom) window.__ugcHighlightsFrom('', '', (it.meta && it.meta.source) || it.id);

@@ -29,6 +29,8 @@ import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
 // (phase TG, block 5) REFERENCES: a post's tile, its hover of miniatures, the post viewer.
 import * as RP from '../references/post.js';
+// (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
+import * as YT from '../references/yt.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -341,13 +343,13 @@ const _CATABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds']);
 // (second round) A talking head is its project's while the project lives - nothing is done to it from here; one kept from a
 // deleted project (`meta.kept`) is the library's and is deleted like anything.
 const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept))
-  // (phase TG, block 6) A video of YOUTUBE is a source of the scenarios: watched and sent to highlights from here, deleted
-  // only in Scenarios -> sources.
+  // (phase TG, block 6; after block 8 in REFERENCES -> YouTube -> Videos) A downloaded YouTube video is a source of the
+  // scenarios: no star, no cross, not moved - watched, sent to highlights and deleted (twice) in its viewer.
   || it.kind === 'youtube';
 
 function _actionsFor(it) {
   const out = [];
-  if (it.kind === 'youtube') return [{ id: 'hl', label: 'To highlights', title: 'A new highlights project in Merge on this video - its words are heard once and kept with it' }];
+  if (it.kind === 'youtube') return YT.ytActions(it);
   if (_fixed(it)) return out;
   if (A.CAN_RENAME.has(it.kind)) out.push({ id: 'rename', label: 'Rename' });
   if (_FAVABLE.has(it.kind)) {
@@ -379,6 +381,13 @@ async function _runAction(id, it) {
   }
   // (block 6) A video of YOUTUBE into a new highlights project, chosen in its popup already.
   if (id === 'hl') { location.href = '/merge?source=' + encodeURIComponent((it.meta && it.meta.source) || it.id); return { changed: false }; }
+  // (after block 8, the owner's (Y4)) A downloaded YouTube video deleted as a source - the second press within a few seconds.
+  if (id === 'srcdel') {
+    const r = await YT.ytDelete(it);
+    if (r.armed) return { actionsOnly: true, msg: r.msg };
+    _items = _items.filter(x => x !== it);
+    return { removed: true, reload: true, msg: 'Source deleted' };
+  }
   if (id === 'del' && it.kind === 'references') {
     // (phase TG) A post of REFERENCES goes with its files - its own route.
     if (!confirm(await RP.deleteQuestion(it))) return { changed: false };

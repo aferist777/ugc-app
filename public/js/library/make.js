@@ -1790,6 +1790,7 @@ function _openAddSource() {
         <div class="mk-choice">
           <button class="mk-choice-btn cur" type="button" data-route="link">From a link</button>
           <button class="mk-choice-btn" type="button" data-route="file">From a file</button>
+          <button class="mk-choice-btn" type="button" data-route="lib">From the Library</button>
         </div>
         <section class="mk-route" data-r="link">
           <label class="mk-field"><span>Link to a single video</span>
@@ -1801,6 +1802,10 @@ function _openAddSource() {
           <label class="mk-field"><span>Title <em>optional — the file name is used otherwise</em></span>
             <input type="text" data-f="title" placeholder="What this source is"></label>
           <button class="lib-btn primary" type="button" data-go="file">Add</button>
+        </section>
+        <section class="mk-route" data-r="lib" hidden>
+          <span class="mk-lib-head">REFERENCES · YouTube · Videos</span>
+          <div class="mk-lib" data-f="lib"></div>
         </section>
         <p class="mk-pnote">A horizontal video becomes a source: it is downloaded - one at a time, in the order added - or
           copied, transcribed and its topics found, all of it in Alerts, so this window lets go at once. A vertical or
@@ -1817,6 +1822,7 @@ function _openAddSource() {
   const route = (r) => {
     ov.querySelectorAll('.mk-choice-btn').forEach(b => b.classList.toggle('cur', b.dataset.route === r));
     ov.querySelectorAll('.mk-route').forEach(s => { s.hidden = s.dataset.r !== r; });
+    if (r === 'lib') _paintLib();
   };
   ov.querySelectorAll('.mk-choice-btn').forEach(b => b.addEventListener('click', () => route(b.dataset.route)));
   q('[data-x="close"]').addEventListener('click', _closeAddSource);
@@ -1829,6 +1835,49 @@ function _openAddSource() {
   q('[data-go="file"]').addEventListener('click', () => _addFile(f('file'), f('title')));
   setTimeout(() => { if (_addWin && _addWin.ov === ov) f('url').focus(); }, 0);
   _paintAdds();
+}
+
+// ── From the Library (after block 8; the owner's (Y6): "в попапе выбор from: link, file, library (нужно сделать как в
+// highlights)") ── REFERENCES -> YouTube -> Videos, the same list as highlights' "from the Library" (GET
+// /api/references/youtube): a downloaded one is a source already - here among the sources; one kept as a tile is added by its
+// link, the way "From a link" adds it (downloaded, heard, its topics found - paid), and its tile becomes the downloaded video.
+const _mmss = (s) => { const t = Math.max(0, Math.round(+s || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+async function _paintLib() {
+  if (!_addWin) return;
+  const box = _addWin.f('lib');
+  box.textContent = '';
+  box.appendChild(el('div', 'mk-pnote', 'reading…'));
+  let items = [];
+  try { items = (await J.api('/api/references/youtube')).items || []; }
+  catch (e) { box.textContent = ''; box.appendChild(el('div', 'mk-pnote', e.message)); return; }
+  if (!_addWin || _addWin.f('lib') !== box) return;
+  box.textContent = '';
+  if (!items.length) { box.appendChild(el('div', 'mk-pnote', 'Nothing there yet - send YouTube links to the Telegram bot, or add a video here by a link.')); return; }
+  for (const it of items) {
+    const row = el('div', 'mk-lib-row');
+    if (it.thumb) { const im = el('img'); im.src = it.thumb; im.alt = ''; im.loading = 'lazy'; row.appendChild(im); }
+    const t = el('div', 'mk-lib-t');
+    t.appendChild(el('b', null, it.title || 'video'));
+    t.appendChild(el('small', null, _mmss(it.seconds) + (it.type === 'source'
+      ? ' · a source already' + (it.topics ? ' · ' + it.topics + ' topics' : '') : ' · not downloaded')));
+    row.appendChild(t);
+    if (it.type === 'remote') {
+      const b = el('button', 'lib-btn primary', 'Add');
+      b.type = 'button';
+      b.title = 'Downloaded, heard and its topics found - the hearing and the topics are paid. Its tile becomes the downloaded video.';
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        _addSay('');
+        try {
+          const d = await _post('/api/sources/add/link', { url: it.link, mineWith: J.modelChoice() || {} });
+          b.textContent = 'added';
+          _track(d.read);
+        } catch (e) { b.disabled = false; _addSay(e.message, true); }
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
 }
 
 function _addSay(text, err) {

@@ -27,6 +27,40 @@ router.get('/references/stamp', (_req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// GET /api/references/youtube -> { items: [...] }   newest first
+// (after block 8; the owner's (Y3), (Y6): "эти окна показывают именно эту папку, вместе с нескачанными, и выбранное видео
+// скачивается") REFERENCES -> YouTube -> Videos as ONE list for the window of highlights ("from the Library") and the
+// scenarios' "Add a source" ("From the Library"):
+//   { type: 'source', id, title, thumb, seconds, words, topics, state }   downloaded - a source of the Library
+//   { type: 'remote', id, title, thumb, seconds, link }                   kept as a tile - downloaded once chosen
+router.get('/references/youtube', (_req, res) => {
+  try {
+    const fs = require('fs');
+    const SRC = require('../lib/sources-store');
+    const { toDiskExisting } = require('../lib/media');
+    const onDisk = (u) => { const a = u && toDiskExisting(u); return !!(a && fs.existsSync(a)); };
+    const items = [];
+    const keys = new Set();
+    for (const s of SRC.list()) {
+      if (!s || !s.videoPath || !onDisk(s.videoPath) || !SRC.fromYouTube(s)) continue;
+      if (s.linkKey) keys.add(s.linkKey);
+      const sum = SRC.summary(s);
+      items.push({ type: 'source', id: String(s.id), title: sum.title, thumb: onDisk(s.thumbPath) ? s.thumbPath : null,
+        seconds: +s.seconds || 0, words: !!sum.words, topics: sum.topics || 0, state: sum.state, at: s.addedAt || '',
+        // Still being read for the scenarios (downloaded, heard, its topics found) - not chosen until that has finished.
+        busy: !!sum.progress || !['ready', 'stored', 'error'].includes(sum.state) });
+    }
+    for (const p of REFS.read()) {
+      if (!p || !p.remote || p.source !== 'youtube' || p.folder !== 'videos' || p.categoryId || !p.link) continue;
+      if (p.linkKey && keys.has(p.linkKey)) continue;
+      items.push({ type: 'remote', id: String(p.id), title: p.title || 'video', thumb: p.poster || null,
+        seconds: +((p.remote || {}).dur) || 0, link: p.link, at: p.receivedAt || '' });
+    }
+    items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    res.json({ success: true, items });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.get('/references', (_req, res) => {
   try { res.json({ success: true, sources: REFS.SOURCES, posts: REFS.read() }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }

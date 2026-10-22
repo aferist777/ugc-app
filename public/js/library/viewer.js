@@ -170,6 +170,8 @@ function _paintActions(it) {
       try { r = await _onAction(a.id, it); } catch (e) { alert(e.message); }
       if (!_ov) return;                                  // the handler closed us
       if (r && r.removed) return dropCurrent();
+      // Only the buttons changed (a "Delete" waiting for its second press) - the video plays on.
+      if (r && r.actionsOnly) { _paintActions(it); return; }
       _paint();
     });
     box.appendChild(b);

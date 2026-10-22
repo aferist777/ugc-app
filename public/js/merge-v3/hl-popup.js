@@ -59,6 +59,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const ask = rec && rec.ask ? rec.ask : {};
   const st = {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
+    // (after block 8) What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
+    pick: null,
     length: lengths[ask.length] ? ask.length : (lengths[remembered.length] ? remembered.length : '30-60'),
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
     // (phase V33.3) The title on top of every fragment - on unless it was taken off last time (the owner's (х35)).
@@ -208,32 +210,41 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     price();
   }
 
-  // ── The Library's sources ──
+  // ── The Library: REFERENCES -> YouTube -> Videos ──
+  // (after block 8; the owner's (Y3): "эти окна показывают именно эту папку, вместе с нескачанными, и выбранное видео
+  // скачивается") Downloaded videos (sources of the Library) and videos kept as tiles - one of those is downloaded by the
+  // project first, by its link. Videos from elsewhere come by "a link" or "a file".
   let sources = null;
   async function loadSources() {
     if (sources) return;
     panes.source.textContent = '';
-    panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading the sources…'));
+    panes.source.appendChild(_el('div', 'mv3-ins-note', 'reading REFERENCES · YouTube · Videos…'));
     try {
-      const d = await _api('/api/sources');
-      // (phase TG, block 6) A source whose words could not be heard for the scenarios (`error` with its video on the disk)
-      // is a video all the same - highlights hears its words itself.
-      sources = (d.sources || []).filter((s) => s.media && !s.progress && ['ready', 'stored', 'error'].includes(s.state));
+      const d = await _api('/api/references/youtube');
+      sources = d.items || [];
     } catch (e) { sources = []; panes.source.textContent = e.message; return; }
     paintSources();
   }
   function paintSources() {
     panes.source.textContent = '';
-    if (!sources.length) { panes.source.appendChild(_el('div', 'mv3-ins-note', 'No sources in the Library yet - give a link or a file.')); return; }
+    panes.source.appendChild(_el('div', 'mv3-ins-note', 'REFERENCES · YouTube · Videos'));
+    if (!sources.length) { panes.source.appendChild(_el('div', 'mv3-ins-note', 'Nothing there yet - give a link or a file.')); return; }
     for (const s of sources) {
-      const r = _el('button', 'mv3-hlp-src' + (st.sourceId === s.id ? ' is-on' : ''));
+      const r = _el('button', 'mv3-hlp-src' + (st.pick === s ? ' is-on' : ''));
       r.type = 'button';
       if (s.thumb) { const im = _el('img', 'mv3-hlp-src-img'); im.src = s.thumb; im.alt = ''; im.loading = 'lazy'; r.appendChild(im); }
       const t = _el('span', 'mv3-hlp-src-t');
       t.appendChild(_el('b', null, s.title || s.id));
-      t.appendChild(_el('small', null, _clock(s.seconds) + (s.words ? ' · its words are in' : ' · its words are heard first')));
+      t.appendChild(_el('small', null, _clock(s.seconds) + (s.type === 'remote' ? ' · not downloaded - the project downloads it first'
+        : (s.words ? ' · its words are in' : ' · its words are heard first'))));
       r.appendChild(t);
-      r.addEventListener('click', () => { st.sourceId = s.id; st.source = s; paintSources(); paint(); price(); });
+      if (s.busy) { r.disabled = true; r.title = 'It is being read for the scenarios - it can be chosen when that has finished.'; }
+      r.addEventListener('click', () => {
+        st.pick = s;
+        st.sourceId = s.type === 'source' ? s.id : '';
+        st.source = s.type === 'source' ? s : null;
+        paintSources(); paint(); price();
+      });
       panes.source.appendChild(r);
     }
   }
@@ -242,7 +253,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   let priceSeq = 0;
   async function price() {
     const seq = ++priceSeq;
-    const q = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId) : '';
+    const q = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
+      : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
     try {
       const d = await _api('/api/highlights/price' + q);
       if (seq !== priceSeq || !_win) return;
@@ -259,7 +271,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     if (!st.style) return false;
     if (st.from === 'link') return /^https?:\/\/\S+/i.test(st.url);
     if (st.from === 'file') return !!st.path;
-    return !!st.sourceId;
+    return !!st.pick;
   }
 
   function paint() {
@@ -300,6 +312,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind };
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
+    // A video kept as a tile: the project downloads it by its link (after block 8).
+    else if (st.pick && st.pick.type === 'remote') { spec.from = 'link'; spec.url = st.pick.link; }
     else spec.sourceId = st.sourceId;
     try {
       const d = await _api('/api/highlights/' + encodeURIComponent(id) + '/start',
@@ -319,7 +333,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     st.from = 'source';
     st.sourceId = String(sourceId);
     loadSources().then(() => {
-      st.source = (sources || []).find((s) => s.id === st.sourceId) || null;
+      st.source = (sources || []).find((s) => s.type === 'source' && s.id === st.sourceId) || null;
+      st.pick = st.source;
       if (!st.source) st.sourceId = '';
       paintSources(); paint(); price();
     });

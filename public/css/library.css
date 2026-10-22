@@ -803,6 +803,18 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* What the add window follows (phase V28.1): a read, a question, a vertical video going onto Uploads. */
 .mk-adds-say{ font-size:11px; line-height:1.45; color:var(--ink); }
 .mk-adds-say.err{ color:oklch(.75 .15 25); }
+/* (phase TG, after block 8) "From the Library": REFERENCES -> YouTube -> Videos, a row each. */
+.mk-lib-head{ font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--muted); }
+.mk-lib{ display:flex; flex-direction:column; gap:6px; max-height:320px; overflow:auto; }
+.mk-lib-row{
+  display:flex; align-items:center; gap:10px; padding:6px 8px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.mk-lib-row img{ flex:0 0 auto; width:72px; height:40px; object-fit:cover; border-radius:var(--r-xs); background:var(--bg); }
+.mk-lib-t{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.mk-lib-t b{ font-size:11.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mk-lib-t small{ font-size:10.5px; color:var(--muted); }
+.mk-lib-row .lib-btn{ flex:0 0 auto; }
 .mk-adds{ display:flex; flex-direction:column; gap:8px; }
 .mk-adds:empty{ display:none; }
 .mk-addl{

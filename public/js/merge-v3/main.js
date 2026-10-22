@@ -86,14 +86,14 @@ const _OPENERS = { pictures: _pictures, videos: _videos };
   });
 })();
 
-// (phase TG, block 5c; the owner's answer (ю)) ?highlights=<a link>&ref=<a post> - a long video of REFERENCES sent "to
-// highlights": a new highlights project with its popup open and the link written in; once the project starts, the post
-// leaves REFERENCES. From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
-async function _highlightsFrom(url, ref, sourceId) {
+// (phase TG, block 5c; the owner's answer (ю)) ?highlights=<a link> - a long video of REFERENCES sent "to highlights": a new
+// highlights project with its popup open and the link written in. Its tile STAYS (after block 8, the owner's (Y2)): the
+// project downloads the video, and the server lets the tile go then - the downloaded video is in its place
+// (lib/sources-store.js update). From the post viewer on this page itself, without a reload: window.__ugcHighlightsFrom.
+// (`ref` of older addresses is not used any more.)
+async function _highlightsFrom(url, _ref, sourceId) {
   const HL = await import('./highlights.js');
-  await HL.createHighlights({ url, sourceId, onStarted: () => {
-    if (ref) fetch('/api/references/' + encodeURIComponent(ref), { method: 'DELETE' }).catch(() => { /* it stays */ });
-  } });
+  await HL.createHighlights({ url, sourceId });
 }
 window.__ugcHighlightsFrom = (url, ref, sourceId) => { _highlightsFrom(url, ref, sourceId).catch(e => console.warn('[merge-v3] highlights:', e.message)); };
 (() => {
