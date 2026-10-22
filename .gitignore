@@ -8,5 +8,7 @@ local-data/
 /library/
 *.log
 *.zip
+# ...except the built-in sound set (phase V34.B, the owner 2026-10-22: kept in git, laid out by tools/fetch-sfx.js).
+!/tools/sfx/*.zip
 # Claude Code's local settings and preview launch configurations.
 .claude/
