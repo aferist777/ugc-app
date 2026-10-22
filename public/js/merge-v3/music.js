@@ -6,7 +6,7 @@
 
    THE GENERATOR asks Suno through kie.ai, and the SERVER sees it through (phase V23):
 
-     POST /api/audio/suno/generate      { style, title, targetDuration, where } -> { taskId, alertId }
+     POST /api/audio/suno/generate      { style, title, targetDuration, where } -> { genId, alertId }
      GET  /api/alerts/:alertId          the generation's row in Alerts - followed here until it ends
 
    The server files both variants Suno makes as two tracks, "<title> · 1" and "<title> · 2" (routes/music.js);
@@ -128,7 +128,8 @@ async function _generate(panel, foot, redraw) {
         },
       }),
     }).then(r => r.json());
-    if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'kie.ai refused the job');
+    // (phase V34.C) The row is written at the press, before kie.ai is asked: there is no task number in the answer.
+    if (!d || !d.success) throw new Error((d && d.error) || 'kie.ai refused the job');
     if (!d.alertId) throw new Error('it was asked for, but its row in Alerts was not written - it will not be filed');
 
     // THE SERVER SEES IT THROUGH (phase V23): the row in Alerts is followed until it ends - both variants are

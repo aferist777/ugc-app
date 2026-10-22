@@ -142,6 +142,7 @@ app.use('/api', require('./routes/links'));
 // Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
 app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
+app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
@@ -223,6 +224,9 @@ const server = app.listen(PORT, '127.0.0.1', () => {
     // And the video chat's (phase V2): a clip still being made is followed again, one never asked for fails in words.
     try { require('./lib/mv3-video-gens').resume(); }
     catch (e) { console.warn('[mv3-video] could not resume:', e.message); }
+    // (phase V34.C) Suno's lyrics have no Alerts row: the ones still coming are followed again here.
+    try { require('./lib/audio-gens').resume(); }
+    catch (e) { console.warn('[audio-gens] could not resume:', e.message); }
 
     // The same for everything in the Alerts journal: a generation the app was closed in the middle
     // of is picked up here, filed when it lands, and the list says so (lib/gen-jobs.js). After the

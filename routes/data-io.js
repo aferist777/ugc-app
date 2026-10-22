@@ -72,7 +72,10 @@ const GROUPS = [
     dirs: ['media/images', 'media/birols', 'media/uploads', 'media/sounds', 'media/work', 'media/voice', 'media/audio', 'media/sources',
            'media/heads', 'data/transcripts'],
     stores: ['data/sources.json', 'data/images.json', 'data/biroly.json', 'data/sounds.json', 'data/library-cats.json', 'data/suno-lib.json',
-             'data/heads.json'], heavy: true },
+             'data/heads.json',
+             // (phase V34.C) what the "generate audio" constructor asked for and made - its history; the files themselves
+             // are AUDIO -> Music and SFX -> My sounds, above. The built-in sounds (vendor/sfx/) are the program's: never here.
+             'data/audio-gens.json'], heavy: true },
   // (phase TG) REFERENCES: what the Telegram bot brought in - the posts and their files, a folder per source.
   { id: 'references', label: 'References (posts, links and media sent to the Telegram bot)',
     dirs: ['media/references'], stores: ['data/references.json'], heavy: true },
