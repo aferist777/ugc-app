@@ -82,6 +82,21 @@
     if (s.result === 'newest') return at + 'this is the newest nightly build.';
     return at + (s.result === 'skipped' ? '' : 'the check failed - ') + (s.error || 'no reason given') + '.';
   }
+  // (Home, the owner 2026-10-22: "hide" puts the First steps away for good, and they come back from here.) The flag is the
+  // Home page's own (localStorage, mirrored into the library by js/storage-sync.js): taken off here and in the library.
+  var STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
+  function paintHome() {
+    var hidden = false;
+    try { hidden = JSON.parse(localStorage.getItem(STEPS_HIDDEN) || 'false') === true; } catch (e) { hidden = false; }
+    body.appendChild(el('div', 'dio-sec', 'Home'));
+    body.appendChild(row('First steps', hidden ? 'Hidden on Home - show them there again.' : 'Shown on Home until you hide them there.',
+      hidden ? btn('Show again', function () {
+        try { localStorage.removeItem(STEPS_HIDDEN); } catch (e) { /* a private window */ }
+        fetch('/api/ui-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ set: {}, del: [STEPS_HIDDEN] }) }).catch(function () {});
+        paint();
+      }) : el('span', 'loc-state', 'shown')));
+  }
+
   function paintYt() {
     body.appendChild(el('div', 'dio-sec', 'Links (yt-dlp)'));
     if (!yt) { body.appendChild(el('div', 'dio-status', 'reading…')); return; }
@@ -121,10 +136,10 @@
 
   function paint() {
     body.textContent = '';
-    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); return; }
+    if (!state) { body.appendChild(el('div', 'dio-status', 'reading…')); paintYt(); paintHome(); return; }
     if (!state.platform) {
       body.appendChild(el('div', 'dio-status', 'Recognition on this computer is built for Windows - captions are heard by Groq here.'));
-      paintYt();
+      paintYt(); paintHome();
       return;
     }
     var p = state.program, m = state.model;
@@ -151,7 +166,7 @@
     if (state.busy) body.appendChild(el('div', 'dio-status', 'Captions are being heard on this computer right now.'));
     var s = el('div', 'dio-status' + (msgErr ? ' err' : ''), msg);
     body.appendChild(s);
-    paintYt();
+    paintYt(); paintHome();
   }
 
   function load() {

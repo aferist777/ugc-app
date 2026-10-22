@@ -69,6 +69,19 @@
 .hm-bar.is-wait i{width:30% !important; animation:hm-wait 1.6s ease-in-out infinite}
 @keyframes hm-wait{0%{transform:translateX(-100%)} 100%{transform:translateX(340%)}}
 
+/* ── First steps: a ring each, gold and ticked when done ── */
+.hm-progress{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
+.hm-progress .hm-bar{flex:1; margin:0}
+.hm-steps{display:flex; flex-direction:column; gap:7px; margin:0; padding:0; list-style:none}
+.hm-steps li{display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:var(--r-xs); background:var(--surface)}
+.hm-ck{flex:0 0 18px; height:18px; border-radius:50%; border:1.5px dashed var(--gold); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--bg)}
+.hm-steps li.is-done .hm-ck{background:var(--gold); border-style:solid}
+.hm-step-tx{flex:1 1 auto; min-width:0}
+.hm-step-t{font-weight:600; font-size:12px}
+.hm-steps li.is-done .hm-step-t{color:var(--muted); text-decoration:line-through}
+.hm-step-d{font-size:10.5px; color:var(--muted)}
+.hm-steps .hm-btn{flex:0 0 auto}
+
 /* ── The app ── */
 .hm-subh{font:700 9px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:4px 0 -2px}
 .hm-tbl{width:100%; border-collapse:collapse; font-size:12px}

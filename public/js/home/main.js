@@ -227,6 +227,76 @@ BLOCKS.new = () => {
   return { el: f.st, paint, every: 30000 };
 };
 
+// ── First steps ──
+// (the owner's (H6) and 2026-10-22: "будем показывать пока пользователь сам не закроет этот блок") Seven things a new
+// person does first, each ticked off by what is really there - never by a press here; the frame is dashed while any is
+// left, solid when none is, and the block stays until "hide" puts it away for good (back from Admin -> This computer).
+const STEPS_HIDDEN = 'ugc_home_steps_hidden_v1';
+const STEPS = [
+  { id: 'kie', title: 'Add the kie.ai key', sub: 'pictures, video, music - the main aggregator', go: 'add', href: '/admin#keys' },
+  { id: 'eleven', title: 'Add the ElevenLabs key', sub: 'the voices of the talking heads', go: 'add', href: '/admin#keys' },
+  { id: 'cf', title: 'Add the Cloudflare key', sub: 'hosts the references the models fetch · R2 needs a card once', go: 'add', href: '/admin#keys' },
+  { id: 'bot', title: 'Connect your Telegram bot', sub: 'send links and media from the phone into REFERENCES', go: 'connect', href: '/admin#keys' },
+  { id: 'char', title: 'Make your first character', sub: 'a portrait, then a 4K sheet - Library · Characters', go: 'start', href: '/library?shelf=characters' },
+  { id: 'head', title: 'Make a talking head', sub: 'a scenario → mood → voice → first frames → video', go: 'start', href: '/merge?new=talking' },
+  { id: 'speech', title: 'Download the speech model', sub: 'captions heard on this computer, free · 574 MB', go: 'download', href: '/admin#local' },
+];
+BLOCKS.steps = () => {
+  const f = frame('steps', 'First steps');
+  const hide = el('button', null, 'hide');
+  hide.type = 'button';
+  hide.title = 'Put the first steps away for good - they come back from Admin -> This computer';
+  hide.addEventListener('click', () => {
+    lsSet(STEPS_HIDDEN, true);
+    f.st.remove();
+    keep();
+  });
+  f.right.appendChild(hide);
+  const prog = el('div', 'hm-progress');
+  const bar = el('div', 'hm-bar');
+  const fill = el('i');
+  bar.appendChild(fill);
+  const count = el('span');
+  prog.append(bar, count);
+  const list = el('ol', 'hm-steps');
+  f.body.append(prog, list);
+  const paint = async () => {
+    const [health, tg, cf, counts, heads, speech] = await Promise.all([
+      api('/api/keys/health').catch(() => null), api('/api/telegram').catch(() => null), api('/api/cloudflare').catch(() => null),
+      api('/api/library/counts').catch(() => null), api('/api/library/shelf/media?filter=heads').catch(() => null),
+      api('/api/speech/local').catch(() => null),
+    ]);
+    const prov = (id) => ((health && health.providers) || []).find((p) => p.id === id) || {};
+    const sp = speech && speech.state;
+    const done = {
+      kie: prov('kie.ai').state === 'ok',
+      eleven: prov('elevenlabs').state === 'ok',
+      cf: !!(cf && cf.inUse),
+      bot: !!(tg && tg.chat && tg.chat.name),
+      char: !!(counts && counts.counts && counts.counts.characters > 0),
+      head: !!(heads && heads.items && heads.items.length),
+      // A computer the recognition is not built for has nothing to download: the step is not its.
+      speech: !!(sp && (sp.platform === false || (sp.model && sp.model.present))),
+    };
+    const n = STEPS.filter((s) => done[s.id]).length;
+    f.st.classList.toggle('is-todo', n < STEPS.length);
+    f.what.textContent = '· ' + n + ' of ' + STEPS.length + ' done';
+    fill.style.width = Math.round((n / STEPS.length) * 100) + '%';
+    count.textContent = n + ' / ' + STEPS.length;
+    list.replaceChildren(...STEPS.map((s) => {
+      const li = el('li', done[s.id] ? 'is-done' : '');
+      li.appendChild(el('span', 'hm-ck', done[s.id] ? '✓' : ''));
+      const tx = el('div', 'hm-step-tx');
+      tx.appendChild(el('div', 'hm-step-t', s.title));
+      tx.appendChild(el('div', 'hm-step-d', s.sub));
+      li.appendChild(tx);
+      if (!done[s.id]) { const a = el('a', 'hm-btn is-gold', s.go); a.href = s.href; li.appendChild(a); }
+      return li;
+    }));
+  };
+  return { el: f.st, paint, every: 60000 };
+};
+
 // ── The app ──
 const ROLE = { 'kie.ai': 'pictures · video · music', elevenlabs: 'voices', openrouter: 'agents', replicate: 'pictures · sources',
   groq: 'captions', anthropic: 'Claude' };
@@ -333,16 +403,25 @@ BLOCKS.app = () => {
 
 // ── the layout: two columns, a block anywhere, kept ──────────────────────────
 const LAYOUT = 'ugc_home_layout_v1';
-const FIRST = [['continue', 'now', 'new'], ['app']];
+const FIRST = [['continue', 'now', 'new'], ['steps', 'app']];
 const cols = [...document.querySelectorAll('#hm-cols .hm-col')];
 const made = {};
-for (const id of Object.keys(BLOCKS)) made[id] = BLOCKS[id]();
+for (const id of Object.keys(BLOCKS)) {
+  if (id === 'steps' && ls(STEPS_HIDDEN, false) === true) continue;   // put away for good (Admin brings it back)
+  made[id] = BLOCKS[id]();
+}
 
 function place(order) {
   const seen = new Set();
   order.forEach((ids, i) => ids.forEach((id) => { if (made[id] && !seen.has(id)) { cols[i].appendChild(made[id].el); seen.add(id); } }));
-  // a block the kept order does not know (one added since) goes where it stands at first
-  FIRST.forEach((ids, i) => ids.forEach((id) => { if (made[id] && !seen.has(id)) { cols[i].appendChild(made[id].el); seen.add(id); } }));
+  // A block the kept order does not know (one added since, or brought back) goes where it stands at first: before the
+  // first block that follows it there.
+  FIRST.forEach((ids, i) => ids.forEach((id, at) => {
+    if (!made[id] || seen.has(id)) return;
+    const next = ids.slice(at + 1).map((x) => made[x] && made[x].el).find((x) => x && x.parentNode === cols[i]);
+    cols[i].insertBefore(made[id].el, next || null);
+    seen.add(id);
+  }));
 }
 const saved = ls(LAYOUT, null);
 place(Array.isArray(saved) && saved.length === 2 ? saved : FIRST);
