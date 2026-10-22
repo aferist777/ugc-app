@@ -34,6 +34,8 @@
 <link rel="stylesheet" href="css/mv3-highlights.css">
 <!-- (phase V34.E) Sound on the shelf: waveforms, the search over SFX, a sound's menu, the cut and online windows (js/sound/). -->
 <link rel="stylesheet" href="css/sound.css">
+<!-- (phase V34.E) The "generate audio" view (js/merge-v3/audchat.js). -->
+<link rel="stylesheet" href="css/mv3-audio.css">
 </head>
 <body>
 
@@ -122,6 +124,8 @@
           <button class="mv3-lib-crumb" id="mv3-lib-vgen" type="button">/ <span class="lg">generate </span>video</button>
           <!-- The video chat's catalog, right beside its crumb (phase V6, the owner 2026-10-06) - shown while it is. -->
           <span class="mv3-pc-head" id="mv3-vc-headl" hidden></span>
+          <!-- (phase V34.E) Music and sounds for the open project - Suno and ElevenLabs (js/merge-v3/audchat.js). -->
+          <button class="mv3-lib-crumb" id="mv3-lib-agen" type="button" hidden>/ <span class="lg">generate </span>audio</button>
           <button class="mv3-lib-crumb" id="mv3-lib-cap" type="button">/ captions</button>
           <span class="sp"></span>
           <!-- The chat's own buttons, while it shows. -->
@@ -141,6 +145,8 @@
         <!-- The pictures chat, built the first time it is shown (js/merge-v3/picchat.js). -->
         <div class="mv3-pc" id="mv3-pc"></div>
         <div class="mv3-pc is-video" id="mv3-vc"></div>
+        <!-- (phase V34.E) "generate audio": the settings, the constructor, "Made here" (js/merge-v3/audchat.js). -->
+        <div class="mv3-pc is-audio" id="mv3-ac"></div>
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
         <div class="mv3-scv" id="mv3-sc"></div>
         <!-- A highlights project's tiles and the card of a moment (phase V33.1, js/merge-v3/highlights.js). -->

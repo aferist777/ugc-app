@@ -1,8 +1,8 @@
 'use strict';
 
-// Music for the timeline: Suno tracks made through kie.ai, and the small library of the ones kept.
+// Music for the timeline: the small library of the tracks kept (made by "generate audio" - routes/audio-gen.js - or
+// brought in from this computer).
 //
-//   POST   /api/audio/suno/generate          { style, title, where, ... } -> { genId, alertId }   (lib/audio-gens.js)
 //   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer (phase V28.4)
 //
 // The list itself is lib/music-store.js (data/suno-lib.json): read, starred, renamed and deleted (with its file) as
@@ -11,13 +11,11 @@
 //
 // TWO TRACKS PER GENERATION (phase V23, the owner 2026-10-09): Suno makes two variants at once, and both are kept -
 // two files, `suno_<task>_1.mp3` and `_2.mp3`, and two records side by side, "<title> · 1" and "<title> · 2", with
-// the generation (`gen`) and the variant (`variant`) on them. Merge's music panel lays the other variant after the
-// one chosen when that one is shorter than the video, crossing into it over three seconds (merge-v3/music.js).
-// Only the server writes them: the panel follows the generation's Alerts row (lib/gen-jobs.js) and reads the list.
-// Older generations were joined into one file; their variants were not kept apart, and they stay as they are.
+// the generation (`gen`) and the variant (`variant`) on them. Only the server writes them (lib/audio-gens.js), and a
+// page follows the generation's Alerts row (lib/gen-jobs.js) and reads the list. Older generations were joined into
+// one file; their variants were not kept apart, and they stay as they are.
 //
-// The addresses keep their /audio/ prefix: Merge's music panel and the media tree's Music call
-// them. Everything else the old routes/audio.js held - voices and voice design, TTS, avatars,
+// The address keeps its /audio/ prefix: the media tree's Music calls it. Everything else the old routes/audio.js held - voices and voice design, TTS, avatars,
 // speech-to-text, sound effects and the Birols pipeline - went with the pages that used it.
 
 const express    = require('express');
@@ -56,27 +54,9 @@ function _dedupeSunoLib() {
 }
 try { _dedupeSunoLib(); } catch (e) { console.warn('[music] the music list was not tidied:', e.message); }
 
-// POST /api/audio/suno/generate - Merge's generator in the audio lane's inspector (phase A7, V23).
-// Body: { style, title, negativeTags, styleWeight, weirdnessConstraint, model, targetDuration, where } -> { genId, alertId }
-//
-// (phase V34.C, the owner 2026-10-22) On kie.ai's NEW Suno address (jobs/createTask, model V6 - V4.5+ is discontinued)
-// and by the journal's rule: the row is written AT THE PRESS, `asked` before the money, the server follows the task,
-// downloads both tracks once and files them as "<title> · 1" / "· 2" (lib/audio-gens.js - the job type 'music' is there
-// now, rows from before V34 are followed on the old address to their end). `targetDuration` is sent as Suno V6's
-// `duration` (10-360 s) - a length it keeps, not a hint any more.
-const AG = require('../lib/audio-gens');
-
-router.post('/audio/suno/generate', (req, res) => {
-  const b = req.body || {};
-  try {
-    const g = AG.create('custom', AG.legacyBody(b), b.where || null);
-    res.json({ success: true, genId: g.id, alertId: g.alertId });
-  } catch (err) {
-    console.error('[audio/suno/generate]', err.message);
-    res.status(err.status || 500).json({ success: false, error: err.message });
-  }
-});
-
+// (phase V34.E, the owner's (м10)) POST /api/audio/suno/generate went with the generator of the audio lane's inspector:
+// music is made in Merge's "/ generate audio" (routes/audio-gen.js). Its rows from before are followed and asked again by
+// lib/audio-gens.js (`legacyBody`).
 
 // ── A track from this computer (phase V28.4, the owner 2026-10-12: "музыка - пока тоже файл") ─────────────
 // Into media/work first (multer), then lib/music-store.js measures it, moves it into media/audio/ and files it first.

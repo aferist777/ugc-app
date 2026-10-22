@@ -1,8 +1,8 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// GENERATE AUDIO (phase V34.C, the owner 2026-10-22) - the server of the "generate audio" constructor: the lab page
-// /lab/audio now (V34.D), Merge's third chat later (V34.E). The records and the journal are lib/audio-gens.js; the
+// GENERATE AUDIO (phase V34.C, the owner 2026-10-22) - the server of the "generate audio" constructor: Merge's view
+// "/ generate audio" (V34.E, js/merge-v3/audchat.js) and the lab page /lab/audio (V34.D) until it goes. The records and the journal are lib/audio-gens.js; the
 // engines' field names lib/audio-engines.js.
 //
 //   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
@@ -11,7 +11,8 @@
 //                                     custom) and how long each one's video is
 //   POST   /api/audio/gen             { mode, ...the mode's fields, where, project? } -> { gen }   a press: the record and
 //                                     its Alerts row NOW, the asking behind the answer
-//   GET    /api/audio/gens?limit=     the history, newest first
+//   GET    /api/audio/gens?limit=&project=   the history, newest first - of one project when it is named (Merge's "Made
+//                                     here", V34.E: the draft's are the drafts' one list)
 //   GET    /api/audio/gens/:id        one record (the page follows a press with it)
 //   DELETE /api/audio/gens/:id        off the history - never its files
 //
@@ -96,7 +97,7 @@ router.post('/audio/gen', (req, res) => {
 });
 
 router.get('/audio/gens', (req, res) => {
-  try { res.json({ success: true, items: AG.list(req.query.limit) }); }
+  try { res.json({ success: true, items: AG.list(req.query.limit, String(req.query.project || '')) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

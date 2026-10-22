@@ -2496,14 +2496,9 @@ function VIDEOS(ctx) {
         name: x.said || x.prompt || '', meta: { date: x.at } })), at);
     },
 
-    // ONE catalog, right beside "/ generate video" (the owner, 2026-10-06); with a recipe in use it opens on it.
-    crumbButtons: () => {
-      const b = el('button', 'mv3-c-btn mv3-vc-cat', 'catalog');
-      b.type = 'button';
-      b.title = 'Recipes for this model: the cookbook\'s templates and cases, Grok\'s examples, your presets';
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); _openCat(); });
-      return [b];
-    },
+    // (phase V34.E, the owner's (м2)) The catalog's button beside "/ generate video" went - its recipes, vcatalog.js,
+    // routes/mv3-catalog.js and vendor/cookbook/ stay for the guidelines to come. A recipe already in use still opens it
+    // from its line above the thread.
   };
 }
 

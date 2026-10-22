@@ -127,6 +127,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/js/merge-v3/gear.js'], ['GET', '/css/mv3-gear.css'], ['GET', '/api/mv3/img/settings'],
                  ['PUT', '/api/mv3/img/settings'], ['DELETE', '/api/mv3/chat'],
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
+                 // phase V34.E: the audio lane's own Suno generator - music is made in "generate audio" now
+                 ['POST', '/api/audio/suno/generate'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase V17: the picture-then-video recipe's start - Kling motion control's own way since

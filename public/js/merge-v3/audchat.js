@@ -1,0 +1,1179 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERGE — "/ generate audio" (phase V34.E, the owner 2026-10-23: "давай добавим в приложение, то что получилось"): the
+   Library panel's fourth view, after "generate video" and before "captions" - the audio lab's constructor (V34.D) moved
+   into Merge. Not a chat: ONE message of the app per mode - its fields, its attachment where it takes one - and what was
+   made under it.
+
+     left     the settings: the engine (Suno · kie.ai | ElevenLabs), the mode, the model, the length (the video's by a press),
+              the chips (V34.A's almanac, public/js/audio/almanac-data.js), the price of a press; the almanac at its foot
+     middle   the CONSTRUCTOR of the open mode and "generate"
+     right    MADE HERE - the presses of THE OPEN PROJECT only (the owner's (р1); the draft's are the drafts' one list, as their
+              chats' conversation is): its stage while it is made, its tracks or sounds when done - a press plays one, ★,
+              "show" (on the shelf), and dragged onto an audio lane it lies there as a tile of the shelf does -, the lyrics
+              with "use in custom", its error and "try again" when it failed. A sash between it and the constructor.
+
+   The project is the one open in Merge - there is no picker here. Its kind gives the mode the first time it is opened here:
+   a talking head - Simple; blank, the draft - Custom (the owner's (р7)); afterwards the mode it was left on. Not in a
+   highlights project (its music is a phase of its own, (р5)).
+
+   The server is routes/audio-gen.js and lib/audio-gens.js: a press writes its record and its Alerts row at once, the server
+   asks, waits, downloads and files - this view only follows. Its Alerts row leads back here (?open=audio, js/merge-v3/main.js).
+   What the person set is remembered (localStorage `mv3_audio_v1`).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as Layers from '../layers.js';
+import * as Store from './store.js';
+import * as Views from './lib-views.js';
+import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
+import { setOpenColumn } from './layout.js';
+import { isTalking } from './workshop.js';
+import { setMediaDrag } from '../media-tree.js';
+import { waveEl, secs } from '../sound/wave.js';
+
+const NAME = 'audio';
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+const KEY = 'mv3_audio_v1';
+const ls = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const d = await r.json().catch(() => null);
+  if (!d || d.success === false) throw new Error((d && d.error) || ('status ' + r.status));
+  return d;
+}
+const post = (url, body) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+
+// ── what the person set ─────────────────────────────────────────────────────
+const MODE_HELP = {
+  simple: 'Background music with no voice, for a video where somebody talks. Pick the feel with the chips on the left and, if you like, say more in your own words (any language). The writer turns it into Suno\'s style and Suno makes TWO tracks of the length on the left. They go to AUDIO → Music.',
+  custom: 'You write it: a title, a style and - unless it is instrumental - the lyrics ([Verse], [Chorus]…). The chips on the left add their words to the style. Suno makes TWO tracks; the length on the left (10–360 s) or Suno\'s own.',
+  lyrics: 'Song lyrics from an idea - two or three texts. A text can go straight into Custom with "use in custom". Text only: no row in Alerts.',
+  sounds: 'A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.',
+  compose: 'Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.',
+  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Choose the video below; say what you want if you like. It goes to AUDIO → Music.',
+  sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
+};
+const MODEL_HELP = { V6: 'the newest - most natural', V6_MINI: 'faster', V6_WILD: 'bolder, stranger' };
+const KIND_MODE = { 'talking head': 'simple', blank: 'custom', draft: 'custom' };
+const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft' };
+
+const S = Object.assign({ engine: 'suno', mode: 'custom', model: 'V6', lastMode: { suno: 'simple', eleven: 'compose' }, f: {}, of: {} }, ls(KEY, {}));
+S.f = Object.assign({
+  simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [] },
+  custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
+  lyrics: { idea: '' },
+  sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
+  compose: { prompt: '', seconds: 30, instrumental: true },
+  video: { video: '', name: '', thumb: '', description: '', tags: '', sfx: false, useAudio: false },
+  sfx: { prompt: '', seconds: 0, loop: false, influence: 0.3 },
+}, S.f || {});
+if (!S.of || typeof S.of !== 'object') S.of = {};
+// Each project's mode, as it was left - the last 60.
+const save = () => {
+  const of = {};
+  for (const k of Object.keys(S.of).slice(-60)) of[k] = S.of[k];
+  S.of = of;
+  lsSet(KEY, { engine: S.engine, mode: S.mode, model: S.model, lastMode: S.lastMode, f: S.f, of: S.of });
+};
+
+let CAT = null;            // GET /api/audio/catalog
+let ALM = null;            // the almanac module, when it is there
+let GENS = [];
+let LIBIDX = new Map();    // path -> the shelf's item (its wave, star, id, name)
+let _ui = null;            // the view's parts, built the first time it shows
+let _shown = false;
+let _key = null;           // the project the view follows
+let _draftHere = false;
+
+// ── the project ─────────────────────────────────────────────────────────────
+const _hl = (k) => /^hl_/.test(String(k || ''));
+const _allowed = () => Store.isReady() && !!Store.key() && !_hl(Store.key()) && Store.canEdit();
+const _lk = (k) => (k === _key && _draftHere ? 'draft' : (k || ''));
+const _kind = () => (isTalking() ? 'talking head' : Store.isDraft() ? 'draft' : 'blank');
+// The video's length: the video lanes' end (a talking head's lines, a blank project's clips).
+function _videoSecs() {
+  const t = Store.timeline();
+  if (!t) return 0;
+  let end = 0;
+  for (const k of Object.keys(t.tracks || {})) {
+    const tr = t.tracks[k];
+    if (!tr || tr.kind !== 'video') continue;
+    for (const c of (tr.clips || [])) { const e = (+c.start || 0) + (+c.dur || 0); if (e > end) end = e; }
+  }
+  return Math.round(end * 10) / 10;
+}
+
+let _sayT = 0;
+function say(text, bad) {
+  if (!_ui) return;
+  const s = _ui.status;
+  s.textContent = text || '';
+  s.hidden = !text;
+  s.classList.toggle('is-bad', !!bad);
+  clearTimeout(_sayT);
+  if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
+}
+
+const _chipsGroups = () => {
+  // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
+  if (ALM && ALM.CHIPS && Array.isArray(ALM.CHIPS.genre)) {
+    return [['genre', 'Genre'], ['mood', 'Mood'], ['sound', 'Sound']]
+      .map(([k, label]) => ({ key: k, label, chips: (ALM.CHIPS[k] || []).map(c => ({ id: c.id, label: c.label, style: c.style || c.label })) }))
+      .filter(g => g.chips.length);
+  }
+  return ((CAT && CAT.chips) || []).map(g => ({ key: '', label: g.label, chips: g.chips.map(c => ({ id: c, label: c, style: c })) }));
+};
+
+// ── the settings column: the chats' column (.mv3-ig-set, css/mv3-imagen.css) ───────────────────────────────
+function paintCol() {
+  const col = _ui.col;
+  col.textContent = '';
+  const row = (label, body, note) => {
+    const r = el('div', 'mv3-ig-row');
+    if (label) r.appendChild(el('label', null, label));
+    r.appendChild(body);
+    if (note) r.appendChild(el('div', 'au-note', note));
+    col.appendChild(r);
+    return r;
+  };
+  const sep = (text) => col.appendChild(el('div', 'mv3-ig-sep', text));
+
+  const seg = el('div', 'mv3-ig-ar-row');
+  for (const e of (CAT ? CAT.engines : [])) {
+    const b = el('button', 'mv3-ig-ar-b' + (S.engine === e.id ? ' on' : ''), e.label);
+    b.type = 'button';
+    b.addEventListener('click', () => setEngine(e.id));
+    seg.appendChild(b);
+  }
+  row('Engine', seg, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
+    ? 'No ' + (S.engine === 'eleven' ? 'ElevenLabs' : 'kie.ai') + ' key - add it on Admin → API keys.' : '');
+
+  const ms = el('select');
+  for (const m of (CAT ? CAT.modes.filter(x => x.engine === S.engine) : [])) {
+    const op = el('option', null, m.label);
+    op.value = m.id;
+    ms.appendChild(op);
+  }
+  ms.value = S.mode;
+  ms.addEventListener('change', () => setMode(ms.value));
+  row('Mode', ms);
+
+  if (S.engine === 'suno' && S.mode !== 'lyrics') {
+    const mo = el('select');
+    for (const id of (CAT ? CAT.sunoModels : ['V6'])) {
+      const op = el('option', null, id + ' - ' + (MODEL_HELP[id] || ''));
+      op.value = id;
+      mo.appendChild(op);
+    }
+    mo.value = S.model;
+    mo.addEventListener('change', () => { S.model = mo.value; save(); });
+    row('Model', mo, 'one price for all three');
+  } else if (S.engine === 'eleven') {
+    row('Model', el('div', 'au-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
+  }
+
+  // The length: what a mode takes, empty - the model decides.
+  const LEN = { simple: [0, 360, 'the video\'s length - the bed comes out a little longer'], custom: [10, 360, '10–360 s'],
+    compose: [3, 600, '3 s – 10 min'], sfx: [0.5, 30, '0.5–30 s'] };
+  if (LEN[S.mode]) {
+    const [lo, hi, note] = LEN[S.mode];
+    const f = S.f[S.mode];
+    sep('Length');
+    const r = el('div', 'au-len');
+    const n = el('input', 'au-in');
+    n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
+    n.value = f.seconds ? String(f.seconds) : '';
+    n.placeholder = 'auto';
+    n.addEventListener('change', () => {
+      const v = +n.value || 0;
+      f.seconds = v <= 0 ? 0 : Math.max(lo || 1, Math.min(hi, v));
+      n.value = f.seconds ? String(f.seconds) : '';
+      save(); paintPrice(); paintMakePrice();
+    });
+    r.append(n, el('span', 'au-len-auto', 's · empty - the model decides'));
+    const vs = _videoSecs();
+    if (vs > 0 && S.mode !== 'sfx') {
+      const by = el('button', 'au-link', 'by the video (' + secs(vs) + ')');
+      by.type = 'button';
+      by.addEventListener('click', () => { f.seconds = Math.max(lo || 1, Math.min(hi, Math.round(vs))); save(); paintCol(); paintMakePrice(); });
+      r.appendChild(by);
+    }
+    row('', r, note);
+  }
+
+  // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
+  if (['simple', 'custom', 'compose'].includes(S.mode)) {
+    for (const g of _chipsGroups()) {
+      sep(g.label);
+      const wrap = el('div', 'mv3-chips');
+      for (const c of g.chips) {
+        const on = S.mode === 'simple' && _isPicked(g.key, c);
+        const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
+        b.type = 'button';
+        b.title = c.style;
+        b.addEventListener('click', () => {
+          if (S.mode === 'simple') { _pick(g.key, c); paintCol(); paintMake(); }
+          else _addWords(c.style);
+        });
+        wrap.appendChild(b);
+      }
+      col.appendChild(wrap);
+    }
+    col.appendChild(el('div', 'au-note', S.mode === 'simple' ? 'What the music is: the writer reads them with your words.'
+      : 'A press adds the chip\'s words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.'));
+  }
+
+  const cost = el('div', 'mv3-ig-cost');
+  _ui.price = cost;
+  col.appendChild(cost);
+  paintPrice();
+
+  // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press puts one into its field.
+  const foot = _ui.alm;
+  foot.textContent = '';
+  const alm = el('button', 'mv3-vc-almanac' + (_almSections().length ? '' : ' is-soon'), 'almanac');
+  alm.type = 'button';
+  alm.title = _almSections().length ? 'Notes on styles and sounds - a press puts one into its field' : 'The almanac of music and sounds is being written - soon';
+  alm.addEventListener('click', () => { if (_almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
+  foot.appendChild(alm);
+}
+
+function _isPicked(group, c) {
+  const f = S.f.simple;
+  return group ? ((f.picked || {})[group] || []).includes(c.id) : (f.flat || []).includes(c.label);
+}
+function _pick(group, c) {
+  const f = S.f.simple;
+  if (group) {
+    f.picked = f.picked || {};
+    const l = f.picked[group] || (f.picked[group] = []);
+    const i = l.indexOf(c.id);
+    if (i >= 0) l.splice(i, 1); else l.push(c.id);
+  } else {
+    f.flat = f.flat || [];
+    const i = f.flat.indexOf(c.label);
+    if (i >= 0) f.flat.splice(i, 1); else f.flat.push(c.label);
+  }
+  save();
+}
+function _pickedLabels() {
+  const out = [];
+  for (const g of _chipsGroups()) for (const c of g.chips) if (_isPicked(g.key, c)) out.push(c.label);
+  return out;
+}
+function _addWords(words) {
+  const key = S.mode === 'custom' ? 'style' : 'prompt';
+  const f = S.f[S.mode];
+  const cur = String(f[key] || '').trim();
+  f[key] = cur ? cur.replace(/[,\s]*$/, '') + ', ' + words : words;
+  save();
+  paintMake();
+}
+
+function _price() {
+  const P = (CAT && CAT.prices) || {};
+  const p = P[S.mode];
+  if (!p) return { big: '', small: '' };
+  const f = S.f[S.mode] || {};
+  if (p.credits != null) return { big: '$' + p.usd, small: p.credits + ' kie credits · ' + p.note };
+  if (p.usdPerMin) {
+    if (S.mode === 'video') return { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+    const sec = +f.seconds || 0;
+    return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: sec + ' s · ' + p.note } : { big: '≈ $' + p.usdPerMin + '/min', small: p.note };
+  }
+  if (p.elPerSec) {
+    const sec = +f.seconds || 0;
+    return sec ? { big: '≈ ' + Math.round(p.elPerSec * sec), small: 'ElevenLabs credits for ' + sec + ' s' }
+      : { big: '≈ ' + p.elPerSec + '/s', small: 'ElevenLabs credits per second of what comes back' };
+  }
+  return { big: '', small: '' };
+}
+const _priceText = () => { const p = _price(); return p.big ? p.big + ' · ' + p.small : ''; };
+function paintPrice() {
+  const box = _ui && _ui.price;
+  if (!box) return;
+  const p = _price();
+  box.textContent = '';
+  box.appendChild(el('b', null, p.big));
+  box.appendChild(el('span', null, 'per press · ' + p.small + (CAT && CAT.fake ? ' · FAKE - nothing is paid' : '')));
+}
+function paintMakePrice() {
+  const s = _ui && _ui.make.querySelector('.au-go-row .au-muted');
+  if (s) s.textContent = _priceText();
+}
+
+// A project opened here: its mode as it was left - or, the first time, the one its kind wants (and the lengths of its video).
+function _forProject() {
+  const lk = _lk(_key);
+  const was = S.of[lk];
+  const m = CAT && CAT.modes.find(x => x.id === was);
+  if (m) { S.mode = m.id; S.engine = m.engine; return; }
+  const kind = _kind();
+  S.mode = KIND_MODE[kind] || 'custom';
+  S.engine = 'suno';
+  const vs = _videoSecs();
+  if (vs > 0) {
+    S.f.simple.seconds = Math.min(360, Math.round(vs));
+    S.f.custom.seconds = Math.max(10, Math.min(360, Math.round(vs)));
+    S.f.compose.seconds = Math.max(3, Math.min(600, Math.round(vs)));
+  }
+  S.of[lk] = S.mode;
+  save();
+}
+function setEngine(id) {
+  if (S.engine === id) return;
+  S.lastMode[S.engine] = S.mode;
+  S.engine = id;
+  setMode(S.lastMode[id] || (CAT.engines.find(e => e.id === id) || { modes: ['compose'] }).modes[0]);
+}
+function setMode(id) {
+  const m = CAT && CAT.modes.find(x => x.id === id);
+  if (!m) return;
+  S.mode = id;
+  S.engine = m.engine;
+  S.lastMode[m.engine] = id;
+  S.of[_lk(_key)] = id;
+  save();
+  paintCol();
+  paintMake();
+}
+
+// ── the constructor ─────────────────────────────────────────────────────────
+function _field(label, input, opts) {
+  const o = opts || {};
+  const f = el('div', 'au-f');
+  const h = el('div', 'au-f-h');
+  h.appendChild(document.createTextNode(label));
+  if (o.small) h.appendChild(el('small', null, o.small));
+  if (o.max) {
+    const cnt = el('span', 'au-cnt');
+    const upd = () => { const n = String(input.value || '').length; cnt.textContent = n + ' / ' + o.max; cnt.classList.toggle('is-over', n > o.max); };
+    input.addEventListener('input', upd);
+    upd();
+    h.appendChild(cnt);
+  }
+  f.append(h, input);
+  return f;
+}
+function _text(obj, key, opts) {
+  const o = opts || {};
+  const t = el(o.area ? 'textarea' : 'input', o.area ? 'au-ta' : 'au-in');
+  if (!o.area) t.type = 'text';
+  if (o.rows) t.rows = o.rows;
+  t.placeholder = o.placeholder || '';
+  t.value = obj[key] == null ? '' : String(obj[key]);
+  t.addEventListener('input', () => { obj[key] = t.value; save(); });
+  return t;
+}
+function _check(obj, key, label, after) {
+  const lab = el('label', 'au-check');
+  const c = el('input');
+  c.type = 'checkbox';
+  c.checked = !!obj[key];
+  c.addEventListener('change', () => { obj[key] = c.checked; save(); if (after) after(); });
+  lab.append(c, el('span', null, label));
+  return lab;
+}
+function _knob(obj, key, label, min, max, step, hint) {
+  const row = el('div', 'au-knob');
+  row.title = hint || '';
+  row.appendChild(el('span', null, label));
+  const r = el('input');
+  r.type = 'range'; r.min = String(min); r.max = String(max); r.step = String(step);
+  const v = el('span', null, obj[key] === '' || obj[key] == null ? 'auto' : String(obj[key]));
+  r.value = obj[key] === '' || obj[key] == null ? String((min + max) / 2) : String(obj[key]);
+  r.addEventListener('input', () => { obj[key] = +r.value; v.textContent = String(obj[key]); save(); });
+  v.addEventListener('dblclick', () => { obj[key] = ''; v.textContent = 'auto'; save(); });
+  v.title = 'a double press: back to Suno\'s own';
+  row.append(r, v);
+  return row;
+}
+
+function paintMake() {
+  const host = _ui.make;
+  host.textContent = '';
+  const m = CAT && CAT.modes.find(x => x.id === S.mode);
+  if (!m) return;
+  const card = el('div', 'au-card');
+  const h = el('div', 'au-card-h');
+  h.appendChild(document.createTextNode((S.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + m.label));
+  h.appendChild(el('span', 'au-muted', 'for ' + (Store.title() || 'this project')));
+  card.appendChild(h);
+  const bot = el('div', 'au-bot');
+  bot.appendChild(el('div', 'au-bot-ico', S.mode === 'sounds' || S.mode === 'sfx' ? '✦' : '♪'));
+  bot.appendChild(el('div', 'au-bot-tx', MODE_HELP[S.mode] || ''));
+  card.appendChild(bot);
+  const f = S.f[S.mode];
+
+  if (S.mode === 'simple') {
+    const picked = _pickedLabels();
+    const row = el('div', 'au-picked');
+    if (picked.length) for (const p of picked) row.appendChild(el('span', 'au-chip on', p));
+    else row.appendChild(el('span', null, 'No chips yet - pick the genre, the mood and the sound on the left.'));
+    card.appendChild(_field('The feel', row));
+    card.appendChild(_field('In your words', _text(f, 'words', { area: true, rows: 3, placeholder: 'e.g. soft and warm under a skincare review, nothing that pulls the ear away from the voice' }), { small: 'any language · optional', max: 1000 }));
+    card.appendChild(_check(f, 'writer', 'the writer makes Suno\'s style of it (off - the chips go as they are)'));
+  } else if (S.mode === 'custom') {
+    card.appendChild(_field('Title', _text(f, 'title', { placeholder: 'the track\'s name' }), { max: 80 }));
+    card.appendChild(_field('Style', _text(f, 'style', { area: true, rows: 3, placeholder: 'genre, mood, instruments, tempo, production - e.g. indie pop, bright clean guitars, 110 BPM, warm female vocal' }), { max: 1000 }));
+    card.appendChild(_check(f, 'instrumental', 'instrumental - no voice, no lyrics', () => paintMake()));
+    if (!f.instrumental) {
+      const ly = _text(f, 'lyrics', { area: true, rows: 7, placeholder: '[Verse]\n...\n[Chorus]\n...' });
+      const fl = _field('Lyrics', ly, { max: 5000, small: 'empty - Suno sings what it makes up' });
+      const wr = el('button', 'au-link', 'write lyrics from an idea…');
+      wr.type = 'button';
+      wr.addEventListener('click', () => {
+        if (!S.f.lyrics.idea) S.f.lyrics.idea = [f.title, f.style].filter(Boolean).join(' - ').slice(0, 200);
+        setMode('lyrics');
+      });
+      fl.appendChild(wr);
+      card.appendChild(fl);
+      const vs = el('select', 'au-sel');
+      for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
+      vs.value = f.vocal || '';
+      vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
+      card.appendChild(_field('Voice', vs));
+    }
+    card.appendChild(_field('Keep out', _text(f, 'negative', { placeholder: 'e.g. heavy metal, distortion, choir' }), { small: 'styles Suno should avoid', max: 500 }));
+    const kn = el('details', 'au-knobs');
+    kn.appendChild(el('summary', null, 'fine-tuning (Suno\'s own when untouched)'));
+    kn.appendChild(_knob(f, 'styleWeight', 'hold the style', 0, 1, 0.05, 'how closely it keeps to the style'));
+    kn.appendChild(_knob(f, 'weirdness', 'weirdness', 0, 1, 0.05, 'how far it may wander'));
+    kn.appendChild(_knob(f, 'variety', 'variety', 0, 4, 1, '0 - your style as written (V6 rewrites it at 1 and up) · 4 max: how different the two tracks are'));
+    card.appendChild(kn);
+  } else if (S.mode === 'lyrics') {
+    card.appendChild(_field('The idea', _text(f, 'idea', { area: true, rows: 2, placeholder: 'e.g. a hopeful song about the first coffee of the morning' }), { max: 200 }));
+  } else if (S.mode === 'sounds') {
+    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }), { max: 500 }));
+    const r2 = el('div', 'au-row2');
+    const tempo = el('input', 'au-in');
+    tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = 'auto';
+    tempo.value = f.tempo ? String(f.tempo) : '';
+    tempo.addEventListener('change', () => { f.tempo = Math.max(0, Math.min(300, Math.round(+tempo.value || 0))); save(); });
+    r2.appendChild(_field('Tempo', tempo, { small: 'BPM, for a loop' }));
+    const key = el('select', 'au-sel');
+    for (const k of (CAT.soundKeys || ['Any'])) { const op = el('option', null, k); op.value = k; key.appendChild(op); }
+    key.value = f.key || 'Any';
+    key.addEventListener('change', () => { f.key = key.value; save(); });
+    r2.appendChild(_field('Key', key));
+    card.appendChild(r2);
+    card.appendChild(_check(f, 'loop', 'a seamless loop'));
+  } else if (S.mode === 'compose') {
+    card.appendChild(_field('The music', _text(f, 'prompt', { area: true, rows: 4, placeholder: 'e.g. calm lo-fi with soft piano and vinyl crackle, steady, nothing that jumps out - under a voiceover' }), { max: 4100 }));
+    card.appendChild(_check(f, 'instrumental', 'instrumental - no voice'));
+  } else if (S.mode === 'video') {
+    card.appendChild(_field('The video', _attachment(f)));
+    card.appendChild(_field('What you want', _text(f, 'description', { area: true, rows: 3, placeholder: 'optional - e.g. upbeat and modern, builds to the reveal at the end' }), { max: 4100 }));
+    card.appendChild(_field('Tags', _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { small: 'up to 10, by commas' }));
+    card.appendChild(_check(f, 'sfx', 'add sound effects from what happens in the video'));
+    card.appendChild(_check(f, 'useAudio', 'use the video\'s own sound as a reference (its genre, tempo, mood)'));
+  } else if (S.mode === 'sfx') {
+    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a quick airy whoosh, left to right' }), { max: 1000 }));
+    const inf = el('div');
+    inf.appendChild(_knob(f, 'influence', 'follow the words', 0, 1, 0.05, 'higher - closer to the description, less varied'));
+    card.appendChild(_field('', inf));
+    card.appendChild(_check(f, 'loop', 'a seamless loop'));
+  }
+
+  const goRow = el('div', 'au-go-row');
+  const go = el('button', 'au-go', S.mode === 'lyrics' ? 'write the lyrics' : 'generate');
+  go.type = 'button';
+  go.addEventListener('click', () => generate(go));
+  goRow.appendChild(go);
+  goRow.appendChild(el('span', 'au-muted', _priceText()));
+  card.appendChild(goRow);
+  card.appendChild(el('div', 'au-err'));
+  host.appendChild(card);
+}
+
+// Video to Music: the video - this project's render, a clip of VIDEO, or one brought in from this computer.
+function _attachment(f) {
+  const att = el('div', 'au-att');
+  const paint = () => {
+    att.textContent = '';
+    if (f.video) {
+      if (f.thumb) { const im = el('img'); im.src = f.thumb; att.appendChild(im); } else att.appendChild(el('div', 'au-att-ph'));
+      const tx = el('div', 'au-att-tx');
+      tx.appendChild(el('b', null, f.name || f.video.split('/').pop()));
+      tx.appendChild(el('span', 'au-muted', f.video));
+      att.appendChild(tx);
+    } else {
+      att.appendChild(el('div', 'au-att-ph'));
+      att.appendChild(el('div', 'au-att-tx', 'Drop a video here, or choose one. Up to 10 minutes and 200 MB.'));
+    }
+    const pick = el('button', 'au-btn', f.video ? 'another…' : 'choose…');
+    pick.type = 'button';
+    pick.addEventListener('click', () => _pickVideo(pick, (v) => { Object.assign(f, v); save(); paint(); }));
+    att.appendChild(pick);
+    if (f.video) {
+      const x = el('button', 'au-x', '✕');
+      x.type = 'button';
+      x.title = 'no video';
+      x.addEventListener('click', () => { f.video = ''; f.name = ''; f.thumb = ''; save(); paint(); });
+      att.appendChild(x);
+    }
+  };
+  att.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); e.stopPropagation(); att.classList.add('is-drop'); } });
+  att.addEventListener('dragleave', () => att.classList.remove('is-drop'));
+  att.addEventListener('drop', async (e) => {
+    att.classList.remove('is-drop');
+    const file = Array.from(e.dataTransfer.files || [])[0];
+    if (!file) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const v = await _uploadVideo(file);
+    if (v) { Object.assign(f, v); save(); paint(); }
+  });
+  paint();
+  return att;
+}
+async function _uploadVideo(file) {
+  say('Bringing the video in (VIDEO → Uploads)…');
+  const fd = new FormData();
+  fd.append('video', file);
+  fd.append('name', file.name);
+  // Under the project's name in Uploads, as the video chat files what it is given.
+  if (_key) fd.append('project', _key);
+  try {
+    const d = await api('/api/mv3/video/upload', { method: 'POST', body: fd });
+    say('"' + file.name + '" is in VIDEO → Uploads.');
+    const it = d.item || {};
+    return { video: it.videoPath, name: it.name || file.name, thumb: it.thumbPath || '' };
+  } catch (e) { say(e.message, true); return null; }
+}
+let _pickEl = null, _pickLayer = null, _pickAway = null;
+function _closePick() {
+  if (_pickAway) document.removeEventListener('mousedown', _pickAway, true);
+  _pickAway = null;
+  if (_pickEl) _pickEl.remove();
+  _pickEl = null;
+  if (_pickLayer) Layers.close(_pickLayer);
+  _pickLayer = null;
+}
+function _pickVideo(anchor, done) {
+  _closePick();
+  const box = el('div', 'au-pick');
+  const tabs = el('div', 'au-pick-tabs');
+  const grid = el('div', 'au-pick-grid');
+  box.append(tabs, grid);
+  document.body.appendChild(box);
+  const r = anchor.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 528, r.left - 200)) + 'px';
+  box.style.top = Math.max(8, Math.min(window.innerHeight * 0.3, r.bottom + 6)) + 'px';
+  _pickEl = box;
+  _pickLayer = Layers.open(box, { modal: true, name: 'a video for the music', onEsc: _closePick });
+  _pickAway = (e) => { if (_pickEl && !_pickEl.contains(e.target)) _closePick(); };
+  setTimeout(() => { if (_pickAway) document.addEventListener('mousedown', _pickAway, true); }, 0);
+  const show = async (which) => {
+    for (const b of tabs.querySelectorAll('button[data-k]')) b.classList.toggle('is-primary', b.dataset.k === which);
+    grid.textContent = '';
+    grid.appendChild(el('div', 'au-empty', 'reading…'));
+    let items = [];
+    try {
+      const d = await api(which === 'renders' ? '/api/library/shelf/renders' : '/api/library/shelf/media?group=video');
+      items = (d.items || []).filter(i => i.media && /\.(mp4|mov|webm|m4v)$/i.test(i.media)).slice(0, 120);
+    } catch (e) { grid.textContent = ''; grid.appendChild(el('div', 'au-err', e.message)); return; }
+    grid.textContent = '';
+    if (!items.length) grid.appendChild(el('div', 'au-empty', 'Nothing here.'));
+    for (const it of items) {
+      const b = el('button', 'au-pick-it');
+      b.type = 'button';
+      if (it.thumb) { const im = el('img'); im.src = it.thumb; im.loading = 'lazy'; b.appendChild(im); } else b.appendChild(el('div', 'au-att-ph'));
+      b.appendChild(el('span', null, it.name || it.media.split('/').pop()));
+      b.title = it.name + (it.dur || (it.meta && it.meta.dur) ? ' · ' + secs(it.dur || it.meta.dur) : '');
+      b.addEventListener('click', () => { _closePick(); done({ video: it.media, name: it.name, thumb: it.thumb || '' }); });
+      grid.appendChild(b);
+    }
+  };
+  for (const [k, label] of [['renders', 'Renders'], ['video', 'VIDEO library']]) {
+    const b = el('button', 'au-btn', label);
+    b.type = 'button';
+    b.dataset.k = k;
+    b.addEventListener('click', () => show(k));
+    tabs.appendChild(b);
+  }
+  const up = el('button', 'au-btn', 'from this computer…');
+  up.type = 'button';
+  up.addEventListener('click', () => {
+    const inp = el('input');
+    inp.type = 'file'; inp.accept = 'video/*';
+    inp.addEventListener('change', async () => {
+      const file = inp.files && inp.files[0];
+      if (!file) return;
+      _closePick();
+      const v = await _uploadVideo(file);
+      if (v) done(v);
+    });
+    inp.click();
+  });
+  tabs.appendChild(el('span', 'sp'));
+  tabs.appendChild(up);
+  show('renders');
+}
+
+// The request of the open mode, and where its Alerts row leads: back here, in this project.
+function _body() {
+  const f = S.f[S.mode];
+  const b = { mode: S.mode, model: S.model };
+  if (S.mode === 'simple') {
+    const groups = _chipsGroups();
+    b.chips = groups.length && groups[0].key ? { genre: (f.picked || {}).genre || [], mood: (f.picked || {}).mood || [], sound: (f.picked || {}).sound || [] } : (f.flat || []);
+    b.words = f.words; b.seconds = f.seconds || 0; b.writer = f.writer !== false;
+    b.projectKind = WRITER_KIND[_kind()] || 'blank';
+  } else if (S.mode === 'custom') {
+    Object.assign(b, { title: f.title, style: f.style, lyrics: f.lyrics, instrumental: !!f.instrumental, vocal: f.vocal, negative: f.negative,
+      styleWeight: f.styleWeight, weirdness: f.weirdness, variety: f.variety, seconds: f.seconds || 0 });
+  } else if (S.mode === 'lyrics') b.idea = f.idea;
+  else if (S.mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
+  else if (S.mode === 'compose') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, instrumental: f.instrumental !== false });
+  else if (S.mode === 'video') Object.assign(b, { video: f.video, description: f.description, tags: f.tags, sfx: !!f.sfx, useAudio: !!f.useAudio });
+  else if (S.mode === 'sfx') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, loop: !!f.loop, influence: f.influence });
+  const m = CAT.modes.find(x => x.id === S.mode);
+  b.where = {
+    page: 'merge', href: '/merge?p=' + encodeURIComponent(_key) + '&open=audio',
+    label: 'Merge · ' + (Store.title() || 'project') + ' · audio · ' + (m ? m.label : S.mode),
+    spot: { key: _key, view: 'audio' },
+  };
+  b.project = _key;
+  return b;
+}
+
+let _going = false;
+async function generate(btn) {
+  if (_going || !_key) return;
+  _going = true;
+  btn.disabled = true;
+  const err = btn.closest('.au-card').querySelector('.au-err');
+  err.textContent = '';
+  try {
+    const d = await post('/api/audio/gen', _body());
+    GENS = [d.gen].concat(GENS.filter(g => g.id !== d.gen.id));
+    paintMade();
+    say(d.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can go on working, the app files it when it comes.');
+    _follow();
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    _going = false;
+    btn.disabled = false;
+  }
+}
+
+// ── what was made ───────────────────────────────────────────────────────────
+const MODE_NAME = (id) => ((CAT && CAT.modes.find(m => m.id === id)) || { label: id }).label;
+const _ago = (iso) => {
+  const t = Date.parse(iso);
+  if (!t) return '';
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return s + ' s ago';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  const d = new Date(t);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+};
+function paintMade() {
+  if (!_ui) return;
+  const host = _ui.made;
+  host.textContent = '';
+  _ui.madeN.textContent = GENS.length ? '· ' + GENS.length : '';
+  if (!GENS.length) { host.appendChild(el('div', 'au-empty', 'Nothing yet for this project - what you make appears here, newest first.')); return; }
+  for (const g of GENS) host.appendChild(_genCard(g));
+}
+function _genCard(g) {
+  const card = el('div', 'au-gen' + (g.state === 'failed' ? ' is-failed' : ''));
+  const h = el('div', 'au-gen-h');
+  h.appendChild(el('span', 'au-state ' + (g.state === 'pending' ? 'run' : g.state === 'done' ? 'ok' : 'bad'),
+    g.state === 'pending' ? 'making' : g.state === 'done' ? 'done' : (g.refused ? 'refused' : 'failed')));
+  h.appendChild(el('b', null, g.said || MODE_NAME(g.mode)));
+  h.appendChild(el('span', 'sp'));
+  h.appendChild(el('span', null, (g.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + MODE_NAME(g.mode) + (g.fake ? ' · FAKE' : '') + ' · ' + _ago(g.at)));
+  if (g.state !== 'pending') {
+    const x = el('button', 'au-x', '✕');
+    x.type = 'button';
+    x.title = 'Off this list - the files stay where they are';
+    x.addEventListener('click', async () => {
+      try { await api('/api/audio/gens/' + encodeURIComponent(g.id), { method: 'DELETE' }); GENS = GENS.filter(y => y.id !== g.id); paintMade(); }
+      catch (e) { say(e.message, true); }
+    });
+    h.appendChild(x);
+  }
+  card.appendChild(h);
+  if (g.mode === 'simple' && g.written && g.written.style) {
+    const w = el('div', 'au-said');
+    w.appendChild(el('b', null, (g.written.by === 'as picked' ? 'Sent as picked' : 'The writer wrote') + ': '));
+    w.appendChild(document.createTextNode(g.written.title + ' — ' + g.written.style));
+    if (g.fell) w.appendChild(el('div', 'au-muted', g.fell));
+    card.appendChild(w);
+  }
+  if (g.state === 'pending') {
+    const bar = el('div', 'au-bar');
+    bar.appendChild(el('i'));
+    card.appendChild(bar);
+    const row = el('div', 'au-gen-h');
+    row.appendChild(el('span', null, (g.stage || (g.taskId ? (g.engine === 'eleven' ? 'ElevenLabs is making it' : 'Suno is making it') : 'starting')) + ' · ' + _ago(g.at).replace(' ago', '')));
+    row.appendChild(el('span', 'sp'));
+    if (g.alertId) {
+      const st = el('button', 'au-link', 'stop waiting');
+      st.type = 'button';
+      st.title = 'It stops being waited for and is not filed - the money is not given back';
+      st.addEventListener('click', async () => {
+        try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', {}); _poll(); } catch (e) { say(e.message, true); }
+      });
+      row.appendChild(st);
+    }
+    card.appendChild(row);
+  } else if (g.state === 'failed') {
+    card.appendChild(el('div', 'au-err', g.error || 'it did not come'));
+    if (g.alertId && !g.refused) {
+      const again = el('button', 'au-link', 'try again (pays again)');
+      again.type = 'button';
+      again.addEventListener('click', async () => {
+        if (!window.confirm('Ask for it again? It costs ' + (g.engine === 'eleven' ? 'ElevenLabs credits' : 'kie credits') + ' again.')) return;
+        try { await post('/api/alerts/' + encodeURIComponent(g.alertId) + '/retry', {}); say('Asked again.'); _follow(); _poll(); } catch (e) { say(e.message, true); }
+      });
+      card.appendChild(again);
+    }
+  } else if (g.kind === 'lyrics') {
+    for (const l of (g.lyrics || [])) card.appendChild(_lyric(l));
+  } else {
+    for (const r of (g.results || [])) card.appendChild(_result(r));
+  }
+  return card;
+}
+
+// One sound heard at a time: a press on a row plays it, a press again stops it; the row shows how far it is.
+let _hear = null;
+function _stopHearing() {
+  if (!_hear) return;
+  try { _hear.audio.pause(); } catch (e) { /* gone */ }
+  _hear.row.classList.remove('is-playing');
+  _hear.row.style.removeProperty('--p');
+  _hear = null;
+}
+function _hearToggle(path, row) {
+  if (_hear && _hear.path === path) { _stopHearing(); return; }
+  _stopHearing();
+  const audio = new Audio(path);
+  _hear = { path, row, audio };
+  row.classList.add('is-playing');
+  audio.addEventListener('timeupdate', () => { if (_hear && _hear.audio === audio && audio.duration) row.style.setProperty('--p', (audio.currentTime / audio.duration * 100).toFixed(1) + '%'); });
+  audio.addEventListener('ended', () => { if (_hear && _hear.audio === audio) _stopHearing(); });
+  audio.play().catch(() => { _stopHearing(); say('That file will not play', true); });
+}
+
+function _result(r) {
+  const it = LIBIDX.get(r.path);
+  const row = el('div', 'au-res' + (_hear && _hear.path === r.path ? ' is-playing' : ''));
+  row.dataset.path = r.path;
+  const pb = el('button', 'au-play', '▶');
+  pb.type = 'button';
+  row.appendChild(pb);
+  row.appendChild(el('span', 'au-res-n', (it && it.name) || r.title));
+  row.appendChild(waveEl(it ? (it.meta || {}).wave : [], 'au-wave'));
+  row.appendChild(el('span', 'au-muted', secs(r.dur)));
+  if (it) {
+    const fav = !!(it.meta && it.meta.favorite);
+    const star = el('button', 'au-star' + (fav ? ' on' : ''), fav ? '★' : '☆');
+    star.type = 'button';
+    star.title = fav ? 'Take it out of Favorites' : 'Into Favorites';
+    star.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/api/library/item/' + encodeURIComponent(it.kind) + '/' + encodeURIComponent(it.id),
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ favorite: !fav }) });
+        await _index();
+        paintMade();
+        window.dispatchEvent(new Event('mv3:lib-reload'));
+      } catch (er) { say(er.message, true); }
+    });
+    row.appendChild(star);
+    const show = el('button', 'au-link', 'show');
+    show.type = 'button';
+    show.title = 'Where it lies - on the shelf, in its place in the tree';
+    show.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      _stopHearing();
+      const L = await import('./library.js');
+      L.reveal(r.path);
+    });
+    row.appendChild(show);
+  } else {
+    row.appendChild(el('span', 'au-muted', 'deleted'));
+  }
+  row.addEventListener('click', () => _hearToggle(r.path, row));
+  // Onto an audio lane, as a tile of the shelf is: a track of music lies as a bed, a sound as a sound effect.
+  if (it) {
+    row.draggable = true;
+    row.title = 'A press plays it · drag it onto an audio lane';
+    row.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'copyMove';
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({
+        libId: it.id, src: it.media, thumb: null, name: it.name || r.title || '', group: it.kind,
+        dur: +it.dur || +r.dur || 0, media: 'audio', bed: it.kind === 'music',
+      }));
+      e.dataTransfer.setData(DRAG_MEDIA + 'audio', '1');
+      setMediaDrag(e.dataTransfer, it);
+    });
+  }
+  return row;
+}
+function _lyric(l) {
+  const box = el('div', 'au-lyr');
+  const h = el('div', 'au-lyr-h');
+  h.appendChild(el('span', null, l.title || 'Lyrics'));
+  h.appendChild(el('span', 'sp'));
+  const use = el('button', 'au-link', 'use in custom');
+  use.type = 'button';
+  use.addEventListener('click', () => {
+    S.f.custom.lyrics = l.text;
+    if (!S.f.custom.title) S.f.custom.title = String(l.title || '').slice(0, 80);
+    S.f.custom.instrumental = false;
+    setMode('custom');
+    say('The lyrics are in Custom.');
+  });
+  const copy = el('button', 'au-link', 'copy');
+  copy.type = 'button';
+  copy.addEventListener('click', () => { navigator.clipboard.writeText(l.text).then(() => say('Copied.')).catch(() => say('Not copied.', true)); });
+  const more = el('button', 'au-link', 'all');
+  more.type = 'button';
+  more.addEventListener('click', () => box.classList.toggle('open'));
+  h.append(use, copy, more);
+  box.appendChild(h);
+  box.appendChild(el('pre', null, l.text));
+  return box;
+}
+
+// The shelf's items by path: a result row's name, waveform and star - and what a lane is given when it is dragged.
+async function _index() {
+  const map = new Map();
+  for (const f of ['music', 'sounds']) {
+    try { for (const it of (await api('/api/library/shelf/media?filter=' + f)).items || []) map.set(String(it.media || '').split('?')[0], it); } catch (e) { /* none */ }
+  }
+  LIBIDX = map;
+}
+
+// Followed while anything is being made and the view is up: every 3 s, the list again; what ended is filed, the shelf read
+// again. Alerts says when something lands while the view is not up.
+let _timer = 0;
+async function _poll() {
+  if (!_key) return;
+  const asked = _key;
+  let d;
+  try { d = await api('/api/audio/gens?limit=40&project=' + encodeURIComponent(_key)); } catch (e) { return; }
+  if (asked !== _key) return;
+  const before = new Map(GENS.map(g => [g.id, g.state]));
+  GENS = d.items || [];
+  const ended = GENS.some(g => before.get(g.id) === 'pending' && g.state !== 'pending');
+  if (ended) {
+    await _index();
+    window.dispatchEvent(new Event('mv3:lib-reload'));
+    const done = GENS.find(g => before.get(g.id) === 'pending' && g.state === 'done');
+    if (done) say((done.kind === 'lyrics' ? 'The lyrics are here.' : 'Done - ' + (done.kind === 'sound' ? 'in SFX → My sounds → Generated.' : 'in AUDIO → Music.')));
+  }
+  paintMade();
+  if (!GENS.some(g => g.state === 'pending')) _unfollow();
+}
+function _follow() {
+  if (_timer || !_shown) return;
+  _timer = setInterval(_poll, 3000);
+}
+function _unfollow() { clearInterval(_timer); _timer = 0; }
+
+// ── the almanac (V34.A: public/js/audio/almanac-data.js) ────────────────────
+// Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right; a
+// press puts a note's `text` into the field it is for (`to` - the first one the open mode has; else the mode of the
+// first is opened) and applies its `set` and `seconds` to the mode's controls. An advice note (`to` empty) is read.
+const FIELD_AT = {
+  words: ['simple', 'words'], style: ['custom', 'style'], negative: ['custom', 'negative'], lyrics: ['custom', 'lyrics'],
+  idea: ['lyrics', 'idea'], sound: ['sounds', 'prompt'], sfx: ['sfx', 'prompt'], music: ['compose', 'prompt'],
+};
+const SET_AT = {
+  style_weight: ['custom', 'styleWeight'], weirdness_constraint: ['custom', 'weirdness'], variety: ['custom', 'variety'],
+  vocal_gender: ['custom', 'vocal'], sound_loop: ['sounds', 'loop'], sound_tempo: ['sounds', 'tempo'], sound_key: ['sounds', 'key'],
+  prompt_influence: ['sfx', 'influence'], loop: ['sfx', 'loop'],
+};
+function _almSections() {
+  return (ALM && Array.isArray(ALM.SECTIONS)) ? ALM.SECTIONS.filter(s => s && s.label && Array.isArray(s.notes)) : [];
+}
+const _fieldLabel = (f) => (ALM && ALM.FIELDS && ALM.FIELDS[f] && ALM.FIELDS[f].label) || f;
+function _applyNote(n) {
+  const to = Array.isArray(n.to) ? n.to.filter(f => FIELD_AT[f]) : [];
+  if (!to.length) {
+    // Advice is read - a press copies it, as the video chat's almanac does.
+    try { navigator.clipboard.writeText(String(n.text || '')); } catch (e) { /* not allowed */ }
+    return { said: 'Advice - copied.' };
+  }
+  const here = to.find(f => FIELD_AT[f][0] === S.mode) || to[0];
+  const [mode, key] = FIELD_AT[here];
+  const switched = mode !== S.mode;
+  const f = S.f[mode];
+  const spec = (ALM.FIELDS && ALM.FIELDS[here]) || {};
+  const cur = String(f[key] || '').replace(/\s+$/, '');
+  const next = cur ? cur + (spec.join || ', ') + n.text : String(n.text || '');
+  // Over the field's limit it is not put in - said (V34.A: "за max не вставлять, а сказать").
+  if (spec.max && next.length > spec.max) return { bad: true, said: _fieldLabel(here) + ' is full: ' + cur.length + ' of ' + spec.max + ' characters - make room first.' };
+  f[key] = next;
+  if (mode === 'custom' && here === 'lyrics') f.instrumental = false;
+  for (const [k, v] of Object.entries(n.set || {})) {
+    const at = SET_AT[k];
+    if (at && at[0] === mode) S.f[mode][at[1]] = v;
+  }
+  if (+n.seconds > 0 && (mode === 'sfx' || mode === 'compose')) f.seconds = +n.seconds;
+  save();
+  if (switched) setMode(mode); else { paintCol(); paintMake(); }
+  return { said: '"' + n.title + '" is in ' + _fieldLabel(here) + (switched ? ' - the mode ' + MODE_NAME(mode) + ' is open' : '') + '.' };
+}
+let _almWin = null;
+function openAlmanac(anchor) {
+  if (_almWin) { _almWin.close(); return; }
+  const secs0 = _almSections();
+  const win = el('div', 'hp au-alm');
+  const head = el('div', 'hp-head');
+  head.appendChild(el('b', null, 'Almanac'));
+  head.appendChild(el('span', 'hp-sub', 'music and sounds · a press puts a note into its field' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
+  const x = el('button', 'hp-x', '✕');
+  x.type = 'button';
+  head.appendChild(x);
+  win.appendChild(head);
+  const body = el('div', 'hp-body');
+  const side = el('div', 'hp-side');
+  const main = el('div', 'au-alm-main');
+  body.append(side, main);
+  win.appendChild(body);
+  // Beside the settings column: the constructor stays in sight, so the note is seen landing in its field.
+  const r = anchor.getBoundingClientRect();
+  const w = Math.max(520, Math.min(820, window.innerWidth - r.right - 30));
+  win.style.left = Math.round(Math.max(8, Math.min(r.right + 10, window.innerWidth - w - 16))) + 'px';
+  win.style.top = '84px';
+  win.style.width = w + 'px';
+  win.style.height = 'calc(100vh - 120px)';
+  document.body.appendChild(win);
+  const layer = Layers.open(win, { modal: false, name: 'the audio almanac', onEsc: () => close() });
+  const close = () => { win.remove(); Layers.close(layer); _almWin = null; };
+  _almWin = { close };
+  x.addEventListener('click', close);
+  const soundy = S.mode === 'sounds' || S.mode === 'sfx';
+  let open = secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
+  let cat = '';
+  const paintSide = () => {
+    side.textContent = '';
+    for (const [g, label] of [['music', 'Music'], ['sound', 'Sounds']]) {
+      const list = secs0.filter(s => s.group === g);
+      if (!list.length) continue;
+      side.appendChild(el('div', 'au-lbl au-alm-g', label));
+      for (const s of list) {
+        const b = el('button', 'hp-sec' + (s === open ? ' on' : ''));
+        b.type = 'button';
+        b.appendChild(el('span', 'nm', s.label));
+        b.appendChild(el('small', null, String(s.notes.length)));
+        b.title = s.about || '';
+        b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); });
+        side.appendChild(b);
+        if (s === open && (s.cats || []).length > 1) {
+          for (const c of s.cats) {
+            const cb = el('button', 'hp-cat' + (cat === c.id ? ' on' : ''));
+            cb.type = 'button';
+            cb.appendChild(el('span', 'nm', c.label));
+            cb.appendChild(el('small', null, String(s.notes.filter(n => n.cat === c.id).length)));
+            cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); });
+            side.appendChild(cb);
+          }
+        }
+      }
+    }
+  };
+  const paintNotes = () => {
+    main.textContent = '';
+    if (!open) return;
+    if (open.about) main.appendChild(el('div', 'au-said', open.about));
+    for (const n of open.notes.filter(y => !cat || y.cat === cat)) {
+      const b = el('button', 'au-alm-note' + ((n.to || []).length ? '' : ' is-advice'));
+      b.type = 'button';
+      const h = el('div', 'au-lyr-h');
+      h.appendChild(el('span', null, n.title));
+      h.appendChild(el('span', 'sp'));
+      const to = (n.to || []).map(_fieldLabel);
+      h.appendChild(el('span', 'au-muted', to.length ? '→ ' + to.join(', ') : 'advice'));
+      b.appendChild(h);
+      b.appendChild(el('div', 'au-alm-text', n.text));
+      if (n.why) b.appendChild(el('div', 'au-said', n.why));
+      const extra = [];
+      if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
+      if (n.seconds) extra.push(n.seconds + ' s');
+      if (extra.length) b.appendChild(el('div', 'au-muted au-alm-set', 'sets ' + extra.join(' · ')));
+      const srcs = (n.src || []).map(id => ALM.SOURCES && ALM.SOURCES[id]).filter(Boolean);
+      if (srcs.length) {
+        const sr = el('div', 'au-alm-src');
+        for (const s of srcs.slice(0, 4)) {
+          const a = el('a', null, s.name);
+          a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
+          a.addEventListener('click', (e) => e.stopPropagation());
+          sr.appendChild(a);
+        }
+        b.appendChild(sr);
+      }
+      b.addEventListener('click', () => {
+        const res = _applyNote(n);
+        if (!res.bad) { b.classList.add('is-put'); setTimeout(() => b.classList.remove('is-put'), 700); }
+        say(res.said, !!res.bad);
+      });
+      main.appendChild(b);
+    }
+  };
+  paintSide();
+  paintNotes();
+}
+
+// ── the view ────────────────────────────────────────────────────────────────
+// Built the first time it shows: the settings column, the middle (the word line, the constructor), the sash, "Made here".
+// Narrower than 900 px "Made here" goes under the constructor (.au-mid); narrower than 620 the settings column goes above
+// both (.au-narrow).
+const KEY_MADE_W = 'mv3_audio_made_w';
+function _build() {
+  if (_ui) return;
+  const root = $('mv3-ac');
+  if (!root) return;
+  root.textContent = '';
+  const set = el('div', 'mv3-ig-set au-set');
+  const col = el('div', 'mv3-ig-scroll');
+  const alm = el('div', 'au-alm-foot');
+  set.append(col, alm);
+  const mid = el('div', 'au-mid');
+  const status = el('div', 'au-status');
+  status.hidden = true;
+  const make = el('div', 'au-make');
+  mid.append(status, make);
+  const sash = el('div', 'mv3-lib-sash au-sash');
+  sash.title = 'Drag to resize - a double press gives the default width back';
+  const madeCol = el('div', 'au-madecol');
+  const madeH = el('div', 'au-made-h', 'Made here ');
+  const madeN = el('span', 'au-muted');
+  madeH.appendChild(madeN);
+  const made = el('div', 'au-made');
+  madeCol.append(madeH, made);
+  root.append(set, mid, sash, madeCol);
+  _ui = { root, set, col, alm, mid, status, make, sash, madeCol, made, madeN, price: null, narrow: '' };
+  _wireMadeSash();
+  new ResizeObserver(() => _fit()).observe(root);
+}
+function _fit() {
+  if (!_ui) return;
+  const w = _ui.root.clientWidth;
+  if (!w) return;
+  // Its own names: the chats' `is-narrow` (css/mv3-imagen.css) folds their settings into one row, which this column is not.
+  const n = w < 620 ? 'au-narrow' : w < 900 ? 'au-mid' : '';
+  if (n === _ui.narrow) return;
+  _ui.narrow = n;
+  _ui.root.classList.toggle('au-narrow', n === 'au-narrow');
+  _ui.root.classList.toggle('au-mid', n !== '');
+  // "Made here" under the constructor, or beside it behind the sash.
+  if (n) _ui.mid.appendChild(_ui.madeCol);
+  else _ui.root.appendChild(_ui.madeCol);
+}
+function _wireMadeSash() {
+  const { sash, madeCol: box, root } = _ui;
+  const room = () => {
+    const view = root.getBoundingClientRect().width;
+    const set = _ui.set.getBoundingClientRect().width;
+    return Math.max(260, view - set - 360 - 5);
+  };
+  const apply = (w) => {
+    if (!(w > 0)) { box.style.flexBasis = ''; return 0; }
+    const v = Math.max(260, Math.min(room(), Math.round(w)));
+    box.style.flexBasis = v + 'px';
+    return v;
+  };
+  apply(+ls(KEY_MADE_W, 0) || 0);
+  sash.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const from = e.clientX;
+    const base = box.getBoundingClientRect().width;
+    document.body.classList.add('mv3-resize-v');
+    const move = (ev) => apply(base - (ev.clientX - from));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-v');
+      lsSet(KEY_MADE_W, Math.round(box.getBoundingClientRect().width));
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => { apply(0); lsSet(KEY_MADE_W, 0); });
+}
+
+async function _ready() {
+  if (CAT) return true;
+  try { CAT = await api('/api/audio/catalog'); } catch (e) { CAT = null; say('Generate audio could not start: ' + e.message, true); return false; }
+  if (CAT.almanac) { try { ALM = await import('/js/audio/almanac-data.js'); } catch (e) { ALM = null; } }
+  if (!CAT.sunoModels.includes(S.model)) S.model = 'V6';
+  return true;
+}
+
+// `remember` is false when another view took the base (onYield): that one writes its own mark.
+async function _show(on, remember = true) {
+  _shown = !!on;
+  if (remember) Views.rememberView(_lk(_key), _shown ? NAME : null, NAME);
+  Views.setBase(NAME, _shown);
+  if (!_shown) { _stopHearing(); _unfollow(); if (_almWin) _almWin.close(); _closePick(); return; }
+  _build();
+  if (!(await _ready()) || !_shown) return;
+  _forProject();
+  paintCol();
+  paintMake();
+  GENS = [];
+  paintMade();
+  await _index();
+  await _poll();
+  if (GENS.some(g => g.state === 'pending')) _follow();
+  requestAnimationFrame(_fit);
+}
+
+/** Every way in: the crumb, ?open=audio (an Alerts row). */
+export async function openAudio() {
+  if (!_allowed()) return;
+  Views.toBase();
+  setOpenColumn('library');
+  await _show(true);
+}
+
+function _crumb() {
+  const c = $('mv3-lib-agen');
+  if (c) c.hidden = !(Store.isReady() && !!Store.key() && !_hl(Store.key()));
+}
+
+function _onStore() {
+  if (!Store.isReady()) return;
+  _crumb();
+  const k = Store.key() || '';
+  // The draft saved under a name: its own from now on, and it stays on the view it was on.
+  if (k === _key && _draftHere && !Store.isDraft()) {
+    _draftHere = false;
+    if (_shown) Views.rememberView(k, NAME);
+    return;
+  }
+  if (k === _key) return;
+  _key = k;
+  _draftHere = !!Store.isDraft();
+  _stopHearing();
+  _unfollow();
+  const want = _allowed() && Views.viewOf(_lk(k)) === NAME;
+  if (want) _show(true, false);
+  else if (_shown) _show(false, false);
+  else Views.sync();
+}
+
+export function initAudChat() {
+  Views.registerChat(NAME, {
+    root: 'mv3-ac', crumb: 'mv3-lib-agen',
+    crumbTitle: 'Generate music and sounds - Suno and ElevenLabs',
+    onBack: () => _show(false), onYield: () => _show(false, false), onCrumb: () => { openAudio(); },
+  });
+  Store.onChange(_onStore);
+  _onStore();
+}

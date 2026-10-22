@@ -24,6 +24,7 @@ import * as Store from './store.js';
 import { initBar } from './bar.js';
 import { initPicChat, openPictures } from './picchat.js';
 import { initVidChat, openVideos } from './vidchat.js';
+import { initAudChat, openAudio } from './audchat.js';
 import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
@@ -36,6 +37,7 @@ initViews();
 initLibrary();
 initPicChat();
 initVidChat();
+initAudChat();
 initScenarios();
 initHighlights();
 initFramesChat();
@@ -67,7 +69,13 @@ async function _videos() {
   if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
   return openVideos();
 }
-const _OPENERS = { pictures: _pictures, videos: _videos };
+// ...and ?open=audio, "generate audio"'s (phase V34.E).
+async function _audio() {
+  await wkSettled();
+  if (isTalking() && wkStep() !== 'timeline') setStep('timeline');
+  return openAudio();
+}
+const _OPENERS = { pictures: _pictures, videos: _videos, audio: _audio };
 (() => {
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { return; }
