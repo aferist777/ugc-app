@@ -47,7 +47,8 @@ export const isHeard = (c) => !!c && Array.isArray(c.words) && c.words.length > 
 //
 // A REVERSED clip is played backwards by the render (lib/mv3b-render.js), and speech backwards is
 // noise to a listener: it is left out, as silence.
-export const isBed = (c) => !!c && (c.bed === true
+// (phase V34.E) A sound effect from SFX (`sfx`) is not listened to either - whisper "hears" words in noise (the owner's (з7)).
+export const isBed = (c) => !!c && (c.bed === true || c.sfx === true
   || (/^m[0-9a-z]/.test(String(c.id || '')) && !c.pairId && /^\/media\/audio\//.test(String(c.src || ''))));
 
 /**

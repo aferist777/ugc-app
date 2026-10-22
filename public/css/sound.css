@@ -1,0 +1,76 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   SOUND ON THE SHELVES (phase V34.E) - what js/sound/ draws in Merge's Library panel and on the Library's Media shelf:
+   a sound's waveform on its tile, the search over SFX, the menu under the right button, "About", the cut window and the
+   online search. Loaded by both pages after their own sheets.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.snd-muted{color:var(--muted)}
+.snd-err{color:var(--danger); font-size:11.5px; margin-top:4px}
+.snd-err:empty{display:none}
+.snd-empty{padding:16px 4px; font-size:12px; color:var(--muted)}
+.snd-win .sp, .snd-shelf-head .sp{flex:1}
+
+/* the waveform (js/sound/wave.js) */
+.snd-wave{display:block; width:100%; height:34px}
+.snd-wave rect{fill:var(--muted); opacity:.75}
+.snd-wave rect.snd-wave-flat{opacity:.35}
+/* on Merge's square sound tile: under its name, over its length */
+.mv3-tile.is-sound .snd-twave{position:absolute; left:6px; bottom:15px; width:calc(100% - 12px); height:15px}
+.mv3-tile.is-sound.is-playing .snd-wave rect{fill:var(--accent); opacity:.95}
+/* on the Library's card: the lower part of the box */
+.lib-thumb-sound .snd-twave{position:absolute; left:8%; bottom:16%; width:84%; height:22%}
+.lib-card.is-playing .snd-wave rect{fill:var(--accent); opacity:.95}
+
+/* the search over SFX, and "find online…" (the panel's body; the Library's shelf header) */
+.snd-shelf-head{display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap}
+.snd-search{flex:1 1 180px; min-width:140px; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 8px}
+.snd-search:focus{outline:none; border-color:var(--primary)}
+.snd-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
+.snd-btn:hover{border-color:var(--muted)}
+.snd-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.snd-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
+.snd-btn[disabled]{opacity:.5; cursor:default}
+.snd-sel{background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:5px 6px}
+
+/* the menu under the right button, and "About" */
+.snd-menu{z-index:9310}
+.snd-about{width:340px; z-index:9310}
+.snd-about-row{display:grid; grid-template-columns:70px 1fr; gap:8px; font-size:11.5px; padding:2px 0; overflow-wrap:anywhere}
+.snd-about-row a{color:var(--primary)}
+
+/* windows: the cut and the online search */
+.snd-back{position:fixed; inset:0; z-index:9280; background:rgba(0,0,0,.45)}
+.snd-win{position:fixed; z-index:9290; left:50%; top:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:86vh;
+  display:flex; flex-direction:column; gap:10px; padding:12px 14px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow)}
+.snd-win-head{display:flex; align-items:baseline; gap:10px}
+.snd-win-head b{font-size:13px}
+.snd-win-head .snd-muted{flex:1; min-width:0; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.snd-cut-stage{background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:6px}
+.snd-cut-cv{display:block; width:100%; height:120px; cursor:ew-resize; touch-action:none}
+.snd-cut-info{font-size:11.5px; color:var(--muted)}
+.snd-cut-row{display:flex; align-items:center; gap:8px}
+.snd-cut-row .snd-sel{width:auto; min-width:160px}
+.snd-cut-row .sp{flex:1}
+.snd-online{width:min(860px, calc(100vw - 40px)); height:84vh}
+.snd-on-bar{display:flex; align-items:center; gap:8px}
+.snd-on-bar .sp{flex:1}
+.snd-on-bar .snd-sel{width:auto; min-width:150px}
+.snd-on-list{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px}
+.snd-on-row{display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg); flex-wrap:wrap}
+.snd-on-tx{flex:1 1 260px; min-width:0; display:flex; flex-direction:column; gap:1px}
+.snd-on-tx b{font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.snd-on-tx span{font-size:10.5px}
+.snd-on-tags{color:var(--muted); opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.snd-on-wave{width:150px; height:28px}
+.snd-on-link{font-size:11px; color:var(--primary); text-decoration:none}
+.snd-on-link:hover{text-decoration:underline}
+.snd-on-pager{display:flex; align-items:center; justify-content:center; gap:10px; font-size:11px}
+.snd-on-foot{display:flex; flex-direction:column; gap:6px; padding-top:8px; border-top:1px solid var(--border-soft)}
+.snd-on-gal{display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:11px}
+.snd-on-credit{font-size:10.5px; color:var(--muted)}
+.snd-play{flex:0 0 auto; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2); color:var(--ink); font-size:10px; cursor:pointer; padding:0}
+.snd-play.on{border-color:var(--gold); color:var(--gold)}
+
+/* the Library's bar: the search sits between the shelf's own buttons and its status */
+.lib-snd-head{flex:1 1 360px; max-width:620px; min-width:0}
+.lib-snd-head .snd-shelf-head{margin:0; flex-wrap:nowrap}

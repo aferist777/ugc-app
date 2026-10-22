@@ -316,6 +316,8 @@ function _drop(trackId, want, data) {
     // one lane they cross into each other by themselves (js/merge-v3/fades.js).
     if (track.kind === 'audio') {
       if (data.bed) track.clips.push({ ...base, id: vidId, volume: 0.5, bed: true, pairId: null });
+      // (phase V34.E) A sound of SFX - own or built-in: full volume, never transcribed (captions/heard.js isBed).
+      else if (data.group === 'sounds' || data.group === 'sfx') track.clips.push({ ...base, id: vidId, volume: 1, sfx: true, pairId: null });
       else track.clips.push({ ...base, id: vidId, volume: 1, pairId: null });
       return;
     }

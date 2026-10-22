@@ -6,7 +6,7 @@
      REFERENCES -> Files, Instagram (Posts, Reels), YouTube (Shorts, Videos), TikTok (Posts, Videos), Other  (phase TG)
      VIDEO   -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
      IMAGES  -> its categories
-     AUDIO   -> Music, SFX -> categories
+     AUDIO   -> Music, SFX -> ★ Favorites, Built-in (the program's set, read only), My sounds (categories)   (phase V34.E)
 
    It is read in one answer (GET /api/library/tree, routes/library.js _tree): every node { key, label, count, q, kind?,
    cat?, locked?, empty?, uncat?, children? }. Pressing a node SELECTS it and the page shows everything under it
@@ -37,7 +37,7 @@ const KIND_TYPE = 'application/x-ugc-kind-';
 const UNCAT = '__uncat__';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references']);
-const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post' };
+const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
 // (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
@@ -74,7 +74,8 @@ function _target(n) {
   // its source's folder.
   if (n.kind === 'references') { const c = n.cat && n.cat !== UNCAT ? n.cat : ''; return { kind: 'references', cat: c, name: c ? (n.name || n.label) : '' }; }
   // (block 6) YOUTUBE is the Sources' - nothing is filed into it, nothing of it moves.
-  if (!n.kind || n.kind === 'heads' || n.kind === 'music' || n.kind === 'youtube') return null;
+  // (phase V34.E) Built-in (kind `sfx`) is the program's: nothing is filed into it.
+  if (!n.kind || n.kind === 'heads' || n.kind === 'music' || n.kind === 'youtube' || n.kind === 'sfx') return null;
   const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
   return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
 }
@@ -85,6 +86,8 @@ function _target(n) {
 function _dropAction(n, from, refType) {
   const t = _target(n);
   if (!t || !from) return '';
+  // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
+  if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
   if (from === 'references') {
     if (t.kind === 'references') return 'ref';
     if (refType === 'video' && VIDEO.has(t.kind)) return 'out';
@@ -126,6 +129,8 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *   o.onSelect(node)      a node was chosen (also once the first read lands)
  *   o.onChanged(what)     the library changed from here (a category made, renamed, deleted; a tile moved) - read the
  *                         gallery again; the tree reads itself again
+ *   o.takesFiles(node)    (phase V34.E) whether files from Explorer may be let go on this node's row
+ *   o.onFiles(node, files)  they were
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind) }
  */
 export function createTree(host, o) {
@@ -267,13 +272,14 @@ export function createTree(host, o) {
     row.appendChild(tw);
 
     const name = _el('span', 'mt-name', n.label);
-    name.title = n.locked ? n.label + ' - required: it cannot be renamed or deleted'
+    name.title = n.builtin ? n.label + ' - built into the app: read only'
+      : n.locked ? n.label + ' - required: it cannot be renamed or deleted'
       : n.empty ? n.label + ' - empty' : n.label;
     row.appendChild(name);
     if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
-      lock.title = 'Required - it cannot be renamed or deleted';
+      lock.title = n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed or deleted';
       row.appendChild(lock);
     }
     // A kind that can have categories: "+" makes one.
@@ -308,8 +314,17 @@ export function createTree(host, o) {
     if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
 
-    // A tile let go here.
+    // A tile let go here - or (phase V34.E) files from Explorer, on a node that takes them (the page says, `takesFiles`).
+    const _files = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files')
+      && typeof opt.takesFiles === 'function' && opt.takesFiles(n);
     row.addEventListener('dragover', (e) => {
+      if (_files(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        row.classList.add('is-drop');
+        return;
+      }
       if (!_dropAction(n, _dragKind(e.dataTransfer), _refType(e.dataTransfer))) return;
       e.preventDefault();
       e.stopPropagation();
@@ -319,6 +334,12 @@ export function createTree(host, o) {
     row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
     row.addEventListener('drop', (e) => {
       row.classList.remove('is-drop');
+      if (_files(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        opt.onFiles(n, Array.from(e.dataTransfer.files || []));
+        return;
+      }
       if (!_dropAction(n, _dragKind(e.dataTransfer), _refType(e.dataTransfer))) return;
       e.preventDefault();
       e.stopPropagation();
@@ -367,6 +388,10 @@ export function createTree(host, o) {
     const act = _dropAction(n, it.kind, refType);
     const t = _target(n);
     if (!act || !t) return;
+    if (act === 'refuse') {
+      opt.status('A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
+      return;
+    }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category is Generated's Uncategorized.
     const where = t.cat ? n.label : (t.kind === 'birols' ? 'Generated · Uncategorized' : kindLabel(t.kind) + ' · Uncategorized');
@@ -540,7 +565,8 @@ export function createTree(host, o) {
     const kindNode = n.kind && !n.cat && CATABLE.has(n.kind) ? n : (n.cat ? byKey.get(n.kind) : null);
     if (kindNode && CATABLE.has(kindNode.kind)) items.push(['New category', 'in ' + kindNode.label, () => _newCat(kindNode, row)]);
     if (n.cat && !n.uncat && !n.project) {
-      if (n.locked) items.push(['Required', 'it cannot be renamed or deleted', null]);
+      if (n.builtin) items.push(['Built-in', 'part of the app - read only', null]);
+      else if (n.locked) items.push(['Required', 'it cannot be renamed or deleted', null]);
       else if (n.own) {
         items.push(['Rename', n.label, () => _rename(n, row)]);
         items.push(['Delete', 'the category - its media stay, or go with it', () => _askDelete(n, row)]);

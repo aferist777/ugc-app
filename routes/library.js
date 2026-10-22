@@ -225,6 +225,28 @@ function _posterOf(thumb, video) {
   return (t && _onDisk(t)) ? t : null;
 }
 
+// (phase V34.E) A sound's tags for the search: its own (found online), else the words of its name.
+function _soundTags(e) {
+  const m = e.meta || {};
+  if (Array.isArray(m.tags) && m.tags.length) return m.tags.map(String).slice(0, 20);
+  return String(e.name || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2).slice(0, 12);
+}
+// What the tile's "About" says: where a sound found online came from (author, licence, page), what a made one was asked.
+function _soundInfo(e) {
+  const m = e.meta || {};
+  const o = m.online;
+  if (o) {
+    return {
+      author: o.creator || '', authorUrl: o.creatorUrl || '',
+      license: (String(o.license || '').toUpperCase() + (o.licenseVersion ? ' ' + o.licenseVersion : '')).trim(), licenseUrl: o.licenseUrl || '',
+      from: (o.source === 'freesound' ? 'Freesound' : o.source === 'wikimedia' ? 'Wikimedia Commons' : (o.source || '')) + ' via Openverse',
+      url: o.landing || '', attribution: o.attribution || '', preview: !!o.preview,
+    };
+  }
+  if (m.prompt) return { prompt: String(m.prompt), engine: m.engine || '', mode: m.mode || '' };
+  return null;
+}
+
 // (phase V28.4) `opts.music`: Suno's tracks and the ones brought in (lib/music-store.js) as a sixth kind, `music` - only
 // when asked for (Audio -> Music in the media tree): every other reader of this shelf - the video chat, the pictures
 // chat, the Library's chats, the 3D Studio, Media's checks - reads it as it always was.
@@ -296,6 +318,8 @@ function _mediaShelf(opts) {
   }));
 
   // (phase V7) Sounds - no picture: the page draws a row of its own for them.
+  // (phase V34.E) With their waveform (lib/audio-wave.js), their tags, where they came from (a sound found online: its
+  // author, licence and page; one made here: what was asked) and the sound a piece was cut from - the tile's "About".
   const fromSounds = SND.read().filter(e => e && e.audioPath).map(e => ({
     id: String(e.id),
     name: String(e.name || '').trim() || 'sound',
@@ -303,7 +327,9 @@ function _mediaShelf(opts) {
     media: e.audioPath,
     thumb: null,
     dur: +e.duration || 0,
-    meta: { categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite, source: e.source || 'upload' },
+    meta: { categoryId: e.categoryId || '', categoryLabel: e.categoryLabel || '', date: e.date || null, favorite: !!e.favorite,
+            source: e.source || 'upload', wave: Array.isArray(e.wave) ? e.wave : [], tags: _soundTags(e), info: _soundInfo(e),
+            original: (e.meta && e.meta.original) || null },
   }));
 
   // (phase V28.4) Music - no categories, no picture; its length kept on the record (measured once for the older ones).
@@ -315,9 +341,24 @@ function _mediaShelf(opts) {
     thumb: null,
     dur: +t.duration || 0,
     meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''),
-            source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0 },
+            source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0, wave: Array.isArray(t.wave) ? t.wave : [],
+            info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' } },
   }));
   if (fromMusic.some(m => !(m.dur > 0))) MUSIC.fillLengths();
+  // (phase V34.E) SFX -> Built-in: the program's set (lib/sfx-builtin.js, vendor/sfx/ at /sfx/) - read only, only when
+  // asked; a built-in sound's star is kept by its address (lib/sfx-favorites.js).
+  let fromSfx = [];
+  if (opts && opts.sfx) {
+    const favs = new Set(require('../lib/sfx-favorites').list().map(f => f.path));
+    fromSfx = require('../lib/sfx-builtin').read().sounds.map(s => ({
+      id: s.id, name: s.name, kind: 'sfx', media: s.path, thumb: null, dur: s.dur,
+      meta: { categoryId: s.category, categoryLabel: s.categoryLabel, date: null, favorite: favs.has(s.path), source: 'built-in',
+              wave: s.wave, tags: s.tags,
+              info: { author: s.author, authorUrl: s.authorUrl, license: s.license, licenseUrl: s.licenseUrl, from: s.source, url: s.url } },
+    }));
+  }
+  // The tiles still with no waveform are measured behind this answer.
+  if (fromSounds.some(i => !i.meta.wave.length) || fromMusic.some(i => !i.meta.wave.length)) require('../lib/audio-wave').fill();
 
   // (phase V28.4, second round) The talking heads - every take of every line of every talking-head project (lib/heads.js),
   // only when asked (VIDEO -> Generated -> Talking heads); the project is its category. A take on a timeline is `used`.
@@ -338,7 +379,7 @@ function _mediaShelf(opts) {
   }
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
-    .filter(i => _onDisk(i.media));
+    .filter(i => _onDisk(i.media)).concat(fromSfx);
   // (phase TG, block 6; the owner: "в library на полке media можно смотреть видео скачаные с youtube ... все видео-источники
   // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
   // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
@@ -465,7 +506,9 @@ function _mediaCats(items, kind, labelFor) {
 // "2026-10-02"). Generated, Hooks and Uploads are locked; so are the required categories.
 // B-rolls has no Uncategorized of its own: a B-roll with no category is Generated's Uncategorized (the owner).
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
-const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds'],
+// (phase V34.E) AUDIO holds the built-in sounds too (`sfx`), and SFX is the own and the built-in together (`sfxall`).
+const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds', 'sfx'],
+  sfxall: ['sounds', 'sfx'],
   // (phase TG, block 5) REFERENCES - the posts the Telegram bot brought in (lib/references-store.js); and (after block 8) the
   // sources of the scenarios and of highlights downloaded from YouTube, in its YouTube -> Videos.
   references: ['references', 'youtube'] };
@@ -476,7 +519,7 @@ const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Gene
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
 function _tree() {
-  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true });
+  const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   const catsOf = (kind, list, withUncat) => {
@@ -537,7 +580,25 @@ function _tree() {
   const video = { key: 'video', label: 'VIDEO', q: { group: 'video' },
     children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
   video.count = video.children.reduce((n, c) => n + c.count, 0);
-  const audio = { key: 'audio', label: 'AUDIO', q: { group: 'audio' }, children: [kindNode('music'), kindNode('sounds')] };
+  // (phase V34.E, the owner 2026-10-22: "SFX -> Favorites, Built-in, My sounds") SFX: every starred sound first; the
+  // program's set, read only, by its categories; the person's own - the kind `sounds` with its categories (Generated
+  // locked) - under "My sounds", so a category made, renamed or a tile filed works as it always did.
+  const own = byKind.sounds || [];
+  const built = byKind.sfx || [];
+  const set = require('../lib/sfx-builtin').read();
+  const mine = kindNode('sounds', 'sounds', 'My sounds');
+  const builtin = { key: 'sfx', kind: 'sfx', label: 'Built-in', locked: true, noAdd: true, builtin: true, count: built.length,
+    q: { filter: 'sfx' },
+    children: set.categories.map(c => {
+      const n = built.filter(i => i.meta.categoryId === c.id).length;
+      return { key: 'sfx:' + c.id, kind: 'sfx', cat: c.id, label: c.label, count: n, locked: true, builtin: true, empty: !n,
+        q: { filter: 'sfx', cat: c.id } };
+    }) };
+  if (!builtin.children.length) delete builtin.children;
+  const favN = own.concat(built).filter(i => i.meta.favorite).length;
+  const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1' } };
+  const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, q: { group: 'sfxall' }, children: [fav, builtin, mine] };
+  const audio = { key: 'audio', label: 'AUDIO', q: { group: 'audio' }, children: [kindNode('music'), sfx] };
   audio.count = audio.children.reduce((n, c) => n + c.count, 0);
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
@@ -865,7 +926,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
-        youtube: f === 'youtube' })
+        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')) })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
@@ -884,6 +945,17 @@ router.get('/library/shelf/:kind', (req, res) => {
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
       : (i.meta || {}).categoryId === cat);
+    // (phase V34.E) SFX -> Favorites: the starred ones. And the search over a sound shelf: every word in the name, the
+    // tags or the category.
+    if (String(req.query.fav || '') === '1') shown = shown.filter(i => (i.meta || {}).favorite);
+    const words = String(req.query.q || '').toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+    if (words.length) {
+      shown = shown.filter(i => {
+        const m = i.meta || {};
+        const hay = [i.name, m.categoryLabel, ...(Array.isArray(m.tags) ? m.tags : [])].join(' ').toLowerCase();
+        return words.every(w => hay.includes(w));
+      });
+    }
     // (phase TG, block 5d) Images, and REFERENCES' pictures as one more category - for the pictures' pickers and the
     // pictures chat's column (`refs=1`); the media tree's IMAGES never asks for them.
     let cats2 = cats;
@@ -1251,6 +1323,17 @@ const FILE_SHELVES = {
 router.patch('/library/item/:kind/:id', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
+    // (phase V34.E) A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
+    if (kind === 'sfx') {
+      const s = require('../lib/sfx-builtin').read().sounds.find(x => x.id === String(req.params.id || ''));
+      if (!s) return res.status(404).json({ success: false, error: 'no such built-in sound' });
+      const b = req.body || {};
+      if (!('favorite' in b) || Object.keys(b).some(k => k !== 'favorite')) {
+        return res.status(409).json({ success: false, error: 'A built-in sound is part of the app - only its star can change. Cut a piece of it to have one of your own.' });
+      }
+      require('../lib/sfx-favorites').set(s.path, !!b.favorite);
+      return res.json({ success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
+    }
     const store = RECORD_STORES[kind];
     if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be edited here` });
     const id = String(req.params.id || '');
@@ -1349,6 +1432,7 @@ router.post('/library/cut', async (req, res) => {
 router.delete('/library/item/:kind/:id', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
+    if (kind === 'sfx') return res.status(409).json({ success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
     const id = String(req.params.id || '');
     const withFiles = req.query.files !== '0';
     const removed = [], spared = [];

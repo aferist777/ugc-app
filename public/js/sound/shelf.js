@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOUND ON A SHELF (phase V34.E) - what Merge's Library panel and the Library's Media shelf share about AUDIO's nodes
+   (routes/library.js _tree): Music; SFX ('sfx-all') -> ★ Favorites ('sfx-fav'), Built-in ('sfx', 'sfx:<category>' - the
+   program's set, read only), My sounds ('sounds', 'sounds:<category>').
+
+     isSfx(node)          a node of SFX: the search and "find online…" stand over its grid
+     filesTo(node)        what a file brought in on this node becomes: { kind: 'music' | 'sounds', cat } - or null
+     searchHead({ q, found, onSearch, onOnline })
+                          the search over the grid - every word in a name, a tag or the category, as typed (Escape
+                          clears) - and "find online…"; when the words found nothing here, "find «words» online" opens
+                          the online search with them already in it (the owner 2026-10-23, (р3))
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export const UNCAT = '__uncat__';
+
+export function isSfx(n) {
+  if (!n) return false;
+  const k = String(n.key || '');
+  return k === 'sfx-all' || k === 'sfx-fav' || k === 'sfx' || k.startsWith('sfx:') || n.kind === 'sounds';
+}
+export const isBuiltin = (n) => !!n && (n.key === 'sfx' || String(n.key || '').startsWith('sfx:'));
+
+export function filesTo(n) {
+  if (!n) return null;
+  if (n.kind === 'music') return { kind: 'music', cat: '' };
+  if (n.key === 'sfx-all' || n.kind === 'sounds') return { kind: 'sounds', cat: n.cat && n.cat !== UNCAT ? n.cat : '' };
+  return null;
+}
+
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+
+// The search is drawn again with the shelf it searched: typed into a moment ago and nothing else took the caret since,
+// the new field takes it where it was (a removed field's blur is not to be relied on).
+let _typedAt = 0;
+let _caret = 0;
+
+export function searchHead(o) {
+  const head = el('div', 'snd-shelf-head');
+  const s = el('input', 'snd-search');
+  s.type = 'search';
+  s.placeholder = 'search SFX - name or tag (whoosh, click, pop…)';
+  s.value = o.q || '';
+  let t = 0;
+  s.addEventListener('input', () => {
+    _typedAt = Date.now(); _caret = s.selectionStart;
+    clearTimeout(t);
+    t = setTimeout(() => o.onSearch(s.value.trim()), 200);
+  });
+  s.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && s.value) { e.preventDefault(); e.stopPropagation(); _typedAt = Date.now(); _caret = 0; s.value = ''; o.onSearch(''); }
+  });
+  head.appendChild(s);
+  if (o.q && !o.found) {
+    const b = el('button', 'snd-btn is-gold', 'find «' + (o.q.length > 28 ? o.q.slice(0, 26) + '…' : o.q) + '» online');
+    b.type = 'button';
+    b.title = 'Nothing here - search the free (CC0) libraries with these words';
+    b.addEventListener('click', () => o.onOnline(o.q));
+    head.appendChild(b);
+  }
+  const on = el('button', 'snd-btn', 'find online…');
+  on.type = 'button';
+  on.title = 'Search free (CC0) sound libraries - Freesound and Wikimedia Commons through Openverse - and the galleries to download from yourself';
+  on.addEventListener('click', () => o.onOnline(o.q || ''));
+  head.appendChild(on);
+  // Typing goes on where it was: the shelf is painted again under the caret.
+  if (Date.now() - _typedAt < 5000) {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a !== document.body && a !== s) return;
+      s.focus();
+      try { s.setSelectionRange(_caret, _caret); } catch (e) { /* a search field */ }
+    }, 0);
+  }
+  return head;
+}

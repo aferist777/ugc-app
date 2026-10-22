@@ -17,6 +17,10 @@
    timeline-b.js) or onto a node of the tree (another category, another kind of video - js/media-tree.js).
 
    The star and the ✕ go through js/library/actions.js - the Library page's own module, not a copy.
+
+   (phase V34.E) AUDIO -> SFX: ★ Favorites, Built-in (the program's set - read only), My sounds. A sound's tile carries its
+   waveform, and - the one tile with a menu (the owner's (р2)) - the right button: Cut…, Rename, Move to, About, Delete
+   (js/sound/menu.js). Over the grid of SFX: the search and "find online…" (js/sound/shelf.js, js/sound/online.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
@@ -37,9 +41,14 @@ import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
 import * as LK from '../library/links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
+// (phase V34.E) Sound on the shelf: the waveform, the menu under the right button, the search and the online libraries.
+import { waveEl } from '../sound/wave.js';
+import { soundMenu, myCats } from '../sound/menu.js';
+import { openOnline } from '../sound/online.js';
+import * as SS from '../sound/shelf.js';
 
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
-const AUDIO = new Set(['music', 'sounds']);
+const AUDIO = new Set(['music', 'sounds', 'sfx']);
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
 const LS_TREE_W = 'mv3_lib_tree_w';
 const TREE_DEF = 180, TREE_MIN = 120, TREE_MAX = 420;
@@ -51,7 +60,9 @@ let _seq = 0;         // guards against a slow response for a node you have left
 
 const _kind = () => (_node && _node.kind) || '';
 const _isImages = () => _kind() === 'images';
-const _isAudio = () => AUDIO.has(_kind()) || (_node && _node.key === 'audio');
+const _isAudio = () => AUDIO.has(_kind()) || (_node && (_node.key === 'audio' || SS.isSfx(_node)));
+// (phase V34.E) The search over SFX - kept while SFX is looked at, let go of outside it.
+let _q = '';
 // Where a clip brought in lands: the kind selected, or Uploads under Video (the owner: "загрузка в него - в Uploads").
 // (second round) Generated takes B-rolls (with no category - its Uncategorized); Talking heads takes nothing.
 const _videoKind = () => (VIDEO.has(_kind()) ? _kind() : (_node && _node.key === 'video') ? 'uploads'
@@ -120,13 +131,28 @@ function _tile(it, list) {
   const audio = AUDIO.has(it.kind);
   cell.className = 'mv3-tile' + (audio ? ' is-sound' : '') + (it.meta && it.meta.favorite ? ' is-fav' : '');
   // No menu on a tile (phase V23, the owner: one rule everywhere): "Save image as" would save the miniature.
-  cell.addEventListener('contextmenu', (e) => e.preventDefault());
+  // (phase V34.E, the owner's (р2)) The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
+  cell.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (audio) {
+      soundMenu(it, e, {
+        status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
+        changed: () => _reload(), stop: () => _stopHearing(),
+        del: async (x) => {
+          if (!confirm(await deleteQuestion(x))) return;
+          try { if (_hear && _hear.id === x.id) _stopHearing(); await deleteItem(x); markGone(x.media); await _reload(); }
+          catch (err) { _status(err.message, true); }
+        },
+      });
+    }
+  });
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
   const hid = (it.meta || {}).hookId || null;
   cell.title = it.kind === 'heads'
     ? [(it.meta || {}).project, it.name, _mmss(it.dur), (it.meta || {}).used ? 'on a timeline' : ''].filter(Boolean).join(' · ')
-    : [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ');
+    : [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ')
+      + (audio ? '\na press plays it · the right button: cut, ' + (it.kind === 'sfx' ? 'about' : 'rename, about, delete') : '');
 
   if (audio) {
     const note = document.createElement('span');
@@ -137,6 +163,8 @@ function _tile(it, list) {
     nm.className = 'mv3-tile-sname';
     nm.textContent = it.name || '';
     cell.appendChild(nm);
+    // (phase V34.E) Its waveform (lib/audio-wave.js; a built-in sound's comes with the set).
+    cell.appendChild(waveEl((it.meta || {}).wave, 'snd-twave'));
     if (it.dur) {
       const d = document.createElement('span');
       d.className = 'mv3-tile-dur';
@@ -263,6 +291,8 @@ function _tile(it, list) {
   cell.appendChild(star);
 
   const del = document.createElement('button');
+  // (phase V34.E) A built-in sound is the app's: a star, never a cross.
+  if (it.kind === 'sfx') del.hidden = true;
   del.type = 'button';
   del.className = 'mv3-tile-btn mv3-tile-del';
   del.textContent = '✕';
@@ -505,6 +535,12 @@ function _plusTile() {
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
     return b;
   }
+  // (phase V34.E) Built-in is the app's, Favorites the starred - nothing is brought in there.
+  if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
+    b.disabled = true;
+    b.title = _node.key === 'sfx-fav' ? 'Favorites are the starred sounds - the ★ on a tile' : 'Built into the app - read only';
+    return b;
+  }
   b.title = _isImages() ? 'Add a picture to Images - from this computer, or made here'
     : _isAudio() ? 'Add music or sounds from this computer'
     : 'Add videos to ' + _landName(_videoKind()) + ' - from this computer or by a link; or drop files or a link anywhere on this panel';
@@ -565,7 +601,7 @@ function _plusMenu(anchor) {
     // The pictures chat, in this panel's place (phase J).
     item('generate', 'make one with a model', () => openPictures());
   } else if (_isAudio()) {
-    if (_kind() !== 'sounds') item('music from this computer', 'a track - mp3, wav, m4a…', () => _pickFiles('music'));
+    if (_kind() !== 'sounds' && !SS.isSfx(_node)) item('music from this computer', 'a track - mp3, wav, m4a…', () => _pickFiles('music'));
     if (_kind() !== 'music') item('sounds from this computer', 'sound effects, into SFX' + (_catOf() ? ' · ' + _node.label : ''), () => _pickFiles('sounds'));
   } else {
     item('load from local', 'video files from this computer', () => _pickFiles());
@@ -699,11 +735,20 @@ async function _addLinks(urls) {
   !!bad.length);
 }
 
+// (phase V34.E) "find online…": the free libraries' search; found sounds go into My sounds and the shelf is read again.
+async function _online(q) {
+  openOnline({ cats: await myCats(), cat: _node && _node.kind === 'sounds' && _node.cat && _node.cat !== SS.UNCAT ? _node.cat : '',
+    q, stop: () => _stopHearing(), added: () => _reload() });
+}
+
 function _paint() {
   _stopHearing();
   const b = _body();
   if (!b) return;
   b.textContent = '';
+  if (SS.isSfx(_node)) {
+    b.appendChild(SS.searchHead({ q: _q, found: _items.length > 0, onSearch: (q) => { _q = q; _load(); }, onOnline: (q) => _online(q) }));
+  }
   const grid = document.createElement('div');
   grid.className = 'mv3-grid';
   grid.appendChild(_plusTile());
@@ -712,7 +757,7 @@ function _paint() {
   if (!_items.length) {
     const s = document.createElement('span');
     s.className = 'mv3-grid-note';
-    s.textContent = _node && _node.cat ? 'nothing in this category' : 'empty - drop files here';
+    s.textContent = _q && SS.isSfx(_node) ? 'nothing with "' + _q + '" here' : _node && _node.cat ? 'nothing in this category' : 'empty - drop files here';
     b.appendChild(grid);
     b.appendChild(s);
     return;
@@ -750,8 +795,10 @@ async function _upload(files, what) {
   if (!list.length) return;
   if (_isImages()) return _uploadAs(list.filter(isPictureFile), list.length, 'images', 'image', (l, on) => uploadImages(l, on));
   if (_isAudio()) {
-    const to = what || (_kind() === 'music' ? 'music' : _kind() === 'sounds' ? 'sounds' : '');
-    if (!to) { _status('Pick Music or SFX in the tree first - or press + and say which', true); return; }
+    const into = SS.filesTo(_node);
+    const to = what || (into ? into.kind : '');
+    if (!to) { _status(SS.isBuiltin(_node) || (_node && _node.key === 'sfx-fav') ? 'Built-in and Favorites take no files - pick My sounds or a category of it'
+      : 'Pick Music or SFX in the tree first - or press + and say which', true); return; }
     const snd = list.filter(f => /^audio\//.test(f.type || '') || AUDIO_RE.test(f.name || ''));
     if (to === 'music') return _uploadAs(snd, list.length, 'music', 'track', (l, on) => uploadMusic(l, on));
     const cat = _kind() === 'sounds' ? _catOf() : '';
@@ -846,6 +893,8 @@ async function _load() {
   if (!_node) return;
   _note('loading…');
   const q = new URLSearchParams(_node.q || {});
+  if (!SS.isSfx(_node)) _q = '';
+  else if (_q) q.set('q', _q);
   try {
     const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
@@ -989,6 +1038,9 @@ export function initLibrary() {
     status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
     onSelect: (n) => { _node = n; _load(); },
     onChanged: () => _load(),        // awaited by the tree before it says what was done
+    // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
+    takesFiles: (n) => !!SS.filesTo(n),
+    onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
   });
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
 }

@@ -24,6 +24,12 @@ import * as NR from './narrators.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
+// (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
+// - the same modules as Merge's Library panel.
+import { waveEl } from '../sound/wave.js';
+import { soundMenu, myCats } from '../sound/menu.js';
+import { openOnline } from '../sound/online.js';
+import * as SS from '../sound/shelf.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
@@ -53,8 +59,10 @@ let _shelf = 'characters';
 let _tree = null;
 let _node = null;
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
-const AUDIO = new Set(['music', 'sounds']);
+const AUDIO = new Set(['music', 'sounds', 'sfx']);
 const _mkind = () => (_node && _node.kind) || '';
+// (phase V34.E) The search over SFX - kept while SFX is looked at, let go of outside it.
+let _q = '';
 const _mcat = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 
 // THE SHELVES WHERE ONE TILE IS ALWAYS SELECTED (phase B, the owner 2026-09-29): opening one selects
@@ -122,6 +130,8 @@ function _paintShelves() {
   // Media's tree, beside its grid.
   const onMedia = _shelf === 'media' && !_makingOn;
   for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
+  // (phase V34.E) The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
+  if (!onMedia) { const h = $('lib-snd-head'); if (h) h.hidden = true; }
 }
 
 // ── The making areas ────────────────────────────────────────────────────────
@@ -276,6 +286,9 @@ function _initTree() {
     },
     onChanged: (what) => (_shelf === 'media'
       ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
+    // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
+    takesFiles: (n) => _shelf === 'media' && !!SS.filesTo(n),
+    onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
   });
   return _tree;
 }
@@ -330,7 +343,7 @@ function _wireTreeSash() {
 // Which ones an item offers is a property of its shelf, not of the UI: a lookbook file
 // has no favourite flag to set and no category to file it under, a character's name is
 // a label while a lookbook's name IS its filename. The viewer's action row reads it.
-const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds', 'music']);
+const _FAVABLE = new Set(['birols', 'uploads', 'hooks', 'images', 'sounds', 'music', 'sfx']);
 // Which kinds a record can be CONVERTED between. Not the same set as the ones that can be
 // starred: an image and a clip are different files in different stores, and there is no
 // meaning to turning a picture into a birol. The server refuses it too - see the /kind route.
@@ -589,6 +602,8 @@ function _card(it, extra) {
     note.className = 'lib-snd';
     note.textContent = '♪';
     box.appendChild(note);
+    // (phase V34.E) Its waveform (lib/audio-wave.js; a built-in sound's comes with the set).
+    box.appendChild(waveEl((it.meta || {}).wave, 'snd-twave'));
     if (it.dur) {
       const d = document.createElement('span');
       d.className = 'lib-snd-dur';
@@ -637,7 +652,8 @@ function _card(it, extra) {
     });
     box.appendChild(star);
   }
-  if (!_fixed(it)) {
+  // (phase V34.E) A built-in sound is the app's: a star, never a cross.
+  if (!_fixed(it) && it.kind !== 'sfx') {
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'lib-x';
@@ -673,7 +689,7 @@ function _card(it, extra) {
   name.appendChild(document.createTextNode(it.name));
   card.appendChild(name);
   // A sound's or a track's name is changed where it is read - it has no window to do it in.
-  if (AUDIO.has(it.kind)) {
+  if (AUDIO.has(it.kind) && it.kind !== 'sfx') {
     name.title = it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') + ' - a double press renames it';
     name.addEventListener('dblclick', async (e) => {
       e.stopPropagation();
@@ -701,8 +717,34 @@ function _card(it, extra) {
   // NO MENU ON A TILE (phase B7, the owner 2026-09-29) - the page's is gone, and the window's own
   // ("Copy image / Save image as", desktop/main.js) must not open in its place: it would save this
   // miniature, not the file. What the old menu offered is in the viewer and on the tile.
-  card.addEventListener('contextmenu', (e) => e.preventDefault());
+  // (phase V34.E, the owner's (р2)) The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (!AUDIO.has(it.kind)) return;
+    soundMenu(it, e, {
+      status: (t, bad) => _status(t, bad ? 'err' : ''), stop: () => _stopHearing(),
+      changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
+      del: async (x) => { try { _stopHearing(); await _apply(await _runAction('del', x)); } catch (err) { _status(err.message, 'err'); } },
+    });
+  });
   return card;
+}
+
+// (phase V34.E) Over SFX: the search, and "find online…" - "find «words» online" when the words found nothing here (р3).
+function _paintSndHead() {
+  const host = $('lib-snd-head');
+  if (!host) return;
+  const on = _shelf === 'media' && !_makingOn && SS.isSfx(_node);
+  host.hidden = !on;
+  host.textContent = '';
+  if (!on) return;
+  host.appendChild(SS.searchHead({ q: _q, found: _items.length > 0,
+    onSearch: (q) => { _q = q; _load({ checks: false }); }, onOnline: (q) => _online(q) }));
+}
+async function _online(q) {
+  openOnline({ cats: await myCats(), cat: _node && _node.kind === 'sounds' && _mcat() ? _mcat() : '', q,
+    stop: () => _stopHearing(),
+    added: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); } });
 }
 
 async function _setKind(it, kind) {
@@ -767,7 +809,8 @@ function _renderGrid() {
   if (!_items.length) {
     const e = document.createElement('div');
     e.className = 'lib-empty';
-    e.textContent = _shelf === 'media' ? ('Nothing here' + (_node && _node.cat ? ' in this category.' : ' yet.')) : 'Nothing on this shelf yet.';
+    e.textContent = _shelf === 'media' ? (_q && SS.isSfx(_node) ? 'Nothing with "' + _q + '" here.'
+      : 'Nothing here' + (_node && _node.cat ? ' in this category.' : ' yet.')) : 'Nothing on this shelf yet.';
     grid.appendChild(e);
     return;
   }
@@ -916,7 +959,10 @@ async function _load(opts) {
   if (!PICKABLE.has(_shelf) && _shelf !== 'voices' && _shelf !== 'scenarios') INFO.hide();
   try {
     // Media: what the media tree has selected (its `q`: a group, or a kind and a category).
-    const q = (_shelf === 'media' && _node) ? new URLSearchParams(_node.q || {}).toString() : '';
+    const qs = new URLSearchParams((_shelf === 'media' && _node && _node.q) || {});
+    if (!(_shelf === 'media' && SS.isSfx(_node))) _q = '';
+    else if (_q) qs.set('q', _q);
+    const q = qs.toString();
     const url = '/api/library/shelf/' + _shelf + (q ? '?' + q : '');
     // Scenarios: the drafts head the list (phase E4), read beside the shelf.
     const draftsP = _shelf === 'scenarios'
@@ -930,6 +976,7 @@ async function _load(opts) {
       _drafts = (dd && dd.success && dd.drafts) || [];
     }
     _items = d.items || [];
+    _paintSndHead();
     _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
     _shelfRunning = d.running || 0;
     _renderGrid();
@@ -951,6 +998,7 @@ async function _load(opts) {
   } catch (e) {
     if (my !== _reqId) return;
     _items = [];
+    _paintSndHead();
     _renderGrid();
     _showSelected();
     _status(e.message, 'err');
@@ -1216,7 +1264,14 @@ function _paintUpload() {
     if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
-  if (kind === 'sounds') {
+  // (phase V34.E) Built-in is the app's, Favorites the starred: nothing is brought in there. SFX itself takes sounds.
+  if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
+    btn.textContent = 'Upload';
+    btn.disabled = true;
+    btn.title = _node.key === 'sfx-fav' ? 'Favorites are the starred sounds - the ★ on a card' : 'Built into the app - read only';
+    return;
+  }
+  if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
     btn.textContent = 'Upload sounds';
     btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into SFX' + (_mcat() ? ', the category selected' : '') + '.';
     if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
@@ -1336,9 +1391,14 @@ async function _upload(files) {
       : (rm.ok + ' of ' + rm.total + ' uploaded - only sound files are taken'), rm.ok === rm.total ? '' : 'err');
     return;
   }
-  if (kind === 'sounds') {
+  if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
+    if (btn) btn.disabled = false;
+    _status('Built-in and Favorites take no files - pick My sounds or a category of it', 'err');
+    return;
+  }
+  if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
     // Into the category selected, if one is - so it stays where it is looked at.
-    const cat = _mcat();
+    const cat = kind === 'sounds' ? _mcat() : '';
     const rs = await A.uploadSounds(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), cat);
     if (btn) btn.disabled = false;
     if (rs.ok) { if (_tree) await _tree.load(); await _load({ checks: true }); _counts(); }
