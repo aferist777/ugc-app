@@ -983,6 +983,44 @@ function _wireViews() {
   $('#la-lib-title').addEventListener('click', () => setView('shelf'));
   $('#la-crumb-audio').addEventListener('click', () => setView('chat'));
   setView(ls(KEY_VIEW, 'chat'));
+  _wireMadeSash();
+}
+
+// THE SASH between the constructor and "Made here" (the owner 2026-10-23), as Merge's between the gallery and the tree
+// (js/merge-v3/library.js _wireTreeSash): "Made here" is on the right, so dragging LEFT widens it. Remembered; a double
+// press gives the default back. The constructor keeps 360 px, "Made here" at least 260.
+const KEY_MADE_W = 'ugc_lab_audio_made_w';
+function _wireMadeSash() {
+  const sash = $('#la-made-sash');
+  const box = $('#la-madecol');
+  const room = () => {
+    const view = $('#la-audio').getBoundingClientRect().width;
+    const set = $('#la-audio .mv3-ig-set').getBoundingClientRect().width;
+    return Math.max(260, view - set - 360 - 5);
+  };
+  const apply = (w) => {
+    if (!(w > 0)) { box.style.flexBasis = ''; return 0; }
+    const v = Math.max(260, Math.min(room(), Math.round(w)));
+    box.style.flexBasis = v + 'px';
+    return v;
+  };
+  apply(+ls(KEY_MADE_W, 0) || 0);
+  sash.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const from = e.clientX;
+    const base = box.getBoundingClientRect().width;
+    document.body.classList.add('mv3-resize-v');
+    const move = (ev) => apply(base - (ev.clientX - from));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('mv3-resize-v');
+      lsSet(KEY_MADE_W, Math.round(box.getBoundingClientRect().width));
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => { apply(0); lsSet(KEY_MADE_W, 0); });
 }
 
 // ── start ───────────────────────────────────────────────────────────────────

@@ -95,7 +95,7 @@
 .la-pick-it span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 
 /* what was made */
-.la-madecol{flex:0 0 42%; min-width:300px; min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--bg)}
+.la-madecol{flex:0 0 42%; min-width:260px; min-height:0; display:flex; flex-direction:column; background:var(--bg)}
 .la-made-h{flex:0 0 auto; padding:12px 14px 8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
 .la-made{flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 14px 20px; display:flex; flex-direction:column; gap:8px}
 .la-gen{padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); display:flex; flex-direction:column; gap:7px}
