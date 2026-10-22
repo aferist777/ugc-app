@@ -22,6 +22,7 @@
 import { initNav } from '../app-nav.js';
 import * as Layers from '../layers.js';
 import * as Tree from './audio-tree.js';
+import * as Lanes from './audio-lanes.js';
 import { openCut } from './audio-cut.js';
 import { openOnline } from './audio-online.js';
 import { waveEl, playToggle, playing, onChange, secs } from './audio-play.js';
@@ -50,9 +51,10 @@ let _sayT = 0;
 function say(text, bad) {
   const s = $('#la-status');
   s.textContent = text || '';
+  s.hidden = !text;
   s.classList.toggle('is-bad', !!bad);
   clearTimeout(_sayT);
-  if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) s.textContent = ''; }, 9000);
+  if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
 }
 
 // ── what the person set ─────────────────────────────────────────────────────
@@ -102,20 +104,11 @@ const _chipsGroups = () => {
   return ((CAT && CAT.chips) || []).map(g => ({ key: '', label: g.label, chips: g.chips.map(c => ({ id: c, label: c, style: c })) }));
 };
 
-// ── the left column ─────────────────────────────────────────────────────────
-function paintCol() {
-  const col = $('#la-col');
-  col.textContent = '';
-  const box = (label, body, note) => {
-    const b = el('div', 'la-colbox');
-    b.appendChild(el('div', 'la-lbl', label));
-    b.appendChild(body);
-    if (note) b.appendChild(el('div', 'la-note', note));
-    col.appendChild(b);
-    return b;
-  };
-  // The project: its kind picks the mode, its video's length the length.
-  const ps = el('select', 'la-sel');
+// ── the settings column: Merge's chat column (.mv3-ig-set, css/mv3-imagen.css) ─────────────────────────────────
+// The project is the page's own picker (the bar above, as in Merge): its kind picks the mode, its video the length.
+function paintProjects() {
+  const ps = $('#mv3-project');
+  ps.textContent = '';
   const none = el('option', null, '— no project —');
   none.value = '';
   ps.appendChild(none);
@@ -125,20 +118,36 @@ function paintCol() {
     ps.appendChild(op);
   }
   ps.value = S.project;
-  ps.addEventListener('change', () => setProject(ps.value, true));
-  box('For the project', ps, _proj() ? 'A ' + _proj().kind + ' - ' + (KIND_MODE[_proj().kind] === 'simple' ? 'Simple' : 'Custom') + ' by default; the length follows its video.' : 'Pick one: its kind sets the mode, its video the length.');
+  const p = _proj();
+  $('#la-proj-note').textContent = p ? 'a ' + p.kind + ' - ' + (KIND_MODE[p.kind] === 'simple' ? 'Simple' : 'Custom') + ' by default, the length of its video' : 'pick one: its kind sets the mode, its video the length';
+  $('#la-stage').textContent = p ? p.title : 'no project';
+}
 
-  const seg = el('div', 'la-seg');
+function paintCol() {
+  const col = $('#la-col');
+  col.textContent = '';
+  const row = (label, body, note) => {
+    const r = el('div', 'mv3-ig-row');
+    if (label) r.appendChild(el('label', null, label));
+    r.appendChild(body);
+    if (note) r.appendChild(el('div', 'la-note', note));
+    col.appendChild(r);
+    return r;
+  };
+  const sep = (text) => col.appendChild(el('div', 'mv3-ig-sep', text));
+
+  // The engine: two buttons, as a chat's shape row.
+  const seg = el('div', 'mv3-ig-ar-row la-seg');
   for (const e of (CAT ? CAT.engines : [])) {
-    const b = el('button', S.engine === e.id ? 'on' : '', e.label);
+    const b = el('button', 'mv3-ig-ar-b' + (S.engine === e.id ? ' on' : ''), e.label);
     b.type = 'button';
     b.addEventListener('click', () => setEngine(e.id));
     seg.appendChild(b);
   }
-  box('Engine', seg, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
+  row('Engine', seg, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
     ? 'No ' + (S.engine === 'eleven' ? 'ElevenLabs' : 'kie.ai') + ' key - add it on Admin → API keys.' : '');
 
-  const ms = el('select', 'la-sel');
+  const ms = el('select');
   for (const m of (CAT ? CAT.modes.filter(x => x.engine === S.engine) : [])) {
     const op = el('option', null, m.label);
     op.value = m.id;
@@ -146,10 +155,10 @@ function paintCol() {
   }
   ms.value = S.mode;
   ms.addEventListener('change', () => setMode(ms.value));
-  box('Mode', ms);
+  row('Mode', ms);
 
   if (S.engine === 'suno' && S.mode !== 'lyrics') {
-    const mo = el('select', 'la-sel');
+    const mo = el('select');
     for (const id of (CAT ? CAT.sunoModels : ['V6'])) {
       const op = el('option', null, id + ' - ' + (MODEL_HELP[id] || ''));
       op.value = id;
@@ -157,18 +166,19 @@ function paintCol() {
     }
     mo.value = S.model;
     mo.addEventListener('change', () => { S.model = mo.value; save(); });
-    box('Model', mo, 'One price for all three.');
+    row('Model', mo, 'one price for all three');
   } else if (S.engine === 'eleven') {
-    box('Model', el('div', 'la-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
+    row('Model', el('div', 'la-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
   }
 
   // The length: what a mode takes, 0 - the model decides.
-  const LEN = { simple: [0, 360, 'the video\'s length; the bed comes out 2 s longer'], custom: [10, 360, '10–360 s'],
+  const LEN = { simple: [0, 360, 'the video\'s length - the bed comes out a little longer'], custom: [10, 360, '10–360 s'],
     compose: [3, 600, '3 s – 10 min'], sfx: [0.5, 30, '0.5–30 s'] };
   if (LEN[S.mode]) {
     const [lo, hi, note] = LEN[S.mode];
     const f = S.f[S.mode];
-    const row = el('div', 'la-len');
+    sep('Length');
+    const r = el('div', 'la-len');
     const n = el('input', 'la-in');
     n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
     n.value = f.seconds ? String(f.seconds) : '';
@@ -179,49 +189,51 @@ function paintCol() {
       n.value = f.seconds ? String(f.seconds) : '';
       save(); paintPrice();
     });
-    row.append(n, el('span', 'la-len-auto', 's · empty - the model decides'));
+    r.append(n, el('span', 'la-len-auto', 's · empty - the model decides'));
     if (_proj() && _proj().seconds && S.mode !== 'sfx') {
       const by = el('button', 'la-link', 'by the video (' + secs(_proj().seconds) + ')');
       by.type = 'button';
       by.addEventListener('click', () => { f.seconds = Math.max(lo || 1, Math.min(hi, Math.round(_proj().seconds))); save(); paintCol(); });
-      row.appendChild(by);
+      r.appendChild(by);
     }
-    box('Length', row, note);
+    row('', r, note);
   }
 
   // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
   if (['simple', 'custom', 'compose'].includes(S.mode)) {
-    const wrap = el('div');
     for (const g of _chipsGroups()) {
-      wrap.appendChild(el('div', 'la-chip-g', g.label));
-      const row = el('div', 'la-chips');
+      sep(g.label);
+      const wrap = el('div', 'mv3-chips');
       for (const c of g.chips) {
         const on = S.mode === 'simple' && _isPicked(g.key, c);
-        const b = el('button', 'la-chip' + (on ? ' on' : ''), c.label);
+        const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
         b.type = 'button';
         b.title = c.style;
         b.addEventListener('click', () => {
           if (S.mode === 'simple') { _pick(g.key, c); paintCol(); paintMake(); }
           else _addWords(c.style);
         });
-        row.appendChild(b);
+        wrap.appendChild(b);
       }
-      wrap.appendChild(row);
+      col.appendChild(wrap);
     }
-    box('Chips', wrap, S.mode === 'simple' ? 'What the music is: the writer reads them with your words.' : 'A press adds the chip\'s words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.');
+    col.appendChild(el('div', 'la-note', S.mode === 'simple' ? 'What the music is: the writer reads them with your words.'
+      : 'A press adds the chip\'s words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.'));
   }
 
-  const price = el('div', 'la-price');
-  price.id = 'la-price';
-  col.appendChild(price);
+  const cost = el('div', 'mv3-ig-cost');
+  cost.id = 'la-price';
+  col.appendChild(cost);
   paintPrice();
 
-  // The almanac: V34.A's notes, a press puts one into the field. "Soon" while it is being written.
+  // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press puts one into its field.
+  const foot = $('#la-alm');
+  foot.textContent = '';
   const alm = el('button', 'mv3-vc-almanac' + (_almSections().length ? '' : ' is-soon'), 'almanac');
   alm.type = 'button';
-  alm.title = _almSections().length ? 'Notes on styles and sounds - a press puts one into the field' : 'The almanac of music and sounds is being written - soon';
+  alm.title = _almSections().length ? 'Notes on styles and sounds - a press puts one into its field' : 'The almanac of music and sounds is being written - soon';
   alm.addEventListener('click', () => { if (_almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
-  col.appendChild(alm);
+  foot.appendChild(alm);
 }
 
 function _isPicked(group, c) {
@@ -258,24 +270,29 @@ function _addWords(words) {
 function _price() {
   const P = (CAT && CAT.prices) || {};
   const p = P[S.mode];
-  if (!p) return '';
+  if (!p) return { big: '', small: '' };
   const f = S.f[S.mode] || {};
-  if (p.credits != null) return '<b>' + p.credits + ' kie credits ≈ $' + p.usd + '</b> per press · ' + p.note;
+  if (p.credits != null) return { big: '$' + p.usd, small: p.credits + ' kie credits · ' + p.note };
   if (p.usdPerMin) {
-    if (S.mode === 'video') return '<b>≈ $' + p.usdPerMin + ' per minute</b> of music · as long as the video';
-    const s = +f.seconds || 0;
-    return s ? '<b>≈ $' + (p.usdPerMin * s / 60).toFixed(3) + '</b> for ' + s + ' s · ' + p.note : '<b>≈ $' + p.usdPerMin + ' per minute</b> · ' + p.note;
+    if (S.mode === 'video') return { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+    const sec = +f.seconds || 0;
+    return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: sec + ' s · ' + p.note } : { big: '≈ $' + p.usdPerMin + '/min', small: p.note };
   }
   if (p.elPerSec) {
-    const s = +f.seconds || 0;
-    return s ? '<b>≈ ' + Math.round(p.elPerSec * s) + ' ElevenLabs credits</b> for ' + s + ' s' : '<b>≈ ' + p.elPerSec + ' ElevenLabs credits</b> per second of what comes back';
+    const sec = +f.seconds || 0;
+    return sec ? { big: '≈ ' + Math.round(p.elPerSec * sec), small: 'ElevenLabs credits for ' + sec + ' s' }
+      : { big: '≈ ' + p.elPerSec + '/s', small: 'ElevenLabs credits per second of what comes back' };
   }
-  return '';
+  return { big: '', small: '' };
 }
+const _priceText = () => { const p = _price(); return p.big ? p.big + ' · ' + p.small : ''; };
 function paintPrice() {
-  const p = $('#la-price');
-  if (!p) return;
-  p.innerHTML = 'One press: ' + _price() + (CAT && CAT.fake ? '<br><span class="la-muted">fake aggregator - nothing is paid</span>' : '');
+  const box = $('#la-price');
+  if (!box) return;
+  const p = _price();
+  box.textContent = '';
+  box.appendChild(el('b', null, p.big));
+  box.appendChild(el('span', null, 'per press · ' + p.small + (CAT && CAT.fake ? ' · FAKE - nothing is paid' : '')));
 }
 
 function setProject(key, apply) {
@@ -292,8 +309,10 @@ function setProject(key, apply) {
     }
   }
   save();
+  paintProjects();
   paintCol();
   paintMake();
+  Lanes.show(S.project);
 }
 function setEngine(id) {
   if (S.engine === id) return;
@@ -457,9 +476,7 @@ function paintMake() {
   go.type = 'button';
   go.addEventListener('click', () => generate(go));
   goRow.appendChild(go);
-  const pr = el('span', 'la-muted');
-  pr.innerHTML = _price();
-  goRow.appendChild(pr);
+  goRow.appendChild(el('span', 'la-muted', _priceText()));
   card.appendChild(goRow);
   card.appendChild(el('div', 'la-err'));
   host.appendChild(card);
@@ -737,6 +754,12 @@ function _result(r) {
     row.appendChild(el('span', 'la-muted', 'deleted'));
   }
   row.addEventListener('click', () => playToggle(r.path, row));
+  // Onto an audio lane of the timeline below, as a tile of the gallery is.
+  row.draggable = true;
+  row.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData(Tree.TILE_DRAG, JSON.stringify({ kind: r.kind, id: r.id, name: (it && it.name) || r.title, path: r.path, dur: r.dur }));
+    e.dataTransfer.effectAllowed = 'copy';
+  });
   return row;
 }
 function _lyric(l) {
@@ -955,8 +978,13 @@ async function start() {
   const m = CAT.modes.find(x => x.id === (want || S.mode)) || CAT.modes[0];
   S.mode = m.id; S.engine = m.engine;
   if (!CAT.sunoModels.includes(S.model)) S.model = 'V6';
+  // The project picker in the bar, as in Merge; the timeline below shows its lanes.
+  paintProjects();
+  $('#mv3-project').addEventListener('change', (e) => setProject(e.target.value, true));
   paintCol();
   paintMake();
+  Lanes.mount($('#mv3-tl'), { say });
+  Lanes.show(S.project);
   await Tree.mount($('#la-tree'), $('#la-gal'), {
     say,
     // Not into Generated (locked): it is what the engines make.

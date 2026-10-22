@@ -66,6 +66,24 @@ router.get('/audio/projects', (_req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// A project's lanes for the lab's sketch of Merge's timeline: each lane's kind and name, its clips' place, length and name.
+// Read only - nothing is warmed or written (Merge's own GET /api/mv3/timeline starts the preview copies).
+router.get('/audio/lanes', (req, res) => {
+  try {
+    const key = String(req.query.key || '');
+    const { timelines } = require('../lib/merge-store').read();
+    const t = timelines && timelines[key];
+    if (!t) return res.status(404).json({ success: false, error: 'no such project' });
+    const tracks = (Array.isArray(t.tracks) ? t.tracks : []).filter(tr => tr && tr.kind).map(tr => ({
+      id: String(tr.id || ''), kind: String(tr.kind), name: String(tr.name || tr.kind), main: !!tr.main,
+      clips: (Array.isArray(tr.clips) ? tr.clips : []).slice(0, 400).map(c => ({
+        start: +c.start || 0, dur: +c.dur || 0, name: String(c.name || c.text || '').slice(0, 80),
+      })),
+    }));
+    res.json({ success: true, key, title: t.title || 'Untitled', tracks });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/audio/gen', (req, res) => {
   const b = req.body || {};
   try {

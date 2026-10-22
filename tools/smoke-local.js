@@ -67,7 +67,7 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes',
                  // the audio lab and its server (phase V34.C-D)
-                 '/js/lab/audio.js', '/js/lab/audio-tree.js', '/js/lab/audio-play.js', '/js/lab/audio-cut.js', '/js/lab/audio-online.js',
+                 '/js/lab/audio.js', '/js/lab/audio-tree.js', '/js/lab/audio-play.js', '/js/lab/audio-cut.js', '/js/lab/audio-online.js', '/js/lab/audio-lanes.js',
                  '/css/lab-audio.css', '/api/audio/catalog', '/api/audio/projects', '/api/audio/gens', '/api/audio/lib/tree', '/api/audio/lib/items'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];

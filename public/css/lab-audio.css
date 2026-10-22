@@ -1,51 +1,57 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   THE AUDIO LAB (phase V34.D) - public/lab/audio.html, js/lab/. Three parts under the top strip:
-     left    the settings column: project, engine, mode, model, length, chips, price, the almanac
+   THE AUDIO LAB (phase V34.D) - public/lab/audio.html, js/lab/. MERGE'S OWN PAGE (the owner 2026-10-23: "имитируй
+   страницу merge, только blur неиспользуемые элементы"): its markup and css/merge-v3.css, css/mv3-imagen.css,
+   css/media-tree.css; this file only adds what the audio work needs and puts the rest to sleep (`.la-off`).
+   Inside the Library panel, the "generate audio" view (`.mv3-pc.la-audio`), three columns:
+     left    Merge's chat settings column (.mv3-ig-set): engine, mode, model, length, chips, price; the almanac at its foot
      middle  the CONSTRUCTOR of the open mode - one message of the app with that mode's fields - and what was made
      right   AUDIO: the gallery and the tree (Music; SFX -> Favorites, Built-in, My sounds)
-   The look is the app's own: its tokens (css/app-shell.css), the media tree's rows (css/media-tree.css), the gold of the
-   chats' almanac button (css/mv3-imagen.css .mv3-vc-almanac) and of a talking head's frames.
    ════════════════════════════════════════════════════════════════════════════ */
 
-.la-sub{flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:7px 18px; background:oklch(.19 .016 265); border-bottom:1px solid var(--border-soft)}
-.la-sub-t{font:700 10px/1 var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--gold)}
-.la-sub-n{font-size:11px; color:var(--muted)}
-.la-sub .sp{flex:1}
-.la-fake{font:700 10px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--bg); background:var(--accent); padding:4px 8px; border-radius:var(--pill)}
+/* ASLEEP: Merge's parts the audio work does not use - seen, blurred, and not pressable (`inert` beside it in the markup). */
+.la-off{filter:blur(2.2px) saturate(.55); opacity:.5; pointer-events:none !important; user-select:none}
+.mv3-lib-crumb.la-off, .mv3-panel-title.la-off{filter:blur(1.6px)}
 
-.la-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:270px minmax(420px, 1fr) minmax(460px, 1.1fr); gap:0}
+/* the bar: a note on what this page is, and the fake aggregator's badge */
+.la-badge{font:600 10.5px/1.3 var(--font); color:var(--gold); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.la-fake{font:700 10px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--bg); background:var(--accent); padding:4px 8px; border-radius:var(--pill); white-space:nowrap}
+.la-proj-note{font:600 10.5px/1.3 var(--font); color:var(--muted)}
+
+/* the column of the page: the Library panel wide, the preview down the left (Merge's own layout sets this from its sash) */
+.la-page #mv3-left{width:min(1480px, calc(100vw - 430px))}
+
+/* the "generate audio" view inside the Library panel */
+#mv3-library.is-chat .mv3-pc.la-audio{display:flex}
+.la-audio{min-width:0}
+.la-status{flex:0 0 auto; padding:5px 11px; background:var(--surface-2); border-bottom:1px solid var(--border-soft);
+  font:600 10.5px/1.35 var(--font); color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.la-status.is-bad{color:var(--danger)}
+
 .la-muted{color:var(--muted)}
 .la-err{color:var(--danger); font-size:11.5px; margin-top:4px}
 .la-err:empty{display:none}
-.sp{flex:1}
+.la-audio .sp, .la-win .sp, .la-pick .sp, .la-alm .sp{flex:1}
 
-/* ── the settings column ── */
-.la-col{min-height:0; overflow-y:auto; padding:14px 14px 18px; border-right:1px solid var(--border-soft); display:flex; flex-direction:column; gap:12px; background:oklch(.185 .015 265)}
-.la-lbl{font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:5px}
-.la-seg{display:flex; gap:0; border:1px solid var(--border); border-radius:var(--r-xs); overflow:hidden}
-.la-seg button{flex:1; padding:7px 6px; border:0; background:transparent; color:var(--muted); font:600 11.5px/1 var(--font); cursor:pointer}
-.la-seg button + button{border-left:1px solid var(--border)}
-.la-seg button.on{background:var(--primary-soft); color:var(--ink)}
+/* ── the settings column (Merge's .mv3-ig-set) ── */
+.la-audio .mv3-ig-set{flex:0 0 240px}
+.la-seg{display:flex; flex-wrap:wrap; gap:4px; margin:2px 0}
+.la-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.la-len .la-in{width:74px; height:26px; padding:0 6px}
+.la-len-auto{font-size:10px; color:var(--muted)}
+.la-chip-g{font:600 9.5px/1 var(--font); color:var(--muted); margin:6px 0 4px}
+.la-note{font:600 9.5px/1.4 var(--font); color:var(--muted); margin-top:3px}
+.la-note b{color:var(--ink)}
 .la-sel, .la-in, .la-ta{width:100%; box-sizing:border-box; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:6px 8px}
 .la-sel{padding:5px 6px}
 .la-sel:focus, .la-in:focus, .la-ta:focus{outline:none; border-color:var(--primary)}
 .la-ta{resize:vertical; min-height:64px}
-.la-note{font-size:10.5px; color:var(--muted); line-height:1.4; margin-top:4px}
-.la-len{display:flex; align-items:center; gap:6px}
-.la-len .la-in{width:84px}
-.la-len-auto{font-size:11px; color:var(--muted)}
-.la-chips{display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px}
 .la-chip{padding:3px 8px; border:1px solid var(--border); border-radius:var(--pill); background:transparent; color:var(--ink); font:500 11px/1.3 var(--font); cursor:pointer}
-.la-chip:hover{border-color:var(--muted)}
 .la-chip.on{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
-.la-chip-g{font:600 9.5px/1 var(--font); color:var(--muted); margin:4px 0 4px}
-.la-price{padding:8px 10px; border:1px dashed var(--border); border-radius:var(--r-xs); font-size:11.5px; line-height:1.4}
-.la-price b{color:var(--gold)}
-.la-col .mv3-vc-almanac{margin:0; width:100%}
-.la-col .mv3-vc-almanac.is-soon{opacity:.75}
+#la-alm .mv3-vc-almanac{width:calc(100% - 20px)}
+#la-alm .mv3-vc-almanac.is-soon{opacity:.75}
 
 /* ── the middle: the constructor and what was made ── */
-.la-mid{min-height:0; overflow-y:auto; padding:16px 18px 24px; display:flex; flex-direction:column; gap:12px}
+.la-mid{flex:1 1 auto; min-width:360px; min-height:0; overflow-y:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px}
 .la-make{flex:0 0 auto}
 .la-card{position:relative; padding:12px 14px 14px; border:1px solid var(--gold); border-radius:var(--r-sm); background:var(--bg); display:flex; flex-direction:column; gap:10px}
 .la-card-h{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
@@ -120,7 +126,7 @@
 .la-lyr.open pre{max-height:none}
 
 /* ── the right: gallery and tree ── */
-.la-lib{min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) 230px; border-left:1px solid var(--border-soft)}
+.la-lib{flex:0 0 46%; min-width:0; min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) 210px; border-left:1px solid var(--border)}
 .la-gal{min-height:0; overflow-y:auto; padding:12px 12px 20px; position:relative}
 .la-gal.is-drop{outline:1px dashed var(--primary); outline-offset:-6px; background:var(--primary-soft)}
 .la-treebox{min-height:0; display:flex; flex-direction:column; border-left:1px solid var(--border-soft); background:oklch(.185 .015 265)}
@@ -190,13 +196,28 @@
 .la-about-row a{color:var(--primary)}
 .la-menu{z-index:9310}
 
-/* the status line */
-.la-status{flex:0 0 auto; min-height:24px; padding:4px 18px; font-size:11.5px; color:var(--muted); border-top:1px solid var(--border-soft); background:oklch(.19 .016 265); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.la-status.is-bad{color:var(--danger)}
+/* ── the timeline's sketch (js/lab/audio-lanes.js): Merge's lanes (.mv3b-*), the audio ones awake ── */
+.la-tl-tools{display:inline-flex; align-items:center; gap:6px}
+.la-tl-note{font:600 10.5px/1.3 var(--font); color:var(--gold); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.la-page #mv3-timeline{flex:0 0 auto; height:210px}
+.la-page .mv3-tl{flex:1; min-height:0; overflow:auto; position:relative}
+.mv3b-row.la-off .mv3b-lbl::before{display:none}
+.mv3b-lane{position:relative; flex:1 1 auto; min-width:0}
+.la-ruler{position:relative}
+.la-tick{position:absolute; top:3px; font:600 9px/1 var(--font); color:var(--muted); transform:translateX(2px)}
+.la-tick::before{content:''; position:absolute; left:-2px; top:-3px; width:1px; height:18px; background:var(--border)}
+.mv3b-row.is-audio .mv3b-lane.is-drop{background:var(--primary-soft); outline:1px dashed var(--primary); outline-offset:-1px}
+.mv3b-clip.la-clip{display:flex; align-items:center; gap:4px; padding:0 4px 0 6px; background:oklch(.32 .06 160 / .55)}
+.mv3b-clip.la-clip.is-playing{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset}
+.mv3b-clip-t{font:600 9.5px/1 var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0}
+.la-clip-x{flex:0 0 auto; border:0; background:none; color:var(--muted); cursor:pointer; font-size:10px; padding:0 2px}
+.la-clip-x:hover{color:var(--ink)}
+.mv3b-clip.la-ghost{opacity:.85; pointer-events:none}
 
-@media (max-width: 1300px){
-  .la-body{grid-template-columns:240px minmax(380px, 1fr) minmax(380px, 1fr)}
-  .la-lib{grid-template-columns:minmax(0, 1fr) 190px}
+/* the preview, asleep: a 9:16 stage with the project's name on it */
+.la-stage{aspect-ratio:9/16; height:calc(100% - 20px); max-width:100%; margin:auto; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(160deg, oklch(.26 .03 265), oklch(.14 .02 265)); color:var(--muted); font:700 12px/1.4 var(--font); text-align:center; padding:16px}
+
 }
 
 /* the almanac's window (js/lab/audio.js openAlmanac) - the chats' .hp frame (css/mv3-imagen.css), V34.A's notes in it */
@@ -212,3 +233,6 @@
 .la-alm-src{display:flex; flex-wrap:wrap; gap:8px; font-size:10.5px}
 .la-alm-src a{color:var(--primary); text-decoration:none}
 .la-alm-src a:hover{text-decoration:underline}
+
+/* a small capital label (the almanac window's groups) */
+.la-lbl{font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:5px}

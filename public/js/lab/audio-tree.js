@@ -23,7 +23,7 @@ import { askName } from '../name-box.js';
 import { waveEl, playToggle, playing, onChange, secs, stop } from './audio-play.js';
 
 const UNCAT = '__uncat__';
-const TILE_DRAG = 'application/x-ugc-lab-sound';
+export const TILE_DRAG = 'application/x-ugc-lab-sound';
 const KEY_NODE = 'ugc_lab_audio_node';
 const KEY_OPEN = 'ugc_lab_audio_open';
 
@@ -375,7 +375,7 @@ function _tile(it) {
   t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(it, t, e); });
   t.draggable = true;
   t.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData(TILE_DRAG, JSON.stringify({ kind: it.kind, id: it.id, name: it.name, path: it.path }));
+    e.dataTransfer.setData(TILE_DRAG, JSON.stringify({ kind: it.kind, id: it.id, name: it.name, path: it.path, dur: it.dur }));
     e.dataTransfer.setData('text/plain', it.path);
     e.dataTransfer.effectAllowed = 'copyMove';
   });

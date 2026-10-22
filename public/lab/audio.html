@@ -6,46 +6,136 @@
 <base href="/">
 <title>Audio lab</title>
 <!-- THE AUDIO LAB (phase V34.D, the owner 2026-10-22: "давай экспериментировать на отдельной html странице. создай чат
-     функциональный там ... с подключенной базой приложения. чтобы можно было сохранять звуки и музыку"). A page of the app,
-     on the library and the keys of the app that serves it: every press of "generate" is a real generation, filed where the
-     app files it and written into Alerts. When the owner has settled it, it moves into Merge and the Library (V34.E) and
-     this page goes. -->
+     функциональный там ... с подключенной базой приложения"; 2026-10-23: "имитируй страницу merge, только blur
+     неиспользуемые элементы. а то что мы делаем сейчас по музыке сделай видимым активным"). Merge's own page - its markup
+     and its stylesheets - with everything that is not the audio work blurred and asleep (`.la-off`, `inert`): live are the
+     project picker, the Library panel's "generate audio" view (the settings column, the constructor, what was made, AUDIO's
+     gallery and tree) and the audio lanes of the timeline, where a track can be let go (a sketch - not saved in the
+     project). On the app's library and keys: every press of "generate" is a real generation. It moves into Merge (V34.E)
+     when the owner has settled it, and this page goes. -->
 <script src="/js/storage-sync.js"></script>
 <link rel="stylesheet" href="css/app-shell.css">
 <link rel="stylesheet" href="css/app-nav.css">
+<link rel="stylesheet" href="css/merge-v3.css">
+<link rel="stylesheet" href="css/dialog.css">
 <link rel="stylesheet" href="css/media-tree.css">
 <link rel="stylesheet" href="css/mv3-imagen.css">
 <link rel="stylesheet" href="css/lab-audio.css">
 </head>
-<body>
+<body class="mv3-blank la-page">
 
 <nav class="sv3-nav">
   <a href="/merge">Merge</a>
   <a href="/3d">3D Studio</a>
   <a href="/library">Library</a>
   <span class="sp"></span>
+  <button class="sv3-navbtn la-off" type="button" inert tabindex="-1">Queue</button>
 </nav>
 
-<div class="la-sub">
-  <span class="la-sub-t">Audio lab</span>
-  <span class="la-sub-n" id="la-sub-n">a test page - every press of "generate" is a real generation on your keys, filed in your library and written into Alerts</span>
-  <span class="sp"></span>
-  <span class="la-fake" id="la-fake" hidden>FAKE aggregator - nothing is paid</span>
-</div>
+<main class="mv3-app">
 
-<main class="la-body">
-  <aside class="la-col" id="la-col"></aside>
-  <section class="la-mid">
-    <div class="la-make" id="la-make"></div>
-    <div class="la-made-h">Made here <span class="la-muted" id="la-made-n"></span></div>
-    <div class="la-made" id="la-made"></div>
-  </section>
-  <section class="la-lib">
-    <div class="la-gal" id="la-gal"></div>
-    <div class="la-treebox"><div class="la-tree-h">AUDIO</div><div id="la-tree"></div></div>
-  </section>
+  <!-- The project bar: the picker is live (its kind sets the mode, its video the length, its lanes the timeline below);
+       the rest is Merge's and asleep. -->
+  <div class="mv3-bar">
+    <button class="mv3-c-btn la-off" type="button" inert tabindex="-1">+ new project</button>
+    <label class="mv3-bar-fld">
+      <span>Project</span>
+      <select id="mv3-project"></select>
+    </label>
+    <button class="mv3-c-btn la-off" type="button" inert tabindex="-1">edit</button>
+    <button class="mv3-c-btn danger la-off" type="button" inert tabindex="-1">delete</button>
+    <span class="mv3-bar-note la-proj-note" id="la-proj-note"></span>
+    <span class="sp"></span>
+    <span class="la-badge" id="la-badge">audio lab · a test page - every press of "generate" is a real generation on your keys</span>
+    <span class="la-fake" id="la-fake" hidden>FAKE aggregator - nothing is paid</span>
+    <button class="mv3-c-btn mv3-x-open la-off" type="button" inert tabindex="-1">Export</button>
+  </div>
+
+  <div class="mv3-work">
+
+    <div class="mv3-left" id="mv3-left">
+      <div class="mv3-pair" id="mv3-pair">
+
+      <section class="mv3-panel mv3-col is-chat" id="mv3-library" data-col="library">
+        <div class="mv3-spine">Library</div>
+        <div class="mv3-panel-head">
+          <span class="mv3-panel-title is-link la-off" inert>Library</span>
+          <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ <span class="lg">generate </span>image</button>
+          <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ <span class="lg">generate </span>video</button>
+          <button class="mv3-lib-crumb is-on" type="button">/ <span class="lg">generate </span>audio</button>
+          <button class="mv3-lib-crumb la-off" type="button" inert tabindex="-1">/ captions</button>
+          <span class="sp"></span>
+        </div>
+        <!-- What the lab says: a press, a drop, a refusal (the shelf's own status line hides while a chat shows). -->
+        <div class="la-status" id="la-status" hidden></div>
+        <!-- THE "generate audio" VIEW: the settings column, the constructor and what was made, AUDIO's gallery and tree. -->
+        <div class="mv3-pc is-shown la-audio" id="la-audio">
+          <div class="mv3-ig-set">
+            <div class="mv3-ig-scroll" id="la-col"></div>
+            <div id="la-alm"></div>
+          </div>
+          <div class="la-mid">
+            <div class="la-make" id="la-make"></div>
+            <div class="la-made-h">Made here <span class="la-muted" id="la-made-n"></span></div>
+            <div class="la-made" id="la-made"></div>
+          </div>
+          <div class="la-lib">
+            <div class="la-gal" id="la-gal"></div>
+            <div class="la-treebox"><div class="la-tree-h">AUDIO</div><div id="la-tree"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mv3-panel mv3-col is-collapsed la-off" id="mv3-inspector" data-col="inspector" inert>
+        <div class="mv3-spine">Setup</div>
+      </section>
+
+      </div>
+
+      <div class="mv3-sash is-h la-off" inert></div>
+
+      <section class="mv3-panel" id="mv3-timeline">
+        <div class="mv3-panel-head">
+          <span class="mv3-panel-title">Timeline</span>
+          <span class="la-off la-tl-tools" inert>
+            <button class="mv3-iconbtn" type="button" tabindex="-1">&#8630;</button>
+            <button class="mv3-iconbtn" type="button" tabindex="-1">&#8631;</button>
+            <button class="mv3-iconbtn is-text" type="button" tabindex="-1">split</button>
+          </span>
+          <span class="la-tl-note" id="la-tl-note">let a track or a sound go on an audio lane - a sketch, not saved in the project</span>
+          <span class="sp"></span>
+          <span class="la-off la-tl-tools" inert>
+            <span class="mv3-tl-clock">0:00.0</span>
+            <button class="mv3-iconbtn is-text" type="button" tabindex="-1">FIT</button>
+          </span>
+        </div>
+        <div class="mv3-tl" id="mv3-tl"></div>
+      </section>
+
+    </div>
+
+    <div class="mv3-sash is-v la-off" inert></div>
+
+    <section class="mv3-panel la-off" id="mv3-preview" inert>
+      <div class="mv3-panel-head">
+        <span class="mv3-panel-title">Preview</span>
+        <span class="sp"></span>
+      </div>
+      <div class="mv3-preview-body">
+        <div class="mv3-stage la-stage" id="la-stage"></div>
+      </div>
+      <div class="mv3-pv-bar">
+        <button class="mv3-pv-btn" type="button" tabindex="-1">&#9198;</button>
+        <button class="mv3-pv-btn" type="button" tabindex="-1">&#9194;</button>
+        <button class="mv3-pv-btn is-main" type="button" tabindex="-1">&#9654;</button>
+        <button class="mv3-pv-btn" type="button" tabindex="-1">&#9193;</button>
+        <span class="mv3-pv-time">0:00.0 / 0:00.0</span>
+        <span class="sp"></span>
+      </div>
+    </section>
+
+  </div>
 </main>
-<div class="la-status" id="la-status"></div>
 
 <script type="module" src="js/lab/audio.js"></script>
 </body>
