@@ -93,8 +93,13 @@ const HTML = `
             <input type="text" class="nr-url" data-f="url" placeholder="…or a link - YouTube, TikTok, Instagram">
             <button class="lib-btn" type="button" data-f="addlink" title="Fetch the video's sound, transcribe it and keep its words as a sample - a paid call">Transcribe a link</button>
           </div>
+          <div class="nr-add-row">
+            <select class="nr-url nr-src-pick" data-f="src"><option value="">…or a source of the Library</option></select>
+            <button class="lib-btn" type="button" data-f="addsrc" title="Its words were heard when it came in - they become the sample, for nothing">Add the source</button>
+          </div>
           <p class="mk-pnote">A video or audio file - or a link, of which only the sound is fetched, without a login - is
-            transcribed (a paid call), and its words become the sample.</p>
+            transcribed (a paid call), and its words become the sample. A source of the Library was heard when it came in:
+            its words become the sample for nothing.</p>
           <div class="mk-job" data-f="sjob" hidden></div>
         </div>
       </section>
@@ -124,6 +129,7 @@ function _build() {
   q('addlink').addEventListener('click', _addLink);
   q('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _addLink(); } });
   q('read').addEventListener('click', _read);
+  q('addsrc').addEventListener('click', _addSource);
   q('text').addEventListener('input', () => { if (_sel) _typed.set(_sel, q('text').value); });
 }
 
@@ -308,6 +314,7 @@ async function _show() {
   _paintRight();
   _paintJob();
   _paintLocks();
+  _paintSources();
   // A reading started before this page was opened (a reload, another window): followed again, at its real age.
   if (d.reading && d.reading.jobId && !_running(_sel)) _follow(String(_sel), d.reading.jobId, d.reading.startedAt);
 }
@@ -339,7 +346,7 @@ function _paintLocks() {
   const q = _win.q;
   const none = !_sel || !_rec;
   const busy = !none && _running(_sel);
-  for (const k of ['addfile', 'file', 'addlink', 'url']) q(k).disabled = none || busy;
+  for (const k of ['addfile', 'file', 'addlink', 'url', 'addsrc', 'src']) q(k).disabled = none || busy;
   for (const k of ['addtext', 'text']) q(k).disabled = none || busy || _adding;
   const unread = none ? [] : _unread();
   const words = unread.reduce((s, x) => s + (x.words || 0), 0);
@@ -409,6 +416,50 @@ async function _addText() {
     if (_sel === id) await _show();
   } catch (e) { if (_win) J.sayJob(_win.q('sjob'), e.message, true); }
   finally { _adding = false; _paintLocks(); }
+}
+
+// (phase V38, block D5) The sources of the Library whose words were heard - read whenever a narrator is shown. One that is
+// a sample of this narrator already says so; the server refuses it anyway (by its words too).
+async function _paintSources() {
+  if (!_win || !_rec) return;
+  const sel = _win.q('src');
+  const keep = sel.value;
+  let list = [];
+  try { list = (await J.api('/api/sources')).sources || []; } catch (e) { return; }
+  if (!_rec) return;
+  const mine = new Set((_rec.narrator.samples || []).map(s => String(s.sourceId || '')).filter(Boolean));
+  sel.textContent = '';
+  const first = el('option', null, '…or a source of the Library');
+  first.value = '';
+  sel.appendChild(first);
+  for (const s of list) {
+    const t = s.transcript || {};
+    if (t.state !== 'ready' || !t.chars) continue;
+    const o = el('option', null, `${s.title}${s.seconds ? ' · ' + J.clock(s.seconds) : ''}${mine.has(String(s.id)) ? ' - a sample already' : ''}`);
+    o.value = String(s.id);
+    o.disabled = mine.has(String(s.id));
+    sel.appendChild(o);
+  }
+  if ([...sel.options].some(o => o.value === keep && !o.disabled)) sel.value = keep;
+}
+
+async function _addSource() {
+  const id = _rec ? String(_rec.narrator.id) : '';
+  if (!id || id !== _sel || _running(id)) return;
+  const sel = _win.q('src');
+  const sourceId = sel.value;
+  if (!sourceId) { J.sayJob(_win.q('sjob'), 'Choose a source first.', true); return; }
+  const btn = _win.q('addsrc');
+  btn.disabled = true;
+  try {
+    const d = await _post(_nurl(id, '/samples/source'), { sourceId });
+    sel.value = '';
+    await _readList();
+    _paintList();
+    if (_sel === id) await _show();
+    if (_win && _sel === id) J.sayJob(_win.q('sjob'), `Added · ${d.words} words, not read yet`);
+  } catch (e) { J.sayJob(_win.q('sjob'), e.message, true); }
+  finally { btn.disabled = false; _paintLocks(); }
 }
 
 // ── The right column: the voice, the vocabulary, the phrases ────────────────

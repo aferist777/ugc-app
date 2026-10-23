@@ -10,6 +10,7 @@
 //   POST   /api/narrators/:id/samples          { text, label } -> { narrator }
 //   POST   /api/narrators/:id/samples/upload   multipart file -> { jobId }
 //   POST   /api/narrators/:id/samples/link     { url } -> { jobId }   (its sound only, no login - phase V27)
+//   POST   /api/narrators/:id/samples/source   { sourceId } -> { narrator }  a Library source's words, free (V38)
 //   DELETE /api/narrators/:id/samples/:index   -> { narrator }
 //   POST   /api/narrators/:id/read             {} -> { jobId }  the samples not read yet - adds to the voice, proposes
 //                                                words and phrases (V38; by the agents' ladder, medium)
@@ -41,6 +42,7 @@ const P = require('../lib/writing-prompts');
 const { callLadder } = require('../lib/llm-json');
 const STT = require('../lib/stt-replicate');
 const AGENT = require('../lib/mv3-agent');
+const SOURCES = require('../lib/sources-store');
 const YTDLP = require('../lib/ytdlp');
 
 const router = express.Router();
@@ -130,6 +132,41 @@ router.delete('/narrators/:id/samples/:index', (req, res) => {
   try {
     const rec = store.removeSample(req.params.id, req.params.index);
     res.json({ success: true, narrator: rec, words: store.totalWords(rec) });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+// (phase V38, block D5) A SOURCE of the Library becomes a sample for nothing: its words were heard when it came in, so
+// its transcript is the sample's text. Refused when this narrator has it already - by the source, by its link, or by
+// its words: the same video transcribed into a sample before (the owner's "black story" is the source "История по
+// черному - рабство древнего рима") overlaps it almost word for word, another video by a tenth at most.
+const _vocab = (t) => new Set(String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').slice(0, 300));
+function _sameWords(a, b) {
+  const A = _vocab(a);
+  const B = _vocab(b);
+  let both = 0;
+  for (const w of A) if (B.has(w)) both++;
+  return both / Math.max(1, A.size + B.size - both) >= 0.6;
+}
+
+router.post('/narrators/:id/samples/source', (req, res) => {
+  const id = String(req.params.id);
+  const rec = store.get(id);
+  if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
+  const sourceId = String((req.body || {}).sourceId || '');
+  const src = sourceId ? SOURCES.get(sourceId) : null;
+  if (!src) return res.status(404).json({ success: false, error: 'no such source' });
+  const t = SOURCES.readTranscript(sourceId);
+  const text = t && Array.isArray(t.cues) ? t.cues.map(c => String(c.text || '').trim()).filter(Boolean).join(' ') : '';
+  if (!text) return res.status(400).json({ success: false, error: 'This source has no words yet - it has not been heard.' });
+  const title = src.title || src.originalName || 'a source';
+  const had = (rec.samples || []).find(s => (s.sourceId && String(s.sourceId) === sourceId)
+    || (src.url && s.url && s.url === src.url) || (src.linkKey && s.linkKey && s.linkKey === src.linkKey));
+  if (had) return res.status(409).json({ success: false, error: `"${title}" is a sample of this narrator already.` });
+  const same = (rec.samples || []).find(s => _sameWords(s.text, text));
+  if (same) return res.status(409).json({ success: false, error: `"${title}" is the same video as the sample "${same.label || 'a sample'}" - its words are there already.` });
+  try {
+    const saved = store.addSample(id, { kind: 'source', label: title, text, sourceId, url: src.url || '', linkKey: src.linkKey || '' });
+    res.json({ success: true, narrator: store.view(saved), words: store.countWords(text) });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
