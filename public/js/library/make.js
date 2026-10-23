@@ -887,9 +887,9 @@ async function _mineTopics() {
   $('mk-mine').disabled = true;
   let run = null;
   try {
-    // On the generator's model (phase F3), not on a default of the mining's own.
+    // (phase V37) By the agents' ladder (Admin -> AI settings), as every agent - no model is sent.
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/topics`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
     // Its way in was cut off (phase V28.1): the server retried its Alerts row - the work is that row's.
     if (d.alertId) { await _afterRetry(); return; }
@@ -910,9 +910,9 @@ async function _transcribeAgain(rec) {
   if (_srcJobs.has(id)) return;
   if (!confirm(`Transcribe "${rec.title}" again?\n\nIt is a paid speech-to-text read of the whole file.`)) return;
   try {
-    // On the generator's model: when it has no topics yet, they are found after the words (phase V28.1).
+    // When it has no topics yet, they are found after the words (phase V28.1) - by the agents' ladder (V37).
     const d = await J.api(`/api/sources/${encodeURIComponent(id)}/transcribe`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
     if (d.alertId) { await _afterRetry(); return; }
     if (!_srcJobs.has(id)) {
@@ -1010,53 +1010,10 @@ async function _buildControls(settings) {
   const nar = _select('mk-c-narrator', [{ value: 'neutral', label: 'Neutral' }], 'neutral');
   box.appendChild(_ctl('Narrator', nar, _narratorsGear()));
 
-  // PROVIDER, MODEL, EFFORT (phase F3): the aggregators kie.ai and Replicate, their models, and the
-  // effort levels THE CHOSEN MODEL takes - the list is rebuilt when the model changes, and hidden
-  // for a model that takes none. A draft opens on its own choice; a new form on the last one made.
-  const was = J.modelChoice() || {};
-  const pick = { provider: s.provider || was.provider || d.provider, model: s.model || was.model || d.model, effort: s.effort || was.effort || d.effort };
-  const provs = _reg.providers.map(p => ({ value: p.id, label: p.label + (p.keyed ? '' : ' — no key'), disabled: !p.keyed }));
-  const prov = _select('mk-c-provider', provs, pick.provider);
-  if (prov.selectedIndex < 0 || prov.selectedOptions[0].disabled) {
-    const first = _reg.providers.find(p => p.keyed) || _reg.providers[0];
-    prov.value = first.id;
-  }
-  prov.title = 'Which aggregator runs the model - its key is on Admin';
-  const model = el('select');
-  model.id = 'mk-c-model';
-  const effort = el('select');
-  effort.id = 'mk-c-effort';
-  const effortCtl = _ctl('Effort', effort);
-  const fillEfforts = (wantEffort) => {
-    const p = _reg.providers.find(x => x.id === prov.value);
-    const m = p && p.models.find(x => x.id === model.value);
-    const list = (m && m.efforts) || [];
-    effort.textContent = '';
-    for (const v of list) { const o = el('option', null, v); o.value = v; effort.appendChild(o); }
-    effort.value = list.includes(wantEffort) ? wantEffort : (m ? m.effort : '');
-    effortCtl.hidden = !list.length;
-    effort.title = 'How long the model thinks before it writes - only the levels this model takes';
-  };
-  const fillModels = (wantModel, wantEffort) => {
-    const p = _reg.providers.find(x => x.id === prov.value) || _reg.providers[0];
-    model.textContent = '';
-    for (const m of p.models) { const o = el('option', null, m.label); o.value = m.id; o.title = m.id; model.appendChild(o); }
-    model.value = p.models.some(m => m.id === wantModel) ? wantModel : p.models[0].id;
-    fillEfforts(wantEffort);
-  };
-  fillModels(pick.model, pick.effort);
-  const remember = () => J.rememberModel({ provider: prov.value, model: model.value, effort: effort.value });
-  // The choice the form landed on is remembered too, when nothing usable was: topic mining and the
-  // narrators window run on the remembered one, and must not fall back to a provider with no key.
-  const had = J.modelChoice();
-  const hadOk = had && _reg.providers.some(p => p.id === had.provider && p.keyed);
-  if (!hadOk && _reg.providers.some(p => p.id === prov.value && p.keyed)) remember();
-  prov.addEventListener('change', () => { fillModels('', ''); remember(); });
-  model.addEventListener('change', () => { fillEfforts(effort.value); remember(); });
-  effort.addEventListener('change', remember);
-  box.appendChild(_ctl('Provider', prov));
-  box.appendChild(_ctl('Model', model));
-  box.appendChild(effortCtl);
+  // (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице") No Provider, Model,
+  // Effort any more: the AGENTS' LADDER writes (Admin -> AI settings), at effort medium; the line says which step is
+  // asked first and where the ladder is changed.
+  box.appendChild(_ctl('Writes', _writesLine()));
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
   const pin = s.readingId || s.readingIndex;   // a draft from before ids keeps a number - read once (_paintNarrators)
   const want = s.narratorId ? (pin ? `${s.narratorId}#${pin}` : s.narratorId) : 'neutral';
@@ -1115,6 +1072,21 @@ async function _paintNarrators(want, wantName) {
   sel.value = pick;
 }
 
+// (V37) "the agents' ladder · Claude Sonnet 5.5 first · AI settings" - the step asked first, the link to where the order is.
+const _PROV = { kie: 'kie.ai', replicate: 'Replicate', anthropic: 'Claude', openrouter: 'OpenRouter' };
+function _writesLine() {
+  const box = el('div', 'mk-writes');
+  const first = (_reg && _reg.ladder && _reg.ladder[0]) || null;
+  box.appendChild(el('span', null, 'the agents\' ladder' + (first ? ' · ' + first.model + ' first' : '')));
+  const a = el('a', 'mk-writes-link', 'AI settings');
+  a.href = '/admin#ai';
+  a.title = 'The order of the agents\' ladder: the first step is asked, the next one only when it refuses or is down. Every stage here at effort ' + ((_reg && _reg.effort) || 'medium') + '.';
+  box.appendChild(el('span', 'mk-writes-dot', '·'));
+  box.appendChild(a);
+  box.title = a.title;
+  return box;
+}
+
 const _controlsReady = () => !!$('mk-c-tone');
 
 function _opts() {
@@ -1131,9 +1103,9 @@ function _opts() {
     // The name alone, not the option's label ("Azazin — reading 2"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
-    provider: $('mk-c-provider').value,
-    model: $('mk-c-model').value,
-    effort: $('mk-c-effort').value,
+    // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
+    model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
+    effort: (_reg && _reg.effort) || 'medium',
   };
 }
 
@@ -1200,7 +1172,6 @@ function _payload() {
     settings: {
       tone: o.tone, scenes: o.scenes,
       narratorId: o.narratorId, narratorName: o.narratorName, readingId: o.readingPin, readingIndex: '',
-      provider: o.provider, model: o.model, effort: o.effort,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1706,7 +1677,7 @@ async function _saveScript() {
         gender: $('mk-gender').value,
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
-        narratorId: o.narratorId, tone: o.tone, provider: o.provider, model: o.model,
+        narratorId: o.narratorId, tone: o.tone,
         // The reading the script was ACTUALLY written with: "random" has to resolve to a real one.
         readingId: _gen.readingId || o.readingId,
         sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,
@@ -1869,7 +1840,7 @@ async function _paintLib() {
         b.disabled = true;
         _addSay('');
         try {
-          const d = await _post('/api/sources/add/link', { url: it.link, mineWith: J.modelChoice() || {} });
+          const d = await _post('/api/sources/add/link', { url: it.link });
           b.textContent = 'added';
           _track(d.read);
         } catch (e) { b.disabled = false; _addSay(e.message, true); }
@@ -1890,7 +1861,7 @@ async function _addLink(input) {
   if (!url) { _addSay('Paste a link first.', true); return; }
   _addSay('');
   try {
-    const d = await _post('/api/sources/add/link', { url, mineWith: J.modelChoice() || {} });
+    const d = await _post('/api/sources/add/link', { url });
     input.value = '';
     _track(d.read);
   } catch (e) { _addSay(e.message, true); }
@@ -1907,7 +1878,7 @@ async function _addFile(input, titleIn) {
   if (!where) { _addSay('Adding a file works in the app\'s own window - it hands the file over. Here, add it by a link.', true); return; }
   _addSay('');
   try {
-    const d = await _post('/api/sources/add/file', { path: where, title: titleIn.value.trim(), mineWith: J.modelChoice() || {} });
+    const d = await _post('/api/sources/add/file', { path: where, title: titleIn.value.trim() });
     input.value = '';
     titleIn.value = '';
     _track(d.read);

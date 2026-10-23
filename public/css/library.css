@@ -717,6 +717,10 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-ctl input[type=number]{ width:66px; min-width:0; }
 .mk-ctl select:focus, .mk-ctl input:focus{ outline:none; border-color:var(--primary); }
+/* (phase V37) Who writes: the agents' ladder, its first step, and the way to AI settings - in place of Provider / Model / Effort */
+.mk-writes{ display:flex; align-items:center; gap:5px; height:26px; font:600 11px var(--font); color:var(--ink); white-space:nowrap; }
+.mk-writes-link{ color:var(--primary); text-decoration:none; }
+.mk-writes-link:hover{ text-decoration:underline; }
 .mk-stage{ display:flex; flex-direction:column; gap:7px; padding:10px 0 0; border-top:1px solid var(--border); }
 .mk-stage-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .mk-stage-h .sp{ flex:1; }

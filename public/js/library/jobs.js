@@ -102,19 +102,8 @@ export const mb = (b) => (b >= 1048576 ? Math.round(b / 1048576) + ' MB' : Math.
 // How long a paragraph takes to say, at two and a half words a second.
 export const spokenSeconds = (t) => Math.round(String(t || '').trim().split(/\s+/).filter(Boolean).length / 2.5);
 
-// THE MODEL CHOICE - provider, model, effort - is the generator's and is remembered across forms and
-// sessions (phase F3): a new form opens on it, and finding a source's topics and reading a narrator's
-// voice run on it too, instead of on a default of their own.
-const LS_MODEL = 'mk_model_v1';
-export function modelChoice() {
-  try {
-    const v = JSON.parse(localStorage.getItem(LS_MODEL) || 'null');
-    return v && v.provider ? { provider: v.provider, model: v.model, effort: v.effort } : null;
-  } catch (e) { return null; }
-}
-export function rememberModel(v) {
-  try { localStorage.setItem(LS_MODEL, JSON.stringify({ provider: v.provider, model: v.model, effort: v.effort })); } catch (e) { /* this session only */ }
-}
+// (phase V37) There is no model choice to remember any more: the generator, a source's topics and a narrator's reading
+// are all written by the agents' ladder (Admin -> AI settings). The old `mk_model_v1` in a browser is read by nobody.
 
 export function el(tag, cls, text) {
   const e = document.createElement(tag);

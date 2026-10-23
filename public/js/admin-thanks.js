@@ -36,7 +36,7 @@
     { group: "App and server", name: "Anthropic TypeScript SDK", npm: "@anthropic-ai/sdk",
       url: "https://github.com/anthropics/anthropic-sdk-typescript", license: "MIT",
       what: "Anthropic's official library for the Claude API.",
-      how: "Talks to Claude directly with the key on API keys, only where you choose Claude: as a step of the agents' ladder on AI settings, or as the scenario generator's model - a long script streamed, a refusal said as one (lib/claude.js). It also checks the key, for free (lib/keys-health.js)." },
+      how: "Talks to Claude directly with the key on API keys, only where you choose Claude: as a step of the agents' ladder on AI settings - a long answer (a script) streamed, a refusal said as one (lib/claude.js). It also checks the key, for free (lib/keys-health.js)." },
     { group: "App and server", name: "Multer", npm: "multer",
       url: "https://github.com/expressjs/multer", license: "MIT",
       what: "An Express add-on that receives uploaded files.",

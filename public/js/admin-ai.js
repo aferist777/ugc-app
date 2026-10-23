@@ -32,21 +32,26 @@
     const box = el('div', 'ai-say');
     const p = (html) => { const e = el('p'); e.innerHTML = html; box.appendChild(e); };
     p('<b>Agents</b> read what you write and the pictures attached to it, look at the pictures, and answer: a prompt '
-      + 'shaped for the model you chose, a description, a plan. Short calls - words and a few pictures in, a short '
-      + 'answer back within a minute.');
+      + 'shaped for the model you chose, a description, a plan, a script. Mostly short calls - words and a few pictures '
+      + 'in, a short answer back within a minute; some are long work (below).');
     p('<b>Where they work:</b> the pictures chat (the prompt for the picture model); the video chat (the clip\'s '
       + 'prompt, Kling\'s first frame, putting a prompt or a script\'s lines into English); the frames chat of a talking head '
       + '(the frame\'s prompt, ideas); New Character (reading a photo, framing the 4K sheet); New look, New lookbook '
       + 'and New environment (what to make); the talking head (the mood markup of the script, the plan of the first '
-      + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place).');
+      + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place); highlights (finding the '
+      + 'moments of a long video); the scenario generator (the hooks, the script, cleaning it to the narrator, rewriting a '
+      + 'paragraph), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, '
+      + 'and the generator, the topics, the narrator and highlights think at effort medium (the rest at low).');
     p('<b>The ladder:</b> the first step is asked. If it answers nothing, refuses or runs out of time, the next one '
       + 'is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the '
       + 'last check, is stepped over - and such an aggregator cannot be chosen until its key works. Every model here '
-      + 'can see pictures.');
+      + 'can see pictures. Long work is PAID ONCE: a step that runs out of time, drops the connection or stops at its '
+      + 'length may have been paid for, so the next one is not asked by itself - the work stops and says so, and is '
+      + 'asked again only when you press again. A refusal is not paid for: the next step is asked.');
     p('<b>Cost:</b> a Gemini Flash answer is a fraction of a cent. Claude, asked directly with its key on API keys, '
       + 'thinks briefly here and costs more: about 3-6 cents for a message with two pictures on Opus 5.5, about half that '
-      + 'on Sonnet 5.5, a fraction of a cent on Haiku 5.5. Not here: the scenario generator, which chooses its model in '
-      + 'its own form for each script - a long script is never handed to a second model.');
+      + 'on Sonnet 5.5, a fraction of a cent on Haiku 5.5. A script, its topics or the moments of an hour of video read '
+      + 'by Claude Sonnet 5.5 cost a few cents to about a dime, by Gemini Flash a cent or two.');
     return box;
   }
 

@@ -527,8 +527,8 @@ async function _analyse() {
   if (!id || id !== _sel || _running(id)) return;
   const words = _rec.words || 0;
   const ok = await _start(id, 'analyse', `/api/narrators/${encodeURIComponent(id)}/analyse`, {
-    // The generator's model (phase F3): the one the scripts this voice writes will run on.
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(J.modelChoice() || {}),
+    // (phase V37) By the agents' ladder (Admin -> AI settings), as every agent - no model is sent.
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   }, { key: `l2-analyse|${J.bucket(words)}`, label: `Reading ${words} words…`, estimateMs: J.EST.analyse });
   if (ok) _announce();
 }

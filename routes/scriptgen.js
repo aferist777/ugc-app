@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // SCRIPT GENERATION — the four calls, in the order they run.
 //
-//   GET  /api/scriptgen/models              -> the Provider / Model / Effort registry
+//   GET  /api/scriptgen/models              -> tones, scenes and the agents' ladder that writes (V37)
 //   POST /api/scriptgen/hooks               -> { jobId }  five openings, differing in kind
 //   POST /api/scriptgen/script              -> { jobId }  title + paragraphs
 //   POST /api/scriptgen/humanize            -> { jobId }  the same paragraphs, cleaned
@@ -30,13 +30,24 @@
 // THE SOURCE TEXT IS ALSO RESOLVED HERE, for the same reason and one more: a topic's text is
 // the slice of transcript it was mined from, and letting the client send it would mean the model
 // could be given text no source contains, then have facts "taken only from the transcript".
+//
+// BY THE AGENTS' LADDER (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице"):
+// every stage is asked of Admin -> AI settings' ladder at effort medium (lib/llm-json.js callLadder) - no model is
+// chosen in the form any more. What WROTE it is the step that answered (`written`, `cleaned`, the scenario's `origin`);
+// a draft or scenario from before keeps the model its form chose. Paid once: a step that did not finish stops the ladder.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 
 const P = require('../lib/writing-prompts');
 const WM = require('../lib/writing-models');
-const { callJSON, hasKey } = require('../lib/llm-json');
+const { callLadder } = require('../lib/llm-json');
+const AGENTS = require('../lib/agents');
+
+// (V37) The effort every stage is asked at (the owner's (л1)), and the ladder's first step - what a stage is expected to
+// take, for the page's countdown (the owner's (л7)).
+const EFFORT = 'medium';
+const _first = () => { const l = AGENTS.ladder(); return (l && l[0]) || { provider: '', model: '' }; };
 const narrators = require('../lib/narrators-store');
 const sources = require('../lib/sources-store');
 const scen3 = require('./scen3');
@@ -71,7 +82,7 @@ function _sweep() {
 // `run` marks the draft the stage writes into: { key, what, ... } - see _runKey.
 //
 // A STAGE CAN BE CANCELLED (phase G1, /scriptgen/jobs/:id/cancel): `work` gets an AbortSignal as its
-// second argument and hands it to callJSON. A cancelled job keeps state 'cancelled' whatever its call
+// second argument and hands it to callLadder. A cancelled job keeps state 'cancelled' whatever its call
 // does afterwards - an answer that arrives anyway is not kept - and its draft is free at once.
 function _start(res, step, work, keep, run) {
   const key = (run && run.key) || '';
@@ -220,7 +231,6 @@ function _keeper(b, build) {
       settings: {
         tone: b.tone, scenes: b.scenes,
         narratorId: b.narratorId, narratorName: b.narratorName, readingId: b.readingPin != null ? b.readingPin : b.readingId,
-        provider: b.provider, model: b.model, effort: b.effort,
       },
       ...patch,
     });
@@ -232,8 +242,8 @@ function _keeper(b, build) {
 router.get('/scriptgen/models', (_req, res) => {
   res.json({
     success: true,
-    // Each model with the effort levels it takes (phase F3); a provider without a key says so.
-    providers: WM.providers(hasKey),
+    // (V37) No models to choose: the agents' ladder writes, its first step first - for the countdown and the form's line.
+    ladder: AGENTS.ladder(), effort: EFFORT,
     tones: WM.TONES,
     scenes: { min: Math.max(WM.SCENES_MIN, MIN_LINES), max: WM.SCENES_MAX, default: WM.DEFAULTS.scenes },
     defaults: WM.DEFAULTS,
@@ -282,20 +292,19 @@ router.post('/scriptgen/hooks', (req, res) => {
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
   _start(res, 'Writing hooks', async (_step, signal) => {
-    const data = await callJSON({
+    const { data, by } = await callLadder({
       system: P.HOOKS_SYSTEM,
       user: P.hooksUserPrompt({ topic, tone: m.tone,
         narratorBlock: nar.block, sourceText: src.text }),
-      schema: P.HOOKS_SCHEMA, name: 'hooks',
-      provider: m.provider, model: m.model, effort: m.effort, signal,
+      schema: P.HOOKS_SCHEMA, name: 'hooks', effort: EFFORT, signal,
     });
     const hooks = (data.hooks || []).filter(h => h && h.text);
     if (!hooks.length) throw new Error('No hooks came back.');
-    return { hooks, narrator: _readingLabel(nar), reading: nar.reading, model: m.model };
+    return { hooks, narrator: _readingLabel(nar), reading: nar.reading, model: by.model, by };
   // Five new hooks mean a hook is to be picked again: the one the draft held is cleared with them,
   // or a draft reopened later would show the old hook and hide the five that were paid for.
   }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '', usedReadingId: (r.reading && r.reading.id) || '' })),
-  { key: _runKey(b), what: 'hooks', model: m.model, effort: m.effort });
+  { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT });
 });
 
 router.post('/scriptgen/script', (req, res) => {
@@ -316,15 +325,14 @@ router.post('/scriptgen/script', (req, res) => {
     // "facts only from the transcript" only make sense when there is one.
     const withSource = !!src.text;
     if (withSource) step(`Writing ${m.scenes} paragraphs from ${Math.round(src.text.length / 1000)}k of transcript`);
-    const data = await callJSON({
+    const { data, by } = await callLadder({
       system: withSource ? P.SOURCE_SCRIPT_SYSTEM : P.SCRIPT_SYSTEM,
       user: withSource
         ? P.sourceScriptUserPrompt({ hook, topic, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, sourceText: src.text })
         : P.scriptUserPrompt({ topic, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, hook }),
-      schema: P.SCRIPT_SCHEMA, name: 'script',
-      provider: m.provider, model: m.model, effort: m.effort, signal,
+      schema: P.SCRIPT_SCHEMA, name: 'script', effort: EFFORT, signal,
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
     if (!paragraphs.length) throw new Error('The script came back empty.');
@@ -335,15 +343,16 @@ router.post('/scriptgen/script', (req, res) => {
       fromSource: withSource,
       narrator: _readingLabel(nar),
       reading: nar.reading,
-      model: m.model,
+      model: by.model,
+      by,
     };
   }, _keeper(b, (r) => ({
     paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
-    // (phase V23) What wrote it - the model as normalised, the reading drawn - for the save to record.
+    // (phase V23) What wrote it - (V37) the step of the ladder that answered, the reading drawn - for the save to record.
     usedReadingId: (r.reading && r.reading.id) || '', cleaned: null,
-    written: { provider: m.provider, model: m.model, effort: m.effort, readingId: (r.reading && r.reading.id) || '', at: new Date().toISOString() },
+    written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, readingId: (r.reading && r.reading.id) || '', at: new Date().toISOString() },
   })),
-  { key: _runKey(b), what: 'script', model: m.model, effort: m.effort, scenes: m.scenes });
+  { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes });
 });
 
 router.post('/scriptgen/humanize', (req, res) => {
@@ -361,11 +370,10 @@ router.post('/scriptgen/humanize', (req, res) => {
   if (!rest.length) return res.status(400).json({ success: false, error: 'only the hook — nothing to clean' });
 
   _start(res, `Cleaning ${rest.length} paragraphs`, async (_step, signal) => {
-    const data = await callJSON({
+    const { data, by } = await callLadder({
       system: P.HUMANIZER_SYSTEM,
       user: P.humanizerUserPrompt({ paragraphs: rest, narratorBlock: nar.block, hook }),
-      schema: P.HUMANIZER_SCHEMA, name: 'humanized',
-      provider: m.provider, model: m.model, effort: m.effort, signal,
+      schema: P.HUMANIZER_SCHEMA, name: 'humanized', effort: EFFORT, signal,
     });
     const cleaned = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
     // A count that does not match means the editor dropped or merged beats. The original wins
@@ -377,12 +385,13 @@ router.post('/scriptgen/humanize', (req, res) => {
       note: kept ? '' : `The editor returned ${cleaned.length} paragraphs for ${rest.length} — kept the original.`,
       narrator: _readingLabel(nar),
       reading: nar.reading,
+      by,
     };
   }, _keeper(b, (r) => ({
     paragraphs: r.paragraphs, humanized: !!r.applied,
-    ...(r.applied ? { cleaned: { provider: m.provider, model: m.model, effort: m.effort, at: new Date().toISOString() } } : {}),
+    ...(r.applied ? { cleaned: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() } } : {}),
   })),
-  { key: _runKey(b), what: 'humanize', model: m.model, effort: m.effort });
+  { key: _runKey(b), what: 'humanize', model: _first().model, effort: EFFORT });
 });
 
 router.post('/scriptgen/rewrite', (req, res) => {
@@ -401,11 +410,10 @@ router.post('/scriptgen/rewrite', (req, res) => {
   const topic = String(b.topic || '').trim();
 
   _start(res, `Rewriting paragraph ${index + 1}`, async (_step, signal) => {
-    const data = await callJSON({
+    const { data } = await callLadder({
       system: P.REWRITE_SYSTEM,
       user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index }),
-      schema: P.REWRITE_SCHEMA, name: 'rewrite',
-      provider: m.provider, model: m.model, effort: m.effort, signal,
+      schema: P.REWRITE_SCHEMA, name: 'rewrite', effort: EFFORT, signal,
     });
     const paragraph = String(data.paragraph || '').trim();
     if (!paragraph) throw new Error('The rewrite came back empty.');
@@ -420,7 +428,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
     next[r.index] = r.paragraph;
     return { paragraphs: next };
   }),
-  { key: _runKey(b), what: 'rewrite', model: m.model, effort: m.effort, index });
+  { key: _runKey(b), what: 'rewrite', model: _first().model, effort: EFFORT, index });
 });
 
 // ── drafts ──────────────────────────────────────────────────────────────────

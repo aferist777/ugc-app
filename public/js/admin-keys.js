@@ -26,13 +26,13 @@ const ROWS = [
     label: 'Claude (Anthropic):', settingsKey: 'anthropicApiKey', probe: 'anthropic',
     placeholder: 'sk-ant-••• (console.anthropic.com)',
     link: 'https://console.anthropic.com/settings/keys', linkText: 'console.anthropic.com → API keys',
-    desc: 'Claude directly - Opus, Sonnet and Haiku 5.5. Used only where you choose it: as a step of the agents\' ladder on AI settings, or as the model of the scenario generator in its form.',
+    desc: 'Claude directly - Opus, Sonnet and Haiku 5.5. Used only where you choose it: as a step of the agents\' ladder on AI settings - which writes the scenario generator\'s scripts too.',
   },
   {
     label: 'kie.ai API:', settingsKey: 'kieApiKey', probe: 'kie.ai',
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key', linkText: 'kie.ai/api-key',
-    desc: 'Pictures and video in the chats, New Character and the talking head; Suno music; the agents and the scenario generator on Gemini; the 3D Studio\'s Claude. The number beside it is the credit balance.',
+    desc: 'Pictures and video in the chats, New Character and the talking head; Suno music; the agents (the scenario generator among them) on Gemini; the 3D Studio\'s Claude. The number beside it is the credit balance.',
   },
   {
     label: 'OpenRouter API:', settingsKey: 'openRouterApiKey', probe: 'openrouter',
@@ -44,7 +44,7 @@ const ROWS = [
     label: 'Replicate API:', settingsKey: 'replicateApiKey', probe: 'replicate',
     placeholder: 'r8_••• (replicate.com)',
     link: 'https://replicate.com/account/api-tokens', linkText: 'replicate.com → API tokens',
-    desc: 'Pictures and video in the chats and New Character; transcribing sources and narrator samples; the agents and the scenario generator on Gemini and GPT.',
+    desc: 'Pictures and video in the chats and New Character; transcribing sources and narrator samples; the agents (the scenario generator among them) on Gemini and GPT.',
   },
   {
     label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey', probe: 'elevenlabs',
