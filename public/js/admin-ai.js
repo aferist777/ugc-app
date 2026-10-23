@@ -24,6 +24,19 @@
     return e;
   };
   const prov = (id) => ((st && st.providers) || []).find(p => p.id === id) || null;
+
+  // (V38.1, the owner: "из ai settings должна быть стрелка "назад" чтобы вернуться туда где закончил") Come from the
+  // scenario generator (?back=/library?...), "← back" leads there again - to the same draft. Read once: a tab's press
+  // rewrites the address without its query. Only a page of this app's Library is a way back.
+  (function backArrow() {
+    const btn = document.getElementById('ai-back');
+    let back = '';
+    try { back = new URLSearchParams(location.search).get('back') || ''; } catch (e) { back = ''; }
+    if (!btn || !/^\/library(\?|$)/.test(back)) return;
+    btn.hidden = false;
+    btn.title = 'Back to the scenario generator, where you left it';
+    btn.addEventListener('click', () => { location.href = back; });
+  })();
   // The verdict in a word or two for a menu entry; the whole sentence is the step's own line.
   const offWord = (off) => (!off ? '' : /^no key/.test(off) ? 'no key' : 'key refused');
 
@@ -39,8 +52,8 @@
       + '(the frame\'s prompt, ideas); New Character (reading a photo, framing the 4K sheet); New look, New lookbook '
       + 'and New environment (what to make); the talking head (the mood markup of the script, the plan of the first '
       + 'frames, the animation prompts, how a place moves); the 3D Studio (describing a place); highlights (finding the '
-      + 'moments of a long video); the scenario generator (the hooks, the script, cleaning it to the narrator, rewriting a '
-      + 'paragraph), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, '
+      + 'moments of a long video); the scenario generator (the hooks, the script, rewriting a paragraph or a '
+      + 'fragment of one, a scenario of the shelf in its narrator\'s voice), a source\'s topics and a narrator\'s reading - these are LONG work: each step may take five minutes, '
       + 'and the generator, the topics, the narrator and highlights think at effort medium (the rest at low).');
     p('<b>The ladder:</b> the first step is asked. If it answers nothing, refuses or runs out of time, the next one '
       + 'is asked, and so on down. A step whose aggregator has no key on API keys, or whose key was refused at the '

@@ -1451,18 +1451,22 @@ async function _upload(files) {
 // ── An address to land on (phase H5) ─────────────────────────────────────────
 // What an Alerts row leads to: ?shelf=characters&make=1 is the making area (a portrait or a sheet being
 // made there), ?shelf=characters&sel=<id> a character on the shelf, selected and in view, ?shelf=scenarios&make=1&src=<id>
-// the generator on a source (phase V28.1: a source being added is a row of its own). Read when the
+// the generator on a source (phase V28.1: a source being added is a row of its own), ?shelf=scenarios&make=1&draft=<id> the
+// generator on a draft (phase V38.1: the way back from Admin -> AI settings). Read when the
 // page loads, and - when the Library is already open - taken from the Alerts list without loading the
 // page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
 function _place(u) {
   const q = u.searchParams;
   let kind = q.get('shelf') || '';
   // (phase V28.5) The Music shelf is Media -> Audio -> Music: an old address lands there.
-  if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', mkind: 'music' };
+  if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', draft: '', mkind: 'music' };
   if (!SHELVES[kind]) return null;
   // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
-  return { kind, sel: q.get('sel') || '', make: q.get('make') === '1', src: q.get('src') || '', mkind: kind === 'media' ? (q.get('kind') || '') : '' };
+  return { kind, sel: q.get('sel') || '', make: q.get('make') === '1', src: q.get('src') || '', draft: q.get('draft') || '', mkind: kind === 'media' ? (q.get('kind') || '') : '' };
 }
+
+// What the making area opens on: a source, a draft (V38.1), or a clean form.
+const _makeOpts = (p) => (p.src ? { sourceId: p.src } : p.draft ? { draftId: p.draft } : undefined);
 
 async function _goToPlace(p) {
   if (!p) return;
@@ -1474,9 +1478,11 @@ async function _goToPlace(p) {
   }
   _closeNarrators();                              // what the address names is under them
   if (p.make && MAKERS[p.kind]) {
-    if (_makingOn !== p.kind) await _openMaker(p.src ? { sourceId: p.src } : undefined);
+    if (_makingOn !== p.kind) await _openMaker(_makeOpts(p));
     // The generator on show, asked for one of its sources: that source, without starting a clean form.
     else if (p.kind === 'scenarios' && p.src) await MK.showSource(p.src);
+    // ...or for a draft (V38.1): that draft.
+    else if (p.kind === 'scenarios' && p.draft) await MK.open({ draftId: p.draft });
     // Already showing: asked to look again - a row it shows may have been started again from Alerts
     // (review I). Not the generator, whose open() starts a clean form.
     else if (p.kind !== 'scenarios') await MAKERS[p.kind].mod.open({});
@@ -1607,7 +1613,7 @@ function boot() {
   Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).
-    if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(arrive.src ? { sourceId: arrive.src } : undefined);
+    if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(_makeOpts(arrive));
   });
   _counts();
 }

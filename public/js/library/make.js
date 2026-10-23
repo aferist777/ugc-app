@@ -1049,15 +1049,23 @@ async function _paintNarrators(want, wantName) {
   sel.value = pick;
 }
 
-// (V37) "the agents' ladder · Claude Sonnet 5.5 first · AI settings" - the step asked first, the link to where the order is.
+// (V37; V38.1, the owner: "столбец writes слишком длинный давай просто будет первая лесенка и синее слово ai settings")
+// "claude-sonnet-5-5 · AI settings" - the ladder's first step, and the way to where the order is changed. The way there
+// saves the draft first and carries the way back: Admin -> AI settings shows "← back" to this generator, on this draft.
 const _PROV = { kie: 'kie.ai', replicate: 'Replicate', anthropic: 'Claude', openrouter: 'OpenRouter' };
 function _writesLine() {
   const box = el('div', 'mk-writes');
   const first = (_reg && _reg.ladder && _reg.ladder[0]) || null;
-  box.appendChild(el('span', null, 'the agents\' ladder' + (first ? ' · ' + first.model + ' first' : '')));
+  box.appendChild(el('span', null, first ? first.model : 'the agents\' ladder'));
   const a = el('a', 'mk-writes-link', 'AI settings');
   a.href = '/admin#ai';
-  a.title = 'The order of the agents\' ladder: the first step is asked, the next one only when it refuses or is down. Every stage here at effort ' + ((_reg && _reg.effort) || 'medium') + '.';
+  a.title = 'The agents\' ladder writes: its first step is asked, the next one only when it refuses or is down. Every stage here at effort ' + ((_reg && _reg.effort) || 'medium') + '.';
+  a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (_gen) { try { await _saveDraft(); } catch (x) { /* the way there is not held up by a save */ } }
+    const back = '/library?shelf=scenarios&make=1' + (_gen && _gen.draftId ? '&draft=' + encodeURIComponent(_gen.draftId) : '');
+    location.href = '/admin?back=' + encodeURIComponent(back) + '#ai';
+  });
   box.appendChild(el('span', 'mk-writes-dot', '·'));
   box.appendChild(a);
   box.title = a.title;
