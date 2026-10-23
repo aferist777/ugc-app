@@ -733,6 +733,12 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
 }
 #mk-hook:focus{ outline:none; border-color:var(--primary); }
+/* (V38.1) What to advertise, under the form's controls - two lines, grows as typed. */
+.mk-ad textarea{
+  font:12px/1.45 var(--font); color:var(--ink); resize:vertical; min-height:44px;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 9px;
+}
+.mk-ad textarea:focus{ outline:none; border-color:var(--primary); }
 /* Five candidates, each labelled with the KIND it is - that is what they differ in. */
 .mk-hooks{ display:flex; flex-direction:column; gap:4px; }
 .mk-hook{

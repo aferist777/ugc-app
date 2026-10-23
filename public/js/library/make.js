@@ -83,6 +83,8 @@ const HTML = `
         <label class="mk-field"><span>Topic</span>
           <input type="text" id="mk-topic" placeholder="What the video is about"></label>
         <div class="mk-controls" id="mk-controls"></div>
+        <label class="mk-field mk-ad"><span>Advertise <em>— optional: worked into 2 paragraphs, natively; empty - no ad</em></span>
+          <textarea id="mk-ad" rows="2" spellcheck="false" placeholder="What to advertise and what to say about it - a call to buy or a link only if you write it here"></textarea></label>
         <div class="mk-note-line" id="mk-nar-note" hidden></div>
         <div class="mk-job" id="mk-job" hidden></div>
         <div class="mk-stage" id="mk-hook-stage">
@@ -151,7 +153,7 @@ function _build() {
   $('mk-newhooks').addEventListener('click', _newHooks);
   $('mk-save').addEventListener('click', _saveScript);
   $('mk-discard').addEventListener('click', _discardDraft);
-  for (const id of ['mk-topic', 'mk-title', 'mk-hook', 'mk-vertical', 'mk-product']) $(id).addEventListener('input', _queueDraft);
+  for (const id of ['mk-topic', 'mk-title', 'mk-hook', 'mk-vertical', 'mk-product', 'mk-ad']) $(id).addEventListener('input', _queueDraft);
   // A hook typed by hand while five wait to be picked is a choice too: the chain goes on from it.
   $('mk-hook').addEventListener('input', () => { if (_stage === 'pick' && $('mk-hook').value.trim()) _setStage('idle'); });
   $('mk-gender').addEventListener('change', _queueDraft);
@@ -1075,6 +1077,8 @@ function _opts() {
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
+    // (V38.1) What to advertise in two paragraphs - empty, no ad.
+    advertise: $('mk-ad') ? $('mk-ad').value.trim() : '',
     // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
     model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
     effort: (_reg && _reg.effort) || 'medium',
@@ -1143,7 +1147,7 @@ function _payload() {
     humanized: !!_gen.humanized,
     settings: {
       tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName,
+      narratorId: o.narratorId, narratorName: o.narratorName, advertise: o.advertise,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1251,6 +1255,7 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   $('mk-gender').value = saved.gender || 'male';
   $('mk-vertical').value = saved.vertical || '';
   $('mk-product').value = saved.product || '';
+  $('mk-ad').value = (full && full.settings && full.settings.advertise) || '';
   _showForm();
   try { await _buildControls(full ? full.settings : null); }
   catch (e) { J.sayJob($('mk-job'), 'the model list could not be read: ' + e.message, true); }
@@ -1698,7 +1703,7 @@ async function _saveScript() {
         gender: $('mk-gender').value,
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
-        narratorId: o.narratorId, tone: o.tone,
+        narratorId: o.narratorId, tone: o.tone, advertise: o.advertise,
         sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,
         draftId: _gen.draftId,
       }),

@@ -171,6 +171,12 @@ function _narrator(id) {
 
 const _words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
 
+// (V38.1) The ad a person typed into the form's "Advertise" - worked into two paragraphs of the script (lib/writing-prompts.js
+// adBlock); empty, the script carries no advertising. And what of it goes into the scenario's Product when that is empty
+// (the owner's (к8)): its first line, short - Product is a label the shelf filters by.
+const _ad = (s) => String(s || '').trim().slice(0, 1500);
+const _productOf = (s) => String(s || '').trim().split(/\r?\n/)[0].replace(/[.;:,\s]+$/, '').slice(0, 80);
+
 // ── a scenario of the shelf, in the narrator's voice (phase V38, block D4; V38.1) ─
 // "In <narrator>'s voice" under a scenario of the shelf. The narrator is the scenario's own - what its narrator field shows
 // (the owner's (к3а)) - and the rewrite starts AT ONCE (the owner's (к3): "оно должно сразу писать голосом нарратора"): a
@@ -288,8 +294,10 @@ function _keeper(b, build) {
       // Only when the stage was sent one: the cleaning pass is not, and must not blank the topic.
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
+        ...((cur && cur.settings) || {}),
         tone: b.tone, scenes: b.scenes,
         narratorId: b.narratorId, narratorName: b.narratorName,
+        ...(b.advertise != null ? { advertise: _ad(b.advertise) } : {}),
       },
       ...patch,
     });
@@ -388,9 +396,9 @@ router.post('/scriptgen/script', (req, res) => {
       system: withSource ? P.SOURCE_SCRIPT_SYSTEM : P.SCRIPT_SYSTEM,
       user: withSource
         ? P.sourceScriptUserPrompt({ hook, topic, paragraphs: m.scenes,
-          tone: m.tone, narratorBlock: nar.block, sourceText: src.text })
+          tone: m.tone, narratorBlock: nar.block, sourceText: src.text, advertise: _ad(b.advertise) })
         : P.scriptUserPrompt({ topic, paragraphs: m.scenes,
-          tone: m.tone, narratorBlock: nar.block, hook }),
+          tone: m.tone, narratorBlock: nar.block, hook, advertise: _ad(b.advertise) }),
       schema: P.SCRIPT_SCHEMA, name: 'script', effort: EFFORT, signal,
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
@@ -449,7 +457,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
       const { data } = await callLadder({
         system: P.FRAGMENT_SYSTEM,
         user: P.fragmentUserPrompt({ topic, tone: m.tone, script, index, before: frag.before, fragment: frag.text, after: frag.after,
-          narratorBlock: nar.block }),
+          narratorBlock: nar.block, advertise: _ad(b.advertise) }),
         schema: P.FRAGMENT_SCHEMA, name: 'fragment', effort: EFFORT, signal,
       });
       // The fragment's own edges are kept: a selection that ended on a space keeps it, whatever the model trimmed.
@@ -462,7 +470,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
     }
     const { data } = await callLadder({
       system: P.REWRITE_SYSTEM,
-      user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index, narratorBlock: nar.block }),
+      user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index, narratorBlock: nar.block, advertise: _ad(b.advertise) }),
       schema: P.REWRITE_SCHEMA, name: 'rewrite', effort: EFFORT, signal,
     });
     const paragraph = String(data.paragraph || '').trim();
@@ -588,7 +596,8 @@ router.post('/scriptgen/save', async (req, res) => {
     title,
     lines: paragraphs.map(text => ({ text })),
     vertical: String(b.vertical || ''),
-    product: String(b.product || ''),
+    // (V38.1, the owner's (к8)) An ad typed in "Advertise" names the product when the form's Product was left empty.
+    product: String(b.product || '').trim() || _productOf(b.advertise),
     roles: Array.isArray(b.roles) && b.roles.length ? b.roles
       : [{ id: 'r0', name: String(b.role || 'narrator'), gender }],
     origin: {
