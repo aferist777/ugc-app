@@ -667,7 +667,9 @@ function _tree() {
         count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.folders.length ? s.id + '/' + UNCAT : s.id } };
       if (s.folders.length) {
         node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
-          label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id } }));
+          label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id },
+          // (phase V35, the owner's (т3)) YouTube's videos are horizontal: their tiles are 16:9, in the Library and in Merge.
+          ...(s.id === 'youtube' && f.id === 'videos' ? { tiles: 'wide' } : {}) }));
       }
       return node;
     }) };

@@ -80,7 +80,7 @@
    own, its count; pressed, it opens. Over the gallery the path to the node (crumbsEl): every word but the last opens its
    folder. A tile hanging over a folder tile or a word that takes it is outlined, as over its row. */
 .mt-folders{
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(128px, 1fr)); gap:6px; margin:0 0 10px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(164px, 1fr)); gap:6px; margin:0 0 10px;
 }
 .mt-ftile{
   display:flex; align-items:center; gap:7px; min-width:0; height:38px; padding:0 9px 0 7px; box-sizing:border-box;

@@ -763,7 +763,8 @@ function _paint() {
   const folders = !searching && _tree && _node ? _tree.foldersEl(_node) : null;
   if (folders) b.appendChild(folders);
   const grid = document.createElement('div');
-  grid.className = 'mv3-grid';
+  // (phase V35, the owner's (т3), (у4)) A folder of horizontal videos (YouTube -> Videos) has 16:9 tiles.
+  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : '');
   grid.appendChild(_plusTile());
   // An empty shelf still gets the grid - it is how files get onto it in the first
   // place, so replacing it with an "empty" placard would hide the only way in. A folder of folders says nothing.

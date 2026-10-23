@@ -218,7 +218,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-cv-at{ font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums; }
 .lib-info-looks{
   --card-w:120px; --card-h:68px; --card-total:86px;
-  display:grid; grid-template-columns:repeat(auto-fill, var(--card-w));
+  display:grid; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content;
   gap:8px; padding:10px 12px; align-content:start; justify-content:start;
 }
 /* What is known about a place, as text: the label over it, the words under. */
@@ -253,14 +253,17 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-grid{
   flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;
   display:grid; grid-template-columns:repeat(auto-fill, var(--card-w));
+  grid-auto-rows:max-content;
   gap:8px; padding:10px; align-content:start; justify-content:start;
 }
-/* The height is DEFINITE on the card. Measured the hard way: with the height only on the
-   preview box, Chrome sized the grid row from the name alone (27px), the preview overflowed
-   into it, and 218 cards claimed to fit one screen — no scrollbar, nothing below the fold
-   reachable. A definite item height needs no intrinsic pass and cannot be got wrong. */
+/* A CARD IS AS TALL AS WHAT IS ON IT (phase V35, the owner 2026-10-23, (т4): "под названием пустое место, прям много").
+   It used to be a fixed 181px, the room of a category select under the name - and a track, a built-in sound, a YouTube
+   video or a post, which have no select, kept an empty strip there. The picture box keeps its DEFINITE height
+   (--card-h): with the height only on an aspect-ratio once, Chrome sized a row from the name alone (27px) and 218 cards
+   "fitted" one screen with no scrollbar; with a definite box and max-content rows a row is never shorter than its tallest
+   card, and a card is not stretched to it (align-self:start). */
 .lib-card{
-  position:relative; height:var(--card-total);
+  position:relative; height:auto; align-self:start;
   border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
   background:var(--surface); cursor:pointer; transition:.12s var(--ease);
 }
@@ -490,7 +493,7 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-rhead{ font:inherit; }
 .lib-rcaret{ flex:0 0 auto; width:12px; color:var(--muted); transition:transform .12s var(--ease); }
 .lib-rgroup.is-open .lib-rcaret{ transform:rotate(90deg); color:var(--ink); }
-.lib-rstrip{ display:none; grid-template-columns:repeat(auto-fill, var(--card-w)); gap:8px; padding:2px 4px 10px 22px; align-content:start; justify-content:start; }
+.lib-rstrip{ display:none; grid-template-columns:repeat(auto-fill, var(--card-w)); grid-auto-rows:max-content; gap:8px; padding:2px 4px 10px 22px; align-content:start; justify-content:start; }
 .lib-rgroup.is-open .lib-rstrip{ display:grid; }
 .lib-rsub{ display:flex; gap:6px; font-variant-numeric:tabular-nums; }
 .lib-rlen{ color:var(--ink); font-weight:600; }
@@ -1035,3 +1038,18 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-crumbs{ flex:0 1 auto; min-width:0; overflow:hidden; }
 .lib-crumbs[hidden]{ display:none; }
 .lib-crumbs .mt-crumbs{ margin:0; flex-wrap:nowrap; }
+
+/* (phase V35, the owner's (т1)) Sounds and tracks on Media are SQUARE cards - a grid of only them (js/library/main.js
+   is-sound): the note, the wave and the length in a square, the name under it (and an own sound's category). */
+.lib-grid.is-sound{ --card-w:100px; --card-h:98px; }  /* the box inside the 1px border: a 100x100 card */
+/* (phase V35, the owner's (т3)) REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
+.lib-grid.is-wide{ --card-w:160px; --card-h:90px; }
+/* The square of a sound: the note, its name (two lines at most) under it, the wave and the length at the bottom - laid out
+   as Merge's sound tile is. */
+.lib-grid.is-sound .lib-thumb-sound{ flex-direction:column; justify-content:flex-start; gap:2px; padding:12px 6px 0; box-sizing:border-box; }
+.lib-grid.is-sound .lib-snd{ font-size:20px; }
+.lib-thumb-sound .lib-name{
+  max-width:100%; padding:0; text-align:center; color:var(--ink); white-space:normal; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-height:1.25;
+}
+.lib-card .lib-thumb-sound .snd-twave{ bottom:18%; height:16%; }

@@ -582,6 +582,10 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 }
 .mv3-tile:hover{border-color:var(--primary)}
 .mv3-tile img{width:100%; height:100%; object-fit:cover; display:block}
+/* (phase V35, the owner's (т3), (у4)) REFERENCES -> YouTube -> Videos are horizontal: 16:9 tiles, wider columns
+   (js/merge-v3/library.js, the node's tiles: 'wide'). */
+.mv3-grid.is-wide{grid-template-columns:repeat(auto-fill, minmax(124px, 1fr))}
+.mv3-grid.is-wide .mv3-tile{aspect-ratio:16 / 9}
 /* The hook's permanent number (lib/hook-ids.js), on its tile. Bottom left, because the star
    and the cross own the top corners; readable over any frame, so it carries its own ground. */
 .mv3-tile-hid{

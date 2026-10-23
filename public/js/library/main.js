@@ -687,7 +687,8 @@ function _card(it, extra) {
     }
   }
   name.appendChild(document.createTextNode(it.name));
-  card.appendChild(name);
+  // (phase V35, the owner's (т1)) A sound or a track is a square, as in Merge: its name inside it, under the note.
+  if (AUDIO.has(it.kind)) box.appendChild(name); else card.appendChild(name);
   // A sound's or a track's name is changed where it is read - it has no window to do it in.
   if (AUDIO.has(it.kind) && it.kind !== 'sfx') {
     name.title = it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') + ' - a double press renames it';
@@ -817,6 +818,12 @@ function _renderGrid() {
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
+  // (phase V35, the owner's (т1), (т3)) Sounds and tracks are square cards; a folder of horizontal videos (YouTube ->
+  // Videos, the node's `tiles: 'wide'`) has 16:9 ones - css/library.css.
+  if (_shelf === 'media') {
+    grid.classList.toggle('is-sound', _items.length > 0 && _items.every(x => AUDIO.has(x.kind)));
+    grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
+  }
   // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
   // directly in it. A search over SFX shows what it found in all of SFX, with no folders.
   const searching = _shelf === 'media' && !!(_q && SS.isSfx(_node));
