@@ -24,7 +24,30 @@ const LS_CAT = 'mv3_hl_cat_v1';
 export const RECOMMENDED = {
   podcast: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for a podcast' },
   documentary: { cats: ['classic', 'clean', 'cinema'], said: 'calm - for a documentary' },
+  // (the owner's (в1)) auto: one tile, "by the video" - the agent's finding chooses between the style kept for podcast and the
+  // one kept for documentary (lib/highlights-store.js styleOf).
+  auto: { cats: [], byVideo: true, said: 'by the video - a talk gets your podcast style, a story told your documentary style' },
 };
+
+// "By the video" (V33.8, (в1)): not a preset but a choice between two - the last style chosen for each kind, remembered here.
+export const BY_VIDEO = '@by-video';
+const LS_KIND = 'mv3_hl_kind_style_v1';
+const FIRST = { podcast: 'cp-podcast-viral', documentary: 'cl-white' };
+const _known = (id) => !!(PRESETS.find((x) => x.id === id) || MyPresets.byId(id));
+/** The style kept for a kind - the one last chosen while it was the kind, or the first answer (Podcast Viral, Classic White). */
+export function styleFor(kind) {
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem(LS_KIND) || '{}') || {}; } catch (e) { m = {}; }
+  return _known(m[kind]) ? m[kind] : FIRST[kind];
+}
+/** A style chosen while the kind was podcast or documentary is kept for it. */
+export function keepFor(kind, id) {
+  if (!FIRST[kind] || !_known(id)) return;
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem(LS_KIND) || '{}') || {}; } catch (e) { m = {}; }
+  m[kind] = id;
+  try { localStorage.setItem(LS_KIND, JSON.stringify(m)); } catch (e) { /* private */ }
+}
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const _loops = new Map();          // a loop's address -> Promise<Blob>, kept for the page's life
 
@@ -38,8 +61,9 @@ function _loopOf(url) {
   return p;
 }
 
-/** A preset's name, the app's or the person's ('' for none). */
+/** A preset's name, the app's or the person's ('' for none); "by the video" for that choice. */
 export function presetName(id) {
+  if (id === BY_VIDEO) return 'by the video';
   const p = PRESETS.find((x) => x.id === id) || MyPresets.byId(id);
   return p ? p.name : '';
 }
@@ -69,7 +93,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     top.textContent = '';
     const recCats = rec ? rec.cats.filter((c) => CATEGORIES.some((x) => x.id === c)) : [];
     const cats = recCats.map((id) => CATEGORIES.find((x) => x.id === id)).concat(CATEGORIES.filter((c) => !recCats.includes(c.id)));
-    const chips = (recCats.length ? [[REC, 'recommended', recCats.reduce((n, c) => n + countOf(c), 0)]] : [])
+    const chips = (recCats.length || (rec && rec.byVideo) ? [[REC, 'recommended', recCats.reduce((n, c) => n + countOf(c), rec.byVideo ? 1 : 0)]] : [])
       .concat([['', 'All', PRESETS.length + mine.length], [MINE, 'Mine', mine.length]])
       .concat(cats.map((c) => [c.id, c.label, countOf(c.id)]));
     for (const [id, label, n] of chips) {
@@ -77,7 +101,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
       b.type = 'button';
       b.dataset.cat = id;
       b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
-      if (id === REC) b.title = 'Recommended for this kind of video: ' + rec.said + ' - ' + recCats.map((c) => CATEGORIES.find((x) => x.id === c).label).join(', ');
+      if (id === REC) b.title = 'Recommended for this kind of video: ' + rec.said + (recCats.length ? ' - ' + recCats.map((c) => CATEGORIES.find((x) => x.id === c).label).join(', ') : '');
       else if (recCats.includes(id)) b.title = 'Recommended for this kind of video';
       b.addEventListener('click', () => { cat = id; try { localStorage.setItem(LS_CAT, JSON.stringify(cat)); } catch (e) { /* private */ } paintCat(); });
       top.appendChild(b);
@@ -88,9 +112,35 @@ export function stylePicker(host, { onPick, kind } = {}) {
   }
   const _rank = (btn) => {
     const c = btn.dataset.cat;
+    if (c === BY_VIDEO) return -20000;
     const i = c === MINE ? -1 : (rec ? rec.cats.indexOf(c) : -1);
     return (c === MINE ? -1 : i >= 0 ? i : 100) * 10000 + (+btn.dataset.i || 0);
   };
+
+  // (V33.8, (в1)) The "by the video" tile: shown under "recommended" while the kind is auto; it says the two styles it chooses from.
+  const byBtn = _el('button', 'mv3-cap-tile mv3-hls-by');
+  byBtn.type = 'button';
+  byBtn.dataset.id = BY_VIDEO;
+  byBtn.dataset.cat = BY_VIDEO;
+  byBtn.dataset.i = '-1';
+  const byBox = _el('div', 'mv3-cap-box mv3-hls-by-box');
+  const byName = _el('div', 'mv3-cap-name');
+  byName.appendChild(_el('span', 'mv3-cap-nm', 'by the video'));
+  byBtn.append(byBox, byName);
+  byBtn.addEventListener('click', () => { set(BY_VIDEO); if (onPick) onPick(BY_VIDEO, 'by the video'); });
+  function paintBy() {
+    byBox.textContent = '';
+    const line = (what, kind) => {
+      const l = _el('span', 'mv3-hls-by-l');
+      l.appendChild(_el('small', null, what));
+      l.appendChild(_el('b', null, presetName(styleFor(kind)) || styleFor(kind)));
+      return l;
+    };
+    byBox.append(line('a talk →', 'podcast'), line('a story told →', 'documentary'));
+    byBtn.title = 'The agent decides what the video is: a talk (podcast, vlog, reaction, monologue, stream) gets «' + presetName(styleFor('podcast'))
+      + '», a story told (documentary, lecture, tutorial, sermon) gets «' + presetName(styleFor('documentary'))
+      + '» - the styles you last chose for podcast and for documentary';
+  }
 
   // The person's first, newest first (as in the captions view), then the app's.
   for (const p of mine.concat(PRESETS)) {
@@ -119,6 +169,8 @@ export function stylePicker(host, { onPick, kind } = {}) {
     tiles.set(p.id, t);
     grid.appendChild(btn);
   }
+  grid.insertBefore(byBtn, grid.firstChild);
+  byBtn.hidden = true;
 
   function paintCat() {
     if (cat === REC && !rec) cat = '';
@@ -127,19 +179,22 @@ export function stylePicker(host, { onPick, kind } = {}) {
       t.btn.hidden = cat === REC ? !rec.cats.includes(t.btn.dataset.cat) : (!!cat && t.btn.dataset.cat !== cat);
       if (t.btn.hidden) stopNow(t);
     }
+    byBtn.hidden = !(cat === REC && rec && rec.byVideo);
   }
 
   /** (V33.8) The video's kind changed: its recommended groups first, and open - the style chosen stays chosen. */
   function recommend(k) {
     rec = RECOMMENDED[k] || null;
+    if (rec && rec.byVideo) paintBy();
     paintChips();
     if (rec) cat = REC;
     paintCat();
   }
 
   function set(id) {
-    chosen = id && tiles.has(id) ? id : '';
+    chosen = id && (tiles.has(id) || id === BY_VIDEO) ? id : '';
     for (const [k, t] of tiles) t.btn.classList.toggle('is-on', k === chosen);
+    byBtn.classList.toggle('is-on', chosen === BY_VIDEO);
   }
 
   // ── The stills, and the loop under the cursor ──

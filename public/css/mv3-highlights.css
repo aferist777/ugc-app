@@ -239,3 +239,9 @@
 .mv3-hls-cats .mv3-cap-cat.is-rec{border-color:var(--gold); color:var(--gold)}
 .mv3-hls-cats .mv3-cap-cat.is-rec.is-on{background:color-mix(in oklch, var(--gold) 16%, transparent); color:var(--ink)}
 .mv3-hls-cats .mv3-cap-cat.is-rec-cat::before{content:'●'; color:var(--gold); font-size:7px; margin-right:4px; vertical-align:2px}
+/* (phase V33.8, (в1)) The "by the video" tile of auto: the two styles it chooses between */
+.mv3-hls-by-box{display:flex; flex-direction:column; justify-content:center; gap:6px; padding:6px 8px; border:1px dashed var(--gold)}
+.mv3-hls-by-l{display:flex; flex-direction:column; gap:1px; text-align:left; min-width:0}
+.mv3-hls-by-l small{font:500 8.5px/1.2 var(--font); color:var(--muted)}
+.mv3-hls-by-l b{font:700 9.5px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-hls-by.is-on .mv3-hls-by-box{border-style:solid}

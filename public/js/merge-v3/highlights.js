@@ -358,7 +358,9 @@ function _paintTop() {
   what.appendChild(_el('b', 'mv3-hl-title', v ? (v.title || 'the video') : 'no video yet'));
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
-  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label : '';
+  // (phase V33.8) Auto - what the agent found the video to be.
+  const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label
+    : (r.ask && r.agent && r.agent.kind ? ' · auto → ' + r.agent.kind : '');
   // (phase V33.8, H3) And the background music asked for.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
   const musicSaid = nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '';

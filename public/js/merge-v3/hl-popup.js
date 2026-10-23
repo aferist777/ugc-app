@@ -14,7 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-import { stylePicker, presetName } from './hl-style.js';
+import { stylePicker, presetName, BY_VIDEO, styleFor, keepFor } from './hl-style.js';
 import { musicPicker } from './hl-music.js';
 
 const LS_ASK = 'mv3_hl_ask_v1';           // the length and the count chosen last
@@ -150,7 +150,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const kindSel = _el('select', 'mv3-hlp-sel');
   for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
   kindSel.value = st.kind;
-  kindSel.addEventListener('change', () => { st.kind = kindSel.value; remember(); if (_win && _win.picker) _win.picker.recommend(st.kind); });
+  kindSel.addEventListener('change', () => {
+    st.kind = kindSel.value;
+    remember();
+    if (!_win || !_win.picker) return;
+    // (V33.8, (в1)) "By the video" is auto's: another kind takes the style kept for it.
+    if (st.style === BY_VIDEO && st.kind !== 'auto') { st.style = styleFor(st.kind); _win.picker.set(st.style); paint(); }
+    _win.picker.recommend(st.kind);
+  });
   const kw = _el('label', 'mv3-hlp-lab', 'video kind');
   kw.appendChild(kindSel);
   kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
@@ -175,7 +182,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   body.appendChild(capSaid);
   body.appendChild(capBox);
   // (phase V33.8, H2) The kind's recommended groups first and open.
-  const picker = stylePicker(capBox, { kind: st.kind, onPick: (pid) => { st.style = pid; paint(); } });
+  // (V33.8, (в1)) A style chosen while the kind is podcast or documentary is kept for it - "by the video" offers those two.
+  const picker = stylePicker(capBox, { kind: st.kind, onPick: (pid) => { st.style = pid; if (pid !== BY_VIDEO) keepFor(st.kind, pid); paint(); } });
 
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
@@ -324,6 +332,11 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     say('');
     const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind,
       music: st.music.slice() };
+    // (V33.8, (в1)) "By the video": the two styles it chooses between go with it.
+    if (st.style === BY_VIDEO) {
+      const of = (k) => ({ preset: styleFor(k), name: presetName(styleFor(k)) });
+      spec.style.byKind = { podcast: of('podcast'), documentary: of('documentary') };
+    } else keepFor(st.kind, st.style);
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
     // A video kept as a tile: the project downloads it by its link (after block 8).
