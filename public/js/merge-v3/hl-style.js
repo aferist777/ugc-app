@@ -15,7 +15,16 @@ import { cssWeight } from '../captions/fonts.js';
 import * as MyPresets from './my-presets.js';
 
 const MINE = 'mine';
+const REC = 'rec';
 const LS_CAT = 'mv3_hl_cat_v1';
+
+// (phase V33.8, H2; the owner's (у7): "под подкасты - яркие, под документалку и факты - чуть сдержанней. типа рекомендованые, но
+// оставить выбор и других групп субтитров") The caption groups recommended for a kind of video - first among the chips, marked
+// "recommended", and open when the kind is chosen; every other group stays beside them.
+export const RECOMMENDED = {
+  podcast: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for a podcast' },
+  documentary: { cats: ['classic', 'clean', 'cinema'], said: 'calm - for a documentary' },
+};
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const _loops = new Map();          // a loop's address -> Promise<Blob>, kept for the page's life
 
@@ -36,15 +45,16 @@ export function presetName(id) {
 }
 
 /**
- * A picker in `host`. `onPick(id, name)` on a press. Returns { set(id), get(), stop() } - stop() puts every loop back to
- * its still (the popup closed).
+ * A picker in `host`. `onPick(id, name)` on a press; `kind` (V33.8) - the video's kind, whose recommended groups come first.
+ * Returns { set(id), get(), recommend(kind), stop() } - stop() puts every loop back to its still (the popup closed).
  */
-export function stylePicker(host, { onPick } = {}) {
+export function stylePicker(host, { onPick, kind } = {}) {
   let cat = '';
   try { cat = JSON.parse(localStorage.getItem(LS_CAT) || '""') || ''; } catch (e) { cat = ''; }
   let chosen = '';
   let state = null;
   let alive = true;
+  let rec = null;                  // (V33.8) RECOMMENDED[kind], or null
   const tiles = new Map();         // id -> { btn, box, ph, img, over, loop, starting, end }
 
   const top = _el('div', 'mv3-cap-cats mv3-hls-cats');
@@ -52,16 +62,35 @@ export function stylePicker(host, { onPick } = {}) {
   host.append(top, grid);
 
   const mine = MyPresets.list();
-  const chips = [['', 'All', PRESETS.length + mine.length], [MINE, 'Mine', mine.length]]
-    .concat(CATEGORIES.map((c) => [c.id, c.label, PRESETS.filter((p) => p.category === c.id).length]));
-  for (const [id, label, n] of chips) {
-    const b = _el('button', 'mv3-cap-cat', label);
-    b.type = 'button';
-    b.dataset.cat = id;
-    b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
-    b.addEventListener('click', () => { cat = id; try { localStorage.setItem(LS_CAT, JSON.stringify(cat)); } catch (e) { /* private */ } paintCat(); });
-    top.appendChild(b);
+  const countOf = (id) => PRESETS.filter((p) => p.category === id).length;
+  // The chips: (V33.8) the kind's recommended groups first - one chip "recommended" for all of them -, then All, Mine and
+  // the groups, the recommended ones first, each marked.
+  function paintChips() {
+    top.textContent = '';
+    const recCats = rec ? rec.cats.filter((c) => CATEGORIES.some((x) => x.id === c)) : [];
+    const cats = recCats.map((id) => CATEGORIES.find((x) => x.id === id)).concat(CATEGORIES.filter((c) => !recCats.includes(c.id)));
+    const chips = (recCats.length ? [[REC, 'recommended', recCats.reduce((n, c) => n + countOf(c), 0)]] : [])
+      .concat([['', 'All', PRESETS.length + mine.length], [MINE, 'Mine', mine.length]])
+      .concat(cats.map((c) => [c.id, c.label, countOf(c.id)]));
+    for (const [id, label, n] of chips) {
+      const b = _el('button', 'mv3-cap-cat' + (id === REC ? ' is-rec' : '') + (recCats.includes(id) ? ' is-rec-cat' : ''), label);
+      b.type = 'button';
+      b.dataset.cat = id;
+      b.appendChild(_el('span', 'mv3-cap-n', ' ' + n));
+      if (id === REC) b.title = 'Recommended for this kind of video: ' + rec.said + ' - ' + recCats.map((c) => CATEGORIES.find((x) => x.id === c).label).join(', ');
+      else if (recCats.includes(id)) b.title = 'Recommended for this kind of video';
+      b.addEventListener('click', () => { cat = id; try { localStorage.setItem(LS_CAT, JSON.stringify(cat)); } catch (e) { /* private */ } paintCat(); });
+      top.appendChild(b);
+    }
+    // The tiles in the same order: the person's, the recommended groups', the rest.
+    const order = [...grid.children].sort((a, b) => _rank(a) - _rank(b));
+    for (const el of order) grid.appendChild(el);
   }
+  const _rank = (btn) => {
+    const c = btn.dataset.cat;
+    const i = c === MINE ? -1 : (rec ? rec.cats.indexOf(c) : -1);
+    return (c === MINE ? -1 : i >= 0 ? i : 100) * 10000 + (+btn.dataset.i || 0);
+  };
 
   // The person's first, newest first (as in the captions view), then the app's.
   for (const p of mine.concat(PRESETS)) {
@@ -70,6 +99,7 @@ export function stylePicker(host, { onPick } = {}) {
     btn.type = 'button';
     btn.dataset.id = p.id;
     btn.dataset.cat = isMine ? MINE : p.category;
+    btn.dataset.i = String(tiles.size);
     btn.title = p.name + ' - the captions of every fragment';
     const box = _el('div', 'mv3-cap-box');
     const ph = _el('span', 'mv3-cap-ph', p.name);
@@ -91,11 +121,20 @@ export function stylePicker(host, { onPick } = {}) {
   }
 
   function paintCat() {
+    if (cat === REC && !rec) cat = '';
     for (const b of top.children) b.classList.toggle('is-on', (b.dataset.cat || '') === cat);
     for (const t of tiles.values()) {
-      t.btn.hidden = !!cat && t.btn.dataset.cat !== cat;
+      t.btn.hidden = cat === REC ? !rec.cats.includes(t.btn.dataset.cat) : (!!cat && t.btn.dataset.cat !== cat);
       if (t.btn.hidden) stopNow(t);
     }
+  }
+
+  /** (V33.8) The video's kind changed: its recommended groups first, and open - the style chosen stays chosen. */
+  function recommend(k) {
+    rec = RECOMMENDED[k] || null;
+    paintChips();
+    if (rec) cat = REC;
+    paintCat();
   }
 
   function set(id) {
@@ -180,9 +219,9 @@ export function stylePicker(host, { onPick } = {}) {
     }
   })();
 
-  paintCat();
+  recommend(kind);
   return {
-    set, get: () => chosen,
+    set, get: () => chosen, recommend,
     stop: () => { alive = false; for (const t of tiles.values()) stopNow(t); },
   };
 }

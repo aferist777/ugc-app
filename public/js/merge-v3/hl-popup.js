@@ -150,7 +150,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const kindSel = _el('select', 'mv3-hlp-sel');
   for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
   kindSel.value = st.kind;
-  kindSel.addEventListener('change', () => { st.kind = kindSel.value; remember(); });
+  kindSel.addEventListener('change', () => { st.kind = kindSel.value; remember(); if (_win && _win.picker) _win.picker.recommend(st.kind); });
   const kw = _el('label', 'mv3-hlp-lab', 'video kind');
   kw.appendChild(kindSel);
   kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
@@ -174,7 +174,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const capSaid = _el('div', 'mv3-hlp-style-said', 'Choose the style of the captions - every fragment gets it; one or several can be given another later.');
   body.appendChild(capSaid);
   body.appendChild(capBox);
-  const picker = stylePicker(capBox, { onPick: (pid) => { st.style = pid; paint(); } });
+  // (phase V33.8, H2) The kind's recommended groups first and open.
+  const picker = stylePicker(capBox, { kind: st.kind, onPick: (pid) => { st.style = pid; paint(); } });
 
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
