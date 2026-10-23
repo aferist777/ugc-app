@@ -267,12 +267,15 @@ function _place(sw, sh, c, tFile) {
     const base = { dx: 0, dy: 0, dw: W, dh: H, cx: W / 2, cy: H / 2, angle: 0, conv };
     if (win.kind === 'whole') {
       // The whole frame by its width over a blurred copy of itself, covering ((х7) Б) - drawn as the render draws it.
+      // (phase V33.8, (ф1)) A documentary's shows the middle `w` of the width (3:2 of a 16:9 film), the full height - the
+      // render's crop by framing/path.js wholeW (lib/mv3b-render.js framedChain); 1 - the whole frame, as before.
       const s2 = Math.max(W / sw, H / sh);
       const bw = W / s2, bh = H / s2;
-      const fh = W * (sh / sw);
+      const fw = sw * Math.max(0.05, Math.min(1, +win.w || 1));
+      const fh = W * (sh / fw);
       return { ...base, sx: 0, sy: 0, sw, sh, parts: [
         { sx: (sw - bw) / 2, sy: (sh - bh) / 2, sw: bw, sh: bh, dx: 0, dy: 0, dw: W, dh: H, blur: Math.max(4, Math.round(W * 0.03)) },
-        { sx: 0, sy: 0, sw, sh, dx: 0, dy: (H - fh) / 2, dw: W, dh: fh },
+        { sx: (sw - fw) / 2, sy: 0, sw: fw, sh, dx: 0, dy: (H - fh) / 2, dw: W, dh: fh },
       ] };
     }
     if (win.kind === 'bands') {
