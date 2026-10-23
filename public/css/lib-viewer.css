@@ -121,3 +121,19 @@
 /* The window "save the piece to" is the post viewer's move menu (css/references.css .ref-move); the clip's own place
    is marked. */
 .cut-menu .ref-move-it.is-here{ font-weight:700; color:var(--primary) }
+
+/* ── The sash before the right column (phase V35, the owner's (т5); js/library/viewer.js wireInfoSash) ──────────────
+   Dragged, the column widens or narrows - remembered for every viewer; a double press gives the usual width back. It is
+   the column's left edge, so the column draws none of its own. */
+.lib-view-sash{
+  flex:0 0 5px; width:5px; position:relative; cursor:col-resize; background:var(--border);
+  transition:background .12s var(--ease);
+}
+.lib-view-sash::after{
+  content:''; position:absolute; top:50%; left:1.5px; transform:translateY(-50%); width:2px; height:36px;
+  border-radius:2px; background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
+}
+.lib-view-sash:hover{ background:oklch(1 0 0 / .12); }
+.lib-view-sash:hover::after{ opacity:1; }
+.lib-view-sash + .lib-view-info{ border-left:0; }
+body.lib-view-resizing, body.lib-view-resizing *{ cursor:col-resize !important; user-select:none; }

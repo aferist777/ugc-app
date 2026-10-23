@@ -18,6 +18,8 @@ import { targetsOf } from '../media-targets.js';
 // (block 7) A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
 import * as Cut from '../cut.js';
 import { askName } from '../name-box.js';
+// (phase V35) The sash before the right column - one helper and one remembered width with the media viewer.
+import { wireInfoSash } from '../library/viewer.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -175,6 +177,7 @@ export function openPost(list, at, o) {
       </div>
     </div>`;
   document.body.appendChild(ov);
+  wireInfoSash(ov);
   const layer = Layers.open(ov, { name: 'post-view', onEsc: closePost });
   _v = { ov, layer, list: posts, at: Math.max(0, posts.findIndex(p => p === list[at] || String(p.id) === String((list[at] || {}).id))), file: 0, sel: new Set(), o: o || {}, armed: null, whole: false };
   ov.querySelector('[data-x="close"]').addEventListener('click', closePost);

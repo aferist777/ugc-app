@@ -178,6 +178,58 @@ function _paintActions(it) {
   }
 }
 
+// THE RIGHT COLUMN'S WIDTH (phase V35, the owner 2026-10-23, (т5): "в просмотре медиа в попапе ... sash добавим там, чтобы
+// пользователь мог менять размеры для удобства"). A sash between the stage and the column: dragged LEFT, the column widens;
+// the stage keeps room for a picture. The width is remembered - one for every viewer: this one (the Library's and Merge's)
+// and a post's (js/references/post.js) - and a double press gives the page's own width back (css: 220px, Merge 260px).
+const LS_INFO_W = 'ugc_view_info_w_v1';
+const INFO_MIN = 180, STAGE_MIN = 260;
+
+/** A sash before `.lib-view-info` in a viewer's overlay `ov`. */
+export function wireInfoSash(ov) {
+  const info = ov && ov.querySelector('.lib-view-info');
+  const body = info && info.parentElement;
+  if (!info || !body) return;
+  const sash = document.createElement('div');
+  sash.className = 'lib-view-sash';
+  sash.title = 'Drag to resize the column - a double press gives its usual width back';
+  body.insertBefore(sash, info);
+  // The two arrows (40px each) and the stage stay; the column takes the rest at most.
+  const max = () => Math.max(INFO_MIN, body.getBoundingClientRect().width - STAGE_MIN - 80);
+  const apply = (w) => {
+    const v = Math.round(Math.max(INFO_MIN, Math.min(max(), w)));
+    info.style.flexBasis = v + 'px';
+    return v;
+  };
+  let saved = 0;
+  try { saved = parseInt(localStorage.getItem(LS_INFO_W) || '', 10) || 0; } catch (e) { saved = 0; }
+  if (saved) apply(saved);
+  sash.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const from = e.clientX;
+    const base = info.getBoundingClientRect().width;
+    document.body.classList.add('lib-view-resizing');
+    const move = (ev) => apply(base - (ev.clientX - from));
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('lib-view-resizing');
+      try { localStorage.setItem(LS_INFO_W, String(Math.round(info.getBoundingClientRect().width))); } catch (err) { /* a private window */ }
+      // The press may end over the dark around the window: that click must not close the viewer.
+      const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+      window.addEventListener('click', swallow, true);
+      setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => {
+    info.style.flexBasis = '';
+    try { localStorage.removeItem(LS_INFO_W); } catch (e) { /* a private window */ }
+  });
+}
+
 // Drop the item being shown and move to the next one — what a delete leaves behind.
 // The list is the page's array, so it is filtered rather than spliced in place.
 export function dropCurrent() {
@@ -241,6 +293,7 @@ export function openViewer(items, index, opts) {
     </div>`;
   document.body.appendChild(ov);
   _ov = ov;
+  wireInfoSash(ov);
 
   $('[data-x="close"]', ov).addEventListener('click', closeViewer);
   $('[data-x="prev"]', ov).addEventListener('click', () => step(-1));
