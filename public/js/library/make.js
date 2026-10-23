@@ -121,8 +121,6 @@ const HTML = `
           <div class="mk-stage-h">
             <span>Script</span>
             <span class="sp"></span>
-            <button class="lib-btn" type="button" id="mk-enrich" hidden title="Put the narrator's own words and phrases into the script, in the measure the form says - done by itself right after writing; this is for when that did not answer, or for another measure">Add vocabulary &amp; phrases</button>
-            <button class="lib-btn" type="button" id="mk-humanize">Clean to the narrator</button>
           </div>
           <div class="mk-scenes" id="mk-scenes"></div>
         </div>
@@ -151,8 +149,6 @@ function _build() {
 
   $('mk-go').addEventListener('click', _runGo);
   $('mk-newhooks').addEventListener('click', _newHooks);
-  $('mk-humanize').addEventListener('click', _humanize);
-  $('mk-enrich').addEventListener('click', _enrichAgain);
   $('mk-save').addEventListener('click', _saveScript);
   $('mk-discard').addEventListener('click', _discardDraft);
   for (const id of ['mk-topic', 'mk-title', 'mk-hook', 'mk-vertical', 'mk-product']) $(id).addEventListener('input', _queueDraft);
@@ -1016,13 +1012,6 @@ async function _buildControls(settings) {
   box.appendChild(_ctl('Tone', _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
   const nar = _select('mk-c-narrator', [{ value: 'neutral', label: 'Neutral' }], 'neutral');
   box.appendChild(_ctl('Narrator', nar, _narratorsGear()));
-  // (phase V38, the owner's (д18)) How much of the narrator's own words and phrases go into the script - put in by
-  // themselves right after it is written. normal by default; rich twice as much, light half.
-  const dens = _select('mk-c-density', DENSITY, DENSITY.some(x => x.value === s.density) ? s.density : 'normal');
-  dens.title = 'The narrator\'s own words and phrases, put in right after the script is written: off, light (half), normal, rich (twice as many)';
-  box.appendChild(_ctl('Words & phrases', dens));
-  nar.addEventListener('change', _paintGo);
-  dens.addEventListener('change', _paintGo);
 
   // (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице") No Provider, Model,
   // Effort any more: the AGENTS' LADDER writes (Admin -> AI settings), at effort medium; the line says which step is
@@ -1043,11 +1032,7 @@ async function _paintNarrators(want, wantName) {
   let list = [];
   try { list = (await J.api('/api/narrators')).narrators || []; } catch (e) { list = []; }
   const values = [{ value: 'neutral', label: 'Neutral' }];
-  _narSets.clear();
-  for (const n of list) {
-    values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
-    _narSets.set(String(n.id), (n.vocabulary || 0) + (n.phrases || 0));
-  }
+  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
   let pick = String(cur || 'neutral').split('#')[0];
   const note = $('mk-nar-note');
   note.hidden = true;
@@ -1060,21 +1045,7 @@ async function _paintNarrators(want, wantName) {
   sel.textContent = '';
   for (const v of values) { const o = el('option', null, v.label); o.value = v.value; sel.appendChild(o); }
   sel.value = pick;
-  _paintGo();
 }
-
-// (V38) The measures of the narrator's words and phrases, and how many entries each narrator has switched on - the
-// "Add vocabulary & phrases" button is there only when the chosen one has some and the measure is not off.
-const DENSITY = [
-  { value: 'off', label: 'off' }, { value: 'light', label: 'light' },
-  { value: 'normal', label: 'normal' }, { value: 'rich', label: 'rich' },
-];
-const _narSets = new Map();
-const _canEnrich = () => {
-  if (!_controlsReady()) return false;
-  const o = _opts();
-  return o.density !== 'off' && (_narSets.get(String(o.narratorId)) || 0) > 0;
-};
 
 // (V37) "the agents' ladder · Claude Sonnet 5.5 first · AI settings" - the step asked first, the link to where the order is.
 const _PROV = { kie: 'kie.ai', replicate: 'Replicate', anthropic: 'Claude', openrouter: 'OpenRouter' };
@@ -1104,7 +1075,6 @@ function _opts() {
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
-    density: $('mk-c-density') ? $('mk-c-density').value : 'normal',
     // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
     model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
     effort: (_reg && _reg.effort) || 'medium',
@@ -1140,18 +1110,7 @@ function _paintGo() {
   // likes none of them keeps the script they have, and saves or cleans it.
   const busy = _busy();
   $('mk-newhooks').disabled = busy;
-  $('mk-humanize').disabled = busy;
   $('mk-save').disabled = busy;
-  // (V38, block D4) A scenario of the shelf not yet in the narrator's voice: the cleaning press is the voice pass, and the
-  // words wait for it.
-  const foreign = !!(_gen && _gen.foreign);
-  $('mk-humanize').textContent = foreign ? 'Rewrite in the narrator’s voice' : 'Clean to the narrator';
-  $('mk-humanize').classList.toggle('primary', foreign);
-  $('mk-humanize').title = foreign
-    ? 'Rewrite every line in the narrator’s voice - as many lines, each about as long, the first too - then put his words and phrases in'
-    : 'Bring the script to the narrator and take out what sounds like a machine; the hook stays';
-  $('mk-enrich').hidden = !written || foreign || !_canEnrich();
-  $('mk-enrich').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
   document.querySelectorAll('#mk-scenes .mk-scene-rw').forEach(b => { b.disabled = busy; });
   if (busy) _hideFragBtn();
@@ -1184,7 +1143,7 @@ function _payload() {
     humanized: !!_gen.humanized,
     settings: {
       tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName, density: o.density,
+      narratorId: o.narratorId, narratorName: o.narratorName,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1282,8 +1241,7 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     hooks: (full && full.hooks) || [],
     paragraphs: (full && full.paragraphs) || [],
     humanized: !!(full && full.humanized),
-    // (V38) What of the narrator's words went in, or why they could not; the shelf's scenario this rewrites (block D4).
-    enriched: (full && full.enriched) || null,
+    // (V38, block D4) The shelf's scenario this rewrites, and whether the rewrite in its narrator's voice has landed.
     from: (full && full.from) || null,
     foreign: !!(full && full.foreign),
   };
@@ -1302,14 +1260,12 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   if (_gen.paragraphs.length) _renderScenes();
   _setStage(needsPick ? 'pick' : 'idle');
   _reattachStage();
-  // (V38) The narrator's words did not go in last time (paid once - never asked again by itself): said, with the press.
-  if (!_following.has(String(_gen.draftId)) && _gen.enriched && _gen.enriched.error) _sayEnrichFailed(_gen.enriched.error);
+  // (V38.1) A shelf's scenario whose rewrite did not land (paid once - never asked again by itself): said, with the way.
+  const sum = _drafts.find(x => String(x.id) === String(_gen.draftId));
+  if (_gen.foreign && !_following.has(String(_gen.draftId)) && !(sum && sum.running)) {
+    J.sayJob($('mk-job'), 'The rewrite in the narrator’s voice did not land - press “In … voice” under the scenario on the shelf again.', true);
+  }
   // NO draft is written just for opening the form: the first edit or the first generation makes it.
-}
-
-function _sayEnrichFailed(err) {
-  J.sayJob($('mk-job'), `The script is written, but the narrator's words and phrases did not go in: ${err} `
-    + '- press “Add vocabulary & phrases” to try again.', true);
 }
 
 // A draft, from the Scenarios list or a topic's "Continue". Its source is chosen with it. A draft
@@ -1388,12 +1344,9 @@ function _renderHooks(hooks) {
 const _TIMING = {
   hooks: (o) => ({ key: `l2-hooks|${o.model}|${o.effort}`, label: 'Writing five hooks…', estimateMs: J.EST.hooks }),
   script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
-  humanize: (o) => ({ key: `l2-humanize|${o.model}|${o.effort}`, label: 'Cleaning to the narrator…', estimateMs: J.EST.humanize }),
   rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
-  // (V38, block D4) A scenario of the shelf rewritten in the narrator's voice.
-  voice: (o) => ({ key: `l2-voice|${o.model}|${o.effort}`, label: 'Rewriting in the narrator’s voice…', estimateMs: J.EST.humanize }),
-  // (V38) The narrator's words and phrases - the second row of a script's countdown, or a press of its own.
-  enrich: (o) => ({ key: `l2-enrich|${o.model}|${o.effort}|${o.density || 'normal'}`, label: 'Adding the narrator\'s words and phrases…', estimateMs: J.EST.enrich }),
+  // (V38, block D4) A scenario of the shelf rewritten in its narrator's voice - started on the shelf, followed here.
+  voice: (o) => ({ key: `l2-voice|${o.model}|${o.effort}`, label: 'Rewriting in the narrator’s voice…', estimateMs: J.EST.voice }),
 };
 
 // Starts a stage on the server and follows it. A draft that is already being written into is not
@@ -1414,7 +1367,7 @@ async function _runStage(path, body, timing, onResult) {
     J.sayJob($('mk-job'), e.message, true);
     return false;
   }
-  return _followStage(jobId, { startedAt: Date.now(), timing, what, model: send.model, effort: send.effort, density: send.density }, gen, onResult);
+  return _followStage(jobId, { startedAt: Date.now(), timing, what }, gen, onResult);
 }
 
 // `onResult` gets the answer while the form still holds the same draft; otherwise - the person moved
@@ -1425,22 +1378,13 @@ async function _runStage(path, body, timing, onResult) {
 // (_reattachStage), at the job's real age. Another draft can run a stage of its own meanwhile.
 async function _followStage(jobId, run, gen, onResult) {
   const draftId = String(gen.draftId);
-  // `phase` (V38): the second step of a two-step stage - the script written, the narrator's words going in.
-  const rec = { jobId, run, rows: [], phase: (run && run.phase) || null };
+  const rec = { jobId, run, rows: [] };
   _following.set(draftId, rec);
   const here = () => !!_gen && String(_gen.draftId) === draftId;
   if (_stage === 'idle' || _stage === 'pick') _setStage('working');
   _stageRow(rec);
   try {
     const job = await J.pollJob('/api/scriptgen/jobs', jobId, (j) => {
-      // The second step began: the first row's time is kept (it taught the countdown how long writing takes), and a
-      // second countdown starts for the words.
-      if (j.phase && (!rec.phase || rec.phase.name !== j.phase.name)) {
-        rec.phase = j.phase;
-        rec.rows.forEach((r, i) => (i === 0 ? r.finish() : r.detach()));
-        rec.rows = [];
-        if (here() && !rec.cancelling) _stageRow(rec);
-      }
       if (j.step && here() && rec.rows.length && !rec.cancelling) rec.rows[rec.rows.length - 1].say(j.step);
     });
     // One timing for the whole job, however many rows showed it.
@@ -1457,8 +1401,6 @@ async function _followStage(jobId, run, gen, onResult) {
       rec.rows.forEach(r => r.detach());
       if (here()) {
         _sayBriefly('cancelled - what was already sent is paid for');
-        // (V38) Cancelled while the narrator's words were going in: the script itself was written and is in the draft.
-        if (rec.phase && rec.phase.name === 'enrich') { await _reloadDraftInto(); return 'cancelled'; }
         if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
         if ((_gen.paragraphs || []).length) _renderScenes();
         // A stage this form did not start has no caller to set the stage back.
@@ -1494,12 +1436,11 @@ async function _landInto(what, r) {
     _gen.humanized = false;
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
-    _noteEnriched(res);
-  } else if ((what === 'humanize' || what === 'enrich') && Array.isArray(res.paragraphs)) {
+  } else if (what === 'voice' && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
-    if (what === 'humanize') { _gen.humanized = !!res.applied; _landVoice(res); }
-    if (what === 'enrich' || res.voice) _noteEnriched(res);
+    _landVoice(res);
     _renderScenes();
+    if (res.note) J.sayJob($('mk-job'), res.note);
   } else if (what === 'rewrite' && res.paragraph && res.index < (_gen.paragraphs || []).length) {
     _gen.paragraphs[res.index] = _spliced(res, _gen.paragraphs[res.index]);
     _renderScenes();
@@ -1512,13 +1453,10 @@ async function _landInto(what, r) {
 // server says is running when the page did not start it (a reload, another visit).
 function _stageRow(rec) {
   const run = rec.run || {};
-  const second = rec.phase && rec.phase.name === 'enrich';
-  const t = second ? _TIMING.enrich({ ...run, ...(_controlsReady() ? { model: run.model || _opts().model, effort: run.effort || _opts().effort } : {}) })
-    : run.timing || (run.voice ? _TIMING.voice(run) : null)
+  const t = run.timing
     || (_TIMING[run.what] ? _TIMING[run.what](run, run.index || 0)
       : { key: 'l2-stage', label: 'Still writing…', estimateMs: J.EST.script(15) });
-  const startedAt = second ? (rec.phase.at || Date.now()) : (run.startedAt || Date.now());
-  const row = J.startJob($('mk-job'), { ...t, startedAt, onCancel: () => _cancelStage(rec) });
+  const row = J.startJob($('mk-job'), { ...t, startedAt: run.startedAt || Date.now(), onCancel: () => _cancelStage(rec) });
   rec.rows.push(row);
   return row;
 }
@@ -1552,7 +1490,6 @@ async function _reloadDraftInto() {
     _gen.hooks = d.hooks || [];
     _gen.paragraphs = d.paragraphs || [];
     _gen.humanized = !!d.humanized;
-    _gen.enriched = d.enriched || null;
     _gen.foreign = !!d.foreign;
     if (d.hook) $('mk-hook').value = d.hook;
     if (d.title && !$('mk-title').value.trim()) $('mk-title').value = d.title;
@@ -1606,37 +1543,6 @@ async function _runScript() {
     if (r.asked && r.paragraphs && r.paragraphs.length !== r.asked) {
       J.sayJob($('mk-job'), `Note: ${r.paragraphs.length} paragraphs came back, ${r.asked} were asked for.`);
     }
-    _noteEnriched(r);
-  });
-  if (_gen === gen) _setStage('idle');
-}
-
-// (V38) What the second step said: nothing under the paragraphs (the owner's (д9а) - what went in is seen in the text);
-// only a failure, with the press to try again, or the server's notes on paragraphs kept as they were.
-function _noteEnriched(r) {
-  if (!r) return;
-  if (r.enrichError) {
-    _gen.enriched = { error: r.enrichError, used: [] };
-    _sayEnrichFailed(r.enrichError);
-    return;
-  }
-  if (r.enriched) _gen.enriched = { used: r.enriched.used || [], error: '' };
-  const notes = (r.notes || []).filter(Boolean);
-  if (notes.length) J.sayJob($('mk-job'), notes.join(' '));
-  else if (r.enriched && !(r.enriched.used || []).length) _sayBriefly('none of the narrator\'s words or phrases fitted this script');
-}
-
-// (V38) "Add vocabulary & phrases": the step after the script, pressed - when it did not answer, or for another measure.
-async function _enrichAgain() {
-  if (!_gen || !(_gen.paragraphs || []).length || _busy()) return;
-  const gen = _gen;
-  _setStage('working');
-  const o = _opts();
-  await _runStage('/api/scriptgen/enrich', { ...o, paragraphs: _gen.paragraphs }, _TIMING.enrich(o), async (r) => {
-    _gen.paragraphs = r.paragraphs || _gen.paragraphs;
-    _renderScenes();
-    await _saveDraft();
-    _noteEnriched(r);
   });
   if (_gen === gen) _setStage('idle');
 }
@@ -1689,28 +1595,11 @@ function _renderScenes() {
   _paintGo();
 }
 
-async function _humanize() {
-  if (!_gen || !_gen.paragraphs.length || _busy()) return;
-  const gen = _gen;
-  _setStage('working');
-  const o = _opts();
-  const body = { ...o, paragraphs: _gen.paragraphs };
-  await _runStage('/api/scriptgen/humanize', body, _gen.foreign ? _TIMING.voice(o) : _TIMING.humanize(o), async (r) => {
-    _landVoice(r);
-    _gen.paragraphs = r.paragraphs || _gen.paragraphs;
-    _gen.humanized = !!r.applied;
-    _renderScenes();
-    await _saveDraft();
-    if (r.note) J.sayJob($('mk-job'), r.note);
-    else if (r.voice) _noteEnriched(r);
-  });
-  if (_gen === gen) _setStage('idle');
-}
-
-// (V38, block D4) The voice pass landed: the scenario is the narrator's now, its first line the hook.
+// (V38, block D4) The rewrite in the narrator's voice landed: the scenario is his now, its first line the hook.
 function _landVoice(r) {
   if (!r || !r.voice) return;
   _gen.foreign = !r.applied;
+  _gen.humanized = false;
   if (r.applied && r.paragraphs && r.paragraphs[0]) $('mk-hook').value = r.paragraphs[0];
 }
 

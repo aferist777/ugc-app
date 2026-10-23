@@ -1,13 +1,14 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SCRIPT GENERATION — the four calls, in the order they run.
+// SCRIPT GENERATION — the calls, in the order they run.
 //
 //   GET  /api/scriptgen/models              -> tones, scenes and the agents' ladder that writes (V37)
 //   POST /api/scriptgen/hooks               -> { jobId }  five openings, differing in kind
 //   POST /api/scriptgen/script              -> { jobId }  title + paragraphs
-//   POST /api/scriptgen/humanize            -> { jobId }  the same paragraphs, cleaned
-//   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle
+//   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle - or a fragment of one (V38)
+//   POST /api/scriptgen/from-scenario       -> { jobId, draft }  a scenario of the shelf, rewritten in its narrator's
+//                                              voice at once (V38, V38.1)
 //   POST /api/scriptgen/save                -> { scenario }  into the scenarios store
 //   GET  /api/scriptgen/jobs/:jobId         -> { state, step, error, result }
 //   GET  /api/scriptgen/drafts              -> { drafts: [summary + running] }
@@ -20,7 +21,7 @@
 // list carries the mark - so a page opened later follows the job instead of paying for it twice.
 //
 // WHY JOBS: a reasoning model writing fifteen paragraphs from a ten-minute transcript takes
-// longer than any sane request timeout, and the humanizer takes as long again. The client polls;
+// longer than any sane request timeout. The client polls;
 // nothing is held open.
 //
 // THE NARRATOR IS RESOLVED HERE, not sent from the page. The page passes an id, this reads the
@@ -33,8 +34,13 @@
 //
 // BY THE AGENTS' LADDER (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице"):
 // every stage is asked of Admin -> AI settings' ladder at effort medium (lib/llm-json.js callLadder) - no model is
-// chosen in the form any more. What WROTE it is the step that answered (`written`, `cleaned`, the scenario's `origin`);
-// a draft or scenario from before keeps the model its form chose. Paid once: a step that did not finish stops the ladder.
+// chosen in the form any more. What WROTE it is the step that answered (`written`, the scenario's `origin`); a draft
+// or scenario from before keeps the model its form chose. Paid once: a step that did not finish stops the ladder.
+//
+// THE VOICE ALONE WRITES (V38.1, the owner 2026-10-23: "используем только the voice для генерации сценария"): the
+// cleaning pass "Clean to the narrator" (/scriptgen/humanize) and V38's enrichment by the narrator's words and phrases
+// (/scriptgen/enrich, the form's "Words & phrases") are gone. A draft or a scenario that still says "cleaned" or "his
+// words & phrases" is read as it is.
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -84,7 +90,7 @@ function _sweep() {
 // A STAGE CAN BE CANCELLED (phase G1, /scriptgen/jobs/:id/cancel): `work` gets an AbortSignal as its
 // second argument and hands it to callLadder. A cancelled job keeps state 'cancelled' whatever its call
 // does afterwards - an answer that arrives anyway is not kept - and its draft is free at once.
-function _start(res, step, work, keep, run) {
+function _start(res, step, work, keep, run, extra) {
   const key = (run && run.key) || '';
   const busy = key ? _running.get(key) : null;
   if (busy && _jobs[busy.jobId] && _jobs[busy.jobId].state === 'running') {
@@ -99,18 +105,10 @@ function _start(res, step, work, keep, run) {
     delete rest.key;
     _running.set(key, { ...rest, jobId, startedAt: job.at });
   }
-  res.json({ success: true, jobId });
-  // (V38) A stage of two steps says when the second one starts - the script written, the narrator's words going in - so
-  // the page shows a second countdown, at its real age after a reload too (the draft's mark carries it).
-  const phase = (name) => {
-    if (job.state !== 'running') return;
-    job.phase = { name, at: Date.now() };
-    const r = key ? _running.get(key) : null;
-    if (r && r.jobId === jobId) r.phase = job.phase;
-  };
+  res.json({ success: true, jobId, ...(extra || {}) });
   (async () => {
     try {
-      const result = await work((s) => { if (job.state === 'running') job.step = s; }, ac.signal, phase);
+      const result = await work((s) => { if (job.state === 'running') job.step = s; }, ac.signal);
       if (job.state !== 'running') return;          // cancelled meanwhile: the answer is not kept
       job.result = result;
       job.state = 'done';
@@ -171,114 +169,15 @@ function _narrator(id) {
   return { block: P.narratorBlock(rec), name: rec.name, id: rec.id, ready: narrators.hasVoice(rec), rec };
 }
 
-// ── the narrator's words and phrases (phase V38) ────────────────────────────
-// After the script is written the same job puts the narrator's own words and phrases into it (the owner's (д5): "сразу
-// после написания, само"), in the measure the form asks (`density`: off | light | normal | rich - the owner's (д6), (д18)).
-// The writer is given the whole set switched on (the owner's (д12): no separate search - Jev is not made) and answers the
-// paragraphs and what it put in; the SERVER checks what comes back: as many paragraphs as were sent (else the script
-// stays as it was), the hook never sent and put back, a paragraph that grew by more than a fifth - or changed with
-// nothing put in - kept as it was, and an entry counted as put in only when it is of the set and is in its paragraph.
-
-const DENSITIES = ['off', 'light', 'normal', 'rich'];
-const _density = (d) => (DENSITIES.includes(d) ? d : 'normal');
 const _words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
 
-/**
- * The enrichment of a script by its narrator's set. Null when there is nothing to do (no narrator, no set, density off).
- * @param {object} nar  _narrator()
- * @param {string[]} paragraphs  the whole script, the hook first
- * @param {object} o  { density, already: [{ list, id }], signal }
- * @returns {Promise<null|{ paragraphs, used, notes, by, density }>}
- */
-async function _enrich(nar, paragraphs, o = {}) {
-  const density = _density(o.density);
-  if (!nar || !nar.rec || density === 'off') return null;
-  const set = narrators.writerSet(nar.rec);
-  if (!set.size) return null;
-  const hook = paragraphs[0];
-  const rest = paragraphs.slice(1);
-  if (!rest.length) return null;
-  const already = (o.already || []).map(u => Object.keys(set.refs).find(r => set.refs[r].id === u.id && set.refs[r].list === u.list)).filter(Boolean);
-  const { data, by } = await callLadder({
-    system: P.ENRICH_SYSTEM,
-    user: P.enrichUserPrompt({ hook, paragraphs: rest, set, measure: P.measureFor(density, rest.length), already }),
-    schema: P.ENRICH_SCHEMA, name: 'enriched', effort: EFFORT, signal: o.signal,
-  });
-  const back = (data.paragraphs || []).map(p => String(p || '').trim());
-  if (back.length !== rest.length || back.some(p => !p)) {
-    return { paragraphs, used: [], by, density,
-      notes: [`The editor returned ${back.filter(Boolean).length} paragraphs for ${rest.length} - the script was kept as it was.`] };
-  }
-  const notes = [];
-  // What it says it put in, checked: of the set, into a paragraph it was given, and there in the text.
-  const claimed = new Map();
-  const unfound = [];
-  const misplaced = [];
-  // Where it went in: the paragraph the answer names, numbered from 2 (the hook is 1) - and when the entry is not new
-  // there, the paragraph it IS new in (the paid check: Claude counted from 1 in its own answer).
-  const isNew = (e, j) => j >= 0 && j < back.length && narrators.appearsIn(e.text, back[j]) && !narrators.appearsIn(e.text, rest[j]);
-  for (const u of data.used || []) {
-    const ref = String(u.ref || '').trim().replace(/^\[|\]$/g, '').toLowerCase();
-    const e = set.refs[ref];
-    if (!e) { unfound.push(ref || '?'); continue; }
-    const n = parseInt(u.paragraph, 10) || 0;
-    let i = [n - 2, n - 1].find(j => isNew(e, j));
-    if (i == null) i = back.findIndex((p, j) => isNew(e, j));
-    if (i == null || i < 0) {
-      // Already in the script before this pass (the writer took it from the voice - the paid check's "Wild, right?"):
-      // not put in now, and not a fault either.
-      if (!back.some((p, j) => narrators.appearsIn(e.text, p) && narrators.appearsIn(e.text, rest[j]))) unfound.push(`"${e.text}"`);
-      continue;
-    }
-    // (the owner's (д8)) An opening line only at the start of the paragraph after the hook, a closing one only in the last.
-    if (e.list === 'phrases' && ((e.place === 'opening' && i !== 0) || (e.place === 'ending' && i !== back.length - 1))) {
-      misplaced.push(i + 2);
-      continue;
-    }
-    if (!claimed.has(i)) claimed.set(i, []);
-    if (!claimed.get(i).some(x => x.id === e.id)) claimed.get(i).push({ list: e.list, id: e.id, text: e.text, paragraph: i + 2 });
-  }
-  const out = rest.slice();
-  const used = [];
-  const grew = [];
-  const bare = [];
-  back.forEach((p, i) => {
-    if (p === rest[i]) return;
-    if (misplaced.includes(i + 2)) return;
-    // Changed with nothing of the set in it: not this editor's job - the script's own words stay.
-    if (!claimed.has(i)) { bare.push(i + 2); return; }
-    if (_words(p) > Math.ceil(_words(rest[i]) * 1.2) + 1) { grew.push(i + 2); return; }
-    out[i] = p;
-    used.push(...claimed.get(i));
-  });
-  // Said, so a pass that put nothing in is not a silence (the paid check: one answer changed paragraphs and named
-  // nothing the server could find).
-  const list = (ns) => (ns.length === 1 ? `Paragraph ${ns[0]}` : `Paragraphs ${ns.join(', ')}`);
-  if (grew.length) notes.push(`${list(grew)} grew by more than a fifth - kept as ${grew.length === 1 ? 'it was' : 'they were'}.`);
-  const mis = [...new Set(misplaced)];
-  if (mis.length) notes.push(`${list(mis)} got an opening or closing line of his in the wrong place - kept as ${mis.length === 1 ? 'it was' : 'they were'}.`);
-  if (bare.length) notes.push(`${list(bare)} came back changed with none of his words or phrases in ${bare.length === 1 ? 'it' : 'them'} - kept as ${bare.length === 1 ? 'it was' : 'they were'}.`);
-  if (unfound.length) notes.push(`Named as put in but not found in the text: ${unfound.slice(0, 4).join(', ')}${unfound.length > 4 ? '…' : ''}.`);
-  return { paragraphs: [hook, ...out], used, by, density, notes };
-}
-
-// What a draft's enrichment becomes once stored: what was put in, by whom, or why it did not happen.
-function _enrichedRecord(r, prev) {
-  if (!r) return prev || null;
-  const keep = (prev && Array.isArray(prev.used)) ? prev.used : [];
-  const seen = new Set(keep.map(u => u.list + ':' + u.id));
-  return {
-    density: r.density || (prev && prev.density) || '',
-    used: [...keep, ...(r.used || []).filter(u => !seen.has(u.list + ':' + u.id))],
-    by: r.by || null, at: new Date().toISOString(), error: '',
-  };
-}
-
-// ── a scenario of the shelf, in the narrator's voice (phase V38, block D4) ─────
-// "Rewrite in a narrator's voice" on a scenario makes a DRAFT of its lines (`from`, `foreign`); the generator's cleaning
-// press on such a draft is this stronger pass - every line, the first too, as many lines, each about as long (the
-// owner's (д10)) - and then, in the same job, the narrator's words and phrases. Saving it makes a NEW scenario that says
-// which one it came from; the one on the shelf is not touched.
+// ── a scenario of the shelf, in the narrator's voice (phase V38, block D4; V38.1) ─
+// "In <narrator>'s voice" under a scenario of the shelf. The narrator is the scenario's own - what its narrator field shows
+// (the owner's (к3а)) - and the rewrite starts AT ONCE (the owner's (к3): "оно должно сразу писать голосом нарратора"): a
+// DRAFT of its lines (`from`, `foreign`) and the job, in one request; the generator opens on the draft and follows the
+// job. Every line is rewritten, the first too, as many lines, each about as long (the owner's (д10)), what it is FOR kept.
+// Saving makes a NEW scenario that says which one it came from; the one on the shelf is not touched. Pressed again while
+// the last rewrite did not land (its draft still `foreign`, nothing writing into it), the same draft is asked again.
 
 router.post('/scriptgen/from-scenario', (req, res) => {
   const s = scen3.getScenario(String((req.body || {}).scenarioId || ''));
@@ -287,40 +186,38 @@ router.post('/scriptgen/from-scenario', (req, res) => {
   if (lines.length < scen3.MIN_LINES) {
     return res.status(400).json({ success: false, error: `the scenario has ${lines.length} lines - at least ${scen3.MIN_LINES} are needed` });
   }
-  // Its narrator, when it has one that still exists - its own label first, then the one that wrote it.
-  const want = (s.narrator && s.narrator.id) || (s.origin && s.origin.narratorId) || '';
-  const nar = want ? narrators.get(want) : null;
+  const label = (scen3.effectiveLabels(s) || {}).narrator;
+  const rec = label && label.id ? narrators.get(label.id) : null;
+  if (!rec) {
+    return res.status(400).json({ success: false, error: label
+      ? `${label.name}, the scenario's narrator, is not among the narrators any more - choose another in its narrator field.`
+      : 'The scenario has no narrator - choose one in its narrator field first.' });
+  }
+  if (!narrators.hasVoice(rec)) return res.status(400).json({ success: false, error: `${rec.name} has no voice yet - read his samples first (Narrators).` });
   const role = (s.roles || [])[0] || {};
   const tone = WM.TONES.includes((s.origin || {}).tone) ? s.origin.tone : WM.DEFAULTS.tone;
+  const settings = { tone, scenes: Math.min(WM.SCENES_MAX, Math.max(MIN_LINES, lines.length)), narratorId: rec.id, narratorName: rec.name };
+  let draft;
   try {
-    const draft = drafts.save({
+    const again = drafts.list().find(d => d.from && String(d.from.scenarioId) === String(s.id) && d.foreign && !_runningFor(d));
+    draft = drafts.save({
+      ...(again ? { id: again.id } : {}),
       topic: s.title || '', title: s.title || '', hook: lines[0], paragraphs: lines, humanized: false,
       from: { scenarioId: String(s.id), title: s.title || '' }, foreign: true,
-      settings: {
-        tone, scenes: Math.min(WM.SCENES_MAX, Math.max(MIN_LINES, lines.length)),
-        narratorId: nar ? nar.id : 'neutral', narratorName: nar ? nar.name : 'Neutral', density: 'normal',
-      },
+      settings: { ...((again && again.settings) || {}), ...settings },
       save: { gender: role.gender || '', vertical: s.vertical || '', product: s.product || '' },
     });
-    res.json({ success: true, draft });
-  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
+  const b = { draftId: draft.id, narratorId: rec.id, narratorName: rec.name, tone: settings.tone, scenes: settings.scenes };
+  _voice(res, b, _narrator(rec.id), lines, { draft });
 });
 
-function _voice(res, b, nar, lines) {
-  if (!nar.rec) return res.status(400).json({ success: false, error: 'Choose the narrator whose voice it is to be rewritten in.' });
-  if (!narrators.hasVoice(nar.rec)) return res.status(400).json({ success: false, error: `${nar.name} has no voice yet - read his samples first (Narrators).` });
-  const density = _density(b.density);
-  const enrich = density !== 'off' && narrators.writerSet(nar.rec).size > 0;
+function _voice(res, b, nar, lines, extra) {
   const keep = _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, hook: r.paragraphs[0] || '', foreign: !r.applied, humanized: !!r.applied,
-    ...(r.applied ? {
-      written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
-      cleaned: null,
-    } : {}),
-    enriched: r.enriched ? _enrichedRecord(r.enriched, null)
-      : r.enrichError ? { density, used: [], error: r.enrichError } : null,
+    paragraphs: r.paragraphs, hook: r.paragraphs[0] || '', foreign: !r.applied,
+    ...(r.applied ? { written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() }, cleaned: null } : {}),
   }));
-  _start(res, `Rewriting ${lines.length} lines in ${nar.name}'s voice`, async (step, signal, phase) => {
+  _start(res, `Rewriting ${lines.length} lines in ${nar.name}'s voice`, async (_step, signal) => {
     const { data, by } = await callLadder({
       system: P.VOICE_SYSTEM,
       user: P.voiceUserPrompt({ lines, narratorBlock: nar.block }),
@@ -330,33 +227,13 @@ function _voice(res, b, nar, lines) {
     // As many lines as were given, or the scenario stays as it was: a line lost is a beat of the story lost.
     if (back.length !== lines.length) {
       return { paragraphs: lines, applied: false, voice: true, by, narrator: nar.name,
-        note: `The editor returned ${back.length} lines for ${lines.length} - the scenario was kept as it was; press again.` };
+        note: `The editor returned ${back.length} lines for ${lines.length} - the scenario was kept as it was; press "In ${nar.name}'s voice" on the shelf again.` };
     }
     // About as long as the line it replaces (the owner's (д10)) - told, and said where it is not.
     const off = back.map((p, i) => [i + 1, _words(p), _words(lines[i])]).filter(([, w, was]) => w > Math.ceil(was * 1.2) + 1 || w < Math.floor(was * 0.8) - 1);
-    const out = { paragraphs: back, applied: true, voice: true, by, narrator: nar.name, density,
-      notes: off.length ? [`${off.length === 1 ? 'Line' : 'Lines'} ${off.map(x => x[0]).join(', ')} came back more than a fifth ${off.length === 1 ? 'longer or shorter than it was' : 'longer or shorter than they were'}.`] : [] };
-    if (enrich) {
-      if (keep) { try { keep(out); } catch (e) { /* the job's own landing writes it again */ } }
-      phase('enrich');
-      step('Adding the narrator\'s words and phrases');
-      try {
-        const e = await _enrich(nar, back, { density, signal });
-        if (e) { out.paragraphs = e.paragraphs; out.enriched = e; out.notes = out.notes.concat(e.notes || []); }
-      } catch (err) {
-        if (err && err.cancelled) throw err;
-        out.enrichError = err.message;
-      }
-    }
-    return out;
-  }, keep, { key: _runKey(b), what: 'humanize', voice: true, model: _first().model, effort: EFFORT, density });
-}
-
-// The narrator's set at the light measure, for a rewrite: told, never required (the owner's (д13)).
-function _setText(nar) {
-  if (!nar || !nar.rec) return '';
-  const set = narrators.writerSet(nar.rec);
-  return set.size ? P.renderSet(set) : '';
+    return { paragraphs: back, applied: true, voice: true, by, narrator: nar.name,
+      note: off.length ? `${off.length === 1 ? 'Line' : 'Lines'} ${off.map(x => x[0]).join(', ')} came back more than a fifth ${off.length === 1 ? 'longer or shorter than it was' : 'longer or shorter than they were'}.` : '' };
+  }, keep, { key: _runKey(b), what: 'voice', model: _first().model, effort: EFFORT }, extra);
 }
 
 // The transcript slice a topic was mined from, or nothing. `sourceId` alone means the whole
@@ -412,7 +289,7 @@ function _keeper(b, build) {
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
         tone: b.tone, scenes: b.scenes,
-        narratorId: b.narratorId, narratorName: b.narratorName, density: b.density,
+        narratorId: b.narratorId, narratorName: b.narratorName,
       },
       ...patch,
     });
@@ -502,18 +379,7 @@ router.post('/scriptgen/script', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  const density = _density(b.density);
-  // What is written into the draft: the script, and (V38) what the enrichment put in or why it could not.
-  const keep = _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
-    // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
-    cleaned: null,
-    written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
-    enriched: r.enriched ? _enrichedRecord(r.enriched, null)
-      : r.enrichError ? { density, used: [], error: r.enrichError } : null,
-  }));
-
-  _start(res, `Writing ${m.scenes} paragraphs`, async (step, signal, phase) => {
+  _start(res, `Writing ${m.scenes} paragraphs`, async (step, signal) => {
     // WITH a transcript the rules change, not just the input: "select, do not summarise" and
     // "facts only from the transcript" only make sense when there is one.
     const withSource = !!src.text;
@@ -529,7 +395,7 @@ router.post('/scriptgen/script', (req, res) => {
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
     if (!paragraphs.length) throw new Error('The script came back empty.');
-    const out = {
+    return {
       title: String(data.title || topic).slice(0, 80),
       paragraphs,
       asked: m.scenes,
@@ -537,98 +403,14 @@ router.post('/scriptgen/script', (req, res) => {
       narrator: nar.name,
       model: by.model,
       by,
-      density,
-    };
-    // (V38) Then, in the same job, the narrator's words and phrases. The script is in the draft FIRST: it is paid for,
-    // and a cancel or a failure of this second step must not take it away.
-    if (density !== 'off' && nar.rec && narrators.writerSet(nar.rec).size) {
-      if (keep) { try { keep(out); } catch (e) { /* the job's own landing writes it again */ } }
-      phase('enrich');
-      step('Adding the narrator\'s words and phrases');
-      try {
-        const e = await _enrich(nar, paragraphs, { density, signal });
-        if (e) { out.paragraphs = e.paragraphs; out.enriched = e; out.notes = e.notes; }
-      } catch (err) {
-        if (err && err.cancelled) throw err;
-        out.enrichError = err.message;
-      }
-    }
-    return out;
-  }, keep,
-  { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes, density });
-});
-
-// (V38) The narrator's words and phrases put in again - when the step after the script did not answer (paid once: it
-// is never asked again by itself), or into a script written before, or with another measure. What was put in before
-// and is still there counts in the measure.
-router.post('/scriptgen/enrich', (req, res) => {
-  const b = req.body || {};
-  const paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
-  if (paragraphs.length < 2) return res.status(400).json({ success: false, error: 'nothing to add to' });
-  let nar;
-  try { nar = _narrator(b.narratorId); } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
-  if (!nar.rec) return res.status(400).json({ success: false, error: 'Neutral has no words or phrases - choose a narrator.' });
-  const density = _density(b.density);
-  if (density === 'off') return res.status(400).json({ success: false, error: 'Words & phrases are off in the form - choose light, normal or rich.' });
-  if (!narrators.writerSet(nar.rec).size) {
-    return res.status(400).json({ success: false, error: `${nar.name} has no words or phrases switched on yet - read his samples first (Narrators).` });
-  }
-  const prev = (b.draftId && drafts.get(String(b.draftId)) || {}).enriched || null;
-  const already = ((prev && prev.used) || []).filter(u => paragraphs.some(p => narrators.appearsIn(u.text, p)));
-
-  _start(res, 'Adding the narrator\'s words and phrases', async (_step, signal) => {
-    const e = await _enrich(nar, paragraphs, { density, signal, already });
-    return { paragraphs: e.paragraphs, enriched: e, notes: e.notes, narrator: nar.name };
-  }, _keeper(b, (r) => ({
-    paragraphs: r.paragraphs,
-    enriched: _enrichedRecord(r.enriched, prev ? { ...prev, used: already } : null),
-  })),
-  { key: _runKey(b), what: 'enrich', model: _first().model, effort: EFFORT, density });
-});
-
-router.post('/scriptgen/humanize', (req, res) => {
-  const b = req.body || {};
-  const paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
-  if (paragraphs.length < 2) return res.status(400).json({ success: false, error: 'nothing to clean' });
-  let nar, m;
-  try { nar = _narrator(b.narratorId); m = WM.normalise(b); }
-  catch (e) { return res.status(400).json({ success: false, error: e.message }); }
-  // (V38, block D4) A scenario of the shelf not yet in the narrator's voice: the stronger pass, the first line too.
-  const draft = b.draftId ? drafts.get(String(b.draftId)) : null;
-  if (draft && draft.foreign) return _voice(res, b, nar, paragraphs);
-
-  // The hook is the FIRST paragraph and is fixed. It is sent as context and not returned, so it
-  // is held here and put back afterwards - the editor never gets to rewrite the opening line.
-  const hook = paragraphs[0];
-  const rest = paragraphs.slice(1);
-  if (!rest.length) return res.status(400).json({ success: false, error: 'only the hook — nothing to clean' });
-
-  // (V38) The narrator's words and phrases the enrichment put in - and that are still there - are kept through it.
-  const put = ((b.draftId && drafts.get(String(b.draftId)) || {}).enriched || {}).used || [];
-  const keepWords = put.filter(u => rest.some(p => narrators.appearsIn(u.text, p))).map(u => u.text);
-
-  _start(res, `Cleaning ${rest.length} paragraphs`, async (_step, signal) => {
-    const { data, by } = await callLadder({
-      system: P.HUMANIZER_SYSTEM,
-      user: P.humanizerUserPrompt({ paragraphs: rest, narratorBlock: nar.block, hook, keep: keepWords }),
-      schema: P.HUMANIZER_SCHEMA, name: 'humanized', effort: EFFORT, signal,
-    });
-    const cleaned = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
-    // A count that does not match means the editor dropped or merged beats. The original wins
-    // rather than a script quietly losing a paragraph.
-    const kept = cleaned.length === rest.length;
-    return {
-      paragraphs: [hook, ...(kept ? cleaned : rest)],
-      applied: kept,
-      note: kept ? '' : `The editor returned ${cleaned.length} paragraphs for ${rest.length} — kept the original.`,
-      narrator: nar.name,
-      by,
     };
   }, _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, humanized: !!r.applied,
-    ...(r.applied ? { cleaned: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() } } : {}),
+    paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
+    // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
+    cleaned: null,
+    written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
   })),
-  { key: _runKey(b), what: 'humanize', model: _first().model, effort: EFFORT });
+  { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes });
 });
 
 router.post('/scriptgen/rewrite', (req, res) => {
@@ -645,11 +427,10 @@ router.post('/scriptgen/rewrite', (req, res) => {
   let m;
   try { m = WM.normalise(b); } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
   const topic = String(b.topic || '').trim();
-  // (V38, the owner's (д13)) The narrator goes with it - the same voice as the script - and his set, told at the light
-  // measure. A narrator deleted since writes plainly rather than refusing a rewrite.
+  // (V38, the owner's (д13)) The narrator goes with it - the same voice as the script. A narrator deleted since writes
+  // plainly rather than refusing a rewrite.
   let nar;
   try { nar = _narrator(b.narratorId); } catch (e) { nar = _narrator('neutral'); }
-  const setText = _setText(nar);
   // (V38) A FRAGMENT of the paragraph, selected on the page: only it is written again, the rest stays word for word.
   // Found by its words - at the place the page names when they are there, else their first occurrence.
   const para = script[index];
@@ -668,7 +449,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
       const { data } = await callLadder({
         system: P.FRAGMENT_SYSTEM,
         user: P.fragmentUserPrompt({ topic, tone: m.tone, script, index, before: frag.before, fragment: frag.text, after: frag.after,
-          narratorBlock: nar.block, setText }),
+          narratorBlock: nar.block }),
         schema: P.FRAGMENT_SCHEMA, name: 'fragment', effort: EFFORT, signal,
       });
       // The fragment's own edges are kept: a selection that ended on a space keeps it, whatever the model trimmed.
@@ -681,7 +462,7 @@ router.post('/scriptgen/rewrite', (req, res) => {
     }
     const { data } = await callLadder({
       system: P.REWRITE_SYSTEM,
-      user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index, narratorBlock: nar.block, setText }),
+      user: P.rewriteUserPrompt({ topic, tone: m.tone, script, index, narratorBlock: nar.block }),
       schema: P.REWRITE_SCHEMA, name: 'rewrite', effort: EFFORT, signal,
     });
     const paragraph = String(data.paragraph || '').trim();
@@ -802,22 +583,6 @@ router.post('/scriptgen/save', async (req, res) => {
   try { if (b.narratorId) nar = _narrator(b.narratorId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
   let srcTitles = { sourceTitle: '', topicTitle: '' };
   try { srcTitles = _sourceText(b.sourceId, b.topicId); } catch (e) { /* same */ }
-  // (V38, the owner's (д7)) What of the narrator's set is in the script as it is saved - what the enrichment put in and
-  // the hand did not take out. Their counts go up once the scenario exists, and the scenario says what they were.
-  const enr = (kept && kept.enriched) || null;
-  const inScript = (enr && nar.id && nar.id !== 'neutral' ? enr.used || [] : [])
-    .filter(u => paragraphs.some(p => narrators.appearsIn(u.text, p)));
-  // ...and his PHRASES the script says word for word, whoever put them there - the writer reaches for a signature line
-  // the voice quotes (the paid check), and "used lately" has to know it.
-  if (nar.id && nar.id !== 'neutral') {
-    try {
-      const rec = narrators.get(nar.id);
-      for (const e of ((rec && rec.phrases) || []).filter(x => x.on)) {
-        if (inScript.some(u => u.list === 'phrases' && u.id === e.id)) continue;
-        if (paragraphs.some(p => narrators.saidIn(e.text, p))) inScript.push({ list: 'phrases', id: e.id, text: e.text });
-      }
-    } catch (e) { /* a count missed is not a reason to lose the script */ }
-  }
 
   const payload = {
     title,
@@ -836,8 +601,6 @@ router.post('/scriptgen/save', async (req, res) => {
       model: String((wrote && wrote.model) || b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),
       // Cleaned by another model than wrote it (the owner: by the recommendation) - said apart.
       ...(cleaned ? { cleanedBy: [cleaned.provider, cleaned.model].filter(Boolean).join(' · ') } : {}),
-      // (V38) The narrator's own words and phrases in it, and the measure they were put in at.
-      ...(inScript.length ? { enriched: inScript.map(u => u.text).join(' · '), density: (enr && enr.density) || '' } : {}),
       // (V38, block D4) A scenario of the shelf rewritten in the narrator's voice: which one.
       ...(kept && kept.from ? { fromId: kept.from.scenarioId, fromTitle: kept.from.title } : {}),
     },
@@ -845,10 +608,6 @@ router.post('/scriptgen/save', async (req, res) => {
 
   try {
     const scenario = scen3.createScenario(payload);
-    if (inScript.length) {
-      try { narrators.noteUses(nar.id, { scenarioId: scenario.id, used: inScript }); }
-      catch (e) { /* the scenario is saved; a count not raised is not worth losing it over */ }
-    }
     // The topic remembers what came out of it. Written AFTER the scenario exists, so a mark can
     // never point at a scenario that was refused - and mining a source again replaces its topics,
     // which is why this lives on the topic rather than in a table of its own.

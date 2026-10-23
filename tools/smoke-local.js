@@ -112,6 +112,10 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // ...and the probably dead: a list for a gone dropdown, a rename with no page, two reads the
                  // page makes elsewhere, and scratch served over HTTP
                  ['GET', '/api/scen3/projects'], ['PATCH', '/api/narrators/x'], ['GET', '/api/sources/cookies'],
+                 // phase V38 / V38.1: one voice read by "Read new samples"; the cleaning pass, the enrichment and the
+                 // narrator's vocabulary and phrases went
+                 ['POST', '/api/narrators/x/analyse'], ['DELETE', '/api/narrators/x/readings/y'], ['POST', '/api/scriptgen/humanize'],
+                 ['POST', '/api/scriptgen/enrich'], ['POST', '/api/narrators/x/vocabulary'], ['POST', '/api/narrators/x/pending/phrases/all/keep'],
                  ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
                  // phase C3: the server version's 'copy to my profile' - one person owns every project here
                  ['POST', '/api/mv3/timeline/x/copy'], ['DELETE', '/api/scen3/projects/x'],

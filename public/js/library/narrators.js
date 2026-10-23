@@ -3,20 +3,14 @@
 // отображаться интерфейс настроек и чтений нарраторов"); the gear by the generator's Narrator field leads here too.
 // js/library/main.js shows and hides it, as it does the making areas.
 //
-// A narrator is HOW a script is written: samples of an author's writing in, and out of them ONE VOICE and the author's
-// own words and phrases (phase V38, the owner 2026-10-23: "нужен один нарратор у которого пополняется его фразы и
-// словарь"). Three columns: the narrators - ONE ROW ALWAYS SELECTED, as on every Library shelf, with "+ New narrator"
-// opening a name field right in the list (prompt() throws in the app's Electron) - then the selected one's samples (each
-// says whether it has been read), then the right column under three crumbs, the last one open remembered:
-//   the voice      its lines by field, each corrected in place or deleted (✕ twice); lines the last reading added say
-//                  "new" - the app only ever ADDS to the voice (the owner's (д15), (д17));
-//   vocabulary     a TABLE: the word · what it stands for · when he says it · examples · the original (pale) - the owner's
-//   phrases        (д3): "не сплошным текстом а таблицей"; the phrases' table has its kind and place. A dot switches an
-//                  entry on or off (off: kept, not told to the writer), cells are corrected in place, "+ example" adds
-//                  one, ✕ twice deletes, the "+" row at the bottom types a new one. What the last reading PROPOSED lies
-//                  above in pale rows with ✓ / ✕, and "keep all".
-// "Read new samples" at the column's foot reads only the samples not read yet - the voice added to, words and phrases
-// proposed, new examples to the entries there are.
+// A narrator is HOW a script is written: samples of an author's writing in, and out of them ONE VOICE (phase V38, the
+// owner 2026-10-23: "the voice должен обновляться если нужно, но только дополняться"). Three columns: the narrators - ONE
+// ROW ALWAYS SELECTED, as on every Library shelf, with "+ New narrator" opening a name field right in the list (prompt()
+// throws in the app's Electron) - then the selected one's samples (each says whether it has been read; a source of the
+// Library is one for nothing), then the voice: its lines by field, each corrected in place or deleted (✕ twice), the
+// lines the last reading added saying "new" - the app only ever ADDS to it (the owner's (д15), (д17)). "Read new samples"
+// at the column's foot reads only the samples not read yet. (V38's vocabulary and phrases under crumbs beside the voice
+// were taken out by the owner, V38.1: "для самого нарратора убираем новые крошки".)
 //
 // TWO PAID KINDS OF WORK, and they belong to the narrator, not to the area: transcribing a file or a link into a sample,
 // and reading the new samples. While one runs, that narrator's buttons are locked and every other narrator is free. The
@@ -46,19 +40,12 @@ const _typed = new Map();  // narratorId -> text pasted and not added yet
 // `last` is { text, err } - the line a finished job leaves behind.
 const _jobs = new Map();
 
-// The right column's crumb, remembered on this computer.
-const LS_VIEW = 'lib_nr_view';
-const VIEWS = ['voice', 'vocabulary', 'phrases'];
-let _view = (() => { try { const v = localStorage.getItem(LS_VIEW); return VIEWS.includes(v) ? v : 'voice'; } catch (e) { return 'voice'; } })();
-
 const VOICE_ROWS = [
   ['summary', 'Who this voice is'], ['sentences', 'Sentences'], ['rhythm', 'Rhythm'],
   ['address', 'Address'], ['register', 'Register'], ['imagery', 'Imagery'],
   ['humour', 'Humour'], ['openings', 'Openings'], ['endings', 'Endings'], ['stance', 'Stance'],
   ['signature_moves', 'Signature moves'], ['never_does', 'Never does'],
 ];
-const KINDS = [['signature', 'signature'], ['idiom', 'turn of phrase']];
-const PLACES = [['anywhere', 'anywhere'], ['opening', 'opening'], ['ending', 'ending']];
 
 const _announce = () => document.dispatchEvent(new CustomEvent('lib:narrators'));
 // Busy from the press - the upload of a file comes before its job has a number - to the last line.
@@ -70,7 +57,7 @@ const _nurl = (id, rest) => `/api/narrators/${encodeURIComponent(id)}${rest || '
 const HTML = `
     <div class="mk-panel-head">
       <span class="mk-panel-t">Narrators</span>
-      <span class="mk-note">how a script is written — writing by an author in; his voice, his words and phrases out</span>
+      <span class="mk-note">how a script is written — writing by an author in, a voice out</span>
     </div>
     <div class="nr-said" data-f="said" hidden></div>
     <div class="nr-body">
@@ -104,13 +91,13 @@ const HTML = `
         </div>
       </section>
       <section class="nr-col nr-right">
-        <div class="nr-crumbs" data-f="crumbs"></div>
+        <div class="nr-col-h">The voice <em>— as a model will be told it</em></div>
         <div class="nr-view" data-f="view"></div>
         <div class="nr-foot">
           <div class="mk-job" data-f="vjob" hidden></div>
           <div class="nr-foot-row">
             <span class="nr-foot-note" data-f="readnote"></span>
-            <button class="lib-btn primary" type="button" data-f="read" title="Read the samples not read yet - the voice is added to, new words and phrases are proposed - a paid call">Read new samples</button>
+            <button class="lib-btn primary" type="button" data-f="read" title="Read the samples not read yet - only what is new is added to the voice - a paid call">Read new samples</button>
           </div>
         </div>
       </section>
@@ -174,7 +161,6 @@ function _tag(it) {
   if (_running(it.id)) return ['run', _jobs.get(String(it.id)).kind === 'read' ? 'reading…' : 'transcribing…'];
   if (!it.ready) return ['wait', it.enough ? 'not read yet' : `needs ${_minWords}+ words`];
   if (it.unread) return ['wait', it.unread === 1 ? '1 new sample' : `${it.unread} new samples`];
-  if (it.pending) return ['wait', `${it.pending} proposed`];
   return ['ready', 'voice read'];
 }
 
@@ -198,10 +184,7 @@ function _paintList() {
     row.dataset.id = String(it.id);
     const main = el('div', 'nr-row-main');
     main.appendChild(el('div', 'nr-row-t', it.name));
-    const bits = [it.samples + (it.samples === 1 ? ' sample' : ' samples'), it.words + ' words'];
-    if (it.vocabulary) bits.push(it.vocabulary + (it.vocabulary === 1 ? ' word' : ' words') + ' of his');
-    if (it.phrases) bits.push(it.phrases + (it.phrases === 1 ? ' phrase' : ' phrases'));
-    main.appendChild(el('div', 'nr-row-s', bits.join(' · ')));
+    main.appendChild(el('div', 'nr-row-s', [it.samples + (it.samples === 1 ? ' sample' : ' samples'), it.words + ' words'].join(' · ')));
     row.appendChild(main);
     const [kind, text] = _tag(it);
     row.appendChild(el('span', 'mk-tag ' + (kind === 'run' ? 'wait' : kind), text));
@@ -275,7 +258,7 @@ async function _delete(it) {
     const d = await J.api('/api/scriptgen/drafts');
     n = (d.drafts || []).filter(x => String(x.narratorId || '') === String(it.id)).length;
   } catch (e) { /* the count is a courtesy */ }
-  const lines = [`Delete the narrator "${it.name}"?`, '', 'Its samples, its voice, its words and phrases go with it, and that cannot be undone.'];
+  const lines = [`Delete the narrator "${it.name}"?`, '', 'Its samples and its voice go with it, and that cannot be undone.'];
   if (n) lines.push('', `${n === 1 ? 'One draft was' : `${n} drafts were`} written with it - ${n === 1 ? 'it keeps its' : 'they keep their'} text, and the form will ask for another narrator.`);
   if (!confirm(lines.join('\n'))) return;
   try {
@@ -332,7 +315,7 @@ function _paintWords() {
 function _blank() {
   _rec = null;
   if (!_win) return;
-  for (const k of ['samples', 'view', 'crumbs', 'words', 'readnote']) _win.q(k).textContent = '';
+  for (const k of ['samples', 'view', 'words', 'readnote']) _win.q(k).textContent = '';
   _win.q('text').value = '';
   for (const k of ['sjob', 'vjob']) J.clearJob(_win.q(k));
   _paintLocks();
@@ -389,7 +372,7 @@ function _paintSamples() {
 }
 
 async function _removeSample(id, i, s) {
-  const said = s && s.readAt ? 'What was read from it stays in the voice, the words and the phrases.' : 'It has not been read yet.';
+  const said = s && s.readAt ? 'What was read from it stays in the voice.' : 'It has not been read yet.';
   if (id !== _sel || _running(id) || !confirm(`Remove this sample? ${said}`)) return;
   try {
     await J.api(_nurl(id, `/samples/${i}`), { method: 'DELETE' });
@@ -462,7 +445,7 @@ async function _addSource() {
   finally { btn.disabled = false; _paintLocks(); }
 }
 
-// ── The right column: the voice, the vocabulary, the phrases ────────────────
+// ── The right column: the voice ────────────────────────────────────────────
 // Changes come back as the whole narrator; the newest one is kept (an older answer arriving late is not painted over a
 // newer one). A cell's own save does not repaint the column - the cursor may be in the next cell already.
 function _take(n) {
@@ -474,41 +457,12 @@ function _take(n) {
 
 function _paintRight() {
   if (!_win || !_rec) return;
-  _paintCrumbs();
   const box = _win.q('view');
   box.textContent = '';
-  box.className = 'nr-view nr-view-' + _view;
-  if (_view === 'voice') _paintVoice(box);
-  else _paintSet(box, _view);
+  _paintVoice(box);
 }
 
-function _paintCrumbs() {
-  const box = _win.q('crumbs');
-  box.textContent = '';
-  const n = _rec.narrator;
-  VIEWS.forEach((v, i) => {
-    if (i) box.appendChild(el('span', 'nr-crumb-sep', '/'));
-    const list = n[v] || [];
-    const pend = ((n.pending || {})[v] || []).length;
-    const b = el('button', 'nr-crumb' + (_view === v ? ' is-on' : ''));
-    b.type = 'button';
-    b.appendChild(el('span', null, v === 'voice' ? 'the voice' : v));
-    if (v !== 'voice') b.appendChild(el('span', 'nr-crumb-n', ' · ' + list.length));
-    if (pend) b.appendChild(el('span', 'nr-crumb-p', ' +' + pend));
-    b.title = v === 'voice' ? 'How he writes - as a model will be told it'
-      : (v === 'vocabulary' ? 'His words - what he says instead of the plain word' : 'His signature lines and turns of phrase')
-        + (pend ? ` · ${pend} proposed by the last reading, waiting for a tick` : '');
-    b.addEventListener('click', () => {
-      if (_view === v) return;
-      _view = v;
-      try { localStorage.setItem(LS_VIEW, v); } catch (e) { /* remembered only where it can be */ }
-      _paintRight();
-    });
-    box.appendChild(b);
-  });
-}
-
-// A press arms a ✕ ("really?" for three seconds); the second press within them does it (the owner's (д3): twice).
+// A press arms a ✕ ("really?" for three seconds); the second press within them does it.
 function _twice(btn, act) {
   const label = btn.textContent;
   btn.addEventListener('click', (e) => {
@@ -522,10 +476,9 @@ function _twice(btn, act) {
 
 // A text corrected in place: pressed, it takes the cursor; Enter or leaving it saves, Escape puts it back. `save(text)`
 // answers the narrator; a refusal is said and the text put back.
-function _editable(node, value, save, { placeholder = '', multiline = false } = {}) {
+function _editable(node, value, save, { multiline = false } = {}) {
   node.classList.add('nr-ed');
   node.textContent = value || '';
-  if (placeholder) node.dataset.ph = placeholder;
   node.tabIndex = 0;
   let was = value || '';
   const begin = () => {
@@ -567,15 +520,16 @@ function _paintVoice(box) {
   const n = _rec.narrator;
   if (!_hasVoice(n)) {
     box.appendChild(el('div', 'mk-empty', (n.samples || []).length
-      ? 'Not read yet. Press “Read new samples” - the voice, his words and his phrases are read out of the samples.'
+      ? 'Not read yet. Press “Read new samples” - the voice is read out of the samples.'
       : 'Not read yet. Add samples, then press “Read new samples”.'));
     return;
   }
   const last = n.lastRead || {};
-  const head = el('div', 'nr-voice-h');
-  head.appendChild(el('span', null, 'As a model will be told it'));
-  if (last.at) head.appendChild(el('span', 'nr-voice-at', ['last read ' + J.fmtDate(last.at), last.model].filter(Boolean).join(' · ')));
-  box.appendChild(head);
+  if (last.at) {
+    const head = el('div', 'nr-voice-h');
+    head.appendChild(el('span', 'nr-voice-at', ['last read ' + J.fmtDate(last.at), last.model].filter(Boolean).join(' · ')));
+    box.appendChild(head);
+  }
   const owner = String(n.id);
   for (const [key, label] of VOICE_ROWS) {
     const lines = n.voice[key] || [];
@@ -604,265 +558,6 @@ function _paintVoice(box) {
     }
     box.appendChild(row);
   }
-}
-
-// The table of one set. Its columns: the dot, the word or phrase (with how many saved scripts it went into), what it
-// stands for, [kind and place], when, the examples, the original, the ✕.
-function _paintSet(box, list) {
-  const n = _rec.narrator;
-  const owner = String(n.id);
-  const phrases = list === 'phrases';
-  const pend = (n.pending || {})[list] || [];
-  if (pend.length) box.appendChild(_pendingBlock(owner, list, pend));
-  const t = el('table', 'nr-table' + (phrases ? ' phrases' : ''));
-  const head = el('tr');
-  const cols = ['', phrases ? 'phrase' : 'word', 'meaning', ...(phrases ? ['kind · place'] : []), 'when & how', 'examples', 'original', ''];
-  for (const c of cols) head.appendChild(el('th', null, c));
-  const thead = el('thead');
-  thead.appendChild(head);
-  t.appendChild(thead);
-  const body = el('tbody');
-  for (const e of n[list] || []) body.appendChild(_entryRow(owner, list, e));
-  body.appendChild(_addRow(owner, list));
-  t.appendChild(body);
-  box.appendChild(t);
-  if (!(n[list] || []).length && !pend.length) {
-    box.appendChild(el('p', 'mk-pnote', phrases
-      ? 'No phrases yet. “Read new samples” proposes his signature lines and turns of phrase, or type one in the row above. Typed in Russian, it is put into English and the Russian kept beside it.'
-      : 'No words yet. “Read new samples” proposes his words, or type one in the row above. Typed in Russian, it is put into English and the Russian kept beside it.'));
-  }
-}
-
-function _cell(cls) { return el('td', cls); }
-
-function _entryRow(owner, list, e) {
-  const phrases = list === 'phrases';
-  const base = _nurl(owner, `/${list}/${encodeURIComponent(e.id)}`);
-  const patch = async (body) => (await _post(base, body, 'PATCH')).narrator;
-  const tr = el('tr', e.on ? '' : 'off');
-  // The dot: told to the writer, or kept and not told.
-  const dc = _cell('nr-dot-c');
-  const dot = el('button', 'nr-dot' + (e.on ? ' on' : ''));
-  dot.type = 'button';
-  dot.title = e.on ? 'On - the writer is given it. Press to keep it but not give it' : 'Off - kept, not given to the writer. Press to give it again';
-  dot.addEventListener('click', async () => {
-    try { if (_take(await patch({ on: !e.on }))) _paintRight(); _announce(); } catch (x) { _say(x.message, true); }
-  });
-  dc.appendChild(dot);
-  tr.appendChild(dc);
-  const tc = _cell('nr-t-c');
-  const tt = el('div', 'nr-t');
-  _editable(tt, e.text, (text) => patch({ text }));
-  tc.appendChild(tt);
-  if (e.uses) {
-    const u = el('div', 'nr-uses', `in ${e.uses} ${e.uses === 1 ? 'script' : 'scripts'}`);
-    u.title = 'How many saved scripts it went into' + (e.lastUsedAt ? ' - last on ' + J.fmtDate(e.lastUsedAt) : '');
-    tc.appendChild(u);
-  }
-  tr.appendChild(tc);
-  const mc = _cell();
-  const mt = el('div');
-  _editable(mt, e.meaning, (meaning) => patch({ meaning }), { placeholder: phrases ? 'what it says' : 'instead of…' });
-  mc.appendChild(mt);
-  tr.appendChild(mc);
-  if (phrases) {
-    const kc = _cell('nr-kind-c');
-    for (const [field, opts] of [['kind', KINDS], ['place', PLACES]]) {
-      const s = el('select', 'nr-sel');
-      for (const [v, label] of opts) { const o = el('option', null, label); o.value = v; s.appendChild(o); }
-      s.value = e[field];
-      s.title = field === 'kind' ? 'A signature line of his, or a turn of phrase he favours' : 'Where it goes: anywhere, opening a piece (never before the hook), or closing one';
-      s.addEventListener('change', async () => {
-        try { _take(await patch({ [field]: s.value })); } catch (x) { s.value = e[field]; _say(x.message, true); }
-      });
-      kc.appendChild(s);
-    }
-    tr.appendChild(kc);
-  }
-  const wc = _cell();
-  const wt = el('div');
-  _editable(wt, e.when, (when) => patch({ when }), { placeholder: 'when he says it', multiline: true });
-  wc.appendChild(wt);
-  tr.appendChild(wc);
-  tr.appendChild(_examplesCell(owner, list, e));
-  const sc = _cell('nr-src-c');
-  const st = el('div');
-  _editable(st, e.source, (source) => patch({ source }), { placeholder: '—' });
-  st.title = 'The original, as he says it - for you only, never sent to the writer';
-  sc.appendChild(st);
-  tr.appendChild(sc);
-  const xc = _cell('nr-x-c');
-  const x = el('button', 'nr-x', '✕');
-  x.type = 'button';
-  x.title = phrases ? 'Delete this phrase' : 'Delete this word';
-  _twice(x, async () => {
-    try {
-      const d = await J.api(base, { method: 'DELETE' });
-      if (_take(d.narrator)) _paintRight();
-      _announce();
-    } catch (err) { _say(err.message, true); }
-  });
-  xc.appendChild(x);
-  tr.appendChild(xc);
-  return tr;
-}
-
-function _examplesCell(owner, list, e) {
-  const c = _cell('nr-ex-c');
-  const base = _nurl(owner, `/${list}/${encodeURIComponent(e.id)}/examples`);
-  (e.examples || []).forEach((x, i) => {
-    const row = el('div', 'nr-ex');
-    const t = el('div', 'nr-ex-t');
-    _editable(t, x.text, async (text) => (await _post(`${base}/${i}`, { text }, 'PATCH')).narrator, { multiline: true });
-    if (x.source) t.title = x.source;
-    row.appendChild(t);
-    const del = el('button', 'nr-x', '✕');
-    del.type = 'button';
-    del.title = 'Delete this example';
-    _twice(del, async () => {
-      try { const d = await J.api(`${base}/${i}`, { method: 'DELETE' }); if (_take(d.narrator)) _paintRight(); }
-      catch (err) { _say(err.message, true); }
-    });
-    row.appendChild(del);
-    c.appendChild(row);
-  });
-  // "+ example": a line of its own, Enter adds it.
-  const add = el('button', 'nr-ex-add', '+ example');
-  add.type = 'button';
-  add.addEventListener('click', () => {
-    add.hidden = true;
-    const input = el('input', 'nr-in');
-    input.type = 'text';
-    input.placeholder = 'An example, then Enter';
-    c.appendChild(input);
-    input.focus();
-    const done = () => { input.remove(); add.hidden = false; };
-    input.addEventListener('keydown', async (ev) => {
-      if (ev.key === 'Escape') { ev.preventDefault(); done(); return; }
-      if (ev.key !== 'Enter') return;
-      ev.preventDefault();
-      const text = input.value.trim();
-      if (!text) { done(); return; }
-      input.disabled = true;
-      try { const d = await _post(base, { text }); if (_take(d.narrator)) _paintRight(); }
-      catch (err) { input.disabled = false; _say(err.message, true); }
-    });
-    input.addEventListener('blur', () => { if (!input.value.trim() && !input.disabled) done(); });
-  });
-  c.appendChild(add);
-  return c;
-}
-
-// The "+" row: typed and Enter (or "+") adds it. In Russian, the server puts it into English first (a moment, cents).
-function _addRow(owner, list) {
-  const phrases = list === 'phrases';
-  const tr = el('tr', 'nr-add-tr');
-  tr.appendChild(_cell('nr-dot-c'));
-  const f = {};
-  const input = (key, ph) => { const i = el('input', 'nr-in'); i.type = 'text'; i.placeholder = ph; f[key] = i; const c = _cell(); c.appendChild(i); return c; };
-  tr.appendChild(input('text', phrases ? '+ a phrase…' : '+ a word…'));
-  tr.appendChild(input('meaning', phrases ? 'what it says' : 'instead of…'));
-  if (phrases) {
-    const kc = _cell('nr-kind-c');
-    for (const [field, opts] of [['kind', KINDS], ['place', PLACES]]) {
-      const s = el('select', 'nr-sel');
-      for (const [v, label] of opts) { const o = el('option', null, label); o.value = v; s.appendChild(o); }
-      f[field] = s;
-      kc.appendChild(s);
-    }
-    tr.appendChild(kc);
-  }
-  tr.appendChild(input('when', 'when he says it'));
-  tr.appendChild(input('example', 'an example'));
-  const said = _cell('nr-src-c nr-add-said');
-  tr.appendChild(said);
-  const bc = _cell('nr-x-c');
-  const go = el('button', 'nr-plus', '+');
-  go.type = 'button';
-  go.title = phrases ? 'Add the phrase' : 'Add the word';
-  bc.appendChild(go);
-  tr.appendChild(bc);
-  const add = async () => {
-    const body = {};
-    for (const [k, node] of Object.entries(f)) body[k] = node.value.trim();
-    if (!body.text) { f.text.focus(); return; }
-    for (const node of Object.values(f)) node.disabled = true;
-    go.disabled = true;
-    said.textContent = /(?!\p{Script=Latin})\p{L}/u.test(Object.values(body).join(' ')) ? 'into English…' : '';
-    try {
-      const d = await _post(_nurl(owner, '/' + list), body);
-      if (_take(d.narrator)) _paintRight();
-      _announce();
-      const again = _win && _win.q('view').querySelector('.nr-add-tr .nr-in');
-      if (again) again.focus();
-    } catch (e) {
-      for (const node of Object.values(f)) node.disabled = false;
-      go.disabled = false;
-      said.textContent = '';
-      _say(e.message, true);
-    }
-  };
-  for (const node of Object.values(f)) {
-    if (node.tagName === 'INPUT') node.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-  }
-  go.addEventListener('click', add);
-  return tr;
-}
-
-// What the last reading proposed, in pale rows: ✓ keeps one, ✕ drops it (and it is not proposed again), and all at once.
-function _pendingBlock(owner, list, pend) {
-  const phrases = list === 'phrases';
-  const box = el('div', 'nr-pend');
-  const h = el('div', 'nr-pend-h');
-  h.appendChild(el('span', null, `${pend.length} proposed by the last reading`));
-  h.appendChild(el('span', 'sp'));
-  const act = async (pid, what) => {
-    try {
-      const d = await _post(_nurl(owner, `/pending/${list}/${encodeURIComponent(pid)}/${what}`));
-      if (_take(d.narrator)) _paintRight();
-      await _readList();
-      _paintList();
-      _announce();
-    } catch (e) { _say(e.message, true); }
-  };
-  const all = el('button', 'lib-btn', 'keep all');
-  all.type = 'button';
-  all.addEventListener('click', () => act('all', 'keep'));
-  const none = el('button', 'lib-btn', 'drop all');
-  none.type = 'button';
-  none.title = 'Drop every proposal - none of them is proposed again';
-  _twice(none, () => act('all', 'drop'));
-  h.append(all, none);
-  box.appendChild(h);
-  const t = el('table', 'nr-table nr-pend-t' + (phrases ? ' phrases' : ''));
-  const body = el('tbody');
-  for (const p of pend) {
-    const tr = el('tr');
-    const ok = el('button', 'nr-ok', '✓');
-    ok.type = 'button';
-    ok.title = 'Keep it';
-    ok.addEventListener('click', () => act(p.id, 'keep'));
-    const no = el('button', 'nr-x', '✕');
-    no.type = 'button';
-    no.title = 'Drop it - it is not proposed again';
-    no.addEventListener('click', () => act(p.id, 'drop'));
-    const c0 = _cell('nr-dot-c');
-    c0.appendChild(ok);
-    tr.appendChild(c0);
-    tr.appendChild(el('td', 'nr-t-c', p.text));
-    tr.appendChild(el('td', null, p.meaning));
-    if (phrases) tr.appendChild(el('td', 'nr-kind-c', [p.kind === 'signature' ? 'signature' : 'turn of phrase', p.place].join(' · ')));
-    tr.appendChild(el('td', null, p.when));
-    tr.appendChild(el('td', 'nr-ex-c', (p.examples || []).map(x => x.text).join(' / ')));
-    tr.appendChild(el('td', 'nr-src-c', p.source));
-    const cx = _cell('nr-x-c');
-    cx.appendChild(no);
-    tr.appendChild(cx);
-    body.appendChild(tr);
-  }
-  t.appendChild(body);
-  box.appendChild(t);
-  return box;
 }
 
 // ── The paid jobs ───────────────────────────────────────────────────────────
@@ -956,15 +651,7 @@ async function _read() {
   if (!id || id !== _sel || _running(id)) return;
   const words = _unread().reduce((s, x) => s + (x.words || 0), 0);
   const done = await _start(id, 'read', () => _post(_nurl(id, '/read')), _readTiming(words));
-  if (done) {
-    // What the reading proposed is where the ticks are: the vocabulary, or the phrases, when the voice has nothing new.
-    const a = done.added || {};
-    if (_sel === id && _view === 'voice' && !a.voice && (a.vocabulary || a.phrases)) {
-      _view = a.vocabulary ? 'vocabulary' : 'phrases';
-      _paintRight();
-    }
-    _announce();
-  }
+  if (done) _announce();
 }
 
 // A reading the page did not start (a reload): its row back at its real age, its landing as usual.

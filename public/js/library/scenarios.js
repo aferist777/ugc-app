@@ -132,8 +132,6 @@ const ORIGIN_ROWS = [
   ['fromTitle', 'rewritten from', true],
   ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
   ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
-  // (phase V38) The narrator's own words and phrases in it, as saved, and the measure they went in at.
-  ['enriched', 'his words & phrases', true], ['density', 'measure'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
@@ -256,7 +254,7 @@ async function _readLists() {
     roles: (opt && opt.options && opt.options.roles) || [],
     // Neutral is the generator's own voice - not a record in the store, sent beside the list.
     narrators: [...(nar && nar.neutral ? [{ id: String(nar.neutral.id), name: nar.neutral.name }] : []),
-      ...((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name }))],
+      ...((nar && nar.narrators) || []).map(n => ({ id: String(n.id), name: n.name, ready: !!n.ready }))],
   };
   return _lists;
 }
@@ -531,9 +529,9 @@ async function _paintFields(box, s) {
   const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
   const curNar = nar ? (nar.id || (L.narrators.find(n => n.name === nar.name) || {}).id || '__name__:' + nar.name) : '';
   _fieldRow(box, 'narrator', curNar, narValues, (v) => {
-    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator');
+    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator').then((ok) => { _paintVoiceBtn(s); return ok; });
     const n = L.narrators.find(x => x.id === v);
-    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator');
+    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator').then((ok) => { _paintVoiceBtn(s); return ok; });
     // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
     return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
   }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
@@ -615,11 +613,10 @@ async function _show(it) {
   make.type = 'button';
   make.title = 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
-  // (phase V38, block D4) This scenario's lines rewritten in a narrator's voice, then his words and phrases put in - in
-  // the generator, saved as a NEW scenario; this one is not touched.
-  const voice = _el('button', 'lib-btn', 'In a narrator’s voice…');
+  // (phase V38, block D4; V38.1) This scenario's lines rewritten in ITS narrator's voice (the narrator field - the owner's
+  // (к3а)), started at once; followed in the generator and saved there as a NEW scenario - this one is not touched.
+  const voice = _el('button', 'lib-btn lib-sc-voice', 'In the narrator’s voice');
   voice.type = 'button';
-  voice.title = 'Rewrite these lines in a narrator’s voice and add his words and phrases - in the generator; saved as a new scenario, this one stays as it is';
   const del = _el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this scenario';
@@ -640,6 +637,7 @@ async function _show(it) {
   ta.addEventListener('blur', () => _flushA(a, true));
   make.addEventListener('click', () => _makeVideo(a, make));
   voice.addEventListener('click', () => _inVoice(a, voice));
+  _paintVoiceBtn(s);
   del.addEventListener('click', () => _delete(s, del));
 
   // A script needs no inner scrolling when it fits; past that the textarea scrolls.
@@ -752,8 +750,23 @@ async function _makeVideo(a, btn) {
   }
 }
 
-// (phase V38, block D4) The lines stored first, then a draft of them in the generator (POST /api/scriptgen/from-scenario):
-// there the narrator is chosen and one press rewrites them in his voice and puts his words in.
+// (V38.1) The button says whose voice, and is pressed only when there is one: the scenario's narrator, read.
+async function _paintVoiceBtn(s) {
+  const btn = document.querySelector('#lib-info-body .lib-sc-voice');
+  if (!btn) return;
+  const L = await _readLists();
+  const nar = s.narrator && s.narrator.name ? s.narrator : null;
+  const rec = nar ? L.narrators.find(n => n.id === String(nar.id || '')) : null;
+  btn.textContent = rec && rec.id !== 'neutral' ? `In ${rec.name}’s voice` : 'In the narrator’s voice';
+  btn.disabled = !(rec && rec.id !== 'neutral' && rec.ready);
+  btn.title = !nar || (rec && rec.id === 'neutral') ? 'Choose the scenario’s narrator in its narrator field first - its lines are rewritten in that narrator’s voice'
+    : !rec ? `${nar.name}, the scenario’s narrator, has been deleted - choose another in its narrator field`
+      : !rec.ready ? `${rec.name} has no voice yet - read his samples first (Narrators)`
+        : `Rewrite every line in ${rec.name}’s voice now - followed in the generator and saved there as a new scenario; this one stays as it is`;
+}
+
+// (phase V38, block D4; V38.1) The lines stored first, then the rewrite starts on the server (POST
+// /api/scriptgen/from-scenario: a draft of them and the job, at once) and the generator opens on that draft, following it.
 async function _inVoice(a, btn) {
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
   if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to rewrite.', 'err'); return; }
@@ -766,7 +779,7 @@ async function _inVoice(a, btn) {
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     if (_hooks.openDraft) _hooks.openDraft(d.draft.id);
   } catch (e) {
-    say('Not opened: ' + e.message, 'err');
+    say('Not started: ' + e.message, 'err');
   } finally { btn.disabled = false; }
 }
 

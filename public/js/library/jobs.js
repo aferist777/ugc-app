@@ -78,9 +78,8 @@ export const EST = {
   topics: 45000,
   hooks: 20000,
   script: (scenes) => Math.max(40000, (scenes || 15) * 9000),
-  humanize: 40000,
   rewrite: 20000,
-  enrich: 30000,
+  voice: 40000,
   analyse: 45000,
   sample: (bytes) => Math.max(60000, Math.round((bytes / 1048576) * 500)),
 };
