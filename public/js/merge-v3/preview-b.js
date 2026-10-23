@@ -1756,9 +1756,22 @@ function _wireTransport() {
 
 export const isMounted = () => _on;
 
+// ANOTHER TIMELINE OPENED STARTS STILL, AT ITS START (phase V36, T1; the owner 2026-10-23: "при проигрывании одного хайлайта
+// я переключаюсь на другой и плейхед без остановки продолжает двигаться"): a project, a highlights fragment, the draft -
+// whichever one the store now holds, playing stops and the playhead goes to 0; nothing plays until Play is pressed.
+let _shownKey;
+function _toStart() {
+  pause();
+  if (_on) { seek(0); return; }
+  _at = 0; _at0 = 0;
+  setPlayhead(0);
+}
+
 export function initPreviewB() {
   // Not while a screenshot is being drawn: that has the frame's size and its own canvas in hand.
   Store.onChange(() => {
+    const k = Store.key();
+    if (k !== _shownKey) { _shownKey = k; _toStart(); }
     if (!_on || _shooting) return;
     // The captions' .ass follows every edit - built by the same builder the render uses.
     CapLayer.setTimeline(Store.timeline());

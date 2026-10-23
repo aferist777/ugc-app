@@ -1336,7 +1336,8 @@ function _build() {
   // re-cut, a lay by the server), which "N clips selected" still counted.
   let lost = false;
   const key = Store.key();
-  if (key !== _selKey) {
+  const opened = key !== _selKey;
+  if (opened) {
     _selKey = key;
     if (_sel.size || _selTrack) { _sel.clear(); _selTrack = ''; lost = true; }
   } else if (_sel.size || _selTrack) {
@@ -1398,6 +1399,9 @@ function _build() {
 
   inner.appendChild(_head());
   host.appendChild(inner);
+  // (phase V36, T1) Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
+  // the lanes are shown from there, not scrolled to where the last one was looked at.
+  if (opened) host.scrollLeft = 0;
 }
 
 // Take over the timeline panel - once, from main.js, when the store first has something to show.
