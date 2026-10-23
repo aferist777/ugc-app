@@ -30,7 +30,7 @@ const port = Number(process.argv[2]) || Number(process.env.PORT) || 3100;
 const base = `http://127.0.0.1:${port}`;
 
 // '/' opens Merge and '/character' lands on the Library's Characters shelf - both answered by redirects.
-const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d', '/lab/audio'];
+const PAGES = ['/', '/character', '/home', '/merge', '/library', '/admin', '/3d'];
 const MANNEQUIN = '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg';
 const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  // New Character's modules, moved out of the Character page's folder in phase H8
@@ -66,9 +66,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/studio3d/main.js', '/js/studio3d/viewport.js', '/js/studio3d/evaluate.js', '/js/studio3d/timeline.js', '/js/studio3d/assets.js', '/js/studio3d/catalog.js', '/css/studio3d.css',
                  '/vendor/three/build/three.module.js', '/vendor/three/addons/controls/TransformControls.js',
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes',
-                 // the audio lab and its server (phase V34.C-D)
-                 '/js/lab/audio.js', '/js/lab/audio-tree.js', '/js/lab/audio-play.js', '/js/lab/audio-cut.js', '/js/lab/audio-online.js', '/js/lab/audio-lanes.js',
-                 '/css/lab-audio.css', '/api/audio/catalog', '/api/audio/projects', '/api/audio/gens', '/api/audio/lib/tree', '/api/audio/lib/items'];
+                 // generate audio and sound on the shelves (phases V34.C-F)
+                 '/js/merge-v3/audchat.js', '/css/mv3-audio.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
+                 '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];
 // Where an address must land (phase H8): the app opens on Merge, the old Character page on the shelf.
 const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
@@ -129,6 +129,9 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  ['GET', '/js/merge-v3/animate.js'], ['GET', '/js/merge-v3/retry.js'],
                  // phase V34.E: the audio lane's own Suno generator - music is made in "generate audio" now
                  ['POST', '/api/audio/suno/generate'],
+                 // phase V34.F: the audio lab - its page, its modules and the routes only it read
+                 ['GET', '/lab/audio'], ['GET', '/js/lab/audio.js'], ['GET', '/css/lab-audio.css'], ['GET', '/api/audio/lanes'],
+                 ['GET', '/api/audio/projects'], ['GET', '/api/audio/lib/tree'], ['GET', '/api/audio/lib/items'], ['POST', '/api/audio/lib/fav'],
                  // phase 2: the per-clip audio extraction nothing read
                  ['POST', '/api/scen3/reel/audio'],
                  // phase V17: the picture-then-video recipe's start - Kling motion control's own way since

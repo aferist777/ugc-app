@@ -2,13 +2,11 @@
 
 // ════════════════════════════════════════════════════════════════════════════
 // GENERATE AUDIO (phase V34.C, the owner 2026-10-22) - the server of the "generate audio" constructor: Merge's view
-// "/ generate audio" (V34.E, js/merge-v3/audchat.js) and the lab page /lab/audio (V34.D) until it goes. The records and the journal are lib/audio-gens.js; the
+// "/ generate audio" (V34.E, js/merge-v3/audchat.js; the lab page /lab/audio of V34.D went in V34.F). The records and the journal are lib/audio-gens.js; the
 // engines' field names lib/audio-engines.js.
 //
 //   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
 //                                     the writer's rules are there
-//   GET    /api/audio/projects        the projects a mode's default follows (talking head -> simple; blank, highlights ->
-//                                     custom) and how long each one's video is
 //   POST   /api/audio/gen             { mode, ...the mode's fields, where, project? } -> { gen }   a press: the record and
 //                                     its Alerts row NOW, the asking behind the answer
 //   GET    /api/audio/gens?limit=&project=   the history, newest first - of one project when it is named (Merge's "Made
@@ -36,52 +34,6 @@ router.get('/audio/catalog', (_req, res) => {
     c.writerRules = fs.existsSync(path.join(__dirname, '..', 'lib', 'audio-writer-rules.js'));
     c.fake = require('../lib/fake-agg').on();
     res.json({ success: true, ...c });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// The projects of Merge, each with its kind and its video's length - the lab's "for the project" list.
-router.get('/audio/projects', (_req, res) => {
-  try {
-    const { timelines } = require('../lib/merge-store').read();
-    const HLS = require('../lib/highlights-store');
-    const PROJECTS = require('../lib/projects-store');
-    const kindOfProject = new Map(PROJECTS.entries().map((e) => [String(e.id), e.kind]));
-    const items = [];
-    for (const [key, t] of Object.entries(timelines || {})) {
-      if (!t) continue;
-      const hl = HLS.ofKey(key);
-      if (hl && hl.n > 0) continue;
-      let kind = 'blank';
-      if (t.draft) kind = 'draft';
-      else if (hl) kind = 'highlights';
-      else if (/^sv3_/.test(key) && kindOfProject.get(key.slice(4)) === 'scenarios') kind = 'talking head';
-      let end = 0;
-      for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) {
-        if (!tr || tr.kind !== 'video') continue;
-        for (const c of (tr.clips || [])) { const e = (+c.start || 0) + (+c.dur || 0); if (e > end) end = e; }
-      }
-      items.push({ key, title: t.title || 'Untitled', kind, seconds: Math.round(end * 10) / 10, updatedAt: t.updatedAt || t.createdAt || null });
-    }
-    items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-    res.json({ success: true, items: items.slice(0, 60) });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// A project's lanes for the lab's sketch of Merge's timeline: each lane's kind and name, its clips' place, length and name.
-// Read only - nothing is warmed or written (Merge's own GET /api/mv3/timeline starts the preview copies).
-router.get('/audio/lanes', (req, res) => {
-  try {
-    const key = String(req.query.key || '');
-    const { timelines } = require('../lib/merge-store').read();
-    const t = timelines && timelines[key];
-    if (!t) return res.status(404).json({ success: false, error: 'no such project' });
-    const tracks = (Array.isArray(t.tracks) ? t.tracks : []).filter(tr => tr && tr.kind).map(tr => ({
-      id: String(tr.id || ''), kind: String(tr.kind), name: String(tr.name || tr.kind), main: !!tr.main,
-      clips: (Array.isArray(tr.clips) ? tr.clips : []).slice(0, 400).map(c => ({
-        start: +c.start || 0, dur: +c.dur || 0, name: String(c.name || c.text || '').slice(0, 80),
-      })),
-    }));
-    res.json({ success: true, key, title: t.title || 'Untitled', tracks });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

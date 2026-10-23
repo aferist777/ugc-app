@@ -5,7 +5,9 @@
    made under it.
 
      left     the settings: the engine (Suno · kie.ai | ElevenLabs), the mode, the model, the length (the video's by a press),
-              the chips (V34.A's almanac, public/js/audio/almanac-data.js), the price of a press; the almanac at its foot
+              the chips (V34.A's almanac, public/js/audio/almanac-data.js) or, in Simple, one of the ten HIGHLIGHTS MOODS
+              (V34.F: two tracks into Music -> highlights -> that mood), the price of a press; the almanac at its foot (a press
+              on a note copies it)
      middle   the CONSTRUCTOR of the open mode and "generate"
      right    MADE HERE - the presses of THE OPEN PROJECT only (the owner's (р1); the draft's are the drafts' one list, as their
               chats' conversation is): its stage while it is made, its tracks or sounds when done - a press plays one, ★,
@@ -65,7 +67,7 @@ const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'dr
 
 const S = Object.assign({ engine: 'suno', mode: 'custom', model: 'V6', lastMode: { suno: 'simple', eleven: 'compose' }, f: {}, of: {} }, ls(KEY, {}));
 S.f = Object.assign({
-  simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [] },
+  simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [], preset: '', pSeconds: 120, presetN: {} },
   custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
   lyrics: { idea: '' },
   sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
@@ -119,6 +121,15 @@ function say(text, bad) {
   clearTimeout(_sayT);
   if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
 }
+
+// (phase V34.F, the owner's (ф3)) The highlights moods - V34.A's ten presets: the server's list (the catalog), the
+// almanac's own words for them when it is there.
+function _moods() {
+  const fromCat = (CAT && Array.isArray(CAT.moods)) ? CAT.moods : [];
+  const P = (ALM && Array.isArray(ALM.HIGHLIGHT_PRESETS)) ? ALM.HIGHLIGHT_PRESETS : [];
+  return fromCat.map(m => Object.assign({}, P.find(x => x.id === m.id) || {}, m));
+}
+const _preset = () => (S.mode === 'simple' && S.f.simple.preset ? _moods().find(m => m.id === S.f.simple.preset) || null : null);
 
 const _chipsGroups = () => {
   // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
@@ -178,27 +189,51 @@ function paintCol() {
     row('Model', el('div', 'au-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
   }
 
+  // (phase V34.F, the owner's (ф3)) A HIGHLIGHTS MOOD in place of the chips: one of the ten presets, written by its own rule,
+  // and the two tracks are filed into Music -> highlights -> that mood - what the highlights popup offers.
+  if (S.mode === 'simple' && _moods().length) {
+    const f = S.f.simple;
+    const sel = el('select');
+    const none = el('option', null, '— none: the chips and your words —');
+    none.value = '';
+    sel.appendChild(none);
+    for (const m of _moods()) {
+      const op = el('option', null, m.label);
+      op.value = m.id;
+      op.title = m.about || '';
+      sel.appendChild(op);
+    }
+    sel.value = _preset() ? f.preset : '';
+    sel.addEventListener('change', () => { f.preset = sel.value; save(); paintCol(); paintMake(); });
+    const p = _preset();
+    row('Highlights mood', sel, p ? 'into Music → highlights → ' + p.label : 'for the highlights popup: a mood\'s preset, filed into its folder');
+  }
+
   // The length: what a mode takes, empty - the model decides.
   const LEN = { simple: [0, 360, 'the video\'s length - the bed comes out a little longer'], custom: [10, 360, '10–360 s'],
     compose: [3, 600, '3 s – 10 min'], sfx: [0.5, 30, '0.5–30 s'] };
   if (LEN[S.mode]) {
-    const [lo, hi, note] = LEN[S.mode];
+    let [lo, hi, note] = LEN[S.mode];
     const f = S.f[S.mode];
+    // A mood's track is longer than a fragment: the highlight takes a window from its middle (V33.8) - its own length.
+    const mood = !!_preset();
+    const key = mood ? 'pSeconds' : 'seconds';
+    if (mood) { lo = 30; note = 'a highlight plays a window from its middle - 90-180 s leaves room'; if (f.pSeconds == null) f.pSeconds = 120; }
     sep('Length');
     const r = el('div', 'au-len');
     const n = el('input', 'au-in');
     n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
-    n.value = f.seconds ? String(f.seconds) : '';
+    n.value = f[key] ? String(f[key]) : '';
     n.placeholder = 'auto';
     n.addEventListener('change', () => {
       const v = +n.value || 0;
-      f.seconds = v <= 0 ? 0 : Math.max(lo || 1, Math.min(hi, v));
-      n.value = f.seconds ? String(f.seconds) : '';
+      f[key] = v <= 0 ? 0 : Math.max(lo || 1, Math.min(hi, v));
+      n.value = f[key] ? String(f[key]) : '';
       save(); paintPrice(); paintMakePrice();
     });
     r.append(n, el('span', 'au-len-auto', 's · empty - the model decides'));
     const vs = _videoSecs();
-    if (vs > 0 && S.mode !== 'sfx') {
+    if (vs > 0 && S.mode !== 'sfx' && !mood) {
       const by = el('button', 'au-link', 'by the video (' + secs(vs) + ')');
       by.type = 'button';
       by.addEventListener('click', () => { f.seconds = Math.max(lo || 1, Math.min(hi, Math.round(vs))); save(); paintCol(); paintMakePrice(); });
@@ -208,7 +243,7 @@ function paintCol() {
   }
 
   // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
-  if (['simple', 'custom', 'compose'].includes(S.mode)) {
+  if (['simple', 'custom', 'compose'].includes(S.mode) && !_preset()) {
     for (const g of _chipsGroups()) {
       sep(g.label);
       const wrap = el('div', 'mv3-chips');
@@ -234,12 +269,12 @@ function paintCol() {
   col.appendChild(cost);
   paintPrice();
 
-  // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press puts one into its field.
+  // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press copies one (V34.F).
   const foot = _ui.alm;
   foot.textContent = '';
   const alm = el('button', 'mv3-vc-almanac' + (_almSections().length ? '' : ' is-soon'), 'almanac');
   alm.type = 'button';
-  alm.title = _almSections().length ? 'Notes on styles and sounds - a press puts one into its field' : 'The almanac of music and sounds is being written - soon';
+  alm.title = _almSections().length ? 'Notes on styles and sounds - a press on a note copies it' : 'The almanac of music and sounds is being written - soon';
   alm.addEventListener('click', () => { if (_almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
   foot.appendChild(alm);
 }
@@ -407,11 +442,24 @@ function paintMake() {
   card.appendChild(h);
   const bot = el('div', 'au-bot');
   bot.appendChild(el('div', 'au-bot-ico', S.mode === 'sounds' || S.mode === 'sfx' ? '✦' : '♪'));
-  bot.appendChild(el('div', 'au-bot-tx', MODE_HELP[S.mode] || ''));
+  bot.appendChild(el('div', 'au-bot-tx', _preset()
+    ? 'Background music for highlights in one mood: its preset goes to Suno as it is, and Suno makes TWO tracks. They go to Music → highlights → ' + _preset().label + ', and the highlights popup offers them. Each press turns one colour of the mood, so the next tracks differ.'
+    : (MODE_HELP[S.mode] || '')));
   card.appendChild(bot);
   const f = S.f[S.mode];
 
-  if (S.mode === 'simple') {
+  const mood = _preset();
+  if (mood) {
+    // The preset says it all: what it is for, the style Suno is given (the rules add the bed's excludes and knobs).
+    const n = (f.presetN || {})[mood.id] || 0;
+    const box = el('div', 'au-preset');
+    box.appendChild(el('b', null, mood.label + (mood.title ? ' · ' + mood.title : '')));
+    if (mood.about) box.appendChild(el('div', 'au-muted', mood.about));
+    if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
+    box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
+      ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
+    card.appendChild(_field('The mood', box));
+  } else if (S.mode === 'simple') {
     const picked = _pickedLabels();
     const row = el('div', 'au-picked');
     if (picked.length) for (const p of picked) row.appendChild(el('span', 'au-chip on', p));
@@ -621,7 +669,13 @@ function _pickVideo(anchor, done) {
 function _body() {
   const f = S.f[S.mode];
   const b = { mode: S.mode, model: S.model };
-  if (S.mode === 'simple') {
+  if (S.mode === 'simple' && _preset()) {
+    // (V34.F) A highlights mood: its preset and which press of it this is; the chips and the words stay out.
+    b.preset = f.preset;
+    b.n = (f.presetN || {})[f.preset] || 0;
+    b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);
+    b.chips = {}; b.words = ''; b.projectKind = 'highlights';
+  } else if (S.mode === 'simple') {
     const groups = _chipsGroups();
     b.chips = groups.length && groups[0].key ? { genre: (f.picked || {}).genre || [], mood: (f.picked || {}).mood || [], sound: (f.picked || {}).sound || [] } : (f.flat || []);
     b.words = f.words; b.seconds = f.seconds || 0; b.writer = f.writer !== false;
@@ -652,7 +706,15 @@ async function generate(btn) {
   const err = btn.closest('.au-card').querySelector('.au-err');
   err.textContent = '';
   try {
-    const d = await post('/api/audio/gen', _body());
+    const body = _body();
+    const d = await post('/api/audio/gen', body);
+    if (body.preset) {
+      const f = S.f.simple;
+      f.presetN = f.presetN || {};
+      f.presetN[body.preset] = (f.presetN[body.preset] || 0) + 1;
+      save();
+      paintMake();
+    }
     GENS = [d.gen].concat(GENS.filter(g => g.id !== d.gen.id));
     paintMade();
     say(d.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can go on working, the app files it when it comes.');
@@ -705,7 +767,7 @@ function _genCard(g) {
   card.appendChild(h);
   if (g.mode === 'simple' && g.written && g.written.style) {
     const w = el('div', 'au-said');
-    w.appendChild(el('b', null, (g.written.by === 'as picked' ? 'Sent as picked' : 'The writer wrote') + ': '));
+    w.appendChild(el('b', null, (g.written.by === 'as picked' ? 'Sent as picked' : g.written.by === 'preset' ? 'The mood\'s preset' : 'The writer wrote') + ': '));
     w.appendChild(document.createTextNode(g.written.title + ' — ' + g.written.style));
     if (g.fell) w.appendChild(el('div', 'au-muted', g.fell));
     card.appendChild(w);
@@ -873,7 +935,9 @@ async function _poll() {
     await _index();
     window.dispatchEvent(new Event('mv3:lib-reload'));
     const done = GENS.find(g => before.get(g.id) === 'pending' && g.state === 'done');
-    if (done) say((done.kind === 'lyrics' ? 'The lyrics are here.' : 'Done - ' + (done.kind === 'sound' ? 'in SFX → My sounds → Generated.' : 'in AUDIO → Music.')));
+    const moodOf = (g) => (g.req && g.req.preset ? (_moods().find(m => m.id === g.req.preset) || { label: g.req.preset }).label : '');
+    if (done) say((done.kind === 'lyrics' ? 'The lyrics are here.' : 'Done - ' + (done.kind === 'sound' ? 'in SFX → My sounds → Generated.'
+      : moodOf(done) ? 'in Music → highlights → ' + moodOf(done) + '.' : 'in AUDIO → Music.')));
   }
   paintMade();
   if (!GENS.some(g => g.state === 'pending')) _unfollow();
@@ -885,48 +949,29 @@ function _follow() {
 function _unfollow() { clearInterval(_timer); _timer = 0; }
 
 // ── the almanac (V34.A: public/js/audio/almanac-data.js) ────────────────────
-// Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right; a
-// press puts a note's `text` into the field it is for (`to` - the first one the open mode has; else the mode of the
-// first is opened) and applies its `set` and `seconds` to the mode's controls. An advice note (`to` empty) is read.
-const FIELD_AT = {
-  words: ['simple', 'words'], style: ['custom', 'style'], negative: ['custom', 'negative'], lyrics: ['custom', 'lyrics'],
-  idea: ['lyrics', 'idea'], sound: ['sounds', 'prompt'], sfx: ['sfx', 'prompt'], music: ['compose', 'prompt'],
-};
-const SET_AT = {
-  style_weight: ['custom', 'styleWeight'], weirdness_constraint: ['custom', 'weirdness'], variety: ['custom', 'variety'],
-  vocal_gender: ['custom', 'vocal'], sound_loop: ['sounds', 'loop'], sound_tempo: ['sounds', 'tempo'], sound_key: ['sounds', 'key'],
-  prompt_influence: ['sfx', 'influence'], loop: ['sfx', 'loop'],
-};
+// Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right.
+// (phase V34.F, the owner 2026-10-23, (т6)-(т9), (у5)) A press on a note COPIES its text - "copied" on the note - and is
+// pasted by the person where it is wanted: nothing is written into a field, no knob is set. No sources under the notes. A
+// press anywhere outside the window closes it, as Escape and its cross do; it opens again where it was left - the same
+// section, category and scroll (kept in the browser, `mv3_audio_alm_v1`).
+const KEY_ALM = 'mv3_audio_alm_v1';
 function _almSections() {
   return (ALM && Array.isArray(ALM.SECTIONS)) ? ALM.SECTIONS.filter(s => s && s.label && Array.isArray(s.notes)) : [];
 }
 const _fieldLabel = (f) => (ALM && ALM.FIELDS && ALM.FIELDS[f] && ALM.FIELDS[f].label) || f;
-function _applyNote(n) {
-  const to = Array.isArray(n.to) ? n.to.filter(f => FIELD_AT[f]) : [];
-  if (!to.length) {
-    // Advice is read - a press copies it, as the video chat's almanac does.
-    try { navigator.clipboard.writeText(String(n.text || '')); } catch (e) { /* not allowed */ }
-    return { said: 'Advice - copied.' };
-  }
-  const here = to.find(f => FIELD_AT[f][0] === S.mode) || to[0];
-  const [mode, key] = FIELD_AT[here];
-  const switched = mode !== S.mode;
-  const f = S.f[mode];
-  const spec = (ALM.FIELDS && ALM.FIELDS[here]) || {};
-  const cur = String(f[key] || '').replace(/\s+$/, '');
-  const next = cur ? cur + (spec.join || ', ') + n.text : String(n.text || '');
-  // Over the field's limit it is not put in - said (V34.A: "за max не вставлять, а сказать").
-  if (spec.max && next.length > spec.max) return { bad: true, said: _fieldLabel(here) + ' is full: ' + cur.length + ' of ' + spec.max + ' characters - make room first.' };
-  f[key] = next;
-  if (mode === 'custom' && here === 'lyrics') f.instrumental = false;
-  for (const [k, v] of Object.entries(n.set || {})) {
-    const at = SET_AT[k];
-    if (at && at[0] === mode) S.f[mode][at[1]] = v;
-  }
-  if (+n.seconds > 0 && (mode === 'sfx' || mode === 'compose')) f.seconds = +n.seconds;
-  save();
-  if (switched) setMode(mode); else { paintCol(); paintMake(); }
-  return { said: '"' + n.title + '" is in ' + _fieldLabel(here) + (switched ? ' - the mode ' + MODE_NAME(mode) + ' is open' : '') + '.' };
+async function _copy(text) {
+  try { await navigator.clipboard.writeText(String(text || '')); return true; } catch (e) { /* not allowed */ }
+  // Without the clipboard API: a hidden field, selected and copied.
+  try {
+    const t = el('textarea');
+    t.value = String(text || '');
+    t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t);
+    t.select();
+    const ok = document.execCommand('copy');
+    t.remove();
+    return ok;
+  } catch (e) { return false; }
 }
 let _almWin = null;
 function openAlmanac(anchor) {
@@ -935,7 +980,7 @@ function openAlmanac(anchor) {
   const win = el('div', 'hp au-alm');
   const head = el('div', 'hp-head');
   head.appendChild(el('b', null, 'Almanac'));
-  head.appendChild(el('span', 'hp-sub', 'music and sounds · a press puts a note into its field' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
+  head.appendChild(el('span', 'hp-sub', 'music and sounds · a press copies a note - paste it where you want it' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
   const x = el('button', 'hp-x', '✕');
   x.type = 'button';
   head.appendChild(x);
@@ -945,7 +990,7 @@ function openAlmanac(anchor) {
   const main = el('div', 'au-alm-main');
   body.append(side, main);
   win.appendChild(body);
-  // Beside the settings column: the constructor stays in sight, so the note is seen landing in its field.
+  // Beside the settings column: the constructor stays in sight, to paste into.
   const r = anchor.getBoundingClientRect();
   const w = Math.max(520, Math.min(820, window.innerWidth - r.right - 30));
   win.style.left = Math.round(Math.max(8, Math.min(r.right + 10, window.innerWidth - w - 16))) + 'px';
@@ -953,13 +998,29 @@ function openAlmanac(anchor) {
   win.style.width = w + 'px';
   win.style.height = 'calc(100vh - 120px)';
   document.body.appendChild(win);
+
+  // Where it was left: the section, its category and how far it was scrolled.
+  const at = ls(KEY_ALM, {}) || {};
+  const soundy = S.mode === 'sounds' || S.mode === 'sfx';
+  let open = secs0.find(s => s.id && s.id === at.sec) || secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
+  let cat = open && at.sec === open.id && (open.cats || []).some(c => c.id === at.cat) ? at.cat : '';
+  const remember = () => lsSet(KEY_ALM, { sec: open ? open.id : '', cat, scroll: Math.round(main.scrollTop) });
+
+  const away = (e) => { if (!win.contains(e.target) && !anchor.contains(e.target)) close(); };
   const layer = Layers.open(win, { modal: false, name: 'the audio almanac', onEsc: () => close() });
-  const close = () => { win.remove(); Layers.close(layer); _almWin = null; };
+  const close = () => {
+    remember();
+    document.removeEventListener('mousedown', away, true);
+    win.remove();
+    Layers.close(layer);
+    _almWin = null;
+  };
   _almWin = { close };
   x.addEventListener('click', close);
-  const soundy = S.mode === 'sounds' || S.mode === 'sfx';
-  let open = secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
-  let cat = '';
+  setTimeout(() => { if (_almWin) document.addEventListener('mousedown', away, true); }, 0);
+  let _st = 0;
+  main.addEventListener('scroll', () => { clearTimeout(_st); _st = setTimeout(remember, 250); });
+
   const paintSide = () => {
     side.textContent = '';
     for (const [g, label] of [['music', 'Music'], ['sound', 'Sounds']]) {
@@ -972,7 +1033,7 @@ function openAlmanac(anchor) {
         b.appendChild(el('span', 'nm', s.label));
         b.appendChild(el('small', null, String(s.notes.length)));
         b.title = s.about || '';
-        b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); });
+        b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
         side.appendChild(b);
         if (s === open && (s.cats || []).length > 1) {
           for (const c of s.cats) {
@@ -980,7 +1041,7 @@ function openAlmanac(anchor) {
             cb.type = 'button';
             cb.appendChild(el('span', 'nm', c.label));
             cb.appendChild(el('small', null, String(s.notes.filter(n => n.cat === c.id).length)));
-            cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); });
+            cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
             side.appendChild(cb);
           }
         }
@@ -998,35 +1059,30 @@ function openAlmanac(anchor) {
       h.appendChild(el('span', null, n.title));
       h.appendChild(el('span', 'sp'));
       const to = (n.to || []).map(_fieldLabel);
-      h.appendChild(el('span', 'au-muted', to.length ? '→ ' + to.join(', ') : 'advice'));
+      h.appendChild(el('span', 'au-muted', to.length ? 'for ' + to.join(', ') : 'advice'));
+      const done = el('span', 'au-copied', 'copied');
+      h.appendChild(done);
       b.appendChild(h);
       b.appendChild(el('div', 'au-alm-text', n.text));
       if (n.why) b.appendChild(el('div', 'au-said', n.why));
+      // What the note suggests for the knobs and the length - to set by hand; nothing is set by the press.
       const extra = [];
       if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
       if (n.seconds) extra.push(n.seconds + ' s');
-      if (extra.length) b.appendChild(el('div', 'au-muted au-alm-set', 'sets ' + extra.join(' · ')));
-      const srcs = (n.src || []).map(id => ALM.SOURCES && ALM.SOURCES[id]).filter(Boolean);
-      if (srcs.length) {
-        const sr = el('div', 'au-alm-src');
-        for (const s of srcs.slice(0, 4)) {
-          const a = el('a', null, s.name);
-          a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
-          a.addEventListener('click', (e) => e.stopPropagation());
-          sr.appendChild(a);
-        }
-        b.appendChild(sr);
-      }
-      b.addEventListener('click', () => {
-        const res = _applyNote(n);
-        if (!res.bad) { b.classList.add('is-put'); setTimeout(() => b.classList.remove('is-put'), 700); }
-        say(res.said, !!res.bad);
+      if (extra.length) b.appendChild(el('div', 'au-muted au-alm-set', 'try ' + extra.join(' · ')));
+      b.addEventListener('click', async () => {
+        const ok = await _copy(n.text);
+        if (!ok) { say('Not copied - the clipboard refused it.', true); return; }
+        b.classList.add('is-put');
+        setTimeout(() => b.classList.remove('is-put'), 1200);
       });
       main.appendChild(b);
     }
   };
   paintSide();
   paintNotes();
+  // The scroll it was left at - once the notes are there.
+  if (open && at.sec === open.id && (at.cat || '') === cat && +at.scroll > 0) main.scrollTop = +at.scroll;
 }
 
 // ── the view ────────────────────────────────────────────────────────────────

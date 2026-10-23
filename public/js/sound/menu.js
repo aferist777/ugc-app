@@ -6,6 +6,9 @@
      Cut…        a piece as a new sound in My sounds (js/sound/cut-window.js)          every sound, every track
      Rename      its name (PATCH /api/library/item/:kind/:id)                          own sounds, tracks
      Move to     another category of My sounds, or Uncategorized                        own sounds
+     highlights  a track into Music -> highlights (its root), out of it, or back into
+                 the mood its preset made it for (V34.F: a mood folder takes nothing
+                 else - routes/music.js, lib/music-store.js `place`)                   tracks
      About       where it came from: its author, licence and page, what it was asked,
                  the sound a piece was cut from, its tags                               every one
      Delete      the page's own delete - it asks with the projects that use it          own sounds, tracks
@@ -90,6 +93,26 @@ export async function soundMenu(it, ev, opts) {
       });
       if (done) { await o.changed(); o.status('Renamed.'); }
     });
+  }
+  // (phase V34.F, the owner's (ф3)) A track and the highlights folder: its root takes any track, a mood only its own.
+  if (it.kind === 'music') {
+    let pl = null;
+    try { pl = await _api('/api/audio/music/' + encodeURIComponent(it.id) + '/place'); } catch (e) { pl = null; }
+    if (pl) {
+      const moodLabel = (id) => ((pl.moods || []).find(m => m.id === id) || { label: id }).label;
+      const put = (to, said) => async () => {
+        try {
+          await _api('/api/audio/music/' + encodeURIComponent(it.id) + '/place',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(to) });
+          await o.changed();
+          o.status(said);
+        } catch (e) { o.status(e.message, true); }
+      };
+      if (!pl.folder) item('Into highlights', 'the highlights popup offers it', put({ folder: 'highlights' }, '"' + it.name + '" is in Music → highlights.'));
+      if (pl.folder && pl.mood) item('Into highlights itself', 'out of the mood ' + moodLabel(pl.mood), put({ folder: 'highlights' }, '"' + it.name + '" is in Music → highlights.'));
+      if (pl.folder && !pl.mood && pl.moodMade) item('Back into ' + moodLabel(pl.moodMade), 'the mood its preset made it for', put({ folder: 'highlights', mood: pl.moodMade }, '"' + it.name + '" is in highlights → ' + moodLabel(pl.moodMade) + '.'));
+      if (pl.folder) item('Out of highlights', 'into Music itself - the popup stops offering it', put({ folder: '' }, '"' + it.name + '" is out of highlights.'));
+    }
   }
   if (own) {
     const cats = await myCats();

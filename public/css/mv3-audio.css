@@ -70,6 +70,11 @@
 .au-go[disabled]{opacity:.5; cursor:default; filter:none}
 .au-go-row .au-muted{font-size:11px}
 .au-picked{display:flex; flex-wrap:wrap; gap:4px; font-size:11.5px; color:var(--muted)}
+/* (V34.F) a highlights mood in Simple: its preset, read only */
+.au-preset{display:flex; flex-direction:column; gap:4px; padding:8px 10px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface); font-size:12px}
+.au-preset b{font-size:12.5px; text-transform:capitalize}
+.au-preset .au-muted{font-size:11px; line-height:1.4}
+.au-preset-style{font-size:11.5px; line-height:1.45; color:var(--ink); opacity:.85}
 
 /* the attachment of Video to Music, and its picker */
 .au-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
@@ -142,6 +147,6 @@
 .au-alm-note.is-put{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 14%, var(--bg))}
 .au-alm-text{font-size:12px; line-height:1.45; color:var(--ink)}
 .au-alm-set{font-size:10.5px}
-.au-alm-src{display:flex; flex-wrap:wrap; gap:8px; font-size:10.5px}
-.au-alm-src a{color:var(--primary); text-decoration:none}
-.au-alm-src a:hover{text-decoration:underline}
+/* (V34.F) a press copies the note: "copied" shows on it for a moment */
+.au-copied{display:none; font:700 9px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--gold); padding:3px 6px; border:1px solid var(--gold); border-radius:var(--pill)}
+.au-alm-note.is-put .au-copied{display:inline-block}

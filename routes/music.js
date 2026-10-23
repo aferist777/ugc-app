@@ -4,6 +4,9 @@
 // brought in from this computer).
 //
 //   POST   /api/audio/music/upload           multipart 'music' -> { item }   a track from this computer (phase V28.4)
+//   GET    /api/audio/music/highlights       Music -> highlights: { moods: [{ id, label, about, tracks }], root } (V34.F)
+//   GET    /api/audio/music/:id/place        where a track lies: { folder, mood, moodMade, moods }
+//   POST   /api/audio/music/:id/place        { folder: '' | 'highlights', mood? } - a mood only for what its preset made
 //
 // The list itself is lib/music-store.js (data/suno-lib.json): read, starred, renamed and deleted (with its file) as
 // the Library's Media shelf's kind 'music' (routes/library.js) - Audio -> Music in the media tree, in the Library and
@@ -88,6 +91,25 @@ router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res
 
 router.use('/audio/music/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+});
+
+// ── Music -> highlights and its moods (phase V34.F, the owner's (ф3); the rule is lib/music-store.js `place`) ──────────
+// The list the highlights popup offers (V33.8): every track in highlights - its root and its ten mood folders.
+router.get('/audio/music/highlights', (_req, res) => {
+  try { res.json({ success: true, ...MUSIC.highlights() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+// Where a track lies: { folder: '' | 'highlights', mood, moodMade }.
+router.get('/audio/music/:id/place', (req, res) => {
+  const rec = MUSIC.read().find(x => x && String(x.id) === String(req.params.id || ''));
+  if (!rec) return res.status(404).json({ success: false, error: 'no such track' });
+  res.json({ success: true, ...MUSIC.placeOf(rec), moods: MUSIC.moods() });
+});
+// Put it somewhere: { folder: '' | 'highlights', mood? } - a mood folder only for the track its preset made (409 otherwise).
+router.post('/audio/music/:id/place', (req, res) => {
+  const b = req.body || {};
+  try { res.json({ success: true, ...MUSIC.place(req.params.id, { folder: b.folder, mood: b.mood }) }); }
+  catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 module.exports = router;

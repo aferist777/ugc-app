@@ -116,9 +116,8 @@ app.use('/sfx', express.static(require('./lib/media').SFX_DIR, {
 // Each tab is its own standalone HTML page at its own URL. Relative asset URLs stay correct via
 // <base href="/"> in each page. merge-v3.html keeps the name of the rebuild that replaced the older
 // page: renaming it would churn every import path under public/js/ for no gain.
-// (phase V34.D) /lab/audio - the audio lab, a test page until its chat moves into Merge (V34.E); opened by its address.
-const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html',
-  '/lab/audio': 'lab/audio.html' };
+// (The audio lab /lab/audio of V34.D went in V34.F: its chat is Merge's "generate audio", its tree the media tree's.)
+const PAGE_FILES = { '/home': 'home.html', '/merge': 'merge-v3.html', '/library': 'library.html', '/admin': 'admin.html', '/3d': 'studio3d.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -150,7 +149,7 @@ app.use('/api', require('./routes/links'));
 app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
 app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
-app.use('/api', require('./routes/audio-lib'));   // AUDIO's tree in the lab: Music, SFX (Favorites, Built-in, My sounds), Openverse
+app.use('/api', require('./routes/audio-lib'));   // a piece of a sound, and the online CC0 search (Openverse)
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
