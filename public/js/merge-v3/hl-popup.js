@@ -15,6 +15,7 @@
 
 import * as Layers from '../layers.js';
 import { stylePicker, presetName } from './hl-style.js';
+import { musicPicker } from './hl-music.js';
 
 const LS_ASK = 'mv3_hl_ask_v1';           // the length and the count chosen last
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -39,6 +40,7 @@ export function closePopup() {
   const w = _win;
   _win = null;
   try { w.picker.stop(); } catch (e) { /* gone */ }
+  try { if (w.music) w.music.stop(); } catch (e) { /* gone */ }
   w.ov.remove();
   Layers.close(w.layer);
 }
@@ -69,6 +71,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     title: ask.title != null ? ask.title !== false : remembered.title !== false,
     kind: kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto'),
     style: '', price: null, busy: false, said: '', err: false,
+    // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
+    music: [],
   };
 
   const ov = _el('div', 'mv3-x-ov mv3-hlp-ov');
@@ -157,6 +161,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   body.appendChild(row);
   body.appendChild(_el('p', 'mv3-x-note', 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.'));
 
+  // ── (phase V33.8, H3) The background music - Music → highlights, by mood ──
+  body.appendChild(_el('div', 'mv3-x-hdr', 'music'));
+  const musicBox = _el('div', 'mv3-hlp-music');
+  body.appendChild(musicBox);
+  const music = musicPicker(musicBox, { onChange: (ids) => { st.music = ids; } });
+
   // ── The caption style, a must ──
   const capHdr = _el('div', 'mv3-x-hdr', 'captions - choose a style');
   body.appendChild(capHdr);
@@ -192,7 +202,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     takeFile(f);
   });
   const layer = Layers.open(ov, { name: 'highlights', onEsc: closePopup });
-  _win = { ov, layer, picker };
+  _win = { ov, layer, picker, music };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
   function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, title: st.title, kind: st.kind })); } catch (e) { /* private */ } }
@@ -311,7 +321,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     }
     st.busy = true;
     say('');
-    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind };
+    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind,
+      music: st.music.slice() };
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
     // A video kept as a tile: the project downloads it by its link (after block 8).

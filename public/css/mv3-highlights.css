@@ -203,3 +203,35 @@
 /* (phase V33.3) The popup's "title on top" box, beside the length and the count */
 .mv3-hlp-tick{cursor:pointer}
 .mv3-hlp-tick input{margin:0; accent-color:var(--primary); cursor:pointer}
+
+/* ── (phase V33.8, H3) The popup's background music: a button and the list under it, by mood ── */
+.mv3-hlm{display:flex; flex-direction:column; gap:5px}
+.mv3-hlm-btn{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:6px 9px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--muted);
+  font:600 10.5px/1.3 var(--font); text-align:left;
+}
+.mv3-hlm-btn:hover{border-color:var(--muted); color:var(--ink)}
+.mv3-hlm-btn.is-on{color:var(--ink); border-color:var(--primary)}
+.mv3-hlm-arrow{flex:0 0 auto; color:var(--muted)}
+.mv3-hlm-list{border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface); max-height:min(36vh, 300px); overflow-y:auto; padding:4px 0}
+.mv3-hlm-list[hidden]{display:none}
+.mv3-hlm-head{display:flex; align-items:center; justify-content:space-between; padding:2px 9px 5px; font:500 10px/1.3 var(--font); color:var(--muted);
+  border-bottom:1px solid var(--border); margin-bottom:3px}
+.mv3-hlm-clear{border:0; background:none; color:var(--accent); font:600 10px/1.3 var(--font); cursor:pointer; padding:0}
+.mv3-hlm-clear[disabled]{color:var(--muted); opacity:.5; cursor:default}
+.mv3-hlm-group{padding:2px 0 4px}
+.mv3-hlm-gh{padding:4px 9px 2px; font:700 9.5px/1.3 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--gold)}
+.mv3-hlm-n{color:var(--muted); font-weight:500}
+.mv3-hlm-none{padding:1px 9px 2px 31px; font:400 9.5px/1.3 var(--font); color:var(--muted); opacity:.7}
+.mv3-hlm-row{display:flex; align-items:center; gap:7px; padding:3px 9px; cursor:pointer}
+.mv3-hlm-row:hover{background:var(--surface-2)}
+.mv3-hlm-row.is-on{background:var(--primary-soft)}
+.mv3-hlm-row.is-playing .mv3-hlm-name{color:var(--accent)}
+.mv3-hlm-play{flex:0 0 auto; width:20px; height:20px; border:1px solid var(--border); border-radius:50%; background:var(--surface-2);
+  color:var(--ink); font:600 8px/1 var(--font); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0}
+.mv3-hlm-play:hover{border-color:var(--accent); color:var(--accent)}
+.mv3-hlm-name{flex:1 1 auto; min-width:0; font:500 10.5px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mv3-hlm-len{flex:0 0 auto; font:500 9.5px/1.3 var(--font); color:var(--muted)}
+.mv3-hlm-tick{flex:0 0 auto; margin:0; accent-color:var(--primary); cursor:pointer}
+.mv3-hlm-empty{padding:8px 10px; font:400 10px/1.45 var(--font); color:var(--muted)}

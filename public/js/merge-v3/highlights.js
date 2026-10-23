@@ -359,7 +359,10 @@ function _paintTop() {
   if (v && v.seconds) what.appendChild(_el('span', 'mv3-hl-meta', _clock(v.seconds)));
   // (phase V33.6) And the kind of video, when one other than auto was chosen.
   const kindSaid = r.ask && r.ask.kind && r.ask.kind !== 'auto' && r.kinds && r.kinds[r.ask.kind] ? ' · ' + r.kinds[r.ask.kind].label : '';
-  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (r.lengths && r.lengths[r.ask.length] ? r.lengths[r.ask.length].label : r.ask.length) + ' · ' + r.ask.count + ' asked' + kindSaid));
+  // (phase V33.8, H3) And the background music asked for.
+  const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
+  const musicSaid = nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '';
+  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (r.lengths && r.lengths[r.ask.length] ? r.lengths[r.ask.length].label : r.ask.length) + ' · ' + r.ask.count + ' asked' + kindSaid + musicSaid));
   top.appendChild(what);
 
   const state = _el('div', 'mv3-hl-state');
@@ -781,6 +784,15 @@ function _paintCard() {
       tl.appendChild(add);
     }
     card.appendChild(tl);
+  }
+  // (phase V33.8, H3) Its background music - the track dealt to it, on "audio 2"; or why it was made without.
+  if (f.music) {
+    const ml = _el('div', 'mv3-hl-cap');
+    ml.appendChild(document.createTextNode('music: '));
+    ml.appendChild(_el('b', null, f.music.title || 'a track'));
+    if (f.state === 'ready' && f.musicNote) ml.appendChild(_el('span', 'mv3-hl-cap-ed', ' · ' + f.musicNote));
+    ml.title = 'On the "audio 2" lane, quiet, from the part of the track where it has opened up - move, trim or delete it on the timeline';
+    card.appendChild(ml);
   }
   // (phase V33.4) Its render: the file, how long, when; "▶ play" opens it in the result window (as the queue's "open").
   if (f.state === 'ready') card.appendChild(_renderLine(f));
