@@ -27,12 +27,17 @@
      TWO, STANDING APART - two faces, or two people in a shot with no face, both there for half the shot or more, too far
      apart for one window - are two bands BY THEMSELVES in 'face' too (`autoBands`, on unless said off), one over the other;
      close enough for one window, the largest is followed, as before. A person's band shows the person from the top down.
+   - (phase V33.8, the owner 2026-10-23, (ф1): "давай не весь кадр, а как бы увелично немного, типа до 3:2") A documentary's
+     shot with no face is not the whole frame but a WIDER WINDOW from its middle - 3:2 of a 16:9 film - over the same blur:
+     `wide` on the record, the window's shape (w/h); none - the whole frame, as before. wholeW() says how much of the
+     width it shows; the preview and the render both draw by it.
 
    THE RECORD on a clip - `frame`, times in the FILE's seconds (a trim, a split, a copy of the clip keep it right):
      { v, mode: 'face' | 'center' | 'whole' | 'bands', shift (-1..1: the window moved by up to half the room
        left over, either way), src: { w, h }, shots: [{ t0, t1, kind: 'face' | 'whole' | 'bands', by: 'person' (V33.6,
        when it follows people, not faces), keys: [[t, x]], b1: [[t, x, y]], b2: [[t, x, y]] }], band (the bands' height, a
-       share of the film's), found (a share of frames with a face) }
+       share of the film's), found (a share of frames with a face), wide (V33.8: a 'whole' shot shows this shape, w/h,
+       from the middle - absent: the whole frame) }
      x and y are the window's MIDDLE as fractions of the film's width and height.
    'center' and 'whole' need no faces: the middle (moved by `shift`), or the whole frame over its blur.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -63,6 +68,17 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 export function windowW(srcW, srcH, aspect) {
   if (!(srcW > 0) || !(srcH > 0)) return 1;
   return Math.min(1, (srcH * (aspect > 0 ? aspect : 9 / 16)) / srcW);
+}
+
+/**
+ * (phase V33.8, (ф1)) What a 'whole' shot shows of the film's width, from its middle, the full height kept: 1 - the whole
+ * frame; less when the record has `wide` (a documentary's 3:2 of a 16:9 film is 0.84). The preview and the render both cut
+ * by it, so the two cannot differ.
+ */
+export function wholeW(frame, srcW, srcH) {
+  const a = +(frame && frame.wide) || 0;
+  if (!(a > 0) || !(srcW > 0) || !(srcH > 0)) return 1;
+  return Math.min(1, (srcH * a) / srcW);
 }
 
 // ── From the faces to a path ────────────────────────────────────────────────
@@ -181,14 +197,17 @@ function _apart(a, b, width) {
 /**
  * The record a clip keeps, worked out from a film's faces (lib/faces.js's record). `aspect` is the frame's shape (w/h,
  * 9/16), `mode` one of MODES, `shift` -1..1. `people` (V33.6): a shot with no face follows a whole person, where the record
- * counted them; `autoBands` (V33.6, on unless false): two standing apart are bands by themselves in 'face'. Pure: the same
+ * counted them; `autoBands` (V33.6, on unless false): two standing apart are bands by themselves in 'face'; `wide` (V33.8,
+ * w/h): a shot with no face shows a window of this shape from the middle over the blur, not the whole frame. Pure: the same
  * faces always give the same path.
  */
-export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true } = {}) {
+export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0 } = {}) {
   const md = MODES.includes(mode) ? mode : 'face';
   const f = faces || {};
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: VERSION, mode: md, shift: r3(clamp(+shift || 0, -1, 1)), src, shots: [] };
+  // (V33.8) Kept only where it shows less than the whole frame - a film no wider than the window shows itself whole.
+  if (+wide > 0 && md !== 'center' && wholeW({ wide }, src.w, src.h) < 0.999) rec.wide = r3(clamp(+wide, 0.5, 4));
   const fps = +f.fps || 5;
   const frames = Array.isArray(f.frames) ? f.frames : [];
   const persons = people && Array.isArray(f.people) ? f.people : null;
@@ -283,7 +302,7 @@ export const isFramed = (frame) => !!(frame && MODES.includes(frame.mode));
  * Where the window is at the FILE's second `t`, for a frame of shape `aspect` - film size `sw` x `sh` as drawn (the
  * preview's copy is smaller than the film; the record's fractions are the same). Returns
  *   { kind: 'face', x }                                  the window's middle, a share of the width (full height)
- *   { kind: 'whole' }                                    the whole frame over its blur
+ *   { kind: 'whole', w }                                 the middle `w` of the width (1 - the whole frame) over its blur
  *   { kind: 'bands', bw, bh, x1, y1, x2, y2 }            two bands, each window's size and middle
  */
 export function windowAt(frame, t, sw, sh, aspect) {
@@ -292,11 +311,12 @@ export function windowAt(frame, t, sw, sh, aspect) {
   const shift = clamp(+(frame && frame.shift) || 0, -1, 1) * room;
   const mid = (x) => clamp(x + shift, width / 2, 1 - width / 2);
   const mode = frame && frame.mode;
-  if (mode === 'whole') return { kind: 'whole' };
+  const whole = () => ({ kind: 'whole', w: wholeW(frame, sw, sh) });
+  if (mode === 'whole') return whole();
   if (mode !== 'face' && mode !== 'bands') return { kind: 'face', x: mid(0.5) };
   const s = _shotAt(frame, t);
   if (!s) return { kind: 'face', x: mid(0.5) };
-  if (s.kind === 'whole') return { kind: 'whole' };
+  if (s.kind === 'whole') return whole();
   if (s.kind === 'bands' && frame.band > 0) {
     const bh = clamp(+frame.band, 0.2, 1);
     const bw = Math.min(1, (bh * sh * 2 * (aspect > 0 ? aspect : 9 / 16)) / sw);
@@ -389,6 +409,7 @@ export function normalize(frame) {
     src: { w: Math.max(0, Math.round(+(frame.src && frame.src.w) || 0)), h: Math.max(0, Math.round(+(frame.src && frame.src.h) || 0)) }, shots: [] };
   if (+frame.band > 0) out.band = r3(clamp(+frame.band, 0.2, 1));
   if (Number.isFinite(+frame.found)) out.found = r2(clamp(+frame.found, 0, 1));
+  if (+frame.wide > 0) out.wide = r3(clamp(+frame.wide, 0.5, 4));
   for (const s of (Array.isArray(frame.shots) ? frame.shots : []).slice(0, 2000)) {
     if (!s || !Number.isFinite(+s.t0) || !Number.isFinite(+s.t1) || !(+s.t1 > +s.t0)) continue;
     const kind = ['face', 'whole', 'bands'].includes(s.kind) ? s.kind : 'face';

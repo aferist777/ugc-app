@@ -55,8 +55,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const lengths = (rec && rec.lengths) || { 'up30': { label: 'up to 30 s' }, '30-60': { label: '30-60 s' }, '60-90': { label: '60-90 s' } };
   const counts = (rec && rec.counts) || [3, 5, 10, 15, 20];
   // (phase V33.6, the owner's (х54)-(х57)) What kind of video - where the frame looks when there is no face, and what the agent is told.
-  const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, facts: { label: 'facts · commentary' } };
+  // (phase V33.8, (у6), (ф2)) auto, podcast · interview, documentary; a `facts` remembered from before is documentary.
+  const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, documentary: { label: 'documentary' } };
   const ask = rec && rec.ask ? rec.ask : {};
+  if (remembered.kind === 'facts') remembered.kind = 'documentary';
   const st = {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
     // (after block 8) What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
@@ -149,7 +151,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   kw.appendChild(kindSel);
   kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
     + 'podcast · interview - the faces; no face: the whole frame; the agent looks for complete thoughts and strong opinions\n'
-    + 'facts · commentary - the faces; no face: the whole frame (text, charts and screens stay whole); the agent looks for a fact with its hook';
+    + 'documentary - the faces; no face: a 3:2 window from the middle over its blur (text, charts and screens stay nearly whole); the agent looks for a fact with its hook';
   row.append(lw, cw, kw, tw);
   body.appendChild(_el('div', 'mv3-x-hdr', 'the fragments'));
   body.appendChild(row);

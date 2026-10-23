@@ -43,6 +43,8 @@ function view(rec, o) {
   // The video's poster - what a tile shows until its own first frame is made.
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
   const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label }])), poster: (src && src.thumbPath) || '' };
+  // (phase V33.8, (ф2)) The kind as it is read now: an old `facts` is documentary.
+  if (rec.ask) out.ask = { ...rec.ask, kind: HL.kindOf(rec) };
   if (o && o.caps) {
     // (phase V33.4) And each one's render: its place in the queue (`rq`) and its file, when it has one (`rendered`).
     const rv = RENDER.viewOf(rec);
