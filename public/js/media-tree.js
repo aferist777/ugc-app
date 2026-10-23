@@ -4,28 +4,38 @@
    gallery is on the left, this tree on the right:
 
      REFERENCES -> Files, Instagram (Posts, Reels), YouTube (Shorts, Videos), TikTok (Posts, Videos), Other  (phase TG)
-     VIDEO   -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
+     VIDEO   -> Generated (B-rolls -> categories, Talking heads -> projects), Hooks, Uploads -> categories
      IMAGES  -> its categories
-     AUDIO   -> Music, SFX -> ★ Favorites, Built-in (the program's set, read only), My sounds (categories)   (phase V34.E)
+     AUDIO   -> Music (-> highlights -> ten moods, V35), SFX -> ★ Favorites, Built-in (the program's set, read only),
+                My sounds (categories)   (phase V34.E)
 
-   It is read in one answer (GET /api/library/tree, routes/library.js _tree): every node { key, label, count, q, kind?,
-   cat?, locked?, empty?, uncat?, children? }. Pressing a node SELECTS it and the page shows everything under it
-   (`q` is what the shelf is asked: a group, or a kind and a category). A branch opens on a DOUBLE press of its row or a
-   press of its ▸ (the owner, second round), and what is open is remembered, so is the node selected - per page. The
-   three top nodes are an accordion: one open, the others folded - what is open inside them stays as it was.
+   It is read in one answer (GET /api/library/tree, routes/library.js _tree): every node { key, label, count, q?, kind?,
+   cat?, locked?, empty?, loose?, children? }.
+
+   FOLDERS (phase V35, the owner 2026-10-23, (т2), (у1)-(у3): "как будто папки в library"). A node is a folder, as in
+   Explorer: pressing it SELECTS it, and the page shows its folders first as FOLDER TILES (foldersEl), then what lies
+   directly in it - what has no category of its kind (`q` is what the shelf is asked for that; a node with no `q` holds
+   only folders: VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES). There is no "Uncategorized" node and no
+   "everything under it" any more. A folder tile pressed opens it - the tree opens to it; a tile let go on a folder tile
+   or on a word of the PATH over the gallery (crumbsEl - "AUDIO / SFX / My sounds", each word a press away) goes there
+   as on its row. A branch opens on a DOUBLE press of its row or a press of its ▸ (the owner, second round), and what is
+   open is remembered, so is the node selected - per page. The three top nodes are an accordion: one open, the others
+   folded - what is open inside them stays as it was.
 
    CATEGORIES, both ways the owner asked for: the chips' gestures - "+" on a kind's row makes one, a double press on
-   its name renames it, the ✕ on hover deletes it (the media moved to Uncategorized, or deleted with them - then the
-   projects using them are named) - and the same in a menu under the right button. The order is the server's: the
-   locked first, the rest alphabetical, the EMPTY ones pale and last (second round: no order by hand any more). A
-   REQUIRED category (lib/library-cats.js REQUIRED) - and Generated, Hooks, Uploads - carries a lock. A project of
-   Talking heads is not a category: nothing is made, renamed or deleted there.
+   its name renames it, the ✕ on hover deletes it (the media moved out of it into the kind itself, or deleted with them -
+   then the projects using them are named) - and the same in a menu under the right button (on a folder tile too). The
+   order is the server's: the locked first, the rest alphabetical, the EMPTY ones pale and last (second round: no order
+   by hand any more). A REQUIRED category (lib/library-cats.js REQUIRED) - and Generated, Hooks, Uploads - carries a
+   lock. A project of Talking heads is not a category: nothing is made, renamed or deleted there.
 
-   A TILE LET GO ON A NODE: on a category of its kind - filed under it; on Uncategorized, or on the kind itself - its
-   category taken off (on B-rolls or on Generated: a B-roll with none, Generated's Uncategorized - the owner); on another
-   kind of video (or one of its categories) - moved to that kind. A picture never becomes a clip, nor a clip a picture;
-   a talking head is its project's and goes nowhere. A tile says what it is with setMediaDrag(); the kind rides in a type
-   of its own, the only part of a drag a page can read before the drop.
+   A TILE LET GO ON A NODE: on a category of its kind - filed under it; on the kind itself - its category taken off (on
+   B-rolls or on Generated: a B-roll with none, lying in Generated - the owner); on another kind of video (or one of its
+   categories) - moved to that kind. A picture never becomes a clip, nor a clip a picture; a talking head is its
+   project's and goes nowhere. A TRACK (V35, the owner's (ф3)): on Music - out of highlights; on highlights - into its
+   root; on a mood - only the track that mood's preset made (lib/music-store.js `place`, V34.F; refused in words
+   otherwise). A tile says what it is with setMediaDrag(); the kind rides in a type of its own, the only part of a drag a
+   page can read before the drop.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -46,7 +56,10 @@ const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 /** A tile being dragged says what it is - for a tree's node to take it. `it` is a shelf item. */
 export function setMediaDrag(dt, it) {
   if (!dt || !it || !it.kind) return;
-  dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: (it.meta && it.meta.categoryId) || '' }));
+  const m = it.meta || {};
+  // (phase V35) A track says where it lies in Music: in highlights (`folder`), in a mood of it (`mood`).
+  dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: m.categoryId || '',
+    folder: m.folder || '', mood: m.mood || '' }));
   dt.setData(KIND_TYPE + it.kind, '1');
   if (it.kind === 'references') {
     const files = (it.meta && it.meta.items) || [];
@@ -65,17 +78,18 @@ function _dragKind(dt) {
 }
 
 // Where a node files what is let go on it: { kind, cat } ('' = no category), or null where nothing goes. Generated and
-// B-rolls are a B-roll with no category (Generated's Uncategorized); a kind is its own Uncategorized; Talking heads and
-// Music take nothing.
+// B-rolls are a B-roll with no category (lying in Generated); a kind takes it with no category; Talking heads takes
+// nothing; Music and its folders take a track (`folder`, `mood` - V35).
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
+  if (n.kind === 'music') return { kind: 'music', cat: '', folder: n.folder || '', mood: n.mood || '' };
   // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
   // its source's folder.
   if (n.kind === 'references') { const c = n.cat && n.cat !== UNCAT ? n.cat : ''; return { kind: 'references', cat: c, name: c ? (n.name || n.label) : '' }; }
   // (block 6) YOUTUBE is the Sources' - nothing is filed into it, nothing of it moves.
   // (phase V34.E) Built-in (kind `sfx`) is the program's: nothing is filed into it.
-  if (!n.kind || n.kind === 'heads' || n.kind === 'music' || n.kind === 'youtube' || n.kind === 'sfx') return null;
+  if (!n.kind || n.kind === 'heads' || n.kind === 'youtube' || n.kind === 'sfx') return null;
   const cat = n.cat && n.cat !== UNCAT ? n.cat : '';
   return { kind: n.kind, cat, name: cat ? (n.name || n.label) : '' };
 }
@@ -88,6 +102,8 @@ function _dropAction(n, from, refType) {
   if (!t || !from) return '';
   // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
   if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
+  // (phase V35) A track goes between Music, highlights and its moods - and nowhere else; nothing else goes there.
+  if (from === 'music' || t.kind === 'music') return from === t.kind ? 'place' : '';
   if (from === 'references') {
     if (t.kind === 'references') return 'ref';
     if (refType === 'video' && VIDEO.has(t.kind)) return 'out';
@@ -119,6 +135,7 @@ function _el(tag, cls, text) {
   return e;
 }
 
+const FOLDER_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2c.6 0 1.2.24 1.65.66L12.8 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11z"/></svg>';
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1zm-2 6V4.5a2 2 0 1 1 4 0V7H6z"/></svg>';
 
 /**
@@ -203,7 +220,8 @@ export function createTree(host, o) {
     // and the page is told, once it has had its first answer (it reads the gallery for the first one itself).
     const before = sel;
     if (!byKey.has(sel)) {
-      const kind = String(sel).split(':')[0];
+      // (phase V35) A remembered "Uncategorized" is gone too: what it held lies in its kind - a B-roll's in Generated.
+      const kind = sel === 'birols:' + UNCAT ? 'generated' : String(sel).split(':')[0];
       sel = byKey.has(kind) ? kind : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
       _lsSet(K_SEL, sel);
     }
@@ -272,14 +290,12 @@ export function createTree(host, o) {
     row.appendChild(tw);
 
     const name = _el('span', 'mt-name', n.label);
-    name.title = n.builtin ? n.label + ' - built into the app: read only'
-      : n.locked ? n.label + ' - required: it cannot be renamed or deleted'
-      : n.empty ? n.label + ' - empty' : n.label;
+    name.title = _tipOf(n);
     row.appendChild(name);
     if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
-      lock.title = n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed or deleted';
+      lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed or deleted');
       row.appendChild(lock);
     }
     // A kind that can have categories: "+" makes one.
@@ -313,27 +329,32 @@ export function createTree(host, o) {
     if (has) row.addEventListener('dblclick', (e) => { e.preventDefault(); toggle(n.key); });
     if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
+    _takesDrops(row, n);
+    return row;
+  }
 
-    // A tile let go here - or (phase V34.E) files from Explorer, on a node that takes them (the page says, `takesFiles`).
+  // A tile let go here - or (phase V34.E) files from Explorer, on a node that takes them (the page says, `takesFiles`).
+  // The same on a node's row, its folder tile and its word in the path (phase V35).
+  function _takesDrops(target, n) {
     const _files = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files')
       && typeof opt.takesFiles === 'function' && opt.takesFiles(n);
-    row.addEventListener('dragover', (e) => {
+    target.addEventListener('dragover', (e) => {
       if (_files(e)) {
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
-        row.classList.add('is-drop');
+        target.classList.add('is-drop');
         return;
       }
       if (!_dropAction(n, _dragKind(e.dataTransfer), _refType(e.dataTransfer))) return;
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
-      row.classList.add('is-drop');
+      target.classList.add('is-drop');
     });
-    row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
-    row.addEventListener('drop', (e) => {
-      row.classList.remove('is-drop');
+    target.addEventListener('dragleave', () => target.classList.remove('is-drop'));
+    target.addEventListener('drop', (e) => {
+      target.classList.remove('is-drop');
       if (_files(e)) {
         e.preventDefault();
         e.stopPropagation();
@@ -347,7 +368,70 @@ export function createTree(host, o) {
       try { it = JSON.parse(e.dataTransfer.getData(MEDIA_DRAG)); } catch (err) { return; }
       if (it) _take(n, it, _refType(e.dataTransfer));
     });
-    return row;
+  }
+
+  // ── Folders in the gallery (phase V35) ──
+  // A node opened from its folder tile or its word in the path: selected, its own branch opened too, as Explorer's tree
+  // follows the folder you went into.
+  function openNode(key) {
+    const n = byKey.get(key);
+    if (!n) return;
+    if (n.children && n.children.length && !open.has(key)) { _openOne(key); _lsSet(K_OPEN, [...open]); }
+    select(key, true, true);
+  }
+
+  // What a node's tooltip says: the server's own word (`tip`), else what it is.
+  const _tipOf = (n) => n.tip || (n.builtin ? n.label + ' - built into the app: read only'
+    : n.locked ? n.label + ' - required: it cannot be renamed or deleted'
+    : n.empty ? n.label + ' - empty' : n.label);
+
+  /** The folders of a node, as tiles - first in its gallery. null when it has none. */
+  function foldersEl(node) {
+    const n = node && byKey.get(node.key);
+    if (!n || !n.children || !n.children.length) return null;
+    const box = _el('div', 'mt-folders');
+    for (const c of n.children) {
+      const t = _el('button', 'mt-ftile' + (c.empty ? ' is-empty' : '') + (c.locked ? ' is-locked' : '') + (fresh.has(c.key) ? ' is-new' : ''));
+      t.type = 'button';
+      t.dataset.key = c.key;
+      t.title = _tipOf(c) + ' · ' + _plural(c.count || 0, 'item');
+      const ic = _el('span', 'mt-ficon');
+      ic.innerHTML = FOLDER_SVG;
+      t.appendChild(ic);
+      const nm = _el('span', 'mt-fname', c.label);
+      t.appendChild(nm);
+      if (c.locked) {
+        const lock = _el('span', 'mt-lock');
+        lock.innerHTML = LOCK_SVG;
+        t.appendChild(lock);
+      }
+      t.appendChild(_el('span', 'mt-fn', String(c.count || 0)));
+      t.addEventListener('click', () => openNode(c.key));
+      t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(c, t, e.clientX, e.clientY); });
+      _takesDrops(t, c);
+      box.appendChild(t);
+    }
+    return box;
+  }
+
+  /** The path to a node over its gallery - "AUDIO / SFX / My sounds"; every word but the last opens its folder. */
+  function crumbsEl(node) {
+    const box = _el('div', 'mt-crumbs');
+    const chain = [];
+    for (let k = node && node.key; k && byKey.has(k); k = parentOf.get(k)) chain.unshift(byKey.get(k));
+    chain.forEach((c, i) => {
+      if (i) box.appendChild(_el('span', 'mt-crumb-sep', '/'));
+      const last = i === chain.length - 1;
+      const w = _el(last ? 'span' : 'button', 'mt-crumb' + (last ? ' is-here' : '') + (i === 0 ? ' is-top' : ''), c.label);
+      if (!last) {
+        w.type = 'button';
+        w.title = 'Open ' + c.label;
+        w.addEventListener('click', () => openNode(c.key));
+      }
+      _takesDrops(w, c);
+      box.appendChild(w);
+    });
+    return box;
   }
 
   function toggle(key) {
@@ -356,25 +440,32 @@ export function createTree(host, o) {
     paint();
   }
 
-  function select(key, fire) {
+  function select(key, fire, repaint) {
     if (!byKey.has(key)) return;
     sel = key;
     _lsSet(K_SEL, sel);
     // Opened: it and everything under it are seen - and its branch is green only while something else in it is new.
     _seeAll(byKey.get(key));
     _computeNew();
-    if (_openTo(key)) paint(); else _mark();
+    if (_openTo(key) || repaint) paint(); else _mark();
     const row = el.querySelector('.mt-row.is-sel');
     if (row) row.scrollIntoView({ block: 'nearest' });
     if (fire) opt.onSelect(byKey.get(key));
   }
 
+  // A kind and a category, as a node: no category is the kind itself - a B-roll's is Generated (V35: no Uncategorized).
   function selectFor(kind, cat, fire = true) {
-    const want = cat ? kind + ':' + cat : kind;
+    const none = !cat || cat === UNCAT;
+    const want = none ? (kind === 'birols' ? 'generated' : kind) : kind + ':' + cat;
     select(byKey.has(want) ? want : kind, fire);
   }
 
   const kindLabel = (kind) => ((byKey.get(kind) || {}).label) || kind;
+  // Where what has no category of a kind lies, in words (V35): the kind itself - a B-roll's, Generated.
+  const homeName = (kind) => (kind === 'birols' ? 'Generated' : kindLabel(kind));
+  // A place in Music, in words: "Music", "Music · highlights", "highlights · calm".
+  const musicPlace = (folder, mood) => (mood ? 'highlights · ' + (((byKey.get('music:highlights:' + mood)) || {}).label || mood)
+    : folder ? 'Music · highlights' : 'Music');
 
   // After the page has read its gallery again - a read may end by clearing the status line.
   async function _after(msg, what) {
@@ -393,9 +484,20 @@ export function createTree(host, o) {
       return;
     }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
-    // Where it is now, in words: a B-roll with no category is Generated's Uncategorized.
-    const where = t.cat ? n.label : (t.kind === 'birols' ? 'Generated · Uncategorized' : kindLabel(t.kind) + ' · Uncategorized');
+    // Where it is now, in words: a B-roll with no category lies in Generated, the rest in their kind.
+    const where = t.cat ? n.label : homeName(t.kind);
     try {
+      // (phase V35, the owner's (ф3)) A track: into Music, the highlights folder, or the one mood its preset made it for -
+      // the rule is the store's (lib/music-store.js place, V34.F); a refusal comes back in words.
+      if (act === 'place') {
+        if ((it.folder || '') === t.folder && (it.mood || '') === t.mood) return;
+        const r = await fetch('/api/audio/music/' + encodeURIComponent(it.id) + '/place', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: t.folder, mood: t.mood }),
+        }).then(x => x.json()).catch(() => null);
+        if (!r || !r.success) { opt.status((r && r.error) || 'Could not move the track', true); return; }
+        await _after('"' + (it.name || 'It') + '" is in ' + musicPlace(r.folder, r.mood), { moved: it });
+        return;
+      }
       // (phase TG, block 5b) A post: filed within REFERENCES, or - one video, one picture - out of it into VIDEO or IMAGES.
       if (act === 'ref' || act === 'out') {
         if (act === 'ref' && (it.cat || '') === t.cat) return;
@@ -461,8 +563,8 @@ export function createTree(host, o) {
     await _after('Renamed to "' + next.label + '"', { cats: n.kind });
   }
 
-  // Delete: the media to Uncategorized (the safe one, chosen), or deleted with it - and then the projects using them
-  // are named (lib/timeline-media.js usage): there they turn red.
+  // Delete: the media out of it into the kind itself (the safe one, chosen), or deleted with it - and then the projects
+  // using them are named (lib/timeline-media.js usage): there they turn red.
   let _pop = null;
   function _closePop() {
     if (!_pop) return;
@@ -478,13 +580,15 @@ export function createTree(host, o) {
     const box = _el('div', 'mt-pop');
     const count = n.count || 0;
     const noun = NOUN[n.kind] || 'item';
+    // Where its media go (V35: no Uncategorized) - the kind itself; a post back to its source's folder.
+    const home = n.kind === 'references' ? 'their sources\' folders' : homeName(n.kind);
     box.appendChild(_el('div', 'mt-pop-head', 'Delete "' + n.label + '"?'));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = true;                       // the safe branch is the default
     lab.appendChild(cb);
-    lab.appendChild(_el('span', null, count ? 'Move its ' + _plural(count, noun) + ' to Uncategorized' : 'Nothing in it to move'));
+    lab.appendChild(_el('span', null, count ? 'Move its ' + _plural(count, noun) + ' into ' + home : 'Nothing in it to move'));
     box.appendChild(lab);
     const note = _el('div', 'mt-pop-note');
     box.appendChild(note);
@@ -539,7 +643,7 @@ export function createTree(host, o) {
         _closePop();
         const msg = d.mode === 'delete'
           ? 'Deleted the category and ' + _plural(d.affected || 0, noun)
-          : 'Deleted the category' + (d.affected ? '; ' + _plural(d.affected, noun) + ' moved to Uncategorized' : '');
+          : 'Deleted the category' + (d.affected ? '; ' + _plural(d.affected, noun) + ' moved into ' + home : '');
         await _after(msg, { cats: n.kind, deleted: d.mode === 'delete' });
       } catch (e) {
         _closePop();
@@ -595,7 +699,7 @@ export function createTree(host, o) {
   }
 
   return {
-    el, load, select, selectFor, kindLabel,
+    el, load, select, selectFor, kindLabel, openNode, foldersEl, crumbsEl, homeName,
     selected: () => byKey.get(sel) || null,
     node: (key) => byKey.get(key) || null,
   };

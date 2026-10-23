@@ -4,9 +4,11 @@
    отображается все что есть по категории"). The tree is js/media-tree.js - the same one the Library's Media shelf
    shows; a sash between them, its width remembered, a double press for the default.
 
-   The node selected in the tree is what the gallery shows - its `q` is what the media shelf is asked:
+   The node selected in the tree is what the gallery shows - since V35 as a FOLDER (the owner 2026-10-23, (т2)): the path
+   to it, its folders as tiles (js/media-tree.js foldersEl), then what lies directly in it - its `q`, what the media shelf
+   is asked (none for a node that only holds folders):
 
-     GET /api/library/shelf/media?group=video|images|audio | filter=<kind>[&cat=<id>]
+     GET /api/library/shelf/media?filter=<kind>[&cat=<id>|__uncat__][&src=…][&folder=…&mood=…] | group=sfxall&q=<words>
        -> { items, shown, total, filters, cats }
 
    Thumbnails ONLY. The grid points an <img> at `thumb` and nothing loads the full media until the viewer opens. A
@@ -64,12 +66,12 @@ const _isAudio = () => AUDIO.has(_kind()) || (_node && (_node.key === 'audio' ||
 // (phase V34.E) The search over SFX - kept while SFX is looked at, let go of outside it.
 let _q = '';
 // Where a clip brought in lands: the kind selected, or Uploads under Video (the owner: "загрузка в него - в Uploads").
-// (second round) Generated takes B-rolls (with no category - its Uncategorized); Talking heads takes nothing.
+// (second round) Generated takes B-rolls (with no category - they lie in it); Talking heads takes nothing.
 const _videoKind = () => (VIDEO.has(_kind()) ? _kind() : (_node && _node.key === 'video') ? 'uploads'
   : (_node && _node.key === 'generated') ? 'birols' : '');
 const _isHeads = () => _kind() === 'heads';
-// Where a clip brought in lands, in words: a B-roll comes in with no category - Generated's Uncategorized.
-const _landName = (kind) => (kind === 'birols' ? 'Generated · Uncategorized' : _tree.kindLabel(kind));
+// Where a clip brought in lands, in words: a B-roll comes in with no category - into Generated itself.
+const _landName = (kind) => _tree.homeName(kind);
 const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : it.kind === 'images' ? 'image' : 'video');
 
@@ -535,6 +537,12 @@ function _plusTile() {
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
     return b;
   }
+  // (phase V35) REFERENCES fills itself: the Telegram bot's posts, the pieces cut from a video, the sources downloaded.
+  if (_kind() === 'references') {
+    b.disabled = true;
+    b.title = 'REFERENCES fills itself - the Telegram bot\'s posts, pieces cut from a video, the YouTube sources';
+    return b;
+  }
   // (phase V34.E) Built-in is the app's, Favorites the starred - nothing is brought in there.
   if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
     b.disabled = true;
@@ -689,13 +697,11 @@ function _linkStatus(text, runId) {
   el.appendChild(x);
 }
 
-// What came in is filed with no category: a node that would not show it gives way to its kind (Video shows them all).
+// What came in is filed with no category: it lies in its kind (V35: a folder shows only what lies directly in it), so a
+// node elsewhere gives way to that kind - a B-roll's is Generated.
 function _showLanded(kind) {
-  // A B-roll with no category is Generated's Uncategorized (second round) - B-rolls shows only its categories.
-  const home = kind === 'birols' ? 'birols:__uncat__' : kind;
-  if (!_node || _node.key === 'video' || _node.key === home) return false;
-  if (_node.key === 'audio' && AUDIO.has(kind)) return false;
-  if (kind === 'birols' && _node.key === 'generated') return false;
+  const home = kind === 'birols' ? 'generated' : kind;
+  if (!_node || _node.key === home) return false;
   _tree.select(home, true);
   return true;
 }
@@ -741,24 +747,33 @@ async function _online(q) {
     q, stop: () => _stopHearing(), added: () => _reload() });
 }
 
+// (phase V35, the owner's (т2), (у2)) The gallery is a folder: the path to it over everything ("AUDIO / SFX / My sounds",
+// every word a press away), its folders as tiles, then what lies directly in it. A search over SFX shows what it found in
+// all of SFX, with no folders.
 function _paint() {
   _stopHearing();
   const b = _body();
   if (!b) return;
   b.textContent = '';
+  if (_tree && _node) b.appendChild(_tree.crumbsEl(_node));
+  const searching = !!(_q && SS.isSfx(_node));
   if (SS.isSfx(_node)) {
     b.appendChild(SS.searchHead({ q: _q, found: _items.length > 0, onSearch: (q) => { _q = q; _load(); }, onOnline: (q) => _online(q) }));
   }
+  const folders = !searching && _tree && _node ? _tree.foldersEl(_node) : null;
+  if (folders) b.appendChild(folders);
   const grid = document.createElement('div');
   grid.className = 'mv3-grid';
   grid.appendChild(_plusTile());
   // An empty shelf still gets the grid - it is how files get onto it in the first
-  // place, so replacing it with an "empty" placard would hide the only way in.
+  // place, so replacing it with an "empty" placard would hide the only way in. A folder of folders says nothing.
   if (!_items.length) {
+    b.appendChild(grid);
+    if (folders) return;
     const s = document.createElement('span');
     s.className = 'mv3-grid-note';
-    s.textContent = _q && SS.isSfx(_node) ? 'nothing with "' + _q + '" here' : _node && _node.cat ? 'nothing in this category' : 'empty - drop files here';
-    b.appendChild(grid);
+    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _node && _node.cat ? 'nothing in this category'
+      : _node && !_node.q ? 'empty' : 'empty - drop files here';
     b.appendChild(s);
     return;
   }
@@ -891,10 +906,13 @@ function _wireDrop() {
 async function _load() {
   const mine = ++_seq;
   if (!_node) return;
-  _note('loading…');
-  const q = new URLSearchParams(_node.q || {});
   if (!SS.isSfx(_node)) _q = '';
-  else if (_q) q.set('q', _q);
+  // (phase V35) What lies directly in the node (its `q`) - none in a node that only holds folders; a search over SFX looks
+  // through all of SFX, whichever of its folders is open (the owner's (у3)).
+  const qo = _q ? { group: 'sfxall', q: _q } : _node.q;
+  if (!qo) { _items = []; _paint(); return; }
+  _note('loading…');
+  const q = new URLSearchParams(qo);
   try {
     const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won

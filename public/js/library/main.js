@@ -131,7 +131,8 @@ function _paintShelves() {
   const onMedia = _shelf === 'media' && !_makingOn;
   for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
   // (phase V34.E) The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
-  if (!onMedia) { const h = $('lib-snd-head'); if (h) h.hidden = true; }
+  // (phase V35) So does the path to the node.
+  if (!onMedia) for (const id of ['lib-snd-head', 'lib-crumbs']) { const h = $(id); if (h) h.hidden = true; }
 }
 
 // ── The making areas ────────────────────────────────────────────────────────
@@ -294,11 +295,10 @@ function _initTree() {
 }
 
 function _showLanded(kind) {
-  // A B-roll with no category is Generated's Uncategorized (second round) - B-rolls shows only its categories.
-  const home = kind === 'birols' ? 'birols:__uncat__' : kind;
-  if (!_tree || !_node || _node.key === 'video' || _node.key === home) return false;
-  if (_node.key === 'audio' && AUDIO.has(kind)) return false;
-  if (kind === 'birols' && _node.key === 'generated') return false;
+  // (phase V35) What came in with no category lies in its kind - a B-roll's in Generated - and a folder shows only what
+  // lies directly in it: a node elsewhere gives way to that kind.
+  const home = kind === 'birols' ? 'generated' : kind;
+  if (!_tree || !_node || _node.key === home) return false;
   _tree.select(home, false);
   _node = _tree.selected();
   return true;
@@ -730,8 +730,20 @@ function _card(it, extra) {
   return card;
 }
 
+// (phase V35, the owner's (у2)) The path to Media's node at the left of the bar - "AUDIO / SFX / My sounds", every word a
+// press away (js/media-tree.js crumbsEl); a tile let go on a word goes there.
+function _paintCrumbs() {
+  const host = $('lib-crumbs');
+  if (!host) return;
+  const on = _shelf === 'media' && !_makingOn && !!_tree && !!_node;
+  host.hidden = !on;
+  host.textContent = '';
+  if (on) host.appendChild(_tree.crumbsEl(_node));
+}
+
 // (phase V34.E) Over SFX: the search, and "find online…" - "find «words» online" when the words found nothing here (р3).
 function _paintSndHead() {
+  _paintCrumbs();
   const host = $('lib-snd-head');
   if (!host) return;
   const on = _shelf === 'media' && !_makingOn && SS.isSfx(_node);
@@ -805,11 +817,17 @@ function _renderGrid() {
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
+  // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
+  // directly in it. A search over SFX shows what it found in all of SFX, with no folders.
+  const searching = _shelf === 'media' && !!(_q && SS.isSfx(_node));
+  const folders = _shelf === 'media' && !searching && _tree && _node ? _tree.foldersEl(_node) : null;
+  if (folders) grid.appendChild(folders);
 
   if (!_items.length) {
+    if (folders) return;
     const e = document.createElement('div');
     e.className = 'lib-empty';
-    e.textContent = _shelf === 'media' ? (_q && SS.isSfx(_node) ? 'Nothing with "' + _q + '" here.'
+    e.textContent = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
       : 'Nothing here' + (_node && _node.cat ? ' in this category.' : ' yet.')) : 'Nothing on this shelf yet.';
     grid.appendChild(e);
     return;
@@ -958,16 +976,17 @@ async function _load(opts) {
   // whole width.
   if (!PICKABLE.has(_shelf) && _shelf !== 'voices' && _shelf !== 'scenarios') INFO.hide();
   try {
-    // Media: what the media tree has selected (its `q`: a group, or a kind and a category).
-    const qs = new URLSearchParams((_shelf === 'media' && _node && _node.q) || {});
+    // Media: what lies directly in the node the media tree has selected (its `q`; phase V35: the folders are drawn
+    // from the tree, a node that only holds folders asks for nothing) - or a search over all of SFX (the owner's (у3)).
     if (!(_shelf === 'media' && SS.isSfx(_node))) _q = '';
-    else if (_q) qs.set('q', _q);
+    const mq = _shelf === 'media' ? (_q ? { group: 'sfxall', q: _q } : (_node && _node.q) || null) : null;
+    const qs = new URLSearchParams(mq || {});
     const q = qs.toString();
     const url = '/api/library/shelf/' + _shelf + (q ? '?' + q : '');
     // Scenarios: the drafts head the list (phase E4), read beside the shelf.
     const draftsP = _shelf === 'scenarios'
       ? fetch('/api/scriptgen/drafts').then(r => r.json()).catch(() => null) : null;
-    const d = await (await fetch(url)).json();
+    const d = (_shelf === 'media' && !mq) ? { success: true, items: [] } : await (await fetch(url)).json();
     if (my !== _reqId) return;
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
     if (draftsP) {
@@ -1303,9 +1322,9 @@ function _paintUpload() {
 
 // ── By a link (phase V27) ───────────────────────────────────────────────────
 // The kind a link's clip goes to, as an upload's would: the kind selected, Uploads under Video; '' where no clip goes.
-// Where a clip brought in lands, in words (second round): a B-roll comes in with no category - Generated's Uncategorized.
+// Where a clip brought in lands, in words (second round): a B-roll comes in with no category - into Generated itself.
 function _landName(kind) {
-  if (kind === 'birols') return 'Generated · Uncategorized';
+  if (kind === 'birols') return 'Generated';
   const k = A.KINDS.find(x => x.id === kind);
   return k ? k.label + 's' : 'Uploads';
 }
@@ -1313,7 +1332,7 @@ function _landName(kind) {
 function _linkKind() {
   if (_shelf !== 'media' || !_node) return '';
   if (VIDEO.has(_mkind())) return _mkind();
-  // (second round) Generated takes B-rolls (with no category - its Uncategorized); Talking heads takes nothing.
+  // (second round) Generated takes B-rolls (with no category - they lie in it); Talking heads takes nothing.
   if (_node.key === 'generated') return 'birols';
   return _node.key === 'video' ? 'uploads' : '';
 }

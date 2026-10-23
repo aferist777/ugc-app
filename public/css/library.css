@@ -1028,3 +1028,10 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-sc-mrow.is-asking > .mv3-plus-item,
 .lib-sc-mrow.is-asking > .mv3-plus-item[disabled]:hover{ opacity:1; cursor:default; background:oklch(.62 .19 25 / .14); }
 .lib-sc-mrow.is-asking > .mv3-plus-item span{ color:var(--danger); }
+
+/* (phase V35) Media is a folder: its folders lie across the whole grid's width, over its cards (js/media-tree.js), and the
+   path to the node stands at the left of the bar. */
+.lib-grid > .mt-folders{ grid-column:1 / -1; margin:0 0 2px; }
+.lib-crumbs{ flex:0 1 auto; min-width:0; overflow:hidden; }
+.lib-crumbs[hidden]{ display:none; }
+.lib-crumbs .mt-crumbs{ margin:0; flex-wrap:nowrap; }

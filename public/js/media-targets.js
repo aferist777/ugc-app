@@ -6,8 +6,9 @@
 //   { kind, cat, label, text }                 a place: a kind and its category ('' - none), the category's name
 //   { newCat: 'references', text }             "+ new category…" of REFERENCES
 //
-// REFERENCES - the source's folder (no category) and its own categories; VIDEO - Uploads, B-rolls' categories, Generated
-// · Uncategorized, Hooks; IMAGES (only when asked) - its categories and Uncategorized.
+// REFERENCES - the source's folder (no category) and its own categories; VIDEO - Generated (a B-roll with no category),
+// B-rolls' categories, Hooks, Uploads and theirs; IMAGES (only when asked) - IMAGES itself and its categories. (Phase V35:
+// the tree has no Uncategorized nodes any more - what has no category lies in the node that says so with `loose`.)
 
 const VIDEO_KINDS = new Set(['birols', 'uploads', 'hooks']);
 
@@ -22,10 +23,9 @@ export function targetsOf(tree, opts) {
   const walk = (n, trail, add) => {
     for (const c of n.children || []) {
       const p = trail ? trail + ' · ' + c.label : c.label;
-      if (c.kind && (VIDEO_KINDS.has(c.kind) || c.kind === 'images')) {
-        if (c.uncat) add({ kind: c.kind, cat: '', label: '', text: p });
-        else if (c.cat && c.cat !== '__cat__') add({ kind: c.kind, cat: c.cat, label: c.name || c.label, text: p });
-        else if (!c.cat && (c.key === 'uploads' || c.key === 'hooks') && !(c.children || []).some(x => x.uncat)) add({ kind: c.kind, cat: '', label: '', text: p });
+      if (c.loose && (VIDEO_KINDS.has(c.loose) || c.loose === 'images')) add({ kind: c.loose, cat: '', label: '', text: p });
+      else if (c.kind && (VIDEO_KINDS.has(c.kind) || c.kind === 'images') && c.cat && c.cat !== '__cat__') {
+        add({ kind: c.kind, cat: c.cat, label: c.name || c.label, text: p });
       }
       walk(c, p, add);
     }
@@ -39,7 +39,7 @@ export function targetsOf(tree, opts) {
     if (images) {
       const before = out.length;
       walk(images, 'IMAGES', (t) => out.push(t));
-      if (!out.slice(before).some(t => !t.cat)) out.splice(before, 0, { kind: 'images', cat: '', label: '', text: 'IMAGES · Uncategorized' });
+      if (!out.slice(before).some(t => !t.cat)) out.splice(before, 0, { kind: 'images', cat: '', label: '', text: 'IMAGES' });
     }
   }
   return out;
@@ -50,6 +50,6 @@ export function whereText(to) {
   if (!to) return '';
   if (to.kind === 'references') return 'REFERENCES · ' + (to.cat ? to.label : 'its site\'s folder');
   if (to.kind === 'images') return 'IMAGES' + (to.cat ? ' · ' + to.label : '');
-  if (to.kind === 'birols' && !to.cat) return 'Generated · Uncategorized';
+  if (to.kind === 'birols' && !to.cat) return 'Generated';
   return ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : '');
 }

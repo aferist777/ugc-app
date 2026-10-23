@@ -333,6 +333,9 @@ function _mediaShelf(opts) {
   }));
 
   // (phase V28.4) Music - no categories, no picture; its length kept on the record (measured once for the older ones).
+  // (phase V35) Where it lies in Music (lib/music-store.js placeOf, V34.F): `folder` 'highlights' or '', `mood` - the mood
+  // folder it is in, `moodMade` - the preset it was made by (the one mood it may go into).
+  const placeOf = typeof MUSIC.placeOf === 'function' ? MUSIC.placeOf : () => ({ folder: '', mood: '', moodMade: '' });
   const fromMusic = !(opts && opts.music) ? [] : MUSIC.read().filter(t => t && t.audioPath).map(t => ({
     id: String(t.id || t.audioPath),
     name: String(t.title || '').trim() || 'track',
@@ -340,7 +343,7 @@ function _mediaShelf(opts) {
     media: String(t.audioPath),
     thumb: null,
     dur: +t.duration || 0,
-    meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''),
+    meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''), ...placeOf(t),
             source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0, wave: Array.isArray(t.wave) ? t.wave : [],
             info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' } },
   }));
@@ -498,13 +501,15 @@ function _mediaCats(items, kind, labelFor) {
 
 // ── The media tree (phase V28.4 + V28.5, the owner 2026-10-12; the second round) ──
 // One answer for both places that draw it - Merge's Library panel and the Library's Media shelf (js/media-tree.js):
-//   VIDEO  -> Generated (B-rolls -> categories, Talking heads -> projects, Uncategorized), Hooks, Uploads -> categories
-//   IMAGES -> its categories          AUDIO -> Music, SFX -> categories
-// Every node: { key, label, count, q, children? } - `q` is what the shelf is asked for it (`group`, or `filter` and `cat`),
-// `key` what a page remembers it by. In a branch (the owner): the locked first, then those with something in them, then
-// Uncategorized, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; "2026-08-23" before
+//   REFERENCES -> the sources' folders, its own categories
+//   VIDEO  -> Generated (B-rolls -> categories, Talking heads -> projects; a B-roll with no category in Generated itself),
+//             Hooks, Uploads -> categories
+//   IMAGES -> its categories          AUDIO -> Music (-> highlights -> the moods), SFX -> Favorites, Built-in, My sounds
+// Every node: { key, label, count, q?, loose?, direct?, children? } - since V35 the tree is FOLDERS: `q` is what the shelf is
+// asked for what lies DIRECTLY in the node (`filter` and `cat`, `src`, `folder`/`mood`; none - it only holds folders),
+// `children` its folders, `key` what a page remembers it by. In a branch (the owner): the locked first, then those with
+// something in them, then the empty ones (`empty`, pale) - each part in alphabetical order (no case; "2026-08-23" before
 // "2026-10-02"). Generated, Hooks and Uploads are locked; so are the required categories.
-// B-rolls has no Uncategorized of its own: a B-roll with no category is Generated's Uncategorized (the owner).
 const KIND_LABEL = { birols: 'B-rolls', hooks: 'Hooks', uploads: 'Uploads', images: 'IMAGES', music: 'Music', sounds: 'SFX', heads: 'Talking heads' };
 // (phase V34.E) AUDIO holds the built-in sounds too (`sfx`), and SFX is the own and the built-in together (`sfxall`).
 const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['birols', 'heads'], images: ['images'], audio: ['music', 'sounds', 'sfx'],
@@ -515,14 +520,61 @@ const GROUPS = { video: ['birols', 'hooks', 'uploads', 'heads'], generated: ['bi
 // Where an item of REFERENCES lies: a post by its site and folder, a downloaded YouTube source in YouTube -> Videos.
 const _siteOf = (i) => (i.kind === 'youtube' ? 'youtube' : (i.meta || {}).source);
 const _inRefs = (i) => i.kind === 'references' || i.kind === 'youtube';
+// A REFERENCES folder, as a node asks for it: "instagram" (all of the source's), "instagram/reels", or (phase V35)
+// "instagram/__uncat__" - what lies in the source itself, in none of its folders. A post under an own category is in that
+// category's folder, not its source's.
+function _inSrc(i, src) {
+  const [s, fo] = String(src || '').split('/');
+  const m = i.meta || {};
+  if (!_inRefs(i) || m.categoryId || _siteOf(i) !== s) return false;
+  if (!fo) return true;
+  if (fo === UNCAT) {
+    const src0 = require('../lib/references-store').SOURCES.find(x => x.id === s);
+    return !((src0 && src0.folders) || []).some(f => f.id === m.folder);
+  }
+  return m.folder === fo;
+}
+// (phase V35) A track's place in Music: `folder` / `mood` asked as a value, or UNCAT for none.
+const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 const ANYCAT = '__cat__';          // a B-roll with some category (VIDEO -> Generated -> B-rolls)
 const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { numeric: true, sensitivity: 'base' });
 
+// (phase V35, the owner's (ф3): "появляется одна папка highlights, а в ней 10 настроений. добавлять можно, но только в
+// корневую highlights") Music -> highlights -> a folder per mood of the highlights presets (lib/music-store.js `moods`,
+// V34.F). highlights and its moods are the app's (locked: never renamed or deleted, no "+"); a mood takes only a track its
+// preset made (`moodLock` - the rule is `place` in lib/music-store.js), a person's own track goes into highlights itself.
+// Music's own tracks lie in Music.
+function _musicNode(list) {
+  const moods = typeof MUSIC.moods === 'function' ? MUSIC.moods() : [];
+  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length, q: { filter: 'music' }, loose: 'music', direct: list.length };
+  if (!moods.length) return node;
+  const inHl = list.filter(i => i.meta.folder === 'highlights');
+  const rootN = inHl.filter(i => !i.meta.mood).length;
+  const hl = { key: 'music:highlights', kind: 'music', folder: 'highlights', label: 'highlights', locked: true, noAdd: true, count: inHl.length,
+    tip: 'highlights - the highlights popup offers every track in it; your own tracks go here, its moods take only what their presets made',
+    q: { filter: 'music', folder: 'highlights', mood: UNCAT }, loose: 'music', direct: rootN, empty: !inHl.length,
+    children: moods.map(m => {
+      const n = inHl.filter(i => i.meta.mood === m.id).length;
+      return { key: 'music:highlights:' + m.id, kind: 'music', folder: 'highlights', mood: m.id, label: m.label, count: n, empty: !n,
+        locked: true, noAdd: true, moodLock: true, tip: m.label + ' - only the tracks made by its preset' + (m.about ? ' (' + m.about + ')' : ''),
+        q: { filter: 'music', folder: 'highlights', mood: m.id } };
+    }) };
+  return Object.assign(node, { q: { filter: 'music', folder: UNCAT }, direct: list.length - inHl.length, children: [hl] });
+}
+
+// (phase V35, the owner 2026-10-23, (т2): "как будто папки в library ... при нажатии на корневую категорию показывать
+// вложенные категории как папки. тогда нам uncategorized будет не нужна") THE TREE IS FOLDERS: a node's `q` is what lies
+// DIRECTLY in it - what has no category of its kind (`loose`: that kind; `direct`: how many) - and its children are its
+// folders, shown first as folder tiles (js/media-tree.js). There is no Uncategorized node any more; a node that only holds
+// folders (VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES) has no `q`. `count` is still all under it.
+// Nothing moves on the disk: what has no category stays in its `nocat/` folder.
 function _tree() {
   const { items, labelFor } = _mediaShelf({ music: true, heads: true, refs: true, youtube: true, sfx: true });
   const byKind = {};
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
-  const catsOf = (kind, list, withUncat) => {
+  // A kind's categories, as folders: the locked first, then those with something in them, then the empty ones (pale) -
+  // each part alphabetical. What has none is counted for the node that holds them (`uncat`).
+  const catsOf = (kind, list) => {
     const counts = {};
     let uncat = 0;
     for (const i of list) {
@@ -539,27 +591,29 @@ function _tree() {
     const out = [
       ...cats.filter(c => c.locked).sort(by).map(one),
       ...cats.filter(c => !c.locked && c.count > 0).sort(by).map(one),
+      ...cats.filter(c => !c.locked && !(c.count > 0)).sort(by).map(one),
     ];
-    const unc = { key: kind + ':' + UNCAT, kind, cat: UNCAT, label: 'Uncategorized', count: uncat, uncat: true, empty: !uncat,
-      q: { filter: kind, cat: UNCAT } };
-    if (withUncat && uncat) out.push(unc);
-    out.push(...cats.filter(c => !c.locked && !(c.count > 0)).sort(by).map(one));
-    if (withUncat && !uncat) out.push(unc);
     return { out, uncat };
   };
+  // A kind: its categories as folders, and what has none lies in it.
   const kindNode = (kind, key, label, extra) => {
     const list = byKind[kind] || [];
-    const node = Object.assign({ key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind } }, extra || {});
+    const node = Object.assign({ key: key || kind, kind, label: label || KIND_LABEL[kind], count: list.length, q: { filter: kind },
+      loose: kind, direct: list.length }, extra || {});
     if (!LC.KINDS.includes(kind)) return node;
-    const { out } = catsOf(kind, list, true);
-    if (LC.listFor(kind, {}, labelFor).length || out.some(c => !c.uncat)) node.children = out;
+    const { out, uncat } = catsOf(kind, list);
+    node.q = { filter: kind, cat: UNCAT };
+    node.direct = uncat;
+    if (out.length) node.children = out;
     return node;
   };
-  // VIDEO -> Generated: B-rolls (its categories, no Uncategorized), Talking heads (a project each), Uncategorized.
+  // VIDEO -> Generated: B-rolls (its categories), Talking heads (a project each); a B-roll with no category lies in
+  // Generated itself (the owner, second round of V28.4: what the chats make goes there).
   const birols = byKind.birols || [];
   const inCat = birols.filter(i => (i.meta || {}).categoryId);
-  const brolls = { key: 'birols', kind: 'birols', label: 'B-rolls', count: inCat.length, q: { filter: 'birols', cat: ANYCAT },
-    children: catsOf('birols', birols, false).out };
+  const brolls = { key: 'birols', kind: 'birols', label: 'B-rolls', count: inCat.length,
+    children: catsOf('birols', birols).out };
+  if (!brolls.children.length) delete brolls.children;
   const heads = byKind.heads || [];
   const projects = new Map();
   for (const h of heads) {
@@ -568,16 +622,16 @@ function _tree() {
     p.n++;
     projects.set(id, p);
   }
-  const headsNode = { key: 'heads', kind: 'heads', label: 'Talking heads', count: heads.length, q: { filter: 'heads' },
+  // Every take is its project's: the projects are its folders, nothing lies in Talking heads itself.
+  const headsNode = { key: 'heads', kind: 'heads', label: 'Talking heads', count: heads.length,
     children: [...projects.values()].sort((a, b) => _abc(a.title, b.title)).map(p => ({
       key: 'heads:' + p.id, kind: 'heads', cat: p.id, label: p.title, count: p.n, project: true, q: { filter: 'heads', cat: p.id },
     })) };
   if (!headsNode.children.length) delete headsNode.children;
   const loose = birols.length - inCat.length;
-  const generated = { key: 'generated', label: 'Generated', locked: true, count: birols.length + heads.length, q: { group: 'generated' },
-    children: [brolls, headsNode, { key: 'birols:' + UNCAT, kind: 'birols', cat: UNCAT, label: 'Uncategorized', count: loose,
-      uncat: true, empty: !loose, q: { filter: 'birols', cat: UNCAT } }] };
-  const video = { key: 'video', label: 'VIDEO', q: { group: 'video' },
+  const generated = { key: 'generated', label: 'Generated', locked: true, count: birols.length + heads.length,
+    q: { filter: 'birols', cat: UNCAT }, loose: 'birols', direct: loose, children: [brolls, headsNode] };
+  const video = { key: 'video', label: 'VIDEO',
     children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
   video.count = video.children.reduce((n, c) => n + c.count, 0);
   // (phase V34.E, the owner 2026-10-22: "SFX -> Favorites, Built-in, My sounds") SFX: every starred sound first; the
@@ -588,7 +642,6 @@ function _tree() {
   const set = require('../lib/sfx-builtin').read();
   const mine = kindNode('sounds', 'sounds', 'My sounds');
   const builtin = { key: 'sfx', kind: 'sfx', label: 'Built-in', locked: true, noAdd: true, builtin: true, count: built.length,
-    q: { filter: 'sfx' },
     children: set.categories.map(c => {
       const n = built.filter(i => i.meta.categoryId === c.id).length;
       return { key: 'sfx:' + c.id, kind: 'sfx', cat: c.id, label: c.label, count: n, locked: true, builtin: true, empty: !n,
@@ -597,18 +650,21 @@ function _tree() {
   if (!builtin.children.length) delete builtin.children;
   const favN = own.concat(built).filter(i => i.meta.favorite).length;
   const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1' } };
-  const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, q: { group: 'sfxall' }, children: [fav, builtin, mine] };
-  const audio = { key: 'audio', label: 'AUDIO', q: { group: 'audio' }, children: [kindNode('music'), sfx] };
+  // SFX holds its three folders; its search looks through all of them (the owner's (у3), js/sound/shelf.js).
+  const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, children: [fav, builtin, mine] };
+  const audio = { key: 'audio', label: 'AUDIO', children: [_musicNode(byKind.music || []), sfx] };
   audio.count = audio.children.reduce((n, c) => n + c.count, 0);
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
   const refs = (byKind.references || []).concat(byKind.youtube || []);
   const nOf = (s, f) => refs.filter(i => !i.meta.categoryId && _siteOf(i) === s && (!f || i.meta.folder === f)).length;
   // `kind` on the root: its "+" makes an own category (block 5b); the sources' folders make none (`noAdd`).
-  const references = { key: 'references', kind: 'references', label: 'REFERENCES', q: { group: 'references' }, count: refs.length,
+  // (phase V35) Nothing lies in REFERENCES itself: a post is in its source's folder or in an own category. A source with
+  // folders of its own (Instagram: Posts, Reels) holds in itself only a post of none of them.
+  const references = { key: 'references', kind: 'references', label: 'REFERENCES', count: refs.length,
     children: require('../lib/references-store').SOURCES.map((s) => {
       const node = { key: 'references:' + s.id, kind: 'references', ref: s.id, label: s.label, locked: true, noAdd: true,
-        count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.id } };
+        count: nOf(s.id), empty: !nOf(s.id), q: { filter: 'references', src: s.folders.length ? s.id + '/' + UNCAT : s.id } };
       if (s.folders.length) {
         node.children = s.folders.map(f => ({ key: `references:${s.id}/${f.id}`, kind: 'references', ref: s.id + '/' + f.id,
           label: f.label, locked: true, noAdd: true, count: nOf(s.id, f.id), empty: !nOf(s.id, f.id), q: { filter: 'references', src: s.id + '/' + f.id } }));
@@ -632,10 +688,9 @@ function _inNode(i, q) {
   if (q.group) return !!(GROUPS[q.group] && GROUPS[q.group].includes(i.kind));
   if (q.filter && i.kind !== q.filter && !(q.filter === 'references' && i.kind === 'youtube')) return false;
   const m = i.meta || {};
-  if (q.src) {
-    const [s, fo] = String(q.src).split('/');
-    if (m.categoryId || _siteOf(i) !== s || (fo && m.folder !== fo)) return false;
-  }
+  if (q.src && !_inSrc(i, q.src)) return false;
+  if (q.folder && !_isIn(m.folder, q.folder)) return false;
+  if (q.mood && !_isIn(m.mood, q.mood)) return false;
   if (q.cat) {
     const c = m.categoryId || '';
     if (q.cat === UNCAT) { if (c && c !== UPLOADS_CAT) return false; }
@@ -936,11 +991,12 @@ router.get('/library/shelf/:kind', (req, res) => {
     if (f) shown = shown.filter(i => i.kind === f || (f === 'references' && i.kind === 'youtube'));
     // (phase TG) A REFERENCES folder: "instagram", or "instagram/reels".
     const src = String(req.query.src || '');
-    if (src) {
-      const [s, fo] = src.split('/');
-      // A post filed under an own category is in that category's folder, not its source's.
-      shown = shown.filter(i => _inRefs(i) && !i.meta.categoryId && _siteOf(i) === s && (!fo || i.meta.folder === fo));
-    }
+    if (src) shown = shown.filter(i => _inSrc(i, src));
+    // (phase V35) Music's folders: `folder=highlights`, `folder=__uncat__` (Music itself); `mood=<id>`, `mood=__uncat__`.
+    const folder = String(req.query.folder || '');
+    const mood = String(req.query.mood || '');
+    if (folder) shown = shown.filter(i => _isIn((i.meta || {}).folder, folder));
+    if (mood) shown = shown.filter(i => _isIn((i.meta || {}).mood, mood));
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
       : cat === ANYCAT ? !!(i.meta || {}).categoryId && (i.meta || {}).categoryId !== UPLOADS_CAT
