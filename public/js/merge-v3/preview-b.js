@@ -1730,7 +1730,8 @@ export function mount() {
 
 // The transport is shared hardware. The other preview stands down while this one holds the
 // stage (see its _mounted guard), so these listeners are added once and simply do nothing
-// when this module is not showing.
+// when this module is not showing. Its four buttons are in the TIMELINE's header, right of split (phase V36, T3) - found
+// by their ids, wherever they are.
 let _wired = false;
 function _wireTransport() {
   if (_wired) return;

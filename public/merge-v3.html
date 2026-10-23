@@ -36,6 +36,8 @@
 <link rel="stylesheet" href="css/sound.css">
 <!-- (phase V34.E) The "generate audio" view (js/merge-v3/audchat.js). -->
 <link rel="stylesheet" href="css/mv3-audio.css">
+<!-- (phase V36) The timeline's transport, a sound's waveform on its clip, the stretch cut out of every lane. -->
+<link rel="stylesheet" href="css/mv3-timeline.css">
 </head>
 <body>
 
@@ -195,6 +197,14 @@
           <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
           <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
                   title="Cut the selected clip at the playhead">split</button>
+          <!-- The transport, right of split (phase V36, T3; the owner 2026-10-23) - it moves the playhead the lanes below
+               show. Driven by js/merge-v3/preview-b.js (_wireTransport) by these ids; Space plays as before. -->
+          <span class="mv3-tl-transport">
+            <button class="mv3-iconbtn" id="mv3-pv-start" type="button" title="Back to the start">&#9198;&#xFE0E;</button>
+            <button class="mv3-iconbtn" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;&#xFE0E;</button>
+            <button class="mv3-iconbtn is-play" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
+            <button class="mv3-iconbtn" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;&#xFE0E;</button>
+          </span>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
                is what made the old store's data loss so hard to notice. -->
@@ -230,14 +240,10 @@
       <div class="mv3-preview-body">
         <div class="mv3-stage" id="mv3-stage"></div>
       </div>
-      <!-- Transport at the bottom left, and the backing resolution to the right of it.
-           Quality changes only how many pixels the canvas composites into - it never
-           touches the project or the eventual export. -->
+      <!-- The time at the bottom left, and the backing resolution to the right of it (the transport went to the timeline's
+           header, right of split - phase V36, T3). Quality changes only how many pixels the canvas composites into - it
+           never touches the project or the eventual export. -->
       <div class="mv3-pv-bar">
-        <button class="mv3-pv-btn" id="mv3-pv-start" type="button" title="Back to the start">&#9198;</button>
-        <button class="mv3-pv-btn" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;</button>
-        <button class="mv3-pv-btn is-main" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
-        <button class="mv3-pv-btn" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;</button>
         <span class="mv3-pv-time" id="mv3-pv-time">0:00.0 / 0:00.0</span>
         <label class="mv3-pv-q" title="Preview resolution - not the export">
           <span>q</span>

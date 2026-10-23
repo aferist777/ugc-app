@@ -2,7 +2,8 @@
    MERGE v3 — the controls on the timeline's bar and the preview's bar.
 
    Undo and redo, the save status, the zoom, FIT and split above the timeline; the quality,
-   the enlarged preview and the screenshot under the picture. They were wired inside the
+   the enlarged preview and the screenshot under the picture. The transport beside split (phase V36, T3) is the
+   preview's own (js/merge-v3/preview-b.js _wireTransport). They were wired inside the
    talking-head editor's modules and did nothing - or the wrong thing - for a project made in
    Merge, which is the one editor that stays (docs/local-app/PLAN.md, phase 3). One module owns
    them now; what depends on the timeline is asked of js/merge-v3/timeline-b.js and

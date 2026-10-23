@@ -1,0 +1,15 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   MERGE - THE TIMELINE'S OWN ADDITIONS OF PHASE V36 (js/merge-v3/timeline-b.js, js/merge-v3/preview-b.js)
+
+   The transport in the timeline's header, right of split (T3); a sound's waveform on its clip (T4); the stretch of time
+   drawn over a waveform to be cut out of every lane (T5). The lanes themselves are styled in merge-v3.css.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── The transport (T3) ───────────────────────────────────────────────────────
+   Four buttons in the header's own shell (.mv3-iconbtn); play a little wider - the one reached for without looking. */
+.mv3-tl-transport{display:flex; align-items:center; gap:4px; flex:0 0 auto}
+.mv3-tl-transport .mv3-iconbtn{font-size:10px}
+.mv3-tl-transport .mv3-iconbtn.is-play{width:28px; color:var(--ink); background:var(--surface); font-size:10.5px}
+.mv3-tl-transport .mv3-iconbtn.is-play:hover{border-color:var(--primary); color:var(--primary)}
+/* While a build step of a talking head holds the stage there is no cut to drive: dimmed and dead, as the preview's bar. */
+body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
