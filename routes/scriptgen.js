@@ -152,29 +152,15 @@ function _runningFor(d) {
 // narrator that has no profile yet is not an error - it means "write plainly", which is what
 // neutral is - but it IS worth saying which one was used, so the answer carries the name.
 //
-// WHICH READING is picked here, not sent from the page, for the same reason the block is built
-// here: a page that could choose its own profile could write in a voice nobody saved. Random by
-// default; `readingId` pins one. The answer says which, because "why does this one sound different"
-// is a question you can only answer if the reading is recorded.
-function _narrator(id, readingId) {
+// ONE NARRATOR, ONE VOICE (phase V38, the owner 2026-10-23): no reading is drawn or pinned any more - the narrator's
+// voice is the block. A `readingId` an older page or draft still sends is not read.
+function _narrator(id) {
   if (!id || id === 'neutral') {
-    return { block: P.NEUTRAL_BLOCK, name: 'Neutral', id: 'neutral', reading: null };
+    return { block: P.NEUTRAL_BLOCK, name: 'Neutral', id: 'neutral', rec: null };
   }
   const rec = narrators.get(id);
   if (!rec) throw new Error('No such narrator.');
-  const pick = narrators.pickReading(rec, readingId);
-  return {
-    block: P.narratorBlock(pick ? { ...rec, profile: pick.profile } : rec),
-    name: rec.name, id: rec.id, ready: !!pick,
-    reading: pick ? { id: pick.id, index: pick.index, total: pick.total, random: pick.random, missing: !!pick.missing } : null,
-  };
-}
-
-// "Azazin, reading 2 of 3 (random)" - short enough for a step line, specific enough to reproduce.
-function _readingLabel(nar) {
-  if (!nar.reading || nar.reading.total < 2) return nar.name;
-  return `${nar.name}, reading ${nar.reading.index} of ${nar.reading.total}`
-    + (nar.reading.missing ? ' (the pinned one is gone - random)' : nar.reading.random ? ' (random)' : '');
+  return { block: P.narratorBlock(rec), name: rec.name, id: rec.id, ready: narrators.hasVoice(rec), rec };
 }
 
 // The transcript slice a topic was mined from, or nothing. `sourceId` alone means the whole
@@ -230,7 +216,7 @@ function _keeper(b, build) {
       ...(b.topic != null ? { topic: String(b.topic) } : {}),
       settings: {
         tone: b.tone, scenes: b.scenes,
-        narratorId: b.narratorId, narratorName: b.narratorName, readingId: b.readingPin != null ? b.readingPin : b.readingId,
+        narratorId: b.narratorId, narratorName: b.narratorName,
       },
       ...patch,
     });
@@ -286,7 +272,7 @@ router.post('/scriptgen/hooks', (req, res) => {
   if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
   let nar, src, m;
   try {
-    nar = _narrator(b.narratorId, b.readingId);
+    nar = _narrator(b.narratorId);
     src = _sourceText(b.sourceId, b.topicId);
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
@@ -300,10 +286,10 @@ router.post('/scriptgen/hooks', (req, res) => {
     });
     const hooks = (data.hooks || []).filter(h => h && h.text);
     if (!hooks.length) throw new Error('No hooks came back.');
-    return { hooks, narrator: _readingLabel(nar), reading: nar.reading, model: by.model, by };
+    return { hooks, narrator: nar.name, model: by.model, by };
   // Five new hooks mean a hook is to be picked again: the one the draft held is cleared with them,
   // or a draft reopened later would show the old hook and hide the five that were paid for.
-  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '', usedReadingId: (r.reading && r.reading.id) || '' })),
+  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '' })),
   { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT });
 });
 
@@ -315,7 +301,7 @@ router.post('/scriptgen/script', (req, res) => {
   if (!hook) return res.status(400).json({ success: false, error: 'pick or write a hook first' });
   let nar, src, m;
   try {
-    nar = _narrator(b.narratorId, b.readingId);
+    nar = _narrator(b.narratorId);
     src = _sourceText(b.sourceId, b.topicId);
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
@@ -341,16 +327,15 @@ router.post('/scriptgen/script', (req, res) => {
       paragraphs,
       asked: m.scenes,
       fromSource: withSource,
-      narrator: _readingLabel(nar),
-      reading: nar.reading,
+      narrator: nar.name,
       model: by.model,
       by,
     };
   }, _keeper(b, (r) => ({
     paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
-    // (phase V23) What wrote it - (V37) the step of the ladder that answered, the reading drawn - for the save to record.
-    usedReadingId: (r.reading && r.reading.id) || '', cleaned: null,
-    written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, readingId: (r.reading && r.reading.id) || '', at: new Date().toISOString() },
+    // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
+    cleaned: null,
+    written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
   })),
   { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes });
 });
@@ -360,7 +345,7 @@ router.post('/scriptgen/humanize', (req, res) => {
   const paragraphs = (Array.isArray(b.paragraphs) ? b.paragraphs : []).map(p => String(p || '').trim()).filter(Boolean);
   if (paragraphs.length < 2) return res.status(400).json({ success: false, error: 'nothing to clean' });
   let nar, m;
-  try { nar = _narrator(b.narratorId, b.readingId); m = WM.normalise(b); }
+  try { nar = _narrator(b.narratorId); m = WM.normalise(b); }
   catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
   // The hook is the FIRST paragraph and is fixed. It is sent as context and not returned, so it
@@ -383,8 +368,7 @@ router.post('/scriptgen/humanize', (req, res) => {
       paragraphs: [hook, ...(kept ? cleaned : rest)],
       applied: kept,
       note: kept ? '' : `The editor returned ${cleaned.length} paragraphs for ${rest.length} — kept the original.`,
-      narrator: _readingLabel(nar),
-      reading: nar.reading,
+      narrator: nar.name,
       by,
     };
   }, _keeper(b, (r) => ({
@@ -513,15 +497,14 @@ router.post('/scriptgen/save', async (req, res) => {
     if (run2) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run2.what}) - save when it has landed.`, ...run2 });
   }
 
-  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the dropdowns as they are now: the reading
-  // the script was drawn with (a random one included), the model that wrote it and the one that cleaned it.
+  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the dropdowns as they are now: the model
+  // that wrote it and the one that cleaned it. (V38) No reading any more - a narrator has one voice.
   let kept = null;
   try { kept = b.draftId ? drafts.get(String(b.draftId)) : null; } catch (e) { kept = null; }
   const wrote = (kept && kept.written) || null;
   const cleaned = (kept && kept.humanized && kept.cleaned) || null;
-  const readingId = (wrote && wrote.readingId) || (kept && kept.usedReadingId) || b.readingId;
   let nar = { name: '', id: '' };
-  try { if (b.narratorId) nar = _narrator(b.narratorId, readingId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
+  try { if (b.narratorId) nar = _narrator(b.narratorId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
   let srcTitles = { sourceTitle: '', topicTitle: '' };
   try { srcTitles = _sourceText(b.sourceId, b.topicId); } catch (e) { /* same */ }
 
@@ -536,11 +519,6 @@ router.post('/scriptgen/save', async (req, res) => {
       sourceId: String(b.sourceId || ''), sourceTitle: srcTitles.sourceTitle,
       topicId: String(b.topicId || ''), topicTitle: srcTitles.topicTitle,
       narratorId: nar.id, narratorName: nar.name,
-      // WHICH reading wrote it. Two scripts by the same narrator that do not sound alike are
-      // explained by this line and by nothing else in the record.
-      narratorReadingId: (nar.reading && nar.reading.id) || '',
-      narratorReading: nar.reading && nar.reading.total > 1
-        ? `reading ${nar.reading.index} of ${nar.reading.total}` : '',
       hook: paragraphs[0] || '', tone: String(b.tone || ''),
       // Which aggregator too (phase F3): the same model id can run on two of them.
       provider: String((wrote && wrote.provider) || b.provider || ''),

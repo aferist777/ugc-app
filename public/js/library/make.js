@@ -1015,9 +1015,8 @@ async function _buildControls(settings) {
   // asked first and where the ladder is changed.
   box.appendChild(_ctl('Writes', _writesLine()));
   for (const n of box.querySelectorAll('select,input')) n.addEventListener('change', _queueDraft);
-  const pin = s.readingId || s.readingIndex;   // a draft from before ids keeps a number - read once (_paintNarrators)
-  const want = s.narratorId ? (pin ? `${s.narratorId}#${pin}` : s.narratorId) : 'neutral';
-  await _paintNarrators(want, s.narratorName);
+  // (phase V38) A narrator has ONE voice: no reading to pin. A draft from before that pinned one is the narrator.
+  await _paintNarrators(s.narratorId || 'neutral', s.narratorName);
 }
 
 // The narrator list, rebuilt from the server: once per form, and again when the narrators window
@@ -1030,42 +1029,15 @@ async function _paintNarrators(want, wantName) {
   let list = [];
   try { list = (await J.api('/api/narrators')).narrators || []; } catch (e) { list = []; }
   const values = [{ value: 'neutral', label: 'Neutral' }];
-  for (const n of list) {
-    if (!n.ready) { values.push({ value: n.id, label: n.name + ' — not read' }); continue; }
-    if ((n.readings || 1) < 2) { values.push({ value: n.id, label: n.name }); continue; }
-    values.push({ value: n.id, label: `${n.name} — random of ${n.readings}` });
-    // (phase V23) BY ID: "reading 2" pinned by its number became the old third one when the first was deleted.
-    const reads = n.readingList || [];
-    reads.forEach((r, i) => values.push({ value: `${n.id}#${r.id}`, label: `${n.name} — reading ${i + 1}` }));
-  }
-  let pick = cur || 'neutral';
-  // A draft from before ids pinned "#2": the second reading AS IT IS NOW, once, and saved by its id.
-  {
-    const [nid, ri] = String(pick).split('#');
-    const nar = list.find(n => String(n.id) === nid);
-    if (nar && /^\d+$/.test(ri || '')) {
-      const r = (nar.readingList || [])[parseInt(ri, 10) - 1];
-      if (r) { pick = `${nid}#${r.id}`; if (_gen && _gen.draftId) _queueDraft(); }
-    }
-  }
+  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
+  let pick = String(cur || 'neutral').split('#')[0];
   const note = $('mk-nar-note');
   note.hidden = true;
   if (!values.some(v => v.value === pick) && pick !== 'neutral') {
-    const [nid, ri] = pick.split('#');
-    const nar = list.find(n => String(n.id) === nid);
-    if (nar && ri) {
-      // The narrator is there and only the pinned READING is gone (deleted in the narrators window):
-      // the choice falls back to the narrator itself, a reading picked at random - and says so.
-      pick = nid;
-      note.hidden = false;
-      note.textContent = `The pinned reading of ${nar.name} is gone - one of its readings is picked at random now. Pin another if it matters.`;
-      if (_gen && _gen.draftId) _queueDraft();
-    } else {
-      const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
-      values.push({ value: pick, label: name + ' — deleted' });
-      note.hidden = false;
-      note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
-    }
+    const name = wantName || (sel.selectedOptions[0] && sel.selectedOptions[0].textContent.replace(/ — .*$/, '')) || 'the narrator';
+    values.push({ value: pick, label: name + ' — deleted' });
+    note.hidden = false;
+    note.textContent = `${name}, the narrator this was written with, has been deleted. Pick another - written as it is, the server refuses a narrator it does not have.`;
   }
   sel.textContent = '';
   for (const v of values) { const o = el('option', null, v.label); o.value = v.value; sel.appendChild(o); }
@@ -1092,15 +1064,12 @@ const _controlsReady = () => !!$('mk-c-tone');
 function _opts() {
   if (!_controlsReady()) return {};
   const nar = $('mk-c-narrator');
-  const [narratorId, readingPin] = String(nar.value).split('#');
+  const narratorId = String(nar.value).split('#')[0];
   return {
     scenes: parseInt($('mk-c-scenes').value, 10),
     tone: $('mk-c-tone').value,
     narratorId,
-    // The reading pinned in the dropdown, by its id (phase V23) - '' is random.
-    readingId: readingPin || '',
-    readingPin: readingPin || '',
-    // The name alone, not the option's label ("Azazin — reading 2"): it is what the draft remembers
+    // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
     // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
@@ -1171,7 +1140,7 @@ function _payload() {
     humanized: !!_gen.humanized,
     settings: {
       tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName, readingId: o.readingPin, readingIndex: '',
+      narratorId: o.narratorId, narratorName: o.narratorName,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1269,8 +1238,6 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     hooks: (full && full.hooks) || [],
     paragraphs: (full && full.paragraphs) || [],
     humanized: !!(full && full.humanized),
-    // (phase V23) The reading the stages drew with, kept in the draft - a reload no longer forgets it.
-    readingId: (full && full.usedReadingId) || '',
   };
   _paintFrom();
   $('mk-topic').value = full ? (full.topic || full.topicTitle || '') : (topic ? topic.title : '');
@@ -1451,12 +1418,10 @@ async function _landInto(what, r) {
   if (what === 'hooks' && Array.isArray(res.hooks)) {
     _gen.hooks = res.hooks;
     $('mk-hook').value = '';
-    _noteReading(res);
     _renderHooks(_gen.hooks);
   } else if (what === 'script' && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
     _gen.humanized = false;
-    _noteReading(res);
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
   } else if (what === 'humanize' && Array.isArray(res.paragraphs)) {
@@ -1527,8 +1492,6 @@ async function _runGo() {
   if (!_controlsReady()) { J.sayJob($('mk-job'), 'the model list is not loaded yet', true); return; }
   const topic = $('mk-topic').value.trim();
   if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); return; }
-  // ONE draw of the narrator's reading per press, not per request.
-  _gen.readingId = '';
   if ($('mk-hook').value.trim()) { _runScript(); return; }
   const gen = _gen;
   _setStage('hooks');
@@ -1536,18 +1499,10 @@ async function _runGo() {
   const o = _opts();
   const ok = await _runStage('/api/scriptgen/hooks', { ...o, topic }, _TIMING.hooks(o), async (r) => {
     _gen.hooks = r.hooks || [];
-    _noteReading(r);
     _renderHooks(_gen.hooks);
     await _saveDraft();
   });
   if (_gen === gen) _setStage(ok && _gen.hooks.length && !$('mk-hook').value.trim() ? 'pick' : 'idle');
-}
-
-// Which reading wrote it - recorded because it has to go into the scenario's provenance on save.
-function _noteReading(r) {
-  const rd = r && r.reading;
-  _gen.readingId = (rd && rd.id) || '';
-  $('mk-used').textContent = (!rd || rd.total < 2) ? '' : `written with ${r.narrator}`;
 }
 
 function _newHooks() {
@@ -1565,11 +1520,9 @@ async function _runScript() {
   _setStage('script');
   const o = _opts();
   const body = { ...o, topic, hook };
-  if (_gen.readingId) body.readingId = _gen.readingId;   // the reading the hooks were drawn with
   await _runStage('/api/scriptgen/script', body, _TIMING.script(o), async (r) => {
     _gen.paragraphs = r.paragraphs || [];
     _gen.humanized = false;
-    _noteReading(r);
     if (!$('mk-title').value.trim()) $('mk-title').value = r.title || topic.slice(0, 60);
     _renderScenes();
     await _saveDraft();
@@ -1622,11 +1575,8 @@ async function _humanize() {
   if (!_gen || !_gen.paragraphs.length || _busy()) return;
   const gen = _gen;
   _setStage('working');
-  // The SAME reading that wrote the script: a cleaning pass aimed at another description of the
-  // voice edits the script towards a voice it was not written in.
   const o = _opts();
   const body = { ...o, paragraphs: _gen.paragraphs };
-  if (_gen.readingId) body.readingId = _gen.readingId;
   await _runStage('/api/scriptgen/humanize', body, _TIMING.humanize(o), async (r) => {
     _gen.paragraphs = r.paragraphs || _gen.paragraphs;
     _gen.humanized = !!r.applied;
@@ -1678,8 +1628,6 @@ async function _saveScript() {
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
         narratorId: o.narratorId, tone: o.tone,
-        // The reading the script was ACTUALLY written with: "random" has to resolve to a real one.
-        readingId: _gen.readingId || o.readingId,
         sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,
         draftId: _gen.draftId,
       }),
