@@ -11,8 +11,8 @@
 //   GET    /api/sources/jobs/:jobId      -> { state, step, error, source }
 //
 // ADDING ONE (phase V28.1, lib/source-intake.js - the frame decides, the whole way in is an Alerts row):
-//   POST   /api/sources/add/link         { url, mineWith } -> { read }
-//   POST   /api/sources/add/file         { path, title, mineWith } -> { read }   (the app's window hands the path over)
+//   POST   /api/sources/add/link         { url } -> { read }    (V37: an old page's `mineWith` is kept, not read)
+//   POST   /api/sources/add/file         { path, title } -> { read }   (the app's window hands the path over)
 //   GET    /api/sources/add              -> { asks: [read] }     the questions still waiting
 //   GET    /api/sources/add/:id          -> { read }             reading | ask | source | uploads | audio | error | dropped
 //   POST   /api/sources/add/:id/answer   { as: source | uploads | drop } -> { read }

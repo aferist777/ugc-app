@@ -13,7 +13,7 @@
 //   POST   /api/narrators/:id/samples/link     { url } -> { jobId }   (its sound only, no login - phase V27)
 //   DELETE /api/narrators/:id/samples/:index   -> { narrator }
 //   DELETE /api/narrators/:id/readings/:rid    -> { narrator, readings }
-//   POST   /api/narrators/:id/analyse          { provider, model, effort } -> { jobId }  appends
+//   POST   /api/narrators/:id/analyse          {} -> { jobId }  appends - by the agents' ladder (V37)
 //   GET    /api/narrators/jobs/:jobId          -> { state, step, error, narrator }
 //
 // TWO CALLS RUN AS JOBS because both take longer than any sane request timeout: transcribing
@@ -30,9 +30,8 @@ const multer = require('multer');
 
 const store = require('../lib/narrators-store');
 const P = require('../lib/writing-prompts');
-const { callJSON, runnable } = require('../lib/llm-json');
+const { callLadder } = require('../lib/llm-json');
 const STT = require('../lib/stt-replicate');
-const WM = require('../lib/writing-models');
 const YTDLP = require('../lib/ytdlp');
 
 const router = express.Router();
@@ -234,8 +233,9 @@ router.post('/narrators/:id/analyse', (req, res) => {
   const rec = store.get(id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such narrator' });
 
-  // Shuffled, and with sampling left on (temperature 1): this call is meant to be run more than
-  // once, and two readings that come back word-for-word identical would make the history pointless.
+  // Shuffled: this call is meant to be run more than once, and two readings that come back word-for-word identical
+  // would make the history pointless. (phase V37, the owner's (л2) b) By the agents' ladder at effort medium, and no
+  // temperature any more - Claude 5.5 refuses one, and the shuffle is what makes two readings differ.
   const samples = store.shuffledSampleTexts(rec);
   if (!samples.length) return res.status(400).json({ success: false, error: 'no samples to read' });
   const words = store.totalWords(rec);
@@ -246,22 +246,20 @@ router.post('/narrators/:id/analyse', (req, res) => {
       error: `${words} words is not enough to read a voice from — at least ${store.MIN_SAMPLE_WORDS} are needed.` });
   }
 
-  const opts = WM.normalise(runnable(req.body || {}));
   const jobId = _newJobId();
   const job = _jobs[jobId] = { state: 'running', step: `reading ${samples.length} samples`, at: Date.now(), error: null, narrator: null };
   res.json({ success: true, jobId });
 
   (async () => {
     try {
-      const profile = await callJSON({
+      const { data: profile, by } = await callLadder({
         system: P.NARRATOR_ANALYSIS_SYSTEM,
         user: P.narratorAnalysisUserPrompt(samples),
         schema: P.NARRATOR_SCHEMA,
         name: 'narrator',
-        provider: opts.provider, model: opts.model, effort: opts.effort,
-        temperature: 1,
+        effort: 'medium',
       });
-      const saved = store.addReading(id, { profile, model: opts.model });
+      const saved = store.addReading(id, { profile, model: by.model });
       const n = store.readings(saved).length;
       job.state = 'done';
       job.step = n === 1 ? 'the voice is read' : `reading ${n} of ${n} stored`;
