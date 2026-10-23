@@ -212,27 +212,53 @@ async function _enrich(nar, paragraphs, o = {}) {
   const notes = [];
   // What it says it put in, checked: of the set, into a paragraph it was given, and there in the text.
   const claimed = new Map();
+  const unfound = [];
+  const misplaced = [];
+  // Where it went in: the paragraph the answer names, numbered from 2 (the hook is 1) - and when the entry is not new
+  // there, the paragraph it IS new in (the paid check: Claude counted from 1 in its own answer).
+  const isNew = (e, j) => j >= 0 && j < back.length && narrators.appearsIn(e.text, back[j]) && !narrators.appearsIn(e.text, rest[j]);
   for (const u of data.used || []) {
     const ref = String(u.ref || '').trim().replace(/^\[|\]$/g, '').toLowerCase();
     const e = set.refs[ref];
-    const i = (parseInt(u.paragraph, 10) || 0) - 2;           // numbered from 2 - the hook is 1
-    if (!e || i < 0 || i >= back.length) continue;
-    if (!narrators.appearsIn(e.text, back[i]) || narrators.appearsIn(e.text, rest[i])) continue;
+    if (!e) { unfound.push(ref || '?'); continue; }
+    const n = parseInt(u.paragraph, 10) || 0;
+    let i = [n - 2, n - 1].find(j => isNew(e, j));
+    if (i == null) i = back.findIndex((p, j) => isNew(e, j));
+    if (i == null || i < 0) {
+      // Already in the script before this pass (the writer took it from the voice - the paid check's "Wild, right?"):
+      // not put in now, and not a fault either.
+      if (!back.some((p, j) => narrators.appearsIn(e.text, p) && narrators.appearsIn(e.text, rest[j]))) unfound.push(`"${e.text}"`);
+      continue;
+    }
+    // (the owner's (д8)) An opening line only at the start of the paragraph after the hook, a closing one only in the last.
+    if (e.list === 'phrases' && ((e.place === 'opening' && i !== 0) || (e.place === 'ending' && i !== back.length - 1))) {
+      misplaced.push(i + 2);
+      continue;
+    }
     if (!claimed.has(i)) claimed.set(i, []);
     if (!claimed.get(i).some(x => x.id === e.id)) claimed.get(i).push({ list: e.list, id: e.id, text: e.text, paragraph: i + 2 });
   }
   const out = rest.slice();
   const used = [];
+  const grew = [];
+  const bare = [];
   back.forEach((p, i) => {
     if (p === rest[i]) return;
-    if (!claimed.has(i)) return;                                // changed with nothing of the set in it: not the editor's job
-    if (_words(p) > Math.ceil(_words(rest[i]) * 1.2) + 1) {
-      notes.push(`Paragraph ${i + 2} grew by more than a fifth - kept as it was.`);
-      return;
-    }
+    if (misplaced.includes(i + 2)) return;
+    // Changed with nothing of the set in it: not this editor's job - the script's own words stay.
+    if (!claimed.has(i)) { bare.push(i + 2); return; }
+    if (_words(p) > Math.ceil(_words(rest[i]) * 1.2) + 1) { grew.push(i + 2); return; }
     out[i] = p;
     used.push(...claimed.get(i));
   });
+  // Said, so a pass that put nothing in is not a silence (the paid check: one answer changed paragraphs and named
+  // nothing the server could find).
+  const list = (ns) => (ns.length === 1 ? `Paragraph ${ns[0]}` : `Paragraphs ${ns.join(', ')}`);
+  if (grew.length) notes.push(`${list(grew)} grew by more than a fifth - kept as ${grew.length === 1 ? 'it was' : 'they were'}.`);
+  const mis = [...new Set(misplaced)];
+  if (mis.length) notes.push(`${list(mis)} got an opening or closing line of his in the wrong place - kept as ${mis.length === 1 ? 'it was' : 'they were'}.`);
+  if (bare.length) notes.push(`${list(bare)} came back changed with none of his words or phrases in ${bare.length === 1 ? 'it' : 'them'} - kept as ${bare.length === 1 ? 'it was' : 'they were'}.`);
+  if (unfound.length) notes.push(`Named as put in but not found in the text: ${unfound.slice(0, 4).join(', ')}${unfound.length > 4 ? '…' : ''}.`);
   return { paragraphs: [hook, ...out], used, by, density, notes };
 }
 
@@ -781,6 +807,17 @@ router.post('/scriptgen/save', async (req, res) => {
   const enr = (kept && kept.enriched) || null;
   const inScript = (enr && nar.id && nar.id !== 'neutral' ? enr.used || [] : [])
     .filter(u => paragraphs.some(p => narrators.appearsIn(u.text, p)));
+  // ...and his PHRASES the script says word for word, whoever put them there - the writer reaches for a signature line
+  // the voice quotes (the paid check), and "used lately" has to know it.
+  if (nar.id && nar.id !== 'neutral') {
+    try {
+      const rec = narrators.get(nar.id);
+      for (const e of ((rec && rec.phrases) || []).filter(x => x.on)) {
+        if (inScript.some(u => u.list === 'phrases' && u.id === e.id)) continue;
+        if (paragraphs.some(p => narrators.saidIn(e.text, p))) inScript.push({ list: 'phrases', id: e.id, text: e.text });
+      }
+    } catch (e) { /* a count missed is not a reason to lose the script */ }
+  }
 
   const payload = {
     title,
