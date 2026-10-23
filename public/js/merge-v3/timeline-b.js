@@ -366,7 +366,8 @@ export function removeClip(trackId, clipId) {
 }
 
 // ── Selecting several at once ───────────────────────────────────────────────
-// Drag across empty lane and a band follows the pointer; everything it TOUCHES is taken,
+// Shift held, drag across empty lane and a band follows the pointer (without Shift that drag is the playhead's - phase
+// V36, T2); everything it TOUCHES is taken,
 // not only what it encloses. Enclosure sounds tidier and is wrong here: lanes are 24px tall
 // and clips are often wider than the screen, so a band that had to contain a clip could
 // never catch one.
@@ -444,20 +445,56 @@ function _paintSel() {
   _afterSelB();
 }
 
+// THE PLAYHEAD GOES WHERE THE PRESS IS, AND FOLLOWS IT WHILE HELD (phase V36, T2; the owner 2026-10-23, (у9), (ф6): "я мог
+// перетаскивать плейхед только кликнув на него, если я промахивался то он не перетаскивался"): a press on the ruler or on bare
+// timeline - a lane where no clip is, the seam, the room between the blocks - puts the playhead there and drags it until the
+// button is let go. A press on a clip still takes the clip; the band that picks several is drawn with Shift held.
+// The moment under the pointer is read off the lanes' left edge - the same GUTTER the playhead is drawn from.
+function _timeAtX(x) {
+  const host = _host();
+  const inner = host && host.querySelector('.mv3b-inner');
+  if (!inner) return 0;
+  return Math.max(0, (x - inner.getBoundingClientRect().left - GUTTER) / _zoom());
+}
+
+function _scrub(e) {
+  e.preventDefault();
+  _seekTo(_timeAtX(e.clientX));
+  document.body.classList.add('mv3-scrubbing');
+  const move = (ev) => _seekTo(_timeAtX(ev.clientX));
+  const up = () => {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+    document.body.classList.remove('mv3-scrubbing');
+  };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+}
+
 function _beginBand(e) {
-  // Not from the label: that is the track's own handle, and a drag starting there is a
-  // mis-aimed click rather than the beginning of a rectangle.
-  if (e.button !== 0 || e.target.closest('.mv3b-clip') || e.target.closest('.mv3b-lbl') || e.target.closest('.mv3b-ruler')) return;
+  // Not from the label or the square beside it: that is the track's own handle, and a drag starting there is a
+  // mis-aimed click rather than the beginning of a rectangle - nor a seek.
+  if (e.button !== 0 || e.target.closest('.mv3b-clip') || e.target.closest('.mv3b-lbl') || e.target.closest('.mv3b-box')
+      || e.target.closest('.mv3b-ruler')) return;
   const host = _host();
   if (!host || !host.contains(e.target)) return;
+  // In the frozen gutter on the left (the squares and the names stay there whatever the scroll), even between the blocks
+  // where no name is drawn: nothing.
+  if (e.clientX < host.getBoundingClientRect().left + GUTTER) return;
+  // (phase V36, T2) Bare timeline without Shift: the playhead, dragged - and whatever was picked is let go of, as a press
+  // on bare lane always did (phase L6).
+  if (!e.shiftKey) {
+    _clearSel();
+    _scrub(e);
+    return;
+  }
   const x0 = e.clientX, y0 = e.clientY;
   const el = document.createElement('div');
   el.className = 'mv3b-band';
   document.body.appendChild(el);
-  // The selection is not cleared HERE: a press on bare lane is a seek until it moves, and a
-  // sweep that is adding (Shift) keeps what was picked. The moment the press becomes a sweep,
-  // _moveBand replaces the selection (or adds to it); let go without sweeping and _endBand
-  // clears it. Esc clears without sweeping.
+  // Held with Shift, so the sweep ADDS to what was picked (a plain press on bare lane has let it go already - phase V36):
+  // the moment the press becomes a sweep, _moveBand adds what it touches; let go without sweeping and _endBand seeks there.
+  // Esc clears without sweeping.
   _band = { x0, y0, el, add: e.shiftKey, moved: false, lane: e.target.closest('.mv3b-lane') };
   e.preventDefault();
 }
@@ -1099,24 +1136,11 @@ function _ruler(dur) {
     m.textContent = _fmtT(Math.round(t * 10) / 10);
     lane.appendChild(m);
   }
-  // Pressing the ruler moves the playhead - the same gesture as every other editor, and the
-  // only way to reach a moment that has no clip under it.
+  // Pressing the ruler moves the playhead - the same gesture as every other editor - and HELD, it scrubs: the playhead
+  // and the picture follow the pointer until it is let go. The ruler touches no pick; bare lane lets it go (_beginBand).
   lane.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    e.preventDefault();
-    const r = lane.getBoundingClientRect();
-    const to = (x) => _seekTo((x - r.left) / _zoom());
-    to(e.clientX);
-    // HELD, it scrubs: the playhead and the picture follow the pointer until it is let go.
-    document.body.classList.add('mv3-scrubbing');
-    const move = (ev) => to(ev.clientX);
-    const up = () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
-      document.body.classList.remove('mv3-scrubbing');
-    };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    _scrub(e);
   });
   row.appendChild(lane);
   return row;
