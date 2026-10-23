@@ -496,6 +496,11 @@ router.createScenario = function createScenario(body) {
 };
 router.MIN_LINES = MIN_LINES;
 router.effectiveLabels = effectiveLabels;
+// (phase V38, block D4) One scenario as the page reads it - the generator makes a draft of it to rewrite in a narrator's voice.
+router.getScenario = function getScenario(id) {
+  const s = _load().find(x => String(x.id) === String(id));
+  return s ? _full(s) : null;
+};
 
 // THE SUGGESTION LISTS REBUILT FROM WHAT SCENARIOS USE, once per library (phase F7, the owner
 // 2026-09-30: "delete all the junk you find"). Typed-and-abandoned values ("fesdfsd", "dsfsdfds")

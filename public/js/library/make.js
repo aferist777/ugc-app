@@ -950,9 +950,11 @@ function _showForm() {
 
 function _paintFrom() {
   if (!_gen) return;
-  $('mk-from').textContent = _gen.sourceTitle
-    ? `from “${_gen.sourceTitle}”${_gen.topicSpan ? ' · ' + _gen.topicSpan : ''}`
-    : 'without a source';
+  $('mk-from').textContent = _gen.from
+    ? `rewriting “${_gen.from.title || 'a scenario'}” from the shelf - saved as a new scenario`
+    : _gen.sourceTitle
+      ? `from “${_gen.sourceTitle}”${_gen.topicSpan ? ' · ' + _gen.topicSpan : ''}`
+      : 'without a source';
 }
 
 // A field of the form: its name above it, and beside the name anything that belongs to the field (the
@@ -1140,7 +1142,15 @@ function _paintGo() {
   $('mk-newhooks').disabled = busy;
   $('mk-humanize').disabled = busy;
   $('mk-save').disabled = busy;
-  $('mk-enrich').hidden = !written || !_canEnrich();
+  // (V38, block D4) A scenario of the shelf not yet in the narrator's voice: the cleaning press is the voice pass, and the
+  // words wait for it.
+  const foreign = !!(_gen && _gen.foreign);
+  $('mk-humanize').textContent = foreign ? 'Rewrite in the narrator’s voice' : 'Clean to the narrator';
+  $('mk-humanize').classList.toggle('primary', foreign);
+  $('mk-humanize').title = foreign
+    ? 'Rewrite every line in the narrator’s voice - as many lines, each about as long, the first too - then put his words and phrases in'
+    : 'Bring the script to the narrator and take out what sounds like a machine; the hook stays';
+  $('mk-enrich').hidden = !written || foreign || !_canEnrich();
   $('mk-enrich').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
   document.querySelectorAll('#mk-scenes .mk-scene-rw').forEach(b => { b.disabled = busy; });
@@ -1380,6 +1390,8 @@ const _TIMING = {
   script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
   humanize: (o) => ({ key: `l2-humanize|${o.model}|${o.effort}`, label: 'Cleaning to the narrator…', estimateMs: J.EST.humanize }),
   rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
+  // (V38, block D4) A scenario of the shelf rewritten in the narrator's voice.
+  voice: (o) => ({ key: `l2-voice|${o.model}|${o.effort}`, label: 'Rewriting in the narrator’s voice…', estimateMs: J.EST.humanize }),
   // (V38) The narrator's words and phrases - the second row of a script's countdown, or a press of its own.
   enrich: (o) => ({ key: `l2-enrich|${o.model}|${o.effort}|${o.density || 'normal'}`, label: 'Adding the narrator\'s words and phrases…', estimateMs: J.EST.enrich }),
 };
@@ -1485,8 +1497,8 @@ async function _landInto(what, r) {
     _noteEnriched(res);
   } else if ((what === 'humanize' || what === 'enrich') && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
-    if (what === 'humanize') _gen.humanized = !!res.applied;
-    else _noteEnriched(res);
+    if (what === 'humanize') { _gen.humanized = !!res.applied; _landVoice(res); }
+    if (what === 'enrich' || res.voice) _noteEnriched(res);
     _renderScenes();
   } else if (what === 'rewrite' && res.paragraph && res.index < (_gen.paragraphs || []).length) {
     _gen.paragraphs[res.index] = _spliced(res, _gen.paragraphs[res.index]);
@@ -1502,7 +1514,7 @@ function _stageRow(rec) {
   const run = rec.run || {};
   const second = rec.phase && rec.phase.name === 'enrich';
   const t = second ? _TIMING.enrich({ ...run, ...(_controlsReady() ? { model: run.model || _opts().model, effort: run.effort || _opts().effort } : {}) })
-    : run.timing
+    : run.timing || (run.voice ? _TIMING.voice(run) : null)
     || (_TIMING[run.what] ? _TIMING[run.what](run, run.index || 0)
       : { key: 'l2-stage', label: 'Still writing…', estimateMs: J.EST.script(15) });
   const startedAt = second ? (rec.phase.at || Date.now()) : (run.startedAt || Date.now());
@@ -1540,6 +1552,8 @@ async function _reloadDraftInto() {
     _gen.hooks = d.hooks || [];
     _gen.paragraphs = d.paragraphs || [];
     _gen.humanized = !!d.humanized;
+    _gen.enriched = d.enriched || null;
+    _gen.foreign = !!d.foreign;
     if (d.hook) $('mk-hook').value = d.hook;
     if (d.title && !$('mk-title').value.trim()) $('mk-title').value = d.title;
     const needsPick = _gen.hooks.length && !$('mk-hook').value.trim();
@@ -1681,14 +1695,23 @@ async function _humanize() {
   _setStage('working');
   const o = _opts();
   const body = { ...o, paragraphs: _gen.paragraphs };
-  await _runStage('/api/scriptgen/humanize', body, _TIMING.humanize(o), async (r) => {
+  await _runStage('/api/scriptgen/humanize', body, _gen.foreign ? _TIMING.voice(o) : _TIMING.humanize(o), async (r) => {
+    _landVoice(r);
     _gen.paragraphs = r.paragraphs || _gen.paragraphs;
     _gen.humanized = !!r.applied;
     _renderScenes();
     await _saveDraft();
     if (r.note) J.sayJob($('mk-job'), r.note);
+    else if (r.voice) _noteEnriched(r);
   });
   if (_gen === gen) _setStage('idle');
+}
+
+// (V38, block D4) The voice pass landed: the scenario is the narrator's now, its first line the hook.
+function _landVoice(r) {
+  if (!r || !r.voice) return;
+  _gen.foreign = !r.applied;
+  if (r.applied && r.paragraphs && r.paragraphs[0]) $('mk-hook').value = r.paragraphs[0];
 }
 
 // `fragment` (V38, the owner's (д13)): { text, start } - only those words of the paragraph are written again.

@@ -164,7 +164,8 @@ function _draftRow(dr) {
   row.title = 'Continue this draft in the generator';
   const main = _el('div', 'lib-srow-main');
   main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
-  const tail = [dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
+  // (V38) A scenario of the shelf being rewritten in a narrator's voice says which one.
+  const tail = [dr.fromTitle ? 'rewriting “' + dr.fromTitle + '”' : dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
     dr.paragraphs ? dr.paragraphs + (dr.paragraphs === 1 ? ' paragraph' : ' paragraphs') : '',
     String(dr.narratorName || '').replace(/ — .*$/, '')].filter(Boolean).join(' · ');
   main.appendChild(_el('div', 'lib-srow-s', tail));
@@ -592,7 +593,7 @@ async function _show(it) {
     // The names go first and whole-row wide, the short facts two to a row after them (phase G5).
     const gone = o.sourceId && o.sourceGone;
     if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted', true);
-    else _row(from, 'written from', String(o.sourceTitle || '').trim() || 'no source', true);
+    else if (!(o.fromId && !o.sourceId)) _row(from, 'written from', String(o.sourceTitle || '').trim() || 'no source', true);
     for (const [key, label, wide] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim(), wide);
     if (o.humanized) _row(from, 'cleaning pass', 'applied');
     fold.appendChild(from);
@@ -614,10 +615,15 @@ async function _show(it) {
   make.type = 'button';
   make.title = 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
+  // (phase V38, block D4) This scenario's lines rewritten in a narrator's voice, then his words and phrases put in - in
+  // the generator, saved as a NEW scenario; this one is not touched.
+  const voice = _el('button', 'lib-btn', 'In a narrator’s voice…');
+  voice.type = 'button';
+  voice.title = 'Rewrite these lines in a narrator’s voice and add his words and phrases - in the generator; saved as a new scenario, this one stays as it is';
   const del = _el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this scenario';
-  foot.append(make, st, _el('span', 'sp'), del);
+  foot.append(make, voice, st, _el('span', 'sp'), del);
   body.appendChild(edit);
   // The foot is the column's last child, stuck to its bottom edge (phase F6): Make video and Delete are
   // in sight however long the lines are.
@@ -633,6 +639,7 @@ async function _show(it) {
   // Leaving the lines is the save that makes them English (phase V29) - never the pause in the typing.
   ta.addEventListener('blur', () => _flushA(a, true));
   make.addEventListener('click', () => _makeVideo(a, make));
+  voice.addEventListener('click', () => _inVoice(a, voice));
   del.addEventListener('click', () => _delete(s, del));
 
   // A script needs no inner scrolling when it fits; past that the textarea scrolls.
@@ -743,6 +750,24 @@ async function _makeVideo(a, btn) {
     say('Not made: ' + e.message, 'err');
     btn.disabled = false;
   }
+}
+
+// (phase V38, block D4) The lines stored first, then a draft of them in the generator (POST /api/scriptgen/from-scenario):
+// there the narrator is chosen and one press rewrites them in his voice and puts his words in.
+async function _inVoice(a, btn) {
+  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
+  if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to rewrite.', 'err'); return; }
+  btn.disabled = true;
+  if (!(await _flushA(a, true))) { btn.disabled = false; return; }
+  try {
+    const d = await fetch('/api/scriptgen/from-scenario', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenarioId: a.s.id }),
+    }).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    if (_hooks.openDraft) _hooks.openDraft(d.draft.id);
+  } catch (e) {
+    say('Not opened: ' + e.message, 'err');
+  } finally { btn.disabled = false; }
 }
 
 async function _delete(s, btn) {

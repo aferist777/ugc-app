@@ -248,6 +248,84 @@ function _enrichedRecord(r, prev) {
   };
 }
 
+// ── a scenario of the shelf, in the narrator's voice (phase V38, block D4) ─────
+// "Rewrite in a narrator's voice" on a scenario makes a DRAFT of its lines (`from`, `foreign`); the generator's cleaning
+// press on such a draft is this stronger pass - every line, the first too, as many lines, each about as long (the
+// owner's (д10)) - and then, in the same job, the narrator's words and phrases. Saving it makes a NEW scenario that says
+// which one it came from; the one on the shelf is not touched.
+
+router.post('/scriptgen/from-scenario', (req, res) => {
+  const s = scen3.getScenario(String((req.body || {}).scenarioId || ''));
+  if (!s) return res.status(404).json({ success: false, error: 'no such scenario' });
+  const lines = (s.lines || []).map(l => String((l && l.text) || '').trim()).filter(Boolean);
+  if (lines.length < scen3.MIN_LINES) {
+    return res.status(400).json({ success: false, error: `the scenario has ${lines.length} lines - at least ${scen3.MIN_LINES} are needed` });
+  }
+  // Its narrator, when it has one that still exists - its own label first, then the one that wrote it.
+  const want = (s.narrator && s.narrator.id) || (s.origin && s.origin.narratorId) || '';
+  const nar = want ? narrators.get(want) : null;
+  const role = (s.roles || [])[0] || {};
+  const tone = WM.TONES.includes((s.origin || {}).tone) ? s.origin.tone : WM.DEFAULTS.tone;
+  try {
+    const draft = drafts.save({
+      topic: s.title || '', title: s.title || '', hook: lines[0], paragraphs: lines, humanized: false,
+      from: { scenarioId: String(s.id), title: s.title || '' }, foreign: true,
+      settings: {
+        tone, scenes: Math.min(WM.SCENES_MAX, Math.max(MIN_LINES, lines.length)),
+        narratorId: nar ? nar.id : 'neutral', narratorName: nar ? nar.name : 'Neutral', density: 'normal',
+      },
+      save: { gender: role.gender || '', vertical: s.vertical || '', product: s.product || '' },
+    });
+    res.json({ success: true, draft });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+function _voice(res, b, nar, lines) {
+  if (!nar.rec) return res.status(400).json({ success: false, error: 'Choose the narrator whose voice it is to be rewritten in.' });
+  if (!narrators.hasVoice(nar.rec)) return res.status(400).json({ success: false, error: `${nar.name} has no voice yet - read his samples first (Narrators).` });
+  const density = _density(b.density);
+  const enrich = density !== 'off' && narrators.writerSet(nar.rec).size > 0;
+  const keep = _keeper(b, (r) => ({
+    paragraphs: r.paragraphs, hook: r.paragraphs[0] || '', foreign: !r.applied, humanized: !!r.applied,
+    ...(r.applied ? {
+      written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
+      cleaned: null,
+    } : {}),
+    enriched: r.enriched ? _enrichedRecord(r.enriched, null)
+      : r.enrichError ? { density, used: [], error: r.enrichError } : null,
+  }));
+  _start(res, `Rewriting ${lines.length} lines in ${nar.name}'s voice`, async (step, signal, phase) => {
+    const { data, by } = await callLadder({
+      system: P.VOICE_SYSTEM,
+      user: P.voiceUserPrompt({ lines, narratorBlock: nar.block }),
+      schema: P.VOICE_SCHEMA, name: 'voiced', effort: EFFORT, signal,
+    });
+    const back = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
+    // As many lines as were given, or the scenario stays as it was: a line lost is a beat of the story lost.
+    if (back.length !== lines.length) {
+      return { paragraphs: lines, applied: false, voice: true, by, narrator: nar.name,
+        note: `The editor returned ${back.length} lines for ${lines.length} - the scenario was kept as it was; press again.` };
+    }
+    // About as long as the line it replaces (the owner's (д10)) - told, and said where it is not.
+    const off = back.map((p, i) => [i + 1, _words(p), _words(lines[i])]).filter(([, w, was]) => w > Math.ceil(was * 1.2) + 1 || w < Math.floor(was * 0.8) - 1);
+    const out = { paragraphs: back, applied: true, voice: true, by, narrator: nar.name, density,
+      notes: off.length ? [`${off.length === 1 ? 'Line' : 'Lines'} ${off.map(x => x[0]).join(', ')} came back more than a fifth ${off.length === 1 ? 'longer or shorter than it was' : 'longer or shorter than they were'}.`] : [] };
+    if (enrich) {
+      if (keep) { try { keep(out); } catch (e) { /* the job's own landing writes it again */ } }
+      phase('enrich');
+      step('Adding the narrator\'s words and phrases');
+      try {
+        const e = await _enrich(nar, back, { density, signal });
+        if (e) { out.paragraphs = e.paragraphs; out.enriched = e; out.notes = out.notes.concat(e.notes || []); }
+      } catch (err) {
+        if (err && err.cancelled) throw err;
+        out.enrichError = err.message;
+      }
+    }
+    return out;
+  }, keep, { key: _runKey(b), what: 'humanize', voice: true, model: _first().model, effort: EFFORT, density });
+}
+
 // The narrator's set at the light measure, for a rewrite: told, never required (the owner's (д13)).
 function _setText(nar) {
   if (!nar || !nar.rec) return '';
@@ -489,6 +567,9 @@ router.post('/scriptgen/humanize', (req, res) => {
   let nar, m;
   try { nar = _narrator(b.narratorId); m = WM.normalise(b); }
   catch (e) { return res.status(400).json({ success: false, error: e.message }); }
+  // (V38, block D4) A scenario of the shelf not yet in the narrator's voice: the stronger pass, the first line too.
+  const draft = b.draftId ? drafts.get(String(b.draftId)) : null;
+  if (draft && draft.foreign) return _voice(res, b, nar, paragraphs);
 
   // The hook is the FIRST paragraph and is fixed. It is sent as context and not returned, so it
   // is held here and put back afterwards - the editor never gets to rewrite the opening line.
@@ -660,9 +741,13 @@ router.post('/scriptgen/save', async (req, res) => {
   // back beside the scenario the moment its answer landed.
   const run = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
   if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - save when it has landed.`, ...run });
-  if (paragraphs.length < MIN_LINES) {
+  // (V38, block D4) A scenario of the shelf rewritten in a voice keeps its own number of lines - the store's floor, not
+  // the generator's.
+  const fromShelf = !!((b.draftId && drafts.get(String(b.draftId))) || {}).from;
+  const minLines = fromShelf ? scen3.MIN_LINES : MIN_LINES;
+  if (paragraphs.length < minLines) {
     return res.status(400).json({ success: false,
-      error: `the scenarios store needs at least ${MIN_LINES} lines — this script has ${paragraphs.length}` });
+      error: `the scenarios store needs at least ${minLines} lines — this script has ${paragraphs.length}` });
   }
   // The third gate, said here rather than let through to a 500: the store reads the narrator's
   // gender off the first role, and refuses a scenario without one.
