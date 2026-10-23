@@ -28,3 +28,17 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
   color:oklch(.76 .11 160);
 }
 .mv3b-clip.is-audio.is-sel .mv3b-wave{color:oklch(.84 .12 160)}
+
+/* ── The stretch to cut out (T5) ──────────────────────────────────────────────
+   Drawn over a wave, laid across every lane - it goes from all of them. Red: Delete takes it away. Under the frozen names
+   (z-index 2-3) and the playhead (6), over the clips; the mouse passes through it. */
+.mv3b-range{
+  position:absolute; top:0; bottom:0; z-index:1; pointer-events:none;
+  background:oklch(from var(--danger) l c h / .18);
+  border-left:1px solid var(--danger); border-right:1px solid var(--danger);
+}
+.mv3b-range-t{
+  position:absolute; top:2px; left:2px; padding:1px 4px; border-radius:var(--r-xs);
+  background:var(--danger); color:#fff; font:700 8.5px/1.25 var(--font); white-space:nowrap;
+}
+body.mv3b-ranging, body.mv3b-ranging *{cursor:text !important; user-select:none}

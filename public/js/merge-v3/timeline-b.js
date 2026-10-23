@@ -29,7 +29,7 @@
 import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import * as Views from './lib-views.js';
-import { askDelete, short } from './ask.js';
+import { askDelete, short, note } from './ask.js';
 import { DRAG_TYPE, DRAG_MEDIA, isStill, STILL_DUR } from './store.js';
 import { locked } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
@@ -41,6 +41,8 @@ import { isHeard } from '../captions/heard.js';
 import { normalize as normalizeFrame } from '../framing/path.js';
 // (phase V36, T4) A sound's waveform on its clip.
 import { paintWaves, onPeaks } from './tl-wave.js';
+// (phase V36, T5) A stretch cut out of every lane, the rest moved left.
+import { cutRefused, rippleCut, MIN_CUT } from './tl-cut.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -521,6 +523,8 @@ function _moveBand(e) {
     if (w <= 3 && h <= 3) return;
     _band.moved = true;
     _selBack = null;
+    // (phase V36, T5) Clips picked: a drawn stretch goes, so Delete means them.
+    _letRangeGo();
     if (!_band.add) _clearSel();
   }
   Object.assign(_band.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
@@ -609,8 +613,115 @@ function _edgeOf(e, el) {
   return null;
 }
 
+// ── A stretch drawn over a wave, cut out of every lane (phase V36, T5) ──────
+// The owner 2026-10-23, (у8): "протянуть мышью по волне и Delete" - the stretch goes from EVERY lane and what is after it
+// moves left (js/merge-v3/tl-cut.js; captions by js/captions/cut.js). A sound clip has two places to press: the strip on
+// top with its name takes the clip as every clip is taken (moved, picked by a click), the WAVE under it draws a stretch
+// of time - as in a sound editor; its edges still trim. The stretch is drawn across all lanes; Delete cuts it, Escape or
+// a press on a clip lets it go; a press on the ruler or bare lane keeps it (to listen to it before cutting).
+let _range = null;              // { a, b } in timeline seconds, while a stretch is drawn
+let _ranging = null;            // the gesture drawing it
+const WAVE_TOP = 12;            // where a sound clip's wave begins, px below its top (css/mv3-timeline.css)
+
+function _onWave(e, el) {
+  if (!el.querySelector('.mv3b-wave') || _edgeOf(e, el)) return false;
+  return e.clientY - el.getBoundingClientRect().top >= WAVE_TOP;
+}
+
+function _beginRange(e, t, c, el) {
+  _ranging = { x0: e.clientX, t0: _timeAtX(e.clientX), moved: false, id: c.id };
+  e.preventDefault();
+}
+
+function _moveRange(e) {
+  if (!_ranging) return;
+  if (!_ranging.moved) {
+    if (Math.abs(e.clientX - _ranging.x0) < SLOP) return;
+    _ranging.moved = true;
+    // What is picked now is the stretch: the clips let go, so Delete can mean only one thing.
+    _clearSel();
+    document.body.classList.add('mv3b-ranging');
+  }
+  const end = Math.max(Store.duration(), 0);
+  const t1 = Math.min(end, _timeAtX(e.clientX));
+  const t0 = Math.min(end, _ranging.t0);
+  _range = { a: _r2(Math.min(t0, t1)), b: _r2(Math.max(t0, t1)) };
+  _paintRange();
+}
+
+function _endRange() {
+  if (!_ranging) return;
+  const g = _ranging;
+  _ranging = null;
+  document.body.classList.remove('mv3b-ranging');
+  if (g.moved) {
+    if (_range && _range.b - _range.a < MIN_CUT) { _range = null; _paintRange(); }
+    return;
+  }
+  // A click on the wave: the clip is picked, as a click on any clip picks it - and a stretch drawn before goes.
+  _letRangeGo();
+  _selBack = null;
+  _sel.clear();
+  _selTrack = '';
+  _sel.add(g.id);
+  _paintSel();
+}
+
+function _letRangeGo() {
+  if (!_range) return;
+  _range = null;
+  _paintRange();
+}
+
+// The stretch over the lanes: one element in the stack, under the playhead and the frozen names.
+function _paintRange() {
+  const host = _host();
+  const inner = host && host.querySelector('.mv3b-inner');
+  if (!inner) return;
+  let el = inner.querySelector('.mv3b-range');
+  if (!_range) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'mv3b-range';
+    const lbl = document.createElement('span');
+    lbl.className = 'mv3b-range-t';
+    el.appendChild(lbl);
+    inner.appendChild(el);
+  }
+  const z = _zoom();
+  el.style.left = (GUTTER + _range.a * z) + 'px';
+  el.style.width = Math.max(1, (_range.b - _range.a) * z) + 'px';
+  el.firstChild.textContent = '✂ ' + (_range.b - _range.a).toFixed(2) + ' s · Delete';
+}
+
+/** The stretch drawn, or null. */
+export const rangeNow = () => (_range ? { ..._range } : null);
+
+/**
+ * Cut the drawn stretch out of every lane and move what is after it left - one step to undo. A talking head's lines are
+ * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was.
+ */
+export function cutRange() {
+  if (!_range) return { ok: false, why: 'Draw a stretch over a wave first' };
+  const { a, b } = _range;
+  const why = cutRefused(Store.timeline(), a, b);
+  if (why) {
+    const at = _host() && _host().querySelector('.mv3b-range');
+    if (at) note(at, 'Not cut', why);
+    return { ok: false, why };
+  }
+  _clearSel();
+  const ok = Store.mutate(tl => rippleCut(tl, a, b, { newId: _id, isStill }));
+  _range = null;
+  _paintRange();
+  if (ok) _seekTo(a);
+  return { ok: !!ok };
+}
+
 function _beginDrag(e, t, c, el) {
   if (e.button !== 0) return;
+  // (phase V36, T5) On a sound's wave the press draws a stretch of time, not the clip.
+  if (t.kind === 'audio' && _onWave(e, el)) { _beginRange(e, t, c, el); return; }
   const tl = Store.timeline();
   const tracks = (tl && tl.tracks) || [];
   const mateTrack = c.pairId
@@ -794,6 +905,8 @@ function _endDrag(e) {
   // is the one I want to change", and keeping the old set would make the inspector talk
   // about something else.
   if (!d.moved) {
+    // (phase V36, T5) A clip picked lets a drawn stretch go: Delete is the clip's again.
+    _letRangeGo();
     _selBack = null;
     _sel.clear();
     _selTrack = '';
@@ -1096,8 +1209,9 @@ function _clipEl(t, c) {
   el.appendChild(x);
 
   el.addEventListener('mousemove', (e) => {
-    if (_drag) return;
-    el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : 'grab';
+    if (_drag || _ranging) return;
+    // (phase V36, T5) Over a sound's wave the pointer draws a stretch of time; over its strip it takes the clip.
+    el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : (t.kind === 'audio' && _onWave(e, el) ? 'text' : 'grab');
   });
   el.addEventListener('mousedown', (e) => _beginDrag(e, t, c, el));
   // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. It is the one thing a still is usually
@@ -1439,6 +1553,9 @@ function _build() {
   if (opened) host.scrollLeft = 0;
   // (phase V36, T4) The waves of what can be seen - laid out now, so they are drawn at once.
   paintWaves(host, _zoom(), GUTTER);
+  // (phase V36, T5) A stretch drawn belongs to the timeline it was drawn on.
+  if (opened) _range = null;
+  _paintRange();
 }
 
 // The waves again, once per frame however many scroll events come - with a timer behind the frame, for a window that is
@@ -2179,6 +2296,9 @@ export function initTimelineB() {
   // drag, and a listener on the clip would drop the gesture the moment it did.
   document.addEventListener('mousemove', _moveDrag);
   document.addEventListener('mouseup', _endDrag);
+  // (phase V36, T5) A stretch drawn over a wave follows the pointer the same way.
+  document.addEventListener('mousemove', _moveRange);
+  document.addEventListener('mouseup', _endRange);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
   document.addEventListener('mousedown', _awayFromLane, true);
   document.addEventListener('contextmenu', _laneMenu);
@@ -2197,12 +2317,15 @@ export function initTimelineB() {
     const t0 = e.target;
     const texty = t0.tagName === 'TEXTAREA' || !!t0.isContentEditable
       || (t0.tagName === 'INPUT' && /^(text|search|number|email|url|tel|password|)$/.test(String(t0.type || '')));
-    if (e.key === 'Escape' && !texty) _clearSel();
+    // (phase V36, T5) Escape lets a drawn stretch go first; the next one lets go of the pick.
+    if (e.key === 'Escape' && !texty) { if (_range) _letRangeGo(); else _clearSel(); }
     // Not while typing: the inspector has fields, and Delete there means a character. And not in a block that
     // keeps its own keys (the words of a caption, where Delete takes a WORD).
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
       e.preventDefault();
-      _deleteSelected();
+      // (phase V36, T5) A stretch drawn over a wave: cut out of every lane. Otherwise the picked clips go.
+      if (_range) cutRange();
+      else _deleteSelected();
     }
   });
 }
