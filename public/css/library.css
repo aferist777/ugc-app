@@ -776,6 +776,11 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-scene-rw:hover{ color:var(--ink); border-color:var(--primary); }
 .mk-scene-rw[disabled]{ opacity:.4; cursor:default; }
+/* (V38) "rewrite fragment" beside words selected in a paragraph (js/library/make.js _fragFrom). */
+.mk-frag-btn{
+  position:fixed; z-index:60; padding:3px 10px; font-size:11px;
+  box-shadow:0 4px 14px oklch(0 0 0 / .45); border-color:var(--primary);
+}
 .mk-scene-secs{ font-size:9px; color:var(--muted); text-align:center; }
 
 /* The "add a source" window, on the layer stack. */

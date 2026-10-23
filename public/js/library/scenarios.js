@@ -129,8 +129,11 @@ function _filterRow() {
 // Not the hook: it is the first line of the script, which the lines below show anyway (phase F5).
 // "written from" is painted before these, by the source's live name. [key, label, whole row wide].
 const ORIGIN_ROWS = [
+  ['fromTitle', 'rewritten from', true],
   ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
   ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
+  // (phase V38) The narrator's own words and phrases in it, as saved, and the measure they went in at.
+  ['enriched', 'his words & phrases', true], ['density', 'measure'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';

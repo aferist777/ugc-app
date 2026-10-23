@@ -80,6 +80,7 @@ export const EST = {
   script: (scenes) => Math.max(40000, (scenes || 15) * 9000),
   humanize: 40000,
   rewrite: 20000,
+  enrich: 30000,
   analyse: 45000,
   sample: (bytes) => Math.max(60000, Math.round((bytes / 1048576) * 500)),
 };

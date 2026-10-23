@@ -137,6 +137,13 @@ function _normOrigin(o) {
     provider:   String(s.provider   || ''),
     model:      String(s.model      || ''),
     humanized:  !!s.humanized,
+    // Who cleaned it (phase V23 recorded it; until V38 this normaliser dropped it on the way in).
+    cleanedBy:  String(s.cleanedBy  || ''),
+    // (phase V38) The narrator's own words and phrases in it, and the measure; a scenario of the shelf it was rewritten from.
+    enriched:   String(s.enriched   || ''),
+    density:    String(s.density    || ''),
+    fromId:     String(s.fromId     || ''),
+    fromTitle:  String(s.fromTitle  || ''),
     at:         String(s.at || ''),
   };
   // An object of empty strings is not provenance.

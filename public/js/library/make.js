@@ -121,6 +121,7 @@ const HTML = `
           <div class="mk-stage-h">
             <span>Script</span>
             <span class="sp"></span>
+            <button class="lib-btn" type="button" id="mk-enrich" hidden title="Put the narrator's own words and phrases into the script, in the measure the form says - done by itself right after writing; this is for when that did not answer, or for another measure">Add vocabulary &amp; phrases</button>
             <button class="lib-btn" type="button" id="mk-humanize">Clean to the narrator</button>
           </div>
           <div class="mk-scenes" id="mk-scenes"></div>
@@ -151,6 +152,7 @@ function _build() {
   $('mk-go').addEventListener('click', _runGo);
   $('mk-newhooks').addEventListener('click', _newHooks);
   $('mk-humanize').addEventListener('click', _humanize);
+  $('mk-enrich').addEventListener('click', _enrichAgain);
   $('mk-save').addEventListener('click', _saveScript);
   $('mk-discard').addEventListener('click', _discardDraft);
   for (const id of ['mk-topic', 'mk-title', 'mk-hook', 'mk-vertical', 'mk-product']) $(id).addEventListener('input', _queueDraft);
@@ -171,6 +173,8 @@ function _build() {
   });
   // Closing the page is leaving the form: a save still waiting out its pause goes now.
   window.addEventListener('pagehide', () => { if (_saveT && _gen) _saveDraft({ keepalive: true }); });
+  // (V38) The "rewrite fragment" button stands by its selection: a scroll moves the words away from it.
+  window.addEventListener('scroll', () => { if (_frag) _hideFragBtn(); }, true);
 }
 
 // ── Opening and leaving ─────────────────────────────────────────────────────
@@ -232,6 +236,7 @@ function _flashRow(id) {
 /** Leave the layout: what is typed is saved; what runs keeps running. */
 export async function close() {
   _say('');
+  _hideFragBtn();
   await _flushDraft();
 }
 
@@ -1009,6 +1014,13 @@ async function _buildControls(settings) {
   box.appendChild(_ctl('Tone', _select('mk-c-tone', _reg.tones, s.tone || d.tone)));
   const nar = _select('mk-c-narrator', [{ value: 'neutral', label: 'Neutral' }], 'neutral');
   box.appendChild(_ctl('Narrator', nar, _narratorsGear()));
+  // (phase V38, the owner's (д18)) How much of the narrator's own words and phrases go into the script - put in by
+  // themselves right after it is written. normal by default; rich twice as much, light half.
+  const dens = _select('mk-c-density', DENSITY, DENSITY.some(x => x.value === s.density) ? s.density : 'normal');
+  dens.title = 'The narrator\'s own words and phrases, put in right after the script is written: off, light (half), normal, rich (twice as many)';
+  box.appendChild(_ctl('Words & phrases', dens));
+  nar.addEventListener('change', _paintGo);
+  dens.addEventListener('change', _paintGo);
 
   // (phase V37, the owner 2026-10-23: "из формы сценариев выбор модели убираем. идем по лестнице") No Provider, Model,
   // Effort any more: the AGENTS' LADDER writes (Admin -> AI settings), at effort medium; the line says which step is
@@ -1029,7 +1041,11 @@ async function _paintNarrators(want, wantName) {
   let list = [];
   try { list = (await J.api('/api/narrators')).narrators || []; } catch (e) { list = []; }
   const values = [{ value: 'neutral', label: 'Neutral' }];
-  for (const n of list) values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
+  _narSets.clear();
+  for (const n of list) {
+    values.push({ value: n.id, label: n.name + (n.ready ? '' : ' — not read') });
+    _narSets.set(String(n.id), (n.vocabulary || 0) + (n.phrases || 0));
+  }
   let pick = String(cur || 'neutral').split('#')[0];
   const note = $('mk-nar-note');
   note.hidden = true;
@@ -1042,7 +1058,21 @@ async function _paintNarrators(want, wantName) {
   sel.textContent = '';
   for (const v of values) { const o = el('option', null, v.label); o.value = v.value; sel.appendChild(o); }
   sel.value = pick;
+  _paintGo();
 }
+
+// (V38) The measures of the narrator's words and phrases, and how many entries each narrator has switched on - the
+// "Add vocabulary & phrases" button is there only when the chosen one has some and the measure is not off.
+const DENSITY = [
+  { value: 'off', label: 'off' }, { value: 'light', label: 'light' },
+  { value: 'normal', label: 'normal' }, { value: 'rich', label: 'rich' },
+];
+const _narSets = new Map();
+const _canEnrich = () => {
+  if (!_controlsReady()) return false;
+  const o = _opts();
+  return o.density !== 'off' && (_narSets.get(String(o.narratorId)) || 0) > 0;
+};
 
 // (V37) "the agents' ladder · Claude Sonnet 5.5 first · AI settings" - the step asked first, the link to where the order is.
 const _PROV = { kie: 'kie.ai', replicate: 'Replicate', anthropic: 'Claude', openrouter: 'OpenRouter' };
@@ -1072,6 +1102,7 @@ function _opts() {
     // The name alone, not the option's label ("Azazin — not read"): it is what the draft remembers
     // the narrator by once the narrator itself may be gone.
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
+    density: $('mk-c-density') ? $('mk-c-density').value : 'normal',
     // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
     model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
     effort: (_reg && _reg.effort) || 'medium',
@@ -1109,8 +1140,11 @@ function _paintGo() {
   $('mk-newhooks').disabled = busy;
   $('mk-humanize').disabled = busy;
   $('mk-save').disabled = busy;
+  $('mk-enrich').hidden = !written || !_canEnrich();
+  $('mk-enrich').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
   document.querySelectorAll('#mk-scenes .mk-scene-rw').forEach(b => { b.disabled = busy; });
+  if (busy) _hideFragBtn();
 }
 function _setStage(s) { _stage = s; _paintGo(); }
 const _busy = () => _stage === 'hooks' || _stage === 'script' || _stage === 'working';
@@ -1140,7 +1174,7 @@ function _payload() {
     humanized: !!_gen.humanized,
     settings: {
       tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName,
+      narratorId: o.narratorId, narratorName: o.narratorName, density: o.density,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1238,6 +1272,10 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     hooks: (full && full.hooks) || [],
     paragraphs: (full && full.paragraphs) || [],
     humanized: !!(full && full.humanized),
+    // (V38) What of the narrator's words went in, or why they could not; the shelf's scenario this rewrites (block D4).
+    enriched: (full && full.enriched) || null,
+    from: (full && full.from) || null,
+    foreign: !!(full && full.foreign),
   };
   _paintFrom();
   $('mk-topic').value = full ? (full.topic || full.topicTitle || '') : (topic ? topic.title : '');
@@ -1254,7 +1292,14 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   if (_gen.paragraphs.length) _renderScenes();
   _setStage(needsPick ? 'pick' : 'idle');
   _reattachStage();
+  // (V38) The narrator's words did not go in last time (paid once - never asked again by itself): said, with the press.
+  if (!_following.has(String(_gen.draftId)) && _gen.enriched && _gen.enriched.error) _sayEnrichFailed(_gen.enriched.error);
   // NO draft is written just for opening the form: the first edit or the first generation makes it.
+}
+
+function _sayEnrichFailed(err) {
+  J.sayJob($('mk-job'), `The script is written, but the narrator's words and phrases did not go in: ${err} `
+    + '- press “Add vocabulary & phrases” to try again.', true);
 }
 
 // A draft, from the Scenarios list or a topic's "Continue". Its source is chosen with it. A draft
@@ -1335,6 +1380,8 @@ const _TIMING = {
   script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
   humanize: (o) => ({ key: `l2-humanize|${o.model}|${o.effort}`, label: 'Cleaning to the narrator…', estimateMs: J.EST.humanize }),
   rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
+  // (V38) The narrator's words and phrases - the second row of a script's countdown, or a press of its own.
+  enrich: (o) => ({ key: `l2-enrich|${o.model}|${o.effort}|${o.density || 'normal'}`, label: 'Adding the narrator\'s words and phrases…', estimateMs: J.EST.enrich }),
 };
 
 // Starts a stage on the server and follows it. A draft that is already being written into is not
@@ -1355,7 +1402,7 @@ async function _runStage(path, body, timing, onResult) {
     J.sayJob($('mk-job'), e.message, true);
     return false;
   }
-  return _followStage(jobId, { startedAt: Date.now(), timing, what }, gen, onResult);
+  return _followStage(jobId, { startedAt: Date.now(), timing, what, model: send.model, effort: send.effort, density: send.density }, gen, onResult);
 }
 
 // `onResult` gets the answer while the form still holds the same draft; otherwise - the person moved
@@ -1366,13 +1413,22 @@ async function _runStage(path, body, timing, onResult) {
 // (_reattachStage), at the job's real age. Another draft can run a stage of its own meanwhile.
 async function _followStage(jobId, run, gen, onResult) {
   const draftId = String(gen.draftId);
-  const rec = { jobId, run, rows: [] };
+  // `phase` (V38): the second step of a two-step stage - the script written, the narrator's words going in.
+  const rec = { jobId, run, rows: [], phase: (run && run.phase) || null };
   _following.set(draftId, rec);
   const here = () => !!_gen && String(_gen.draftId) === draftId;
   if (_stage === 'idle' || _stage === 'pick') _setStage('working');
   _stageRow(rec);
   try {
     const job = await J.pollJob('/api/scriptgen/jobs', jobId, (j) => {
+      // The second step began: the first row's time is kept (it taught the countdown how long writing takes), and a
+      // second countdown starts for the words.
+      if (j.phase && (!rec.phase || rec.phase.name !== j.phase.name)) {
+        rec.phase = j.phase;
+        rec.rows.forEach((r, i) => (i === 0 ? r.finish() : r.detach()));
+        rec.rows = [];
+        if (here() && !rec.cancelling) _stageRow(rec);
+      }
       if (j.step && here() && rec.rows.length && !rec.cancelling) rec.rows[rec.rows.length - 1].say(j.step);
     });
     // One timing for the whole job, however many rows showed it.
@@ -1389,6 +1445,8 @@ async function _followStage(jobId, run, gen, onResult) {
       rec.rows.forEach(r => r.detach());
       if (here()) {
         _sayBriefly('cancelled - what was already sent is paid for');
+        // (V38) Cancelled while the narrator's words were going in: the script itself was written and is in the draft.
+        if (rec.phase && rec.phase.name === 'enrich') { await _reloadDraftInto(); return 'cancelled'; }
         if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
         if ((_gen.paragraphs || []).length) _renderScenes();
         // A stage this form did not start has no caller to set the stage back.
@@ -1424,12 +1482,14 @@ async function _landInto(what, r) {
     _gen.humanized = false;
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
-  } else if (what === 'humanize' && Array.isArray(res.paragraphs)) {
+    _noteEnriched(res);
+  } else if ((what === 'humanize' || what === 'enrich') && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
-    _gen.humanized = !!res.applied;
+    if (what === 'humanize') _gen.humanized = !!res.applied;
+    else _noteEnriched(res);
     _renderScenes();
   } else if (what === 'rewrite' && res.paragraph && res.index < (_gen.paragraphs || []).length) {
-    _gen.paragraphs[res.index] = res.paragraph;
+    _gen.paragraphs[res.index] = _spliced(res, _gen.paragraphs[res.index]);
     _renderScenes();
   } else { await _reloadDraftInto(); return; }
   await _saveDraft();
@@ -1440,10 +1500,13 @@ async function _landInto(what, r) {
 // server says is running when the page did not start it (a reload, another visit).
 function _stageRow(rec) {
   const run = rec.run || {};
-  const t = run.timing
+  const second = rec.phase && rec.phase.name === 'enrich';
+  const t = second ? _TIMING.enrich({ ...run, ...(_controlsReady() ? { model: run.model || _opts().model, effort: run.effort || _opts().effort } : {}) })
+    : run.timing
     || (_TIMING[run.what] ? _TIMING[run.what](run, run.index || 0)
       : { key: 'l2-stage', label: 'Still writing…', estimateMs: J.EST.script(15) });
-  const row = J.startJob($('mk-job'), { ...t, startedAt: run.startedAt || Date.now(), onCancel: () => _cancelStage(rec) });
+  const startedAt = second ? (rec.phase.at || Date.now()) : (run.startedAt || Date.now());
+  const row = J.startJob($('mk-job'), { ...t, startedAt, onCancel: () => _cancelStage(rec) });
   rec.rows.push(row);
   return row;
 }
@@ -1529,11 +1592,51 @@ async function _runScript() {
     if (r.asked && r.paragraphs && r.paragraphs.length !== r.asked) {
       J.sayJob($('mk-job'), `Note: ${r.paragraphs.length} paragraphs came back, ${r.asked} were asked for.`);
     }
+    _noteEnriched(r);
   });
   if (_gen === gen) _setStage('idle');
 }
 
+// (V38) What the second step said: nothing under the paragraphs (the owner's (д9а) - what went in is seen in the text);
+// only a failure, with the press to try again, or the server's notes on paragraphs kept as they were.
+function _noteEnriched(r) {
+  if (!r) return;
+  if (r.enrichError) {
+    _gen.enriched = { error: r.enrichError, used: [] };
+    _sayEnrichFailed(r.enrichError);
+    return;
+  }
+  if (r.enriched) _gen.enriched = { used: r.enriched.used || [], error: '' };
+  const notes = (r.notes || []).filter(Boolean);
+  if (notes.length) J.sayJob($('mk-job'), notes.join(' '));
+  else if (r.enriched && !(r.enriched.used || []).length) _sayBriefly('none of the narrator\'s words or phrases fitted this script');
+}
+
+// (V38) "Add vocabulary & phrases": the step after the script, pressed - when it did not answer, or for another measure.
+async function _enrichAgain() {
+  if (!_gen || !(_gen.paragraphs || []).length || _busy()) return;
+  const gen = _gen;
+  _setStage('working');
+  const o = _opts();
+  await _runStage('/api/scriptgen/enrich', { ...o, paragraphs: _gen.paragraphs }, _TIMING.enrich(o), async (r) => {
+    _gen.paragraphs = r.paragraphs || _gen.paragraphs;
+    _renderScenes();
+    await _saveDraft();
+    _noteEnriched(r);
+  });
+  if (_gen === gen) _setStage('idle');
+}
+
+// A fragment's answer into the paragraph as it is NOW: in place of the words it was written for; when those are gone
+// (typed over meanwhile), the paragraph the server made.
+function _spliced(r, cur) {
+  if (r.was == null || r.fragment == null) return r.paragraph;
+  const at = String(cur || '').indexOf(r.was);
+  return at < 0 ? r.paragraph : cur.slice(0, at) + r.fragment + cur.slice(at + r.was.length);
+}
+
 function _renderScenes() {
+  _hideFragBtn();
   const box = $('mk-scenes');
   box.textContent = '';
   const list = (_gen && _gen.paragraphs) || [];
@@ -1560,9 +1663,10 @@ function _renderScenes() {
     if (i > 0) {
       const rw = el('button', 'mk-scene-rw', 'rewrite');
       rw.type = 'button';
-      rw.title = 'Rewrite this paragraph from a different angle';
+      rw.title = 'Rewrite this paragraph from a different angle - or select some of its words to rewrite only them';
       rw.addEventListener('click', () => _rewrite(i, rw));
       acts.appendChild(rw);
+      _wireFragment(ta, i);
     }
     row.appendChild(ta);
     row.appendChild(acts);
@@ -1587,22 +1691,77 @@ async function _humanize() {
   if (_gen === gen) _setStage('idle');
 }
 
-async function _rewrite(index, btn) {
+// `fragment` (V38, the owner's (д13)): { text, start } - only those words of the paragraph are written again.
+async function _rewrite(index, btn, fragment) {
   if (!_gen || _busy()) return;
-  const was = btn.textContent;
-  btn.textContent = '…';
+  const was = btn ? btn.textContent : '';
+  if (btn) btn.textContent = '…';
   const gen = _gen;
   _setStage('working');
   const o = _opts();
+  const t = _TIMING.rewrite(o, index);
   await _runStage('/api/scriptgen/rewrite',
-    { ...o, topic: $('mk-topic').value.trim(), script: _gen.paragraphs, index }, _TIMING.rewrite(o, index),
+    { ...o, topic: $('mk-topic').value.trim(), script: _gen.paragraphs, index, ...(fragment ? { fragment } : {}) },
+    fragment ? { ...t, key: t.key + '|fragment', label: `Rewriting a fragment of paragraph ${index + 1}…` } : t,
     async (r) => {
-      _gen.paragraphs[index] = r.paragraph || _gen.paragraphs[index];
+      _gen.paragraphs[index] = r.paragraph ? _spliced(r, _gen.paragraphs[index]) : _gen.paragraphs[index];
       _renderScenes();
       await _saveDraft();
     });
-  if (btn.isConnected) btn.textContent = was;
+  if (btn && btn.isConnected) btn.textContent = was;
   if (_gen === gen) _setStage('idle');
+}
+
+// ── "rewrite fragment": a piece of a paragraph selected (phase V38, the owner's (д13)) ──
+// Words selected in a paragraph's text (not the hook's) bring a small button beside the selection; pressed, only those
+// words are written again, in the narrator's voice. It is a layer of its own (Escape takes it away) and goes when the
+// selection does, when the text is typed into or the script scrolls.
+let _frag = null;          // { btn, layer, index, start, end, text }
+
+function _hideFragBtn() {
+  if (!_frag) return;
+  const f = _frag;
+  _frag = null;
+  f.btn.remove();
+  Layers.close(f.layer);
+}
+
+function _fragFrom(ta, index, ev) {
+  if (_busy()) { _hideFragBtn(); return; }
+  // Whole words: a selection that cut into a word takes the rest of it.
+  const W = /[\p{L}\p{N}'’-]/u;
+  let start = ta.selectionStart;
+  let end = ta.selectionEnd;
+  while (start > 0 && end > start && W.test(ta.value[start - 1]) && W.test(ta.value[start])) start--;
+  while (end < ta.value.length && end > start && W.test(ta.value[end]) && W.test(ta.value[end - 1])) end++;
+  const text = ta.value.slice(start, end);
+  if (end <= start || text.trim().length < 2 || text.trim() === ta.value.trim()) { _hideFragBtn(); return; }
+  _hideFragBtn();
+  const btn = el('button', 'lib-btn mk-frag-btn', 'rewrite fragment');
+  btn.type = 'button';
+  btn.title = 'Write only the selected words again, in the narrator\'s voice - the rest of the paragraph stays as it is';
+  // Pressed without taking the focus: the selection - and the textarea's own blur - stay as they are.
+  btn.addEventListener('mousedown', (e) => e.preventDefault());
+  btn.addEventListener('click', () => {
+    const f = _frag;
+    _hideFragBtn();
+    if (f) _rewrite(f.index, null, { text: f.text, start: f.start });
+  });
+  document.body.appendChild(btn);
+  // Beside the press that ended the selection; by the keyboard, at the paragraph's top right.
+  const r = ta.getBoundingClientRect();
+  const x = ev && ev.clientX ? ev.clientX + 8 : r.right - 130;
+  const y = ev && ev.clientY ? ev.clientY + 12 : r.top - 4;
+  btn.style.left = Math.max(8, Math.min(window.innerWidth - 150, x)) + 'px';
+  btn.style.top = Math.max(8, Math.min(window.innerHeight - 40, y)) + 'px';
+  _frag = { btn, layer: Layers.open(btn, { name: 'rewrite fragment', modal: false, onEsc: _hideFragBtn }), index, start, end, text };
+}
+
+function _wireFragment(ta, index) {
+  ta.addEventListener('mouseup', (e) => setTimeout(() => _fragFrom(ta, index, e), 0));
+  ta.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') _fragFrom(ta, index, null); });
+  ta.addEventListener('input', _hideFragBtn);
+  ta.addEventListener('blur', () => setTimeout(() => { if (_frag && document.activeElement !== ta) _hideFragBtn(); }, 150));
 }
 
 // ── Into the Scenarios shelf ────────────────────────────────────────────────
