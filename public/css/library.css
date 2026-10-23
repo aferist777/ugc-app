@@ -851,7 +851,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 
 /* ── The narrators (phase E6; an area since V28.2, js/library/narrators.js) ──────────────────
    In place of the scenario list or the generator, three columns: the narrators (one always selected), the
-   selected one's samples, its voice. The head and the countdown rows are the generator's (mk-*). */
+   selected one's samples, and (V38) its voice, vocabulary and phrases under three crumbs - the widest, for the tables.
+   The head and the countdown rows are the generator's (mk-*). */
 .lib-narrators{
   display:flex; flex-direction:column; flex:1 1 auto; min-height:0; min-width:0;
   background:var(--surface);
@@ -863,7 +864,7 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .nr-said > span{ flex:1 1 auto; min-width:0; }
 .nr-said.err > span{ color:oklch(.78 .14 25); }
-.nr-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:230px 1fr 1fr; }
+.nr-body{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:230px minmax(240px, 1fr) minmax(0, 1.8fr); }
 .nr-list-col{
   min-height:0; display:flex; flex-direction:column; gap:6px; padding:8px;
   background:var(--surface); border-right:1px solid var(--border);
@@ -936,26 +937,107 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:5px 8px;
 }
 .nr-add-row .nr-url:focus{ outline:none; border-color:var(--primary); }
-/* The pager over readings: which one and how many, readable without opening anything. */
-.nr-pager{
-  display:flex; align-items:center; gap:6px; padding:5px 7px; background:var(--surface-2);
-  border:1px solid var(--border-soft); border-radius:var(--r-xs);
+/* (V38) A sample not read yet is lit a little: "Read new samples" reads it. */
+.nr-sample.unread{ border-color:oklch(.45 .07 85); }
+/* The right column's crumbs: the voice / vocabulary · N / phrases · N, the open one gold; "+3" - proposals waiting. */
+.nr-crumbs{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+.nr-crumb{
+  padding:0; border:0; background:none; cursor:pointer;
+  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); opacity:.7;
 }
-.nr-pager-b{
-  width:20px; height:20px; padding:0; flex:0 0 auto;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font-size:12px; line-height:1; cursor:pointer;
-}
-.nr-pager-b:hover:not([disabled]){ color:var(--ink); border-color:var(--primary); }
-.nr-pager-b[disabled]{ opacity:.35; cursor:default; }
-.nr-pager-t{ font-size:10.5px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
-.nr-pager-n{ margin-left:auto; font-size:10px; color:var(--muted); }
-.nr-profile{ display:flex; flex-direction:column; gap:7px; }
+.nr-crumb:hover{ opacity:1; color:var(--ink); }
+.nr-crumb.is-on{ opacity:1; color:var(--gold); cursor:default; }
+.nr-crumb-n{ letter-spacing:0; font-variant-numeric:tabular-nums; }
+.nr-crumb-p{ letter-spacing:0; color:oklch(.85 .12 85); }
+.nr-crumb-sep{ color:var(--muted); opacity:.5; font-size:11px; }
+.nr-view{ display:flex; flex-direction:column; gap:8px; }
+/* The voice: a field's label, then its lines - each corrected in place, its ✕ on hover. */
+.nr-voice-h{ display:flex; gap:8px; align-items:baseline; font-size:10px; color:var(--muted); }
+.nr-voice-at{ margin-left:auto; font-variant-numeric:tabular-nums; }
 .nr-prof-row{ display:flex; flex-direction:column; gap:2px; }
 .nr-prof-k{ font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
-.nr-prof-v{ font-size:11.5px; line-height:1.5; color:var(--ink); }
-.nr-prof-list{ margin:0; padding-left:16px; font-size:11.5px; line-height:1.5; color:var(--ink); }
-.nr-foot > .lib-btn{ align-self:flex-end; }
+.nr-vline{ display:flex; align-items:flex-start; gap:6px; }
+.nr-vline-t{ flex:1 1 auto; min-width:0; font-size:11.5px; line-height:1.5; color:var(--ink); }
+.nr-vline > .nr-x{ opacity:0; }
+.nr-vline:hover > .nr-x, .nr-vline > .nr-x:focus-visible, .nr-vline > .nr-x.armed{ opacity:1; }
+.nr-new-tag{
+  flex:0 0 auto; margin-top:2px; padding:1px 5px; border-radius:3px; font-size:8.5px; font-weight:700; letter-spacing:.05em;
+  text-transform:uppercase; color:oklch(.9 .12 150); background:oklch(.28 .06 150);
+}
+/* Text corrected in place: a quiet frame under the cursor, the hint while empty. */
+.nr-ed{ border-radius:3px; padding:1px 3px; margin:-1px -3px; cursor:text; outline:none; overflow-wrap:anywhere; }
+.nr-ed:hover{ background:var(--surface-2); }
+.nr-ed[contenteditable="plaintext-only"]{ background:var(--bg); box-shadow:0 0 0 1px var(--primary); }
+.nr-ed:empty::before{ content:attr(data-ph); color:var(--muted); opacity:.6; }
+.nr-ed.saving{ opacity:.55; }
+/* ✕ armed: "really?" until the second press or three seconds. */
+.nr-x.armed{ width:auto; padding:0 6px; border-radius:9px; color:oklch(.97 0 0); background:var(--danger); font-size:9.5px; }
+/* The tables of words and phrases (the owner's (д3): a table, not running text). */
+.nr-table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:11px; line-height:1.45; color:var(--ink); }
+.nr-table th{
+  text-align:left; font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+  padding:3px 5px; border-bottom:1px solid var(--border);
+}
+.nr-table td{ padding:5px; vertical-align:top; border-bottom:1px solid var(--border-soft); overflow-wrap:anywhere; }
+.nr-table th:nth-child(1), .nr-table td.nr-dot-c{ width:22px; padding-left:2px; padding-right:2px; text-align:center; }
+.nr-table th:last-child, .nr-table td.nr-x-c{ width:48px; text-align:right; }
+.nr-table:not(.phrases) th:nth-child(2){ width:15%; }
+.nr-table:not(.phrases) th:nth-child(3){ width:17%; }
+.nr-table:not(.phrases) th:nth-child(4){ width:22%; }
+.nr-table:not(.phrases) th:nth-child(6){ width:13%; }
+.nr-table.phrases th:nth-child(2){ width:18%; }
+.nr-table.phrases th:nth-child(3){ width:15%; }
+.nr-table.phrases th:nth-child(4){ width:100px; }
+.nr-table.phrases th:nth-child(5){ width:17%; }
+.nr-table.phrases th:nth-child(7){ width:11%; }
+.nr-table tr.off td:not(.nr-dot-c):not(.nr-x-c){ opacity:.45; }
+.nr-t{ font-weight:600; }
+.nr-uses{ margin-top:2px; font-size:9.5px; color:var(--muted); }
+.nr-src-c{ color:var(--muted); font-size:10.5px; }
+.nr-ex{ display:flex; align-items:flex-start; gap:4px; margin-bottom:3px; }
+.nr-ex-t{ flex:1 1 auto; min-width:0; font-style:italic; }
+.nr-ex > .nr-x, .nr-table td.nr-x-c > .nr-x{ opacity:0; }
+.nr-ex:hover > .nr-x, .nr-ex > .nr-x.armed, .nr-table tr:hover td.nr-x-c > .nr-x, .nr-table td.nr-x-c > .nr-x.armed,
+.nr-table td.nr-x-c > .nr-x:focus-visible{ opacity:1; }
+.nr-ex-add{ padding:0; border:0; background:none; color:var(--muted); font-size:10px; cursor:pointer; }
+.nr-ex-add:hover{ color:var(--primary); }
+/* The dot: gold - the writer is given it; hollow - kept, not given. */
+.nr-dot{
+  width:11px; height:11px; padding:0; margin-top:3px; border-radius:50%; cursor:pointer;
+  border:1.5px solid var(--muted); background:transparent;
+}
+.nr-dot.on{ border-color:var(--gold); background:var(--gold); }
+.nr-dot:hover{ border-color:var(--primary); }
+.nr-sel{
+  display:block; width:100%; margin-bottom:3px; font:10.5px var(--font); color:var(--ink); padding:1px 2px;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
+}
+.nr-in{
+  width:100%; box-sizing:border-box; font:11px var(--font); color:var(--ink); padding:3px 5px;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
+}
+.nr-in:focus{ outline:none; border-color:var(--primary); }
+.nr-add-tr td{ border-bottom:0; padding-top:7px; }
+.nr-add-said{ font-style:italic; }
+.nr-plus{
+  width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font-size:14px; line-height:1; cursor:pointer;
+}
+.nr-plus:hover:not([disabled]){ border-color:var(--primary); color:var(--primary); }
+/* What the last reading proposed: pale rows, ✓ keeps, ✕ drops. */
+.nr-pend{ display:flex; flex-direction:column; gap:4px; padding:6px 8px; border:1px dashed oklch(.45 .07 85); border-radius:var(--r-xs); }
+.nr-pend-h{ display:flex; align-items:center; gap:6px; font-size:10.5px; color:oklch(.85 .1 85); }
+.nr-pend-h .sp{ flex:1; }
+.nr-pend-h .lib-btn{ padding:2px 8px; font-size:10.5px; }
+.nr-pend-t td{ color:var(--muted); }
+.nr-pend-t td.nr-x-c > .nr-x{ opacity:1; }
+.nr-ok{
+  width:17px; height:17px; padding:0; border:0; border-radius:50%; cursor:pointer;
+  background:transparent; color:oklch(.85 .12 150); font-size:11px; line-height:17px;
+}
+.nr-ok:hover{ color:oklch(.97 0 0); background:oklch(.55 .12 150); }
+.nr-foot-row{ display:flex; align-items:center; gap:8px; }
+.nr-foot-note{ flex:1 1 auto; min-width:0; font-size:10.5px; color:var(--muted); }
 /* A disabled ✕ on a row whose job runs stays dim, hover or not. */
 .nr-row:hover > .nr-x[disabled], .nr-row > .nr-x[disabled]:focus-visible{ opacity:.35; }
 
