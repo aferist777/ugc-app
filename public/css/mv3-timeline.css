@@ -13,3 +13,18 @@
 .mv3-tl-transport .mv3-iconbtn.is-play:hover{border-color:var(--primary); color:var(--primary)}
 /* While a build step of a talking head holds the stage there is no cut to drive: dimmed and dead, as the preview's bar. */
 body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
+
+/* ── A sound's waveform (T4) ──────────────────────────────────────────────────
+   An audio lane is taller than a video one: a strip on top carries the name (and the cross), the wave fills the rest -
+   tall enough to see a pause in. The canvas covers only what can be seen (js/merge-v3/tl-wave.js moves it). */
+.mv3b-row.is-audio{height:40px}
+.mv3b-clip.is-audio::before{
+  content:''; position:absolute; left:0; right:0; top:0; height:11px; pointer-events:none;
+  background:oklch(0 0 0 / .28); border-bottom:1px solid oklch(1 0 0 / .06);
+}
+.mv3b-clip.is-audio .mv3b-clip-t{top:1px; bottom:auto; font-size:7.5px; line-height:10px}
+.mv3b-wave{
+  position:absolute; left:0; top:12px; height:calc(100% - 13px); display:block; pointer-events:none;
+  color:oklch(.76 .11 160);
+}
+.mv3b-clip.is-audio.is-sel .mv3b-wave{color:oklch(.84 .12 160)}

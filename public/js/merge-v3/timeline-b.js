@@ -39,6 +39,8 @@ import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 // (phase V33.2) A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
+// (phase V36, T4) A sound's waveform on its clip.
+import { paintWaves, onPeaks } from './tl-wave.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -1059,6 +1061,15 @@ function _clipEl(t, c) {
     m.className = 'mv3b-fix';
     el.appendChild(m);
   }
+  // (phase V36, T4) A SOUND SHOWS ITS WAVE - a sound, a track of music, a film's own sound: the peaks of the part of its
+  // file it plays, drawn by tl-wave.js for what can be seen (after the build, on scroll, when the peaks arrive). The name
+  // sits in the strip above it (css/mv3-timeline.css).
+  if (t.kind === 'audio' && c.src && !Store.isGone(c)) {
+    const wave = document.createElement('canvas');
+    wave.className = 'mv3b-wave';
+    el.appendChild(wave);
+    el.__clip = c;
+  }
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
   cap.textContent = (Store.isGone(c) ? 'deleted · ' : '') + (c.name || '');
@@ -1426,6 +1437,19 @@ function _build() {
   // (phase V36, T1) Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
   // the lanes are shown from there, not scrolled to where the last one was looked at.
   if (opened) host.scrollLeft = 0;
+  // (phase V36, T4) The waves of what can be seen - laid out now, so they are drawn at once.
+  paintWaves(host, _zoom(), GUTTER);
+}
+
+// The waves again, once per frame however many scroll events come - with a timer behind the frame, for a window that is
+// not being drawn (rAF waits for one that is).
+let _wavesAsked = false;
+function _wavesSoon() {
+  if (_wavesAsked) return;
+  _wavesAsked = true;
+  const go = () => { if (!_wavesAsked) return; _wavesAsked = false; if (_on) paintWaves(_host(), _zoom(), GUTTER); };
+  requestAnimationFrame(go);
+  setTimeout(go, 50);
 }
 
 // Take over the timeline panel - once, from main.js, when the store first has something to show.
@@ -2142,6 +2166,13 @@ function _laneMenu(e) {
 
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
+  // (phase V36, T4) The waves follow the scroll and the panel's width, and are drawn when a file's peaks arrive.
+  const host = _host();
+  if (host) {
+    host.addEventListener('scroll', _wavesSoon, { passive: true });
+    if (window.ResizeObserver) new ResizeObserver(_wavesSoon).observe(host);
+  }
+  onPeaks(_wavesSoon);
   const z = document.getElementById('mv3-zoom');
   if (z) z.addEventListener('input', () => { if (_on) { _build(); _centreOnPlayhead(); } });
   // On the document, not the clip: the pointer routinely leaves a 20px-tall element during a
