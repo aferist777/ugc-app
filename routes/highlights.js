@@ -6,7 +6,7 @@
 //   GET    /api/highlights                  -> { projects: [view] }
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
 //   GET    /api/highlights/price            ?seconds=&source= -> { price }     what "find moments" is expected to cost
-//   GET    /api/highlights/:id              -> { project, progress, retry }    what the field draws (polled while at work)
+//   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
 //   POST   /api/highlights/:id/retry        the same as the row's retry in Alerts -> { alertId }
@@ -82,7 +82,11 @@ router.get('/highlights/:id', (req, res) => {
   // Whether "retry" has something to go on with, and whether it costs (the row's own answer - lib/alerts.js view).
   const row = rec.work && rec.work.alertId ? ALERTS.get(rec.work.alertId) : null;
   const rv = row && row.state === 'failed' && !JOB.live(rec.id) ? ALERTS.view(row) : null;
-  res.json({ success: true, project: view(rec, { caps: true }), progress: JOB.progress(rec.id), live: JOB.live(rec.id),
+  // (phase V40) `stages`: the steps of its way as the record left them - the preparation panel of a run that stopped before
+  // its moments were found; while it is at work `progress.stages` says them.
+  const live = JOB.live(rec.id);
+  res.json({ success: true, project: view(rec, { caps: true }), progress: JOB.progress(rec.id), live,
+    stages: live ? null : JOB.stagesOf(rec, null),
     retry: rv && rv.retryable ? JOB.plan(rec) : '', retryFree: !!(rv && rv.retryFree), refused: !!(row && row.refused) });
 });
 

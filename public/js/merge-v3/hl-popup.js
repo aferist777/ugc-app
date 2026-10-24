@@ -67,8 +67,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     pick: null,
     length: lengths[ask.length] ? ask.length : (lengths[remembered.length] ? remembered.length : '30-60'),
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
-    // (phase V33.3) The title on top of every fragment - on unless it was taken off last time (the owner's (х35)).
-    title: ask.title != null ? ask.title !== false : remembered.title !== false,
+    // (phase V40, the owner's (о4)) No "title on top" box any more: a new fragment has no title, the card's "add title" puts one.
     kind: kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto'),
     style: '', price: null, busy: false, said: '', err: false,
     // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
@@ -140,13 +139,6 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   lw.appendChild(lenSel);
   const cw = _el('label', 'mv3-hlp-lab', 'how many');
   cw.appendChild(cntSel);
-  const tw = _el('label', 'mv3-hlp-lab mv3-hlp-tick');
-  const titleBox = _el('input');
-  titleBox.type = 'checkbox';
-  titleBox.checked = st.title;
-  titleBox.addEventListener('change', () => { st.title = titleBox.checked; remember(); });
-  tw.append(titleBox, document.createTextNode('title on top'));
-  tw.title = 'The moment\'s headline, in the video\'s own language, at the top of each fragment for its first three seconds - a text line like any other: edit it, move it or delete it on the timeline';
   const kindSel = _el('select', 'mv3-hlp-sel');
   for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
   kindSel.value = st.kind;
@@ -163,7 +155,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
     + 'podcast · interview - the faces; no face: the whole frame; the agent looks for complete thoughts and strong opinions\n'
     + 'documentary - the faces; no face: a 3:2 window from the middle over its blur (text, charts and screens stay nearly whole); the agent looks for a fact with its hook';
-  row.append(lw, cw, kw, tw);
+  row.append(lw, cw, kw);
   body.appendChild(_el('div', 'mv3-x-hdr', 'the fragments'));
   body.appendChild(row);
   body.appendChild(_el('p', 'mv3-x-note', 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.'));
@@ -214,7 +206,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   _win = { ov, layer, picker, music };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
-  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, title: st.title, kind: st.kind })); } catch (e) { /* private */ } }
+  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, kind: st.kind })); } catch (e) { /* private */ } }
 
   function takeFile(f) {
     if (!f) return;
@@ -330,7 +322,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     }
     st.busy = true;
     say('');
-    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, title: st.title, kind: st.kind,
+    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
       music: st.music.slice() };
     // (V33.8, (в1)) "By the video": the two styles it chooses between go with it.
     if (st.style === BY_VIDEO) {

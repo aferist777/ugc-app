@@ -52,10 +52,8 @@
 .mv3-hl-tile:hover{border-color:var(--muted)}
 .mv3-hl-tile.is-sel{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary)}
 .mv3-hl-tile.is-checked{border-color:var(--accent)}
-.mv3-hl-tile.is-ph{cursor:default}
 .mv3-hl-tile.is-failed{opacity:.55}
 .mv3-hl-frame{position:absolute; inset:0; background:center / cover no-repeat var(--surface-2)}
-.mv3-hl-tile.is-ph .mv3-hl-frame{filter:grayscale(.6) brightness(.45)}
 .mv3-hl-check{position:absolute; top:6px; left:6px; z-index:2; width:15px; height:15px; margin:0; accent-color:var(--primary); cursor:pointer}
 .mv3-hl-score{
   position:absolute; top:28px; right:5px; z-index:2; min-width:24px; padding:2px 5px; border-radius:999px;
@@ -80,12 +78,14 @@
 .mv3-hl-step.is-err{color:var(--danger)}
 .mv3-hl-said{font:600 10px/1.3 var(--font); color:var(--muted); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mv3-hl-said.is-err{color:var(--danger)}
+/* (phase V40, the owner 2026-10-24) The name in a dark field with its frame, as the scenario's lines (V38.8, library.css
+   .mk-scene-t): seen at once as a field that takes typing; pointed at - its frame lighter, typed in - blue. */
 .mv3-hl-card-name{
-  display:block; width:100%; padding:3px 5px; margin-bottom:6px; border:1px solid transparent; border-radius:var(--r-xs);
-  background:transparent; font:700 12.5px/1.35 var(--font); color:var(--ink);
+  display:block; width:100%; padding:3px 8px; margin-bottom:6px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--bg); font:700 12.5px/1.35 var(--font); color:var(--ink); cursor:text; transition:border-color .12s var(--ease);
 }
-.mv3-hl-card-name:hover{border-color:var(--border)}
-.mv3-hl-card-name:focus{outline:none; border-color:var(--primary); background:var(--bg)}
+.mv3-hl-card-name:hover{border-color:var(--muted)}
+.mv3-hl-card-name:focus{outline:none; border-color:var(--primary)}
 .mv3-hl-foot{
   position:absolute; left:0; right:0; bottom:0; z-index:2; padding:16px 7px 7px;
   background:linear-gradient(to top, oklch(0 0 0 / .85), oklch(0 0 0 / 0));
@@ -98,28 +98,29 @@
 .mv3-hl-step{font:600 9px/1.3 var(--font); color:oklch(.85 0 0); overflow-wrap:anywhere}
 .mv3-hl-bar{height:4px; border-radius:2px; background:oklch(1 0 0 / .18); overflow:hidden}
 .mv3-hl-fill{height:100%; background:var(--accent); transition:width .4s linear}
-/* (phase V33.4, the owner 2026-10-21) While the video comes in: ONE line over the tiles, the field's whole width, popping up
-   once; the tiles under it only turn a ring. */
-.mv3-hl-load{
-  position:sticky; top:-10px; z-index:4; margin:-2px 0 10px; padding:8px 11px 9px;
+/* (phase V40, the owner's (о5)) Until the moments are found: ONE panel the field's width - the way's steps as rows, one bar for
+   the whole of it, "0:48 · ~3:10 left" - popping up once. */
+.mv3-hl-prep{
+  margin:0; padding:12px 14px 12px;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
 }
-.mv3-hl-load.is-new{animation:mv3-hl-pop .28s var(--ease) both}
+.mv3-hl-prep.is-new{animation:mv3-hl-pop .28s var(--ease) both}
 @keyframes mv3-hl-pop{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
-.mv3-hl-load-t{display:flex; align-items:baseline; gap:10px; margin-bottom:6px}
-.mv3-hl-load-w{flex:1 1 auto; min-width:0; font:600 11px/1.3 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.mv3-hl-load-l{flex:0 0 auto; font:500 10px/1.3 var(--font); color:var(--muted); white-space:nowrap}
-.mv3-hl-load-bar{height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden}
-.mv3-hl-load-bar > i{display:block; height:100%; width:0; background:var(--accent); border-radius:3px; transition:width .5s linear}
-.mv3-hl-load-bar.is-indet > i{width:30%; animation:mv3-hl-slide 1.2s linear infinite}
-@keyframes mv3-hl-slide{from{transform:translateX(-100%)} to{transform:translateX(340%)}}
-.mv3-hl-tile.is-loading .mv3-hl-frame{filter:grayscale(.6) brightness(.4)}
-.mv3-hl-spin{
-  position:absolute; left:50%; top:50%; z-index:2; width:26px; height:26px; margin:-13px 0 0 -13px;
-  border:3px solid oklch(1 0 0 / .18); border-top-color:var(--accent); border-radius:50%;
-  animation:mv3-hl-turn 1s linear infinite;
-}
-@keyframes mv3-hl-turn{to{transform:rotate(360deg)}}
+.mv3-hl-stages{list-style:none; margin:0 0 10px; padding:0; display:flex; flex-direction:column; gap:6px}
+.mv3-hl-stage{display:flex; align-items:baseline; gap:9px; font:500 11px/1.35 var(--font); color:var(--muted)}
+.mv3-hl-stage-m{flex:0 0 14px; font-style:normal; font-weight:700; text-align:center}
+.mv3-hl-stage-w{flex:1 1 auto; min-width:0; overflow-wrap:anywhere}
+.mv3-hl-stage-t{flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--muted)}
+.mv3-hl-stage.is-done{color:var(--ink)}
+.mv3-hl-stage.is-done .mv3-hl-stage-m{color:var(--accent)}
+.mv3-hl-stage.is-now{color:var(--ink); font-weight:600}
+.mv3-hl-stage.is-now .mv3-hl-stage-m{color:var(--accent); animation:mv3-hl-beat 1.2s ease-in-out infinite}
+@keyframes mv3-hl-beat{50%{opacity:.35}}
+.mv3-hl-stage.is-next{opacity:.7}
+.mv3-hl-stage.is-failed, .mv3-hl-stage.is-failed .mv3-hl-stage-m{color:var(--danger)}
+.mv3-hl-prep-bar{height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden}
+.mv3-hl-prep-bar > i{display:block; height:100%; width:0; background:var(--accent); border-radius:3px; transition:width .6s linear}
+.mv3-hl-prep-t{margin-top:6px; font:600 10.5px/1.3 var(--font); color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
 
 /* (phase V33.4) Its render: the bar in the primary colour, "rendered" on the frame (pale when changed since), cut off, failed */
 .mv3-hl-fill.is-render{background:var(--primary)}
@@ -200,9 +201,6 @@
 .mv3-hl-cap b{color:var(--ink); font-weight:700}
 .mv3-hl-cap-ed{color:var(--accent)}
 .mv3-hl-cap-of{color:var(--muted); font-weight:500}
-/* (phase V33.3) The popup's "title on top" box, beside the length and the count */
-.mv3-hlp-tick{cursor:pointer}
-.mv3-hlp-tick input{margin:0; accent-color:var(--primary); cursor:pointer}
 
 /* ── (phase V33.8, H3) The popup's background music: a button and the list under it, by mood ── */
 .mv3-hlm{display:flex; flex-direction:column; gap:5px}

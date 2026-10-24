@@ -10,8 +10,9 @@
      the top      the video, what is happening (the server's words, as the row in Alerts says them), the cross that
                   stops it (twice: "really?"), "retry" (one press when it costs nothing, two - "spend again?" - when it
                   does), and "select all";
-     the tiles    vertical, as many as were asked for: until the agent has answered they all show the SAME way along -
-                  downloading, hearing 12 / 73 min, finding the moments -, then one per moment found;
+     the panel    (phase V40) until the agent has answered, ONE panel the field's width: the way's steps as rows - ✓ done
+                  with its size and time, ● going with the server's words, ○ to come -, one bar and "0:48 · ~3:10 left";
+     the tiles    vertical, one per moment found, each with its own way along while it is cut;
      the card     on the right: the moment pressed - its name, how complete its theme is (0-100), its length, the time of
                   each of its pieces in the video, the hook, why it would work, all its words; several ticked - how many.
    A project with no video yet shows "add video", which opens the popup (hl-popup.js) - as "+ new project -> highlights"
@@ -107,7 +108,7 @@ function _onStore() {
   _openShown = _openN();
   // Another project: what was shown of the last one goes.
   _pid = pid;
-  _rec = null; _prog = null; _live = false; _retry = ''; _sel = _openN(); _checked.clear(); _err = ''; _multi = false;
+  _rec = null; _prog = null; _live = false; _retry = ''; _stages = null; _sel = _openN(); _checked.clear(); _err = ''; _multi = false;
   _rStart = 0;
   _stopPoll();
   closePopup();
@@ -273,6 +274,7 @@ async function _load() {
   _live = !!d.live;
   _retry = d.retry || '';
   _retryFree = !!d.retryFree;
+  _stages = Array.isArray(d.stages) ? d.stages : null;
   // A moment gone (deleted, a new run) lets go of its card and its tick.
   const have = new Set((_rec.fragments || []).filter((f) => !f.deletedAt).map((f) => f.n));
   if (_sel && !have.has(_sel)) _sel = 0;
@@ -370,9 +372,10 @@ function _paintTop() {
   const state = _el('div', 'mv3-hl-state');
   const w = r.work || {};
   if (_live) {
-    // While the video comes in its words are the line over the field's (phase V33.4): here only what is going.
-    state.appendChild(_el('span', 'mv3-hl-words', _prog ? (_prog.load ? (STEP[_prog.step] || _prog.step) + ' the video' : _prog.words)
-      : (STEP[w.step] || w.step || 'at work')));
+    // (phase V40) Before the moments are found the field's panel says the way in full: here only what is going.
+    const panel = !_frags().length;
+    state.appendChild(_el('span', 'mv3-hl-words', _prog && !panel ? _prog.words
+      : (STEP[(_prog && _prog.step) || w.step] || w.step || 'at work')));
     const x = _el('button', 'mv3-c-btn danger' + (_armed === 'stop' ? ' is-armed' : ''), _armed === 'stop' ? 'really?' : '✕ stop');
     x.type = 'button';
     x.title = 'Stop it - what was paid for is kept; a video not heard yet is let go of';
@@ -539,8 +542,8 @@ const _fileOf = (url) => { try { return decodeURIComponent(String(url).split('/'
 function _paintField() {
   const field = _ui.field;
   field.textContent = '';
-  const wasLoading = _loadShown;
-  _loadShown = false;
+  const wasShown = _prepShown;
+  _prepShown = false;
   const r = _rec;
   if (!r) return;
   const frags = _frags();
@@ -558,42 +561,11 @@ function _paintField() {
   }
   const grid = _el('div', 'mv3-hl-grid');
   if (!frags.length) {
-    // Until the agent has answered no tile knows its moment: all of them show the same way along.
-    const n = r.ask ? r.ask.count : 0;
-    const failed = !_live && (r.work || {}).state === 'failed';
-    // (phase V33.4, the owner 2026-10-21) WHILE THE VIDEO COMES IN - downloaded or copied - its way along is ONE line over the
-    // field, the whole width (`load`); the tiles stand at once with only a turning ring on them. In, the line goes and the
-    // tiles show the steps after it.
-    const loading = !!(_live && _prog && _prog.load);
-    if (loading) field.appendChild(_loadLine(_prog, !wasLoading));
-    _loadShown = loading;
-    // The field is drawn again every 1.5 s: the rings go on turning from where they were, not from the start.
-    const turn = -(Date.now() % 1000) + 'ms';
-    for (let k = 0; k < n; k++) {
-      const t = _el('div', 'mv3-hl-tile is-ph' + (failed ? ' is-failed' : '') + (loading ? ' is-loading' : ''));
-      const fr = _el('div', 'mv3-hl-frame');
-      if (r.poster) fr.style.backgroundImage = 'url("' + r.poster + '")';
-      t.appendChild(fr);
-      if (loading) {
-        const spin = _el('div', 'mv3-hl-spin');
-        spin.style.animationDelay = turn;
-        t.appendChild(spin);
-        grid.appendChild(t);
-        continue;
-      }
-      const foot = _el('div', 'mv3-hl-foot');
-      if (_live && _prog) {
-        const bar = _el('div', 'mv3-hl-bar');
-        const fill = _el('div', 'mv3-hl-fill');
-        fill.style.width = Math.round(Math.max(0.02, _prog.pct) * 100) + '%';
-        bar.appendChild(fill);
-        foot.appendChild(bar);
-        foot.appendChild(_el('div', 'mv3-hl-step', _prog.words));
-      } else foot.appendChild(_el('div', 'mv3-hl-step', failed ? 'not made' : 'waiting'));
-      t.appendChild(foot);
-      grid.appendChild(t);
-    }
-    field.appendChild(grid);
+    // (phase V40, the owner 2026-10-24: "10 одинаковых плиток говорят только «ждите»") Until the agent has answered no tile knows
+    // its moment: ONE panel the field's width says the way - its steps, one bar for the whole of it and the time. The moments
+    // found, it goes and the tiles stand, each with its own way along.
+    const stages = (_live && _prog && _prog.stages) || _stages;
+    if (stages && stages.length) { field.appendChild(_prepPanel(stages, !wasShown)); _prepShown = true; }
     return;
   }
   const cutting = (_prog && _prog.fragments) || {};
@@ -691,22 +663,47 @@ function _paintField() {
   field.appendChild(grid);
 }
 
-// The one line over the field while the video comes in (phase V33.4, the owner 2026-10-21): what is going, its own bar (the
-// download's, not the whole job's) and how long is left. A number not known yet - a moving stripe.
-let _loadShown = false;        // the line was there at the last paint: it does not pop up again
-function _loadLine(p, fresh) {
-  const box = _el('div', 'mv3-hl-load' + (fresh ? ' is-new' : ''));
-  const top = _el('div', 'mv3-hl-load-t');
-  top.appendChild(_el('span', 'mv3-hl-load-w', p.words || (p.step === 'copy' ? 'copying the video' : 'downloading the video')));
-  const left = p.load.leftMs;
-  if (left != null && left > 1500) top.appendChild(_el('span', 'mv3-hl-load-l', '~' + _clock(left / 1000) + ' left'));
-  box.appendChild(top);
-  const bar = _el('div', 'mv3-hl-load-bar' + (p.load.frac == null ? ' is-indet' : ''));
-  const fill = _el('i');
-  if (p.load.frac != null) fill.style.width = Math.max(1, Math.round(p.load.frac * 1000) / 10) + '%';
-  else fill.style.animationDelay = -(Date.now() % 1200) + 'ms';
-  bar.appendChild(fill);
-  box.appendChild(bar);
+// THE PREPARATION PANEL (phase V40, the owner's (о5)): the way, a row a step - ✓ done (its size, its time), ● going (what it
+// is doing now, the server's words), ○ still to come, ✕ where a run stopped -, ONE bar for the whole way and "0:48 · ~3:10
+// left". It pops up once, not at every read of the record (the field is drawn again every 1.5 s).
+let _prepShown = false;        // the panel was there at the last paint
+let _stages = null;            // the steps as the record left them, while nothing is at work (GET /api/highlights/:id `stages`)
+const _mb = (b) => (b >= 1e9 ? (Math.round(b / 1e8) / 10) + ' GB' : Math.max(1, Math.round(b / 1e6)) + ' MB');
+const _min = (s) => Math.max(1, Math.round((+s || 0) / 60)) + ' min';
+function _stageSaid(s) {
+  if (s.state === 'now' && _prog && _prog.words) return _prog.words;
+  const done = s.state === 'done';
+  switch (s.key) {
+    case 'download': return done ? (s.had ? 'in the Library already' : 'downloaded' + (s.bytes ? ' ' + _mb(s.bytes) : '')) : 'downloading the video';
+    case 'copy': return done ? 'copied' + (s.bytes ? ' ' + _mb(s.bytes) : '') : 'copying the video';
+    case 'hear': return done ? (s.kept ? 'its words were in already' : 'heard' + (s.seconds ? ' ' + _min(s.seconds) : '')
+      + (s.engine === 'local' ? ' on this computer' : s.engine === 'groq' ? ' by Groq' : '')) : 'hearing the words';
+    case 'find': return done ? 'moments found' : 'finding the moments';
+    case 'fragments': return s.count ? 'cutting ' + s.count + (s.count === 1 ? ' fragment' : ' fragments') : 'cutting the fragments';
+    default: return s.key;
+  }
+}
+function _prepPanel(stages, fresh) {
+  const live = !!(_live && _prog);
+  const box = _el('div', 'mv3-hl-prep' + (fresh ? ' is-new' : ''));
+  const list = _el('ol', 'mv3-hl-stages');
+  for (const s of stages) {
+    const li = _el('li', 'mv3-hl-stage is-' + s.state);
+    li.appendChild(_el('i', 'mv3-hl-stage-m', s.state === 'done' ? '✓' : s.state === 'now' ? '●' : s.state === 'failed' ? '✕' : '○'));
+    li.appendChild(_el('span', 'mv3-hl-stage-w', _stageSaid(s) + (s.state === 'failed' ? ' - stopped here' : '')));
+    if (s.state === 'done' && s.took) li.appendChild(_el('span', 'mv3-hl-stage-t', _clock(s.took / 1000)));
+    list.appendChild(li);
+  }
+  box.appendChild(list);
+  if (live) {
+    const bar = _el('div', 'mv3-hl-prep-bar');
+    const fill = _el('i');
+    fill.style.width = Math.max(1, Math.round((+_prog.pct || 0) * 1000) / 10) + '%';
+    bar.appendChild(fill);
+    box.appendChild(bar);
+    const left = +_prog.leftMs || 0;
+    box.appendChild(_el('div', 'mv3-hl-prep-t', _clock((+_prog.elapsedMs || 0) / 1000) + (left > 1500 ? ' · ~' + _clock(left / 1000) + ' left' : '')));
+  }
   return box;
 }
 
@@ -767,8 +764,8 @@ function _paintCard() {
     line.title = f.n === _openN() ? 'Another style: the captions crumb above, or the subtitle lane on the timeline'
       : 'Open the fragment (press its tile) or tick it - then the captions crumb above gives it another style';
     card.appendChild(line);
-    // (phase V33.3) The title on top (the owner's (х35)): said when it is there, "add title" when it is not - a fragment made before,
-    // or with the popup's box taken off.
+    // (phase V33.3) The title on top (the owner's (х35)): said when it is there, "add title" when it is not - since V40 (the owner's
+    // (о4)) a new fragment has none: this button is the way to put the agent's headline on top.
     const open = f.n === _openN();
     const lane = open ? titleLaneOf(Store.timeline()) : null;
     const titled = open ? !!lane : !!(f.cap && f.cap.titled);
