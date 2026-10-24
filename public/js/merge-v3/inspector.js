@@ -43,7 +43,7 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle } from '../captions/style.js';
+import { markedColour, renderFrame, resolveStyle, PLATES } from '../captions/style.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
@@ -554,6 +554,31 @@ const EFFECTS = [['none', 'none'], ['color', 'colour'], ['box', 'a box'], ['pop'
 const APPEARS = [['none', 'at once'], ['pop', 'pops in'], ['fade', 'fades in'], ['slide', 'slides up']];
 const CASINGS = [['none', 'as typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
 const BEHIND = [['outline', 'nothing'], ['box', 'a box'], ['boxline', 'box + outline']];
+// A TEXT line's (phase V42; the owner's (ц4)): what stands behind it besides a box - a plate in the box's colour - and how it
+// comes in and goes out (style.js ENTERS / LEAVES, drawn by captions/text-fx.js).
+const BEHIND_TEXT = BEHIND.concat([['round', 'a rounded box'], ['pill', 'a pill'], ['marker', 'a marker stroke'],
+  ['underline', 'an underline'], ['circle', 'a circle'], ['tag', 'a tag with a stripe'], ['sticker', 'a sticker']]);
+const ENTER_OPTS = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['grow', 'grow'], ['rise', 'rise'],
+  ['from-left', 'from the left'], ['from-right', 'from the right'], ['drop', 'drop'], ['blur', 'blur'], ['stretch', 'stretch'],
+  ['swing', 'swing'], ['wipe', 'wipe'], ['mask-rise', 'slot'], ['rows', 'line by line'], ['words', 'word by word'],
+  ['words-pop', 'words pop'], ['letters', 'letter by letter'], ['letters-pop', 'letters pop'], ['letters-drop', 'letters drop'],
+  ['typewriter', 'typewriter'], ['glitch', 'glitch'], ['flicker', 'flicker']];
+const LEAVE_OPTS = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['shrink', 'shrink'], ['rise', 'rise'],
+  ['sink', 'sink'], ['to-left', 'to the left'], ['to-right', 'to the right'], ['fall', 'fall'], ['blur', 'blur'], ['stretch', 'stretch'],
+  ['wipe', 'wipe'], ['mask-sink', 'slot'], ['rows', 'line by line'], ['words', 'word by word'], ['letters', 'letter by letter'],
+  ['letters-fall', 'letters fall'], ['backspace', 'backspace'], ['glitch', 'glitch'], ['flicker', 'flicker']];
+// The old way a text line arrived, shown as its entrance (text-fx.js reads it so).
+const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
+const _secs = (v) => (Math.round(v * 100) / 100) + ' s';
+
+/** What choosing `v` in Behind writes, for a look that is `st` now: a box or a plate, never both; one that would be clear is given
+ * an opacity - a plate solid, a box as before. */
+function _behind(v, st) {
+  const plate = PLATES.includes(v) && v !== 'none';
+  const p = plate ? { plate: v, borderStyle: 'outline' } : { borderStyle: v, plate: 'none' };
+  if (v !== 'outline' && !(+st.backAlpha)) p.backAlpha = plate ? 1 : 0.6;
+  return p;
+}
 
 // What a press on a preset tile applies it to - set by whichever strip is painted (render).
 let _capApply = null;
@@ -797,6 +822,8 @@ function _styleRows(host, st, set, o) {
   const markBox = _el('span', 'mv3-c-marks');
   for (const m of marks) markBox.appendChild(m);
   host.appendChild(C.row('Font', C.pair(fontSel, markBox)));
+  const twin = fontOf(st.font).twin;
+  if (twin) host.appendChild(C.hint(fontOf(st.font).label + ' has no Russian letters - a line with them is drawn in ' + twin + '.'));
   host.appendChild(C.row('Casing', C.select(CASINGS, st.casing, (v) => set({ casing: v }))));
   host.appendChild(C.row('Colour', C.color(st.primary, (v) => set({ primary: v }))));
   // What the spoken word does - and the colour it is done in.
@@ -819,7 +846,23 @@ function _styleRows(host, st, set, o) {
   if (o.textLane && st.effect !== 'none') {
     host.appendChild(C.hint('A text lane has no spoken word - it plays on the Subtitles lane.'));
   }
-  host.appendChild(C.row('Arrives', C.select(APPEARS, st.appear, (v) => set({ appear: v }))));
+  if (o.textLane) {
+    // IN AND OUT (V42, (о15), (ц4)): each with its length - on a lane for all its lines, on a line for itself.
+    const enter = st.enter && st.enter !== 'none' ? st.enter : (APPEAR_AS[st.appear] || 'none');
+    host.appendChild(C.row('In', C.select(ENTER_OPTS, enter, (v) => set({ enter: v, appear: 'none' }))));
+    if (enter !== 'none') {
+      host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.enterDur || 0.5, fmt: _secs,
+        onChange: (v) => set({ enterDur: v }) })));
+    }
+    const leave = st.leave || 'none';
+    host.appendChild(C.row('Out', C.select(LEAVE_OPTS, leave, (v) => set({ leave: v }))));
+    if (leave !== 'none') {
+      host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
+        onChange: (v) => set({ leaveDur: v }) })));
+    }
+  } else {
+    host.appendChild(C.row('Arrives', C.select(APPEARS, st.appear, (v) => set({ appear: v }))));
+  }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(C.row('Outline', C.pair(
@@ -838,15 +881,28 @@ function _styleRows(host, st, set, o) {
   }
   // A box given an opacity only where it would be invisible - never the shown one's copied over another's
   // (review K6: a band wrote the first line's opacity into every line).
-  host.appendChild(C.row('Behind', C.select(BEHIND, st.borderStyle,
-    (v) => (o.setBehind ? o.setBehind(v) : set(v !== 'outline' && !(+st.backAlpha) ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v })))));
-  if (st.borderStyle === 'box' || st.borderStyle === 'boxline') {
+  const plate = o.textLane && st.plate && st.plate !== 'none' ? st.plate : '';
+  host.appendChild(C.row('Behind', C.select(o.textLane ? BEHIND_TEXT : BEHIND, plate || st.borderStyle,
+    (v) => (o.setBehind ? o.setBehind(v) : set(_behind(v, st))))));
+  if (plate || st.borderStyle === 'box' || st.borderStyle === 'boxline') {
     host.appendChild(C.row('Box', C.pair(
       C.slider({ min: 0, max: 1, step: 0.05, value: +st.backAlpha || 0, fmt: C.pct,
                  onChange: (v) => set({ backAlpha: v }) }),
       C.color(st.backColor, (v) => set({ backColor: v })),
     )));
   }
+  if (!o.textLane) return;
+  // A tag's stripe and a typewriter's cursor are the accent (V42; `highlight` - a text lane has no spoken word).
+  if (plate === 'tag' || st.enter === 'typewriter' || st.leave === 'backspace') {
+    host.appendChild(C.row('Accent', C.color(st.highlight, (v) => set({ highlight: v }))));
+  }
+  host.appendChild(C.row('Tilt', C.slider({ min: -15, max: 15, step: 0.5, value: +st.tilt || 0,
+    // Counter-clockwise is positive, as libass turns.
+    fmt: (v) => (Math.abs(v) < 0.05 ? 'none' : (v > 0 ? '↺ ' : '↻ ') + Math.abs(v) + '°'), onChange: (v) => set({ tilt: v }) })));
+  host.appendChild(C.row('Glow', C.pair(
+    C.slider({ min: 0, max: 10, step: 0.5, value: +st.glow || 0, fmt: (v) => (v > 0 ? String(v) : 'none'), onChange: (v) => set({ glow: v }) }),
+    C.color(st.glowColor || st.primary, (v) => set({ glowColor: v })),
+  )));
 }
 
 // WHAT A PLATFORM'S SCREEN COVERS (phase V30, block 3; the owner's (с36): a mark, nothing refused or moved): with
@@ -893,8 +949,7 @@ function _renderCaptions(host, items) {
   if (common) _presetLine(host, first.clip.style, () => wear(common), anyEdited);
   const st = styleOf(first.track, fmt, first.clip);
   const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
-  const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
-    ? { borderStyle: v, backAlpha: 0.6 } : { borderStyle: v }), { cut: true });
+  const setBehind = (v) => setCapStyleB(ids, (c, t) => _behind(v, styleOf(t, fmt, c)), { cut: true });
   host.appendChild(_el('div', 'mv3-c-sep'));
   _styleRows(host, st, set, { fmt, textLane: items.every(x => x.track.kind !== 'subs'), setBehind, marks: (items.map(x => x.clip)).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
     pages: () => items });
