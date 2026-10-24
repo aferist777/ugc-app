@@ -301,6 +301,37 @@ async function _paintList() {
 // Which projects' rows are open - kept while the panel repaints on its beat.
 const _openGroups = new Set();
 
+// (phase V40, the owner 2026-10-24) THE PROJECT'S WAY ALONG is its LAST press of Render - the entries of its last batch, as
+// lib/highlights-render.js viewOf counts them -, each fragment weighed by its length: a rendered one whole, the one rendering
+// by its share, the rest nothing. It was the running fragment's own percent: the bar went to 100% and back for each.
+const _secsOf = (x) => (+x.dur > 0 ? +x.dur : 30);
+function _lastBatch(items) {
+  const last = items.filter(x => x.batch).map(x => String(x.batch)).sort().pop() || '';
+  return last ? items.filter(x => String(x.batch || '') === last) : items;
+}
+// Seconds of encoding a second of film, as the project's own renders took it (the median of its last ones) - 0.3 before any.
+function _ratio(items) {
+  const r = items.filter(x => x.status === 'done' && x.tookMs > 0 && x.dur > 0).slice(-7)
+    .map(x => x.tookMs / 1000 / x.dur).sort((a, b) => a - b);
+  return r.length ? r[Math.floor(r.length / 2)] : 0.3;
+}
+function _batchWay(items) {
+  const batch = _lastBatch(items);
+  const ratio = _ratio(items);
+  let all = 0, made = 0, left = 0;
+  for (const x of batch) {
+    const s = _secsOf(x);
+    const pc = Math.max(0, Math.min(100, +x.percent || 0));
+    all += s;
+    if (x.status === 'done') made += s;
+    else if (x.status === 'running') {
+      made += s * pc / 100;
+      left += x.remain != null ? +x.remain : s * ratio * (1 - pc / 100);
+    } else if (x.status === 'queued' && x.armed) left += s * ratio;
+  }
+  return { batch, frac: all > 0 ? made / all : 0, left: Math.round(left) };
+}
+
 function _group(id, items, refresh) {
   const wrap = document.createElement('div');
   wrap.className = 'mv3-qgrp';
@@ -311,6 +342,7 @@ function _group(id, items, refresh) {
   const cut = items.filter(x => x.status === 'queued' && !x.armed).length;
   const failed = items.filter(x => x.status === 'failed').length;
   const open = _openGroups.has(id);
+  const way = _batchWay(items);
 
   const el = document.createElement('div');
   el.className = 'mv3-qrow mv3-qgrp-row' + (running ? ' is-running' : '');
@@ -325,12 +357,12 @@ function _group(id, items, refresh) {
   top.appendChild(nm);
   const st = document.createElement('span');
   st.className = 'mv3-qrow-s';
-  // Its way along, all together: what is going, then what is made and what was cut off or failed.
+  // Its way along, all together: what is going - counted in its last batch -, then what is made and what was cut off or failed.
   const live = running || inLine;
-  let left = 0;
-  if (running) left += running.remain != null ? running.remain : 0;
+  const bn = way.batch.length;
+  const bdone = way.batch.filter(x => x.status === 'done').length;
   st.textContent = live
-    ? 'rendering ' + Math.min(n, done + 1) + ' of ' + n + (left ? ' · ' + _mmss(left) + ' left' : '')
+    ? 'rendering ' + Math.min(bn, bdone + 1) + ' of ' + bn + (way.left ? ' · ' + _mmss(way.left) + ' left' : '')
     : [done ? done + ' rendered' : '', cut ? cut + ' interrupted' : '', failed ? failed + ' failed' : ''].filter(Boolean).join(' · ') || 'queued';
   top.appendChild(st);
   main.appendChild(top);
@@ -338,12 +370,12 @@ function _group(id, items, refresh) {
   sub.className = 'mv3-qrow-sub';
   sub.textContent = 'highlights · ' + n + (n === 1 ? ' fragment' : ' fragments');
   main.appendChild(sub);
-  if (running) {
+  if (live) {
     const bar = document.createElement('div');
-    const known = !running.phase && running.percent > 0;
+    const known = way.frac > 0;
     bar.className = 'mv3-qbar' + (known ? '' : ' is-indet');
     const fill = document.createElement('i');
-    if (known) fill.style.width = running.percent + '%';
+    if (known) fill.style.width = Math.min(100, Math.round(way.frac * 1000) / 10) + '%';
     bar.appendChild(fill);
     main.appendChild(bar);
   }
