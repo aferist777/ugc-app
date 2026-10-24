@@ -22,6 +22,7 @@
 // picks the countdown up again instead of paying twice.
 
 import * as J from './jobs.js';
+import * as HT from './hook-types.js';
 import * as Layers from '../layers.js';
 import { flyToAlerts, pulseAlerts } from '../alerts-bell.js';
 
@@ -83,7 +84,7 @@ const HTML = `
         <label class="mk-field"><span>Topic</span>
           <input type="text" id="mk-topic" placeholder="What the video is about"></label>
         <div class="mk-controls" id="mk-controls"></div>
-        <label class="mk-field mk-ad"><span>Advertise <em>— optional: worked into 2 paragraphs, natively; empty - no ad</em></span>
+        <label class="mk-field mk-ad" id="mk-ad-field" hidden><span>Advertise <em>— optional: worked into 2 paragraphs, natively; empty - no ad</em></span>
           <textarea id="mk-ad" rows="2" spellcheck="false" placeholder="What to advertise and what to say about it - a call to buy or a link only if you write it here"></textarea></label>
         <div class="mk-note-line" id="mk-nar-note" hidden></div>
         <div class="mk-job" id="mk-job" hidden></div>
@@ -91,6 +92,7 @@ const HTML = `
           <div class="mk-stage-h">
             <span>Hook <em>— the first line said out loud</em></span>
             <span class="sp"></span>
+            <select id="mk-hook-n" class="mk-hook-n" title="How many hooks to write - each of a type picked at random"></select>
             <span class="mk-go-slot" id="mk-go-slot-hook">
               <button class="lib-btn primary" type="button" id="mk-go">Write hooks</button>
             </span>
@@ -101,7 +103,7 @@ const HTML = `
           <div class="mk-stage-h">
             <span>Save as a scenario</span>
             <span class="sp"></span>
-            <button class="lib-btn" type="button" id="mk-newhooks" title="Suggest five fresh hooks and write from the one you pick">New hooks</button>
+            <button class="lib-btn" type="button" id="mk-newhooks" title="Suggest fresh hooks - as many as last chosen - and write from the one you pick">New hooks</button>
             <span class="mk-go-slot" id="mk-go-slot-save"></span>
             <button class="lib-btn primary" type="button" id="mk-save">Save to Scenarios</button>
           </div>
@@ -147,6 +149,20 @@ function _build() {
   $('mk-src-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('mk-src-title').blur(); });
 
   $('mk-go').addEventListener('click', _runGo);
+  // (V38.4) How many hooks a press writes: kept in the draft, and as the last choice for the next new one.
+  const nSel = $('mk-hook-n');
+  for (let n = HT.HOOK_COUNT.min; n <= HT.HOOK_COUNT.max; n++) {
+    const opt = el('option', '', n + (n === 1 ? ' hook' : ' hooks'));
+    opt.value = String(n);
+    nSel.appendChild(opt);
+  }
+  nSel.value = String(_lastCount());
+  nSel.addEventListener('change', () => {
+    try { localStorage.setItem(_COUNT_KEY, nSel.value); } catch (e) { /* remembered for this draft only */ }
+    _queueDraft();
+  });
+  // The hook type's description follows the pointer; a scroll or a new set of rows takes it away.
+  document.addEventListener('scroll', _hideTip, true);
   $('mk-newhooks').addEventListener('click', _newHooks);
   $('mk-save').addEventListener('click', _saveScript);
   $('mk-discard').addEventListener('click', _discardDraft);
@@ -1082,6 +1098,8 @@ function _opts() {
     narratorName: nar.selectedOptions[0] ? nar.selectedOptions[0].textContent.replace(/ — .*$/, '') : '',
     // (V38.1) What to advertise in two paragraphs - empty, no ad.
     advertise: $('mk-ad') ? $('mk-ad').value.trim() : '',
+    // (V38.4) How many hooks a press writes.
+    hookCount: HT.hookCount($('mk-hook-n') && $('mk-hook-n').value),
     // (V37) Not sent as a choice - the ladder's first step and the effort, for the countdown's key only (the owner's (л7)).
     model: (_reg && _reg.ladder && _reg.ladder[0] && _reg.ladder[0].model) || '',
     effort: (_reg && _reg.effort) || 'medium',
@@ -1108,6 +1126,7 @@ function _paintGo() {
   btn.textContent = label;
   btn.disabled = disabled;
   btn.classList.toggle('primary', !written);
+  _paintAd();
   const slot = $(hookOpen ? 'mk-go-slot-hook' : 'mk-go-slot-save');
   if (btn.parentElement !== slot) slot.appendChild(btn);
   $('mk-hook-stage').hidden = !hookOpen;
@@ -1120,7 +1139,25 @@ function _paintGo() {
   $('mk-save').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
   document.querySelectorAll('#mk-scenes .mk-scene-rw, #mk-hook-list .mk-hook-use').forEach(b => { b.disabled = busy; });
+  // (V38.4) "remake" only for a hook whose type is one of the forty.
+  document.querySelectorAll('#mk-hook-list .mk-hook-remake').forEach(b => { b.disabled = busy || !b.dataset.type; });
+  $('mk-hook-n').disabled = busy;
   if (busy) _hideFragBtn();
+}
+
+// (V38.4, the owner 2026-10-24: "пока хуки не сгенерированы - поле advertise не должно показываться ... поле advertise
+// должно появляться после того, как хуки сгенерированы") Shown once there are hooks, and from then on - the script, its
+// "Generate again" and its rewrites carry the ad too; a draft with an ad typed in shows it whatever it holds.
+function _paintAd() {
+  const f = $('mk-ad-field');
+  if (!f || !_gen) return;
+  f.hidden = !((_gen.hooks || []).length || (_gen.paragraphs || []).length || $('mk-ad').value.trim());
+}
+
+// (V38.4, (э4)) Five unless chosen otherwise; the last choice is what a new draft starts with.
+const _COUNT_KEY = 'ugc.make.hookCount';
+function _lastCount() {
+  try { return HT.hookCount(localStorage.getItem(_COUNT_KEY)); } catch (e) { return HT.HOOK_COUNT.default; }
 }
 function _setStage(s) { _stage = s; _paintGo(); }
 const _busy = () => _stage === 'hooks' || _stage === 'script' || _stage === 'working';
@@ -1144,12 +1181,13 @@ function _payload() {
     topicId: _gen.topicId, topicTitle: _gen.topicTitle || '',
     topic: $('mk-topic').value,
     hook: _gen.hook || '',
+    hookType: _gen.hookType || '',
     hooks: _gen.hooks || [],
     paragraphs: _gen.paragraphs || [],
     title: $('mk-title').value,
     settings: {
       tone: o.tone, scenes: o.scenes,
-      narratorId: o.narratorId, narratorName: o.narratorName, advertise: o.advertise,
+      narratorId: o.narratorId, narratorName: o.narratorName, advertise: o.advertise, hookCount: o.hookCount,
     },
     save: { gender: $('mk-gender').value, vertical: $('mk-vertical').value, product: $('mk-product').value },
   };
@@ -1247,6 +1285,8 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     hooks: (full && full.hooks) || [],
     // (V38.3) The hook the script is written from: one of the five, used (and maybe edited) - there is no field of one's own.
     hook: (full && full.hook) || '',
+    // (V38.4) Its type - the script is carried the way that opening works.
+    hookType: (full && full.hookType) || '',
     paragraphs: (full && full.paragraphs) || [],
     // (V38, block D4) The shelf's scenario this rewrites, and whether the rewrite in its narrator's voice has landed.
     from: (full && full.from) || null,
@@ -1259,6 +1299,8 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   $('mk-vertical').value = saved.vertical || '';
   $('mk-product').value = saved.product || '';
   $('mk-ad').value = (full && full.settings && full.settings.advertise) || '';
+  $('mk-hook-n').value = String(full && full.settings && full.settings.hookCount
+    ? HT.hookCount(full.settings.hookCount) : _lastCount());
   _showForm();
   try { await _buildControls(full ? full.settings : null); }
   catch (e) { J.sayJob($('mk-job'), 'the model list could not be read: ' + e.message, true); }
@@ -1332,10 +1374,15 @@ function _reattachStage() {
 // стороне строки хука. с левой стороны кнопка use hook") A row per hook: "use hook" on the left writes the script from it,
 // its text is edited in place (kept in the draft), its kind on the right. The one used is marked, and stays until the
 // script lands - a script that did not come is one press away again.
+// (V38.4) "remake" right of "use hook" writes the row again in its own type; the type on the right by its NAME
+// (public/js/library/hook-types.js), its description on hover. A kind from before that is not one of the forty is shown
+// as it was, with no description and no remake.
 function _renderHooks(hooks) {
   const box = $('mk-hook-list');
   box.textContent = '';
+  _hideTip();
   hooks.forEach((h, i) => {
+    const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook' + (_gen.hook && h.text.trim() === _gen.hook.trim() ? ' used' : ''));
     const use = el('button', 'lib-btn mk-hook-use', 'use hook');
     use.type = 'button';
@@ -1353,25 +1400,99 @@ function _renderHooks(hooks) {
       if (!text || _busy()) return;
       _gen.hooks[i] = { ..._gen.hooks[i], text };
       _gen.hook = text;
+      _gen.hookType = type ? type.id : '';
       box.querySelectorAll('.mk-hook').forEach(r => r.classList.toggle('used', r === row));
       await _saveDraft();
       _runScript();
     });
-    row.append(use, ta, el('span', 'mk-hook-k', h.kind));
+    const remake = el('button', 'lib-btn mk-hook-remake', 'remake');
+    remake.type = 'button';
+    remake.dataset.type = type ? type.id : '';
+    remake.title = type ? `Write this hook again - another ${type.name.toLowerCase()} on the same topic`
+      : 'This hook has no type to write it again in';
+    remake.disabled = _busy() || !type;
+    remake.addEventListener('click', () => _remakeHook(i, type, ta, row, remake));
+    const k = el('span', 'mk-hook-k' + (type ? ' typed' : ''), type ? type.name : (h.type || h.kind || ''));
+    if (type) {
+      k.addEventListener('mouseenter', () => _showTip(k, type));
+      k.addEventListener('mouseleave', _hideTip);
+    }
+    row.append(use, remake, ta, k);
     box.appendChild(row);
   });
 }
 
+// (V38.4, the owner: "кнопку remake чтобы выбранный хук переделался в том типе хука, которым он уже является. и после
+// нажатия хук переписывается в соответствии с темой сценария") One hook again, of its own type, by the topic - the row's
+// text replaced, a hand edit too ((э5)). The other rows go with it, so it does not read like them. While it is written
+// every hook button waits (one stage at a time per draft); a cancel leaves the row as it was.
+async function _remakeHook(i, type, ta, row, btn) {
+  if (!type || _busy()) return;
+  const topic = $('mk-topic').value.trim();
+  if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); return; }
+  const gen = _gen;
+  _setStage('working');
+  row.classList.add('remaking');
+  btn.textContent = 'remaking…';
+  ta.readOnly = true;
+  const o = _opts();
+  const others = (_gen.hooks || []).filter((_, j) => j !== i).map(x => x.text);
+  await _runStage('/api/scriptgen/hooks/remake', { ...o, topic, index: i, type: type.id, text: ta.value.trim(), others },
+    _TIMING.remake(o, i), async (r) => {
+      _putRemade(r);
+      await _saveDraft();
+    });
+  if (_gen === gen) {
+    if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
+    _setStage(_pickOrIdle());
+  }
+}
+
+// A remade hook into its row - while the row still holds a hook of that type. The hook it replaces, if it was the one
+// used, is used no more: the script would be written from words no longer on the screen.
+function _putRemade(r) {
+  const h = (_gen.hooks || [])[r.index];
+  if (!h || !r.text || (HT.hookType(h.type || h.kind) || {}).id !== r.type) return false;
+  if (_gen.hook && _gen.hook.trim() === String(h.text || '').trim()) { _gen.hook = ''; _gen.hookType = ''; }
+  _gen.hooks[r.index] = { type: r.type, text: r.text };
+  return true;
+}
+
+// (V38.4) The hook type's description, beside its name - the page's own small box, at once (not the browser's, a second
+// later). Above the name, or below it when there is no room above; inside the window.
+let _tipEl = null;
+function _hideTip() { if (_tipEl) { _tipEl.remove(); _tipEl = null; } }
+function _showTip(anchor, type) {
+  _hideTip();
+  const t = el('div', 'mk-tip');
+  t.append(el('b', '', type.name), el('span', '', type.about));
+  document.body.appendChild(t);
+  const r = anchor.getBoundingClientRect();
+  const w = t.offsetWidth, h = t.offsetHeight;
+  const x = Math.min(window.innerWidth - w - 8, Math.max(8, r.right - w));
+  const y = r.top - h - 6 >= 8 ? r.top - h - 6 : r.bottom + 6;
+  t.style.left = x + 'px';
+  t.style.top = y + 'px';
+  _tipEl = t;
+}
+
 // The hooks are shown while there is no script yet (a draft's five, or the hook it was written from). A hook kept from
 // before V38.3 that was typed by hand, with no five beside it, is shown as one of its own.
+// (V38.4) Beside a script too, when new hooks were written for it and none used yet (the hook was cleared with them):
+// they were paid for, and the page left before one was picked must show them again.
 function _showHooks() {
-  if (_gen.paragraphs.length) { $('mk-hook-list').textContent = ''; return; }
-  if (!_gen.hooks.length && _gen.hook) _gen.hooks = [{ kind: 'yours', text: _gen.hook }];
+  if (_gen.paragraphs.length && (_gen.hook || !_gen.hooks.length)) { $('mk-hook-list').textContent = ''; return; }
+  if (!_gen.hooks.length && _gen.hook) _gen.hooks = [{ type: 'yours', text: _gen.hook }];
   if (_gen.hooks.length) _renderHooks(_gen.hooks);
 }
 
 const _TIMING = {
-  hooks: (o) => ({ key: `l2-hooks|${o.model}|${o.effort}`, label: 'Writing five hooks…', estimateMs: J.EST.hooks }),
+  // (V38.4) 1-10 hooks: each count its own measured time.
+  hooks: (o) => {
+    const n = HT.hookCount(o.hookCount);
+    return { key: `l2-hooks|${o.model}|${o.effort}|${n}`, label: `Writing ${n} ${n === 1 ? 'hook' : 'hooks'}…`, estimateMs: J.EST.hooks(n) };
+  },
+  remake: (o, i) => ({ key: `l2-remake|${o.model}|${o.effort}`, label: `Writing hook ${i + 1} again…`, estimateMs: J.EST.remake }),
   script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
   rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
   // (V38, block D4) A scenario of the shelf rewritten in its narrator's voice - started on the shelf, followed here.
@@ -1384,7 +1505,7 @@ async function _runStage(path, body, timing, onResult) {
   const gen = _gen;
   if (!(await _ensureDraft())) { J.sayJob($('mk-job'), 'The draft could not be saved, so nothing was started.', true); return false; }
   const send = { ...body, ..._draftKey() };
-  const what = path.split('/').pop();              // hooks | script | humanize | rewrite
+  const what = path.split('/').pop();              // hooks | remake | script | rewrite
   let jobId;
   try {
     jobId = (await J.api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(send) })).jobId;
@@ -1459,7 +1580,11 @@ async function _landInto(what, r) {
   if (what === 'hooks' && Array.isArray(res.hooks)) {
     _gen.hooks = res.hooks;
     _gen.hook = '';
+    _gen.hookType = '';
     _renderHooks(_gen.hooks);
+  } else if (what === 'remake' && res.text) {
+    // Shown where the hooks are on show (with no script, or new ones beside a script); kept in the draft either way.
+    if (_putRemade(res) && (!(_gen.paragraphs || []).length || $('mk-hook-list').querySelector('.mk-hook'))) _renderHooks(_gen.hooks);
   } else if (what === 'script' && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
     $('mk-hook-list').textContent = '';
@@ -1520,6 +1645,7 @@ async function _reloadDraftInto() {
     _gen.paragraphs = d.paragraphs || [];
     _gen.foreign = !!d.foreign;
     _gen.hook = d.hook || '';
+    _gen.hookType = d.hookType || '';
     if (d.title && !$('mk-title').value.trim()) $('mk-title').value = d.title;
     _showHooks();
     if (_gen.paragraphs.length) _renderScenes();
@@ -1527,8 +1653,8 @@ async function _reloadDraftInto() {
   } catch (e) { _setStage('idle'); }
 }
 
-// The chain's one button: five hooks ("Write hooks"; with five on show, "Write new hooks"), and the script is written
-// from the one used. With a script there, "Generate again" writes it again from the same hook.
+// The chain's one button: hooks ("Write hooks"; with hooks on show, "Write new hooks" - as many as the list beside it
+// says, V38.4), and the script is written from the one used. With a script there, "Generate again" writes it again from the same hook.
 async function _runGo() {
   if (!_controlsReady()) { J.sayJob($('mk-job'), 'the model list is not loaded yet', true); return; }
   if (_stage !== 'pick' && _gen.paragraphs.length && _gen.hook) { _runScript(); return; }
@@ -1545,13 +1671,14 @@ async function _writeHooks() {
   const ok = await _runStage('/api/scriptgen/hooks', { ...o, topic }, _TIMING.hooks(o), async (r) => {
     _gen.hooks = r.hooks || [];
     _gen.hook = '';
+    _gen.hookType = '';
     _renderHooks(_gen.hooks);
     await _saveDraft();
   });
   if (_gen === gen) _setStage(ok ? _pickOrIdle() : (_gen.hooks.length ? (_renderHooks(_gen.hooks), 'pick') : 'idle'));
 }
 
-// "New hooks" beside a script: five more to choose from - the script stays until one of them is used.
+// "New hooks" beside a script: more to choose from (as many as last chosen) - the script stays until one of them is used.
 function _newHooks() {
   if (!_gen || _busy()) return;
   _writeHooks();
@@ -1565,7 +1692,8 @@ async function _runScript() {
   const gen = _gen;
   _setStage('script');
   const o = _opts();
-  const body = { ...o, topic, hook };
+  // (V38.4) With its type: the script is carried the way that opening works.
+  const body = { ...o, topic, hook, hookType: _gen.hookType || '' };
   await _runStage('/api/scriptgen/script', body, _TIMING.script(o), async (r) => {
     _gen.paragraphs = r.paragraphs || [];
     $('mk-hook-list').textContent = '';

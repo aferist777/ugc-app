@@ -76,7 +76,8 @@ export const bucket = (n) => Math.pow(2, Math.round(Math.log2(Math.max(1, +n || 
 export const EST = {
   ingestLink: 300000,
   topics: 45000,
-  hooks: 20000,
+  hooks: (n) => Math.max(12000, (n || 5) * 4000),     // (V38.4) 1-10 hooks a press
+  remake: 12000,                                       // (V38.4) one hook again
   script: (scenes) => Math.max(40000, (scenes || 15) * 9000),
   rewrite: 20000,
   voice: 40000,

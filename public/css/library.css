@@ -734,8 +734,18 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 9px;
 }
 .mk-ad textarea:focus{ outline:none; border-color:var(--primary); }
-/* Five candidates, each labelled with the KIND it is - that is what they differ in. (V38.3) A row: "use hook" on the
-   left, the text edited in place, the kind on the right; the one used is gold. */
+/* (V38.4) Hidden until hooks have been written - .mk-field's flex would show it otherwise. */
+.mk-ad[hidden]{ display:none; }
+/* (V38.4) How many hooks a press writes, left of "Write hooks". */
+.mk-hook-n{
+  font:600 11px var(--font); color:var(--ink);
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
+  height:26px; padding:0 6px;
+}
+.mk-hook-n:focus{ outline:none; border-color:var(--primary); }
+/* Candidates, each labelled with the KIND it is - that is what they differ in. (V38.3) A row: "use hook" on the
+   left, the text edited in place, the kind on the right; the one used is gold. (V38.4) "remake" right of "use hook";
+   the kind is a type of the forty, by its name, its description on hover (.mk-tip). */
 .mk-hooks{ display:flex; flex-direction:column; gap:4px; }
 .mk-hook{
   display:flex; gap:8px; align-items:flex-start; width:100%;
@@ -745,7 +755,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-hook:hover{ border-color:var(--border); }
 .mk-hook.used{ border-color:var(--gold); }
-.mk-hook-use{ flex:0 0 auto; padding:2px 9px; font-size:10.5px; }
+.mk-hook-use, .mk-hook-remake{ flex:0 0 auto; padding:2px 9px; font-size:10.5px; }
+.mk-hook.remaking .mk-hook-t{ opacity:.55; }
 .mk-hook-t{
   flex:1 1 auto; min-width:0; resize:none; overflow:hidden;
   font:11.5px/1.5 var(--font); color:var(--ink);
@@ -758,6 +769,14 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   background:var(--primary-soft); color:var(--primary);
   font-size:9px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
 }
+.mk-hook-k.typed{ cursor:help; }
+.mk-tip{
+  position:fixed; z-index:9300; max-width:260px; pointer-events:none;
+  display:flex; flex-direction:column; gap:2px; padding:6px 9px;
+  background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--r-xs);
+  box-shadow:0 6px 18px rgba(0,0,0,.28); font:11px/1.4 var(--font);
+}
+.mk-tip b{ font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--primary); }
 .mk-save-row{ display:flex; flex-wrap:wrap; gap:8px; }
 .mk-save-row .mk-field{ flex:1 1 150px; }
 .mk-save-row input, .mk-save-row select{ height:28px; }

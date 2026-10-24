@@ -4,7 +4,8 @@
 // SCRIPT GENERATION — the calls, in the order they run.
 //
 //   GET  /api/scriptgen/models              -> tones, scenes and the agents' ladder that writes (V37)
-//   POST /api/scriptgen/hooks               -> { jobId }  five openings, differing in kind
+//   POST /api/scriptgen/hooks               -> { jobId }  1-10 openings, one per type picked at random (V38.4)
+//   POST /api/scriptgen/hooks/remake        -> { jobId }  one hook written again in its own type (V38.4)
 //   POST /api/scriptgen/script              -> { jobId }  title + paragraphs
 //   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle - or a fragment of one (V38)
 //   POST /api/scriptgen/from-scenario       -> { jobId, draft }  a scenario of the shelf, rewritten in its narrator's
@@ -46,6 +47,8 @@
 const express = require('express');
 
 const P = require('../lib/writing-prompts');
+// (V38.4) The forty hook types - one module with the page.
+const HT = require('../public/js/library/hook-types.js');
 const WM = require('../lib/writing-models');
 const { callLadder } = require('../lib/llm-json');
 const AGENTS = require('../lib/agents');
@@ -298,6 +301,7 @@ function _keeper(b, build) {
         tone: b.tone, scenes: b.scenes,
         narratorId: b.narratorId, narratorName: b.narratorName,
         ...(b.advertise != null ? { advertise: _ad(b.advertise) } : {}),
+        ...(b.hookCount != null ? { hookCount: HT.hookCount(b.hookCount) } : {}),
       },
       ...patch,
     });
@@ -358,26 +362,89 @@ router.post('/scriptgen/hooks', (req, res) => {
     m = WM.normalise(b);
   } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
 
-  _start(res, 'Writing hooks', async (_step, signal) => {
+  // (V38.4, the owner 2026-10-24) As many hooks as the form's count says, each of a type picked at random from the
+  // forty (public/js/library/hook-types.js) - picked here, so what the writer is asked for is what the draft keeps.
+  const count = HT.hookCount(b.hookCount);
+  const types = HT.pickTypes(count);
+  _start(res, `Writing ${count} ${count === 1 ? 'hook' : 'hooks'}`, async (_step, signal) => {
     const { data, by } = await callLadder({
       system: P.HOOKS_SYSTEM,
       user: P.hooksUserPrompt({ topic, tone: m.tone,
-        narratorBlock: nar.block, sourceText: src.text }),
+        narratorBlock: nar.block, sourceText: src.text, types }),
       schema: P.HOOKS_SCHEMA, name: 'hooks', effort: EFFORT, signal,
     });
-    const hooks = (data.hooks || []).filter(h => h && h.text);
+    // Each hook keeps the type it was asked for: one named wrongly, or twice, takes the next type not yet given out -
+    // the order is the one asked in. Fewer than asked are kept as they came; more are cut.
+    const want = types.map(t => t.id);
+    const given = new Set();
+    const hooks = (data.hooks || []).filter(h => h && String(h.text || '').trim()).slice(0, count).map((h) => {
+      let id = String(h.type || '').trim().toLowerCase();
+      if (!want.includes(id) || given.has(id)) id = want.find(x => !given.has(x));
+      given.add(id);
+      return { type: id, text: String(h.text).trim() };
+    });
     if (!hooks.length) throw new Error('No hooks came back.');
     return { hooks, narrator: nar.name, model: by.model, by };
-  // Five new hooks mean a hook is to be picked again: the one the draft held is cleared with them,
-  // or a draft reopened later would show the old hook and hide the five that were paid for.
-  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '' })),
-  { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT });
+  // New hooks mean a hook is to be picked again: the one the draft held is cleared with them,
+  // or a draft reopened later would show the old hook and hide the new ones that were paid for.
+  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '', hookType: '' })),
+  { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT, hookCount: count });
+});
+
+// ── one hook, written again in its own type (phase V38.4) ─────────────────────
+// "remake" beside "use hook" (the owner 2026-10-24: "чтобы выбранный хук переделался в том типе хука, которым он уже
+// является. и после нажатия хук переписывается в соответствии с темой сценария"): a NEW hook of the row's type, by the
+// topic, the source, the narrator and the tone, not like the row's text nor the other rows; it replaces the row's text,
+// a hand edit too ((э5)). A job like the hooks - one at a time per draft, cancellable. Filed into the draft's row only
+// while that row still holds a hook of the same type; the row's hook, if it was the one used, is no longer used.
+router.post('/scriptgen/hooks/remake', (req, res) => {
+  const b = req.body || {};
+  const topic = String(b.topic || '').trim();
+  if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
+  const type = HT.hookType(b.type);
+  if (!type) return res.status(400).json({ success: false, error: 'this hook has no type to write it again in' });
+  const index = parseInt(b.index, 10);
+  if (!Number.isInteger(index) || index < 0 || index >= HT.HOOK_COUNT.max) {
+    return res.status(400).json({ success: false, error: 'no such hook' });
+  }
+  const current = String(b.text || '').trim().slice(0, 1000);
+  const others = (Array.isArray(b.others) ? b.others : []).map(s => String(s || '').trim().slice(0, 1000))
+    .filter(Boolean).slice(0, HT.HOOK_COUNT.max);
+  let nar, src, m;
+  try {
+    nar = _narrator(b.narratorId);
+    src = _sourceText(b.sourceId, b.topicId);
+    m = WM.normalise(b);
+  } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
+
+  _start(res, 'Writing the hook again', async (_step, signal) => {
+    const { data, by } = await callLadder({
+      system: P.HOOK_REMAKE_SYSTEM,
+      user: P.hookRemakeUserPrompt({ topic, tone: m.tone, narratorBlock: nar.block, sourceText: src.text,
+        type, current, others }),
+      schema: P.HOOK_REMAKE_SCHEMA, name: 'hook', effort: EFFORT, signal,
+    });
+    const text = String(data.text || '').trim();
+    if (!text) throw new Error('No hook came back.');
+    return { index, type: type.id, text, narrator: nar.name, model: by.model, by };
+  }, _keeper(b, (r) => {
+    const cur = b.draftId ? drafts.get(String(b.draftId)) : null;
+    const hooks = ((cur && cur.hooks) || []).slice();
+    const h = hooks[r.index];
+    if (!h || (HT.hookType(h.type || h.kind) || {}).id !== r.type) return null;
+    hooks[r.index] = { type: r.type, text: r.text };
+    const wasUsed = !!cur.hook && cur.hook.trim() === String(h.text || '').trim();
+    return { hooks, ...(wasUsed ? { hook: '', hookType: '' } : {}) };
+  }),
+  { key: _runKey(b), what: 'remake', model: _first().model, effort: EFFORT, index });
 });
 
 router.post('/scriptgen/script', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
   const hook = String(b.hook || '').trim();
+  // (V38.4) The chosen hook's type: the script is carried the way that opening works (none for a hook typed by hand).
+  const hookType = HT.hookType(b.hookType);
   if (!topic) return res.status(400).json({ success: false, error: 'a topic is required' });
   if (!hook) return res.status(400).json({ success: false, error: 'pick or write a hook first' });
   let nar, src, m;
@@ -395,10 +462,10 @@ router.post('/scriptgen/script', (req, res) => {
     const { data, by } = await callLadder({
       system: withSource ? P.SOURCE_SCRIPT_SYSTEM : P.SCRIPT_SYSTEM,
       user: withSource
-        ? P.sourceScriptUserPrompt({ hook, topic, paragraphs: m.scenes,
+        ? P.sourceScriptUserPrompt({ hook, hookType, topic, paragraphs: m.scenes,
           tone: m.tone, narratorBlock: nar.block, sourceText: src.text, advertise: _ad(b.advertise) })
         : P.scriptUserPrompt({ topic, paragraphs: m.scenes,
-          tone: m.tone, narratorBlock: nar.block, hook, advertise: _ad(b.advertise) }),
+          tone: m.tone, narratorBlock: nar.block, hook, hookType, advertise: _ad(b.advertise) }),
       schema: P.SCRIPT_SCHEMA, name: 'script', effort: EFFORT, signal,
     });
     const paragraphs = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
@@ -413,7 +480,7 @@ router.post('/scriptgen/script', (req, res) => {
       by,
     };
   }, _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, title: r.title, hook,
+    paragraphs: r.paragraphs, title: r.title, hook, hookType: hookType ? hookType.id : '',
     // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
     written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
   })),
