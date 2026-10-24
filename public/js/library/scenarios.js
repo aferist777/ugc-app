@@ -7,8 +7,9 @@
 // ONE ROW IS ALWAYS SELECTED and the right column is about it (phase D5, the owner 2026-09-29) - the
 // rule of the picture shelves: opening the shelf selects the first, a delete falls back to the
 // first, a reload keeps the one that was selected. The column holds the whole scenario: its title
-// and fields, where it came from when the generator wrote it, its lines - editable in one textarea,
-// one line per line, because editing a script is reading it top to bottom - "Make video" and Delete.
+// and fields, where it came from when the generator wrote it, "Make video" and Delete, and its lines - (phase V38.6, the
+// owner: "если сценарий уже сохранен, то давай отображать так же построчно как и при создании, только без полей для
+// генерации") a card each, as the generator shows a script, the first the hook, edited in place.
 //
 // NOTHING TO SAVE BY HAND (phase V28.2, the owner 2026-10-12: "сохранение должно быть автоматическим после любых
 // изменений в сценарии"): a field is saved the moment it is chosen, the lines a moment after the typing stops, when the
@@ -17,7 +18,9 @@
 // scenario, and Merge opened on it - what "use" does in Merge's picker.
 //
 // DRAFTS HEAD THE LIST (phase E4): a script the generator is still writing, one row each, saying how
-// far it got. A draft is not selected - pressing it continues it in the generator (js/library/make.js).
+// far it got. (V38.6) A draft is SELECTED like a scenario (`_sel` 'd:<id>'): the right side is then the generator's form
+// on that draft, without the sources (the page moves it there - js/library/main.js _showDraftHere). The shelf opens on
+// the first scenario; a draft chosen stays chosen while it is there.
 //
 // FILTERS AND FIELDS (phase F7, the owner 2026-09-30): over the list, above the drafts, a dropdown per
 // field - type, role, gender, vertical, product, narrator (the voice of the WRITING) - with
@@ -32,6 +35,7 @@
 import { askName } from '../name-box.js';
 import * as Layers from '../layers.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
+import { spokenSeconds } from './jobs.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -157,9 +161,11 @@ function _pick(it) {
 
 // A draft's row: what it is about, how far it got, where it is written from.
 function _draftRow(dr) {
-  const row = _el('button', 'lib-srow is-draft');
+  const key = 'd:' + dr.id;
+  const row = _el('button', 'lib-srow is-draft' + (_sel === key ? ' cur' : ''));
   row.type = 'button';
-  row.title = 'Continue this draft in the generator';
+  row.dataset.id = key;
+  row.title = 'This draft on the right - its fields and its script';
   const main = _el('div', 'lib-srow-main');
   main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
   // (V38) A scenario of the shelf being rewritten in a narrator's voice says which one.
@@ -171,8 +177,27 @@ function _draftRow(dr) {
     'draft · ' + (dr.running ? 'writing…' : (dr.stageLabel || dr.stage || ''))));
   row.appendChild(main);
   row.appendChild(_el('div', 'lib-srow-d', _fmtDate(dr.updatedAt)));
-  row.addEventListener('click', () => { if (_hooks.openDraft) _hooks.openDraft(dr.id); });
+  row.addEventListener('click', () => _pickDraft(dr));
   return row;
+}
+
+// (V38.6) A draft chosen: the scenario on show lets go (its lines stored), and the page puts the draft's form on the
+// right. Pressing the chosen draft again leaves its form as it is.
+function _pickDraft(dr) {
+  const key = 'd:' + dr.id;
+  if (_sel === key) return;
+  _sel = key;
+  _keep = '';
+  _paintSel();
+  _showDraft(dr.id);
+}
+function _showDraft(id) {
+  _seq++;
+  _closeFieldMenu();
+  if (_auto) { _flushing = _flushA(_auto); _auto = null; }
+  const pane = $('lib-info');
+  if (pane) pane.hidden = true;
+  if (_hooks.showDraft) _hooks.showDraft(String(id));
 }
 
 export function render(items, hooks = {}) {
@@ -183,24 +208,19 @@ export function render(items, hooks = {}) {
   grid.textContent = '';
   grid.className = 'lib-rows is-scenarios';
   if (_items.length) grid.appendChild(_filterRow());
-  for (const dr of (_hooks.drafts || [])) grid.appendChild(_draftRow(dr));
-
-  if (!_items.length) {
-    _sel = '';
-    grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet. “New scenario” above writes one.'));
-    _empty();
-    return;
-  }
+  const drafts = _hooks.drafts || [];
+  // (V38.6) A draft chosen stays chosen while it is there - saved or discarded, the scenarios have the selection back.
+  if (_sel.startsWith('d:') && !drafts.some(d => 'd:' + d.id === _sel)) _sel = '';
   const shown = _items.filter(it => _passes(it) || String(it.id) === _keep);
-  if (!shown.length) {
-    _sel = '';
-    grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
-    _empty('Nothing under these filters.');
-    return;
+  // The selection survives a reload while that scenario is still shown; otherwise the first scenario - or, with none
+  // to show, the first draft.
+  if (!_sel.startsWith('d:') && !shown.some(i => String(i.id) === _sel)) {
+    _sel = shown.length ? String(shown[0].id) : drafts.length ? 'd:' + drafts[0].id : '';
   }
-  // The selection survives a reload while that scenario is still shown; otherwise the first.
-  if (!shown.some(i => String(i.id) === _sel)) _sel = String(shown[0].id);
+  for (const dr of drafts) grid.appendChild(_draftRow(dr));
 
+  if (!_items.length) grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet. “New scenario” above writes one.'));
+  else if (!shown.length) grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
   for (const it of shown) {
     const outside = !_passes(it);
     const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : ''));
@@ -216,6 +236,8 @@ export function render(items, hooks = {}) {
     row.addEventListener('click', () => _pick(it));
     grid.appendChild(row);
   }
+  if (_sel.startsWith('d:')) { _showDraft(_sel.slice(2)); return; }
+  if (!shown.length) { _empty(_items.length ? 'Nothing under these filters.' : undefined); return; }
   _show(_items.find(i => String(i.id) === _sel));
 }
 
@@ -223,6 +245,8 @@ export function render(items, hooks = {}) {
 function _pane() {
   const pane = $('lib-info'), head = $('lib-info-head'), body = $('lib-info-body');
   if (!pane || !body) return null;
+  // (V38.6) A draft's form on the right gives way to the scenario.
+  if (_hooks.hideDraft) _hooks.hideDraft();
   _closeFieldMenu();   // its field is about to be painted again
   // What was typed into the scenario on show goes to the store before the column is painted again - and before it is
   // read again, which waits for it (_show).
@@ -597,17 +621,8 @@ async function _show(it) {
   }
   body.appendChild(fold);
 
-  const linesHead = _el('div', 'lib-info-sec', 'Lines · ' + lines.length);
-  body.appendChild(linesHead);
-  const edit = _el('div', 'lib-sc-edit');
-  const ta = _el('textarea', 'lib-sc-ta');
-  ta.spellcheck = false;
-  ta.placeholder = 'One line of the script per line.';
-  ta.value = lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')).join('\n');
-  ta.dataset.was = ta.value;
-  edit.appendChild(ta);
-
-  const foot = _el('div', 'lib-sc-foot');
+  // (V38.6, the owner's (щ2)) The buttons over the lines, under the fields; the lines under them, a card each.
+  const foot = _el('div', 'lib-sc-bar');
   const make = _el('button', 'lib-btn primary', 'Make video');
   make.type = 'button';
   make.title = 'Make a talking-head project from this scenario and open it in Merge';
@@ -620,27 +635,24 @@ async function _show(it) {
   del.type = 'button';
   del.title = 'Delete this scenario';
   foot.append(make, voice, st, _el('span', 'sp'), del);
-  body.appendChild(edit);
-  // The foot is the column's last child, stuck to its bottom edge (phase F6): Make video and Delete are
-  // in sight however long the lines are.
   body.appendChild(foot);
+  const linesHead = _el('div', 'lib-info-sec', 'Lines · ' + lines.length);
+  body.appendChild(linesHead);
+  const box = _el('div', 'lib-sc-cards');
+  body.appendChild(box);
 
-  // The lines save themselves (phase V28.2): a moment after the typing stops, and when the textarea is left.
-  const a = { s, ta, st, count, linesHead, timer: null, busy: null, empty: false };
+  // The lines save themselves (phase V28.2): a moment after the typing stops, and when the lines are left.
+  const a = { s, box, cards: [], was: '', st, count, linesHead, timer: null, busy: null, empty: false };
+  _paintCards(a, lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')));
+  a.was = _valueOf(a);
   _auto = a;
-  ta.addEventListener('input', () => {
-    clearTimeout(a.timer);
-    a.timer = setTimeout(() => _flushA(a), AUTOSAVE_MS);
-  });
-  // Leaving the lines is the save that makes them English (phase V29) - never the pause in the typing.
-  ta.addEventListener('blur', () => _flushA(a, true));
+  // Leaving the lines - for anything but another of them - is the save that makes them English (phase V29), never the
+  // pause in the typing.
+  box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) _flushA(a, true); });
   make.addEventListener('click', () => _makeVideo(a, make));
   voice.addEventListener('click', () => _inVoice(a, voice));
   _paintVoiceBtn(s);
   del.addEventListener('click', () => _delete(s, del));
-
-  // A script needs no inner scrolling when it fits; past that the textarea scrolls.
-  requestAnimationFrame(() => { ta.style.height = Math.min(520, Math.max(140, ta.scrollHeight + 4)) + 'px'; });
 
   // What the last Save or refusal said, now that the column is painted again.
   if (_say && _say.id === String(s.id)) {
@@ -652,12 +664,96 @@ async function _show(it) {
 
 // ── The lines, saved by themselves (phase V28.2) ─────────────────────────────
 const AUTOSAVE_MS = 800;
-let _auto = null;                    // the column on show: { s, ta, st, count, linesHead, timer, busy, empty }
+let _auto = null;                    // the column on show: { s, box, cards, was, st, count, linesHead, timer, busy, empty }
 let _flushing = Promise.resolve();   // the save of a column painted over, which a new reading waits for
 
-// The lines as a script: blank lines are separators people leave while editing, not lines of script - they
-// are dropped rather than saved as empty ones, which also stops a stray trailing newline adding a line.
-const _linesOf = (ta) => ta.value.split('\n').map(t => t.trim()).filter(Boolean).map(text => ({ text }));
+// ── The lines as cards (phase V38.6) ───────────────────────────────────────
+// As the generator shows a script (its .mk-scene cards): the number, the first one "hook", the words, how long they
+// take said. Edited as one text: Enter splits a line in two at the cursor (a paste of several lines makes as many
+// cards), Backspace at a line's start joins it to the one above, Delete at its end joins the one below to it, the arrows
+// at an edge go on to the next line.
+const _valueOf = (a) => a.cards.map(c => c.ta.value.replace(/\s*\n\s*/g, ' ')).join('\n');
+
+function _card(a, text) {
+  const row = _el('div', 'mk-scene lib-sc-line');
+  const n = _el('div', 'mk-scene-n');
+  const ta = _el('textarea', 'mk-scene-t lib-sc-lt');
+  ta.rows = 1;
+  ta.spellcheck = false;
+  ta.value = text;
+  const acts = _el('div', 'mk-scene-a');
+  const secs = _el('div', 'mk-scene-secs');
+  acts.appendChild(secs);
+  row.append(n, ta, acts);
+  const c = { row, n, ta, secs };
+  ta.addEventListener('input', () => _cardInput(a, c));
+  ta.addEventListener('keydown', (e) => _cardKey(a, c, e));
+  return c;
+}
+
+function _paintCards(a, texts) {
+  a.box.textContent = '';
+  a.cards = (texts.length ? texts : ['']).map(t => _card(a, t));
+  for (const c of a.cards) a.box.appendChild(c.row);
+  _number(a);
+}
+
+function _number(a) {
+  a.cards.forEach((c, i) => {
+    c.row.classList.toggle('hook', i === 0);
+    c.n.classList.toggle('is-hook', i === 0);
+    c.n.textContent = i === 0 ? 'hook' : String(i + 1);
+    c.secs.textContent = spokenSeconds(c.ta.value) + 's';
+  });
+}
+
+const _queueSave = (a) => { clearTimeout(a.timer); a.timer = setTimeout(() => _flushA(a), AUTOSAVE_MS); };
+const _caret = (ta, at) => { ta.focus(); ta.setSelectionRange(at, at); };
+
+function _cardInput(a, c) {
+  const v = c.ta.value;
+  if (v.includes('\n')) {
+    // A line break typed or pasted: the line splits there, the cursor stays where it was in the words.
+    const before = v.slice(0, c.ta.selectionStart);
+    const k = before.split('\n').length - 1;
+    const off = before.length - (before.lastIndexOf('\n') + 1);
+    const parts = v.split('\n');
+    c.ta.value = parts[0];
+    const more = parts.slice(1).map(t => _card(a, t));
+    const i = a.cards.indexOf(c);
+    a.cards.splice(i + 1, 0, ...more);
+    let after = c.row;
+    for (const m of more) { after.after(m.row); after = m.row; }
+    _number(a);
+    _caret([c, ...more][k].ta, off);
+  } else c.secs.textContent = spokenSeconds(v) + 's';
+  _queueSave(a);
+}
+
+function _cardKey(a, c, e) {
+  const ta = c.ta;
+  const i = a.cards.indexOf(c);
+  const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
+  const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
+  const join = (top, low) => {
+    const at = top.ta.value.length;
+    const glue = top.ta.value && low.ta.value && !/\s$/.test(top.ta.value) && !/^\s/.test(low.ta.value) ? ' ' : '';
+    top.ta.value = top.ta.value + glue + low.ta.value;
+    low.row.remove();
+    a.cards.splice(a.cards.indexOf(low), 1);
+    _number(a);
+    _caret(top.ta, at);
+    _queueSave(a);
+  };
+  if (e.key === 'Backspace' && atStart && i > 0) { e.preventDefault(); join(a.cards[i - 1], c); }
+  else if (e.key === 'Delete' && atEnd && i < a.cards.length - 1) { e.preventDefault(); join(c, a.cards[i + 1]); }
+  else if (e.key === 'ArrowUp' && atStart && i > 0) { e.preventDefault(); const p = a.cards[i - 1].ta; _caret(p, p.value.length); }
+  else if (e.key === 'ArrowDown' && atEnd && i < a.cards.length - 1) { e.preventDefault(); _caret(a.cards[i + 1].ta, 0); }
+}
+
+// The lines as a script: an empty card is a line being written, not a line of script - it is dropped rather than saved
+// empty.
+const _linesOf = (a) => a.cards.map(c => c.ta.value.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean).map(text => ({ text }));
 
 // (phase V29, the owner 2026-10-14: "набранное переводится") A letter of another script than Latin - the server's
 // own test (lib/mv3-agent.js `english`). Lines with one are made English by the server when they are left.
@@ -675,12 +771,12 @@ function _flushA(a, english) {
 }
 
 async function _save(a, keepalive, english) {
-  const value = a.ta.value;
+  const value = _valueOf(a);
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
   const toEnglish = !!english && !keepalive && _foreign(value);
   // Typed back to what is stored: nothing to save, and "every line is empty" is not true any more.
-  if (value === a.ta.dataset.was && !toEnglish) { if (a.empty) { a.empty = false; say(''); } return true; }
-  const lines = _linesOf(a.ta);
+  if (value === a.was && !toEnglish) { if (a.empty) { a.empty = false; say(''); } return true; }
+  const lines = _linesOf(a);
   a.empty = !lines.length;
   if (a.empty) { say('Every line is empty - not saved; the scenario keeps the lines it had.', 'err'); return false; }
   if (!keepalive) say(toEnglish ? 'translating into English…' : 'saving…');
@@ -694,7 +790,7 @@ async function _save(a, keepalive, english) {
     if (keepalive) return true;
     const d = await r.json().catch(() => null);
     if (r.status === 404) {
-      a.ta.dataset.was = value;                 // nothing left to save it into
+      a.was = value;                            // nothing left to save it into
       if (_hooks.status) _hooks.status('"' + (a.s.title || 'untitled') + '" was deleted elsewhere', 'err');
       _sel = '';
       if (_hooks.reload) await _hooks.reload();
@@ -702,14 +798,14 @@ async function _save(a, keepalive, english) {
       return false;
     }
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    a.ta.dataset.was = value;
-    // Made English: the field shows what is stored - unless it was typed into while the translation came.
+    a.was = value;
+    // Made English: the cards show what is stored - unless they were typed into while the translation came.
     if (toEnglish && d.scenario && Array.isArray(d.scenario.lines)) {
-      const now = d.scenario.lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')).join('\n');
-      if (a.ta.value === value) { a.ta.value = now; a.ta.dataset.was = now; }
+      const now = d.scenario.lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' '));
+      if (_valueOf(a) === value) { _paintCards(a, now); a.was = _valueOf(a); }
     }
     // The row, the head of the lines and their count say what is stored now - in place: painting the column
-    // again would take the textarea from under the typing.
+    // again would take the cards from under the typing.
     const n = lines.length;
     const it = _items.find(x => String(x.id) === String(a.s.id));
     if (it) {
@@ -729,14 +825,14 @@ async function _save(a, keepalive, english) {
 
 // Closing the window is leaving the lines: a save still waiting out its pause goes now.
 window.addEventListener('pagehide', () => {
-  if (_auto && _auto.ta.value !== _auto.ta.dataset.was && _linesOf(_auto.ta).length) _save(_auto, true);
+  if (_auto && _valueOf(_auto) !== _auto.was && _linesOf(_auto).length) _save(_auto, true);
 });
 
 // MAKE VIDEO: the lines stored first - a project is made from what is STORED - then the talking head (its own
 // copy of the lines and its empty timeline), and Merge opened on its setup.
 async function _makeVideo(a, btn) {
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
-  if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
+  if (!_linesOf(a).length) { say('Every line is empty - nothing to make a video of.', 'err'); return; }
   btn.disabled = true;
   if (!(await _flushA(a, true))) { btn.disabled = false; return; }
   say('making the project…');
@@ -768,7 +864,7 @@ async function _paintVoiceBtn(s) {
 // /api/scriptgen/from-scenario: a draft of them and the job, at once) and the generator opens on that draft, following it.
 async function _inVoice(a, btn) {
   const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
-  if (!_linesOf(a.ta).length) { say('Every line is empty - nothing to rewrite.', 'err'); return; }
+  if (!_linesOf(a).length) { say('Every line is empty - nothing to rewrite.', 'err'); return; }
   btn.disabled = true;
   if (!(await _flushA(a, true))) { btn.disabled = false; return; }
   try {
@@ -776,6 +872,7 @@ async function _inVoice(a, btn) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenarioId: a.s.id }),
     }).then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+    // (V38.6) The new draft selected in the list, its form on the right following the rewrite.
     if (_hooks.openDraft) _hooks.openDraft(d.draft.id);
   } catch (e) {
     say('Not started: ' + e.message, 'err');
@@ -785,7 +882,7 @@ async function _inVoice(a, btn) {
 async function _delete(s, btn) {
   if (!confirm('Delete "' + (s.title || 'untitled') + '"?\n\nThe scenario goes for good. Projects already made from it keep their own copy of the text.')) return;
   // Its lines are not saved on the way out: it is going.
-  if (_auto && String(_auto.s.id) === String(s.id)) { clearTimeout(_auto.timer); _auto.ta.dataset.was = _auto.ta.value; }
+  if (_auto && String(_auto.s.id) === String(s.id)) { clearTimeout(_auto.timer); _auto.was = _valueOf(_auto); }
   btn.disabled = true;
   try {
     const d = await fetch('/api/scen3/scenarios/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(r => r.json());
@@ -803,13 +900,14 @@ async function _delete(s, btn) {
 /** The lines typed into the scenario on show, stored now - the page is about to put something in its place. */
 export function flush() { return _flushA(_auto); }
 
-/** The scenario to select at the next render - one the generator has just saved. */
-export function select(id) { _sel = String(id || ''); _keep = _sel; }
+/** The scenario to select at the next render - one the generator has just saved; (V38.6) 'd:<id>' a draft. */
+export function select(id) { _sel = String(id || ''); _keep = _sel.startsWith('d:') ? '' : _sel; }
 
 // Leaving the shelf: the lines typed are stored, an answer on its way is dropped, and coming back opens on
 // the first scenario.
 export function leave() {
   if (_auto) { _flushing = _flushA(_auto); _auto = null; }
+  if (_hooks.hideDraft) _hooks.hideDraft();       // (V38.6) a draft's form: what is typed is saved
   _seq++;
   _sel = '';
   _say = null;

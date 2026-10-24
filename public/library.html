@@ -98,6 +98,8 @@
          selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
       <div class="lib-grid" id="lib-grid"></div>
+      <!-- (V38.6) Scenarios: the list's width, dragged and remembered (js/library/main.js _wireScSash). -->
+      <div class="lib-tree-sash lib-sc-sash" id="lib-sc-sash" hidden title="Drag to resize the list, double-click for the usual width"></div>
       <!-- THE MEDIA TREE (phase V28.5, the owner 2026-10-12): on Media, what it selects is what the grid shows -
            the same tree as Merge's Library panel (js/media-tree.js); the sash sets its width. -->
       <div class="lib-tree-sash" id="lib-tree-sash" hidden title="Drag to resize the tree, double-click for the default width"></div>
@@ -106,6 +108,8 @@
         <div class="lib-info-head" id="lib-info-head"></div>
         <div class="lib-info-body" id="lib-info-body"></div>
       </aside>
+      <!-- (V38.6) Scenarios: a draft selected in the list - the generator's form, moved here (js/library/make.js mount). -->
+      <section class="lib-sc-draft" id="lib-sc-draft" hidden></section>
     </div>
     <!-- THE SCENARIO GENERATOR (phase E): sources down the left, the form or a source's topics on the
          right. Built the first time "New scenario" is pressed and only hidden after that, so what it

@@ -146,6 +146,12 @@
 .lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
 body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
 .lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
+/* (V38.6) Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
+   selected one on the right - a scenario's column, or a draft's form (#lib-sc-draft, the generator's form moved in). */
+.lib-split.is-scenarios > #lib-grid{ flex:0 0 var(--sc-list-w, 360px); }
+.lib-split.is-scenarios > .lib-info{ flex:1 1 0; border-left:0; }
+.lib-sc-draft{ flex:1 1 0; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); }
+.lib-sc-draft[hidden]{ display:none; }
 .lib-info{
   flex:0 0 33.333%; min-width:0; display:flex; flex-direction:column;
   border-left:1px solid var(--border); background:var(--surface);
@@ -500,32 +506,22 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 
 /* ── Scenarios: the selected one, in the right column (phase D5) ──────────────
    The title in the body at its own size - the column's head is upper case and cut to one line -
-   then the fields, where it came from, and the lines: one textarea holding the whole script, one
-   line per line, because editing a script is reading it top to bottom. */
+   then the fields, where it came from, the buttons and (V38.6) the lines, a card each. */
+/* (V38.6) The buttons over the lines; the lines a card each, as the generator shows a script (.mk-scene). */
+.lib-sc-bar{ display:flex; align-items:center; gap:10px; padding:8px 12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.lib-sc-bar .sp{ flex:1; }
+.lib-sc-cards{ display:flex; flex-direction:column; gap:6px; padding:0 12px 14px; }
+.lib-sc-lt{ field-sizing:content; contain:inline-size; min-height:20px; }
 .lib-sc-title{ padding:10px 12px 2px; font-size:13px; font-weight:650; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
-.lib-sc-edit{ display:flex; flex-direction:column; gap:6px; padding:10px 12px 12px; }
-.lib-sc-ta{
-  width:100%; min-height:140px; resize:vertical;
-  font:12px/1.55 var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
-}
-.lib-sc-ta:focus{ outline:none; border-color:var(--primary); }
-/* The scenario column is a column: its parts keep their height, the foot goes to the bottom edge
-   and stays there while the rest scrolls under it (phase F6). */
+/* The scenario column is a column: its parts keep their height. */
 .lib-info-body.is-scenarios{ display:flex; flex-direction:column; }
 .lib-info-body.is-scenarios > *{ flex:0 0 auto; }
-.lib-sc-foot{
-  display:flex; align-items:center; gap:10px;
-  position:sticky; bottom:0; z-index:1; margin-top:auto;
-  padding:8px 12px; background:var(--surface); border-top:1px solid var(--border);
-}
 /* "Where it came from", folding (phase F5): the section's own name is the switch. */
 .lib-sc-origin > summary{ cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; }
 .lib-sc-origin > summary::-webkit-details-marker{ display:none; }
 .lib-sc-origin > summary::before{ content:'▸'; font-size:9px; transition:transform .12s var(--ease); }
 .lib-sc-origin[open] > summary::before{ transform:rotate(90deg); }
 .lib-sc-origin > summary:hover{ color:var(--ink); }
-.lib-sc-foot .sp{ flex:1; }
 .lib-sc-status{ font-size:10.5px; color:var(--muted); }
 .lib-sc-status.ok{ color:oklch(.78 .13 150); }
 .lib-sc-status.err{ color:oklch(.75 .15 25); }

@@ -8,6 +8,12 @@
 // puts ITS topics on the right instead; choosing a topic brings the form back, filled for that
 // fragment. Pressing the chosen source again lets go of it; "← topics" goes back from the form.
 //
+// THE FORM ON THE SHELF (phase V38.6, the owner 2026-10-24: "в левом столбце список сценариев и черновиков и готовых а с
+// правой стороны так: ... если черновик, то с полями. а источники показываем только, когда переходим в new scenario->narrator")
+// A draft selected in the Scenarios list shows THIS module's form on the right of the shelf: the form's node is moved
+// there (mount) and back (open) - one form, one state, two places. On the shelf "← topics" opens the whole layout on the
+// draft's source and its topics (the owner's (щ3)); a save or a discard hands the list back to the page.
+//
 // PAID WORK IS NEVER LOST (the owner: drafts must not be lost). Everything slow is a job on the server
 // that this module polls, and every stage of a script is written into a draft on the server as it
 // lands (routes/scriptgen.js, the keepers). So before any paid step the draft is saved at once - a
@@ -47,6 +53,7 @@ let _stopArmed = '';      // the source whose cross says "really?" - the next pr
 const _srcJobs = new Map();
 const _srcLast = new Map();  // sourceId -> { text, err } - what its last job said, when it failed
 const _following = new Map();  // draftId -> { jobId, run, rows } - the stages this page follows
+let _embedded = false;         // (V38.6) the form stands on the Scenarios shelf, not in this layout
 
 // ── Markup ──────────────────────────────────────────────────────────────────
 const HTML = `
@@ -155,7 +162,11 @@ function _build() {
   window.addEventListener('ugc:alert-retried', () => { if (_built) _readSources().then(() => _paintSources()); });
   $('mk-mine').addEventListener('click', _mineTopics);
   $('mk-src-off').addEventListener('click', () => _chooseSource(null));
-  $('mk-to-topics').addEventListener('click', () => { if (_src) _showTopics(); });
+  // (V38.6, (щ3)) On the shelf the source's topics are the whole layout's: the page opens it on that source.
+  $('mk-to-topics').addEventListener('click', () => {
+    if (!_embedded) { if (_src) _showTopics(); return; }
+    if (_gen && _gen.sourceId && _hooks.openSource) _hooks.openSource(_gen.sourceId);
+  });
   $('mk-src-title').addEventListener('input', _queueRename);
   $('mk-src-title').addEventListener('blur', _saveTitle);
   $('mk-src-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('mk-src-title').blur(); });
@@ -216,6 +227,7 @@ export function init(hooks) { _hooks = hooks || {}; }
  */
 export async function open(opts) {
   _build();
+  mount(null);                                    // (V38.6) the form back in this layout
   const o = opts || {};
   await _flushDraft();
   await Promise.all([_readSources(), _readDrafts()]);
@@ -260,6 +272,33 @@ function _flashRow(id) {
   void row.offsetWidth;
   row.classList.add('flash');
 }
+
+/**
+ * (V38.6) Where the form stands: `host` - the Scenarios shelf's right side - or, with null, this layout. One node moved,
+ * so a stage it follows, a pause before a save and what is typed go with it.
+ */
+export function mount(host) {
+  _build();
+  const f = $('mk-form');
+  const home = document.querySelector('#lib-make .mk-main');
+  const to = host || home;
+  if (to && f.parentElement !== to) to.appendChild(f);
+  _embedded = !!host;
+  if (_embedded) { _hideFragBtn(); f.hidden = false; }
+}
+
+/** (V38.6) A draft in the form on the shelf - read as it is now. False when it could not be opened. */
+export async function openDraft(id) {
+  _build();
+  await _flushDraft();
+  await _readDrafts();
+  return _resumeDraft(id);
+}
+
+/** (V38.6) The draft the form on the shelf shows - '' when the form is not there. */
+export const embeddedDraft = () => (_embedded && _gen && _gen.draftId ? String(_gen.draftId) : '');
+/** (V38.6) The draft the form holds, wherever it stands - the page selects it on the way back from the layout. */
+export const currentDraft = () => (_gen && _gen.draftId ? String(_gen.draftId) : '');
 
 /** Leave the layout: what is typed is saved; what runs keeps running. */
 export async function close() {
@@ -1291,6 +1330,8 @@ async function _discardDraft() {
   try {
     await J.api('/api/scriptgen/drafts/' + encodeURIComponent(_gen.draftId), { method: 'DELETE' });
     _gen = null;
+    // (V38.6) On the shelf the list is read again, and its first scenario is on the right.
+    if (_embedded) { if (_hooks.discarded) await _hooks.discarded(); return; }
     await _readDrafts();
     _paintSources();
     if (_src) _showTopics(); else await _enterScript({});
@@ -1575,6 +1616,7 @@ async function _followStage(jobId, run, gen, onResult) {
   const here = () => !!_gen && String(_gen.draftId) === draftId;
   if (_stage === 'idle' || _stage === 'pick') _setStage('working');
   _stageRow(rec);
+  if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged();     // (V38.6) its row says "writing…"
   try {
     const job = await J.pollJob('/api/scriptgen/jobs', jobId, (j) => {
       if (j.step && here() && rec.rows.length && !rec.cancelling) rec.rows[rec.rows.length - 1].say(j.step);
@@ -1609,6 +1651,7 @@ async function _followStage(jobId, run, gen, onResult) {
     if (_following.get(draftId) === rec) _following.delete(draftId);
     await _readDrafts();
     if (_built) _paintSources();
+    if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged();
     // A topic card showing this draft says how far it got now.
     if (_built && _view === 'topics' && _src) _paintTopics(_src);
   }
@@ -1904,6 +1947,13 @@ async function _saveScript() {
     clearTimeout(_saveT);
     _saveT = null;
     _gen = null;
+    // (V38.6) On the shelf the new scenario is selected in the list, in the draft's place.
+    if (_embedded) {
+      const n0 = (d.scenario.lines || []).length;
+      if (_hooks.counts) _hooks.counts();
+      if (_hooks.saved) await _hooks.saved(d.scenario.id, `Saved “${d.scenario.title}” — ${n0} lines.`);
+      return;
+    }
     await Promise.all([_readDrafts(), _readSources()]);
     _paintSources();
     if (_src) { await _refreshSource(); _showTopics(); } else await _enterScript({});
@@ -1920,6 +1970,8 @@ async function _saveScript() {
 
 // The layout's own line, over both views: what was saved (with the way to it), what went wrong.
 function _say(text, kind, scenarioId) {
+  // (V38.6) The layout's line is not on the shelf: the page's status line says it there.
+  if (_embedded) { if (_hooks.status && text) _hooks.status(text, kind); return; }
   const box = $('mk-said');
   if (!box) return;
   box.textContent = '';

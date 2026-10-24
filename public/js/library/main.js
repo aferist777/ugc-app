@@ -128,6 +128,14 @@ function _paintShelves() {
   // Media's three checks show their buttons only there; leaving Media puts them away at once.
   if (_shelf !== 'media') for (const id of ['lib-dupes', 'lib-broken', 'lib-thumbs']) { const b = $(id); if (b) b.hidden = true; }
   // Media's tree, beside its grid.
+  // (V38.6) Scenarios: the list at its own width on the left, a sash, the selected one on the right - a scenario's
+  // column, or a draft's form. Elsewhere the draft's place is put away.
+  const onSc = _shelf === 'scenarios';
+  const split = $('lib-split');
+  if (split) split.classList.toggle('is-scenarios', onSc);
+  const scs = $('lib-sc-sash');
+  if (scs) scs.hidden = !onSc;
+  if (!onSc) { const dh = $('lib-sc-draft'); if (dh) dh.hidden = true; }
   const onMedia = _shelf === 'media' && !_makingOn;
   for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
   // (phase V34.E) The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
@@ -183,8 +191,11 @@ async function _openMaker(opts) {
 async function _closeMaker(then, after) {
   if (!_makingOn) return;
   const m = MAKERS[_makingOn];
+  // (V38.6) Back from the generator on the draft it was writing: that draft selected, its form on the right.
+  const dr = _makingOn === 'scenarios' ? MK.currentDraft() : '';
   await m.mod.close();
   _makingOn = '';
+  if (dr) SC.select('d:' + dr);
   if (_narrOn) { _narrOn = false; NR.close(); }
   _paintMake();
   if (then) then();
@@ -337,6 +348,78 @@ function _wireTreeSash() {
     apply(TREE_DEF);
     try { localStorage.setItem(LS_TREE_W, String(TREE_DEF)); } catch (e) { /* a private window */ }
   });
+}
+
+// (V38.6, the owner: "делаем sash в полке scenarios (запоминается положение - двигаем влево вправо)") The Scenarios
+// list's width: dragged and remembered, a double press for the usual 360 px ((щ5)); the right side takes the rest.
+const LS_SC_W = 'lib_sc_list_w';
+const SC_DEF = 360, SC_MIN = 220, SC_RIGHT_MIN = 420;
+function _wireScSash() {
+  const sash = $('lib-sc-sash');
+  const split = $('lib-split');
+  if (!sash || !split) return;
+  const apply = (w) => {
+    const max = Math.max(SC_MIN, (split.clientWidth || 1200) - SC_RIGHT_MIN);
+    const v = Math.max(SC_MIN, Math.min(max, Math.round(w)));
+    split.style.setProperty('--sc-list-w', v + 'px');
+    return v;
+  };
+  let saved = 0;
+  try { saved = parseInt(localStorage.getItem(LS_SC_W) || '', 10); } catch (e) { saved = 0; }
+  split.style.setProperty('--sc-list-w', (saved || SC_DEF) + 'px');
+  const keep = (v) => { try { localStorage.setItem(LS_SC_W, String(v)); } catch (e) { /* a private window */ } };
+  sash.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const from = e.clientX;
+    const grid = $('lib-grid');
+    const base = grid ? grid.getBoundingClientRect().width : (saved || SC_DEF);
+    let w = base;
+    document.body.classList.add('lib-colresize');
+    const move = (ev) => { w = apply(base + (ev.clientX - from)); };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('lib-colresize');
+      keep(w);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  sash.addEventListener('dblclick', () => keep(apply(SC_DEF)));
+}
+
+// (V38.6, the owner: "если черновик, то с полями") A draft selected in the list: the generator's form on the shelf's
+// right (js/library/make.js mount) - the sources stay out of it, they belong to "New scenario → narrator". The draft on
+// show already is only shown again, as it was.
+async function _showDraftHere(id) {
+  const host = $('lib-sc-draft'), info = $('lib-info');
+  if (!host) return;
+  if (info) info.hidden = true;
+  host.hidden = false;
+  if (MK.embeddedDraft() === String(id)) return;
+  MK.mount(host);
+  if (!(await MK.openDraft(id))) { SC.select(''); await _load({ keepScroll: true }); }
+}
+function _hideDraftHere() {
+  const host = $('lib-sc-draft');
+  if (!host || host.hidden) return;
+  host.hidden = true;
+  MK.close();                                     // what is typed is saved; what runs goes on
+}
+// The draft rows again - a stage started or landed in the form on the shelf - without reading the scenario on show.
+async function _refreshDraftRows() {
+  if (_shelf !== 'scenarios' || _makingOn) return;
+  try {
+    const dd = await fetch('/api/scriptgen/drafts').then(r => r.json());
+    if (!dd || !dd.success) return;
+    _drafts = dd.drafts || [];
+  } catch (e) { return; }
+  if (_shelf !== 'scenarios' || _makingOn) return;
+  const grid = $('lib-grid');
+  const top = grid ? grid.scrollTop : 0;
+  _renderGrid();
+  if (grid) grid.scrollTop = top;
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -804,7 +887,10 @@ function _renderGrid() {
     // store's answer rather than the editor's.
     SC.render(_items, {
       reload: () => _load({ keepScroll: true }), status: _status, counts: _counts,
-      drafts: _drafts, openDraft: (id) => _openMaker({ draftId: id }),
+      // (V38.6) A draft is selected like a scenario, its form on the right; one made elsewhere ("In … voice") is
+      // selected once the list has been read with it.
+      drafts: _drafts, showDraft: _showDraftHere, hideDraft: _hideDraftHere,
+      openDraft: (id) => { SC.select('d:' + id); return _load({ keepScroll: true }); },
     });
     return;
   }
@@ -1477,6 +1563,12 @@ async function _goToPlace(p) {
     if (_shelf !== p.kind) return;
   }
   _closeNarrators();                              // what the address names is under them
+  // (V38.6) A draft named - "← back" from AI settings, a link - is the draft selected on the shelf, its form on the right.
+  if (p.make && p.kind === 'scenarios' && p.draft && !p.src) {
+    if (_makingOn) await _closeMaker(() => SC.select('d:' + p.draft));
+    else { SC.select('d:' + p.draft); await _load({ keepScroll: true }); }
+    return;
+  }
   if (p.make && MAKERS[p.kind]) {
     if (_makingOn !== p.kind) await _openMaker(_makeOpts(p));
     // The generator on show, asked for one of its sources: that source, without starting a clean form.
@@ -1528,6 +1620,8 @@ function boot() {
     _shelf = arrive.kind;
     try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
     if (arrive.sel) { _sel = arrive.sel; _scrollSel = true; }
+    // (V38.6) A draft named: selected on the shelf, not the generator opened on it.
+    if (arrive.kind === 'scenarios' && arrive.make && arrive.draft && !arrive.src) { SC.select('d:' + arrive.draft); arrive.make = false; }
     if (arrive.mkind) { try { localStorage.setItem('lib_tree_sel_v1', JSON.stringify(arrive.mkind)); } catch (e) { /* a private window */ } }
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
   }
@@ -1550,6 +1644,12 @@ function boot() {
     openScenario: (id) => _closeMaker(() => SC.select(id)),
     // The gear by the Narrator field (phase V28.2): the narrators, and "← Generate script" back.
     narrators: _openNarrators,
+    // (V38.6) The form on the shelf: "← topics" opens the generator on the draft's source and its topics (the owner's
+    // (щ3)); a save selects the new scenario; a discard reads the list again; a stage started or landed repaints the rows.
+    openSource: (id) => _openMaker({ sourceId: id }),
+    saved: async (id, text) => { SC.select(id); await _load({ keepScroll: true }); _counts(); if (text) _status(text, 'ok'); },
+    discarded: () => { SC.select(''); return _load({ keepScroll: true }); },
+    draftsChanged: _refreshDraftRows,
   });
   CM.init({
     // Done: the shelf again, on the character just made - selected, in view, its column open.
@@ -1609,6 +1709,7 @@ function boot() {
   }
 
   _wireTreeSash();
+  _wireScSash();
   _initTree();
   Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
