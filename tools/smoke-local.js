@@ -116,6 +116,8 @@ const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/user
                  // narrator's vocabulary and phrases went
                  ['POST', '/api/narrators/x/analyse'], ['DELETE', '/api/narrators/x/readings/y'], ['POST', '/api/scriptgen/humanize'],
                  ['POST', '/api/scriptgen/enrich'], ['POST', '/api/narrators/x/vocabulary'], ['POST', '/api/narrators/x/pending/phrases/all/keep'],
+                 // phase V38.9: a scenario of the shelf rewritten in its narrator's voice went with its button (V38.7)
+                 ['POST', '/api/scriptgen/from-scenario'],
                  ['GET', '/api/sources/x/transcript'], ['GET', '/temp_files/x'], ['GET', '/temp_public/x'],
                  // phase C3: the server version's 'copy to my profile' - one person owns every project here
                  ['POST', '/api/mv3/timeline/x/copy'], ['DELETE', '/api/scen3/projects/x'],

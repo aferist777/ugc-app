@@ -158,8 +158,7 @@ function _draftRow(dr) {
   row.title = 'This draft on the right - its fields and its script';
   const main = _el('div', 'lib-srow-main');
   main.appendChild(_el('div', 'lib-srow-t', dr.title || dr.topic || dr.topicTitle || 'untitled draft'));
-  // (V38) A scenario of the shelf being rewritten in a narrator's voice says which one.
-  const tail = [dr.fromTitle ? 'rewriting “' + dr.fromTitle + '”' : dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
+  const tail = [dr.sourceTitle ? 'from ' + dr.sourceTitle : 'no source',
     dr.paragraphs ? dr.paragraphs + (dr.paragraphs === 1 ? ' paragraph' : ' paragraphs') : '',
     String(dr.narratorName || '').replace(/ — .*$/, '')].filter(Boolean).join(' · ');
   main.appendChild(_el('div', 'lib-srow-s', tail));

@@ -8,8 +8,6 @@
 //   POST /api/scriptgen/hooks/remake        -> { jobId }  one hook written again in its own type (V38.4)
 //   POST /api/scriptgen/script              -> { jobId }  title + paragraphs
 //   POST /api/scriptgen/rewrite             -> { jobId }  one paragraph, another angle - or a fragment of one (V38)
-//   POST /api/scriptgen/from-scenario       -> { jobId, draft }  a scenario of the shelf, rewritten in its narrator's
-//                                              voice at once (V38, V38.1)
 //   POST /api/scriptgen/save                -> { scenario }  into the scenarios store
 //   GET  /api/scriptgen/jobs/:jobId         -> { state, step, error, result }
 //   GET  /api/scriptgen/drafts              -> { drafts: [summary + running] }
@@ -172,78 +170,11 @@ function _narrator(id) {
   return { block: P.narratorBlock(rec), name: rec.name, id: rec.id, ready: narrators.hasVoice(rec), rec };
 }
 
-const _words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
-
 // (V38.1) The ad a person typed into the form's "Advertise" - worked into two paragraphs of the script (lib/writing-prompts.js
 // adBlock); empty, the script carries no advertising. And what of it goes into the scenario's Product when that is empty
 // (the owner's (к8)): its first line, short - Product is a label the shelf filters by.
 const _ad = (s) => String(s || '').trim().slice(0, 1500);
 const _productOf = (s) => String(s || '').trim().split(/\r?\n/)[0].replace(/[.;:,\s]+$/, '').slice(0, 80);
-
-// ── a scenario of the shelf, in the narrator's voice (phase V38, block D4; V38.1) ─
-// "In <narrator>'s voice" under a scenario of the shelf. The narrator is the scenario's own - what its narrator field shows
-// (the owner's (к3а)) - and the rewrite starts AT ONCE (the owner's (к3): "оно должно сразу писать голосом нарратора"): a
-// DRAFT of its lines (`from`, `foreign`) and the job, in one request; the generator opens on the draft and follows the
-// job. Every line is rewritten, the first too, as many lines, each about as long (the owner's (д10)), what it is FOR kept.
-// Saving makes a NEW scenario that says which one it came from; the one on the shelf is not touched. Pressed again while
-// the last rewrite did not land (its draft still `foreign`, nothing writing into it), the same draft is asked again.
-
-router.post('/scriptgen/from-scenario', (req, res) => {
-  const s = scen3.getScenario(String((req.body || {}).scenarioId || ''));
-  if (!s) return res.status(404).json({ success: false, error: 'no such scenario' });
-  const lines = (s.lines || []).map(l => String((l && l.text) || '').trim()).filter(Boolean);
-  if (lines.length < scen3.MIN_LINES) {
-    return res.status(400).json({ success: false, error: `the scenario has ${lines.length} lines - at least ${scen3.MIN_LINES} are needed` });
-  }
-  const label = (scen3.effectiveLabels(s) || {}).narrator;
-  const rec = label && label.id ? narrators.get(label.id) : null;
-  if (!rec) {
-    return res.status(400).json({ success: false, error: label
-      ? `${label.name}, the scenario's narrator, is not among the narrators any more - choose another in its narrator field.`
-      : 'The scenario has no narrator - choose one in its narrator field first.' });
-  }
-  if (!narrators.hasVoice(rec)) return res.status(400).json({ success: false, error: `${rec.name} has no voice yet - read his samples first (Narrators).` });
-  const role = (s.roles || [])[0] || {};
-  const tone = WM.TONES.includes((s.origin || {}).tone) ? s.origin.tone : WM.DEFAULTS.tone;
-  const settings = { tone, scenes: Math.min(WM.SCENES_MAX, Math.max(MIN_LINES, lines.length)), narratorId: rec.id, narratorName: rec.name };
-  let draft;
-  try {
-    const again = drafts.list().find(d => d.from && String(d.from.scenarioId) === String(s.id) && d.foreign && !_runningFor(d));
-    draft = drafts.save({
-      ...(again ? { id: again.id } : {}),
-      topic: s.title || '', title: s.title || '', hook: lines[0], paragraphs: lines,
-      from: { scenarioId: String(s.id), title: s.title || '' }, foreign: true,
-      settings: { ...((again && again.settings) || {}), ...settings },
-      save: { gender: role.gender || '', vertical: s.vertical || '', product: s.product || '' },
-    });
-  } catch (e) { return res.status(400).json({ success: false, error: e.message }); }
-  const b = { draftId: draft.id, narratorId: rec.id, narratorName: rec.name, tone: settings.tone, scenes: settings.scenes };
-  _voice(res, b, _narrator(rec.id), lines, { draft });
-});
-
-function _voice(res, b, nar, lines, extra) {
-  const keep = _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, hook: r.paragraphs[0] || '', foreign: !r.applied,
-    ...(r.applied ? { written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() } } : {}),
-  }));
-  _start(res, `Rewriting ${lines.length} lines in ${nar.name}'s voice`, async (_step, signal) => {
-    const { data, by } = await callLadder({
-      system: P.VOICE_SYSTEM,
-      user: P.voiceUserPrompt({ lines, narratorBlock: nar.block }),
-      schema: P.VOICE_SCHEMA, name: 'voiced', effort: EFFORT, signal,
-    });
-    const back = (data.paragraphs || []).map(p => String(p || '').trim()).filter(Boolean);
-    // As many lines as were given, or the scenario stays as it was: a line lost is a beat of the story lost.
-    if (back.length !== lines.length) {
-      return { paragraphs: lines, applied: false, voice: true, by, narrator: nar.name,
-        note: `The editor returned ${back.length} lines for ${lines.length} - the scenario was kept as it was; press "In ${nar.name}'s voice" on the shelf again.` };
-    }
-    // About as long as the line it replaces (the owner's (д10)) - told, and said where it is not.
-    const off = back.map((p, i) => [i + 1, _words(p), _words(lines[i])]).filter(([, w, was]) => w > Math.ceil(was * 1.2) + 1 || w < Math.floor(was * 0.8) - 1);
-    return { paragraphs: back, applied: true, voice: true, by, narrator: nar.name,
-      note: off.length ? `${off.length === 1 ? 'Line' : 'Lines'} ${off.map(x => x[0]).join(', ')} came back more than a fifth ${off.length === 1 ? 'longer or shorter than it was' : 'longer or shorter than they were'}.` : '' };
-  }, keep, { key: _runKey(b), what: 'voice', model: _first().model, effort: EFFORT }, extra);
-}
 
 // The transcript slice a topic was mined from, or nothing. `sourceId` alone means the whole
 // transcript; with `topicId` it is that topic's own span, which is what makes "select, do not
@@ -620,13 +551,9 @@ router.post('/scriptgen/save', async (req, res) => {
   // back beside the scenario the moment its answer landed.
   const run = _runningFor(b.draftId ? drafts.get(b.draftId) : null);
   if (run) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run.what}) - save when it has landed.`, ...run });
-  // (V38, block D4) A scenario of the shelf rewritten in a voice keeps its own number of lines - the store's floor, not
-  // the generator's.
-  const fromShelf = !!((b.draftId && drafts.get(String(b.draftId))) || {}).from;
-  const minLines = fromShelf ? scen3.MIN_LINES : MIN_LINES;
-  if (paragraphs.length < minLines) {
+  if (paragraphs.length < MIN_LINES) {
     return res.status(400).json({ success: false,
-      error: `the scenarios store needs at least ${minLines} lines — this script has ${paragraphs.length}` });
+      error: `the scenarios store needs at least ${MIN_LINES} lines — this script has ${paragraphs.length}` });
   }
   // The third gate, said here rather than let through to a 500: the store reads the narrator's
   // gender off the first role, and refuses a scenario without one.
@@ -671,8 +598,6 @@ router.post('/scriptgen/save', async (req, res) => {
       // Which aggregator too (phase F3): the same model id can run on two of them.
       provider: String((wrote && wrote.provider) || ''),
       model: String((wrote && wrote.model) || ''), at: new Date().toISOString(),
-      // (V38, block D4) A scenario of the shelf rewritten in the narrator's voice: which one.
-      ...(kept && kept.from ? { fromId: kept.from.scenarioId, fromTitle: kept.from.title } : {}),
     },
   };
 

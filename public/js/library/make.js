@@ -1017,11 +1017,9 @@ function _showForm() {
 
 function _paintFrom() {
   if (!_gen) return;
-  $('mk-from').textContent = _gen.from
-    ? `rewriting “${_gen.from.title || 'a scenario'}” from the shelf - saved as a new scenario`
-    : _gen.sourceTitle
-      ? `from “${_gen.sourceTitle}”${_gen.topicSpan ? ' · ' + _gen.topicSpan : ''}`
-      : 'without a source';
+  $('mk-from').textContent = _gen.sourceTitle
+    ? `from “${_gen.sourceTitle}”${_gen.topicSpan ? ' · ' + _gen.topicSpan : ''}`
+    : 'without a source';
 }
 
 // A field of the form: its name above it, and beside the name anything that belongs to the field (the
@@ -1365,9 +1363,6 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     // (V38.4) Its type - the script is carried the way that opening works.
     hookType: (full && full.hookType) || '',
     paragraphs: (full && full.paragraphs) || [],
-    // (V38, block D4) The shelf's scenario this rewrites, and whether the rewrite in its narrator's voice has landed.
-    from: (full && full.from) || null,
-    foreign: !!(full && full.foreign),
   };
   _paintFrom();
   $('mk-topic').value = full ? (full.topic || full.topicTitle || '') : (topic ? topic.title : '');
@@ -1391,11 +1386,6 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   if (_gen.paragraphs.length) _renderScenes();
   _setStage(_pickOrIdle());
   _reattachStage();
-  // (V38.1) A shelf's scenario whose rewrite did not land (paid once - never asked again by itself): said, with the way.
-  const sum = _drafts.find(x => String(x.id) === String(_gen.draftId));
-  if (_gen.foreign && !_following.has(String(_gen.draftId)) && !(sum && sum.running)) {
-    J.sayJob($('mk-job'), 'The rewrite in the narrator’s voice did not land - the draft holds the lines as they were.', true);
-  }
   // NO draft is written just for opening the form: the first edit or the first generation makes it.
 }
 
@@ -1583,8 +1573,6 @@ const _TIMING = {
   remake: (o, i) => ({ key: `l2-remake|${o.model}|${o.effort}`, label: `Writing hook ${i + 1} again…`, estimateMs: J.EST.remake }),
   script: (o) => ({ key: `l2-script|${o.model}|${o.effort}|${o.scenes}`, label: `Writing ${o.scenes} paragraphs…`, estimateMs: J.EST.script(o.scenes) }),
   rewrite: (o, i) => ({ key: `l2-rewrite|${o.model}|${o.effort}`, label: `Rewriting paragraph ${i + 1}…`, estimateMs: J.EST.rewrite }),
-  // (V38, block D4) A scenario of the shelf rewritten in its narrator's voice - started on the shelf, followed here.
-  voice: (o) => ({ key: `l2-voice|${o.model}|${o.effort}`, label: 'Rewriting in the narrator’s voice…', estimateMs: J.EST.voice }),
 };
 
 // Starts a stage on the server and follows it. A draft that is already being written into is not
@@ -1679,11 +1667,6 @@ async function _landInto(what, r) {
     _hooksOpen = false;
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
-  } else if (what === 'voice' && Array.isArray(res.paragraphs)) {
-    _gen.paragraphs = res.paragraphs;
-    _landVoice(res);
-    _renderScenes();
-    if (res.note) J.sayJob($('mk-job'), res.note);
   } else if (what === 'rewrite' && res.paragraph && res.index < (_gen.paragraphs || []).length) {
     _gen.paragraphs[res.index] = _spliced(res, _gen.paragraphs[res.index]);
     _renderScenes();
@@ -1732,7 +1715,6 @@ async function _reloadDraftInto() {
     const d = (await J.api('/api/scriptgen/drafts/' + encodeURIComponent(_gen.draftId))).draft;
     _gen.hooks = d.hooks || [];
     _gen.paragraphs = d.paragraphs || [];
-    _gen.foreign = !!d.foreign;
     _gen.hook = d.hook || '';
     _gen.hookType = d.hookType || '';
     $('mk-hook').value = _gen.hook;
@@ -1838,13 +1820,6 @@ function _renderScenes() {
     box.appendChild(row);
   });
   _paintGo();
-}
-
-// (V38, block D4) The rewrite in the narrator's voice landed: the scenario is his now, its first line the hook.
-function _landVoice(r) {
-  if (!r || !r.voice) return;
-  _gen.foreign = !r.applied;
-  if (r.applied && r.paragraphs && r.paragraphs[0]) _gen.hook = r.paragraphs[0];
 }
 
 // `fragment` (V38, the owner's (д13)): { text, start } - only those words of the paragraph are written again.

@@ -80,7 +80,6 @@ export const EST = {
   remake: 12000,                                       // (V38.4) one hook again
   script: (scenes) => Math.max(40000, (scenes || 15) * 9000),
   rewrite: 20000,
-  voice: 40000,
   analyse: 45000,
   sample: (bytes) => Math.max(60000, Math.round((bytes / 1048576) * 500)),
 };
