@@ -649,6 +649,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* The countdown row (css/gen-progress.css .sv3-inline-prog) lies over its host: the host is a
    positioned strip of its own height, or the row would cover the whole window. */
 .mk-job{ position:relative; min-height:28px; display:flex; flex-direction:column; gap:5px; }
+/* (V38.5) No strip while there is nothing in it - .mk-job's flex would show it, hidden or not. */
+.mk-job[hidden], .mk-job:empty{ display:none; }
 .mk-job > .sv3-inline-prog{ border-radius:var(--r-xs); }
 .mk-note-line{
   padding:6px 9px; font-size:11px; line-height:1.45; color:oklch(.93 .06 85);
@@ -691,13 +693,33 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-field input[type=text]:focus, .mk-field select:focus{ outline:none; border-color:var(--primary); }
 .mk-field input[type=file]{ font:11px var(--font); color:var(--muted); }
-.mk-controls{
-  display:flex; flex-wrap:wrap; gap:8px;
+/* (V38.5) Two boxes alike: box 1 - Tone, Narrator, Hooks, "Write hooks" and the AI settings gear at its right; box 2 -
+   the chosen hook, Lines, "Write scenario", and the ad under them. A button stands under an empty label, level with the
+   fields. */
+.mk-box{
+  display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px;
   padding:8px 10px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
 }
-.mk-controls:empty{ display:none; }
+.mk-box[hidden]{ display:none; }
+.mk-box > .sp{ flex:1; }
+.mk-ctls{ display:contents; }
+.mk-btns{ display:flex; gap:6px; }
+.mk-box .lib-btn{ height:26px; }
+.mk-ai{ width:26px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+.mk-ai svg{ width:14px; height:14px; }
+.mk-box2{ flex-direction:column; align-items:stretch; }
+.mk-box-row{ display:flex; gap:8px; align-items:flex-start; }
+.mk-ctl-hook{ flex:1 1 auto; }
+.mk-ctl textarea, .mk-ad-t{
+  font:12px/1.45 var(--font); color:var(--ink); resize:none; field-sizing:content;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:4px 8px;
+}
+.mk-ctl textarea{ min-height:26px; }
+.mk-ad-t{ min-height:44px; }
+.mk-ctl textarea:focus, .mk-ad-t:focus{ outline:none; border-color:var(--primary); }
+.mk-ctl textarea[readonly]{ opacity:.7; }
 .mk-ctl{ display:flex; flex-direction:column; gap:3px; min-width:0; }
-.mk-ctl > span{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.mk-ctl > span:first-child{ font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
 /* The narrators' gear beside the Narrator field's name (phase G2): as tall as the name, no taller, so the
    fields of the row stay level. */
 .mk-ctl > span:has(.mk-gear){ display:flex; align-items:center; gap:4px; }
@@ -717,32 +739,19 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-ctl input[type=number]{ width:66px; min-width:0; }
 .mk-ctl select:focus, .mk-ctl input:focus{ outline:none; border-color:var(--primary); }
-/* (phase V37) Who writes: the agents' ladder, its first step, and the way to AI settings - in place of Provider / Model / Effort */
-.mk-writes{ display:flex; align-items:center; gap:5px; height:26px; font:600 11px var(--font); color:var(--ink); white-space:nowrap; }
-.mk-writes-link{ color:var(--primary); text-decoration:none; }
-.mk-writes-link:hover{ text-decoration:underline; }
 .mk-stage{ display:flex; flex-direction:column; gap:7px; padding:10px 0 0; border-top:1px solid var(--border); }
 .mk-stage-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .mk-stage-h .sp{ flex:1; }
 .mk-stage-h > span:first-child{ font-size:11px; font-weight:700; color:var(--ink); }
 .mk-stage-h em{ font-style:normal; font-weight:400; color:var(--muted); }
-/* The one generate button lives in one of these two, never in both. */
-.mk-go-slot{ display:inline-flex; }
-/* (V38.1) What to advertise, under the form's controls - two lines, grows as typed. */
-.mk-ad textarea{
-  font:12px/1.45 var(--font); color:var(--ink); resize:vertical; min-height:44px;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 9px;
+/* (V38.5) The hooks between the two boxes; with a script written, folded under one line. */
+.mk-hookset{ display:flex; flex-direction:column; gap:5px; }
+.mk-hookset[hidden], .mk-hooks[hidden]{ display:none; }
+.mk-fold{
+  align-self:flex-start; padding:2px 4px; background:none; border:none; cursor:pointer;
+  font:600 11px var(--font); color:var(--muted);
 }
-.mk-ad textarea:focus{ outline:none; border-color:var(--primary); }
-/* (V38.4) Hidden until hooks have been written - .mk-field's flex would show it otherwise. */
-.mk-ad[hidden]{ display:none; }
-/* (V38.4) How many hooks a press writes, left of "Write hooks". */
-.mk-hook-n{
-  font:600 11px var(--font); color:var(--ink);
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
-  height:26px; padding:0 6px;
-}
-.mk-hook-n:focus{ outline:none; border-color:var(--primary); }
+.mk-fold:hover{ color:var(--ink); }
 /* Candidates, each labelled with the KIND it is - that is what they differ in. (V38.3) A row: "use hook" on the
    left, the text edited in place, the kind on the right; the one used is gold. (V38.4) "remake" right of "use hook";
    the kind is a type of the forty, by its name, its description on hover (.mk-tip). */

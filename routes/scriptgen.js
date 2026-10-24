@@ -385,9 +385,8 @@ router.post('/scriptgen/hooks', (req, res) => {
     });
     if (!hooks.length) throw new Error('No hooks came back.');
     return { hooks, narrator: nar.name, model: by.model, by };
-  // New hooks mean a hook is to be picked again: the one the draft held is cleared with them,
-  // or a draft reopened later would show the old hook and hide the new ones that were paid for.
-  }, _keeper(b, (r) => ({ hooks: r.hooks, hook: '', hookType: '' })),
+  // (V38.5, the owner's (ш6)) New hooks leave the chosen one where it is - in box 2 - until another is picked.
+  }, _keeper(b, (r) => ({ hooks: r.hooks })),
   { key: _runKey(b), what: 'hooks', model: _first().model, effort: EFFORT, hookCount: count });
 });
 
@@ -396,7 +395,7 @@ router.post('/scriptgen/hooks', (req, res) => {
 // является. и после нажатия хук переписывается в соответствии с темой сценария"): a NEW hook of the row's type, by the
 // topic, the source, the narrator and the tone, not like the row's text nor the other rows; it replaces the row's text,
 // a hand edit too ((э5)). A job like the hooks - one at a time per draft, cancellable. Filed into the draft's row only
-// while that row still holds a hook of the same type; the row's hook, if it was the one used, is no longer used.
+// while that row still holds a hook of the same type; the chosen hook (box 2, V38.5) is its own copy and stays.
 router.post('/scriptgen/hooks/remake', (req, res) => {
   const b = req.body || {};
   const topic = String(b.topic || '').trim();
@@ -433,8 +432,7 @@ router.post('/scriptgen/hooks/remake', (req, res) => {
     const h = hooks[r.index];
     if (!h || (HT.hookType(h.type || h.kind) || {}).id !== r.type) return null;
     hooks[r.index] = { type: r.type, text: r.text };
-    const wasUsed = !!cur.hook && cur.hook.trim() === String(h.text || '').trim();
-    return { hooks, ...(wasUsed ? { hook: '', hookType: '' } : {}) };
+    return { hooks };
   }),
   { key: _runKey(b), what: 'remake', model: _first().model, effort: EFFORT, index });
 });
