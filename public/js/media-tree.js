@@ -18,9 +18,10 @@
    only folders: VIDEO, AUDIO, SFX, Built-in, B-rolls, Talking heads, REFERENCES). There is no "Uncategorized" node and no
    "everything under it" any more. A folder tile pressed opens it - the tree opens to it; a tile let go on a folder tile
    or on a word of the PATH over the gallery (crumbsEl - "AUDIO / SFX / My sounds", each word a press away) goes there
-   as on its row. A branch opens on a DOUBLE press of its row or a press of its ▸ (the owner, second round), and what is
-   open is remembered, so is the node selected - per page. The three top nodes are an accordion: one open, the others
-   folded - what is open inside them stays as it was.
+   as on its row. A branch opens on a DOUBLE press of its row or a press of its ▸ (the owner, second round) - and (phase
+   V39) under a tile dragged and held over its row for 0.6 s -, and what is open is remembered, so is the node selected -
+   per page. The three top nodes are an accordion: one open, the others folded - what is open inside them stays as it
+   was (a branch opened under a drag folds nothing).
 
    CATEGORIES, both ways the owner asked for: the chips' gestures - "+" on a kind's row makes one, a double press on
    its name renames it, the ✕ on hover deletes it (the media moved out of it into the kind itself, or deleted with them -
@@ -330,7 +331,47 @@ export function createTree(host, o) {
     if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
     _takesDrops(row, n);
+    if (has) row.addEventListener('dragover', (e) => _spring(n, e));
     return row;
+  }
+
+  // ── A folded branch opens under a drag (phase V39, the owner 2026-10-24: "если пользователь перетаскивает плитку на
+  // дерево, а категории закрыты, то открывать категорию, на которую навел пользователь"; (о2) 0.6 s) ──
+  // A tile - or files from Explorer - held over a folded branch's row for 0.6 s opens it: a root or a category, whether it
+  // takes the drop itself or not (VIDEO, AUDIO do not), so the drop can go straight into a folder under it. Only rows below
+  // it come out, so the row under the pointer stays where it is: no accordion fold of the other roots mid-drag. What
+  // opened stays open. Keyed by the node, not its row - a paint replaces every row; any dragover off that row, a drop or
+  // the drag's end forgets it.
+  const SPRING_MS = 600;
+  let spring = null;            // { key, timer, watch }
+  function _unspring() {
+    if (!spring) return;
+    clearTimeout(spring.timer);
+    document.removeEventListener('dragover', spring.watch, true);
+    document.removeEventListener('drop', _unspring, true);
+    document.removeEventListener('dragend', _unspring, true);
+    spring = null;
+  }
+  function _spring(n, e) {
+    if (open.has(n.key) || (spring && spring.key === n.key)) return;
+    const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
+    if (!types.includes(MEDIA_DRAG) && !types.includes('Files')) return;
+    _unspring();
+    const watch = (ev) => {
+      const r = ev.target && ev.target.closest ? ev.target.closest('.mt-row') : null;
+      if (!r || r.dataset.key !== n.key || !el.contains(r)) _unspring();
+    };
+    const timer = setTimeout(() => {
+      _unspring();
+      if (open.has(n.key) || !byKey.has(n.key)) return;
+      open.add(n.key);
+      _lsSet(K_OPEN, [...open]);
+      paint();
+    }, SPRING_MS);
+    spring = { key: n.key, timer, watch };
+    document.addEventListener('dragover', watch, true);
+    document.addEventListener('drop', _unspring, true);
+    document.addEventListener('dragend', _unspring, true);
   }
 
   // A tile let go here - or (phase V34.E) files from Explorer, on a node that takes them (the page says, `takesFiles`).
