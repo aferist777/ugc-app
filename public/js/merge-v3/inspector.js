@@ -34,7 +34,7 @@ import * as CapView from './captions-view.js';
 import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
-import { presetStyle, presetName, editedKeys } from '../captions/preset-use.js';
+import { presetStyle, presetName, editedKeys, placed } from '../captions/preset-use.js';
 import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
@@ -569,12 +569,13 @@ function _blankWordsTrack(host, track) {
   const st = styleOf(track, fmt);
   const isSubs = track.kind === 'subs';
   const set = (patch) => setSubsStyleB(track.id, patch, isSubs && _cuts(patch));
-  // A preset REPLACES the lane's style (every field - the owner's answer 1); a subtitle lane is cut again.
-  const apply = (id) => { const s = presetStyle(id); if (s) setSubsStyleB(track.id, s, isSubs); };
+  // A preset REPLACES the lane's style (every field - the owner's answer 1); a subtitle lane is cut again. A text preset keeps
+  // where the lane's lines are (V42, (ц3) - preset-use.js placed).
+  const apply = (id) => { const s = placed(id, raw); if (s) setSubsStyleB(track.id, s, isSubs); };
   const pagesNow = (track.clips || []).filter(isHeard).length;
   _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : ''));
   // Saved as the lane's style is stored - an automatic size stays automatic.
-  _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw);
+  _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw, isSubs ? '' : 'text');
 
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
@@ -699,7 +700,8 @@ function _blankWordsTrack(host, track) {
   host.appendChild(_el('div', 'mv3-c-sep'));
   _presetsHint(host);
   _laneRemove(host, track);
-  return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit() };
+  return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
+    kind: isSubs ? 'subs' : 'text' };
 }
 
 // ── The settings of words, shared by a lane, one caption and several (K6) ────
@@ -714,7 +716,8 @@ function _capHead(host, title, sub) {
 // "based on Red Pop · edited" and the way back to it - a style made from a preset says which. Where ONE look is shown (a
 // lane, a line), `save` - what that look is - puts "save as my preset" in the same row, at the top of the strip where it is
 // seen without scrolling (phase V30, block 5, (с49)); a look made from no preset has the row for that button alone.
-function _presetLine(host, style, back, editedAny, save) {
+// `kind` 'text': saved into the text gallery's Mine (V42).
+function _presetLine(host, style, back, editedAny, save, kind) {
   const id = style && style.preset;
   const name = id ? presetName(id) : '';
   if (!name && !save) return;
@@ -728,18 +731,18 @@ function _presetLine(host, style, back, editedAny, save) {
       row.appendChild(b);
     }
   }
-  if (save) row.appendChild(_saveMine(save));
+  if (save) row.appendChild(_saveMine(save, kind));
   host.appendChild(row);
 }
 
 // SAVE AS MY PRESET (phase V30, block 5; the owner's (с13): with a window for the name). The window offers "My preset" (or
 // "My preset 2"…, (с48)); a taken name - one of the person's or of the app's - is refused in it, in the server's words, and
 // it stays open (с45). The lane or line it is saved from stays as it was (с46); the new tile is shown in `Mine`.
-function _saveMine(lookOf) {
+function _saveMine(lookOf, kind) {
   const b = C.button('save as my preset', () => {
     askName({
       anchor: b.isConnected ? b : null, title: 'Save as my preset', value: MyPresets.freeName(), okLabel: 'Save', maxLength: 60,
-      submit: (name) => MyPresets.save(name, lookOf()),
+      submit: (name) => MyPresets.save(name, lookOf(), kind),
     }).then((p) => { if (p && p.id) CapView.showMine(p.id); });
   }, { title: 'Keeps this look - font, colours, place, effects - as a preset of your own: its tile goes into Mine, to put on any lane or line' });
   b.classList.add('mv3-cap-save');
@@ -885,8 +888,9 @@ function _renderCaptions(host, items) {
   const presetOfItem = (x) => (x.clip.style && x.clip.style.preset) || '';
   const common = items.every(x => presetOfItem(x) === presetOfItem(first)) ? presetOfItem(first) : '';
   const anyEdited = !!common && items.some(x => editedKeys(x.clip.style).length > 0);
-  if (common) _presetLine(host, first.clip.style,
-    () => setCapStyleB(ids, presetStyle(common), { replace: true, cut: true }), anyEdited);
+  // Each line given the whole preset - a text preset where that line is now (V42, (ц3)).
+  const wear = (id) => { if (presetStyle(id)) setCapStyleB(ids, (c, t) => placed(id, styleOf(t, fmt, c)), { replace: true, cut: true }); };
+  if (common) _presetLine(host, first.clip.style, () => wear(common), anyEdited);
   const st = styleOf(first.track, fmt, first.clip);
   const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
   const setBehind = (v) => setCapStyleB(ids, (c, t) => (v !== 'outline' && !(+styleOf(t, fmt, c).backAlpha)
@@ -903,8 +907,8 @@ function _renderCaptions(host, items) {
   _presetsHint(host);
   host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
     { danger: true, title: 'Also on the Delete key' })));
-  return { preset: common, edited: anyEdited,
-    apply: (id) => { const p = presetStyle(id); if (p) setCapStyleB(ids, p, { replace: true, cut: true }); }, readOnly: !Store.canEdit() };
+  return { preset: common, edited: anyEdited, apply: wear, readOnly: !Store.canEdit(),
+    kind: items.every(x => x.track.kind === 'text') ? 'text' : 'subs' };
 }
 
 // A caption: words and when. No length field, the same as every other clip here - the edges
@@ -916,8 +920,10 @@ function _blankCaption(host, track, clip) {
   const own = !!(clip.style && Object.keys(clip.style).length);
   _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
   // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
-  _presetLine(host, own ? clip.style : null, () => setCapStyleB([clip.id], presetStyle(clip.style.preset), { replace: true, cut: true }),
-    undefined, () => resolveStyle(track.style, clip.style));
+  // A text preset keeps where the line is now (V42, (ц3)).
+  const wear = (id, cut) => { const p = placed(id, styleOf(track, fmt, clip)); if (p) setCapStyleB([clip.id], p, { replace: true, cut }); };
+  _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true),
+    undefined, () => resolveStyle(track.style, clip.style), track.kind === 'text' ? 'text' : '');
   const heardLine = isHeard(clip);
   const area = C.textarea(clip.name || '', (v) => {
     // NEVER THE OLD TEXT OVER A NEWER ONE (review K10): the box writes the WHOLE text, and the line may have
@@ -1013,8 +1019,7 @@ function _blankCaption(host, track, clip) {
   })));
   const s = own ? clip.style : null;
   return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
-    apply: (id) => { const p = presetStyle(id); if (p) setCapStyleB([clip.id], p, { replace: true, cut: heard }); },
-    readOnly: !Store.canEdit() };
+    apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs' };
 }
 
 // NO HEADER, and no description of the lane under it. Which lane is open is visible on the

@@ -13,6 +13,7 @@
 
 import { setMine } from '../captions/preset-use.js';
 import { PRESETS } from '../captions/presets.js';
+import { TEXT_PRESETS } from '../captions/presets-text.js';
 
 let _list = [];
 let _loaded = false;
@@ -53,14 +54,15 @@ async function _post(url, body) {
   return d;
 }
 
-/** A new preset from a style. A refusal (a taken name, (с45)) is thrown in the server's words. */
-export const save = (name, style) => _post('/api/mv3/captions/presets', { name, style }).then((d) => d.preset);
+/** A new preset from a style - `kind` 'text' when saved from a text lane or line (V42). A refusal (a taken name, (с45)) is thrown in the
+ * server's words. */
+export const save = (name, style, kind) => _post('/api/mv3/captions/presets', { name, style, kind: kind === 'text' ? 'text' : '' }).then((d) => d.preset);
 export const rename = (id, name) => _post('/api/mv3/captions/presets/rename', { id, name }).then((d) => d.preset);
 export const remove = (id) => _post('/api/mv3/captions/presets/delete', { id });
 
 /** The name the window offers (с48): "My preset", or "My preset 2" and on when it is taken - by the person's or the app's. */
 export function freeName() {
-  const taken = new Set(_list.map((p) => String(p.name).toLowerCase()).concat(PRESETS.map((p) => String(p.name).toLowerCase())));
+  const taken = new Set(_list.map((p) => String(p.name).toLowerCase()).concat(PRESETS.concat(TEXT_PRESETS).map((p) => String(p.name).toLowerCase())));
   if (!taken.has('my preset')) return 'My preset';
   for (let n = 2; ; n++) if (!taken.has('my preset ' + n)) return 'My preset ' + n;
 }

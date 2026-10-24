@@ -42,6 +42,7 @@ const { HEARD } = require('../lib/mv3b-subs');
 const TILES = require('../lib/caption-tiles');
 const MINE = require('../lib/caption-presets-store');
 const { CATEGORIES } = require('../public/js/captions/presets.js');
+const { TEXT_CATEGORIES } = require('../public/js/captions/presets-text.js');
 
 router.post('/mv3/captions/transcribe', (req, res) => {
   try {
@@ -99,7 +100,7 @@ router.get('/mv3/captions/tiles', (req, res) => {
 router.post('/mv3/captions/tiles/make', (req, res) => {
   try {
     const first = String((req.body && req.body.first) || '');
-    res.json({ success: true, ...TILES.make(first === TILES.MINE_CAT || CATEGORIES.some((c) => c.id === first) ? first : null) });
+    res.json({ success: true, ...TILES.make(first === TILES.MINE_CAT || CATEGORIES.concat(TEXT_CATEGORIES).some((c) => c.id === first) ? first : null) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -116,7 +117,7 @@ router.get('/mv3/captions/presets', (req, res) => {
 router.post('/mv3/captions/presets', (req, res) => {
   try {
     const b = req.body || {};
-    const preset = MINE.add(b.name, b.style);
+    const preset = MINE.add(b.name, b.style, b.kind === 'text' ? 'text' : '');
     TILES.mineChanged();
     res.json({ success: true, preset, presets: MINE.list() });
   } catch (e) { _presetErr(res, e); }

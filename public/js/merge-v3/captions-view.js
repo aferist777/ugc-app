@@ -29,10 +29,16 @@
    built again. A right-click on one opens Rename / Delete - deleted at once (с47); the app's tiles have no menu. An empty
    `Mine` says how to fill it.
 
+   TWO GALLERIES (phase V42; the owner's (о14), (ц1)): what is picked says which - a text lane or text lines get the TEXT
+   presets (presets-text.js: Headline, Hook, Label, Callout, Kinetic), everything else the caption presets, as before. Each
+   has its own categories, its own `Mine` (a preset of the person's saved from text is `kind: 'text'`) and its own category
+   remembered; the tiles of the other gallery are hidden, not rebuilt. A text tile loops for 3 s (lib/caption-tiles.js).
+
    Which view shows, the header and the room are lib-views.js's; this only draws the tiles and the tabs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
+import { TEXT_PRESETS, TEXT_CATEGORIES } from '../captions/presets-text.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as Doc from './caption-doc.js';
 import * as MyPresets from './my-presets.js';
@@ -41,6 +47,7 @@ import { askName } from '../name-box.js';
 import { note } from './ask.js';
 
 const LS_CAT = 'mv3_cap_cat_v1';
+const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
 const LS_TAB = 'mv3_cap_tab_v1';
 const TABS = [['presets', 'presets', 'The preset styles - a press applies one to what is picked'],
   ['text', 'text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
@@ -57,14 +64,17 @@ const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls
 let _ui = null;
 const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine, img, over, loop, starting, end }
 const _loops = new Map();          // a loop's address -> Promise<Blob>: asked at its first hover, then kept
-const _counts = new Map();         // category ('' for All) -> its number on the chip
+const _counts = new Map();         // gallery|category ('' for All) -> its number on the chip
 let _target = null;                // what show() was last told: the preset the pick wears
 let _menu = null;
 let _state = null;
 let _timer = 0;
 let _shown = false;
 let _asked = false;
-let _cat = _store(LS_CAT, '');
+// The gallery shown - 'subs' or 'text' (V42) - and each one's category.
+let _kind = 'subs';
+const _cats = { subs: _store(LS_CAT, ''), text: _store(LS_CAT_TEXT, '') };
+const _kindOf = (p) => (p && p.kind === 'text' ? 'text' : 'subs');
 let _tab = _store(LS_TAB, 'presets') === 'text' ? 'text' : 'presets';
 let _apply = null;
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
@@ -79,17 +89,21 @@ function _build() {
   host.textContent = '';
   const top = _el('div', 'mv3-cap-top');
   const chips = _el('div', 'mv3-cap-cats');
-  // `Mine` first after All (с51); its number and All's move with the person's list (_paintCounts).
-  const all = [['', 'All', 0], [MINE, 'Mine', 0]].concat(CATEGORIES.map((c) => [c.id, c.label, PRESETS.filter((p) => p.category === c.id).length]));
-  for (const [id, label, n] of all) {
-    const b = _el('button', 'mv3-cap-cat', label);
-    b.type = 'button';
-    b.dataset.cat = id;
-    const num = _el('span', 'mv3-cap-n', ' ' + n);
-    b.appendChild(num);
-    _counts.set(id, num);
-    b.addEventListener('click', () => _setCat(id));
-    chips.appendChild(b);
+  // `Mine` first after All (с51); its number and All's move with the person's list (_paintCounts). A row of chips per gallery
+  // (V42), the other's hidden.
+  for (const [kind, cats, list] of [['subs', CATEGORIES, PRESETS], ['text', TEXT_CATEGORIES, TEXT_PRESETS]]) {
+    const all = [['', 'All', 0], [MINE, 'Mine', 0]].concat(cats.map((c) => [c.id, c.label, list.filter((p) => p.category === c.id).length]));
+    for (const [id, label, n] of all) {
+      const b = _el('button', 'mv3-cap-cat', label);
+      b.type = 'button';
+      b.dataset.cat = id;
+      b.dataset.kind = kind;
+      const num = _el('span', 'mv3-cap-n', ' ' + n);
+      b.appendChild(num);
+      _counts.set(kind + '|' + id, num);
+      b.addEventListener('click', () => _setCat(id));
+      chips.appendChild(b);
+    }
   }
   const status = _el('div', 'mv3-cap-status');
   top.appendChild(chips);
@@ -111,7 +125,7 @@ function _build() {
     + 'then press "save as my preset" at their top - the look is kept here, to put on any lane or line.');
   empty.hidden = true;
   grid.appendChild(empty);
-  for (const p of PRESETS) {
+  for (const p of PRESETS.concat(TEXT_PRESETS)) {
     const t = _tile(p, false);
     grid.appendChild(t.btn);
     _tiles.set(p.id, t);
@@ -133,6 +147,7 @@ function _tile(p, mine) {
   btn.type = 'button';
   btn.dataset.id = p.id;
   btn.dataset.cat = mine ? MINE : p.category;
+  btn.dataset.kind = _kindOf(p);
   btn.title = _title(p.name, mine);
   const box = _el('div', 'mv3-cap-box');
   const ph = _el('span', 'mv3-cap-ph', p.name);
@@ -150,7 +165,7 @@ function _tile(p, mine) {
   name.appendChild(ed);
   btn.appendChild(box);
   btn.appendChild(name);
-  const t = { btn, box, ed, nm, ph, mine };
+  const t = { btn, box, ed, nm, ph, mine, kind: _kindOf(p) };
   btn.addEventListener('click', () => { if (_apply) _apply(p.id); });
   btn.addEventListener('pointerenter', () => _enter(t));
   btn.addEventListener('pointerleave', () => _leave(t));
@@ -204,7 +219,7 @@ async function _enter(t) {
 function _leave(t) {
   t.over = false;
   if (!t.loop || t.end) return;
-  const round = ((_state && _state.loop) || 2.5) * 1000;
+  const round = ((_state && (t.kind === 'text' ? _state.textLoop : _state.loop)) || 2.5) * 1000;
   const left = round - ((performance.now() - t.loop.since) % round);
   t.end = setTimeout(() => { t.end = 0; _stop(t); }, Math.max(0, left - 40));
 }
@@ -248,9 +263,11 @@ function _syncMine() {
 }
 
 function _paintCounts() {
-  const n = MyPresets.list().length;
-  if (_counts.has('')) _counts.get('').textContent = ' ' + (PRESETS.length + n);
-  if (_counts.has(MINE)) _counts.get(MINE).textContent = ' ' + n;
+  for (const [kind, list] of [['subs', PRESETS], ['text', TEXT_PRESETS]]) {
+    const n = MyPresets.list().filter((p) => _kindOf(p) === kind).length;
+    if (_counts.has(kind + '|')) _counts.get(kind + '|').textContent = ' ' + (list.length + n);
+    if (_counts.has(kind + '|' + MINE)) _counts.get(kind + '|' + MINE).textContent = ' ' + n;
+  }
 }
 
 // The tile of the preset the pick wears is lit, and says `edited` when it was changed since.
@@ -319,8 +336,8 @@ async function _delete(p, tile) {
  */
 export function showMine(id) {
   const t = _tiles.get(id);
-  if (!_ui || !t) return;
-  if (_cat && _cat !== MINE) _setCat(MINE);
+  if (!_ui || !t || t.kind !== _kind) return;
+  if (_cats[_kind] && _cats[_kind] !== MINE) _setCat(MINE);
   if (_tab !== 'presets') return;
   t.btn.classList.add('is-new');
   setTimeout(() => t.btn.classList.remove('is-new'), 2000);
@@ -348,21 +365,26 @@ function _paintTab() {
 }
 
 function _setCat(id) {
-  _cat = id || '';
-  _keep(LS_CAT, _cat);
+  _cats[_kind] = id || '';
+  _keep(_kind === 'text' ? LS_CAT_TEXT : LS_CAT, _cats[_kind]);
   _paintCat();
   // The category looked at is made first.
-  if (_state && _state.making && _cat) _read(true);
+  if (_state && _state.making && _cats[_kind]) _read(true);
 }
 
+// The gallery's chips and tiles shown, the other's hidden (V42), and within it the category.
 function _paintCat() {
   if (!_ui) return;
-  for (const b of _ui.chips.children) b.classList.toggle('is-on', (b.dataset.cat || '') === _cat);
+  const cat = _cats[_kind];
+  for (const b of _ui.chips.children) {
+    b.hidden = b.dataset.kind !== _kind;
+    b.classList.toggle('is-on', !b.hidden && (b.dataset.cat || '') === cat);
+  }
   for (const t of _tiles.values()) {
-    t.btn.hidden = !!_cat && t.btn.dataset.cat !== _cat;
+    t.btn.hidden = t.kind !== _kind || (!!cat && t.btn.dataset.cat !== cat);
     if (t.btn.hidden) _stopNow(t);
   }
-  _ui.empty.hidden = !(_cat === MINE && !MyPresets.list().length);
+  _ui.empty.hidden = !(cat === MINE && !MyPresets.list().some((p) => _kindOf(p) === _kind));
 }
 
 function _paintState() {
@@ -401,7 +423,7 @@ async function _read(make) {
   let d = null;
   try {
     d = make
-      ? await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: _cat || null }) }).then((r) => r.json())
+      ? await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: _cats[_kind] || null }) }).then((r) => r.json())
       : await fetch('/api/mv3/captions/tiles').then((r) => r.json());
   } catch (e) { d = null; }
   _reading = false;
@@ -417,8 +439,8 @@ async function _read(make) {
 }
 
 /**
- * The view is up for what is picked: `preset` - the id it wears ('' for none), `edited` - changed since.
- * Cheap and safe to call on every repaint.
+ * The view is up for what is picked: `preset` - the id it wears ('' for none), `edited` - changed since; `kind` - 'text' for a text
+ * lane or text lines (their own gallery, V42), else the caption presets'. Cheap and safe to call on every repaint.
  */
 export function show(target) {
   _build();
@@ -426,6 +448,8 @@ export function show(target) {
   _shown = true;
   const t = target || {};
   _target = t;
+  const kind = t.kind === 'text' ? 'text' : 'subs';
+  if (kind !== _kind) { _kind = kind; _paintCat(); }
   _light();
   _ui.host.classList.toggle('is-ro', !!t.readOnly);
   Doc.setShown(_tab === 'text');
