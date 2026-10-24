@@ -461,8 +461,13 @@ function _timeAtX(x) {
   return Math.max(0, (x - inner.getBoundingClientRect().left - GUTTER) / _zoom());
 }
 
+// PLAYING, THE PLAYHEAD DRAGGED HOLDS IT STILL (phase V41, the owner's (о9): "как в CapCut и Premiere"): the press pauses
+// the preview, the picture follows the pointer, and playing goes on from where the button is let go - not past the end.
 function _scrub(e) {
   e.preventDefault();
+  const P = _P;
+  const held = !!(P && P.isPlaying && P.isPlaying());
+  if (held) P.pause();
   _seekTo(_timeAtX(e.clientX));
   document.body.classList.add('mv3-scrubbing');
   const move = (ev) => _seekTo(_timeAtX(ev.clientX));
@@ -470,6 +475,7 @@ function _scrub(e) {
     document.removeEventListener('mousemove', move);
     document.removeEventListener('mouseup', up);
     document.body.classList.remove('mv3-scrubbing');
+    if (held && _playhead < P.duration() - 0.05) P.play();
   };
   document.addEventListener('mousemove', move);
   document.addEventListener('mouseup', up);
@@ -683,8 +689,13 @@ function _paintRange() {
   if (!el) {
     el = document.createElement('div');
     el.className = 'mv3b-range';
-    const lbl = document.createElement('span');
+    // (phase V41) THE LABEL IS A BUTTON: a press cuts, as Delete does. Its own press is not the bare lane's (a seek).
+    const lbl = document.createElement('button');
+    lbl.type = 'button';
     lbl.className = 'mv3b-range-t';
+    lbl.title = 'Cut this stretch out of every lane - or press Delete';
+    lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
+    lbl.addEventListener('click', (e) => { e.stopPropagation(); cutRange(); });
     el.appendChild(lbl);
     inner.appendChild(el);
   }
@@ -1294,14 +1305,22 @@ function _headMoved() {
   for (const cb of _headSubs) { try { cb(_playhead); } catch { /* a listener's own trouble */ } }
 }
 
+// The preview, once loaded (initTimelineB): it imports this module, so it is reached by a dynamic import - and held, so a
+// seek reaches it in the same moment rather than a promise later.
+let _P = null;
+
 function _seekTo(t) {
-  _playhead = Math.max(0, Math.round((+t || 0) * 100) / 100);
+  const at = Math.max(0, Math.round((+t || 0) * 100) / 100);
+  _playhead = at;
   const el = _host() && _host().querySelector('.mv3b-head');
   if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
   _headMoved();
   // The preview is the other half of this workflow, and the playhead belongs to both. seek()
   // calls setPlayhead back, which is harmless: it writes the same number this just wrote.
-  import('./preview-b.js').then(P => P.seek(_playhead)).catch(() => {});
+  // THE MOMENT GIVEN, not _playhead read later (phase V41): while playing, the preview's next frame wrote its own time into
+  // _playhead before the import answered, and the seek went to where playing already was - a press seemed to do nothing.
+  if (_P) _P.seek(at);
+  else import('./preview-b.js').then(P => { _P = P; P.seek(at); }).catch(() => {});
 }
 
 // ZOOM HOLDS THE PLAYHEAD. Leaving the scroll alone anchors the view to a pixel, and a pixel
@@ -2278,6 +2297,20 @@ function _laneMenu(e) {
   window.addEventListener('scroll', _closeCtx, true);
 }
 
+// The field (or a block that keeps its own keys - a caption's words) left focused when the timeline was pressed: blurred
+// after the press's own mouseup, so Delete and Escape are the timeline's again.
+let _pressIn = false;
+function _letFieldGo() {
+  if (!_pressIn) return;
+  _pressIn = false;
+  const a = document.activeElement;
+  const host = _host();
+  if (!a || a === document.body || !a.blur || (host && host.contains(a))) return;
+  const field = /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '') || !!a.isContentEditable
+    || !!(a.closest && a.closest('[data-own-keys]'));
+  if (field) a.blur();
+}
+
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
   // (phase V36, T4) The waves follow the scroll and the panel's width, and are drawn when a file's peaks arrive.
@@ -2285,8 +2318,13 @@ export function initTimelineB() {
   if (host) {
     host.addEventListener('scroll', _wavesSoon, { passive: true });
     if (window.ResizeObserver) new ResizeObserver(_wavesSoon).observe(host);
+    // (phase V41) A press on the timeline is not in the field last used (the zoom slider, a select of the format, a text of
+    // the inspector) - every press here keeps the focus where it was (preventDefault, so a drag selects no text), and
+    // Delete then counted as typing in that field. Let go of at the release, once the gesture's own work is done.
+    host.addEventListener('mousedown', () => { _pressIn = true; }, true);
   }
   onPeaks(_wavesSoon);
+  import('./preview-b.js').then(P => { _P = P; }).catch(() => {});
   const z = document.getElementById('mv3-zoom');
   if (z) z.addEventListener('input', () => { if (_on) { _build(); _centreOnPlayhead(); } });
   // On the document, not the clip: the pointer routinely leaves a 20px-tall element during a
@@ -2301,6 +2339,7 @@ export function initTimelineB() {
   document.addEventListener('contextmenu', _laneMenu);
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);
+  document.addEventListener('mouseup', _letFieldGo);
   document.addEventListener('keydown', (e) => {
     if (!_on) return;
     if (Layers.blocked()) return;          // a window on top owns the keyboard (js/layers.js)

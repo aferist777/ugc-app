@@ -1606,6 +1606,8 @@ export function pause() {
 }
 
 export function toggle() { if (_borrowed) return; _playing ? pause() : play(); }
+/** Playing now - the timeline holds it still while its playhead is dragged (phase V41). */
+export const isPlaying = () => _playing;
 
 function _syncPlayBtn() {
   const b = document.getElementById('mv3-pv-play');
