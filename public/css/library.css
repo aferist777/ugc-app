@@ -821,11 +821,15 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
   font-size:10px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums;
 }
 .mk-scene-n.is-hook{ font-size:8.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--primary); }
+/* (V38.8, the owner: "сделай редактируемые строки сценария в темное поле. так будет видно что строки можно редактировать")
+   A line's words in a dark field, as every field that takes typing - in the generator and on the shelf alike. */
 .mk-scene-t{
   flex:1 1 auto; min-width:0; font:12px/1.55 var(--font); color:var(--ink);
-  background:transparent; border:0; resize:none; padding:0;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); resize:none; padding:3px 8px;
+  cursor:text; transition:border-color .12s var(--ease);
 }
-.mk-scene-t:focus{ outline:none; }
+.mk-scene-t:hover{ border-color:var(--border-soft); }
+.mk-scene-t:focus{ outline:none; border-color:var(--primary); }
 .mk-scene-a{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; }
 .mk-scene-rw{
   background:none; border:1px solid var(--border); border-radius:var(--r-xs);
