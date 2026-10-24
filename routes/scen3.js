@@ -3271,6 +3271,9 @@ function _normLine(l) {
     // (phase V44) WHAT CUT SILENCE TOOK OUT OF THE LINE'S SOUND - stretches of its file, bound to the take they were cut in
     // (lib/line-cuts.js): written by a save of its timeline, laid by the mirror. Absent - the line plays whole.
     ...(require('../lib/line-cuts').normalize(s.cuts) ? { cuts: require('../lib/line-cuts').normalize(s.cuts) } : {}),
+    // (phase V45) THE LINES MERGED INTO ONE FILE FROM THIS ONE ON - the file, its length, and each line's take and pieces
+    // (lib/line-cuts.js): written by a save of the timeline, laid by the mirror as one cell while those takes stand.
+    ...(require('../lib/line-cuts').normalizeMerge(s.merge) ? { merge: require('../lib/line-cuts').normalizeMerge(s.merge) } : {}),
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.

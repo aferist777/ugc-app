@@ -67,7 +67,8 @@ export function refreshSilence() {
 function _mainSounds(tl) {
   const t = ((tl && tl.tracks) || []).find((x) => x && x.kind === 'audio' && x.main);
   if (!t || (t.volume != null && !(+t.volume > 0))) return [];
-  return (t.clips || []).filter((c) => c && c.src && !c.reversed && (c.volume == null || +c.volume > 0))
+  // (phase V45) Not a talking head's lines merged into one file: they are cut before merging (tl-cut.js refuses).
+  return (t.clips || []).filter((c) => c && c.src && !c.reversed && (c.volume == null || +c.volume > 0) && !(Array.isArray(c.merge) && c.merge.length))
     .map((c) => ({ c, s: +c.start || 0, e: (+c.start || 0) + (+c.dur || 0) }));
 }
 
@@ -200,7 +201,17 @@ async function _listen() {
     }
   }
   w.walls = walls;
-  if (!asks.length) { w.asks = []; w.none = 'main audio has no sound here - nothing to listen to'; _find(); return; }
+  if (!asks.length) {
+    // (phase V45) Only a talking head's merged lines under the pick: they are one file now.
+    const t = ((Store.timeline() || {}).tracks || []).find((x) => x && x.kind === 'audio' && x.main);
+    const merged = ((t && t.clips) || []).some((c) => Array.isArray(c.merge) && c.merge.length
+      && w.span.some(([a, b]) => (+c.start || 0) < b && (+c.start || 0) + (+c.dur || 0) > a));
+    w.asks = [];
+    w.none = merged ? 'merged lines are one file - cut silence in them before merging (Ctrl+Z takes the merge back)'
+      : 'main audio has no sound here - nothing to listen to';
+    _find();
+    return;
+  }
   try {
     const got = await Promise.all(asks.map((q) => fetch('/api/track-pauses?src=' + encodeURIComponent(q.c.src)
       + '&from=' + q.from.toFixed(3) + '&to=' + q.to.toFixed(3)).then((r) => r.json()).then((j) => ({ q, j }))));

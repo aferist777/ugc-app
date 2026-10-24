@@ -46,6 +46,7 @@ import { paintWaves, onPeaks } from './tl-wave.js';
 // (phase V36, T5) A stretch cut out of every lane, the rest moved left.
 import { cutRefused, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
+import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -466,6 +467,8 @@ function _afterSelB() {
   for (const cb of _selSubs) { try { cb(n); } catch { /* a listener's own trouble */ } }
   // (phase V44) "cut silence" is live while there is something picked to cut in.
   refreshSilence();
+  // (phase V45) An offer to merge belongs to the pick it was made for.
+  refreshMerge();
 }
 
 function _paintSel() {
@@ -520,20 +523,14 @@ function _beginBand(e) {
   // In the frozen gutter on the left (the squares and the names stay there whatever the scroll), even between the blocks
   // where no name is drawn: nothing.
   if (e.clientX < host.getBoundingClientRect().left + GUTTER) return;
-  // (phase V36, T2) Bare timeline without Shift: the playhead, dragged - and whatever was picked is let go of, as a press
-  // on bare lane always did (phase L6).
-  if (!e.shiftKey) {
-    _clearSel();
-    _scrub(e);
-    return;
-  }
+  // (phase V45, the owner's (ю4): "плейхед мы можем двигать только по линейке, выделение в поле дорожек выделяет фрагменты
+  // дорожек (без shift)") A press on bare lanes and a sweep is the BAND - it picks what it touches, in place of what was
+  // picked, or added to it with Shift held; let go without sweeping, it lets go of the pick. The playhead is the ruler's.
   const x0 = e.clientX, y0 = e.clientY;
   const el = document.createElement('div');
   el.className = 'mv3b-band';
   document.body.appendChild(el);
-  // Held with Shift, so the sweep ADDS to what was picked (a plain press on bare lane has let it go already - phase V36):
-  // the moment the press becomes a sweep, _moveBand adds what it touches; let go without sweeping and _endBand seeks there.
-  // Esc clears without sweeping.
+  // The moment the press becomes a sweep, _moveBand takes what it touches; Esc clears without sweeping.
   _band = { x0, y0, el, add: e.shiftKey, moved: false, lane: e.target.closest('.mv3b-lane') };
   e.preventDefault();
 }
@@ -579,18 +576,12 @@ function _endBand() {
   const b = _band;
   b.el.remove();
   _band = null;
-  // The panels held still while the band was swept (gesture()); now they follow what it picked.
-  if (b.moved) _afterSelB();
-  // PRESSED ON BARE LANE and let go without sweeping: a seek to the moment under the pointer,
-  // AND letting go of whatever was picked - the strip of its settings slides away and the Library
-  // is what is left (phase L6, the owner 2026-09-23). It used to keep the pick, so that seeking to
-  // look at a clip did not take it out of the panel; that gesture is the RULER's now, which seeks
-  // and touches nothing else.
-  if (!b.moved && b.lane) {
-    const r = b.lane.getBoundingClientRect();
-    _seekTo((b.x0 - r.left) / _zoom());
-    if (!b.add) _clearSel();
-  }
+  // The panels held still while the band was swept (gesture()); now they follow what it picked - and (phase V45) clips in a
+  // row are offered to be merged.
+  if (b.moved) { _afterSelB(); offerMerge(); }
+  // PRESSED ON BARE LANE and let go without sweeping: whatever was picked is let go of - the strip of its settings slides
+  // away and the Library is what is left (phase L6). The playhead stays: since phase V45 (ю4) it is moved by the ruler only.
+  if (!b.moved && !b.add) _clearSel();
 }
 
 // Everything selected, deleted in one go. A pair still goes as a pair - removeClip owns that
@@ -690,7 +681,7 @@ function _moveRange(e) {
   _paintRange();
 }
 
-function _endRange() {
+function _endRange(e) {
   if (!_ranging) return;
   const g = _ranging;
   _ranging = null;
@@ -701,11 +692,23 @@ function _endRange() {
   }
   // A click on the wave: the clip is picked, as a click on any clip picks it - and a stretch drawn before goes.
   _letRangeGo();
+  // (phase V45, (ю4)) With Shift held it is added to the pick, or taken out of it.
+  if (e && e.shiftKey) { _togglePick(g.id); return; }
   _selBack = null;
   _sel.clear();
   _selTrack = '';
   _sel.add(g.id);
   _paintSel();
+}
+
+// (phase V45, the owner's (ю4): "с зажатым shift выделение по одному фрагменту кликом") A clip clicked with Shift held joins
+// the pick - or leaves it - and clips in a row are offered to be merged.
+function _togglePick(id) {
+  _selBack = null;
+  _selTrack = '';
+  if (_sel.has(id)) _sel.delete(id); else _sel.add(id);
+  _paintSel();
+  offerMerge();
 }
 
 function _letRangeGo() {
@@ -996,6 +999,8 @@ function _endDrag(e) {
   if (!d.moved) {
     // (phase V36, T5) A clip picked lets a drawn stretch go: Delete is the clip's again.
     _letRangeGo();
+    // (phase V45, (ю4)) With Shift held, one clip at a time: added to the pick, or taken out of it.
+    if (e && e.shiftKey) { _togglePick(d.id); return; }
     _selBack = null;
     _sel.clear();
     _selTrack = '';
@@ -2760,6 +2765,8 @@ export function initTimelineB() {
   });
   // (phase V44) The button right of ⏩ and its window.
   wireSilence({ span: _silenceSpan, zoom: _zoom, gutter: GUTTER, host: _host, cut: _silenceCut });
+  // (phase V45) Clips in a row picked: "merge?".
+  wireMerge({ ids: () => [..._sel], newId: _id, select: (id) => { if (id) selectClipById(id); } });
 }
 
 

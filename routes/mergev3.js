@@ -289,6 +289,29 @@ router.put('/mv3/timeline', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// (phase V45) CLIPS IN A ROW MERGED INTO ONE FILE of the project (lib/merge-clips.js): the page sends the clips as it has
+// them, follows the job, and lays the file in their place itself - one step to undo.
+//   POST /api/mv3/merge { key, format, video: [clips], audio: [clips] } -> { job }
+//   GET  /api/mv3/merge/:id -> { job: { state, pct, src, dur, error } };  POST /api/mv3/merge/:id/cancel
+router.post('/mv3/merge', (req, res) => {
+  try {
+    const b = req.body || {};
+    const t = _read().timelines[String(b.key || '')];
+    if (t && !OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
+    const r = require('../lib/merge-clips').start(b);
+    if (r.error) return res.status(r.code || 400).json({ success: false, error: r.error });
+    res.json({ success: true, job: r.job });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+router.get('/mv3/merge/:id', (req, res) => {
+  const job = require('../lib/merge-clips').get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'no such merge' });
+  res.json({ success: true, job });
+});
+router.post('/mv3/merge/:id/cancel', (req, res) => {
+  res.json({ success: true, job: require('../lib/merge-clips').cancel(req.params.id) });
+});
+
 // Export settings for one project. Their own endpoint on purpose: pressing Apply in the
 // export dialog must not rewrite the timeline, and a timeline save must not rewrite them.
 router.post('/mv3/adv', (req, res) => {

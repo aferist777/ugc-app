@@ -56,10 +56,24 @@ function _lineGone(tl, cuts) {
   return false;
 }
 
+const MERGED_LINES = 'Merged lines of the talking head are one file - cut inside them before merging, or take the merge back (Ctrl+Z).';
+
+// (phase V45) Would `cuts` reach into a talking head's lines merged into one file (a cell with `merge`)?
+function _mergedHit(tl, cuts) {
+  for (const t of tl.tracks) {
+    for (const c of (t.clips || [])) {
+      if (!Array.isArray(c.merge) || !c.merge.length) continue;
+      if (cuts.some((k) => k.a < _end(c) - EPS && k.b > +c.start + EPS)) return true;
+    }
+  }
+  return false;
+}
+
 /** Why [a, b) cannot be cut out of `tl`, in words - or '' when it can. */
 export function cutRefused(tl, a, b) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!(b - a >= MIN_CUT)) return 'Draw a longer stretch over the wave to cut it out';
+  if (_mergedHit(tl, [{ a, b }])) return MERGED_LINES;
   return _lineGone(tl, [{ a, b }]) ? LINE_GONE : '';
 }
 
@@ -209,6 +223,7 @@ export function mapThrough(cuts, t) {
 export function silenceRefused(tl, cuts) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!cuts || !cuts.length) return 'No pause here is longer than that';
+  if (_mergedHit(tl, cuts)) return MERGED_LINES;
   return _lineGone(tl, cuts) ? LINE_GONE : '';
 }
 
