@@ -83,6 +83,8 @@ const HTML = `
       <div class="mk-body">
         <label class="mk-field"><span>Topic</span>
           <input type="text" id="mk-topic" placeholder="What the video is about"></label>
+        <div class="mk-note-line" id="mk-nar-note" hidden></div>
+        <div class="mk-step1">
         <div class="mk-box" id="mk-box1">
           <div class="mk-ctls" id="mk-controls"></div>
           <label class="mk-ctl" for="mk-hook-n"><span>Hooks</span>
@@ -93,10 +95,11 @@ const HTML = `
             <button class="lib-btn mk-ai" type="button" id="mk-ai" aria-label="AI settings"></button>
           </span></span>
         </div>
-        <div class="mk-note-line" id="mk-nar-note" hidden></div>
+        <!-- (V38.6) The hooks hang under box 1: once one is picked they fold into a bar glued to its bottom. -->
         <div class="mk-hookset" id="mk-hook-stage" hidden>
           <button class="mk-fold" type="button" id="mk-hooks-fold" hidden></button>
           <div class="mk-hooks" id="mk-hook-list"></div>
+        </div>
         </div>
         <div class="mk-job" id="mk-job" hidden></div>
         <div class="mk-box mk-box2" id="mk-box2" hidden>
@@ -1133,7 +1136,8 @@ function _paintGo() {
   go.disabled = busy;
   go.classList.toggle('primary', !hooks);
   const wr = $('mk-write');
-  wr.textContent = _stage === 'script' ? 'Writing the script…' : written ? 'Write again' : 'Write scenario';
+  // (V38.6) On two lines, in a taller button: "Write / scenario".
+  wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
   wr.disabled = busy || !String((_gen && _gen.hook) || '').trim();
   wr.classList.toggle('primary', !written);
   $('mk-box2').hidden = !(_gen && _gen.box2);
@@ -1153,19 +1157,23 @@ function _paintGo() {
   if (busy) _hideFragBtn();
 }
 
-// (V38.5, the owner's (ш3): "да, только под дропдаун скрывать все хуки") With a script written the hooks fold under one
-// line, "▸ 7 hooks", opened by a press - to pick another and write again; before a script they are open. New hooks open
-// them; a script landing folds them.
+// (V38.5, the owner's (ш3): "да, только под дропдаун скрывать все хуки"; V38.6: "при выборе хука вся пачка сгенерированных
+// хуков должна сворачиваться наверх в дропдаун в ширину полей между двумя полями-шагами генератора. как бы приклеенным к
+// верхнему полю генерации хуков") Once a hook is picked - or a script is written - the hooks fold into one bar glued under
+// box 1, "▸ 7 hooks"; a press opens them under it and box 2 moves down ((щ6)); a pick folds them again, new hooks come
+// open. Before any pick they are open, with no bar.
 let _hooksOpen = false;
 function _paintFold() {
   const n = ((_gen && _gen.hooks) || []).length;
   const written = !!(_gen && (_gen.paragraphs || []).length);
-  const open = !written || _hooksOpen;
+  const foldable = !!n && (written || !!(_gen && _gen.box2)) && _stage !== 'hooks';
+  const open = !foldable || _hooksOpen;
   const f = $('mk-hooks-fold');
-  f.hidden = !(n && written) || _stage === 'hooks';
+  f.hidden = !foldable;
   f.textContent = (open ? '▾ ' : '▸ ') + n + (n === 1 ? ' hook' : ' hooks');
-  f.title = open ? 'Fold the hooks away' : 'Show the hooks - pick another and write the script again';
+  f.title = open ? 'Fold the hooks away' : 'Show the hooks - pick another';
   $('mk-hook-list').hidden = !open;
+  $('mk-box1').classList.toggle('glued', foldable);
 }
 
 // The row whose words are the hook in box 2 is gold - whichever way the two came to match.
@@ -1327,7 +1335,8 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   // draft open folded.
   $('mk-hook').value = _gen.hook;
   _gen.box2 = !!(_gen.hook.trim() || _gen.paragraphs.length || $('mk-ad').value.trim());
-  _hooksOpen = false;
+  // (V38.6) Folded when a hook is chosen or a script written; open while there is still one to pick.
+  _hooksOpen = !(_gen.hook.trim() || _gen.paragraphs.length);
   $('mk-hook-n').value = String(full && full.settings && full.settings.hookCount
     ? HT.hookCount(full.settings.hookCount) : _lastCount());
   _showForm();
@@ -1413,7 +1422,8 @@ function _renderHooks(hooks) {
   hooks.forEach((h, i) => {
     const type = HT.hookType(h.type || h.kind);
     const row = el('div', 'mk-hook');
-    const use = el('button', 'lib-btn mk-hook-use', 'use hook');
+    // (V38.6, the owner: "кнопка use hooks сделай более видимой") Blue, as the main buttons are.
+    const use = el('button', 'lib-btn primary mk-hook-use', 'use hook');
     use.type = 'button';
     use.title = 'Put this hook into the box below - the script is written from it there';
     use.disabled = _busy();
@@ -1421,9 +1431,9 @@ function _renderHooks(hooks) {
     ta.rows = 1;
     ta.spellcheck = false;
     ta.value = h.text;
-    const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
-    ta.addEventListener('input', () => { _gen.hooks[i] = { ..._gen.hooks[i], text: ta.value }; fit(); _markUsed(); _queueDraft(); });
-    setTimeout(fit, 0);
+    // (V38.6) Fitted to its text by the stylesheet (field-sizing) - a height measured by script while the list was folded
+    // came out as nothing.
+    ta.addEventListener('input', () => { _gen.hooks[i] = { ..._gen.hooks[i], text: ta.value }; _markUsed(); _queueDraft(); });
     // (V38.5, the owner: "пользователь выбирает нужный хук, он появляется в таком же поле как у дропдаунов только ниже")
     // No script is written yet: the hook goes into box 2, where it can be edited, and "Write scenario" writes from it.
     use.addEventListener('click', () => {
@@ -1433,6 +1443,7 @@ function _renderHooks(hooks) {
       _gen.hook = text;
       _gen.hookType = type ? type.id : '';
       _gen.box2 = true;
+      _hooksOpen = false;               // (V38.6) the batch folds under box 1
       $('mk-hook').value = text;
       _markUsed();
       _paintGo();
@@ -1759,8 +1770,8 @@ function _renderScenes() {
     const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
     ta.addEventListener('input', () => {
       _gen.paragraphs[i] = ta.value;
-      // Editing the first paragraph edits the hook: "Generate again" writes from what is on screen.
-      if (i === 0) _gen.hook = ta.value;
+      // Editing the first paragraph edits the hook: "Write again" writes from what is on screen - box 2 says the same (V38.6).
+      if (i === 0) { _gen.hook = ta.value; $('mk-hook').value = ta.value; _markUsed(); }
       secs.textContent = J.spokenSeconds(ta.value) + 's';
       fit();
       _queueDraft();
