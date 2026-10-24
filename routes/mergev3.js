@@ -274,6 +274,10 @@ router.put('/mv3/timeline', (req, res) => {
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);
+    // (phase V44) A TALKING HEAD'S LINES CUT ON ITS TIMELINE - cut silence, a stretch cut by hand, an undo of either: what
+    // their pieces say is written into the lines in the same tick, so the mirror lays them so again (lib/line-cuts.js).
+    const th = /^sv3_(.+)$/.exec(key);
+    if (th) require('../lib/line-cuts').fromTimeline(th[1], clean.tracks);
     // The STORED tracks go back, not just the version. _sanitize normalises as it writes -
     // a missing field becomes an explicit null, a band number its default - so what the caller
     // sent and what is now here are not byte-identical. The caller needs the stored shape to

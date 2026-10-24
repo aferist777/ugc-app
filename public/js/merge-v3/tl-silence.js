@@ -3,17 +3,21 @@
 
    A button right of ⏩ in the timeline's header (and the key S - "Ы" in the Russian layout, by the key's place): live
    when there is something to cut in (ы1) - a stretch drawn over a wave, or picked clips (the time they take); dim with
-   nothing picked. Pressed, a small window opens above it:
+   nothing picked. Pressed, a small window opens above it - TWO SLIDERS that work together ((ы12)):
 
-     keep pauses up to  [slider 0.01-1.00 s, 0.30 at first]
+     keep pauses up to  [0.01-1.00 s, 0.30 at first]        a pause longer than this is shortened to it (ы2)
+     silent below       [−60 … −20 dB]  [auto]              quieter than this is silence; auto - the stretch's own noise
+                                                            floor + 6 dB, never above −36 (V33.5), each clip its own
      14 pauses · −6.2 s                       [cut]
 
-   The pauses are heard in MAIN AUDIO only (ы3), once, when the window opens (GET /api/track-pauses, lib/track-pauses.js:
-   silence below that stretch's own noise floor, so under music there is none); moving the slider only plans again. Every
-   pause longer than the slider is shortened to it (ы2) and what will go glows red on the lanes before anything is cut
-   (ы8). "cut" or Enter cuts - every lane at once, one step to undo (js/merge-v3/tl-cut.js silenceCut: music under the
-   film stays put, sound effects move with the picture, the seams faded); Escape or a press anywhere else closes it
-   and changes nothing.
+   The sound is heard in MAIN AUDIO only (ы3), ONCE, when the window opens: GET /api/track-pauses (lib/track-pauses.js)
+   answers each clip's stretch with its auto threshold and the loudness itself (a byte a 10 ms window), and moving either
+   slider only finds the pauses and plans again, here. Above −36 dB is allowed by hand ((ы13): under music the music
+   counts as silence then). The length is kept while the page is open; the decibels start at auto every time ((ы14)).
+   What will go glows red on the lanes before anything is cut (ы8). "cut" or Enter cuts - every lane at once, one step to
+   undo (js/merge-v3/tl-cut.js silenceCut: music under the film stays put, sound effects move with the picture, the seams
+   faded); Escape or a press anywhere else closes it and changes nothing. A talking head's lines are cut too ((ы5)): the
+   save of the timeline writes their pieces into the lines (lib/line-cuts.js).
 
    timeline-b.js owns the pick and the lanes and hands this its accessors (wireSilence):
      span()      [[a, b], ...] timeline seconds to listen in, or null - nothing picked
@@ -28,6 +32,7 @@ import { cutsOfPauses } from './tl-cut.js';
 
 const KEEP_DEFAULT = 0.30;
 const KEEP_MIN = 0.01, KEEP_MAX = 1.00;
+const DB_MIN = -60, DB_MAX = -20;
 // Pauses of two clips that meet are one pause.
 const JOIN = 0.011;
 // A piece of main audio shorter than this inside the pick is not listened to.
@@ -35,7 +40,7 @@ const MIN_PIECE = 0.1;
 
 let _acc = null;
 let _btn = null;
-let _keep = KEEP_DEFAULT;     // the slider's place, kept while the page is open
+let _keep = KEEP_DEFAULT;     // the length slider's place, kept while the page is open
 let _win = null;              // the window while it is open
 
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -69,6 +74,8 @@ function _mainSounds(tl) {
 // What the pauses were heard from - when it changes under the window, they are stale.
 const _print = (tl) => _mainSounds(tl).map(({ c }) => [c.id, c.src, c.start, c.dur, c.trimIn, c.speed].join('|')).join(';');
 
+const _dbText = (v) => (v < 0 ? '−' : '') + Math.abs(Math.round(v)) + ' dB';
+
 /** Open the window over the button (the button's press, the key S). */
 export function openSilence() {
   if (!_acc || !_btn) return;
@@ -82,12 +89,19 @@ export function openSilence() {
   box.className = 'mv3-silence';
   box.innerHTML =
     '<div class="mv3-silence-h"><b>Cut silence</b><button type="button" class="mv3-silence-x" title="Close (Esc)">✕</button></div>' +
-    '<label class="mv3-silence-row"><span>keep pauses up to</span>' +
+    '<label class="mv3-silence-row" title="A pause longer than this is shortened to it - half after the sound before, half before the sound after">' +
+    '<span>keep pauses up to</span>' +
     `<input type="range" min="${KEEP_MIN}" max="${KEEP_MAX}" step="0.01" class="mv3-silence-k">` +
     '<span class="mv3-silence-v"></span></label>' +
+    '<label class="mv3-silence-row" title="Quieter than this is silence. auto - this sound\'s own noise floor + 6 dB, never above −36 dB">' +
+    '<span>silent below</span>' +
+    `<input type="range" min="${DB_MIN}" max="${DB_MAX}" step="1" class="mv3-silence-d" disabled>` +
+    '<span class="mv3-silence-v is-db"></span>' +
+    '<button type="button" class="mv3-silence-auto is-on" title="Back to this sound\'s own threshold" disabled>auto</button></label>' +
     '<div class="mv3-silence-row is-foot"><span class="mv3-silence-n">listening to main audio…</span>' +
     '<button type="button" class="mv3-silence-cut" title="Cut them out of every lane (Enter)" disabled>cut</button></div>';
   const k = box.querySelector('.mv3-silence-k');
+  const d = box.querySelector('.mv3-silence-d');
   k.value = String(_keep);
   box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
   document.body.appendChild(box);
@@ -96,14 +110,27 @@ export function openSilence() {
     if (!_win || !Layers.topIs(_win.layer)) return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); _cut(); }
   };
-  _win = { box, k, away, keys, key: Store.key(), print: _print(Store.timeline()), span, pauses: null, cuts: [], why: '', none: '', seq: 0,
-    layer: Layers.open(box, { name: 'cut silence', onEsc: closeSilence }) };
+  _win = { box, k, d, away, keys, key: Store.key(), print: _print(Store.timeline()), span, asks: null, pauses: null, walls: [],
+    db: null, cuts: [], why: '', none: '', seq: 0, layer: Layers.open(box, { name: 'cut silence', onEsc: closeSilence }) };
   _place();
   k.addEventListener('input', () => {
-    if (_win) _win.why = '';
+    if (!_win) return;
+    _win.why = '';
     _keep = Math.max(KEEP_MIN, Math.min(KEEP_MAX, r2(+k.value || KEEP_DEFAULT)));
     box.querySelector('.mv3-silence-v').textContent = _keep.toFixed(2) + ' s';
     _plan();
+  });
+  d.addEventListener('input', () => {
+    if (!_win) return;
+    _win.why = '';
+    _win.db = Math.max(DB_MIN, Math.min(DB_MAX, Math.round(+d.value)));
+    _find();
+  });
+  box.querySelector('.mv3-silence-auto').addEventListener('click', () => {
+    if (!_win || _win.db == null) return;
+    _win.why = '';
+    _win.db = null;
+    _find();
   });
   box.querySelector('.mv3-silence-x').addEventListener('click', closeSilence);
   box.querySelector('.mv3-silence-cut').addEventListener('click', _cut);
@@ -146,12 +173,24 @@ function _say(text, bad) {
   n.classList.toggle('is-bad', !!bad);
 }
 
-// Hear main audio inside the pick - each of its clips over the file's own stretch - and lay the pauses on the timeline.
+// The loudness a stretch was answered with, ready to look through: { t0, step, edge, minPause, db: Float32Array } or null.
+function _loudOf(j) {
+  const L = j && j.loud;
+  if (!L || !L.db) return null;
+  const s = atob(L.db);
+  const db = new Float32Array(s.length);
+  for (let i = 0; i < s.length; i++) db[i] = s.charCodeAt(i) / 2 - 100;
+  return { t0: +L.t0 || 0, step: +L.step || 0.01, edge: +L.edge || 0.005, minPause: +L.minPause || 0.1, db };
+}
+
+// Hear main audio inside the pick - each of its clips over the file's own stretch - once.
 async function _listen() {
   const w = _win;
   const seq = ++w.seq;
   const asks = [];
+  const walls = [];
   for (const { c, s, e } of _mainSounds(Store.timeline())) {
+    walls.push(s, e);
     const sp = Math.max(0.25, Math.min(4, +c.speed || 1));
     const tin = +c.trimIn || 0;
     for (const [a, b] of w.span) {
@@ -160,41 +199,75 @@ async function _listen() {
       asks.push({ c, s, e, sp, tin, x0, x1, from: tin + (x0 - s) * sp, to: tin + (x1 - s) * sp });
     }
   }
-  if (!asks.length) { w.pauses = []; w.none = 'main audio has no sound here - nothing to listen to'; _plan(); return; }
+  w.walls = walls;
+  if (!asks.length) { w.asks = []; w.none = 'main audio has no sound here - nothing to listen to'; _find(); return; }
   try {
     const got = await Promise.all(asks.map((q) => fetch('/api/track-pauses?src=' + encodeURIComponent(q.c.src)
       + '&from=' + q.from.toFixed(3) + '&to=' + q.to.toFixed(3)).then((r) => r.json()).then((j) => ({ q, j }))));
     if (_win !== w || w.seq !== seq) return;
-    const all = [];
-    for (const { q, j } of got) {
-      if (!j || !j.success) throw new Error((j && j.error) || 'the sound could not be read');
-      for (const [fa, fb] of (j.pauses || [])) {
-        // File seconds -> the timeline's, kept inside this piece of the pick.
-        const a = Math.max(q.x0, q.s + (fa - q.tin) / q.sp), b = Math.min(q.x1, q.s + (fb - q.tin) / q.sp);
-        if (b > a) all.push([a, b]);
-      }
-    }
-    all.sort((x, y) => x[0] - y[0]);
-    const joined = [];
-    for (const p of all) {
-      const last = joined[joined.length - 1];
-      if (last && p[0] <= last[1] + JOIN) last[1] = Math.max(last[1], p[1]); else joined.push(p.slice());
-    }
-    w.pauses = joined;
-    _plan();
+    for (const { j } of got) if (!j || !j.success) throw new Error((j && j.error) || 'the sound could not be read');
+    w.asks = got.map(({ q, j }) => ({ ...q, thr: +j.thr, loud: _loudOf(j), pauses: j.pauses || [] }));
+    _find();
   } catch (e) {
     if (_win !== w) return;
-    w.pauses = [];
+    w.asks = [];
     w.none = 'Not heard: ' + e.message;
-    _plan();
+    _find();
   }
 }
 
-// The cuts for the slider's place: the count, the seconds, the glow.
+// The pauses for the threshold now - each clip's own (auto) or the one set by hand - on the timeline, then the plan.
+function _find() {
+  const w = _win;
+  if (!w || !w.asks) return;
+  const auto = w.db == null;
+  // The slider shows the threshold in use: by hand its own, auto that of the longest piece listened to.
+  const longest = w.asks.slice().sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0))[0];
+  const shown = auto ? (longest && Number.isFinite(longest.thr) ? longest.thr : null) : w.db;
+  const d = w.d, btn = w.box.querySelector('.mv3-silence-auto');
+  d.disabled = !w.asks.length;
+  btn.disabled = auto;
+  btn.classList.toggle('is-on', auto);
+  if (shown != null) d.value = String(Math.max(DB_MIN, Math.min(DB_MAX, Math.round(shown))));
+  w.box.querySelector('.mv3-silence-v.is-db').textContent = shown == null ? '—' : _dbText(shown);
+  const all = [];
+  for (const q of w.asks) {
+    const thr = auto ? q.thr : w.db;
+    const L = q.loud;
+    const filePauses = [];
+    if (L && Number.isFinite(thr)) {
+      // Runs of windows below the threshold, as lib/track-pauses.js finds them: from MIN_PAUSE, widened by its edge.
+      const n = L.db.length;
+      for (let i = 0; i < n;) {
+        if (!(L.db[i] < thr)) { i++; continue; }
+        let j = i;
+        while (j + 1 < n && L.db[j + 1] < thr) j++;
+        const a = Math.max(q.from, L.t0 + i * L.step - L.edge), b = Math.min(q.to, L.t0 + j * L.step + L.edge);
+        if (b - a >= L.minPause - 1e-9) filePauses.push([a, b]);
+        i = j + 1;
+      }
+    } else if (auto) filePauses.push(...q.pauses);
+    for (const [fa, fb] of filePauses) {
+      // File seconds -> the timeline's, kept inside this piece of the pick.
+      const a = Math.max(q.x0, q.s + (fa - q.tin) / q.sp), b = Math.min(q.x1, q.s + (fb - q.tin) / q.sp);
+      if (b > a) all.push([a, b]);
+    }
+  }
+  all.sort((x, y) => x[0] - y[0]);
+  const joined = [];
+  for (const p of all) {
+    const last = joined[joined.length - 1];
+    if (last && p[0] <= last[1] + JOIN) last[1] = Math.max(last[1], p[1]); else joined.push(p.slice());
+  }
+  w.pauses = joined;
+  _plan();
+}
+
+// The cuts for the length now: the count, the seconds, the glow.
 function _plan() {
   const w = _win;
   if (!w || !w.pauses) return;
-  w.cuts = cutsOfPauses(w.pauses, _keep);
+  w.cuts = cutsOfPauses(w.pauses, _keep, w.walls);
   const sec = w.cuts.reduce((s, c) => s + (c.b - c.a), 0);
   const btn = w.box.querySelector('.mv3-silence-cut');
   btn.disabled = !w.cuts.length;

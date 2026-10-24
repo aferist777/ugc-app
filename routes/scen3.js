@@ -3268,6 +3268,9 @@ function _normLine(l) {
     // (phase V26.8, sixth round, the owner 2026-10-15: "Всегда по одной строке") WHAT SEEDANCE KEEPS FOR THIS LINE - a
     // line is a fragment of its own: its prompt and its clips (_normSdLine). Absent until it has either.
     ...(s.sd && typeof s.sd === 'object' ? { sd: _normSdLine(s.sd) } : {}),
+    // (phase V44) WHAT CUT SILENCE TOOK OUT OF THE LINE'S SOUND - stretches of its file, bound to the take they were cut in
+    // (lib/line-cuts.js): written by a save of its timeline, laid by the mirror. Absent - the line plays whole.
+    ...(require('../lib/line-cuts').normalize(s.cuts) ? { cuts: require('../lib/line-cuts').normalize(s.cuts) } : {}),
     // A clip being rendered right now. It cannot live in `video` above, which only
     // accepts a take that already has a file — and it has to be on the PROJECT rather
     // than in memory, so a render survives a reload and even a server restart.

@@ -16,8 +16,10 @@
      a caption line, a title            js/captions/cut.js: words inside go, the rest move, nothing heard again
 
    A TALKING HEAD's lines are laid by its script (lib/frag-mirror.js: cells with `frag`, and the caption pages bound to a
-   line by `voice`): the mirror lays them again by the script, so they are never cut or moved here (the owner's (ф7)) -
-   a cut that would reach one is refused in words; a pause inside a line goes by reading the line again.
+   line by `voice`). Since phase V44 ((ы5), (ы15)) they are cut here like any clip: a line becomes pieces of its file, and
+   the save of the timeline writes what its pieces say into the line (lib/line-cuts.js), so the mirror lays it so again;
+   Ctrl+Z, saved, gives it back whole. Refused only when a cut would take a WHOLE line away - that is taking it off the
+   script.
 
    CUT SILENCE (phase V44, the owner 2026-10-24): many such cuts at once, the pauses of main audio shortened
    (js/merge-v3/tl-silence.js finds them, lib/track-pauses.js listens). Every pause longer than `keep` keeps `keep` - half
@@ -39,14 +41,18 @@ export const MIN_CUT = 0.05;
 const _end = (c) => (+c.start || 0) + (+c.dur || 0);
 const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
 
-const LINES_REFUSED = 'The lines of the talking head are laid by its script and are not cut here - a pause inside a line goes '
-  + 'by reading the line again. Cut after the last line, on your own clips.';
+const LINE_GONE = 'A whole line of the talking head is inside the stretch - take it off the script in Setup instead, '
+  + 'or cut a shorter stretch.';
 
-// A line of a talking head that ends after `a` would be cut or moved by a cut starting there.
-function _lineAfter(tl, a) {
+// (phase V44) Would `cuts` ({ a, b }) take a WHOLE line of a talking head away - every piece of it on main audio?
+function _lineGone(tl, cuts) {
+  const lines = new Map();
   for (const t of tl.tracks) {
-    for (const c of (t.clips || [])) if ((c.frag != null || (_words(t) && c.voice)) && _end(c) > a + EPS) return true;
+    if (t.kind !== 'audio') continue;
+    for (const c of (t.clips || [])) if (Number(c.frag) > 0) (lines.get(+c.frag) || lines.set(+c.frag, []).get(+c.frag)).push(c);
   }
+  const inside = (c) => cuts.some((k) => +c.start >= k.a - EPS && _end(c) <= k.b + EPS);
+  for (const ps of lines.values()) if (ps.every(inside)) return true;
   return false;
 }
 
@@ -54,7 +60,7 @@ function _lineAfter(tl, a) {
 export function cutRefused(tl, a, b) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!(b - a >= MIN_CUT)) return 'Draw a longer stretch over the wave to cut it out';
-  return _lineAfter(tl, a) ? LINES_REFUSED : '';
+  return _lineGone(tl, [{ a, b }]) ? LINE_GONE : '';
 }
 
 /**
@@ -74,12 +80,14 @@ export function rippleCut(tl, a, b, opts) {
   const pairs = new Map();
   const pairOf = (p) => { if (!pairs.has(p)) pairs.set(p, 'p' + newId().replace(/^c/, '')); return pairs.get(p); };
 
+  // (phase V44) Cut silence keeps every word - shortened, never dropped (js/captions/cut.js).
+  const lineOpts = opts && opts.keepWords ? { keepWords: true } : undefined;
   for (const t of (tl.tracks || [])) {
     if (!Array.isArray(t.clips)) continue;
     const out = [];
     for (const c of t.clips) {
       if (_words(t)) {
-        const n = cutLine(c, a, b);
+        const n = cutLine(c, a, b, lineOpts);
         if (n) out.push(n);
         continue;
       }
@@ -144,15 +152,19 @@ export function rippleCut(tl, a, b, opts) {
 export const SEAM_FADE = 0.015;
 /** A cut shorter than this is not made - a hundredth on the timeline's own grid. */
 export const MIN_SILENCE_CUT = 0.02;
+/** A piece of main audio's clip left between two cuts, or between a cut and the clip's own edge, is at least this long - a
+ *  shorter one is a picture flashing for a frame or two: the cuts beside it give it back the room. */
+export const MIN_KEEP = 0.1;
 
 /** Music laid under the film (ы4): a bed on any audio lane but main audio - not cut, not moved. A sound effect is not music. */
 export const isMusicBed = (t, c) => !!t && t.kind === 'audio' && !t.main && !!c && !c.sfx && isBed(c);
 
 /**
  * The cuts that shorten every pause longer than `keep` to `keep` (ы2): [[a, b], ...] timeline seconds in -> [{ a, b }] out,
- * in order, on the timeline's hundredths, each at least MIN_SILENCE_CUT.
+ * in order, on the timeline's hundredths, each at least MIN_SILENCE_CUT. `walls` - the moments main audio's clips start and
+ * end: no piece left between a cut and a wall, or between two cuts, is shorter than MIN_KEEP.
  */
-export function cutsOfPauses(pauses, keep) {
+export function cutsOfPauses(pauses, keep, walls) {
   const k = Math.max(0, +keep || 0);
   // Onto the timeline's hundredths INWARDS - what is kept is never less than asked (0.01 kept as 0.005 a side would round
   // to nothing).
@@ -163,7 +175,23 @@ export function cutsOfPauses(pauses, keep) {
     if (b - a >= MIN_SILENCE_CUT - EPS) out.push({ a, b });
   }
   out.sort((x, y) => x.a - y.a);
-  return out.filter((c, i) => !i || c.a >= out[i - 1].b - EPS);
+  const cuts = out.filter((c, i) => !i || c.a >= out[i - 1].b - EPS);
+  // No flash of a frame or two: the piece before each cut - back to the cut before it or to a wall - at least MIN_KEEP,
+  // the room taken from the cuts beside it; and so the piece after a cut up to the next wall.
+  const W = (walls || []).map(Number).filter(Number.isFinite).sort((x, y) => x - y);
+  for (let i = 0; i < cuts.length; i++) {
+    const c = cuts[i], prev = i ? cuts[i - 1] : null, next = cuts[i + 1] || null;
+    const wl = W.filter((w) => w <= c.a + EPS && (!prev || w >= prev.b - EPS)).pop();
+    if (wl != null && c.a - wl < MIN_KEEP - EPS) c.a = up(wl + MIN_KEEP);
+    else if (wl == null && prev && c.a - prev.b < MIN_KEEP - EPS) {
+      const need = MIN_KEEP - (c.a - prev.b);
+      prev.b = down(prev.b - need / 2);
+      c.a = up(c.a + need / 2);
+    }
+    const wr = W.find((w) => w >= c.b - EPS && (!next || w <= next.a + EPS));
+    if (wr != null && wr - c.b < MIN_KEEP - EPS) c.b = down(wr - MIN_KEEP);
+  }
+  return cuts.filter((c) => c.b - c.a >= MIN_SILENCE_CUT - EPS);
 }
 
 /** Where moment `t` of the timeline is after `cuts` ({ a, b }, in order, apart) are made - inside a cut, at its start. */
@@ -181,7 +209,7 @@ export function mapThrough(cuts, t) {
 export function silenceRefused(tl, cuts) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!cuts || !cuts.length) return 'No pause here is longer than that';
-  return _lineAfter(tl, cuts[0].a) ? LINES_REFUSED : '';
+  return _lineGone(tl, cuts) ? LINE_GONE : '';
 }
 
 /**
@@ -192,7 +220,7 @@ export function silenceRefused(tl, cuts) {
 export function silenceCut(tl, cuts, opts) {
   const list = (cuts || []).filter((c) => c && c.b - c.a >= MIN_SILENCE_CUT - EPS);
   if (!list.length || !tl || !Array.isArray(tl.tracks)) return;
-  const o = { ...(opts || {}), seamFade: opts && opts.seamFade != null ? opts.seamFade : SEAM_FADE };
+  const o = { ...(opts || {}), seamFade: opts && opts.seamFade != null ? opts.seamFade : SEAM_FADE, keepWords: true };
   // Music and sound effects are taken off their lanes while the rest is cut, and put back after.
   const held = [];
   for (const t of tl.tracks) {
@@ -205,7 +233,18 @@ export function silenceCut(tl, cuts, opts) {
     }
     t.clips = keep;
   }
+  // How long every clip of another lane was: a piece of one the cuts leave shorter than MIN_KEEP is a flash of a frame or two.
+  const was = new Map();
+  for (const t of tl.tracks) if (!t.main && Array.isArray(t.clips)) for (const c of t.clips) was.set(c.id, +c.dur || 0);
   for (let i = list.length - 1; i >= 0; i--) rippleCut(tl, list[i].a, list[i].b, o);
+  // A piece left shorter than the shortest a timeline keeps (0.02 s, lib/timeline-shape.js) goes: it would come back from the
+  // save that long, over the piece after it. On the other lanes (a b-roll over a pause) a piece the cuts left shorter than
+  // MIN_KEEP goes too - a clip that was that short to begin with stays.
+  const cutShort = (c) => +c.dur < MIN_KEEP - EPS && (!was.has(c.id) || +c.dur < was.get(c.id) - EPS);
+  for (const t of tl.tracks) {
+    if ((t.kind !== 'video' && t.kind !== 'audio') || !Array.isArray(t.clips)) continue;
+    t.clips = t.clips.filter((c) => +c.dur >= 0.02 - EPS && (t.main || !cutShort(c)));
+  }
   // A sound effect starts where the picture it was laid on now is.
   for (const h of held) if (!h.music) h.c.start = mapThrough(list, +h.c.start || 0);
   // The film's end now: the picture and every sound but the music.

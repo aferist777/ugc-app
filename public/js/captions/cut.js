@@ -18,6 +18,10 @@
 
    Pure: a line in, the new line (a copy; the same object when nothing changes) or null out. Every mark of a word stays
    with it (`h` corrected, `k` stand out); the line keeps every other field (its id, style, place, `voice`).
+
+   KEEPING EVERY WORD (phase V44, `opts.keepWords` - cut silence): what is cut there is silence by its own measure, so a
+   word that reaches into it was heard longer than it is spoken (the hearing stretches a word over the pause after it, the
+   V33.5 measurement) - it is shortened to what is left of it, never dropped, and the text stays as it was.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { isHeard } from './heard.js';
@@ -32,8 +36,9 @@ export const MIN = 0.05;
  * Cut [a, b) out of a caption line `c` ({ start, dur, name, words? }) and close the gap.
  * @returns {object|null} the line after the cut (`c` itself when the cut is wholly after it), or null when it goes
  */
-export function cutLine(c, a, b) {
+export function cutLine(c, a, b, opts) {
   if (!c) return null;
+  const keepWords = !!(opts && opts.keepWords);
   a = r2(+a || 0); b = r2(+b || 0);
   if (!(b > a)) return c;
   const D = b - a;
@@ -41,7 +46,8 @@ export function cutLine(c, a, b) {
   const e = s + (+c.dur || 0);
   if (e <= a + EPS) return c;
   if (s >= b - EPS) return { ...c, start: r2(s - D) };
-  if (s >= a - EPS && e <= b + EPS) return null;
+  // (V44) Keeping words, a heard line wholly inside the cut stays too - shrunk onto it, below.
+  if (s >= a - EPS && e <= b + EPS && !(keepWords && isHeard(c))) return null;
   // A moment of the timeline before the cut -> after it: inside the cut is its start.
   const map = (t) => (t <= a ? t : t >= b ? t - D : a);
   const ns = r2(map(s));
@@ -57,8 +63,11 @@ export function cutLine(c, a, b) {
   words.forEach((w, i) => {
     const ws = s + (+w.s || 0), we = s + (+w.e || 0);
     const mid = (ws + we) / 2;
-    if (mid >= a - EPS && mid < b - EPS) { dropped++; return; }
-    kept.push({ ...w, i, s: r2(Math.max(0, map(ws) - ns)), e: r2(Math.max(0, map(we) - ns)) });
+    if (!keepWords && mid >= a - EPS && mid < b - EPS) { dropped++; return; }
+    const ks = r2(Math.max(0, map(ws) - ns));
+    // Kept whole in time or not, a word kept has some length (one wholly inside the cut lands on it, a fiftieth long).
+    const ke = r2(Math.max(0, map(we) - ns, keepWords ? ks + 0.02 : 0));
+    kept.push({ ...w, i, s: ks, e: ke });
   });
   if (!kept.length) return null;
   // EDGES FOLLOW THE WORDS (as the captions' document keeps them, doc.js): a line whose first word went starts at its
@@ -69,8 +78,8 @@ export function cutLine(c, a, b) {
   if (lastWord.i !== words.length - 1) ne = r2(ns + lastWord.e);
   const out0 = kept.map(({ i, ...w }) => (from ? { ...w, s: r2(w.s - from), e: r2(w.e - from) } : w));
   const start = r2(ns + from);
-  // A word kept runs to its end: the line is at least as long as its words.
-  ne = Math.max(ne, r2(start + Math.max(...out0.map((w) => w.e))));
+  // A word kept runs to its end: the line is at least as long as its words - and, keeping words, as long as MIN.
+  ne = Math.max(ne, r2(start + Math.max(...out0.map((w) => w.e))), keepWords ? r2(start + MIN) : 0);
   if (ne - start < MIN - EPS) return null;
   const out = { ...c, start, dur: r2(ne - start), words: out0 };
   // Only silence was cut: the text is what it was (words timed for a rewritten text spell it). Words went: the text is

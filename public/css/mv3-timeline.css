@@ -22,7 +22,7 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-tl-transport .mv3-iconbtn.is-silence.is-dim{opacity:.45}
 .mv3-tl-transport .mv3-iconbtn.is-silence.is-open{border-color:var(--danger); color:var(--danger)}
 .mv3-silence{
-  position:fixed; z-index:60; width:248px; padding:8px 10px 9px; box-sizing:border-box;
+  position:fixed; z-index:60; width:300px; padding:8px 10px 9px; box-sizing:border-box;
   background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--r-sm);
   box-shadow:0 8px 24px oklch(0 0 0 / .45); font:500 11px/1.35 var(--font);
 }
@@ -31,8 +31,17 @@ body.mv3-workshop .mv3-tl-transport{opacity:.4; pointer-events:none}
 .mv3-silence-x{border:0; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:0 2px}
 .mv3-silence-x:hover{color:var(--ink)}
 .mv3-silence-row{display:flex; align-items:center; gap:7px}
-.mv3-silence-row > span:first-child{color:var(--muted); white-space:nowrap}
-.mv3-silence-k{flex:1 1 auto; min-width:0; accent-color:var(--danger)}
+.mv3-silence-row + .mv3-silence-row{margin-top:4px}
+.mv3-silence-row > span:first-child{flex:0 0 96px; color:var(--muted); white-space:nowrap}
+.mv3-silence-k, .mv3-silence-d{flex:1 1 auto; min-width:0; accent-color:var(--danger)}
+.mv3-silence-d:disabled{opacity:.45}
+/* (phase V44, (ы12)) The threshold's "auto": lit while the sound's own threshold is in use, a press goes back to it. */
+.mv3-silence-auto{
+  flex:0 0 auto; padding:1px 5px; border:1px solid var(--border); border-radius:var(--r-xs); cursor:pointer;
+  background:none; color:var(--muted); font:600 9.5px/1.3 var(--font);
+}
+.mv3-silence-auto:hover:not(:disabled){color:var(--ink); border-color:var(--ink)}
+.mv3-silence-auto.is-on{color:var(--ink); border-color:var(--danger); cursor:default}
 .mv3-silence-v{flex:0 0 auto; min-width:40px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
 .mv3-silence-row.is-foot{margin-top:8px; justify-content:space-between}
 .mv3-silence-row.is-foot > .mv3-silence-n{color:var(--ink); white-space:normal; font-variant-numeric:tabular-nums}
