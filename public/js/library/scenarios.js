@@ -130,8 +130,8 @@ function _filterRow() {
 // "written from" is painted before these, by the source's live name. [key, label, whole row wide].
 const ORIGIN_ROWS = [
   ['fromTitle', 'rewritten from', true],
-  ['topicTitle', 'topic', true], ['narratorName', 'narrator'], ['narratorReading', 'which reading'],
-  ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'], ['cleanedBy', 'cleaned by'],
+  ['topicTitle', 'topic', true], ['narratorName', 'narrator'],
+  ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
 ];
 // "Where it came from" folds (phase F5): folded until opened, and remembered either way.
 const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
@@ -593,7 +593,6 @@ async function _show(it) {
     if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted', true);
     else if (!(o.fromId && !o.sourceId)) _row(from, 'written from', String(o.sourceTitle || '').trim() || 'no source', true);
     for (const [key, label, wide] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim(), wide);
-    if (o.humanized) _row(from, 'cleaning pass', 'applied');
     fold.appendChild(from);
   }
   body.appendChild(fold);

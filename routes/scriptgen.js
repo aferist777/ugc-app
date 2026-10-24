@@ -39,8 +39,8 @@
 //
 // THE VOICE ALONE WRITES (V38.1, the owner 2026-10-23: "используем только the voice для генерации сценария"): the
 // cleaning pass "Clean to the narrator" (/scriptgen/humanize) and V38's enrichment by the narrator's words and phrases
-// (/scriptgen/enrich, the form's "Words & phrases") are gone. A draft or a scenario that still says "cleaned" or "his
-// words & phrases" is read as it is.
+// (/scriptgen/enrich, the form's "Words & phrases") are gone, and what they left in the owner's stores was taken out
+// (V38.2).
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
@@ -159,7 +159,7 @@ function _runningFor(d) {
 // neutral is - but it IS worth saying which one was used, so the answer carries the name.
 //
 // ONE NARRATOR, ONE VOICE (phase V38, the owner 2026-10-23): no reading is drawn or pinned any more - the narrator's
-// voice is the block. A `readingId` an older page or draft still sends is not read.
+// voice is the block.
 function _narrator(id) {
   if (!id || id === 'neutral') {
     return { block: P.NEUTRAL_BLOCK, name: 'Neutral', id: 'neutral', rec: null };
@@ -208,7 +208,7 @@ router.post('/scriptgen/from-scenario', (req, res) => {
     const again = drafts.list().find(d => d.from && String(d.from.scenarioId) === String(s.id) && d.foreign && !_runningFor(d));
     draft = drafts.save({
       ...(again ? { id: again.id } : {}),
-      topic: s.title || '', title: s.title || '', hook: lines[0], paragraphs: lines, humanized: false,
+      topic: s.title || '', title: s.title || '', hook: lines[0], paragraphs: lines,
       from: { scenarioId: String(s.id), title: s.title || '' }, foreign: true,
       settings: { ...((again && again.settings) || {}), ...settings },
       save: { gender: role.gender || '', vertical: s.vertical || '', product: s.product || '' },
@@ -221,7 +221,7 @@ router.post('/scriptgen/from-scenario', (req, res) => {
 function _voice(res, b, nar, lines, extra) {
   const keep = _keeper(b, (r) => ({
     paragraphs: r.paragraphs, hook: r.paragraphs[0] || '', foreign: !r.applied,
-    ...(r.applied ? { written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() }, cleaned: null } : {}),
+    ...(r.applied ? { written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() } } : {}),
   }));
   _start(res, `Rewriting ${lines.length} lines in ${nar.name}'s voice`, async (_step, signal) => {
     const { data, by } = await callLadder({
@@ -413,9 +413,8 @@ router.post('/scriptgen/script', (req, res) => {
       by,
     };
   }, _keeper(b, (r) => ({
-    paragraphs: r.paragraphs, title: r.title, hook, humanized: false,
+    paragraphs: r.paragraphs, title: r.title, hook,
     // (phase V23) What wrote it - (V37) the step of the ladder that answered - for the save to record.
-    cleaned: null,
     written: { provider: r.by.provider, model: r.by.model, effort: EFFORT, at: new Date().toISOString() },
   })),
   { key: _runKey(b), what: 'script', model: _first().model, effort: EFFORT, scenes: m.scenes });
@@ -581,12 +580,11 @@ router.post('/scriptgen/save', async (req, res) => {
     if (run2) return res.status(409).json({ success: false, error: `A stage is still writing into this draft (${run2.what}) - save when it has landed.`, ...run2 });
   }
 
-  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the dropdowns as they are now: the model
-  // that wrote it and the one that cleaned it. (V38) No reading any more - a narrator has one voice.
+  // (phase V23) WHAT WROTE IT comes from the draft the stages kept, not from the form as it is now: the step of the
+  // agents' ladder that wrote it (V37).
   let kept = null;
   try { kept = b.draftId ? drafts.get(String(b.draftId)) : null; } catch (e) { kept = null; }
   const wrote = (kept && kept.written) || null;
-  const cleaned = (kept && kept.humanized && kept.cleaned) || null;
   let nar = { name: '', id: '' };
   try { if (b.narratorId) nar = _narrator(b.narratorId); } catch (e) { /* a deleted narrator is not a reason to lose the script */ }
   let srcTitles = { sourceTitle: '', topicTitle: '' };
@@ -606,10 +604,8 @@ router.post('/scriptgen/save', async (req, res) => {
       narratorId: nar.id, narratorName: nar.name,
       hook: paragraphs[0] || '', tone: String(b.tone || ''),
       // Which aggregator too (phase F3): the same model id can run on two of them.
-      provider: String((wrote && wrote.provider) || b.provider || ''),
-      model: String((wrote && wrote.model) || b.model || ''), humanized: !!b.humanized, at: new Date().toISOString(),
-      // Cleaned by another model than wrote it (the owner: by the recommendation) - said apart.
-      ...(cleaned ? { cleanedBy: [cleaned.provider, cleaned.model].filter(Boolean).join(' · ') } : {}),
+      provider: String((wrote && wrote.provider) || ''),
+      model: String((wrote && wrote.model) || ''), at: new Date().toISOString(),
       // (V38, block D4) A scenario of the shelf rewritten in the narrator's voice: which one.
       ...(kept && kept.from ? { fromId: kept.from.scenarioId, fromTitle: kept.from.title } : {}),
     },

@@ -49,8 +49,6 @@ const _ar = (a) => { const p = String(a || '').split(':'); const v = (+p[0] || 0
 function _stored() { try { return JSON.parse(localStorage.getItem(LS_SRC) || '') || {}; } catch (e) { return {}; } }
 function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } catch (e) { /* a private window */ } }
 
-export const pickOpen = () => !!_w;
-
 /**
  * Opens the picker on one place. `o`:
  *   kind      'image' | 'video' | 'audio'

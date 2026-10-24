@@ -694,9 +694,6 @@ function _paintRange() {
   el.firstChild.textContent = '✂ ' + (_range.b - _range.a).toFixed(2) + ' s · Delete';
 }
 
-/** The stretch drawn, or null. */
-export const rangeNow = () => (_range ? { ..._range } : null);
-
 /**
  * Cut the drawn stretch out of every lane and move what is after it left - one step to undo. A talking head's lines are
  * not cut (its script lays them): refused in words, on the stretch. The playhead goes to where the cut was.

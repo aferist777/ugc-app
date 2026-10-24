@@ -36,8 +36,6 @@ function _stored() { try { return JSON.parse(localStorage.getItem(LS) || '') || 
 function _keep() { try { localStorage.setItem(LS, JSON.stringify({ sec: _st.sec, cat: _st.cat })); } catch (e) { /* a private window */ } }
 const _lc = (s) => String(s || '').toLowerCase();
 
-export const helpOpen = () => !!_w;
-
 /**
  * Opens the reference beside `anchor` - the almanac at the foot of the chat's column. `field()` is the prompt field a
  * copied tip is for - asked at every copy, so the note stands over the one typed in last. `note()`: a line over the

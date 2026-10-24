@@ -125,10 +125,6 @@ function _normOrigin(o) {
     topicTitle: String(s.topicTitle || ''),
     narratorId: String(s.narratorId || ''),
     narratorName: String(s.narratorName || ''),
-    // A narrator can be read more than once, and the readings do not write alike. Which one wrote
-    // this is the difference between provenance and a name.
-    narratorReadingId: String(s.narratorReadingId || ''),
-    narratorReading: String(s.narratorReading || ''),
     // The hook is the one line the whole script had to deliver on, so it is worth keeping
     // beside the result: reading them together is how you tell a script that kept its promise
     // from one that wandered.
@@ -136,12 +132,7 @@ function _normOrigin(o) {
     tone:       String(s.tone       || ''),
     provider:   String(s.provider   || ''),
     model:      String(s.model      || ''),
-    humanized:  !!s.humanized,
-    // Who cleaned it (phase V23 recorded it; until V38 this normaliser dropped it on the way in).
-    cleanedBy:  String(s.cleanedBy  || ''),
-    // (phase V38) The narrator's own words and phrases in it, and the measure; a scenario of the shelf it was rewritten from.
-    enriched:   String(s.enriched   || ''),
-    density:    String(s.density    || ''),
+    // (phase V38) A scenario of the shelf it was rewritten from, in a narrator's voice.
     fromId:     String(s.fromId     || ''),
     fromTitle:  String(s.fromTitle  || ''),
     at:         String(s.at || ''),

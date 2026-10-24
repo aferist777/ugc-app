@@ -41,12 +41,6 @@ function _want(src) {
   return p;
 }
 
-/** The peaks of `src` once they have arrived - for the timeline's other uses (null while they have not). */
-export function peaksNow(src) {
-  const p = _want(src);
-  return p && p.data ? p : null;
-}
-
 function _draw(cv, c, z, x0, x1) {
   const p = _want(c.src);
   const dpr = Math.max(1, window.devicePixelRatio || 1);

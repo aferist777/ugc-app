@@ -803,8 +803,6 @@ export function hide() {
   CHAT.close();
 }
 
-export const isShown = () => CHAT.isOpen();
-
 /**
  * "to reference" (the owner, 2026-10-10): the frame takes the base - the person and the place go from it - and the extra
  * field stays as it is (the owner's answer (b)). Its cross in the base puts the person and the place back (onDetach).

@@ -309,8 +309,6 @@ router.post('/narrators/:id/read', (req, res) => {
       const { rec: saved, added } = store.applyReading(id, data, { readId, model: by.model, samples: unread.map(x => x.i) });
       job.state = 'done';
       job.step = added ? `${added} new ${added === 1 ? 'line' : 'lines'} in the voice` : 'nothing new in the voice';
-      job.added = added;
-      job.model = by.model;
       job.narrator = store.summary(saved);
       job.at = Date.now();
     } catch (e) {

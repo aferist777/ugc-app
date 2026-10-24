@@ -115,8 +115,6 @@ const HTML = `
           </div>
           <div class="mk-stage-h">
             <span class="lib-status" id="mk-save-status"></span>
-            <span class="sp"></span>
-            <span class="mk-note" id="mk-used"></span>
           </div>
         </div>
         <div class="mk-stage" id="mk-script-stage" hidden>
@@ -1136,7 +1134,6 @@ function _clearForm() {
   $('mk-scenes').textContent = '';
   $('mk-save-status').textContent = '';
   $('mk-save-status').className = 'lib-status';
-  $('mk-used').textContent = '';
   J.clearJob($('mk-job'));
 }
 
@@ -1152,7 +1149,6 @@ function _payload() {
     hooks: _gen.hooks || [],
     paragraphs: _gen.paragraphs || [],
     title: $('mk-title').value,
-    humanized: !!_gen.humanized,
     settings: {
       tone: o.tone, scenes: o.scenes,
       narratorId: o.narratorId, narratorName: o.narratorName, advertise: o.advertise,
@@ -1252,7 +1248,6 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     topicSpan: topic ? `${J.clock(topic.start)}–${J.clock(topic.end)}` : '',
     hooks: (full && full.hooks) || [],
     paragraphs: (full && full.paragraphs) || [],
-    humanized: !!(full && full.humanized),
     // (V38, block D4) The shelf's scenario this rewrites, and whether the rewrite in its narrator's voice has landed.
     from: (full && full.from) || null,
     foreign: !!(full && full.foreign),
@@ -1446,7 +1441,6 @@ async function _landInto(what, r) {
     _renderHooks(_gen.hooks);
   } else if (what === 'script' && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
-    _gen.humanized = false;
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
   } else if (what === 'voice' && Array.isArray(res.paragraphs)) {
@@ -1502,7 +1496,6 @@ async function _reloadDraftInto() {
     const d = (await J.api('/api/scriptgen/drafts/' + encodeURIComponent(_gen.draftId))).draft;
     _gen.hooks = d.hooks || [];
     _gen.paragraphs = d.paragraphs || [];
-    _gen.humanized = !!d.humanized;
     _gen.foreign = !!d.foreign;
     if (d.hook) $('mk-hook').value = d.hook;
     if (d.title && !$('mk-title').value.trim()) $('mk-title').value = d.title;
@@ -1549,7 +1542,6 @@ async function _runScript() {
   const body = { ...o, topic, hook };
   await _runStage('/api/scriptgen/script', body, _TIMING.script(o), async (r) => {
     _gen.paragraphs = r.paragraphs || [];
-    _gen.humanized = false;
     if (!$('mk-title').value.trim()) $('mk-title').value = r.title || topic.slice(0, 60);
     _renderScenes();
     await _saveDraft();
@@ -1612,7 +1604,6 @@ function _renderScenes() {
 function _landVoice(r) {
   if (!r || !r.voice) return;
   _gen.foreign = !r.applied;
-  _gen.humanized = false;
   if (r.applied && r.paragraphs && r.paragraphs[0]) $('mk-hook').value = r.paragraphs[0];
 }
 
@@ -1712,7 +1703,7 @@ async function _saveScript() {
         vertical: $('mk-vertical').value.trim(),
         product: $('mk-product').value.trim(),
         narratorId: o.narratorId, tone: o.tone, advertise: o.advertise,
-        sourceId: _gen.sourceId, topicId: _gen.topicId, humanized: _gen.humanized,
+        sourceId: _gen.sourceId, topicId: _gen.topicId,
         draftId: _gen.draftId,
       }),
     });

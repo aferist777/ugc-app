@@ -496,9 +496,6 @@ export const unsettledBy = (p, l) => {
 };
 /** The speed a line is read at: its own, set in its fragment, else the project's (V26.1). */
 export const speedOf = (p, l) => (+(l && l.speed) || params(p).speed);
-/** The lines of the video read with other settings - what the voice field's `generate` redoes. */
-export const unsettled = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
-  .map((l, i) => (unsettledBy(p, l) ? i : -1)).filter(i => i >= 0);
 /** The lines of the video still waiting for their tags - stage 1 (the mood field) is about these. */
 export const untagged = (p) => (Array.isArray(p && p.lines) ? p.lines : [])
   .map((l, i) => ((isLive(l) && !_tagged(l)) ? i : -1)).filter(i => i >= 0);
