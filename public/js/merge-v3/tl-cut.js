@@ -18,9 +18,18 @@
    A TALKING HEAD's lines are laid by its script (lib/frag-mirror.js: cells with `frag`, and the caption pages bound to a
    line by `voice`): the mirror lays them again by the script, so they are never cut or moved here (the owner's (ф7)) -
    a cut that would reach one is refused in words; a pause inside a line goes by reading the line again.
+
+   CUT SILENCE (phase V44, the owner 2026-10-24): many such cuts at once, the pauses of main audio shortened
+   (js/merge-v3/tl-silence.js finds them, lib/track-pauses.js listens). Every pause longer than `keep` keeps `keep` - half
+   after the sound before it, half before the sound after (ы2) - and the rest goes from every lane as above, from the last
+   cut to the first, in ONE mutation. Two things are not moved with the picture (ы4): MUSIC laid under it (a `bed` on
+   audio 2 and below) is neither cut nor moved - it plays on evenly, and what of it is left past the shortened film's end
+   goes; a SOUND EFFECT (`sfx`) is moved whole with the picture under its start, never cut. Each seam a sound is cut at
+   gets SEAM_FADE in and out (js/sound/fades.js reads them - the preview and the render alike), so no seam clicks.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { cutLine } from '../captions/cut.js';
+import { isBed } from '../captions/heard.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const EPS = 1e-6;
@@ -30,20 +39,22 @@ export const MIN_CUT = 0.05;
 const _end = (c) => (+c.start || 0) + (+c.dur || 0);
 const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
 
+const LINES_REFUSED = 'The lines of the talking head are laid by its script and are not cut here - a pause inside a line goes '
+  + 'by reading the line again. Cut after the last line, on your own clips.';
+
+// A line of a talking head that ends after `a` would be cut or moved by a cut starting there.
+function _lineAfter(tl, a) {
+  for (const t of tl.tracks) {
+    for (const c of (t.clips || [])) if ((c.frag != null || (_words(t) && c.voice)) && _end(c) > a + EPS) return true;
+  }
+  return false;
+}
+
 /** Why [a, b) cannot be cut out of `tl`, in words - or '' when it can. */
 export function cutRefused(tl, a, b) {
   if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
   if (!(b - a >= MIN_CUT)) return 'Draw a longer stretch over the wave to cut it out';
-  for (const t of tl.tracks) {
-    for (const c of (t.clips || [])) {
-      // A line of a talking head that ends after the cut's start would be cut or moved.
-      if ((c.frag != null || (_words(t) && c.voice)) && _end(c) > a + EPS) {
-        return 'The lines of the talking head are laid by its script and are not cut here - a pause inside a line goes '
-          + 'by reading the line again. Cut after the last line, on your own clips.';
-      }
-    }
-  }
-  return '';
+  return _lineAfter(tl, a) ? LINES_REFUSED : '';
 }
 
 /**
@@ -56,6 +67,9 @@ export function rippleCut(tl, a, b, opts) {
   if (!(D > 0)) return;
   const newId = (opts && opts.newId) || (() => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
   const isStill = (opts && opts.isStill) || (() => false);
+  // (phase V44) A sound cut here fades out into the seam and in out of it - cut silence's seams; a stretch cut by hand has none.
+  const seam = Math.max(0, +(opts && opts.seamFade) || 0);
+  const fadeAt = (t, c, side) => { if (seam && t.kind === 'audio') c[side] = Math.max(+c[side] || 0, seam); };
   // The right pieces of a pair cut through become a pair of their own - one new pair id for both halves.
   const pairs = new Map();
   const pairOf = (p) => { if (!pairs.has(p)) pairs.set(p, 'p' + newId().replace(/^c/, '')); return pairs.get(p); };
@@ -87,6 +101,8 @@ export function rippleCut(tl, a, b, opts) {
         // A sound's fade belongs to its own end (as a split leaves it): the left keeps the fade in, the right the fade out.
         delete piece.fadeIn;
         delete c.fadeOut;
+        fadeAt(t, c, 'fadeOut');
+        fadeAt(t, piece, 'fadeIn');
         if (c.reversed) {
           // Played backwards, the timeline's first part is the END of the file's window: the right piece keeps its start.
           piece.trimIn = r2(tin);
@@ -105,6 +121,7 @@ export function rippleCut(tl, a, b, opts) {
         const cut = r2(e - a);
         if (c.reversed && !still) c.trimIn = r2(tin + cut * sp);
         c.dur = r2(a - s);
+        fadeAt(t, c, 'fadeOut');
         out.push(c);
         continue;
       }
@@ -113,9 +130,100 @@ export function rippleCut(tl, a, b, opts) {
       if (!c.reversed && !still) c.trimIn = r2(tin + cut * sp);
       c.start = a;
       c.dur = r2(e - b);
+      fadeAt(t, c, 'fadeIn');
       out.push(c);
     }
     t.clips = out;
     if (t.kind === 'audio') t.clips.sort((x, y) => x.start - y.start);
   }
+}
+
+// ── Cut silence (phase V44) ─────────────────────────────────────────────────
+
+/** How long a sound fades into and out of a seam cut silence leaves - the measurement of V33.5: no click, nothing heard. */
+export const SEAM_FADE = 0.015;
+/** A cut shorter than this is not made - a hundredth on the timeline's own grid. */
+export const MIN_SILENCE_CUT = 0.02;
+
+/** Music laid under the film (ы4): a bed on any audio lane but main audio - not cut, not moved. A sound effect is not music. */
+export const isMusicBed = (t, c) => !!t && t.kind === 'audio' && !t.main && !!c && !c.sfx && isBed(c);
+
+/**
+ * The cuts that shorten every pause longer than `keep` to `keep` (ы2): [[a, b], ...] timeline seconds in -> [{ a, b }] out,
+ * in order, on the timeline's hundredths, each at least MIN_SILENCE_CUT.
+ */
+export function cutsOfPauses(pauses, keep) {
+  const k = Math.max(0, +keep || 0);
+  // Onto the timeline's hundredths INWARDS - what is kept is never less than asked (0.01 kept as 0.005 a side would round
+  // to nothing).
+  const up = (v) => Math.ceil(v * 100 - 1e-6) / 100, down = (v) => Math.floor(v * 100 + 1e-6) / 100;
+  const out = [];
+  for (const p of (pauses || [])) {
+    const a = up(+p[0] + k / 2), b = down(+p[1] - k / 2);
+    if (b - a >= MIN_SILENCE_CUT - EPS) out.push({ a, b });
+  }
+  out.sort((x, y) => x.a - y.a);
+  return out.filter((c, i) => !i || c.a >= out[i - 1].b - EPS);
+}
+
+/** Where moment `t` of the timeline is after `cuts` ({ a, b }, in order, apart) are made - inside a cut, at its start. */
+export function mapThrough(cuts, t) {
+  let gone = 0;
+  for (const c of (cuts || [])) {
+    if (t >= c.b) gone += c.b - c.a;
+    else if (t > c.a) return r2(c.a - gone);
+    else break;
+  }
+  return r2(t - gone);
+}
+
+/** Why `cuts` cannot be made in `tl`, in words - or '' when they can. */
+export function silenceRefused(tl, cuts) {
+  if (!tl || !Array.isArray(tl.tracks)) return 'Nothing is open to cut';
+  if (!cuts || !cuts.length) return 'No pause here is longer than that';
+  return _lineAfter(tl, cuts[0].a) ? LINES_REFUSED : '';
+}
+
+/**
+ * Make `cuts` ({ a, b }, in order, apart - cutsOfPauses) in `tl` (a timeline being mutated): every lane as rippleCut makes
+ * one, the seams faded; music under the film left where it is, its tail past the new end taken off; sound effects moved
+ * with the picture under their start. `opts`: rippleCut's (`newId`, `isStill`) and `seamFade` (SEAM_FADE by default).
+ */
+export function silenceCut(tl, cuts, opts) {
+  const list = (cuts || []).filter((c) => c && c.b - c.a >= MIN_SILENCE_CUT - EPS);
+  if (!list.length || !tl || !Array.isArray(tl.tracks)) return;
+  const o = { ...(opts || {}), seamFade: opts && opts.seamFade != null ? opts.seamFade : SEAM_FADE };
+  // Music and sound effects are taken off their lanes while the rest is cut, and put back after.
+  const held = [];
+  for (const t of tl.tracks) {
+    if (t.kind !== 'audio' || !Array.isArray(t.clips)) continue;
+    const keep = [];
+    for (const c of t.clips) {
+      if (isMusicBed(t, c)) held.push({ t, c, music: true });
+      else if (c.sfx) held.push({ t, c, music: false });
+      else keep.push(c);
+    }
+    t.clips = keep;
+  }
+  for (let i = list.length - 1; i >= 0; i--) rippleCut(tl, list[i].a, list[i].b, o);
+  // A sound effect starts where the picture it was laid on now is.
+  for (const h of held) if (!h.music) h.c.start = mapThrough(list, +h.c.start || 0);
+  // The film's end now: the picture and every sound but the music.
+  let end = 0;
+  for (const t of tl.tracks) {
+    if (t.kind !== 'video' && t.kind !== 'audio') continue;
+    for (const c of (t.clips || [])) end = Math.max(end, _end(c));
+  }
+  for (const h of held) if (!h.music) end = Math.max(end, _end(h.c));
+  for (const h of held) {
+    if (h.music) {
+      const s = +h.c.start || 0;
+      if (_end(h.c) > end + EPS) {
+        if (s >= end - EPS) continue;               // wholly past the end: it goes
+        h.c.dur = r2(end - s);
+      }
+    }
+    h.t.clips.push(h.c);
+  }
+  for (const t of tl.tracks) if (t.kind === 'audio' && Array.isArray(t.clips)) t.clips.sort((x, y) => x.start - y.start);
 }

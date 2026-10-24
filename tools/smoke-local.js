@@ -68,6 +68,8 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/vendor/3d/people/female.glb', '/vendor/3d/people/motions-base.glb', '/vendor/3d/furniture/loungeSofa.glb', '/api/3d/scenes',
                  // Merge's timeline: a sound's waveform, the transport, the stretch cut out of every lane (phase V36)
                  '/js/merge-v3/tl-wave.js', '/css/mv3-timeline.css', '/js/merge-v3/tl-cut.js', '/js/captions/cut.js',
+                 // ...and cut silence (phase V44)
+                 '/js/merge-v3/tl-silence.js',
                  // generate audio and sound on the shelves (phases V34.C-F)
                  '/js/merge-v3/audchat.js', '/css/mv3-audio.css', '/js/sound/menu.js', '/js/sound/shelf.js', '/css/sound.css',
                  '/api/audio/catalog', '/api/audio/gens', '/api/audio/music/highlights'];

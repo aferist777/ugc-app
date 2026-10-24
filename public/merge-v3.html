@@ -204,6 +204,9 @@
             <button class="mv3-iconbtn" id="mv3-pv-back" type="button" title="Back 5 seconds">&#9194;&#xFE0E;</button>
             <button class="mv3-iconbtn is-play" id="mv3-pv-play" type="button" title="Play (Space)">&#9654;</button>
             <button class="mv3-iconbtn" id="mv3-pv-fwd" type="button" title="Forward 5 seconds">&#9193;&#xFE0E;</button>
+            <!-- (phase V44) Cut silence: the pauses of main audio in the stretch or the picked clips shortened
+                 (js/merge-v3/tl-silence.js) - live while something is picked, dim otherwise. -->
+            <button class="mv3-iconbtn is-silence is-dim" id="mv3-silence" type="button" title="Cut silence (S)"><svg viewBox="0 0 18 14" width="16" height="13" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="2.6" cy="3.2" r="1.7"/><circle cx="2.6" cy="10.8" r="1.7"/><path d="M4 4.2 9.2 9.4M4 9.8 9.2 4.6"/><path d="M10.4 7c.9-2.6 1.5-2.6 2.2 0s1.3 2.6 2.2 0 1.4-2.6 2.2 0"/></g></svg></button>
           </span>
           <span class="sp"></span>
           <!-- Only ever shown when a save was refused or failed. Silence about a lost edit

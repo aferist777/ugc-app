@@ -44,7 +44,8 @@ import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
 import { paintWaves, onPeaks } from './tl-wave.js';
 // (phase V36, T5) A stretch cut out of every lane, the rest moved left.
-import { cutRefused, rippleCut, MIN_CUT } from './tl-cut.js';
+import { cutRefused, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
+import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -463,6 +464,8 @@ export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb
 function _afterSelB() {
   const n = _sel.size + (_selTrack ? 1 : 0);
   for (const cb of _selSubs) { try { cb(n); } catch { /* a listener's own trouble */ } }
+  // (phase V44) "cut silence" is live while there is something picked to cut in.
+  refreshSilence();
 }
 
 function _paintSel() {
@@ -715,6 +718,7 @@ function _letRangeGo() {
 // words block while it sticks to the floor (phase V41: it is a layer of its own over the lanes, and the stretch cuts its
 // lines too). Its label lives in the ruler, which stays in sight.
 function _paintRange() {
+  refreshSilence();
   const host = _host();
   const inner = host && host.querySelector('.mv3b-inner');
   if (!inner) return;
@@ -764,6 +768,43 @@ export function cutRange() {
   _paintRange();
   if (ok) _seekTo(a);
   return { ok: !!ok };
+}
+
+// ── Cut silence (phase V44) ─────────────────────────────────────────────────
+// The window is js/merge-v3/tl-silence.js; the pick it listens in and the cut are the timeline's.
+
+// What "cut silence" listens in (ы1): the stretch drawn over a wave, or the time the picked clips take (each its own) -
+// null with nothing picked.
+function _silenceSpan() {
+  if (_range) return [[_range.a, _range.b]];
+  if (!_sel.size) return null;
+  const tl = Store.timeline();
+  const out = [];
+  for (const t of ((tl && tl.tracks) || [])) {
+    for (const c of (t.clips || [])) if (_sel.has(c.id) && +c.dur > 0) out.push([+c.start || 0, (+c.start || 0) + (+c.dur || 0)]);
+  }
+  out.sort((x, y) => x[0] - y[0]);
+  const joined = [];
+  for (const p of out) {
+    const last = joined[joined.length - 1];
+    if (last && p[0] <= last[1]) last[1] = Math.max(last[1], p[1]); else joined.push(p);
+  }
+  return joined.length ? joined : null;
+}
+
+// Every pause found, shortened at once on every lane - one step to undo (js/merge-v3/tl-cut.js silenceCut). The playhead
+// stays on the moment it was on; the pick goes (its clips were cut into pieces).
+function _silenceCut(cuts) {
+  const why = silenceRefused(Store.timeline(), cuts);
+  if (why) return { ok: false, why };
+  const at = mapThrough(cuts, _playhead);
+  _clearSel();
+  const ok = Store.mutate(tl => silenceCut(tl, cuts, { newId: _id, isStill }));
+  if (!ok) return { ok: false, why: Store.status() || 'Not cut' };
+  _range = null;
+  _paintRange();
+  _seekTo(at);
+  return { ok: true };
 }
 
 function _beginDrag(e, t, c, el) {
@@ -1899,6 +1940,8 @@ function _build() {
   // (phase V36, T5) A stretch drawn belongs to the timeline it was drawn on.
   if (opened) _range = null;
   _paintRange();
+  // (phase V44) The glow of the pauses "cut silence" found, on the lanes just built.
+  paintSilence();
 }
 
 // The waves again, once per frame however many scroll events come - with a timer behind the frame, for a window that is
@@ -2708,7 +2751,15 @@ export function initTimelineB() {
       if (_range) cutRange();
       else _deleteSelected();
     }
+    // (phase V44, (ы6)) S opens "cut silence" - by the key's place, so "Ы" in the Russian layout is the same key.
+    if (e.code === 'KeyS' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat
+        && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
+      e.preventDefault();
+      openSilence();
+    }
   });
+  // (phase V44) The button right of ⏩ and its window.
+  wireSilence({ span: _silenceSpan, zoom: _zoom, gutter: GUTTER, host: _host, cut: _silenceCut });
 }
 
 
