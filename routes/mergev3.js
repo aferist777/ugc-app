@@ -742,4 +742,51 @@ router.get('/mv3/timeline/:key/source', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── A FILE FROM EXPLORER, LET GO ON THE TIMELINE (phase V41, the owner's (о13), (о13а)) ──────────────────────────────
+// Copied into the library first - a video onto VIDEO -> Uploads with no category, a picture into IMAGES' root, a sound into
+// AUDIO -> Music's root - and never twice (lib/drop-file.js); the page lays what it answers as a tile from the Library.
+//   POST /api/mv3/drop-file/known  { name, size, lastModified } -> { item | null }   asked before sending
+//   POST /api/mv3/drop-file        multipart `file` (+ size, lastModified) -> { item, copied }
+const DROP = require('../lib/drop-file');
+const _dropUpload = require('multer')({
+  storage: require('multer').diskStorage({
+    destination: (_q, _f, cb) => {
+      const { MEDIA } = require('../lib/config');
+      try { fs.mkdirSync(MEDIA.work, { recursive: true }); } catch (e) { /* there */ }
+      cb(null, MEDIA.work);
+    },
+    // The name as the page sends it (a field BEFORE the file, in UTF-8): the part's own file name comes in latin1, and a
+    // Russian name was a row of mojibake on the disk.
+    filename: (q, file, cb) => {
+      const orig = _dropName(q, file);
+      const ext = path.extname(orig).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 8);
+      const stem = require('../lib/names').folderName(path.basename(orig, path.extname(orig)), 'file').slice(0, 80);
+      cb(null, stem + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + ext);
+    },
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+  fileFilter: (q, file, cb) => cb(null, !!DROP.kindOf(_dropName(q, file), file.mimetype)),
+});
+const _dropName = (q, file) => String((q.body && q.body.name) || (file && file.originalname) || '').slice(0, 240);
+
+router.post('/mv3/drop-file/known', (req, res) => {
+  try { res.json({ success: true, item: DROP.known(req.body || {}) }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/mv3/drop-file', _dropUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(415).json({ success: false, error: 'not a video, a picture or a sound' });
+  try {
+    const b = req.body || {};
+    const r = await DROP.take(req.file.path, { name: _dropName(req, req.file), mime: req.file.mimetype,
+      size: +b.size || req.file.size, lastModified: +b.lastModified || 0 });
+    res.json({ success: true, item: r.item, copied: r.copied });
+  } catch (e) {
+    res.status(e.status || 500).json({ success: false, error: e.message });
+  }
+});
+router.use('/mv3/drop-file', (err, _req, res, _next) => {
+  res.status(400).json({ success: false, error: (err && err.message) || 'the file did not arrive' });
+});
+
 module.exports = router;

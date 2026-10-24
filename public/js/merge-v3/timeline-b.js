@@ -297,7 +297,8 @@ function _replace(trackId, clipId, data) {
 
 // `make` ('video' | 'audio', phase V41, the owner's (о12)): let go above the top video lane or below the bottom audio one,
 // the clip goes onto a lane made for it IN THE SAME STEP - a pair of video and its sound, or a sound lane on its own; one
-// undo takes both away. Returns the clip's duration on the timeline, or 0 when nothing was laid.
+// undo takes both away. Returns { dur, lane } - the clip's length on the timeline and the lane it went on - or null when
+// nothing was laid.
 function _drop(trackId, want, data, make) {
   const still = isStill({ src: data.src });
   const known = still ? 0 : (+data.dur || 0);
@@ -318,7 +319,7 @@ function _drop(trackId, want, data, make) {
     // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
     if (!track || track.kind === 'subs' || track.kind === 'text') return;
     if (!_laneTakes(track.kind, data.media)) return;
-    laid = true;
+    laid = track.id;
 
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
     // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
@@ -362,7 +363,7 @@ function _drop(trackId, want, data, make) {
 
   if (!ok) laid = false;
   if (laid && !still && !(known > 0)) _measure([vidId, audId], data.src);
-  return laid ? Math.round(dur * 100) / 100 : 0;
+  return laid ? { dur: Math.round(dur * 100) / 100, lane: laid } : null;
 }
 
 // Deleting is asymmetric for the same reason it is asymmetric for lanes: the picture owns the
@@ -1056,17 +1057,138 @@ function _endDrag(e) {
 
 const _hasClip = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf(DRAG_TYPE) >= 0;
 
+// ── Files from Explorer (phase V41, the owner's (о13), (о13а)) ──────────────
+// Let go on a lane or where a drop makes one (_wireGhost), each file is COPIED INTO THE LIBRARY first - a video onto
+// VIDEO -> Uploads with no category, a picture into IMAGES, a sound into AUDIO -> Music; the same file never twice
+// (lib/drop-file.js, POST /api/mv3/drop-file) - and then laid as a tile from the Library is: at the pointer, the next one
+// straight after it on the same lane. What the lane does not take is said, not laid. Several at once go one after another.
+const _hasFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf('Files') >= 0;
+const _FILE_RE = { video: /\.(mp4|webm|mov|m4v|avi|mkv)$/i, audio: /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i,
+                   image: /\.(jpe?g|png|webp|gif|avif|tiff?|bmp|heic|heif)$/i };
+
+function _typeMedia(type) {
+  const t = String(type || '');
+  return /^video\//.test(t) ? 'video' : /^image\//.test(t) ? 'image' : /^audio\//.test(t) ? 'audio' : '';
+}
+// While the files are dragged only their types can be read: one kind for all of them, or '' (mixed, or not known yet).
+function _fileMedia(dt) {
+  const kinds = new Set(Array.from((dt && dt.items) || []).filter(i => i.kind === 'file').map(i => _typeMedia(i.type)));
+  return kinds.size === 1 ? [...kinds][0] : '';
+}
+function _mediaOfFile(f) {
+  const m = _typeMedia(f && f.type);
+  if (m) return m;
+  const n = String((f && f.name) || '');
+  return Object.keys(_FILE_RE).find(k => _FILE_RE[k].test(n)) || '';
+}
+
+// The file into the library: asked by its name, size and time first (a file dropped before is not sent again), then sent
+// with its progress. Resolves with what a lane lays.
+async function _sendFile(f, onProgress) {
+  const meta = { name: f.name, size: f.size, lastModified: f.lastModified || 0 };
+  try {
+    const k = await fetch('/api/mv3/drop-file/known', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meta) }).then(r => r.json());
+    if (k && k.success && k.item) return k.item;
+  } catch { /* sent the long way */ }
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    // Before the file: the server names the copy by it (a part's own name arrives in latin1).
+    fd.append('name', f.name);
+    fd.append('size', String(f.size));
+    fd.append('lastModified', String(f.lastModified || 0));
+    fd.append('file', f, f.name);
+    const x = new XMLHttpRequest();
+    x.open('POST', '/api/mv3/drop-file');
+    x.responseType = 'json';
+    x.upload.onprogress = (ev) => { if (ev.lengthComputable && onProgress) onProgress(ev.loaded / ev.total); };
+    x.onload = () => {
+      const r = x.response;
+      if (r && r.success && r.item) resolve(r.item);
+      else reject(new Error((r && r.error) || ('refused (' + x.status + ')')));
+    };
+    x.onerror = () => reject(new Error('the file did not reach the app'));
+    x.send(fd);
+  });
+}
+
+// One line over the timeline's top right while files go in, and what came of it for a few seconds after.
+let _dropNote = null, _dropNoteT = 0;
+function _dropSay(text, bad, stay) {
+  const host = _host();
+  if (!host) return;
+  clearTimeout(_dropNoteT);
+  if (!text) { if (_dropNote) _dropNote.remove(); _dropNote = null; return; }
+  if (!_dropNote) { _dropNote = document.createElement('div'); _dropNote.className = 'mv3b-dropnote'; document.body.appendChild(_dropNote); }
+  const r = host.getBoundingClientRect();
+  _dropNote.style.top = Math.round(r.top + 22) + 'px';
+  _dropNote.style.right = Math.round(window.innerWidth - r.right + 8) + 'px';
+  _dropNote.textContent = text;
+  _dropNote.classList.toggle('is-bad', !!bad);
+  if (!stay) _dropNoteT = setTimeout(() => _dropSay(''), bad ? 7000 : 3000);
+}
+
+let _dropping = false;
+async function _dropFiles(files, place) {
+  const list = (files || []).filter(f => f && _mediaOfFile(f));
+  const skipped = (files || []).length - list.length;
+  if (!list.length) { _dropSay('Only videos, pictures and sounds go on the timeline', true); return; }
+  if (_dropping) { _dropSay('Files are still going in - wait for them, then drop these', true); return; }
+  _dropping = true;
+  let trackId = place.trackId || '', make = place.make || '', at = Math.max(0, +place.at || 0);
+  let laid = 0, copied = 0;
+  const bad = [];
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      const media = _mediaOfFile(f);
+      const lane = make || (((Store.timeline() || {}).tracks || []).find(x => x.id === trackId) || {}).kind;
+      if (!_laneTakes(lane, media)) {
+        bad.push(f.name + ' - ' + ({ video: 'a video', image: 'a picture', audio: 'a sound' }[media]) + ' does not go on '
+          + (lane === 'audio' ? 'an audio' : 'a ' + (lane || '')) + ' lane');
+        continue;
+      }
+      const head = (list.length > 1 ? (i + 1) + '/' + list.length + ' · ' : '') + f.name;
+      _dropSay('into the library · ' + head, false, true);
+      let item = null;
+      try { item = await _sendFile(f, (p) => _dropSay('into the library ' + Math.round(p * 100) + '% · ' + head, false, true)); }
+      catch (err) { bad.push(f.name + ' - ' + ((err && err.message) || 'not taken')); continue; }
+      copied++;
+      const r = _drop(trackId, at, item, make);
+      if (!r) { bad.push(f.name + ' - ' + (Store.status() || 'not laid')); continue; }
+      laid++;
+      // The next one straight after it, on the same lane - the one just made, for a drop that made one.
+      trackId = r.lane; make = ''; at = _r2(at + r.dur);
+    }
+  } finally {
+    _dropping = false;
+  }
+  if (copied) window.dispatchEvent(new CustomEvent('mv3:lib-reload'));
+  if (skipped) bad.push(skipped + (skipped === 1 ? ' file is' : ' files are') + ' not a video, a picture or a sound');
+  if (bad.length) _dropSay((laid ? laid + ' laid · ' : '') + bad.join(' · '), true);
+  else _dropSay(laid === 1 ? 'Laid, and kept in the library' : laid + ' laid, and kept in the library');
+}
+
 function _wireLane(lane, t) {
   if (t.kind === 'subs' || t.kind === 'text') return;
   lane.addEventListener('dragover', (e) => {
-    if (!_hasClip(e)) return;
-    if (!_laneTakes(t.kind, _mediaOfDrag(e.dataTransfer))) { e.dataTransfer.dropEffect = 'none'; return; }
+    // (phase V41) Files from Explorer too - what they are is readable while they are dragged (_fileMedia).
+    const files = !_hasClip(e) && _hasFiles(e);
+    if (!_hasClip(e) && !files) return;
+    if (!_laneTakes(t.kind, files ? _fileMedia(e.dataTransfer) : _mediaOfDrag(e.dataTransfer))) { e.dataTransfer.dropEffect = 'none'; return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     lane.classList.add('is-drop');
   });
   lane.addEventListener('dragleave', () => lane.classList.remove('is-drop'));
   lane.addEventListener('drop', (e) => {
+    if (!_hasClip(e) && _hasFiles(e)) {
+      e.preventDefault();
+      lane.classList.remove('is-drop');
+      const r = lane.getBoundingClientRect();
+      _dropFiles(Array.from(e.dataTransfer.files || []), { trackId: t.id, at: (e.clientX - r.left) / _zoom() });
+      return;
+    }
     if (!_hasClip(e)) return;
     e.preventDefault();
     lane.classList.remove('is-drop');
@@ -1186,8 +1308,9 @@ function _hideGhost() {
 
 function _wireGhost(host) {
   host.addEventListener('dragover', (e) => {
-    if (!_on || locked() || !_hasClip(e)) return;
-    const media = _mediaOfDrag(e.dataTransfer);
+    const clip = _hasClip(e), files = !clip && _hasFiles(e);
+    if (!_on || locked() || (!clip && !files)) return;
+    const media = clip ? _mediaOfDrag(e.dataTransfer) : _fileMedia(e.dataTransfer);
     const side = _sideAt(e);
     const tracks = (Store.timeline() || {}).tracks || [];
     if (!side || !_laneTakes(side, media) || _count(tracks, side) >= MAX_PER_SIDE) {
@@ -1203,7 +1326,13 @@ function _wireGhost(host) {
   host.addEventListener('drop', (e) => {
     const g = _ghost;
     _hideGhost();
-    if (!g || !_on || _onLane(e.target) || !_hasClip(e)) return;
+    if (!g || !_on || _onLane(e.target)) return;
+    if (!_hasClip(e) && _hasFiles(e)) {
+      e.preventDefault();
+      _dropFiles(Array.from(e.dataTransfer.files || []), { make: g.side, at: g.at });
+      return;
+    }
+    if (!_hasClip(e)) return;
     e.preventDefault();
     let data = null;
     try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { return; }
