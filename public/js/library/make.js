@@ -92,10 +92,9 @@ const HTML = `
             <span>Hook <em>— the first line said out loud</em></span>
             <span class="sp"></span>
             <span class="mk-go-slot" id="mk-go-slot-hook">
-              <button class="lib-btn primary" type="button" id="mk-go">Generate script</button>
+              <button class="lib-btn primary" type="button" id="mk-go">Write hooks</button>
             </span>
           </div>
-          <textarea id="mk-hook" rows="3" placeholder="Write it yourself, or let the model suggest five."></textarea>
           <div class="mk-hooks" id="mk-hook-list"></div>
         </div>
         <div class="mk-stage" id="mk-save-stage" hidden>
@@ -151,9 +150,7 @@ function _build() {
   $('mk-newhooks').addEventListener('click', _newHooks);
   $('mk-save').addEventListener('click', _saveScript);
   $('mk-discard').addEventListener('click', _discardDraft);
-  for (const id of ['mk-topic', 'mk-title', 'mk-hook', 'mk-vertical', 'mk-product', 'mk-ad']) $(id).addEventListener('input', _queueDraft);
-  // A hook typed by hand while five wait to be picked is a choice too: the chain goes on from it.
-  $('mk-hook').addEventListener('input', () => { if (_stage === 'pick' && $('mk-hook').value.trim()) _setStage('idle'); });
+  for (const id of ['mk-topic', 'mk-title', 'mk-vertical', 'mk-product', 'mk-ad']) $(id).addEventListener('input', _queueDraft);
   $('mk-gender').addEventListener('change', _queueDraft);
 
   // The narrators window says when a narrator was made, deleted or read again (js/library/narrators.js);
@@ -1100,9 +1097,9 @@ function _paintGo() {
   const written = !!(_gen && _gen.paragraphs && _gen.paragraphs.length);
   const hookOpen = !written || _stage === 'hooks' || _stage === 'pick';
   const map = {
-    idle: [written ? 'Generate again' : 'Generate script', false],
+    idle: [written ? 'Generate again' : 'Write hooks', false],
     hooks: ['Writing hooks…', true],
-    pick: ['Pick a hook', true],
+    pick: ['Write new hooks', false],
     script: ['Writing the script…', true],
     working: ['Working…', true],
   };
@@ -1122,14 +1119,15 @@ function _paintGo() {
   $('mk-newhooks').disabled = busy;
   $('mk-save').disabled = busy;
   $('mk-discard').hidden = !(_gen && _gen.draftId);
-  document.querySelectorAll('#mk-scenes .mk-scene-rw').forEach(b => { b.disabled = busy; });
+  document.querySelectorAll('#mk-scenes .mk-scene-rw, #mk-hook-list .mk-hook-use').forEach(b => { b.disabled = busy; });
   if (busy) _hideFragBtn();
 }
 function _setStage(s) { _stage = s; _paintGo(); }
 const _busy = () => _stage === 'hooks' || _stage === 'script' || _stage === 'working';
+// (V38.3) Hooks on show wait to be used - else the form is idle.
+const _pickOrIdle = () => ($('mk-hook-list').querySelector('.mk-hook') ? 'pick' : 'idle');
 
 function _clearForm() {
-  $('mk-hook').value = '';
   $('mk-hook-list').textContent = '';
   $('mk-scenes').textContent = '';
   $('mk-save-status').textContent = '';
@@ -1145,7 +1143,7 @@ function _payload() {
     sourceId: _gen.sourceId, sourceTitle: _gen.sourceTitle || '',
     topicId: _gen.topicId, topicTitle: _gen.topicTitle || '',
     topic: $('mk-topic').value,
-    hook: $('mk-hook').value,
+    hook: _gen.hook || '',
     hooks: _gen.hooks || [],
     paragraphs: _gen.paragraphs || [],
     title: $('mk-title').value,
@@ -1185,7 +1183,7 @@ async function _saveDraft(o) {
 }
 
 function _hasContent() {
-  return !!(($('mk-topic') && $('mk-topic').value.trim()) || ($('mk-hook') && $('mk-hook').value.trim())
+  return !!(($('mk-topic') && $('mk-topic').value.trim()) || (_gen && _gen.hook)
     || ($('mk-title') && $('mk-title').value.trim()) || (_gen && ((_gen.hooks || []).length || (_gen.paragraphs || []).length)));
 }
 
@@ -1247,6 +1245,8 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
     topicTitle: full ? full.topicTitle : (topic ? topic.title : ''),
     topicSpan: topic ? `${J.clock(topic.start)}–${J.clock(topic.end)}` : '',
     hooks: (full && full.hooks) || [],
+    // (V38.3) The hook the script is written from: one of the five, used (and maybe edited) - there is no field of one's own.
+    hook: (full && full.hook) || '',
     paragraphs: (full && full.paragraphs) || [],
     // (V38, block D4) The shelf's scenario this rewrites, and whether the rewrite in its narrator's voice has landed.
     from: (full && full.from) || null,
@@ -1262,11 +1262,9 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   _showForm();
   try { await _buildControls(full ? full.settings : null); }
   catch (e) { J.sayJob($('mk-job'), 'the model list could not be read: ' + e.message, true); }
-  if (full && full.hook) $('mk-hook').value = full.hook;
-  const needsPick = _gen.hooks.length && !$('mk-hook').value.trim();
-  if (needsPick) _renderHooks(_gen.hooks);
+  _showHooks();
   if (_gen.paragraphs.length) _renderScenes();
-  _setStage(needsPick ? 'pick' : 'idle');
+  _setStage(_pickOrIdle());
   _reattachStage();
   // (V38.1) A shelf's scenario whose rewrite did not land (paid once - never asked again by itself): said, with the way.
   const sum = _drafts.find(x => String(x.id) === String(_gen.draftId));
@@ -1330,23 +1328,46 @@ function _reattachStage() {
 }
 
 // ── The chain: hooks, then the script ───────────────────────────────────────
+// (V38.3, the owner 2026-10-24: "поле для своего хука удаляем. делаем в самих хуках редактирование. тип хука пишем в правой
+// стороне строки хука. с левой стороны кнопка use hook") A row per hook: "use hook" on the left writes the script from it,
+// its text is edited in place (kept in the draft), its kind on the right. The one used is marked, and stays until the
+// script lands - a script that did not come is one press away again.
 function _renderHooks(hooks) {
   const box = $('mk-hook-list');
   box.textContent = '';
-  for (const h of hooks) {
-    const b = el('button', 'mk-hook');
-    b.type = 'button';
-    b.appendChild(el('span', 'mk-hook-k', h.kind));
-    b.appendChild(el('span', 'mk-hook-t', h.text));
-    // Picking a hook runs straight on into the script. That is the whole point of one button.
-    b.addEventListener('click', async () => {
-      $('mk-hook').value = h.text;
-      box.textContent = '';
+  hooks.forEach((h, i) => {
+    const row = el('div', 'mk-hook' + (_gen.hook && h.text.trim() === _gen.hook.trim() ? ' used' : ''));
+    const use = el('button', 'lib-btn mk-hook-use', 'use hook');
+    use.type = 'button';
+    use.title = 'Write the script from this hook, as it reads here';
+    use.disabled = _busy();
+    const ta = el('textarea', 'mk-hook-t');
+    ta.rows = 1;
+    ta.spellcheck = false;
+    ta.value = h.text;
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    ta.addEventListener('input', () => { _gen.hooks[i] = { ..._gen.hooks[i], text: ta.value }; fit(); _queueDraft(); });
+    setTimeout(fit, 0);
+    use.addEventListener('click', async () => {
+      const text = ta.value.trim();
+      if (!text || _busy()) return;
+      _gen.hooks[i] = { ..._gen.hooks[i], text };
+      _gen.hook = text;
+      box.querySelectorAll('.mk-hook').forEach(r => r.classList.toggle('used', r === row));
       await _saveDraft();
       _runScript();
     });
-    box.appendChild(b);
-  }
+    row.append(use, ta, el('span', 'mk-hook-k', h.kind));
+    box.appendChild(row);
+  });
+}
+
+// The hooks are shown while there is no script yet (a draft's five, or the hook it was written from). A hook kept from
+// before V38.3 that was typed by hand, with no five beside it, is shown as one of its own.
+function _showHooks() {
+  if (_gen.paragraphs.length) { $('mk-hook-list').textContent = ''; return; }
+  if (!_gen.hooks.length && _gen.hook) _gen.hooks = [{ kind: 'yours', text: _gen.hook }];
+  if (_gen.hooks.length) _renderHooks(_gen.hooks);
 }
 
 const _TIMING = {
@@ -1412,14 +1433,14 @@ async function _followStage(jobId, run, gen, onResult) {
         if ((_gen.hooks || []).length) _renderHooks(_gen.hooks);
         if ((_gen.paragraphs || []).length) _renderScenes();
         // A stage this form did not start has no caller to set the stage back.
-        if (_gen !== gen || !onResult) _setStage((_gen.hooks || []).length && !$('mk-hook').value.trim() ? 'pick' : 'idle');
+        if (_gen !== gen || !onResult) _setStage(_pickOrIdle());
       }
       return 'cancelled';
     }
     const last = rec.rows.length - 1;
     rec.rows.forEach((r, i) => (i === last && here() ? r.fail(e.message) : r.detach()));
     // A stage nobody started from this form has no caller to put the buttons back.
-    if (here() && (_gen !== gen || !onResult)) _setStage('idle');
+    if (here() && (_gen !== gen || !onResult)) _setStage(_pickOrIdle());
     return false;
   } finally {
     if (_following.get(draftId) === rec) _following.delete(draftId);
@@ -1437,10 +1458,11 @@ async function _landInto(what, r) {
   const res = r || {};
   if (what === 'hooks' && Array.isArray(res.hooks)) {
     _gen.hooks = res.hooks;
-    $('mk-hook').value = '';
+    _gen.hook = '';
     _renderHooks(_gen.hooks);
   } else if (what === 'script' && Array.isArray(res.paragraphs)) {
     _gen.paragraphs = res.paragraphs;
+    $('mk-hook-list').textContent = '';
     if (!$('mk-title').value.trim()) $('mk-title').value = res.title || '';
     _renderScenes();
   } else if (what === 'voice' && Array.isArray(res.paragraphs)) {
@@ -1453,7 +1475,7 @@ async function _landInto(what, r) {
     _renderScenes();
   } else { await _reloadDraftInto(); return; }
   await _saveDraft();
-  _setStage(_gen.hooks.length && !$('mk-hook').value.trim() ? 'pick' : 'idle');
+  _setStage(_pickOrIdle());
 }
 
 // A countdown row for a followed stage, in the form as it is now. Its timing comes from what the
@@ -1497,51 +1519,56 @@ async function _reloadDraftInto() {
     _gen.hooks = d.hooks || [];
     _gen.paragraphs = d.paragraphs || [];
     _gen.foreign = !!d.foreign;
-    if (d.hook) $('mk-hook').value = d.hook;
+    _gen.hook = d.hook || '';
     if (d.title && !$('mk-title').value.trim()) $('mk-title').value = d.title;
-    const needsPick = _gen.hooks.length && !$('mk-hook').value.trim();
-    if (needsPick) _renderHooks(_gen.hooks);
+    _showHooks();
     if (_gen.paragraphs.length) _renderScenes();
-    _setStage(needsPick ? 'pick' : 'idle');
+    _setStage(_pickOrIdle());
   } catch (e) { _setStage('idle'); }
 }
 
-// One press: five hooks, then - once one is chosen - the script. A hook already written skips
-// straight to the script, because there is nothing left to suggest.
+// The chain's one button: five hooks ("Write hooks"; with five on show, "Write new hooks"), and the script is written
+// from the one used. With a script there, "Generate again" writes it again from the same hook.
 async function _runGo() {
   if (!_controlsReady()) { J.sayJob($('mk-job'), 'the model list is not loaded yet', true); return; }
+  if (_stage !== 'pick' && _gen.paragraphs.length && _gen.hook) { _runScript(); return; }
+  _writeHooks();
+}
+
+async function _writeHooks() {
   const topic = $('mk-topic').value.trim();
   if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); return; }
-  if ($('mk-hook').value.trim()) { _runScript(); return; }
   const gen = _gen;
   _setStage('hooks');
   $('mk-hook-list').textContent = '';
   const o = _opts();
   const ok = await _runStage('/api/scriptgen/hooks', { ...o, topic }, _TIMING.hooks(o), async (r) => {
     _gen.hooks = r.hooks || [];
+    _gen.hook = '';
     _renderHooks(_gen.hooks);
     await _saveDraft();
   });
-  if (_gen === gen) _setStage(ok && _gen.hooks.length && !$('mk-hook').value.trim() ? 'pick' : 'idle');
+  if (_gen === gen) _setStage(ok ? _pickOrIdle() : (_gen.hooks.length ? (_renderHooks(_gen.hooks), 'pick') : 'idle'));
 }
 
+// "New hooks" beside a script: five more to choose from - the script stays until one of them is used.
 function _newHooks() {
   if (!_gen || _busy()) return;
-  $('mk-hook').value = '';
-  _queueDraft();                                  // the cleared hook is saved before the paid step
-  _runGo();
+  _writeHooks();
 }
 
 async function _runScript() {
   const topic = $('mk-topic').value.trim();
-  const hook = $('mk-hook').value.trim();
-  if (!topic || !hook) { _setStage('idle'); return; }
+  const hook = String(_gen.hook || '').trim();
+  if (!topic) { J.sayJob($('mk-job'), 'Describe the topic first.', true); _setStage(_pickOrIdle()); return; }
+  if (!hook) { _setStage(_pickOrIdle()); return; }
   const gen = _gen;
   _setStage('script');
   const o = _opts();
   const body = { ...o, topic, hook };
   await _runStage('/api/scriptgen/script', body, _TIMING.script(o), async (r) => {
     _gen.paragraphs = r.paragraphs || [];
+    $('mk-hook-list').textContent = '';
     if (!$('mk-title').value.trim()) $('mk-title').value = r.title || topic.slice(0, 60);
     _renderScenes();
     await _saveDraft();
@@ -1549,7 +1576,8 @@ async function _runScript() {
       J.sayJob($('mk-job'), `Note: ${r.paragraphs.length} paragraphs came back, ${r.asked} were asked for.`);
     }
   });
-  if (_gen === gen) _setStage('idle');
+  // A script that did not come leaves its hooks on show - the one used is a press away again.
+  if (_gen === gen) _setStage(_pickOrIdle());
 }
 
 // A fragment's answer into the paragraph as it is NOW: in place of the words it was written for; when those are gone
@@ -1579,7 +1607,7 @@ function _renderScenes() {
     ta.addEventListener('input', () => {
       _gen.paragraphs[i] = ta.value;
       // Editing the first paragraph edits the hook: "Generate again" writes from what is on screen.
-      if (i === 0) $('mk-hook').value = ta.value;
+      if (i === 0) _gen.hook = ta.value;
       secs.textContent = J.spokenSeconds(ta.value) + 's';
       fit();
       _queueDraft();
@@ -1604,7 +1632,7 @@ function _renderScenes() {
 function _landVoice(r) {
   if (!r || !r.voice) return;
   _gen.foreign = !r.applied;
-  if (r.applied && r.paragraphs && r.paragraphs[0]) $('mk-hook').value = r.paragraphs[0];
+  if (r.applied && r.paragraphs && r.paragraphs[0]) _gen.hook = r.paragraphs[0];
 }
 
 // `fragment` (V38, the owner's (д13)): { text, start } - only those words of the paragraph are written again.

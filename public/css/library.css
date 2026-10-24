@@ -728,32 +728,36 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-stage-h em{ font-style:normal; font-weight:400; color:var(--muted); }
 /* The one generate button lives in one of these two, never in both. */
 .mk-go-slot{ display:inline-flex; }
-#mk-hook{
-  font:12px/1.5 var(--font); color:var(--ink); resize:vertical;
-  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
-}
-#mk-hook:focus{ outline:none; border-color:var(--primary); }
 /* (V38.1) What to advertise, under the form's controls - two lines, grows as typed. */
 .mk-ad textarea{
   font:12px/1.45 var(--font); color:var(--ink); resize:vertical; min-height:44px;
   background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 9px;
 }
 .mk-ad textarea:focus{ outline:none; border-color:var(--primary); }
-/* Five candidates, each labelled with the KIND it is - that is what they differ in. */
+/* Five candidates, each labelled with the KIND it is - that is what they differ in. (V38.3) A row: "use hook" on the
+   left, the text edited in place, the kind on the right; the one used is gold. */
 .mk-hooks{ display:flex; flex-direction:column; gap:4px; }
 .mk-hook{
-  display:flex; gap:8px; align-items:flex-start; width:100%; text-align:left;
-  padding:7px 9px; cursor:pointer;
+  display:flex; gap:8px; align-items:flex-start; width:100%;
+  padding:6px 8px;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
   transition:.12s var(--ease);
 }
-.mk-hook:hover{ border-color:var(--primary); }
+.mk-hook:hover{ border-color:var(--border); }
+.mk-hook.used{ border-color:var(--gold); }
+.mk-hook-use{ flex:0 0 auto; padding:2px 9px; font-size:10.5px; }
+.mk-hook-t{
+  flex:1 1 auto; min-width:0; resize:none; overflow:hidden;
+  font:11.5px/1.5 var(--font); color:var(--ink);
+  background:transparent; border:1px solid transparent; border-radius:var(--r-xs); padding:2px 5px;
+}
+.mk-hook-t:hover{ border-color:var(--border); }
+.mk-hook-t:focus{ outline:none; border-color:var(--primary); background:var(--bg); }
 .mk-hook-k{
-  flex:0 0 auto; padding:1px 6px; border-radius:var(--pill);
+  flex:0 0 auto; margin-top:3px; padding:1px 6px; border-radius:var(--pill);
   background:var(--primary-soft); color:var(--primary);
   font-size:9px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
 }
-.mk-hook-t{ font-size:11.5px; line-height:1.5; color:var(--ink); }
 .mk-save-row{ display:flex; flex-wrap:wrap; gap:8px; }
 .mk-save-row .mk-field{ flex:1 1 150px; }
 .mk-save-row input, .mk-save-row select{ height:28px; }
