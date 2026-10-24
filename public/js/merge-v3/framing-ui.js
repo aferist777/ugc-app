@@ -5,10 +5,16 @@
    "Follow the face" and "two faces" need the clip's faces: they are counted by the app's hidden window (lib/faces.js -
    kept, so a film is counted once) and the path is worked out HERE, on the page, by the same module the render reads
    (public/js/framing/path.js plan). While they are counted the panel says how far; with no window to count (the app
-   run as a bare server) it says so and nothing changes. The middle and the whole frame need only the film's size. */
+   run as a bare server) it says so and nothing changes. The middle and the whole frame need only the film's size.
+
+   (phase V40, the owner's (о7)) A frame that comes out split into two bands takes the subtitles with it: the record is
+   written and the split frame's rule run over the subtitle lane IN ONE STEP (one Ctrl+Z) - a page that is on the bands for
+   more than half its time goes to the middle, one the rule put there and no longer on them goes back
+   (public/js/captions/split.js). */
 
 import * as Store from './store.js';
-import { plan } from '../framing/path.js';
+import { plan, normalize } from '../framing/path.js';
+import { placeBySplit } from '../captions/split.js';
 
 export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['center', 'middle'],
                          ['whole', 'whole + blur'], ['bands', 'two faces']];
@@ -47,19 +53,34 @@ export const failed = (c) => !!(_wait.get(c.id) && _wait.get(c.id).error);
 /** Called by the panel each time it is drawn: how to tell it the note changed. */
 export function onNote(fn) { _tick = fn; }
 
+// The clip's frame written - or taken off (null) - and the subtitles placed for it, as ONE step to undo (phase V40).
+function _setFrame(c, value) {
+  const f = value ? normalize(value) : null;
+  Store.mutate((tl) => {
+    for (const t of (tl.tracks || [])) {
+      for (const x of (t.clips || [])) {
+        if (!x || x.id !== c.id) continue;
+        if (f) x.frame = f; else delete x.frame;
+      }
+    }
+    placeBySplit(tl);
+  });
+}
+
 /**
- * The switch moved to `mode` on clip `c`; `set(key, value)` writes the clip (one Ctrl+Z step). Faces counted if they are
- * needed - the panel follows through noteOf().
+ * The switch moved to `mode` on clip `c` - written as one Ctrl+Z step with the subtitles' places (_setFrame). Faces counted
+ * if they are needed - the panel follows through noteOf(). (Since V40 the inspector's writer of the clip, its third
+ * argument, is not used: the frame and the subtitles go in one step.)
  */
-export async function choose(c, mode, set) {
+export async function choose(c, mode) {
   _wait.delete(c.id);
   const shift = c.frame ? (+c.frame.shift || 0) : 0;
-  if (mode === 'fixed') { set('frame', null); _say(); return; }
+  if (mode === 'fixed') { _setFrame(c, null); _say(); return; }
   if (mode === 'center' || mode === 'whole') {
     const p = await _json('/api/media/probe?src=' + encodeURIComponent(c.src));
     if (!p || !(p.w > 0)) { _wait.set(c.id, { mode, error: 'the film could not be read' }); _say(); return; }
     const side = p.rotate === 90 || p.rotate === 270;
-    set('frame', { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [] });
+    _setFrame(c, { v: 1, mode, shift, src: { w: side ? p.h : p.w, h: side ? p.w : p.h }, shots: [] });
     _say();
     return;
   }
@@ -75,7 +96,7 @@ export async function choose(c, mode, set) {
     if (_wait.get(c.id) !== mine) return;
     if (st && st.state === 'ready' && st.faces) {
       _wait.delete(c.id);
-      set('frame', plan(st.faces, { aspect: aspectOf(), mode, shift }));
+      _setFrame(c, plan(st.faces, { aspect: aspectOf(), mode, shift }));
       _say();
       return;
     }
