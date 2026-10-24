@@ -149,6 +149,92 @@ function _srcFor(src, rev) {
 // downloads, and one element cannot hold both.
 const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : (_shooting === 'orig' ? 'orig' : _quality()) + (rev ? '|rev' : ''));
 
+// TWO ELEMENTS FOR A FILE CUT INTO PIECES (phase V44; measured in its block 0: one element per file followed a cut only once
+// it had drifted past 0.25 s for the sound, 0.35 s for the picture - a pause cut out was heard and seen as if still there - and
+// every correction while playing left the sound silent and the picture still for ~0.2 s). Pieces of one file laid end to end
+// on a lane with a jump in the file between them (cut silence, a stretch cut by hand) take turns between two elements: while
+// one plays its piece, the other waits paused on the first frame of the next (_cue), and at the seam the waiting one simply
+// starts. A piece that plays on in its file from where the one before it ended (a split) keeps the same element. A piece
+// after a very short one (a word between two pauses) would find the other element free only a moment before it starts -
+// too late to be put in place (~0.2 s a seek, measured) - so a THIRD element takes it when that one has had longer to wait.
+const SEAM = 0.011;               // two clips this close meet
+const LOOK = 3;                   // s: the next piece is made ready this long before it starts
+const READY = 0.6;                // s: how long an element should have to be put in place before its piece
+let _slotTl = null;
+let _slotMap = new Map();         // clip id -> 0 | 1 | 2
+function _slots(tl) {
+  const out = new Map();
+  for (const tr of ((tl && tl.tracks) || [])) {
+    if (!tr || (tr.kind !== 'video' && tr.kind !== 'audio')) continue;
+    const cs = (tr.clips || []).filter((c) => c && c.src).slice().sort((a, b) => (+a.start) - (+b.start));
+    let prev = null;
+    let free = [-Infinity, -Infinity, -Infinity];     // when each element of the run is let go of
+    for (const c of cs) {
+      const s = +c.start;
+      let slot = 0;
+      if (prev && prev.src === c.src && !!prev.reversed === !!c.reversed && Math.abs((+prev.start) + (+prev.dur) - s) < SEAM) {
+        const sp = +prev.speed || 1;
+        // A split leaves the file's time running on to the hundredth; cut silence takes from 0.02 s out.
+        const goesOn = !c.reversed && (+c.speed || 1) === sp
+          && Math.abs((+prev.trimIn || 0) + (+prev.dur) * sp - (+c.trimIn || 0)) < 0.006;
+        const was = out.get(prev.id) || 0;
+        if (goesOn) slot = was;
+        else {
+          // The other of the two when it has been free long enough; else the third, when it has been free longer.
+          const other = was === 1 ? 0 : 1;
+          slot = other;
+          if (free[other] > s - READY) {
+            const third = [0, 1, 2].find((k) => k !== was && k !== other);
+            if (free[third] < free[other]) slot = third;
+          }
+        }
+      } else free = [-Infinity, -Infinity, -Infinity];
+      out.set(c.id, slot);
+      free[slot] = s + (+c.dur || 0);
+      prev = c;
+    }
+  }
+  return out;
+}
+function _slotOf(c) {
+  const tl = Store.timeline();
+  if (tl !== _slotTl) { _slotTl = tl; _slotMap = _slots(tl); }
+  return _slotMap.get(c.id) || 0;
+}
+const _slotKey = (slot) => (slot ? '#' + (slot + 1) : '');
+const _keyOf = (c) => _key(c.src, _rev(c)) + _slotKey(_slotOf(c));
+
+// The clips of a lane that start after `t` and within LOOK of it, the nearest first.
+function _nextOn(track, t) {
+  const out = [];
+  for (const c of (track.clips || [])) {
+    const s = +c.start;
+    if (c.src && s > t + 0.0001 && s <= t + LOOK) out.push(c);
+  }
+  return out.sort((a, b) => (+a.start) - (+b.start));
+}
+
+// An element made ready for clip `c` before it starts: paused, on the clip's first moment.
+function _cue(el, c) {
+  if (el.seeking) return;
+  if (!el.paused) { try { el.pause(); } catch (e) {} }
+  const want = _srcTime(c, +c.start, el.duration);
+  if (!isFinite(want)) return;
+  if (el.__fresh !== false || Math.abs((el.currentTime || 0) - want) > 0.02) {
+    try { el.currentTime = Math.max(0, want); } catch (e) {}
+  }
+  el.__fresh = false;
+}
+
+// The clip an element plays now is not the one it played a moment ago: it goes where it should AT ONCE (a jump of a tenth
+// is a cut, not a drift), not when it has drifted past the tolerance. Not tighter than JUMP: an element that has just
+// started runs ~0.05 s behind the clock (measured, V44 block 3) and a tighter rule would seek it for nothing.
+const JUMP = 0.1;
+function _jumpOf(el, c) {
+  if (el.__live !== c.id) { el.__live = c.id; el.__jump = true; }
+  return !!el.__jump;
+}
+
 // A PICTURE THAT HAS ARRIVED ASKS TO BE DRAWN (phase L7, the owner 2026-09-23). An element is made
 // by the paint that first needs it - the playhead has just landed on its clip - and that paint, and
 // the one a frame later, both find nothing decoded: the file is not even open yet. Nothing looked
@@ -182,8 +268,8 @@ function _posterOf(c) {
   return im.naturalWidth ? im : null;
 }
 
-function _el(src, rev) {
-  const key = _key(src, rev);
+function _el(src, rev, slot) {
+  const key = _key(src, rev) + _slotKey(slot);
   if (_media.has(key)) return _media.get(key);
   let el;
   if (isStill({ src })) {
@@ -529,14 +615,19 @@ function _paint() {
   _ctx.fillRect(0, 0, W, H);
 
   const tl = Store.timeline();
-  const alive = new Set();
+  const alive = new Set();        // the elements kept (the rest are let go of)
+  const shown = new Set();        // (phase V44) the elements on screen this frame
   const gaps = [];
   _liveVideo = [];
   for (const c of _layers(tl).flatMap(track => _clipsAt(track, _at))) {
     if (!c.src) continue;
     const still = isStill({ src: c.src });
-    alive.add(_key(c.src, _rev(c)));
-    const el = _el(c.src, _rev(c));
+    alive.add(_keyOf(c));
+    shown.add(_keyOf(c));
+    // (phase V44) Its twins too, while the file is on screen: a piece longer than LOOK would otherwise let them go, and the
+    // next piece would open the file again from nothing.
+    for (const k of [0, 1, 2]) alive.add(_key(c.src, _rev(c)) + _slotKey(k));
+    const el = _el(c.src, _rev(c), _slotOf(c));
 
     if (!still) {
       const want = _srcTime(c, _at, el.duration);
@@ -557,11 +648,15 @@ function _paint() {
         // it never gets the chance to do.
         el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
         if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
-        if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.35)) {
+        // (phase V44) A new piece for this element: put right at once (_jumpOf); after that, only a real drift.
+        const jump = _jumpOf(el, c);
+        if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (jump ? JUMP : 0.35))) {
           try { el.currentTime = Math.max(0, want); } catch (e) {}
           el.__fresh = false;
-        }
+          el.__jump = false;
+        } else if (!busy) el.__jump = false;
       } else {
+        el.__live = c.id;
         if (!el.paused) el.pause();
         if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.08)) {
           try { el.currentTime = Math.max(0, want); } catch (e) {}
@@ -578,6 +673,21 @@ function _paint() {
     } else {
       if (!el.naturalWidth) { missing++; continue; }
       _show(el, el.naturalWidth, el.naturalHeight, c, gaps);
+    }
+  }
+  // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
+  // frame, the nearest piece first; an element on screen, or waiting for a nearer piece, is left alone.
+  if (_playing && !_holding && !_shooting) {
+    const claimed = new Set(shown);
+    for (const track of _layers(tl)) {
+      for (const nx of _nextOn(track, _at)) {
+        if (isStill({ src: nx.src })) continue;
+        const key = _keyOf(nx);
+        if (claimed.has(key)) continue;
+        claimed.add(key);
+        alive.add(key);
+        _cue(_el(nx.src, _rev(nx), _slotOf(nx)), nx);
+      }
     }
   }
   // OVER EVERY LAYER, like the render burns them. Drawn by libass on its own canvas over the frame
@@ -621,7 +731,7 @@ function _paint() {
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
   // and is somewhere else entirely by the time it is needed again.
   for (const [key, el] of _media) {
-    if (el.pause && !el.paused && !alive.has(key)) { try { el.pause(); } catch (e) {} }
+    if (el.pause && !el.paused && !shown.has(key)) { try { el.pause(); } catch (e) {} }
   }
   _sweep(alive);
   return missing;
@@ -781,7 +891,7 @@ function _sounds(tl, t) {
 // way to hear one, since no element plays a file backwards.
 function _aud(c) {
   const rev = _rev(c);
-  const key = _key(c.src, rev);
+  const key = _keyOf(c);
   if (_audio.has(key)) return _audio.get(key);
   const el = new Audio();
   el.preload = 'auto';
@@ -805,7 +915,7 @@ function _aud(c) {
 function _syncAudio() {
   const tl = Store.timeline();
   const live = _sounds(tl, _at);
-  const alive = new Set(live.map(x => _key(x.c.src, _rev(x.c))));
+  const alive = new Set(live.map(x => _keyOf(x.c)));
   for (const [key, el] of _audio) {
     if (alive.has(key)) continue;
     try { el.pause(); } catch (e) {}
@@ -826,16 +936,35 @@ function _syncAudio() {
     // The same busy rule as the picture: no correction while a load is in progress.
     if (el.__fresh === undefined) el.__fresh = true;
     const busy = !el.__fresh && (el.seeking || el.readyState < 2);
-    if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (_holding ? 0.08 : 0.25))) {
+    // (phase V44) A new piece for this element is put right at once, as the picture's is (_jumpOf).
+    const jump = run && _jumpOf(el, c);
+    if (!run) el.__live = c.id;
+    if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > (_holding ? 0.08 : jump ? JUMP : 0.25))) {
       // While sounding, a correction is aimed where the clock will be when the file plays again - its own measured seek
       // time (above), at most 2 s - not where the clock is now, or a slow file lands behind every time (phase V33.4).
       const lead = (run && !el.__fresh) ? Math.min(2, el.__cost || 0) * el.playbackRate : 0;
       try { el.currentTime = Math.max(0, want + lead); } catch (e) {}
       if (run) el.__seekAt = performance.now();
       el.__fresh = false;
-    }
+      el.__jump = false;
+    } else if (!busy) el.__jump = false;
     if (run && el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
     if (!run && !el.paused) el.pause();
+  }
+  // (phase V44) The next pieces of every lane made ready while this one sounds: each one's element waits paused on its
+  // first moment, the nearest first; one sounding, or waiting for a nearer piece, is left alone.
+  if (run) {
+    const claimed = new Set(alive);
+    for (const tr of ((tl && tl.tracks) || [])) {
+      if (!tr || tr.kind !== 'audio' || (tr.volume != null && !(+tr.volume > 0))) continue;
+      for (const nx of _nextOn(tr, _at)) {
+        if ((nx.volume != null && !(+nx.volume > 0)) || (nx.reversed && !_rev(nx))) continue;
+        const key = _keyOf(nx);
+        if (claimed.has(key)) continue;
+        claimed.add(key);
+        _cue(_aud(nx), nx);
+      }
+    }
   }
 }
 
