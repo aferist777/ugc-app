@@ -7,17 +7,16 @@
 // a row of `extraRows`) and the post viewer of REFERENCES (js/references/post.js, `cutBox` per file of a post).
 //
 //   under the video   the trimmer (js/merge-v3/trim.js) and "Cut…": the window "save the piece to" - the places of the
-//                     media tree (js/media-targets.js), the clip's own place first - and the piece becomes a NEW clip
-//                     there (POST /api/library/cut). The video itself stays as it is.
+//                     media tree as a folded tree (js/place-tree.js, phase V39), the clip's own place on top - and the
+//                     piece becomes a NEW clip there (POST /api/library/cut). The video itself stays as it is.
 //   right column      a piece has "original": ticked, the stage shows the WHOLE video it was cut from, the handles where
 //                     the piece was - and a cut from there is another new piece.
 //
 // Not cut here: talking heads (their project's) and renders.
 
-import * as Layers from './layers.js';
 import { trimmer } from './merge-v3/trim.js';
-import { targetsOf, whereText } from './media-targets.js';
-import { askName } from './name-box.js';
+import { whereText } from './media-targets.js';
+import { openPlaces, closePlaces } from './place-tree.js';
 
 const CUTTABLE = new Set(['birols', 'uploads', 'hooks', 'youtube']);
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|mkv)(\?|$)/i;
@@ -134,68 +133,19 @@ export function cutBox(video, piece, o) {
 }
 
 // ── the window "save the piece to" ───────────────────────────────────────────
-let _open = null;      // { box, layer, away }
-
-export function closeMenu() {
-  if (!_open) return;
-  _open.box.remove();
-  Layers.close(_open.layer);
-  document.removeEventListener('mousedown', _open.away, true);
-  _open = null;
-}
+// (phase V39) A tree of the places (js/place-tree.js): REFERENCES and VIDEO folded, the clip's own place on top as
+// "BESIDE IT"; "+ new category…" in REFERENCES, Uploads and B-rolls.
+export function closeMenu() { closePlaces(); }
 
 async function _menu(anchor, piece, g, go) {
-  closeMenu();
+  closePlaces();
   let tree = [];
   try { const d = await fetch('/api/library/tree').then(r => r.json()); tree = (d && d.nodes) || []; } catch (e) { tree = []; }
   if (!anchor.isConnected) return;
-  const all = targetsOf(tree, { images: false, refHome: 'its site\'s folder (no category)' });
-  // "+ new category" for the two kinds of VIDEO that have them, after their places.
-  const at = all.findIndex(x => x.head === 'VIDEO');
-  if (at >= 0) all.push({ newCat: 'uploads', text: '+ new Uploads category…' }, { newCat: 'birols', text: '+ new B-rolls category…' });
-  const isHere = (x) => piece.here && x.kind === piece.here.kind && (x.cat || '') === (piece.here.cat || '');
-  const here = all.find(x => !x.head && !x.newCat && isHere(x));
-
-  const box = el('div', 'ref-move cut-menu');
-  box.appendChild(el('div', 'ref-move-title', 'Save the piece ' + mmss(g.in) + '–' + mmss(g.out) + ' (' + (g.out - g.in).toFixed(1) + ' s) as a new clip in'));
-  const list = el('div', 'ref-move-list');
-  const item = (x, text) => {
-    const b = el('button', 'ref-move-it' + (isHere(x) ? ' is-here' : ''), text || x.text);
-    b.type = 'button';
-    b.addEventListener('click', async () => {
-      let to = x;
-      if (x.newCat) {
-        const kind = x.newCat;
-        const cat = await askName({
-          anchor: b, title: 'New ' + ({ references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls' }[kind] || kind) + ' category',
-          okLabel: 'Create', maxLength: 60,
-          submit: async (name) => {
-            const r = await fetch('/api/library/cats', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ kind, label: name }) }).then(z => z.json());
-            if (!r || !r.success) throw new Error((r && r.error) || 'not made');
-            return r.cat;
-          },
-        });
-        if (!cat) return;
-        to = { kind, cat: cat.id, label: cat.label, text: cat.label };
-      }
-      closeMenu();
-      go(to);
-    });
-    list.appendChild(b);
-  };
-  if (here) { list.appendChild(el('div', 'ref-move-head', 'BESIDE IT')); item(here); }
-  for (const x of all) {
-    if (x.head) { list.appendChild(el('div', 'ref-move-head', x.head)); continue; }
-    item(x);
-  }
-  box.appendChild(list);
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  const bw = box.offsetWidth, bh = box.offsetHeight;
-  box.style.left = Math.max(8, Math.min(r.right - bw, window.innerWidth - bw - 8)) + 'px';
-  box.style.top = (r.top - bh - 6 >= 8 ? r.top - bh - 6 : Math.min(window.innerHeight - bh - 8, r.bottom + 6)) + 'px';
-  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor && !(e.target.closest && e.target.closest('.nm-box'))) closeMenu(); };
-  document.addEventListener('mousedown', away, true);
-  _open = { box, away, layer: Layers.open(box, { name: 'cut-menu', onEsc: closeMenu }) };
+  openPlaces(anchor, {
+    title: 'Save the piece ' + mmss(g.in) + '–' + mmss(g.out) + ' (' + (g.out - g.in).toFixed(1) + ' s) as a new clip in',
+    tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
+    places: { images: false, refHome: 'its site\'s folder (no category)', newCats: ['references', 'uploads', 'birols'] },
+    onPick: go,
+  });
 }

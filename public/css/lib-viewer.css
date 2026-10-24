@@ -118,9 +118,8 @@
 .cut-orig input{ margin:2px 0 0; accent-color:var(--primary) }
 .cut-orig-txt{ display:flex; flex-direction:column; gap:2px; min-width:0 }
 .cut-orig-txt small{ font-weight:500; color:var(--muted); overflow-wrap:anywhere }
-/* The window "save the piece to" is the post viewer's move menu (css/references.css .ref-move); the clip's own place
-   is marked. */
-.cut-menu .ref-move-it.is-here{ font-weight:700; color:var(--primary) }
+/* The window "save the piece to" is the place picker (js/place-tree.js, phase V39): the post viewer's move menu
+   (css/references.css .ref-move) with the tree's rows (css/media-tree.css .mtp-row) - the clip's own place marked there. */
 
 /* ── The sash before the right column (phase V35, the owner's (т5); js/library/viewer.js wireInfoSash) ──────────────
    Dragged, the column widens or narrows - remembered for every viewer; a double press gives the usual width back. It is

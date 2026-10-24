@@ -14,10 +14,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-import { targetsOf } from '../media-targets.js';
+// (phase V39) "Move to…" is the place picker - the media tree's places, folded.
+import { openPlaces, closePlaces } from '../place-tree.js';
 // (block 7) A video of a post is cut into new pieces under the stage; a piece shows its whole video on a tick.
 import * as Cut from '../cut.js';
-import { askName } from '../name-box.js';
 // (phase V35) The sash before the right column - one helper and one remembered width with the media viewer.
 import { wireInfoSash } from '../library/viewer.js';
 
@@ -513,20 +513,14 @@ async function _toSources(it, btn) {
 }
 
 // ── moving (block 5b) ────────────────────────────────────────────────────────
-// A menu of where the files can go, read from the media tree: REFERENCES' own categories (or back to the post's source
-// folder) and "+ new category", VIDEO's Uploads, B-rolls' categories, Generated · Uncategorized and Hooks, IMAGES and its
-// categories. What cannot take every file chosen is pale with the reason (the owner's answer (ч)): a picture never goes
-// into VIDEO, a video never into IMAGES, a post of several goes out by its files, a tile-only video stays in REFERENCES.
-let _menu = null;
+// Where the files can go, read from the media tree - since phase V39 as a tree of its places, folded each time
+// (js/place-tree.js): REFERENCES' own categories (or back to the post's source folder) and "+ new category", VIDEO's
+// Generated (a B-roll with no category), B-rolls' categories, Hooks and Uploads, IMAGES and its categories. What cannot
+// take every file chosen is grey with the reason (the owner's answer (ч)): a picture never goes into VIDEO, a video never
+// into IMAGES, a post of several goes out by its files, a tile-only video stays in REFERENCES.
 const VIDEO_KINDS = new Set(['birols', 'uploads', 'hooks']);
 
-function _closeMenu() {
-  if (!_menu) return;
-  _menu.box.remove();
-  Layers.close(_menu.layer);
-  document.removeEventListener('mousedown', _menu.away, true);
-  _menu = null;
-}
+function _closeMenu() { closePlaces(); }
 
 async function _moveMenu(anchor, ids, files, whole) {
   _closeMenu();
@@ -545,44 +539,11 @@ async function _moveMenu(anchor, ids, files, whole) {
     if (t.kind === 'images') return videos ? 'videos do not go into IMAGES' : '';
     return '';
   };
-  const box = el('div', 'ref-move');
-  box.appendChild(el('div', 'ref-move-title', whole ? 'Move the post to' : `Move ${files.length} file${files.length === 1 ? '' : 's'} to`));
-  const list = el('div', 'ref-move-list');
-  for (const t of targetsOf(tree)) {
-    if (t.head) { list.appendChild(el('div', 'ref-move-head', t.head)); continue; }
-    const b = el('button', 'ref-move-it', t.text);
-    b.type = 'button';
-    const no = t.newCat ? '' : why(t);
-    if (no) { b.disabled = true; b.title = no; }
-    b.addEventListener('click', async () => {
-      let to = t;
-      if (t.newCat) {
-        const cat = await askName({
-          anchor: b, title: 'New REFERENCES category', okLabel: 'Create', maxLength: 60,
-          submit: async (name) => {
-            const r = await fetch('/api/library/cats', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ kind: 'references', label: name }) }).then(x => x.json());
-            if (!r || !r.success) throw new Error((r && r.error) || 'not made');
-            return r.cat;
-          },
-        });
-        if (!cat) return;
-        to = { kind: 'references', cat: cat.id, label: cat.label, text: cat.label };
-      }
-      _closeMenu();
-      await _doMove(it, ids, to);
-    });
-    list.appendChild(b);
-  }
-  box.appendChild(list);
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  const bw = box.offsetWidth, bh = box.offsetHeight;
-  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - bw - 8)) + 'px';
-  box.style.top = (r.bottom + 4 + bh > window.innerHeight - 8 ? Math.max(8, r.top - bh - 4) : r.bottom + 4) + 'px';
-  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor && !(e.target.closest && e.target.closest('.nm-box'))) _closeMenu(); };
-  document.addEventListener('mousedown', away, true);
-  _menu = { box, away, layer: Layers.open(box, { name: 'ref-move', onEsc: _closeMenu }) };
+  openPlaces(anchor, {
+    title: whole ? 'Move the post to' : `Move ${files.length} file${files.length === 1 ? '' : 's'} to`,
+    tree, why, name: 'ref-move', places: { newCats: ['references'] },
+    onPick: (to) => { if (_v && _cur() === it) _doMove(it, ids, to); },
+  });
 }
 
 async function _doMove(it, ids, to) {

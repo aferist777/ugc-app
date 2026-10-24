@@ -1,46 +1,57 @@
-// WHERE MEDIA CAN BE PUT - the places of the media tree (GET /api/library/tree), as one list for a menu (phase TG).
-// Read by the post viewer's "move to…" (js/references/post.js, block 5b) and by the window "save the piece to"
-// after a stretch is chosen in any video (js/cut.js, block 7):
+// WHERE MEDIA CAN BE PUT - the places of the media tree (GET /api/library/tree), cut down to a smaller tree for the place
+// picker (js/place-tree.js, phase V39): the window "save the piece to" after a stretch is chosen in any video (js/cut.js,
+// phase TG block 7) and "move to…" of a REFERENCES post (js/references/post.js, block 5b).
 //
-//   { head }                                   a group's title: REFERENCES, VIDEO, IMAGES
-//   { kind, cat, label, text }                 a place: a kind and its category ('' - none), the category's name
-//   { newCat: 'references', text }             "+ new category…" of REFERENCES
+//   { key, label, count, locked, to?, newCat?, children? }
+//     to       the node is a place itself: { kind, cat, label, text } - a kind and its category ('' - none), the
+//              category's name, the whole path in words ("Generated · B-rolls · Reels")
+//     newCat   the row "+ new category…" of that kind - the last of its kind's own branch
+//     a node with neither only opens.
 //
-// REFERENCES - the source's folder (no category) and its own categories; VIDEO - Generated (a B-roll with no category),
-// B-rolls' categories, Hooks, Uploads and theirs; IMAGES (only when asked) - IMAGES itself and its categories. (Phase V35:
-// the tree has no Uncategorized nodes any more - what has no category lies in the node that says so with `loose`.)
+// REFERENCES - back to the post's own source folder (no category: the sources' folders themselves are not places, a post
+// goes back to its own) and its own categories; VIDEO - Generated (a B-roll with no category), B-rolls' categories,
+// Hooks, Uploads and theirs (never Talking heads: a take is its project's); IMAGES (unless `images: false`) - IMAGES
+// itself and its categories. (Phase V35: the tree has no Uncategorized nodes - what has no category lies in the node that
+// says so with `loose`.)
 
-const VIDEO_KINDS = new Set(['birols', 'uploads', 'hooks']);
+const KINDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references']);
+const ANYCAT = '__cat__';
 
-export function targetsOf(tree, opts) {
+/**
+ * opts { images: false - without IMAGES; refHome - the words for REFERENCES' "no category";
+ *        newCats - the kinds whose branch ends in "+ new category…" }
+ * -> the roots: REFERENCES, VIDEO, IMAGES
+ */
+export function placesOf(tree, opts) {
   const o = opts || {};
-  const out = [];
-  const ref = (tree || []).find(n => n.key === 'references');
-  out.push({ head: 'REFERENCES' });
-  out.push({ kind: 'references', cat: '', label: '', text: o.refHome || 'the source\'s folder (no category)' });
-  for (const c of ((ref && ref.children) || []).filter(c => c.cat)) out.push({ kind: 'references', cat: c.cat, label: c.name || c.label, text: c.label });
-  out.push({ newCat: 'references', text: '+ new category…' });
-  const walk = (n, trail, add) => {
-    for (const c of n.children || []) {
-      const p = trail ? trail + ' · ' + c.label : c.label;
-      if (c.loose && (VIDEO_KINDS.has(c.loose) || c.loose === 'images')) add({ kind: c.loose, cat: '', label: '', text: p });
-      else if (c.kind && (VIDEO_KINDS.has(c.kind) || c.kind === 'images') && c.cat && c.cat !== '__cat__') {
-        add({ kind: c.kind, cat: c.cat, label: c.name || c.label, text: p });
-      }
-      walk(c, p, add);
-    }
+  const adds = new Set(o.newCats || []);
+  const map = (n, path) => {
+    if (n.kind === 'heads' || n.ref) return null;
+    let to = null;
+    if (n.loose && KINDS.has(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label };
+    else if (KINDS.has(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
+    const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
+    // A kind's own node (its key is the kind: REFERENCES, B-rolls, Hooks, Uploads, IMAGES) holds its categories.
+    if (n.key === n.kind && adds.has(n.kind)) kids.push({ key: 'new:' + n.kind, label: '+ new category…', newCat: n.kind });
+    if (!to && !kids.length) return null;
+    const p = { key: n.key, label: n.label, count: n.count || 0, locked: !!n.locked };
+    if (to) p.to = to;
+    if (kids.length) p.children = kids;
+    return p;
   };
-  const video = (tree || []).find(n => n.key === 'video');
-  out.push({ head: 'VIDEO' });
-  if (video) walk(video, '', (t) => out.push(t));
+  const root = (key) => (tree || []).find(n => n.key === key);
+  const out = [];
+  const refs = root('references');
+  const home = o.refHome || 'the source\'s folder (no category)';
+  const r = (refs && map(refs, 'REFERENCES')) || { key: 'references', label: 'REFERENCES', count: 0, locked: false };
+  r.children = [{ key: 'references:home', label: home, to: { kind: 'references', cat: '', label: '', text: 'REFERENCES · ' + home } }]
+    .concat(r.children || []);
+  out.push(r);
+  const video = root('video') && map(root('video'), '');
+  if (video) out.push(video);
   if (o.images !== false) {
-    const images = (tree || []).find(n => n.key === 'images');
-    out.push({ head: 'IMAGES' });
-    if (images) {
-      const before = out.length;
-      walk(images, 'IMAGES', (t) => out.push(t));
-      if (!out.slice(before).some(t => !t.cat)) out.splice(before, 0, { kind: 'images', cat: '', label: '', text: 'IMAGES' });
-    }
+    const images = root('images') && map(root('images'), 'IMAGES');
+    if (images) out.push(images);
   }
   return out;
 }
