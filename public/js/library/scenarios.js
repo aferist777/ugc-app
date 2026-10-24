@@ -6,10 +6,11 @@
 //
 // ONE ROW IS ALWAYS SELECTED and the right column is about it (phase D5, the owner 2026-09-29) - the
 // rule of the picture shelves: opening the shelf selects the first, a delete falls back to the
-// first, a reload keeps the one that was selected. The column holds the whole scenario: its title
-// and fields, where it came from when the generator wrote it, "Make video" and Delete, and its lines - (phase V38.6, the
-// owner: "если сценарий уже сохранен, то давай отображать так же построчно как и при создании, только без полей для
-// генерации") a card each, as the generator shows a script, the first the hook, edited in place.
+// first, a reload keeps the one that was selected. The column holds the whole scenario: its title with its line count
+// and date, its fields three to a row, "Make video" and Delete, and its lines - (phase V38.6, the owner: "если сценарий
+// уже сохранен, то давай отображать так же построчно как и при создании, только без полей для генерации") a card each,
+// as the generator shows a script, the first the hook, edited in place. (V38.7) No "Where it came from" and no rewrite
+// in the narrator's voice any more: the scenario is written.
 //
 // NOTHING TO SAVE BY HAND (phase V28.2, the owner 2026-10-12: "сохранение должно быть автоматическим после любых
 // изменений в сценарии"): a field is saved the moment it is chosen, the lines a moment after the typing stops, when the
@@ -128,17 +129,6 @@ function _filterRow() {
   }
   return row;
 }
-
-// Where a generated scenario came from, as the generator recorded it (routes/scriptgen.js, save).
-// Not the hook: it is the first line of the script, which the lines below show anyway (phase F5).
-// "written from" is painted before these, by the source's live name. [key, label, whole row wide].
-const ORIGIN_ROWS = [
-  ['fromTitle', 'rewritten from', true],
-  ['topicTitle', 'topic', true], ['narratorName', 'narrator'],
-  ['tone', 'tone'], ['provider', 'provider'], ['model', 'model'],
-];
-// "Where it came from" folds (phase F5): folded until opened, and remembered either way.
-const LS_ORIGIN_OPEN = 'library_sc_origin_open_v1';
 
 let _items = [];
 let _sel = '';           // the selected scenario's id
@@ -288,8 +278,8 @@ document.addEventListener('lib:narrators', () => { _lists = null; });
 const _inUse = (key) => [...new Set(_items.map(it => _val(it, key)).filter(Boolean))];
 const _uniq = (arr) => { const seen = new Set(); return arr.filter(v => { const k = String(v).toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; }); };
 
-// ONE FIELD (phase G4, the owner 2026-09-30): its name above a button that shows the value, laid two to
-// a row. Pressing it opens the list as a layer - a list of our own, because a row of a native <select>
+// ONE FIELD (phase G4, the owner 2026-09-30; V38.7: "в три столбца и название дропдауна слева от дропдауна"): its name
+// on the left of a button that shows the value - the names of one width, so the buttons stand in line - three to a row. Pressing it opens the list as a layer - a list of our own, because a row of a native <select>
 // cannot carry the ✕ that removes a wrong value. `values` are [{value, label}]; "none" and "new…" are
 // added as asked. The pick is handed to `onPick`, which saves; a refused save puts the old value back.
 // Returns { value } - the role and the gender read each other's current value when they save.
@@ -553,26 +543,15 @@ async function _paintFields(box, s) {
   const narValues = L.narrators.map(n => ({ value: n.id, label: n.name }));
   const curNar = nar ? (nar.id || (L.narrators.find(n => n.name === nar.name) || {}).id || '__name__:' + nar.name) : '';
   _fieldRow(box, 'narrator', curNar, narValues, (v) => {
-    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator').then((ok) => { _paintVoiceBtn(s); return ok; });
+    if (!v) return _patch(s, { narrator: { id: '', name: '' } }, 'narrator');
     const n = L.narrators.find(x => x.id === v);
-    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator').then((ok) => { _paintVoiceBtn(s); return ok; });
+    if (n) return _patch(s, { narrator: { id: n.id, name: n.name } }, 'narrator');
     // The value it was painted with - a narrator since deleted - goes back as it was, by its name.
     return _patch(s, { narrator: { id: nar && nar.id && v === curNar ? nar.id : '', name: nar ? nar.name : '' } }, 'narrator');
   }, { none: true, missingLabel: () => (nar ? nar.name : '') + ' — deleted' });
 }
 
-// A fact in the column's grid (phase G4/G5): its name above its value, two to a row; `wide` takes the
-// whole row - the long ones, a source's or a topic's name. An empty fact is left out. Returns the value's node.
-function _row(box, label, value, wide) {
-  if (!value) return;
-  const c = _el('div', 'lib-sc-cell' + (wide ? ' is-wide' : ''));
-  c.appendChild(_el('span', 'lib-sc-cl', label));
-  const v = _el('span', 'lib-sc-cv', value);
-  v.title = value;
-  c.appendChild(v);
-  box.appendChild(c);
-  return v;
-}
+const _linesSay = (n) => n + (n === 1 ? ' line' : ' lines');
 
 async function _show(it) {
   const my = ++_seq;
@@ -593,33 +572,18 @@ async function _show(it) {
   }
   if (my !== _seq) return;
   body.textContent = '';
-  body.appendChild(_el('div', 'lib-sc-title', s.title || 'untitled'));
-
+  // (V38.7, the owner: "строки с названием lines и edited помещаем справа от названия сценария") The title, and beside it
+  // how many lines and when it was last edited.
   const lines = s.lines || [];
-  const facts = _el('div', 'lib-sc-grid');
+  const top = _el('div', 'lib-sc-top');
+  top.appendChild(_el('div', 'lib-sc-title', s.title || 'untitled'));
+  const count = _el('span', 'lib-sc-meta', _linesSay(lines.length));
+  top.append(count, _el('span', 'lib-sc-meta', 'edited ' + _fmtDate(s.updatedAt || s.createdAt)));
+  body.appendChild(top);
+  const facts = _el('div', 'lib-sc-grid lib-sc-fields');
   body.appendChild(facts);
   await _paintFields(facts, s);
   if (my !== _seq) return;
-  const count = _row(facts, 'lines', String(lines.length));
-  _row(facts, 'edited', _fmtDate(s.updatedAt || s.createdAt));
-
-  const fold = _el('details', 'lib-sc-origin');
-  try { fold.open = localStorage.getItem(LS_ORIGIN_OPEN) === '1'; } catch (e) { /* folded */ }
-  fold.appendChild(_el('summary', 'lib-info-sec', 'Where it came from'));
-  fold.addEventListener('toggle', () => { try { localStorage.setItem(LS_ORIGIN_OPEN, fold.open ? '1' : '0'); } catch (e) { /* kept for this view */ } });
-  const o = s.origin;
-  if (!o) fold.appendChild(_el('div', 'lib-info-note', 'Written by hand.'));
-  else {
-    const from = _el('div', 'lib-sc-grid');
-    // The source by its current name (the server reads it live); one since deleted by the name it had.
-    // The names go first and whole-row wide, the short facts two to a row after them (phase G5).
-    const gone = o.sourceId && o.sourceGone;
-    if (gone) _row(from, 'written from', o.sourceTitle ? '“' + o.sourceTitle + '” - source deleted' : 'a source since deleted', true);
-    else if (!(o.fromId && !o.sourceId)) _row(from, 'written from', String(o.sourceTitle || '').trim() || 'no source', true);
-    for (const [key, label, wide] of ORIGIN_ROWS) _row(from, label, String(o[key] || '').trim(), wide);
-    fold.appendChild(from);
-  }
-  body.appendChild(fold);
 
   // (V38.6, the owner's (щ2)) The buttons over the lines, under the fields; the lines under them, a card each.
   const foot = _el('div', 'lib-sc-bar');
@@ -627,22 +591,16 @@ async function _show(it) {
   make.type = 'button';
   make.title = 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
-  // (phase V38, block D4; V38.1) This scenario's lines rewritten in ITS narrator's voice (the narrator field - the owner's
-  // (к3а)), started at once; followed in the generator and saved there as a NEW scenario - this one is not touched.
-  const voice = _el('button', 'lib-btn lib-sc-voice', 'In the narrator’s voice');
-  voice.type = 'button';
   const del = _el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
   del.title = 'Delete this scenario';
-  foot.append(make, voice, st, _el('span', 'sp'), del);
+  foot.append(make, st, _el('span', 'sp'), del);
   body.appendChild(foot);
-  const linesHead = _el('div', 'lib-info-sec', 'Lines · ' + lines.length);
-  body.appendChild(linesHead);
   const box = _el('div', 'lib-sc-cards');
   body.appendChild(box);
 
   // The lines save themselves (phase V28.2): a moment after the typing stops, and when the lines are left.
-  const a = { s, box, cards: [], was: '', st, count, linesHead, timer: null, busy: null, empty: false };
+  const a = { s, box, cards: [], was: '', st, count, timer: null, busy: null, empty: false };
   _paintCards(a, lines.map(l => String((l && l.text) || '').replace(/\s*\n\s*/g, ' ')));
   a.was = _valueOf(a);
   _auto = a;
@@ -650,8 +608,6 @@ async function _show(it) {
   // pause in the typing.
   box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) _flushA(a, true); });
   make.addEventListener('click', () => _makeVideo(a, make));
-  voice.addEventListener('click', () => _inVoice(a, voice));
-  _paintVoiceBtn(s);
   del.addEventListener('click', () => _delete(s, del));
 
   // What the last Save or refusal said, now that the column is painted again.
@@ -664,7 +620,7 @@ async function _show(it) {
 
 // ── The lines, saved by themselves (phase V28.2) ─────────────────────────────
 const AUTOSAVE_MS = 800;
-let _auto = null;                    // the column on show: { s, box, cards, was, st, count, linesHead, timer, busy, empty }
+let _auto = null;                    // the column on show: { s, box, cards, was, st, count, timer, busy, empty }
 let _flushing = Promise.resolve();   // the save of a column painted over, which a new reading waits for
 
 // ── The lines as cards (phase V38.6) ───────────────────────────────────────
@@ -813,8 +769,7 @@ async function _save(a, keepalive, english) {
       const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(a.s.id)) + '"] .lib-srow-s');
       if (row) row.textContent = _tail(it.meta);
     }
-    a.linesHead.textContent = 'Lines · ' + n;
-    if (a.count) { a.count.textContent = String(n); a.count.title = String(n); }
+    if (a.count) a.count.textContent = _linesSay(n);
     say((toEnglish ? 'saved in English · ' : 'saved · ') + n + (n === 1 ? ' line' : ' lines'), 'ok');
     return true;
   } catch (e) {
@@ -843,40 +798,6 @@ async function _makeVideo(a, btn) {
     say('Not made: ' + e.message, 'err');
     btn.disabled = false;
   }
-}
-
-// (V38.1) The button says whose voice, and is pressed only when there is one: the scenario's narrator, read.
-async function _paintVoiceBtn(s) {
-  const btn = document.querySelector('#lib-info-body .lib-sc-voice');
-  if (!btn) return;
-  const L = await _readLists();
-  const nar = s.narrator && s.narrator.name ? s.narrator : null;
-  const rec = nar ? L.narrators.find(n => n.id === String(nar.id || '')) : null;
-  btn.textContent = rec && rec.id !== 'neutral' ? `In ${rec.name}’s voice` : 'In the narrator’s voice';
-  btn.disabled = !(rec && rec.id !== 'neutral' && rec.ready);
-  btn.title = !nar || (rec && rec.id === 'neutral') ? 'Choose the scenario’s narrator in its narrator field first - its lines are rewritten in that narrator’s voice'
-    : !rec ? `${nar.name}, the scenario’s narrator, has been deleted - choose another in its narrator field`
-      : !rec.ready ? `${rec.name} has no voice yet - read his samples first (Narrators)`
-        : `Rewrite every line in ${rec.name}’s voice now - followed in the generator and saved there as a new scenario; this one stays as it is`;
-}
-
-// (phase V38, block D4; V38.1) The lines stored first, then the rewrite starts on the server (POST
-// /api/scriptgen/from-scenario: a draft of them and the job, at once) and the generator opens on that draft, following it.
-async function _inVoice(a, btn) {
-  const say = (t, k) => { a.st.textContent = t; a.st.className = 'lib-sc-status' + (k ? ' ' + k : ''); };
-  if (!_linesOf(a).length) { say('Every line is empty - nothing to rewrite.', 'err'); return; }
-  btn.disabled = true;
-  if (!(await _flushA(a, true))) { btn.disabled = false; return; }
-  try {
-    const d = await fetch('/api/scriptgen/from-scenario', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenarioId: a.s.id }),
-    }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    // (V38.6) The new draft selected in the list, its form on the right following the rewrite.
-    if (_hooks.openDraft) _hooks.openDraft(d.draft.id);
-  } catch (e) {
-    say('Not started: ' + e.message, 'err');
-  } finally { btn.disabled = false; }
 }
 
 async function _delete(s, btn) {

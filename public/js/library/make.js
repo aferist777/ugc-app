@@ -1178,7 +1178,10 @@ function _paintGo() {
   // (V38.6) On two lines, in a taller button: "Write / scenario".
   wr.textContent = _stage === 'script' ? 'Writing\nthe script…' : written ? 'Write\nagain' : 'Write\nscenario';
   wr.disabled = busy || !String((_gen && _gen.hook) || '').trim();
-  wr.classList.toggle('primary', !written);
+  // (V38.7, the owner: "когда сценарий написан и пользователь выбирает другой hook, то write again снова становится синей
+  // кнопкой") Blue while there is no script - and again when box 2 holds another hook than the script's first line.
+  const other = written && String((_gen && _gen.hook) || '').trim() !== String(_gen.paragraphs[0] || '').trim();
+  wr.classList.toggle('primary', !written || other);
   $('mk-box2').hidden = !(_gen && _gen.box2);
   $('mk-hook').readOnly = busy;
   $('mk-hook-stage').hidden = !hooks && _stage !== 'hooks';
@@ -1300,7 +1303,8 @@ function _hasContent() {
 // and a stage's reattach finds it - the list is otherwise read only now and then.
 function _noteDraft(dr) {
   if (!dr) return;
-  const stage = (dr.paragraphs || []).length ? 'script written' : ((dr.hooks || []).length || dr.hook) ? 'hook chosen' : 'topic only';
+  // (V38.7) "hooks written" before "hook chosen" - lib/script-drafts.js stageOf says the same.
+  const stage = (dr.paragraphs || []).length ? 'script written' : dr.hook ? 'hook chosen' : (dr.hooks || []).length ? 'hooks written' : 'topic only';
   const i = _drafts.findIndex(x => String(x.id) === String(dr.id));
   const sum = { ...(i >= 0 ? _drafts[i] : {}), id: dr.id, sourceId: dr.sourceId, topicId: dr.topicId,
     sourceTitle: dr.sourceTitle, topicTitle: dr.topicTitle, topic: dr.topic, title: dr.title, stageLabel: stage };
@@ -1390,7 +1394,7 @@ async function _enterScript({ source = null, topic = null, draft = null } = {}) 
   // (V38.1) A shelf's scenario whose rewrite did not land (paid once - never asked again by itself): said, with the way.
   const sum = _drafts.find(x => String(x.id) === String(_gen.draftId));
   if (_gen.foreign && !_following.has(String(_gen.draftId)) && !(sum && sum.running)) {
-    J.sayJob($('mk-job'), 'The rewrite in the narrator’s voice did not land - press “In … voice” under the scenario on the shelf again.', true);
+    J.sayJob($('mk-job'), 'The rewrite in the narrator’s voice did not land - the draft holds the lines as they were.', true);
   }
   // NO draft is written just for opening the form: the first edit or the first generation makes it.
 }
@@ -1488,8 +1492,9 @@ function _renderHooks(hooks) {
       $('mk-hook').value = text;
       _markUsed();
       _paintGo();
-      _queueDraft();
       $('mk-box2').scrollIntoView({ block: 'nearest' });
+      // (V38.7) Saved at once, so the draft's row in the list says "hook chosen".
+      _saveDraft().then(() => { if (_embedded && _hooks.draftsChanged) _hooks.draftsChanged(); });
     });
     const remake = el('button', 'lib-btn mk-hook-remake', 'remake');
     remake.type = 'button';

@@ -508,10 +508,15 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
    The title in the body at its own size - the column's head is upper case and cut to one line -
    then the fields, where it came from, the buttons and (V38.6) the lines, a card each. */
 /* (V38.6) The buttons over the lines; the lines a card each, as the generator shows a script (.mk-scene). */
-.lib-sc-bar{ display:flex; align-items:center; gap:10px; padding:8px 12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.lib-sc-bar{ display:flex; align-items:center; gap:10px; padding:6px 12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
 .lib-sc-bar .sp{ flex:1; }
-.lib-sc-cards{ display:flex; flex-direction:column; gap:6px; padding:0 12px 14px; }
+.lib-sc-cards{ display:flex; flex-direction:column; gap:4px; padding:8px 12px 12px; }
+.lib-sc-cards > .mk-scene{ padding:5px 8px; }
 .lib-sc-lt{ field-sizing:content; contain:inline-size; min-height:20px; }
+/* (V38.7) The title with its line count and date beside it. */
+.lib-sc-top{ display:flex; align-items:baseline; gap:10px; padding:8px 12px 2px; }
+.lib-sc-top > .lib-sc-title{ flex:1 1 auto; min-width:0; padding:0; }
+.lib-sc-meta{ flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .lib-sc-title{ padding:10px 12px 2px; font-size:13px; font-weight:650; line-height:1.35; color:var(--ink); overflow-wrap:anywhere; }
 /* The scenario column is a column: its parts keep their height. */
 .lib-info-body.is-scenarios{ display:flex; flex-direction:column; }
@@ -1060,8 +1065,13 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 /* A character whose 4K sheet is still being made (phase H6). */
 .lib-sub-run{ color:var(--gold); font-weight:600; }
 /* The scenario column's fields and facts, two to a row (phases G4, G5): the name above, the value or
-   its dropdown under it; a long one (a source's or a topic's name) takes the whole row. */
+   its dropdown under it; a long one (a source's or a topic's name) takes the whole row. (V38.7) The fields three to a
+   row, each name on the left of its dropdown, the names of one width so the dropdowns stand in line. */
 .lib-sc-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px 10px; padding:10px 12px; }
+.lib-sc-fields{ grid-template-columns:repeat(3, minmax(0,1fr)); gap:5px 12px; padding:4px 12px 8px; }
+.lib-sc-fields > .lib-sc-cell{ flex-direction:row; align-items:center; gap:6px; }
+.lib-sc-fields .lib-sc-cl{ flex:0 0 52px; }
+.lib-sc-fields .lib-sc-fbtn{ flex:1 1 auto; }
 .lib-sc-cell{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .lib-sc-cell.is-wide{ grid-column:1 / -1; }
 .lib-sc-cl{ font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }

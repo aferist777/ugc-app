@@ -887,7 +887,7 @@ function _renderGrid() {
     // store's answer rather than the editor's.
     SC.render(_items, {
       reload: () => _load({ keepScroll: true }), status: _status, counts: _counts,
-      // (V38.6) A draft is selected like a scenario, its form on the right; one made elsewhere ("In … voice") is
+      // (V38.6) A draft is selected like a scenario, its form on the right; one made elsewhere is
       // selected once the list has been read with it.
       drafts: _drafts, showDraft: _showDraftHere, hideDraft: _hideDraftHere,
       openDraft: (id) => { SC.select('d:' + id); return _load({ keepScroll: true }); },
