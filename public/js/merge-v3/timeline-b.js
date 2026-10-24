@@ -39,6 +39,8 @@ import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 // (phase V33.2) A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
+// (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
+import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
 import { paintWaves, onPeaks } from './tl-wave.js';
 // (phase V36, T5) A stretch cut out of every lane, the rest moved left.
@@ -2090,12 +2092,18 @@ export function placeClipAbove(data) {
   return { ok: true, lane, at };
 }
 
+// (phase V40, tail (а), the owner 2026-10-24: "Fit / Fill и Shift пересчитывают субтитры на шве") A clip's fit or its frame
+// - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the subtitles' places on the seam are
+// worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch does (framing-ui.js).
+const SPLIT_KEYS = new Set(['fit', 'frame']);
+
 export function setClipFields(trackId, clipId, patch) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c) return;
     for (const k of Object.keys(patch || {})) if (CLIP_FIELDS.has(k)) _write(c, k, patch[k]);
+    if (Object.keys(patch || {}).some(k => SPLIT_KEYS.has(k))) placeBySplit(tl);
   });
 }
 
@@ -2106,10 +2114,12 @@ export function setClipField(trackId, clipId, key, value) {
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c) return;
     _write(c, key, value);
-    if (!c.pairId || !PAIRED.has(key)) return;
-    for (const other of (tl.tracks || [])) {
-      for (const x of (other.clips || [])) if (x !== c && x.pairId === c.pairId) _write(x, key, value);
+    if (c.pairId && PAIRED.has(key)) {
+      for (const other of (tl.tracks || [])) {
+        for (const x of (other.clips || [])) if (x !== c && x.pairId === c.pairId) _write(x, key, value);
+      }
     }
+    if (SPLIT_KEYS.has(key)) placeBySplit(tl);
   });
 }
 
@@ -2133,6 +2143,7 @@ export function stampTrack(trackId, patch) {
       if (!STAMP_FIELDS.has(k)) continue;
       for (const c of (t.clips || [])) _write(c, k, patch[k]);
     }
+    if (Object.keys(patch || {}).some(k => SPLIT_KEYS.has(k))) placeBySplit(tl);
   });
 }
 
@@ -2151,6 +2162,7 @@ export function resetTrack(trackId) {
       c.transition = null; c.animation = null; c.filter = null;
       c.fit = null; c.cropAlign = null;
     }
+    placeBySplit(tl);            // (V40) a fitted clip is never split: its subtitles go back off the seam
   });
 }
 
@@ -2402,10 +2414,13 @@ export function setSubsStyle(trackId, patch, cut) {
 // THE HEARD LINES CUT AGAIN, inside a mutation (K2). The lines somebody typed stay the very same
 // objects - their ids, their own style, their place - so a merge with another save still knows them;
 // the pages cut from the heard words carry the own look of the lines they came from.
+// (phase V40, tail (б), the owner 2026-10-24: "пресет на открытом фрагменте тоже") The new pages carry their words' places; on a
+// split frame which of them is on the seam is worked out again for them (public/js/captions/split.js) - the same step.
 function _recutLane(tl, t) {
   const clips = recutClips(t, tl, _id);
   if (!clips) return null;
   t.clips = clips;
+  placeBySplit(tl);
   return clips.filter(isHeard).length;
 }
 
@@ -2462,6 +2477,8 @@ export function setCaptionStyle(clipIds, style, opts) {
         }
       }
     }
+    // (V40, tail (б)) Pages cut again: their places on a split frame's seam worked out again.
+    if (made) placeBySplit(tl);
   });
   // The pick follows its words onto the pages cut from them.
   if (made && follow) {
@@ -2489,6 +2506,7 @@ export function recutLines(trackId, clipIds) {
     gone = (t.clips || []).filter(c => ids.has(c.id) && isHeard(c)).map(c => c.id);
     t.clips = r.clips;
     made = r.made;
+    placeBySplit(tl);          // (V40, tail (б)) the pages cut again, on a split frame's seam or not
   });
   if (made && [...ids].some(id => _sel.has(id))) {
     for (const id of (gone || [])) _sel.delete(id);
