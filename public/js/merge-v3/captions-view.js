@@ -243,7 +243,7 @@ const _title = (name, mine) => name + ' - apply to what is picked' + (mine ? '. 
 // first, before the app's. The 131 are not touched.
 function _syncMine() {
   if (!_ui) return;
-  const list = MyPresets.list();
+  const list = MyPresets.all();
   const want = new Set(list.map((p) => p.id));
   for (const [id, t] of [..._tiles]) if (t.mine && !want.has(id)) { _stopNow(t); t.btn.remove(); _tiles.delete(id); }
   for (const p of list) {
@@ -264,7 +264,7 @@ function _syncMine() {
 
 function _paintCounts() {
   for (const [kind, list] of [['subs', PRESETS], ['text', TEXT_PRESETS]]) {
-    const n = MyPresets.list().filter((p) => _kindOf(p) === kind).length;
+    const n = MyPresets.all().filter((p) => _kindOf(p) === kind).length;
     if (_counts.has(kind + '|')) _counts.get(kind + '|').textContent = ' ' + (list.length + n);
     if (_counts.has(kind + '|' + MINE)) _counts.get(kind + '|' + MINE).textContent = ' ' + n;
   }
@@ -292,7 +292,7 @@ function _closeMenu() {
 
 function _openMenu(ev, id, tile) {
   _closeMenu();
-  const p = MyPresets.byId(id);
+  const p = MyPresets.find(id);
   if (!p) return;
   const el = _el('div', 'mv3-plus-menu');
   const item = (label, sub, on, danger) => {
@@ -384,7 +384,7 @@ function _paintCat() {
     t.btn.hidden = t.kind !== _kind || (!!cat && t.btn.dataset.cat !== cat);
     if (t.btn.hidden) _stopNow(t);
   }
-  _ui.empty.hidden = !(cat === MINE && !MyPresets.list().some((p) => _kindOf(p) === _kind));
+  _ui.empty.hidden = !(cat === MINE && !MyPresets.all().some((p) => _kindOf(p) === _kind));
 }
 
 function _paintState() {

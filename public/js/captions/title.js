@@ -9,24 +9,21 @@
 
    Its look by default ((х37)): large, bold, white on a dark plate, at the top - below the strip the platforms draw there
    (merge-v3/platforms.js: TikTok's tabs end at 235 px of 1920, Shorts' and Reels' buttons at 220), so it starts at
-   about 270 px.
+   about 270 px. Since phase V42 that look is the TEXT PRESET Dark Plate (presets-text.js; it pops in and fades out) worn
+   from there: the lane says "based on Dark Plate", and a tile of the text gallery gives it another look, its place kept.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { normalizeStyle } from './style.js';
+import { textPresetOf } from './presets-text.js';
 
 export const TITLE_SECONDS = 3;
 export const TITLE_MAX = 80;
 
-export const TITLE_STYLE = normalizeStyle({
-  font: 'Montserrat ExtraBold', size: 92, bold: true, italic: false,
-  primary: '#ffffff', secondary: '#ffffff', highlight: '#ffffff',
-  outlineColor: '#000000', shadowColor: '#000000', backColor: '#000000', backAlpha: 0.8, shadowAlpha: 0,
-  // In a box look `outline` is the plate's margin round the letters (captions/ass.js textStyle).
-  outline: 14, shadow: 0, blur: 0, borderStyle: 'box',
-  pos: 'top', tx: 0, ty: 0.045,
-  wrap: true, wordsPerLine: 0, lines: 3, cut: 'pages',
-  effect: 'none', appear: 'none', casing: 'none', sizeAuto: false,
-});
+export const TITLE_PRESET = 'tx-dark-plate';
+// The preset's whole style, marked with its id, at the title's place (a text preset has none of its own, (ц3)).
+export const TITLE_STYLE = normalizeStyle(Object.assign({}, textPresetOf(TITLE_PRESET).style, {
+  preset: TITLE_PRESET, pos: 'top', tx: 0, ty: 0.045,
+}));
 
 /** The fragment's title lane, or null: a text lane holding a line that starts at its very beginning. */
 export function titleLaneOf(tl) {

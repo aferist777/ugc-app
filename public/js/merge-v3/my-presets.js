@@ -26,10 +26,16 @@ function _take(list) {
   for (const fn of _subs) { try { fn(_list); } catch (e) { console.warn('[my presets]', e); } }
 }
 
-/** The person's presets, newest first. */
-export const list = () => _list;
+// TWO KINDS (phase V42): one saved from a text lane or line is `kind: 'text'` - the text gallery's. `list` / `byId` are the CAPTION
+// presets', as they always were (the highlights popup's styles, hl-style.js, are for subtitles); `all` / `find` both kinds, for the
+// captions view, which shows each gallery's own.
+/** The person's caption presets (for subtitles), newest first. */
+export const list = () => _list.filter((p) => p.kind !== 'text');
 export const loaded = () => _loaded;
-export const byId = (id) => _list.find((p) => p.id === id) || null;
+export const byId = (id) => list().find((p) => p.id === id) || null;
+/** Every preset of the person's, both kinds, newest first. */
+export const all = () => _list;
+export const find = (id) => _list.find((p) => p.id === id) || null;
 
 /** Told after every change of the list (and once it is first read). */
 export function onChange(fn) { _subs.add(fn); return () => _subs.delete(fn); }
