@@ -125,29 +125,41 @@ function _newVideoLane(t) {
   if (_count(t, 'video') >= MAX_PER_SIDE) return null;
   const v = { id: _freshId(t, 'v'), kind: 'video', name: '', linkId: null, main: false,
               volume: null, speed: null, clips: [] };
-  const a = { id: _freshId(t.concat(v), 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
-              volume: null, speed: null, clips: [] };
-  v.linkId = a.id;
-  // The new video lane goes on TOP - a new layer sits over what is already there - and its
-  // sound goes at the far end of the audio block, which is the mirror of the same place.
+  // The new video lane goes on TOP - a new layer sits over what is already there.
   const firstVideo = t.findIndex(x => x.kind === 'video');
   t.splice(firstVideo < 0 ? 0 : firstVideo, 0, v);
-  const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
-  t.splice(lastAudio + 1, 0, a);
+  // Its sound goes at the far end of the audio block, which is the mirror of the same place - unless the audio side is full
+  // already (beds of music): then the lane is silent, as one whose sound lane was deleted (phase V41: a fifth audio lane was
+  // made here, and the server's ceiling dropped one of them on the save).
+  if (_count(t, 'audio') < MAX_PER_SIDE) {
+    const a = { id: _freshId(t, 'a'), kind: 'audio', name: '', linkId: v.id, main: false,
+                volume: null, speed: null, clips: [] };
+    v.linkId = a.id;
+    const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
+    t.splice(lastAudio + 1, 0, a);
+  }
   _renumber(t);
   return v;
 }
 
+// Inside a mutation: an audio lane on its own at the far end of the audio block - a bed. Null at the ceiling.
+function _newAudioLane(t) {
+  if (_count(t, 'audio') >= MAX_PER_SIDE) return null;
+  const a = { id: _freshId(t, 'a'), kind: 'audio', name: '', linkId: null, main: false,
+              volume: null, speed: null, clips: [] };
+  const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
+  if (lastAudio >= 0) t.splice(lastAudio + 1, 0, a);
+  else {
+    // No audio lane at all: after the video block, before the words.
+    const words = t.findIndex(x => x.kind === 'subs' || x.kind === 'text');
+    t.splice(words < 0 ? t.length : words, 0, a);
+  }
+  _renumber(t);
+  return a;
+}
+
 export function addAudioTrack() {
-  Store.mutate(tl => {
-    const t = tl.tracks;
-    if (_count(t, 'audio') >= MAX_PER_SIDE) return;
-    const a = { id: _freshId(t, 'a'), kind: 'audio', name: '', linkId: null, main: false,
-                volume: null, speed: null, clips: [] };
-    const lastAudio = t.map(x => x.kind).lastIndexOf('audio');
-    t.splice(lastAudio + 1, 0, a);
-    _renumber(t);
-  });
+  Store.mutate(tl => { _newAudioLane(tl.tracks); });
 }
 
 // Deleting is asymmetric, and deliberately: a video lane taken away takes its sound with it,
@@ -283,7 +295,10 @@ function _replace(trackId, clipId, data) {
   if (measure.length) _measure(measure, data.src);
 }
 
-function _drop(trackId, want, data) {
+// `make` ('video' | 'audio', phase V41, the owner's (о12)): let go above the top video lane or below the bottom audio one,
+// the clip goes onto a lane made for it IN THE SAME STEP - a pair of video and its sound, or a sound lane on its own; one
+// undo takes both away. Returns the clip's duration on the timeline, or 0 when nothing was laid.
+function _drop(trackId, want, data, make) {
   const still = isStill({ src: data.src });
   const known = still ? 0 : (+data.dur || 0);
   const dur = still ? STILL_DUR : (known > 0 ? known : FALLBACK_DUR);
@@ -291,13 +306,19 @@ function _drop(trackId, want, data) {
   const pairId = 'p' + _id().slice(1);
   // Made up here so the clips can be found again by the measurement below.
   const vidId = _id(), audId = _id();
+  let laid = false;
 
-  Store.mutate(tl => {
+  const ok = Store.mutate(tl => {
     const t = tl.tracks;
-    const track = t.find(x => x.id === trackId);
+    let track = null;
+    if (make) {
+      if (!_laneTakes(make, data.media)) return;
+      track = make === 'video' ? _newVideoLane(t) : _newAudioLane(t);
+    } else track = t.find(x => x.id === trackId);
     // Words lanes hold words: a file dropped on a text lane became a caption reading its file name.
     if (!track || track.kind === 'subs' || track.kind === 'text') return;
     if (!_laneTakes(track.kind, data.media)) return;
+    laid = true;
 
     // EVERY lane here takes the moment it was given, main included. A blank project is not a
     // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
@@ -339,7 +360,9 @@ function _drop(trackId, want, data) {
     }
   });
 
-  if (!still && !(known > 0)) _measure([vidId, audId], data.src);
+  if (!ok) laid = false;
+  if (laid && !still && !(known > 0)) _measure([vidId, audId], data.src);
+  return laid ? Math.round(dur * 100) / 100 : 0;
 }
 
 // Deleting is asymmetric for the same reason it is asymmetric for lanes: the picture owns the
@@ -1056,6 +1079,143 @@ function _wireLane(lane, t) {
     const r = lane.getBoundingClientRect();
     _drop(t.id, (e.clientX - r.left) / _zoom(), data);
   });
+}
+
+// ── A lane made by a drop (phase V41, the owner's (о12)) ────────────────────
+// A tile held over the RULER - above the top video lane - shows the ghost of a new pair, a video lane and its sound lane, and
+// where the clip will lie on them; held BELOW THE BOTTOM AUDIO LANE (the room under it, or over the words block) - the ghost
+// of a new audio lane. Let go there: the lanes are made and the clip laid on them in one step (_drop `make`). Taken away:
+// the ghost goes. Not past the ceiling - four lanes a side - and not for what the side does not take (a sound above, a
+// picture below). Held over a lane, it is that lane's drop, as before.
+let _ghost = null;          // { side, media, rows: [element], at }
+let _dragData = null;       // what a tile of this page carries while it is dragged - read at its dragstart, for the length
+
+function _ghostDur(media) {
+  const d = _dragData;
+  if (media === 'image' || (d && d.src && isStill({ src: d.src }))) return STILL_DUR;
+  return d && +d.dur > 0 ? +d.dur : FALLBACK_DUR;
+}
+
+const _onLane = (tg) => !!(tg && tg.closest && tg.closest('.mv3b-row.is-video .mv3b-lane, .mv3b-row.is-audio .mv3b-lane'));
+
+// Which new lane a drag here would make: 'video' (over the ruler, or over that ghost pair), 'audio' (below the bottom media
+// lane, over the words block, or over that ghost), or '' (over a lane - its own drop - or between the blocks).
+function _sideAt(e) {
+  const host = _host();
+  const inner = host && host.querySelector('.mv3b-inner');
+  const tg = e.target && e.target.closest ? e.target : null;
+  if (!inner || !tg || !host.contains(tg)) return '';
+  const g = tg.closest('.mv3b-row.is-ghost');
+  if (g) return g.dataset.side || '';
+  if (tg.closest('.mv3b-row.is-ruler')) return 'video';
+  if (tg.closest('.mv3b-row.is-video, .mv3b-row.is-audio, .mv3b-seam')) return '';
+  const words = inner.querySelector(':scope > .mv3b-zone.is-subs');
+  if (words && words.contains(tg)) return 'audio';
+  const rows = inner.querySelectorAll('.mv3b-row.is-video, .mv3b-row.is-audio');
+  const last = rows[rows.length - 1];
+  return last && e.clientY > last.getBoundingClientRect().bottom ? 'audio' : '';
+}
+
+function _ghostRow(kind, side, label, withClip) {
+  const row = document.createElement('div');
+  row.className = 'mv3b-row is-ghost is-ghost-' + kind;
+  row.dataset.side = side;
+  const box = document.createElement('div');
+  box.className = 'mv3b-box';
+  box.textContent = '+';
+  const lbl = document.createElement('div');
+  lbl.className = 'mv3b-lbl';
+  lbl.textContent = label;
+  const lane = document.createElement('div');
+  lane.className = 'mv3b-lane';
+  if (withClip) {
+    const c = document.createElement('div');
+    c.className = 'mv3b-ghost-clip is-' + kind;
+    lane.appendChild(c);
+  }
+  row.append(box, lbl, lane);
+  return row;
+}
+
+function _showGhost(side, media, clientX) {
+  const host = _host();
+  const inner = host && host.querySelector('.mv3b-inner');
+  if (!inner) return;
+  if (!_ghost || _ghost.side !== side || _ghost.media !== media || !_ghost.rows.every(r => r.isConnected)) {
+    _hideGhost();
+    const tracks = (Store.timeline() || {}).tracks || [];
+    const vz = inner.querySelector(':scope > .mv3b-zone.is-video');
+    const az = inner.querySelector(':scope > .mv3b-zone.is-audio');
+    const ruler = inner.querySelector(':scope > .mv3b-row.is-ruler');
+    const rows = [];
+    const putAudio = (row) => {
+      if (az) az.appendChild(row);
+      else (vz || ruler).after(row);
+      rows.push(row);
+    };
+    if (side === 'video') {
+      const v = _ghostRow('video', side, 'new video', true);
+      if (vz) vz.insertBefore(v, vz.firstChild); else ruler.after(v);
+      rows.push(v);
+      // Its sound lane comes with it - with the clip's sound on it, unless it is a picture (_newVideoLane).
+      if (_count(tracks, 'audio') < MAX_PER_SIDE) putAudio(_ghostRow('audio', side, 'new audio', media !== 'image'));
+      // In sight: the new lane is the top one, and the lanes may be scrolled under the ruler.
+      host.scrollTop = 0;
+    } else {
+      putAudio(_ghostRow('audio', side, 'new audio', true));
+      // In sight: the words block stuck to the floor may cover the bottom lanes.
+      if (host.scrollHeight > host.clientHeight) host.scrollTop = host.scrollHeight;
+    }
+    _ghost = { side, media, rows, at: 0 };
+  }
+  const z = _zoom();
+  const t = _r2(_timeAtX(clientX));
+  const w = Math.max(2, _ghostDur(media) * z);
+  for (const r of _ghost.rows) {
+    const c = r.querySelector('.mv3b-ghost-clip');
+    if (c) { c.style.left = (t * z) + 'px'; c.style.width = w + 'px'; }
+  }
+  _ghost.at = t;
+}
+
+function _hideGhost() {
+  if (!_ghost) return;
+  for (const r of _ghost.rows) r.remove();
+  _ghost = null;
+}
+
+function _wireGhost(host) {
+  host.addEventListener('dragover', (e) => {
+    if (!_on || locked() || !_hasClip(e)) return;
+    const media = _mediaOfDrag(e.dataTransfer);
+    const side = _sideAt(e);
+    const tracks = (Store.timeline() || {}).tracks || [];
+    if (!side || !_laneTakes(side, media) || _count(tracks, side) >= MAX_PER_SIDE) {
+      _hideGhost();
+      if (!_onLane(e.target)) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    _showGhost(side, media, e.clientX);
+  });
+  host.addEventListener('dragleave', (e) => { if (!e.relatedTarget || !host.contains(e.relatedTarget)) _hideGhost(); });
+  host.addEventListener('drop', (e) => {
+    const g = _ghost;
+    _hideGhost();
+    if (!g || !_on || _onLane(e.target) || !_hasClip(e)) return;
+    e.preventDefault();
+    let data = null;
+    try { data = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { return; }
+    if (data && data.src) _drop(null, g.at, data, g.side);
+  });
+  // The length of what is dragged, for the ghost: a tile's dragstart has set it by the time it reaches the document.
+  document.addEventListener('dragstart', (e) => {
+    _dragData = null;
+    if (!_hasClip(e)) return;
+    try { _dragData = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch { _dragData = null; }
+  });
+  document.addEventListener('dragend', () => { _dragData = null; _hideGhost(); });
 }
 
 function _lane(t) {
@@ -2358,6 +2518,8 @@ export function initTimelineB() {
     // the inspector) - every press here keeps the focus where it was (preventDefault, so a drag selects no text), and
     // Delete then counted as typing in that field. Let go of at the release, once the gesture's own work is done.
     host.addEventListener('mousedown', () => { _pressIn = true; }, true);
+    // (phase V41) A drop above the top video lane or below the bottom audio one makes its lane.
+    _wireGhost(host);
   }
   onPeaks(_wavesSoon);
   import('./preview-b.js').then(P => { _P = P; }).catch(() => {});
