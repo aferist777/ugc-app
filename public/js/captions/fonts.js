@@ -1,11 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CAPTIONS — the fonts the app ships, and only those (phase K5, 2026-10-03).
 
-   They live in public/fonts/captions/ (static TTFs, unmodified, OFL - licences beside them) and every
-   one draws the whole Russian alphabet: a font without it is not shipped, because libass quietly fills
-   missing letters from Arial and the word comes out in two fonts. The render hands the folder to the
-   `ass` filter (fontsdir), the page declares them with @font-face (css/caption-fonts.css) - the same
-   files on both sides.
+   They live in public/fonts/captions/ (static TTFs, unmodified, OFL or Apache-2.0 - licences beside them) and
+   every one draws the whole Russian alphabet - but the five display faces of the text presets (phase V42,
+   the owner's (ц2)): Anton, Bebas Neue, Bangers, Luckiest Guy and Permanent Marker have no Cyrillic, and
+   libass would quietly fill the missing letters from Arial, the word coming out in two fonts. Each of them
+   names its `twin`, a shipped font with Cyrillic: a line that holds a Cyrillic letter is drawn WHOLE in the
+   twin (drawnFamily below - ass.js, place.js and text-fx.js all ask it), never a word in two fonts. The
+   render hands the folder to the `ass` filter (fontsdir), the page declares them with @font-face
+   (css/caption-fonts.css) - the same files on both sides.
 
    `family` is the name libass looks the font up by: the font's OWN family name (nameID 1), which for a
    weight-named file is "Montserrat Black", not "Montserrat" - asked for "Montserrat" in bold, libass
@@ -38,6 +41,12 @@ export const FONTS = [
   { family: 'Unbounded Black', label: 'Unbounded Black', files: { 400: 'Unbounded-Black.ttf' }, bold: false, line: 1.548, ink: [0.26, 0.06] },
   { family: 'Russo One', label: 'Russo One', files: { 400: 'RussoOne-Regular.ttf' }, bold: false, line: 1.205, ink: [0.18, 0.08] },
   { family: 'Exo 2 Black', label: 'Exo 2 Black', files: { 400: 'Exo2-Black.ttf' }, bold: false, line: 1.469, ink: [0.28, 0.07] },
+  // No Cyrillic (phase V42): a line with a Cyrillic letter is drawn in the `twin`.
+  { family: 'Anton', label: 'Anton', files: { 400: 'Anton-Regular.ttf' }, bold: false, line: 1.733, ink: [0.32, 0.12], twin: 'Fira Sans Extra Condensed Black' },
+  { family: 'Bebas Neue', label: 'Bebas Neue', files: { 400: 'BebasNeue-Regular.ttf' }, bold: false, line: 1.300, ink: [0.19, 0.22], twin: 'Oswald' },
+  { family: 'Bangers', label: 'Bangers', files: { 400: 'Bangers-Regular.ttf' }, bold: false, line: 1.757, ink: [0.38, 0.17], twin: 'Rubik Mono One' },
+  { family: 'Luckiest Guy', label: 'Luckiest Guy', files: { 400: 'LuckiestGuy-Regular.ttf' }, bold: false, line: 1.226, ink: [0.22, 0.13], twin: 'Rubik Mono One' },
+  { family: 'Permanent Marker', label: 'Permanent Marker', files: { 400: 'PermanentMarker-Regular.ttf' }, bold: false, line: 1.427, ink: [0.26, 0.18], twin: 'Rubik Black' },
   { family: 'Liberation Sans', label: 'Liberation Sans (Arial)', files: { 400: 'LiberationSans-Regular.ttf', 700: 'LiberationSans-Bold.ttf' }, bold: 'style', line: 1.117, ink: [0.16, 0.00] },
   { family: 'PT Sans', label: 'PT Sans', files: { 400: 'PT_Sans-Web-Regular.ttf', 700: 'PT_Sans-Web-Bold.ttf' }, bold: 'style', line: 1.294, ink: [0.23, 0.05] },
   { family: 'PT Serif', label: 'PT Serif', files: { 400: 'PT_Serif-Web-Regular.ttf', 700: 'PT_Serif-Web-Bold.ttf' }, bold: 'style', line: 1.325, ink: [0.21, 0.05] },
@@ -49,10 +58,8 @@ export const ALIASES = {
   'arial': 'Liberation Sans', 'helvetica': 'Liberation Sans', 'ibm plex sans': 'Inter',
   'georgia': 'PT Serif', 'times new roman': 'PT Serif',
   'tahoma': 'PT Sans', 'verdana': 'PT Sans', 'courier new': 'PT Sans',
-  'impact': 'Fira Sans Extra Condensed Black', 'anton': 'Fira Sans Extra Condensed Black',
-  'bebas neue': 'Oswald',
-  'the bold font': 'Montserrat Black', 'komika axis': 'Rubik Mono One', 'bangers': 'Rubik Mono One',
-  'luckiest guy': 'Rubik Mono One', 'poppins': 'Montserrat',
+  'impact': 'Fira Sans Extra Condensed Black',
+  'the bold font': 'Montserrat Black', 'komika axis': 'Rubik Mono One', 'poppins': 'Montserrat',
   'orbitron': 'Russo One', 'syne': 'Unbounded Black', 'outfit': 'Montserrat', 'plus jakarta sans': 'Inter',
 };
 
@@ -68,6 +75,25 @@ export function fontOf(name) {
 
 /** The family a style's font is stored and drawn as. */
 export const familyOf = (name) => fontOf(name).family;
+
+// A letter of the Cyrillic alphabets (phase V42).
+const CYRILLIC = /[Ѐ-ӿ]/;
+
+/**
+ * The family a line saying `text` is DRAWN in: its style's font - or, where that font has no Cyrillic and the line holds a
+ * Cyrillic letter, the font's twin (phase V42, the owner's (ц2)): the whole line, never a word in two fonts.
+ */
+export function drawnFamily(name, text) {
+  const f = fontOf(name);
+  return f.twin && CYRILLIC.test(String(text == null ? '' : text)) ? f.twin : f.family;
+}
+
+/** A style as a line saying `text` is drawn: the same object when its font draws every letter, else a copy in the twin. */
+export function withTwin(st, text) {
+  if (!st) return st;
+  const fam = drawnFamily(st.font, text);
+  return fam === fontOf(st.font).family ? st : Object.assign({}, st, { font: fam });
+}
 
 /** What the .ass says for a style: the family and its Bold flag (-1 / 0). */
 export function assFace(name, bold) {

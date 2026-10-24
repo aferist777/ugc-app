@@ -21,7 +21,7 @@
 
 import { resolveStyle, withAuto, anchorOf, captionLanes, POSITIONS } from './style.js';
 import { meter, edgeOf } from './measure.js';
-import { fontOf } from './fonts.js';
+import { fontOf, withTwin } from './fonts.js';
 import { fitPage, fitText, tokensOf } from './pages.js';
 import { spells, typedWords } from './words.js';
 
@@ -141,7 +141,8 @@ export function boxOf(drawn, st, W, H) {
  */
 export function pageBox(c, laneStyle, subs, W, H) {
   const own = c && c.style && typeof c.style === 'object' && Object.keys(c.style).length ? c.style : null;
-  const st = withAuto(resolveStyle(laneStyle, own), W, H);
+  // In the font it is drawn in: a line with a Cyrillic letter in a font without them is drawn in the twin (V42).
+  const st = withTwin(withAuto(resolveStyle(laneStyle, own), W, H), c && c.name);
   const start = Math.max(0, +c.start || 0);
   const dur = Math.max(0.05, +c.dur || 0);
   const b = boxOf(drawnPage(c, st, subs, W, (start + dur) - start), st, W, H);

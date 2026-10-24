@@ -14,6 +14,12 @@
 @font-face{ font-family:"Unbounded Black"; src:url("/fonts/captions/Unbounded-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"Russo One"; src:url("/fonts/captions/RussoOne-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"Exo 2 Black"; src:url("/fonts/captions/Exo2-Black.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+/* The text presets' display faces (phase V42) - no Cyrillic; a line with it is drawn in the font's twin (fonts.js). */
+@font-face{ font-family:"Anton"; src:url("/fonts/captions/Anton-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Bebas Neue"; src:url("/fonts/captions/BebasNeue-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Bangers"; src:url("/fonts/captions/Bangers-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Luckiest Guy"; src:url("/fonts/captions/LuckiestGuy-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
+@font-face{ font-family:"Permanent Marker"; src:url("/fonts/captions/PermanentMarker-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"Liberation Sans"; src:url("/fonts/captions/LiberationSans-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 @font-face{ font-family:"Liberation Sans"; src:url("/fonts/captions/LiberationSans-Bold.ttf") format("truetype"); font-weight:700; font-style:normal; font-display:swap }
 @font-face{ font-family:"PT Sans"; src:url("/fonts/captions/PT_Sans-Web-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap }

@@ -39,6 +39,16 @@ export const POSITIONS = ['top', 'center', 'bottom'];
 // subtitles, a sentence or a part of one, two lines of up to 42 characters, 1-7 s (pages.js SENT). The LANE's, never
 // a line's (с43): resolveStyle takes it from the lane only.
 export const CUTS = ['pages', 'sentences'];
+// A TEXT line's entrance and exit (phase V42, the owner's (о15); captions/text-fx.js draws them, its ENTER / LEAVE are keyed by
+// these names): what moves - the whole line, its rows, its words or its letters - and how; `enterDur` / `leaveDur` their
+// lengths, s. A text lane's only: the subtitle lanes keep `appear`.
+export const ENTERS = ['none', 'fade', 'pop', 'zoom', 'grow', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'stretch', 'swing',
+  'wipe', 'mask-rise', 'rows', 'words', 'words-pop', 'letters', 'letters-pop', 'letters-drop', 'typewriter', 'glitch', 'flicker'];
+export const LEAVES = ['none', 'fade', 'pop', 'zoom', 'shrink', 'rise', 'sink', 'to-left', 'to-right', 'fall', 'blur', 'stretch', 'wipe',
+  'mask-sink', 'rows', 'words', 'letters', 'letters-fall', 'backspace', 'glitch', 'flicker'];
+// What a text line stands on besides a box (`borderStyle`): a plate drawn round its letters (text-fx.js plateOf), in the box's
+// colour and opacity (`backColor`, `backAlpha`); `plateIn` / `plateOut` - its own entrance and exit ('' - the text's).
+export const PLATES = ['none', 'round', 'pill', 'marker', 'underline', 'circle', 'tag', 'sticker'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -55,6 +65,11 @@ export const DEF = {
   sizeAuto: true,
   // The colour of a word marked to stand out (`k`, K10b) - '' is automatic (markedColour).
   marked: '',
+  // A text line's (phase V42): its entrance and exit and their lengths, the plate behind it, its tilt (degrees, counter-
+  // clockwise) and its glow (0 none; '' colour - the text's). The accent of a tag's stripe and of a typewriter's cursor is
+  // `highlight` - a text lane has no spoken word to light.
+  enter: 'none', enterDur: 0.5, leave: 'none', leaveDur: 0.4,
+  plate: 'none', plateIn: '', plateOut: '', tilt: 0, glow: 0, glowColor: '',
 };
 
 // ── One rule per field, for the whole style and for a caption's part of it ──
@@ -93,6 +108,9 @@ const RULES = {
   effect: ONE(EFFECTS), appear: ONE(APPEARS), casing: ONE(CASINGS),
   sizeAuto: BOOL,
   marked: (v) => (v === '' ? '' : COLOUR(v)),
+  enter: ONE(ENTERS), enterDur: NUM(0.05, 3), leave: ONE(LEAVES), leaveDur: NUM(0.05, 3),
+  plate: ONE(PLATES), plateIn: (v) => (v === '' ? '' : ONE(ENTERS)(v)), plateOut: (v) => (v === '' ? '' : ONE(LEAVES)(v)),
+  tilt: NUM(-15, 15), glow: NUM(0, 10), glowColor: (v) => (v === '' ? '' : COLOUR(v)),
 };
 
 // ── A word marked to stand out ──────────────────────────────────────────────

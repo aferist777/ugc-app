@@ -39,14 +39,19 @@
    of the page is worked out by; a page that would run past an edge of the frame is moved back inside in its
    \pos (phase V30, block 3, the owner's (с34)), and one that fits is written as it always was.
 
+   A TEXT LINE WITH AN ENTRANCE, AN EXIT, A PLATE, A TILT OR A GLOW (phase V42) is drawn by text-fx.js in its lane's four
+   layers, with a style row of its own; every other line is drawn here, exactly as before. A line in a font without Cyrillic
+   that holds a Cyrillic letter is drawn whole in the font's twin (fonts.js drawnFamily).
+
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { resolveStyle, withAuto, anchorOf, cased, markedColour } from './style.js';
-import { assFace } from './fonts.js';
+import { assFace, drawnFamily } from './fonts.js';
 import { padOf } from './measure.js';
 import { spells } from './words.js';
 import { drawnPage, boxOf, gapAfter as _gap } from './place.js';
+import { textLine, usesFx } from './text-fx.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -290,15 +295,37 @@ export function buildAss(lanes, w, h) {
     return shrunk.get(key);
   };
 
+  // A line in a font without Cyrillic that holds a Cyrillic letter: the same style in the font's twin (V42).
+  const twins = new Map();
+  const twinned = (s, text) => {
+    const fam = drawnFamily(s.st.font, text);
+    if (fam === s.st.font) return s;
+    const key = s.name + '|' + fam;
+    if (!twins.has(key)) {
+      const z = make(s.name + 't' + twins.size, Object.assign({}, s.st, { font: fam }), s.marks);
+      twins.set(key, z);
+      extra.push(z);
+    }
+    return twins.get(key);
+  };
+  // The text lines drawn by text-fx.js, and their own style rows.
+  const fxStyles = [];
+
   const lines = [];
   const dlg = (layer, start, end, style, text) => lines.push('Dialogue: ' + layer + ',' + assTime(start) + ','
     + assTime(end) + ',' + style + ',,0,0,0,,' + text);
   used.forEach((u, lane) => {
     const L = lane * 4;
     for (const c of u.clips) {
-      let s = styleOf(u, lane, c);
+      let s = twinned(styleOf(u, lane, c), c.name);
       const start = Math.max(0, +c.start || 0);
       const end = start + Math.max(0.05, +c.dur || 0);
+      if (!u.subs && usesFx(s.st)) {
+        const fx = textLine({ text: c.name, start, end }, s.st, s.name + 'x' + fxStyles.length, L, w, h);
+        fxStyles.push(...fx.styles);
+        lines.push(...fx.events);
+        continue;
+      }
       // Where the page breaks into lines: between its words - or, typed, in each paragraph as typed, at
       // breakable blanks only (a no-break space stays where it is). A typed line that needs no break is
       // drawn exactly as typed, its spaces and all (review K2). A typed line of the subtitle lane with a
@@ -322,6 +349,7 @@ export function buildAss(lanes, w, h) {
     styles.push('Style: ' + textStyle(s.name, s.st, s.a, w, h, s.layered));
     if (s.layered && (BOXY(s.st) || s.st.effect === 'box')) styles.push('Style: ' + boxStyle(s.name + 'b', s.st, s.a, w, h));
   }
+  styles.push(...fxStyles);
 
   const head = [
     '[Script Info]',
