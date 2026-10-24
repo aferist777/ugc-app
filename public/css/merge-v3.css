@@ -921,6 +921,13 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    whatever else is on it, rather than following the audio block up and down as lanes are
    added and removed. */
 .mv3b-zone.is-subs{margin-top:auto}
+/* (phase V41, the owner's (о10)) AND IT STAYS IN SIGHT: while it holds lines, the words block - the subtitles and the text
+   lanes above them - sticks to the bottom of the timeline's window, over the lanes scrolling under it. Over the clips and the
+   frozen names of those lanes (z-index 2-3), under the playhead (6); a stretch drawn to cut has its own copy inside it. */
+.mv3b-zone.is-subs.has-words{
+  position:sticky; bottom:0; z-index:4; background:var(--bg);
+  box-shadow:0 -1px 0 var(--border), 0 -6px 8px -6px oklch(0 0 0 / .55);
+}
 /* The seam. A real element, not a border: the pairing is read off distance from it, so it
    has to be findable rather than painted on. */
 .mv3b-seam{height:2px; background:var(--border); position:sticky; left:0}
@@ -1012,6 +1019,9 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
 
 /* Ruler and playhead. The row is shorter than a lane - it carries numbers, not clips. */
 .mv3b-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}
+/* (phase V41) THE RULER STAYS ON TOP while the lanes scroll under it - with the playhead's tip and the label of a stretch
+   drawn to cut, which live in it. Over the lanes and the words block (4), under the playhead's line (6). */
+.mv3b-row.is-ruler{position:sticky; top:0; z-index:5; background:var(--bg)}
 .mv3b-ruler{cursor:text; position:relative}
 .mv3b-tick{
   position:absolute; top:3px; padding-left:3px;
@@ -1024,8 +1034,9 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
   position:absolute; top:0; bottom:0; width:1px; z-index:6;
   background:var(--primary); pointer-events:none;
 }
-.mv3b-head::before{
-  content:''; position:absolute; top:0; left:-3px;
+/* Its tip is drawn in the ruler (phase V41), so it stays in sight with it. */
+.mv3b-head-tip{
+  position:absolute; top:0; width:0; height:0; margin-left:-3.5px; pointer-events:none;
   border-left:3.5px solid transparent; border-right:3.5px solid transparent;
   border-top:6px solid var(--primary);
 }

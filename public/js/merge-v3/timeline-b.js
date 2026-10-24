@@ -586,8 +586,14 @@ function _deleteSelected() {
 // repaint the whole timeline under the pointer.
 let _drag = null;
 
-// Where a clip may go: video to video, audio to audio. A subtitle lane takes neither.
+// Where a clip may go: video to video, audio to audio. A subtitle lane takes neither. Not a lane scrolled under the ruler or
+// the words block stuck to the floor (phase V41): what cannot be seen there takes nothing.
 function _laneUnder(y, kind) {
+  const host = _host();
+  const cover = host ? [...host.querySelectorAll('.mv3b-row.is-ruler, .mv3b-zone.is-subs.has-words')] : [];
+  if (kind === 'video' || kind === 'audio') {
+    for (const c of cover) { const b = c.getBoundingClientRect(); if (y >= b.top && y <= b.bottom) return null; }
+  }
   const rows = [...document.querySelectorAll('.mv3b-row.is-' + kind)];
   for (const r of rows) {
     const b = r.getBoundingClientRect();
@@ -679,30 +685,38 @@ function _letRangeGo() {
   _paintRange();
 }
 
-// The stretch over the lanes: one element in the stack, under the playhead and the frozen names.
+// The stretch over the lanes: one element in the stack, under the playhead and the frozen names - and a copy inside the
+// words block while it sticks to the floor (phase V41: it is a layer of its own over the lanes, and the stretch cuts its
+// lines too). Its label lives in the ruler, which stays in sight.
 function _paintRange() {
   const host = _host();
   const inner = host && host.querySelector('.mv3b-inner');
   if (!inner) return;
-  let el = inner.querySelector('.mv3b-range');
-  if (!_range) { if (el) el.remove(); return; }
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'mv3b-range';
-    // (phase V41) THE LABEL IS A BUTTON: a press cuts, as Delete does. Its own press is not the bare lane's (a seek).
-    const lbl = document.createElement('button');
+  if (!_range) { inner.querySelectorAll('.mv3b-range, .mv3b-range-t').forEach(el => el.remove()); return; }
+  const z = _zoom();
+  const words = inner.querySelector(':scope > .mv3b-zone.is-subs.has-words');
+  for (const p of [inner, words]) {
+    if (!p) continue;
+    let el = p.querySelector(':scope > .mv3b-range');
+    if (!el) { el = document.createElement('div'); el.className = 'mv3b-range'; p.appendChild(el); }
+    el.style.left = (GUTTER + _range.a * z) + 'px';
+    el.style.width = Math.max(1, (_range.b - _range.a) * z) + 'px';
+  }
+  const ruler = inner.querySelector('.mv3b-ruler');
+  if (!ruler) return;
+  let lbl = ruler.querySelector('.mv3b-range-t');
+  if (!lbl) {
+    // (phase V41) THE LABEL IS A BUTTON: a press cuts, as Delete does. Its own press is not the ruler's (a seek).
+    lbl = document.createElement('button');
     lbl.type = 'button';
     lbl.className = 'mv3b-range-t';
     lbl.title = 'Cut this stretch out of every lane - or press Delete';
     lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
     lbl.addEventListener('click', (e) => { e.stopPropagation(); cutRange(); });
-    el.appendChild(lbl);
-    inner.appendChild(el);
+    ruler.appendChild(lbl);
   }
-  const z = _zoom();
-  el.style.left = (GUTTER + _range.a * z) + 'px';
-  el.style.width = Math.max(1, (_range.b - _range.a) * z) + 'px';
-  el.firstChild.textContent = '✂ ' + (_range.b - _range.a).toFixed(2) + ' s · Delete';
+  lbl.style.left = (_range.a * z + 2) + 'px';
+  lbl.textContent = '✂ ' + (_range.b - _range.a).toFixed(2) + ' s · Delete';
 }
 
 /**
@@ -714,7 +728,7 @@ export function cutRange() {
   const { a, b } = _range;
   const why = cutRefused(Store.timeline(), a, b);
   if (why) {
-    const at = _host() && _host().querySelector('.mv3b-range');
+    const at = _host() && _host().querySelector('.mv3b-range-t, .mv3b-range');
     if (at) note(at, 'Not cut', why);
     return { ok: false, why };
   }
@@ -1275,6 +1289,11 @@ function _ruler(dur) {
     if (e.button !== 0) return;
     _scrub(e);
   });
+  // The playhead's tip, here rather than on the line (phase V41): the ruler stays on top while the lanes scroll.
+  const tip = document.createElement('div');
+  tip.className = 'mv3b-head-tip';
+  tip.style.left = (_playhead * z) + 'px';
+  lane.appendChild(tip);
   row.appendChild(lane);
   return row;
 }
@@ -1309,11 +1328,21 @@ function _headMoved() {
 // seek reaches it in the same moment rather than a promise later.
 let _P = null;
 
+// The line over the stack and its tip in the ruler, where _playhead says.
+function _placeHead() {
+  const host = _host();
+  if (!host) return;
+  const z = _zoom();
+  const el = host.querySelector('.mv3b-head');
+  if (el) el.style.left = (GUTTER + _playhead * z) + 'px';
+  const tip = host.querySelector('.mv3b-head-tip');
+  if (tip) tip.style.left = (_playhead * z) + 'px';
+}
+
 function _seekTo(t) {
   const at = Math.max(0, Math.round((+t || 0) * 100) / 100);
   _playhead = at;
-  const el = _host() && _host().querySelector('.mv3b-head');
-  if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  _placeHead();
   _headMoved();
   // The preview is the other half of this workflow, and the playhead belongs to both. seek()
   // calls setPlayhead back, which is harmless: it writes the same number this just wrote.
@@ -1340,8 +1369,7 @@ function _centreOnPlayhead() {
 export const playhead = () => _playhead;
 export function setPlayhead(t) {
   _playhead = Math.max(0, +t || 0);
-  const el = _host() && _host().querySelector('.mv3b-head');
-  if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  _placeHead();
   _headMoved();
 }
 
@@ -1560,10 +1588,18 @@ function _build() {
     inner.appendChild(seam);
   }
   if (audio) inner.appendChild(audio);
-  if (subs) inner.appendChild(subs);
+  // (phase V41, the owner's (о10)) While it holds lines it sticks to the bottom of the window (merge-v3.css) - empty, it would
+  // only hide the lanes under it.
+  if (subs) {
+    if (tracks.some(t => (t.kind === 'subs' || t.kind === 'text') && (t.clips || []).length)) subs.classList.add('has-words');
+    inner.appendChild(subs);
+  }
 
   inner.appendChild(_head());
   host.appendChild(inner);
+  // What is brought into view (a picked lane, a clip) stops short of the ruler and the words block that cover the lanes.
+  host.style.scrollPaddingTop = '19px';
+  host.style.scrollPaddingBottom = (subs && subs.classList.contains('has-words')) ? subs.offsetHeight + 'px' : '';
   // (phase V36, T1) Another timeline opens at its start - the preview put the playhead at 0 (preview-b.js _toStart), and
   // the lanes are shown from there, not scrolled to where the last one was looked at.
   if (opened) host.scrollLeft = 0;
