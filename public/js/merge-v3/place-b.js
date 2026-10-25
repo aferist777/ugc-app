@@ -48,7 +48,8 @@ function _target() {
   const one = selectedOne();
   if (!one || !one.clip || one.track.kind !== 'video') return null;
   const r = _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
-  return r && !r.band ? { track: one.track, clip: one.clip, r } : null;
+  // (phase V49) A main clip that is not a PiP has no grips either (preview-b.js `nogrip`): it moves only as a PiP.
+  return r && !r.band && !r.nogrip ? { track: one.track, clip: one.clip, r } : null;
 }
 
 // Canvas pixels, then FRAME pixels: the canvas is drawn at a fixed size and shown at whatever
@@ -217,7 +218,7 @@ function _up() {
 export function paintHandles(ctx) {
   const one = selectedOne();
   const br = one && one.track.kind === 'video' && _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
-  if (br && br.band) {
+  if (br && (br.band || br.nogrip)) {
     ctx.save();
     ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.55)';
     ctx.strokeRect(br.dx + 1, br.dy + 1, br.dw - 2, br.dh - 2);

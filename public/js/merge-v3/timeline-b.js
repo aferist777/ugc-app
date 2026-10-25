@@ -2064,7 +2064,9 @@ export function selectedOne() {
 const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign', 'frame',
                              'transition', 'animation', 'filter',
                              'tx', 'ty', 'tw', 'angle', 'feather',
-                             'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation']);
+                             'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation',
+                             // (phase V49, point 3) A main clip as a picture in the picture, its corners and outline.
+                             'pip', 'radius', 'outline', 'outlineColor']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2109,6 +2111,13 @@ function _write(c, key, value) {
   }
   if (key === 'angle') { c.angle = (value == null) ? null : Math.max(-180, Math.min(180, +value || 0)); return; }
   if (key === 'feather') { c.feather = (value == null) ? null : Math.max(0, Math.min(0.45, +value || 0)); return; }
+  // (phase V49, point 3, the owner's (пр8)-(пр11)) A MAIN clip shown as a picture in the picture over a blurred copy of itself
+  // (preview-b.js _pipRect, lib/mv3b-render.js): the switch, then the look - its corners rounded (a share of its shorter
+  // side, 0.5 round ends), an outline (a share of the frame's width) and its colour. The look stays when the switch goes off.
+  if (key === 'pip') { c.pip = value ? true : null; return; }
+  if (key === 'radius') { c.radius = (value == null || !(+value > 0)) ? null : Math.min(0.5, +value); return; }
+  if (key === 'outline') { c.outline = (value == null || !(+value > 0)) ? null : Math.min(0.05, +value); return; }
+  if (key === 'outlineColor') { c.outlineColor = /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : null; return; }
   // All five the panel offers. Only three were let through, so top and bottom quietly wrote
   // centre - which the preview and the render then showed, as if the choice had been made.
   if (key === 'cropAlign') {
@@ -2207,6 +2216,39 @@ export function setClipFields(trackId, clipId, patch) {
     for (const k of Object.keys(patch || {})) if (CLIP_FIELDS.has(k)) _write(c, k, patch[k]);
     if (Object.keys(patch || {}).some(k => SPLIT_KEYS.has(k))) placeBySplit(tl);
   });
+}
+
+/**
+ * (phase V49, (пр9)) Fields on SEVERAL clips in ONE mutation - one undo step: a PiP switched on, sized or moved for every main
+ * clip picked at once. `items` - [{ trackId, clipId, patch }], each its own patch.
+ */
+export function setClipsFields(items) {
+  const list = (items || []).filter(x => x && x.trackId && x.clipId && x.patch);
+  if (!list.length) return false;
+  return Store.mutate(tl => {
+    let split = false;
+    for (const it of list) {
+      const t = (tl.tracks || []).find(x => x.id === it.trackId);
+      const c = t && (t.clips || []).find(x => x.id === it.clipId);
+      if (!c) continue;
+      for (const k of Object.keys(it.patch)) if (CLIP_FIELDS.has(k)) { _write(c, k, it.patch[k]); if (SPLIT_KEYS.has(k)) split = true; }
+    }
+    if (split) placeBySplit(tl);
+  });
+}
+
+/** (phase V49) Every clip picked, with its lane - [{ track, clip }], in the lanes' order. */
+export function selectedClips() {
+  if (!_sel.size) return [];
+  const out = [];
+  for (const t of ((Store.timeline() || {}).tracks || [])) for (const c of (t.clips || [])) if (_sel.has(c.id)) out.push({ track: t, clip: c });
+  return out;
+}
+
+/** (phase V49) The main video lane - the bottom one, the one a PiP belongs to - or null. */
+export function mainVideo(tl) {
+  const vids = (((tl || Store.timeline()) || {}).tracks || []).filter(t => t.kind === 'video');
+  return vids.length ? vids[vids.length - 1] : null;
 }
 
 export function setClipField(trackId, clipId, key, value) {

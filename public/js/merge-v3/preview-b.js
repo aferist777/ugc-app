@@ -357,10 +357,11 @@ export const isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
 // In lane order, bottom layer first - so the LAST one under the pointer is the one on top.
 const _rects = new Map();
 
-function _place(sw, sh, c, tFile) {
+function _place(sw, sh, c, tFile, raw) {
   // A gesture in progress holds its numbers rather than writing them: this is where they are
-  // read back, so the picture follows the mouse without a store write per pixel.
-  const live = liveOf(c.id);
+  // read back, so the picture follows the mouse without a store write per pixel. (V49) Not for the frame a PiP shows
+  // (`raw`): the gesture moves the PiP, not what is inside it.
+  const live = raw ? null : liveOf(c.id);
   if (live) c = Object.assign({}, c, live);
   if (isPlaced(c)) {
     const dw = Math.max(2, (+c.tw) * W);
@@ -430,6 +431,113 @@ function _place(sw, sh, c, tFile) {
   return { sx, sy, sw: cw, sh: ch, dx: 0, dy: 0, dw: W, dh: H,
            cx: W / 2, cy: H / 2, angle: 0,
            conv: { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 } };
+}
+
+// ── A main clip as a picture in the picture (phase V49, point 3) ─────────────
+// The owner, 2026-10-25: "то что в превью уже порезалось я хочу зафиксировать это (например галочкой в инспекторе) и менять
+// просто размер этого видео в превью чтобы по бокам появились размытые края". A clip of the MAIN lane with `pip` on is drawn as
+// the picture the frame shows of it - a filled clip's frame (its crop with its Keep side, or its window following the faces,
+// which keeps moving and punching in inside the PiP, (пр10)), a fitted clip's whole picture - in a box of that shape, by
+// default where and as big as it already is (nothing jumps), else at `tx`/`ty` (its middle) and `tw` (its width) like an
+// insert; turned by `angle`, its edges softened by `feather`, its corners rounded by `radius`, outlined by `outline` in
+// `outlineColor` ((пр11)) - over the same clip blurred across the whole frame. lib/mv3b-render.js draws it by the same rule:
+// the frame's picture -> the box -> corners, outline and soft edge -> the turn -> over the blurred copy.
+const PIP_OUTLINE = '#ffffff';
+const _pipNum = (v, lo, hi) => { const n = +v; return Number.isFinite(n) && n > 0 ? Math.max(lo, Math.min(hi, n)) : 0; };
+
+function _pipRect(sw, sh, c, tFile) {
+  const live = liveOf(c.id);
+  const k = live ? Object.assign({}, c, live) : c;
+  const fill = String(k.fit || 'fit') === 'fill';
+  const ar = fill ? W / H : sw / sh;
+  // Its own size when nobody has sized it: the whole frame for a filled clip, the fitted picture for a fitted one.
+  const nat = fill ? W : Math.min(W, H * ar);
+  const placed = isPlaced(k);
+  const dw = Math.max(2, placed ? +k.tw * W : nat), dh = dw / ar;
+  const cx = (placed && k.tx != null ? +k.tx : 0.5) * W, cy = (placed && k.ty != null ? +k.ty : 0.5) * H;
+  return {
+    pip: true, placed: true, fill, dx: cx - dw / 2, dy: cy - dh / 2, dw, dh, cx, cy, angle: +k.angle || 0,
+    // What a filled clip's frame shows - drawn into the box (parts of a framed clip, or one rectangle of the file).
+    inner: fill ? _place(sw, sh, Object.assign({}, c, { tw: null, tx: null, ty: null, angle: null }), tFile, true) : null,
+    feather: _pipNum(k.feather, 0, 0.45), radius: _pipNum(k.radius, 0, 0.5), outline: _pipNum(k.outline, 0, 0.05),
+    outlineColor: /^#[0-9a-f]{6}$/i.test(String(k.outlineColor || '')) ? k.outlineColor : PIP_OUTLINE,
+    conv: { tw: dw / W, tx: cx / W, ty: cy / H },
+  };
+}
+
+// Its edges, kept between frames - they change only when its size or look does: the alpha of every pixel (the soft edge and
+// the rounded corners, from the distance to the nearest edge - round at a corner) and the outline over it.
+let _maskKey = '', _maskCv = null, _ringCv = null;
+function _pipMasks(cw, ch, fr, rr, tpx, col) {
+  const key = [cw, ch, fr, rr, tpx.toFixed(2), col].join('|');
+  if (key === _maskKey) return { mask: _maskCv, ring: _ringCv };
+  _maskKey = key;
+  const S = Math.min(cw, ch), F = Math.max(1, fr * S), R = Math.min(0.5, rr) * S;
+  const mk = () => { const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; return cv; };
+  _maskCv = mk();
+  _ringCv = tpx > 0 ? mk() : null;
+  const m = _maskCv.getContext('2d').createImageData(cw, ch);
+  const g = _ringCv ? _ringCv.getContext('2d').createImageData(cw, ch) : null;
+  const cr = parseInt(col.slice(1, 3), 16), cg = parseInt(col.slice(3, 5), 16), cb = parseInt(col.slice(5, 7), 16);
+  for (let y = 0; y < ch; y++) {
+    const Y = y + 0.5;
+    const dy = Math.max(0, R - Y, Y - (ch - R));
+    for (let x = 0; x < cw; x++) {
+      const X = x + 0.5;
+      const dx = Math.max(0, R - X, X - (cw - R));
+      const e = (dx > 0 && dy > 0) ? R - Math.hypot(dx, dy) : Math.min(X, cw - X, Y, ch - Y);
+      const a = Math.max(0, Math.min(1, e / F));
+      const i = (y * cw + x) * 4;
+      m.data[i + 3] = Math.round(a * 255);
+      if (g) {
+        const on = Math.max(0, Math.min(1, tpx - e + 0.5));
+        g.data[i] = cr; g.data[i + 1] = cg; g.data[i + 2] = cb; g.data[i + 3] = Math.round(a * on * 255);
+      }
+    }
+  }
+  _maskCv.getContext('2d').putImageData(m, 0, 0);
+  if (g) _ringCv.getContext('2d').putImageData(g, 0, 0);
+  return { mask: _maskCv, ring: _ringCv };
+}
+
+let _pipCv = null;
+function _drawPip(el, r, sw, sh) {
+  // The box, in frame pixels - no bigger than a canvas should be (a PiP may be made larger than the film).
+  const cw = Math.max(1, Math.min(2160, Math.round(r.dw))), ch = Math.max(1, Math.min(3840, Math.round(r.dh)));
+  if (!_pipCv) _pipCv = document.createElement('canvas');
+  if (_pipCv.width !== cw || _pipCv.height !== ch) { _pipCv.width = cw; _pipCv.height = ch; }
+  const g = _pipCv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.filter = 'none';
+  g.clearRect(0, 0, cw, ch);
+  try {
+    if (r.fill && r.inner) {
+      const k = cw / W;
+      const ps = r.inner.parts || [{ sx: r.inner.sx, sy: r.inner.sy, sw: r.inner.sw, sh: r.inner.sh, dx: 0, dy: 0, dw: W, dh: H }];
+      for (const p of ps) {
+        g.filter = p.blur ? `blur(${Math.max(1, p.blur * k).toFixed(1)}px)` : 'none';
+        g.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx * k, p.dy * k, p.dw * k, p.dh * k);
+      }
+      g.filter = 'none';
+    } else {
+      g.drawImage(el, 0, 0, sw, sh, 0, 0, cw, ch);
+    }
+  } catch (e) { /* not decoded yet */ }
+  // Corners, soft edge, outline: the outline's thickness is a share of the FRAME's width, in the box's pixels.
+  const tpx = r.outline * W * (cw / r.dw);
+  if (r.feather > 0.001 || r.radius > 0.001 || tpx > 0.05) {
+    const { mask, ring } = _pipMasks(cw, ch, r.feather, r.radius, tpx, r.outlineColor);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(mask, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    if (ring) g.drawImage(ring, 0, 0);
+  }
+  _ctx.save();
+  _ctx.translate(r.cx, r.cy);
+  if (r.angle) _ctx.rotate(r.angle * Math.PI / 180);
+  _ctx.drawImage(_pipCv, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
+  _ctx.restore();
 }
 
 // ── A halfer band ───────────────────────────────────────────────────────────
@@ -617,9 +725,19 @@ function _fileTime(el, c) {
   return t;
 }
 
-function _show(el, sw, sh, c, gaps) {
+function _show(el, sw, sh, c, gaps, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
-  const r = _place(sw, sh, c, isFramed(c.frame) ? _fileTime(el, c) : NaN);
+  const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
+  // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.
+  if (main && c.pip) {
+    const r = _pipRect(sw, sh, c, tFile);
+    _rects.set(c.id, r);
+    _drawPip(el, r, sw, sh);
+    return;
+  }
+  const r = _place(sw, sh, c, tFile);
+  // (phase V49) A main clip is moved and sized only as a PiP (its switch in the inspector): picked, it has no grips.
+  if (main && !isPlaced(c)) r.nogrip = true;
   _rects.set(c.id, r);
   _blit(el, r, c, gaps);
 }
@@ -662,7 +780,10 @@ function _paint() {
   const shown = new Set();        // (phase V44) the elements on screen this frame
   const gaps = [];
   _liveVideo = [];
-  for (const c of _layers(tl).flatMap(track => _clipsAt(track, _at))) {
+  // (phase V49) The bottom layer is main video - a clip of it may be a PiP (_show).
+  const lanes = _layers(tl);
+  const mainId = lanes.length ? lanes[0].id : null;
+  for (const { c, main } of lanes.flatMap(track => _clipsAt(track, _at).map(c => ({ c, main: track.id === mainId })))) {
     if (!c.src) continue;
     const still = isStill({ src: c.src });
     alive.add(_keyOf(c));
@@ -709,13 +830,13 @@ function _paint() {
       if (!el.videoWidth || el.seeking || el.readyState < 2) missing++;
       if (!el.videoWidth) {                       // nothing decoded yet: its poster, while it opens (V23)
         const pic = _shooting ? null : _posterOf(c);
-        if (pic) _show(pic, pic.naturalWidth, pic.naturalHeight, c, gaps);
+        if (pic) _show(pic, pic.naturalWidth, pic.naturalHeight, c, gaps, main);
         continue;
       }
-      _show(el, el.videoWidth, el.videoHeight, c, gaps);
+      _show(el, el.videoWidth, el.videoHeight, c, gaps, main);
     } else {
       if (!el.naturalWidth) { missing++; continue; }
-      _show(el, el.naturalWidth, el.naturalHeight, c, gaps);
+      _show(el, el.naturalWidth, el.naturalHeight, c, gaps, main);
     }
   }
   // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first

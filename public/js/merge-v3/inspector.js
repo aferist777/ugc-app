@@ -22,7 +22,7 @@ import * as Store from './store.js';
 import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
          onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
          removeClip as removeB, mateOf as mateB, selectedTrack as trackB,
-         setClipFields as setManyB,
+         setClipFields as setManyB, setClipsFields as setClipsB, selectedClips as pickedB,
          removeTrack as removeTrackB, playhead as playheadB,
          stampTrack as stampB, resetTrack as resetTrackB,
          addCaption as addCapB, setCaptionText as setCapTextB,
@@ -172,6 +172,42 @@ function _pipRows(host, track, c) {
     + ', so it is no longer fitted to it.'));
 }
 
+// ── A main clip as a picture in the picture (phase V49, point 3) ─────────────
+// The owner's (пр8)-(пр11): main video has no Halfer but a PiP. Switched on, what the frame shows of the clip NOW becomes the
+// picture - a filled clip's crop with its Keep side, a fitted clip's whole picture, a framed clip's window (still moving inside
+// it) - where and as big as it already is; the yellow corners on the preview then size THAT picture about its middle, a drag
+// moves it, and behind it the same clip is blurred over the whole frame (preview-b.js _pipRect, lib/mv3b-render.js). Off:
+// the whole frame again. Written into EVERY main clip picked at once ((пр9): cut silence leaves 20-30 pieces a minute), one
+// undo step. `items` - [{ track, clip }] of the main lane.
+const isMainVideo = (track) => !!(track && track.kind === 'video' && track.main);
+
+function _pipSection(host, items) {
+  const clips = items.map(x => x.clip);
+  const on = clips.every(c => !!c.pip);
+  const write = (patch) => setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch })));
+  const many = items.length > 1;
+  const head = C.row('PiP', C.toggle(on, (v) => write(v ? { pip: true }
+    : { pip: null, tx: null, ty: null, tw: null, angle: null })));
+  head.title = on ? 'A picture in the picture over its own blur. Switch off for the whole frame again.'
+                  : 'Make ' + (many ? 'these clips' : 'this clip') + ' a picture in the picture: what the frame shows now, '
+                    + 'sized and moved on the preview, over a blurred copy of itself';
+  host.appendChild(head);
+  if (!on) {
+    if (clips.some(c => c.pip)) host.appendChild(C.hint('Some of the picked clips are a PiP already - switching on makes all of them one.'));
+    return;
+  }
+  const c0 = clips[0];
+  host.appendChild(C.row('Soft edge', C.slider({
+    min: 0, max: 0.4, step: 0.01, value: +c0.feather || 0,
+    fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
+    onChange: (v) => write({ feather: v }),
+  })));
+  host.appendChild(C.row('', C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
+    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' })));
+  host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
+    + (many ? ' - all ' + items.length + ' picked clips move together.' : '.')));
+}
+
 // How a clip meets a frame of another shape. The second row appears only when there is
 // something to decide: a fitted clip loses nothing, so there is no side to pick.
 // (phase V33.2, the owner's (х9)) A filled clip's window may MOVE: "Framing" - fixed (the side kept, as before), following
@@ -290,14 +326,20 @@ function _blankFilm(host, track, c, set, pair) {
     host.appendChild(C.hint('No sound attached to this clip.'));
   }
 
-  _bsep(host);
-  _halferRows(host, c, set);
+  // (phase V49, (пр8)) No Halfer on main video - one switched on before can still be switched off.
+  const main = isMainVideo(track);
+  if (!main || c.halfer) {
+    _bsep(host);
+    _halferRows(host, c, set);
+  }
 
   if (!c.halfer) {
     _bsep(host);
     // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
-    if (_isPlaced(c)) _pipRows(host, track, c);
+    // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
+    if (main) { _frameRows(host, c, set); _bsep(host); _pipSection(host, [{ track, clip: c }]); }
+    else if (_isPlaced(c)) _pipRows(host, track, c);
     else _frameRows(host, c, set);
   }
 
@@ -337,7 +379,9 @@ function _blankStill(host, track, c, set) {
     if (control) { control.title = control.title || label; box.appendChild(control); }
     stack.appendChild(box);
   };
-  const placed = _isPlaced(c);
+  // (phase V49) On main video a picture is framed as ever and may be a PiP (below); it has no Halfer.
+  const main = isMainVideo(track);
+  const placed = _isPlaced(c) && !main;
 
   if (c.halfer) {
     // A band takes none of these: its settings are the section under the picture. No placement or framing on a band.
@@ -366,8 +410,14 @@ function _blankStill(host, track, c, set) {
   top.appendChild(side);
   host.appendChild(top);
 
-  _bsep(host);
-  _halferRows(host, c, set);
+  if (main && !c.halfer) {
+    _bsep(host);
+    _pipSection(host, [{ track, clip: c }]);
+  }
+  if (!main || c.halfer) {
+    _bsep(host);
+    _halferRows(host, c, set);
+  }
 }
 
 // A sound. Its level is the whole of it - and a birol lands here silent, which is what this
