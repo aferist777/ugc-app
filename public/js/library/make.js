@@ -371,6 +371,8 @@ const _choosable = (it) => !!it && !it.progress && !_offer(it);
 function _stateLine(it) {
   const t = it.transcript || {};
   const way = it.intake || null;
+  // (phase V43) Its video stays on the disk and is not there any more.
+  if (it.disk && it.disk.missing) return 'the file is not where it was';
   if (it.state === 'nospeech') return 'no speech - not a source';
   if (it.state === 'notopics') return 'no topics - not a source';
   if (it.state === 'error') {
@@ -459,6 +461,25 @@ function _srcLine(it) {
     fill.style.width = (p.pct * 100).toFixed(1) + '%';
     bar.appendChild(fill);
     main.appendChild(bar);
+  }
+  // (phase V43, the owner's (ё17а)) Its video stays on the disk and is not where it was: point at it again (the same file - its
+  // words stay its own), or delete the source, with its transcripts or keeping them for the same file added again.
+  if (it.disk && it.disk.missing && !p) {
+    row.classList.add('offer');
+    const where = el('div', 'mk-srow-s mk-srow-missing', it.disk.path);
+    where.style.color = 'var(--danger)';
+    main.appendChild(where);
+    const acts = el('div', 'mk-srow-acts');
+    const re = el('button', 'lib-btn', 'Point at the file…');
+    re.type = 'button';
+    re.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
+    re.addEventListener('click', (e) => { e.stopPropagation(); _relinkSource(it); });
+    const del = el('button', 'lib-btn', 'Delete…');
+    del.type = 'button';
+    del.title = 'Delete this source - your files on the disk are not touched';
+    del.addEventListener('click', (e) => { e.stopPropagation(); _deleteMissing(it); });
+    acts.append(re, del);
+    main.appendChild(acts);
   }
   if (offer) {
     const acts = el('div', 'mk-srow-acts');
@@ -598,10 +619,80 @@ function _detachGen() {
   if (_gen.draftId) _queueDraft();
 }
 
+// (phase V43) The video of a source that stays on the disk, pointed at again: the app's window hands the file's path over,
+// the server checks it is the same video (its print).
+function _relinkSource(it) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'video/*';
+  inp.addEventListener('change', async () => {
+    const file = inp.files && inp.files[0];
+    const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
+    let where = '';
+    try { where = file && typeof pathOf === 'function' ? String(pathOf(file) || '') : ''; } catch (e) { where = ''; }
+    if (!where) { _say('Pointing at a file works in the app\'s own window - it hands the file over.', 'err'); return; }
+    try {
+      await J.api('/api/sources/' + encodeURIComponent(it.id) + '/relink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: where }) });
+      _say(`"${it.title}" - its video is found again.`, 'ok');
+    } catch (e) { _say(e.message, 'err'); }
+    await _readSources();
+    _paintSources();
+  });
+  inp.click();
+}
+
+// (phase V43, (ё17а): "удалить с галочкой удаления расшифровок") A source whose video is gone from the disk: deleted - with its
+// transcripts, or keeping them (the box not ticked) for the same file added again, which then is not heard twice.
+function _deleteMissing(it) {
+  const ov = el('div', 'mv3-x-ov');
+  const box = el('div', 'mv3-x');
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  const head = el('div', 'mv3-x-head');
+  head.appendChild(el('h3', null, `Delete "${it.title}"?`));
+  const body = el('div', 'mv3-x-body');
+  body.appendChild(el('p', 'mv3-x-note', 'Its video is not where it was (' + ((it.disk && it.disk.path) || '') + '). The source and its poster go; your files on the disk are not touched.'));
+  const lab = el('label', 'mv3-x-check');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  lab.append(cb, document.createTextNode(' and its transcripts - not ticked, they are kept, and the same video added again is not heard a second time'));
+  body.appendChild(lab);
+  const foot = el('div', 'mv3-x-foot');
+  const cancel = el('button', 'mv3-c-btn', 'Cancel');
+  cancel.type = 'button';
+  const go = el('button', 'mv3-c-btn danger', 'Delete');
+  go.type = 'button';
+  foot.append(cancel, go);
+  box.append(head, body, foot);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); Layers.close(layer); };
+  const layer = Layers.open(ov, { name: 'delete-source', onEsc: close });
+  cancel.addEventListener('click', close);
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    await _flushDraft();
+    try {
+      await J.api('/api/sources/' + encodeURIComponent(it.id) + (cb.checked ? '' : '?keepWords=1'), { method: 'DELETE' });
+      const was = _src && String(_src.id) === String(it.id);
+      if (was) _src = null;
+      if (_gen && String(_gen.sourceId) === String(it.id)) _detachGen();
+      _srcLast.delete(String(it.id));
+      close();
+      await Promise.all([_readSources(), _readDrafts()]);
+      _paintSources();
+      if (was && _view === 'topics') await _enterScript({});
+    } catch (e) { go.disabled = false; _say(e.message, 'err'); }
+  });
+}
+
 async function _deleteSource(it) {
   const nd = _drafts.filter(d => String(d.sourceId) === String(it.id)).length;
+  // (phase V43) A video that stays on the disk is never deleted by the app - only what the library holds goes.
   const lines = [`Delete "${it.title}"?`, '',
-    `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
+    it.disk ? 'Its poster and its transcript are removed. Your video stays where it is on the disk (' + it.disk.path + ').'
+      : `The video (${J.mb(it.bytes || 0)}), its poster and its transcript are removed from disk.`];
   if (nd) lines.push('', `${nd === 1 ? 'Its draft is' : `Its ${nd} drafts are`} kept, and carry on without a source.`);
   if (!confirm(lines.join('\n'))) return;
   // What is typed goes first, with the source it was written from - the server then detaches it.

@@ -5,7 +5,8 @@
 //
 //   GET    /api/highlights                  -> { projects: [view] }
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
-//   GET    /api/highlights/price            ?seconds=&source=&kind=&length= -> { price }   what "find moments" is expected to cost
+//   GET    /api/highlights/price            ?seconds=&source=&kind=&length=&audio= -> { price }   what "find moments" is expected to cost
+//   GET    /api/highlights/tracks           ?path= | ?source= -> { tracks, first }   (V43) the video's sound tracks
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
@@ -73,8 +74,27 @@ router.post('/highlights', (req, res) => {
 
 router.get('/highlights/price', (req, res) => {
   try { res.json({ success: true, price: JOB.price({ seconds: +req.query.seconds || 0, sourceId: String(req.query.source || ''),
-    kind: String(req.query.kind || ''), length: String(req.query.length || '') }) }); }
+    kind: String(req.query.kind || ''), length: String(req.query.length || ''),
+    audio: req.query.audio != null && req.query.audio !== '' ? Number(req.query.audio) : null }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// (phase V43, the owner's (ё18)) The sound tracks of a video - a file of this computer the app's window handed over (`path`), or
+// a source of the Library (`source`) - so the popup offers the choice when there is one. Only read.
+//   GET /api/highlights/tracks ?path= | ?source= -> { tracks: [{ k, label, def }], first }
+router.get('/highlights/tracks', async (req, res) => {
+  try {
+    const TR = require('../lib/audio-tracks');
+    let abs = '';
+    if (req.query.source) abs = require('../lib/sources-store').fileOf(require('../lib/sources-store').get(String(req.query.source))) || '';
+    else {
+      const p = String(req.query.path || '');
+      if (p && require('path').isAbsolute(p) && require('fs').existsSync(p) && require('fs').statSync(p).isFile()) abs = p;
+    }
+    if (!abs) return res.json({ success: true, tracks: [], first: 0 });
+    const tracks = await TR.tracksOf(abs);
+    res.json({ success: true, tracks: tracks.map((t) => ({ k: t.k, label: TR.label(t), def: t.def })), first: TR.firstOf(tracks) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 router.get('/highlights/:id', (req, res) => {

@@ -86,6 +86,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     style: '', price: null, busy: false, said: '', err: false,
     // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
     music: [],
+    // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
+    tracks: [], audio: null, tracksFor: '',
   };
 
   const ov = _el('div', 'mv3-x-ov mv3-hlp-ov');
@@ -110,7 +112,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     const b = _el('button', 'mv3-sc-tab', label);
     b.type = 'button';
     b.dataset.from = k;
-    b.addEventListener('click', () => { st.from = k; paint(); price(); if (k === 'source') loadSources(); });
+    b.addEventListener('click', () => { st.from = k; paint(); price(); readTracks(); if (k === 'source') loadSources(); });
     tabs.appendChild(b);
   }
   body.appendChild(tabs);
@@ -138,6 +140,38 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
 
   panes.source = _el('div', 'mv3-hlp-pane mv3-hlp-srcs');
   for (const k of Object.keys(panes)) body.appendChild(panes[k]);
+  // (phase V43, the owner's (ё18): "давать выбор дорожки если есть выбор") A file with more than one sound track - a dub and the
+  // original, say - says so here: the one chosen is heard and is the parts' sound.
+  const trackSel = _el('select', 'mv3-hlp-sel');
+  trackSel.addEventListener('change', () => { st.audio = +trackSel.value; price(); });
+  const trackRow = _el('label', 'mv3-hlp-lab mv3-hlp-track', 'sound');
+  trackRow.title = 'The video has more than one sound track - the one chosen is heard for the words and is the sound of the shorts';
+  trackRow.appendChild(trackSel);
+  trackRow.hidden = true;
+  body.appendChild(trackRow);
+  // The tracks of what is chosen now - asked once for each file or source.
+  let trackSeq = 0;
+  async function readTracks() {
+    const q = st.from === 'file' && st.path ? 'path=' + encodeURIComponent(st.path)
+      : (st.from === 'source' && st.sourceId ? 'source=' + encodeURIComponent(st.sourceId) : '');
+    if (q === st.tracksFor) return;
+    st.tracksFor = q;
+    st.tracks = []; st.audio = null;
+    paint();
+    if (!q) return;
+    const seq = ++trackSeq;
+    try {
+      const d = await _api('/api/highlights/tracks?' + q);
+      if (seq !== trackSeq || !_win) return;
+      st.tracks = d.tracks || [];
+      st.audio = st.tracks.length > 1 ? +d.first || 0 : null;
+      trackSel.textContent = '';
+      for (const t of st.tracks) { const o = _el('option', null, t.label + (t.def ? ' (default)' : '')); o.value = String(t.k); trackSel.appendChild(o); }
+      if (st.audio != null) trackSel.value = String(st.audio);
+    } catch (e) { st.tracks = []; st.audio = null; }
+    paint();
+    price();
+  }
 
   // ── How long and how many ──
   const row = _el('div', 'mv3-hlp-row');
@@ -255,6 +289,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     say('');
     paint();
     price();
+    readTracks();
   }
 
   // ── The Library: REFERENCES -> YouTube -> Videos ──
@@ -290,7 +325,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
         st.pick = s;
         st.sourceId = s.type === 'source' ? s.id : '';
         st.source = s.type === 'source' ? s : null;
-        paintSources(); paint(); price();
+        paintSources(); paint(); price(); readTracks();
       });
       panes.source.appendChild(r);
     }
@@ -303,7 +338,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     const q0 = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
       : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
     // (V43) fragmentation's agent writes every part of the video - its price is the kind's and the length's.
-    const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind) + '&length=' + encodeURIComponent(st.length);
+    const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind) + '&length=' + encodeURIComponent(st.length)
+      + (st.audio != null ? '&audio=' + st.audio : '');
     try {
       const d = await _api('/api/highlights/price' + q);
       if (seq !== priceSeq || !_win) return;
@@ -325,6 +361,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
 
   function paint() {
     for (const b of tabs.children) b.classList.toggle('is-on', b.dataset.from === st.from);
+    // (V43) The sound tracks of what is chosen - only when there is a choice.
+    trackRow.hidden = !(st.tracks.length > 1 && st.tracksFor && (st.from === 'file' || st.from === 'source'));
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== st.from;
     capBox.classList.toggle('is-missing', !st.style);
     capSaid.classList.toggle('is-missing', !st.style);
@@ -372,6 +410,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
       const of = (k) => ({ preset: styleFor(k), name: presetName(styleFor(k)) });
       spec.style.byKind = { podcast: of('podcast'), documentary: of('documentary') };
     } else keepFor(st.kind, st.style);
+    // (V43, (ё18)) The sound track chosen, when the video has more than one.
+    if (st.audio != null && st.tracks.length > 1 && (st.from === 'file' || st.from === 'source')) {
+      spec.audio = st.audio;
+      const t = st.tracks.find((x) => x.k === st.audio);
+      spec.audioLabel = t ? t.label : '';
+    }
     if (st.from === 'link') spec.url = st.url;
     else if (st.from === 'file') spec.path = st.path;
     // A video kept as a tile: the project downloads it by its link (after block 8).
@@ -398,7 +442,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
       st.source = (sources || []).find((s) => s.type === 'source' && s.id === st.sourceId) || null;
       st.pick = st.source;
       if (!st.source) st.sourceId = '';
-      paintSources(); paint(); price();
+      paintSources(); paint(); price(); readTracks();
     });
   }
 }

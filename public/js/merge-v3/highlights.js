@@ -392,6 +392,9 @@ function _paintTop() {
     state.appendChild(x);
   } else if (w.state === 'failed') {
     state.appendChild(_el('span', 'mv3-hl-words is-err', w.error === 'stopped' ? 'stopped' : (w.error || 'it failed')));
+    // (phase V43, the owner's (ё17а)) Its video stays on the disk and was moved or deleted: pointed at again here (the same file -
+    // its print says so - its words its own); deleting its source is the Library's (Scenarios -> its source).
+    if (/not where it was/i.test(String(w.error || '')) && r.video && r.video.sourceId) state.appendChild(_relinkButton(r.video.sourceId));
     if (_retry) {
       const armed = _armed === 'retry';
       const b = _el('button', 'mv3-c-btn' + (armed ? ' is-armed' : ''), armed ? 'spend again?' : 'retry');
@@ -958,4 +961,32 @@ async function _retryNow() {
   try { await _api('/api/highlights/' + encodeURIComponent(_pid) + '/retry', { method: 'POST' }); }
   catch (e) { _err = e.message; }
   _load();
+}
+
+// (phase V43, (ё17а)) "point at the file…": the video of a source that stays on the disk, moved - the app's window hands the
+// file's path over (desktop/preload.js pathOf), the server checks it is the same video (its print) and the work goes on.
+function _relinkButton(sourceId) {
+  const b = _el('button', 'mv3-c-btn', 'point at the file…');
+  b.type = 'button';
+  b.title = 'The video was moved or renamed: show where it is now - the same file, its words are kept';
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'video/*';
+  inp.hidden = true;
+  inp.addEventListener('change', async () => {
+    const f = inp.files && inp.files[0];
+    const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
+    let where = '';
+    try { where = f && typeof pathOf === 'function' ? String(pathOf(f) || '') : ''; } catch (e) { where = ''; }
+    if (!where) { _err = 'Pointing at a file works in the app\'s own window - it hands the file over.'; _paintTop(); return; }
+    try {
+      await _api('/api/sources/' + encodeURIComponent(sourceId) + '/relink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: where }) });
+      _err = '';
+      await _retryNow();
+    } catch (e) { _err = e.message; _paintTop(); }
+  });
+  b.addEventListener('click', () => inp.click());
+  const wrap = _el('span', null);
+  wrap.append(b, inp);
+  return wrap;
 }

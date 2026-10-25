@@ -7,7 +7,9 @@
 //   GET    /api/sources/:id              -> { source, transcriptChars }
 //   POST   /api/sources/:id/transcribe   -> { jobId } | { alertId } (its way in is retried - phase V28.1)
 //   POST   /api/sources/:id/topics       -> { jobId } | { alertId }   409 with the running job while one runs
-//   DELETE /api/sources/:id              -> { success, removed, draftsDetached }
+//   DELETE /api/sources/:id              -> { success, removed, draftsDetached }   ?keepWords=1 (V43): its transcripts stay
+//   GET    /api/sources/:id/video        (phase V43) the video of a source that stays on the disk - by its id, never a path
+//   POST   /api/sources/:id/relink       { path } (phase V43) the same video pointed at again where it lies now
 //   GET    /api/sources/jobs/:jobId      -> { state, step, error, source }
 //
 // ADDING ONE (phase V28.1, lib/source-intake.js - the frame decides, the whole way in is an Alerts row):
@@ -36,6 +38,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 
 const store = require('../lib/sources-store');
 const YTDLP = require('../lib/ytdlp');
@@ -160,11 +164,42 @@ router.get('/sources/:id', (req, res) => {
 // (phase V28.1) A source comes in through POST /sources/add/* (lib/source-intake.js) - the multipart upload and the
 // page-followed link that were here are gone with the page's own ingest.
 
+// ── (phase V43, the owner's (ё17), (ё17а)) A video that stays on the disk ───
+// Played by the source's id: the path is the record's, never the request's (the app only reads that file).
+router.get('/sources/:id/video', (req, res) => {
+  const rec = store.get(req.params.id);
+  if (!rec || !rec.diskPath) return res.status(404).end();
+  if (!fs.existsSync(rec.diskPath)) return res.status(410).json({ success: false, error: 'The video is not where it was: ' + rec.diskPath, missing: true });
+  res.sendFile(path.resolve(rec.diskPath), { acceptRanges: true, dotfiles: 'allow' });
+});
+// The same video pointed at again where it lies now: its print must be the source's (the same file, moved or renamed) -
+// its words are its own then, and nothing is heard again.
+router.post('/sources/:id/relink', (req, res) => {
+  try {
+    const rec = store.get(req.params.id);
+    if (!rec || !rec.diskPath) return res.status(404).json({ success: false, error: 'no such source on the disk' });
+    const abs = String((req.body || {}).path || '');
+    if (!abs || !path.isAbsolute(abs)) return res.status(400).json({ success: false, error: 'pointing at a file works in the app\'s own window - it hands the file over' });
+    let st = null;
+    try { st = fs.statSync(abs); } catch (e) { st = null; }
+    if (!st || !st.isFile()) return res.status(400).json({ success: false, error: 'That file is not there.' });
+    const print = store.printOf(abs);
+    if (rec.diskPrint && print !== rec.diskPrint) {
+      return res.status(409).json({ success: false, error: 'This is not the same video - its size or its content differ. Point at the very file, moved or renamed.' });
+    }
+    const other = store.findOnDisk(abs, '');
+    if (other && String(other.id) !== String(rec.id)) return res.status(409).json({ success: false, error: 'That file is the video of another source ("' + (other.title || other.id) + '").' });
+    const saved = store.update(rec.id, { diskPath: abs, diskPrint: print || rec.diskPrint || '' });
+    res.json({ success: true, source: store.summary(saved) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/sources/:id/transcribe', async (req, res) => {
   const id = String(req.params.id);
   const rec = store.get(id);
   if (!rec) return res.status(404).json({ success: false, error: 'no such source' });
-  if (!rec.videoPath) return res.status(400).json({ success: false, error: 'this source has no file' });
+  // (V43) Its file, in the library or where it stays on the disk.
+  if (!store.fileOf(rec)) return res.status(400).json({ success: false, error: rec.diskPath ? 'The video is not where it was: ' + rec.diskPath : 'this source has no file' });
   if (LIVE.has(rec.state) || INTAKE.live(id)) return res.status(409).json({ success: false, error: 'this source is being read already' });
   // Its way in was cut off or failed (phase V28.1): the same retry as its row in Alerts - one piece of work, not two.
   try {
@@ -271,7 +306,9 @@ router.delete('/sources/:id', (req, res) => {
     }
     // The scenarios written from it keep the name it has now, not the one it had when they were saved.
     try { require('./scen3').keepSourceTitle(id, rec.title || rec.originalName || ''); } catch (e) { /* a name, not the delete */ }
-    const removed = store.remove(id);
+    // (phase V43, (ё17а)) A source whose video stays on the disk: its file is never touched; `keepWords` keeps its transcripts
+    // for the same file added again.
+    const removed = store.remove(id, { keepWords: String(req.query.keepWords || '') === '1' });
     let draftsDetached = 0;
     try { draftsDetached = DRAFTS.detachSource(id); } catch (e) { /* the source is gone either way */ }
     res.json({ success: true, removed, draftsDetached });
