@@ -1381,8 +1381,9 @@ function VIDEOS(ctx) {
     const c = m.card;
     const B = c.board || {};
     // (phase V17) A first frame's card is written when its picture's prompt is: Kling's own is put in at its start.
+    // (phase V48) A Seedance card shows its steps from the moment its clips begin to be watched.
     const has = B.kind === 'frame' ? (B.versions || []).length || B.prompt
-      : (c.versions || []).length || c.prompt || (B.versions || []).length || B.prompt;
+      : (c.versions || []).length || c.prompt || (B.versions || []).length || B.prompt || (c.watch || []).length;
     return [c.type, c.plain ? 'plain' : c.board ? (B.kind || 'two') : 'one', has ? 'v' : (c.state || '') + ':' + (c.error || '')].join(':');
   };
   const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
@@ -1497,6 +1498,8 @@ function VIDEOS(ctx) {
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
     try {
+      // (phase V48) A description being corrected is saved first: the writer writes from it as it stands.
+      await _flushWatch(m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/rewrite', { project: m.project, model: b.model, agg: b.agg, params: b.params });
       if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
@@ -1505,6 +1508,104 @@ function VIDEOS(ctx) {
       if (btn.isConnected) btn.disabled = false;
     }
   }
+  // ── What the agent saw (phase V48, the owner 2026-10-25; кл5) ──
+  // Seedance's clips are WATCHED whole before its writer writes (routes/mv3-video.js _watchFor): the first step of the
+  // message, one description per clip - "clip not watched" where no model could, the writer then seeing three frames.
+  // A description is the person's to correct - who is who, what happens - and "write it again" writes the prompt from
+  // it as it stands; it is kept on the card, never watched (and paid) again for the same part. Read-only while the
+  // prompt is being written from it.
+  const _watchSaves = new Map();     // message id -> Map(clip number -> save())
+  async function _flushWatch(id) {
+    const saves = _watchSaves.get(id);
+    if (!saves) return;
+    await Promise.all([...saves.values()].map(f => f()));
+  }
+  const _watchBusy = (c) => (c.watch || []).some(w => w && (w.state === 'watching' || w.state === 'waiting'));
+  const _clipT = (v) => { const x = Math.max(0, +v || 0); const mm = Math.floor(x / 60); return mm + ':' + (x - mm * 60).toFixed(1).padStart(4, '0'); };
+  // The step, or null when the message watched nothing. `written` - whether a prompt of it has been written.
+  function _watchStep(m, l, written) {
+    const c = m.card;
+    const list = (c.watch || []).filter(Boolean);
+    if (!list.length) return null;
+    const failed = !written && c.state === 'failed';
+    const sig = list.map(w => w.n + ':' + w.state + ':' + (w.why ? 1 : 0)).join(',') + '|' + (c.state === 'writing' ? 'w' : 'r') + '|' + (failed ? c.error || 'x' : '');
+    return {
+      key: 'watch', title: list.length > 1 ? 'clips watched' : 'clip watched', word: 'description', variants: [{ key: 'w', sig }],
+      body: (x, b, progs) => _watchBody(l.m, b, progs, failed),
+      acts: (x, a) => _watchActs(l.m, a),
+    };
+  }
+  function _watchBody(m, b, progs, failed) {
+    const c = m.card;
+    const list = (c.watch || []).filter(Boolean);
+    const clips = (m.media || []).filter(a => a && a.kind === 'video');
+    const locked = c.state === 'writing';
+    const saves = new Map();
+    _watchSaves.set(m.id, saves);
+    for (const w of list) {
+      const box = el('div', 'vc-watch is-' + w.state);
+      const h = el('div', 'vc-try-h');
+      h.appendChild(el('span', 'k', '[clip ' + w.n + ']'));
+      h.appendChild(el('span', null, _clipT(w.in) + '–' + _clipT(w.out)));
+      const lab = clips[w.n - 1] && clips[w.n - 1].label;
+      if (lab) h.appendChild(el('span', null, lab));
+      if (w.state === 'done') {
+        h.appendChild(el('span', null, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent')));
+        if (w.edited) h.appendChild(el('span', 'is-mine', 'corrected by you'));
+      }
+      box.appendChild(h);
+      if (w.state === 'done') {
+        const ta = document.createElement('textarea');
+        ta.className = 'vc-prompt-ta vc-watch-ta';
+        ta.spellcheck = true;
+        ta.maxLength = 40000;
+        ta.value = w.text || '';
+        ta.readOnly = locked;
+        ta.title = locked ? 'The prompt is being written from this now'
+          : 'What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.';
+        const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(360, ta.scrollHeight + 2) + 'px'; };
+        requestAnimationFrame(grow);
+        const key = 'w:' + m.id + ':' + w.n;
+        let last = ta.value;
+        const save = () => {
+          clearTimeout(_patchT.get(key));
+          _patchT.delete(key);
+          if (ta.value === last || !ta.value.trim()) return Promise.resolve();
+          last = ta.value;
+          return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, watch: { n: w.n, text: ta.value } }, 'PATCH');
+        };
+        ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+        ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+        saves.set(w.n, save);
+        box.appendChild(ta);
+      } else if (w.state === 'watching') {
+        const strip = el('div', 'mv3-ig-prog');
+        box.appendChild(strip);
+        progs.set('watch:' + w.n, startInlineProgress(strip, {
+          label: 'watching clip ' + w.n + (list.length > 1 ? ' of ' + list.length : '') + ' with its sound…', key: 'mv3-clip-watch', estimateMs: 60000,
+          startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
+        }));
+      } else if (w.state === 'waiting') {
+        box.appendChild(el('div', 'vc-card-why', 'waits for clip ' + (w.n - 1)));
+      } else {
+        box.appendChild(el('div', 'mv3-ig-bad', 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.'));
+      }
+      b.appendChild(box);
+    }
+    if (failed) b.appendChild(el('div', 'mv3-ig-bad', 'The prompt was not written: ' + (c.error || 'no writer answered')));
+    else if (list.some(w => w.state === 'done') && !locked) b.appendChild(el('div', 'vc-card-why', 'The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".'));
+  }
+  function _watchActs(m, a) {
+    const c = m.card;
+    if (c.state === 'writing') return;
+    const again = el('button', 'mv3-c-btn vc-go', 'write it again');
+    again.type = 'button';
+    again.title = 'Another variant of the prompt, written from these descriptions as they stand - a clip not watched is watched again';
+    again.addEventListener('click', () => _rewrite(m, again));
+    a.appendChild(again);
+    if (c.plain && (m.media || []).length && !(c.versions || []).length) a.appendChild(_backLink(m));
+  }
+
   // "again - a copy" (the owner, 2026-10-06): a recipe's message that was made, copied into a new one to change and make
   // apart from it.
   function _copyLink(m) {
@@ -1659,7 +1760,8 @@ function VIDEOS(ctx) {
       : { request: _requestOf(m), media: m.media });
     if (asked) box.appendChild(asked);
     const B = c.board || {};
-    if (!((B.versions || []).length || B.prompt)) {
+    // (phase V48) A Seedance card whose clips are being watched, or were, has its steps at once.
+    if (!((B.versions || []).length || B.prompt) && !(c.watch || []).length) {
       // Nothing written yet: the writer at work, or why not.
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
@@ -1701,10 +1803,11 @@ function VIDEOS(ctx) {
     const m = l.m, c = m.card, B = c.board || {};
     const kind = l.kind;
     const patch = (b) => _post('/api/mv3/video/card/' + encodeURIComponent(m.id), Object.assign({ project: m.project }, b), 'PATCH');
-    const writing = c.state === 'writing';
+    // (phase V48) The writing begins once the clips have been watched.
+    const writing = c.state === 'writing' && !_watchBusy(c);
     // A card written before its prompts had variants has its one prompt and no list: that one is its only variant (`b0`,
-    // `v0` - edited as the card's own).
-    const bv = (B.versions || []).length ? B.versions : [{ id: 'b0', prompt: B.prompt, aspect: B.aspect, edited: !!B.edited }];
+    // `v0` - edited as the card's own). (phase V48) None while nothing is written - its clips watched first.
+    const bv = (B.versions || []).length ? B.versions : B.prompt ? [{ id: 'b0', prompt: B.prompt, aspect: B.aspect, edited: !!B.edited }] : [];
     const bvars = bv.map(v => ({ key: v.id, sig: '', v }));
     if (writing && (kind === 'recipe' || c.writing === 'board')) bvars.push({ key: 'writing', sig: 'writing', writing: true });
     const sheets = (m.boards || []).map(g => ({ key: g.id, sig: g.state + ':' + (g.imagePath || '') + ':' + (g.error || '') + ':' + (g.gone ? 1 : 0), g }));
@@ -1729,10 +1832,12 @@ function VIDEOS(ctx) {
       page: (x) => { if (x && x.v && (B.versions || []).length && x.key !== B.cur) patch({ bcur: x.key }); },
       freshen: () => _freshenStory(id, l),
     };
-    const steps = [first];
+    // (phase V48) What the agent saw of the clips, first; the first prompt once there is something of it.
+    const watch = _watchStep(m, l, bvars.some(x => !x.writing));
+    const steps = [watch, bvars.length ? first : null].filter(Boolean);
     // The sheets: on a recipe's message from the start, so its steps never move under the person; on the column's once
-    // one is drawn.
-    if (sheets.length || kind !== 'column') {
+    // one is drawn. (phase V48) Not before its prompt is written.
+    if (sheets.length || (kind !== 'column' && bvars.some(x => !x.writing))) {
       steps.push({
         key: 'board', title: kind === 'swap' ? 'first frame' : 'storyboard', word: kind === 'swap' ? 'picture' : 'sheet', pick: B.chosen, variants: sheets,
         note: (x) => (!x ? '' : x.g.state === 'pending' ? 'being drawn' : !_boardOk(x.g) ? (x.g.gone ? 'not on the Images shelf any more' : 'not drawn')
@@ -1766,7 +1871,7 @@ function VIDEOS(ctx) {
       });
     }
     // A recipe's message nothing has been drawn or made from yet opens on its first step.
-    l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !clips.length ? first.key : '' });
+    l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !clips.length && steps.length ? steps[0].key : '' });
   }
   // 1 · the storyboard prompt: its words to edit (the variant shown), the pictures it is drawn with.
   function _boardPromptStep(m, l, x, b, progs) {
@@ -1980,6 +2085,7 @@ function VIDEOS(ctx) {
     if (why) { note(btn, why[0], why[1]); return; }
     btn.disabled = true;
     try {
+      await _flushWatch(m.id);
       const b = _body(m.media || []);
       const d = await _post('/api/mv3/video/card/' + encodeURIComponent(m.id) + '/video', { project: m.project, model: b.model, agg: b.agg, params: b.params, boardId: g.id });
       if (!d || !d.success) { note(btn, 'Not written.', (d && d.error) || 'the server did not answer'); return; }
@@ -2195,7 +2301,8 @@ function VIDEOS(ctx) {
     const asked = _askedOf(c.plain ? { words: c.text, media: m.media, none: frames ? 'from the frames alone' : 'from the attachments alone' }
       : { request: _requestOf(m), media: m.media });
     if (asked) box.appendChild(asked);
-    if (!_versOf(c).length) {
+    // (phase V48) A card whose clips are being watched, or were, has its steps at once: what the agent saw comes first.
+    if (!_versOf(c).length && !(c.watch || []).length) {
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
@@ -2225,8 +2332,13 @@ function VIDEOS(ctx) {
   function _paintReview(id, l) {
     const m = l.m, c = m.card;
     const vers = _versOf(c).map(v => ({ key: v.id, sig: v.model, v }));
-    if (c.state === 'writing') vers.push({ key: 'writing', sig: 'writing', writing: true });
-    const steps = [{
+    const written = vers.length > 0;
+    // (phase V48) The prompt is being written once the clips have been watched - not while they are.
+    if (c.state === 'writing' && !_watchBusy(c)) vers.push({ key: 'writing', sig: 'writing', writing: true });
+    const steps = [];
+    const watch = _watchStep(m, l, written);
+    if (watch) steps.push(watch);
+    if (vers.length) steps.push({
       key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur || 'v0', variants: vers,
       note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
       body: (x, b, progs) => _promptStep(m, l, x, b, progs),
@@ -2234,7 +2346,7 @@ function VIDEOS(ctx) {
       // The variant paged to is the chosen one (the server keeps it for the next read).
       page: (x) => { if (x && x.v && x.key !== 'v0' && x.key !== l.m.card.cur) _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, cur: x.key }, 'PATCH'); },
       freshen: () => _freshenReview(id, l),
-    }];
+    });
     const clips = _triesOf(m).flatMap((t, i) => t.gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.videoPath || '') + ':' + (g.error || ''), g, t, n: i + 1 })));
     if (clips.length) {
       steps.push({
@@ -2252,8 +2364,11 @@ function VIDEOS(ctx) {
     if (!x || x.writing) {
       const strip = el('div', 'mv3-ig-prog');
       b.appendChild(strip);
+      // (phase V48) Counted from the end of the watching, when the clips were watched first.
+      const watched = (c.watch || []).map(w => Date.parse((w && w.at) || '') || 0);
       progs.set('w', startInlineProgress(strip, {
-        label: 'writing another variant…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
+        label: _versOf(c).length ? 'writing another variant…' : 'writing the prompt…', key: 'mv3-video-writer', estimateMs: 25000,
+        startedAt: Math.max(Date.parse(c.startedAt || m.at) || 0, ...watched),
       }));
       return;
     }

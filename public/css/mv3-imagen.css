@@ -611,6 +611,12 @@ audio.vtrim-media{ background:none; height:32px }
 /* An attempt's line on the message's video step: which one, when, from which variant. */
 .vc-try-h{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:600 10px/1.3 var(--font); color:var(--muted) }
 .vc-try-h .k{ font:700 9px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vc-try-h .is-mine{ color:var(--gold) }
+/* (phase V48) What the agent saw of each clip - the message's first step: the clip's part, who watched it, the description. */
+.vc-watch{ display:flex; flex-direction:column; gap:5px; min-width:0 }
+.vc-watch + .vc-watch{ padding-top:8px; border-top:1px solid var(--border-soft) }
+.vc-watch-ta{ min-height:120px; font:500 11px/1.5 var(--font); white-space:pre-wrap }
+.vc-watch-ta[readonly]{ color:var(--muted); cursor:default }
 /* (phase V16, the owner 2026-10-07) A working message as a SUB-PROJECT of its own (vsteps.js): its steps paged at its top,
    the variants of the step shown at its bottom - the chat does not grow with every attempt. */
 .vc-card.is-steps{ display:flex; flex-direction:column; gap:8px }

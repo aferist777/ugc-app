@@ -691,7 +691,8 @@ async function _watchFor(cardId, kick, model, media, words) {
   if (!put()) throw _cardLeft();
   for (const w of list) {
     if (w.state === 'done') continue;
-    w.state = 'watching';
+    // When it began: the page's bar counts from it.
+    Object.assign(w, { state: 'watching', at: new Date().toISOString() });
     if (!put()) throw _cardLeft();
     let r;
     try { r = await require('../lib/clip-watch').describe(w, { fakeText: words }); }
