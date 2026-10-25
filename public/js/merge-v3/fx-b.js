@@ -103,8 +103,13 @@ export function fxAt(c, at) {
   };
 }
 
-/** Whether anything at all has to be done for this clip - the common answer is no. */
-export const hasFx = (c) => !!(named(c.animation) || named(c.filter) || named(c.transition));
+// THE EFFECTS ARE OFF (phase V49, point 5, the owner's (пр14) а): no longer offered, and what a project already has of them is
+// drawn as none - kept in its file for the phase that brings them back, as is this code. The render reads the same switch
+// (lib/mv3b-render.js EFFECTS_ON).
+export const EFFECTS_ON = false;
+
+/** Whether anything at all has to be done for this clip - the common answer is no; while the effects are off, never. */
+export const hasFx = (c) => EFFECTS_ON && !!(named(c.animation) || named(c.filter) || named(c.transition));
 
 // ── Painting the parts a drawImage cannot carry ─────────────────────────────
 // All three are painted into the clip's own rectangle rather than the whole frame: a clip may

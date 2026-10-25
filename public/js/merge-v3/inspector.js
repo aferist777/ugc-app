@@ -81,28 +81,11 @@ function _fact(k, v) {
   return row;
 }
 
-// The three effect pickers side by side rather than three labelled rows: they are one
-// decision about how a clip looks, they are asked in the same words on every panel, and
-// three full rows cost a third of the panel's height. The labels shrink to a caption over
-// each one.
-// `skipAnim` drops the middle one. A placed insert is not zoomed: zoompan re-bakes its output
-// to the frame size, which would throw the insert back to full screen - so the graph skips it,
-// and a select the file ignores is worse than one that is not there.
-function _fxTriple(tr, an, fi, onTr, onAn, onFi, skipAnim) {
-  const wrap = _el('div', 'mv3-ins-fx3');
-  const cell = (label, opts, value, onChange) => {
-    const box = _el('div', 'mv3-ins-fx3-cell');
-    box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
-    const sel = C.select(opts, value, onChange);
-    sel.title = label;
-    box.appendChild(sel);
-    return box;
-  };
-  wrap.appendChild(cell('transition', C.TRANSITIONS, tr, onTr));
-  if (!skipAnim) wrap.appendChild(cell('animation', C.ANIMATIONS, an, onAn));
-  wrap.appendChild(cell('filter', C.FILTERS, fi, onFi));
-  return wrap;
-}
+// THE THREE EFFECTS ARE NOT OFFERED (phase V49, point 5, the owner's (пр14) а: "убираем эти параметры (transition, animation
+// и filter). эти штуки я добавлю в другой фазе"). After cut silence a lane is 20-30 pieces a minute, and a transition picked
+// for the lane played at both ends of every piece and broke the render's runs. The pickers of the clip, the picture and the
+// lane are gone; values already in a project stay in its file and nothing applies them (fx-b.js, lib/mv3b-render.js
+// EFFECTS_ON) - the code that draws and renders them is kept for the phase that brings them back.
 
 // NOT WHILE A CONTROL IS BEING HELD. The panel is rebuilt wholesale, so a repaint that
 // lands mid-gesture replaces the very slider under the pointer with a new element - the
@@ -186,8 +169,7 @@ function _pipRows(host, track, c) {
   }), { title: 'Drop the placement and cover the whole frame again' })));
   host.appendChild(C.hint('Placed on the frame'
     + ((+c.angle) ? ' and turned ' + Math.round(+c.angle) + '\u00b0' : '')
-    + ', so it is no longer fitted to it - and the two zooms do not apply while it floats: '
-    + 'they re-bake the picture to the frame size.'));
+    + ', so it is no longer fitted to it.'));
 }
 
 // How a clip meets a frame of another shape. The second row appears only when there is
@@ -224,19 +206,6 @@ function _frameRows(host, c, set) {
     // Asked and not found: the switch says what the clip still has.
     if (FRAMING.failed(c) && pickFraming.isConnected) pickFraming.value = mode;
   });
-}
-
-// Transition, animation and filter - the values lib/mv3b-render.js builds them from.
-//
-// Two of the twenty cannot be drawn on a canvas - glitch's noise and sharpen's convolution -
-// and the preview says so on itself while they are chosen rather than letting them turn up
-// for the first time in the export.
-function _blankFx(host, c, set) {
-  host.appendChild(_fxTriple(
-    c.transition || 'none', c.animation || 'none', c.filter || 'none',
-    (v) => set('transition', v), (v) => set('animation', v), (v) => set('filter', v),
-    _isPlaced(c),
-  ));
 }
 
 // ── A halfer band ───────────────────────────────────────────────────────────
@@ -330,9 +299,6 @@ function _blankFilm(host, track, c, set, pair) {
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
     if (_isPlaced(c)) _pipRows(host, track, c);
     else _frameRows(host, c, set);
-
-    _bsep(host);
-    _blankFx(host, c, set);
   }
 
   _bsep(host);
@@ -374,17 +340,8 @@ function _blankStill(host, track, c, set) {
   const placed = _isPlaced(c);
 
   if (c.halfer) {
-    // A band takes none of these: its settings are the section under the picture.
+    // A band takes none of these: its settings are the section under the picture. No placement or framing on a band.
     stack.appendChild(C.hint('A halfer band - its settings are below.'));
-  } else {
-    cell('transition', C.select(C.TRANSITIONS, c.transition || 'none', (v) => set('transition', v)));
-    // No zoom on a placed insert - see the note on _fxTriple.
-    if (!placed) cell('animation', C.select(C.ANIMATIONS, c.animation || 'none', (v) => set('animation', v)));
-    cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set('filter', v)));
-  }
-
-  if (c.halfer) {
-    // nothing: no placement or framing on a band
   } else if (placed) {
     cell('soft edge', C.slider({
       min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
@@ -498,12 +455,6 @@ function _blankVideoTrack(host, track) {
     host.appendChild(C.hint('Nothing on this lane yet. A setting for the whole lane is written '
       + 'into the clips on it, so there is nothing here to write it into.'));
   } else {
-    host.appendChild(_fxTriple(
-      _commonOf(track, 'transition'), _commonOf(track, 'animation'), _commonOf(track, 'filter'),
-      (v) => stampB(track.id, { transition: v }),
-      (v) => stampB(track.id, { animation: v }),
-      (v) => stampB(track.id, { filter: v }),
-    ));
     host.appendChild(C.row('Frame', C.select(FITS, _commonOf(track, 'fit') === 'fill' ? 'fill' : 'fit',
       (v) => stampB(track.id, { fit: v }))));
     if (_commonOf(track, 'fit') === 'fill') {
@@ -514,7 +465,7 @@ function _blankVideoTrack(host, track) {
     // still writes it into every clip on the lane, over whatever each had. It lives in the
     // tooltip of the control that does it, and the undo arrow is still the way back.
     host.appendChild(C.row('', C.button('Reset lane', () => resetTrackB(track.id), {
-      title: 'Clears the effects and the framing on this lane\u2019s clips. Speed, trims, '
+      title: 'Puts the framing of this lane\u2019s clips back to Fit. Speed, trims, '
            + 'placement and levels are left alone.',
     })));
   }

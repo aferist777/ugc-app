@@ -2235,7 +2235,8 @@ export function setClipField(trackId, clipId, key, value) {
 // Volume is NOT stamped and never will be: it is a master that multiplies, so the lane and the
 // clip both mean something. Anything on this list means the same thing on a lane as on a clip,
 // which is the test for whether stamping it makes sense at all.
-const STAMP_FIELDS = new Set(['transition', 'animation', 'filter', 'fit', 'cropAlign']);
+// (phase V49, (пр14) а) The three effects are no longer offered - nor stamped: what a lane offers is its framing.
+const STAMP_FIELDS = new Set(['fit', 'cropAlign']);
 
 export function stampTrack(trackId, patch) {
   Store.mutate(tl => {
@@ -2250,18 +2251,18 @@ export function stampTrack(trackId, patch) {
 }
 
 /**
- * Back to nothing: the effects and the framing, on the lane's clips.
+ * Back to nothing: the framing, on the lane's clips.
  *
  * It deliberately leaves speed, trims, placement and levels alone. Those are edits made by
  * hand, one clip at a time, and wiping them from a button called "reset" would be exactly the
- * surprise the stamp warning exists to prevent.
+ * surprise the stamp warning exists to prevent. (phase V49, (пр14) а) Nor the effects any more: they are not offered, and
+ * what a project already has of them stays in its file for the phase that brings them back.
  */
 export function resetTrack(trackId) {
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);
     if (!t) return;
     for (const c of (t.clips || [])) {
-      c.transition = null; c.animation = null; c.filter = null;
       c.fit = null; c.cropAlign = null;
     }
     placeBySplit(tl);            // (V40) a fitted clip is never split: its subtitles go back off the seam
