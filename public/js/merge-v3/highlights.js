@@ -38,7 +38,9 @@ import * as Views from './lib-views.js';
 import { setOpenColumn, roomForWork } from './layout.js';
 import { openPopup, closePopup } from './hl-popup.js';
 import * as Layers from '../layers.js';
-import { presetName, presetStyle, editedKeys } from '../captions/preset-use.js';
+import { presetName, presetStyle, editedKeys, keepMotion } from '../captions/preset-use.js';
+import { LOOK_KEYS, mixOf, pairOf } from '../captions/style.js';
+import { deal, newSeed } from '../captions/mix.js';
 import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
@@ -131,9 +133,13 @@ function _crumbs() {
   if (lib) lib.classList.toggle('is-hl-cap', !!_pid && (_openN() > 0 || _ticked().length > 0));
   // The ticks changed under the captions of several: they follow (and go when none is ticked any more).
   const sig = _multi ? _ticked().map((f) => f.n + ':' + ((_capOfFrag(f) || {}).preset || '')).join(',') : '';
+  // (V49) Other fragments ticked: what was picked with Shift for the ones before is let go.
+  const ticks = _ticked().map((f) => f.n).join(',');
+  if (ticks !== _tickSig) { _tickSig = ticks; _hlMix = []; _hlAnims = []; }
   if (sig !== _multiSig) { _multiSig = sig; Views.altChanged(); }
 }
 let _multiSig = '';
+let _tickSig = '';
 
 // The open fragment's caption style, from its timeline as it is now - { preset, name, edited }; the server says it for the
 // others (GET /api/highlights/:id `cap`), read from theirs: the style lives in one place, the fragment's timeline.
@@ -141,6 +147,9 @@ function _capOpen() {
   const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
   const st = (lane && lane.style) || {};
   const id = String(st.preset || '');
+  // (V49) Several presets on its lane: their names, as the server says them for the others (highlights-cut.js capOf).
+  const mix = mixOf(st);
+  if (mix) return { preset: id, name: 'mix: ' + mix.map((e) => presetName(e.preset)).filter(Boolean).join(', '), edited: false };
   const name = id ? presetName(id) : '';
   return name ? { preset: id, name, edited: editedKeys(st).length > 0 } : { preset: '', name: '', edited: false };
 }
@@ -151,7 +160,13 @@ let _capShown = '';
 // Ticked fragments are what the captions crumb gives a style to - all at once, by the server on their timelines (they are
 // not open), the open one among them too; with nothing ticked, or only the open one, it is the open fragment's lane, as in
 // any project. No undo for several (х34): another style is another press.
+// (phase V49, the owner's (пр17), (пр21)) Shift picks several presets - every ticked fragment the same set, each its own deal page by
+// page - and the "animation" tab puts a pair on them, or several with Shift. What was picked is kept while the same fragments stay
+// ticked (_crumbs lets it go).
 let _multi = false;
+let _hlMix = [];
+let _hlAnims = [];
+const _toggle = (list, x, shift) => (!shift ? [x] : list.includes(x) ? list.filter((y) => y !== x) : list.concat([x]));
 const _ticked = () => _frags().filter((f) => _checked.has(f.n) && f.state === 'ready' && f.key);
 const _multiWanted = () => !!_pid && _ticked().length > 0 && !(_checked.size === 1 && _checked.has(_openN()));
 function _capOfFrag(f) { return f.n === _openN() ? _capOpen() : (f.cap || null); }
@@ -176,34 +191,67 @@ Views.captionsAlt({
       : 'A preset pressed is put on all of them at once - their subtitle lanes, the heard lines cut again; lines typed or corrected stay. '
       + 'There is no undo for several: another style is another press. One fragment open and none ticked - its own lane, with all its settings.'));
     const ps = new Set(list.map((f) => { const c = _capOfFrag(f); return c ? c.preset : ''; }));
-    return { preset: ps.size === 1 ? [...ps][0] : '', edited: false, apply: _restyle, readOnly: _applying };
+    return { preset: ps.size === 1 ? [...ps][0] : '', presets: _hlMix.length > 1 ? _hlMix.slice() : null, edited: false,
+      apply: _restyle, readOnly: _applying, anims: _hlAnims.slice(), anim: _reanimate };
   },
 });
 
-async function _restyle(presetId) {
+// The open fragment's subtitle lane, and the ticked ones that are not open - the page's and the server's (see _restyle).
+const _openLane = () => (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs') || null;
+async function _toServer(rest, open, body, said) {
+  if (!rest.length) { _say(said); _paintCard(); Views.altChanged(); return; }
+  _applying = true;
+  Views.altChanged();
+  try {
+    const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/style', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ ns: rest.map((f) => f.n) }, body)) });
+    const n = d.n + (open ? 1 : 0);
+    _say('captions of ' + n + (n === 1 ? ' fragment' : ' fragments') + ': ' + (d.name || said.replace(/^captions: /, '')));
+  } catch (e) { _say(e.message, true); }
+  _applying = false;
+  await _load();
+  Views.altChanged();
+}
+
+async function _restyle(presetId, o) {
   const list = _ticked();
   if (!list.length || _applying || !presetId) return;
+  // (V49, (пр21)) Shift: the preset joins those picked, or leaves them; without Shift it alone.
+  _hlMix = _toggle(_hlMix, presetId, !!(o && o.shift));
+  if (!_hlMix.length) { Views.altChanged(); return; }
+  const first = _hlMix[0];
+  const many = _hlMix.length > 1;
   // The OPEN one among them is the page's: a tile on its lane, as anywhere (its save, its one step of the timeline's undo) - a
   // server's write under an open timeline reads to the page as somebody else's edit. The others are the server's.
   const open = list.find((f) => f.n === _openN());
   const rest = list.filter((f) => f !== open);
   if (open) {
-    const lane = (((Store.timeline() || {}).tracks) || []).find((t) => t && t.kind === 'subs');
-    const st = presetStyle(presetId);
-    if (lane && st) setSubsStyle(lane.id, st, true);
+    const lane = _openLane();
+    const st = presetStyle(first);
+    if (lane && st) {
+      // (V49, (пр20)) Its In and Out stay; several presets are its lane's mix, dealt as it is cut again; one is one again.
+      const look = (id) => { const p = presetStyle(id) || {}; const e = { preset: id }; for (const k of LOOK_KEYS) e[k] = p[k]; return e; };
+      setSubsStyle(lane.id, Object.assign(keepMotion(st, lane.style || {}), many ? { mix: _hlMix.map(look), mixSeed: newSeed() } : { mix: [] }), true);
+    }
   }
-  if (!rest.length) { _say('captions: ' + (presetName(presetId) || presetId)); _paintCard(); Views.altChanged(); return; }
-  _applying = true;
-  Views.altChanged();
-  try {
-    const d = await _api('/api/highlights/' + encodeURIComponent(_pid) + '/style', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ns: rest.map((f) => f.n), preset: presetId }) });
-    const n = d.n + (open ? 1 : 0);
-    _say('captions of ' + n + (n === 1 ? ' fragment' : ' fragments') + ': ' + (d.name || presetId));
-  } catch (e) { _say(e.message, true); }
-  _applying = false;
-  await _load();
-  Views.altChanged();
+  await _toServer(rest, open, { preset: first, ...(many ? { mix: _hlMix.slice() } : {}) },
+    'captions: ' + (many ? _hlMix.length + ' presets' : presetName(first) || first));
+}
+
+// (V49, (пр17)) A pair of In and Out on the ticked fragments - several with Shift, each its own deal; the lanes are not cut again.
+async function _reanimate(pair, o) {
+  const list = _ticked();
+  if (!list.length || _applying || !pair) return;
+  _hlAnims = _toggle(_hlAnims, pair, !!(o && o.shift));
+  const open = list.find((f) => f.n === _openN());
+  const rest = list.filter((f) => f !== open);
+  if (open) {
+    const lane = _openLane();
+    const patch = _hlAnims.length >= 2 ? { anims: _hlAnims.slice(), mixSeed: newSeed() } : Object.assign(pairOf(_hlAnims[0] || 'at-once|none'), { anims: [] });
+    if (lane) setSubsStyle(lane.id, patch, false, (t) => deal(t.clips, t.style));
+  }
+  await _toServer(rest, open, { anims: _hlAnims.length ? _hlAnims.slice() : ['at-once|none'] },
+    'animation: ' + (_hlAnims.length > 1 ? _hlAnims.length + ' pairs' : _hlAnims[0] || 'none'));
 }
 
 function _show(on) {

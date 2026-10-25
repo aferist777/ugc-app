@@ -149,6 +149,11 @@ router.post('/highlights/:id/style', (req, res) => {
     const ns = new Set((Array.isArray(b.ns) ? b.ns : []).map(Number).filter((n) => n > 0));
     const keys = (rec.fragments || []).filter((f) => ns.has(f.n) && !f.deletedAt && f.state === 'ready' && f.key).map((f) => f.key);
     if (!keys.length) return res.status(400).json({ success: false, error: 'none of these fragments is made' });
+    // (phase V49) Animations alone (no preset): put on the lanes as they are, not cut again (CUT.reanimate).
+    if (!b.preset && Array.isArray(b.anims)) {
+      const a = CUT.reanimate(keys, b.anims);
+      return res.json({ success: true, n: a.keys.length, name: a.name });
+    }
     // (phase V49) Several presets (`mix`, ids) and animations (`anims`, 'in|out' pairs) - each fragment its own deal of them.
     const out = CUT.restyle(keys, String(b.preset || ''), { mix: Array.isArray(b.mix) ? b.mix : undefined, anims: Array.isArray(b.anims) ? b.anims : undefined });
     res.json({ success: true, n: out.keys.length, name: out.name, preset: out.preset });
