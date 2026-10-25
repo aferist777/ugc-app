@@ -202,6 +202,20 @@ function _pipSection(host, items) {
     fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
     onChange: (v) => write({ feather: v }),
   })));
+  // ((пр11)) Rounded corners - a share of the shorter side, half of it round ends - and an outline inside the edge, its
+  // thickness a share of the frame's width (said in the pixels of a 1080-wide film) and its colour.
+  host.appendChild(C.row('Corners', C.slider({
+    min: 0, max: 0.5, step: 0.01, value: +c0.radius || 0,
+    fmt: (v) => (v <= 0.005 ? 'square' : v >= 0.495 ? 'round' : Math.round(v * 200) + '%'),
+    onChange: (v) => write({ radius: v }),
+  })));
+  const col = C.color(c0.outlineColor || '#ffffff', (v) => write({ outlineColor: v }));
+  col.title = 'The outline’s colour';
+  host.appendChild(C.row('Outline', C.pair(C.slider({
+    min: 0, max: 0.03, step: 0.001, value: +c0.outline || 0,
+    fmt: (v) => (v <= 0.0005 ? 'none' : Math.round(v * 1080) + ' px'),
+    onChange: (v) => write({ outline: v }),
+  }), col)));
   host.appendChild(C.row('', C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
     { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' })));
   host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
