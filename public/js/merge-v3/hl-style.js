@@ -27,12 +27,14 @@ export const RECOMMENDED = {
   // (the owner's (в1)) auto: one tile, "by the video" - the agent's finding chooses between the style kept for podcast and the
   // one kept for documentary (lib/highlights-store.js styleOf).
   auto: { cats: [], byVideo: true, said: 'by the video - a talk gets your podcast style, a story told your documentary style' },
+  // (phase V43) fragmentation - an episode or a show cut whole: people talking, as in a podcast.
+  fragmentation: { cats: ['viral', 'karaoke', 'pop'], said: 'bright, word by word - for people talking' },
 };
 
 // "By the video" (V33.8, (в1)): not a preset but a choice between two - the last style chosen for each kind, remembered here.
 export const BY_VIDEO = '@by-video';
 const LS_KIND = 'mv3_hl_kind_style_v1';
-const FIRST = { podcast: 'cp-podcast-viral', documentary: 'cl-white' };
+const FIRST = { podcast: 'cp-podcast-viral', documentary: 'cl-white', fragmentation: 'cp-podcast-viral' };
 const _known = (id) => !!(PRESETS.find((x) => x.id === id) || MyPresets.byId(id));
 /** The style kept for a kind - the one last chosen while it was the kind, or the first answer (Podcast Viral, Classic White). */
 export function styleFor(kind) {

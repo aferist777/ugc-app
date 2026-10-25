@@ -329,6 +329,9 @@ function _build() {
 }
 
 const _frags = () => ((_rec && _rec.fragments) || []).filter((f) => !f.deletedAt).sort((a, b) => (a.rank || 0) - (b.rank || 0));
+// (V43) How many parts the video came to - a part deleted since keeps its number.
+const _whole = () => !!(_rec && _rec.ask && _rec.kinds && _rec.kinds[_rec.ask.kind] && _rec.kinds[_rec.ask.kind].whole);
+const _partsFound = () => (_rec && _rec.agent && +_rec.agent.found) || ((_rec && _rec.fragments) || []).length;
 
 function _arm(what) {
   _armed = what;
@@ -366,7 +369,13 @@ function _paintTop() {
   // (phase V33.8, H3) And the background music asked for.
   const nm = r.ask && Array.isArray(r.ask.music) ? r.ask.music.length : 0;
   const musicSaid = nm ? ' · music: ' + (nm === 1 ? r.ask.music[0].title : nm + ' tracks') : '';
-  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (r.lengths && r.lengths[r.ask.length] ? r.lengths[r.ask.length].label : r.ask.length) + ' · ' + r.ask.count + ' asked' + kindSaid + musicSaid));
+  // (phase V43) fragmentation: its own lengths, no count - "1-2 min parts" - and what was cut out of the video.
+  const K = r.ask && r.kinds ? r.kinds[r.ask.kind] : null;
+  const L = (K && K.whole && K.lengths) || r.lengths;
+  const lenSaid = L && r.ask && L[r.ask.length] ? L[r.ask.length].label : (r.ask ? r.ask.length : '');
+  const cut = K && K.whole && r.agent && Array.isArray(r.agent.skipped) && r.agent.skipped.length
+    ? ' · cut out: ' + [...new Set(r.agent.skipped.map((x) => x.skip))].join(', ') : '';
+  if (r.ask) what.appendChild(_el('span', 'mv3-hl-meta', (K && K.whole ? lenSaid + ' parts' : lenSaid + ' · ' + r.ask.count + ' asked') + kindSaid + musicSaid + cut));
   top.appendChild(what);
 
   const state = _el('div', 'mv3-hl-state');
@@ -398,9 +407,11 @@ function _paintTop() {
   } else if (w.state === 'done') {
     const n = _frags().length;
     const found = (r.fragments || []).length;           // deleted ones too: what the agent found
-    const want = r.ask ? r.ask.count : n;
+    // (V43) fragmentation asked for no count: as many parts as the video came to.
+    const want = r.ask && r.ask.count ? r.ask.count : found;
     const made = _frags().filter((f) => f.state === 'ready').length;
-    const what = made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
+    const whole = !!(r.ask && r.kinds && r.kinds[r.ask.kind] && r.kinds[r.ask.kind].whole);
+    const what = whole ? (n === 1 ? ' part' : ' parts') : made === n && n ? (n === 1 ? ' short' : ' shorts') : (n === 1 ? ' moment' : ' moments');
     state.appendChild(_el('span', 'mv3-hl-words', found >= want ? n + what : 'found ' + found + ' of ' + want));
   }
   // (phase V33.4) The project's renders: "rendering 2 of 5 · ~1:30 left"; what was cut off or failed, and where to go on.
@@ -597,7 +608,8 @@ function _paintField() {
     x.title = 'Delete this fragment - Ctrl+Z here brings it back';
     x.addEventListener('click', (e) => { e.stopPropagation(); if (!armed) { _arm('del' + f.n); return; } _armed = ''; _delete(f); });
     t.appendChild(x);
-    t.appendChild(_el('span', 'mv3-hl-score', String(f.score)));
+    // (phase V43, (ё9)) fragmentation's parts have no score: their place in the video instead - "3 / 38".
+    t.appendChild(_el('span', 'mv3-hl-score', Number.isFinite(f.score) ? String(f.score) : f.rank + ' / ' + _partsFound()));
     if ((f.pieces || []).length > 1) t.appendChild(_el('span', 'mv3-hl-pieces', f.pieces.length + ' pieces'));
     // (phase V33.4) Rendered: a mark on its frame - pale, "changed since", when its timeline was edited after.
     if (ready && f.rendered) {
@@ -678,8 +690,8 @@ function _stageSaid(s) {
     case 'copy': return done ? 'copied' + (s.bytes ? ' ' + _mb(s.bytes) : '') : 'copying the video';
     case 'hear': return done ? (s.kept ? 'its words were in already' : 'heard' + (s.seconds ? ' ' + _min(s.seconds) : '')
       + (s.engine === 'local' ? ' on this computer' : s.engine === 'groq' ? ' by Groq' : '')) : 'hearing the words';
-    case 'find': return done ? 'moments found' : 'finding the moments';
-    case 'fragments': return s.count ? 'cutting ' + s.count + (s.count === 1 ? ' fragment' : ' fragments') : 'cutting the fragments';
+    case 'find': return _whole() ? (done ? 'split into parts' : 'splitting the video into parts') : (done ? 'moments found' : 'finding the moments');
+    case 'fragments': return _whole() ? 'cutting the parts' : s.count ? 'cutting ' + s.count + (s.count === 1 ? ' fragment' : ' fragments') : 'cutting the fragments';
     default: return s.key;
   }
 }
@@ -726,7 +738,7 @@ function _paintCard() {
   }
   const f = frags.find((x) => x.n === _sel);
   if (!f) {
-    card.appendChild(_el('p', 'mv3-hl-note', frags.length ? 'Press a tile to read its moment.' : (_live ? 'The moments come when the agent has read the video.' : '')));
+    card.appendChild(_el('p', 'mv3-hl-note', frags.length ? (_whole() ? 'Press a tile to read its part.' : 'Press a tile to read its moment.') : (_live ? (_whole() ? 'The parts come when the agent has read the video.' : 'The moments come when the agent has read the video.') : '')));
     return;
   }
   // Its name is edited here (the owner's (х20)): the card's, and its timeline's - the name of the render file after it.
@@ -748,8 +760,15 @@ function _paintCard() {
   if (f.state === 'ready' && f.faceNote) card.appendChild(_el('p', 'mv3-hl-note', f.faceNote + ' - Framing on its clip can follow the face later.'));
   const facts = _el('div', 'mv3-hl-facts');
   const score = _el('span', 'mv3-hl-fact');
-  score.appendChild(_el('b', null, String(f.score)));
-  score.appendChild(document.createTextNode(' / 100 · how complete the theme is'));
+  if (Number.isFinite(f.score)) {
+    score.appendChild(_el('b', null, String(f.score)));
+    score.appendChild(document.createTextNode(' / 100 · how complete the theme is'));
+  } else {
+    // (phase V43, (ё9)) A part of fragmentation: no score - its place in the video and its key moments (where it punches in).
+    score.appendChild(_el('b', null, 'part ' + f.rank + ' of ' + _partsFound()));
+    const k = (f.keys || []).length;
+    if (k) score.appendChild(document.createTextNode(' · ' + k + (k === 1 ? ' key moment' : ' key moments')));
+  }
   facts.appendChild(score);
   facts.appendChild(_el('span', 'mv3-hl-fact', _secs(f.seconds)));
   card.appendChild(facts);

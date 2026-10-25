@@ -61,14 +61,28 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const kinds = (rec && rec.kinds) || { auto: { label: 'auto' }, podcast: { label: 'podcast · interview' }, documentary: { label: 'documentary' } };
   const ask = rec && rec.ask ? rec.ask : {};
   if (remembered.kind === 'facts') remembered.kind = 'documentary';
+  // (phase V43, (ё1), (ё8)) fragmentation - the whole video in parts: its own lengths (the server's), no count.
+  const isWhole = (k) => !!(kinds[k] && kinds[k].whole);
+  const lengthsOf = (k) => (isWhole(k) && kinds[k].lengths) || lengths;
+  const kind0 = kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto');
+  // The last length of each - the moments' and the parts' - so switching the kind back and forth brings each one's back.
+  const lastLen = {
+    whole: isWhole(ask.kind) ? ask.length : remembered.flength,
+    moments: isWhole(ask.kind) ? remembered.length : (ask.length || remembered.length),
+  };
+  const firstLen = (k) => {
+    const L = lengthsOf(k);
+    const want = isWhole(k) ? lastLen.whole : lastLen.moments;
+    return L[want] ? want : (L[isWhole(k) ? 'p1-2' : '30-60'] ? (isWhole(k) ? 'p1-2' : '30-60') : Object.keys(L)[0]);
+  };
   const st = {
     from: 'link', url: '', path: '', fileName: '', sourceId: '', source: null,
     // (after block 8) What is chosen in "from the Library": a downloaded source (`source`) or a video kept as a tile (`remote`).
     pick: null,
-    length: lengths[ask.length] ? ask.length : (lengths[remembered.length] ? remembered.length : '30-60'),
+    length: firstLen(kind0),
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
     // (phase V40, the owner's (о4)) No "title on top" box any more: a new fragment has no title, the card's "add title" puts one.
-    kind: kinds[ask.kind] ? ask.kind : (kinds[remembered.kind] ? remembered.kind : 'auto'),
+    kind: kind0,
     style: '', price: null, busy: false, said: '', err: false,
     // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
     music: [],
@@ -128,9 +142,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   // ── How long and how many ──
   const row = _el('div', 'mv3-hlp-row');
   const lenSel = _el('select', 'mv3-hlp-sel');
-  for (const [k, v] of Object.entries(lengths)) { const o = _el('option', null, v.label || k); o.value = k; lenSel.appendChild(o); }
-  lenSel.value = st.length;
-  lenSel.addEventListener('change', () => { st.length = lenSel.value; remember(); });
+  const fillLengths = () => {
+    lenSel.textContent = '';
+    for (const [k, v] of Object.entries(lengthsOf(st.kind))) { const o = _el('option', null, v.label || k); o.value = k; lenSel.appendChild(o); }
+    lenSel.value = st.length;
+  };
+  fillLengths();
+  lenSel.addEventListener('change', () => { st.length = lenSel.value; lastLen[isWhole(st.kind) ? 'whole' : 'moments'] = st.length; remember(); price(); });
   const cntSel = _el('select', 'mv3-hlp-sel');
   for (const n of counts) { const o = _el('option', null, n + ' fragments'); o.value = String(n); cntSel.appendChild(o); }
   cntSel.value = String(st.count);
@@ -143,8 +161,13 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   for (const [k, v] of Object.entries(kinds)) { const o = _el('option', null, v.label || k); o.value = k; kindSel.appendChild(o); }
   kindSel.value = st.kind;
   kindSel.addEventListener('change', () => {
+    const was = isWhole(st.kind);
     st.kind = kindSel.value;
+    // (V43) fragmentation and the moments have lengths of their own: each kind's last one comes back.
+    if (was !== isWhole(st.kind)) { st.length = firstLen(st.kind); fillLengths(); }
     remember();
+    paint();
+    price();
     if (!_win || !_win.picker) return;
     // (V33.8, (в1)) "By the video" is auto's: another kind takes the style kept for it.
     if (st.style === BY_VIDEO && st.kind !== 'auto') { st.style = styleFor(st.kind); _win.picker.set(st.style); paint(); }
@@ -154,11 +177,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   kw.appendChild(kindSel);
   kw.title = 'auto - where a shot has no face, the frame follows a whole person when there is one, else shows the whole frame over its blur\n'
     + 'podcast · interview - the faces; no face: the whole frame; the agent looks for complete thoughts and strong opinions\n'
-    + 'documentary - the faces; no face: a 3:2 window from the middle over its blur (text, charts and screens stay nearly whole); the agent looks for a fact with its hook';
-  row.append(lw, cw, kw);
-  body.appendChild(_el('div', 'mv3-x-hdr', 'the fragments'));
+    + 'documentary - the faces; no face: a 3:2 window from the middle over its blur (text, charts and screens stay nearly whole); the agent looks for a fact with its hook\n'
+    + 'fragmentation - the WHOLE video, start to end, in parts by meaning (the intro, ads and the outro cut out); the frame follows the most active in it and punches in on the key moments';
+  row.append(kw, lw, cw);
+  const fragHdr = _el('div', 'mv3-x-hdr', 'the fragments');
+  body.appendChild(fragHdr);
   body.appendChild(row);
-  body.appendChild(_el('p', 'mv3-x-note', 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.'));
+  const fragNote = _el('p', 'mv3-x-note', '');
+  body.appendChild(fragNote);
 
   // ── (phase V33.8, H3) The background music - Music → highlights, by mood ──
   body.appendChild(_el('div', 'mv3-x-hdr', 'music'));
@@ -206,7 +232,15 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   _win = { ov, layer, picker, music };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
-  function remember() { try { localStorage.setItem(LS_ASK, JSON.stringify({ length: st.length, count: st.count, kind: st.kind })); } catch (e) { /* private */ } }
+  // The moments' length and fragmentation's are kept apart: each kind's last one comes back (V43).
+  function remember() {
+    try {
+      const was = JSON.parse(localStorage.getItem(LS_ASK) || '{}') || {};
+      const out = { ...was, count: st.count, kind: st.kind };
+      if (isWhole(st.kind)) out.flength = st.length; else out.length = st.length;
+      localStorage.setItem(LS_ASK, JSON.stringify(out));
+    } catch (e) { /* private */ }
+  }
 
   function takeFile(f) {
     if (!f) return;
@@ -266,8 +300,10 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   let priceSeq = 0;
   async function price() {
     const seq = ++priceSeq;
-    const q = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
+    const q0 = st.from === 'source' && st.source ? '?seconds=' + encodeURIComponent(st.source.seconds || 0) + '&source=' + encodeURIComponent(st.sourceId)
       : (st.from === 'source' && st.pick && st.pick.seconds ? '?seconds=' + encodeURIComponent(st.pick.seconds) : '');
+    // (V43) fragmentation's agent writes every part of the video - its price is the kind's and the length's.
+    const q = q0 + (q0 ? '&' : '?') + 'kind=' + encodeURIComponent(st.kind) + '&length=' + encodeURIComponent(st.length);
     try {
       const d = await _api('/api/highlights/price' + q);
       if (seq !== priceSeq || !_win) return;
@@ -308,7 +344,14 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
       const sum = (kept ? 0 : (p.hear.cost || 0)) + (p.agent.cost || 0);
       cost = kept || p.hear.cost != null || p.hear.by !== 'groq' ? '~' + _usd(sum) : '~' + _usd(p.agent.cost) + ' + the words';
     }
-    goBtn.textContent = st.busy ? 'starting…' : 'find moments' + (cost ? ' · ' + cost : '');
+    // (V43) fragmentation: no count - as many parts as the video comes to.
+    const whole = isWhole(st.kind);
+    cw.hidden = whole;
+    fragHdr.textContent = whole ? 'the parts' : 'the fragments';
+    fragNote.textContent = whole
+      ? 'The whole video, one part after another, each a scene or a topic - as many as it comes to. The intro, ads and the outro are cut out.'
+      : 'Fewer when the video does not have that many good ones. A fragment may be made of up to three pieces of the video - a theme opened in one place and closed in another.';
+    goBtn.textContent = st.busy ? 'starting…' : (whole ? 'split into parts' : 'find moments') + (cost ? ' · ' + cost : '');
     goBtn.disabled = !ready();
     goBtn.title = !st.style ? 'Choose the style of the captions first' : '';
     said.textContent = st.said;
@@ -322,7 +365,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     }
     st.busy = true;
     say('');
-    const spec = { from: st.from, length: st.length, count: st.count, style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
+    const spec = { from: st.from, length: st.length, ...(isWhole(st.kind) ? {} : { count: st.count }), style: { preset: st.style, name: presetName(st.style) }, kind: st.kind,
       music: st.music.slice() };
     // (V33.8, (в1)) "By the video": the two styles it chooses between go with it.
     if (st.style === BY_VIDEO) {

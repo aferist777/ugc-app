@@ -5,7 +5,7 @@
 //
 //   GET    /api/highlights                  -> { projects: [view] }
 //   POST   /api/highlights                  { name? } -> { project, key }       a new project and its own timeline
-//   GET    /api/highlights/price            ?seconds=&source= -> { price }     what "find moments" is expected to cost
+//   GET    /api/highlights/price            ?seconds=&source=&kind=&length= -> { price }   what "find moments" is expected to cost
 //   GET    /api/highlights/:id              -> { project, progress, stages, retry }   what the field draws (polled while at work)
 //   POST   /api/highlights/:id/start        { from, url | path | sourceId, length, count, style } -> { alertId }
 //   POST   /api/highlights/:id/stop         the work let go of
@@ -42,7 +42,7 @@ function view(rec, o) {
   if (a) delete a.raw;
   // The video's poster - what a tile shows until its own first frame is made.
   const src = rec.video && rec.video.sourceId ? require('../lib/sources-store').get(rec.video.sourceId) : null;
-  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label }])), poster: (src && src.thumbPath) || '' };
+  const out = { ...rest, agent: a, key: HL.homeKey(rec.id), lengths: HL.LENGTHS, counts: HL.COUNTS, kinds: Object.fromEntries(Object.entries(HL.KINDS).map(([k, v]) => [k, { label: v.label, ...(v.whole ? { whole: true, lengths: HL.lengthsOf(k) } : {}) }])), poster: (src && src.thumbPath) || '' };
   // (phase V33.8, (ф2)) The kind as it is read now: an old `facts` is documentary.
   if (rec.ask) out.ask = { ...rec.ask, kind: HL.kindOf(rec) };
   if (o && o.caps) {
@@ -72,7 +72,8 @@ router.post('/highlights', (req, res) => {
 });
 
 router.get('/highlights/price', (req, res) => {
-  try { res.json({ success: true, price: JOB.price({ seconds: +req.query.seconds || 0, sourceId: String(req.query.source || '') }) }); }
+  try { res.json({ success: true, price: JOB.price({ seconds: +req.query.seconds || 0, sourceId: String(req.query.source || ''),
+    kind: String(req.query.kind || ''), length: String(req.query.length || '') }) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
