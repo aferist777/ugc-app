@@ -10,7 +10,6 @@
 //   • the Admin entry, on a page whose strip leaves it out.
 
 import { mountAlerts } from './alerts-bell.js';
-import { installCloseAsk } from './draft-ask.js';
 import { mountUpdate } from './app-update.js';
 
 function _lightCurrent(nav) {
@@ -95,6 +94,7 @@ export function initNav() {
   // (phase V23) A new version in the program folder: a chip left of the wait and Alerts, in the app window only.
   mountUpdate(nav);
   _windowButtons(nav);
-  // (phase V20) The window's close asks about the draft from whichever page is open.
-  installCloseAsk();
+  // (phase V49, the owner's (пр13)) The window's close asks nothing about the draft any more (the question of phase V20,
+  // js/draft-ask.js, went): it stays as it is. The shell asks the page `window.__ugcDraftAsk`, which no page defines now -
+  // the answer is 'none' at once (desktop/main.js draftAsked).
 }

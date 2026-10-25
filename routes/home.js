@@ -7,7 +7,8 @@
 // the key check (/api/keys/health - the balances of kie.ai, ElevenLabs and OpenRouter are in its words), /api/telegram,
 // /api/cloudflare.
 //
-//   GET /api/home/continue           -> { items: [{ key, title, kind, updatedAt, clips, thumb, sub }] }   four, newest first
+//   GET /api/home/continue           -> { items: [{ key, title, kind, updatedAt, clips, thumb, sub }] }   four: the draft
+//                                       first when it has clips (phase V49), then newest first
 //   GET /api/home/news?since=<iso>   -> { since, refs, renders, made, failed }   what came since the last visit
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -66,7 +67,8 @@ router.get('/home/continue', (_req, res) => {
       } else if (/^sv3_/.test(key) && kindOfProject.get(key.slice(4)) === 'scenarios') kind = 'talking head';
       items.push({ key, title: t.title || 'Untitled', kind, updatedAt: t.updatedAt || t.createdAt || null, clips, thumb, sub });
     }
-    items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    // (phase V49, the owner's (пр12)) The draft first, as in Merge's list - when there is something in it to continue.
+    items.sort((a, b) => ((b.kind === 'draft') - (a.kind === 'draft')) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
     res.json({ success: true, items: items.slice(0, 4) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

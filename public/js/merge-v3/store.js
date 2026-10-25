@@ -104,6 +104,28 @@ export function hasProject() { return !!_key; }
 export function isDraft() { return _draft; }
 /** The draft was saved under a name: no longer the draft. */
 export function markSaved(t) { _draft = false; if (t != null) _title = String(t); _emit(); }
+/**
+ * (phase V49, the owner's (пр12)) THE DRAFT CLEARED: its lanes become a new timeline's - main video, main audio and
+ * Subtitles, empty (the server's shape, GET /api/mv3/blank: lib/timeline-shape.js emptyBlank) - as ONE step to undo, so
+ * Ctrl+Z brings the clips back; its frame stays. The draft itself stays as it is: its key, folder, title, category and
+ * the drafts' conversation. Done here, through mutate(), and not by the server: the edit goes up the way every edit does,
+ * quoting its version, with nothing for a save in the air to fight. -> 'cleared' | 'empty' (nothing on it to clear).
+ */
+export async function clearDraft() {
+  const k = _key;
+  if (!k || !_draft) throw new Error('only the draft is cleared');
+  const d = await fetch('/api/mv3/blank').then(r => r.json());
+  const tracks = d && d.success && d.timeline && d.timeline.tracks;
+  if (!Array.isArray(tracks)) throw new Error((d && d.error) || 'could not read a new timeline');
+  // Another project opened while the shape was on its way: nothing of it is cleared.
+  if (_key !== k || !_draft) throw new Error('the draft is not open any more');
+  // Nothing on it and the lanes of a new timeline already: no step to undo.
+  const have = (_timeline && _timeline.tracks) || [];
+  const ids = (l) => l.map(x => (x && x.kind) + ':' + (x && x.id)).join(',');
+  if (have.every(x => !((x && x.clips) || []).length) && ids(have) === ids(tracks)) return 'empty';
+  if (!mutate((t) => { t.tracks = clone(tracks); })) throw new Error(_status || 'not cleared');
+  return 'cleared';
+}
 let _timer = null;
 let _saving = false;
 let _dirty = false;
@@ -264,10 +286,10 @@ export async function load(k) {
   // another tab, or the app was pointed at another library. Forget it and open empty (R6).
   if ((!d || !d.success) && fromMemory) { _remember(''); return load(''); }
   if (!d || !d.success) throw new Error((d && d.error) || 'could not read the timeline');
-  // (phase V20) A project that is not there any more - a draft let go of, one deleted, an old Alerts link - opens the
-  // draft, not whichever project the server would pick in its place. Its ?p= goes from the address first, or the draft's
-  // load would read it straight back.
-  if (d.key !== want) {
+  // (phase V20) A project that is not there any more - one deleted, an old Alerts link - opens the draft, not whichever
+  // project the server would pick in its place. Its ?p= goes from the address first, or the draft's load would read it
+  // straight back. (phase V49) So does the empty shape the server answers with when there is no timeline at all (`found`).
+  if (d.key !== want || d.found === false) {
     // Never round and round: a draft that cannot be had a few times over is an error, not another try.
     if (_misses++ > 2) { _misses = 0; throw new Error('the project could not be opened'); }
     try {
@@ -282,6 +304,8 @@ export async function load(k) {
   _gone = new Set((d.missing || []).map(m => _srcKey(m && m.src)).filter(Boolean));
   _version = d.version;
   _misses = 0;
+  // (phase V49) What was said about one project is not said about the next one opened.
+  if (d.key !== _key) _status = null;
   _key = d.key;
   _title = d.title || '';
   _draft = !!d.draft;
@@ -626,6 +650,11 @@ export async function save(_merges = 0) {
       _emit();
       _saving = false;
       return save(_merges + 1);     // still dirty on purpose: the merged state has to go up
+    } else if (r.status === 404 && d && d.gone) {
+      // (phase V49) The project is not there any more - deleted while this edit waited (the server never makes one
+      // from a save): nothing to save it into, and trying again would only be refused again.
+      if (d.key === _key) _dirty = false;
+      _status = 'Not saved: this project is not there any more.';
     } else if (d && d.success) {
       // An edit that landed while this was in the air is newer than this answer. It stays
       // dirty so the next save carries it up, and the answer is NOT adopted into the live copy

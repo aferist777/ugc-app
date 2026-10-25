@@ -22,7 +22,6 @@ import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
-import { draftNow, askDraft } from '../draft-ask.js';
 import { openScenarios } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
 
@@ -72,7 +71,7 @@ async function _paint() {
   // the list, which reads as "this one is open" when it is not.
   if (openRec) {
     sel.value = open;
-    // (phase V20) A delete or a draft let go of opens the draft - and says what became of what was there.
+    // (phase V20) A delete opens the draft - and says what became of what was there.
     _note(_after);
     _after = '';
   } else {
@@ -92,8 +91,7 @@ export function initProjects() {
   sel.addEventListener('change', async () => {
     const want = sel.value;
     if (!want) return;              // the "choose a project" placeholder
-    // (phase V20) Away from the draft with something in it: asked first, and Cancel stays.
-    if (want !== Store.key() && !(await _leaveDraft())) { sel.value = Store.key() || ''; return; }
+    // (phase V49, the owner's (пр13)) Away from the draft: nothing is asked - it stays as it is, first in this list.
     _note('opening…');
     try {
       await Store.open(want);
@@ -120,8 +118,6 @@ export function initProjects() {
     const k = Store.key();
     _paintDraft();
     if (k === last) return;
-    // The first project the session really opens - not the empty moment before the store has read one.
-    if (k && !_startAsked) { _startAsked = true; _askAtStart(); }
     last = k;
     _paint();
     _disarm();          // a different project means the armed delete no longer applies
@@ -129,35 +125,9 @@ export function initProjects() {
   });
 }
 
-// (phase V20) Leaving the draft with something in it - another project opened, a new one made: saved, let go of, or
-// stay. True when the way is open.
-async function _leaveDraft() {
-  if (!Store.isDraft()) return true;
-  const dr = await draftNow();
-  if (!dr || dr.key !== Store.key() || !dr.content || !dr.content.any) return true;
-  const r = await askDraft(dr);
-  if (r.result === 'saved') Store.markSaved(r.title);
-  return r.result === 'saved' || r.result === 'discarded';
-}
-
-// (phase V20) AT THE START, a draft with something in it was left by an app that closed without asking - a crash, a
-// power cut: asked once a session (the app's window is one session), with "Later".
-const SS_ASKED = 'mv3_draft_asked';
-let _startAsked = false;
-async function _askAtStart() {
-  try {
-    if (sessionStorage.getItem(SS_ASKED)) return;
-    sessionStorage.setItem(SS_ASKED, '1');
-  } catch (e) { return; }
-  if (!Store.isDraft()) return;
-  const dr = await draftNow();
-  if (!dr || dr.key !== Store.key() || !dr.content || !dr.content.any) return;
-  const r = await askDraft(dr, { later: true });
-  if (r.result === 'saved') Store.markSaved(r.title);
-  else if (r.result === 'discarded') { _after = 'not saved - what it made is in the Library, in Uncategorized'; await Store.openBlank(); }
-}
-
-// (phase V20) The draft's two buttons: "save" names it, "don't save" lets it go - what it made goes to Uncategorized.
+// (phase V20; phase V49, the owner's (пр12), (пр13)) THE DRAFT is never asked about - not at the window's close, not at
+// the start, not when another project is opened: it stays as it is, its lanes and its chats, first in the list. Its two
+// buttons: "save" names it (a new empty draft takes its place, routes/mergev3.js), "clear" empties its lanes and keeps it.
 function _paintDraft() {
   const d = Store.isDraft();
   const e = document.getElementById('mv3-project-edit');
@@ -167,8 +137,8 @@ function _paintDraft() {
     e.title = d ? 'Save this draft under a name - what it made goes into the name\'s category' : 'Rename this project';
   }
   if (x && !_armed) {
-    x.textContent = d ? 'don\'t save' : 'delete';
-    x.title = d ? 'Let this draft go - what it made stays in the Library, in Uncategorized' : 'Delete this project';
+    x.textContent = d ? 'clear' : 'delete';
+    x.title = d ? 'Empty the lanes of this draft - it stays the draft, with its chats; Ctrl+Z brings the clips back' : 'Delete this project';
   }
 }
 
@@ -202,7 +172,6 @@ function _wireNew() {
       else if (want === 'talking') openScenarios();
       else if (want === 'highlights') {
         (async () => {
-          if (!(await _leaveDraft())) return;
           _note('creating…');
           try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
         })();
@@ -210,7 +179,6 @@ function _wireNew() {
     });
   }
   _newBlank = async () => {
-    if (!(await _leaveDraft())) return;
     const today = new Date().toISOString().slice(0, 10);
     const title = await askName({ anchor: b, title: 'New project', value: today + ' - ', select: false, okLabel: 'Create' });
     if (title === null) return;                       // cancelled, not an empty name
@@ -276,7 +244,6 @@ function _kindMenu(anchor) {
   item('talking head', 'from a scenario - pick or write one', () => { openScenarios(); });
   // (phase V33.1, the owner 2026-10-03/04: third) A long video in, vertical shorts out - a project of its own, and its popup.
   item('highlights', 'a long video → shorts', async () => {
-    if (!(await _leaveDraft())) return;
     _note('creating…');
     try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
   });
@@ -386,7 +353,7 @@ function _disarm() {
   const b = document.getElementById('mv3-project-del');
   _armed = false;
   if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-  if (b) { b.textContent = Store.isDraft() ? 'don\'t save' : 'delete'; b.classList.remove('is-armed'); }
+  if (b) { b.textContent = Store.isDraft() ? 'clear' : 'delete'; b.classList.remove('is-armed'); }
 }
 
 function _wireDelete() {
@@ -405,8 +372,8 @@ function _wireDelete() {
     _disarm();
     const key = _projKey();
     if (!key) return;
-    // (phase V20) The draft is not deleted - it is let go of: what it made stays, in Uncategorized.
-    if (Store.isDraft()) { _discard(key); return; }
+    // (phase V49) The draft is not deleted - its lanes are emptied, and it stays.
+    if (Store.isDraft()) { _clear(); return; }
     // A TALKING HEAD'S FILES (phase C3, the owner 2026-10-05): the last timeline of its project holds the reads,
     // frames and clips in the project's folder, and deleting it asks whether they go too. The pictures and videos
     // on the Library's shelves are not in that folder and stay.
@@ -425,15 +392,13 @@ function _wireDelete() {
   });
 }
 
-// (phase V20) A draft not saved: its timeline and chats go, what it made stays in the Library, Uncategorized - and a
-// new draft takes its place.
-async function _discard(key) {
-  _note('letting it go…');
+// (phase V49, the owner's (пр12)) "clear": the draft's lanes emptied to a new timeline's, one step to undo (store.js
+// clearDraft); its name, folder, category and chats stay, and so does what it made - on the shelves.
+async function _clear() {
+  _note('clearing…');
   try {
-    const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/discard', { method: 'POST' }).then(r => r.json());
-    if (!d || !d.success) throw new Error((d && d.error) || 'refused');
-    _after = 'not saved - what it made is in the Library, in Uncategorized';
-    await Store.openBlank();
+    const r = await Store.clearDraft();
+    _note(r === 'empty' ? 'the draft is empty already' : 'cleared - Ctrl+Z brings the clips back');
   } catch (e) { _note(e.message); }
 }
 
@@ -461,6 +426,8 @@ async function _askHeads(anchor, key) {
 
 async function _delete(key, files, heads) {
   _note('deleting…');
+  // (phase V49) An edit still waiting goes up first: a save after the delete would be refused (the project is gone).
+  try { await Store.flush(); } catch (e) { /* refused or offline - the delete goes on */ }
   try {
     const q = files ? '?files=1' + (heads ? '&heads=' + heads : '') : '';
     const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + q, { method: 'DELETE' }).then(r => r.json());

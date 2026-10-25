@@ -43,6 +43,8 @@
                                            stale version, so the caller can reconcile
                                            rather than guess.
                                            403 when the project is somebody else's.
+                                           404 { gone: true } when it is not there any more -
+                                           a save never makes a project (phase V49).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -102,9 +104,11 @@ function _write(state) {
 }
 
 
-// The picker's list. Newest first, so an imported project is at the top.
+// The picker's list. Newest first, so an imported project is at the top - under THE draft, which is always first and always
+// there (phase V49: made here when the list is read without one).
 router.get('/mv3/timelines', (req, res) => {
   try {
+    _ensureDraft(req);
     const s = _read();
     const own = _folderFiles(Object.keys(s.timelines));
     // (phase V33.1) A highlights project is ONE line - its own timeline; its fragments' timelines open from its tiles.
@@ -140,7 +144,8 @@ router.get('/mv3/timeline', (req, res) => {
     // drawn its lanes - one ffmpeg at a time, so the first play is not the first transcode.
     if (t) _warmProxies(t);
     res.json({
-      success: true, version: _revOf(t), key,
+      // `found`: false when there is no timeline at all - the empty shape under LOCAL_KEY; the page opens the draft instead.
+      success: true, version: _revOf(t), key, found: !!t,
       title: t ? t.title : 'Untitled', draft: !!(t && t.draft),
       ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
@@ -152,56 +157,41 @@ router.get('/mv3/timeline', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── THE DRAFT (phase V20, the owner 2026-10-08) ────────────────────────────
-// Merge with no project open opens THE draft - a Merge project marked `draft`, named "draft <date time>", one at a
-// time - so the timeline and the chats work from the first press, with nothing to name first. What its chats MAKE goes
-// into "Generated" (phase V28.4) and stays there whatever becomes of it; what is BROUGHT INTO them is filed in the
-// category of its name, as any project's. Saved, it is renamed (the categories and the folder follow) and the mark
-// goes; not saved, its timeline and its chats go, and what it filed goes to Uncategorized (lib/project-cats.js
-// release). Asked at the window's close, at a switch away from it, and at the start after an app that closed without
-// asking (public/js/draft-ask.js).
+// ── THE DRAFT (phase V20, the owner 2026-10-08; phase V49, the owner's (пр12), (пр13)) ──────────────────────────
+// Merge with no project open opens THE draft - a Merge project marked `draft`, named "draft <date time>" - so the
+// timeline and the chats work from the first press, with nothing to name first. There is ONE, and always one: made when
+// Merge opens with nothing to open (POST /mv3/timeline/new {draft}), when the list is read without one (GET
+// /mv3/timelines) and the moment the draft is saved under a name (PATCH .../title) - first in the list every time. What
+// its chats MAKE goes into "Generated" (phase V28.4) and stays there whatever becomes of it; what is BROUGHT INTO them is
+// filed in the category of its name, as any project's. Saved, it is renamed (the categories and the folder follow), the
+// mark goes and a new empty draft takes its place. Nothing is asked about it and nothing deletes it (V49): it stays as it
+// is - its lanes, its category, the drafts' conversation; "clear" on the picker empties its lanes on the page (one step to
+// undo, public/js/merge-v3/store.js clearDraft), and DELETE refuses it.
 const _draftOf = (timelines) => Object.keys(timelines || {}).find(k => timelines[k] && timelines[k].draft) || '';
-function _draftContent(key, t) {
-  let clips = 0;
-  for (const tr of (Array.isArray(t && t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
-  // (phase V21) What was said is not counted: the drafts' conversation goes on whatever becomes of this draft.
-  let made = 0;
-  try { made = require('../lib/mv3-gens').list(key).length + require('../lib/mv3-video-gens').list(key).length; } catch (e) { /* none */ }
-  // What it filed on the shelves - a picture brought into its chat is work begun too.
-  let filed = 0;
-  try { filed = require('../lib/project-cats').filedUnder(require('../lib/mv3-gens').catLabelFor(t && t.title)); } catch (e) { /* none */ }
-  return { clips, made, filed, any: clips + made + filed > 0 };
+
+// The draft there is, or a new empty one written at once -> { key, title, version, made }. `avoid`: a name it must not
+// take - the draft just saved under a name had it, and its folder and category have just moved away from it (an old
+// address of that folder is redirected to the new one, lib/moves.js, so a new folder must not take it back).
+function _ensureDraft(req, avoid) {
+  const cur = _read();
+  const was = _draftOf(cur.timelines);
+  if (was) return { key: was, title: cur.timelines[was].title, version: cur.version, made: false };
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const base = 'draft ' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const off = String(avoid || '').trim().toLowerCase();
+  const bad = (t) => _titleTaken(cur.timelines, t, null) || (!!off && t.toLowerCase() === off);
+  let title = base;
+  for (let n = 2; bad(title); n++) title = base + ' (' + n + ')';
+  let key = 'mv3_' + Date.now();
+  for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
+  const now = d.toISOString();
+  cur.timelines[key] = { title, createdAt: now, updatedAt: now, adv: null, owner: OWN.uidOf(req), rev: 1, kind: BLANK_KIND,
+    format: '9:16', tracks: _emptyBlank().tracks, draft: true };
+  const version = cur.version + 1;
+  _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+  return { key, title, version, made: true };
 }
-
-// GET /api/mv3/draft -> { draft: null | { key, title, content: { clips, made, filed, any } } }
-router.get('/mv3/draft', (req, res) => {
-  try {
-    const s = _read();
-    const key = _draftOf(s.timelines);
-    if (!key) return res.json({ success: true, draft: null });
-    res.json({ success: true, draft: { key, title: s.timelines[key].title || '', content: _draftContent(key, s.timelines[key]) } });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-// POST /api/mv3/timeline/:key/discard - a draft not saved: what it filed to Uncategorized, its timeline gone; the
-// drafts' conversation stays as it is (phase V21). Only a draft: a project is deleted by its own button (which lets go
-// of its categories the same way since phase V28.4).
-router.post('/mv3/timeline/:key/discard', (req, res) => {
-  try {
-    const key = String(req.params.key || '');
-    const cur = _read();
-    const rec = cur.timelines[key];
-    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    if (!rec.draft) return res.status(409).json({ success: false, error: 'only a draft is let go of this way - this project is saved' });
-    let released = {};
-    try { released = require('../lib/project-cats').release(require('../lib/mv3-gens').catLabelFor(rec.title)); }
-    catch (e) { console.warn('[mv3] draft: its category was not let go of -', e.message); }
-    delete cur.timelines[key];
-    const now = new Date().toISOString();
-    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, released, version: cur.version + 1 });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
 
 // The shape of nothing. Entering Merge without a project shows an empty timeline and waits
 // for one to be chosen, and the page needs the same track shape the real ones have - built
@@ -232,16 +222,21 @@ router.put('/mv3/timeline', (req, res) => {
     if (!Number.isFinite(claimed)) {
       return res.status(400).json({ success: false, error: 'version is required - a write that does not say what it replaces cannot be checked' });
     }
-    const key = String((req.body || {}).key || '').trim() || _newestKey(cur.timelines) || LOCAL_KEY;
+    // (phase V49) A save names its project, and the project must be there: a project is made by POST .../new (or by the
+    // server laying one), never by a save. A save that arrives after its project was deleted - an edit still waiting when a
+    // project, a highlights fragment or (before V49) the draft went - made it again as "Untitled", with no draft mark;
+    // with no key it wrote into the newest project. Both are refused now: 400 and 404 `gone`, the edit not saved.
+    const key = String((req.body || {}).key || '').trim();
+    if (!key) return res.status(400).json({ success: false, error: 'which project? - the edit was not saved' });
     const prev = cur.timelines[key];
+    if (!prev) return res.status(404).json({ success: false, gone: true, key, error: 'this project is not there any more - the edit was not saved' });
     // Somebody else's project: refused before the version is even looked at. The page shows
     // it read-only and should never send this; this is for the page that did not know.
-    if (prev && !OWN.canEdit(prev, req.user)) return OWN.refuse(res, prev);
+    if (!OWN.canEdit(prev, req.user)) return OWN.refuse(res, prev);
     // The refusal that makes this store different, checked against THIS project's rev - see
     // the top of the file. The current state goes back with it, so the caller can reconcile
-    // in one round trip instead of two. Nothing stored means nothing to protect, so a number
-    // is not held against a project that no longer exists.
-    if (prev && claimed !== _revOf(prev)) {
+    // in one round trip instead of two.
+    if (claimed !== _revOf(prev)) {
       return res.status(409).json({
         success: false, error: 'stale version', expected: _revOf(prev), got: claimed,
         version: _revOf(prev), key,
@@ -257,20 +252,20 @@ router.put('/mv3/timeline', (req, res) => {
     const now = new Date().toISOString();
     const clean = _sanitizeBlank(incoming);
     cur.timelines[key] = {
-      title: prev ? prev.title : 'Untitled',
-      createdAt: prev ? (prev.createdAt || now) : now,
+      title: prev.title,
+      createdAt: prev.createdAt || now,
       updatedAt: now,
-      adv: prev ? (prev.adv || null) : null,
-      from: prev ? (prev.from || null) : null,
+      adv: prev.adv || null,
+      from: prev.from || null,
       // Whose it is, set once at creation and carried across every save after; and how many
       // saves there have been, which is the number the next one must quote.
-      owner: prev ? (prev.owner || null) : OWN.uidOf(req),
+      owner: prev.owner || null,
       rev: _revOf(prev) + 1,
       kind: BLANK_KIND,
       format: clean.format,
       tracks: clean.tracks,
       // (phase V20) The draft stays the draft across its saves - only "save" takes the mark off.
-      ...(prev && prev.draft ? { draft: true } : {}),
+      ...(prev.draft ? { draft: true } : {}),
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);
@@ -464,16 +459,10 @@ router.post('/mv3/timeline/new', (req, res) => {
 
     // (phase V20) THE draft: the one there is, or a new one named for the moment.
     if (b.draft) {
-      const was = _draftOf(cur.timelines);
-      if (was) return res.json({ success: true, key: was, version: cur.version, title: cur.timelines[was].title, draft: true });
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      const base = 'draft ' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-      title = base;
-      for (let n = 2; _titleTaken(cur.timelines, title, null); n++) title = base + ' (' + n + ')';
-      key = 'mv3_' + Date.now();
-      for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
-    } else if (projectId) {
+      const dr = _ensureDraft(req);
+      return res.json({ success: true, key: dr.key, version: dr.version, title: dr.title, draft: true });
+    }
+    if (projectId) {
       const p = require('../lib/projects-store').get(projectId);
       if (!p) return res.status(404).json({ success: false, error: 'no such project' });
       // The FIRST free one, the same way a send numbers them: sv3_<id>, then _2, _3. An empty
@@ -513,10 +502,9 @@ router.post('/mv3/timeline/new', (req, res) => {
       format: '9:16',
       tracks: _emptyBlank().tracks,
     };
-    if (b.draft) cur.timelines[key].draft = true;
     const version = cur.version + 1;
     _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, key, version, title, draft: !!b.draft });
+    res.json({ success: true, key, version, title, draft: false });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -583,7 +571,11 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     // own from then on.
     let copied = 0;
     if (wasDraft) { try { copied = require('../lib/mv3-chat').copyDraftTo(key); } catch (e) { console.warn('[mv3] draft: its conversation was not copied -', e.message); } }
-    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved, copied });
+    // (phase V49, the owner's (пр12)) A draft saved leaves a new empty draft in its place, first in the list - written after
+    // the rename and its category's move, and under another name than the one the saved draft had.
+    let draft = '';
+    if (wasDraft) { try { draft = _ensureDraft(req, was).key; } catch (e) { console.warn('[mv3] draft: a new one was not made -', e.message); } }
+    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved, copied, ...(draft ? { draft } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -603,6 +595,34 @@ function _folderFiles(keys) {
   return out;
 }
 
+// (phase V49, point 2) EVERY KEY A HIGHLIGHTS PROJECT'S CHATS MAY HAVE TALKED UNDER: its own (hl_<id>) and each fragment's
+// (hl_<id>_<n>) - the timelines there are and any key a message or a record of the chats still names (a fragment deleted
+// before, a conversation shared by the project).
+function _hlChatKeys(id, timelines) {
+  const re = new RegExp('^hl_' + String(id).replace(/[^a-z0-9]/g, '') + '(?:_\\d+)?$');
+  const keys = new Set(['hl_' + id]);
+  const take = (k) => { if (k && re.test(String(k))) keys.add(String(k)); };
+  for (const k of Object.keys(timelines || {})) take(k);
+  try {
+    const raw = JSON.parse(fs.readFileSync(require('../lib/mv3-chat').FILE, 'utf8'));
+    for (const m of (Array.isArray(raw) ? raw : ((raw && raw.messages) || []))) take(m && m.project);
+  } catch (e) { /* no conversation yet */ }
+  for (const store of ['../lib/mv3-gens', '../lib/mv3-video-gens']) {
+    try { for (const r of require(store).listAll()) take(r && r.project); } catch (e) { /* none */ }
+  }
+  return [...keys];
+}
+// Twice over: a record one key's message pointed at is spared while that message is there (mv3-chat forget `spoken`), and
+// is let go on the second round, once the messages of every key are gone.
+function _forgetChats(keys) {
+  const CHAT = require('../lib/mv3-chat');
+  for (let round = 0; round < 2; round++) {
+    for (const k of keys) {
+      try { CHAT.forget(k); } catch (e) { console.warn('[mv3] the chats of', k, 'were not cleared -', e.message); }
+    }
+  }
+}
+
 router.delete('/mv3/timeline/:key', (req, res) => {
   try {
     const key = String(req.params.key || '');
@@ -611,6 +631,8 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     // Deleting is the one write nobody but the owner should be able to undo their way out of,
     // so it is held to the same line as the rest - and the admin's on anything.
     if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
+    // (phase V49) THE DRAFT is not deleted: "clear" empties its lanes, "save" names it - there is always one.
+    if (cur.timelines[key].draft) return res.status(409).json({ success: false, error: 'the draft is not deleted - "clear" empties its lanes, "save" gives it a name' });
     // (phase V33.1) A HIGHLIGHTS PROJECT is deleted whole by its own timeline: its work stopped, its folder - the fragments'
     // timelines and pieces - gone; its video stays, a source of the Library. A fragment goes from its tile, not from here.
     const HLS = require('../lib/highlights-store');
@@ -621,7 +643,11 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const rec = HLS.get(hk.id);
       const row = rec && rec.work && rec.work.alertId;
       if (row) require('../lib/alerts').cancel(row, 'stopped - the project was deleted');
+      const talks = _hlChatKeys(hk.id, cur.timelines);
       const { moved } = HLS.remove(hk.id);
+      // (phase V49, point 2) Its chats' conversations and the finished records of what they made go too, as any project's
+      // (below) - under every key they may have talked: its own and each fragment's.
+      _forgetChats(talks);
       return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 }, released: {} });
     }
     // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
