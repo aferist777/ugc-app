@@ -25,7 +25,8 @@
    ── Why a thread and not a form ─────────────────────────────────────────────
    Making things is iterative. You say a thing, look at it, then say "the same but at night" - and the
    second sentence only means anything because the first one is still there. The conversation belongs to
-   the PROJECT (data/mv3-chat.json by kind, the results in their own store and on their shelf).
+   the PROJECT (data/mv3-chat.json by kind, the results in their own store and on their shelf) - a highlights
+   project's is ONE for its home and all its fragments, kept under the home's key (phase V49, lib-views.js chatKey).
 
    ── The server sends ────────────────────────────────────────────────────────
    A press is one request: the server writes the person's turn, a record and an Alerts row for every result
@@ -112,6 +113,16 @@ export const ratioOf = (ar) => {
   const p = String(ar || '9:16').split(':');
   return (+p[0] || 1) / (+p[1] || 1);
 };
+/**
+ * (phase V49, the owner's (пр6)) A chat's result is not laid on a highlights project's own timeline - nothing on it is rendered:
+ * "to timeline" and a drag (its `dragstart` event, cancelled) say "open a fragment" at the anchor. True when refused.
+ */
+export function refuseHome(anchor, ev) {
+  if (!Views.isHlHome(Store.key())) return false;
+  if (ev) ev.preventDefault();
+  note(anchor, Views.NO_FRAGMENT[0], Views.NO_FRAGMENT[1]);
+  return true;
+}
 export const json = (url, opts) => fetch(url, opts).then(r => r.json()).catch(() => null);
 export const stored = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || '') || fb; } catch (e) { return fb; } };
 export const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
@@ -211,11 +222,12 @@ export function createChat(make) {
     bar: (show) => { if (_ui) _ui.bar.hidden = !show; },
     thread: () => _thread,
     reload: (toEnd) => _reload(toEnd),
+    // The key the conversation is kept under (phase V49: a highlights fragment's is its project's home).
     ensureProject: async () => {
-      if (Store.key()) return Store.key();
+      if (Store.key()) return Views.chatKey(Store.key());
       _adopt = true;
       try { await _ensureProject(); } catch (e) { _adopt = false; throw e; }
-      return Store.key();
+      return Views.chatKey(Store.key());
     },
     shots: (m, progs) => _shots(m, progs),
     // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
@@ -280,7 +292,9 @@ export function createChat(make) {
   function _onStore() {
     // Not before the store has read what is open: "nothing yet" is not "no project".
     if (!Store.isReady()) return;
-    const k = Store.key() || '';
+    // (phase V49, the owner's (пр5)) A highlights project talks in ONE conversation: its fragments' keys are its home's, so
+    // pressing another fragment is no project switch here - the thread, the view and what is being written stay.
+    const k = Views.chatKey(Store.key());
     if (_ui && _ui.stripP) _ui.stripP.textContent = Store.title() || (k ? k : 'no project');
     // (phase V21) The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
     // none of them), it stays on the chat it was on, and its conversation is read again (the project's copy). The next
@@ -1455,8 +1469,10 @@ export function createChat(make) {
     S.view(done, Math.max(0, done.findIndex(x => x.id === g.id)));
   }
 
-  // On the lane above main video, at the playhead (js/merge-v3/timeline-b.js placeAbove).
+  // On the lane above main video, at the playhead (js/merge-v3/timeline-b.js placeAbove) - not on a highlights project's own
+  // timeline (phase V49, (пр6)): a fragment is opened first.
   async function _place(item, anchor) {
+    if (refuseHome(anchor)) return;
     const Tl = await import('./timeline-b.js');
     // Not picked on the timeline: a picked clip slides its settings over the Library - over this chat.
     // A clip (the video chat) goes with its length and its sound; a picture as a still.
@@ -1524,7 +1540,9 @@ export function createChat(make) {
         try { await _ensureProject(); }
         catch (e) { _adopt = false; note(at, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
       }
-      const key = Store.key();
+      // The conversation's key (phase V49): a highlights fragment talks in its project's - what is made and brought in is filed
+      // under the project's name (catLabelFor), and its Alerts row leads back to the project with this chat open.
+      const key = Views.chatKey(Store.key());
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({ project: key, text, refs: _real().map(a => a.path) }, set.body(), {
@@ -1673,6 +1691,7 @@ export function createChat(make) {
       t.draggable = true;
       // The library's own payload, so a tile can be dragged onto a lane like anything on the shelf.
       t.addEventListener('dragstart', (ev) => {
+        if (refuseHome(t, ev)) return;
         ev.dataTransfer.effectAllowed = 'copy';
         ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
           libId: it.libId || '', src: it.path, thumb: it.path,

@@ -25,7 +25,7 @@
 
 import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf } from './chat-shell.js';
+import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome } from './chat-shell.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { openTrim, closeTrim } from './vtrim.js';
@@ -2622,6 +2622,8 @@ function VIDEOS(ctx) {
       };
       box.draggable = true;
       box.addEventListener('dragstart', (ev) => {
+        // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
+        if (refuseHome(box, ev)) return;
         ev.dataTransfer.effectAllowed = 'copy';
         ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(item));
         box.classList.add('is-dragging');

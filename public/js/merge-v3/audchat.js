@@ -15,8 +15,8 @@
               with "use in custom", its error and "try again" when it failed. A sash between it and the constructor.
 
    The project is the one open in Merge - there is no picker here. Its kind gives the mode the first time it is opened here:
-   a talking head - Simple; blank, the draft - Custom (the owner's (р7)); afterwards the mode it was left on. Not in a
-   highlights project (its music is a phase of its own, (р5)).
+   a talking head - Simple; blank, the draft - Custom (the owner's (р7)); a highlights project - Simple, with its moods (phase
+   V49, the owner's (пр7); its home and fragments are one project here, lib-views.js chatKey); afterwards the mode it was left on.
 
    The server is routes/audio-gen.js and lib/audio-gens.js: a press writes its record and its Alerts row at once, the server
    asks, waits, downloads and files - this view only follows. Its Alerts row leads back here (?open=audio, js/merge-v3/main.js).
@@ -31,6 +31,7 @@ import { setOpenColumn } from './layout.js';
 import { isTalking } from './workshop.js';
 import { setMediaDrag } from '../media-tree.js';
 import { waveEl, secs } from '../sound/wave.js';
+import { refuseHome } from './chat-shell.js';
 
 const NAME = 'audio';
 const $ = (id) => document.getElementById(id);
@@ -62,8 +63,8 @@ const MODE_HELP = {
   sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
 };
 const MODEL_HELP = { V6: 'the newest - most natural', V6_MINI: 'faster', V6_WILD: 'bolder, stranger' };
-const KIND_MODE = { 'talking head': 'simple', blank: 'custom', draft: 'custom' };
-const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft' };
+const KIND_MODE = { 'talking head': 'simple', blank: 'custom', draft: 'custom', highlights: 'simple' };
+const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
 
 const S = Object.assign({ engine: 'suno', mode: 'custom', model: 'V6', lastMode: { suno: 'simple', eleven: 'compose' }, f: {}, of: {} }, ls(KEY, {}));
 S.f = Object.assign({
@@ -94,10 +95,12 @@ let _key = null;           // the project the view follows
 let _draftHere = false;
 
 // ── the project ─────────────────────────────────────────────────────────────
+// (phase V49, the owner's (пр4), (пр7)) In a highlights project too: its home and every fragment are ONE list of what was made
+// (the key is the home's - lib-views.js chatKey), and it opens in Simple with the highlights moods.
 const _hl = (k) => /^hl_/.test(String(k || ''));
-const _allowed = () => Store.isReady() && !!Store.key() && !_hl(Store.key()) && Store.canEdit();
+const _allowed = () => Store.isReady() && !!Store.key() && Store.canEdit();
 const _lk = (k) => (k === _key && _draftHere ? 'draft' : (k || ''));
-const _kind = () => (isTalking() ? 'talking head' : Store.isDraft() ? 'draft' : 'blank');
+const _kind = () => (_hl(Store.key()) ? 'highlights' : isTalking() ? 'talking head' : Store.isDraft() ? 'draft' : 'blank');
 // The video's length: the video lanes' end (a talking head's lines, a blank project's clips).
 function _videoSecs() {
   const t = Store.timeline();
@@ -873,6 +876,8 @@ function _result(r) {
     row.draggable = true;
     row.title = 'A press plays it · drag it onto an audio lane';
     row.addEventListener('dragstart', (e) => {
+      // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
+      if (refuseHome(row, e)) return;
       e.dataTransfer.effectAllowed = 'copyMove';
       e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({
         libId: it.id, src: it.media, thumb: null, name: it.name || r.title || '', group: it.kind,
@@ -1200,13 +1205,14 @@ export async function openAudio() {
 
 function _crumb() {
   const c = $('mv3-lib-agen');
-  if (c) c.hidden = !(Store.isReady() && !!Store.key() && !_hl(Store.key()));
+  if (c) c.hidden = !(Store.isReady() && !!Store.key());
 }
 
 function _onStore() {
   if (!Store.isReady()) return;
   _crumb();
-  const k = Store.key() || '';
+  // (phase V49, (пр5)) A highlights fragment's key is its project's home: another fragment pressed is no project switch here.
+  const k = Views.chatKey(Store.key());
   // The draft saved under a name: its own from now on, and it stays on the view it was on.
   if (k === _key && _draftHere && !Store.isDraft()) {
     _draftHere = false;

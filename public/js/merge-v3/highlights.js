@@ -5,8 +5,11 @@
    галочка ... в правом столбце поля плиток будет отображаться информация по отдельным фрагментам").
 
    In a highlights project - its own timeline hl_<id> or a fragment's hl_<id>_<n> - the crumbs are "highlights / Library"
-   (Library stays - music and B-roll for a fragment, the owner's (х15)); the view is one of lib-views.js's bases, as the
-   scenarios view is, and it is what the project opens on. It holds:
+   (Library stays - music and B-roll for a fragment, the owner's (х15)) and, since phase V49 (the owner's (пр4)), "generate image /
+   generate video / generate audio" - overlays for a fragment's lanes above main. The chats talk in ONE conversation per project
+   (lib-views.js chatKey: a fragment's key is the home's), so pressing a tile never brings a chat forward over the tiles; with no
+   fragment open their results are not laid on the home (chat-shell.js refuseHome). The view is one of lib-views.js's bases, as
+   the scenarios view is, and it is what the project opens on. It holds:
      the top      the video, what is happening (the server's words, as the row in Alerts says them), the cross that
                   stops it (twice: "really?"), "retry" (one press when it costs nothing, two - "spend again?" - when it
                   does), and "select all";

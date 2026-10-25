@@ -3,11 +3,10 @@
    (js/merge-v3/hl-popup.js) and the caption style picked in it (js/merge-v3/hl-style.js, the captions view's tiles).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── The crumbs of a highlights project: "highlights / Library" (the owner's (х15)), and "/ captions" while a fragment is open
-      or ticked (phase V33.3, (х33) - highlights.js puts .is-hl-cap on the panel) ── */
+/* ── The crumbs of a highlights project: "highlights / Library / generate image / generate video / generate audio" (the owner's
+      (х15); the generators since phase V49, (пр4) - overlays for a fragment's lanes above main), and "/ captions" while a
+      fragment is open or ticked (phase V33.3, (х33) - highlights.js puts .is-hl-cap on the panel). No scenarios. ── */
 #mv3-library.is-hl #mv3-lib-scen,
-#mv3-library.is-hl #mv3-lib-gen,
-#mv3-library.is-hl #mv3-lib-vgen,
 #mv3-library.is-hl:not(.is-hl-cap) #mv3-lib-cap{display:none !important}
 #mv3-library:not(.is-hl) #mv3-lib-hl{display:none !important}
 

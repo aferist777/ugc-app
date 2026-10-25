@@ -7,10 +7,12 @@
    their settings into one row.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* Four crumbs now: the chats' read "image" / "video" / "audio" a little sooner. */
+/* Four crumbs now: the chats' read "image" / "video" / "audio" a little sooner. In a highlights project too (phase V49, the
+   owner's (пр4)): "highlights / Library / generate image / generate video / generate audio" (css/mv3-highlights.css). */
 @container libhead (max-width: 760px){ .mv3-lib-crumb .lg{display:none} }
-/* A highlights project has its own crumbs (css/mv3-highlights.css) - its music is a phase of its own. */
-#mv3-library.is-hl #mv3-lib-agen{display:none !important}
+/* (phase V49) At the panel's narrowest (layout.js MIN_PANEL, 380 px) six crumbs were a few pixels too wide - the draft's and a
+   highlights project's alike, each cut with an ellipsis: there the letters close up instead. */
+@container libhead (max-width: 420px){ .mv3-lib-crumb, #mv3-library .mv3-panel-title{letter-spacing:.01em} }
 
 .mv3-pc.is-audio{min-width:0}
 .mv3-pc.is-audio .sp, .au-pick .sp, .au-alm .sp{flex:1}

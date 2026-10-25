@@ -82,7 +82,20 @@ export function toShelf() {
   if (c && c.onBack) c.onBack();
 }
 
-/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library" alone (css/mv3-highlights.css). */
+// ── A HIGHLIGHTS PROJECT's keys (phase V49, the owner's (пр5), (пр6)) ───────
+// Its own timeline hl_<id> - its home, open while no fragment is - and a fragment's hl_<id>_<n> (highlights.js KEY_RE). The chats
+// talk in ONE conversation per highlights project: a fragment's key is its home's wherever a chat keys by project (the thread,
+// what it made, the view it was left on, what was being written); and nothing is laid on the home, which is never rendered.
+const HL_FRAG = /^(hl_[a-z0-9]+)_\d+$/;
+/** The key a chat's conversation is kept under: a highlights fragment's is its project's home, any other key is itself. */
+export const chatKey = (key) => { const k = String(key || ''); const m = HL_FRAG.exec(k); return m ? m[1] : k; };
+/** The open timeline is a highlights project's own (no fragment open). */
+export const isHlHome = (key) => /^hl_[a-z0-9]+$/.test(String(key || ''));
+/** What "to timeline" and a drag of a chat's result say there. */
+export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
+
+/** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library / generate image / generate video / generate
+ *  audio" (phase V49, the owner's (пр4); css/mv3-highlights.css). */
 export function setHighlights(on) {
   const panel = $('mv3-library');
   if (panel) panel.classList.toggle('is-hl', !!on);
@@ -132,13 +145,13 @@ function _views() {
   return v;
 }
 
-/** The chat a project was left on ('' for the shelf). */
-export const viewOf = (key) => String(_views()[key || ''] || '');
+/** The chat a project was left on ('' for the shelf). A highlights project's fragments share its home's mark (phase V49). */
+export const viewOf = (key) => String(_views()[chatKey(key)] || '');
 
 /** A chat came forward (`name`) or was left (`null`) on this project - only its own mark is taken away. */
 export function rememberView(key, name, was) {
   const v = _views();
-  const k = key || '';
+  const k = chatKey(key);
   if (name) v[k] = name;
   else if (!was || v[k] === was) delete v[k];
   try { localStorage.setItem(LS_VIEW, JSON.stringify(v)); } catch (e) { /* a private window */ }
