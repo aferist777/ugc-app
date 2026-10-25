@@ -585,9 +585,10 @@ async function _writeBoard(cardId, kick, o) {
   let out;
   try {
     const pics = o.media.filter(x => x.kind === 'image').length;
-    const sees = await _writerSees(o.media, 'storyboard');
+    const watched = await _watchFor(cardId, kick, o.model, o.media, o.text);
+    const sees = await _writerSees(o.media, 'storyboard', watched);
     const t = await AGENT.thinkVideo({ model: o.model, text: o.text || NO_WORDS, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
-                                       params: o.params, boardOnly: true });
+                                       params: o.params, boardOnly: true, watched });
     const board = t.board ? _boardWords(t.board, pics) : '';
     out = board ? { board, writer: t.writer || '', aspect: t.boardAspect || (VR.BOARD_ASPECTS.includes((o.params || {}).aspect) ? o.params.aspect : '16:9') }
       : { error: t.fail || 'the writer answered nothing usable - write it again' };
@@ -630,7 +631,8 @@ async function _hostForWriter(paths) {
 // cannot be hosted is left out with a warning: the writer works from the words then, as before.
 // (review V7) It answers { urls, seen } - what the writer is told it sees is what it gets: the pictures all or none,
 // each clip's THREE frames or none of them (one short and the next clip's frames were read as this one's end).
-async function _writerSees(media, why) {
+// (phase V48) A clip WATCHED whole (`watched[i]` - its description) needs no frames: `seen.clips[i]` is 'watched'.
+async function _writerSees(media, why, watched) {
   const list = Array.isArray(media) ? media : [];
   const pics = list.filter(m => m.kind === 'image').map(m => m.path);
   let urls = [];
@@ -639,7 +641,8 @@ async function _writerSees(media, why) {
     try { urls = await _hostForWriter(pics); }
     catch (e) { console.warn('[mv3-video] ' + why + ': the writer will not see the pictures -', e.message); urls = []; seen.pics = false; }
   }
-  for (const m of list.filter(x => x.kind === 'video')) {
+  for (const [ci, m] of list.filter(x => x.kind === 'video').entries()) {
+    if (watched && watched[ci]) { seen.clips.push('watched'); continue; }
     let three = [];
     try {
       if (FAKE.on()) three = [FAKE.host(m.path), FAKE.host(m.path), FAKE.host(m.path)];
@@ -652,6 +655,52 @@ async function _writerSees(media, why) {
     if (three.length === 3) { urls.push(...three); seen.clips.push(true); } else seen.clips.push(false);
   }
   return { urls, seen };
+}
+
+// (phase V48, the owner 2026-10-25: "нам нужно чтобы агент просматривал видео полностью и описывал его ... это нужно
+// пока только для seedance") THE CLIPS WATCHED before Seedance's writer writes a card: each clip - the part of it that
+// goes - described by an agent that watches video (lib/clip-watch.js: kept by the file and the part, never paid twice),
+// the descriptions written onto the card as they come (`watch`, one entry per clip) - a step of the message the person
+// reads and corrects (кл5). A description the card has already for the same part is used AS IT STANDS - corrected or
+// not; a clip that was not watched is asked again. The clips' descriptions in their order ({ text } or null - the writer
+// then sees its three frames, and the card says "clip not watched"), or null when this card watches nothing.
+const _samePart = (w, i, c) => !!(w && w.n === i + 1 && w.path === c.path
+  && Math.abs((+w.in || 0) - (+c.in || 0)) < 0.005 && Math.abs((+w.out || 0) - (+c.out || 0)) < 0.005);
+// The card does not wait for this writer any more (written again, cleared): nothing more is watched or written for it.
+const _cardLeft = () => Object.assign(new Error('the card changed meanwhile'), { left: true });
+async function _watchFor(cardId, kick, model, media, words) {
+  const clips = (Array.isArray(media) ? media : []).filter(x => x && x.kind === 'video');
+  if (_family(model) !== 'seedance' || !clips.length) return null;
+  const now = CHAT.get(cardId);
+  const had = now && now.card && Array.isArray(now.card.watch) ? now.card.watch : [];
+  const list = clips.map((c, i) => {
+    const w = had.find(x => _samePart(x, i, c));
+    if (w && w.state === 'done' && w.text) return Object.assign({}, w);
+    return { n: i + 1, path: c.path, in: +c.in || 0, out: +c.out || 0, state: 'waiting', text: '', by: '', why: '', edited: false, cached: false, at: '' };
+  });
+  // Filed only while the card still waits for THIS writer; false when it does not any more.
+  const put = () => {
+    let ours = false;
+    CHAT.update(cardId, (m) => {
+      if (!m.card || m.card.kick !== kick || m.card.state !== 'writing') return false;
+      ours = true;
+      m.card.watch = list.map(w => Object.assign({}, w));
+    });
+    return ours;
+  };
+  if (!put()) throw _cardLeft();
+  for (const w of list) {
+    if (w.state === 'done') continue;
+    w.state = 'watching';
+    if (!put()) throw _cardLeft();
+    let r;
+    try { r = await require('../lib/clip-watch').describe(w, { fakeText: words }); }
+    catch (e) { r = { fail: 'the watching broke off - ' + String(e.message || e).slice(0, 200) }; }
+    Object.assign(w, r.text ? { state: 'done', text: r.text, by: r.by || '', cached: !!r.cached, why: '', edited: false, at: new Date().toISOString() }
+      : { state: 'failed', text: '', why: r.fail || 'not watched' });
+    if (!put()) throw _cardLeft();
+  }
+  return list.map(w => (w.state === 'done' && w.text ? { text: w.text } : null));
 }
 const _family = (id) => ((VM.MODELS.find(m => m.id === id) || {}).family || '');
 const _labelOf = (id) => ((VM.MODELS.find(m => m.id === id) || {}).label || id);
@@ -689,9 +738,10 @@ function _cardOf(id, project, type) {
 async function _writeCard(cardId, kick, o) {
   let out;
   try {
-    const sees = await _writerSees(o.media, 'write');
+    const watched = await _watchFor(cardId, kick, o.model, o.media, o.filled);
+    const sees = await _writerSees(o.media, 'write', watched);
     const t = await AGENT.thinkVideo({ model: o.model, text: o.filled, media: o.media, picUrls: sees.urls, seen: sees.seen, thread: [],
-                                       skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep });
+                                       skill: { text: o.body }, params: o.params, max: o.max, recipe: true, twoStep: !!o.twoStep, watched });
     out = t.prompt ? { prompt: _strictRefs(t.prompt), writer: t.writer || '', fell: t.fell || '' }
       : { error: t.fail || 'the writer answered nothing usable - write it again' };
     if (t.prompt && o.twoStep) {
@@ -807,13 +857,14 @@ const NO_WORDS_FRAMES = '(Nothing was written - decide a natural motion from the
 async function _writePlain(cardId, kick, o) {
   let out;
   try {
-    const sees = await _writerSees(o.media, 'review');
+    const watched = await _watchFor(cardId, kick, o.model, o.media, o.text);
+    const sees = await _writerSees(o.media, 'review', watched);
     // (phase V16) Frames: the writer's frames rules, and our opening before its prompt.
     const fr = _framesOf(o.model, o.media);
     const frames = fr && !fr.error ? fr : null;
     const open = VR.framesOpening(frames);
     const t = await AGENT.thinkVideo({ model: o.model, text: o.text || (frames ? NO_WORDS_FRAMES : NO_WORDS), media: o.media, picUrls: sees.urls, seen: sees.seen,
-                                       thread: o.before || [], params: o.params, max: _roomFor(o.max, open), review: true, frames });
+                                       thread: o.before || [], params: o.params, max: _roomFor(o.max, open), review: true, frames, watched });
     out = t.prompt ? { prompt: _strictRefs(frames ? _withOpening(t.prompt, frames) : t.prompt), writer: t.writer || '', fell: t.fell || '' }
       : { error: t.fail || 'the writer answered nothing usable - write it again' };
     if (out.prompt) {
@@ -913,10 +964,23 @@ router.patch('/mv3/video/card/:id', (req, res) => {
     const bcur = b.bcur == null ? null : String(b.bcur);
     // A first frame's moment (V17: where the part starts; on a V7.6 card within the part).
     const at = b.at == null || !Number.isFinite(+b.at) ? null : +b.at;
+    // (phase V48, кл5) The person's correction of what the agent saw in clip `n`: the next writing reads it as it stands.
+    const wEdit = b.watch && typeof b.watch === 'object' && Number.isFinite(+b.watch.n)
+      ? { n: Math.round(+b.watch.n), text: String(b.watch.text == null ? '' : b.watch.text).replace(/\r\n/g, '\n').slice(0, 40000) } : null;
     let why = null;
     const m = CHAT.update(req.params.id, (x) => {
       const story = !!(x.card && x.card.type === 'board');
       if (String(x.project || '') !== CHAT.threadOf(project) || !x.card || (x.card.type !== 'prompt' && !story)) { why = [404, 'no such card']; return false; }
+      // A description is corrected on a card that is not being written - a failed one too: its prompt is written again from it.
+      if (wEdit) {
+        if (x.card.state === 'writing') { why = [409, 'the prompt is being written from it now - correct it when that is done']; return false; }
+        const w = (x.card.watch || []).find(y => y && y.n === wEdit.n);
+        if (!w || w.state !== 'done') { why = [404, 'clip ' + wEdit.n + ' has no description on this card']; return false; }
+        if (!wEdit.text.trim()) { why = [400, 'the description is empty - say what the clip shows']; return false; }
+        if (w.text === wEdit.text) return false;
+        Object.assign(w, { text: wEdit.text, edited: true });
+        return;
+      }
       if (story && at != null) { why = [400, 'a storyboard card has no moment of a clip']; return false; }
       // Written - waiting, or made and edited for the next make (the owner, 2026-10-06).
       if (x.card.state !== 'ready' && x.card.state !== 'sent') { why = [409, 'it is not written yet']; return false; }
@@ -1430,6 +1494,8 @@ router.post('/mv3/video/card/:id/again', (req, res) => {
                           card: { type: 'prompt', state: 'ready', from: m.card.from || '', copyOf: m.id, recipe: m.card.recipe,
                                   model: m.card.model, agg: m.card.agg, params: m.card.params, prompt: m.card.prompt,
                                   writer: m.card.writer || '', edited: !!m.card.edited,
+                                  // (phase V48) What the agent saw of its clips goes with it, as the person left it.
+                                  watch: Array.isArray(m.card.watch) ? m.card.watch.filter(w => w && w.state === 'done') : undefined,
                                   // Its storyboards go with it - those asked for again from Alerts too.
                                   board: m.card.board ? Object.assign({}, m.card.board, { genIds: CHAT.boardsOf(m).map(g => g.id).slice(-20) }) : undefined } });
     res.json({ success: true, card: pc.id });
