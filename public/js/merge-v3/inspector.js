@@ -800,10 +800,8 @@ function _shiftAnim(track, raw, st, pair) {
   const at = cur.indexOf(pair);
   const next = at >= 0 ? cur.filter((_, i) => i !== at) : cur.concat([pair]);
   if (next.length >= 2) {
-    const patch = { anims: next, mixSeed: newSeed() };
-    // Dealt in the same step as the lane is told (timeline-b.js's `after`); a build without it deals by cutting the lane again.
-    if (setSubsStyleB.length >= 4) setSubsStyleB(track.id, patch, false, (t) => deal(t.clips, t.style));
-    else setSubsStyleB(track.id, patch, true);
+    // Dealt in the same step as the lane is told (timeline-b.js setSubsStyle's `after`): one step to undo, the lane not cut again.
+    setSubsStyleB(track.id, { anims: next, mixSeed: newSeed() }, false, (t) => deal(t.clips, t.style));
     return;
   }
   setSubsStyleB(track.id, Object.assign(pairOf(next[0] || 'at-once|none'), { anims: [] }), false);
