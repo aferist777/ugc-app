@@ -37,6 +37,7 @@ import { talkingHead } from '../merge-v3/scen-api.js';
 import * as RP from '../references/post.js';
 // (after block 8) A downloaded YouTube video of REFERENCES -> YouTube -> Videos: To highlights, Delete twice.
 import * as YT from '../references/yt.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -114,7 +115,10 @@ let _narrOn = false;
 let _scrollSel = false;
 let _drafts = [];         // the drafts heading the Scenarios list (phase E)
 
+// The page's line: what was just done ("Saved", "Reading…"). A refusal or a failure (kind 'err') is a popup in the corner
+// instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js), and the line goes.
 function _status(text, kind) {
+  if (text && kind === 'err') { showError(text); text = ''; kind = ''; }
   const el = $('lib-status');
   if (!el) return;
   el.textContent = text || '';

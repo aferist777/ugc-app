@@ -21,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { panelRoom, onColumnOpen } from './layout.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -93,6 +94,17 @@ export const chatKey = (key) => { const k = String(key || ''); const m = HL_FRAG
 export const isHlHome = (key) => /^hl_[a-z0-9]+$/.test(String(key || ''));
 /** What "to timeline" and a drag of a chat's result say there. */
 export const NO_FRAGMENT = ['Open a fragment first.', 'Press a fragment\'s tile in highlights - this is the project\'s own timeline, and nothing on it is rendered.'];
+/**
+ * (phase V49.1, the owner's (пр33)) Said wherever something would be laid on the home - a chat's result ("to timeline", its
+ * drag) and a drop on its lanes, refused on release: a popup (js/notice.js) with "to highlights", which brings the tiles back
+ * (the highlights view's own crumb, highlights.js) and lets the popup go.
+ */
+export function noFragment() {
+  showError(NO_FRAGMENT[0], { detail: NO_FRAGMENT[1], action: { label: 'to highlights', run: () => {
+    const c = _chats.get('highlights');
+    if (c && c.onCrumb) c.onCrumb();
+  } } });
+}
 
 /** (phase V33.1) A highlights project is open: its crumbs are "highlights / Library / generate image / generate video / generate
  *  audio" (phase V49, the owner's (пр4); css/mv3-highlights.css). */

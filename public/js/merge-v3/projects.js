@@ -24,6 +24,7 @@ import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
 import { openScenarios } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
+import { showError } from '../notice.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
 // Said once after the picker is painted again (a delete that moved files), where "nothing open yet" would go.
@@ -36,6 +37,12 @@ function _note(text) {
   const el = document.getElementById('mv3-project-note');
   if (el) el.textContent = text || '';
 }
+// (phase V49.1, the owner's (пр28), (пр29)) An error is not said on this line - "opening…" and "cleared" are: it is a popup
+// in the corner (js/notice.js), and the line's "…" goes.
+function _fail(text) {
+  _note('');
+  showError(text);
+}
 
 const _fmtDate = (s) => {
   if (!s) return '';
@@ -47,7 +54,7 @@ async function _paint() {
   const sel = _sel();
   if (!sel) return;
   let d = null;
-  try { d = await Store.listFull(); } catch (e) { _note(e.message); return; }
+  try { d = await Store.listFull(); } catch (e) { _fail(e.message); return; }
   const { list } = d;
   _titles.clear();
   for (const p of list) _titles.set(p.key, p.title);
@@ -96,7 +103,7 @@ export function initProjects() {
     try {
       await Store.open(want);
       _note('');
-    } catch (e) { _note(e.message); }
+    } catch (e) { _fail(e.message); }
   });
 
   // Refreshed when the list is about to be READ, not on every store change: a clip drag
@@ -173,7 +180,7 @@ function _wireNew() {
       else if (want === 'highlights') {
         (async () => {
           _note('creating…');
-          try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
+          try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
         })();
       } else _kindMenu(b);
     });
@@ -183,7 +190,7 @@ function _wireNew() {
     const title = await askName({ anchor: b, title: 'New project', value: today + ' - ', select: false, okLabel: 'Create' });
     if (title === null) return;                       // cancelled, not an empty name
     const clean = title.trim();
-    if (!clean) { _note('a name is needed'); return; }
+    if (!clean) { _fail('a name is needed'); return; }
 
     b.disabled = true;
     _note('creating…');
@@ -201,7 +208,7 @@ function _wireNew() {
       roomForWork();                                  // a new project is opened to be worked on
       _note('');
     } catch (e) {
-      _note(e.message);
+      _fail(e.message);
     } finally {
       b.disabled = false;
     }
@@ -245,7 +252,7 @@ function _kindMenu(anchor) {
   // (phase V33.1, the owner 2026-10-03/04: third) A long video in, vertical shorts out - a project of its own, and its popup.
   item('highlights', 'a long video → shorts', async () => {
     _note('creating…');
-    try { await createHighlights(); _note(''); } catch (e) { _note(e.message); }
+    try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
 
   document.body.appendChild(el);
@@ -283,7 +290,7 @@ async function _saveRename() {
   const key = _projKey();
   if (!box || !key) return _cancelRename();
   const title = box.value.trim();
-  if (!title) { _note('a name is needed'); box.focus(); return; }
+  if (!title) { _fail('a name is needed'); box.focus(); return; }
   const was = key === Store.key() ? Store.title() : (_titles.get(key) || '');
   if (title === was && !Store.isDraft()) return _cancelRename();
   const saving = Store.isDraft();
@@ -297,13 +304,13 @@ async function _saveRename() {
     const d = await r.json();
     // A name already taken is not a failure to be swept away - the box stays open with what
     // was typed still in it, because the next thing to do is change one word of it.
-    if (!d || !d.success) { _note(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
+    if (!d || !d.success) { _fail(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
     // (phase V20) A draft named is a draft saved.
     if (saving) Store.markSaved(d.title); else if (key === Store.key()) Store.setTitle(d.title);
     _cancelRename();
     await _paint();
   } catch (e) {
-    _note(e.message);
+    _fail(e.message);
     box.focus();
   }
 }
@@ -317,8 +324,8 @@ function _wireRename() {
   b.addEventListener('click', () => {
     if (_editing) { _saveRename(); return; }
     const key = Store.key();
-    if (!key) { _note('open a project first'); return; }
-    if (!Store.canEdit()) { _note('this project cannot be changed here'); return; }
+    if (!key) { _fail('open a project first'); return; }
+    if (!Store.canEdit()) { _fail('this project cannot be changed here'); return; }
     _editing = true;
     // (phase V20) A draft is named the way a new project is: the day, then its name.
     const draft = Store.isDraft();
@@ -341,6 +348,8 @@ function _wireRename() {
   document.addEventListener('mousedown', (e) => {
     if (!_editing) return;
     if (e.target === box || e.target === b) return;
+    // (phase V49.1) Nor the corner of popups: closing "that name is taken" keeps what was typed.
+    if (e.target && e.target.closest && e.target.closest('.sv3-toasts')) return;
     _cancelRename();
   }, true);
 }
@@ -399,7 +408,7 @@ async function _clear() {
   try {
     const r = await Store.clearDraft();
     _note(r === 'empty' ? 'the draft is empty already' : 'cleared - Ctrl+Z brings the clips back');
-  } catch (e) { _note(e.message); }
+  } catch (e) { _fail(e.message); }
 }
 
 // (phase V28.4, second round, the owner: "при удалении проекта спрашивать про удаление исходников с головами") A project
@@ -442,5 +451,5 @@ async function _delete(key, files, heads) {
       loose ? 'what it filed is in the Library, in Uncategorized' : '',
       heads ? heads + (heads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
-  } catch (e) { _note(e.message); }
+  } catch (e) { _fail(e.message); }
 }

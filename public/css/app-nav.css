@@ -129,20 +129,39 @@
 /* Asked before it spends: the second press on the same button is the answer. */
 .sv3-al-act.is-armed{ color:var(--gold); border-color:var(--gold); }
 
-/* A finished generation says so once, wherever you are. Under the button it belongs to. */
+/* THE CORNER OF POPUPS (js/notice.js; phase V49.1, the owner's (пр28)-(пр32)): a finished generation says so once, wherever
+   you are, and goes by itself; an error stays until its ✕ or its button. Newest on top, five at most, below the page's top
+   bars (top is set by the module). Over every window (the highest is 9700): an error said from inside one is seen. */
 .sv3-toasts{
-  position:fixed; top:46px; right:12px; z-index:130;
+  position:fixed; top:46px; right:12px; z-index:9800;
   display:flex; flex-direction:column; gap:6px; pointer-events:none;
 }
 .sv3-toast{
-  pointer-events:auto; display:flex; align-items:center; gap:8px; width:300px; padding:8px 10px;
-  cursor:pointer; background:var(--surface); border:1px solid var(--primary); border-radius:var(--r-sm);
+  pointer-events:auto; display:flex; align-items:center; gap:8px; width:320px; padding:8px 8px 8px 10px; box-sizing:border-box;
+  background:var(--surface); border:1px solid var(--primary); border-radius:var(--r-sm);
   box-shadow:var(--shadow); transition:opacity .25s var(--ease), transform .25s var(--ease);
 }
-.sv3-toast.is-failed{ border-color:var(--danger); }
+.sv3-toast.is-link{ cursor:pointer; }
+.sv3-toast.is-failed, .sv3-toast.is-error{ border-color:var(--danger); }
 .sv3-toast.is-going{ opacity:0; transform:translateY(-6px); }
 .sv3-toast-mark{ flex:0 0 auto; width:16px; text-align:center; color:var(--primary); }
 .sv3-toast.is-failed .sv3-toast-mark{ color:var(--danger); }
+/* An error: its words whole (they wrap), a "×2" when it came again, a quieter second line. */
+.sv3-toast.is-error{ align-items:flex-start; }
+.sv3-toast.is-error .sv3-toast-mark{ color:#fff; background:var(--danger); border-radius:50%; width:16px; height:16px; margin-top:1px;
+  font:800 10.5px/16px var(--font); }
+.sv3-toast-text{ font:600 11.5px/1.35 var(--font); color:var(--ink); white-space:normal; overflow-wrap:anywhere; user-select:text; }
+.sv3-toast-n{ display:inline-block; margin-left:6px; padding:0 5px; border-radius:var(--pill); vertical-align:1px;
+  background:var(--danger); color:#fff; font:700 9.5px/15px var(--font); }
+.sv3-toast-n[hidden]{ display:none; }
+.sv3-toast-detail{ font:400 10.5px/1.35 var(--font); color:var(--muted); white-space:normal; overflow-wrap:anywhere; }
+.sv3-toast.is-error .sv3-al-act{ align-self:center; }
+.sv3-toast-x{
+  flex:0 0 auto; align-self:flex-start; width:18px; height:18px; padding:0; margin-left:-2px; cursor:pointer;
+  display:grid; place-items:center; border:0; border-radius:var(--r-xs); background:none;
+  color:var(--muted); font:400 11px/1 var(--font);
+}
+.sv3-toast-x:hover{ color:var(--ink); background:var(--surface-2); }
 
 /* A track has nothing to look at: the viewer gives it a player instead of a picture. */
 .lib-view-audio{ width:min(560px, 80%); }

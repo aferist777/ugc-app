@@ -18,6 +18,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
+import { showToast } from './notice.js';
 
 const POLL_MS = 4000;
 const TOAST_MS = 5000;
@@ -147,15 +148,8 @@ async function _pollRefs() {
   try { window.dispatchEvent(new CustomEvent('ugc-references', { detail: d })); } catch (e) { /* an old page */ }
   if (d.latest && d.latest > was) {
     _tgChime();
-    const t = _el('div', 'sv3-toast');
-    t.appendChild(_el('span', 'sv3-toast-mark', '✈'));
-    const main = _el('span', 'sv3-al-main');
-    main.appendChild(_el('span', 'sv3-al-title', d.title || 'a post'));
-    main.appendChild(_el('span', 'sv3-al-where', 'from Telegram · REFERENCES · ' + (d.where || '')));
-    t.appendChild(main);
-    t.addEventListener('click', () => _goTo('/library?shelf=media'));
-    _toasts().appendChild(t);
-    setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, TOAST_MS);
+    showToast({ mark: '✈', title: d.title || 'a post', where: 'from Telegram · REFERENCES · ' + (d.where || ''),
+      onClick: () => _goTo('/library?shelf=media'), ms: TOAST_MS });
   }
 }
 function _keepRefs() { try { localStorage.setItem(LS_REFS, _refsSeen || ''); } catch (e) { /* a private window */ } }
@@ -446,32 +440,17 @@ function _close() {
 }
 
 // ── a finished generation announces itself ──────────────────────────────────
-function _toasts() {
-  let box = document.querySelector('.sv3-toasts');
-  if (!box) {
-    box = _el('div', 'sv3-toasts');
-    document.body.appendChild(box);
-  }
-  return box;
-}
-
+// In the corner of popups (js/notice.js, phase V49.1): it goes by itself, and has a ✕ too.
 function _announce(rec) {
-  const t = _el('div', 'sv3-toast' + (rec.state === 'failed' ? ' is-failed' : ''));
-  t.appendChild(_el('span', 'sv3-toast-mark', KIND_MARK[rec.kind] || '▣'));
-  const main = _el('span', 'sv3-al-main');
-  main.appendChild(_el('span', 'sv3-al-title', rec.title || rec.what || 'generation'));
-  main.appendChild(_el('span', 'sv3-al-where', rec.state === 'failed' ? (rec.error || 'it did not come') : 'ready'));
-  t.appendChild(main);
-  if (_canOpen(rec)) {
-    const open = _el('button', 'sv3-al-act', 'open');
-    open.type = 'button';
-    open.addEventListener('click', (e) => { e.stopPropagation(); _open(rec); });
-    t.appendChild(open);
-  }
   const href = _hrefOf(rec);
-  if (href) t.addEventListener('click', () => _goTo(href));
-  _toasts().appendChild(t);
-  setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, TOAST_MS);
+  showToast({
+    mark: KIND_MARK[rec.kind] || '▣', failed: rec.state === 'failed',
+    title: rec.title || rec.what || 'generation',
+    where: rec.state === 'failed' ? (rec.error || 'it did not come') : 'ready',
+    act: _canOpen(rec) ? { label: 'open', run: () => _open(rec) } : null,
+    onClick: href ? () => _goTo(href) : null,
+    ms: TOAST_MS,
+  });
   // A failure is said in red and without the bell: it is news, but not good news.
   if (rec.state !== 'failed') _ding();
 }

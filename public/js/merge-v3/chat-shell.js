@@ -115,12 +115,14 @@ export const ratioOf = (ar) => {
 };
 /**
  * (phase V49, the owner's (пр6)) A chat's result is not laid on a highlights project's own timeline - nothing on it is rendered:
- * "to timeline" and a drag (its `dragstart` event, cancelled) say "open a fragment" at the anchor. True when refused.
+ * "to timeline" and a drag (its `dragstart` event, cancelled) say "open a fragment" - since V49.1 ((пр33)) in the corner of
+ * popups with "to highlights" (lib-views.js noFragment), as a drop on the home's lanes does. True when refused. `anchor` is
+ * kept for the callers; the popup does not stand at it.
  */
 export function refuseHome(anchor, ev) {
   if (!Views.isHlHome(Store.key())) return false;
   if (ev) ev.preventDefault();
-  note(anchor, Views.NO_FRAGMENT[0], Views.NO_FRAGMENT[1]);
+  Views.noFragment();
   return true;
 }
 export const json = (url, opts) => fetch(url, opts).then(r => r.json()).catch(() => null);

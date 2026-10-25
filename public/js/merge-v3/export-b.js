@@ -21,6 +21,7 @@ import * as Store from './store.js';
 import * as Layers from '../layers.js';
 import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
+import { showError } from '../notice.js';
 
 let _busy = false;
 
@@ -32,7 +33,10 @@ const DEFAULTS = {
   playbackSpeed: 1, extra1: 'none', extra2: 'none', srt: true,
 };
 
+// The timeline's header line ("Added to the queue."); an error ("Not queued: …", "Rendered, but …") is a popup instead
+// (phase V49.1, the owner's (пр28), (пр29); js/notice.js).
 function _say(msg, kind) {
+  if (msg && kind === 'err') { showError(msg); return; }
   const el = document.getElementById('mv3-tl-status');
   if (!el) return;
   el.hidden = !msg;

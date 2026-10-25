@@ -7,6 +7,7 @@
 // there is nothing to restart from a page.
 
 import * as Layers from './layers.js';
+import { showToast } from './notice.js';
 
 const EVERY_MS = 60000;
 const NOTICE_MS = 9000;
@@ -57,19 +58,10 @@ function _paintChip() {
   _nav.insertBefore(_chip, at);
 }
 
-// Once: the toasts' own corner, the same look as a finished generation (css/app-nav.css).
+// Once: the corner of popups, the same look as a finished generation (js/notice.js) - it goes by itself, or by its ✕.
 function _notice(d) {
-  let box = document.querySelector('.sv3-toasts');
-  if (!box) { box = _el('div', 'sv3-toasts'); document.body.appendChild(box); }
-  const t = _el('div', 'sv3-toast is-update');
-  t.appendChild(_el('span', 'sv3-toast-mark', '↻'));
-  const main = _el('span', 'sv3-al-main');
-  main.appendChild(_el('span', 'sv3-al-title', 'The app was updated'));
-  main.appendChild(_el('span', 'sv3-al-where', d.subject || 'restart it to use the new version'));
-  t.appendChild(main);
-  t.addEventListener('click', () => { t.remove(); _ask(); });
-  box.appendChild(t);
-  setTimeout(() => { t.classList.add('is-going'); setTimeout(() => t.remove(), 300); }, NOTICE_MS);
+  showToast({ mark: '↻', cls: 'is-update', title: 'The app was updated', where: d.subject || 'restart it to use the new version',
+    onClick: _ask, ms: NOTICE_MS });
 }
 
 function _ask() {

@@ -42,6 +42,7 @@ import { askName } from '../name-box.js';
 import { openPictures } from './picchat.js';
 import * as Views from './lib-views.js';
 import * as LK from '../library/links.js';
+import { showError } from '../notice.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V34.E) Sound on the shelf: the waveform, the menu under the right button, the search and the online libraries.
 import { waveEl } from '../sound/wave.js';
@@ -245,7 +246,7 @@ function _tile(it, list) {
         const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
         if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
         await _reload();
-      } catch (err) { alert(err.message); del.disabled = false; }
+      } catch (err) { showError(err.message); del.disabled = false; }
     });
     cell.appendChild(del);
     // Onto a node of the tree (block 5b) - within REFERENCES, or a post of one file out of it.
@@ -288,7 +289,7 @@ function _tile(it, list) {
       await toggleFavorite(it);
       // Reload rather than re-sorting here: favourites-first is the SERVER's ordering.
       await _load();
-    } catch (err) { alert(err.message); star.disabled = false; }
+    } catch (err) { showError(err.message); star.disabled = false; }
   });
   cell.appendChild(star);
 
@@ -310,7 +311,7 @@ function _tile(it, list) {
       await deleteItem(it);
       markGone(it.media);
       await _reload();
-    } catch (err) { alert(err.message); del.disabled = false; }
+    } catch (err) { showError(err.message); del.disabled = false; }
   });
   cell.appendChild(del);
 
@@ -791,12 +792,15 @@ function _paint() {
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)$/i;
 const AUDIO_RE = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus)$/i;
 
+// The panel's line: uploads and links coming in, and what came of them. A refusal or a failure is a popup in the corner
+// instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js) - seen while a chat or highlights covers the line - and the
+// line goes.
 function _status(text, bad) {
+  if (text && bad) { showError(text); text = ''; }
   const el = document.getElementById('mv3-lib-status');
   if (!el) return;
   el.textContent = text || '';
   el.hidden = !text;
-  el.classList.toggle('is-bad', !!bad);
 }
 
 // Locked while files are in flight: another node mid-upload would file the rest elsewhere.

@@ -9,6 +9,8 @@
 // left with a src goes on buffering after it is hidden.
 
 import * as Layers from '../layers.js';
+// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+import { showError } from '../notice.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 
@@ -167,7 +169,7 @@ function _paintActions(it) {
     b.addEventListener('click', async () => {
       box.querySelectorAll('button').forEach(x => { x.disabled = true; });
       let r = null;
-      try { r = await _onAction(a.id, it); } catch (e) { alert(e.message); }
+      try { r = await _onAction(a.id, it); } catch (e) { showError(e.message); }
       if (!_ov) return;                                  // the handler closed us
       if (r && r.removed) return dropCurrent();
       // Only the buttons changed (a "Delete" waiting for its second press) - the video plays on.

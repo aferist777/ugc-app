@@ -159,6 +159,14 @@ const _INFO = new Set([
   'The captions were laid from the sound while you edited - your edit was kept and merged in.',
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
+// (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, read only, a rule of the lanes) or
+// not saved: popped up once (bar.js, js/notice.js), and red in the timeline's header while it lasts. "Changed on another
+// device" with the edit kept or the current version shown is news, as the server's own lays are - not an error.
+export function statusIsError() {
+  const s = String(_status || '');
+  if (!s || statusIsInfo()) return false;
+  return !/^Changed on another device/.test(s) || /not saved/i.test(s);
+}
 export function isReady() { return !!_timeline; }
 
 export function onChange(cb) {

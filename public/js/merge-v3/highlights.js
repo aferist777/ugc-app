@@ -45,6 +45,7 @@ import { setSubsStyle } from './timeline-b.js';
 import { putTitle, titleLaneOf } from '../captions/title.js';
 import { setRenderTarget, paintExportButton, openMany } from './export-b.js';
 import { showResult } from './render-result.js';
+import { showError } from '../notice.js';
 
 const NAME = 'highlights';
 const POLL_MS = 1500;
@@ -318,7 +319,7 @@ async function _load() {
   const seq = ++_seq;
   let d = null;
   try { d = await _api('/api/highlights/' + encodeURIComponent(pid)); _err = ''; }
-  catch (e) { if (seq === _seq && pid === _pid) { _err = e.message; _paint(); } return; }
+  catch (e) { if (seq === _seq && pid === _pid) { _err = e.message; showError(e.message); _paint(); } return; }
   if (seq !== _seq || pid !== _pid) return;
   _rec = d.project;
   _prog = d.progress || null;
@@ -484,7 +485,7 @@ function _paintTop() {
   if (sf) state.appendChild(sf);
   const gone = ((r.fragments || []).filter((f) => f.deletedAt)).length;
   if (gone) state.appendChild(_el('span', 'mv3-hl-meta', gone + ' deleted - Ctrl+Z here brings back'));
-  if (_said || _err) state.appendChild(_el('span', 'mv3-hl-said' + ((_said && _said.err) || (!_said && _err) ? ' is-err' : ''), _said ? _said.text : _err));
+  if (_said) state.appendChild(_el('span', 'mv3-hl-said', _said.text));
   if (!v && !_live) {
     const add = _el('button', 'mv3-c-btn mv3-hl-add', '+ add video');
     add.type = 'button';
@@ -715,14 +716,14 @@ function _paintField() {
       if (_sel === f.n) {
         _sel = 0;
         _paint();
-        if (f.key && Store.key() === f.key) Store.open('hl_' + _pid).catch((e) => { _err = e.message; _paintTop(); });
+        if (f.key && Store.key() === f.key) Store.open('hl_' + _pid).catch((e) => showError(e.message));
         return;
       }
       _sel = f.n;
       _paint();
       // Made: its timeline opens - the preview shows it, the timeline its cut (the owner: "кликнуть на него для просмотра
       // фрагмента в превью и отображения нарезки на таймлайне").
-      if (ready && f.key && Store.key() !== f.key) Store.open(f.key).catch((e) => { _err = e.message; _paintTop(); });
+      if (ready && f.key && Store.key() !== f.key) Store.open(f.key).catch((e) => showError(e.message));
     });
     grid.appendChild(t);
   }
@@ -991,11 +992,13 @@ async function _rename(f, title) {
   _load();
 }
 
-// A word in the top for a few seconds: what was just done, or why not.
+// A word in the top for a few seconds: what was just done. WHY NOT is a popup in the corner (phase V49.1, the owner's
+// (пр28), (пр29); js/notice.js) - it stays until closed, and is seen while a chat or the shelf covers this view.
 let _said = null;
 let _saidT = 0;
 function _say(text, err) {
-  _said = text ? { text, err: !!err } : null;
+  if (text && err) { showError(text); return; }
+  _said = text ? { text, err: false } : null;
   if (_saidT) clearTimeout(_saidT);
   if (text) _saidT = setTimeout(() => { _said = null; _saidT = 0; _paintTop(); }, 5000);
   _paintTop();
@@ -1004,13 +1007,13 @@ function _say(text, err) {
 // ── Stop and retry ──────────────────────────────────────────────────────────
 async function _stop() {
   try { await _api('/api/highlights/' + encodeURIComponent(_pid) + '/stop', { method: 'POST' }); }
-  catch (e) { _err = e.message; }
+  catch (e) { showError(e.message); }
   _load();
 }
 
 async function _retryNow() {
   try { await _api('/api/highlights/' + encodeURIComponent(_pid) + '/retry', { method: 'POST' }); }
-  catch (e) { _err = e.message; }
+  catch (e) { showError(e.message); }
   _load();
 }
 
@@ -1029,12 +1032,12 @@ function _relinkButton(sourceId) {
     const pathOf = window.ugcWindow && window.ugcWindow.pathOf;
     let where = '';
     try { where = f && typeof pathOf === 'function' ? String(pathOf(f) || '') : ''; } catch (e) { where = ''; }
-    if (!where) { _err = 'Pointing at a file works in the app\'s own window - it hands the file over.'; _paintTop(); return; }
+    if (!where) { showError('Pointing at a file works in the app\'s own window - it hands the file over.'); return; }
     try {
       await _api('/api/sources/' + encodeURIComponent(sourceId) + '/relink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: where }) });
       _err = '';
       await _retryNow();
-    } catch (e) { _err = e.message; _paintTop(); }
+    } catch (e) { showError(e.message); }
   });
   b.addEventListener('click', () => inp.click());
   const wrap = _el('span', null);

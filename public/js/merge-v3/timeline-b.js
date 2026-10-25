@@ -47,6 +47,8 @@ import { paintWaves, onPeaks } from './tl-wave.js';
 import { cutRefused, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
 import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
+// (phase V49.1) Refusals and failures in the corner of popups.
+import { showError } from '../notice.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
 // timeline, because it belongs to the project rather than to a button that could be missed.
@@ -442,7 +444,8 @@ function _awayFromLane(e) {
   // Nor in the captions view beside the strip - its preset tiles and their categories set the lane too - nor on the
   // Library's "captions" crumb that picked it (phase V18.2: a press on a category let go of the lane, and the panel went
   // back to the chat under it).
-  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip')) return;
+  // (phase V49.1) Nor in the corner of popups: closing one changes nothing on the timeline.
+  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .mv3b-lbl, .mv3b-clip, .sv3-toasts')) return;
   // Nor, while the captions view is up, on "Library" or a chat's crumb: their own click lets the pick go (lib-views.js
   // toBase). Let go here, at the mousedown, the panel jumped back from the corner under the pointer and the click never
   // landed - "generate video" pressed over the captions showed the shelf (phase V23.5).
@@ -1164,20 +1167,32 @@ async function _sendFile(f, onProgress) {
   });
 }
 
-// One line over the timeline's top right while files go in, and what came of it for a few seconds after.
+// One line over the timeline's top right while files go in, and what came of it for a few seconds after. A refusal or a
+// failure is a popup in the corner instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js) - and the line goes.
 let _dropNote = null, _dropNoteT = 0;
 function _dropSay(text, bad, stay) {
   const host = _host();
   if (!host) return;
   clearTimeout(_dropNoteT);
+  if (text && bad) { showError(text); text = ''; }
   if (!text) { if (_dropNote) _dropNote.remove(); _dropNote = null; return; }
   if (!_dropNote) { _dropNote = document.createElement('div'); _dropNote.className = 'mv3b-dropnote'; document.body.appendChild(_dropNote); }
   const r = host.getBoundingClientRect();
   _dropNote.style.top = Math.round(r.top + 22) + 'px';
   _dropNote.style.right = Math.round(window.innerWidth - r.right + 8) + 'px';
   _dropNote.textContent = text;
-  _dropNote.classList.toggle('is-bad', !!bad);
-  if (!stay) _dropNoteT = setTimeout(() => _dropSay(''), bad ? 7000 : 3000);
+  if (!stay) _dropNoteT = setTimeout(() => _dropSay(''), 3000);
+}
+
+// (phase V49.1, the owner's (пр33)) A HIGHLIGHTS PROJECT'S OWN TIMELINE takes nothing: it is open while no fragment is, and it
+// is never rendered. A drag over its lanes is taken as anywhere (a Library tile cannot be told "no" at its start - the media
+// tree takes it too); LET GO, it is refused - before a file from Explorer is copied into the library - with a popup and
+// "to highlights" (lib-views.js noFragment). True when refused.
+function _refusedHome(e) {
+  if (!Views.isHlHome(Store.key())) return false;
+  e.preventDefault();
+  Views.noFragment();
+  return true;
 }
 
 let _dropping = false;
@@ -1234,6 +1249,9 @@ function _wireLane(lane, t) {
   });
   lane.addEventListener('dragleave', () => lane.classList.remove('is-drop'));
   lane.addEventListener('drop', (e) => {
+    // (phase V49.1, (пр33)) A highlights project's own timeline: refused here, on release - a tile, a red clip's
+    // replacement and files alike, before anything is copied.
+    if ((_hasClip(e) || _hasFiles(e)) && _refusedHome(e)) { lane.classList.remove('is-drop'); return; }
     if (!_hasClip(e) && _hasFiles(e)) {
       e.preventDefault();
       lane.classList.remove('is-drop');
@@ -1379,6 +1397,8 @@ function _wireGhost(host) {
     const g = _ghost;
     _hideGhost();
     if (!g || !_on || _onLane(e.target)) return;
+    // (phase V49.1, (пр33)) Nor a lane made by a drop, on a highlights project's own timeline.
+    if (_refusedHome(e)) return;
     if (!_hasClip(e) && _hasFiles(e)) {
       e.preventDefault();
       _dropFiles(Array.from(e.dataTransfer.files || []), { make: g.side, at: g.at });

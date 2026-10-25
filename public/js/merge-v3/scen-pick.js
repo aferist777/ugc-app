@@ -36,6 +36,8 @@ import * as Store from './store.js';
 import * as WK from './workshop.js';
 import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
+// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+import { showError } from '../notice.js';
 
 const NAME = 'scenarios';
 const $ = (id) => document.getElementById(id);
@@ -357,7 +359,7 @@ function _paintList() {
       } catch (err) {
         for (const b of acts.children) b.disabled = false;
         go.textContent = 'use';
-        alert('Could not make the project: ' + err.message);
+        showError('Could not make the project: ' + err.message);
       }
     });
     acts.appendChild(go);
@@ -400,7 +402,7 @@ function _rowMenu(ev, s, row) {
   };
 
   item('open', 'read and edit the text', () => openForm(s));
-  if (!s.archived) item('use', 'make a talking head from it', () => _use(s.id).catch(e => alert('Could not make the project: ' + e.message)));
+  if (!s.archived) item('use', 'make a talking head from it', () => _use(s.id).catch(e => showError('Could not make the project: ' + e.message)));
   if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
   else item('archive', 'out of the list, kept', () => _archive(s, true));
   // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
@@ -409,7 +411,7 @@ function _rowMenu(ev, s, row) {
     askDelete(row, 'Delete "' + (s.title || 'untitled') + '"?',
       'The scenario goes for good. Projects already made from it keep their own copy of the text.',
       async () => {
-        try { await API.remove(s.id); } catch (e) { alert('Could not delete it: ' + e.message); }
+        try { await API.remove(s.id); } catch (e) { showError('Could not delete it: ' + e.message); }
         _load();
       });
   }, true);
@@ -429,7 +431,7 @@ function _rowMenu(ev, s, row) {
 // Out of the library or back into it. Same call either way - the server merges the flag into
 // the stored record - and the list is read again so the counts move with it.
 async function _archive(s, yes) {
-  try { await API.archive(s.id, yes); } catch (e) { alert('Could not change it: ' + e.message); }
+  try { await API.archive(s.id, yes); } catch (e) { showError('Could not change it: ' + e.message); }
   _load();
 }
 

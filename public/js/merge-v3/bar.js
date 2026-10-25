@@ -15,6 +15,7 @@ import * as Layers from '../layers.js';
 import * as History from './history.js';
 import { fit, splitAtPlayhead, canSplit, onSelChange, onPlayhead } from './timeline-b.js';
 import { grabFrame } from './preview-b.js';
+import { showError } from '../notice.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,11 +50,16 @@ function _history() {
 // ── The save status ─────────────────────────────────────────────────────────
 // Shown only when a save was refused or failed, or when something came in from elsewhere.
 // Silence about a lost edit is what made the old store's data loss so hard to notice.
+// (phase V49.1, the owner's (пр29)) A refusal or a failure is also a popup (js/notice.js) - ONCE: the same status staying
+// on through the next changes is not said again; it is again when it comes back after it went.
+let _popped = '';
 function _status() {
   const el = $('mv3-tl-status');
   if (!el) return;
   Store.onChange(() => {
     const s = Store.status();
+    if (s && Store.statusIsError()) { if (s !== _popped) { _popped = s; showError(s); } }
+    else _popped = '';
     if (!s && !el.textContent) return;
     el.className = 'mv3-tl-status' + (s && Store.statusIsInfo() ? ' is-info' : '');
     el.textContent = s || '';

@@ -653,7 +653,6 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
   font:600 10.5px/1.35 var(--font); color:var(--accent);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.mv3-libstatus.is-bad{color:var(--danger)}
 
 /* ── Inspector ────────────────────────────────────────────────────────────────
    One narrow column, so everything is a full-width row and nothing sits side by side:
