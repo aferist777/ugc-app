@@ -31,7 +31,7 @@ import * as Layers from '../layers.js';
 import * as Views from './lib-views.js';
 import { askDelete, short, note } from './ask.js';
 import { DRAG_TYPE, DRAG_MEDIA, isStill, STILL_DUR } from './store.js';
-import { locked } from './layout.js';
+import { locked, lanesChanged } from './layout.js';
 import { recutClips, recutSome, timedWords } from '../captions/pages.js';
 import { retext, isCorrected } from '../captions/words.js';
 import { linesOf as docLines, editLine as docEditLine } from '../captions/doc.js';
@@ -1994,6 +1994,8 @@ function _build() {
   _paintRange();
   // (phase V44) The glow of the pauses "cut silence" found, on the lanes just built.
   paintSilence();
+  // (phase V49, (пр15)) The timeline is never shorter than its lanes: the floor follows what was just built (layout.js).
+  lanesChanged();
 }
 
 // The waves again, once per frame however many scroll events come - with a timer behind the frame, for a window that is

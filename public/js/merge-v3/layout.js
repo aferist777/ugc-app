@@ -33,8 +33,10 @@ const SASH        = 5;     // must match .mv3-sash in css/merge-v3.css
 // the timeline under it shows its label column and a few seconds of lane.
 const MIN_PANEL   = 380;   // narrowest the OPEN panel may get, beside the spine
 const MIN_PREVIEW = 340;   // the 9:16 stage stops being worth looking at below this
-const MIN_TL_H    = 120;
+const MIN_TL_H    = 120;   // the floor until the open project's lanes have been measured (below)
+const MIN_TL_ABS  = 60;    // the header and the ruler: never less, whatever the window
 const MIN_WORK_H  = 220;   // the pair above the timeline never gets shorter than this
+const BAR_H       = 10;    // the lanes' horizontal scrollbar (app-shell.css ::-webkit-scrollbar)
 
 function _num(key, def) {
   let v = null;
@@ -61,13 +63,64 @@ function _leftNow() {
 }
 
 // ── Timeline height ────────────────────────────────────────────────────────
+// THE FLOOR IS THE OPEN PROJECT'S LANES (phase V49, the owner's points 6-7, (пр15): "чтобы поле с таймлайнами было такой
+// высоты чтобы все дорожки помещались. а то сейчас оно в минимальную высоту уходит и скрывает дорожку со звуком"). The old
+// floor, 120 px, was set when every lane was 24 px; with a 40 px audio lane (V36), the ruler stuck to the top and the words
+// block to the bottom (V41), a chat or the captions view putting the timeline on its floor left ~7 px of the audio lane in
+// sight. Now the floor is what the lanes take - the header, the deleted-files notice, the ruler, every lane, the seam and
+// the horizontal scrollbar - measured from what is drawn, not from the scroll box (_measureFloor), again whenever the lanes
+// are built (a project opened, a lane added or taken away: lanesChanged) and when the window or the notice changes. The sash
+// cannot go below it, above it drags as before; every "the timeline to its minimum" (a chat, captions, scenarios, highlights,
+// a new project, a talking head's Setup) means to it. A window too short for it keeps the panel above its MIN_WORK_H and the
+// lanes scroll.
+let _floor = MIN_TL_H;
+// The arrangement asked for the timeline at its minimum (roomForWork, roomForTimeline) and nothing was dragged since: it
+// follows the lanes down as well as up. Kept as 'floor' in place of a height.
+let _atFloor = false;
+
+function _measureFloor() {
+  const panel = document.getElementById('mv3-timeline');
+  const tl = document.getElementById('mv3-tl');
+  const inner = tl && tl.querySelector(':scope > .mv3b-inner');
+  if (!panel || !tl || !inner) return _floor;
+  let h = 0;
+  // Everything of the panel above the lanes' box: its header, and the notice about deleted files when it shows.
+  for (const ch of panel.children) if (ch !== tl) h += ch.offsetHeight;
+  // The lanes as drawn: the ruler, the blocks and the seam - not the playhead or a drawn stretch, which lie over them.
+  for (const ch of inner.children) {
+    if (getComputedStyle(ch).position === 'absolute') continue;
+    h += ch.offsetHeight;
+  }
+  return Math.ceil(h + BAR_H);
+}
+
 // Against the column it lives in, not the page: the bar above is not room it can take.
 function _clampTl(px) {
   const col = document.getElementById('mv3-left');
   const h = col ? col.getBoundingClientRect().height : window.innerHeight;
-  const hi = Math.max(MIN_TL_H, h - MIN_WORK_H - SASH);
-  return Math.round(Math.max(MIN_TL_H, Math.min(px, hi)));
+  const room = h - MIN_WORK_H - SASH;
+  const lo = Math.max(MIN_TL_ABS, Math.min(_floor, room));
+  const hi = Math.max(lo, room);
+  return Math.round(Math.max(lo, Math.min(px, hi)));
 }
+
+/**
+ * The lanes were built again (js/merge-v3/timeline-b.js, the end of _build) - or the window, or the notice over them,
+ * changed: the floor is measured again; at its minimum the timeline follows it, else it is only lifted to it.
+ */
+export function lanesChanged() {
+  const f = _measureFloor();
+  const was = _floor;
+  _floor = f;
+  const now = _tlNow();
+  if ((_panelOn || _atFloor) && Math.abs(now - _clampTl(0)) >= 1) _applyTl(0);
+  else if (f !== was || now < _clampTl(now) - 0.5) _applyTl(now);
+  else return;
+  _placeCross();
+}
+
+/** The timeline's floor now, in px - for a test. */
+export const timelineFloor = () => _clampTl(0);
 function _applyTl(px) {
   const el = document.getElementById('mv3-timeline');
   if (el) el.style.height = _clampTl(px) + 'px';
@@ -142,6 +195,8 @@ function _wireSash(sash, { axis, sign, get, set, save, reset }) {
   const cls = axis === 'x' ? 'mv3-resize-v' : 'mv3-resize-h';
   sash.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    // (V49) The timeline's height dragged is the person's from now on: it stops following the lanes.
+    if (axis === 'y') _atFloor = false;
     const from = axis === 'x' ? e.clientX : e.clientY;
     const base = get();
     document.body.classList.add(cls);
@@ -190,6 +245,7 @@ function _wireCross() {
     e.stopPropagation();                       // not also a drag of the sash underneath
     const x0 = e.clientX, y0 = e.clientY;
     const left0 = _leftNow(), tl0 = _tlNow();
+    _atFloor = false;
     document.body.classList.add('mv3-resize-xy');
     const move = (ev) => {
       // The column hangs off the right edge, so it GROWS as the pointer goes left (P1)...
@@ -210,6 +266,7 @@ function _wireCross() {
   });
   cross.addEventListener('dblclick', (e) => {
     e.stopPropagation();
+    _atFloor = false;
     _applyLeft(_defLeft());
     _applyTl(DEF_TL_H);
     _save();
@@ -225,26 +282,24 @@ function _save() {
   if (_panelOn) return;
   try {
     localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow())));
-    localStorage.setItem(LS_TL_H, String(Math.round(_tlNow())));
+    localStorage.setItem(LS_TL_H, _tlKept());
   } catch (e) { /* a private window */ }
 }
+// (V49) The timeline at its minimum is kept as 'floor' - it follows the lanes after a reload too; else its height.
+const _tlKept = () => (_atFloor ? 'floor' : String(Math.round(_tlNow())));
 
 /**
  * THE TIMELINE STEP'S ARRANGEMENT (phase L1, the owner 2026-09-23): the timeline as tall as its
  * lanes need - measured as drawn, because lanes are not all one height - and the column 30px
  * narrower than its widest, so the preview is a little wider than setup leaves it. Clamped like
  * any drag: the panel above keeps its floor, and lanes that still do not fit scroll as before.
+ * (phase V49) "As tall as its lanes" is the floor itself (_measureFloor - the scroll box's scrollHeight it read before
+ * could only grow), and the timeline keeps following it.
  */
 export function roomForTimeline() {
-  const panel = document.getElementById('mv3-timeline');
-  const tl = document.getElementById('mv3-tl');
-  const head = panel && panel.querySelector('.mv3-panel-head');
-  let wantTl = _tlNow();
-  if (panel && tl) {
-    // The lanes' own height, plus the header over them and the scrollbar under them.
-    wantTl = (head ? head.getBoundingClientRect().height : 0) + tl.scrollHeight + (tl.offsetHeight - tl.clientHeight) + 2;
-  }
-  _stepRoom(_clampLeft(Number.MAX_SAFE_INTEGER) - 30, wantTl);
+  _floor = _measureFloor();
+  _atFloor = true;
+  _stepRoom(_clampLeft(Number.MAX_SAFE_INTEGER) - 30, 0);
 }
 
 /**
@@ -255,7 +310,9 @@ export function roomForTimeline() {
  * comes back to it too (phase L1).
  */
 export function roomForWork() {
-  // Clamped to what the preview can spare, and to the timeline's floor.
+  // Clamped to what the preview can spare, and to the timeline's floor - its lanes' height (V49), which it follows.
+  _floor = _measureFloor();
+  _atFloor = true;
   _stepRoom(_clampLeft(Number.MAX_SAFE_INTEGER), 0);
 }
 
@@ -305,7 +362,8 @@ export function panelRoom(on) {
   if (!back) return;
   try { localStorage.removeItem(LS_ROOM); } catch (e) { /* a private window */ }
   _applyLeft(+back.left || _defLeft());
-  _applyTl(+back.tl || DEF_TL_H);
+  // (V49) Back at the lanes' height when that is what it was at - they may have changed while the panel was up.
+  _applyTl(_atFloor ? 0 : (+back.tl || DEF_TL_H));
   _placeCross();
   _save();
 }
@@ -316,7 +374,10 @@ export function initLayout() {
   setOpenColumn(open === 'inspector' ? 'inspector' : 'library');
 
   _applyLeft(_num(LS_LEFT_W, _defLeft()));
-  _applyTl(_num(LS_TL_H, DEF_TL_H));
+  let keptTl = null;
+  try { keptTl = localStorage.getItem(LS_TL_H); } catch (e) { /* a private window */ }
+  _atFloor = keptTl === 'floor';
+  _applyTl(_atFloor ? 0 : _num(LS_TL_H, DEF_TL_H));
 
   // A collapsed column is one big button. Clicking the open one does nothing on
   // purpose - collapsing it would leave the left side with no panel at all.
@@ -340,12 +401,19 @@ export function initLayout() {
     axis: 'y', sign: -1,
     get: _tlNow, set: (px) => { _applyTl(px); _placeCross(); },
     reset: () => { _applyTl(DEF_TL_H); _placeCross(); },
-    save: () => { if (_panelOn) return; try { localStorage.setItem(LS_TL_H, String(Math.round(_tlNow()))); } catch (e) {} },
+    save: () => { if (_panelOn) return; try { localStorage.setItem(LS_TL_H, _tlKept()); } catch (e) {} },
   });
 
   _wireCross();
 
   // Re-clamp when the window changes, or a size that fitted yesterday's window
   // squeezes today's preview to nothing. The crossing follows whatever that leaves.
-  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow()); _placeCross(); });
+  // (V49) The floor too: the notice over the lanes may wrap onto another line in a narrower column.
+  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow()); lanesChanged(); _placeCross(); });
+  // The notice about deleted files shown, closed or wrapped by a dragged column: the floor is measured again.
+  const gone = document.getElementById('mv3-tl-gone');
+  if (gone && window.ResizeObserver) {
+    let h = -1;
+    new ResizeObserver(() => { const now = gone.offsetHeight; if (now !== h) { h = now; lanesChanged(); } }).observe(gone);
+  }
 }
