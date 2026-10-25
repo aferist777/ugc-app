@@ -644,11 +644,23 @@ router.delete('/mv3/timeline/:key', (req, res) => {
       const row = rec && rec.work && rec.work.alertId;
       if (row) require('../lib/alerts').cancel(row, 'stopped - the project was deleted');
       const talks = _hlChatKeys(hk.id, cur.timelines);
+      // (phase V49, point 2) What was BROUGHT INTO its chats is filed under the project's name - its own timeline's title
+      // (lib/mv3-gens.js catLabelFor): read before the timelines go, and let go of after, as any project's (below) - not
+      // when a timeline of another project keeps the same name, never a required category (lib/project-cats.js).
+      const GENS = require('../lib/mv3-gens');
+      const label = GENS.catLabelFor(cur.timelines[key].title);
+      const shared = Object.keys(cur.timelines).some(k => cur.timelines[k] && (HLS.ofKey(k) || {}).id !== hk.id
+        && GENS.catLabelFor(cur.timelines[k].title).toLowerCase() === label.toLowerCase());
       const { moved } = HLS.remove(hk.id);
       // (phase V49, point 2) Its chats' conversations and the finished records of what they made go too, as any project's
       // (below) - under every key they may have talked: its own and each fragment's.
       _forgetChats(talks);
-      return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 }, released: {} });
+      let released = {};
+      if (!shared) {
+        try { released = require('../lib/project-cats').release(label); }
+        catch (e) { console.warn('[mv3] delete: the highlights project\'s category was not let go of -', e.message); }
+      }
+      return res.json({ success: true, version: cur.version + 1, open: null, files: { removed: true, kept: moved, heads: 0 }, released });
     }
     // AND ITS FILES (?files=1, phase C3, the owner 2026-10-05): a talking head's folder - its reads, frames and
     // clips - goes with its last timeline (PROJECTS.remove: what another project, timeline or shelf still points
@@ -680,7 +692,7 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     const talk = CHAT.threadOf(key) === CHAT.DRAFT ? null : key;
     // (phase V28.4, the owner 2026-10-12: "раскидывать медиа удаленного проекта по типу медиа в категории uncategorized")
     // What was brought into its chats and filed under its name on the shelves goes to Uncategorized of its kind, the
-    // category with it - as a draft not saved, above (what its chats MADE is in "Generated" and stays). Not when another
+    // category with it (what its chats MADE is in "Generated" and stays). Not when another
     // project keeps the same name (the category is that one's too), and never a required category (lib/project-cats.js).
     const GENS = require('../lib/mv3-gens');
     const label = GENS.catLabelFor(cur.timelines[key].title);
