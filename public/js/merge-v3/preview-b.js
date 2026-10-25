@@ -157,49 +157,85 @@ const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : (_shooting === '
 // starts. A piece that plays on in its file from where the one before it ended (a split) keeps the same element. A piece
 // after a very short one (a word between two pauses) would find the other element free only a moment before it starts -
 // too late to be put in place (~0.2 s a seek, measured) - so a THIRD element takes it when that one has had longer to wait.
+//
+// CLIPS OF ONE FILE THAT OVERLAP get an element each too (phase V49, the owner's point 1: "помехи при проигрывании"; measured
+// in its block 0 in the Electron window: one track laid twice, overlapping, shared ONE element - it was sought to one clip's
+// moment and then to the other's on every frame, 991 seeks in 6 s, and what came out was a few scraps and silence). Pieces
+// that run over the next one (0.05 s in an older cut) are such clips as well. So the elements are dealt out per FILE across
+// every lane - the picture's elements and the sound's apart, as they are kept - by the moments they are busy: a clip takes
+// an element nobody is playing at its start, one that has had READY to be put in place first if there is one (the lowest),
+// else a new one while a run has fewer than SLOTS_RUN (two very short pieces in a row left none of three ready: the third
+// short piece of the Kids fragment started 0.5 s late), else the one let go of longest ago; an element past that is added
+// only while every one is busy at that moment (an overlap) - at most SLOTS_MAX of one file.
 const SEAM = 0.011;               // two clips this close meet
 const LOOK = 3;                   // s: the next piece is made ready this long before it starts
 const READY = 0.6;                // s: how long an element should have to be put in place before its piece
+const SOON = 1.5;                 // s: (V49) a piece starting this soon after Play is waited for by the hold
+const SLOTS_RUN = 4;              // elements a run of pieces end to end takes turns between, at most
+const SLOTS_MAX = 8;              // elements of one file at most, overlaps included
 let _slotTl = null;
-let _slotMap = new Map();         // clip id -> 0 | 1 | 2
+let _slotMap = new Map();         // clip id -> its element's number for its file (0 is the file's own key)
+let _slotN = new Map();           // 'v|' / 'a|' + file key -> how many elements its clips use
+const _group = (tr, c) => (tr.kind === 'video' ? 'v|' : 'a|') + c.src + (_rev(c) ? '|rev' : '');
 function _slots(tl) {
-  const out = new Map();
+  const out = new Map(), count = new Map();
+  const groups = new Map();         // group -> [{ c, lane }]
   for (const tr of ((tl && tl.tracks) || [])) {
     if (!tr || (tr.kind !== 'video' && tr.kind !== 'audio')) continue;
-    const cs = (tr.clips || []).filter((c) => c && c.src).slice().sort((a, b) => (+a.start) - (+b.start));
-    let prev = null;
-    let free = [-Infinity, -Infinity, -Infinity];     // when each element of the run is let go of
-    for (const c of cs) {
-      const s = +c.start;
-      let slot = 0;
-      if (prev && prev.src === c.src && !!prev.reversed === !!c.reversed && Math.abs((+prev.start) + (+prev.dur) - s) < SEAM) {
-        const sp = +prev.speed || 1;
-        // A split leaves the file's time running on to the hundredth; cut silence takes from 0.02 s out.
-        const goesOn = !c.reversed && (+c.speed || 1) === sp
-          && Math.abs((+prev.trimIn || 0) + (+prev.dur) * sp - (+c.trimIn || 0)) < 0.006;
-        const was = out.get(prev.id) || 0;
-        if (goesOn) slot = was;
-        else {
-          // The other of the two when it has been free long enough; else the third, when it has been free longer.
-          const other = was === 1 ? 0 : 1;
-          slot = other;
-          if (free[other] > s - READY) {
-            const third = [0, 1, 2].find((k) => k !== was && k !== other);
-            if (free[third] < free[other]) slot = third;
-          }
-        }
-      } else free = [-Infinity, -Infinity, -Infinity];
-      out.set(c.id, slot);
-      free[slot] = s + (+c.dur || 0);
-      prev = c;
+    for (const c of (tr.clips || [])) {
+      // A picture never seeks: one element serves every clip of it.
+      if (!c || !c.src || isStill(c)) continue;
+      const g = _group(tr, c);
+      (groups.get(g) || groups.set(g, []).get(g)).push({ c, lane: tr.id });
     }
   }
-  return out;
+  for (const [g, list] of groups) {
+    list.sort((x, y) => (+x.c.start) - (+y.c.start));
+    const free = [];                // when each element is let go of
+    const last = [];                // the clip each element played last
+    for (const { c, lane } of list) {
+      const s = +c.start, e = s + (+c.dur || 0);
+      let slot = -1;
+      // A piece that plays on in its file from where the one before it on its lane ended (a split) keeps that element - it
+      // need not seek at all. A split leaves the file's time running on to the hundredth; cut silence takes from 0.02 s out.
+      for (let k = 0; k < free.length && slot < 0; k++) {
+        const p = last[k];
+        if (!p || p.lane !== lane || Math.abs(free[k] - s) >= SEAM) continue;
+        const sp = +p.c.speed || 1;
+        if (!c.reversed && !p.c.reversed && (+c.speed || 1) === sp
+            && Math.abs((+p.c.trimIn || 0) + (+p.c.dur) * sp - (+c.trimIn || 0)) < 0.006) slot = k;
+      }
+      if (slot < 0) {
+        const idle = [];             // free at this clip's start (a hair of rounding allowed)
+        for (let k = 0; k < free.length; k++) if (free[k] <= s + 0.0005) idle.push(k);
+        const ready = idle.filter((k) => free[k] <= s - READY);
+        if (ready.length) slot = ready[0];
+        else if ((!idle.length || free.length < SLOTS_RUN) && free.length < SLOTS_MAX) slot = free.length;
+        else {
+          const from = idle.length ? idle : free.map((_, k) => k);
+          slot = from.reduce((a, k) => (free[k] < free[a] ? k : a), from[0]);
+        }
+      }
+      free[slot] = Math.max(free[slot] == null ? -Infinity : free[slot], e);
+      last[slot] = { c, lane };
+      out.set(c.id, slot);
+    }
+    count.set(g, Math.max(1, free.length));
+  }
+  return { out, count };
+}
+function _slotsNow() {
+  const tl = Store.timeline();
+  if (tl !== _slotTl) { _slotTl = tl; const r = _slots(tl); _slotMap = r.out; _slotN = r.count; }
 }
 function _slotOf(c) {
-  const tl = Store.timeline();
-  if (tl !== _slotTl) { _slotTl = tl; _slotMap = _slots(tl); }
+  _slotsNow();
   return _slotMap.get(c.id) || 0;
+}
+// How many elements the clips of `c`'s file use on lanes of `kind` - kept alive together while the file is on screen.
+function _slotCount(kind, c) {
+  _slotsNow();
+  return _slotN.get((kind === 'video' ? 'v|' : 'a|') + c.src + (_rev(c) ? '|rev' : '')) || 1;
 }
 const _slotKey = (slot) => (slot ? '#' + (slot + 1) : '');
 const _keyOf = (c) => _key(c.src, _rev(c)) + _slotKey(_slotOf(c));
@@ -632,8 +668,8 @@ function _paint() {
     alive.add(_keyOf(c));
     shown.add(_keyOf(c));
     // (phase V44) Its twins too, while the file is on screen: a piece longer than LOOK would otherwise let them go, and the
-    // next piece would open the file again from nothing.
-    for (const k of [0, 1, 2]) alive.add(_key(c.src, _rev(c)) + _slotKey(k));
+    // next piece would open the file again from nothing. (V49) As many as its clips use.
+    for (let k = 0, n = _slotCount('video', c); k < n; k++) alive.add(_key(c.src, _rev(c)) + _slotKey(k));
     const el = _el(c.src, _rev(c), _slotOf(c));
 
     if (!still) {
@@ -684,7 +720,12 @@ function _paint() {
   }
   // (phase V44) The next pieces of every lane made ready while this one plays - each one's element waits on its first
   // frame, the nearest piece first; an element on screen, or waiting for a nearer piece, is left alone.
-  if (_playing && !_holding && !_shooting) {
+  // (phase V49) From the moment Play is pressed, held or not: a piece starting within SOON of the playhead is waited for
+  // by the hold like the clips under it (_soonVideo) - pressed 0.16 s before a run of short pieces, their elements began
+  // to seek only once the clock ran, and a cold file's seek (0.5-1 s, measured: 0.95 s for the Kids fragment's 68 MB film)
+  // left them silent and sought again.
+  _soonVideo = [];
+  if (_playing && !_shooting) {
     const claimed = new Set(shown);
     for (const track of _layers(tl)) {
       for (const nx of _nextOn(track, _at)) {
@@ -693,7 +734,9 @@ function _paint() {
         if (claimed.has(key)) continue;
         claimed.add(key);
         alive.add(key);
-        _cue(_el(nx.src, _rev(nx), _slotOf(nx)), nx);
+        const el = _el(nx.src, _rev(nx), _slotOf(nx));
+        _cue(el, nx);
+        if (_holding && +nx.start - _at <= SOON) _soonVideo.push(el);
       }
     }
   }
@@ -863,6 +906,8 @@ let _holdT = 0;
 const HOLD_MS = 3000;
 let _liveVideo = [];         // the films the last paint put under the playhead
 let _liveAudio = [];         // the sounds the last sync put under it
+let _soonVideo = [];         // (V49) held at Play: the films of pieces starting within SOON, being put in place
+let _soonAudio = [];         // ...and the sounds
 
 // Every audible sound at this moment. A clip at volume 0 is SKIPPED - that is what a muted
 // birol is, and what the subtitle pass will read to decide what to transcribe. Track volume
@@ -893,16 +938,101 @@ function _sounds(tl, t) {
   return out;
 }
 
+// ── A SOUND THAT DOES NOT SEEK EXACTLY IS PLAYED FROM ITS DECODED SAMPLES (phase V49) ──────────
+// Measured in the Electron window (V49 block 0): an mp3 of variable bitrate - every Suno track - lands after a seek up to 0.9 s
+// away from where the element's currentTime says it is (seeks to 6 / 30 / 70 / 120 s of the two variants of one generation:
+// +0.39 +0.89 -0.07 +0.42 and +0.53 +0.51 -0.83 -0.32 s; Chromium seeks it by the file's rough table of contents and does not
+// know it missed). The render's ffmpeg lands exactly (0.000 s at the same moments). So a track started anywhere but its own
+// start played somewhere else than the film will, two tracks laid in step sounded apart by up to 0.76 s - "помехи" over an
+// overlap - and a track cut into pieces jumped at every seam. Such a file is decoded once here into a WAV in memory (sample
+// for sample the file, at 48 kHz) and the element plays that; a WAV seeks to the sample. Until it is ready the element plays
+// the file itself; it changes over the next time it is still (paused, waiting for its piece, held at Play - the hold waits
+// for it, _pcmWaits). A file longer than PCM_MAX_S, or one that cannot be decoded, stays as it is.
+const PCM_RE = /\.(mp3|aac)(\?|#|$)/i;
+const PCM_MAX_S = 20 * 60;          // ~11.5 MB of memory a minute
+const PCM_KEEP = 8;                 // decoded files kept; the oldest not playing goes first
+const _pcm = new Map();             // src -> { url, done, failed }
+let _pcmCtx = null;
+
+function _wavOf(buf) {
+  const ch = Math.min(2, buf.numberOfChannels), n = buf.length, rate = buf.sampleRate;
+  const ab = new ArrayBuffer(44 + n * ch * 2);
+  const dv = new DataView(ab);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); dv.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, ch, true); dv.setUint32(24, rate, true);
+  dv.setUint32(28, rate * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+  str(36, 'data'); dv.setUint32(40, n * ch * 2, true);
+  const pcm = new Int16Array(ab, 44, n * ch);
+  for (let c = 0; c < ch; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0, o = c; i < n; i++, o += ch) { const v = d[i]; pcm[o] = v >= 1 ? 32767 : v <= -1 ? -32768 : (v * 32767) | 0; }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+function _pcmOf(src) {
+  if (!PCM_RE.test(String(src || ''))) return null;
+  let p = _pcm.get(src);
+  if (p) { _pcm.delete(src); _pcm.set(src, p); return p; }      // the most recently wanted last
+  p = { url: null, done: false, failed: false };
+  _pcm.set(src, p);
+  (async () => {
+    try {
+      const r = await fetch(src);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.arrayBuffer();
+      if (!_pcmCtx) _pcmCtx = new OfflineAudioContext(2, 1, 48000);
+      const buf = await _pcmCtx.decodeAudioData(data);
+      if (!(buf.duration > 0) || buf.duration > PCM_MAX_S) throw new Error('not kept');
+      p.url = URL.createObjectURL(_wavOf(buf));
+    } catch { p.failed = true; }
+    p.done = true;
+    _pcmTrim();
+    // Held at Play, the clock is waiting for it; still, it changes over at the next sync.
+    if (_on && !_playing) _syncAudio();
+  })();
+  return p;
+}
+
+// Not more than PCM_KEEP decoded files: the oldest one no element is playing from is let go of.
+function _pcmTrim() {
+  if (_pcm.size <= PCM_KEEP) return;
+  const used = new Set([..._audio.values()].map(el => el.src));
+  for (const [src, p] of _pcm) {
+    if (_pcm.size <= PCM_KEEP) break;
+    if (!p.done || (p.url && used.has(p.url))) continue;
+    if (p.url) URL.revokeObjectURL(p.url);
+    _pcm.delete(src);
+  }
+}
+
+// The element plays the decoded copy once there is one and it is still - never under a sound that is playing.
+function _pcmSwap(el) {
+  const p = el.__orig ? _pcm.get(el.__orig) : null;
+  if (!p || !p.url || el.src === p.url || !el.paused) return;
+  el.src = p.url;
+  el.__fresh = true;              // put in place again, exactly, as a new element is
+  el.__seekAt = 0;
+  el.__cost = 0;
+}
+// Held at Play, the clock waits for a sound whose decoded copy is still being made (at most HOLD_MS, as for the rest; a
+// Suno track of two and a half minutes takes ~0.3 s). Playing on, a track is decoded when its clip is LOOK away.
+const _pcmWaits = (el) => { const p = el.__orig ? _pcm.get(el.__orig) : null; return !!(p && !p.done); };
+
 // Sound is taken from the same place the picture is. For a reversed clip that means the
 // reversed proxy, whose audio ffmpeg has already run through `areverse` - which is the only
 // way to hear one, since no element plays a file backwards.
 function _aud(c) {
   const rev = _rev(c);
   const key = _keyOf(c);
-  if (_audio.has(key)) return _audio.get(key);
+  if (_audio.has(key)) { const was = _audio.get(key); _pcmSwap(was); return was; }
   const el = new Audio();
   el.preload = 'auto';
-  el.src = rev ? _srcFor(c.src, true) : c.src;
+  // (V49) The decoded copy when the file does not seek exactly (above), once it is made.
+  const pc = rev ? null : _pcmOf(c.src);
+  el.__orig = rev ? '' : c.src;
+  el.src = rev ? _srcFor(c.src, true) : (pc && pc.url ? pc.url : c.src);
   // HOW LONG THIS FILE TAKES TO PLAY AGAIN after a seek made while playing (phase V33.4, the owner 2026-10-21: "первые
   // секунд пять идут без звука, но картинка есть"): from the seek to sound, a half-and-half running average. A big file
   // read cold (a 4K piece of a highlights fragment, 17 Mbit/s) took 0.4-0.6 s a seek - more than the drift allowed - so the
@@ -959,8 +1089,10 @@ function _syncAudio() {
     if (!run && !el.paused) el.pause();
   }
   // (phase V44) The next pieces of every lane made ready while this one sounds: each one's element waits paused on its
-  // first moment, the nearest first; one sounding, or waiting for a nearer piece, is left alone.
-  if (run) {
+  // first moment, the nearest first; one sounding, or waiting for a nearer piece, is left alone. (V49) Held at Play too,
+  // and a piece starting within SOON is waited for (_soonAudio, as the picture's).
+  _soonAudio = [];
+  if (_playing) {
     const claimed = new Set(alive);
     for (const tr of ((tl && tl.tracks) || [])) {
       if (!tr || tr.kind !== 'audio' || (tr.volume != null && !(+tr.volume > 0))) continue;
@@ -969,7 +1101,9 @@ function _syncAudio() {
         const key = _keyOf(nx);
         if (claimed.has(key)) continue;
         claimed.add(key);
-        _cue(_aud(nx), nx);
+        const el = _aud(nx);
+        _cue(el, nx);
+        if (_holding && +nx.start - _at <= SOON) _soonAudio.push(el);
       }
     }
   }
@@ -978,7 +1112,10 @@ function _syncAudio() {
 // Every film and sound under the playhead can play from where it stands: the clock may start (play(), _tick).
 // One that cannot load at all (its file gone - red on the timeline) is not waited for.
 const _canRun = (el, rs) => !!el.error || el.networkState === 3 || (!el.seeking && el.readyState >= rs);
-const _readyToRun = () => _liveAudio.every((el) => _canRun(el, 3)) && _liveVideo.every((el) => _canRun(el, 2));
+// (V49) A piece about to start is ready once it waits on its first moment: sought there and not seeking. A sound whose
+// decoded copy is being made is waited for too (_pcmWaits).
+const _readyToRun = () => _liveAudio.every((el) => _canRun(el, 3) && !_pcmWaits(el)) && _liveVideo.every((el) => _canRun(el, 2))
+  && _soonAudio.every((el) => _canRun(el, 2) && !_pcmWaits(el)) && _soonVideo.every((el) => _canRun(el, 2));
 
 function _tick() {
   if (!_playing) return;
