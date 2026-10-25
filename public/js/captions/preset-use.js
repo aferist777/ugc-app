@@ -13,6 +13,10 @@
    THE TEXT PRESETS (phase V42, presets-text.js) and the person's own saved from a text lane or line (`kind: 'text'`) are
    bases the same way - but they carry no place (the owner's (ц3)): applied, the line or lane keeps where it is (placed), and
    where it is never counts as an edit of the preset (editedKeys).
+
+   A SUBTITLE'S IN AND OUT ARE NOT ITS PRESET'S (phase V49, the owner's (пр20)): a preset put on the subtitle lane or on its
+   lines leaves their In and Out as they were (keepMotion), and an In or Out chosen is never an edit of the preset. A text
+   preset's entrance and exit are its own, as before.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { presetOf } from './presets.js';
@@ -45,6 +49,23 @@ export function placed(id, current) {
   return normalizeStyle(st);
 }
 
+/** What of a style is its animation, not its look (phase V49, (пр20)). */
+export const MOTION_KEYS = ['enter', 'enterDur', 'leave', 'leaveDur'];
+
+/**
+ * A subtitle preset's whole style `st` as worn by what wears `cur` now, its In and Out kept: a LANE keeps its own (`cur` its
+ * style); a LINE (`line`) keeps only what its own style sets - the rest stays its lane's, whatever that becomes.
+ */
+export function keepMotion(st, cur, line) {
+  if (!st) return st;
+  const out = Object.assign({}, st);
+  for (const k of MOTION_KEYS) {
+    if (cur && cur[k] !== undefined) out[k] = cur[k];
+    else if (line) delete out[k];
+  }
+  return out;
+}
+
 /** A preset's name, '' for none. */
 export const presetName = (id) => { const p = _find(id); return p ? p.name : ''; };
 
@@ -53,6 +74,6 @@ export function editedKeys(style) {
   const s = normalizeStyle(style || {});
   const base = s.preset ? presetStyle(s.preset) : null;
   if (!base) return [];
-  const keep = isTextPreset(s.preset) ? TEXT_KEEP : [];
+  const keep = isTextPreset(s.preset) ? TEXT_KEEP : MOTION_KEYS;
   return Object.keys(DEF).filter((k) => k !== 'preset' && !keep.includes(k) && JSON.stringify(s[k]) !== JSON.stringify(base[k]));
 }

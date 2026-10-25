@@ -70,6 +70,8 @@ export const ENTER = {
   'from-left': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), dx: lerp(-2.2, 0, outC(p)) }) },
   'from-right': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), dx: lerp(2.2, 0, outC(p)) }) },
   drop: { by: 'block', f: (p) => ({ a: seg(p, 0, 0.15), dy: lerp(-2.5, 0, outBounce(p)) }) },
+  // (phase V49) From the top with no bounce - the subtitles' new In; a text line wearing it moves the same way.
+  'from-top': { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.8)), dy: lerp(-0.7, 0, outC(p)) }) },
   blur: { by: 'block', f: (p) => ({ a: outC(p), blur: lerp(14, 0, outC(p)), s: lerp(106, 100, outC(p)) }) },
   stretch: { by: 'block', f: (p) => ({ a: outC(seg(p, 0, 0.6)), fsp: lerp(0.55, 0, outC(p)), sx: lerp(118, 100, outC(p)) }) },
   swing: { by: 'block', f: (p) => ({ a: seg(p, 0, 0.25), rz: lerp(-14, 0, outBack(p, 2.6)), s: lerp(60, 100, outBack(p, 1.6)) }) },
@@ -116,12 +118,13 @@ export const LEAVE = {
 
 // The old way a text line arrived (`appear`, K3), read as an entrance when the line has none of the new.
 const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
-const enterOf = (st) => (st.enter && st.enter !== 'none' ? st.enter : APPEAR_AS[st.appear] || 'none');
+// `at-once` (phase V49): an entrance chosen to be none - the old way goes too.
+const enterOf = (st) => (st.enter === 'at-once' ? 'none' : st.enter && st.enter !== 'none' ? st.enter : APPEAR_AS[st.appear] || 'none');
 
 /** Is this text line drawn here (an entrance, an exit, a plate, a tilt or a glow) - or by ass.js, as it always was? */
 export function usesFx(st) {
   const s = st || {};
-  return (!!s.enter && s.enter !== 'none') || (!!s.leave && s.leave !== 'none') || (!!s.plate && s.plate !== 'none')
+  return (!!s.enter && s.enter !== 'none' && s.enter !== 'at-once') || (!!s.leave && s.leave !== 'none') || (!!s.plate && s.plate !== 'none')
     || Math.abs(+s.tilt || 0) > 0.05 || (+s.glow || 0) > 0;
 }
 

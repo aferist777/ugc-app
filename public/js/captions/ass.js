@@ -43,6 +43,11 @@
    layers, with a style row of its own; every other line is drawn here, exactly as before. A line in a font without Cyrillic
    that holds a Cyrillic letter is drawn whole in the font's twin (fonts.js drawnFamily).
 
+   A SUBTITLE PAGE WITH AN IN OR AN OUT (phase V49, point 8a) is drawn here in the same layers, moving as a whole (page-fx.js
+   says how): from its own place, its In inside its own events - the words' moments untouched - and its Out in a second set of
+   events over its last moments, the words carried on from where they were (_shift). A page without them is drawn as before,
+   byte for byte; `at-once` (an In chosen to be none) only takes the preset's `appear` away.
+
    PURE: it returns a string.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -52,6 +57,7 @@ import { padOf } from './measure.js';
 import { spells } from './words.js';
 import { drawnPage, boxOf, gapAfter as _gap } from './place.js';
 import { textLine, usesFx } from './text-fx.js';
+import { pageMotion, placeTags, motionTags, popScale, axisOf } from './page-fx.js';
 
 // &HAABBGGRR - alpha first and the channels backwards, which is the format and not a mistake.
 export function hexToAss(hex, alpha) {
@@ -130,6 +136,29 @@ const _wordsOf = (c) => (spells(c.words, c.name) ? c.words : null);
 const _arrive = (st) => (st.appear === 'pop' ? '\\fscx85\\fscy85\\t(0,140,\\fscx100\\fscy100)' : '');
 const _blur = (st) => ((+st.blur || 0) > 0 ? '\\blur' + (+st.blur).toFixed(1) : '');
 const _times = (w) => { const s = ms(w.s); return [s, Math.max(ms(w.e), s + 1)]; };
+// A word's look switched while it is spoken: `base` always, `on` from its start, `after` from its end. A word an Out's events
+// find spoken and over (`done`) or being spoken (`on`) - _shift - starts in that state.
+function _sw(w, base, on, after) {
+  if (w.was === 'done') return base + after;
+  const [s, e] = _times(w);
+  if (w.was === 'on') return base + on + '\\t(' + e + ',' + (e + 1) + ',' + after + ')';
+  return base + '\\t(' + s + ',' + (s + 1) + ',' + on + ')\\t(' + e + ',' + (e + 1) + ',' + after + ')';
+}
+
+// The words as an event that starts `off` ms into the page sees them (an Out's, phase V49): their times from that event's
+// start, `t0` the start before it was cut at 0 (s), and what each was by then.
+function _shift(words, off) {
+  if (!words || !(off > 0)) return words;
+  const o = off / 1000;
+  return words.map((w) => {
+    const s = +w.s || 0, e = +w.e || 0;
+    const x = Object.assign({}, w, { s: Math.max(0, s - o), e: Math.max(0, e - o), t0: s - o });
+    if (e <= o) { x.was = 'done'; x.s = 0; x.e = 0; } else if (s < o) x.was = 'on';
+    return x;
+  });
+}
+// A page's time in centiseconds as assTime writes it - the moment libass starts an event at.
+const _cs = (t) => { const v = Math.max(0, +t || 0); return Math.floor(v) * 100 + Math.floor((v - Math.floor(v)) * 100); };
 
 // The page's own tags: where it sits, how it arrives.
 function _place(st, a) {
@@ -142,35 +171,49 @@ function _place(st, a) {
 }
 
 // ── layer +2: the letters ───────────────────────────────────────────────────
-function _textBody(c, st, words, page) {
-  const arrive = _arrive(st), blur = _blur(st);
+// `head` (phase V49): a moving page's own tags for every block - its motion, and the blur when the motion does not set it -
+// in place of how a page arrives.
+function _textBody(c, st, words, page, head0) {
+  const arrive = head0 != null ? head0 : _arrive(st), blur = head0 != null ? '' : _blur(st);
   const head = (arrive || blur) ? '{' + blur + arrive + '}' : '';
   const brk = page.brk;
   const anyMark = !!(words && words.some(w => w.k));
   const mk = anyMark ? tagColour(markedColour(st)) : '';
   if (words && (st.effect === 'karaoke' || st.effect === 'sweep')) {
     const mark = anyMark ? { on: mk, prim: tagColour(st.primary), sec: tagColour(st.secondary) } : null;
-    return head + karaokeLine(words, st.effect === 'sweep' ? '\\kf' : '\\k', st.casing, brk, mark);
+    // An Out's events find a word half filled: it is shown filled - a fill cannot start in its middle.
+    const ws = st.effect === 'sweep' ? words.map(w => (w.was === 'on' ? Object.assign({}, w, { e: 0 }) : w)) : words;
+    return head + karaokeLine(ws, st.effect === 'sweep' ? '\\kf' : '\\k', st.casing, brk, mark);
   }
   const perWord = words && (['color', 'pop', 'bounce'].includes(st.effect) || anyMark);
   if (!perWord) return head + assText(cased(page.text, st.casing));
   const hl = tagColour(st.highlight), prim = tagColour(st.primary);
   return words.map((w, i) => {
-    const [s, e] = _times(w);
     let t = '';
     if (st.effect === 'pop' || st.effect === 'bounce') {
       // The spoken word is drawn by the layer above, grown; here it steps aside for its moment.
-      t = (w.k ? '\\1c' + mk : '') + '\\t(' + s + ',' + (s + 1) + ',\\alpha&HFF&)\\t(' + e + ',' + (e + 1) + ',\\alpha&H00&)';
+      t = _sw(w, w.k ? '\\1c' + mk : '', '\\alpha&HFF&', '\\alpha&H00&');
     } else if (w.k && (st.effect === 'color' || st.effect === 'box')) {
       // Marked, the whole page - and while it is spoken it turns the text's colour: a flash where every
       // other word lights up, and letters that do not sink into a box of the same colour (K10b).
-      t = '\\1c' + mk + '\\t(' + s + ',' + (s + 1) + ',\\1c' + prim + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + mk + ')';
+      t = _sw(w, '\\1c' + mk, '\\1c' + prim, '\\1c' + mk);
     } else if (w.k) {
       t = '\\1c' + mk;                                    // marked to stand out: the whole page
     } else if (st.effect === 'color') {
-      t = '\\t(' + s + ',' + (s + 1) + ',\\1c' + hl + ')\\t(' + e + ',' + (e + 1) + ',\\1c' + prim + ')';
+      t = _sw(w, '', '\\1c' + hl, '\\1c' + prim);
     }
     return '{\\r' + blur + arrive + t + '}' + assText(cased(w.w, st.casing)) + _gap(i, words.length, brk);
+  }).join('');
+}
+
+// ── layer +3 on a moving page (phase V49): its size is the page's times its growth (page-fx.js popScale) ──
+function _popBodyMoving(st, words, brk, part, base, head) {
+  const hl = tagColour(st.highlight);
+  const grow = st.effect === 'pop' ? { x: 112, y: 125, up: 80, down: 170 } : { x: 100, y: 132, up: 60, down: 140 };
+  return words.map((w, i) => {
+    const at = w.was === 'done' ? -1e9 : w.t0 != null ? Math.round(w.t0 * 1000) : ms(w.s);
+    return '{\\r' + head + '\\alpha&HFF&\\1c' + hl + _sw(w, '', '\\alpha&H00&', '\\alpha&HFF&') + popScale(part, base, at, grow) + '}'
+      + assText(cased(w.w, st.casing)) + _gap(i, words.length, brk);
   }).join('');
 }
 
@@ -190,20 +233,56 @@ function _popBody(st, words, brk) {
 }
 
 // ── layer +0: the line's box, one run ───────────────────────────────────────
-function _lineBoxBody(st, page) {
-  return '{' + _arrive(st) + '\\1a&HFF&\\2a&HFF&\\3c' + tagColour(st.backColor) + '\\3a' + tagAlpha(st.backAlpha) + '}'
+function _lineBoxBody(st, page, head) {
+  return '{' + (head != null ? head : _arrive(st)) + '\\1a&HFF&\\2a&HFF&\\3c' + tagColour(st.backColor) + '\\3a' + tagAlpha(st.backAlpha) + '}'
     + assText(cased(page.text, st.casing));
 }
 
 // ── layer +1: the box behind the spoken word ───────────────────────────────
-function _wordBoxBody(st, words, brk) {
-  const arrive = _arrive(st), hl = tagColour(st.highlight);
+function _wordBoxBody(st, words, brk, head) {
+  const arrive = head != null ? head : _arrive(st), hl = tagColour(st.highlight);
   const clear = '\\1a&HFF&\\2a&HFF&\\3a&HFF&';
   return words.map((w, i) => {
-    const [s, e] = _times(w);
-    return '{\\r' + arrive + clear + '\\t(' + s + ',' + (s + 1) + ',\\3c' + hl + '\\3a&H00&)\\t(' + e + ',' + (e + 1) + ',\\3a&HFF&)}'
+    return '{\\r' + arrive + _sw(w, clear, '\\3c' + hl + '\\3a&H00&', '\\3a&HFF&') + '}'
       + assText(cased(w.w, st.casing)) + (i < words.length - 1 ? '{\\r' + arrive + clear + '}' + _gap(i, words.length, brk) : '');
   }).join('');
+}
+
+/**
+ * A SUBTITLE PAGE THAT MOVES (phase V49): its In in its own events [start, the Out's start], its Out in a second set over its
+ * last moments - each set in the layers a page of its style has (see the header). `dlg` writes an event.
+ */
+function _movingPage(dlg, M, s, L, start, end, box, drawn) {
+  const st = s.st;
+  const words = drawn.words;
+  const page = { brk: drawn.brk, text: drawn.text };
+  // Where it is drawn at rest - as a page without motion (_place) - and the middle of its text block (place.js boxOf): the
+  // anchor less how far the block hangs from it, plus half of it.
+  const ax = s.a.x + box.dx, ay = s.a.y + box.dy;
+  const lift = box.an === 2 ? box.th : box.an === 5 ? box.th / 2 : 0;
+  const cx = box.ax, cy = box.ay - lift + box.th / 2;
+  const grows = box.an === 2 ? box.th / 2 : box.an === 8 ? -box.th / 2 : 0;
+  const base0 = { sx: +st.scaleX || 100, sy: +st.scaleY || 100, lh: (+st.size || 60) * ((+st.scaleY || 100) / 100), blur: +st.blur || 0, grows };
+  const c0 = _cs(start), c1 = _cs(end);
+  // The Out's events start where its length before the end falls - at a centisecond, as libass starts them.
+  const cOut = M.leave ? Math.max(c0 + 1, Math.min(c1 - 1, _cs(end - M.leave.ms / 1000))) : c1;
+  const sets = [{ part: M.enter, t0: start, t1: M.leave ? cOut / 100 : end, off: 0, ev: (cOut - c0) * 10 }];
+  if (M.leave) sets.push({ part: M.leave, t0: cOut / 100, t1: end, off: (cOut - c0) * 10, ev: (c1 - cOut) * 10 });
+  for (const x of sets) {
+    const ws = _shift(words, x.off);
+    const axis = axisOf(x.part, s.a.an);
+    const base = Object.assign({}, base0, { axis });
+    const boxBase = Object.assign({}, base, { blur: 0 });
+    const place = placeTags(x.part, s.a.an, ax, ay, cx, cy, axis, x.ev);
+    const blur = x.part && x.part.keys.blur ? '' : _blur(st);
+    const head = blur + motionTags(x.part, base);
+    if (s.layered && BOXY(st)) dlg(L, x.t0, x.t1, s.name + 'b', place + _lineBoxBody(st, page, motionTags(x.part, boxBase)));
+    if (s.layered && st.effect === 'box' && ws) dlg(L + 1, x.t0, x.t1, s.name + 'b', place + _wordBoxBody(st, ws, page.brk, motionTags(x.part, boxBase)));
+    dlg(L + 2, x.t0, x.t1, s.name, place + _textBody(null, st, ws, page, head));
+    if (s.layered && (st.effect === 'pop' || st.effect === 'bounce') && ws) {
+      dlg(L + 3, x.t0, x.t1, s.name, place + _popBodyMoving(st, ws, page.brk, x.part, base, blur + motionTags(x.part, base, true)));
+    }
+  }
 }
 
 // ── The [V4+ Styles] entries ────────────────────────────────────────────────
@@ -333,14 +412,19 @@ export function buildAss(lanes, w, h) {
       const drawn = drawnPage(c, s.st, u.subs, w, end - start);
       const box = boxOf(drawn, s.st, w, h);
       if (drawn.shrink) s = smaller(s, drawn.shrink);
+      // A subtitle page with an In or an Out moves (phase V49, page-fx.js); any other is drawn as it always was.
+      const M = u.subs ? pageMotion(s.st, end - start) : null;
+      if (M) { _movingPage(dlg, M, s, L, start, end, box, drawn); continue; }
       const words = drawn.words;
       const page = { brk: drawn.brk, text: drawn.text };
+      // An In chosen to be none (`at-once`, V49) arrives with nothing - the preset's way of arriving goes.
+      const st = s.st.enter === 'at-once' && s.st.appear !== 'none' ? Object.assign({}, s.st, { appear: 'none' }) : s.st;
       // Never off the frame (phase V30, block 3, (с34)): a page past an edge is drawn moved back inside.
-      const place = _place(s.st, (box.dx || box.dy) ? { ...s.a, x: s.a.x + box.dx, y: s.a.y + box.dy } : s.a);
-      if (s.layered && BOXY(s.st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(s.st, page));
-      if (s.layered && s.st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(s.st, words, page.brk));
-      dlg(L + 2, start, end, s.name, place + _textBody(c, s.st, words, page));
-      if (s.layered && (s.st.effect === 'pop' || s.st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(s.st, words, page.brk));
+      const place = _place(st, (box.dx || box.dy) ? { ...s.a, x: s.a.x + box.dx, y: s.a.y + box.dy } : s.a);
+      if (s.layered && BOXY(st)) dlg(L, start, end, s.name + 'b', place + _lineBoxBody(st, page));
+      if (s.layered && st.effect === 'box' && words) dlg(L + 1, start, end, s.name + 'b', place + _wordBoxBody(st, words, page.brk));
+      dlg(L + 2, start, end, s.name, place + _textBody(c, st, words, page));
+      if (s.layered && (st.effect === 'pop' || st.effect === 'bounce') && words) dlg(L + 3, start, end, s.name, place + _popBody(st, words, page.brk));
     }
   });
 

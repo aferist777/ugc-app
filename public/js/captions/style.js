@@ -41,14 +41,29 @@ export const POSITIONS = ['top', 'center', 'bottom'];
 export const CUTS = ['pages', 'sentences'];
 // A TEXT line's entrance and exit (phase V42, the owner's (о15); captions/text-fx.js draws them, its ENTER / LEAVE are keyed by
 // these names): what moves - the whole line, its rows, its words or its letters - and how; `enterDur` / `leaveDur` their
-// lengths, s. A text lane's only: the subtitle lanes keep `appear`.
+// lengths, s. A SUBTITLE page has In and Out too since phase V49 (the owner's (пр16)-(пр18)): whole-page motions only, drawn by
+// captions/page-fx.js (its PAGE_ENTERS / PAGE_LEAVES), lengths automatic. On a subtitle lane `none` is "not chosen": the
+// preset's own way of arriving (`appear`) - and `at-once`, chosen, arrives with nothing, whatever the preset does ((пр20)).
 export const ENTERS = ['none', 'fade', 'pop', 'zoom', 'grow', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'stretch', 'swing',
-  'wipe', 'mask-rise', 'rows', 'words', 'words-pop', 'letters', 'letters-pop', 'letters-drop', 'typewriter', 'glitch', 'flicker'];
+  'wipe', 'mask-rise', 'rows', 'words', 'words-pop', 'letters', 'letters-pop', 'letters-drop', 'typewriter', 'glitch', 'flicker',
+  'from-top', 'at-once'];
 export const LEAVES = ['none', 'fade', 'pop', 'zoom', 'shrink', 'rise', 'sink', 'to-left', 'to-right', 'fall', 'blur', 'stretch', 'wipe',
   'mask-sink', 'rows', 'words', 'letters', 'letters-fall', 'backspace', 'glitch', 'flicker'];
 // What a text line stands on besides a box (`borderStyle`): a plate drawn round its letters (text-fx.js plateOf), in the box's
 // colour and opacity (`backColor`, `backAlpha`); `plateIn` / `plateOut` - its own entrance and exit ('' - the text's).
 export const PLATES = ['none', 'round', 'pill', 'marker', 'underline', 'circle', 'tag', 'sticker'];
+
+// SEVERAL PRESETS AND ANIMATIONS AT ONCE on the subtitle lane (phase V49, point 8c; the owner's (пр17), (пр21), (пр22)): the
+// lane's `mix` - the looks dealt, one entry per preset ({ preset, ...LOOK_KEYS }: what a preset's own section of the strip
+// changes) - and `anims` - the animations dealt, 'in|out' pairs; `mixSeed` - the deal's seed, new at every press. A page dealt
+// one wears REFERENCES, never a copy: `mixP` - its entry of `mix`, `mixA` - its pair of `anims`, `mixS` - the seed it was
+// dealt with (captions/mix.js deals them). A mix is two entries or more - one is no mix. SPARSE: written only when set, so a
+// style without a mix is stored, saved as a preset and drawn exactly as before.
+export const LOOK_KEYS = ['font', 'bold', 'italic', 'casing', 'primary', 'secondary', 'highlight', 'marked', 'outlineColor',
+  'shadowColor', 'backColor', 'backAlpha', 'shadowAlpha', 'outline', 'shadow', 'blur', 'scaleX', 'scaleY', 'spacing', 'borderStyle',
+  'effect', 'appear'];
+export const MIX_MAX = 40;
+const SPARSE = ['mix', 'anims', 'mixSeed', 'mixP', 'mixA', 'mixS'];
 
 export const DEF = {
   preset: '',                     // the preset this style was made from - what "back to the preset" restores
@@ -111,6 +126,27 @@ const RULES = {
   enter: ONE(ENTERS), enterDur: NUM(0.05, 3), leave: ONE(LEAVES), leaveDur: NUM(0.05, 3),
   plate: ONE(PLATES), plateIn: (v) => (v === '' ? '' : ONE(ENTERS)(v)), plateOut: (v) => (v === '' ? '' : ONE(LEAVES)(v)),
   tilt: NUM(-15, 15), glow: NUM(0, 10), glowColor: (v) => (v === '' ? '' : COLOUR(v)),
+  // (phase V49) The mix - a lane's - and a page's references into it.
+  mix: (v) => {
+    if (!Array.isArray(v)) return undefined;
+    const out = [];
+    for (const e of v.slice(0, MIX_MAX)) {
+      if (!e || typeof e !== 'object') continue;
+      const o = {};
+      const id = RULES.preset(e.preset);
+      if (id) o.preset = id;
+      for (const k of LOOK_KEYS) { const x = RULES[k](e[k]); if (x !== undefined) o[k] = x; }
+      if (Object.keys(o).length) out.push(o);
+    }
+    return out.length ? out : undefined;
+  },
+  anims: (v) => {
+    if (!Array.isArray(v)) return undefined;
+    const out = v.slice(0, MIX_MAX).map(String).filter((x) => { const [a, b] = x.split('|'); return ENTERS.includes(a) && LEAVES.includes(b); });
+    return out.length ? out : undefined;
+  },
+  mixSeed: NUM(0, 2147483647, true), mixS: NUM(0, 2147483647, true),
+  mixP: NUM(0, MIX_MAX - 1, true), mixA: NUM(0, MIX_MAX - 1, true),
 };
 
 // ── A word marked to stand out ──────────────────────────────────────────────
@@ -151,6 +187,7 @@ export function normalizeStyle(st) {
   }
   // "Still the format's suggestion" unless somebody said otherwise.
   out.sizeAuto = src.sizeAuto !== false;
+  for (const k of SPARSE) { const v = RULES[k](src[k]); if (v !== undefined) out[k] = v; }
   return out;
 }
 
@@ -159,7 +196,7 @@ export function normalizeOverride(st) {
   if (!st || typeof st !== 'object') return null;
   const src = _legacy(st);
   const out = {};
-  for (const k of Object.keys(DEF)) {
+  for (const k of Object.keys(DEF).concat(SPARSE)) {
     if (src[k] === undefined) continue;
     const v = RULES[k](src[k]);
     if (v !== undefined) out[k] = v;
@@ -174,12 +211,34 @@ export function normalizeOverride(st) {
 export function resolveStyle(laneStyle, clipStyle) {
   const lane = _legacy(laneStyle || {});
   const own = clipStyle ? _legacy(clipStyle) : null;
-  const st = Object.assign({}, DEF, lane, own || {});
+  // A page dealt from its lane's mix (phase V49): the look and the animation it was dealt, under what it sets itself.
+  const st = Object.assign({}, DEF, lane, own ? dealtOf(lane, own) : null, own || {});
   delete st.karaoke;                       // read as `effect` above (_legacy)
   st.font = familyOf(st.font);             // a shipped font, whatever an old project named (K5)
   // The cut is the lane's (phase V30, block 4, (с43)): a Classic preset put on a line gives it the look only.
   st.cut = lane.cut === 'sentences' ? 'sentences' : 'pages';
   return st;
+}
+
+/** The lane's mix when it is one - two looks or more - else null. */
+export const mixOf = (lane) => (lane && Array.isArray(lane.mix) && lane.mix.length >= 2 ? lane.mix : null);
+/** The lane's animations dealt - two pairs or more - else null. */
+export const animsOf = (lane) => (lane && Array.isArray(lane.anims) && lane.anims.length >= 2 ? lane.anims : null);
+/** A pair 'in|out' as { enter, leave }. */
+export const pairOf = (p) => { const [enter, leave] = String(p || '').split('|'); return { enter: enter || 'none', leave: leave || 'none' }; };
+
+/**
+ * What a page was dealt from its lane's mix (phase V49): the look of its entry of `mix` and its pair of `anims` - {} when it
+ * was dealt nothing, or its references point at nothing (the mix gone or shorter: the lane's own look then).
+ */
+export function dealtOf(laneStyle, clipStyle) {
+  const lane = laneStyle || {}, own = clipStyle || {};
+  const out = {};
+  const mix = mixOf(lane);
+  if (mix && Number.isInteger(own.mixP) && mix[own.mixP]) Object.assign(out, mix[own.mixP]);
+  const an = animsOf(lane);
+  if (an && Number.isInteger(own.mixA) && an[own.mixA]) Object.assign(out, pairOf(an[own.mixA]));
+  return out;
 }
 
 // ── The frame ───────────────────────────────────────────────────────────────

@@ -34,7 +34,8 @@ import * as CapView from './captions-view.js';
 import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
-import { presetStyle, presetName, editedKeys, placed } from '../captions/preset-use.js';
+import { presetStyle, presetName, editedKeys, placed, keepMotion } from '../captions/preset-use.js';
+import { shownEnter, PAGE_LEAVES } from '../captions/page-fx.js';
 import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
@@ -550,11 +551,16 @@ const CUT_OPTS = [['pages', 'pages - a few words at a time'], ['sentences', 'sen
 const CUTS = CUT_KEYS;
 const _cuts = (patch) => Object.keys(patch || {}).some(k => CUTS.includes(k));
 
-// What a word does while it is spoken, how a page arrives, how it is cased, what stands behind it (K0's
-// fields, given controls in K6).
+// What a word does while it is spoken, how it is cased, what stands behind it (K0's fields, given controls in K6).
 const EFFECTS = [['none', 'none'], ['color', 'colour'], ['box', 'a box'], ['pop', 'pop'], ['bounce', 'jump'],
   ['sweep', 'sweep'], ['karaoke', 'karaoke']];
-const APPEARS = [['none', 'at once'], ['pop', 'pops in'], ['fade', 'fades in'], ['slide', 'slides up']];
+// HOW A SUBTITLE PAGE COMES IN AND GOES OUT (phase V49, the owner's (пр16)-(пр18)): motions of the whole page, their lengths the
+// app's (captions/page-fx.js). "Arrives" went: a preset's own way of arriving shows as its In until one is chosen ((пр17)).
+const PAGE_IN = [['at-once', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['zoom', 'zoom'], ['grow', 'grow'], ['from-top', 'from the top'],
+  ['rise', 'from below'], ['from-left', 'from the left'], ['from-right', 'from the right'], ['drop', 'drop'], ['blur', 'blur'],
+  ['swing', 'swing']];
+const PAGE_OUT = [['none', 'at once'], ['fade', 'fade'], ['pop', 'pop'], ['shrink', 'shrink'], ['zoom', 'zoom'], ['rise', 'up'],
+  ['sink', 'down'], ['to-left', 'to the left'], ['to-right', 'to the right'], ['fall', 'fall'], ['blur', 'blur']];
 const CASINGS = [['none', 'as typed'], ['upper', 'UPPER'], ['lower', 'lower'], ['title', 'Title']];
 const BEHIND = [['outline', 'nothing'], ['box', 'a box'], ['boxline', 'box + outline']];
 // A TEXT line's (phase V42; the owner's (ц4)): what stands behind it besides a box - a plate in the box's colour - and how it
@@ -598,8 +604,8 @@ function _blankWordsTrack(host, track) {
   const isSubs = track.kind === 'subs';
   const set = (patch) => setSubsStyleB(track.id, patch, isSubs && _cuts(patch));
   // A preset REPLACES the lane's style (every field - the owner's answer 1); a subtitle lane is cut again. A text preset keeps
-  // where the lane's lines are (V42, (ц3) - preset-use.js placed).
-  const apply = (id) => { const s = placed(id, raw); if (s) setSubsStyleB(track.id, s, isSubs); };
+  // where the lane's lines are (V42, (ц3) - preset-use.js placed); a subtitle lane its In and Out (V49, (пр20)).
+  const apply = (id) => { const s = placed(id, raw); if (s) setSubsStyleB(track.id, isSubs ? keepMotion(s, raw) : s, isSubs); };
   const pagesNow = (track.clips || []).filter(isHeard).length;
   _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : ''));
   // Saved as the lane's style is stored - an automatic size stays automatic.
@@ -689,7 +695,8 @@ function _blankWordsTrack(host, track) {
     const counted = heard + ' heard words on ' + pages + (pages === 1 ? ' page' : ' pages')
       + '; changing this cuts them again straight away, lines you typed stay as they are.';
     if (sent) {
-      // One rule, no Words or Lines (с42).
+      // One rule, no Words or Lines (с42); In and Out under Cut (V49, (пр17)).
+      _pageMotionRows(host, st, set);
       host.appendChild(C.hint(heard
         ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
           + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
@@ -704,17 +711,14 @@ function _blankWordsTrack(host, track) {
       const lines = Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
       const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
       host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
-      const most = +raw.wordsPerLine > 0 ? +raw.wordsPerLine : autoWordsPerLine(fmt);
-      host.appendChild(C.hint(heard
-        ? 'A page ends at a sentence, at a pause, at a comma after two words, and before a line would run '
-          + 'wider than 78% of the frame - with at most ' + most + (most === 1 ? ' word' : ' words') + '. ' + counted
-        : 'How the transcript gets cut into pages. Nothing has been transcribed yet, so this waits '
-          + 'for the first Generate.'));
+      // In and Out right under Lines; the hint that stood here went (V49, the owner's (пр17)).
+      _pageMotionRows(host, st, set);
     }
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
+  // A subtitle lane's In and Out are above, under Lines.
+  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, motion: false, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
     pages: () => (track.clips || []).map(c => ({ track, clip: c })) });
 
   // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
@@ -863,8 +867,9 @@ function _styleRows(host, st, set, o) {
       host.appendChild(C.row('Its length', C.slider({ min: 0.1, max: 2, step: 0.05, value: +st.leaveDur || 0.4, fmt: _secs,
         onChange: (v) => set({ leaveDur: v }) })));
     }
-  } else {
-    host.appendChild(C.row('Arrives', C.select(APPEARS, st.appear, (v) => set({ appear: v }))));
+  } else if (o.motion !== false) {
+    // One line's, or several lines': where "Arrives" was (V49, (пр17)).
+    _pageMotionRows(host, st, set);
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
@@ -908,6 +913,13 @@ function _styleRows(host, st, set, o) {
   )));
 }
 
+// A SUBTITLE PAGE'S IN AND OUT (phase V49, (пр16)-(пр18)): the In shown is the one chosen, or the preset's own way of arriving
+// while none is (style.js `appear`, (пр20)); "at once" chosen takes that away too. Their lengths are the app's.
+function _pageMotionRows(host, st, set) {
+  host.appendChild(C.row('In', C.select(PAGE_IN, shownEnter(st) || 'at-once', (v) => set({ enter: v }))));
+  host.appendChild(C.row('Out', C.select(PAGE_OUT, PAGE_LEAVES.includes(st.leave) ? st.leave : 'none', (v) => set({ leave: v }))));
+}
+
 // WHAT A PLATFORM'S SCREEN COVERS (phase V30, block 3; the owner's (с36): a mark, nothing refused or moved): with
 // TikTok, Shorts or Instagram over the preview, how many of these pages lie under which of its elements - every page
 // of the lane, not only the one on screen.
@@ -948,7 +960,13 @@ function _renderCaptions(host, items) {
   const common = items.every(x => presetOfItem(x) === presetOfItem(first)) ? presetOfItem(first) : '';
   const anyEdited = !!common && items.some(x => editedKeys(x.clip.style).length > 0);
   // Each line given the whole preset - a text preset where that line is now (V42, (ц3)).
-  const wear = (id) => { if (presetStyle(id)) setCapStyleB(ids, (c, t) => placed(id, styleOf(t, fmt, c)), { replace: true, cut: true }); };
+  // A subtitle line keeps its In and Out (V49, (пр20)): what it set itself, the rest its lane's.
+  const wear = (id) => {
+    if (presetStyle(id)) {
+      setCapStyleB(ids, (c, t) => { const p = placed(id, styleOf(t, fmt, c)); return t.kind === 'subs' ? keepMotion(p, c.style || {}, true) : p; },
+        { replace: true, cut: true });
+    }
+  };
   if (common) _presetLine(host, first.clip.style, () => wear(common), anyEdited);
   const st = styleOf(first.track, fmt, first.clip);
   const set = (patch) => setCapStyleB(ids, patch, { cut: _cuts(patch) });
@@ -979,7 +997,10 @@ function _blankCaption(host, track, clip) {
   _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
   // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
   // A text preset keeps where the line is now (V42, (ц3)).
-  const wear = (id, cut) => { const p = placed(id, styleOf(track, fmt, clip)); if (p) setCapStyleB([clip.id], p, { replace: true, cut }); };
+  const wear = (id, cut) => {
+    const p = placed(id, styleOf(track, fmt, clip));
+    if (p) setCapStyleB([clip.id], track.kind === 'subs' ? keepMotion(p, clip.style || {}, true) : p, { replace: true, cut });
+  };
   _presetLine(host, own ? clip.style : null, () => wear(clip.style.preset, true),
     undefined, () => resolveStyle(track.style, clip.style), track.kind === 'text' ? 'text' : '');
   const heardLine = isHeard(clip);
