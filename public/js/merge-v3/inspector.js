@@ -197,9 +197,12 @@ function _frameRows(host, c, set) {
   host.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
     (v) => set('fit', v))));
   if (c.fit !== 'fill') return;
-  const mode = (c.frame && c.frame.mode) || 'fixed';
-  const pickFraming = C.select(FRAMING.FRAMINGS, mode, (v) => { FRAMING.choose(c, v, set); });
+  // (phase V43) A part of fragmentation follows the most active - its own choice while it has it - with punch-ins on or off.
+  const mode = FRAMING.modeOf(c);
+  const pickFraming = C.select(FRAMING.framingsOf(c), mode, (v) => { FRAMING.choose(c, v, set); });
   host.appendChild(C.row('Framing', pickFraming));
+  const zoomRow = FRAMING.zoomRow(c, C);
+  if (zoomRow) host.appendChild(zoomRow);
   if (mode === 'fixed') {
     host.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center',
       (v) => set('cropAlign', v))));

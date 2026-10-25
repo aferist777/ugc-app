@@ -19,6 +19,29 @@ import { placeBySplit } from '../captions/split.js';
 export const FRAMINGS = [['fixed', 'fixed'], ['face', 'follow the face'], ['center', 'middle'],
                          ['whole', 'whole + blur'], ['bands', 'two faces']];
 
+// (phase V43, (ё13), (ё7а)) A part of fragmentation follows THE MOST ACTIVE (public/js/framing/active.js) - a 'face' record
+// marked `active`, planned on the server from the counted source, the words and the key moments. The switch shows it as its
+// own choice while the clip has it (another choice replaces it; Ctrl+Z brings it back); and its punch-ins have a switch of their
+// own - on or off, nothing to edit by hand.
+const ACTIVE = ['active', 'the most active'];
+/** The switch's value for the clip: 'active' for a part of fragmentation, else its record's mode, or fixed. */
+export const modeOf = (c) => (c && c.frame && c.frame.active ? 'active' : (c && c.frame && c.frame.mode) || 'fixed');
+/** The choices the switch offers this clip - the most active only on a clip that has it. */
+export const framingsOf = (c) => (c && c.frame && c.frame.active ? [ACTIVE, ...FRAMINGS] : FRAMINGS);
+/** (V43) The punch-ins' row - on / off - for a clip whose record has them, or null. `C` the inspector's controls. */
+export function zoomRow(c, C) {
+  const f = c && c.frame;
+  if (!f || !f.active || !Array.isArray(f.zooms) || !f.zooms.length) return null;
+  const sel = C.select([['on', 'on'], ['off', 'off']], f.noZoom ? 'off' : 'on', (v) => {
+    const next = { ...f };
+    if (v === 'off') next.noZoom = true; else delete next.noZoom;
+    _setFrame(c, next);
+  });
+  sel.title = f.zooms.length + (f.zooms.length === 1 ? ' punch-in' : ' punch-ins') + ' on its key moments, x' + f.zooms[0].z
+    + ' - the program places them; off: none';
+  return C.row('Punch-ins', sel);
+}
+
 const _wait = new Map();     // clip id -> { mode, frac, error }
 let _tick = null;
 
@@ -38,6 +61,14 @@ export function noteOf(c) {
   if (w) return w.frac > 0 ? `finding the faces... ${Math.round(w.frac * 100)}%` : 'finding the faces...';
   const f = c && c.frame;
   if (!f) return '';
+  if (f.active) {
+    // (V43) The most active: what it follows, and its punch-ins.
+    const shots = (f.shots || []).length;
+    const bands = (f.shots || []).filter((s) => s.kind === 'bands').length;
+    const z = (f.zooms || []).length;
+    return `the most active · ${shots} shot${shots === 1 ? '' : 's'}` + (bands ? ` · ${bands} as two bands` : '')
+      + (z ? ` · ${z} punch-in${z === 1 ? '' : 's'}${f.noZoom ? ' (off)' : ''}` : '');
+  }
   if (f.mode === 'face' || f.mode === 'bands') {
     const shots = (f.shots || []).length;
     const none = (f.shots || []).filter((s) => s.kind === 'whole').length;
@@ -75,6 +106,8 @@ function _setFrame(c, value) {
 export async function choose(c, mode) {
   _wait.delete(c.id);
   const shift = c.frame ? (+c.frame.shift || 0) : 0;
+  // (V43) The most active is planned on the server; chosen while the clip has it, nothing changes.
+  if (mode === 'active') { _say(); return; }
   if (mode === 'fixed') { _setFrame(c, null); _say(); return; }
   if (mode === 'center' || mode === 'whole') {
     const p = await _json('/api/media/probe?src=' + encodeURIComponent(c.src));

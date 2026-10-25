@@ -29,7 +29,7 @@ import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
 import { setPlayhead, setFormat } from './timeline-b.js';
 // (phase V33.2) A filled clip's window over time - the one answer the render reads too.
-import { isFramed, windowAt, windowW } from '../framing/path.js';
+import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 
 const STAGE = 'mv3-stage';
 
@@ -374,7 +374,14 @@ function _place(sw, sh, c, tFile) {
       ] };
     }
     const fw = sh * (W / H);
-    return { ...base, sx: Math.max(0, Math.min(sw - fw, win.x * sw - fw / 2)), sy: 0, sw: fw, sh };
+    const sx = Math.max(0, Math.min(sw - fw, win.x * sw - fw / 2));
+    // (phase V43) fragmentation's punch-in: the window scaled by z about its point (ax, ay) - framing/path.js zoomAt, the
+    // render's exprZoom (lib/mv3b-render.js framedChain) - a smaller rectangle of the film drawn over the whole frame.
+    const zm = zoomAt(c.frame, tFile);
+    if (zm.z > 1.0005) {
+      return { ...base, sx: sx + fw * zm.ax * (1 - 1 / zm.z), sy: sh * zm.ay * (1 - 1 / zm.z), sw: fw / zm.z, sh: sh / zm.z };
+    }
+    return { ...base, sx, sy: 0, sw: fw, sh };
   }
   const s = Math.max(W / sw, H / sh);
   const cw = Math.min(sw, W / s), ch = Math.min(sh, H / s);

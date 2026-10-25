@@ -40,7 +40,15 @@
        from the middle - absent: the whole frame) }
      x and y are the window's MIDDLE as fractions of the film's width and height.
    'center' and 'whole' need no faces: the middle (moved by `shift`), or the whole frame over its blur.
+   - (phase V43, the owner 2026-10-25, (ё2), (ё13)-(ё16)) THE MOST ACTIVE, fragmentation's only: plan(..., { active }) hands a
+     film counted with `active` (lib/faces.js) to active.js - the window goes to the action, the one who reacts, the one who
+     speaks, the largest face, a person; never a whole frame over a blur. Its record is a 'face' one, marked `active: 1`, and
+     may carry PUNCH-INS: `zooms` [{ t0, t1, z, ax, ay }] - the window scaled by z about the point (ax, ay) of it, in ZOOM_IN s
+     from t0, held to t1, back in ZOOM_OUT s; `noZoom` - the clip's switch says none ((ё7а)). zoomAt() is the preview's answer,
+     exprZoom() the render's; the bands are never zoomed.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import { planActive, ZOOM_IN, ZOOM_OUT } from './active.js';
 
 export const VERSION = 1;
 export const MODES = ['face', 'center', 'whole', 'bands'];
@@ -201,9 +209,17 @@ function _apart(a, b, width) {
  * w/h): a shot with no face shows a window of this shape from the middle over the blur, not the whole frame. Pure: the same
  * faces always give the same path.
  */
-export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0 } = {}) {
+export function plan(faces, { aspect = 9 / 16, mode = 'face', shift = 0, people = false, autoBands = true, wide = 0, active = null } = {}) {
+  // (V43) The most active: its own planner, on a film counted ten a second with its mouths, lips and things.
+  if (active && faces && faces.active) return planActive(faces, { aspect, shift, ...active });
   const md = MODES.includes(mode) ? mode : 'face';
-  const f = faces || {};
+  // (V43) A film counted ten a second for the most active is read here as five a second - the path it gives stays the one
+  // a five-a-second count gives.
+  let f = faces || {};
+  if (+f.fps >= 9.5 && Array.isArray(f.frames)) {
+    const half = (xs) => (Array.isArray(xs) ? xs.filter((_, i) => i % 2 === 0) : xs);
+    f = { ...f, fps: f.fps / 2, frames: half(f.frames), people: half(f.people) };
+  }
   const src = { w: +f.w || 0, h: +f.h || 0 };
   const rec = { v: VERSION, mode: md, shift: r3(clamp(+shift || 0, -1, 1)), src, shots: [] };
   // (V33.8) Kept only where it shows less than the whole frame - a film no wider than the window shows itself whole.
@@ -327,6 +343,24 @@ export function windowAt(frame, t, sw, sh, aspect) {
   return { kind: 'face', x: mid(_lerp(s.keys, t, 1)) };
 }
 
+// ── (phase V43) The punch-ins ───────────────────────────────────────────────
+const _ss = (u) => u * u * (3 - 2 * u);
+const _zooms = (frame) => (frame && !frame.noZoom && Array.isArray(frame.zooms) ? frame.zooms : []);
+/** Does the clip punch in at all (fragmentation's record with zooms, its switch on). */
+export const hasZooms = (frame) => _zooms(frame).length > 0;
+/**
+ * The punch-in at the FILE's second `t`: { z, ax, ay } - the window scaled by z about its point (ax, ay), fractions of the
+ * window; z 1 between them. Smooth in and out (smoothstep), the anchor held across one.
+ */
+export function zoomAt(frame, t) {
+  let z = 1, ax = 0.5, ay = 0.5;
+  for (const k of _zooms(frame)) {
+    const u = _ss(clamp((t - k.t0) / ZOOM_IN, 0, 1)) - _ss(clamp((t - k.t1) / ZOOM_OUT, 0, 1));
+    if (u > 0) { z += (k.z - 1) * u; ax = k.ax; ay = k.ay; }
+  }
+  return { z, ax, ay };
+}
+
 // ── The same, said to ffmpeg ────────────────────────────────────────────────
 // An expression in the FILE's time `T` (the render passes `(t+trimIn)`): a sum of pieces, each on for its own stretch -
 // flat, not nested, so a long path does not deepen ffmpeg's parser. `pick` takes a key's value.
@@ -386,6 +420,20 @@ export function exprFace(frame, T, sw, sh, aspect) {
   return `clip(${_sumOf(_spansOf(frame, 'face', (s) => s.keys, 1), T)}+${n4(shift)},${lo},${hi})`;
 }
 
+/**
+ * (phase V43) The punch-ins as ffmpeg expressions in `T` (the file's time): { Z, AX, AY } - flat sums, as zoomAt reads them - or
+ * null when the clip has none. lib/mv3b-render.js framedChain scales the window by Z frame by frame and cuts the frame back out
+ * about (AX, AY) - measured in block 0 against zoompan and perspective: under a pixel off, and the frames' own times kept.
+ */
+export function exprZoom(frame, T) {
+  const zs = _zooms(frame);
+  if (!zs.length) return null;
+  const ssE = (u) => `(${u})*(${u})*(3-2*(${u}))`;
+  const Z = '(1' + zs.map((k) => `+${n4(k.z - 1)}*(${ssE(`clip((${T}-${n4(k.t0)})/${ZOOM_IN},0,1)`)}-${ssE(`clip((${T}-${n4(k.t1)})/${ZOOM_OUT},0,1)`)})`).join('') + ')';
+  const A = (key) => '(0.5' + zs.map((k) => `+between(${T},${n4(k.t0)},${n4(k.t1 + ZOOM_OUT)})*${n4(k[key] - 0.5)}`).join('') + ')';
+  return { Z, AX: A('ax'), AY: A('ay') };
+}
+
 /** The same for band 1 or 2: { x, y } expressions in `T`, edges included. */
 export function exprBand(frame, which, T, sw, sh, aspect) {
   const bh = clamp(+(frame && frame.band) || 0.6, 0.2, 1);
@@ -410,6 +458,15 @@ export function normalize(frame) {
   if (+frame.band > 0) out.band = r3(clamp(+frame.band, 0.2, 1));
   if (Number.isFinite(+frame.found)) out.found = r2(clamp(+frame.found, 0, 1));
   if (+frame.wide > 0) out.wide = r3(clamp(+frame.wide, 0.5, 4));
+  // (V43) The most active, its punch-ins and the clip's switch for them.
+  if (frame.active) out.active = 1;
+  if (Array.isArray(frame.zooms)) {
+    const zs = frame.zooms.filter((k) => k && [k.t0, k.t1, k.z, k.ax, k.ay].every((v) => Number.isFinite(+v)) && +k.t1 > +k.t0)
+      .slice(0, 1000).map((k) => ({ t0: r3(+k.t0), t1: r3(+k.t1), z: r3(clamp(+k.z, 1, 2)), ax: r3(clamp(+k.ax, 0, 1)), ay: r3(clamp(+k.ay, 0, 1)) }))
+      .sort((a, b) => a.t0 - b.t0);
+    if (zs.length) out.zooms = zs;
+  }
+  if (frame.noZoom) out.noZoom = true;
   for (const s of (Array.isArray(frame.shots) ? frame.shots : []).slice(0, 2000)) {
     if (!s || !Number.isFinite(+s.t0) || !Number.isFinite(+s.t1) || !(+s.t1 > +s.t0)) continue;
     const kind = ['face', 'whole', 'bands'].includes(s.kind) ? s.kind : 'face';
