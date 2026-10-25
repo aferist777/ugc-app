@@ -2502,13 +2502,14 @@ export function nextCaption(clipId) {
  * makes a line wider, changes both the setting and the pages it cuts, and two mutations would be two
  * steps to undo for one thing the person did once. Returns the pages laid, or null.
  */
-export function setSubsStyle(trackId, patch, cut) {
+export function setSubsStyle(trackId, patch, cut, after) {
   let pages = null;
   Store.mutate(tl => {
     const t = _words(tl, trackId);
     if (!t) return;
     t.style = Object.assign({}, t.style || {}, patch || {});
     if (cut && t.kind === 'subs') pages = _recutLane(tl, t);
+    if (typeof after === 'function') after(t, tl);   // (phase V49, S3) runs inside the same mutation - one undo step
   });
   return pages;
 }
