@@ -17,6 +17,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const MARGIN = 300;               // px drawn beyond the visible edge either side, so a short scroll shows no blank
+const FAINT = 0.4;                // (V49) a clip's own wave where it lies over an earlier sound of its lane
 const _peaks = new Map();         // src -> { data: Uint8Array|null, rate, failed }
 const _subs = [];
 
@@ -61,6 +62,12 @@ function _draw(cv, c, z, x0, x1) {
   const rev = !!c.reversed;
   const mid = H / 2;
   ctx.fillStyle = getComputedStyle(cv).color || '#7fd1a8';
+  // (phase V49, (пр2) а) Where the clip lies over an earlier sound of its lane (timeline-b.js _overlaps: seconds from its
+  // start) it is see-through, and its own wave is drawn faint there, so the wave under it reads.
+  const over = (cv.parentElement && cv.parentElement.__over) || null;
+  const faint = (x) => !!over && over.some(([a, b]) => x / z >= a && x / z < b);
+  let dim = false;
+  ctx.globalAlpha = 1;
   // The file's time at a pixel of the clip (in css px from the clip's left edge).
   const fileAt = (x) => {
     const t = Math.max(0, Math.min(dur, x / z));
@@ -68,6 +75,7 @@ function _draw(cv, c, z, x0, x1) {
   };
   for (let px = 0; px < W; px++) {
     const xa = x0 + px / dpr, xb = x0 + (px + 1) / dpr;
+    if (over) { const f = faint(xa); if (f !== dim) { dim = f; ctx.globalAlpha = f ? FAINT : 1; } }
     let a = fileAt(xa), b = fileAt(xb);
     if (a > b) { const s = a; a = b; b = s; }
     let i0 = Math.floor(a * rate), i1 = Math.max(i0 + 1, Math.ceil(b * rate));

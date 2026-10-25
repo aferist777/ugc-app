@@ -37,6 +37,8 @@ const r2 = (v) => Math.round(v * 100) / 100;
 const EPS = 1e-6;
 /** The shortest stretch worth cutting. */
 export const MIN_CUT = 0.05;
+/** The shortest clip a timeline keeps (lib/timeline-shape.js): a save brings a shorter one back this long. */
+const MIN_DUR = 0.02;
 
 const _end = (c) => (+c.start || 0) + (+c.dur || 0);
 const _words = (t) => t && (t.kind === 'subs' || t.kind === 'text');
@@ -155,7 +157,10 @@ export function rippleCut(tl, a, b, opts) {
       fadeAt(t, c, 'fadeIn');
       out.push(c);
     }
-    t.clips = out;
+    // (phase V49) A piece of a film, a sound or a picture the cut left shorter than the shortest a timeline keeps (0.02 s,
+    // lib/timeline-shape.js) goes: the save would bring it back that long, over the piece after it. Not a talking head's
+    // line (`frag`): its pieces are read into the line on the save (lib/line-cuts.js), and a line is never taken off here.
+    t.clips = _words(t) ? out : out.filter((c) => +c.dur >= MIN_DUR - EPS || Number(c.frag) > 0);
     if (t.kind === 'audio') t.clips.sort((x, y) => x.start - y.start);
   }
 }

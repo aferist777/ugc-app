@@ -920,10 +920,13 @@ function _moveDrag(e) {
     // between rather than treated as the same number - at 2x, dragging the front in by a
     // second eats two seconds of film.
     const sp = _drag.speed || 1;
+    // (phase V49) The shortest a trim leaves a clip is 0.1 s - or the clip's own length when it is shorter already (a piece a
+    // cut left): grabbing the edge of a piece of 0.05 s made it 0.1 s, and it ran over the piece beside it.
+    const minD = Math.min(0.1, _drag.dur0);
     if (_drag.edge === 'in') {
       // A caption has no source behind its front edge: it may be pulled back as far as the start.
       const lo = _drag.words ? -_drag.start0 : -_drag.trimIn0 / sp;
-      const hi = _drag.dur0 - 0.1;
+      const hi = _drag.dur0 - minD;
       const d = Math.max(lo, Math.min(hi, dx));
       _drag.start = Math.max(0, Math.round((_drag.start0 + d) * 100) / 100);
       _drag.dur = Math.round((_drag.dur0 - d) * 100) / 100;
@@ -931,7 +934,7 @@ function _moveDrag(e) {
       _drag.el.style.left = (_drag.start * z) + 'px';
     } else {
       const hi = room === Infinity ? Infinity : (room - _drag.trimIn0) / sp;
-      const d = Math.max(0.1 - _drag.dur0, Math.min(hi - _drag.dur0, dx));
+      const d = Math.max(minD - _drag.dur0, Math.min(hi - _drag.dur0, dx));
       _drag.dur = Math.round((_drag.dur0 + d) * 100) / 100;
     }
     _drag.el.style.width = Math.max(2, _drag.dur * z) + 'px';
@@ -1499,7 +1502,8 @@ function _lane(t) {
 
   const lane = document.createElement('div');
   lane.className = 'mv3b-lane';
-  for (const c of (t.clips || [])) lane.appendChild(_clipEl(t, c));
+  const over = t.kind === 'audio' ? _overlaps(t.clips || []) : null;
+  for (const c of (t.clips || [])) lane.appendChild(_clipEl(t, c, over && over.get(c.id)));
   // Selection survives the rebuild: it is held by id for exactly this reason.
   
   _wireLane(lane, t);
@@ -1508,7 +1512,34 @@ function _lane(t) {
   return row;
 }
 
-function _clipEl(t, c) {
+// (phase V49, the owner's (пр2) а: "наложенная сверху часть была прозрачной, чтобы было видно звуковую волну на нижней
+// дорожке") WHERE A SOUND LIES OVER AN EARLIER ONE ON ITS LANE: a clip is drawn over every clip before it in the lane's list
+// (sorted by start), so for each clip the stretches it shares with any of those - in seconds from its own start, joined.
+// Over them it is see-through and its own wave faint (tl-wave.js), so the wave under it shows; the rest of it as before.
+function _overlaps(clips) {
+  const out = new Map();
+  for (let i = 1; i < clips.length; i++) {
+    const c = clips[i];
+    const s = +c.start || 0, e = s + (+c.dur || 0);
+    const xs = [];
+    for (let j = 0; j < i; j++) {
+      const o = clips[j];
+      const a = Math.max(s, +o.start || 0), b = Math.min(e, (+o.start || 0) + (+o.dur || 0));
+      if (b - a > 0.005) xs.push([a - s, b - s]);
+    }
+    if (!xs.length) continue;
+    xs.sort((x, y) => x[0] - y[0]);
+    const joined = [];
+    for (const x of xs) {
+      const last = joined[joined.length - 1];
+      if (last && x[0] <= last[1]) last[1] = Math.max(last[1], x[1]); else joined.push(x.slice());
+    }
+    out.set(c.id, joined);
+  }
+  return out;
+}
+
+function _clipEl(t, c, over) {
   const el = document.createElement('div');
   el.className = 'mv3b-clip is-' + t.kind + (c.pairId ? ' is-paired' : '') +
                  (t.kind === 'audio' && !(+c.volume) ? ' is-muted' : '') +
@@ -1541,6 +1572,22 @@ function _clipEl(t, c) {
     wave.className = 'mv3b-wave';
     el.appendChild(wave);
     el.__clip = c;
+  }
+  // (phase V49, (пр2) а) Over an earlier sound of its lane this one is see-through - its fill stops there (_overlaps).
+  const d = +c.dur || 0;
+  if (over && over.length && d > 0 && !Store.isGone(c)) {
+    const pc = (v) => (Math.max(0, Math.min(d, v)) / d * 100).toFixed(3) + '%';
+    const stops = [];
+    let at = 0;
+    for (const [a, b] of over) {
+      stops.push(`var(--surface-2) ${pc(at)} ${pc(a)}`, `transparent ${pc(a)} ${pc(b)}`);
+      at = b;
+    }
+    stops.push(`var(--surface-2) ${pc(at)} 100%`);
+    el.style.backgroundColor = 'transparent';
+    el.style.backgroundImage = `linear-gradient(90deg, ${stops.join(', ')})`;
+    el.classList.add('has-over');
+    el.__over = over;
   }
   const cap = document.createElement('span');
   cap.className = 'mv3b-clip-t';
@@ -2029,9 +2076,14 @@ const PAIRED = new Set(['dur', 'speed', 'reversed']);
 
 const _r2 = (v) => Math.round(v * 100) / 100;
 
+// (phase V49) No clip is made LONGER by the floor of a length: a piece a cut left shorter than 0.1 s stays its length (the
+// timeline keeps clips down to 0.02 s, lib/timeline-shape.js) - at 0.1 it ran over the piece after it, which the render
+// and the preview then played twice.
+const _minDur = (c) => Math.max(0.02, Math.min(0.1, +c.dur || 0.1));
+
 function _write(c, key, value) {
   if (key === 'volume') { c.volume = Math.max(0, Math.min(4, +value || 0)); return; }
-  if (key === 'dur') { c.dur = Math.max(0.1, _r2(+value || 0)); return; }
+  if (key === 'dur') { c.dur = Math.max(_minDur(c), _r2(+value || 0)); return; }
   if (key === 'speed') {
     // Same content, faster = shorter. What stays put is the SLICE OF SOURCE in play; what
     // the number changes is how long it takes to get through it. Nothing is clamped against
@@ -2040,7 +2092,7 @@ function _write(c, key, value) {
     const sp = Math.max(0.25, Math.min(4, +value || 1));
     const srcLen = (+c.dur || 0) * (+c.speed || 1);
     c.speed = sp;
-    c.dur = Math.max(0.1, _r2(srcLen / sp));
+    c.dur = Math.max(0.02, _r2(srcLen / sp));
     return;
   }
   if (key === 'reversed') { c.reversed = !!value; return; }
