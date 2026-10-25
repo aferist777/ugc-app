@@ -914,7 +914,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    Its own class prefix throughout: it was written beside the talking-head timeline, which drew
    into the same panel, and the names stayed when that editor went.
    ════════════════════════════════════════════════════════════════════════════ */
-/* A column, so the words zone can be pushed to the floor of it. */
+/* A column, so the words zone can be pushed to the floor of it. Its width is set by timeline-b.js (phase V49.1: the film
+   and its margin - every row, line and background runs that long, and the frozen names stay at the left at any scroll);
+   never narrower than the box. */
 .mv3b-inner{position:relative; min-width:100%; display:flex; flex-direction:column; min-height:100%}
 .mv3b-zone{display:flex; flex-direction:column}
 /* THE FLOOR. Subtitles and the text lanes above them sit at the bottom of the timeline
@@ -923,14 +925,22 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3b-zone.is-subs{margin-top:auto}
 /* (phase V41, the owner's (о10)) AND IT STAYS IN SIGHT: while it holds lines, the words block - the subtitles and the text
    lanes above them - sticks to the bottom of the timeline's window, over the lanes scrolling under it. Over the clips and the
-   frozen names of those lanes (z-index 2-3), under the playhead (6); a stretch drawn to cut has its own copy inside it. */
+   frozen names of those lanes (z-index 2-3) and the playhead (1); the playhead, a stretch drawn to cut and the glow of
+   silence have their own copies inside it. */
 .mv3b-zone.is-subs.has-words{
   position:sticky; bottom:0; z-index:4; background:var(--bg);
   box-shadow:0 -1px 0 var(--border), 0 -6px 8px -6px oklch(0 0 0 / .55);
 }
 /* The seam. A real element, not a border: the pairing is read off distance from it, so it
    has to be findable rather than painted on. */
-.mv3b-seam{height:2px; background:var(--border); position:sticky; left:0}
+.mv3b-seam{height:2px; background:var(--border)}
+/* (phase V49.1) Its piece under the frozen names stays there and covers the playhead's line going under them. The seam
+   itself is not sticky any more (it runs the content's whole width now): a sticky element is a layer of its own, and the
+   piece could not rise above the line from inside it. */
+.mv3b-seam::before{
+  content:''; display:block; position:sticky; left:0; z-index:3; width:calc(20px + var(--mv3-lbl-w)); height:2px;
+  background:var(--border);
+}
 
 .mv3b-row{display:flex; align-items:stretch; height:24px; border-bottom:1px solid var(--border-soft)}
 .mv3b-row.is-subs{border-top:1px solid var(--border)}
@@ -963,9 +973,15 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3b-lbl:hover{color:var(--ink)}
 .mv3b-row.is-selT .mv3b-lbl{
   color:var(--ink);
-  box-shadow:inset 2px 0 0 var(--primary);
+  box-shadow:inset 2px 0 0 var(--primary), 0 1px 0 var(--border-soft);
   background:oklch(from var(--primary) l c h / .10);
 }
+/* (phase V49.1) THE ROW'S LINE UNDER THE FROZEN CELLS is drawn by the cells themselves (the row's border lies outside them):
+   the playhead going under the names showed through it as a dot on every line. */
+.mv3b-box, .mv3b-row:not(.is-selT) > .mv3b-lbl{box-shadow:0 1px 0 var(--border-soft)}
+.mv3b-row.is-ruler > .mv3b-box, .mv3b-row.is-ruler > .mv3b-lbl{box-shadow:0 1px 0 var(--border)}
+.mv3b-row.is-subs > .mv3b-box, .mv3b-row.is-subs:not(.is-selT) > .mv3b-lbl{box-shadow:0 1px 0 var(--border-soft), 0 -1px 0 var(--border)}
+.mv3b-row.is-subs.is-selT > .mv3b-lbl{box-shadow:inset 2px 0 0 var(--primary), 0 1px 0 var(--border-soft), 0 -1px 0 var(--border)}
 /* The label is a row now: the name, and a link mark when this lane has a partner. The mark
    earns its place only when the mirror cannot be trusted - which is exactly when a lane has
    lost its opposite number - so it is quiet rather than decorative. */
@@ -1020,7 +1036,7 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
 /* Ruler and playhead. The row is shorter than a lane - it carries numbers, not clips. */
 .mv3b-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}
 /* (phase V41) THE RULER STAYS ON TOP while the lanes scroll under it - with the playhead's tip and the label of a stretch
-   drawn to cut, which live in it. Over the lanes and the words block (4), under the playhead's line (6). */
+   drawn to cut, which live in it. Over the lanes, the playhead's line and the words block (4). */
 .mv3b-row.is-ruler{position:sticky; top:0; z-index:5; background:var(--bg)}
 .mv3b-ruler{cursor:text; position:relative}
 .mv3b-tick{
@@ -1029,16 +1045,22 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
   font:9px/1.3 var(--font); color:var(--muted); white-space:nowrap; user-select:none;
 }
 /* One line over the whole stack rather than a mark per lane: it is one moment, and a mark
-   per lane makes it possible for them to disagree. */
+   per lane makes it possible for them to disagree. (phase V49.1) Over the clips and UNDER the frozen names (2-3): scrolled
+   past, it goes behind them. The ruler (5) and the words block stuck to the floor (4) cover it - the ruler carries the tip
+   and its stem, the words block a copy of the line (timeline-b.js _build). */
 .mv3b-head{
-  position:absolute; top:0; bottom:0; width:1px; z-index:6;
+  position:absolute; top:0; bottom:0; width:1px; z-index:1;
   background:var(--primary); pointer-events:none;
 }
-/* Its tip is drawn in the ruler (phase V41), so it stays in sight with it. */
+/* Its tip is drawn in the ruler (phase V41), so it stays in sight with it - under the ruler's own frozen cell. */
 .mv3b-head-tip{
   position:absolute; top:0; width:0; height:0; margin-left:-3.5px; pointer-events:none;
   border-left:3.5px solid transparent; border-right:3.5px solid transparent;
   border-top:6px solid var(--primary);
+}
+/* The line's piece across the ruler, from the tip down (phase V49.1): the ruler covers the line itself. */
+.mv3b-head-tip::after{
+  content:''; position:absolute; left:0; top:-6px; width:1px; height:18px; background:var(--primary);
 }
 body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3b-clip-t{
@@ -1110,7 +1132,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 /* The cross on a clip. Only on hover: a lane of clips each wearing a permanent delete button
    is a row of invitations to lose work. */
 .mv3b-clipx{
-  position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; z-index:3;
+  position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; z-index:1;
   display:grid; place-items:center; cursor:pointer; opacity:0;
   background:oklch(0 0 0 / .55); border:0; border-radius:var(--r-xs);
   color:#fff; font:11px/1 var(--font); transition:opacity .12s var(--ease);

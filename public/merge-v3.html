@@ -216,8 +216,9 @@
           <span class="mv3-tl-clock" id="mv3-tl-clock">0:00.0</span>
           <button class="mv3-iconbtn is-text" id="mv3-fit" type="button"
                   title="Fit the whole timeline into view">FIT</button>
-          <!-- px/sec, the same scale and range the old editor used. -->
-          <label class="mv3-tl-zoom" title="Timeline zoom (px/sec)">
+          <!-- px/sec, the same scale and range the old editor used. Alt + wheel over the timeline moves it too, toward the
+               playhead (phase V49.1, js/merge-v3/timeline-b.js _onWheel). -->
+          <label class="mv3-tl-zoom" title="Timeline zoom (px/sec) - or Alt + wheel over the timeline, toward the playhead">
             <span>zoom</span>
             <input type="range" id="mv3-zoom" min="1" max="240" step="1" value="60">
             <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>

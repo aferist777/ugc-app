@@ -731,7 +731,8 @@ function _paintRange() {
   for (const p of [inner, words]) {
     if (!p) continue;
     let el = p.querySelector(':scope > .mv3b-range');
-    if (!el) { el = document.createElement('div'); el.className = 'mv3b-range'; p.appendChild(el); }
+    // Under the playhead's line, which shares its layer (phase V49.1): put before it.
+    if (!el) { el = document.createElement('div'); el.className = 'mv3b-range'; p.insertBefore(el, p.querySelector(':scope > .mv3b-head')); }
     el.style.left = (GUTTER + _range.a * z) + 'px';
     el.style.width = Math.max(1, (_range.b - _range.a) * z) + 'px';
   }
@@ -1648,7 +1649,54 @@ function _fmtT(v) {
   return m + ':' + (s < 10 ? '0' : '') + (s % 1 ? s.toFixed(1) : s.toFixed(0));
 }
 
-function _ruler(dur) {
+// The marks of the ruler, from 0 to `upTo` seconds - drawn again when the lanes widen (_widen).
+function _ticks(lane, upTo) {
+  lane.querySelectorAll(':scope > .mv3b-tick').forEach(el => el.remove());
+  const z = _zoom(), st = _step(z);
+  const frag = document.createDocumentFragment();
+  for (let t = 0; t <= upTo; t += st) {
+    const m = document.createElement('span');
+    m.className = 'mv3b-tick';
+    m.style.left = (t * z) + 'px';
+    m.textContent = _fmtT(Math.round(t * 10) / 10);
+    frag.appendChild(m);
+  }
+  lane.insertBefore(frag, lane.firstChild);
+}
+
+// HOW WIDE THE LANES ARE (phase V49.1, the owner's report: "названия дорожек пропадают при прокрутке вправо"). Clips and
+// marks lie absolute, so the content was only ever as wide as the box it is seen in - and a sticky name cannot leave its
+// row: one box-width to the right it slid away with it, and so did the rows' lines, the seam, the ruler's and the words
+// block's backgrounds, the drop, the right-click and the band. So the content is given its width: the film (at least ten
+// seconds, as the ruler counts) and a mark more, room for the end to come to the middle of the box, and never narrower
+// than the box. In px of lane, right of the frozen names.
+function _lanesWidth(end) {
+  const host = _host();
+  const z = _zoom(), st = _step(z);
+  const strip = Math.max(0, (host ? host.clientWidth : 0) - GUTTER);
+  return Math.ceil(Math.max((Math.max(end, 10) + st) * z + 60, end * z + strip / 2, strip));
+}
+
+const _endOf = (tracks) => {
+  let end = 0;
+  for (const t of tracks || []) for (const c of (t.clips || [])) end = Math.max(end, (+c.start) + (+c.dur));
+  return end;
+};
+
+// The box was resized (a sash, the window): the width and the ruler's marks follow - not the whole build.
+let _builtW = -1;
+function _widen() {
+  const host = _host();
+  const inner = host && host.querySelector('.mv3b-inner');
+  if (!_on || !inner || host.clientWidth === _builtW) return;
+  _builtW = host.clientWidth;
+  const w = _lanesWidth(_endOf(((Store.timeline() || {}).tracks) || []));
+  inner.style.width = (GUTTER + w) + 'px';
+  const lane = inner.querySelector('.mv3b-ruler');
+  if (lane) _ticks(lane, w / _zoom());
+}
+
+function _ruler(upTo) {
   const row = document.createElement('div');
   row.className = 'mv3b-row is-ruler';
   const box = document.createElement('div');
@@ -1659,14 +1707,8 @@ function _ruler(dur) {
 
   const lane = document.createElement('div');
   lane.className = 'mv3b-lane mv3b-ruler';
-  const z = _zoom(), st = _step(z);
-  for (let t = 0; t <= dur + st; t += st) {
-    const m = document.createElement('span');
-    m.className = 'mv3b-tick';
-    m.style.left = (t * z) + 'px';
-    m.textContent = _fmtT(Math.round(t * 10) / 10);
-    lane.appendChild(m);
-  }
+  const z = _zoom();
+  _ticks(lane, upTo);
   // Pressing the ruler moves the playhead - the same gesture as every other editor - and HELD, it scrubs: the playhead
   // and the picture follow the pointer until it is let go. The ruler touches no pick; bare lane lets it go (_beginBand).
   lane.addEventListener('mousedown', (e) => {
@@ -1683,8 +1725,10 @@ function _ruler(dur) {
 }
 
 // The playhead is one element over the whole stack, not a mark per lane: it is one moment,
-// and drawing it per lane makes it possible for them to disagree.
-function _head(dur) {
+// and drawing it per lane makes it possible for them to disagree. (phase V49.1) It goes UNDER the frozen names, not over
+// them: over the clips, under the names (merge-v3.css) - so the ruler and the words block stuck to the floor, which cover
+// the lanes, each carry their own piece of it (the tip's stem; a copy, as a stretch drawn to cut has one), placed with it.
+function _head() {
   const el = document.createElement('div');
   el.className = 'mv3b-head';
   el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
@@ -1717,8 +1761,7 @@ function _placeHead() {
   const host = _host();
   if (!host) return;
   const z = _zoom();
-  const el = host.querySelector('.mv3b-head');
-  if (el) el.style.left = (GUTTER + _playhead * z) + 'px';
+  for (const el of host.querySelectorAll('.mv3b-head')) el.style.left = (GUTTER + _playhead * z) + 'px';
   const tip = host.querySelector('.mv3b-head-tip');
   if (tip) tip.style.left = (_playhead * z) + 'px';
 }
@@ -1748,6 +1791,58 @@ function _centreOnPlayhead() {
   const strip = host.clientWidth - GUTTER;
   if (strip <= 0) return;
   host.scrollLeft = Math.max(0, _playhead * _zoom() - strip / 2);
+}
+
+// ── ALT + WHEEL ZOOMS (phase V49.1, the owner's (пр27) а) ───────────────────
+// Over the timeline, Alt held: a notch of the wheel is x1.2 closer (up) or farther (down), in the slider's range and in
+// whole px/sec, and the PLAYHEAD STAYS WHERE IT IS ON SCREEN - the slider's own rule held still instead of centred. A
+// playhead off screen is put in the middle, as the slider does. A touchpad's small deltas add up to notches; whatever
+// arrives within one frame is applied once (each change rebuilds the lanes). The slider, its number and the kept value
+// follow: the slider is set and told (bar.js keeps it, the input listener below rebuilds), then the scroll is put back.
+// Plain wheel and Shift + wheel are the browser's, as before; Alt + Shift is Windows' layout switch and is left alone.
+const NOTCH_PX = 100;       // one notch of a mouse wheel, in the pixels Chromium reports
+let _wheelAcc = 0;          // notches gathered since the last frame (+ = farther)
+let _wheelAsked = false;
+
+function _onWheel(e) {
+  if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return;
+  if (!_on || locked() || !Store.hasProject()) return;
+  const dy = +e.deltaY || 0;
+  if (!dy) return;
+  e.preventDefault();
+  _wheelAcc += e.deltaMode === 1 ? dy / 3 : e.deltaMode === 2 ? dy : dy / NOTCH_PX;
+  if (_wheelAsked) return;
+  _wheelAsked = true;
+  // A frame, with a timer behind it for a window that is not being drawn (rAF waits for one that is).
+  const go = () => { if (!_wheelAsked) return; _wheelAsked = false; _wheelZoom(); };
+  requestAnimationFrame(go);
+  setTimeout(go, 50);
+}
+
+function _wheelZoom() {
+  const host = _host();
+  const z = document.getElementById('mv3-zoom');
+  if (!host || !z || !_on) { _wheelAcc = 0; return; }
+  const acc = _wheelAcc;
+  const lo = +z.min || 1, hi = +z.max || 240;
+  const was = _zoom();
+  let next = Math.round(was * Math.pow(1.2, -acc));
+  // At a low zoom x1.2 rounds back to the same whole number: a full notch still moves it by one.
+  if (next === was && Math.abs(acc) >= 1) next = was - Math.sign(acc);
+  next = Math.max(lo, Math.min(hi, next));
+  if (next === was) {
+    // Less than a notch from a touchpad: kept until it adds up. At the end of the range: nothing to keep.
+    if (Math.abs(acc) >= 1 || (acc > 0 ? was <= lo : was >= hi)) _wheelAcc = 0;
+    return;
+  }
+  _wheelAcc = 0;
+  // Where the playhead is on screen now: from the lanes' left edge, inside the strip right of the frozen names.
+  const strip = host.clientWidth - GUTTER;
+  const off = _playhead * was - host.scrollLeft;
+  const seen = strip > 0 && off >= 0 && off <= strip;
+  z.value = String(next);
+  z.dispatchEvent(new Event('input'));       // the number, the kept value, the lanes rebuilt and the playhead centred
+  if (seen) host.scrollLeft = Math.max(0, _playhead * next - off);
 }
 
 export const playhead = () => _playhead;
@@ -1937,9 +2032,11 @@ function _build() {
 
   const inner = document.createElement('div');
   inner.className = 'mv3b-inner';
-  let end = 0;
-  for (const t of tracks) for (const c of (t.clips || [])) end = Math.max(end, (+c.start) + (+c.dur));
-  inner.appendChild(_ruler(Math.max(end, 10)));
+  // (phase V49.1) The content as wide as the film and its margin (_lanesWidth), the ruler's marks across all of it.
+  const lanesW = _lanesWidth(_endOf(tracks));
+  inner.style.width = (GUTTER + lanesW) + 'px';
+  _builtW = host.clientWidth;
+  inner.appendChild(_ruler(lanesW / _zoom()));
 
   // The video block, then the audio block, then subtitles. Read off the track kinds
   // rather than off positions in the list, so a list that arrives in an odd order still
@@ -1977,6 +2074,8 @@ function _build() {
   if (subs) {
     if (tracks.some(t => (t.kind === 'subs' || t.kind === 'text') && (t.clips || []).length)) subs.classList.add('has-words');
     inner.appendChild(subs);
+    // (phase V49.1) Stuck to the floor it covers the lanes and the playhead under it: its own copy of the line.
+    if (subs.classList.contains('has-words')) subs.appendChild(_head());
   }
 
   inner.appendChild(_head());
@@ -2806,13 +2905,17 @@ export function initTimelineB() {
   const host = _host();
   if (host) {
     host.addEventListener('scroll', _wavesSoon, { passive: true });
-    if (window.ResizeObserver) new ResizeObserver(_wavesSoon).observe(host);
+    // (phase V49.1) A wider box: the lanes and the ruler reach across it (_widen), then the waves.
+    // Out of the observer's own turn: a width set inside it may resize the box again (a scroll bar), a loop it reports.
+    if (window.ResizeObserver) new ResizeObserver(() => { setTimeout(_widen, 0); _wavesSoon(); }).observe(host);
     // (phase V41) A press on the timeline is not in the field last used (the zoom slider, a select of the format, a text of
     // the inspector) - every press here keeps the focus where it was (preventDefault, so a drag selects no text), and
     // Delete then counted as typing in that field. Let go of at the release, once the gesture's own work is done.
     host.addEventListener('mousedown', () => { _pressIn = true; }, true);
     // (phase V41) A drop above the top video lane or below the bottom audio one makes its lane.
     _wireGhost(host);
+    // (phase V49.1, (пр27)) Alt + wheel zooms toward the playhead. Not passive: the page's own scroll is held back.
+    host.addEventListener('wheel', _onWheel, { passive: false });
   }
   onPeaks(_wavesSoon);
   import('./preview-b.js').then(P => { _P = P; }).catch(() => {});
