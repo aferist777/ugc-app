@@ -162,6 +162,11 @@
 }
 .mv3-cap-tab:hover{ color:var(--ink) }
 .mv3-cap-tab.is-on{ color:var(--ink); background:var(--bg); border-color:var(--border-soft) }
+.mv3-cap-tab:disabled{ opacity:.4; cursor:default }
+/* The highlights popup's two tabs over its pickers (phase V49, (пр26)). */
+.mv3-hlp-captabs{ padding:6px 0 0; margin-top:5px }
+.mv3-hlp-captabs + .mv3-hlp-style, .mv3-hlp-anim{ margin-top:0 }
+.mv3-hlp-anim .mv3-cap-note{ margin:0 0 6px }
 .mv3-cap-pane{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column }
 .mv3-cap-pane[hidden]{ display:none }
 

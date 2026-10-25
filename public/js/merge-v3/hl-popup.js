@@ -14,7 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
-import { stylePicker, presetName, BY_VIDEO, styleFor, keepFor } from './hl-style.js';
+import { stylePicker, animPicker, presetName, pairName, BY_VIDEO, styleFor, keepFor } from './hl-style.js';
 import { musicPicker } from './hl-music.js';
 
 const LS_ASK = 'mv3_hl_ask_v1';           // the length and the count chosen last
@@ -33,6 +33,9 @@ const _clock = (s) => {
 const _usd = (v) => (v == null ? '' : v < 0.01 ? '<1¢' : v < 1 ? Math.round(v * 100) + '¢' : '$' + v.toFixed(2));
 
 let _win = null;
+// (phase V49, the owner's (пр26)) What was chosen for the captions - the styles, the animations and the tab - kept for the next popup.
+const LS_PICKS = 'mv3_hl_caption_picks_v1';
+const _picks = () => { try { return JSON.parse(localStorage.getItem(LS_PICKS) || '{}') || {}; } catch (e) { return {}; } };
 
 export function isOpen() { return !!_win; }
 export function closePopup() {
@@ -40,6 +43,7 @@ export function closePopup() {
   const w = _win;
   _win = null;
   try { w.picker.stop(); } catch (e) { /* gone */ }
+  try { if (w.anim) w.anim.stop(); } catch (e) { /* gone */ }
   try { if (w.music) w.music.stop(); } catch (e) { /* gone */ }
   w.ov.remove();
   Layers.close(w.layer);
@@ -83,7 +87,8 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     count: counts.includes(+ask.count) ? +ask.count : (counts.includes(+remembered.count) ? +remembered.count : 5),
     // (phase V40, the owner's (о4)) No "title on top" box any more: a new fragment has no title, the card's "add title" puts one.
     kind: kind0,
-    style: '', price: null, busy: false, said: '', err: false,
+    // (phase V49) The styles chosen - one, or several with Shift (пр25) - and the animations (пр26); `style` the first of them.
+    style: '', styles: [], anims: [], capTab: 'presets', price: null, busy: false, said: '', err: false,
     // (phase V33.8, H3) The tracks of Music → highlights ticked for the background.
     music: [],
     // (phase V43, (ё18)) The video's sound tracks (a file or a source with more than one) and the one chosen.
@@ -204,7 +209,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     price();
     if (!_win || !_win.picker) return;
     // (V33.8, (в1)) "By the video" is auto's: another kind takes the style kept for it.
-    if (st.style === BY_VIDEO && st.kind !== 'auto') { st.style = styleFor(st.kind); _win.picker.set(st.style); paint(); }
+    if (st.style === BY_VIDEO && st.kind !== 'auto') { st.style = styleFor(st.kind); st.styles = [st.style]; _win.picker.set(st.styles); keepPicks(); paint(); }
     _win.picker.recommend(st.kind);
   });
   const kw = _el('label', 'mv3-hlp-lab', 'video kind');
@@ -230,12 +235,52 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
   const capHdr = _el('div', 'mv3-x-hdr', 'captions - choose a style');
   body.appendChild(capHdr);
   const capBox = _el('div', 'mv3-hlp-style is-missing');
-  const capSaid = _el('div', 'mv3-hlp-style-said', 'Choose the style of the captions - every fragment gets it; one or several can be given another later.');
+  const capSaid = _el('div', 'mv3-hlp-style-said', 'Choose the style of the captions - every fragment gets it; Shift picks several, each page one of them. '
+    + 'One or several fragments can be given another later.');
   body.appendChild(capSaid);
+  // (phase V49, the owner's (пр26)) TWO TABS: the presets and the animations - the second open once a style is chosen.
+  const capTabs = _el('div', 'mv3-cap-tabs mv3-hlp-captabs');
+  const tabBtn = (id, label, title) => {
+    const b = _el('button', 'mv3-cap-tab', label);
+    b.type = 'button';
+    b.dataset.tab = id;
+    b.title = title;
+    b.addEventListener('click', () => { if (!b.disabled) { st.capTab = id; keepPicks(); paint(); } });
+    capTabs.appendChild(b);
+    return b;
+  };
+  tabBtn('presets', 'presets', 'The style of the captions');
+  const animTab = tabBtn('anim', 'animation', 'How a page comes in and goes out - after a style is chosen');
+  body.appendChild(capTabs);
   body.appendChild(capBox);
+  const animBox = _el('div', 'mv3-hlp-style mv3-hlp-anim');
+  body.appendChild(animBox);
   // (phase V33.8, H2) The kind's recommended groups first and open.
-  // (V33.8, (в1)) A style chosen while the kind is podcast or documentary is kept for it - "by the video" offers those two.
-  const picker = stylePicker(capBox, { kind: st.kind, onPick: (pid) => { st.style = pid; if (pid !== BY_VIDEO) keepFor(st.kind, pid); paint(); } });
+  // (V33.8, (в1)) A style chosen while the kind is podcast or documentary is kept for it - "by the video" offers those two; several
+  // chosen (V49) are kept for no kind.
+  const picker = stylePicker(capBox, { kind: st.kind, onPick: (ids) => {
+    st.styles = ids;
+    st.style = ids[0] || '';
+    if (ids.length === 1 && ids[0] !== BY_VIDEO) keepFor(st.kind, ids[0]);
+    if (!ids.length && st.capTab === 'anim') st.capTab = 'presets';
+    keepPicks();
+    paint();
+  } });
+  const anim = animPicker(animBox, { onPick: (pairs) => { st.anims = pairs; keepPicks(); paint(); } });
+  // What was chosen the last time (пр26) - what is still there of it.
+  {
+    const was = _picks();
+    picker.set(Array.isArray(was.styles) ? was.styles : []);
+    st.styles = picker.getAll();
+    if (st.styles.includes(BY_VIDEO) && st.kind !== 'auto') { st.styles = [styleFor(st.kind)]; picker.set(st.styles); }
+    st.style = st.styles[0] || '';
+    anim.set(Array.isArray(was.anims) ? was.anims : []);
+    st.anims = anim.getAll();
+    st.capTab = was.tab === 'anim' && st.styles.length ? 'anim' : 'presets';
+  }
+  function keepPicks() {
+    try { localStorage.setItem(LS_PICKS, JSON.stringify({ styles: st.styles, anims: st.anims, tab: st.capTab })); } catch (e) { /* private */ }
+  }
 
   // ── The foot: who hears, and the press ──
   const hear = _el('div', 'mv3-hlp-hear');
@@ -263,7 +308,7 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     takeFile(f);
   });
   const layer = Layers.open(ov, { name: 'highlights', onEsc: closePopup });
-  _win = { ov, layer, picker, music };
+  _win = { ov, layer, picker, anim, music };
   setTimeout(() => { if (_win && _win.ov === ov) link.focus(); }, 0);
 
   // The moments' length and fragmentation's are kept apart: each kind's last one comes back (V43).
@@ -366,7 +411,16 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     for (const [k, p] of Object.entries(panes)) p.hidden = k !== st.from;
     capBox.classList.toggle('is-missing', !st.style);
     capSaid.classList.toggle('is-missing', !st.style);
-    capHdr.textContent = st.style ? 'captions - ' + (presetName(st.style) || st.style) : 'captions - choose a style';
+    // (V49) The two tabs: the animations' open once a style is chosen.
+    animTab.disabled = !st.styles.length;
+    if (!st.styles.length) st.capTab = 'presets';
+    for (const b of capTabs.children) b.classList.toggle('is-on', b.dataset.tab === st.capTab);
+    capBox.hidden = st.capTab !== 'presets';
+    animBox.hidden = st.capTab !== 'anim';
+    const many = st.styles.length > 1;
+    const anims = st.anims.length ? ' · ' + (st.anims.length === 1 ? pairName(st.anims[0]) : st.anims.length + ' animations, mixed') : '';
+    capHdr.textContent = !st.style ? 'captions - choose a style'
+      : 'captions - ' + (many ? st.styles.length + ' styles, mixed' : (presetName(st.style) || st.style)) + anims;
     // Who hears it, and what it costs.
     const p = st.price;
     hear.textContent = '';
@@ -409,7 +463,12 @@ export function openPopup(id, rec, { onStarted, url, sourceId } = {}) {
     if (st.style === BY_VIDEO) {
       const of = (k) => ({ preset: styleFor(k), name: presetName(styleFor(k)) });
       spec.style.byKind = { podcast: of('podcast'), documentary: of('documentary') };
+    } else if (st.styles.length > 1) {
+      // (V49, (пр25)) Several: every fragment the same set, dealt page by page.
+      spec.style.mix = st.styles.map((id) => ({ preset: id, name: presetName(id) }));
     } else keepFor(st.kind, st.style);
+    // (V49, (пр26)) The animations: one for every page, or several dealt.
+    if (st.anims.length) spec.style.anims = st.anims.slice();
     // (V43, (ё18)) The sound track chosen, when the video has more than one.
     if (st.audio != null && st.tracks.length > 1 && (st.from === 'file' || st.from === 'source')) {
       spec.audio = st.audio;

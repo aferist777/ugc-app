@@ -8,11 +8,17 @@
    when the cursor leaves). A press CHOOSES - nothing is applied to any lane here: the style goes to every fragment of
    the project (block 3). The tiles are the server's (lib/caption-tiles.js); one not made yet shows the preset's name in
    its own font and colour, and the set is asked to be made once.
+
+   SEVERAL WITH SHIFT (phase V49, the owner's (пр25), (пр26)): Shift on a tile adds it to those chosen or takes it away - every
+   fragment gets the same set, dealt page by page (public/js/captions/mix.js); several replace "by the video". The popup's second
+   tab is the animations (animPicker): the In -> Out pairs of the captions view's "animation" tab (captions/page-fx.js PAIRS), its
+   tiles the same server's, one or several with Shift.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as MyPresets from './my-presets.js';
+import { PAIRS, animTileId } from '../captions/page-fx.js';
 
 const MINE = 'mine';
 const REC = 'rec';
@@ -70,18 +76,114 @@ export function presetName(id) {
   return p ? p.name : '';
 }
 
+// ── The stills, and the loop under the cursor - a picker's tiles (V32), for the presets and the animations alike ──
+// `tiles` - id -> { btn, box, img, over, loop, starting, end }; `ctx` - { state, alive } as the picker has them now.
+function _player(tiles, ctx) {
+  function paintStills() {
+    const state = ctx.state;
+    if (!state) return;
+    for (const id of (state.ready || [])) {
+      const t = tiles.get(id);
+      if (!t || t.img) continue;
+      const img = new Image();
+      img.className = 'mv3-cap-img';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.draggable = false;
+      img.addEventListener('load', () => t.box.classList.add('is-ready'));
+      img.src = state.base + encodeURIComponent(id) + (state.still || '.first.webp');
+      t.box.appendChild(img);
+      t.img = img;
+    }
+  }
+  async function enter(t) {
+    t.over = true;
+    if (t.end) { clearTimeout(t.end); t.end = 0; }
+    if (t.loop || t.starting || !t.img || !ctx.state) return;
+    t.starting = true;
+    let url = null;
+    try {
+      url = URL.createObjectURL(await _loopOf(ctx.state.base + encodeURIComponent(t.btn.dataset.id) + '.webp'));
+      const img = new Image();
+      img.className = 'mv3-cap-img';
+      img.alt = '';
+      img.draggable = false;
+      img.src = url;
+      await img.decode();
+      if (!t.over || !ctx.alive || !t.btn.isConnected || t.btn.hidden) return;
+      t.box.appendChild(img);
+      t.loop = { img, url, since: performance.now() };
+      url = null;
+      requestAnimationFrame(() => { if (t.loop && t.loop.img === img) t.loop.since = performance.now(); });
+    } catch (e) {
+      /* the still stays */
+    } finally {
+      t.starting = false;
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+  function stopLoop(t) {
+    if (t.end) { clearTimeout(t.end); t.end = 0; }
+    if (!t.loop) return;
+    t.loop.img.remove();
+    URL.revokeObjectURL(t.loop.url);
+    t.loop = null;
+  }
+  function leave(t, loop) {
+    t.over = false;
+    if (!t.loop || t.end) return;
+    const round = (loop || 2.5) * 1000;
+    const left = round - ((performance.now() - t.loop.since) % round);
+    t.end = setTimeout(() => { t.end = 0; stopLoop(t); }, Math.max(0, left - 40));
+  }
+  const stopNow = (t) => { t.over = false; stopLoop(t); };
+  return { paintStills, enter, leave, stopNow };
+}
+
+// The tiles' state, asked once and followed while the set is being made (`first` - a category made first).
+async function _follow(ctx, first, paint) {
+  let d = null;
+  try { d = await fetch('/api/mv3/captions/tiles').then((r) => r.json()); } catch (e) { d = null; }
+  // A set not made yet (a library that never showed the captions view): made now, the category looked at first.
+  if (d && d.success && !d.making && ((d.ready || []).length + (d.failed || []).length) < d.total) {
+    try { d = await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: first || null }) }).then((r) => r.json()); }
+    catch (e) { /* the names stand in */ }
+  }
+  for (let k = 0; ctx.alive && d && d.success; k++) {
+    ctx.state = d;
+    paint();
+    if (!d.making || k > 60) break;
+    await new Promise((r) => setTimeout(r, 1500));
+    try { d = await fetch('/api/mv3/captions/tiles').then((r) => r.json()); } catch (e) { break; }
+  }
+}
+
+// A press, with Shift or not (V49): Shift adds the tile to those chosen, or - chosen already - takes it away; without Shift, it alone.
+function _press(chosen, id, shift) {
+  if (!shift) return [id];
+  return chosen.includes(id) ? chosen.filter((x) => x !== id) : chosen.concat([id]);
+}
+
 /**
- * A picker in `host`. `onPick(id, name)` on a press; `kind` (V33.8) - the video's kind, whose recommended groups come first.
- * Returns { set(id), get(), recommend(kind), stop() } - stop() puts every loop back to its still (the popup closed).
+ * A picker in `host`. `onPick(ids)` on a press - the styles chosen, one or (V49, Shift) several; `kind` (V33.8) - the video's kind,
+ * whose recommended groups come first. Returns { set(ids), get() - the first, getAll(), recommend(kind), stop() } - stop() puts every
+ * loop back to its still (the popup closed).
  */
 export function stylePicker(host, { onPick, kind } = {}) {
   let cat = '';
   try { cat = JSON.parse(localStorage.getItem(LS_CAT) || '""') || ''; } catch (e) { cat = ''; }
-  let chosen = '';
-  let state = null;
-  let alive = true;
+  let chosen = [];
+  const ctx = { state: null, alive: true };
   let rec = null;                  // (V33.8) RECOMMENDED[kind], or null
   const tiles = new Map();         // id -> { btn, box, ph, img, over, loop, starting, end }
+  const P = _player(tiles, ctx);
+  // A tile pressed: "by the video" is one choice by itself, and several styles replace it (пр25).
+  const pick = (id, shift) => {
+    chosen = id === BY_VIDEO ? [BY_VIDEO] : _press(chosen.filter((x) => x !== BY_VIDEO), id, shift);
+    paintChosen();
+    if (onPick) onPick(chosen.slice());
+  };
 
   const top = _el('div', 'mv3-cap-cats mv3-hls-cats');
   const grid = _el('div', 'mv3-cap-grid mv3-hls-grid');
@@ -129,7 +231,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
   const byName = _el('div', 'mv3-cap-name');
   byName.appendChild(_el('span', 'mv3-cap-nm', 'by the video'));
   byBtn.append(byBox, byName);
-  byBtn.addEventListener('click', () => { set(BY_VIDEO); if (onPick) onPick(BY_VIDEO, 'by the video'); });
+  byBtn.addEventListener('click', () => pick(BY_VIDEO, false));
   function paintBy() {
     byBox.textContent = '';
     const line = (what, kind) => {
@@ -152,7 +254,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     btn.dataset.id = p.id;
     btn.dataset.cat = isMine ? MINE : p.category;
     btn.dataset.i = String(tiles.size);
-    btn.title = p.name + ' - the captions of every fragment';
+    btn.title = p.name + ' - the captions of every fragment; Shift adds it to those chosen - each page one of them';
     const box = _el('div', 'mv3-cap-box');
     const ph = _el('span', 'mv3-cap-ph', p.name);
     const s = p.style || {};
@@ -165,9 +267,9 @@ export function stylePicker(host, { onPick, kind } = {}) {
     name.appendChild(_el('span', 'mv3-cap-nm', p.name));
     btn.append(box, name);
     const t = { btn, box, ph, img: null, over: false, loop: null, starting: false, end: 0 };
-    btn.addEventListener('click', () => { set(p.id); if (onPick) onPick(p.id, p.name); });
-    btn.addEventListener('pointerenter', () => enter(t));
-    btn.addEventListener('pointerleave', () => leave(t));
+    btn.addEventListener('click', (e) => pick(p.id, !!(e && e.shiftKey)));
+    btn.addEventListener('pointerenter', () => P.enter(t));
+    btn.addEventListener('pointerleave', () => P.leave(t, ctx.state && ctx.state.loop));
     tiles.set(p.id, t);
     grid.appendChild(btn);
   }
@@ -179,7 +281,7 @@ export function stylePicker(host, { onPick, kind } = {}) {
     for (const b of top.children) b.classList.toggle('is-on', (b.dataset.cat || '') === cat);
     for (const t of tiles.values()) {
       t.btn.hidden = cat === REC ? !rec.cats.includes(t.btn.dataset.cat) : (!!cat && t.btn.dataset.cat !== cat);
-      if (t.btn.hidden) stopNow(t);
+      if (t.btn.hidden) P.stopNow(t);
     }
     byBtn.hidden = !(cat === REC && rec && rec.byVideo);
   }
@@ -193,92 +295,67 @@ export function stylePicker(host, { onPick, kind } = {}) {
     paintCat();
   }
 
-  function set(id) {
-    chosen = id && (tiles.has(id) || id === BY_VIDEO) ? id : '';
-    for (const [k, t] of tiles) t.btn.classList.toggle('is-on', k === chosen);
-    byBtn.classList.toggle('is-on', chosen === BY_VIDEO);
+  function paintChosen() {
+    for (const [k, t] of tiles) t.btn.classList.toggle('is-on', chosen.includes(k));
+    byBtn.classList.toggle('is-on', chosen.includes(BY_VIDEO));
+  }
+  /** The styles chosen, one or several (V49) - those no longer there are left out. */
+  function set(ids) {
+    const list = (Array.isArray(ids) ? ids : [ids]).filter((id) => id && (tiles.has(id) || id === BY_VIDEO));
+    chosen = list.includes(BY_VIDEO) ? [BY_VIDEO] : [...new Set(list)];
+    paintChosen();
   }
 
-  // ── The stills, and the loop under the cursor ──
-  function paintStills() {
-    if (!state) return;
-    for (const id of (state.ready || [])) {
-      const t = tiles.get(id);
-      if (!t || t.img) continue;
-      const img = new Image();
-      img.className = 'mv3-cap-img';
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.draggable = false;
-      img.addEventListener('load', () => t.box.classList.add('is-ready'));
-      img.src = state.base + encodeURIComponent(id) + (state.still || '.first.webp');
-      t.box.appendChild(img);
-      t.img = img;
-    }
-  }
-  async function enter(t) {
-    t.over = true;
-    if (t.end) { clearTimeout(t.end); t.end = 0; }
-    if (t.loop || t.starting || !t.img || !state) return;
-    t.starting = true;
-    let url = null;
-    try {
-      url = URL.createObjectURL(await _loopOf(state.base + encodeURIComponent(t.btn.dataset.id) + '.webp'));
-      const img = new Image();
-      img.className = 'mv3-cap-img';
-      img.alt = '';
-      img.draggable = false;
-      img.src = url;
-      await img.decode();
-      if (!t.over || !alive || !t.btn.isConnected || t.btn.hidden) return;
-      t.box.appendChild(img);
-      t.loop = { img, url, since: performance.now() };
-      url = null;
-      requestAnimationFrame(() => { if (t.loop && t.loop.img === img) t.loop.since = performance.now(); });
-    } catch (e) {
-      /* the still stays */
-    } finally {
-      t.starting = false;
-      if (url) URL.revokeObjectURL(url);
-    }
-  }
-  function leave(t) {
-    t.over = false;
-    if (!t.loop || t.end) return;
-    const round = ((state && state.loop) || 2.5) * 1000;
-    const left = round - ((performance.now() - t.loop.since) % round);
-    t.end = setTimeout(() => { t.end = 0; stopLoop(t); }, Math.max(0, left - 40));
-  }
-  function stopLoop(t) {
-    if (t.end) { clearTimeout(t.end); t.end = 0; }
-    if (!t.loop) return;
-    t.loop.img.remove();
-    URL.revokeObjectURL(t.loop.url);
-    t.loop = null;
-  }
-  function stopNow(t) { t.over = false; stopLoop(t); }
-
-  (async () => {
-    let d = null;
-    try { d = await fetch('/api/mv3/captions/tiles').then((r) => r.json()); } catch (e) { d = null; }
-    // A set not made yet (a library that never showed the captions view): made now, the category looked at first.
-    if (d && d.success && !d.making && ((d.ready || []).length + (d.failed || []).length) < d.total) {
-      try { d = await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: cat || null }) }).then((r) => r.json()); }
-      catch (e) { /* the names stand in */ }
-    }
-    for (let k = 0; alive && d && d.success; k++) {
-      state = d;
-      paintStills();
-      if (!d.making || k > 60) break;
-      await new Promise((r) => setTimeout(r, 1500));
-      try { d = await fetch('/api/mv3/captions/tiles').then((r) => r.json()); } catch (e) { break; }
-    }
-  })();
-
+  _follow(ctx, cat, P.paintStills);
   recommend(kind);
   return {
-    set, get: () => chosen, recommend,
-    stop: () => { alive = false; for (const t of tiles.values()) stopNow(t); },
+    set, get: () => chosen[0] || '', getAll: () => chosen.slice(), recommend,
+    stop: () => { ctx.alive = false; for (const t of tiles.values()) P.stopNow(t); },
+  };
+}
+
+/** A pair's name (V49): "from the top → down"; '' for none. */
+export const pairName = (pair) => { const p = PAIRS.find((x) => x.id === pair); return p ? p.name : ''; };
+
+/**
+ * THE ANIMATIONS (V49, the owner's (пр26)): the In -> Out pairs' tiles in `host`, one chosen - or several with Shift, dealt page by
+ * page. `onPick(pairs)` on a press. Returns { set(pairs), getAll(), stop() }.
+ */
+export function animPicker(host, { onPick } = {}) {
+  let chosen = [];
+  const ctx = { state: null, alive: true };
+  const tiles = new Map();         // tile id -> { btn, box, img, … }
+  const P = _player(tiles, ctx);
+  host.appendChild(_el('div', 'mv3-cap-note', 'How a page comes in and goes out - one for every page, or several with Shift: each page one of them.'));
+  const grid = _el('div', 'mv3-cap-grid mv3-hls-grid');
+  host.appendChild(grid);
+  for (const p of PAIRS) {
+    const id = animTileId(p.id);
+    const btn = _el('button', 'mv3-cap-tile');
+    btn.type = 'button';
+    btn.dataset.id = id;
+    btn.dataset.pair = p.id;
+    btn.title = p.name + ' - every fragment\'s pages; Shift adds it to those chosen';
+    const box = _el('div', 'mv3-cap-box');
+    const ph = _el('span', 'mv3-cap-ph', p.name);
+    ph.style.fontFamily = '"Montserrat Black", "Liberation Sans", sans-serif';
+    ph.style.color = '#ffffff';
+    box.appendChild(ph);
+    const name = _el('div', 'mv3-cap-name');
+    name.appendChild(_el('span', 'mv3-cap-nm', p.name));
+    btn.append(box, name);
+    const t = { btn, box, ph, img: null, over: false, loop: null, starting: false, end: 0 };
+    btn.addEventListener('click', (e) => { chosen = _press(chosen, p.id, !!(e && e.shiftKey)); paint(); if (onPick) onPick(chosen.slice()); });
+    btn.addEventListener('pointerenter', () => P.enter(t));
+    btn.addEventListener('pointerleave', () => P.leave(t, ctx.state && ctx.state.animLoop));
+    tiles.set(id, t);
+    grid.appendChild(btn);
+  }
+  function paint() { for (const t of tiles.values()) t.btn.classList.toggle('is-on', chosen.includes(t.btn.dataset.pair)); }
+  _follow(ctx, 'anim', P.paintStills);
+  return {
+    set: (pairs) => { chosen = [...new Set((Array.isArray(pairs) ? pairs : []).filter((x) => PAIRS.some((p) => p.id === x)))]; paint(); },
+    getAll: () => chosen.slice(),
+    stop: () => { ctx.alive = false; for (const t of tiles.values()) P.stopNow(t); },
   };
 }
