@@ -20,6 +20,8 @@ import { openPlaces, closePlaces } from '../place-tree.js';
 import * as Cut from '../cut.js';
 // (phase V35) The sash before the right column - one helper and one remembered width with the media viewer.
 import { wireInfoSash } from '../library/viewer.js';
+// (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
+import { showError } from '../notice.js';
 
 const SRC_LABEL = { files: 'Files', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok', other: 'Other' };
 const FOLDER_LABEL = { posts: 'Posts', reels: 'Reels', shorts: 'Shorts', videos: 'Videos' };
@@ -442,7 +444,7 @@ function _paintActs(it) {
     try {
       const r = await fetch('/api/references/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(x => x.json());
       if (!r || !r.success) throw new Error((r && r.error) || 'not deleted');
-    } catch (e) { del.disabled = false; del.textContent = 'Delete'; alert('Not deleted: ' + e.message); return; }
+    } catch (e) { del.disabled = false; del.textContent = 'Delete'; showError('Not deleted: ' + e.message); return; }
     if (typeof _v.o.onChanged === 'function') { try { _v.o.onChanged({ deleted: it }); } catch (e) { /* the page's */ } }
     _v.list = _v.list.filter(x => x !== it);
     if (!_v.list.length) return closePost();
