@@ -132,6 +132,13 @@ function VIDEOS(ctx) {
       }
       const [lo, hi] = L.clipSecs || [2, 15];
       const all = L.videoSecs || hi;
+      // (phase V47) The only clip is the video's length: 4 s at least (lib/video-models.js byClip).
+      const alone = !!r.oneClip && !ctx.atts().some(x => x !== a && x.path !== a.path && _kind(x) === 'video');
+      if (alone) {
+        const least = Math.max(lo, r.oneClip.least || 4);
+        return { min: least, max: Math.min(hi, all), all,
+          why: m.label + ' makes the video as long as its clip: ' + least + '-' + hi + ' s' + (r.agg === 'kie' ? ' - kie bills its seconds too.' : '.') };
+      }
       return { min: lo, max: Math.min(hi, Math.max(0, all - others)), all,
         why: m.label + ' takes clips of ' + lo + '-' + hi + ' s, ' + all + ' s in all' + (r.agg === 'kie' ? ' - kie bills their seconds too.' : '.') };
     }
@@ -251,6 +258,19 @@ function VIDEOS(ctx) {
     const L = r.limits || {};
     return k === 'video' ? L.videos > 0 : k === 'audio' ? L.audios > 0 : L.images > 0;
   };
+  // (phase V47, the owner 2026-10-24/25) ONE clip decides Seedance's length and shape (lib/video-models.js byClip): the
+  // column's rows show the clip's and are not sent - 2.5 on kie makes the clip's own seconds, the others its seconds
+  // rounded. With several clips the column's length and shape go. `media`: a card's own attachments, else the zone.
+  function _byClip(r, media) {
+    if (!r || !r.oneClip) return null;
+    const cl = media ? media.filter(x => x && x.kind === 'video') : (_takes('video') ? _clips() : []);
+    return cl.length === 1 ? cl[0] : null;
+  }
+  // How long the video made beside that clip is (0 while its part is not known).
+  const _clipOut = (r, a) => { const s = _span(a); return !(s > 0) ? 0 : r.oneClip.auto ? s : clamp(Math.round(s), r.duration.min, r.duration.max); };
+  // The seconds a price is made of, in words.
+  const _secsWords = (pr) => (pr.byClip ? _s(pr.out) + ' (as long as the clip)' + (pr.vidIn ? ' + ' + _s(pr.vidIn) + ' of the clip' : '')
+    : pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s');
 
   // A clip or a sound kept with a draft that has left the library since (deleted on its shelf): it goes from the zone,
   // in words - a picture does the same when its miniature does not load (the shell). One that MOVED is followed.
@@ -315,6 +335,13 @@ function VIDEOS(ctx) {
       // (phase V10.2) kie bills Kling by the whole seconds that come back, rounded down.
       const secs = !vidIn ? 0 : r.billWhole ? Math.max(1, Math.floor(Math.min(vidIn, cap) + 0.001)) : Math.min(vidIn, cap);
       return { per, res, fromClip: true, whole: !!r.billWhole, secs, usd: secs ? per * secs : null };
+    }
+    // (phase V47) One Seedance clip: the video is as long as the clip - kie bills the clip's seconds and the video's.
+    const one = r.oneClip && clips.length === 1 ? clips[0] : null;
+    if (one && _span(one) > 0) {
+      const out1 = _clipOut(r, one);
+      const in1 = r.agg === 'kie' ? vidIn : 0;
+      return { per, res, secs: out1 + in1, out: out1, vidIn: in1, usd: per * (out1 + in1), byClip: true };
     }
     const out = clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
     const withIn = r.agg === 'kie' && (model() || {}).family === 'seedance' && clips.length > 0;
@@ -492,7 +519,16 @@ function VIDEOS(ctx) {
     const fam = m.family;
     // (phase V7) Beside a clip or a sound Seedance's pictures are references - frames go only on their own.
     const mixed = _takes('video') && _clips().length + _sounds().length > 0;
-    if (!r.duration.fromClip) {
+    // (phase V47) One clip: the length and the shape are the clip's - shown, not chosen; several: chosen here.
+    const one = _byClip(r);
+    if (!r.duration.fromClip && one) {
+      const out = _clipOut(r, one);
+      const sel = _select('mv3-vc-dur', '', [{ value: 'clip', text: 'as the clip' + (out ? ' · ' + _s(out) : '') }], 'clip');
+      sel.disabled = true;
+      sel.title = 'With one clip ' + m.label + ' makes the video as long as the clip' + (r.oneClip.auto ? '' : ', rounded to a whole second')
+        + '. With several clips the length is chosen here.';
+      _row(box, 'length', sel);
+    } else if (!r.duration.fromClip) {
       const opts = [];
       for (let s = r.duration.min; s <= r.duration.max; s++) opts.push({ value: String(s), text: s + ' s' });
       _row(box, 'length', _select('mv3-vc-dur', 'How long the clip is', opts, clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
@@ -507,7 +543,12 @@ function VIDEOS(ctx) {
       }));
     // The shape: with a picture Grok takes the picture's (Grok 1.5 on kie: with one - several are references, and the
     // shape is chosen again), and Seedance's frames take theirs.
-    if (r.aspects && r.aspects.length) {
+    if (r.aspects && r.aspects.length && one) {
+      const sel = _select('mv3-vc-ar', '', [{ value: 'clip', text: 'as the clip' }], 'clip');
+      sel.disabled = true;
+      sel.title = 'With one clip the video takes the clip\'s shape. With several clips the shape is chosen here.';
+      _row(box, 'shape', sel);
+    } else if (r.aspects && r.aspects.length) {
       const fmt = (Store.timeline() || {}).format || '9:16';
       // Frames on their own make the clip in their shape; beside a clip or a sound they go as references.
       const fixed = n > 0 && ((fam === 'grok' && !(r.aspectWithImages && n > 1)) || (fam === 'seedance' && _framesMode() && !mixed));
@@ -587,7 +628,7 @@ function VIDEOS(ctx) {
         : '<b>≈' + money(pr.per) + '</b><span>per second of your clip · ' + pr.res + ' · ' + r.aggLabel + '</span>';
     } else {
       box.className = 'mv3-ig-cost';
-      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s')
+      box.innerHTML = '<b>≈' + money(pr.usd) + '</b><span>per clip · ' + _secsWords(pr)
         + ' · ' + pr.res + ' · ' + r.aggLabel + (many > 1 ? ' · ' + money(pr.usd * many) + ' for ' + many : '') + '</span>';
     }
     // (phase V15) The storyboard first: what the sheet costs now, and the video's price for later - its own press.
@@ -1029,6 +1070,9 @@ function VIDEOS(ctx) {
       && (cardMedia ? cardMedia.some(a => a && a.kind === 'video') : atts.some(a => _kind(a) === 'video'));
     const besideClip = withClip ? _clipSoundOf(p) : '';
     const clipSound = besideClip === 'clip';
+    // (phase V47) One clip: the length the record shows is the clip's (the server sends the clip's, whatever comes here).
+    const one = _byClip(r, cardMedia || atts.map(a => ({ kind: _kind(a), in: a.in, out: a.out })));
+    const oneSecs = one && _span(one) > 0 ? clamp(Math.round(_span(one)), r.duration.min, r.duration.max) : 0;
     return {
       model: m.id, agg: r.agg,
       // (phase V15) The column's storyboard: the sheet is written and drawn, and it stops there.
@@ -1037,7 +1081,7 @@ function VIDEOS(ctx) {
       // made from there - "make the video". Under Kling motion control the writer writes the first frame instead (V17).
       review: !boarding && ctx.writing() && !isMC() ? true : undefined,
       params: {
-        duration: r.duration.fromClip ? undefined : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
+        duration: r.duration.fromClip ? undefined : oneSecs || clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max),
         resolution: r.resolutions.includes(p.resolution) ? p.resolution : r.resDef,
         aspect: (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]),
         audio: besideClip ? besideClip === 'on' : p.audio !== false, sound: clipSound ? 'clip' : '',
@@ -1092,6 +1136,9 @@ function VIDEOS(ctx) {
   function _sizeWords() {
     const r = rec(), p = params();
     if (!r) return '';
+    // (phase V47) One Seedance clip: the clip's length and shape.
+    const one = _byClip(r);
+    if (one) return 'as long as the clip' + (_clipOut(r, one) ? ' (' + _s(_clipOut(r, one)) + ')' : '') + ', in the clip\'s shape.';
     const secs = r.duration.fromClip ? 0 : clamp(+p.duration || r.duration.def, r.duration.min, r.duration.max);
     const fmt = (Store.timeline() || {}).format || '9:16';
     const ar = (r.aspects || []).includes(p.aspect) ? p.aspect : ((r.aspects || []).includes(fmt) ? fmt : (r.aspects || [])[0]);
@@ -2281,7 +2328,7 @@ function VIDEOS(ctx) {
     l.price.textContent = other ? 'this variant was written for ' + _labelOf(vm)
       : !pr || pr.none ? (mm ? mm.label + ' · no published price' : '')
         : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
-          : '≈' + money(pr.usd * n) + ' · ' + (pr.vidIn ? pr.out + ' s + ' + _s(pr.vidIn) + ' of the clips' : pr.secs + ' s') + ' · ' + pr.res + ' · '
+          : '≈' + money(pr.usd * n) + ' · ' + _secsWords(pr) + ' · ' + pr.res + ' · '
             + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
   }
   function _videoStep(m, x, b, progs) {
