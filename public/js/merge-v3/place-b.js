@@ -24,7 +24,7 @@
    commits once - one undo step for one thing the person did.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { selectedOne, selectClipById, setClipFields } from './timeline-b.js';
+import { selectedOne, selectClipById, setClipFields, setClipsFields, selectedClips, multiCount } from './timeline-b.js';
 
 const HANDLE = 9;      // half-width of a corner grip, in canvas pixels
 const KNOB = 22;       // how far above the top edge the turning knob sits
@@ -46,10 +46,34 @@ const _isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
 // to something you can see, not to something three seconds away.
 function _target() {
   const one = selectedOne();
-  if (!one || !one.clip || one.track.kind !== 'video') return null;
+  if (!one) return _groupTarget();
+  if (!one.clip || one.track.kind !== 'video') return null;
   const r = _api && _api.rectOf ? _api.rectOf(one.clip.id) : null;
   // (phase V49) A main clip that is not a PiP has no grips either (preview-b.js `nogrip`): it moves only as a PiP.
   return r && !r.band && !r.nogrip ? { track: one.track, clip: one.clip, r } : null;
+}
+
+// (phase V49, (пр9)) SEVERAL MAIN CLIPS PICKED - cut silence's pieces, by the band or Shift: the PiP'd ones among them move
+// together. The grips are on the one on screen; what the gesture does to it - moved by so much, sized by so much, turned by
+// so much - is done to each of them from where each was, in one step.
+function _groupTarget() {
+  if (multiCount() < 2 || !_api || !_api.rectOf) return null;
+  const group = selectedClips().filter(x => x.track.kind === 'video' && x.track.main && x.clip.pip);
+  for (const x of group) {
+    const r = _api.rectOf(x.clip.id);
+    if (r && r.pip) return { track: x.track, clip: x.clip, r, group };
+  }
+  return null;
+}
+
+// Where a clip of the group starts from: its own placement, or - not sized yet - the size it shows at: the whole frame for a
+// filled one, and for a fitted one the box the one on screen has (pieces of one file are one shape).
+function _baseOf(c, t, at0) {
+  if (c.id === t.clip.id) return at0;
+  if (_isPlaced(c)) return { tw: +c.tw, tx: c.tx == null ? 0.5 : +c.tx, ty: c.ty == null ? 0.5 : +c.ty, angle: +c.angle || 0 };
+  if (String(c.fit || 'fit') === 'fill') return { tw: 1, tx: 0.5, ty: 0.5, angle: 0 };
+  const conv = t.r.conv || {};
+  return { tw: conv.tw != null ? conv.tw : 1, tx: 0.5, ty: 0.5, angle: 0 };
 }
 
 // Canvas pixels, then FRAME pixels: the canvas is drawn at a fixed size and shown at whatever
@@ -122,6 +146,8 @@ function _begin(t, p, part, e) {
     // against: dragging to twice that distance is twice the width.
     grip: Math.max(4, Math.hypot(t.r.dw / 2, t.r.dh / 2)),
     aim0: Math.atan2(p.y - t.r.cy, p.x - t.r.cx),
+    // (V49) The other PiP'd main clips picked with it, each from where it was.
+    group: t.group ? t.group.map(x => ({ track: x.track.id, id: x.clip.id, base: _baseOf(x.clip, t, at0) })) : null,
   };
   // Every gesture carries the whole placement, so the one that lifts a clip off the frame
   // writes all of it at once rather than leaving half a placement behind.
@@ -210,7 +236,23 @@ function _up() {
   const d = _drag, patch = (_live && _live.patch) || {};
   _drag = null;
   _live = null;
-  if (d.moved && Object.keys(patch).length) setClipFields(d.track, d.id, patch);
+  if (d.moved && Object.keys(patch).length && d.group) {
+    // (V49) Every PiP'd main clip picked: moved, sized and turned by as much as the one on screen - one step.
+    const b = d.base;
+    const dx = (patch.tx != null ? patch.tx : b.tx) - b.tx, dy = (patch.ty != null ? patch.ty : b.ty) - b.ty;
+    const k = (patch.tw != null ? patch.tw : b.tw) / (b.tw || 1);
+    const da = (patch.angle != null ? patch.angle : b.angle) - (b.angle || 0);
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    setClipsFields(d.group.map(g => {
+      let a = (g.base.angle || 0) + da;
+      while (a > 180) a -= 360;
+      while (a < -180) a += 360;
+      return { trackId: g.track, clipId: g.id, patch: {
+        tx: clamp(g.base.tx + dx, 0, 1), ty: clamp(g.base.ty + dy, 0, 1), tw: clamp(g.base.tw * k, 0.04, 4),
+        ...(d.part === 'turn' || g.base.angle ? { angle: Math.round(a) } : {}),
+      } };
+    }));
+  } else if (d.moved && Object.keys(patch).length) setClipFields(d.track, d.id, patch);
   else if (_api && _api.repaint) _api.repaint();
 }
 

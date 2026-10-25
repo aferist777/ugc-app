@@ -1292,11 +1292,19 @@ function _renderMany(host, n) {
   h.textContent = n + ' clips selected';
   host.appendChild(h);
 
-  const p = document.createElement('div');
-  p.className = 'mv3-ins-note';
-  p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
-                + 'What can be done to all of them is remove them.';
-  host.appendChild(p);
+  // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
+  const mains = pickedB().filter(x => isMainVideo(x.track));
+  if (mains.length) {
+    if (mains.length < n) host.appendChild(C.hint('The PiP below is for the ' + mains.length + ' picked clips of main video.'));
+    _pipSection(host, mains);
+    _bsep(host);
+  } else {
+    const p = document.createElement('div');
+    p.className = 'mv3-ins-note';
+    p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
+                  + 'What can be done to all of them is remove them.';
+    host.appendChild(p);
+  }
 
   host.appendChild(C.row('', C.button('Delete ' + n + ' clips', () => deleteMultiB(),
     { danger: true, title: 'Also on the Delete key' })));

@@ -502,6 +502,22 @@ function _pipMasks(cw, ch, fr, rr, tpx, col) {
 
 let _pipCv = null;
 function _drawPip(el, r, sw, sh) {
+  // Behind it the same clip, covering the frame and blurred - as framing's "whole" draws its background (the render's
+  // boxblur at a quarter of the size, lib/mv3b-render.js).
+  // Drawn a blur's width past the frame and cut at its edge: a canvas blur pulls the transparency outside in, and the edges
+  // of the frame came out darker than the render's.
+  {
+    const s2 = Math.max(W / sw, H / sh);
+    const bw = W / s2, bh = H / s2;
+    const b = Math.max(4, Math.round(W * 0.03));
+    _ctx.save();
+    _ctx.beginPath();
+    _ctx.rect(0, 0, W, H);
+    _ctx.clip();
+    _ctx.filter = `blur(${b}px)`;
+    try { _ctx.drawImage(el, (sw - bw) / 2, (sh - bh) / 2, bw, bh, -2 * b, -2 * b, W + 4 * b, H + 4 * b); } catch (e) { /* not decoded yet */ }
+    _ctx.restore();
+  }
   // The box, in frame pixels - no bigger than a canvas should be (a PiP may be made larger than the film).
   const cw = Math.max(1, Math.min(2160, Math.round(r.dw))), ch = Math.max(1, Math.min(3840, Math.round(r.dh)));
   if (!_pipCv) _pipCv = document.createElement('canvas');
