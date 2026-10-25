@@ -35,7 +35,7 @@ import * as MyPresets from './my-presets.js';
 import { askName } from '../name-box.js';
 import * as Views from './lib-views.js';
 import { presetStyle, presetName, editedKeys, placed, keepMotion } from '../captions/preset-use.js';
-import { shownEnter, PAGE_LEAVES } from '../captions/page-fx.js';
+import { shownEnter, PAGE_LEAVES, pairNow } from '../captions/page-fx.js';
 import { isHeard } from '../captions/heard.js';
 import { styleOf, autoSize, autoWordsPerLine } from './subs-b.js';
 import { wordsOf, CUT_KEYS } from '../captions/pages.js';
@@ -44,7 +44,7 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle, PLATES } from '../captions/style.js';
+import { markedColour, renderFrame, resolveStyle, PLATES, pairOf } from '../captions/style.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
@@ -589,8 +589,10 @@ function _behind(v, st) {
   return p;
 }
 
-// What a press on a preset tile applies it to - set by whichever strip is painted (render).
+// What a press on a preset tile applies it to - set by whichever strip is painted (render) - and a press on an animation's tile
+// (V49): its pair 'in|out'.
 let _capApply = null;
+let _capAnim = null;
 
 // TWO LANES, ONE PANEL. Subtitles and a text lane hold the same thing - words with a look and
 // a place - and differ in exactly one way: where the words come from. So the style half is
@@ -733,7 +735,7 @@ function _blankWordsTrack(host, track) {
   _presetsHint(host);
   _laneRemove(host, track);
   return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
-    kind: isSubs ? 'subs' : 'text' };
+    kind: isSubs ? 'subs' : 'text', anims: [pairNow(st)], anim: (pair) => set(pairOf(pair)) };
 }
 
 // ── The settings of words, shared by a lane, one caption and several (K6) ────
@@ -983,8 +985,11 @@ function _renderCaptions(host, items) {
   _presetsHint(host);
   host.appendChild(C.row('', C.button('Delete ' + items.length + ' lines', () => deleteMultiB(),
     { danger: true, title: 'Also on the Delete key' })));
+  // The pair they all wear is lit (V49); a press puts one on each.
+  const pairs = new Set(items.map(x => pairNow(styleOf(x.track, fmt, x.clip))));
   return { preset: common, edited: anyEdited, apply: wear, readOnly: !Store.canEdit(),
-    kind: items.every(x => x.track.kind === 'text') ? 'text' : 'subs' };
+    kind: items.every(x => x.track.kind === 'text') ? 'text' : 'subs',
+    anims: pairs.size === 1 ? [...pairs] : [], anim: (pair) => setCapStyleB(ids, pairOf(pair), { cut: false }) };
 }
 
 // A caption: words and when. No length field, the same as every other clip here - the edges
@@ -1098,7 +1103,8 @@ function _blankCaption(host, track, clip) {
   })));
   const s = own ? clip.style : null;
   return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
-    apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs' };
+    apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs',
+    anims: [pairNow(styleOf(track, fmt, clip))], anim: (pair) => setCapStyleB([clip.id], pairOf(pair), { cut: false }) };
 }
 
 // NO HEADER, and no description of the lane under it. Which lane is open is visible on the
@@ -1169,6 +1175,7 @@ function render(force) {
   // While a band is swept the view stays as it was - it follows the pick when the band is let go.
   const on = gestureB() ? was : (!!cap && !_narrow());
   _capApply = cap ? cap.apply : null;
+  _capAnim = cap && cap.anim ? cap.anim : null;
   if (on && cap) CapView.show(cap); else if (!on) CapView.hide();
   Views.setCaptions(on);
   // The timeline has just shrunk under the pick: the picked lane back in view, the lit tile too.
@@ -1255,6 +1262,8 @@ export function initInspector() {
   WK.onChange(() => render());
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
   CapView.onApply((id) => { if (_capApply) _capApply(id); });
+  // A pair of In and Out pressed (V49) - on what is picked.
+  CapView.onAnim((pair) => { if (_capAnim) _capAnim(pair); });
   // The person's own presets (phase V30, block 5): read once, and a change paints the strip - "based on" a preset of theirs
   // is said once the list is known, and goes when the preset is deleted.
   MyPresets.onChange(() => render());

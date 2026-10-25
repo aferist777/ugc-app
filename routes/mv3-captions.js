@@ -100,7 +100,9 @@ router.get('/mv3/captions/tiles', (req, res) => {
 router.post('/mv3/captions/tiles/make', (req, res) => {
   try {
     const first = String((req.body && req.body.first) || '');
-    res.json({ success: true, ...TILES.make(first === TILES.MINE_CAT || CATEGORIES.concat(TEXT_CATEGORIES).some((c) => c.id === first) ? first : null) });
+    // (phase V49) 'anim' - the animations' tiles first, while the "animation" tab is open.
+    const known = first === TILES.MINE_CAT || first === TILES.ANIM_CAT || CATEGORIES.concat(TEXT_CATEGORIES).some((c) => c.id === first);
+    res.json({ success: true, ...TILES.make(known ? first : null) });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

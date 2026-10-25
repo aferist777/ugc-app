@@ -28,6 +28,8 @@
    code taken. PURE: numbers and tag strings.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// The preset's own way of arriving (`appear`, K3), as an In.
+export const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const outC = (t) => 1 - Math.pow(1 - t, 3);
@@ -80,8 +82,27 @@ const OUT = {
 export const PAGE_ENTERS = ['fade', 'pop', 'zoom', 'grow', 'from-top', 'rise', 'from-left', 'from-right', 'drop', 'blur', 'swing'];
 export const PAGE_LEAVES = ['fade', 'pop', 'shrink', 'zoom', 'rise', 'sink', 'to-left', 'to-right', 'fall', 'blur'];
 const IN_LEN = 0.25, OUT_LEN = 0.2;
-// The preset's own way of arriving (`appear`, K3), as an In.
-export const APPEAR_AS = { pop: 'pop', fade: 'fade', slide: 'rise' };
+
+// THE READY PAIRS of the captions view's "animation" tab (phase V49, point 8b; the owner's (пр19)): an In and an Out that go
+// together, 'in|out' - a press puts both on what is picked, the In and Out rows change each side by itself. 'at-once|none' is
+// no animation at all. Their tiles are drawn by the server like the presets' (lib/caption-tiles.js, animTileId).
+export const PAIRS = [
+  ['at-once|none', 'none'], ['fade|fade', 'fade → fade'], ['from-top|sink', 'from the top → down'],
+  ['rise|rise', 'from below → up'], ['from-left|to-right', 'from the left → to the right'],
+  ['from-right|to-left', 'from the right → to the left'], ['pop|shrink', 'pop → shrink'], ['pop|pop', 'pop → pop'],
+  ['zoom|zoom', 'zoom → zoom'], ['grow|fade', 'grow → fade'], ['drop|fall', 'drop → fall'], ['blur|blur', 'blur → blur'],
+  ['swing|shrink', 'swing → shrink'], ['rise|sink', 'from below → back down'], ['from-top|rise', 'from the top → back up'],
+  ['from-left|to-left', 'from the left → back left'], ['zoom|fade', 'zoom → fade'], ['fade|sink', 'fade → down'],
+].map(([id, name]) => ({ id, name }));
+/** A pair's tile: its file and its id among the tiles (the names of motions hold single dashes). */
+export const animTileId = (pair) => 'an-' + String(pair || '').replace('|', '--');
+/** The pair a style wears now: its In as shown (the preset's own arrival while none is chosen) and its Out. */
+export function pairNow(st) {
+  const s = st || {};
+  const enter = s.enter === 'at-once' ? 'at-once' : (s.enter && s.enter !== 'none' ? s.enter : APPEAR_AS[s.appear] || 'at-once');
+  return enter + '|' + (s.leave && s.leave !== 'none' ? s.leave : 'none');
+}
+
 // How far away the point a travel turns about is, px: a page 2 line heights off turns by under a hundredth of a degree.
 const FAR = 1e6;
 

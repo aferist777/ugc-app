@@ -34,11 +34,17 @@
    has its own categories, its own `Mine` (a preset of the person's saved from text is `kind: 'text'`) and its own category
    remembered; the tiles of the other gallery are hidden, not rebuilt. A text tile loops for 3 s (lib/caption-tiles.js).
 
+   THE ANIMATIONS (phase V49, point 8b; the owner's (пр19)): a tab `animation` between `presets` and `text` - tiles of ready In ->
+   Out pairs (captions/page-fx.js PAIRS), drawn by the server like the presets' (lib/caption-tiles.js) and shown the same way:
+   the still, the motion under the cursor. A press puts the pair on what is picked (the inspector says how: `onAnim`); the
+   pair it wears is lit.
+
    Which view shows, the header and the room are lib-views.js's; this only draws the tiles and the tabs.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { PRESETS, CATEGORIES } from '../captions/presets.js';
 import { TEXT_PRESETS, TEXT_CATEGORIES } from '../captions/presets-text.js';
+import { PAIRS, animTileId } from '../captions/page-fx.js';
 import { cssWeight } from '../captions/fonts.js';
 import * as Doc from './caption-doc.js';
 import * as MyPresets from './my-presets.js';
@@ -50,7 +56,11 @@ const LS_CAT = 'mv3_cap_cat_v1';
 const LS_CAT_TEXT = 'mv3_cap_cat_text_v1';
 const LS_TAB = 'mv3_cap_tab_v1';
 const TABS = [['presets', 'presets', 'The preset styles - a press applies one to what is picked'],
+  ['anim', 'animation', 'How a page comes in and goes out - a press puts a pair on what is picked'],
   ['text', 'text', 'The words of the subtitle and text lanes as one document - edit, cut and join lines, find and replace']];
+const TAB_IDS = TABS.map((t) => t[0]);
+// The animations' tiles (V49): the pair's In -> Out on plain white letters; until the still is made, its name in these.
+const ANIM_LOOK = { font: 'Montserrat Black', bold: true, primary: '#ffffff' };
 const POLL_MS = 1500;
 const MINE = 'mine';
 
@@ -63,6 +73,7 @@ const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls
 
 let _ui = null;
 const _tiles = new Map();          // preset id -> { btn, box, ed, nm, ph, mine, img, over, loop, starting, end }
+const _anims = new Map();          // an animation's pair 'in|out' -> its tile (V49), the same shape
 const _loops = new Map();          // a loop's address -> Promise<Blob>: asked at its first hover, then kept
 const _counts = new Map();         // gallery|category ('' for All) -> its number on the chip
 let _target = null;                // what show() was last told: the preset the pick wears
@@ -75,13 +86,22 @@ let _asked = false;
 let _kind = 'subs';
 const _cats = { subs: _store(LS_CAT, ''), text: _store(LS_CAT_TEXT, '') };
 const _kindOf = (p) => (p && p.kind === 'text' ? 'text' : 'subs');
-let _tab = _store(LS_TAB, 'presets') === 'text' ? 'text' : 'presets';
+let _tab = TAB_IDS.includes(_store(LS_TAB, 'presets')) ? _store(LS_TAB, 'presets') : 'presets';
 let _apply = null;
+let _applyAnim = null;
 let _retries = 0;           // makes asked again for a set left incomplete (a restart, a make that could not start)
 let _reading = false;
 
 /** What a press on a tile does - the inspector knows what is picked. */
 export function onApply(fn) { _apply = typeof fn === 'function' ? fn : null; }
+/** What a press on an animation's tile does (V49): fn(pair 'in|out'). */
+export function onAnim(fn) { _applyAnim = typeof fn === 'function' ? fn : null; }
+
+// Every tile of both kinds, and one by the id its files are named by.
+const _allTiles = () => [..._tiles.values(), ..._anims.values()];
+const _byId = (id) => _tiles.get(id) || [..._anims.values()].find((t) => t.btn.dataset.id === id) || null;
+// The tab a tile is shown in.
+const _tabOf = (t) => (t.kind === 'anim' ? 'anim' : 'presets');
 
 function _build() {
   const host = document.getElementById('mv3-cap');
@@ -132,10 +152,22 @@ function _build() {
   }
   const presets = _el('div', 'mv3-cap-pane');
   presets.append(top, grid);
+  // The animations (V49): a line on what a press does, and the pairs' tiles.
+  const anim = _el('div', 'mv3-cap-pane');
+  const atop = _el('div', 'mv3-cap-top');
+  atop.appendChild(_el('div', 'mv3-cap-note', 'How a page comes in and goes out. A press puts the pair on what is picked; '
+    + 'In and Out on the right change each side by itself.'));
+  const agrid = _el('div', 'mv3-cap-grid');
+  for (const p of PAIRS) {
+    const t = _tile({ id: animTileId(p.id), name: p.name, pair: p.id, kind: 'anim', style: ANIM_LOOK }, false);
+    agrid.appendChild(t.btn);
+    _anims.set(p.id, t);
+  }
+  anim.append(atop, agrid);
   const text = _el('div', 'mv3-cap-pane');
-  host.append(tabs, presets, text);
+  host.append(tabs, presets, anim, text);
   Doc.mount(text);
-  _ui = { host, tabs, presets, text, top, chips, status, grid, empty, firstApp: grid.children[1] || null };
+  _ui = { host, tabs, presets, anim, agrid, text, top, chips, status, grid, empty, firstApp: grid.children[1] || null };
   _syncMine();
   _paintCat();
   _paintTab();
@@ -144,11 +176,12 @@ function _build() {
 // One tile: the still when it is made (the loop under the cursor), until then the name in the preset's own font and colour.
 function _tile(p, mine) {
   const btn = _el('button', 'mv3-cap-tile');
+  const anim = p.kind === 'anim';
   btn.type = 'button';
   btn.dataset.id = p.id;
-  btn.dataset.cat = mine ? MINE : p.category;
-  btn.dataset.kind = _kindOf(p);
-  btn.title = _title(p.name, mine);
+  btn.dataset.cat = mine ? MINE : anim ? 'anim' : p.category;
+  btn.dataset.kind = anim ? 'anim' : _kindOf(p);
+  btn.title = anim ? p.name + ' - put it on what is picked' : _title(p.name, mine);
   const box = _el('div', 'mv3-cap-box');
   const ph = _el('span', 'mv3-cap-ph', p.name);
   const s = p.style || {};
@@ -165,8 +198,10 @@ function _tile(p, mine) {
   name.appendChild(ed);
   btn.appendChild(box);
   btn.appendChild(name);
-  const t = { btn, box, ed, nm, ph, mine, kind: _kindOf(p) };
-  btn.addEventListener('click', () => { if (_apply) _apply(p.id); });
+  const t = { btn, box, ed, nm, ph, mine, kind: anim ? 'anim' : _kindOf(p) };
+  btn.addEventListener('click', () => {
+    if (anim) { if (_applyAnim) _applyAnim(p.pair); } else if (_apply) _apply(p.id);
+  });
   btn.addEventListener('pointerenter', () => _enter(t));
   btn.addEventListener('pointerleave', () => _leave(t));
   if (mine) btn.addEventListener('contextmenu', (e) => { e.preventDefault(); _openMenu(e, p.id, btn); });
@@ -188,7 +223,7 @@ function _loopOf(url) {
 async function _enter(t) {
   t.over = true;
   if (t.end) { clearTimeout(t.end); t.end = 0; }      // back while it finishes its round: it plays on
-  if (t.loop || t.starting || !t.img || !_state || _tab !== 'presets') return;
+  if (t.loop || t.starting || !t.img || !_state || _tab !== _tabOf(t)) return;
   t.starting = true;
   let url = null;
   try {
@@ -219,7 +254,7 @@ async function _enter(t) {
 function _leave(t) {
   t.over = false;
   if (!t.loop || t.end) return;
-  const round = ((_state && (t.kind === 'text' ? _state.textLoop : _state.loop)) || 2.5) * 1000;
+  const round = ((_state && (t.kind === 'text' ? _state.textLoop : t.kind === 'anim' ? _state.animLoop : _state.loop)) || 2.5) * 1000;
   const left = round - ((performance.now() - t.loop.since) % round);
   t.end = setTimeout(() => { t.end = 0; _stop(t); }, Math.max(0, left - 40));
 }
@@ -270,7 +305,8 @@ function _paintCounts() {
   }
 }
 
-// The tile of the preset the pick wears is lit, and says `edited` when it was changed since.
+// The tile of the preset the pick wears is lit, and says `edited` when it was changed since; so is the pair of its In and Out
+// (V49, `anims`).
 function _light() {
   const t = _target || {};
   for (const [id, x] of _tiles) {
@@ -278,6 +314,8 @@ function _light() {
     x.btn.classList.toggle('is-on', on);
     x.ed.hidden = !(on && t.edited);
   }
+  const pairs = new Set(t.anims || []);
+  for (const [pair, x] of _anims) x.btn.classList.toggle('is-on', pairs.has(pair));
 }
 
 // ── The person's tile's menu: Rename / Delete (с47 - at once) ───────────────
@@ -345,12 +383,14 @@ export function showMine(id) {
 }
 
 function _setTab(id) {
-  _tab = id === 'text' ? 'text' : 'presets';
+  _tab = TAB_IDS.includes(id) ? id : 'presets';
   _keep(LS_TAB, _tab);
   _paintTab();
   Doc.setShown(_shown && _tab === 'text');
-  if (_tab === 'presets') revealLit();
-  else for (const t of _tiles.values()) _stopNow(t);
+  for (const t of _allTiles()) if (_tabOf(t) !== _tab) _stopNow(t);
+  if (_tab !== 'text') revealLit();
+  // The animations looked at are made first.
+  if (_tab === 'anim' && _state && _state.making) _read(true);
 }
 
 function _paintTab() {
@@ -361,6 +401,7 @@ function _paintTab() {
     b.setAttribute('aria-selected', on ? 'true' : 'false');
   }
   _ui.presets.hidden = _tab !== 'presets';
+  _ui.anim.hidden = _tab !== 'anim';
   _ui.text.hidden = _tab !== 'text';
 }
 
@@ -390,7 +431,7 @@ function _paintCat() {
 function _paintState() {
   if (!_ui || !_state) return;
   for (const id of (_state.ready || [])) {
-    const t = _tiles.get(id);
+    const t = _byId(id);
     if (!t || t.img) continue;
     const img = new Image();
     img.className = 'mv3-cap-img';
@@ -423,7 +464,7 @@ async function _read(make) {
   let d = null;
   try {
     d = make
-      ? await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: _cats[_kind] || null }) }).then((r) => r.json())
+      ? await fetch('/api/mv3/captions/tiles/make', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first: _tab === 'anim' ? 'anim' : (_cats[_kind] || null) }) }).then((r) => r.json())
       : await fetch('/api/mv3/captions/tiles').then((r) => r.json());
   } catch (e) { d = null; }
   _reading = false;
@@ -460,15 +501,15 @@ export function show(target) {
 export function hide() {
   _shown = false;
   _closeMenu();
-  for (const t of _tiles.values()) _stopNow(t);
+  for (const t of _allTiles()) _stopNow(t);
   Doc.setShown(false);
   if (_timer) { clearTimeout(_timer); _timer = 0; }
 }
 
-/** The lit tile brought into view - when the view comes up on a pick that wears a preset. */
+/** The lit tile brought into view - when the view comes up on a pick that wears a preset (or, on the animations, a pair). */
 export function revealLit() {
-  if (!_ui || _tab !== 'presets') return;
-  const lit = _ui.grid.querySelector('.mv3-cap-tile.is-on:not([hidden])');
+  if (!_ui || _tab === 'text') return;
+  const lit = (_tab === 'anim' ? _ui.agrid : _ui.grid).querySelector('.mv3-cap-tile.is-on:not([hidden])');
   if (lit && lit.scrollIntoView) lit.scrollIntoView({ block: 'nearest' });
 }
 
