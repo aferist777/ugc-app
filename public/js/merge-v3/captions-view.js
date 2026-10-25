@@ -37,7 +37,8 @@
    THE ANIMATIONS (phase V49, point 8b; the owner's (пр19)): a tab `animation` between `presets` and `text` - tiles of ready In ->
    Out pairs (captions/page-fx.js PAIRS), drawn by the server like the presets' (lib/caption-tiles.js) and shown the same way:
    the still, the motion under the cursor. A press puts the pair on what is picked (the inspector says how: `onAnim`); the
-   pair it wears is lit.
+   pair it wears is lit. With Shift a press picks several (the owner's (пр17), (пр21)): the inspector deals them out, and every
+   preset and pair the pick wears is lit.
 
    Which view shows, the header and the room are lib-views.js's; this only draws the tiles and the tabs.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -199,8 +200,10 @@ function _tile(p, mine) {
   btn.appendChild(box);
   btn.appendChild(name);
   const t = { btn, box, ed, nm, ph, mine, kind: anim ? 'anim' : _kindOf(p) };
-  btn.addEventListener('click', () => {
-    if (anim) { if (_applyAnim) _applyAnim(p.pair); } else if (_apply) _apply(p.id);
+  // Shift picks several (V49, the owner's (пр17), (пр21)): what is picked deals them out - the inspector says how.
+  btn.addEventListener('click', (e) => {
+    const o = { shift: !!(e && e.shiftKey) };
+    if (anim) { if (_applyAnim) _applyAnim(p.pair, o); } else if (_apply) _apply(p.id, o);
   });
   btn.addEventListener('pointerenter', () => _enter(t));
   btn.addEventListener('pointerleave', () => _leave(t));
@@ -306,13 +309,15 @@ function _paintCounts() {
 }
 
 // The tile of the preset the pick wears is lit, and says `edited` when it was changed since; so is the pair of its In and Out
-// (V49, `anims`).
+// (V49, `anims`). A lane wearing several (V49, `presets`) has them all lit, each `edited` that was (`editedIds`).
 function _light() {
   const t = _target || {};
+  const lit = new Set(Array.isArray(t.presets) ? t.presets : (t.preset ? [t.preset] : []));
+  const ed = new Set(Array.isArray(t.editedIds) ? t.editedIds : (t.edited && t.preset ? [t.preset] : []));
   for (const [id, x] of _tiles) {
-    const on = !!t.preset && id === t.preset;
+    const on = lit.has(id);
     x.btn.classList.toggle('is-on', on);
-    x.ed.hidden = !(on && t.edited);
+    x.ed.hidden = !(on && ed.has(id));
   }
   const pairs = new Set(t.anims || []);
   for (const [pair, x] of _anims) x.btn.classList.toggle('is-on', pairs.has(pair));

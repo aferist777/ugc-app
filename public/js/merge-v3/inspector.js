@@ -44,7 +44,8 @@ import * as Listen from './listen.js';
 import { askDelete, note } from './ask.js';
 import { spells, textOf, correctedCount, isCorrected } from '../captions/words.js';
 import { overPage } from '../captions/pages.js';
-import { markedColour, renderFrame, resolveStyle, PLATES, pairOf } from '../captions/style.js';
+import { markedColour, renderFrame, resolveStyle, PLATES, pairOf, mixOf, animsOf, LOOK_KEYS } from '../captions/style.js';
+import { deal, newSeed, withoutRefs, refsOf } from '../captions/mix.js';
 import { pageBox } from '../captions/place.js';
 import * as Platforms from './platforms.js';
 import * as WordEdit from './word-edit.js';
@@ -605,13 +606,23 @@ function _blankWordsTrack(host, track) {
   const st = styleOf(track, fmt);
   const isSubs = track.kind === 'subs';
   const set = (patch) => setSubsStyleB(track.id, patch, isSubs && _cuts(patch));
+  // SEVERAL PRESETS AND ANIMATIONS (V49, the owner's (пр17), (пр21)-(пр24)): the subtitle lane's only.
+  const mix = isSubs ? mixOf(raw) : null;
+  const anims = isSubs ? animsOf(raw) : null;
   // A preset REPLACES the lane's style (every field - the owner's answer 1); a subtitle lane is cut again. A text preset keeps
-  // where the lane's lines are (V42, (ц3) - preset-use.js placed); a subtitle lane its In and Out (V49, (пр20)).
-  const apply = (id) => { const s = placed(id, raw); if (s) setSubsStyleB(track.id, isSubs ? keepMotion(s, raw) : s, isSubs); };
+  // where the lane's lines are (V42, (ц3) - preset-use.js placed); a subtitle lane its In and Out (V49, (пр20)), and a press
+  // without Shift is one preset again. Shift on the subtitle lane adds the preset to those dealt, or takes it away (_shiftPreset).
+  const apply = (id, o) => {
+    if (isSubs && o && o.shift) return _shiftPreset(track, raw, id);
+    const s = placed(id, raw);
+    if (s) setSubsStyleB(track.id, isSubs ? Object.assign(keepMotion(s, raw), mix ? { mix: [] } : {}) : s, isSubs);
+  };
   const pagesNow = (track.clips || []).filter(isHeard).length;
-  _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : ''));
-  // Saved as the lane's style is stored - an automatic size stays automatic.
-  _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw, isSubs ? '' : 'text');
+  _capHead(host, track.name || (isSubs ? 'Subtitles' : 'Text'), 'the whole lane' + (isSubs && pagesNow ? ' · ' + pagesNow + ' pages' : '')
+    + (mix ? ' · ' + mix.length + ' presets' : ''));
+  // Saved as the lane's style is stored - an automatic size stays automatic. Several presets are no one look (пр23): no saving.
+  if (mix) _mixLine(host, mix);
+  else _presetLine(host, raw, () => apply(raw.preset), undefined, () => raw, isSubs ? '' : 'text');
 
   const add = C.button('Add a line', () => addCapB(track.id, playheadB(), 'New line'),
     { title: 'One line at the playhead, to type yourself' });
@@ -698,7 +709,7 @@ function _blankWordsTrack(host, track) {
       + '; changing this cuts them again straight away, lines you typed stay as they are.';
     if (sent) {
       // One rule, no Words or Lines (с42); In and Out under Cut (V49, (пр17)).
-      _pageMotionRows(host, st, set);
+      _pageMotionRows(host, st, set, anims);
       host.appendChild(C.hint(heard
         ? 'Classic subtitles: a page is a sentence, or part of one cut at a comma - two lines of up to 42 characters (and '
           + '78% of the frame), 1-7 s on screen; a pause of a second ends it. ' + counted
@@ -714,28 +725,136 @@ function _blankWordsTrack(host, track) {
       const LINES = [['1', 'one'], ['2', 'two']].concat(lines === 3 ? [['3', 'three']] : []);
       host.appendChild(C.row('Lines', C.select(LINES, String(lines), (v) => set({ lines: +v }))));
       // In and Out right under Lines; the hint that stood here went (V49, the owner's (пр17)).
-      _pageMotionRows(host, st, set);
+      _pageMotionRows(host, st, set, anims);
     }
   }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   // A subtitle lane's In and Out are above, under Lines.
-  _styleRows(host, st, set, { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, motion: false, marks: (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k)),
-    pages: () => (track.clips || []).map(c => ({ track, clip: c })) });
+  const marks = (track.clips || []).some(c => Array.isArray(c && c.words) && c.words.some(w => w && w.k));
+  const rowsO = { fmt, autoS: raw.sizeAuto !== false, textLane: !isSubs, motion: false, marks,
+    pages: () => (track.clips || []).map(c => ({ track, clip: c })) };
+  if (mix) {
+    // Several presets (пр22): the common rows - Where, Nudge, Size - and a section per preset, closed until opened.
+    _placeRows(host, st, set, rowsO);
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    _mixSections(host, track, raw, mix, fmt, marks);
+  } else _styleRows(host, st, set, rowsO);
 
-  // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2).
-  const own = (track.clips || []).filter(c => c && c.style && Object.keys(c.style).length);
+  // Lines that wear a style of their own keep it when the lane's changes (the owner's answer 2). What a mix dealt them is no
+  // style of their own, and stays (V49).
+  const own = (track.clips || []).filter(c => c && withoutRefs(c.style));
   if (own.length) {
     host.appendChild(_el('div', 'mv3-c-sep'));
     host.appendChild(C.row('', C.button(own.length + (own.length === 1 ? ' line has its' : ' lines have their') + ' own style - reset',
-      () => setCapStyleB(own.map(c => c.id), null, { cut: isSubs }),
+      () => setCapStyleB(own.map(c => c.id), (c) => refsOf(c.style), { replace: true, cut: isSubs }),
       { title: 'Puts those lines back on the lane\'s style' })));
   }
   host.appendChild(_el('div', 'mv3-c-sep'));
   _presetsHint(host);
   _laneRemove(host, track);
-  return { preset: raw.preset || '', edited: !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
-    kind: isSubs ? 'subs' : 'text', anims: [pairNow(st)], anim: (pair) => set(pairOf(pair)) };
+  // A press on an animation's tile: the pair on the lane - one pair again; with Shift on the subtitle lane, one more dealt (_shiftAnim).
+  const anim = (pair, o) => {
+    if (isSubs && o && o.shift) return _shiftAnim(track, raw, st, pair);
+    set(Object.assign(pairOf(pair), anims ? { anims: [] } : {}));
+  };
+  return { preset: mix ? '' : (raw.preset || ''), edited: !mix && !!raw.preset && editedKeys(raw).length > 0, apply, readOnly: !Store.canEdit(),
+    presets: mix ? mix.map(e => e.preset).filter(Boolean) : null, editedIds: mix ? mix.filter(_entryEdited).map(e => e.preset) : null,
+    kind: isSubs ? 'subs' : 'text', anims: anims ? anims.slice() : [pairNow(st)], anim };
+}
+
+// ── Several presets and animations on the subtitle lane (phase V49, point 8c; the owner's (пр17), (пр21)-(пр24)) ──
+// A preset as an entry of the lane's mix: its id and its look (style.js LOOK_KEYS) - what its section changes.
+function _lookEntry(st) {
+  const o = { preset: (st && st.preset) || '' };
+  for (const k of LOOK_KEYS) if (st && st[k] !== undefined) o[k] = st[k];
+  return o;
+}
+// An entry changed since its preset was picked.
+function _entryEdited(e) {
+  const base = e && e.preset ? presetStyle(e.preset) : null;
+  return !!base && LOOK_KEYS.some(k => e[k] !== undefined && JSON.stringify(e[k]) !== JSON.stringify(base[k]));
+}
+
+// SHIFT ON A PRESET TILE (пр21): the preset joins those dealt - the lane's own look (edits and all) is the first of them - or, picked
+// already, leaves them. Two or more: dealt again at random, each page one of them, two in a row never the same (a new seed; the
+// lane cut again in the same step - captions/mix.js deals as it cuts). One left: the lane wears it, as a press without Shift.
+function _shiftPreset(track, raw, id) {
+  const mix = mixOf(raw);
+  const cur = mix ? mix.slice() : (raw.preset ? [_lookEntry(raw)] : []);
+  const at = cur.findIndex(e => e.preset === id);
+  let next;
+  if (at >= 0) next = cur.filter((_, i) => i !== at);
+  else { const p = presetStyle(id); if (!p) return; next = cur.concat([_lookEntry(p)]); }
+  if (next.length >= 2) { setSubsStyleB(track.id, { mix: next, mixSeed: newSeed() }, true); return; }
+  // One preset again: its look as it was among them, the lane's common rows as they are.
+  if (next.length === 1) setSubsStyleB(track.id, Object.assign({}, raw, next[0], { mix: [] }), true);
+}
+
+// SHIFT ON AN ANIMATION'S TILE (пр17): the pair joins those dealt - the lane's own In and Out are the first - or leaves them. Two or more:
+// each page one of them at random (dealt without cutting the lane again); one left: the lane's In and Out again.
+function _shiftAnim(track, raw, st, pair) {
+  const an = animsOf(raw);
+  const now = pairNow(st);
+  const cur = an ? an.slice() : (now !== 'at-once|none' ? [now] : []);
+  const at = cur.indexOf(pair);
+  const next = at >= 0 ? cur.filter((_, i) => i !== at) : cur.concat([pair]);
+  if (next.length >= 2) {
+    const patch = { anims: next, mixSeed: newSeed() };
+    // Dealt in the same step as the lane is told (timeline-b.js's `after`); a build without it deals by cutting the lane again.
+    if (setSubsStyleB.length >= 4) setSubsStyleB(track.id, patch, false, (t) => deal(t.clips, t.style));
+    else setSubsStyleB(track.id, patch, true);
+    return;
+  }
+  setSubsStyleB(track.id, Object.assign(pairOf(next[0] || 'at-once|none'), { anims: [] }), false);
+}
+
+// The row of a mixed lane where "based on" stands: which presets, and that their mix is saved as no preset of its own (пр23).
+function _mixLine(host, mix) {
+  const row = _el('div', 'mv3-cap-preset');
+  row.appendChild(_el('span', 'mv3-cap-based', 'mixed: ' + mix.map(e => presetName(e.preset) || 'a look').join(', ')));
+  row.title = 'Every page wears one of these, at random - Shift on a tile adds a preset or takes it away, a tile without Shift is one preset again';
+  host.appendChild(row);
+}
+
+// Which sections of a mixed lane are open - closed until opened (пр22), kept across the strip's rebuilds: lane id | preset id.
+const _openSec = new Set();
+
+// A SECTION PER PRESET OF THE MIX (пр22): its name and how many pages wear it; opened - its look (Font to Box), for its pages only.
+function _mixSections(host, track, raw, mix, fmt, marks) {
+  const pages = (track.clips || []).filter(c => c && c.name);
+  mix.forEach((e, k) => {
+    const n = pages.filter(c => c.style && c.style.mixP === k).length;
+    const key = track.id + '|' + (e.preset || '#' + k);
+    const open = _openSec.has(key);
+    const edited = _entryEdited(e);
+    const head = _el('button', 'mv3-cap-sec' + (open ? ' is-open' : ''));
+    head.type = 'button';
+    head.title = open ? 'Fold it' : 'The look of these pages - font, colours, the spoken word, outline, shadow, box';
+    head.appendChild(_el('span', 'mv3-cap-sec-c', open ? '▾' : '▸'));
+    head.appendChild(_el('span', 'mv3-cap-sec-n', presetName(e.preset) || 'a look'));
+    head.appendChild(_el('span', 'mv3-cap-sec-k', n + (n === 1 ? ' page' : ' pages') + (edited ? ' · edited' : '')));
+    head.addEventListener('click', () => { if (_openSec.has(key)) _openSec.delete(key); else _openSec.add(key); render(); });
+    host.appendChild(head);
+    if (!open) return;
+    const body = _el('div', 'mv3-cap-sec-body');
+    // Its pages' look: the lane's with this entry dealt on top - what those pages are drawn with.
+    const stK = styleOf(track, fmt, { style: { mixP: k } });
+    const put = (entry, cut) => setSubsStyleB(track.id, { mix: (raw.mix || []).map((x, i) => (i === k ? entry : x)) }, cut);
+    const setK = (patch) => {
+      const look = {};
+      for (const f of Object.keys(patch || {})) if (LOOK_KEYS.includes(f)) look[f] = patch[f];
+      if (Object.keys(look).length) put(Object.assign({}, e, look), _cuts(look));
+    };
+    if (edited) {
+      const base = presetStyle(e.preset);
+      const b = C.button('back to the preset', () => put(_lookEntry(base), true), { title: 'Takes away what was changed in this look' });
+      b.disabled = !Store.canEdit();
+      body.appendChild(C.row('', b));
+    }
+    _lookRows(body, stK, setK, { fmt, textLane: false, motion: false, marks, setBehind: (v) => setK(_behind(v, stK)) });
+    host.appendChild(body);
+  });
 }
 
 // ── The settings of words, shared by a lane, one caption and several (K6) ────
@@ -791,7 +910,14 @@ function _presetsHint(host) {
 
 // Every field of a look - Where to Behind. `set(patch)` writes it where it belongs; `autoS` - the lane's
 // size is still the format's (a caption has no "auto" of its own); `textLane` - a text lane's: no spoken word there.
+// Two halves since V49: where and how big (_placeRows) - common to every page of a lane with several presets - and the look
+// (_lookRows), which each of them has its own of.
 function _styleRows(host, st, set, o) {
+  _placeRows(host, st, set, o);
+  _lookRows(host, st, set, o);
+}
+
+function _placeRows(host, st, set, o) {
   host.appendChild(C.row('Where', C.select(POS, st.pos, (v) => set({ pos: v }))));
   // Nudged up or down from that anchor, as a fraction of the frame - so it means the same
   // thing after the format changes, which a number of pixels would not. ±80% (phase V30, block 3): a page dragged
@@ -821,7 +947,9 @@ function _styleRows(host, st, set, o) {
   host.appendChild(C.row('Size', o.autoS === undefined ? size : C.pair(size,
     C.toggleNamed('auto', autoS, (on) => set(on ? { sizeAuto: true, size: autoSize(o.fmt) } : { sizeAuto: false }),
       'Let the format choose the size'))));
+}
 
+function _lookRows(host, st, set, o) {
   host.appendChild(_el('div', 'mv3-c-sep'));
   // Bold is a choice only where the family ships both weights; a Black or a Bold file is what it is.
   const fontSel = C.select(FONTS, st.font, (v) => set({ font: v }));
@@ -917,7 +1045,19 @@ function _styleRows(host, st, set, o) {
 
 // A SUBTITLE PAGE'S IN AND OUT (phase V49, (пр16)-(пр18)): the In shown is the one chosen, or the preset's own way of arriving
 // while none is (style.js `appear`, (пр20)); "at once" chosen takes that away too. Their lengths are the app's.
-function _pageMotionRows(host, st, set) {
+// With several animations dealt (`anims`, V49): a side the pairs do not share says "mixed", and choosing one puts it on every pair -
+// the other side stays dealt.
+function _pageMotionRows(host, st, set, anims) {
+  if (anims) {
+    const side = (k) => [...new Set(anims.map(p => pairOf(p)[k]))];
+    const ins = side('enter'), outs = side('leave');
+    const mixed = (n) => [['', 'mixed · ' + n]];
+    host.appendChild(C.row('In', C.select(ins.length > 1 ? mixed(ins.length).concat(PAGE_IN) : PAGE_IN, ins.length > 1 ? '' : ins[0],
+      (v) => { if (v) set({ anims: anims.map(p => v + '|' + pairOf(p).leave) }); })));
+    host.appendChild(C.row('Out', C.select(outs.length > 1 ? mixed(outs.length).concat(PAGE_OUT) : PAGE_OUT, outs.length > 1 ? '' : outs[0],
+      (v) => { if (v) set({ anims: anims.map(p => pairOf(p).enter + '|' + v) }); })));
+    return;
+  }
   host.appendChild(C.row('In', C.select(PAGE_IN, shownEnter(st) || 'at-once', (v) => set({ enter: v }))));
   host.appendChild(C.row('Out', C.select(PAGE_OUT, PAGE_LEAVES.includes(st.leave) ? st.leave : 'none', (v) => set({ leave: v }))));
 }
@@ -998,8 +1138,11 @@ function _renderCaptions(host, items) {
 function _blankCaption(host, track, clip) {
   const tl = Store.timeline();
   const fmt = (tl && tl.format) || '9:16';
-  const own = !!(clip.style && Object.keys(clip.style).length);
-  _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : ''));
+  // What a lane's mix dealt it is not a style of its own (V49): its own is what is left.
+  const own = !!withoutRefs(clip.style);
+  const drawn = styleOf(track, fmt, clip);
+  const dealt = track.kind === 'subs' && !!mixOf(track.style) && !own && drawn.preset ? presetName(drawn.preset) : '';
+  _capHead(host, 'This line', 'on ' + (track.name || track.kind) + (own ? ' · its own style' : dealt ? ' · ' + dealt : ''));
   // What is saved is the look the line is drawn with: its lane's style with its own on top (the cut is the lane's).
   // A text preset keeps where the line is now (V42, (ц3)).
   const wear = (id, cut) => {
@@ -1093,7 +1236,7 @@ function _blankCaption(host, track, clip) {
       pages: () => [{ track, clip }] });
   if (own) {
     host.appendChild(_el('div', 'mv3-c-sep'));
-    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], null, { cut: heard }),
+    host.appendChild(C.row('', C.button('back to the lane\'s style', () => setCapStyleB([clip.id], refsOf(clip.style), { replace: true, cut: heard }),
       { title: 'This line wears its lane\'s style again' })));
   }
   host.appendChild(_el('div', 'mv3-c-sep'));
@@ -1101,8 +1244,9 @@ function _blankCaption(host, track, clip) {
   host.appendChild(C.row('', C.button('Remove this line', () => removeB(track.id, clip.id), {
     danger: true, title: 'Takes the caption off the lane',
   })));
+  // ITS tiles lit (V49, (пр17)): the preset it is drawn with - its own, the one its lane's mix dealt it, or its lane's.
   const s = own ? clip.style : null;
-  return { preset: s ? (s.preset || '') : '', edited: !!(s && s.preset) && editedKeys(s).length > 0,
+  return { preset: s ? (s.preset || '') : (drawn.preset || ''), edited: !!(s && s.preset) && editedKeys(withoutRefs(s)).length > 0,
     apply: (id) => wear(id, heard), readOnly: !Store.canEdit(), kind: track.kind === 'text' ? 'text' : 'subs',
     anims: [pairNow(styleOf(track, fmt, clip))], anim: (pair) => setCapStyleB([clip.id], pairOf(pair), { cut: false }) };
 }
@@ -1261,9 +1405,9 @@ export function initInspector() {
   });
   WK.onChange(() => render());
   // A tile pressed applies its preset to what is picked; "Library" in the captions view lets the pick go.
-  CapView.onApply((id) => { if (_capApply) _capApply(id); });
-  // A pair of In and Out pressed (V49) - on what is picked.
-  CapView.onAnim((pair) => { if (_capAnim) _capAnim(pair); });
+  CapView.onApply((id, o) => { if (_capApply) _capApply(id, o); });
+  // A pair of In and Out pressed (V49) - on what is picked; with Shift, one more dealt.
+  CapView.onAnim((pair, o) => { if (_capAnim) _capAnim(pair, o); });
   // The person's own presets (phase V30, block 5): read once, and a change paints the strip - "based on" a preset of theirs
   // is said once the list is known, and goes when the preset is deleted.
   MyPresets.onChange(() => render());

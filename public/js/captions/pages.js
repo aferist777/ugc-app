@@ -22,6 +22,10 @@
    breakLines() is the one rule for where a page breaks into lines - the cut asks it whether a page fits,
    the .ass builder asks it where to put the breaks.
 
+   A LANE WITH SEVERAL PRESETS (phase V49, mix.js): what a deal put on a page (its references) is no look of its own - it is no
+   boundary, a page cut from words of two pages takes its first word's; a page must fit in EVERY look it may be dealt; and the
+   pages cut again are dealt again (mix.js deal) - the lines typed by hand too.
+
    PURE, and shared: the page imports it, the server require()s it (lib/mv3b-subs.js).
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -29,6 +33,8 @@ import { resolveStyle, withAuto, renderFrame, autoWordsPerLine } from './style.j
 import { meter, LINE_MAX } from './measure.js';
 import { isHeard, soundPieces } from './heard.js';
 import { tokensOf, spells, retext } from './words.js';
+import { mixOf } from './style.js';
+import { withoutRefs, deal, needsDeal } from './mix.js';
 
 export { tokensOf };
 
@@ -258,7 +264,16 @@ export function fixJoins(words, joins) {
 }
 
 // ── The cut ─────────────────────────────────────────────────────────────────
-const lookKey = (l) => (l ? JSON.stringify(l) : '');
+// What a deal put on a page is not a look of its own (V49): a look of references only is no look.
+const lookKey = (l) => {
+  if (!l) return '';
+  if (!l.style) return JSON.stringify(l);
+  const s = withoutRefs(l.style);
+  if (s === l.style) return JSON.stringify(l);
+  const o = Object.assign({}, l);
+  if (s) o.style = s; else delete o.style;
+  return Object.keys(o).length ? JSON.stringify(o) : '';
+};
 
 /**
  * @param words   [{ text, start, end, k?, h?, look?, voice? }] in timeline seconds; `look` is the own look of the
@@ -344,7 +359,9 @@ export function paginate(words, opts) {
     if (end) { phrases.push({ idx: cur, end }); cur = []; }
   }
 
-  // Each phrase's style: the lane's, with the own look of its words on top.
+  // Each phrase's style: the lane's, with the own look of its words on top. On a lane with several presets (V49) a page may be
+  // dealt any of them: `alts` - each look it must fit in too.
+  const mixL = srt ? null : mixOf(o.lane);
   const styleCache = new Map();
   const styleOf = (look) => {
     const key = lookKey(look);
@@ -355,7 +372,12 @@ export function paginate(words, opts) {
       const lines = sent ? SENT.lines : Math.max(1, Math.min(3, Math.round(+st.lines || 2)));
       const m = st ? meter(st) : null;
       const lim = LINE_MAX * F.w;
-      styleCache.set(key, { st, N, lines, m, lim });
+      const own = look && look.style ? withoutRefs(look.style) : null;
+      const alts = mixL ? mixL.map((_, k) => {
+        const a = withAuto(resolveStyle(o.lane, Object.assign({}, own || {}, { mixP: k })), F.w, F.h);
+        return { st: a, m: meter(a) };
+      }) : null;
+      styleCache.set(key, { st, N, lines, m, lim, alts });
     }
     return styleCache.get(key);
   };
@@ -371,10 +393,13 @@ export function paginate(words, opts) {
     const dur = list[b - 1].end - list[a].start;
     if (dur > maxDur + 1e-9 || (!merging && dur < PAGE.minDur - 1e-9)) return false;
     const toks = [];
+    // On a lane with several presets a page is drawn in one of THEIR looks, never the lane's own: those are what it must fit in.
+    const looks = S.alts || (S.m ? [{ st: S.st, m: S.m }] : null);
     for (let i = a; i < b; i++) {
-      if (S.m && S.m.text(list[i].text) > S.lim) return false;       // a word wider than a line stands alone
+      if (looks && looks.some((x) => x.m.text(list[i].text) > S.lim)) return false;       // a word wider than a line stands alone
       toks.push(list[i].text);
     }
+    if (S.alts) return S.alts.every((x) => breakLines(toks, x.st, F.w).length <= S.lines);
     return breakLines(toks, S.st, F.w).length <= S.lines;
   };
 
@@ -638,10 +663,18 @@ export function recut(track, tl, style) {
  */
 export function recutClips(track, tl, makeId) {
   const pages = recut(track, tl);
-  if (!pages) return null;
+  // A lane with no heard words is still dealt its mix (V49) - its typed lines.
+  if (!pages) {
+    if (!needsDeal(track)) return null;
+    const list = ((track && track.clips) || []).slice();
+    deal(list, track.style);
+    return list;
+  }
   const old = ((track && track.clips) || []).filter(isHeard);
   const typed = ((track && track.clips) || []).filter((c) => c && !isHeard(c));
-  return typed.concat(_asClips(pages, old, makeId, track.clips)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  const out = typed.concat(_asClips(pages, old, makeId, track.clips)).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  if (needsDeal({ style: track.style, clips: out })) deal(out, track.style);
+  return out;
 }
 
 /**
@@ -665,7 +698,9 @@ export function recutSome(track, tl, ids, makeId) {
     joins: joinsOf(soundPieces(tl)),
   });
   const made = _asClips(pages, mine, makeId, all);
-  return { clips: others.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0)), made: made.map((c) => c.id) };
+  const clips = others.concat(made).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+  if (needsDeal({ style: track.style, clips })) deal(clips, track.style);
+  return { clips, made: made.map((c) => c.id) };
 }
 
 /**
@@ -692,7 +727,9 @@ export function recutWithLooks(track, tl, looks, makeId, keep) {
   }
   const spans = typedOf(track).concat(held.map((c) => [+c.start || 0, (+c.start || 0) + (+c.dur || 0)]));
   const pages = paginate(words, { lane: track.style, format: tl && tl.format, typed: spans, joins: joinsOf(soundPieces(tl)) });
-  return typed.concat(held, _asClips(pages, cut, makeId, all)).sort(byStart);
+  const out = typed.concat(held, _asClips(pages, cut, makeId, all)).sort(byStart);
+  if (needsDeal({ style: track.style, clips: out })) deal(out, track.style);
+  return out;
 }
 
 // Pages as lane clips, keeping the ids of the captions they came from (see recutClips). A new id is never

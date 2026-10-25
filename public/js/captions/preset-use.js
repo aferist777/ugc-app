@@ -54,7 +54,8 @@ export const MOTION_KEYS = ['enter', 'enterDur', 'leave', 'leaveDur'];
 
 /**
  * A subtitle preset's whole style `st` as worn by what wears `cur` now, its In and Out kept: a LANE keeps its own (`cur` its
- * style); a LINE (`line`) keeps only what its own style sets - the rest stays its lane's, whatever that becomes.
+ * style); a LINE (`line`) keeps only what its own style sets - the rest stays its lane's, whatever that becomes - and the
+ * animation its lane's mix dealt it (`mixA`, captions/mix.js).
  */
 export function keepMotion(st, cur, line) {
   if (!st) return st;
@@ -63,6 +64,7 @@ export function keepMotion(st, cur, line) {
     if (cur && cur[k] !== undefined) out[k] = cur[k];
     else if (line) delete out[k];
   }
+  if (line && cur) for (const k of ['mixA', 'mixS']) if (cur[k] !== undefined) out[k] = cur[k];
   return out;
 }
 
