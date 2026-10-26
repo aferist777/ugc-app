@@ -16,13 +16,15 @@
    ty, without the mark - is never touched; moved by hand after the rule placed it, it is the person's from then on.
 
    WHEN: at the cut of a highlights fragment and whenever its captions are restyled there (lib/highlights-cut.js), and
-   whenever a clip's Framing switch changes on the page (merge-v3/framing-ui.js) - in the same step as the frame.
+   whenever a clip's Framing switch changes on the page (merge-v3/framing-ui.js) - in the same step as the frame; (phase V51)
+   and whenever its fit, frame, crop, PiP or size is written (merge-v3/timeline-b.js SPLIT_KEYS) - in that same step.
 
    PURE, and shared: the page imports it, the server require()s it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { isFramed, windowW } from '../framing/path.js';
 import { ownPlace } from './place.js';
+import { active as cropActive } from '../framing/crop.js';
 
 /** The rule's mark: a page in the middle with exactly this offset down was put there by the rule. */
 export const MARK = 0.0001;
@@ -30,7 +32,10 @@ export const MARK = 0.0001;
 export const SHARE = 0.5;
 
 const _video = (tl) => ((tl && tl.tracks) || []).filter((t) => t && t.kind === 'video');
-const _placed = (c) => !!(c && c.tw != null && +c.tw > 0);          // an insert on the frame (PiP): covers nothing
+// An insert on the frame (PiP): covers nothing. (phase V51) Nor does a cropped clip, placed or not: it is drawn as its piece -
+// never framed into bands (lib/mv3b-render.js isFramedClip) - a PiP of it on main, an insert of it on a lane above.
+// A PiP NOT sized (no `tw`) is not on this list: it shows the frame's own picture - the bands too - as big as the frame.
+const _placed = (c) => !!(c && ((c.tw != null && +c.tw > 0) || cropActive(c)));
 
 /** Is this clip one whose picture follows a framing record that can split it (as the render frames it: mv3b-render.js isFramedClip)? */
 function _canSplit(c, aspect) {

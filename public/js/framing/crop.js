@@ -79,17 +79,26 @@ export function pickMap(maps, k) {
  * THE SCISSORS ((пр40)): the placement that draws the file's rectangle `to` (shares) with the pixels where `map` draws them -
  * the same scale, the same turn, the same place on the frame. W, H - the frame in the pixels of `map.box`. The numbers are kept
  * within what a placement may hold (timeline-b.js _write): the middle on the frame, the width 0.04-4 of it.
+ * `whole` - when `to` is only a PART of the box the placement sizes (a band of a PiP framed into two): where the part lies in
+ * it - its middle off the box's middle (`ox`, `oy`) and its width (`f`), in widths of the box (preview-b.js mapsOf).
  */
-export function placeFor(map, to, W, H) {
+export function placeFor(map, to, W, H, whole) {
   const v = map.view, b = map.box;
   const Sx = b.dw / Math.max(1e-6, v.w), Sy = b.dh / Math.max(1e-6, v.h);
-  const lx = ((+to.x + (+to.w) / 2) - (v.x + v.w / 2)) * Sx;
-  const ly = ((+to.y + (+to.h) / 2) - (v.y + v.h / 2)) * Sy;
+  let lx = ((+to.x + (+to.w) / 2) - (v.x + v.w / 2)) * Sx;
+  let ly = ((+to.y + (+to.h) / 2) - (v.y + v.h / 2)) * Sy;
+  let pw = (+to.w) * Sx;
+  if (whole && +whole.f > 0) {
+    const bw = pw / whole.f;
+    lx -= (+whole.ox || 0) * bw;
+    ly -= (+whole.oy || 0) * bw;
+    pw = bw;
+  }
   const a = (+b.angle || 0) * Math.PI / 180;
   const cx = b.cx + lx * Math.cos(a) - ly * Math.sin(a);
   const cy = b.cy + lx * Math.sin(a) + ly * Math.cos(a);
   const out = {
-    tw: Math.max(0.04, Math.min(4, (+to.w) * Sx / W)),
+    tw: Math.max(0.04, Math.min(4, pw / W)),
     tx: Math.max(0, Math.min(1, cx / W)),
     ty: Math.max(0, Math.min(1, cy / H)),
   };

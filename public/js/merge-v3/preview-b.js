@@ -797,7 +797,9 @@ function _mapsOf(r, sw, sh) {
     const ps = r.inner.parts || [{ sx: r.inner.sx, sy: r.inner.sy, sw: r.inner.sw, sh: r.inner.sh, dx: 0, dy: 0, dw: W, dh: H }];
     return ps.filter((p) => !p.blur).map((p) => {
       const lx = (p.dx + p.dw / 2 - W / 2) * k, ly = (p.dy + p.dh / 2 - H / 2) * k;
-      return { view: viewOf(p), box: box(r.cx + lx * Math.cos(a) - ly * Math.sin(a), r.cy + lx * Math.sin(a) + ly * Math.cos(a), p.dw * k, p.dh * k, r.angle) };
+      return { view: viewOf(p), box: box(r.cx + lx * Math.cos(a) - ly * Math.sin(a), r.cy + lx * Math.sin(a) + ly * Math.cos(a), p.dw * k, p.dh * k, r.angle),
+        // Where this part lies in the PiP's box, in widths of the box - what sizes and puts the box is the box, not the part.
+        whole: { ox: (p.dx + p.dw / 2 - W / 2) / W, oy: (p.dy + p.dh / 2 - H / 2) / W, f: p.dw / W } };
     });
   }
   if (r.pip) return [{ view: { x: 0, y: 0, w: 1, h: 1 }, box: box(r.cx, r.cy, r.dw, r.dh, r.angle) }];

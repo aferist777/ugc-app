@@ -104,8 +104,19 @@ function _offPatch(it, d) {
   const main = isMain(it.track);
   const t = _moment(it.clip);
   const m = mapsOf(it.clip, main, d.w, d.h, t);
-  const bare = mapsOf({ ...it.clip, crop: null }, main, d.w, d.h, t);
-  return { crop: { ...k, off: true }, ...placeFor(m.maps[0], pickMap(bare.maps, k).view, m.W, m.H) };
+  const to = pickMap(mapsOf({ ...it.clip, crop: null }, main, d.w, d.h, t).maps, k);
+  const pl = placeFor(m.maps[0], to.view, m.W, m.H, to.whole);
+  const crop = { ...k, off: true };
+  // A PiP back at exactly the size and place it has unsized (its crop taken off where it was put on) is unsized again: the
+  // same picture, and its unplaced state - the subtitles' rule for a split frame reads it so (captions/split.js).
+  if (main && it.clip.pip && !pl.angle) {
+    const nt = pickMap(mapsOf({ ...it.clip, crop: null, tw: null, tx: null, ty: null, angle: null }, main, d.w, d.h, t).maps, k);
+    const ntw = (nt.whole && nt.whole.f > 0 ? nt.box.dw / nt.whole.f : nt.box.dw) / m.W;
+    if (Math.abs(pl.tw - ntw) < 0.003 && Math.abs(pl.tx - 0.5) < 0.002 && Math.abs(pl.ty - 0.5) < 0.002) {
+      return { crop, tw: null, tx: null, ty: null };
+    }
+  }
+  return { crop, ...pl };
 }
 
 /** The crop's patch when a main clip's PiP goes off: the frame remembered, not applied ((пр43)) - or nothing to add. */

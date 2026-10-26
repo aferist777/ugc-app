@@ -2373,7 +2373,8 @@ export function placeClipAbove(data) {
 // (phase V40, tail (а), the owner 2026-10-24: "Fit / Fill и Shift пересчитывают субтитры на шве") A clip's fit or its frame
 // - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the subtitles' places on the seam are
 // worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch does (framing-ui.js).
-const SPLIT_KEYS = new Set(['fit', 'frame']);
+// (phase V51) So do a crop, a PiP and a placement (`tw`) - put on, taken off or sized: a cropped or placed clip covers nothing.
+const SPLIT_KEYS = new Set(['fit', 'frame', 'crop', 'pip', 'tw']);
 
 export function setClipFields(trackId, clipId, patch) {
   Store.mutate(tl => {
