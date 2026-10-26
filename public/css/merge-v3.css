@@ -835,7 +835,7 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* A clip's crop (phase V51, point 1, js/merge-v3/crop-box.js): the clip's whole picture with the frame over it, and the
    forms under it - Free, 9:16, 1:1, 16:9, 4:5 - the one kept lit. */
 .mv3-crop{display:flex; justify-content:center; padding:4px 0 6px}
-.mv3-crop-cv{display:block; border-radius:var(--r-xs); background:#000; touch-action:none; cursor:default}
+.mv3-crop-cv{display:block; touch-action:none; cursor:default}
 .mv3-crop-shapes{display:flex; gap:4px; padding:0 0 4px}
 .mv3-crop-shape{
   flex:1 1 0; min-width:0; height:22px; padding:0 4px;

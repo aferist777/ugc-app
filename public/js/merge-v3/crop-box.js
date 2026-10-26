@@ -140,6 +140,7 @@ export async function setCrop(items, want) {
 const MAX_H = 260;                // css px the field may be tall
 const GRIP = 9;                   // css px about a corner that takes it
 const EDGE = 7;                   // css px about a side
+const PAD = 7;                    // css px of room around the picture: a grip on the file's edge is whole, and taken whole
 let _f = null;                    // the field on show: { cv, items, d, k }
 let _g = null;                    // the frame being moved: { part, p0, k0, k, base, pointer }
 const _pic = document.createElement('canvas');   // the last frame, kept between paints of the panel
@@ -217,14 +218,14 @@ function _seekOwn() {
 function _size() {
   const f = _f;
   const ar = f.d.w / f.d.h;
-  const avail = Math.max(120, f.wrap.clientWidth || 330);
-  const cw = Math.min(avail, MAX_H * ar), ch = cw / ar;
+  const avail = Math.max(120, (f.wrap.clientWidth || 330) - 2 * PAD);
+  const cw = Math.round(Math.min(avail, MAX_H * ar)), ch = Math.round(cw / ar);
   f.cssW = cw; f.cssH = ch;
   const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  f.cv.style.width = Math.round(cw) + 'px';
-  f.cv.style.height = Math.round(ch) + 'px';
-  f.cv.width = Math.round(cw * dpr);
-  f.cv.height = Math.round(ch * dpr);
+  f.cv.style.width = (cw + 2 * PAD) + 'px';
+  f.cv.style.height = (ch + 2 * PAD) + 'px';
+  f.cv.width = Math.round((cw + 2 * PAD) * dpr);
+  f.cv.height = Math.round((ch + 2 * PAD) * dpr);
   f.dpr = dpr;
 }
 
@@ -232,8 +233,10 @@ function _draw() {
   const f = _f;
   if (!f || !f.d || !f.cssW) return;
   const g = f.cv.getContext('2d');
-  const W = f.cv.width, H = f.cv.height, s = f.dpr;
+  const s = f.dpr, W = f.cssW * s, H = f.cssH * s;
   g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, f.cv.width, f.cv.height);
+  g.setTransform(1, 0, 0, 1, PAD * s, PAD * s);
   g.fillStyle = '#000';
   g.fillRect(0, 0, W, H);
   if (_picKey && _picKey.startsWith(f.clip.id + '|')) { try { g.drawImage(_pic, 0, 0, W, H); } catch (e) { /* none yet */ } }
@@ -261,10 +264,10 @@ function _draw() {
   if (h > bar * 2.2) { g.fillRect(x - th / 2, y + h / 2 - bar / 2, th, bar); g.fillRect(x + w - th / 2, y + h / 2 - bar / 2, th, bar); }
 }
 
-// The pointer in shares of the file.
+// The pointer in shares of the file (the picture sits PAD inside the field's edges).
 function _pt(e) {
   const b = _f.cv.getBoundingClientRect();
-  return { x: (e.clientX - b.left) / Math.max(1, b.width), y: (e.clientY - b.top) / Math.max(1, b.height) };
+  return { x: (e.clientX - b.left - PAD) / Math.max(1, _f.cssW), y: (e.clientY - b.top - PAD) / Math.max(1, _f.cssH) };
 }
 
 // What a press at p takes: a corner ('nw' ...), a side ('n' ...), the middle ('move') or nothing.
