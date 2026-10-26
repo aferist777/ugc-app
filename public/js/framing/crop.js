@@ -3,12 +3,27 @@
    (lib/timeline-shape.js and lib/mv3b-render.js require() it, as they do framing/path.js).
 
    `crop: { x, y, w, h }` - a piece of the clip's FILE in shares of its width and height, cut FIRST:
-   past it the clip behaves as if the file were that piece. `off: true` - the frame is remembered and
-   not applied (PiP switched off takes the crop with it, the Crop tick brings it back - (пр43)).
+   past it the clip behaves as if the file were that piece - no Fit / Fill, Framing, Keep or punch-ins.
+   `off: true` - the frame is remembered and not applied (PiP switched off takes the crop with it, the
+   Crop tick brings it back - (пр43)). `shape` - the form the frame keeps while it is moved ((пр39):
+   9:16, 1:1, 16:9, 4:5 of the piece's own pixels; none - free).
+
+   A crop is shown where the piece already was ((пр40): "остается там же, без подстраивания"): the
+   piece keeps its place and its scale on the screen, as scissors cut a still picture. placeFor() is
+   that rule - from what the clip shows now (a rectangle of its file, `view`, drawn in a box of the
+   frame, `box`) to the placement (tx, ty, tw, angle) that draws another rectangle of the file with
+   the same pixels in the same places.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // The smallest piece, in shares of the file: a frame narrower than this is a slip of the mouse.
 export const MIN = 0.02;
+
+// (пр41) THE BLUR BEHIND A CROPPED PiP ON MAIN - from the whole frame (false, as before V51) or from the piece itself (true).
+// The owner was asked again; both the preview (merge-v3/preview-b.js _drawPip) and the render (lib/mv3b-render.js) read this.
+export const BLUR_FROM_PIECE = false;
+
+// The forms a frame may keep - the piece's width over its height in its own pixels.
+export const SHAPES = { '9:16': 9 / 16, '1:1': 1, '16:9': 16 / 9, '4:5': 4 / 5 };
 
 const r4 = (v) => Math.round(v * 10000) / 10000;
 
@@ -23,6 +38,7 @@ export function normalize(c) {
   y = r4(Math.max(0, Math.min(1 - h, y)));
   const out = { x, y, w, h };
   if (c.off) out.off = true;
+  if (Object.prototype.hasOwnProperty.call(SHAPES, c.shape)) out.shape = c.shape;
   return out;
 }
 
@@ -30,4 +46,52 @@ export function normalize(c) {
 export function active(clip) {
   const k = clip && clip.crop;
   return (k && !k.off && +k.w > 0 && +k.h > 0) ? k : null;
+}
+
+/** The piece's own shape in pixels, width over height - `fileAr` is the file's (its width over its height). */
+export const pieceAr = (k, fileAr) => ((+k.w || 1) * fileAr) / (+k.h || 1);
+
+/**
+ * THE LARGEST FRAME OF A FORM ((пр39)): `ar` of the piece's pixels, as big as the file allows, its middle where the frame's
+ * middle (`cx`, `cy`, shares) is - moved back inside the file where it would hang over an edge.
+ */
+export function largest(ar, fileAr, cx = 0.5, cy = 0.5) {
+  const q = ar / fileAr;                       // the piece's width over its height in shares
+  const w = q <= 1 ? q : 1, h = q <= 1 ? 1 : 1 / q;
+  const x = Math.max(0, Math.min(1 - w, cx - w / 2)), y = Math.max(0, Math.min(1 - h, cy - h / 2));
+  return { x, y, w, h };
+}
+
+/**
+ * Which of a clip's pictures a rectangle of the file belongs to: most clips show one (`maps` of one), a framed clip's whole
+ * frame over its blur or two bands show two - the one whose part of the file holds the rectangle's middle, else the first.
+ * A map: { view: { x, y, w, h } - shares of the file, box: { cx, cy, dw, dh, angle } - frame pixels }.
+ */
+export function pickMap(maps, k) {
+  if (!maps || !maps.length) return null;
+  if (!k) return maps[0];
+  const mx = +k.x + (+k.w) / 2, my = +k.y + (+k.h) / 2;
+  return maps.find((m) => mx >= m.view.x && mx <= m.view.x + m.view.w && my >= m.view.y && my <= m.view.y + m.view.h) || maps[0];
+}
+
+/**
+ * THE SCISSORS ((пр40)): the placement that draws the file's rectangle `to` (shares) with the pixels where `map` draws them -
+ * the same scale, the same turn, the same place on the frame. W, H - the frame in the pixels of `map.box`. The numbers are kept
+ * within what a placement may hold (timeline-b.js _write): the middle on the frame, the width 0.04-4 of it.
+ */
+export function placeFor(map, to, W, H) {
+  const v = map.view, b = map.box;
+  const Sx = b.dw / Math.max(1e-6, v.w), Sy = b.dh / Math.max(1e-6, v.h);
+  const lx = ((+to.x + (+to.w) / 2) - (v.x + v.w / 2)) * Sx;
+  const ly = ((+to.y + (+to.h) / 2) - (v.y + v.h / 2)) * Sy;
+  const a = (+b.angle || 0) * Math.PI / 180;
+  const cx = b.cx + lx * Math.cos(a) - ly * Math.sin(a);
+  const cy = b.cy + lx * Math.sin(a) + ly * Math.cos(a);
+  const out = {
+    tw: Math.max(0.04, Math.min(4, (+to.w) * Sx / W)),
+    tx: Math.max(0, Math.min(1, cx / W)),
+    ty: Math.max(0, Math.min(1, cy / H)),
+  };
+  if (+b.angle) out.angle = Math.round(+b.angle);
+  return out;
 }
