@@ -515,7 +515,7 @@ function _drawPip(el, r, sw, sh, bg = true) {
   // boxblur at a quarter of the size, lib/mv3b-render.js).
   // Drawn a blur's width past the frame and cut at its edge: a canvas blur pulls the transparency outside in, and the edges
   // of the frame came out darker than the render's.
-  // (phase V51, (пр41)) A cropped one's blur is of the whole frame, or of the piece (framing/crop.js BLUR_FROM_PIECE).
+  // (phase V51, (пр41а)) A cropped one's blur is made of its piece (framing/crop.js BLUR_FROM_PIECE).
   if (bg) {
     const f = BLUR_FROM_PIECE && r.src ? r.src : { sx: 0, sy: 0, sw, sh };
     const s2 = Math.max(W / f.sw, H / f.sh);

@@ -18,9 +18,10 @@
 // The smallest piece, in shares of the file: a frame narrower than this is a slip of the mouse.
 export const MIN = 0.02;
 
-// (пр41) THE BLUR BEHIND A CROPPED PiP ON MAIN - from the whole frame (false, as before V51) or from the piece itself (true).
-// The owner was asked again; both the preview (merge-v3/preview-b.js _drawPip) and the render (lib/mv3b-render.js) read this.
-export const BLUR_FROM_PIECE = false;
+// (пр41а) THE BLUR BEHIND A CROPPED PiP ON MAIN is made of the piece itself - the owner 2026-10-26: «из самого куска; на дорожках
+// выше main фона нет, отрезанное исчезает» (false would make it of the whole frame, as a PiP with no crop has it). Both the
+// preview (merge-v3/preview-b.js _drawPip) and the render (lib/mv3b-render.js) read this.
+export const BLUR_FROM_PIECE = true;
 
 // The forms a frame may keep - the piece's width over its height in its own pixels.
 export const SHAPES = { '9:16': 9 / 16, '1:1': 1, '16:9': 16 / 9, '4:5': 4 / 5 };
