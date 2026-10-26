@@ -39,6 +39,7 @@ import * as History from './history.js';
 import { isHeard } from '../captions/heard.js';
 // (phase V33.2) A filled clip's window over time, kept as the render reads it.
 import { normalize as normalizeFrame } from '../framing/path.js';
+import { normalize as normalizeCrop } from '../framing/crop.js';
 // (phase V40, tails (а) and (б)) The subtitles on a split frame's seam, put right in the same step as whatever changed it.
 import { placeBySplit } from '../captions/split.js';
 // (phase V36, T4) A sound's waveform on its clip.
@@ -2185,7 +2186,9 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              'tx', 'ty', 'tw', 'angle', 'feather',
                              'halfer', 'halferPos', 'halferThick', 'halferKeep', 'rotation',
                              // (phase V49, point 3) A main clip as a picture in the picture, its corners and outline.
-                             'pip', 'radius', 'outline', 'outlineColor']);
+                             'pip', 'radius', 'outline', 'outlineColor',
+                             // (phase V51, point 1) A piece of the clip's file, cut first (framing/crop.js).
+                             'crop']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2237,6 +2240,8 @@ function _write(c, key, value) {
   if (key === 'radius') { c.radius = (value == null || !(+value > 0)) ? null : Math.min(0.5, +value); return; }
   if (key === 'outline') { c.outline = (value == null || !(+value > 0)) ? null : Math.min(0.05, +value); return; }
   if (key === 'outlineColor') { c.outlineColor = /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : null; return; }
+  // (phase V51, point 1) THE CROP - { x, y, w, h } in shares of the file, `off` when remembered and not applied; null takes it off.
+  if (key === 'crop') { const k = normalizeCrop(value); if (k) c.crop = k; else delete c.crop; return; }
   // All five the panel offers. Only three were let through, so top and bottom quietly wrote
   // centre - which the preview and the render then showed, as if the choice had been made.
   if (key === 'cropAlign') {
