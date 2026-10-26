@@ -48,6 +48,8 @@ import { paintWaves, onPeaks } from './tl-wave.js';
 import { cutRefused, rippleCut, MIN_CUT, silenceCut, silenceRefused, mapThrough } from './tl-cut.js';
 import { wireSilence, refreshSilence, paintSilence, openSilence } from './tl-silence.js';
 import { wireMerge, offerMerge, refreshMerge } from './tl-merge.js';
+// (phase V51, points 2 and 4) Ctrl+C / Ctrl+V of the picked clips and text lines - the buffer and the paste.
+import { wireClip, copyPicked, paste } from './tl-clip.js';
 // (phase V49.1) Refusals and failures in the corner of popups.
 import { showError } from '../notice.js';
 
@@ -178,21 +180,24 @@ export function addAudioTrack() {
 export const MAX_TEXT = 2;
 
 export function addTextTrack() {
-  Store.mutate(tl => {
-    const t = tl.tracks;
-    if (_count(t, 'text') >= MAX_TEXT) return;
-    const row = { id: _freshId(t, 'x'), kind: 'text', name: '', linkId: null, main: false,
-                  volume: null, speed: null, clips: [],
-                  // Not where the subtitles are. Two sets of words in the same place is one
-                  // set of words on top of another, and the second lane is usually a title.
-                  style: { pos: t.some(x => x.kind === 'text') ? 'center' : 'top' } };
-    // Immediately ABOVE the subtitles, which are the floor. A second text lane lands above the
-    // first, so the newest is nearest the picture and the subtitles never move.
-    let at = t.findIndex(x => x.kind === 'subs');
-    if (at < 0) at = t.length;
-    t.splice(at, 0, row);
-    _renumber(t);
-  });
+  Store.mutate(tl => { _newTextLane(tl.tracks); });
+}
+
+// Inside a mutation: a text lane, or null at the ceiling (phase V51: a paste makes one too).
+function _newTextLane(t) {
+  if (_count(t, 'text') >= MAX_TEXT) return null;
+  const row = { id: _freshId(t, 'x'), kind: 'text', name: '', linkId: null, main: false,
+                volume: null, speed: null, clips: [],
+                // Not where the subtitles are. Two sets of words in the same place is one
+                // set of words on top of another, and the second lane is usually a title.
+                style: { pos: t.some(x => x.kind === 'text') ? 'center' : 'top' } };
+  // Immediately ABOVE the subtitles, which are the floor. A second text lane lands above the
+  // first, so the newest is nearest the picture and the subtitles never move.
+  let at = t.findIndex(x => x.kind === 'subs');
+  if (at < 0) at = t.length;
+  t.splice(at, 0, row);
+  _renumber(t);
+  return row;
 }
 
 export function removeTrack(id) {
@@ -2982,6 +2987,15 @@ export function initTimelineB() {
       if (_range) cutRange();
       else _deleteSelected();
     }
+    // (phase V51) Ctrl+C copies the picked clips and text lines, Ctrl+V lays them (tl-clip.js) - by the printed letter when
+    // it is a Latin one, by the key's place in another alphabet ("С" and "М" in the Russian layout), as bar.js reads Ctrl+Z.
+    // Not in a text field or a block that keeps its own keys: there they copy and paste text.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !texty && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
+      const key = String(e.key || '').toLowerCase();
+      const k = /^[a-z]$/.test(key) ? key : (e.code === 'KeyC' ? 'c' : e.code === 'KeyV' ? 'v' : key);
+      if (k === 'c' && !e.repeat) copyPicked();
+      else if (k === 'v') { e.preventDefault(); if (!e.repeat) paste(); }
+    }
     // (phase V44, (ы6)) S opens "cut silence" - by the key's place, so "Ы" in the Russian layout is the same key.
     if (e.code === 'KeyS' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat
         && !(e.target.closest && e.target.closest('[data-own-keys]'))) {
@@ -2993,6 +3007,18 @@ export function initTimelineB() {
   wireSilence({ span: _silenceSpan, zoom: _zoom, gutter: GUTTER, host: _host, cut: _silenceCut });
   // (phase V45) Clips in a row picked: "merge?".
   wireMerge({ ids: () => [..._sel], newId: _id, select: (id) => { if (id) selectClipById(id); } });
+  // (phase V51) Ctrl+C / Ctrl+V: the pick, ids, the playhead, what is laid picked, and the lanes a paste may have to make.
+  wireClip({ ids: () => [..._sel], newId: _id, playhead: () => _playhead, select: _pickIds,
+             video: _newVideoLane, audio: _newAudioLane, text: _newTextLane });
+}
+
+// (phase V51) These clips picked, in place of the pick - what a paste laid.
+function _pickIds(ids) {
+  _selBack = null;
+  _sel.clear();
+  _selTrack = '';
+  for (const id of (ids || [])) _sel.add(String(id));
+  _paintSel();
 }
 
 
