@@ -467,6 +467,42 @@ let _keepPick = null;
 /** A press that is not "away" from a picked lane though it lands outside the timeline - the preview's caption pages. */
 export function keepPickOn(fn) { _keepPick = typeof fn === 'function' ? fn : null; }
 
+// (phase V51, point 3, the owner's (пр51)) PICKED CLIPS LET GO OF THEMSELVES at a press anywhere else, as a lane does - the
+// Library, the tiles of highlights, the page around - and the strip of their settings slides back. Not a press in that strip
+// or the captions view (they are being set there), on the buttons over the timeline (split, cut silence, undo, the transport,
+// the zoom, FIT - they work on the pick), on the ruler (the playhead walks over the picked clip), in a window, a menu or a
+// popup on top ("Merge N clips into one?" among them); not on a clip or a lane's name (they pick, Shift adds). On the lanes
+// the band decides: pressed and let go on bare lane it lets go (_endBand), a sweep picks. On the PREVIEW the press is the
+// preview's first: on a picture it picks or moves it (place-b.js), on a page of captions it picks that (cap-place.js) - only
+// a press on neither lets go (_afterPreviewPress). Captured, so a control that keeps its own mousedown still counts.
+const _onPreview = (t) => !!(t && t.tagName === 'CANVAS' && t.closest && t.closest('#mv3-stage'));
+let _pvPress = null;           // the pick as a press on the preview found it, until that press has been the preview's
+let _pvPicked = false;         // that press picked the picture under it (place-b.js selectClipById) - the one picked already too
+function _awayFromClip(e) {
+  _pvPress = null;
+  _pvPicked = false;
+  if (!_on || !_sel.size || e.button !== 0 || locked() || Layers.blocked()) return;
+  const t = e.target;
+  if (!t || !t.closest) return;
+  if (_onPreview(t)) { _pvPress = [..._sel].join(' '); return; }
+  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .sv3-toasts, #mv3-timeline > .mv3-panel-head, .mv3b-row.is-ruler, .mv3b-clip, .mv3b-lbl')) return;
+  // While the captions view is up, "Library" and a chat's crumb let the pick go by their own click (lib-views.js toBase).
+  if (Views.isCaptions() && t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
+  const top = Layers.top();
+  if (top && top.el && top.el.contains && top.el.contains(t)) return;
+  const host = _host();
+  if (host && host.contains(t) && e.clientX >= host.getBoundingClientRect().left + GUTTER && !t.closest('.mv3b-box')) return;
+  _clearSel();
+}
+function _afterPreviewPress(e) {
+  const was = _pvPress;
+  _pvPress = null;
+  if (was == null || !_on || !_sel.size || e.button !== 0) return;
+  // A picture picked, moved, sized or turned, a page of captions taken: the preview's gesture, not a press away.
+  if (_pvPicked || e.defaultPrevented || [..._sel].join(' ') !== was || (_keepPick && _keepPick(e))) return;
+  _clearSel();
+}
+
 const _selSubs = [];
 export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb); }
 // HOW MANY THINGS ARE SELECTED, which a track counts towards: the listener on the other side
@@ -2145,6 +2181,8 @@ export const multiCount = () => _sel.size;
 
 /** Pick one clip, by id - what a click on the PREVIEW means. */
 export function selectClipById(id) {
+  // (phase V51) A press on the preview that found a picture under it - the one picked already as well: not a press away.
+  if (id && _pvPress != null) _pvPicked = true;
   if (!id || (_sel.size === 1 && _sel.has(id))) return;
   _selBack = null;
   _sel.clear();
@@ -2960,6 +2998,9 @@ export function initTimelineB() {
   document.addEventListener('mouseup', _endRange);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
   document.addEventListener('mousedown', _awayFromLane, true);
+  // (phase V51, point 3) Picked clips too - a press on the preview is decided once the preview has had it.
+  document.addEventListener('mousedown', _awayFromClip, true);
+  document.addEventListener('mousedown', _afterPreviewPress);
   document.addEventListener('contextmenu', _laneMenu);
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);
