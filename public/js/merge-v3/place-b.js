@@ -37,8 +37,18 @@ let _cv = null;
 let _drag = null;
 let _live = null;      // { id, patch } - the gesture in progress, not yet stored
 
+// (phase V51, point 1) A gesture held OUTSIDE the preview - the crop's frame dragged in the clip's settings (crop-box.js): a
+// patch per clip (several main clips picked are cropped by one frame, (пр44)), drawn by the preview, written on release.
+let _ext = null;       // Map id -> patch, or null
+
 /** The patch a gesture is holding for this clip, or null. The preview draws with it. */
-export const liveOf = (id) => (_live && _live.id === id ? _live.patch : null);
+export const liveOf = (id) => (_live && _live.id === id ? _live.patch : (_ext && _ext.get(id)) || null);
+
+/** (phase V51) Patches held by a gesture elsewhere - a Map of id -> patch, or null when it is let go - and the preview drawn. */
+export function setLive(patches) {
+  _ext = patches && patches.size ? patches : null;
+  if (_api && _api.repaint) _api.repaint();
+}
 
 const _isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
 

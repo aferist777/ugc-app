@@ -57,6 +57,9 @@ import * as M from './music.js';
 import { setOpenColumn, columnMax } from './layout.js';
 // (phase V33.2) A filled clip's window: fixed, following the face, the middle, whole over its blur, two faces.
 import * as FRAMING from './framing-ui.js';
+// (phase V51, point 1) A clip's crop: the switch and its field.
+import { cropRows, pipOffCrop } from './crop-box.js';
+import { active as cropActive } from '../framing/crop.js';
 
 function _host() { return document.querySelector('#mv3-inspector .mv3-panel-body'); }
 function _overHost() { return document.querySelector('#mv3-over .mv3-over-body'); }
@@ -186,8 +189,10 @@ function _pipSection(host, items) {
   const on = clips.every(c => !!c.pip);
   const write = (patch) => setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id, patch })));
   const many = items.length > 1;
-  const head = C.row('PiP', C.toggle(on, (v) => write(v ? { pip: true }
-    : { pip: null, tx: null, ty: null, tw: null, angle: null })));
+  // (phase V51, (пр43)) Off takes a crop with it - remembered, the Crop switch brings it back.
+  const head = C.row('PiP', C.toggle(on, (v) => (v ? write({ pip: true })
+    : setClipsB(items.map(({ track, clip }) => ({ trackId: track.id, clipId: clip.id,
+      patch: { pip: null, tx: null, ty: null, tw: null, angle: null, ...pipOffCrop(clip) } }))))));
   head.title = on ? 'A picture in the picture over its own blur. Switch off for the whole frame again.'
                   : 'Make ' + (many ? 'these clips' : 'this clip') + ' a picture in the picture: what the frame shows now, '
                     + 'sized and moved on the preview, over a blurred copy of itself';
@@ -196,7 +201,16 @@ function _pipSection(host, items) {
     if (clips.some(c => c.pip)) host.appendChild(C.hint('Some of the picked clips are a PiP already - switching on makes all of them one.'));
     return;
   }
-  const c0 = clips[0];
+  _edgeRows(host, clips[0], write);
+  host.appendChild(C.row('', C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
+    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' })));
+  host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
+    + (many ? ' - all ' + items.length + ' picked clips move together.' : '.')));
+}
+
+// A PiP's edges - and (phase V51, (пр42)) a cropped clip's of a lane above, by the same rule: its soft edge, its rounded
+// corners, its outline. `write(patch)` writes them into what is picked.
+function _edgeRows(host, c0, write) {
   host.appendChild(C.row('Soft edge', C.slider({
     min: 0, max: 0.4, step: 0.01, value: +c0.feather || 0,
     fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
@@ -216,10 +230,16 @@ function _pipSection(host, items) {
     fmt: (v) => (v <= 0.0005 ? 'none' : Math.round(v * 1080) + ' px'),
     onChange: (v) => write({ outline: v }),
   }), col)));
-  host.appendChild(C.row('', C.button('Full size', () => write({ tx: null, ty: null, tw: null, angle: null }),
-    { title: 'Back to the size and place it had when it became a PiP - the whole frame it showed' })));
-  host.appendChild(C.hint('Drag a corner on the preview to size it, drag it to move it, the knob to turn it'
-    + (many ? ' - all ' + items.length + ' picked clips move together.' : '.')));
+}
+
+// (phase V51, (пр42)) A CROPPED clip of a lane above main: its piece over the lanes under it, no blur behind it - the PiP's
+// edges, and the way back to the whole frame (the crop remembered).
+function _cutRows(host, track, c) {
+  _edgeRows(host, c, (patch) => setManyB(track.id, c.id, patch));
+  host.appendChild(C.row('', C.button('Full frame', () => setManyB(track.id, c.id, {
+    tx: null, ty: null, tw: null, angle: null, feather: null, ...pipOffCrop(c),
+  }), { title: 'Drop the crop and the placement and cover the whole frame again - the crop is remembered' })));
+  host.appendChild(C.hint('Drag it on the preview to move it, a corner to size it, the knob to turn it.'));
 }
 
 // How a clip meets a frame of another shape. The second row appears only when there is
@@ -349,10 +369,14 @@ function _blankFilm(host, track, c, set, pair) {
 
   if (!c.halfer) {
     _bsep(host);
+    // (phase V51, point 1) The crop first: while it is on, the piece is the picture - no Fit / Fill, Framing or Keep.
+    const cropped = cropRows(host, [{ track, clip: c }]);
+    _bsep(host);
     // PLACED OR FITTED, never both. A clip laid on the frame at a third of its width is not
     // being fitted to anything, so the fit controls would be two settings with nothing to act on.
     // (V49) A main clip is framed as ever - a PiP shows what the frame shows - and its PiP is below.
-    if (main) { _frameRows(host, c, set); _bsep(host); _pipSection(host, [{ track, clip: c }]); }
+    if (main) { if (!cropped) { _frameRows(host, c, set); _bsep(host); } _pipSection(host, [{ track, clip: c }]); }
+    else if (cropped) _cutRows(host, track, c);
     else if (_isPlaced(c)) _pipRows(host, track, c);
     else _frameRows(host, c, set);
   }
@@ -396,10 +420,14 @@ function _blankStill(host, track, c, set) {
   // (phase V49) On main video a picture is framed as ever and may be a PiP (below); it has no Halfer.
   const main = isMainVideo(track);
   const placed = _isPlaced(c) && !main;
+  // (phase V51) A cropped picture: the piece is the picture - its settings are the crop's, below.
+  const cropped = !c.halfer && !!cropActive(c);
 
   if (c.halfer) {
     // A band takes none of these: its settings are the section under the picture. No placement or framing on a band.
     stack.appendChild(C.hint('A halfer band - its settings are below.'));
+  } else if (cropped) {
+    stack.appendChild(C.hint('Cropped - its frame is below.'));
   } else if (placed) {
     cell('soft edge', C.slider({
       min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
@@ -424,9 +452,16 @@ function _blankStill(host, track, c, set) {
   top.appendChild(side);
   host.appendChild(top);
 
+  if (!c.halfer) {
+    _bsep(host);
+    cropRows(host, [{ track, clip: c }]);
+  }
   if (main && !c.halfer) {
     _bsep(host);
     _pipSection(host, [{ track, clip: c }]);
+  } else if (cropped) {
+    _bsep(host);
+    _cutRows(host, track, c);
   }
   if (!main || c.halfer) {
     _bsep(host);
@@ -1309,7 +1344,10 @@ function _renderMany(host, n) {
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
   const mains = pickedB().filter(x => isMainVideo(x.track));
   if (mains.length) {
-    if (mains.length < n) host.appendChild(C.hint('The PiP below is for the ' + mains.length + ' picked clips of main video.'));
+    if (mains.length < n) host.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
+    // (phase V51, (пр44)) One crop frame for all of them, the field showing the first.
+    cropRows(host, mains);
+    _bsep(host);
     _pipSection(host, mains);
     _bsep(host);
   } else {

@@ -30,6 +30,8 @@ import { fadesOf } from '../sound/fades.js';
 import { setPlayhead, setFormat } from './timeline-b.js';
 // (phase V33.2) A filled clip's window over time - the one answer the render reads too.
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
+// (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
+import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 
 const STAGE = 'mv3-stage';
 
@@ -445,11 +447,16 @@ function _place(sw, sh, c, tFile, raw) {
 const PIP_OUTLINE = '#ffffff';
 const _pipNum = (v, lo, hi) => { const n = +v; return Number.isFinite(n) && n > 0 ? Math.max(lo, Math.min(hi, n)) : 0; };
 
+// (phase V51, point 1) A CROPPED clip is a PiP of its piece: the box takes the piece's shape, its natural size is the piece
+// fitted to the frame, and what is drawn into it is that rectangle of the file (`src`) - no Fit / Fill, no framing. A cropped
+// clip off main's PiP (a lane above) is drawn by the same rule with no blur behind it (_show).
 function _pipRect(sw, sh, c, tFile) {
   const live = liveOf(c.id);
   const k = live ? Object.assign({}, c, live) : c;
-  const fill = String(k.fit || 'fit') === 'fill';
-  const ar = fill ? W / H : sw / sh;
+  const K = cropActive(k);
+  const fill = !K && String(k.fit || 'fit') === 'fill';
+  const pw = K ? K.w * sw : sw, ph = K ? K.h * sh : sh;
+  const ar = fill ? W / H : pw / ph;
   // Its own size when nobody has sized it: the whole frame for a filled clip, the fitted picture for a fitted one.
   const nat = fill ? W : Math.min(W, H * ar);
   const placed = isPlaced(k);
@@ -459,6 +466,7 @@ function _pipRect(sw, sh, c, tFile) {
     pip: true, placed: true, fill, dx: cx - dw / 2, dy: cy - dh / 2, dw, dh, cx, cy, angle: +k.angle || 0,
     // What a filled clip's frame shows - drawn into the box (parts of a framed clip, or one rectangle of the file).
     inner: fill ? _place(sw, sh, Object.assign({}, c, { tw: null, tx: null, ty: null, angle: null }), tFile, true) : null,
+    crop: K, src: K ? { sx: K.x * sw, sy: K.y * sh, sw: pw, sh: ph } : null,
     feather: _pipNum(k.feather, 0, 0.45), radius: _pipNum(k.radius, 0, 0.5), outline: _pipNum(k.outline, 0, 0.05),
     outlineColor: /^#[0-9a-f]{6}$/i.test(String(k.outlineColor || '')) ? k.outlineColor : PIP_OUTLINE,
     conv: { tw: dw / W, tx: cx / W, ty: cy / H },
@@ -501,13 +509,16 @@ function _pipMasks(cw, ch, fr, rr, tpx, col) {
 }
 
 let _pipCv = null;
-function _drawPip(el, r, sw, sh) {
+// `bg` - the blur behind it: a PiP of main has it, a cropped clip of a lane above has none ((пр42)).
+function _drawPip(el, r, sw, sh, bg = true) {
   // Behind it the same clip, covering the frame and blurred - as framing's "whole" draws its background (the render's
   // boxblur at a quarter of the size, lib/mv3b-render.js).
   // Drawn a blur's width past the frame and cut at its edge: a canvas blur pulls the transparency outside in, and the edges
   // of the frame came out darker than the render's.
-  {
-    const s2 = Math.max(W / sw, H / sh);
+  // (phase V51, (пр41)) A cropped one's blur is of the whole frame, or of the piece (framing/crop.js BLUR_FROM_PIECE).
+  if (bg) {
+    const f = BLUR_FROM_PIECE && r.src ? r.src : { sx: 0, sy: 0, sw, sh };
+    const s2 = Math.max(W / f.sw, H / f.sh);
     const bw = W / s2, bh = H / s2;
     const b = Math.max(4, Math.round(W * 0.03));
     _ctx.save();
@@ -515,7 +526,7 @@ function _drawPip(el, r, sw, sh) {
     _ctx.rect(0, 0, W, H);
     _ctx.clip();
     _ctx.filter = `blur(${b}px)`;
-    try { _ctx.drawImage(el, (sw - bw) / 2, (sh - bh) / 2, bw, bh, -2 * b, -2 * b, W + 4 * b, H + 4 * b); } catch (e) { /* not decoded yet */ }
+    try { _ctx.drawImage(el, f.sx + (f.sw - bw) / 2, f.sy + (f.sh - bh) / 2, bw, bh, -2 * b, -2 * b, W + 4 * b, H + 4 * b); } catch (e) { /* not decoded yet */ }
     _ctx.restore();
   }
   // The box, in frame pixels - no bigger than a canvas should be (a PiP may be made larger than the film).
@@ -536,6 +547,8 @@ function _drawPip(el, r, sw, sh) {
         g.drawImage(el, p.sx, p.sy, p.sw, p.sh, p.dx * k, p.dy * k, p.dw * k, p.dh * k);
       }
       g.filter = 'none';
+    } else if (r.src) {
+      g.drawImage(el, r.src.sx, r.src.sy, r.src.sw, r.src.sh, 0, 0, cw, ch);
     } else {
       g.drawImage(el, 0, 0, sw, sh, 0, 0, cw, ch);
     }
@@ -745,10 +758,22 @@ function _show(el, sw, sh, c, gaps, main) {
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
   // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.
-  if (main && c.pip) {
+  // (phase V51) What a crop gesture holds counts here too (crop-box.js puts it in place-b.js's live patches).
+  const lv = liveOf(c.id);
+  const lc = lv ? Object.assign({}, c, lv) : c;
+  if (main && lc.pip) {
     const r = _pipRect(sw, sh, c, tFile);
     _rects.set(c.id, r);
     _drawPip(el, r, sw, sh);
+    return;
+  }
+  // (phase V51, point 1, (пр42)) A CROPPED clip anywhere else: its piece in its box over the lanes under it - the PiP's own
+  // rule (corners, outline, soft edge, the turn), with no blur behind it.
+  if (cropActive(lc)) {
+    const r = _pipRect(sw, sh, c, tFile);
+    r.pip = false;
+    _rects.set(c.id, r);
+    _drawPip(el, r, sw, sh, false);
     return;
   }
   const r = _place(sw, sh, c, tFile);
@@ -758,7 +783,69 @@ function _show(el, sw, sh, c, gaps, main) {
   _blit(el, r, c, gaps);
 }
 
+// ── What a clip shows of its file, for the crop (phase V51, point 1) ────────
+// The crop's scissors (framing/crop.js placeFor) need to know which rectangle of the FILE a clip draws (`view`, shares of the
+// file) into which box of the frame (`box`, frame pixels, turned by `angle`) - read off the very rectangle the preview draws
+// by (_place, _pipRect). Most clips draw one; a framed clip's whole frame over its blur or two bands draw two.
+function _mapsOf(r, sw, sh) {
+  const box = (cx, cy, dw, dh, angle) => ({ cx, cy, dw, dh, angle: +angle || 0 });
+  const viewOf = (p) => ({ x: p.sx / sw, y: p.sy / sh, w: p.sw / sw, h: p.sh / sh });
+  if (r.crop) return [{ view: { x: r.crop.x, y: r.crop.y, w: r.crop.w, h: r.crop.h }, box: box(r.cx, r.cy, r.dw, r.dh, r.angle) }];
+  if (r.pip && r.fill && r.inner) {
+    // A filled PiP: its frame (W x H) drawn into the box - each part of it scaled and turned with the box.
+    const k = r.dw / W, a = (+r.angle || 0) * Math.PI / 180;
+    const ps = r.inner.parts || [{ sx: r.inner.sx, sy: r.inner.sy, sw: r.inner.sw, sh: r.inner.sh, dx: 0, dy: 0, dw: W, dh: H }];
+    return ps.filter((p) => !p.blur).map((p) => {
+      const lx = (p.dx + p.dw / 2 - W / 2) * k, ly = (p.dy + p.dh / 2 - H / 2) * k;
+      return { view: viewOf(p), box: box(r.cx + lx * Math.cos(a) - ly * Math.sin(a), r.cy + lx * Math.sin(a) + ly * Math.cos(a), p.dw * k, p.dh * k, r.angle) };
+    });
+  }
+  if (r.pip) return [{ view: { x: 0, y: 0, w: 1, h: 1 }, box: box(r.cx, r.cy, r.dw, r.dh, r.angle) }];
+  if (r.parts) return r.parts.filter((p) => !p.blur).map((p) => ({ view: viewOf(p), box: box(p.dx + p.dw / 2, p.dy + p.dh / 2, p.dw, p.dh, 0) }));
+  return [{ view: viewOf(r), box: box(r.cx, r.cy, r.dw, r.dh, r.angle) }];
+}
+
+/** The FILE's second a clip shows at the timeline's moment `t` (forwards, or backwards for a reversed clip). */
+export function fileTimeAt(c, t) {
+  const sp = +c.speed || 1;
+  const into = Math.max(0, Math.min(+c.dur || 0, (+t) - (+c.start || 0))) * sp;
+  return c.reversed && !isStill(c) ? (+c.trimIn || 0) + (+c.dur || 0) * sp - into : (+c.trimIn || 0) + into;
+}
+
+/**
+ * (phase V51) What clip `c` shows of its file at the timeline's moment `t` and where, by the preview's own rules: { W, H, maps }
+ * (framing/crop.js pickMap / placeFor). `main` - it is on main video (a PiP there). `sw`, `sh` - its file's size or shape.
+ * Read with no gesture held (a live patch would be read into it).
+ */
+export function mapsOf(c, main, sw, sh, t) {
+  const tFile = isFramed(c.frame) ? fileTimeAt(c, t) : NaN;
+  let r;
+  if ((main && c.pip) || cropActive(c)) r = _pipRect(sw, sh, c, tFile);
+  else r = _place(sw, sh, c, tFile, true);
+  return { W, H, maps: _mapsOf(r, sw, sh) };
+}
+
+/** (phase V51) The preview's own element for a clip on screen, decoded - what the crop's field shows while the playhead is on it. */
+export function shownElement(c) {
+  const el = c && c.src ? _media.get(_keyOf(c)) : null;
+  if (!el) return null;
+  return (el.tagName === 'VIDEO' ? (el.videoWidth && el.readyState >= 2 && !el.seeking) : el.naturalWidth) ? el : null;
+}
+
+/** (phase V51) The address a clip's picture is played from - its preview copy (forwards), or the picture itself. */
+export const frameSrc = (c) => _srcFor(c.src, false);
+
+// (phase V51) Told after each paint: the crop's field follows the frame under the playhead.
+const _paintSubs = [];
+export function onPaint(cb) { if (typeof cb === 'function') _paintSubs.push(cb); }
+
 function _paint() {
+  const n = _paintFrame();
+  if (!_shooting && !_borrowed) for (const cb of _paintSubs) { try { cb(); } catch (e) { /* a listener's own trouble */ } }
+  return n;
+}
+
+function _paintFrame() {
   if (!_ctx) return 0;
   // Lent to the workshop: the stage shows what the step is doing, and at this point in a
   // talking-head project the timeline is usually empty anyway - a black frame is the honest
