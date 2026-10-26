@@ -482,7 +482,9 @@ export function cropRows(host, items) {
     _grab();
     _draw();
   };
-  if (f.d) requestAnimationFrame(() => show(f.d));
+  // At once when the shape is known - the field is in the page already, so its width can be read (a frame of the page's
+  // own clock is not waited for: a window behind others has none).
+  if (f.d) show(f.d);
   else _dimsOf(first).then(show);
   return true;
 }
