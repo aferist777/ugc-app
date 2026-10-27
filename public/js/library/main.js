@@ -886,9 +886,11 @@ function _manyMenu(items, e) {
   ]);
 }
 async function _deleteMany(all) {
-  // The app's own sounds and a YouTube source (two presses on its tile) are not deleted here.
-  const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube');
-  if (!items.length) { _status(all.some(x => x.kind === 'sfx') ? 'A built-in sound is part of the app - it is not deleted.' : 'Nothing here to delete.', 'err'); return; }
+  // The app's own sounds, a project's talking head and a YouTube source (two presses on its tile) are not deleted here -
+  // the question names only what will go (as in Merge).
+  const items = all.filter(x => x.kind !== 'sfx' && !_fixed(x));
+  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds, a project\'s talking heads and YouTube sources stay', 'err'); return; }
+  if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', 'err'); return; }
   // One alone: the question it always had.
   if (items.length === 1) {
     try { await _apply(await _runAction('del', items[0])); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }

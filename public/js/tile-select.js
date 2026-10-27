@@ -32,6 +32,8 @@ import * as Layers from './layers.js';
 import { openPlaces } from './place-tree.js';
 
 const BAND_FROM = 5;          // px a press moves before it is a band
+// The most a batch takes at once - routes/library.js BATCH_MAX says the same; more is refused in words before anything.
+export const BATCH_MAX = 2000;
 
 const _inField = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 const _hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
@@ -49,7 +51,10 @@ export function createSelection(o) {
     return t && host.contains(t) && t.dataset.key ? t : null;
   };
 
-  // The chip that says how many are picked - over the gallery's top right corner.
+  // Whether the gallery is on screen: Merge's panel shows a chat or the captions in its place, the Library another shelf.
+  const shown = () => host.getClientRects().length > 0 && opt.active();
+
+  // The chip that says how many are picked - over the gallery's top left corner.
   const chip = document.createElement('div');
   chip.className = 'ts-chip';
   chip.hidden = true;
@@ -63,7 +68,7 @@ export function createSelection(o) {
   document.body.appendChild(chip);
   function _chip() {
     const n = picked.size;
-    chip.hidden = n < 2 || !opt.active();
+    chip.hidden = n < 2 || !shown();
     if (chip.hidden) return;
     chipText.textContent = n + ' picked · drag them onto the tree · the right button · Delete';
     const r = host.getBoundingClientRect();
@@ -125,9 +130,11 @@ export function createSelection(o) {
     if (tileOf(e.target)) return;
     // Empty space only: not a folder tile, a word of the path, the search, a button.
     if (e.target.closest('button, input, select, textarea, a, .mt-ftile, .mt-crumbs, .snd-shelf-head, [draggable="true"]')) return;
+    // No preventDefault here: it would take the mousedown away from every "press away" of the page (Merge's picked clips,
+    // the menus, the fields). Text is kept from being selected under the band by `selectstart` below.
     band = { x: e.clientX, y: e.clientY, el: null, base: e.shiftKey ? [...picked] : [], moved: false, id: e.pointerId };
-    e.preventDefault();         // no text selected under the band
   });
+  document.addEventListener('selectstart', (e) => { if (band) e.preventDefault(); });
   const move = (e) => {
     if (!band) return;
     if (!band.moved && Math.hypot(e.clientX - band.x, e.clientY - band.y) < BAND_FROM) return;
@@ -166,8 +173,12 @@ export function createSelection(o) {
   document.addEventListener('pointerdown', (e) => { if (!host.contains(e.target) && !chip.contains(e.target)) pressedHere = false; }, true);
 
   // ── Keys ──
+  // In the capture phase, before the page's own: Delete after a press in this gallery is the gallery's ALONE - it is
+  // taken (preventDefault), and Merge's timeline lets a taken key be (timeline-b.js `defaultPrevented`). After a press
+  // anywhere else this gallery does not answer Delete.
   document.addEventListener('keydown', (e) => {
-    if (!picked.size || !opt.active() || _inField(e.target)) return;
+    if (!picked.size || !shown() || _inField(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest('[data-own-keys]')) return;
     if (e.key === 'Escape') {
       if (Layers.top()) return;               // a window on top takes Escape (js/layers.js)
       clear();
@@ -177,8 +188,13 @@ export function createSelection(o) {
       e.preventDefault();
       opt.onDelete([...picked]);
     }
-  });
+  }, true);
   window.addEventListener('resize', _chip);
+  // The gallery put away (another view of Merge's panel, another shelf, a making area): what was picked is let go, and
+  // the chip with it. Shown again or resized: the chip where the gallery is.
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => { if (!shown()) clear(); _chip(); }).observe(host);
+  }
 
   return {
     has: (key) => picked.has(String(key)),
@@ -261,6 +277,7 @@ export function canGo(kind, to) {
 
 /** POST /api/library/batch/<op> for the items; the answer, or it throws in words. */
 export async function batch(op, items, extra) {
+  if (items.length > BATCH_MAX) throw new Error('At most ' + BATCH_MAX + ' at once - ' + items.length + ' are picked.');
   const r = await fetch('/api/library/batch/' + op, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(Object.assign({ items: items.map(x => ({ kind: x.kind, id: String(x.id) })) }, extra || {})),

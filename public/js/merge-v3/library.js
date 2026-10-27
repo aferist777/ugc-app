@@ -832,12 +832,19 @@ function _manyMenu(items, e) {
 async function _deleteMany(all) {
   const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube' && !_fixed(x));
   if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds and a project\'s talking heads stay', true); return; }
+  if (items.length > TS.BATCH_MAX) { _status('At most ' + TS.BATCH_MAX + ' at once - ' + items.length + ' are picked.', true); return; }
   const q = items.length === 1 ? await deleteQuestion(items[0]) : await TS.deleteQuestion(items);
   if (!confirm(q)) return;
   _stopHearing();
   try {
     const d = await TS.batch('delete', items);
-    for (const x of items) markGone(x.media);
+    // Red on the timelines only what really went: not one the server refused, nor a file it spared for another record.
+    const stayed = new Set((d.skipped || []).map(x => x.kind + ':' + x.id));
+    const gone = new Set(d.removed || []);
+    for (const x of items) {
+      const base = String(x.media || '').split('?')[0].split('/').pop();
+      if (!stayed.has(_keyOf(x)) && base && gone.has(base)) markGone(x.media);
+    }
     await _afterMany(d, 'deleted');
   } catch (err) { _status(err.message, true); }
 }

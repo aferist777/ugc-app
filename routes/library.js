@@ -1240,8 +1240,23 @@ function _pathsInUse(doomed) {
 }
 
 // The whole videos the pieces of `doomed` named - for lib/cuts.js dropOrphans once those records are gone.
-const _originalsOf = (doomed) => (doomed || []).flatMap(e => [e && e.original && e.original.path,
-  ...((e && Array.isArray(e.media)) ? e.media.map(m => m && m.original && m.original.path) : [])]).filter(Boolean);
+// (phase V54) Never a file a record of Music names: a piece of a track keeps the track as its `original` (lib/audio-cut.js),
+// and lib/cuts.js does not look into Music - so a track, or anything a track names, is taken out here, whatever it is.
+function _musicFiles() {
+  const keep = new Set();
+  for (const t of MUSIC.read()) {
+    if (t && t.audioPath) keep.add(String(t.audioPath).split('?')[0]);
+    if (t && t.original && t.original.path) keep.add(String(t.original.path).split('?')[0]);
+  }
+  return keep;
+}
+const _originalsOf = (doomed) => {
+  const all = (doomed || []).flatMap(e => [e && e.original && e.original.path,
+    ...((e && Array.isArray(e.media)) ? e.media.map(m => m && m.original && m.original.path) : [])]).filter(Boolean);
+  if (!all.length) return all;
+  const music = _musicFiles();
+  return all.filter(p => !music.has(String(p).split('?')[0]));
+};
 
 // What belongs to a file and goes with it: the derivatives a move carries along (lib/relocate.js siblingsOf) -
 // its thumbs/ copy, a clip's poster, a preview, a clip's loudness mark. A picture made by an engine has a 600px
@@ -1384,6 +1399,29 @@ const FILE_SHELVES = {
 
 const _r = (status, body) => ({ status, body });
 
+// (phase V54) A BATCH PLACES ITS FILES ONCE. Each item function moves a record's files to its folder (SHELF.placeRecords -
+// one relocate, every store and project rewritten); a batch of hundreds would do that hundreds of times. While a batch
+// runs, `_placeLater` collects what would have been placed (and the clips that became hooks), and `_placeAll` places the
+// records as they are at the end, in ONE call - then numbers the new hooks by their placed paths.
+let _placeLater = null;           // [{ kind, id, hook }] while a batch runs
+function _placeAll(list) {
+  const last = new Map();         // id -> the kind it ended as
+  const hooks = new Set();
+  for (const x of list || []) { last.set(x.id, x.kind); if (x.hook) hooks.add(x.id); }
+  const lists = {};
+  const recOf = (kind, id) => {
+    if (!lists[kind]) { try { lists[kind] = RECORD_STORES[kind].read(); } catch (e) { lists[kind] = []; } }
+    return lists[kind].find(x => x && String(x.id) === id) || null;
+  };
+  const items = [];
+  for (const [id, kind] of last) { const rec = recOf(kind, id); if (rec) items.push({ kind, rec }); }
+  if (items.length) SHELF.placeRecords(items);
+  if (hooks.size) {
+    const placed = RECORD_STORES.hooks.read().filter(x => x && hooks.has(String(x.id))).map(x => x.videoPath).filter(Boolean);
+    if (placed.length) { try { require('../lib/hook-ids').assign(placed); } catch (e) { /* numbered at its next filing */ } }
+  }
+}
+
 // (phase V54) The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
 // several items exactly what these do to one.
 function _patchOne(kindIn, idIn, bodyIn) {
@@ -1425,8 +1463,11 @@ function _patchOne(kindIn, idIn, bodyIn) {
     // Another category is another folder: the files move there, and every path to them with them.
     let item = it;
     if ('categoryId' in patch && SHELF.SHELF_KINDS.includes(kind)) {
-      SHELF.placeRecords([{ kind, rec: it }]);
-      item = store.read().find(x => x && String(x.id) === id) || it;
+      if (_placeLater) _placeLater.push({ kind, id });
+      else {
+        SHELF.placeRecords([{ kind, rec: it }]);
+        item = store.read().find(x => x && String(x.id) === id) || it;
+      }
     }
     // The page needs this to patch localStorage, so send back what to look for.
     return _r(200, { success: true, kind, id, patch, item });
@@ -1568,7 +1609,8 @@ function _deleteOne(kindIn, idIn, filesIn) {
     }
     store.write(list.filter(x => x !== it));
     // A piece's whole video, when nothing holds it any more (phase TG, block 7).
-    if (withFiles) removed.push(...CUTS.dropOrphans(_originalsOf([it])));
+    // (phase V54) A piece of a track names the TRACK - never dropped as an orphan.
+    if (withFiles && kind !== 'music') removed.push(...CUTS.dropOrphans(_originalsOf([it])));
     // `spared` is a file another record is still using, so it stayed put.
     return _r(200, { success: true, kind, id, removed, spared });
 }
@@ -1651,6 +1693,7 @@ function _kindOne(fromIn, idIn, toIn) {
       stamp(it);
       src.write(srcList);
       // Another shelf is another folder.
+      if (_placeLater) { _placeLater.push({ kind: to, id }); return _r(200, { success: true, kind: to, id, item: it }); }
       SHELF.placeRecords([{ kind: to, rec: it }]);
       const placed = src.read().find(x => x && String(x.id) === id) || it;
       return _r(200, { success: true, kind: to, id, item: placed });
@@ -1695,6 +1738,7 @@ function _kindOne(fromIn, idIn, toIn) {
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
     // Another shelf is another folder: the files move, the record and every other path follow.
+    if (_placeLater) { _placeLater.push({ kind: to, id: String(moved.id), hook: to === 'hooks' }); return _r(200, { success: true, kind: to, id, item: moved }); }
     SHELF.placeRecords([{ kind: to, rec: moved }]);
     Object.assign(moved, dst.read().find(x => x && String(x.id) === String(moved.id)) || {});
     // BECOMING A HOOK IS WHEN A HOOK GETS ITS NUMBER. A file uploaded straight onto Hooks is
@@ -1726,12 +1770,14 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
 // categories and its source's folder. What cannot go there stays and says why: a picture never becomes a clip, a built-in
 // sound is the app's, a talking head its project's, a post goes out of REFERENCES only by itself (its own window).
 // ════════════════════════════════════════════════════════════════════════════
-const BATCH_MAX = 500;
+const BATCH_MAX = 2000;            // js/tile-select.js says the same; more is refused in words before anything is done
 const _BVIDEO = new Set(['birols', 'uploads', 'hooks']);
 
 function _batchItems(b) {
   const seen = new Set();
-  return (Array.isArray(b && b.items) ? b.items : []).slice(0, BATCH_MAX)
+  const raw = Array.isArray(b && b.items) ? b.items : [];
+  if (raw.length > BATCH_MAX) throw Object.assign(new Error('At most ' + BATCH_MAX + ' at once - ' + raw.length + ' were picked. Nothing was done.'), { status: 400 });
+  return raw
     .map(x => ({ kind: String((x && x.kind) || ''), id: String((x && x.id) || '') }))
     .filter(x => x.kind && x.id && !seen.has(x.kind + ':' + x.id) && seen.add(x.kind + ':' + x.id));
 }
@@ -1824,13 +1870,21 @@ router.post('/library/batch/move', (req, res) => {
       if (to.kind !== 'references') for (const x of posts) skipped.push({ kind: x.kind, id: x.id, why: _moveOne(x, to) });
       else for (const s of _postsTo(posts.map(x => x.id), to)) skipped.push({ kind: 'references', id: s.id, why: s.why });
     }
-    for (const x of items) {
-      if (x.kind === 'references') continue;
-      const why = _moveOne(x, to);
-      if (why) skipped.push({ kind: x.kind, id: x.id, why });
+    // Every record changed first, the files placed ONCE at the end (`_placeAll`) - also when one fails midway.
+    _placeLater = [];
+    try {
+      for (const x of items) {
+        if (x.kind === 'references') continue;
+        const why = _moveOne(x, to);
+        if (why) skipped.push({ kind: x.kind, id: x.id, why });
+      }
+    } finally {
+      const l = _placeLater;
+      _placeLater = null;
+      _placeAll(l);
     }
     _batchAnswer(res, items, skipped);
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 router.post('/library/batch/favorite', (req, res) => {
@@ -1845,7 +1899,7 @@ router.post('/library/batch/favorite', (req, res) => {
       if (r.status !== 200) skipped.push({ kind: x.kind, id: x.id, why: _whyOf(r) });
     }
     _batchAnswer(res, items, skipped, { favorite });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 router.post('/library/batch/delete', (req, res) => {
@@ -1862,7 +1916,7 @@ router.post('/library/batch/delete', (req, res) => {
       removed.push(...((r.body && r.body.removed) || []));
     }
     _batchAnswer(res, items, skipped, { removed });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
