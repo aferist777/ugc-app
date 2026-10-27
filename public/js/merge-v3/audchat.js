@@ -13,6 +13,15 @@
               chats' conversation is): its stage while it is made, its tracks or sounds when done - a press plays one, ★,
               "show" (on the shelf), and dragged onto an audio lane it lies there as a tile of the shelf does -, the lyrics
               with "use in custom", its error and "try again" when it failed. A sash between it and the constructor.
+              (phase V54, the owner's (зв23)) In VIDEO TO MUSIC the right column is the VIDEO tree (js/media-tree.js `roots`,
+              its own memory `v2m`): the path to the node open, its folders as tiles, then its videos - a press puts one into
+              "The video" (its track goes to Music and "Made here" only, (зв24)); "Made here" moves under the constructor.
+
+   (phase V54, block 2, the owner's (зв3)-(зв7)) VIDEO TO MUSIC FROM A CLIP: the right button on a clip of a video lane
+   (timeline-b.js) brings THAT clip, as it is seen, into "The video" (videoToMusicFromClip) - its lane, from-to, length and
+   the price of its seconds; "generate" asks the server, which makes the clip into a file ("preparing the clip"), asks
+   ElevenLabs and files the track as "music for <the clip>" into Music AND lays it under the clip (lib/audio-gens.js). The
+   picker of renders and videos ("choose…") is gone; "from this computer…" and a file let go on the field stay.
 
    The project is the one open in Merge - there is no picker here. Its kind gives the mode the first time it is opened here:
    a talking head - Simple; blank, the draft - Custom (the owner's (р7)); a highlights project - Simple, with its moods (phase
@@ -29,7 +38,7 @@ import * as Views from './lib-views.js';
 import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
 import { setOpenColumn } from './layout.js';
 import { isTalking } from './workshop.js';
-import { setMediaDrag } from '../media-tree.js';
+import { setMediaDrag, createTree } from '../media-tree.js';
 import { waveEl, secs } from '../sound/wave.js';
 import { refuseHome } from './chat-shell.js';
 
@@ -59,7 +68,7 @@ const MODE_HELP = {
   lyrics: 'Song lyrics from an idea - two or three texts. A text can go straight into Custom with "use in custom". Text only: no row in Alerts.',
   sounds: 'A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.',
   compose: 'Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.',
-  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Choose the video below; say what you want if you like. It goes to AUDIO → Music.',
+  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in the tree on the right - or a clip on the timeline with the right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.',
   sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
 };
 const MODEL_HELP = { V6: 'the newest - most natural', V6_MINI: 'faster', V6_WILD: 'bolder, stranger' };
@@ -73,7 +82,9 @@ S.f = Object.assign({
   lyrics: { idea: '' },
   sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
   compose: { prompt: '', seconds: 30, instrumental: true },
-  video: { video: '', name: '', thumb: '', description: '', tags: '', sfx: false, useAudio: false },
+  // `clip` (phase V54) - a clip of a timeline { key, trackId, clipId, name, start, dur, thumb } in place of a file; `dur` - the
+  // file's length when it is known (the price).
+  video: { video: '', name: '', thumb: '', dur: 0, clip: null, description: '', tags: '', sfx: false, useAudio: false },
   sfx: { prompt: '', seconds: 0, loop: false, influence: 0.3 },
 }, S.f || {});
 if (!S.of || typeof S.of !== 'object') S.of = {};
@@ -321,7 +332,12 @@ function _price() {
   const f = S.f[S.mode] || {};
   if (p.credits != null) return { big: '$' + p.usd, small: p.credits + ' kie credits · ' + p.note };
   if (p.usdPerMin) {
-    if (S.mode === 'video') return { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+    if (S.mode === 'video') {
+      // (phase V54) By the seconds of the clip or the file in "The video", when they are known.
+      const sec = _v2m().dur;
+      return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: secs(sec) + ' of music, as long as the video · ElevenLabs' }
+        : { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+    }
     const sec = +f.seconds || 0;
     return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: sec + ' s · ' + p.note } : { big: '≈ $' + p.usdPerMin + '/min', small: p.note };
   }
@@ -348,6 +364,9 @@ function paintMakePrice() {
 
 // A project opened here: its mode as it was left - or, the first time, the one its kind wants (and the lengths of its video).
 function _forProject() {
+  // (phase V54) A clip of another project is no video of this one.
+  const vc = S.f.video.clip;
+  if (vc && Views.chatKey(vc.key) !== _key) { S.f.video.clip = null; save(); }
   const lk = _lk(_key);
   const was = S.of[lk];
   const m = CAT && CAT.modes.find(x => x.id === was);
@@ -541,35 +560,87 @@ function paintMake() {
   card.appendChild(goRow);
   card.appendChild(el('div', 'au-err'));
   host.appendChild(card);
+  // (phase V54) The right column follows the mode: Video to Music's VIDEO tree, or "Made here".
+  _place();
 }
 
-// Video to Music: the video - this project's render, a clip of VIDEO, or one brought in from this computer.
+// ── Video to Music's video (phase V54, block 2) ────────────────────────────────────────────────────────────────────────────
+// ONE CLIP of a timeline (its right button) or a FILE (a press in the VIDEO tree on the right, "from this computer…", a file
+// let go on the field). A clip is shown as it is NOW on the open timeline - moved, trimmed, sped up, its name -; a clip of
+// another fragment of the same highlights project as it was put in; one taken off the open timeline says so.
+const V2M_MAX = 600;
+// The clip in the field on the open timeline: { track, clip } - null when another timeline is open, or it is not on this one.
+function _liveClip(c) {
+  if (!c || Store.key() !== c.key) return null;
+  for (const t of ((Store.timeline() || {}).tracks || [])) {
+    const x = (t.clips || []).find(y => y.id === c.clipId);
+    if (x) return t.kind === 'video' ? { track: t, clip: x } : null;
+  }
+  return null;
+}
+// What "The video" holds now: { clip?, live?, gone, name, start, dur, thumb, lane }.
+function _v2m() {
+  const f = S.f.video;
+  const c = f.clip;
+  if (c) {
+    const live = _liveClip(c);
+    const x = live ? live.clip : null;
+    return { clip: c, live, gone: !live && Store.key() === c.key, name: (x && x.name) || c.name || 'clip',
+      start: x ? +x.start || 0 : +c.start || 0, dur: Math.round((x ? +x.dur || 0 : +c.dur || 0) * 10) / 10,
+      thumb: (x && x.thumb) || c.thumb || '', lane: live ? live.track.name : '' };
+  }
+  return { name: f.name || '', dur: +f.dur || 0, thumb: f.thumb || '', gone: false };
+}
+const _clock = (t) => { const s = Math.max(0, +t || 0); return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
+const _usd = (s) => '≈ $' + (0.15 * (+s || 0) / 60).toFixed(3);
+
 function _attachment(f) {
   const att = el('div', 'au-att');
   const paint = () => {
     att.textContent = '';
-    if (f.video) {
-      if (f.thumb) { const im = el('img'); im.src = f.thumb; att.appendChild(im); } else att.appendChild(el('div', 'au-att-ph'));
+    const v = _v2m();
+    if (f.clip || f.video) {
+      if (v.thumb) { const im = el('img'); im.src = v.thumb; att.appendChild(im); } else att.appendChild(el('div', 'au-att-ph'));
       const tx = el('div', 'au-att-tx');
-      tx.appendChild(el('b', null, f.name || f.video.split('/').pop()));
-      tx.appendChild(el('span', 'au-muted', f.video));
+      tx.appendChild(el('b', null, f.clip ? v.name : (f.name || f.video.split('/').pop())));
+      if (f.clip) {
+        tx.appendChild(el('span', 'au-muted', 'a clip' + (v.lane ? ' of ' + v.lane : '') + ' · ' + _clock(v.start) + ' – ' + _clock(v.start + v.dur)
+          + ' · ' + secs(v.dur)));
+        if (v.gone) tx.appendChild(el('span', 'au-err', 'Not on the timeline any more - press a clip with the right button again.'));
+        else if (v.dur > V2M_MAX) tx.appendChild(el('span', 'au-err', 'Longer than 10 minutes - Video to Music takes up to 10.'));
+        else tx.appendChild(el('span', 'au-muted', _usd(v.dur) + ' for its ' + secs(v.dur) + ' · the track is laid under it'));
+      } else {
+        tx.appendChild(el('span', 'au-muted', (v.dur ? secs(v.dur) + ' · ' + _usd(v.dur) + ' · ' : '') + 'into Music only - not onto the timeline'));
+      }
       att.appendChild(tx);
     } else {
       att.appendChild(el('div', 'au-att-ph'));
-      att.appendChild(el('div', 'au-att-tx', 'Drop a video here, or choose one. Up to 10 minutes and 200 MB.'));
+      att.appendChild(el('div', 'au-att-tx', 'Press a video in the tree on the right, or a clip on the timeline with the right button - or drop a file here. Up to 10 minutes and 200 MB.'));
     }
-    const pick = el('button', 'au-btn', f.video ? 'another…' : 'choose…');
-    pick.type = 'button';
-    pick.addEventListener('click', () => _pickVideo(pick, (v) => { Object.assign(f, v); save(); paint(); }));
-    att.appendChild(pick);
-    if (f.video) {
+    const up = el('button', 'au-btn', 'from this computer…');
+    up.type = 'button';
+    up.title = 'A video from this computer - it is copied into VIDEO → Uploads first';
+    up.addEventListener('click', () => {
+      const inp = el('input');
+      inp.type = 'file'; inp.accept = 'video/*';
+      inp.addEventListener('change', async () => {
+        const file = inp.files && inp.files[0];
+        if (!file) return;
+        const v2 = await _uploadVideo(file);
+        if (v2) { Object.assign(f, v2, { clip: null }); save(); paintMake(); paintPrice(); }
+      });
+      inp.click();
+    });
+    att.appendChild(up);
+    if (f.video || f.clip) {
       const x = el('button', 'au-x', '✕');
       x.type = 'button';
       x.title = 'no video';
-      x.addEventListener('click', () => { f.video = ''; f.name = ''; f.thumb = ''; save(); paint(); });
+      x.addEventListener('click', () => { Object.assign(f, { video: '', name: '', thumb: '', dur: 0, clip: null }); save(); paintMake(); paintPrice(); });
       att.appendChild(x);
     }
   };
+  _attPaint = paint;
   att.addEventListener('dragover', (e) => { if (Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); e.stopPropagation(); att.classList.add('is-drop'); } });
   att.addEventListener('dragleave', () => att.classList.remove('is-drop'));
   att.addEventListener('drop', async (e) => {
@@ -579,11 +650,12 @@ function _attachment(f) {
     e.preventDefault();
     e.stopPropagation();
     const v = await _uploadVideo(file);
-    if (v) { Object.assign(f, v); save(); paint(); }
+    if (v) { Object.assign(f, v, { clip: null }); save(); paintMake(); paintPrice(); }
   });
   paint();
   return att;
 }
+let _attPaint = null;          // the field of the video, painted again when the timeline changes under its clip
 async function _uploadVideo(file) {
   say('Bringing the video in (VIDEO → Uploads)…');
   const fd = new FormData();
@@ -595,79 +667,9 @@ async function _uploadVideo(file) {
     const d = await api('/api/mv3/video/upload', { method: 'POST', body: fd });
     say('"' + file.name + '" is in VIDEO → Uploads.');
     const it = d.item || {};
-    return { video: it.videoPath, name: it.name || file.name, thumb: it.thumbPath || '' };
+    return { video: it.videoPath, name: it.name || file.name, thumb: it.thumbPath || '', dur: +it.duration || 0 };
   } catch (e) { say(e.message, true); return null; }
 }
-let _pickEl = null, _pickLayer = null, _pickAway = null;
-function _closePick() {
-  if (_pickAway) document.removeEventListener('mousedown', _pickAway, true);
-  _pickAway = null;
-  if (_pickEl) _pickEl.remove();
-  _pickEl = null;
-  if (_pickLayer) Layers.close(_pickLayer);
-  _pickLayer = null;
-}
-function _pickVideo(anchor, done) {
-  _closePick();
-  const box = el('div', 'au-pick');
-  const tabs = el('div', 'au-pick-tabs');
-  const grid = el('div', 'au-pick-grid');
-  box.append(tabs, grid);
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  box.style.left = Math.max(8, Math.min(window.innerWidth - 528, r.left - 200)) + 'px';
-  box.style.top = Math.max(8, Math.min(window.innerHeight * 0.3, r.bottom + 6)) + 'px';
-  _pickEl = box;
-  _pickLayer = Layers.open(box, { modal: true, name: 'a video for the music', onEsc: _closePick });
-  _pickAway = (e) => { if (_pickEl && !_pickEl.contains(e.target)) _closePick(); };
-  setTimeout(() => { if (_pickAway) document.addEventListener('mousedown', _pickAway, true); }, 0);
-  const show = async (which) => {
-    for (const b of tabs.querySelectorAll('button[data-k]')) b.classList.toggle('is-primary', b.dataset.k === which);
-    grid.textContent = '';
-    grid.appendChild(el('div', 'au-empty', 'reading…'));
-    let items = [];
-    try {
-      const d = await api(which === 'renders' ? '/api/library/shelf/renders' : '/api/library/shelf/media?group=video');
-      items = (d.items || []).filter(i => i.media && /\.(mp4|mov|webm|m4v)$/i.test(i.media)).slice(0, 120);
-    } catch (e) { grid.textContent = ''; grid.appendChild(el('div', 'au-err', e.message)); return; }
-    grid.textContent = '';
-    if (!items.length) grid.appendChild(el('div', 'au-empty', 'Nothing here.'));
-    for (const it of items) {
-      const b = el('button', 'au-pick-it');
-      b.type = 'button';
-      if (it.thumb) { const im = el('img'); im.src = it.thumb; im.loading = 'lazy'; b.appendChild(im); } else b.appendChild(el('div', 'au-att-ph'));
-      b.appendChild(el('span', null, it.name || it.media.split('/').pop()));
-      b.title = it.name + (it.dur || (it.meta && it.meta.dur) ? ' · ' + secs(it.dur || it.meta.dur) : '');
-      b.addEventListener('click', () => { _closePick(); done({ video: it.media, name: it.name, thumb: it.thumb || '' }); });
-      grid.appendChild(b);
-    }
-  };
-  for (const [k, label] of [['renders', 'Renders'], ['video', 'VIDEO library']]) {
-    const b = el('button', 'au-btn', label);
-    b.type = 'button';
-    b.dataset.k = k;
-    b.addEventListener('click', () => show(k));
-    tabs.appendChild(b);
-  }
-  const up = el('button', 'au-btn', 'from this computer…');
-  up.type = 'button';
-  up.addEventListener('click', () => {
-    const inp = el('input');
-    inp.type = 'file'; inp.accept = 'video/*';
-    inp.addEventListener('change', async () => {
-      const file = inp.files && inp.files[0];
-      if (!file) return;
-      _closePick();
-      const v = await _uploadVideo(file);
-      if (v) done(v);
-    });
-    inp.click();
-  });
-  tabs.appendChild(el('span', 'sp'));
-  tabs.appendChild(up);
-  show('renders');
-}
-
 // The request of the open mode, and where its Alerts row leads: back here, in this project.
 function _body() {
   const f = S.f[S.mode];
@@ -689,7 +691,13 @@ function _body() {
   } else if (S.mode === 'lyrics') b.idea = f.idea;
   else if (S.mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
   else if (S.mode === 'compose') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, instrumental: f.instrumental !== false });
-  else if (S.mode === 'video') Object.assign(b, { video: f.video, description: f.description, tags: f.tags, sfx: !!f.sfx, useAudio: !!f.useAudio });
+  else if (S.mode === 'video') {
+    // (phase V54) A clip - the server makes it into a file and lays the track under it - or a file of the library.
+    const v = _v2m();
+    if (f.clip) b.clip = { key: f.clip.key, clipId: f.clip.clipId, name: v.name, start: v.start, dur: v.dur };
+    else Object.assign(b, { video: f.video, name: f.name || '' });
+    Object.assign(b, { seconds: v.dur || 0, description: f.description, tags: f.tags, sfx: !!f.sfx, useAudio: !!f.useAudio });
+  }
   else if (S.mode === 'sfx') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, loop: !!f.loop, influence: f.influence });
   const m = CAT.modes.find(x => x.id === S.mode);
   b.where = {
@@ -709,6 +717,9 @@ async function generate(btn) {
   const err = btn.closest('.au-card').querySelector('.au-err');
   err.textContent = '';
   try {
+    // (phase V54) A clip of the open timeline: the server reads it from the SAVED timeline - what is not saved yet goes first.
+    const vc = S.mode === 'video' ? S.f.video.clip : null;
+    if (vc && vc.key === Store.key() && !(await Store.flush())) throw new Error('The timeline could not be saved - the clip is read from the saved one. Try again in a moment.');
     const body = _body();
     const d = await post('/api/audio/gen', body);
     if (body.preset) {
@@ -807,6 +818,9 @@ function _genCard(g) {
     for (const l of (g.lyrics || [])) card.appendChild(_lyric(l));
   } else {
     for (const r of (g.results || [])) card.appendChild(_result(r));
+    // (phase V54) Made from a clip: where its track was laid, or why not.
+    if (g.laid) card.appendChild(el('div', 'au-said', 'Laid under its clip on ' + g.laid.lane + ' at ' + _clock(g.laid.at) + '.'));
+    else if (g.notLaid) card.appendChild(el('div', 'au-said', 'Not laid on the timeline: ' + g.notLaid + '.'));
   }
   return card;
 }
@@ -942,7 +956,11 @@ async function _poll() {
     const done = GENS.find(g => before.get(g.id) === 'pending' && g.state === 'done');
     const moodOf = (g) => (g.req && g.req.preset ? (_moods().find(m => m.id === g.req.preset) || { label: g.req.preset }).label : '');
     if (done) say((done.kind === 'lyrics' ? 'The lyrics are here.' : 'Done - ' + (done.kind === 'sound' ? 'in SFX → My sounds → Generated.'
-      : moodOf(done) ? 'in Music → highlights → ' + moodOf(done) + '.' : 'in AUDIO → Music.')));
+      : moodOf(done) ? 'in Music → highlights → ' + moodOf(done) + '.'
+      : done.laid ? 'in AUDIO → Music, and laid under its clip on ' + done.laid.lane + '.'
+      : done.notLaid ? 'in AUDIO → Music; not laid on the timeline - ' + done.notLaid + '.' : 'in AUDIO → Music.')));
+    // (phase V54) The server laid a track on the timeline open here: taken now, not at the next look in 20 s.
+    if (GENS.some(g => before.get(g.id) === 'pending' && g.laid && g.laid.key === Store.key())) Store.refresh();
   }
   paintMade();
   if (!GENS.some(g => g.state === 'pending')) _unfollow();
@@ -1111,14 +1129,22 @@ function _build() {
   mid.append(status, make);
   const sash = el('div', 'mv3-lib-sash au-sash');
   sash.title = 'Drag to resize - a double press gives the default width back';
+  // The right column: "Made here" - or (phase V54) in Video to Music the VIDEO tree, "Made here" under the constructor.
   const madeCol = el('div', 'au-madecol');
+  const madeBox = el('div', 'au-madebox');
   const madeH = el('div', 'au-made-h', 'Made here ');
   const madeN = el('span', 'au-muted');
   madeH.appendChild(madeN);
   const made = el('div', 'au-made');
-  madeCol.append(madeH, made);
+  madeBox.append(madeH, made);
+  const v2m = el('div', 'au-v2m');
+  const v2mGal = el('div', 'au-v2m-gal');
+  const v2mTree = el('div', 'au-v2m-tree');
+  v2m.append(v2mGal, v2mTree);
+  v2m.hidden = true;
+  madeCol.append(madeBox);
   root.append(set, mid, sash, madeCol);
-  _ui = { root, set, col, alm, mid, status, make, sash, madeCol, made, madeN, price: null, narrow: '' };
+  _ui = { root, set, col, alm, mid, status, make, sash, madeCol, madeBox, made, madeN, v2m, v2mGal, v2mTree, price: null, narrow: '' };
   _wireMadeSash();
   new ResizeObserver(() => _fit()).observe(root);
 }
@@ -1132,9 +1158,110 @@ function _fit() {
   _ui.narrow = n;
   _ui.root.classList.toggle('au-narrow', n === 'au-narrow');
   _ui.root.classList.toggle('au-mid', n !== '');
-  // "Made here" under the constructor, or beside it behind the sash.
-  if (n) _ui.mid.appendChild(_ui.madeCol);
-  else _ui.root.appendChild(_ui.madeCol);
+  _place();
+}
+// Where the right column's parts go. Wide: beside the constructor behind the sash - "Made here", or in Video to Music the VIDEO
+// tree with "Made here" under the constructor. Narrower than 900 px: all of it under the constructor, the tree first.
+function _place() {
+  if (!_ui) return;
+  const video = S.mode === 'video';
+  _ui.v2m.hidden = !video;
+  _ui.root.classList.toggle('au-v2m-on', video);
+  if (_ui.narrow) {
+    _ui.mid.appendChild(_ui.madeCol);
+    if (video) _ui.madeCol.append(_ui.v2m, _ui.madeBox);
+    else _ui.madeCol.append(_ui.madeBox);
+  } else {
+    _ui.root.appendChild(_ui.madeCol);
+    if (video) { _ui.madeCol.appendChild(_ui.v2m); _ui.mid.appendChild(_ui.madeBox); }
+    else _ui.madeCol.appendChild(_ui.madeBox);
+  }
+  if (video) _v2mOpen();
+}
+
+// ── The VIDEO tree of Video to Music (phase V54, the owner's (зв23), (зв24), (зв31)) ─────────────────────────────────────
+// js/media-tree.js with VIDEO alone (`roots`, A's), remembering its own branches (`page: 'v2m'`) - no renders in it. The
+// gallery beside it: the path to the node open, its folders as tiles, then the videos lying directly in it (the shelf's `q`);
+// a press on one puts it into "The video" - a longer one than ten minutes is refused in words.
+let _vtree = null;
+let _vseq = 0;
+let _vRead = 0;                // when the tree was last read - read again on coming back to the mode
+function _v2mOpen() {
+  if (!_ui) return;
+  if (!_vtree) {
+    _vtree = createTree(_ui.v2mTree, { page: 'v2m', roots: ['video'], fallback: 'uploads',
+      status: (t, bad) => { if (t) say(t, bad); },
+      onSelect: (n) => _v2mLoad(n),
+      onChanged: () => _v2mLoad(_vtree.selected()) });
+  }
+  if (Date.now() - _vRead < 2000) return;
+  _vRead = Date.now();
+  _vtree.load().then(() => _v2mLoad(_vtree.selected()));
+}
+async function _v2mLoad(n) {
+  if (!_ui || !_vtree || !n) return;
+  const mine = ++_vseq;
+  const gal = _ui.v2mGal;
+  gal.textContent = '';
+  gal.appendChild(_vtree.crumbsEl(n));
+  const fold = _vtree.foldersEl(n);
+  if (fold) gal.appendChild(fold);
+  const grid = el('div', 'au-v2m-grid');
+  gal.appendChild(grid);
+  if (!n.q) { if (!fold) grid.appendChild(el('div', 'au-empty', 'Nothing here.')); return; }
+  grid.appendChild(el('div', 'au-empty', 'reading…'));
+  let items = [];
+  try {
+    const d = await api('/api/library/shelf/media?' + new URLSearchParams(n.q));
+    items = (d.items || []).filter(i => i && i.media && /\.(mp4|mov|webm|m4v|mkv)$/i.test(String(i.media).split('?')[0]));
+  } catch (e) {
+    if (mine === _vseq) { grid.textContent = ''; grid.appendChild(el('div', 'au-err', e.message)); }
+    return;
+  }
+  if (mine !== _vseq) return;
+  grid.textContent = '';
+  if (!items.length && !fold) grid.appendChild(el('div', 'au-empty', 'No videos here.'));
+  for (const it of items) grid.appendChild(_v2mTile(it));
+}
+function _v2mTile(it) {
+  const f = S.f.video;
+  const dur = +it.dur || +((it.meta || {}).dur) || 0;
+  const long = dur > V2M_MAX;
+  const b = el('button', 'au-v2m-it' + (!f.clip && f.video === it.media ? ' is-on' : '') + (long ? ' is-long' : ''));
+  b.type = 'button';
+  b.dataset.media = it.media;
+  if (it.thumb) { const im = el('img'); im.src = it.thumb; im.loading = 'lazy'; im.alt = ''; b.appendChild(im); } else b.appendChild(el('div', 'au-att-ph'));
+  b.appendChild(el('span', 'nm', it.name || String(it.media).split('/').pop()));
+  if (dur) b.appendChild(el('span', 'd', secs(dur)));
+  b.title = (it.name || '') + (dur ? ' · ' + secs(dur) : '') + (long ? ' - longer than 10 minutes: Video to Music takes up to 10'
+    : ' - a press puts it into "The video"; its music goes to Music only');
+  b.addEventListener('click', () => {
+    if (long) { say('"' + (it.name || 'that video') + '" is ' + secs(dur) + ' - Video to Music takes up to 10 minutes.', true); return; }
+    Object.assign(f, { clip: null, video: it.media, name: it.name || '', thumb: it.thumb || '', dur });
+    save();
+    paintMake();
+    paintPrice();
+    for (const x of _ui.v2mGal.querySelectorAll('.au-v2m-it')) x.classList.toggle('is-on', x.dataset.media === it.media);
+  });
+  return b;
+}
+
+/**
+ * (phase V54, block 2) THE RIGHT BUTTON ON A CLIP (timeline-b.js): "generate audio" -> ElevenLabs -> Video to Music opens with
+ * THAT clip in "The video" - nothing is asked until "generate". `o` - { key, trackId, clipId } of the open timeline.
+ */
+export async function videoToMusicFromClip(o) {
+  if (!_allowed() || !o || !o.clipId) return;
+  const t = ((Store.timeline() || {}).tracks || []).find(x => x.id === o.trackId);
+  const c = t && (t.clips || []).find(x => x.id === o.clipId);
+  if (!c) return;
+  await openAudio();
+  if (!CAT || !_shown) return;
+  Object.assign(S.f.video, { video: '', name: '', thumb: '', dur: 0,
+    clip: { key: String(o.key || Store.key()), trackId: t.id, clipId: c.id, name: c.name || '', start: +c.start || 0, dur: +c.dur || 0, thumb: c.thumb || '' } });
+  if (S.mode !== 'video') setMode('video');
+  else { save(); paintCol(); paintMake(); }
+  say('The clip is in "The video" - say what you want if you like, then generate. Its track is laid under it when it comes.');
 }
 function _wireMadeSash() {
   const { sash, madeCol: box, root } = _ui;
@@ -1181,7 +1308,7 @@ async function _show(on, remember = true) {
   _shown = !!on;
   if (remember) Views.rememberView(_lk(_key), _shown ? NAME : null, NAME);
   Views.setBase(NAME, _shown);
-  if (!_shown) { _stopHearing(); _unfollow(); if (_almWin) _almWin.close(); _closePick(); return; }
+  if (!_shown) { _stopHearing(); _unfollow(); if (_almWin) _almWin.close(); return; }
   _build();
   if (!(await _ready()) || !_shown) return;
   _forProject();
@@ -1211,6 +1338,8 @@ function _crumb() {
 function _onStore() {
   if (!Store.isReady()) return;
   _crumb();
+  // (phase V54) The clip in "The video" as it is now - moved, trimmed, taken off.
+  if (_shown && S.mode === 'video' && S.f.video.clip && _attPaint) { _attPaint(); paintPrice(); paintMakePrice(); }
   // (phase V49, (пр5)) A highlights fragment's key is its project's home: another fragment pressed is no project switch here.
   const k = Views.chatKey(Store.key());
   // The draft saved under a name: its own from now on, and it stays on the view it was on.

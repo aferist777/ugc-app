@@ -157,6 +157,10 @@ const _INFO = new Set([
   'The captions were laid from the sound - they merge in when your edit saves.',
   'The fragments were laid again while you edited - your edit was kept and merged in.',
   'The captions were laid from the sound while you edited - your edit was kept and merged in.',
+  // (phase V54) Video to Music's track laid under its clip by the server.
+  'Music laid under its clip.',
+  'The music was laid under its clip - it merges in when your edit saves.',
+  'The music was laid under its clip while you edited - your edit was kept and merged in.',
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
 // (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, read only, a rule of the lanes) or
@@ -651,6 +655,7 @@ export async function save(_merges = 0) {
         if (removed) parts.push(removed + (removed === 1 ? ' clip' : ' clips') + ' removed');
         // The server laying its own cells is not another device (_serverOnly).
         _status = (who && who.frag) ? 'The fragments were laid again while you edited - your edit was kept and merged in.'
+          : who && who.laid && !who.heard ? 'The music was laid under its clip while you edited - your edit was kept and merged in.'
           : who ? 'The captions were laid from the sound while you edited - your edit was kept and merged in.'
           : 'Changed on another device' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
             + ' - your edit was kept and merged in.';
@@ -780,14 +785,15 @@ async function _checkRemote() {
   if (_dirty || typing) {
     _status = !who ? 'Changed on another device - your edit will be merged in when it saves.'
       : who.frag ? 'The fragments were laid again - it will merge in when your edit saves.'
+      : who.laid && !who.heard ? 'The music was laid under its clip - it merges in when your edit saves.'
       : 'The captions were laid from the sound - they merge in when your edit saves.';
     _emit();
     return;
   }
   // The lines laid from the sound are ONE step to undo, as they were when the page laid them itself:
   // the step is taken before the new state comes in. A mirror lay is not - undoing it would only fight
-  // the mirror, which lays it again - and neither is somebody else's edit.
-  const undoable = !!who && who.heard && !who.frag;
+  // the mirror, which lays it again - and neither is somebody else's edit. (V54) Nor is the music laid under a clip: one step.
+  const undoable = !!who && (who.heard || who.laid) && !who.frag;
   if (undoable) History.push();
   _timeline = d.timeline;
   _version = d.version;
@@ -797,6 +803,7 @@ async function _checkRemote() {
   if (!undoable) _bindHistory();
   _status = !who ? 'Changed on another device - this is the current version.'
     : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
+    : who.laid && !who.heard ? 'Music laid under its clip.'
     : 'Captions laid from the sound.';
   _emit();
 }
@@ -807,14 +814,20 @@ async function _checkRemote() {
 // and in what order. A change anywhere in that means somebody edited the project, whatever else moved
 // with it. Null for that; otherwise { frag, heard } - which of the two moved.
 const _isFrag = (c) => Number(c && c.frag) > 0;
+// (phase V54, block 2) A clip the server laid itself - Video to Music's track under its clip (lib/audio-gens.js _layUnder): the
+// mark rides only until this page saves (lib/timeline-shape.js keeps no such field).
+const _isLaid = (c) => !!(c && c.laidBy);
 function _serverOnly(base, theirs) {
   const lanes = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []);
   const a = lanes(base);
   if (!a.length) return null;
-  // A subtitle lane the server had to add - an old project without one - holds only heard lines.
-  const b = lanes(theirs).filter(l => !(l && l.kind === 'subs' && !a.some(x => x.id === l.id)
-    && (l.clips || []).every(isHeard)));
-  let heard = b.length !== lanes(theirs).length;
+  // A subtitle lane the server had to add - an old project without one - holds only heard lines. (V54) A sound lane it made for
+  // a track it laid holds only that.
+  const newLane = (l) => !!l && !a.some(x => x.id === l.id);
+  const b = lanes(theirs).filter(l => !(newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard))
+    && !(newLane(l) && l.kind === 'audio' && (l.clips || []).length && l.clips.every(_isLaid)));
+  let heard = lanes(theirs).some(l => newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard));
+  let laid = lanes(theirs).some(l => newLane(l) && l.kind === 'audio' && (l.clips || []).length && l.clips.every(_isLaid));
   let frag = false;
   if (a.length !== b.length) return null;
   const byId = (list) => list.slice().sort((x, y) => String(x.id).localeCompare(String(y.id)));
@@ -835,13 +848,14 @@ function _serverOnly(base, theirs) {
     // (`voice`, phase V30, block 1) is MOVED by the mirror with its line, a corrected one too: where it stands is
     // the server's, what it says is the person's.
     const placeFree = (c) => (subs && c && c.voice ? { ...c, start: 0, dur: 0 } : c);
-    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c)).map(placeFree);
+    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c) && !_isLaid(c)).map(placeFree);
     if (subs ? !_same(byId(own(xc)), byId(own(yc))) : !_same(own(xc), own(yc))) return null;
     if (!_same((xc || []).filter(_isFrag), (yc || []).filter(_isFrag))) frag = true;
     const said = (list) => (list || []).filter(c => !_isFrag(c) && said1(c));
     if (subs && !_same(said(xc), said(yc))) heard = true;
+    if (!_same((xc || []).filter(_isLaid), (yc || []).filter(_isLaid))) laid = true;
   }
-  return (frag || heard) ? { frag, heard } : null;
+  return (frag || heard || laid) ? { frag, heard, laid } : null;
 }
 
 /**

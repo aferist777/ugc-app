@@ -37,10 +37,13 @@ router.get('/audio/catalog', (_req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-router.post('/audio/gen', (req, res) => {
+// (phase V54) Video to Music: `video` - a file of the library, or `clip` { key, clipId } - one clip of a timeline as it is
+// seen, made into a file by the server when it is asked and the track laid under the clip; over ten minutes or 200 MB it is
+// refused here in words, before anything is paid.
+router.post('/audio/gen', async (req, res) => {
   const b = req.body || {};
   try {
-    const g = AG.create(String(b.mode || ''), b, b.where || null, { project: String(b.project || '') });
+    const g = await AG.create(String(b.mode || ''), b, b.where || null, { project: String(b.project || '') });
     res.json({ success: true, gen: g, price: ENG.price(g.req) });
   } catch (e) {
     if (!e.status) console.warn('[audio/gen]', e.message);

@@ -15,7 +15,7 @@
 @container libhead (max-width: 420px){ .mv3-lib-crumb, #mv3-library .mv3-panel-title{letter-spacing:.01em} }
 
 .mv3-pc.is-audio{min-width:0}
-.mv3-pc.is-audio .sp, .au-pick .sp, .au-alm .sp{flex:1}
+.mv3-pc.is-audio .sp, .au-alm .sp{flex:1}
 .au-set{flex:0 0 232px}
 .au-alm-foot .mv3-vc-almanac{width:calc(100% - 20px)}
 .au-alm-foot .mv3-vc-almanac.is-soon{opacity:.75}
@@ -78,24 +78,38 @@
 .au-preset .au-muted{font-size:11px; line-height:1.4}
 .au-preset-style{font-size:11.5px; line-height:1.45; color:var(--ink); opacity:.85}
 
-/* the attachment of Video to Music, and its picker */
+/* the video of Video to Music - a clip of the timeline (its lane, from-to, length, price) or a file (phase V54) */
 .au-att{display:flex; gap:10px; align-items:center; padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); min-height:74px}
 .au-att.is-drop{border-color:var(--primary); background:var(--primary-soft)}
 .au-att img, .au-att .au-att-ph{flex:0 0 auto; width:48px; height:64px; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
 .au-att-tx{flex:1; min-width:0; font-size:12px}
 .au-att-tx b{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-att-tx .au-muted{display:block; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.au-pick{position:fixed; z-index:9300; width:520px; max-width:calc(100vw - 16px); max-height:70vh; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden}
-.au-pick-tabs{display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--border-soft)}
-.au-pick-grid{flex:1; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; padding:8px}
-.au-pick-it{display:flex; flex-direction:column; gap:3px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
-.au-pick-it:hover{border-color:var(--primary)}
-.au-pick-it img, .au-pick-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
-.au-pick-it span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.au-att-tx .au-err{margin-top:2px; font-size:10.5px}
+
+/* (phase V54, the owner's (зв23)) Video to Music's right column: the gallery of the node open, the VIDEO tree beside it */
+.au-v2m{flex:1 1 auto; min-height:0; display:flex}
+.au-v2m[hidden]{display:none}
+.au-v2m-gal{flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:10px 10px 16px}
+.au-v2m-gal .mt-folders{grid-template-columns:repeat(auto-fill, minmax(120px, 1fr))}
+.au-v2m-tree{flex:0 0 156px; min-width:0; min-height:0; overflow-y:auto; border-left:1px solid var(--border-soft); padding:4px 2px}
+.au-v2m-tree .mt{height:auto}
+.au-v2m-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:6px}
+.au-v2m-it{position:relative; display:flex; flex-direction:column; gap:2px; border:1px solid transparent; border-radius:var(--r-xs); background:none; padding:3px; cursor:pointer; color:var(--ink); font:500 10px/1.2 var(--font); text-align:left}
+.au-v2m-it:hover{border-color:var(--primary)}
+.au-v2m-it.is-on{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 10%, transparent)}
+.au-v2m-it.is-long{opacity:.45}
+.au-v2m-it img, .au-v2m-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
+.au-v2m-it .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.au-v2m-it .d{color:var(--muted); font-size:9.5px; font-variant-numeric:tabular-nums}
+/* "Made here" under the constructor while the tree has the column */
+.au-mid > .au-madebox .au-made-h{padding:6px 0 4px}
+.au-mid > .au-madebox .au-made{overflow:visible; padding:0}
 
 /* ── "Made here": the open project's presses ── */
 .au-sash{flex:0 0 5px}
 .au-madecol{flex:0 0 42%; min-width:260px; min-height:0; display:flex; flex-direction:column; background:var(--bg)}
+.au-madebox{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
 .au-made-h{flex:0 0 auto; padding:12px 14px 8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
 .au-made{flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 14px 20px; display:flex; flex-direction:column; gap:8px}
 .au-gen{padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); display:flex; flex-direction:column; gap:7px}
@@ -134,6 +148,7 @@
 .mv3-pc.is-audio.au-mid .au-madecol{flex:0 0 auto; min-width:0; background:none}
 .mv3-pc.is-audio.au-mid .au-made-h{padding:6px 0 4px}
 .mv3-pc.is-audio.au-mid .au-made{overflow:visible; padding:0}
+.mv3-pc.is-audio.au-mid .au-v2m{flex:0 0 auto; height:380px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
 .mv3-pc.is-audio.au-narrow{flex-direction:column}
 .mv3-pc.is-audio.au-narrow .au-set{flex:0 0 auto; max-height:38%; border-right:0; border-bottom:1px solid var(--border)}
 .mv3-pc.is-audio.au-narrow .au-mid{min-width:0; padding:10px 12px 20px}

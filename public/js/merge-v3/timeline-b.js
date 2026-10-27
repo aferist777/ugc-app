@@ -3026,7 +3026,11 @@ function _laneMenu(e) {
     () => import('./vidchat.js').then(m => m.openVideos())
       .catch(err => console.warn('[timeline] the video chat did not open:', (err && err.message) || err)));
 
-  // Fixed to the viewport and parked on the body, where the pointer was.
+  _showCtx(box, e);
+}
+
+// The menu fixed to the viewport and parked on the body, where the pointer was.
+function _showCtx(box, e) {
   document.body.appendChild(box);
   const w = box.offsetWidth, h = box.offsetHeight;
   box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, e.clientX))) + 'px';
@@ -3037,6 +3041,47 @@ function _laneMenu(e) {
   _ctx = { el: box, away, layer };
   document.addEventListener('mousedown', away, true);
   window.addEventListener('scroll', _closeCtx, true);
+}
+
+// ── The right button on a clip (phase V54, block 2, the owner's (зв3), (зв4)) ─────────────────────────────────────────────────
+// A clip of a VIDEO lane that is a film - not a picture, not a red clip whose file is gone - has a menu: "Video to Music…" puts
+// THIS clip, as it is seen, into the Library panel's "generate audio" -> ElevenLabs -> Video to Music (js/merge-v3/audchat.js),
+// where "generate" asks for music made for it; the server makes the clip into a file and lays the track under it. Longer than
+// one clip - "Merge N clips" first. A highlights project's own timeline: "Open a fragment first.". Nothing is picked by it.
+function _clipMenu(e) {
+  if (!_on || locked()) return;
+  const host = _host();
+  const el = e.target && e.target.closest ? e.target.closest('.mv3b-clip') : null;
+  if (!host || !el || !host.contains(el)) return;
+  const tl = Store.timeline();
+  const t = ((tl && tl.tracks) || []).find(x => x.id === el.dataset.track);
+  const c = t && (t.clips || []).find(x => x.id === el.dataset.clip);
+  if (!t || !c || t.kind !== 'video' || isStill(c) || Store.isGone(c) || !c.src) return;
+  e.preventDefault();
+  _closeCtx();
+  const box = document.createElement('div');
+  box.className = 'mv3-plus-menu';
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mv3-plus-item';
+  const usd = 0.15 * (+c.dur || 0) / 60;
+  b.title = 'Music made for this clip by ElevenLabs - laid under it on "audio 2" (or the next free sound lane) when it comes';
+  const s = document.createElement('span');
+  s.textContent = 'Video to Music…';
+  const m = document.createElement('small');
+  m.textContent = 'ElevenLabs scores this clip · ' + (Math.round((+c.dur || 0) * 10) / 10) + ' s · ≈ $' + usd.toFixed(3);
+  b.append(s, m);
+  b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    _closeCtx();
+    if (Views.isHlHome(Store.key())) { Views.noFragment(); return; }
+    // The strip of a pick would cover the Library panel the clip goes to.
+    _clearSel();
+    import('./audchat.js').then(A => A.videoToMusicFromClip({ key: Store.key(), trackId: t.id, clipId: c.id }))
+      .catch(err => showError('Video to Music did not open', { detail: (err && err.message) || String(err) }));
+  });
+  box.appendChild(b);
+  _showCtx(box, e);
 }
 
 // The field (or a block that keeps its own keys - a caption's words) left focused when the timeline was pressed: blurred
@@ -3088,6 +3133,7 @@ export function initTimelineB() {
   document.addEventListener('mousedown', _awayFromClip, true);
   document.addEventListener('mousedown', _afterPreviewPress);
   document.addEventListener('contextmenu', _laneMenu);
+  document.addEventListener('contextmenu', _clipMenu);
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);
   document.addEventListener('mouseup', _letFieldGo);
