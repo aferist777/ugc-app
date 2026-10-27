@@ -2370,6 +2370,58 @@ export function placeClipAbove(data) {
   return { ok: true, lane, at };
 }
 
+// A sound lane below main audio with nothing on it in [a, b) - "audio 2" first, then on outwards; null when every one is taken
+// there. Main audio is the film's own sound and is never chosen.
+function _freeSoundLane(tracks, a, b) {
+  const auds = (tracks || []).filter(x => x.kind === 'audio');
+  for (const t of auds.slice(1)) {
+    const busy = (t.clips || []).some(c => (+c.start || 0) < b - 0.005 && (+c.start || 0) + (+c.dur || 0) > a + 0.005);
+    if (!busy) return t;
+  }
+  return null;
+}
+
+/**
+ * (phase V54, the owner's (зв29)) A PIECE OF A SOUND at the playhead - "to timeline" of the Cut window: the same file cut by
+ * `trimIn` and `dur` (no new file), on the first audio lane under main audio that is free for the whole piece, or a new one
+ * made in the same step; at the ceiling it is refused in words. One step to undo; the piece laid is picked. A highlights
+ * project's own timeline takes nothing ("Open a fragment first."). `kind` - 'music' lays a bed (half volume, never heard for
+ * captions), 'sfx' / 'sounds' a sound effect (full volume, never heard), anything else a sound at full volume.
+ * Returns { ok, lane, at } or { ok: false, why }.
+ */
+export function placeSoundPiece({ src, name, libId, kind, trimIn, dur, srcDur } = {}) {
+  if (!_on) return { ok: false, why: 'The timeline is not showing' };
+  if (!src) return { ok: false, why: 'There is no sound to lay' };
+  if (Views.isHlHome(Store.key())) { Views.noFragment(); return { ok: false, why: Views.NO_FRAGMENT[0] }; }
+  if (locked()) return { ok: false, why: 'The talking head is being built - the timeline takes nothing until it is done' };
+  const len = _r2(+dur || 0);
+  if (!(len >= 0.05)) return { ok: false, why: 'The piece is too short to lay' };
+  const whole = _r2(Math.max(0, +srcDur || 0));
+  const tin = _r2(Math.max(0, Math.min(+trimIn || 0, whole > 0 ? Math.max(0, whole - len) : Infinity)));
+  const at = _r2(Math.max(0, _playhead));
+  const id = _id();
+  const k = String(kind || '');
+  let lane = '', full = false;
+  const ok = Store.mutate(tl => {
+    const t = tl.tracks || [];
+    const to = _freeSoundLane(t, at, at + len) || _newAudioLane(t);
+    if (!to) { full = true; return; }
+    to.clips.push({
+      id, src: String(src), thumb: null, name: String(name || '').slice(0, 200), libId: libId || null,
+      start: at, dur: len, srcDur: whole, trimIn: tin, trimOut: whole > 0 ? _r2(Math.max(0, whole - tin - len)) : 0,
+      speed: 1, reversed: false, transition: null, animation: null, filter: null, pairId: null,
+      volume: k === 'music' ? 0.5 : 1,
+      ...(k === 'music' ? { bed: true } : (k === 'sfx' || k === 'sounds') ? { sfx: true } : {}),
+    });
+    to.clips.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+    lane = to.name;
+  });
+  if (full) return { ok: false, why: 'No audio lane is free there - four is the limit. Move the playhead, or clear a lane.' };
+  if (!ok || !lane) return { ok: false, why: Store.status() || 'The piece could not be laid' };
+  selectClipById(id);
+  return { ok: true, lane, at };
+}
+
 // (phase V40, tail (а), the owner 2026-10-24: "Fit / Fill и Shift пересчитывают субтитры на шве") A clip's fit or its frame
 // - Fit / Fill, the Shift slider - decides whether its picture is split into bands: the subtitles' places on the seam are
 // worked out again IN THE SAME STEP (public/js/captions/split.js), as the Framing switch does (framing-ui.js).
