@@ -14,9 +14,6 @@
        modified time - several shelves sort by it. That is layout 5, the desktop library before
        project folders: the copy is then upgraded to layout 6 (lib/library-upgrade.js), which
        sorts it into project, shelf and category folders and sets aside what nothing uses;
-     - into a library that is already layout 6, it goes the way Import does: into a staging
-       library inside it (cache/import/), upgraded there and merged in (lib/library-merge.js) -
-       what the library has already stays, --overwrite-stores lets the incoming stores win;
      - rewrites every server-era path inside the stores it copies (/uploads/x.jpg becomes
        /media/images/x.jpg) - whole values, keys, and paths inside longer strings alike;
      - carries the settings over without the retired keys, and fills empty key fields from the
@@ -36,8 +33,9 @@
      - caches the app makes again: thumbnails, pose previews, voice previews.
    The check afterwards counts paths into what was left out on purpose apart from paths lost.
 
-   It refuses to write stores over a library that already has its own - pass --overwrite-stores
-   when replacing them is the intention (a library the app opened once has a few seeded ones). */
+   It refuses a library of the desktop app (layout 6) - merging into one went with Import (phase V54, the owner
+   2026-10-28): migrate into a new folder and open that. It refuses to write stores over a folder that already has
+   some - pass --overwrite-stores when replacing them is the intention. */
 
 const fs = require('fs');
 const path = require('path');
@@ -45,7 +43,6 @@ const dotenv = require('dotenv');
 const { fromLegacy, rewriteLegacyValue, legacyPathsIn, LEGACY_LEFT_OUT, STORES_LEFT_OUT } = require('../lib/layout');
 const { writeFileAtomic } = require('../lib/atomic-write');
 const UPGRADE = require('../lib/library-upgrade');
-const { mergeLibrary } = require('../lib/library-merge');
 
 // ── arguments ───────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -59,10 +56,11 @@ function fail(msg) { console.error(`[migrate] ${msg}`); process.exit(1); }
 if (!FROM || !TO) fail('usage: node tools/migrate-library.js --from <server install> --to <library> [--apply] [--overwrite-stores]');
 const within = (a, b) => a === b || a.startsWith(b + path.sep);
 if (within(TO, FROM) || within(FROM, TO)) fail('--from and --to must be separate folders, neither inside the other');
-// Where the copy is made: the library itself, or - when it is layout 6 already - a staging library
-// inside it, merged in at the end.
-const INTO_LAYOUT_6 = fs.existsSync(TO) && UPGRADE.layoutOf(TO) === 6 && fs.existsSync(path.join(TO, 'data'));
-const LIB = INTO_LAYOUT_6 ? path.join(TO, 'cache', 'import', `migrate-${Date.now()}`, 'lib') : TO;
+// A library of the desktop app is not migrated into (merging went with Import, phase V54).
+if (fs.existsSync(TO) && UPGRADE.layoutOf(TO) === 6 && fs.existsSync(path.join(TO, 'data'))) {
+  fail(`${TO} is a library of the desktop app already - migrate into a new folder and open that`);
+}
+const LIB = TO;
 if (!fs.existsSync(path.join(FROM, 'data')) || !fs.existsSync(path.join(FROM, 'uploads'))) {
   fail(`${FROM} does not look like a server-era install (no data/ and uploads/ in it)`);
 }
@@ -76,7 +74,7 @@ const MEDIA_SOURCES = [
   // Written into public/ while the server ran. Both are left out now; walked only to say so.
   ['public/voice-previews', '/voice-previews'], ['public/models', '/models'],
 ];
-// What is left out, shared with Import: lib/layout.js.
+// What is left out: lib/layout.js.
 const SKIP_MEDIA = LEGACY_LEFT_OUT;
 const SKIP_STORES = STORES_LEFT_OUT;
 // Folders inside data/ that are copied whole (and rewritten, being JSON).
@@ -201,7 +199,7 @@ for (const rel of stores) {
 
 // ── report the plan ─────────────────────────────────────────────────────────
 say(`[migrate] ${APPLY ? 'APPLYING' : 'dry run'} - from ${FROM}`);
-say(`[migrate]            to ${TO}${INTO_LAYOUT_6 ? ' (layout 6 already: staged, upgraded and merged in)' : ''}`);
+say(`[migrate]            to ${TO}`);
 say('');
 say('media, by folder:');
 let totalBytes = 0;
@@ -304,18 +302,9 @@ if (blocked) fail('refusing to apply - see above');
   say(`check: ${untranslated.reduce((n, [, l]) => n + l.length, 0)} server-era paths left untranslated`);
   for (const [rel, l] of untranslated) say(`  ${l.length} in ${rel}, e.g. ${l[0]}`);
 
-  // Layout 6: sorted into folders, what nothing uses set aside - and merged in when staged.
+  // Layout 6: sorted into folders, what nothing uses set aside.
   const up = UPGRADE.upgrade(LIB, { log: (s) => say(s) });
   if (up.upgraded) say(`upgrade: ${up.report.unreferenced} files nothing uses set aside in ${up.backup}; ${up.newlyMissing.length} paths lost by it`);
-  if (INTO_LAYOUT_6) {
-    // No draft characters (phase H8): out of the staged set before the merge, into the library's backups.
-    const drafts = require('../lib/char-drafts').setAside(LIB, path.join(TO, 'backups'));
-    if (drafts.length) say(drafts.length + ' draft character(s) set aside in ' + path.join(TO, 'backups'));
-    const m = mergeLibrary(LIB, TO, { overwrite: OVERWRITE_STORES });
-    say(`merged into ${TO}: ${m.projects} projects (${m.projectsHere} already there), ${m.timelines} timelines, `
-      + `${m.categories} categories, ${m.files} files (${m.skipped} already there), ${m.stores} stores`);
-    fs.rmSync(path.dirname(LIB), { recursive: true, force: true });
-  }
 
   const logDir = path.join(TO, 'logs');
   fs.mkdirSync(logDir, { recursive: true });

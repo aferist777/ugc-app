@@ -1436,7 +1436,7 @@ function VIDEOS(ctx) {
     if (!mm || !mm.usable) return ['Not available now.', (mm && mm.why) || 'no model can be asked'];
     if (!r || !r.usable) return [(r ? r.aggLabel : 'That aggregator') + ' cannot be asked.', (r && r.why) || ''];
     // A two-step card always sends a picture - its storyboard (review V8).
-    // (phase V23) A card brought by Import without its character or place: what is missing, before the press.
+    // (phase V23) A card whose character or place is not in this library any more: what is missing, before the press.
     const gone = (m.media || []).filter(a => a && a.gone);
     if (gone.length) {
       const what = gone.map(a => a.label ? '«' + a.label + '»' : (a.kind === 'video' ? 'a clip' : a.kind === 'audio' ? 'a sound' : 'a picture')).join(', ');

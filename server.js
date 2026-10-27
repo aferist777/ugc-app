@@ -156,12 +156,6 @@ app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/clips'));   // clip upload and poster frames for the Library
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
-// Import / Export. The feature came back, rebuilt: the version this note used to describe
-// knew thirteen of the stores this app now has and none of the ones the current pages
-// write. The old server half is still in data/backups/ for reference. This one builds the
-// archive to a file rather than streaming it, so a broken download resumes instead of
-// starting again - the bundle runs to gigabytes.
-app.use('/api', require('./routes/data-io'));
 // Captions from the sound: the server listens to a project and lays the lines (phase K1).
 app.use('/api', require('./routes/mv3-captions'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves

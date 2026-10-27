@@ -565,7 +565,7 @@ audio.vtrim-media{ background:none; height:32px }
 @keyframes vc-sending{ 50%{ opacity:.45 } }
 .vc-ref{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px }
 .vc-ref .lab{ max-width:100%; font:600 8.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-/* (phase V23) Not in this library - a card brought by Import without it. */
+/* (phase V23) Not in this library any more - a card's character or place deleted since. */
 .vc-ref.is-gone > :first-child{ outline:1.5px solid var(--danger); outline-offset:1px; opacity:.55 }
 .vc-ref.is-gone .lab{ color:var(--danger) }
 /* (phase V15) The video chat's switches in its column - the writer and the storyboard (checkboxes since V16; 中文 went in V29) - and
