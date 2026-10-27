@@ -51,6 +51,8 @@ import { waveEl } from '../sound/wave.js';
 import { soundMenu, myCats } from '../sound/menu.js';
 import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
+// (phase V54) Several tiles picked at once - one module with the Library page.
+import * as TS from '../tile-select.js';
 
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const AUDIO = new Set(['music', 'sounds', 'sfx']);
@@ -135,10 +137,15 @@ function _tile(it, list) {
   const cell = document.createElement('div');
   const audio = AUDIO.has(it.kind);
   cell.className = 'mv3-tile' + (audio ? ' is-sound' : '') + (it.meta && it.meta.favorite ? ' is-fav' : '');
+  // (phase V54) What js/tile-select.js picks it by.
+  cell.dataset.key = it.kind + ':' + it.id;
   // No menu on a tile (phase V23, the owner: one rule everywhere): "Save image as" would save the miniature.
   // (phase V34.E, the owner's (р2)) The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
   cell.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
+    const many = _pickedWith(it);
+    if (many) { _manyMenu(many, e); return; }
     if (audio) {
       soundMenu(it, e, {
         status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
@@ -261,7 +268,7 @@ function _tile(it, list) {
       const files = (it.meta && it.meta.items) || [];
       if (files.length === 1 && !(it.meta && it.meta.remote)) toLane(e.dataTransfer, it, files[0]);
       else e.dataTransfer.effectAllowed = 'move';
-      setMediaDrag(e.dataTransfer, it);
+      setMediaDrag(e.dataTransfer, it, _pickedWith(it));
     });
     cell.addEventListener('click', () => open(it, 0));
     return cell;
@@ -338,7 +345,8 @@ function _tile(it, list) {
       bed: it.kind === 'music',
     }));
     e.dataTransfer.setData(DRAG_MEDIA + media, '1');
-    setMediaDrag(e.dataTransfer, it);
+    // (phase V54) A picked tile carries the others picked onto the tree (a lane still takes this one alone, (зв18)).
+    setMediaDrag(e.dataTransfer, it, _pickedWith(it));
     cell.classList.add('is-dragging');
   });
   cell.addEventListener('dragend', () => cell.classList.remove('is-dragging'));
@@ -788,6 +796,50 @@ function _paint() {
   const seen = _items.filter(it => !AUDIO.has(it.kind));
   _items.forEach((it) => grid.appendChild(_tile(it, seen)));
   b.appendChild(grid);
+  if (_tsel) _tsel.refresh();
+}
+
+// ── Several tiles picked (phase V54 block 5, (зв17)) ────────────────────────
+// js/tile-select.js picks them in the gallery; let go on the tree they go in one request (js/media-tree.js); here are
+// the right button's menu and Delete for them.
+let _tsel = null;
+const _keyOf = (it) => it.kind + ':' + it.id;
+function _pickedWith(it) {
+  if (!_tsel || _tsel.size() < 2 || !_tsel.has(_keyOf(it))) return null;
+  const keys = new Set(_tsel.keys());
+  return _items.filter(x => keys.has(_keyOf(x)));
+}
+async function _afterMany(d, verb) {
+  await _reload();
+  if (d) _status(TS.saidOf(d, verb), !d.done && (d.skipped || []).length > 0);
+}
+function _manyMenu(items, e) {
+  const n = items.length;
+  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind));
+  const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
+  TS.menuAt(e.clientX, e.clientY, [
+    ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
+      done: () => _reload(), status: (t, bad) => _status(t, bad),
+    })],
+    [allFav ? '★ Remove from favourites' : '★ Add to favourites', starable.length < n ? 'posts have no star' : '',
+      starable.length ? async () => {
+        try { await _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
+        catch (err) { _status(err.message, true); }
+      } : null],
+    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items), true],
+  ]);
+}
+async function _deleteMany(all) {
+  const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube' && !_fixed(x));
+  if (!items.length) { _status('Nothing picked here can be deleted - built-in sounds and a project\'s talking heads stay', true); return; }
+  const q = items.length === 1 ? await deleteQuestion(items[0]) : await TS.deleteQuestion(items);
+  if (!confirm(q)) return;
+  _stopHearing();
+  try {
+    const d = await TS.batch('delete', items);
+    for (const x of items) markGone(x.media);
+    await _afterMany(d, 'deleted');
+  } catch (err) { _status(err.message, true); }
 }
 
 // ── Upload ──────────────────────────────────────────────────────────────────
@@ -1064,11 +1116,20 @@ export function initLibrary() {
   _tree = createTree(host, {
     page: 'mv3', fallback,
     status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
-    onSelect: (n) => { _node = n; _load(); },
+    onSelect: (n) => { _node = n; if (_tsel) _tsel.clear(); _load(); },
     onChanged: () => _load(),        // awaited by the tree before it says what was done
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => !!SS.filesTo(n),
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
   });
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
+  // (phase V54) Several tiles picked in the gallery (js/tile-select.js) - while the shelf is what the panel shows.
+  const body = _body();
+  if (body) {
+    _tsel = TS.createSelection({
+      host: body, tile: '.mv3-grid .mv3-tile[data-key]',
+      active: () => !!body.querySelector('.mv3-grid') && body.offsetParent !== null,
+      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+    });
+  }
 }

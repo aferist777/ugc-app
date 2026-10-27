@@ -32,6 +32,8 @@ import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
 // (phase V54) The music player at the bottom of Media while Music is open.
 import { createPlayer } from '../sound/player.js';
+// (phase V54) Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
+import * as TS from '../tile-select.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
@@ -310,6 +312,7 @@ function _initTree() {
     onSelect: (n) => {
       _node = n;
       _sel = '';
+      if (_tsel) _tsel.clear();         // another folder: nothing picked
       if (_shelf === 'media') _load({ checks: false });
     },
     onChanged: (what) => (_shelf === 'media'
@@ -684,6 +687,8 @@ function _card(it, extra) {
   const card = document.createElement('div');
   card.className = 'lib-card' + (it.meta && it.meta.favorite ? ' fav' : '');
   card.dataset.id = String(it.id);
+  // (phase V54) What js/tile-select.js picks it by - on Media.
+  if (_shelf === 'media') card.dataset.key = it.kind + ':' + it.id;
   // A hook's permanent number (lib/hook-ids.js): what the render window puts into the name
   // of every creative that opens with this hook, so it belongs where the hook is chosen.
   const hookId = (it.meta && it.meta.hookId) || null;
@@ -800,7 +805,8 @@ function _card(it, extra) {
   // talking head, which is its project's).
   if (_shelf === 'media' && !_fixed(it)) {
     card.draggable = true;
-    card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it); });
+    // (phase V54) A picked tile carries the others picked with it.
+    card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it, _pickedWith(it)); });
   }
 
   // Second line: which category this clip is filed under, changeable in place. Only
@@ -820,6 +826,9 @@ function _card(it, extra) {
   // (phase V34.E, the owner's (р2)) The exception: a sound's or a track's menu - Cut…, Rename, Move to, About, Delete.
   card.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    // (phase V54) Several picked, this one among them: their menu - Move to…, the star, Delete N.
+    const many = _pickedWith(it);
+    if (many) { _manyMenu(many, e); return; }
     if (!AUDIO.has(it.kind)) return;
     soundMenu(it, e, {
       status: (t, bad) => _status(t, bad ? 'err' : ''),
@@ -834,6 +843,61 @@ function _card(it, extra) {
     });
   });
   return card;
+}
+
+// ── Several tiles picked (phase V54 block 5, (зв17)) ────────────────────────
+// js/tile-select.js picks them on Media; let go on the tree they go in one request (js/media-tree.js), and here are the
+// right button's menu and Delete for them.
+let _tsel = null;
+const _keyOf = (it) => it.kind + ':' + it.id;
+// The picked items when `it` is one of several picked - else null.
+function _pickedWith(it) {
+  if (!_tsel || _tsel.size() < 2 || !_tsel.has(_keyOf(it))) return null;
+  const keys = new Set(_tsel.keys());
+  return _items.filter(x => keys.has(_keyOf(x)));
+}
+function _picked() {
+  if (!_tsel) return [];
+  const keys = new Set(_tsel.keys());
+  return _items.filter(x => keys.has(_keyOf(x)));
+}
+async function _afterMany(d, verb, deleted) {
+  if (deleted && _player) for (const x of _picked()) _player.forget(x.id);
+  if (_tree) await _tree.load();
+  await _load({ keepScroll: true, checks: !!deleted });
+  _counts();
+  if (d) _status(TS.saidOf(d, verb), !d.done && (d.skipped || []).length ? 'err' : '');
+}
+function _manyMenu(items, e) {
+  const n = items.length;
+  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind));
+  const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
+  TS.menuAt(e.clientX, e.clientY, [
+    ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
+      done: (d) => _afterMany(null, '', false).then(() => d),
+      status: (t, bad) => _status(t, bad ? 'err' : ''),
+    })],
+    [allFav ? '★ Remove from favourites' : '★ Add to favourites', starable.length < n ? 'posts have no star' : '',
+      starable.length ? async () => {
+        try { _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
+        catch (err) { _status(err.message, 'err'); }
+      } : null],
+    ['Delete ' + n, 'with their files - asked first', () => _deleteMany(items), true],
+  ]);
+}
+async function _deleteMany(all) {
+  // The app's own sounds and a YouTube source (two presses on its tile) are not deleted here.
+  const items = all.filter(x => x.kind !== 'sfx' && x.kind !== 'youtube');
+  if (!items.length) { _status(all.some(x => x.kind === 'sfx') ? 'A built-in sound is part of the app - it is not deleted.' : 'Nothing here to delete.', 'err'); return; }
+  // One alone: the question it always had.
+  if (items.length === 1) {
+    try { await _apply(await _runAction('del', items[0])); if (_player) _player.forget(items[0].id); } catch (err) { _status(err.message, 'err'); }
+    return;
+  }
+  if (!confirm(await TS.deleteQuestion(items))) return;
+  _stopHearing();
+  try { await _afterMany(await TS.batch('delete', items), 'deleted', true); }
+  catch (err) { _status(err.message, 'err'); }
 }
 
 // (phase V35, the owner's (у2)) The path to Media's node at the left of the bar - "AUDIO / SFX / My sounds", every word a
@@ -988,6 +1052,7 @@ function _renderGrid() {
     grid.appendChild(card);
   }
   if (_player && _shelf === 'media') { _player.sync(_items); _player.mark(grid); }
+  if (_tsel) _tsel.refresh();
 }
 
 // ── The selected tile, and the right column about it (phase B) ──────────────
@@ -1175,6 +1240,7 @@ function _select(kind) {
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
+  if (_tsel) _tsel.clear();
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load({ checks: kind === 'media' });
 }
@@ -1736,6 +1802,15 @@ function boot() {
   _wireTreeSash();
   _wireScSash();
   _initTree();
+  // (phase V54) Several tiles picked on Media (js/tile-select.js).
+  const grid = $('lib-grid');
+  if (grid) {
+    _tsel = TS.createSelection({
+      host: grid, tile: '.lib-card[data-key]',
+      active: () => _shelf === 'media' && !_makingOn,
+      onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+    });
+  }
   // (phase V54) The music player, and Space for it - not in a field, not under a window (js/layers.js).
   const ph = $('lib-player');
   if (ph) {

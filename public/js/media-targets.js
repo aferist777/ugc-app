@@ -13,23 +13,31 @@
 // Hooks, Uploads and theirs (never Talking heads: a take is its project's); IMAGES (unless `images: false`) - IMAGES
 // itself and its categories. (Phase V35: the tree has no Uncategorized nodes - what has no category lies in the node that
 // says so with `loose`.)
+//
+// (phase V54, `audio: true` - "Move to…" of several tiles, js/tile-select.js) AUDIO too: Music itself, its highlights
+// folder and the moods (`to.folder`, `to.mood` - a mood takes only the tracks its preset made, the server says so), My
+// sounds and its categories; never Built-in or ★ Favorites.
 
 const KINDS = new Set(['birols', 'uploads', 'hooks', 'images', 'references']);
+const AUDIO_KINDS = new Set(['sounds', 'music']);
 const ANYCAT = '__cat__';
 
 /**
- * opts { images: false - without IMAGES; refHome - the words for REFERENCES' "no category";
+ * opts { images: false - without IMAGES; audio: true - with AUDIO (V54); refHome - the words for REFERENCES' "no category";
  *        newCats - the kinds whose branch ends in "+ new category…" }
- * -> the roots: REFERENCES, VIDEO, IMAGES
+ * -> the roots: REFERENCES, VIDEO, IMAGES (, AUDIO)
  */
 export function placesOf(tree, opts) {
   const o = opts || {};
   const adds = new Set(o.newCats || []);
+  const takes = (k) => KINDS.has(k) || (o.audio && AUDIO_KINDS.has(k));
   const map = (n, path) => {
     if (n.kind === 'heads' || n.ref) return null;
+    if (n.kind === 'sfx' || n.key === 'sfx-fav') return null;          // Built-in is the app's; Favorites is a star
     let to = null;
-    if (n.loose && KINDS.has(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label };
-    else if (KINDS.has(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
+    if (n.kind === 'music' && o.audio) to = { kind: 'music', cat: '', label: '', folder: n.folder || '', mood: n.mood || '', text: path || n.label };
+    else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label };
+    else if (takes(n.kind) && n.cat && n.cat !== ANYCAT) to = { kind: n.kind, cat: n.cat, label: n.name || n.label, text: path };
     const kids = (n.children || []).map(c => map(c, path ? path + ' · ' + c.label : c.label)).filter(Boolean);
     // A kind's own node (its key is the kind: REFERENCES, B-rolls, Hooks, Uploads, IMAGES) holds its categories.
     if (n.key === n.kind && adds.has(n.kind)) kids.push({ key: 'new:' + n.kind, label: '+ new category…', newCat: n.kind });
@@ -53,6 +61,10 @@ export function placesOf(tree, opts) {
     const images = root('images') && map(root('images'), 'IMAGES');
     if (images) out.push(images);
   }
+  if (o.audio) {
+    const audio = root('audio') && map(root('audio'), '');
+    if (audio) out.push(audio);
+  }
   return out;
 }
 
@@ -61,6 +73,8 @@ export function whereText(to) {
   if (!to) return '';
   if (to.kind === 'references') return 'REFERENCES · ' + (to.cat ? to.label : 'its site\'s folder');
   if (to.kind === 'images') return 'IMAGES' + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'sounds') return 'My sounds' + (to.cat ? ' · ' + to.label : '');
+  if (to.kind === 'music') return to.text || 'Music';
   if (to.kind === 'birols' && !to.cat) return 'Generated';
   return ({ uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks' }[to.kind] || to.kind) + (to.cat ? ' · ' + to.label : '');
 }

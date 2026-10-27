@@ -18,7 +18,7 @@ import * as Layers from './layers.js';
 import { placesOf } from './media-targets.js';
 import { askName } from './name-box.js';
 
-const KIND_WORD = { references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks', images: 'IMAGES' };
+const KIND_WORD = { references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks', images: 'IMAGES', sounds: 'My sounds' };
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1zm-2 6V4.5a2 2 0 1 1 4 0V7H6z"/></svg>';
 
 const el = (tag, cls, text) => {

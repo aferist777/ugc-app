@@ -36,7 +36,9 @@
    project's and goes nowhere. A TRACK (V35, the owner's (ф3)): on Music - out of highlights; on highlights - into its
    root; on a mood - only the track that mood's preset made (lib/music-store.js `place`, V34.F; refused in words
    otherwise). A tile says what it is with setMediaDrag(); the kind rides in a type of its own, the only part of a drag a
-   page can read before the drop.
+   page can read before the drop. SEVERAL TILES (phase V54, js/tile-select.js): a picked tile dragged carries the others
+   (`many`) and they go in ONE request (POST /api/library/batch/move) - each as one would; what cannot go stays and the
+   status says why. Whether the node takes the drop is the dragged tile's question.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -54,13 +56,16 @@ const REF_TYPE = 'application/x-ugc-refmedia-';
 
 const _plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 
-/** A tile being dragged says what it is - for a tree's node to take it. `it` is a shelf item. */
-export function setMediaDrag(dt, it) {
+/** A tile being dragged says what it is - for a tree's node to take it. `it` is a shelf item; `many` - (phase V54) the
+ *  picked tiles it is one of, when there are several (js/tile-select.js). */
+export function setMediaDrag(dt, it, many) {
   if (!dt || !it || !it.kind) return;
   const m = it.meta || {};
   // (phase V35) A track says where it lies in Music: in highlights (`folder`), in a mood of it (`mood`).
+  const several = Array.isArray(many) && many.length > 1
+    ? many.map(x => ({ kind: x.kind, id: String(x.id) })) : null;
   dt.setData(MEDIA_DRAG, JSON.stringify({ kind: it.kind, id: String(it.id), name: it.name || '', cat: m.categoryId || '',
-    folder: m.folder || '', mood: m.mood || '' }));
+    folder: m.folder || '', mood: m.mood || '', ...(several ? { many: several } : {}) }));
   dt.setData(KIND_TYPE + it.kind, '1');
   if (it.kind === 'references') {
     const files = (it.meta && it.meta.items) || [];
@@ -531,6 +536,8 @@ export function createTree(host, o) {
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
     // Where it is now, in words: a B-roll with no category lies in Generated, the rest in their kind.
     const where = t.cat ? n.label : homeName(t.kind);
+    // (phase V54) Several picked tiles: one request; each goes as it would alone, or stays and says why.
+    if (Array.isArray(it.many) && it.many.length > 1) { await _takeMany(n, t, it.many, where); return; }
     try {
       // (phase V35, the owner's (ф3)) A track: into Music, the highlights folder, or the one mood its preset made it for -
       // the rule is the store's (lib/music-store.js place, V34.F); a refusal comes back in words.
@@ -568,6 +575,23 @@ export function createTree(host, o) {
         await _after('"' + (it.name || 'It') + '" moved to ' + (t.kind === 'birols' && !t.cat ? where : kindLabel(t.kind) + (t.cat ? ' · ' + n.label : '')), { moved: it });
       }
     } catch (e) { opt.status('Could not move it: ' + e.message, true); await load(); }
+  }
+
+  async function _takeMany(n, t, many, where) {
+    const there = t.kind === 'music' ? musicPlace(t.folder, t.mood)
+      : t.kind === 'references' ? (t.cat ? 'REFERENCES · ' + n.label : 'their sources\' folders in REFERENCES') : where;
+    let r = null;
+    try {
+      r = await fetch('/api/library/batch/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: many, to: { kind: t.kind, cat: t.cat || '', label: t.name || '', folder: t.folder || '', mood: t.mood || '' } }),
+      }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'not moved');
+    } catch (e) { opt.status('Could not move them: ' + e.message, true); await load(); return; }
+    const sk = r.skipped || [];
+    const whys = [...new Set(sk.map(x => x.why))].slice(0, 3).join('; ');
+    const msg = (r.done ? _plural(r.done, 'item') + ' in ' + there : 'Nothing moved') + (sk.length ? ' · ' + sk.length + ' stayed: ' + whys : '');
+    await _after(sk.length && !r.done ? '' : msg, { moved: { many } });
+    if (sk.length && !r.done) opt.status(msg, true);
   }
 
   // ── Categories ──

@@ -1382,33 +1382,37 @@ const FILE_SHELVES = {
   environments: { dir: ENVIRONMENTS_DIR, url: toUrl(ENVIRONMENTS_DIR) },
 };
 
-router.patch('/library/item/:kind/:id', (req, res) => {
-  try {
+const _r = (status, body) => ({ status, body });
+
+// (phase V54) The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
+// several items exactly what these do to one.
+function _patchOne(kindIn, idIn, bodyIn) {
+    const req = { params: { kind: kindIn, id: idIn }, body: bodyIn || {} };   // the route's own names, kept
     const kind = String(req.params.kind || '');
     // (phase V34.E) A built-in sound: only its star, kept by its address (lib/sfx-favorites.js).
     if (kind === 'sfx') {
       const s = require('../lib/sfx-builtin').read().sounds.find(x => x.id === String(req.params.id || ''));
-      if (!s) return res.status(404).json({ success: false, error: 'no such built-in sound' });
+      if (!s) return _r(404, { success: false, error: 'no such built-in sound' });
       const b = req.body || {};
       if (!('favorite' in b) || Object.keys(b).some(k => k !== 'favorite')) {
-        return res.status(409).json({ success: false, error: 'A built-in sound is part of the app - only its star can change. Cut a piece of it to have one of your own.' });
+        return _r(409, { success: false, error: 'A built-in sound is part of the app - only its star can change. Cut a piece of it to have one of your own.' });
       }
       require('../lib/sfx-favorites').set(s.path, !!b.favorite);
-      return res.json({ success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
+      return _r(200, { success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
     }
     const store = RECORD_STORES[kind];
-    if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be edited here` });
+    if (!store) return _r(400, { success: false, error: `"${kind}" cannot be edited here` });
     const id = String(req.params.id || '');
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
-    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+    if (!it) return _r(404, { success: false, error: 'not found' });
 
     const patch = {};
     for (const k of store.fields) if (k in (req.body || {})) patch[k] = req.body[k];
-    if (!Object.keys(patch).length) return res.status(400).json({ success: false, error: 'nothing to set' });
+    if (!Object.keys(patch).length) return _r(400, { success: false, error: 'nothing to set' });
     if ('name' in patch) {
       const n = String(patch.name || '').trim();
-      if (!n) return res.status(400).json({ success: false, error: 'name cannot be empty' });
+      if (!n) return _r(400, { success: false, error: 'name cannot be empty' });
       patch.name = n.slice(0, 120);
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
@@ -1425,8 +1429,11 @@ router.patch('/library/item/:kind/:id', (req, res) => {
       item = store.read().find(x => x && String(x.id) === id) || it;
     }
     // The page needs this to patch localStorage, so send back what to look for.
-    res.json({ success: true, kind, id, patch, item });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    return _r(200, { success: true, kind, id, patch, item });
+}
+router.patch('/library/item/:kind/:id', (req, res) => {
+  try { const r = _patchOne(req.params.kind, req.params.id, req.body); res.status(r.status).json(r.body); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 /* ── Cutting a piece out of a video (phase TG, block 7) ──────────────────────
@@ -1491,10 +1498,10 @@ router.post('/library/cut', async (req, res) => {
   }
 });
 
-router.delete('/library/item/:kind/:id', (req, res) => {
-  try {
+function _deleteOne(kindIn, idIn, filesIn) {
+    const req = { params: { kind: kindIn, id: idIn }, query: { files: filesIn === false ? '0' : '1' } };
     const kind = String(req.params.kind || '');
-    if (kind === 'sfx') return res.status(409).json({ success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
+    if (kind === 'sfx') return _r(409, { success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
     const id = String(req.params.id || '');
     const withFiles = req.query.files !== '0';
     const removed = [], spared = [];
@@ -1503,8 +1510,8 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     if (shelf) {
       // The id IS the filename. basename() it so nothing can walk out of the dir.
       const base = path.basename(id);
-      if (!base || !IMG_RE.test(base)) return res.status(400).json({ success: false, error: 'not an image on this shelf' });
-      if (!fs.existsSync(path.join(shelf.dir, base))) return res.status(404).json({ success: false, error: 'not found' });
+      if (!base || !IMG_RE.test(base)) return _r(400, { success: false, error: 'not an image on this shelf' });
+      if (!fs.existsSync(path.join(shelf.dir, base))) return _r(404, { success: false, error: 'not found' });
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
       // And its preview, made for a large one when it was filed (routes/scen3.js _previewTarget) - it
@@ -1514,7 +1521,7 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       // that no longer exists is only something a later picture of the same name could inherit.
       try { require('../lib/shelf-meta').drop(kind, `${shelf.url}/${base}`); }
       catch (e) { console.warn('[library] could not drop the description of', base, e.message); }
-      return res.json({ success: true, kind, id, removed });
+      return _r(200, { success: true, kind, id, removed });
     }
 
     // Renders. No record to remove - the file IS the entry - so this unlinks the video and its
@@ -1523,25 +1530,25 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     // than needing a second writer here.
     if (kind === 'renders') {
       const base = path.basename(id);
-      if (!base || !VID_RE.test(base)) return res.status(400).json({ success: false, error: 'not a render' });
+      if (!base || !VID_RE.test(base)) return _r(400, { success: false, error: 'not a render' });
       // The id is the render's path inside media/renders/ - its project folder and name.
       const abs = toDiskWithin('/media/renders/' + String(id).replace(/\\/g, '/'), [FINALS_DIR]);
-      if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not found' });
+      if (!abs || !fs.existsSync(abs)) return _r(404, { success: false, error: 'not found' });
       const url = toUrl(abs);
       if (_unlink(url)) removed.push(base);
       const turl = VT.thumbUrlFor(url);
       if (turl) _unlink(turl);
       // Its subtitles file beside it (phase V30, block 4).
       try { fs.rmSync(JOB.srtOf(abs), { force: true }); } catch (e) { /* held open */ }
-      return res.json({ success: true, kind, id, removed });
+      return _r(200, { success: true, kind, id, removed });
     }
 
     const store = RECORD_STORES[kind];
-    if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be deleted here` });
+    if (!store) return _r(400, { success: false, error: `"${kind}" cannot be deleted here` });
     const list = store.read();
     const it = list.find(x => x && String(x.id) === id);
-    if (!it && kind === 'heads') return res.status(409).json({ success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
-    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+    if (!it && kind === 'heads') return _r(409, { success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
+    if (!it) return _r(404, { success: false, error: 'not found' });
 
     if (withFiles) {
       if (store.folder) {
@@ -1563,8 +1570,11 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     // A piece's whole video, when nothing holds it any more (phase TG, block 7).
     if (withFiles) removed.push(...CUTS.dropOrphans(_originalsOf([it])));
     // `spared` is a file another record is still using, so it stayed put.
-    res.json({ success: true, kind, id, removed, spared });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    return _r(200, { success: true, kind, id, removed, spared });
+}
+router.delete('/library/item/:kind/:id', (req, res) => {
+  try { const r = _deleteOne(req.params.kind, req.params.id, req.query.files !== '0'); res.status(r.status).json(r.body); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── Take a voice off the shelf ──────────────────────────────────────────────
@@ -1611,20 +1621,19 @@ router.delete('/library/voices/:voiceId', (req, res) => {
 //
 // The FILE never moves. Its url is stored on the record, not derived from the kind, so
 // carrying it across is what keeps the clip playable; only the record changes home.
-router.post('/library/item/:kind/:id/kind', (req, res) => {
-  try {
-    const from = String(req.params.kind || '');
-    const to = String((req.body || {}).kind || '');
-    const id = String(req.params.id || '');
+function _kindOne(fromIn, idIn, toIn) {
+    const from = String(fromIn || '');
+    const to = String(toIn || '');
+    const id = String(idIn || '');
     const KINDS = ['birols', 'uploads', 'hooks'];
-    if (!KINDS.includes(from) || !KINDS.includes(to)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
-    if (from === to) return res.json({ success: true, kind: to, id, unchanged: true });
+    if (!KINDS.includes(from) || !KINDS.includes(to)) return _r(400, { success: false, error: 'kind must be birols, uploads or hooks' });
+    if (from === to) return _r(200, { success: true, kind: to, id, unchanged: true });
 
     const src = RECORD_STORES[from];
     const dst = RECORD_STORES[to];
     const srcList = src.read();
     const it = srcList.find(x => x && String(x.id) === id);
-    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+    if (!it) return _r(404, { success: false, error: 'not found' });
 
     // Same store: flip the flag that decides which kind it reads as. `categoryId` is
     // kept — moving a birol to uploads and back should not lose which category it was in.
@@ -1644,7 +1653,7 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
       // Another shelf is another folder.
       SHELF.placeRecords([{ kind: to, rec: it }]);
       const placed = src.read().find(x => x && String(x.id) === id) || it;
-      return res.json({ success: true, kind: to, id, item: placed });
+      return _r(200, { success: true, kind: to, id, item: placed });
     }
 
     // Different stores: build the record the destination expects, then write the
@@ -1693,7 +1702,166 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     // wait for the next time a browser pushed the hooks archive - which the Merge page never
     // does - so it sat on the shelf with no number at all.
     if (to === 'hooks') { try { require('../lib/hook-ids').assign([moved.videoPath]); } catch (e) {} }
-    res.json({ success: true, kind: to, id, item: moved });
+    return _r(200, { success: true, kind: to, id, item: moved });
+}
+router.post('/library/item/:kind/:id/kind', (req, res) => {
+  try { const r = _kindOne(req.params.kind, req.params.id, (req.body || {}).kind); res.status(r.status).json(r.body); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SEVERAL TILES AT ONCE (phase V54 block 5, the owner 2026-10-27: "выделение нескольких файлов ... с зажатым shift
+// (выделение от и до) и с зажатым ctrl"; (зв17)) - js/tile-select.js picks tiles in Library -> Media and in Merge's
+// Library panel; these do to every one of them what the item routes above do to one, in ONE request and one tick (every
+// step is synchronous).
+//
+//   POST /api/library/batch/move     { items: [{ kind, id }], to: { kind, cat, label, folder, mood } }
+//   POST /api/library/batch/favorite { items, favorite }
+//   POST /api/library/batch/delete   { items }
+//     -> { success, done, skipped: [{ kind, id, name, why }], removed? }
+//
+// A move does what letting ONE tile go on that node does (js/media-tree.js _dropAction): within a kind - its category
+// (the file moves with relocate, as for one); between the kinds of video - the kind, then the category; a track between
+// Music, highlights and the mood its preset made (lib/music-store.js place); a whole post between REFERENCES' own
+// categories and its source's folder. What cannot go there stays and says why: a picture never becomes a clip, a built-in
+// sound is the app's, a talking head its project's, a post goes out of REFERENCES only by itself (its own window).
+// ════════════════════════════════════════════════════════════════════════════
+const BATCH_MAX = 500;
+const _BVIDEO = new Set(['birols', 'uploads', 'hooks']);
+
+function _batchItems(b) {
+  const seen = new Set();
+  return (Array.isArray(b && b.items) ? b.items : []).slice(0, BATCH_MAX)
+    .map(x => ({ kind: String((x && x.kind) || ''), id: String((x && x.id) || '') }))
+    .filter(x => x.kind && x.id && !seen.has(x.kind + ':' + x.id) && seen.add(x.kind + ':' + x.id));
+}
+const _whyOf = (r) => (r && r.body && r.body.error) || 'not done';
+function _recOf(kind, id) {
+  const st = RECORD_STORES[kind];
+  if (!st) return null;
+  try { return st.read().find(x => x && String(x.id) === String(id)) || null; } catch (e) { return null; }
+}
+const _nameOfRec = (kind, id) => { const r = _recOf(kind, id); return r ? String(r.name || r.title || '') : ''; };
+
+// One item to `to`: '' when it went (or was there already), else why not.
+function _moveOne(it, to) {
+  const from = it.kind;
+  if (from === 'sfx') return 'a built-in sound stays in Built-in';
+  if (from === 'heads') return 'a talking head is its project\'s';
+  if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
+  if (from === 'music' || to.kind === 'music') {
+    if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
+    try { MUSIC.place(it.id, { folder: to.folder || '', mood: to.mood || '' }); return ''; }
+    catch (e) { return e.message; }
+  }
+  if (from === 'references' || to.kind === 'references') {
+    return from === 'references' ? 'a post goes out of REFERENCES by itself - from its own window' : 'only posts go into REFERENCES';
+  }
+  const rec = _recOf(from, it.id);
+  if (!rec) return 'not found';
+  if (to.kind === from) {
+    if (String(rec.categoryId || '') === String(to.cat || '')) return '';
+    const r = _patchOne(from, it.id, { categoryId: to.cat || '', categoryLabel: to.cat ? (to.label || '') : '' });
+    return r.status === 200 ? '' : _whyOf(r);
+  }
+  if (_BVIDEO.has(from) && _BVIDEO.has(to.kind)) {
+    // Off its own kind's category first, as one tile let go does: a category is one kind's.
+    if (rec.categoryId && rec.categoryId !== UPLOADS_CAT) {
+      const r0 = _patchOne(from, it.id, { categoryId: '', categoryLabel: '' });
+      if (r0.status !== 200) return _whyOf(r0);
+    }
+    const r1 = _kindOne(from, it.id, to.kind);
+    if (r1.status !== 200) return _whyOf(r1);
+    if (to.cat) {
+      const r2 = _patchOne(to.kind, it.id, { categoryId: to.cat, categoryLabel: to.label || '' });
+      if (r2.status !== 200) return _whyOf(r2);
+    }
+    return '';
+  }
+  if (from === 'images') return 'a picture never becomes a clip or a sound';
+  if (to.kind === 'images') return 'only pictures go into IMAGES';
+  return 'it cannot go there';
+}
+
+// Whole posts within REFERENCES - an own category, or back to their sources' folders (`cat` ''), in one write.
+function _postsTo(ids, to) {
+  const REFS = require('../lib/references-store');
+  const cat = String(to.cat || '');
+  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such category in REFERENCES' }));
+  const moved = [];
+  const found = new Set();
+  REFS.apply((list) => {
+    for (const p of list) {
+      if (!p || !ids.includes(String(p.id))) continue;
+      found.add(String(p.id));
+      if (String(p.categoryId || '') === cat) continue;
+      p.categoryId = cat;
+      p.categoryLabel = cat ? String(to.label || '') : '';
+      p.handled = true;            // moved by hand is seen - not news in the tree
+      moved.push(String(p.id));
+    }
+  });
+  if (moved.length) REFS.placePosts(REFS.read().filter(p => p && moved.includes(String(p.id))));
+  return ids.filter(id => !found.has(id)).map(id => ({ id, why: 'no such post' }));
+}
+
+function _batchAnswer(res, items, skipped, extra) {
+  res.json(Object.assign({ success: true, done: items.length - skipped.length,
+    skipped: skipped.map(x => Object.assign({ name: x.name || _nameOfRec(x.kind, x.id) }, x)) }, extra || {}));
+}
+
+router.post('/library/batch/move', (req, res) => {
+  try {
+    const items = _batchItems(req.body);
+    const t = (req.body || {}).to || {};
+    const to = { kind: String(t.kind || ''), cat: String(t.cat || ''), label: String(t.label || ''),
+      folder: String(t.folder || ''), mood: String(t.mood || '') };
+    if (!items.length || !to.kind) return res.status(400).json({ success: false, error: 'what, and where to' });
+    if (to.cat === UNCAT) to.cat = '';
+    const skipped = [];
+    const posts = items.filter(x => x.kind === 'references');
+    if (posts.length) {
+      if (to.kind !== 'references') for (const x of posts) skipped.push({ kind: x.kind, id: x.id, why: _moveOne(x, to) });
+      else for (const s of _postsTo(posts.map(x => x.id), to)) skipped.push({ kind: 'references', id: s.id, why: s.why });
+    }
+    for (const x of items) {
+      if (x.kind === 'references') continue;
+      const why = _moveOne(x, to);
+      if (why) skipped.push({ kind: x.kind, id: x.id, why });
+    }
+    _batchAnswer(res, items, skipped);
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/batch/favorite', (req, res) => {
+  try {
+    const items = _batchItems(req.body);
+    if (!items.length) return res.status(400).json({ success: false, error: 'nothing chosen' });
+    const favorite = !!(req.body || {}).favorite;
+    const skipped = [];
+    for (const x of items) {
+      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube') { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
+      const r = _patchOne(x.kind, x.id, { favorite });
+      if (r.status !== 200) skipped.push({ kind: x.kind, id: x.id, why: _whyOf(r) });
+    }
+    _batchAnswer(res, items, skipped, { favorite });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/batch/delete', (req, res) => {
+  try {
+    const items = _batchItems(req.body);
+    if (!items.length) return res.status(400).json({ success: false, error: 'nothing chosen' });
+    const skipped = [];
+    const removed = [];
+    for (const x of items) {
+      if (x.kind === 'youtube') { skipped.push({ kind: x.kind, id: x.id, why: 'a YouTube source is deleted on its own tile' }); continue; }
+      const name = _nameOfRec(x.kind, x.id);
+      const r = _deleteOne(x.kind, x.id, true);
+      if (r.status !== 200) { skipped.push({ kind: x.kind, id: x.id, name, why: _whyOf(r) }); continue; }
+      removed.push(...((r.body && r.body.removed) || []));
+    }
+    _batchAnswer(res, items, skipped, { removed });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
