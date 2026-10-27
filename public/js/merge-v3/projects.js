@@ -141,7 +141,7 @@ function _paintDraft() {
   const x = document.getElementById('mv3-project-del');
   if (e && !_editing) {
     e.textContent = d ? 'save' : 'edit';
-    e.title = d ? 'Save this draft under a name - what it made goes into the name\'s category' : 'Rename this project';
+    e.title = d ? 'Save this draft under a name - what it made goes into the name\'s folder' : 'Rename this project';
   }
   if (x && !_armed) {
     x.textContent = d ? 'clear' : 'delete';

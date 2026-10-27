@@ -145,7 +145,7 @@ function _build() {
   q.spellcheck = false;
   const cat = document.createElement('select');
   cat.className = 'pk-cat';
-  cat.title = 'A category of this shelf';
+  cat.title = 'A folder of this shelf';
   const count = el('span', 'pk-count', '');
   bar.append(q, cat, count);
   const grid = el('div', 'pk-grid');
@@ -368,7 +368,7 @@ function _paintGrid() {
   _w.count.textContent = _st.list.length === _st.items.length ? String(_st.items.length) : _st.list.length + ' of ' + _st.items.length;
   if (!_st.list.length) {
     const src = _o.sources.find(x => x.id === _st.src) || {};
-    G.appendChild(el('div', 'pk-none', _st.items.length ? (_st.q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing in this category.')
+    G.appendChild(el('div', 'pk-none', _st.items.length ? (_st.q ? 'Nothing here is called “' + _st.q.trim() + '”.' : 'Nothing in this folder.')
       : (_st.why || src.empty || 'Nothing on this shelf.')));
     return;
   }

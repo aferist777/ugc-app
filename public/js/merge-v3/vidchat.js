@@ -2511,9 +2511,9 @@ function VIDEOS(ctx) {
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {
-        image: 'A picture goes into Images, in this project\'s category.',
-        video: 'A clip goes into Uploads, in this project\'s category.',
-        audio: 'A sound goes onto the Sounds shelf, in this project\'s category.',
+        image: 'A picture goes into Images, in this project\'s folder.',
+        video: 'A clip goes into Uploads, in this project\'s folder.',
+        audio: 'A sound goes onto the Sounds shelf, in this project\'s folder.',
       },
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),

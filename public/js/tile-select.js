@@ -336,7 +336,7 @@ export async function moveMany(x, y, items, o) {
   const kinds = [...new Set(items.map(i => i.kind))];
   openPlaces(_anchorAt(x, y), {
     title: 'Move ' + _plural(items.length, 'item') + ' to', tree, name: 'move several',
-    places: { audio: true, newCats: kinds.filter(k => ['birols', 'uploads', 'hooks', 'images', 'sounds', 'references'].includes(k)) },
+    places: { audio: true, newCats: kinds.filter(k => ['birols', 'uploads', 'hooks', 'images', 'sounds', 'references', 'music'].includes(k)) },
     why: (to) => (kinds.some(k => canGo(k, to)) ? '' : 'none of them goes there'),
     onPick: async (to) => {
       try {

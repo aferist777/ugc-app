@@ -112,6 +112,15 @@ export async function loadCats() {
 }
 
 // ── Category vocabulary: create, rename, reorder, delete ─────────────────────
+// (phase V54 block 6) A folder made where the person asked: in `parent` ('' - the kind itself). A name already there gives
+// that one (created:false); a path too long is refused in words.
+export async function addFolder(kind, label, parent) {
+  return _json('/api/library/cats', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, label, parent: String(parent || '') }),
+  });
+}
+
 export async function addCat(kind, label) {
   const d = await _json('/api/library/cats', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -149,12 +158,12 @@ export async function setCategory(it, categoryId, categoryLabel) {
   return categoryId;
 }
 
-// A category that did not exist a moment ago, for one kind. The server hands back the existing
-// one when the name is already taken (LC.add is idempotent by label), so asking twice is safe.
-export async function createCategory(kind, label) {
+// A category that did not exist a moment ago, for one kind - (phase V54) a folder at the kind's top, or in `parent`. The
+// server hands back the existing one when the name is already taken there, so asking twice is safe.
+export async function createCategory(kind, label, parent) {
   const d = await _json('/api/library/cats', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind, label }),
+    body: JSON.stringify({ kind, label, parent: String(parent || '') }),
   });
   return { cat: d.cat, created: d.created !== false };
 }
@@ -311,7 +320,8 @@ export async function uploadSounds(files, onEach, categoryId) {
 }
 
 // (phase V28.4) Music from this computer into Media -> Audio -> Music (routes/music.js; no categories) - one call each.
-export async function uploadMusic(files, onEach) {
+// (phase V54) `categoryId` - an own folder of Music to put them in ('' - Music itself).
+export async function uploadMusic(files, onEach, categoryId) {
   let ok = 0;
   const list = Array.from(files || []);
   for (let i = 0; i < list.length; i++) {
@@ -321,6 +331,7 @@ export async function uploadMusic(files, onEach) {
       const fd = new FormData();
       fd.append('music', f);
       fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+      if (categoryId) fd.append('cat', String(categoryId));
       await _json('/api/audio/music/upload', { method: 'POST', body: fd });
       ok++;
     } catch (e) { /* one bad file must not stop the batch */ }

@@ -485,7 +485,8 @@ function _mediaCats(items, kind, labelFor) {
   const uncat = scope.filter(i => !(i.meta || {}).categoryId).length;
   const cats = LC.listFor(kind || null, counts, labelFor).map(c => ({
     id: c.id,
-    label: c.label + ' · ' + c.count,
+    // (phase V54) A folder in a folder reads as its path - the pictures chat's column offers these.
+    label: (Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : c.label) + ' · ' + c.count,
     name: c.label,          // the bare name, for the rename box and the dropdowns
     own: c.own,
     orphan: c.orphan,
@@ -1515,7 +1516,7 @@ router.post('/library/cut', async (req, res) => {
   let made = null, thumbPath = null;
   try {
     if (!CUT_KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'a piece goes into VIDEO or REFERENCES' });
-    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such category in REFERENCES' });
+    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such folder in REFERENCES' });
     made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
     try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
 
@@ -1855,7 +1856,7 @@ function _moveOne(it, to) {
 function _postsTo(ids, to) {
   const REFS = require('../lib/references-store');
   const cat = String(to.cat || '');
-  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such category in REFERENCES' }));
+  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such folder in REFERENCES' }));
   const moved = [];
   const found = new Set();
   REFS.apply((list) => {
@@ -2312,8 +2313,8 @@ router.patch('/library/cats/:id', (req, res) => {
     const label = String((req.body || {}).label || '').trim();
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be renamed.' });
-    if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be renamed. Folders inside it can.' });
+    if (!label) return res.status(400).json({ success: false, error: 'A folder needs a name.' });
 
     // An orphan becomes a real category first, under the name its records carry.
     if (!LC.isOwn(kind, id)) {
@@ -2357,7 +2358,7 @@ router.delete('/library/cats/:id', (req, res) => {
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
     // Refused BEFORE its media are moved or deleted below.
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be deleted.' });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be deleted. Folders inside it can.' });
     const own = LC.isOwn(kind, id);
     if (mode === 'move') {
       if (own) {

@@ -7,8 +7,9 @@
 //   - everything is folded each time it opens, nothing is remembered (the owner's (о1));
 //   - ▸, or a press on a branch that is not a place itself, opens or folds it;
 //   - a press on a place picks it: the window closes and the caller gets { kind, cat, label, text };
-//   - "+ new category…" is the last row of its kind's branch: the name asked, the category made (POST /api/library/cats -
-//     a name that exists gives that one), and that is the place;
+//   - "+ new folder…" is the last row of a kind's branch and of every folder's (phase V54, (зв44)): the name asked, the
+//     folder made there (POST /api/library/cats with its `parent` - a name that exists there gives that one), and that is
+//     the place;
 //   - where the thing is now: a row on top ("BESIDE IT"), marked in the tree too (.is-here);
 //   - a place that cannot take it is grey, why in its tooltip - and so is a branch whose every place cannot.
 //
@@ -18,7 +19,7 @@ import * as Layers from './layers.js';
 import { placesOf } from './media-targets.js';
 import { askName } from './name-box.js';
 
-const KIND_WORD = { references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks', images: 'IMAGES', sounds: 'My sounds' };
+const KIND_WORD = { references: 'REFERENCES', uploads: 'Uploads', birols: 'B-rolls', hooks: 'Hooks', images: 'IMAGES', sounds: 'My sounds', music: 'Music' };
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1zm-2 6V4.5a2 2 0 1 1 4 0V7H6z"/></svg>';
 
 const el = (tag, cls, text) => {
@@ -67,7 +68,7 @@ export function openPlaces(anchor, o) {
   let hereNode = null;
   const mark = (p) => {
     byKey.set(p.key, p);
-    if (p.newCat) return [''];
+    if (p.newIn) return [''];
     const own = p.to ? [why(p.to) || ''] : [];
     if (p.to && !hereNode && isHere(p.to)) hereNode = p;
     const below = [];
@@ -89,7 +90,7 @@ export function openPlaces(anchor, o) {
     const has = !top && !!(p.children && p.children.length);
     const no = off.get(p.key) || '';
     const b = el('button', 'mt-row mtp-row' + (depth === 0 && !top ? ' is-group' : '') + (p.to ? ' is-place' : '')
-      + (p.newCat ? ' is-newcat' : '') + (p.to && isHere(p.to) ? ' is-here' : '') + (no ? ' is-off' : ''));
+      + (p.newIn ? ' is-newcat' : '') + (p.to && isHere(p.to) ? ' is-here' : '') + (no ? ' is-off' : ''));
     b.type = 'button';
     b.dataset.key = p.key;
     b.dataset.depth = String(depth);
@@ -110,14 +111,14 @@ export function openPlaces(anchor, o) {
       lock.innerHTML = LOCK_SVG;
       b.appendChild(lock);
     }
-    if (!top && !p.newCat && p.count != null) b.appendChild(el('span', 'mt-n', String(p.count)));
-    b.title = no || (p.newCat ? 'Make a new ' + (KIND_WORD[p.newCat] || p.newCat) + ' category - and that is the place'
+    if (!top && !p.newIn && p.count != null) b.appendChild(el('span', 'mt-n', String(p.count)));
+    b.title = no || (p.newIn ? 'Make a new folder in ' + (p.newIn.label || KIND_WORD[p.newIn.kind] || p.newIn.kind) + ' - and that is the place'
       : p.to ? p.to.text : (open.has(p.key) ? 'Fold ' : 'Open ') + p.label);
     // The second press of a double one (the media tree's way to open a branch) does nothing: it would fold what the first
     // opened, or pick a row that came under the pointer.
     b.addEventListener('click', (e) => {
       if (e.detail > 1) return;
-      if (p.newCat) { _newCat(p.newCat, b); return; }
+      if (p.newIn) { _newFolder(p.newIn, b); return; }
       if (p.to && !no) { closePlaces(); opt.onPick(p.to); return; }
       if (has) toggle(p.key);
     });
@@ -156,12 +157,13 @@ export function openPlaces(anchor, o) {
     if (to > list.scrollTop + list.clientHeight) list.scrollTop = Math.min(from, to - list.clientHeight);
   }
 
-  async function _newCat(kind, b) {
+  async function _newFolder(at, b) {
+    const kind = at.kind;
     const cat = await askName({
-      anchor: b, title: 'New ' + (KIND_WORD[kind] || kind) + ' category', okLabel: 'Create', maxLength: 60,
+      anchor: b, title: 'New folder in ' + (at.label || KIND_WORD[kind] || kind), okLabel: 'Create', maxLength: 60,
       submit: async (name) => {
         const r = await fetch('/api/library/cats', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kind, label: name }) }).then(x => x.json());
+          body: JSON.stringify({ kind, label: name, parent: at.parent || '' }) }).then(x => x.json());
         if (!r || !r.success) throw new Error((r && r.error) || 'not made');
         return r.cat;
       },

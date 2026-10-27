@@ -96,7 +96,7 @@ router.post('/references/:id/move', async (req, res) => {
     if (kind === 'references') {
       if (cat) {
         const LC = require('../lib/library-cats');
-        if (!LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such category in REFERENCES' });
+        if (!LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such folder in REFERENCES' });
       }
       const whole = all || chosen.length === (post.media || []).length;
       let target = null;

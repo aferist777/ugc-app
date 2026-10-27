@@ -54,7 +54,7 @@ function PICTURES(ctx) {
       onlyFiles: 'Only pictures can be attached here.',
       slot: 'A picture to work from - from this computer, or press one on the right',
       plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
-      cat: 'This project\'s pictures, or a category of the Library\'s Images',
+      cat: 'This project\'s pictures, or a folder of the Library\'s Images',
       crumb: 'The pictures chat - pictures made with a model',
     },
     // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in (phase V24).

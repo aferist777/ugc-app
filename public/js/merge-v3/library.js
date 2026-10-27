@@ -436,20 +436,21 @@ function _kindSelect(item) {
 function _categorySelect(item) {
   const sel = document.createElement('select');
   sel.className = 'lib-view-sel';
-  sel.title = 'Which category this is filed under';
+  sel.title = 'Which folder it is in';
   let current = (item.meta && item.meta.categoryId) || '';
 
   const fill = (list) => {
     sel.textContent = '';
     const make = document.createElement('option');
-    make.value = NEW_CAT; make.textContent = '+ category';
+    make.value = NEW_CAT; make.textContent = '+ folder';
     sel.appendChild(make);
     const none = document.createElement('option');
-    none.value = ''; none.textContent = '— no category —';
+    none.value = ''; none.textContent = '— no folder —';
     sel.appendChild(none);
     for (const c of (list || [])) {
       const o = document.createElement('option');
-      o.value = c.id; o.textContent = c.title || c.label;
+      // (phase V54 block 6, (зв45)) A folder in a folder reads as its path, in the tree's order.
+      o.value = c.id; o.textContent = Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label);
       sel.appendChild(o);
     }
     sel.value = current;
@@ -472,7 +473,7 @@ function _categorySelect(item) {
       await setCategory(item, id, label);
       current = id;
       if (item.meta) item.meta.categoryId = id;
-      _status('Filed under ' + (label || 'no category') + '.');
+      _status(label ? 'In ' + label + '.' : 'Out of its folder.');
       setTimeout(() => _status(''), 2200);
       // The grid behind may be one category: the clip may have to leave it - read again, the counts too.
       _reload();
@@ -505,12 +506,13 @@ function _categorySelect(item) {
 // list is refused in the box rather than made twice.
 async function _askCategoryName(anchor, kind, onMade) {
   const cat = await askName({
-    anchor, title: 'New ' + kind.replace(/s$/, '') + ' category', okLabel: 'Create', maxLength: 60,
+    // (phase V54) A new folder at the kind's top - one inside another is made in the tree.
+    anchor, title: 'New folder', okLabel: 'Create', maxLength: 60,
     check: (name) => {
-      const taken = ((_allCats || {})[kind] || []).find(c => String(c.label).toLowerCase() === name.toLowerCase());
-      return taken ? 'There is already a category called ' + (taken.title || taken.label) + '.' : '';
+      const taken = ((_allCats || {})[kind] || []).find(c => !c.parent && String(c.label).toLowerCase() === name.toLowerCase());
+      return taken ? 'There is already a folder called ' + (taken.title || taken.label) + '.' : '';
     },
-    submit: async (name) => (await createCategory(kind, name)).cat,
+    submit: async (name) => (await createCategory(kind, name, '')).cat,
   });
   if (cat) await onMade(cat);
 }
@@ -777,7 +779,7 @@ function _paint() {
     if (folders) return;
     const s = document.createElement('span');
     s.className = 'mv3-grid-note';
-    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _node && _node.cat ? 'nothing in this category'
+    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _node && _node.cat ? 'nothing in this folder'
       : _node && !_node.q ? 'empty' : 'empty - drop files here';
     b.appendChild(s);
     return;
@@ -871,10 +873,11 @@ async function _upload(files, what) {
   if (_isAudio()) {
     const into = SS.filesTo(_node);
     const to = what || (into ? into.kind : '');
-    if (!to) { _status(SS.isBuiltin(_node) || (_node && _node.key === 'sfx-fav') ? 'Built-in and Favorites take no files - pick My sounds or a category of it'
+    if (!to) { _status(SS.isBuiltin(_node) || (_node && _node.key === 'sfx-fav') ? 'Built-in and Favorites take no files - pick My sounds or a folder of it'
       : 'Pick Music or SFX in the tree first - or press + and say which', true); return; }
     const snd = list.filter(f => /^audio\//.test(f.type || '') || AUDIO_RE.test(f.name || ''));
-    if (to === 'music') return _uploadAs(snd, list.length, 'music', 'track', (l, on) => uploadMusic(l, on));
+    // (phase V54) Into the own folder of Music selected, if one is.
+    if (to === 'music') return _uploadAs(snd, list.length, 'music', 'track', (l, on) => uploadMusic(l, on, into && into.cat));
     const cat = _kind() === 'sounds' ? _catOf() : '';
     return _uploadAs(snd, list.length, 'sounds', 'sound', (l, on) => uploadSounds(l, on, cat));
   }
@@ -1127,6 +1130,20 @@ export function initLibrary() {
       host: body, tile: '.mv3-grid .mv3-tile[data-key]',
       active: () => !!body.querySelector('.mv3-grid') && body.offsetParent !== null,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+    });
+    // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
+    // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
+    body.addEventListener('contextmenu', (e) => {
+      if (!(body.offsetParent !== null) || !_tree || !_node || !_tree.holds(_node)) return;
+      if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
+      e.preventDefault();
+      const here = _node;
+      TS.menuAt(e.clientX, e.clientY, [['New folder', 'in ' + here.label, async () => {
+        const mark = document.createElement('div');
+        mark.style.cssText = 'position:fixed;left:' + e.clientX + 'px;top:' + e.clientY + 'px;width:1px;height:1px;pointer-events:none';
+        document.body.appendChild(mark);
+        try { await _tree.newFolder(here, mark); } finally { mark.remove(); }
+      }]]);
     });
   }
 }
