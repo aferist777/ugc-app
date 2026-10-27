@@ -27,7 +27,7 @@ import * as CapPlace from './cap-place.js';
 import * as Platforms from './platforms.js';
 import { isStill } from './store.js';
 import { fadesOf } from '../sound/fades.js';
-import { setPlayhead, setFormat } from './timeline-b.js';
+import { setPlayhead, setFormat, liveVolumeOf } from './timeline-b.js';
 // (phase V33.2) A filled clip's window over time - the one answer the render reads too.
 import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
@@ -1148,7 +1148,9 @@ function _sounds(tl, t) {
     const master = (tr.volume == null) ? 1 : +tr.volume;
     if (!(master > 0)) continue;
     for (const c of (tr.clips || [])) {
-      const v = ((c.volume == null) ? 1 : +c.volume) * master;
+      // (phase V54) A level shift held in the inspector is heard before it is written (timeline-b.js setLiveVolumes).
+      const lv = liveVolumeOf(c.id);
+      const v = (lv != null ? lv : (c.volume == null) ? 1 : +c.volume) * master;
       if (!(v > 0)) continue;
       const s = +c.start, e = s + (+c.dur);
       if (t < s - 0.0001 || t >= e) continue;

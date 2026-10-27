@@ -822,12 +822,15 @@ function _serverOnly(base, theirs) {
   const a = lanes(base);
   if (!a.length) return null;
   // A subtitle lane the server had to add - an old project without one - holds only heard lines. (V54) A sound lane it made for
-  // a track it laid holds only that.
+  // a track it laid holds only that - and, on a timeline that had no sound lane, the empty main audio made before it (then
+  // main video's link to it is the server's too). Those count only beside a track laid: an empty lane alone is somebody's.
   const newLane = (l) => !!l && !a.some(x => x.id === l.id);
-  const b = lanes(theirs).filter(l => !(newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard))
-    && !(newLane(l) && l.kind === 'audio' && (l.clips || []).length && l.clips.every(_isLaid)));
+  const laidLane = (l) => newLane(l) && l.kind === 'audio' && (l.clips || []).length && l.clips.every(_isLaid);
+  let laid = lanes(theirs).some(laidLane);
+  const made = new Set(lanes(theirs).filter(l => laidLane(l) || (laid && newLane(l) && l.kind === 'audio' && !(l.clips || []).length))
+    .map(l => l.id));
+  const b = lanes(theirs).filter(l => !(newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard)) && !made.has(l.id));
   let heard = lanes(theirs).some(l => newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard));
-  let laid = lanes(theirs).some(l => newLane(l) && l.kind === 'audio' && (l.clips || []).length && l.clips.every(_isLaid));
   let frag = false;
   if (a.length !== b.length) return null;
   const byId = (list) => list.slice().sort((x, y) => String(x.id).localeCompare(String(y.id)));
@@ -835,7 +838,8 @@ function _serverOnly(base, theirs) {
     const x = a[i], y = b[i];
     if (!x || !y || x.id !== y.id) return null;
     const { clips: xc, ...xf } = x;
-    const { clips: yc, ...yf } = y;
+    const { clips: yc, ...yf0 } = y;
+    const yf = made.has(yf0.linkId) ? { ...yf0, linkId: xf.linkId } : yf0;
     if (!_same(xf, yf)) return null;
     const subs = x.kind === 'subs';
     // A heard line a person CORRECTED (K10) is the person's while the newer copy still has it - a lay keeps

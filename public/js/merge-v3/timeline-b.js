@@ -2467,28 +2467,19 @@ export function setClipsFields(items) {
 }
 
 /**
- * (phase V54, the owner's (зв8)) LEVELS HEARD WHILE A SLIDER IS HELD - the shift of several sound clips at once. Written into the
- * open timeline IN PLACE - no step, no save, no repaint - so the preview, which reads the levels every frame, plays them at once.
- * `list` - [{ clipId, volume }]; `null` puts back what was stored. The release puts them back first and then writes the new ones
- * with setClipsFields - ONE step, which undoes to the levels before the gesture.
+ * (phase V54, the owner's (зв8)) LEVELS HEARD WHILE A SLIDER IS HELD - the shift of several sound clips at once. Held HERE, never
+ * in the store (the planning session's check: written into the live timeline, a save already due, or a newer copy adopted
+ * meanwhile, carried levels nobody let go of - or the old ones were put back into a timeline that had replaced them): the
+ * preview reads them every frame (preview-b.js _sounds, liveVolumeOf) and plays them at once. `list` - [{ clipId, volume }];
+ * `null` lets go. The release lets go and writes the new levels with setClipsFields - ONE step.
  */
-let _liveVol = null;           // clipId -> the level stored before the gesture
+let _liveVol = null;           // clipId -> the level the preview plays while the slider is held
 export function setLiveVolumes(list) {
-  const byId = new Map();
-  for (const t of ((Store.timeline() || {}).tracks || [])) for (const c of (t.clips || [])) byId.set(c.id, c);
-  if (!list) {
-    if (_liveVol) for (const [id, v] of _liveVol) { const c = byId.get(id); if (c) c.volume = v; }
-    _liveVol = null;
-    return;
-  }
-  if (!_liveVol) _liveVol = new Map();
-  for (const { clipId, volume } of list) {
-    const c = byId.get(clipId);
-    if (!c) continue;
-    if (!_liveVol.has(clipId)) _liveVol.set(clipId, c.volume);
-    c.volume = Math.max(0, Math.min(4, +volume || 0));
-  }
+  _liveVol = (Array.isArray(list) && list.length)
+    ? new Map(list.map(x => [String(x.clipId), Math.max(0, Math.min(4, +x.volume || 0))])) : null;
 }
+/** The level a held slider gives this clip, or null - the preview's (preview-b.js _sounds). */
+export const liveVolumeOf = (id) => (_liveVol && _liveVol.has(String(id)) ? _liveVol.get(String(id)) : null);
 
 /** (phase V49) Every clip picked, with its lane - [{ track, clip }], in the lanes' order. */
 export function selectedClips() {
