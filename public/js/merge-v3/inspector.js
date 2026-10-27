@@ -23,6 +23,7 @@ import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMo
          onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
          removeClip as removeB, mateOf as mateB, selectedTrack as trackB,
          setClipFields as setManyB, setClipsFields as setClipsB, selectedClips as pickedB,
+         setLiveVolumes as setLiveVolumesB,
          removeTrack as removeTrackB, playhead as playheadB,
          stampTrack as stampB, resetTrack as resetTrackB,
          addCaption as addCapB, setCaptionText as setCapTextB,
@@ -469,6 +470,106 @@ function _blankStill(host, track, c, set) {
   }
 }
 
+// A fade's length: seconds, the 15 ms of a seam (cut silence) in milliseconds, none "off".
+const _fadeLbl = (v) => (v >= 0.05 ? (+v).toFixed(1) + 's' : v > 0 ? Math.round(v * 1000) + ' ms' : 'off');
+// (phase V54, the owner's (зв10)) A talking head's line on its project's timeline (a mirror's cell, lib/frag-mirror.js): its level
+// can be changed, and the mirror evens the lines' levels again when it lays the line anew.
+const _isLine = (c) => Number(c && c.frag) > 0;
+const LINE_HINT = 'A line of the talking head: a new take or a change of the line puts the mirror’s level back on it.';
+
+// ── The sound of several clips (phase V54, block 3; the owner's (зв8)-(зв11)) ────────────────────────────────────────────────
+// What of the pick is HEARD: the clips of the audio lanes and (зв9) the sound half of a picked film - each once, a pair picked
+// whole counted once. A red clip's too: its level waits for the file that replaces it.
+function _soundsOf(items) {
+  const out = [], seen = new Set();
+  const add = (track, clip) => { if (!clip || seen.has(clip.id)) return; seen.add(clip.id); out.push({ track, clip }); };
+  for (const { track, clip } of items) {
+    if (track.kind === 'audio') add(track, clip);
+    else if (track.kind === 'video' && !isStill(clip)) {
+      const m = mateB(clip.id);
+      if (m && m.track.kind === 'audio') add(m.track, m.clip);
+    }
+  }
+  return out;
+}
+
+// CLIPS IN A ROW ON ONE LANE - the pieces cut silence leaves - fade as one: in at the first of the row, out at its last; the
+// 15 ms at the seams between them stay. A row is picked clips each starting where the one before it ends.
+function _runsOf(sounds) {
+  const byLane = new Map();
+  for (const s of sounds) {
+    if (!byLane.has(s.track.id)) byLane.set(s.track.id, []);
+    byLane.get(s.track.id).push(s);
+  }
+  const runs = [];
+  for (const list of byLane.values()) {
+    list.sort((a, b) => (+a.clip.start || 0) - (+b.clip.start || 0));
+    let cur = null;
+    for (const s of list) {
+      const last = cur && cur[cur.length - 1];
+      const end = last ? (+last.clip.start || 0) + (+last.clip.dur || 0) : -1;
+      if (last && Math.abs((+s.clip.start || 0) - end) <= 0.02) cur.push(s);
+      else { cur = [s]; runs.push(cur); }
+    }
+  }
+  return runs;
+}
+
+// (зв8) THE LEVEL OF SEVERAL IS A SHIFT: every clip moved by the same dB, so the differences between them stay. A level held at
+// the dial's ends - +12 dB at the top, the quietest step above muted at the bottom: a shift never mutes a clip, nor wakes a muted
+// one; one past an end already is not pulled to it.
+const SHIFT_DB = 24;
+const FLOOR_DB = C.DB_MIN + 0.5;
+const _shiftLbl = (db) => (Math.abs(db) < 0.05 ? '0 dB' : (db > 0 ? '+' : '−') + Math.abs(db).toFixed(1) + ' dB');
+function _shifted(vol, db) {
+  const v = vol == null ? 1 : +vol;
+  if (!(v > 0)) return 0;
+  const cur = 20 * Math.log10(v);
+  const want = Math.min(Math.max(cur, C.DB_MAX), Math.max(Math.min(cur, FLOOR_DB), cur + db));
+  return Math.pow(10, want / 20);
+}
+
+// The strip's rows for the sound of several: the shift of the level (live while it is held, one step when let go, back to 0),
+// Fade in and Fade out (one value for all, "mixed" while they differ). No Speed: lengths would change without moving the
+// neighbours - overlaps and holes. `alone` - every clip picked is a sound, so the rows need no "for N".
+function _soundSection(host, sounds, alone) {
+  host.appendChild(_el('div', 'mv3-ins-sub', alone ? 'Sound'
+    : 'Sound · for ' + sounds.length + (sounds.length === 1 ? ' sound clip' : ' sound clips')));
+  const base = sounds.map(s => ({ s, v: s.clip.volume == null ? 1 : +s.clip.volume }));
+  const levelsAt = (db) => base.map(({ s, v }) => ({ trackId: s.track.id, clipId: s.clip.id, volume: _shifted(v, db) }));
+  const vol = C.slider({
+    min: -SHIFT_DB, max: SHIFT_DB, step: 0.5, value: 0, fmt: _shiftLbl,
+    onInput: (db) => setLiveVolumesB(levelsAt(db)),
+    onChange: (db) => {
+      setLiveVolumesB(null);
+      if (Math.abs(db) >= 0.05) setClipsB(levelsAt(db).map(x => ({ trackId: x.trackId, clipId: x.clipId, patch: { volume: x.volume } })));
+      // Back to 0 for the next move - a write that changed nothing (every level at an end) repaints nothing by itself.
+      render();
+    },
+  });
+  vol.title = 'Moves every level by the same number of dB - the differences between them stay';
+  host.appendChild(C.row('Volume', vol));
+  const muted = base.filter(x => !(x.v > 0)).length;
+  host.appendChild(C.hint('Moves them all by the same dB, the differences kept. One at +12 dB stays there'
+    + (muted ? '; ' + (muted === 1 ? 'the muted one stays' : muted + ' muted ones stay') + ' muted.' : '.')));
+
+  const runs = _runsOf(sounds);
+  const fadeRow = (label, key, ends) => {
+    const vals = ends.map(s => Math.max(0, +s.clip[key] || 0));
+    const mixed = vals.some(v => Math.abs(v - vals[0]) > 0.0005);
+    host.appendChild(C.row(label, C.slider({
+      min: 0, max: 5, step: 0.5, value: vals[0], fmt: _fadeLbl, mixed,
+      onChange: (v) => setClipsB(ends.map(s => ({ trackId: s.track.id, clipId: s.clip.id, patch: { [key]: v } }))),
+    })));
+  };
+  fadeRow('Fade in', 'fadeIn', runs.map(r => r[0]));
+  fadeRow('Fade out', 'fadeOut', runs.map(r => r[r.length - 1]));
+  if (runs.some(r => r.length > 1)) {
+    host.appendChild(C.hint('Clips in a row on one lane fade as one - in at the first, out at the last; the seams between them keep their 15 ms.'));
+  }
+  if (sounds.some(s => _isLine(s.clip))) host.appendChild(C.hint(LINE_HINT));
+}
+
 // A sound. Its level is the whole of it - and a birol lands here silent, which is what this
 // panel is most often opened to undo.
 function _blankSound(host, track, c, set, pair) {
@@ -478,13 +579,13 @@ function _blankSound(host, track, c, set, pair) {
     ? 'Muted is the bottom of the travel.'
     : 'Silent. Raise it to hear this clip in the preview and in the export.'));
 
-  // (phase V23) Its own fades - the two variants of a Suno track cross into each other over three seconds.
-  const secs = (v) => (v > 0 ? (+v).toFixed(1) + 's' : 'off');
+  // (phase V23) Its own fades - the two variants of a Suno track cross into each other over three seconds. (phase V54, (зв11) а)
+  // Written since V54: they were not on the timeline's list of fields, and nothing was.
   host.appendChild(C.row('Fade in', C.slider({
-    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeIn || 0), fmt: secs, onChange: (v) => set('fadeIn', v),
+    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeIn || 0), fmt: _fadeLbl, onChange: (v) => set('fadeIn', v),
   })));
   host.appendChild(C.row('Fade out', C.slider({
-    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeOut || 0), fmt: secs, onChange: (v) => set('fadeOut', v),
+    min: 0, max: 5, step: 0.5, value: Math.max(0, +c.fadeOut || 0), fmt: _fadeLbl, onChange: (v) => set('fadeOut', v),
   })));
 
   host.appendChild(C.row('Speed', C.pair(
@@ -500,6 +601,7 @@ function _blankSound(host, track, c, set, pair) {
     host.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
       + 'picture on ' + pair.track.name + '. The level is not.'));
   }
+  if (_isLine(c)) host.appendChild(C.hint(LINE_HINT));
 
   _bsep(host);
   host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
@@ -1341,8 +1443,15 @@ function _renderMany(host, n) {
   h.textContent = n + ' clips selected';
   host.appendChild(h);
 
+  const picked = pickedB();
+  // (phase V54, block 3) Their sound - the audio lanes' clips and the sound of the films among them - shifted and faded at once.
+  const sounds = _soundsOf(picked);
+  if (sounds.length) {
+    _soundSection(host, sounds, picked.every(x => x.track.kind === 'audio'));
+    _bsep(host);
+  }
   // (phase V49, (пр9)) Main clips among them - cut silence's pieces - are made a PiP, and sized and moved, all at once.
-  const mains = pickedB().filter(x => isMainVideo(x.track));
+  const mains = picked.filter(x => isMainVideo(x.track));
   if (mains.length) {
     if (mains.length < n) host.appendChild(C.hint('The crop and the PiP below are for the ' + mains.length + ' picked clips of main video.'));
     // (phase V51, (пр44)) One crop frame for all of them, the field showing the first.
@@ -1350,7 +1459,7 @@ function _renderMany(host, n) {
     _bsep(host);
     _pipSection(host, mains);
     _bsep(host);
-  } else {
+  } else if (!sounds.length) {
     const p = document.createElement('div');
     p.className = 'mv3-ins-note';
     p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
@@ -1516,6 +1625,8 @@ export function initInspector() {
   document.addEventListener('pointerup', () => {
     if (!_held) return;
     _held = false;
+    // (phase V54) A level shift heard while it was held goes back to what is stored - its `change`, if any, writes the new one.
+    setLiveVolumesB(null);
     if (_pending) { _pending = false; render(); }
   });
   // The field being typed in (see _typing). On the strip itself, which is never rebuilt - only its insides.

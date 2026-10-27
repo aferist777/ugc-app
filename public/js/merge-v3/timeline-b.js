@@ -382,27 +382,29 @@ function _drop(trackId, want, data, make) {
 // sound, not the other way round. Removing the picture removes the piece of media; removing
 // the sound leaves the picture, silent.
 export function removeClip(trackId, clipId) {
-  Store.mutate(tl => {
-    const t = tl.tracks;
-    const track = t.find(x => x.id === trackId);
-    if (!track) return;
-    const c = (track.clips || []).find(x => x.id === clipId);
-    if (!c) return;
-    track.clips = track.clips.filter(x => x.id !== clipId);
-    if (track.kind === 'video' && c.pairId) {
-      for (const other of t) {
-        if (other.kind !== 'audio') continue;
-        other.clips = (other.clips || []).filter(x => x.pairId !== c.pairId);
-      }
-    } else if (track.kind === 'audio' && c.pairId) {
-      // The picture stays and keeps its pairId pointing at nothing, which is exactly what an
-      // unpaired clip is - the same state an image has had since it landed.
-      for (const other of t) {
-        if (other.kind !== 'video') continue;
-        for (const x of (other.clips || [])) if (x.pairId === c.pairId) x.pairId = null;
-      }
+  Store.mutate(tl => { _removeIn(tl.tracks, trackId, clipId); });
+}
+
+// Inside a mutation: the clip off its lane, by the rule above.
+function _removeIn(t, trackId, clipId) {
+  const track = t.find(x => x.id === trackId);
+  if (!track) return;
+  const c = (track.clips || []).find(x => x.id === clipId);
+  if (!c) return;
+  track.clips = track.clips.filter(x => x.id !== clipId);
+  if (track.kind === 'video' && c.pairId) {
+    for (const other of t) {
+      if (other.kind !== 'audio') continue;
+      other.clips = (other.clips || []).filter(x => x.pairId !== c.pairId);
     }
-  });
+  } else if (track.kind === 'audio' && c.pairId) {
+    // The picture stays and keeps its pairId pointing at nothing, which is exactly what an
+    // unpaired clip is - the same state an image has had since it landed.
+    for (const other of t) {
+      if (other.kind !== 'video') continue;
+      for (const x of (other.clips || [])) if (x.pairId === c.pairId) x.pairId = null;
+    }
+  }
 }
 
 // ── Selecting several at once ───────────────────────────────────────────────
@@ -629,8 +631,9 @@ function _endBand() {
   if (!b.moved && !b.add) _clearSel();
 }
 
-// Everything selected, deleted in one go. A pair still goes as a pair - removeClip owns that
-// rule, and running it per clip keeps the one place that knows it.
+// Everything selected, deleted in one go. A pair still goes as a pair - _removeIn owns that
+// rule, and running it per clip keeps the one place that knows it. (phase V54, the owner's (зв11) б) ONE mutation - one step
+// to undo, however many there were: "Delete N clips" and the Delete key took N steps.
 function _deleteSelected() {
   if (!_sel.size) return;
   const tl = Store.timeline();
@@ -638,7 +641,7 @@ function _deleteSelected() {
   const jobs = [];
   for (const t of tl.tracks) for (const c of (t.clips || [])) if (_sel.has(c.id)) jobs.push([t.id, c.id]);
   _clearSel();
-  for (const [tid, cid] of jobs) removeClip(tid, cid);
+  if (jobs.length) Store.mutate(x => { for (const [tid, cid] of jobs) _removeIn(x.tracks, tid, cid); });
 }
 
 // ── Dragging ────────────────────────────────────────────────────────────────
@@ -2231,7 +2234,10 @@ const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropA
                              // (phase V49, point 3) A main clip as a picture in the picture, its corners and outline.
                              'pip', 'radius', 'outline', 'outlineColor',
                              // (phase V51, point 1) A piece of the clip's file, cut first (framing/crop.js).
-                             'crop']);
+                             'crop',
+                             // (phase V54, the owner's (зв11) а) A sound's own fades - offered by the inspector since V23 and
+                             // never let through: the slider stayed where it was let go, and nothing was written.
+                             'fadeIn', 'fadeOut']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -2252,6 +2258,9 @@ const _minDur = (c) => Math.max(0.02, Math.min(0.1, +c.dur || 0.1));
 
 function _write(c, key, value) {
   if (key === 'volume') { c.volume = Math.max(0, Math.min(4, +value || 0)); return; }
+  // (phase V54) Seconds of the timeline, as js/sound/fades.js reads them for the preview and the render (which keep them inside
+  // the clip); to the millisecond, so the 15 ms of a seam (cut silence) survive; none is null - lib/timeline-shape.js's shape.
+  if (key === 'fadeIn' || key === 'fadeOut') { const v = +value; c[key] = v > 0 ? Math.min(30, Math.round(v * 1000) / 1000) : null; return; }
   if (key === 'dur') { c.dur = Math.max(_minDur(c), _r2(+value || 0)); return; }
   if (key === 'speed') {
     // Same content, faster = shorter. What stays put is the SLICE OF SOURCE in play; what
@@ -2455,6 +2464,30 @@ export function setClipsFields(items) {
     }
     if (split) placeBySplit(tl);
   });
+}
+
+/**
+ * (phase V54, the owner's (зв8)) LEVELS HEARD WHILE A SLIDER IS HELD - the shift of several sound clips at once. Written into the
+ * open timeline IN PLACE - no step, no save, no repaint - so the preview, which reads the levels every frame, plays them at once.
+ * `list` - [{ clipId, volume }]; `null` puts back what was stored. The release puts them back first and then writes the new ones
+ * with setClipsFields - ONE step, which undoes to the levels before the gesture.
+ */
+let _liveVol = null;           // clipId -> the level stored before the gesture
+export function setLiveVolumes(list) {
+  const byId = new Map();
+  for (const t of ((Store.timeline() || {}).tracks || [])) for (const c of (t.clips || [])) byId.set(c.id, c);
+  if (!list) {
+    if (_liveVol) for (const [id, v] of _liveVol) { const c = byId.get(id); if (c) c.volume = v; }
+    _liveVol = null;
+    return;
+  }
+  if (!_liveVol) _liveVol = new Map();
+  for (const { clipId, volume } of list) {
+    const c = byId.get(clipId);
+    if (!c) continue;
+    if (!_liveVol.has(clipId)) _liveVol.set(clipId, c.volume);
+    c.volume = Math.max(0, Math.min(4, +volume || 0));
+  }
 }
 
 /** (phase V49) Every clip picked, with its lane - [{ track, clip }], in the lanes' order. */

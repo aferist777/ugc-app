@@ -56,7 +56,9 @@ export function acts(btns) {
   return r;
 }
 
-export function slider({ min, max, step, value, fmt, onChange }) {
+// (phase V54) `mixed` - several things picked disagree: the readout says "mixed" until the slider is moved, and the move gives
+// them all one value. `onInput` - for a gesture heard while it is held (the shift of several levels); still nothing written.
+export function slider({ min, max, step, value, fmt, onChange, onInput, mixed }) {
   const wrap = document.createElement('span');
   wrap.className = 'mv3-c-slider';
   const inp = document.createElement('input');
@@ -65,12 +67,13 @@ export function slider({ min, max, step, value, fmt, onChange }) {
   inp.value = String(value);
   const out = document.createElement('span');
   out.className = 'mv3-c-num';
-  const show = (v) => { out.textContent = fmt ? fmt(v) : String(v); };
+  let moved = false;
+  const show = (v) => { out.textContent = (mixed && !moved) ? 'mixed' : (fmt ? fmt(v) : String(v)); };
   show(+value);
   // Live readout, no write.
-  inp.addEventListener('input', () => show(+inp.value));
+  inp.addEventListener('input', () => { moved = true; show(+inp.value); if (onInput) onInput(+inp.value); });
   // One write, on release.
-  inp.addEventListener('change', () => { if (onChange) onChange(+inp.value); });
+  inp.addEventListener('change', () => { moved = true; if (onChange) onChange(+inp.value); });
   wrap.appendChild(inp);
   wrap.appendChild(out);
   return wrap;
@@ -90,7 +93,7 @@ export function slider({ min, max, step, value, fmt, onChange }) {
 // The bottom of the travel is MUTED rather than -40 dB, because silence is a state people
 // want and 0.01 of a multiplier is not silence, it is a whisper you cannot hear but ffmpeg
 // still mixes.
-const DB_MIN = -40, DB_MAX = 12;
+export const DB_MIN = -40, DB_MAX = 12;
 
 export const toDb = (lin) => ((+lin > 0) ? Math.max(DB_MIN, 20 * Math.log10(+lin)) : DB_MIN);
 export const fromDb = (db) => ((+db <= DB_MIN) ? 0 : Math.pow(10, +db / 20));
