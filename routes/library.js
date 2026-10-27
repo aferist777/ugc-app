@@ -45,6 +45,8 @@ const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
 const SND = require('../lib/sounds-store');
 const MUSIC = require('../lib/music-store');
+// (phase V54 block 6) Folders in folders: renamed, moved, emptied with everything in them.
+const FOLDERS = require('../lib/folders');
 
 // (phase V28.4) The required categories ("Generated", "Screenshots"...) are there, and a second one of the same name is
 // folded into the first - before anything reads a category. The library has been upgraded by now (server.js).
@@ -212,11 +214,6 @@ function _origMeta(o) {
   return { path: o.path, in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: o.name || '' };
 }
 
-// The hook numbers, read once per shelf build rather than once per tile.
-function _hookIds() {
-  try { return require('../lib/hook-ids').map(); } catch (e) { return {}; }
-}
-
 // A clip whose record lost its poster still has one beside it on disk (lib/video-thumb.js) - shown
 // instead of "no thumb" (phase J4), the way the renders shelf finds its own.
 function _posterOf(thumb, video) {
@@ -256,9 +253,6 @@ function _mediaShelf(opts) {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
   const hooks = _read(path.join(DATA_DIR, 'hooks-archive.json'), []);
-  // The hook numbers, read once for the whole build: it used to be once per hook, off the disk
-  // each time, on every read of Media and on every count of the shelves (phase D3).
-  const hookIds = _hookIds();
 
   const fromArchive = arch.filter(e => e && e.videoPath).map(e => ({
     id: String(e.id),
@@ -296,11 +290,7 @@ function _mediaShelf(opts) {
     // Hook records have never carried a duration; 0 means "ask the file", which is what
     // the timeline falls back to.
     dur: +h.duration || 0,
-    // The hook's permanent number, which the grid shows on the tile and the render window
-    // puts in the creative's name. Read from the registry rather than the record: the
-    // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
-            hookId: hookIds[String(h.videoPath || '').split('?')[0]] || null,
             trimmed: h.trimmed || null, original: _origMeta(h.original), link: h.link || '' },
   }));
 
@@ -334,7 +324,8 @@ function _mediaShelf(opts) {
             original: (e.meta && e.meta.original) || null },
   }));
 
-  // (phase V28.4) Music - no categories, no picture; its length kept on the record (measured once for the older ones).
+  // (phase V28.4) Music - no picture; its length kept on the record (measured once for the older ones). (phase V54) Its own
+  // folders: `categoryId`, as the other kinds.
   // (phase V35) Where it lies in Music (lib/music-store.js placeOf, V34.F): `folder` 'highlights' or '', `mood` - the mood
   // folder it is in, `moodMade` - the preset it was made by (the one mood it may go into).
   const placeOf = typeof MUSIC.placeOf === 'function' ? MUSIC.placeOf : () => ({ folder: '', mood: '', moodMade: '' });
@@ -345,7 +336,8 @@ function _mediaShelf(opts) {
     media: String(t.audioPath),
     thumb: null,
     dur: +t.duration || 0,
-    meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''), ...placeOf(t),
+    meta: { categoryId: String(t.categoryId || ''), categoryLabel: String(t.categoryLabel || ''), date: t.createdAt || null,
+            favorite: !!t.favorite, style: String(t.style || ''), ...placeOf(t),
             source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0, wave: Array.isArray(t.wave) ? t.wave : [],
             info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' },
             // (phase V54) a piece cut out of a track names the track and the stretch (lib/audio-cut.js)
@@ -458,7 +450,7 @@ function _mediaShelf(opts) {
   // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
   // note. Reading it from the record is the only way to name such a chip.
   const fromRecords = {};
-  for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read()).concat(SND.read())) {
+  for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read()).concat(SND.read()).concat(MUSIC.read())) {
     if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
   }
 
@@ -493,7 +485,8 @@ function _mediaCats(items, kind, labelFor) {
   const uncat = scope.filter(i => !(i.meta || {}).categoryId).length;
   const cats = LC.listFor(kind || null, counts, labelFor).map(c => ({
     id: c.id,
-    label: c.label + ' · ' + c.count,
+    // (phase V54) A folder in a folder reads as its path - the pictures chat's column offers these.
+    label: (Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : c.label) + ' · ' + c.count,
     name: c.label,          // the bare name, for the rename box and the dropdowns
     own: c.own,
     orphan: c.orphan,
@@ -547,23 +540,28 @@ const _abc = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { nu
 // корневую highlights") Music -> highlights -> a folder per mood of the highlights presets (lib/music-store.js `moods`,
 // V34.F). highlights and its moods are the app's (locked: never renamed or deleted, no "+"); a mood takes only a track its
 // preset made (`moodLock` - the rule is `place` in lib/music-store.js), a person's own track goes into highlights itself.
-// Music's own tracks lie in Music.
-function _musicNode(list) {
+// Music's own tracks lie in Music. (phase V54 block 6, (зв22), (зв41)) Beside highlights - after it - Music's OWN folders, in
+// one another as any kind's (lib/library-cats.js kind `music`); none inside highlights or its moods.
+function _musicNode(list, folders) {
   const moods = typeof MUSIC.moods === 'function' ? MUSIC.moods() : [];
-  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length, q: { filter: 'music' }, loose: 'music', direct: list.length };
-  if (!moods.length) return node;
+  // (phase V54) What lies in Music itself: in no own folder and not in highlights.
+  const rootN = list.filter(i => !i.meta.categoryId && i.meta.folder !== 'highlights').length;
+  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
+    loose: 'music', direct: rootN };
+  const own = folders || [];
+  if (!moods.length) { if (own.length) node.children = own; return node; }
   const inHl = list.filter(i => i.meta.folder === 'highlights');
-  const rootN = inHl.filter(i => !i.meta.mood).length;
+  const hlRootN = inHl.filter(i => !i.meta.mood).length;
   const hl = { key: 'music:highlights', kind: 'music', folder: 'highlights', label: 'highlights', locked: true, noAdd: true, count: inHl.length,
     tip: 'highlights - the highlights popup offers every track in it; your own tracks go here, its moods take only what their presets made',
-    q: { filter: 'music', folder: 'highlights', mood: UNCAT }, loose: 'music', direct: rootN, empty: !inHl.length,
+    q: { filter: 'music', folder: 'highlights', mood: UNCAT }, loose: 'music', direct: hlRootN, empty: !inHl.length,
     children: moods.map(m => {
       const n = inHl.filter(i => i.meta.mood === m.id).length;
       return { key: 'music:highlights:' + m.id, kind: 'music', folder: 'highlights', mood: m.id, label: m.label, count: n, empty: !n,
         locked: true, noAdd: true, moodLock: true, tip: m.label + ' - only the tracks made by its preset' + (m.about ? ' (' + m.about + ')' : ''),
         q: { filter: 'music', folder: 'highlights', mood: m.id } };
     }) };
-  return Object.assign(node, { q: { filter: 'music', folder: UNCAT }, direct: list.length - inHl.length, children: [hl] });
+  return Object.assign(node, { children: [hl, ...own] });
 }
 
 // (phase V35, the owner 2026-10-23, (т2): "как будто папки в library ... при нажатии на корневую категорию показывать
@@ -578,6 +576,8 @@ function _tree() {
   for (const i of items) (byKind[i.kind] = byKind[i.kind] || []).push(i);
   // A kind's categories, as folders: the locked first, then those with something in them, then the empty ones (pale) -
   // each part alphabetical. What has none is counted for the node that holds them (`uncat`).
+  // (phase V54 block 6) FOLDERS IN FOLDERS: a folder's own folders are its `children`, in the same order at every level;
+  // `count` is all under it, `direct` what lies in it itself (its `q`).
   const catsOf = (kind, list) => {
     const counts = {};
     let uncat = 0;
@@ -587,17 +587,29 @@ function _tree() {
       else uncat++;
     }
     const cats = LC.listFor(kind, counts, labelFor);
-    const one = (c) => ({
-      key: kind + ':' + c.id, kind, cat: c.id, label: c.title || c.label, name: c.label, count: c.count,
-      locked: !!c.locked, own: !!c.own, orphan: !!c.orphan, empty: !(c.count > 0), q: { filter: kind, cat: c.id },
-    });
-    const by = (a, b) => _abc(a.title || a.label, b.title || b.label);
-    const out = [
-      ...cats.filter(c => c.locked).sort(by).map(one),
-      ...cats.filter(c => !c.locked && c.count > 0).sort(by).map(one),
-      ...cats.filter(c => !c.locked && !(c.count > 0)).sort(by).map(one),
-    ];
-    return { out, uncat };
+    const byParent = new Map();
+    for (const c of cats) {
+      const p = c.parent || '';
+      if (!byParent.has(p)) byParent.set(p, []);
+      byParent.get(p).push(c);
+    }
+    const by = (a, b) => _abc(a.label, b.label);
+    const build = (parent) => {
+      const here = (byParent.get(parent) || []).map(c => {
+        const kids = build(c.id);
+        const total = c.count + kids.reduce((n, k) => n + k.count, 0);
+        const node = { key: kind + ':' + c.id, kind, cat: c.id, label: c.title || c.label, name: c.label, count: total, direct: c.count,
+          locked: !!c.locked, own: !!c.own, orphan: !!c.orphan, empty: !(total > 0), q: { filter: kind, cat: c.id } };
+        if (kids.length) node.children = kids;
+        return node;
+      });
+      return [
+        ...here.filter(n => n.locked).sort(by),
+        ...here.filter(n => !n.locked && n.count > 0).sort(by),
+        ...here.filter(n => !n.locked && !(n.count > 0)).sort(by),
+      ];
+    };
+    return { out: build(''), uncat };
   };
   // A kind: its categories as folders, and what has none lies in it.
   const kindNode = (kind, key, label, extra) => {
@@ -656,7 +668,7 @@ function _tree() {
   const fav = { key: 'sfx-fav', label: '★ Favorites', count: favN, empty: !favN, q: { group: 'sfxall', fav: '1' } };
   // SFX holds its three folders; its search looks through all of them (the owner's (у3), js/sound/shelf.js).
   const sfx = { key: 'sfx-all', label: 'SFX', count: own.length + built.length, children: [fav, builtin, mine] };
-  const audio = { key: 'audio', label: 'AUDIO', children: [_musicNode(byKind.music || []), sfx] };
+  const audio = { key: 'audio', label: 'AUDIO', children: [_musicNode(byKind.music || [], catsOf('music', byKind.music || []).out), sfx] };
   audio.count = audio.children.reduce((n, c) => n + c.count, 0);
   // (phase TG, block 5; the owner: "давай над video - самой первой") REFERENCES - the posts the Telegram bot brought in, a
   // folder per source and its kind of post; the folders are the app's (locked).
@@ -1382,7 +1394,8 @@ const RECORD_STORES = {
     file: MUSIC.FILE,
     read: MUSIC.read,
     write: MUSIC.write,
-    fields: ['name', 'favorite'],
+    // (phase V54) and its own folder
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.audioPath],
   },
 };
@@ -1401,13 +1414,12 @@ const _r = (status, body) => ({ status, body });
 
 // (phase V54) A BATCH PLACES ITS FILES ONCE. Each item function moves a record's files to its folder (SHELF.placeRecords -
 // one relocate, every store and project rewritten); a batch of hundreds would do that hundreds of times. While a batch
-// runs, `_placeLater` collects what would have been placed (and the clips that became hooks), and `_placeAll` places the
-// records as they are at the end, in ONE call - then numbers the new hooks by their placed paths.
-let _placeLater = null;           // [{ kind, id, hook }] while a batch runs
+// runs, `_placeLater` collects what would have been placed, and `_placeAll` places the records as they are at the end,
+// in ONE call.
+let _placeLater = null;           // [{ kind, id }] while a batch runs
 function _placeAll(list) {
   const last = new Map();         // id -> the kind it ended as
-  const hooks = new Set();
-  for (const x of list || []) { last.set(x.id, x.kind); if (x.hook) hooks.add(x.id); }
+  for (const x of list || []) last.set(x.id, x.kind);
   const lists = {};
   const recOf = (kind, id) => {
     if (!lists[kind]) { try { lists[kind] = RECORD_STORES[kind].read(); } catch (e) { lists[kind] = []; } }
@@ -1416,10 +1428,6 @@ function _placeAll(list) {
   const items = [];
   for (const [id, kind] of last) { const rec = recOf(kind, id); if (rec) items.push({ kind, rec }); }
   if (items.length) SHELF.placeRecords(items);
-  if (hooks.size) {
-    const placed = RECORD_STORES.hooks.read().filter(x => x && hooks.has(String(x.id))).map(x => x.videoPath).filter(Boolean);
-    if (placed.length) { try { require('../lib/hook-ids').assign(placed); } catch (e) { /* numbered at its next filing */ } }
-  }
 }
 
 // (phase V54) The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
@@ -1457,8 +1465,16 @@ function _patchOne(kindIn, idIn, bodyIn) {
     if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
     // (phase V28.4) A track's name is its title: the music panel and the video chat read that.
     if (kind === 'music' && 'name' in patch) { patch.title = patch.name; delete patch.name; }
+    // (phase V54 block 6) A category is a folder that is there - a nested one is chosen by its id, never guessed from a name.
+    if (patch.categoryId && LC.KINDS.includes(kind)) {
+      const cat = LC.find(kind, patch.categoryId);
+      if (!cat && LC.isOwn(null, patch.categoryId)) return _r(400, { success: false, error: 'that folder is not one of ' + kind });
+      if (cat) patch.categoryLabel = cat.label;
+    }
 
     Object.assign(it, patch);
+    // (phase V54) A track in an own folder of Music is out of highlights - it lies in one place.
+    if (kind === 'music' && patch.categoryId) { delete it.folder; delete it.mood; }
     store.write(list);
     // Another category is another folder: the files move there, and every path to them with them.
     let item = it;
@@ -1500,7 +1516,7 @@ router.post('/library/cut', async (req, res) => {
   let made = null, thumbPath = null;
   try {
     if (!CUT_KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'a piece goes into VIDEO or REFERENCES' });
-    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such category in REFERENCES' });
+    if (kind === 'references' && cat && !LC.find('references', cat)) return res.status(400).json({ success: false, error: 'no such folder in REFERENCES' });
     made = await CUTS.cut(String(b.src || ''), +b.in, +b.out);
     try { thumbPath = (await VT.makeThumb(made.videoPath)).thumb; } catch (e) { console.warn('[library/cut] poster failed:', e.message); }
 
@@ -1527,7 +1543,7 @@ router.post('/library/cut', async (req, res) => {
     }
 
     const { item } = _fileRecord({
-      videoPath: made.videoPath, thumbPath, name: made.name, kind, categoryLabel: kind === 'hooks' ? '' : label,
+      videoPath: made.videoPath, thumbPath, name: made.name, kind, categoryId: cat, categoryLabel: kind === 'hooks' ? '' : label,
       original: made.original, duration: made.dur, w: made.w, h: made.h, link: made.root.link || '',
     });
     console.log('[library/cut]', made.original.path, made.original.in + 's..' + made.original.out + 's ->', kind, item.videoPath);
@@ -1738,14 +1754,9 @@ function _kindOne(fromIn, idIn, toIn) {
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
     // Another shelf is another folder: the files move, the record and every other path follow.
-    if (_placeLater) { _placeLater.push({ kind: to, id: String(moved.id), hook: to === 'hooks' }); return _r(200, { success: true, kind: to, id, item: moved }); }
+    if (_placeLater) { _placeLater.push({ kind: to, id: String(moved.id) }); return _r(200, { success: true, kind: to, id, item: moved }); }
     SHELF.placeRecords([{ kind: to, rec: moved }]);
     Object.assign(moved, dst.read().find(x => x && String(x.id) === String(moved.id)) || {});
-    // BECOMING A HOOK IS WHEN A HOOK GETS ITS NUMBER. A file uploaded straight onto Hooks is
-    // numbered as it is filed (POST /library/media/record); one moved here from Uploads used to
-    // wait for the next time a browser pushed the hooks archive - which the Merge page never
-    // does - so it sat on the shelf with no number at all.
-    if (to === 'hooks') { try { require('../lib/hook-ids').assign([moved.videoPath]); } catch (e) {} }
     return _r(200, { success: true, kind: to, id, item: moved });
 }
 router.post('/library/item/:kind/:id/kind', (req, res) => {
@@ -1797,7 +1808,19 @@ function _moveOne(it, to) {
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
   if (from === 'music' || to.kind === 'music') {
     if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
-    try { MUSIC.place(it.id, { folder: to.folder || '', mood: to.mood || '' }); return ''; }
+    if (to.cat) {
+      const rec = _recOf('music', it.id);
+      if (!rec) return 'not found';
+      if (String(rec.categoryId || '') === to.cat) return '';
+      const r = _patchOne('music', it.id, { categoryId: to.cat, categoryLabel: to.label || '' });
+      return r.status === 200 ? '' : _whyOf(r);
+    }
+    try {
+      // Out of an own folder: its file is placed with the rest of the batch.
+      const r = MUSIC.place(it.id, { folder: to.folder || '', mood: to.mood || '' }, { later: !!_placeLater });
+      if (r && r.left && _placeLater) _placeLater.push({ kind: 'music', id: String(it.id) });
+      return '';
+    }
     catch (e) { return e.message; }
   }
   if (from === 'references' || to.kind === 'references') {
@@ -1833,7 +1856,7 @@ function _moveOne(it, to) {
 function _postsTo(ids, to) {
   const REFS = require('../lib/references-store');
   const cat = String(to.cat || '');
-  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such category in REFERENCES' }));
+  if (cat && !LC.find('references', cat)) return ids.map(id => ({ id, why: 'no such folder in REFERENCES' }));
   const moved = [];
   const found = new Set();
   REFS.apply((list) => {
@@ -2120,10 +2143,10 @@ router.post('/library/media/record', (req, res) => {
 });
 
 // The filing itself, for the route above and for a clip that came in by a link (phase V27, lib/link-queue.js): the
-// same record, the same place, the same proxy and hook number as a file brought in by hand. Throws with `status`.
+// same record, the same place and the same proxy as a file brought in by hand. Throws with `status`.
 function _fileRecord(b) {
   const _no = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
-  const { videoPath, thumbPath, name, refImage, prompt, categoryLabel } = b;
+  const { videoPath, thumbPath, name, refImage, prompt, categoryLabel, categoryId } = b;
   if (!videoPath || !_onDisk(videoPath)) throw _no(400, 'videoPath must be a file that exists');
   // Which kind the clip is filed as follows what the page had open, so uploading while
   // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
@@ -2150,7 +2173,12 @@ function _fileRecord(b) {
   // to know which id that resolved to - and LC.add is idempotent by label, handing back the
   // existing chip rather than making a second one with the same name, so asking for it every
   // time is the same as asking whether it exists. Hooks have no category machinery.
-  if (categoryLabel && kind !== 'hooks') {
+  // (phase V54 block 6) A folder chosen by its id - with folders in folders a name may be in several places.
+  const byId = categoryId ? LC.find(kind, String(categoryId)) : null;
+  if (byId) {
+    rec.categoryId = byId.id;
+    rec.categoryLabel = byId.label;
+  } else if (categoryLabel && kind !== 'hooks') {
     try {
       const { cat } = LC.add(kind === 'uploads' ? 'uploads' : kind, String(categoryLabel));
       rec.categoryId = cat.id;
@@ -2184,26 +2212,24 @@ function _fileRecord(b) {
   // follows (lib/shelf-files.js).
   SHELF.placeRecords([{ kind, rec }]);
   const item = store.read().find(e => e && e.id === rec.id) || rec;
-  // On the shelf means it can land on a lane: its preview proxy is queued now, and a
-  // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
+  // On the shelf means it can land on a lane: its preview proxy is queued now.
   try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
-  if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
   return { item, kind };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CATEGORIES — one list per kind, owned by lib/library-cats.js
+// CATEGORIES - FOLDERS - one list per kind, owned by lib/library-cats.js; moved with their files by lib/folders.js
 //
-//   GET    /api/library/cats?kind=          the list, for the dropdowns
-//   POST   /api/library/cats                { kind, label }        create
-//   PATCH  /api/library/cats/:id            { kind, label }        rename, or fork
-//   POST   /api/library/cats/order          { kind, order:[id] }   the chip order
+//   GET    /api/library/cats?kind=          the lists, for the dropdowns: every folder with its `parent` and `trail` (its
+//                                           names from the top), in the tree's order
+//   POST   /api/library/cats                { kind, label }           filed by name (the code's way: top first, then anywhere)
+//                                           { kind, label, parent }   (phase V54) a new folder in `parent` ('' - the kind)
+//   PATCH  /api/library/cats/:id            { kind, label }           rename (its folder on the disk with everything under it)
+//   POST   /api/library/cats/:id/move       { kind, parent }          (phase V54) into another folder of its kind
 //   DELETE /api/library/cats/:id            ?kind=&media=move|delete
 //
-// Records keep a DENORMALISED copy of the name in `categoryLabel` — every lookup in the app
-// goes by id, but public/js/biroly-archive.js reads that copy to draw a heading. So every
-// operation that changes a name has to rewrite it on the records too, or the old name lives
-// on in the UI. That is the "files take the new name" part.
+// Records keep a DENORMALISED copy of the name in `categoryLabel` - lib/folders.js refreshes it on a rename.
+// (phase V54 block 6, the owner 2026-10-27/28) Folders in folders, with no limit of depth - (зв19)-(зв22), (зв27), (зв33)-(зв46).
 // ════════════════════════════════════════════════════════════════════════════
 
 // The records that a chip of this kind actually stands for. birols and uploads share one
@@ -2244,16 +2270,26 @@ function _reassign(kind, fromId, toId, toLabel) {
   return { moved: n };
 }
 
-// All three lists in one request. The dropdown on a card has to offer the list belonging to
-// THAT card's kind, and a grid on the All filter shows all three kinds at once, so the page
-// needs every list up front rather than one per card.
+// A folder and every folder under it - an orphan is only itself.
+function _subtree(kind, id) {
+  const ids = LC.subtreeOf(LC.read(), kind, id);
+  return ids.length ? ids : [String(id)];
+}
+
+// Every list in one request, in the tree's order (the locked first, then A-Z, a folder's own after it), each folder
+// with where it is: `parent`, `trail`. A card's dropdown offers its OWN kind's list, by path - "Товары / Обувь / Лето".
 router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
     for (const k of LC.KINDS) {
-      // (second round) In the tree's order: the locked first, the rest alphabetical.
-      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title }))
+      const list = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title,
+        parent: c.parent || '', trail: c.trail || [c.title] }));
+      const kids = (p) => list.filter(c => c.parent === p)
         .sort((a, b) => (Number(!!b.locked) - Number(!!a.locked)) || _abc(a.title || a.label, b.title || b.label));
+      const out = [];
+      const walk = (p) => { for (const c of kids(p)) { out.push(c); walk(c.id); } };
+      walk('');
+      byKind[k] = out;
     }
     res.json({ success: true, byKind });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -2261,11 +2297,13 @@ router.get('/library/cats', (_req, res) => {
 
 router.post('/library/cats', (req, res) => {
   try {
-    const { kind, label } = req.body || {};
-    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
-    const { cat, created } = LC.add(String(kind), label);
+    const b = req.body || {};
+    const kind = String(b.kind || '');
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
+    // (phase V54) A folder made where the person asked - in `parent`, or the kind itself.
+    const { cat, created } = ('parent' in b) ? LC.make(kind, b.label, String(b.parent || '')) : LC.add(kind, b.label);
     res.json({ success: true, cat, created });
-  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+  } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
 router.patch('/library/cats/:id', (req, res) => {
@@ -2275,8 +2313,8 @@ router.patch('/library/cats/:id', (req, res) => {
     const label = String((req.body || {}).label || '').trim();
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be renamed.' });
-    if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be renamed. Folders inside it can.' });
+    if (!label) return res.status(400).json({ success: false, error: 'A folder needs a name.' });
 
     // An orphan becomes a real category first, under the name its records carry.
     if (!LC.isOwn(kind, id)) {
@@ -2284,21 +2322,34 @@ router.patch('/library/cats/:id', (req, res) => {
       const one = list.find(e => inKind(e) && String(e.categoryId || '') === id);
       LC.adopt(kind, id, (one && one.categoryLabel) || label);
     }
-    // The label changes, the folder moves with every path under it, and the copies of the
-    // label on the records are refreshed.
-    const cat = SHELF.renameCategory(kind, id, label);
-    const { moved } = _reassign(kind, id, cat.id, cat.label);
-    res.json({ success: true, cat, renamed: true, moved });
-  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+    // The label changes, the folder moves with every path under it, and the copies of the label on the records follow.
+    const cat = FOLDERS.rename(kind, id, label);
+    res.json({ success: true, cat, renamed: true });
+  } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
-// media=move   (the default) clears the category off its clips, so they land in Uncategorized -
-//              and their files in the kind's nocat/ folder
-// media=delete REMOVES those clips: files unlinked, records dropped. Irreversible, and the
-//              page states the count in the confirmation before it can be chosen.
+// (phase V54 block 6) Into another folder of its kind - `parent` '' is the kind itself. A folder of the same name there is
+// refused in words (зв35); so is a required one, and one into itself.
+router.post('/library/cats/:id/move', (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const b = req.body || {};
+    const kind = String(b.kind || '');
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
+    if (!LC.isOwn(kind, id)) return res.status(404).json({ success: false, error: 'That folder is not there any more.' });
+    const cat = FOLDERS.move(kind, id, String(b.parent || ''));
+    res.json({ success: true, cat });
+  } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
+});
+
+// media=move   (the default) what is in it goes ONE LEVEL UP (phase V54 block 6, (зв46)): its files into the folder it is
+//              in - at the top, into the kind itself (their files into nocat; REFERENCES' posts back to their sources'
+//              folders; Music's tracks into Music) - and its folders become that folder's. A folder there of a name one
+//              of them has is refused in words before anything moves (зв35).
+// media=delete REMOVES what is in it AND IN EVERY FOLDER UNDER IT: files unlinked, records dropped. Irreversible, and the
+//              page names how many and the projects that use them before it can be chosen.
 //
-// Any chip can go except All and Uncategorized. A category is removed from the store and its
-// emptied folder goes; an orphan has nothing stored - it exists only because records point at it.
+// Any folder can go but a required one. An orphan has nothing stored - it exists only because records point at it.
 router.delete('/library/cats/:id', (req, res) => {
   try {
     const id = String(req.params.id || '');
@@ -2307,51 +2358,53 @@ router.delete('/library/cats/:id', (req, res) => {
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
     // Refused BEFORE its media are moved or deleted below.
-    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This category is required - it cannot be deleted.' });
-    let affected = 0, removedFiles = [], sparedFiles = [];
-    if (mode === 'delete') {
-      const { store, list, inKind } = _kindRecords(kind);
-      const doomed = list.filter(e => inKind(e) && String(e.categoryId || '') === id);
-      const paths = [];
-      for (const e of doomed) for (const p of (store.files ? store.files(e) : [])) paths.push(p);
-      // One pass for the whole set: a file shared BETWEEN two doomed records must not be
-      // treated as still in use by the second one.
-      const r = _unlinkUnused(paths, doomed.map(e => e.id));
-      removedFiles.push(...r.removed);
-      sparedFiles.push(...r.kept);
-      if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
-      removedFiles.push(...CUTS.dropOrphans(_originalsOf(doomed)));
-      affected = doomed.length;
-    } else {
+    if (LC.isLocked(kind, id)) return res.status(409).json({ success: false, error: 'This folder is required - it cannot be deleted. Folders inside it can.' });
+    const own = LC.isOwn(kind, id);
+    if (mode === 'move') {
+      if (own) {
+        const c = LC.find(kind, id);
+        const r = FOLDERS.empty(kind, id, c.parent, { byHand: true });
+        return res.json({ success: true, id, kind, mode, affected: r.records, folders: r.folders, removedFiles: [], sparedFiles: [], disposition: 'removed' });
+      }
+      // An orphan: its records to no category, their files placed.
       const { list, inKind } = _kindRecords(kind);
       const ids = new Set(list.filter(e => inKind(e) && String(e.categoryId || '') === id).map(e => String(e.id)));
       const r = _reassign(kind, id, '', '');
-      affected = r.moved;
-      // Uncategorized is a folder too: the files go to nocat, and every path to them follows.
-      const { list: now } = _kindRecords(kind);
-      // (phase TG) A post let go of goes back to its source's folder - its files several.
       if (kind === 'references') {
-        // Let go of by hand: seen, not news in the folders they go back to (2026-10-22).
-        require('../lib/references-store').apply((list) => { for (const e of list) if (e && ids.has(String(e.id))) e.handled = true; });
+        require('../lib/references-store').apply((l) => { for (const e of l) if (e && ids.has(String(e.id))) e.handled = true; });
         require('../lib/references-store').placePosts(require('../lib/references-store').read().filter(e => e && ids.has(String(e.id))));
-      }
-      else SHELF.placeRecords(now.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
+      } else SHELF.placeRecords(_kindRecords(kind).list.filter(e => e && ids.has(String(e.id))).map(rec => ({ kind, rec })));
+      return res.json({ success: true, id, kind, mode, affected: r.moved, folders: 0, removedFiles: [], sparedFiles: [], disposition: 'orphan' });
     }
-    // The clips are resolved; now the chip itself, and its folder.
-    let disposition;
-    const folder = (LC.find(kind, id) || {}).folder;
-    if (LC.isOwn(kind, id)) { LC.remove(kind, id); disposition = 'removed'; }
-    else { disposition = 'orphan'; }          // nothing to store: it lived on its records alone
-    SHELF.dropEmptyFolder(kind, folder);
-    res.json({ success: true, id, kind, mode, affected, removedFiles, sparedFiles, disposition });
-  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+    // Delete: the folder and every folder under it, with what is in them.
+    const state = LC.read();
+    const ids = _subtree(kind, id);
+    const paths = ids.map(x => (LC.byIdOf(state, kind, x) || {}).folder).filter(Boolean);
+    const { store, list, inKind } = _kindRecords(kind);
+    const want = new Set(ids);
+    const doomed = list.filter(e => inKind(e) && want.has(String(e.categoryId || '')));
+    const files = [];
+    for (const e of doomed) for (const p of (store.files ? store.files(e) : [])) files.push(p);
+    // One pass for the whole set: a file shared BETWEEN two doomed records must not be treated as still in use by the
+    // second one.
+    const r = _unlinkUnused(files, doomed.map(e => e.id));
+    const removedFiles = r.removed.slice();
+    if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
+    if (kind !== 'music') removedFiles.push(...CUTS.dropOrphans(_originalsOf(doomed)));
+    if (own) LC.remove(kind, id);
+    // Their folders off the disk, the deepest first - each only once nothing is left in it.
+    for (const p of paths.sort((a, b) => b.length - a.length)) SHELF.dropEmptyFolder(kind, p);
+    res.json({ success: true, id, kind, mode, affected: doomed.length, folders: ids.length - 1, removedFiles, sparedFiles: r.kept,
+      disposition: own ? 'removed' : 'orphan' });
+  } catch (e) { res.status(e.status || 400).json({ success: false, error: e.message }); }
 });
 
 // ── WHERE A FILE IS USED (phase V28.4, the owner 2026-10-12) ───────────────────
 // Asked before something is deleted from the library: the projects (the draft too) whose timelines hold it, and how
 // many clips in each - the deleting question names them, and there the clips turn red (lib/timeline-media.js).
 //   POST /api/library/usage { media: [address, ...] }       some files
-//   POST /api/library/usage { kind, cat }                   everything in a category ('__uncat__': in none)
+//   POST /api/library/usage { kind, cat }                   everything in a category ('__uncat__': in none) - and (phase V54)
+//                                                           in every folder under it
 //   -> { projects: [{ key, title, draft, clips }] }
 router.post('/library/usage', (req, res) => {
   try {
@@ -2362,10 +2415,11 @@ router.post('/library/usage', (req, res) => {
       const cat = String(b.cat || '');
       const store = RECORD_STORES[kind];
       const inKind = LC.KINDS.includes(kind) ? _kindRecords(kind).inKind : () => true;
+      const under = cat && cat !== UNCAT && LC.KINDS.includes(kind) ? new Set(_subtree(kind, cat)) : new Set([cat]);
       for (const e of store.read()) {
         if (!e || !inKind(e)) continue;
         const c = String(e.categoryId || '');
-        if (cat === UNCAT ? (c && c !== UPLOADS_CAT) : c !== cat) continue;
+        if (cat === UNCAT ? (c && c !== UPLOADS_CAT) : !under.has(c)) continue;
         for (const p of (store.files ? store.files(e) : [])) if (p) media.push(String(p));
       }
     }

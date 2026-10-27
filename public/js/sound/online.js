@@ -83,7 +83,7 @@ export function openOnline(opts) {
 
   const foot = el('div', 'snd-on-foot');
   const g = el('div', 'snd-on-gal');
-  g.appendChild(el('span', 'snd-muted', 'Or download by hand, then drop the file onto a category in the tree:'));
+  g.appendChild(el('span', 'snd-muted', 'Or download by hand, then drop the file onto a folder in the tree:'));
   for (const s of GALLERIES) {
     const a = el('a', 'snd-on-link', s.name);
     a.href = s.url; a.target = '_blank'; a.rel = 'noopener';

@@ -165,8 +165,8 @@ async function _work(o) {
 // Read whole rather than paged. A project's conversation is bounded by what one person typed
 // into it, and the pictures inside it are thumbnails on demand - so the whole of it costs less
 // than the paging would.
-// (phase V23) An attachment of the video chat that is not in this library - a card brought by Import without its
-// character or place - is marked `gone`: the card says what is missing before anything is pressed.
+// (phase V23) An attachment of the video chat that is not in this library - a card whose character or place was
+// deleted since - is marked `gone`: the card says what is missing before anything is pressed.
 function _markGone(items) {
   const seen = new Map();
   const here = (p) => {

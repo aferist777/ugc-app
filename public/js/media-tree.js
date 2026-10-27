@@ -39,6 +39,18 @@
    page can read before the drop. SEVERAL TILES (phase V54, js/tile-select.js): a picked tile dragged carries the others
    (`many`) and they go in ONE request (POST /api/library/batch/move) - each as one would; what cannot go stays and the
    status says why. Whether the node takes the drop is the dragged tile's question.
+
+   FOLDERS IN FOLDERS (phase V54 block 6, the owner 2026-10-27/28, (зв19)-(зв22), (зв27), (зв33)-(зв46)): every kind with
+   categories and Music hold folders in one another, with no limit of depth - they open ▸ one inside another. The word is
+   "folder" everywhere (зв43). "New folder" - the "+" of a kind's row (at its top), the right button on a kind or a folder
+   (inside it; a required one too, (зв27)), and the right button on the gallery's empty space (inside the open one; the page
+   asks newFolder) - never in highlights, its moods, the sources' folders of REFERENCES (зв42), Built-in or a project of
+   Talking heads (`holds`). A folder is renamed (a double press on its name, or the menu), deleted (✕, or the menu: what
+   is in it goes up a level - its folders stay folders - or it goes with everything in it and under it, the projects using
+   them named) and DRAGGED by its row or its tile onto another folder of its kind, or onto the kind's row (to its top);
+   a branch held over opens as for a tile. The server refuses in words what cannot be (a name the place has, (зв35); a
+   required one; into itself; a path too long, (зв34)) and the status line says so. A folder drag carries
+   `application/x-ugc-folder` and `application/x-ugc-folder-kind-<kind>`.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -49,7 +61,11 @@ export const MEDIA_DRAG = 'application/x-ugc-media';
 const KIND_TYPE = 'application/x-ugc-kind-';
 const UNCAT = '__uncat__';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
-const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references']);
+const CATABLE = new Set(['birols', 'hooks', 'uploads', 'images', 'sounds', 'references', 'music']);
+// (phase V54) A folder being dragged: what it is, and its kind as a type of its own (readable before the drop).
+const FOLDER_DRAG = 'application/x-ugc-folder';
+const FOLDER_KIND = 'application/x-ugc-folder-kind-';
+let _dragging = null;       // { kind, id, key, label } while a folder of this page is dragged
 const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
 // (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
@@ -89,7 +105,7 @@ function _dragKind(dt) {
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
-  if (n.kind === 'music') return { kind: 'music', cat: '', folder: n.folder || '', mood: n.mood || '' };
+  if (n.kind === 'music') return { kind: 'music', cat: n.cat || '', name: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '' };
   // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
   // its source's folder.
   if (n.kind === 'references') { const c = n.cat && n.cat !== UNCAT ? n.cat : ''; return { kind: 'references', cat: c, name: c ? (n.name || n.label) : '' }; }
@@ -173,6 +189,20 @@ export function createTree(host, o) {
   const el = _el('div', 'mt');
   el.setAttribute('role', 'tree');
   host.appendChild(el);
+
+  // (phase V54) Whether folders can be made in a node: a kind's own node, or a folder of one - not the app's (`noAdd`:
+  // highlights, its moods, the sources' folders, Built-in) and not a project of Talking heads.
+  const holds = (n) => !!n && !!n.kind && CATABLE.has(n.kind) && !n.noAdd && !n.project && !n.builtin && !n.ref
+    && (n.cat ? (n.own || n.locked) && !n.orphan : n.key === n.kind);
+  // A folder: a category of a kind (an orphan too); one that is the person's to move.
+  const isFolder = (n) => !!n && !!n.cat && !n.uncat && !n.project && !n.builtin && CATABLE.has(n.kind);
+  const movable = (n) => isFolder(n) && !!n.own && !n.locked;
+  const kidFolders = (n) => (((n && byKey.get(n.key)) || {}).children || []).filter(isFolder);
+  const isUnderKey = (key, anc) => { for (let k = key; k; k = parentOf.get(k)) if (k === anc) return true; return false; };
+  // A dragged folder may go into this node: one of its kind that holds folders, not itself or under it, not where it is.
+  const takesFolder = (n) => !!_dragging && !!n && n.kind === _dragging.kind && holds(n) && !isUnderKey(n.key, _dragging.key)
+    && parentOf.get(_dragging.key) !== n.key;
+  const _hasType = (dt, t) => Array.from((dt && dt.types) || []).some(x => x === t || x.startsWith(t));
 
   function _index(list, parent) {
     for (const n of list) {
@@ -305,23 +335,23 @@ export function createTree(host, o) {
     if (n.locked) {
       const lock = _el('span', 'mt-lock');
       lock.innerHTML = LOCK_SVG;
-      lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed or deleted');
+      lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
       row.appendChild(lock);
     }
-    // A kind that can have categories: "+" makes one.
-    if (n.kind && !n.cat && !n.noAdd && CATABLE.has(n.kind)) {
+    // A kind that can have folders: "+" makes one at its top.
+    if (holds(n) && !n.cat) {
       const add = _el('button', 'mt-act mt-add', '+');
       add.type = 'button';
       add.tabIndex = -1;
-      add.title = 'New ' + (n.label || n.kind) + ' category';
-      add.addEventListener('click', (e) => { e.stopPropagation(); _newCat(n, add); });
+      add.title = 'New folder in ' + (n.label || n.kind);
+      add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
       row.appendChild(add);
     }
     if (isCat && n.own && !n.locked) {
       const x = _el('button', 'mt-act mt-x', '✕');
       x.type = 'button';
       x.tabIndex = -1;
-      x.title = 'Delete this category';
+      x.title = 'Delete this folder';
       x.addEventListener('mousedown', (e) => e.stopPropagation());
       x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(n, row); });
       row.appendChild(x);
@@ -341,6 +371,7 @@ export function createTree(host, o) {
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
     _takesDrops(row, n);
     if (has) row.addEventListener('dragover', (e) => _spring(n, e));
+    if (movable(n)) _draggable(row, n);
     return row;
   }
 
@@ -364,7 +395,7 @@ export function createTree(host, o) {
   function _spring(n, e) {
     if (open.has(n.key) || (spring && spring.key === n.key)) return;
     const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
-    if (!types.includes(MEDIA_DRAG) && !types.includes('Files')) return;
+    if (!types.includes(MEDIA_DRAG) && !types.includes('Files') && !types.includes(FOLDER_DRAG)) return;
     _unspring();
     const watch = (ev) => {
       const r = ev.target && ev.target.closest ? ev.target.closest('.mt-row') : null;
@@ -389,6 +420,15 @@ export function createTree(host, o) {
     const _files = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files')
       && typeof opt.takesFiles === 'function' && opt.takesFiles(n);
     target.addEventListener('dragover', (e) => {
+      // (phase V54) A folder dragged onto a folder of its kind, or the kind's row.
+      if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
+        if (!takesFolder(n)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        target.classList.add('is-drop');
+        return;
+      }
       if (_files(e)) {
         e.preventDefault();
         e.stopPropagation();
@@ -405,6 +445,15 @@ export function createTree(host, o) {
     target.addEventListener('dragleave', () => target.classList.remove('is-drop'));
     target.addEventListener('drop', (e) => {
       target.classList.remove('is-drop');
+      if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
+        if (!takesFolder(n)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const d = _dragging;
+        _dragging = null;
+        _moveFolder(d, n);
+        return;
+      }
       if (_files(e)) {
         e.preventDefault();
         e.stopPropagation();
@@ -432,7 +481,7 @@ export function createTree(host, o) {
 
   // What a node's tooltip says: the server's own word (`tip`), else what it is.
   const _tipOf = (n) => n.tip || (n.builtin ? n.label + ' - built into the app: read only'
-    : n.locked ? n.label + ' - required: it cannot be renamed or deleted'
+    : n.locked ? n.label + ' - required: it cannot be renamed, moved or deleted'
     : n.empty ? n.label + ' - empty' : n.label);
 
   /** The folders of a node, as tiles - first in its gallery. null when it has none. */
@@ -459,6 +508,7 @@ export function createTree(host, o) {
       t.addEventListener('click', () => openNode(c.key));
       t.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(c, t, e.clientX, e.clientY); });
       _takesDrops(t, c);
+      if (movable(c)) _draggable(t, c);
       box.appendChild(t);
     }
     return box;
@@ -542,7 +592,14 @@ export function createTree(host, o) {
       // (phase V35, the owner's (ф3)) A track: into Music, the highlights folder, or the one mood its preset made it for -
       // the rule is the store's (lib/music-store.js place, V34.F); a refusal comes back in words.
       if (act === 'place') {
-        if ((it.folder || '') === t.folder && (it.mood || '') === t.mood) return;
+        // (phase V54) An own folder of Music: the track is filed there (and leaves highlights).
+        if (t.cat) {
+          if ((it.cat || '') === t.cat) return;
+          await A.setCategory(item, t.cat, t.name);
+          await _after('"' + (it.name || 'It') + '" is in ' + n.label, { moved: it });
+          return;
+        }
+        if ((it.folder || '') === t.folder && (it.mood || '') === t.mood && !it.cat) return;
         const r = await fetch('/api/audio/music/' + encodeURIComponent(it.id) + '/place', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: t.folder, mood: t.mood }),
         }).then(x => x.json()).catch(() => null);
@@ -578,7 +635,7 @@ export function createTree(host, o) {
   }
 
   async function _takeMany(n, t, many, where) {
-    const there = t.kind === 'music' ? musicPlace(t.folder, t.mood)
+    const there = t.kind === 'music' ? (t.cat ? n.label : musicPlace(t.folder, t.mood))
       : t.kind === 'references' ? (t.cat ? 'REFERENCES · ' + n.label : 'their sources\' folders in REFERENCES') : where;
     let r = null;
     try {
@@ -594,34 +651,47 @@ export function createTree(host, o) {
     if (sk.length && !r.done) opt.status(msg, true);
   }
 
-  // ── Categories ──
-  function _siblingCats(kind) {
-    const k = byKey.get(kind);
-    return ((k && k.children) || []).filter(c => c.cat && !c.uncat);
+  // ── Folders (phase V54) ──
+  const _lcName = (c) => String(c.name || c.label).toLowerCase();
+
+  // A folder dragged by its row or its tile.
+  function _draggable(target, n) {
+    target.draggable = true;
+    target.addEventListener('dragstart', (e) => {
+      if (!e.dataTransfer) return;
+      _dragging = { kind: n.kind, id: n.cat, key: n.key, label: n.label };
+      e.dataTransfer.setData(FOLDER_DRAG, JSON.stringify(_dragging));
+      e.dataTransfer.setData(FOLDER_KIND + n.kind, '1');
+      e.dataTransfer.effectAllowed = 'move';
+      e.stopPropagation();
+      document.addEventListener('dragend', () => { _dragging = null; }, { once: true });
+    });
   }
 
-  async function _newCat(n, anchor) {
+  async function _newFolder(n, anchor) {
+    if (!holds(n)) return;
     const kind = n.kind;
     const cat = await askName({
-      anchor, title: 'New ' + (n.label || kind) + ' category', okLabel: 'Create', maxLength: 60,
+      anchor, title: 'New folder in ' + (n.label || kind), okLabel: 'Create', maxLength: 60,
       check: (name) => {
-        const taken = _siblingCats(kind).find(c => String(c.name || c.label).toLowerCase() === name.toLowerCase());
-        return taken ? 'There is already a category called ' + taken.label + '.' : '';
+        const taken = kidFolders(n).find(c => _lcName(c) === name.toLowerCase());
+        return taken ? 'There is already a folder called ' + taken.label + ' here.' : '';
       },
-      submit: async (name) => (await A.addCat(kind, name)).cat,
+      submit: async (name) => (await A.addFolder(kind, name, n.cat || '')).cat,
     });
     if (!cat) return;
-    open.add(kind);
+    open.add(n.key);
     _lsSet(K_OPEN, [...open]);
-    await _after('Made the category "' + cat.label + '"', { cats: kind });
+    await _after('Made the folder "' + cat.label + '"', { cats: kind });
   }
 
   async function _rename(n, anchor) {
+    const parent = byKey.get(parentOf.get(n.key));
     const next = await askName({
-      anchor, title: 'Rename category', value: n.name || n.label, okLabel: 'Rename', maxLength: 60,
+      anchor, title: 'Rename folder', value: n.name || n.label, okLabel: 'Rename', maxLength: 60,
       check: (name) => {
-        const taken = _siblingCats(n.kind).find(c => c.key !== n.key && String(c.name || c.label).toLowerCase() === name.toLowerCase());
-        return taken ? 'There is already a category called ' + taken.label + '.' : '';
+        const taken = kidFolders(parent).find(c => c.key !== n.key && _lcName(c) === name.toLowerCase());
+        return taken ? 'There is already a folder called ' + taken.label + ' here.' : '';
       },
       submit: async (name) => {
         if (name === (n.name || n.label)) return null;
@@ -632,8 +702,24 @@ export function createTree(host, o) {
     await _after('Renamed to "' + next.label + '"', { cats: n.kind });
   }
 
-  // Delete: the media out of it into the kind itself (the safe one, chosen), or deleted with it - and then the projects
-  // using them are named (lib/timeline-media.js usage): there they turn red.
+  // Into another folder of its kind, or the kind's top (`t` is the kind's own node). Refused in words by the server.
+  async function _moveFolder(d, t) {
+    if (!d || !t) return;
+    let r = null;
+    try {
+      r = await fetch('/api/library/cats/' + encodeURIComponent(d.id) + '/move', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: d.kind, parent: t.cat || '' }),
+      }).then(x => x.json());
+    } catch (e) { r = { success: false, error: e.message }; }
+    if (!r || !r.success) { opt.status((r && r.error) || 'Could not move the folder', true); return; }
+    open.add(t.key);
+    _lsSet(K_OPEN, [...open]);
+    await _after('"' + d.label + '" is in ' + (t.cat ? t.label : (t.label || kindLabel(d.kind))) + ' now', { cats: d.kind, moved: { folder: d.id } });
+  }
+
+  // Delete (phase V54, (зв46)): what is in it ONE LEVEL UP - its files into the folder it is in (at the top, the kind
+  // itself), its folders that folder's (the safe one, chosen) - or deleted with everything in it and under it, and then the
+  // projects using them are named (lib/timeline-media.js usage): there they turn red.
   let _pop = null;
   function _closePop() {
     if (!_pop) return;
@@ -649,15 +735,23 @@ export function createTree(host, o) {
     const box = _el('div', 'mt-pop');
     const count = n.count || 0;
     const noun = NOUN[n.kind] || 'item';
-    // Where its media go (V35: no Uncategorized) - the kind itself; a post back to its source's folder.
-    const home = n.kind === 'references' ? 'their sources\' folders' : homeName(n.kind);
+    // Its folders, all the way down.
+    let folders = 0;
+    const walk = (x) => { for (const c of kidFolders(x)) { folders++; walk(c); } };
+    walk(n);
+    // Where what is in it goes - the folder it is in; at the top, the kind itself (V35: no Uncategorized), a post back to
+    // its source's folder, a track into Music.
+    const up = byKey.get(parentOf.get(n.key));
+    const home = up && up.cat ? '"' + up.label + '"'
+      : n.kind === 'references' ? 'their sources\' folders' : n.kind === 'music' ? 'Music' : homeName(n.kind);
     box.appendChild(_el('div', 'mt-pop-head', 'Delete "' + n.label + '"?'));
+    if (count || folders) box.appendChild(_el('div', 'mt-pop-note', 'Inside: ' + [count ? _plural(count, noun) : '', folders ? _plural(folders, 'folder') : ''].filter(Boolean).join(' and ') + '.'));
     const lab = _el('label', 'mt-pop-row');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = true;                       // the safe branch is the default
     lab.appendChild(cb);
-    lab.appendChild(_el('span', null, count ? 'Move its ' + _plural(count, noun) + ' into ' + home : 'Nothing in it to move'));
+    lab.appendChild(_el('span', null, (count || folders) ? 'Move what is in it up into ' + home + (folders ? ' - its folders stay folders' : '') : 'Nothing in it to move'));
     box.appendChild(lab);
     const note = _el('div', 'mt-pop-note');
     box.appendChild(note);
@@ -674,9 +768,11 @@ export function createTree(host, o) {
 
     let projects = null;
     const paintPop = () => {
-      const keep = cb.checked || !count;
-      note.textContent = keep ? 'The ' + noun + 's stay on the disk.' : 'Its ' + _plural(count, noun) + ' will be deleted from the disk. This cannot be undone.';
-      go.textContent = keep ? 'Delete category' : 'Delete category and ' + _plural(count, noun);
+      const keep = cb.checked || (!count && !folders);
+      note.textContent = keep ? (count ? 'The ' + noun + 's stay on the disk.' : '')
+        : count ? 'Its ' + _plural(count, noun) + (folders ? ' - in it and in every folder under it -' : '') + ' will be deleted from the disk. This cannot be undone.'
+        : 'Its folders go with it.';
+      go.textContent = keep ? 'Delete folder' : count ? 'Delete folder and ' + _plural(count, noun) : 'Delete folder and its folders';
       go.classList.toggle('is-danger', !keep);
       used.textContent = '';
       used.hidden = keep || !projects || !projects.length;
@@ -700,19 +796,19 @@ export function createTree(host, o) {
     box.style.left = Math.round(Math.max(6, Math.min(r.right - w.width, window.innerWidth - w.width - 6))) + 'px';
     box.style.top = Math.round(Math.min(r.bottom + 4, window.innerHeight - w.height - 6)) + 'px';
     const away = (e) => { if (!box.contains(e.target)) _closePop(); };
-    const layer = Layers.open(box, { modal: false, name: 'delete a category', onEsc: _closePop });
+    const layer = Layers.open(box, { modal: false, name: 'delete a folder', onEsc: _closePop });
     _pop = { el: box, away, layer };
     document.addEventListener('mousedown', away, true);
     cancel.addEventListener('click', _closePop);
     go.addEventListener('click', async () => {
-      const mode = (cb.checked || !count) ? 'move' : 'delete';
+      const mode = (cb.checked || (!count && !folders)) ? 'move' : 'delete';
       go.disabled = true; cancel.disabled = true;
       try {
         const d = await A.deleteCat(n.kind, n.cat, mode);
         _closePop();
         const msg = d.mode === 'delete'
-          ? 'Deleted the category and ' + _plural(d.affected || 0, noun)
-          : 'Deleted the category' + (d.affected ? '; ' + _plural(d.affected, noun) + ' moved into ' + home : '');
+          ? 'Deleted the folder and ' + _plural(d.affected || 0, noun)
+          : 'Deleted the folder' + (d.affected || d.folders ? '; what was in it is in ' + home : '');
         await _after(msg, { cats: n.kind, deleted: d.mode === 'delete' });
       } catch (e) {
         _closePop();
@@ -735,14 +831,14 @@ export function createTree(host, o) {
   function _menu(n, row, x, y) {
     _closeMenu();
     const items = [];
-    const kindNode = n.kind && !n.cat && CATABLE.has(n.kind) ? n : (n.cat ? byKey.get(n.kind) : null);
-    if (kindNode && CATABLE.has(kindNode.kind)) items.push(['New category', 'in ' + kindNode.label, () => _newCat(kindNode, row)]);
+    // (phase V54) A new folder INSIDE the one pressed (зв19).
+    if (holds(n)) items.push(['New folder', 'in ' + n.label, () => _newFolder(n, row)]);
     if (n.cat && !n.uncat && !n.project) {
       if (n.builtin) items.push(['Built-in', 'part of the app - read only', null]);
-      else if (n.locked) items.push(['Required', 'it cannot be renamed or deleted', null]);
+      else if (n.locked) items.push(['Required', 'it cannot be renamed, moved or deleted', null]);
       else if (n.own) {
         items.push(['Rename', n.label, () => _rename(n, row)]);
-        items.push(['Delete', 'the category - its media stay, or go with it', () => _askDelete(n, row)]);
+        items.push(['Delete', 'the folder - what is in it goes up a level, or with it', () => _askDelete(n, row)]);
       }
     }
     if (!items.length) return;
@@ -761,7 +857,7 @@ export function createTree(host, o) {
     m.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - w - 6, x))) + 'px';
     m.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, y))) + 'px';
     const away = (e) => { if (!m.contains(e.target)) _closeMenu(); };
-    const layer = Layers.open(m, { modal: false, name: 'category menu', onEsc: _closeMenu });
+    const layer = Layers.open(m, { modal: false, name: 'folder menu', onEsc: _closeMenu });
     _m = { el: m, away, layer };
     document.addEventListener('mousedown', away, true);
     window.addEventListener('scroll', _closeMenu, true);
@@ -769,6 +865,9 @@ export function createTree(host, o) {
 
   return {
     el, load, select, selectFor, kindLabel, openNode, foldersEl, crumbsEl, homeName,
+    // (phase V54) the gallery's empty space: "New folder" inside the open node, when it holds folders
+    holds: (node) => holds(node && byKey.get(node.key)),
+    newFolder: (node, anchor) => _newFolder(node && byKey.get(node.key), anchor),
     selected: () => byKey.get(sel) || null,
     node: (key) => byKey.get(key) || null,
   };

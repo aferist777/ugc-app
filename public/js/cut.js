@@ -145,7 +145,7 @@ async function _menu(anchor, piece, g, go) {
   openPlaces(anchor, {
     title: 'Save the piece ' + mmss(g.in) + '–' + mmss(g.out) + ' (' + (g.out - g.in).toFixed(1) + ' s) as a new clip in',
     tree, here: piece.here || null, above: true, alignRight: true, cls: 'cut-menu', name: 'cut-menu',
-    places: { images: false, refHome: 'its site\'s folder (no category)', newCats: ['references', 'uploads', 'birols'] },
+    places: { images: false, refHome: 'its site\'s folder (no folder of yours)', newCats: ['references', 'uploads', 'birols'] },
     onPick: go,
   });
 }

@@ -22,11 +22,11 @@
 </nav>
 
 <div class="adm-body">
-  <!-- Five panes, one strip. The address carries the pane (#keys, #ai, #data, #local, #thanks), so a reload stays put. -->
+  <!-- Four panes, one strip. The address carries the pane (#keys, #ai, #local, #thanks), so a reload stays put. (Import /
+       Export went in phase V54, the owner 2026-10-28.) -->
   <div class="adm-tabs" role="tablist">
     <button class="adm-tab cur" type="button" role="tab" data-pane="keys">API keys</button>
     <button class="adm-tab" type="button" role="tab" data-pane="ai">AI settings</button>
-    <button class="adm-tab" type="button" role="tab" data-pane="data">Import / Export</button>
     <button class="adm-tab" type="button" role="tab" data-pane="local">This computer</button>
     <button class="adm-tab" type="button" role="tab" data-pane="thanks">Thanks</button>
   </div>
@@ -56,45 +56,6 @@
     <div class="dio-body" id="ai-body"></div>
   </section>
 
-  <!-- Taking the library out as .zip volumes, and bringing volumes in (js/data-io.js). -->
-  <section class="adm-panel" data-pane="data" hidden>
-    <div class="adm-head">
-      <span class="adm-title">Import / Export</span>
-      <span class="adm-count">everything in this library, as .zip volumes - out, or back in</span>
-    </div>
-    <div class="dio-body">
-      <div class="dio-sec">Take out</div>
-      <div id="dio-groups"></div>
-      <div class="dio-warn" id="dio-warn" hidden></div>
-      <div class="dio-total" id="dio-total">measuring…</div>
-      <div class="dio-actions">
-        <button class="lib-btn dio-go" type="button" id="dio-export">Build the archive</button>
-      </div>
-      <div class="dio-status" id="dio-status"></div>
-      <div class="dio-parts" id="dio-parts"></div>
-
-      <div class="dio-sec">Bring in</div>
-      <label class="dio-row">
-        <input type="checkbox" id="dio-overwrite">
-        <span class="dio-lbl"><b>Overwrite what is already here</b>
-          <i>Off, an import only ADDS: nothing already in this library is touched, and a
-             record that exists keeps its local version. On, an archive taken later
-             replaces what it collides with.</i></span>
-      </label>
-      <div class="dio-actions">
-        <button class="lib-btn" type="button" id="dio-import">Choose .zip volumes…</button>
-        <input type="file" id="dio-file" accept=".zip" multiple hidden>
-      </div>
-      <div class="dio-status" id="dio-imp-status"></div>
-      <div class="dio-prog" id="dio-imp-prog" hidden>
-        <div class="dio-bar"><i id="dio-bar-all"></i></div>
-        <div class="dio-now" id="dio-now"></div>
-        <div class="dio-bar dio-bar-sm"><i id="dio-bar-one"></i></div>
-      </div>
-      <div class="dio-parts" id="dio-imp-log"></div>
-    </div>
-  </section>
-
   <!-- Speech recognition on this computer: the program, the model, the NVIDIA build (js/admin-local.js, K1b). -->
   <section class="adm-panel" data-pane="local" hidden>
     <div class="adm-head">
@@ -118,12 +79,11 @@
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
 <script src="js/admin-keys.js"></script>
 <script src="js/admin-ai.js"></script>
-<script src="js/data-io.js"></script>
 <script src="js/admin-local.js"></script>
 <script src="js/admin-thanks.js"></script>
 <script>
   // The tab strip, after the panes' own scripts so they hear the first `adm-pane`. Panes are
-  // hidden rather than rebuilt, so a half-typed key or an export being built survives a switch.
+  // hidden rather than rebuilt, so a half-typed key survives a switch.
   (function () {
     var tabs = document.querySelectorAll('.adm-tab');
     function show(name, fromClick) {

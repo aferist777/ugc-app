@@ -28,7 +28,7 @@ function _lightCurrent(nav) {
   if (best) best.classList.add('cur');
 }
 
-// The Admin entry - API keys, Import / Export - on a page whose strip does not carry one already.
+// The Admin entry - API keys, AI settings - on a page whose strip does not carry one already.
 // There is one person and no sign-in, so there is nobody to hide it from.
 // (the owner 2026-10-22) HOME first in every strip, left of Merge - put in here, so no page's markup has to carry it.
 function _homeLink(nav) {

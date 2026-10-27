@@ -34,8 +34,7 @@ const CHAR_DRAFTS = require('../lib/char-drafts');
 // WHAT THE CHARACTER PAGE LEFT BEHIND (phase H8, the owner 2026-10-01). Its own logs - the attempt log
 // (cv2-trace.jsonl and its rotations), the rescued list (cv2-recovered.json), the prompt edits
 // (prompts.json) - which nothing reads any more, set aside ONCE per library (marked in cache/). And
-// drafts, on EVERY start: one can come back with an archive made before H8 (lib/char-drafts.js - Import
-// takes them out of the staged set too). Both into backups/<date> character page/.
+// drafts, on EVERY start (lib/char-drafts.js). Both into backups/<date> character page/.
 function _tidyAfterTheCharacterPage() {
   try {
     const drafts = CHAR_DRAFTS.setAside(ROOT_DIR, BACKUPS_DIR);

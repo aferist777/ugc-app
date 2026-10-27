@@ -170,7 +170,7 @@ export function openPost(list, at, o) {
             <span class="ref-strip-n"></span>
             <button class="lib-btn" data-x="all" type="button"></button>
             <span class="sp"></span>
-            <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a category of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
+            <button class="lib-btn" data-x="move" type="button" title="Move the selected files - into a folder of REFERENCES (as a post of their own), into VIDEO or into IMAGES"></button>
           </div>
           <div class="ref-strip"></div>
         </div>

@@ -818,7 +818,7 @@ function createMaker(kind) {
     else if (!_masonryCols) _masonryCols = 2;
     if (_images === null) { host.appendChild(el('div', 'mkc-none', 'reading the Library…')); return; }
     if (_imagesErr && !_images.length) { host.appendChild(el('div', 'mkc-none', _imagesErr)); return; }
-    if (!_images.length) { host.appendChild(el('div', 'mkc-none', _cat ? 'Nothing in this category.' : 'No pictures in the Library\'s Images yet.')); return; }
+    if (!_images.length) { host.appendChild(el('div', 'mkc-none', _cat ? 'Nothing in this folder.' : 'No pictures in the Library\'s Images yet.')); return; }
     // A kladka: each tile its own shape, the next into the shortest column.
     const cols = [];
     const h = [];

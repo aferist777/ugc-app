@@ -27,7 +27,8 @@ export const isBuiltin = (n) => !!n && (n.key === 'sfx' || String(n.key || '').s
 
 export function filesTo(n) {
   if (!n) return null;
-  if (n.kind === 'music') return { kind: 'music', cat: '' };
+  // (phase V54) An own folder of Music takes them into itself; highlights and its moods - into Music.
+  if (n.kind === 'music') return { kind: 'music', cat: n.cat && !n.noAdd ? n.cat : '' };
   if (n.key === 'sfx-all' || n.kind === 'sounds') return { kind: 'sounds', cat: n.cat && n.cat !== UNCAT ? n.cat : '' };
   return null;
 }

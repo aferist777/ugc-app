@@ -47,7 +47,9 @@ const _patch = (it, body) => _api('/api/library/item/' + encodeURIComponent(it.k
 export async function myCats() {
   try {
     const d = await _api('/api/library/cats');
-    return ((d.byKind && d.byKind.sounds) || []).filter(c => !c.locked).map(c => ({ id: c.id, label: c.title || c.label }));
+    // (phase V54) A folder in a folder reads as its path.
+    return ((d.byKind && d.byKind.sounds) || []).filter(c => !c.locked)
+      .map(c => ({ id: c.id, label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }));
   } catch (e) { return []; }
 }
 
@@ -129,7 +131,7 @@ export async function soundMenu(it, ev, opts) {
     const here = (it.meta || {}).categoryId || '';
     for (const c of [{ id: '', label: 'My sounds' }].concat(cats)) {
       if (c.id === here) continue;
-      item('Move to ' + c.label, c.id ? '' : 'out of its category', async () => {
+      item('Move to ' + c.label, c.id ? '' : 'out of its folder', async () => {
         try { await _patch(it, { categoryId: c.id, categoryLabel: c.id ? c.label : '' }); await o.changed(); o.status('"' + it.name + '" is in ' + c.label + '.'); }
         catch (e) { o.status(e.message, true); }
       });

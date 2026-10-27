@@ -976,7 +976,7 @@ export function createChat(make) {
       },
       // (phase V27) A clip by a link, where the description takes them (`S.links`: { video: true }).
       link: (S.links && S.links[kind]) ? {
-        hint: 'At the best quality there is, without a login - into Uploads, in this project\'s category, and into this place.',
+        hint: 'At the best quality there is, without a login - into Uploads, in this project\'s folder, and into this place.',
         add: (url) => _linkIn(url, kind),
       } : null,
       onClose: () => {
@@ -1664,7 +1664,7 @@ export function createChat(make) {
     host.replaceChildren(...boxes);
     _ui.count.textContent = String(_feed.length);
     if (!_feed.length) {
-      const none = el('div', 'mv3-ig-none', _cat ? 'Nothing in this category.' : 'Nothing made in this project yet.');
+      const none = el('div', 'mv3-ig-none', _cat ? 'Nothing in this folder.' : 'Nothing made in this project yet.');
       host.replaceChildren(none, _plusTile());
     }
   }

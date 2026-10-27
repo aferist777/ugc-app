@@ -565,7 +565,7 @@ function FRAMES(ctx) {
       why: () => '',
       sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into Images, in this project\'s category.' },
+      upWords: { image: 'A picture goes into Images, in this project\'s folder.' },
     },
     penInBar: false,
     columnFoot: () => [almanacSoon()],

@@ -14,7 +14,7 @@ person, in a window of its own, and keeps everything it makes in one folder - th
 |---|---|
 | **Merge** | Where the app opens. The talking head built line by line - cast, wardrobe, location, a frame per line, the voice, lipsync - and the timeline: clips, overlays, halfers, music, word-timed captions, and the render to mp4 |
 | **Library** | The shelves: characters, lookbooks, environments, media, voices, music, scenarios, renders. On Characters, **New Character** builds a person once, as a 4K reference sheet (face and three full-body views) that every later picture of them is conditioned on, and a character's voices are chosen in its column; on Scenarios, the generator: sources and their transcripts, topics, scripts, narrators |
-| **Admin** | API keys, and Import / Export of the whole library |
+| **Admin** | API keys, AI settings, this computer, thanks |
 
 Generation goes out to paid services: images and video through kie.ai or Replicate (the same
 models through two aggregators, because they fail separately), scripts through kie.ai or
@@ -74,7 +74,7 @@ or a category renames its folder, and every stored path follows. An update repla
 and leaves the library alone; a library from an older version is sorted into these folders the
 first time the app starts (the old stores and the files nothing used go to `backups\`).
 
-**Import / Export** (Admin) carries a whole library, or chosen groups of it, to another machine.
+A library moves to another computer as its folder - copied whole while the app is closed.
 The archive is built to a file first, so a dropped download resumes; an import adds what is
 missing and touches nothing that is already there - a project or category of the same name but
 another origin gets a folder of its own. Archives from older versions and from the server version

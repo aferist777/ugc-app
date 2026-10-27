@@ -584,8 +584,8 @@ function _open(it, list, follow) {
       }
       if (_CATABLE.has(item.kind)) {
         rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: '— no category —' }].concat(_catsFor(item.kind)),
-          (id) => _setCat(item, id), 'Category')]);
+          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind)),
+          (id) => _setCat(item, id), 'Folder')]);
       }
       const orig = Cut.originalRow(item, repaintViewer);
       if (orig) rows.push(orig);
@@ -604,7 +604,9 @@ function _open(it, list, follow) {
 // the grid holds all three kinds at once, so one list would be the wrong one two thirds of
 // the time.
 let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
-const _catsFor = (kind) => _catsByKind[kind] || [];
+// (phase V54 block 6, (зв45)) A folder in a folder reads as its path - "Товары / Обувь / Лето" - in the tree's order.
+const _catsFor = (kind) => (_catsByKind[kind] || []).map(c => Object.assign({}, c,
+  { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }));
 async function _loadCats() {
   try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] }; }
 }
@@ -689,9 +691,6 @@ function _card(it, extra) {
   card.dataset.id = String(it.id);
   // (phase V54) What js/tile-select.js picks it by - on Media.
   if (_shelf === 'media') card.dataset.key = it.kind + ':' + it.id;
-  // A hook's permanent number (lib/hook-ids.js): what the render window puts into the name
-  // of every creative that opens with this hook, so it belongs where the hook is chosen.
-  const hookId = (it.meta && it.meta.hookId) || null;
   card.title = it.name + (it.meta && it.meta.character ? '\n' + it.meta.character : '');
 
   // The ratio lives on the box: an <img> with no loaded source contributes no height,
@@ -773,12 +772,6 @@ function _card(it, extra) {
 
   const name = document.createElement('div');
   name.className = 'lib-name';
-  if (hookId) {
-    const tag = document.createElement('b');
-    tag.className = 'lib-hid';
-    tag.textContent = hookId;
-    name.appendChild(tag);
-  }
   // (second round) A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
   if (it.kind === 'heads') {
     const m = it.meta || {};
@@ -813,8 +806,8 @@ function _card(it, extra) {
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
     card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: '— no category —' }].concat(_catsFor(it.kind)),
-      (id) => _setCat(it, id), 'Category'));
+      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind)),
+      (id) => _setCat(it, id), 'Folder'));
   }
 
   if (extra) card.appendChild(extra);
@@ -947,7 +940,7 @@ async function _setCat(it, id) {
   try {
     await A.setCategory(it, c.id, c.label);
     it.meta = it.meta || {}; it.meta.categoryId = c.id;
-    await _apply({ changed: true, reload: true, msg: c.id ? ('Filed under ' + c.label) : 'Category cleared' });
+    await _apply({ changed: true, reload: true, msg: c.id ? ('In ' + c.label) : 'Out of its folder' });
   } catch (e) { _status(e.message, 'err'); }
 }
 
@@ -1009,7 +1002,7 @@ function _renderGrid() {
     const e = document.createElement('div');
     e.className = 'lib-empty';
     e.textContent = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
-      : 'Nothing here' + (_node && _node.cat ? ' in this category.' : ' yet.')) : 'Nothing on this shelf yet.';
+      : 'Nothing here' + (_node && _node.cat ? ' in this folder.' : ' yet.')) : 'Nothing on this shelf yet.';
     grid.appendChild(e);
     return;
   }
@@ -1342,7 +1335,7 @@ async function _cleanDupes() {
   if (g.length > 6) lines.push('  … and ' + (g.length - 6) + ' more');
   if (moves) {
     lines.push('');
-    lines.push(moves + ' clip' + (moves === 1 ? '' : 's') + ' will show under a different category,');
+    lines.push(moves + ' clip' + (moves === 1 ? '' : 's') + ' will show in a different folder,');
     lines.push('because the copies disagreed and the kept one wins.');
   }
   lines.push('', 'Go ahead?');
@@ -1478,7 +1471,7 @@ function _paintUpload() {
   }
   if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
     btn.textContent = 'Upload sounds';
-    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into SFX' + (_mcat() ? ', the category selected' : '') + '.';
+    btn.title = 'Add sounds - mp3, wav, m4a, ogg, flac - into SFX' + (_mcat() ? ', the folder selected' : '') + '.';
     if (inp) inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus';
     return;
   }
@@ -1588,7 +1581,8 @@ async function _upload(files) {
     return;
   }
   if (kind === 'music') {
-    const rm = await A.uploadMusic(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
+    // (phase V54) Into the own folder of Music selected, if one is.
+    const rm = await A.uploadMusic(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name), _mcat());
     if (btn) btn.disabled = false;
     if (rm.ok) await landed('music');
     _status(rm.ok === rm.total
@@ -1598,7 +1592,7 @@ async function _upload(files) {
   }
   if (_node && (SS.isBuiltin(_node) || _node.key === 'sfx-fav')) {
     if (btn) btn.disabled = false;
-    _status('Built-in and Favorites take no files - pick My sounds or a category of it', 'err');
+    _status('Built-in and Favorites take no files - pick My sounds or a folder of it', 'err');
     return;
   }
   if (kind === 'sounds' || (_node && _node.key === 'sfx-all')) {
@@ -1811,6 +1805,20 @@ function boot() {
       host: grid, tile: '.lib-card[data-key]',
       active: () => _shelf === 'media' && !_makingOn,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
+    });
+    // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
+    // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
+    grid.addEventListener('contextmenu', (e) => {
+      if (!(_shelf === 'media' && !_makingOn) || !_tree || !_node || !_tree.holds(_node)) return;
+      if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
+      e.preventDefault();
+      const here = _node;
+      TS.menuAt(e.clientX, e.clientY, [['New folder', 'in ' + here.label, async () => {
+        const mark = document.createElement('div');
+        mark.style.cssText = 'position:fixed;left:' + e.clientX + 'px;top:' + e.clientY + 'px;width:1px;height:1px;pointer-events:none';
+        document.body.appendChild(mark);
+        try { await _tree.newFolder(here, mark); } finally { mark.remove(); }
+      }]]);
     });
   }
   // (phase V54) The music player, and Space for it - not in a field, not under a window (js/layers.js).

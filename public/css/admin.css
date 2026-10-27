@@ -1,4 +1,4 @@
-/* admin.css — the admin page: the API keys, and Import / Export. Built on the shell's tokens so it
+/* admin.css — the admin page: the API keys, the AI settings, this computer and Thanks. Built on the shell's tokens so it
    reads as one more page of the app rather than a control panel bolted on. Compact by intent:
    every key should fit on one line. */
 
@@ -114,7 +114,8 @@
 .bk-tg .bk-step a{ color:var(--primary); }
 .bk-tg .bk-mini{ margin-left:4px; padding:1px 6px; }
 
-/* ── Import / Export ─────────────────────────────────────────────────────── */
+/* ── What the panes share (AI settings, This computer, Thanks) ─────────────────
+   The dio- names are from the Import / Export pane they were made for, gone in phase V54 (the owner 2026-10-28). */
 .dio-body{ padding:12px 14px; max-width:760px; }
 
 /* Admin -> This computer (js/admin-local.js): one row per thing, what it is on the left, its state or its
@@ -134,63 +135,17 @@
   color:var(--muted); margin:14px 0 6px;
 }
 .dio-sec:first-child{ margin-top:0; }
-/* A whole row is the target, not the twelve pixels of the box itself. */
-.dio-row{
-  display:flex; align-items:flex-start; gap:9px; padding:6px 7px; border-radius:var(--r-sm);
-  cursor:pointer;
-}
-.dio-row:hover{ background:var(--surface-2); }
-.dio-row input{ margin-top:2px; flex:0 0 auto; }
 .dio-lbl{ flex:1; min-width:0; }
 .dio-lbl b{ display:block; font:600 11.5px var(--font); color:var(--ink); }
 .dio-lbl i{ display:block; margin-top:1px; font-style:normal; font:10px/1.4 var(--font); color:var(--muted); }
-.dio-tag{
-  flex:0 0 auto; align-self:center; font:600 9px var(--font); letter-spacing:.04em;
-  text-transform:uppercase; color:var(--muted);
-  border:1px solid var(--border); border-radius:var(--pill); padding:2px 7px;
-}
-.dio-warn{
-  margin:8px 0 0; padding:8px 10px; border-radius:var(--r-sm);
-  background:var(--surface-2); border:1px solid var(--border);
-  font:10.5px/1.45 var(--font); color:var(--muted);
-}
-.dio-warn[hidden]{ display:none; }
-.dio-total{ margin:10px 0 0; font:600 11px var(--font); color:var(--ink); }
 .dio-actions{ display:flex; align-items:center; gap:8px; margin:10px 0 0; }
-.dio-go{ font-weight:600; }
-.dio-dl{ text-decoration:none; font-weight:600; }
 .dio-status{ margin:7px 0 0; font:10.5px/1.45 var(--font); color:var(--muted); min-height:14px; }
 
-/* Volumes: one line per archive, on the way out and on the way back in. The two lists share a
-   look deliberately - it is the same set of files, once as links and once as receipts. */
-.dio-parts{ display:flex; flex-direction:column; gap:3px; margin-top:8px; }
-.dio-part{
-  display:flex; align-items:center; gap:8px; min-width:0;
-  padding:4px 7px; border-radius:var(--r-xs);
-  background:var(--surface-2); border:1px solid var(--border-soft);
-  font:10.5px/1.4 var(--font); color:var(--muted);
-}
-.dio-part-n{
-  flex:0 0 auto; font:10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color:var(--muted); min-width:26px;
-}
-.dio-part-w{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dio-part-sz{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
-.dio-part .dio-dl{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dio-part.ok{ border-color:oklch(from var(--ok, #3fd39b) l c h / .45); }
-.dio-part.ok .dio-part-n{ color:var(--ok, #3fd39b); }
-.dio-part.bad{ border-color:oklch(from var(--danger, #ff6b6b) l c h / .45); }
-.dio-part.bad .dio-part-n, .dio-part.bad .dio-part-sz{ color:var(--danger, #ff6b6b); }
-
-/* Two bars, because there are two questions: how far through the whole set, and how far
-   through the file moving right now. */
-.dio-prog{ margin-top:8px; }
-.dio-prog[hidden]{ display:none; }
+/* A bar of how far a download has come (This computer). */
 .dio-bar{
   height:6px; border-radius:99px; overflow:hidden;
   background:var(--surface-2); border:1px solid var(--border-soft);
 }
-.dio-bar-sm{ height:4px; }
 .dio-bar i{
   display:block; height:100%; width:0; background:var(--primary);
   transition:width .15s linear;

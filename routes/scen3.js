@@ -3531,7 +3531,7 @@ router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
     // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
-    // came in, or brought by an Import - gets them in English, and so does the scenario: what is spoken is English.
+    // came in - gets them in English, and so does the scenario: what is spoken is English.
     if (b.id == null && b.scenarioId != null) {
       const s0 = _load().find(x => String(x.id) === String(b.scenarioId));
       const texts = s0 ? (s0.lines || []).map(l => String((l && l.text) || '')) : [];
