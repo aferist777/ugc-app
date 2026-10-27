@@ -141,8 +141,10 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
 
 /**
  * Build a tree in `host`.
- *   o.page        'mv3' | 'lib' - what it remembers is kept under this
- *   o.fallback    the node selected when none is remembered
+ *   o.page        'mv3' | 'lib' | ... - what it remembers (open branches, the node selected) is kept under this, so two
+ *                 trees of different pages never share it (what is NEW stays shared - seen in one, seen in all)
+ *   o.roots       (phase V54) only these top nodes, by key - ['video'] shows VIDEO alone; omitted - all of them
+ *   o.fallback    the node selected when none is remembered (one of `roots` when they are given)
  *   o.status(text, bad)   say something
  *   o.onSelect(node)      a node was chosen (also once the first read lands)
  *   o.onChanged(what)     the library changed from here (a category made, renamed, deleted; a tile moved) - read the
@@ -215,6 +217,8 @@ export function createTree(host, o) {
     catch (e) { opt.status('Could not read the media tree: ' + e.message, true); return nodes; }
     if (!d || !d.success) { opt.status((d && d.error) || 'Could not read the media tree', true); return nodes; }
     nodes = d.nodes || [];
+    // (phase V54) A tree of some roots only - Merge's Video to Music shows VIDEO alone.
+    if (Array.isArray(opt.roots) && opt.roots.length) nodes = nodes.filter(n => opt.roots.includes(n.key));
     byKey.clear(); parentOf.clear();
     _index(nodes, null);
     // A remembered node that is not there any more (a category deleted, renamed elsewhere): its kind, else the fallback -
