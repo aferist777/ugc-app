@@ -81,7 +81,8 @@ router.post('/audio/music/upload', _uploadMusic.single('music'), async (req, res
   if (!req.file) return res.status(400).json({ success: false, error: 'no music - mp3, wav, m4a, aac, ogg, flac or opus' });
   try {
     const name = String((req.body || {}).name || '').trim() || path.basename(req.file.originalname).replace(/\.[^.]+$/, '');
-    const item = await MUSIC.add('/media/work/' + req.file.filename, { name });
+    // (phase V54) Let go on an own folder of Music: into it.
+    const item = await MUSIC.add('/media/work/' + req.file.filename, { name, categoryId: String((req.body || {}).cat || '') });
     res.json({ success: true, item });
   } catch (e) {
     try { fs.unlinkSync(req.file.path); } catch (er) { /* gone or moved */ }
