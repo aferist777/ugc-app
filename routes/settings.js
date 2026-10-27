@@ -27,6 +27,8 @@ const SECRET_KEYS = [
   // (phase TG, block 2) the owner's own bot, made at @BotFather (lib/telegram.js) - back from RETIRED_KEYS, where the
   // server version's reporting bot had left it
   'telegramBotToken',
+  // (phase V54) the owner's Freesound account - finding CC0 sound effects online (lib/freesound.js)
+  'freesoundApiKey',
 ];
 // Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
 // its pair from. A page cannot set it, and a key replaced or removed drops it: a new key is R2's only once IT passed.

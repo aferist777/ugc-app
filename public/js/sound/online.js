@@ -5,10 +5,11 @@
    подставлять написаное в поиск в попап поиска онлайн") - one window for Merge's Library panel, the Library's Media shelf
    and the lab.
 
-   The search (Openverse - Freesound and Wikimedia Commons, CC0 only, no key; GET /api/audio/online), a result played by
+   The search (CC0 only; GET /api/audio/online - since phase V54 Freesound directly with the owner's key, else Openverse,
+   which searches Freesound and Wikimedia Commons with no key; the answer says which, `via`), a result played by
    a press of ▶, "add" files it into the category chosen at the top - "Downloaded" by default, made when it is first used
    (POST /api/audio/online/add). Below: the galleries a person opens and downloads from by hand - the file is then let go
-   on a category of the tree. And, as Openverse's terms ask, "made using Openverse".
+   on a category of the tree. And, as their terms ask, "made using Openverse" or "the Freesound API" - whichever answered.
 
      openOnline({ cats: [{ id, label }], cat, q, stop(), added(item) })   `q` - words to search at once (the shelf's own
                                                                           search that found nothing)
@@ -44,7 +45,8 @@ export function openOnline(opts) {
   const win = el('div', 'snd-win snd-online');
   const head = el('div', 'snd-win-head');
   head.appendChild(el('b', null, 'Find sounds online'));
-  head.appendChild(el('span', 'snd-muted', 'free to use in any video, sold or not (CC0) - Freesound and Wikimedia Commons'));
+  const sub = el('span', 'snd-muted', 'free to use in any video, sold or not (CC0)');
+  head.appendChild(sub);
   const x = el('button', 'hp-x', '✕');
   x.type = 'button';
   head.appendChild(x);
@@ -89,7 +91,19 @@ export function openOnline(opts) {
     g.appendChild(a);
   }
   foot.appendChild(g);
-  foot.appendChild(el('div', 'snd-on-credit', 'Search made using Openverse (openverse.org) - not endorsed or certified by Openverse. Each sound keeps its author, licence and page.'));
+  const credit = el('div', 'snd-on-credit', '');
+  foot.appendChild(credit);
+  // Whoever answered is credited, as its terms ask (phase V54: Freesound first, Openverse the second way).
+  const credited = (via, note) => {
+    credit.textContent = (via === 'freesound'
+      ? 'Search made using the Freesound API (freesound.org).'
+      : 'Search made using Openverse (openverse.org) - not endorsed or certified by Openverse.')
+      + ' Each sound keeps its author, licence and page.';
+    sub.textContent = 'free to use in any video, sold or not (CC0) - ' + (via === 'freesound' ? 'Freesound' : 'Freesound and Wikimedia Commons through Openverse')
+      + (note ? ' · ' + note : '');
+    sub.title = sub.textContent;
+  };
+  credited('', '');
   win.appendChild(foot);
 
   document.body.append(back, win);
@@ -124,7 +138,7 @@ export function openOnline(opts) {
       row.appendChild(pb);
       const tx = el('div', 'snd-on-tx');
       tx.appendChild(el('b', null, r.title));
-      const who = (r.source === 'freesound' ? 'Freesound' : r.source === 'wikimedia' ? 'Wikimedia Commons' : r.source)
+      const who = (r.source === 'freesound' ? 'Freesound' : /^wikimedia/.test(r.source) ? 'Wikimedia Commons' : r.source)
         + (r.creator ? ' · ' + r.creator : '') + (r.dur ? ' · ' + secs(r.dur) : '') + (r.filetype ? ' · ' + r.filetype : '');
       tx.appendChild(el('span', 'snd-muted', who));
       if (r.tags.length) tx.appendChild(el('span', 'snd-on-tags', r.tags.slice(0, 8).join(', ')));
@@ -176,12 +190,13 @@ export function openOnline(opts) {
     _last = { q: words, page };
     stopPreview();
     list.textContent = '';
-    list.appendChild(el('div', 'snd-empty', 'searching… (Openverse can take a while)'));
+    list.appendChild(el('div', 'snd-empty', 'searching…'));
     go.disabled = true;
     try {
       const r = await fetch('/api/audio/online?q=' + encodeURIComponent(words) + '&page=' + page);
       const d = await r.json();
       if (!d.success) throw new Error(d.error || 'no answer');
+      credited(d.via, d.note ? d.note + ' - searched Openverse' : '');
       paint(d);
     } catch (e) {
       list.textContent = '';

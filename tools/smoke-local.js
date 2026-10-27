@@ -78,7 +78,7 @@ const REDIRECTS = [['/', '/home'], ['/character', '/library?shelf=characters']];
 // Every key routes/settings.js keeps out of the page, secret or retired.
 const HIDDEN_KEYS = ['kieApiKey', 'replicateApiKey', 'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
                      'r2SecretAccessKey', 'imgbbApiKey', 'partnerApiKey', 'partnerUrl',
-                     'telegramBotToken', 'telegramChatId', 'cloudflareApiToken'];
+                     'telegramBotToken', 'telegramChatId', 'cloudflareApiToken', 'freesoundApiKey'];
 const REMOVED = [['GET', '/api/me'], ['GET', '/login'], ['GET', '/api/admin/users'], ['GET', '/api/audit/meta'],
                  ['POST', '/api/mv3/render/send'], ['GET', '/api/biroly/hands-status'],
                  ['POST', '/api/biroly/hands-generate'], ['POST', '/api/upload-public-base64'],

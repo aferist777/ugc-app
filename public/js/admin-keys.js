@@ -7,7 +7,7 @@
    EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
    provider accepted it, amber when it is there but the provider refused it (the reason sits
    under the field), red when it is missing. The check is the same one the Character page
-   runs (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Cloudflare); the keys it
+   runs (GET /api/keys/health: Claude, kie.ai, OpenRouter, Replicate, ElevenLabs, Groq, Freesound, Cloudflare); the keys it
    does not probe - the separate R2 fields - are green when present, with "not probed" said.
 
    THE ONE CLOUDFLARE KEY (phase TG): saved, it is checked step by step at once (POST /api/cloudflare/check - the key,
@@ -57,6 +57,13 @@ const ROWS = [
     placeholder: 'gsk_••• (console.groq.com)',
     link: 'https://console.groq.com/keys', linkText: 'console.groq.com → API keys',
     desc: 'Hearing the words for captions (whisper-large-v3-turbo); without it, or when Groq cannot be asked, this computer hears them.',
+  },
+  {
+    // (phase V54, the owner 2026-10-27, (зв1)) Finding sound effects online - Freesound directly; Openverse without it.
+    label: 'Freesound API:', settingsKey: 'freesoundApiKey', probe: 'freesound',
+    placeholder: '••• (freesound.org → API credentials)',
+    link: 'https://freesound.org/apiv2/apply', linkText: 'freesound.org/apiv2/apply (a free account)',
+    desc: 'SFX → "find online…": free sound effects (CC0 only) straight from Freesound. Without it the search goes through Openverse, which is often down.',
   },
   {
     // (phase TG, block 2; the owner: the bot's key "в админке над r2") The owner's own bot: what it is sent goes into

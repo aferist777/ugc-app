@@ -9,8 +9,12 @@
                           the search over the grid - every word in a name, a tag or the category, as typed (Escape
                           clears) - and ONE button "find online…"; when the words found nothing here it turns gold itself
                           and reads "find «words» online", opening the online search with them already in it (the owner
-                          2026-10-23, (р3); one button, not a second one beside it - V34.F, (т15))
+                          2026-10-23, (р3); one button, not a second one beside it - V34.F, (т15)); and (phase
+                          V54) a "?" right of the field - the sites to download free sounds from by hand, searching for
+                          the words typed (js/sound/sites.js)
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import { openSites } from './sites.js';
 
 export const UNCAT = '__uncat__';
 
@@ -56,13 +60,19 @@ export function searchHead(o) {
     if (e.key === 'Escape' && s.value) { e.preventDefault(); e.stopPropagation(); _typedAt = Date.now(); _caret = 0; s.value = ''; o.onSearch(''); }
   });
   head.appendChild(s);
+  // (phase V54) "?" - the sites to download from by hand, with the words as typed now.
+  const help = el('button', 'snd-btn snd-help', '?');
+  help.type = 'button';
+  help.title = 'Where else to find free sounds - the sites open in your browser';
+  help.addEventListener('click', () => openSites(help, s.value));
+  head.appendChild(help);
   // One button: found nothing - it turns gold with the words in it.
   const missed = !!(o.q && !o.found);
   const on = el('button', 'snd-btn' + (missed ? ' is-gold' : ''),
     missed ? 'find «' + (o.q.length > 28 ? o.q.slice(0, 26) + '…' : o.q) + '» online' : 'find online…');
   on.type = 'button';
   on.title = missed ? 'Nothing here - search the free (CC0) libraries with these words'
-    : 'Search free (CC0) sound libraries - Freesound and Wikimedia Commons through Openverse - and the galleries to download from yourself';
+    : 'Search free (CC0) sounds online - Freesound (with its key on Admin -> API keys), else Openverse';
   on.addEventListener('click', () => o.onOnline(o.q || ''));
   head.appendChild(on);
   // Typing goes on where it was: the shelf is painted again under the caret.

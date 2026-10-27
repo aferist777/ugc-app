@@ -239,7 +239,9 @@ function _soundInfo(e) {
     return {
       author: o.creator || '', authorUrl: o.creatorUrl || '',
       license: (String(o.license || '').toUpperCase() + (o.licenseVersion ? ' ' + o.licenseVersion : '')).trim(), licenseUrl: o.licenseUrl || '',
-      from: (o.source === 'freesound' ? 'Freesound' : o.source === 'wikimedia' ? 'Wikimedia Commons' : (o.source || '')) + ' via Openverse',
+      // (phase V54) Found on Freesound directly, or through Openverse (Wikimedia's sounds are its `wikimedia_audio`).
+      from: (o.source === 'freesound' ? 'Freesound' : /^wikimedia/.test(String(o.source || '')) ? 'Wikimedia Commons' : (o.source || ''))
+        + (o.via === 'Freesound' ? '' : ' via Openverse'),
       url: o.landing || '', attribution: o.attribution || '', preview: !!o.preview,
     };
   }
