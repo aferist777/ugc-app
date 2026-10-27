@@ -257,10 +257,27 @@ function paintCol() {
   }
 
   // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
+  // (phase V54, block 7, the owner 2026-10-27: "чтобы они были свернутыми дропдаунами и открыт может быть только один из
+  // них") Each group is a FOLDED ROW - its name and, in Simple, what is picked in it ("Genre · Lo-fi, Jazz"); a press opens
+  // it and folds the one open before (_chipOpen).
   if (['simple', 'custom', 'compose'].includes(S.mode) && !_preset()) {
     for (const g of _chipsGroups()) {
-      sep(g.label);
-      const wrap = el('div', 'mv3-chips');
+      const gk = g.key || g.label;
+      const open = _chipOpen === gk;
+      const picked = S.mode === 'simple' ? g.chips.filter(c => _isPicked(g.key, c)).map(c => c.label) : [];
+      const head = el('button', 'au-chips-h' + (open ? ' is-open' : '') + (picked.length ? ' has-picked' : ''));
+      head.type = 'button';
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      head.appendChild(el('span', 'au-chips-tw', '▸'));
+      head.appendChild(el('b', null, g.label));
+      const said = el('span', 'au-chips-sel', picked.length ? '· ' + picked.join(', ') : '');
+      head.appendChild(said);
+      head.appendChild(el('span', 'au-chips-n', String(g.chips.length)));
+      head.title = (open ? 'Fold ' : 'Open ') + g.label + (picked.length ? ' - picked: ' + picked.join(', ') : '');
+      head.addEventListener('click', () => { _chipOpen = open ? '' : gk; paintCol(); });
+      col.appendChild(head);
+      if (!open) continue;
+      const wrap = el('div', 'mv3-chips au-chips-open');
       for (const c of g.chips) {
         const on = S.mode === 'simple' && _isPicked(g.key, c);
         const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
@@ -292,6 +309,8 @@ function paintCol() {
   alm.addEventListener('click', () => { if (_almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
   foot.appendChild(alm);
 }
+
+let _chipOpen = '';            // (phase V54) the one chip group open in the settings column - '' all folded
 
 function _isPicked(group, c) {
   const f = S.f.simple;

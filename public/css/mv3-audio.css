@@ -20,6 +20,20 @@
 .au-alm-foot .mv3-vc-almanac{width:calc(100% - 20px)}
 .au-alm-foot .mv3-vc-almanac.is-soon{opacity:.75}
 
+/* (phase V54, block 7) a chip group folded into one row - its name, what is picked in it, how many chips; one open at a time */
+.au-chips-h{display:flex; align-items:baseline; gap:6px; width:100%; margin:6px 0 0; padding:6px 8px; box-sizing:border-box;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
+  font:500 11px/1.3 var(--font); text-align:left; cursor:pointer; min-width:0}
+.au-chips-h:hover{border-color:var(--muted)}
+.au-chips-h b{flex:0 0 auto; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.au-chips-h.has-picked b, .au-chips-h.is-open b{color:var(--ink)}
+.au-chips-sel{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--primary)}
+.au-chips-n{flex:0 0 auto; color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums}
+.au-chips-tw{flex:0 0 auto; display:inline-block; width:9px; font-size:9px; color:var(--muted); transition:transform .12s var(--ease)}
+.au-chips-h.is-open{border-color:var(--primary); border-bottom-left-radius:0; border-bottom-right-radius:0}
+.au-chips-h.is-open .au-chips-tw{transform:rotate(90deg)}
+.au-chips-open{padding:6px; border:1px solid var(--primary); border-top:0; border-radius:0 0 var(--r-xs) var(--r-xs)}
+
 .au-muted{color:var(--muted)}
 .au-err{color:var(--danger); font-size:11.5px; margin-top:4px}
 .au-err:empty{display:none}
