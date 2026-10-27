@@ -36,6 +36,8 @@ import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages,
 // (phase TG, block 7) Cutting a piece out of any video - one module with the Library page and the post viewer.
 import * as Cut from '../cut.js';
 import { DRAG_TYPE, DRAG_MEDIA, markGone } from './store.js';
+// (phase V54, (зв29)) The Cut window's "to timeline": the piece at the playhead - the timeline's own function (sub-session B).
+import { placeSoundPiece } from './timeline-b.js';
 import { setOpenColumn } from './layout.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 import { askName } from '../name-box.js';
@@ -141,6 +143,9 @@ function _tile(it, list) {
       soundMenu(it, e, {
         status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
         changed: () => _reload(), stop: () => _stopHearing(),
+        // (phase V54) Merge has no player: every sound - a track too - is cut in the Cut window, and "to timeline" lays
+        // the piece at the playhead (one undo step; refused in words on a highlights project's own timeline).
+        toTimeline: (piece) => placeSoundPiece(piece),
         del: async (x) => {
           if (!confirm(await deleteQuestion(x))) return;
           try { if (_hear && _hear.id === x.id) _stopHearing(); await deleteItem(x); markGone(x.media); await _reload(); }

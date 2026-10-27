@@ -347,7 +347,9 @@ function _mediaShelf(opts) {
     dur: +t.duration || 0,
     meta: { categoryId: '', date: t.createdAt || null, favorite: !!t.favorite, style: String(t.style || ''), ...placeOf(t),
             source: t.source || 'suno', gen: t.gen || '', variant: t.variant || 0, wave: Array.isArray(t.wave) ? t.wave : [],
-            info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' } },
+            info: { style: String(t.style || ''), lyrics: t.lyrics ? String(t.lyrics) : '' },
+            // (phase V54) a piece cut out of a track names the track and the stretch (lib/audio-cut.js)
+            original: t.original || null },
   }));
   if (fromMusic.some(m => !(m.dur > 0))) MUSIC.fillLengths();
   // (phase V34.E) SFX -> Built-in: the program's set (lib/sfx-builtin.js, vendor/sfx/ at /sfx/) - read only, only when

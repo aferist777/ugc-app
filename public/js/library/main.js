@@ -30,6 +30,8 @@ import { waveEl } from '../sound/wave.js';
 import { soundMenu, myCats } from '../sound/menu.js';
 import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
+// (phase V54) The music player at the bottom of Media while Music is open.
+import { createPlayer } from '../sound/player.js';
 import * as Layers from '../layers.js';
 import { openScenario } from '../scen-window.js';
 import { talkingHead } from '../merge-v3/scen-api.js';
@@ -172,6 +174,16 @@ function _paintMake() {
   }
   const nh = $('lib-narrators');
   if (nh) nh.hidden = !_narrOn;
+  _paintPlayer();
+}
+
+// ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
+// A bar at the bottom of Media, there while Music is open (its root, highlights, its moods) - out of the gallery, so
+// drawing the gallery again stops nothing. Leaving Music stops it and hides it; back, the same track where it was.
+let _player = null;
+const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
+function _paintPlayer() {
+  if (_player) _player.show(_inMusic());
 }
 
 // The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (phase V28.2:
@@ -810,9 +822,15 @@ function _card(it, extra) {
     e.preventDefault();
     if (!AUDIO.has(it.kind)) return;
     soundMenu(it, e, {
-      status: (t, bad) => _status(t, bad ? 'err' : ''), stop: () => _stopHearing(),
+      status: (t, bad) => _status(t, bad ? 'err' : ''),
+      stop: () => { _stopHearing(); if (_player) _player.pause(); },
       changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
-      del: async (x) => { try { _stopHearing(); await _apply(await _runAction('del', x)); } catch (err) { _status(err.message, 'err'); } },
+      del: async (x) => {
+        try { _stopHearing(); await _apply(await _runAction('del', x)); if (_player) _player.forget(x.id); }
+        catch (err) { _status(err.message, 'err'); }
+      },
+      // (phase V54, (зв14)) A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
+      cut: (x) => (x.kind === 'music' && _player && _inMusic() ? (_player.open(x, { cut: true }), true) : false),
     });
   });
   return card;
@@ -961,12 +979,15 @@ function _renderGrid() {
       // (phase V28.1) Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel);
-      if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
+      // (phase V54) A track in Music plays in the player; SFX and My sounds on their cards, as before.
+      if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); });
+      else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
       else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
       else card.addEventListener('click', () => _open(it, _shelf === 'media' ? seen : null));
     }
     grid.appendChild(card);
   }
+  if (_player && _shelf === 'media') { _player.sync(_items); _player.mark(grid); }
 }
 
 // ── The selected tile, and the right column about it (phase B) ──────────────
@@ -1715,6 +1736,22 @@ function boot() {
   _wireTreeSash();
   _wireScSash();
   _initTree();
+  // (phase V54) The music player, and Space for it - not in a field, not under a window (js/layers.js).
+  const ph = $('lib-player');
+  if (ph) {
+    _player = createPlayer(ph, {
+      status: (t, bad) => _status(t, bad ? 'err' : ''),
+      changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true }); _counts(); },
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== ' ' || e.repeat || e.ctrlKey || e.altKey || e.metaKey || !_player.shown() || !_player.current()) return;
+      if (Layers.blocked()) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      _player.toggle();
+    });
+  }
   Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).

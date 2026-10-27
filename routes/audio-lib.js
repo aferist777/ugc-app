@@ -4,7 +4,9 @@
 // SOUND ON THE SHELVES - what Merge's Library panel and the Library's Media shelf ask beside the Library's own routes
 // (phase V34.C-D; the lab's tree, tiles and star went with the lab in V34.F - the media tree is routes/library.js):
 //
-//   POST /api/audio/cut { src, in, out, cat }      a piece of any sound as a NEW sound in My sounds (lib/audio-cut.js)
+//   POST /api/audio/cut { src, in, out }           a piece of any sound as a NEW one (lib/audio-cut.js): of a track of
+//                                                  Music - a track in Music's root, of anything else - a sound in My
+//                                                  sounds' root (phase V54); the answer says which (`where`)
 //   GET  /api/audio/online?q=&page=                CC0 only: Freesound with the owner's key (lib/freesound.js, phase V54),
 //                                                  Openverse when there is no key or Freesound did not answer
 //                                                  (lib/openverse.js) - the answer says which (`via`) and why (`note`)
@@ -18,8 +20,8 @@ const router = express.Router();
 router.post('/audio/cut', async (req, res) => {
   const b = req.body || {};
   try {
-    const item = await require('../lib/audio-cut').cut(String(b.src || ''), +b.in, +b.out, { cat: String(b.cat || '') });
-    res.json({ success: true, item });
+    const r = await require('../lib/audio-cut').cut(String(b.src || ''), +b.in, +b.out);
+    res.json({ success: true, item: r.item, where: r.where });
   } catch (e) { res.status(e.status || 500).json({ success: false, error: e.message }); }
 });
 

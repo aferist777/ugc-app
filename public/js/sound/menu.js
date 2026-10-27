@@ -3,9 +3,11 @@
    tile has in Merge's Library panel and on the Library's Media shelf, and only a sound's or a track's (the rule of V23 -
    no menu on a tile - stays for every other tile). What a sound has no window to do in:
 
-     Cut…        a piece as a new sound in My sounds (js/sound/cut-window.js)          every sound, every track
+     Cut…        a piece as a new sound (js/sound/cut-window.js) - of a track a new    every sound, every track
+                 track in Music, of the rest a sound in My sounds (V54); a track in the
+                 Library opens in its player instead (the page's `cut`)
      Rename      its name (PATCH /api/library/item/:kind/:id)                          own sounds, tracks
-     Move to     another category of My sounds, or Uncategorized                        own sounds
+     Move to     another category of My sounds, or My sounds itself                     own sounds
      highlights  a track into Music -> highlights (its root), out of it, or back into
                  the mood its preset made it for (V34.F: a mood folder takes nothing
                  else - routes/music.js, lib/music-store.js `place`)                   tracks
@@ -15,8 +17,10 @@
 
    A built-in sound (kind `sfx`) is the app's: a piece of it, its star and its "About" only.
 
-     soundMenu(item, event, { status(text, bad), changed(), del(item), stop() })
-                          changed() reads the shelf again (awaited - the word about what was done comes after it)
+     soundMenu(item, event, { status(text, bad), changed(), del(item), stop(), cut(item), toTimeline(piece) })
+                          changed() reads the shelf again (awaited - the word about what was done comes after it);
+                          cut(item) - the page's own way to cut it (true: done; the Library's player for a track);
+                          toTimeline(piece) - Merge's "to timeline" in the Cut window (timeline-b.js placeSoundPiece)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
@@ -78,11 +82,17 @@ export async function soundMenu(it, ev, opts) {
     else b.disabled = true;
     m.appendChild(b);
   };
-  item('Cut…', 'a piece of it as a new sound in My sounds', async () => {
-    const cats = await myCats();
-    openCut({ path: it.media, name: it.name, dur: it.dur, wave: (it.meta || {}).wave }, {
-      cats, cat: own && cats.some(c => c.id === (it.meta || {}).categoryId) ? it.meta.categoryId : '', stop: o.stop,
-      done: async (made) => { await o.changed(); o.status('"' + made.name + '" is a new sound in My sounds' + (made.categoryLabel ? ' · ' + made.categoryLabel : '')); },
+  // (phase V54, (зв28)) Where the piece goes follows what is cut: a track's into Music, the rest into My sounds - no choice.
+  const inPlayer = it.kind === 'music' && typeof o.cut === 'function';
+  item('Cut…', inPlayer ? 'in the player - a piece of it as a new track in Music'
+    : 'a piece of it as a new ' + (it.kind === 'music' ? 'track in Music' : 'sound in My sounds'), () => {
+    if (typeof o.cut === 'function' && o.cut(it)) return;
+    openCut({ kind: it.kind, id: it.id, path: it.media, name: it.name, dur: it.dur, wave: (it.meta || {}).wave }, {
+      stop: o.stop, toTimeline: o.toTimeline,
+      done: async (made, where) => {
+        await o.changed();
+        o.status('"' + ((made && (made.name || made.title)) || 'The piece') + '" is a new ' + (where === 'music' ? 'track in Music' : 'sound in My sounds'));
+      },
     });
   });
   if (!builtin) {
@@ -117,9 +127,9 @@ export async function soundMenu(it, ev, opts) {
   if (own) {
     const cats = await myCats();
     const here = (it.meta || {}).categoryId || '';
-    for (const c of [{ id: '', label: 'Uncategorized' }].concat(cats)) {
+    for (const c of [{ id: '', label: 'My sounds' }].concat(cats)) {
       if (c.id === here) continue;
-      item('Move to ' + c.label, '', async () => {
+      item('Move to ' + c.label, c.id ? '' : 'out of its category', async () => {
         try { await _patch(it, { categoryId: c.id, categoryLabel: c.id ? c.label : '' }); await o.changed(); o.status('"' + it.name + '" is in ' + c.label + '.'); }
         catch (e) { o.status(e.message, true); }
       });
@@ -152,7 +162,7 @@ export function about(it, ev) {
   const m = it.meta || {};
   const i = m.info || {};
   row('length', secs(it.dur));
-  row('where', it.kind === 'sfx' ? 'Built-in · ' + (m.categoryLabel || '') : it.kind === 'music' ? 'Music' : 'My sounds · ' + (m.categoryLabel || 'Uncategorized'));
+  row('where', it.kind === 'sfx' ? 'Built-in · ' + (m.categoryLabel || '') : it.kind === 'music' ? 'Music' : 'My sounds' + (m.categoryLabel ? ' · ' + m.categoryLabel : ''));
   row('file', it.media, it.media);
   row('from', i.from);
   row('author', i.author, i.authorUrl || '');
