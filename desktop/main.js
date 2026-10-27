@@ -361,8 +361,6 @@ function run() {
     } else if (code === 'F5' || (mod && code === 'KeyR')) {
       if (input.shift || (mod && code === 'F5')) contents.reloadIgnoringCache();
       else contents.reload();
-    } else if (DEV && (code === 'F12' || (mod && input.shift && code === 'KeyI'))) {
-      contents.toggleDevTools();
     } else if (mod && (code === 'Equal' || code === 'NumpadAdd')) {
       contents.setZoomLevel(Math.min(contents.getZoomLevel() + 0.5, 5));
     } else if (mod && (code === 'Minus' || code === 'NumpadSubtract')) {
@@ -381,7 +379,9 @@ function run() {
 
   // Chromium brings no context menu of its own. This one has what a right click is for here: copy
   // and paste, a picture or a clip saved out, a link copied. A page with its own menu (the
-  // Library's cards) cancels the event, and this one does not open.
+  // Library's cards) cancels the event, and this one does not open. There is no Inspect and no F12:
+  // the window has no developer tools at all (the owner, 2026-10-27) - a check of the window reaches
+  // its pages through --remote-debugging-port.
   function contextMenu(contents, p) {
     const groups = [];
     if (p.misspelledWord) {
@@ -413,7 +413,6 @@ function run() {
     } else if (p.selectionText.trim()) {
       groups.push([{ role: 'copy' }]);
     }
-    if (DEV) groups.push([{ label: 'Inspect', click: () => contents.inspectElement(p.x, p.y) }]);
     if (!groups.length) return;
     const items = groups.flatMap((g, i) => (i ? [{ type: 'separator' }, ...g] : g));
     Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(contents) });
