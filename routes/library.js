@@ -212,11 +212,6 @@ function _origMeta(o) {
   return { path: o.path, in: +o.in || 0, out: +o.out || 0, dur: +o.dur || 0, name: o.name || '' };
 }
 
-// The hook numbers, read once per shelf build rather than once per tile.
-function _hookIds() {
-  try { return require('../lib/hook-ids').map(); } catch (e) { return {}; }
-}
-
 // A clip whose record lost its poster still has one beside it on disk (lib/video-thumb.js) - shown
 // instead of "no thumb" (phase J4), the way the renders shelf finds its own.
 function _posterOf(thumb, video) {
@@ -256,9 +251,6 @@ function _mediaShelf(opts) {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
   const hooks = _read(path.join(DATA_DIR, 'hooks-archive.json'), []);
-  // The hook numbers, read once for the whole build: it used to be once per hook, off the disk
-  // each time, on every read of Media and on every count of the shelves (phase D3).
-  const hookIds = _hookIds();
 
   const fromArchive = arch.filter(e => e && e.videoPath).map(e => ({
     id: String(e.id),
@@ -296,11 +288,7 @@ function _mediaShelf(opts) {
     // Hook records have never carried a duration; 0 means "ask the file", which is what
     // the timeline falls back to.
     dur: +h.duration || 0,
-    // The hook's permanent number, which the grid shows on the tile and the render window
-    // puts in the creative's name. Read from the registry rather than the record: the
-    // record belongs to the browser and is overwritten wholesale on every push.
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite,
-            hookId: hookIds[String(h.videoPath || '').split('?')[0]] || null,
             trimmed: h.trimmed || null, original: _origMeta(h.original), link: h.link || '' },
   }));
 
@@ -1401,13 +1389,12 @@ const _r = (status, body) => ({ status, body });
 
 // (phase V54) A BATCH PLACES ITS FILES ONCE. Each item function moves a record's files to its folder (SHELF.placeRecords -
 // one relocate, every store and project rewritten); a batch of hundreds would do that hundreds of times. While a batch
-// runs, `_placeLater` collects what would have been placed (and the clips that became hooks), and `_placeAll` places the
-// records as they are at the end, in ONE call - then numbers the new hooks by their placed paths.
-let _placeLater = null;           // [{ kind, id, hook }] while a batch runs
+// runs, `_placeLater` collects what would have been placed, and `_placeAll` places the records as they are at the end,
+// in ONE call.
+let _placeLater = null;           // [{ kind, id }] while a batch runs
 function _placeAll(list) {
   const last = new Map();         // id -> the kind it ended as
-  const hooks = new Set();
-  for (const x of list || []) { last.set(x.id, x.kind); if (x.hook) hooks.add(x.id); }
+  for (const x of list || []) last.set(x.id, x.kind);
   const lists = {};
   const recOf = (kind, id) => {
     if (!lists[kind]) { try { lists[kind] = RECORD_STORES[kind].read(); } catch (e) { lists[kind] = []; } }
@@ -1416,10 +1403,6 @@ function _placeAll(list) {
   const items = [];
   for (const [id, kind] of last) { const rec = recOf(kind, id); if (rec) items.push({ kind, rec }); }
   if (items.length) SHELF.placeRecords(items);
-  if (hooks.size) {
-    const placed = RECORD_STORES.hooks.read().filter(x => x && hooks.has(String(x.id))).map(x => x.videoPath).filter(Boolean);
-    if (placed.length) { try { require('../lib/hook-ids').assign(placed); } catch (e) { /* numbered at its next filing */ } }
-  }
 }
 
 // (phase V54) The bodies of the three item routes are functions - { status, body } - so the batch routes below do to
@@ -1738,14 +1721,9 @@ function _kindOne(fromIn, idIn, toIn) {
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
     // Another shelf is another folder: the files move, the record and every other path follow.
-    if (_placeLater) { _placeLater.push({ kind: to, id: String(moved.id), hook: to === 'hooks' }); return _r(200, { success: true, kind: to, id, item: moved }); }
+    if (_placeLater) { _placeLater.push({ kind: to, id: String(moved.id) }); return _r(200, { success: true, kind: to, id, item: moved }); }
     SHELF.placeRecords([{ kind: to, rec: moved }]);
     Object.assign(moved, dst.read().find(x => x && String(x.id) === String(moved.id)) || {});
-    // BECOMING A HOOK IS WHEN A HOOK GETS ITS NUMBER. A file uploaded straight onto Hooks is
-    // numbered as it is filed (POST /library/media/record); one moved here from Uploads used to
-    // wait for the next time a browser pushed the hooks archive - which the Merge page never
-    // does - so it sat on the shelf with no number at all.
-    if (to === 'hooks') { try { require('../lib/hook-ids').assign([moved.videoPath]); } catch (e) {} }
     return _r(200, { success: true, kind: to, id, item: moved });
 }
 router.post('/library/item/:kind/:id/kind', (req, res) => {
@@ -2120,7 +2098,7 @@ router.post('/library/media/record', (req, res) => {
 });
 
 // The filing itself, for the route above and for a clip that came in by a link (phase V27, lib/link-queue.js): the
-// same record, the same place, the same proxy and hook number as a file brought in by hand. Throws with `status`.
+// same record, the same place and the same proxy as a file brought in by hand. Throws with `status`.
 function _fileRecord(b) {
   const _no = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
   const { videoPath, thumbPath, name, refImage, prompt, categoryLabel } = b;
@@ -2184,10 +2162,8 @@ function _fileRecord(b) {
   // follows (lib/shelf-files.js).
   SHELF.placeRecords([{ kind, rec }]);
   const item = store.read().find(e => e && e.id === rec.id) || rec;
-  // On the shelf means it can land on a lane: its preview proxy is queued now, and a
-  // hook also gets its permanent number (H01, H02 - see lib/hook-ids.js).
+  // On the shelf means it can land on a lane: its preview proxy is queued now.
   try { require('./proxies').warmProxies([item.videoPath], 480); } catch (e) {}
-  if (kind === 'hooks') { try { require('../lib/hook-ids').assign([item.videoPath]); } catch (e) {} }
   return { item, kind };
 }
 

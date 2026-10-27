@@ -99,7 +99,7 @@ const GROUPS = [
   { id: 'lookbooks', label: 'Lookbooks',
     dirs: ['media/lookbooks'], stores: ['data/scen3-lookbook-meta.json', 'data/makechat-lookbooks.json'] },
   { id: 'hooks', label: 'Hooks',
-    dirs: ['media/hooks'], stores: ['data/hooks-archive.json', 'data/hook-ids.json'] },
+    dirs: ['media/hooks'], stores: ['data/hooks-archive.json'] },
   { id: 'characters', label: 'Characters (4K sheets, thumbnails)',
     dirs: ['media/characters'], stores: ['data/characters.json'] },
   { id: 'locations', label: 'Locations',

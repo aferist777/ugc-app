@@ -689,9 +689,6 @@ function _card(it, extra) {
   card.dataset.id = String(it.id);
   // (phase V54) What js/tile-select.js picks it by - on Media.
   if (_shelf === 'media') card.dataset.key = it.kind + ':' + it.id;
-  // A hook's permanent number (lib/hook-ids.js): what the render window puts into the name
-  // of every creative that opens with this hook, so it belongs where the hook is chosen.
-  const hookId = (it.meta && it.meta.hookId) || null;
   card.title = it.name + (it.meta && it.meta.character ? '\n' + it.meta.character : '');
 
   // The ratio lives on the box: an <img> with no loaded source contributes no height,
@@ -773,12 +770,6 @@ function _card(it, extra) {
 
   const name = document.createElement('div');
   name.className = 'lib-name';
-  if (hookId) {
-    const tag = document.createElement('b');
-    tag.className = 'lib-hid';
-    tag.textContent = hookId;
-    name.appendChild(tag);
-  }
   // (second round) A talking head: its project and line in the tooltip, and a mark when this take is on a timeline.
   if (it.kind === 'heads') {
     const m = it.meta || {};

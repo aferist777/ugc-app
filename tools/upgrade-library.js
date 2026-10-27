@@ -109,7 +109,6 @@ const collect = (v) => {
   if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (/^\/(media|projects)\//.test(k)) usedAfter.add(k.split(/[?#]/)[0]); collect(x); }
 };
 for (const [f, v] of Object.entries(after.data)) {
-  if (['hook-ids.json'].includes(f)) continue;
   if (f === 'ui-state.json') {
     for (const [k, x] of Object.entries(v)) {
       if (U.DEAD_UI_KEYS.has(k) || typeof x !== 'string') continue;

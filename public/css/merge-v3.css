@@ -586,8 +586,8 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    (js/merge-v3/library.js, the node's tiles: 'wide'). */
 .mv3-grid.is-wide{grid-template-columns:repeat(auto-fill, minmax(124px, 1fr))}
 .mv3-grid.is-wide .mv3-tile{aspect-ratio:16 / 9}
-/* The hook's permanent number (lib/hook-ids.js), on its tile. Bottom left, because the star
-   and the cross own the top corners; readable over any frame, so it carries its own ground. */
+/* A talking head's line number on its tile (the hooks' numbers that shared it are gone, V54 block 8). Bottom left,
+   because the star and the cross own the top corners; readable over any frame, so it carries its own ground. */
 .mv3-tile-hid{
   position:absolute; left:3px; bottom:3px; z-index:2;
   padding:1px 4px; border-radius:3px;

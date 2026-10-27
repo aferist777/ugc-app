@@ -767,39 +767,17 @@ function _scenBehind(timelines, key, loaded) {
   return p ? { p, via: 'title' } : null;
 }
 
-// THE HOOK THAT NAMES THE RENDER. The Meta pattern carries a hook id (…_AUTH_H03_…) and
-// it is the hook the video OPENS with: a clip on a video lane starting at the very start of the
-// timeline whose file has a hook number (lib/hook-ids.js). One that begins a moment later is an
-// insert, not the hook the creative is built on, so only the first frames count - anything within
-// a frame of zero at 30 fps. The top layer wins when two qualify. None, and the field keeps its
-// Hxx placeholder.
-const HOOK_AT_START = 0.04;
-function _openingHookId(t) {
-  const lanes = (Array.isArray(t && t.tracks) ? t.tracks : []).filter(x => x && x.kind === 'video');
-  let ids;
-  try { ids = require('../lib/hook-ids'); } catch (e) { return null; }
-  for (const lane of lanes) {
-    for (const c of ((lane && lane.clips) || [])) {
-      if (!c || !c.src || (+c.start || 0) > HOOK_AT_START) continue;
-      const id = ids.idFor(c.src);
-      if (id) return id;
-    }
-  }
-  return null;
-}
-
 router.get('/mv3/timeline/:key/source', (req, res) => {
   try {
     const cur = _read();
     const key = String(req.params.key || '');
     const rec = cur.timelines[key];
     if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    const hookId = _openingHookId(rec);
     const hit = _scenBehind(cur.timelines, key);
-    if (!hit) return res.json({ success: true, project: null, via: null, hookId });
+    if (!hit) return res.json({ success: true, project: null, via: null });
     const p = hit.p;
     const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
-    res.json({ success: true, via: hit.via, hookId, project: {
+    res.json({ success: true, via: hit.via, project: {
       id: String(p.id), name: String(p.name || ''), title: String(p.title || ''),
       vertical: String(p.vertical || ''), product: String(p.product || ''),
       gender: String(p.gender || ''), characterName: String(cast.characterName || ''),

@@ -163,10 +163,9 @@ function _tile(it, list) {
   });
   // Which file, so a tile can be found by what it shows (reveal, below).
   cell.dataset.media = String(it.media || '').split('?')[0];
-  const hid = (it.meta || {}).hookId || null;
   cell.title = it.kind === 'heads'
     ? [(it.meta || {}).project, it.name, _mmss(it.dur), (it.meta || {}).used ? 'on a timeline' : ''].filter(Boolean).join(' · ')
-    : [hid, it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ')
+    : [it.name, it.meta && it.meta.style, _mmss(it.dur)].filter(Boolean).join(' · ')
       + (audio ? '\na press plays it · the right button: cut, ' + (it.kind === 'sfx' ? 'about' : 'rename, about, delete') : '');
 
   if (audio) {
@@ -211,15 +210,6 @@ function _tile(it, list) {
     cell.appendChild(s);
   }
 
-  // THE HOOK'S NUMBER, on the tile. It is what the render window puts in the creative's
-  // name (lib/hook-ids.js), so which hook is H01 has to be answerable by looking rather
-  // than by opening each one. Bottom left, out of the way of the star and the cross.
-  if (hid) {
-    const tag = document.createElement('span');
-    tag.className = 'mv3-tile-hid';
-    tag.textContent = hid;
-    cell.appendChild(tag);
-  }
   // A talking head: its line's number, and a mark when this take is on a timeline (the one the project uses).
   if (it.kind === 'heads') {
     const tag = document.createElement('span');

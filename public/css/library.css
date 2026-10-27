@@ -46,16 +46,6 @@
   display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   height:calc(2.5em + 6px);
 }
-/* A hook's permanent number, beside its name in the grid (lib/hook-ids.js). It lived under a
-   selector with a comment in its middle, so it only ever styled the Characters shelf - and the
-   numbers are on Media. Its line is no taller than the name's: a taller one pushed the category
-   select under the card's bottom edge. */
-.lib-hid{
-  display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
-  background:var(--surface-2); color:var(--accent);
-  font:700 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing:.03em; vertical-align:1px;
-}
 .lib-grid.is-lookbooks,
 .lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
 
@@ -322,7 +312,14 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-card.is-playing{ border-color:var(--accent); }
 .lib-card.is-playing .lib-snd{ color:var(--accent); animation:lib-hear 1s ease-in-out infinite alternate; }
 @keyframes lib-hear{ from{ transform:scale(1); } to{ transform:scale(1.15); } }
-/* (second round) A talking head whose take is on a timeline. */
+/* (second round) A talking head whose take is on a timeline: a small mark beside its name (it was the hooks' number tag
+   too until their numbers went, V54 block 8). Its line is no taller than the name's. */
+.lib-hid{
+  display:inline-block; margin-right:5px; padding:0 4px; border-radius:3px;
+  background:var(--surface-2); color:var(--accent);
+  font:700 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing:.03em; vertical-align:1px;
+}
 .lib-hid.is-used{ background:color-mix(in oklch, var(--success) 70%, black); color:oklch(.99 0 0); }
 /* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{

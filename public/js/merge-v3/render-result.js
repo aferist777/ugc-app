@@ -5,13 +5,14 @@
    either editor, or from the queue's "open" on a ready entry.
 
    LEFT: the video.
-   RIGHT: the name taken apart. Seven fields, one per part of the Meta naming pattern, each
+   RIGHT: the name taken apart. Six fields, one per part of the Meta naming pattern, each
    with its description beside it; they are filled from the project on open (the Scenarios
    project behind the render knows the vertical, the ingredient, the character, the gender,
-   and the title often carries the trigger and the hook id), and joined with `_` into the
-   full name as they are edited.
+   and the title often carries the trigger), and joined with `_` into the full name as they
+   are edited. (Phase V54 block 8, the owner 2026-10-28: the hook id is out of the pattern -
+   the hooks have no numbers any more.)
    FOOT: the full name, one editable field along the left, and the two buttons on the right.
-   Editing the full name feeds the parts back while it still has seven of them.
+   Editing the full name feeds the parts back while it still has six of them.
 
    TWO BUTTONS. Save & download names the file in finals/ (renaming it if the name changed),
    keeps it on the Library's renders shelf and downloads it. Cancel on a FRESH render deletes
@@ -38,7 +39,6 @@ const PARTS = [
   { id: 'ingredient', label: 'Ingredient',    desc: 'the trick/ingredient, e.g. RedHoney, Honey, Beetroot', ph: 'RedHoney' },
   { id: 'angle',      label: 'angleScenario', desc: 'the angle, e.g. ScientistSecret, GirlfriendsStoryTime, BreakingNews', ph: 'ScientistSecret' },
   { id: 'trigger',    label: 'trigger',       desc: 'one of: AUTH · FEAR · FOMO · SECRET · PROOF · DESIRE', select: TRIGGERS },
-  { id: 'hook',       label: 'hookid',        desc: 'the hook this cut opens with, numbered in the library (H01, H02…)', ph: 'H03' },
   { id: 'character',  label: 'character',     desc: 'narrator, e.g. DrFauci', ph: 'DrFauci' },
   { id: 'gender',     label: 'gender',        desc: 'M / F', select: ['M', 'F'] },
 ];
@@ -46,8 +46,8 @@ const INTRO = [
   'Use this exact pattern — the same string becomes the Meta Ad name. Underscore _ is the separator, so never use _ or a space inside a field (use camelCase or a hyphen).',
   'No offer in the name — a creative gets reused across offers, so the offer lives at the campaign level, not here.',
 ];
-const PATTERN = 'vertical_Ingredient_angleScenario_trigger_hookid_character_gender';
-const EXAMPLE = 'MaleEnh_RedHoney_ScientistSecret_AUTH_H03_DrFauci_M';
+const PATTERN = 'vertical_Ingredient_angleScenario_trigger_character_gender';
+const EXAMPLE = 'MaleEnh_RedHoney_ScientistSecret_AUTH_DrFauci_M';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -70,22 +70,21 @@ function check(name) {
   if (!n) return { ok: false, text: 'a name is needed' };
   if (/\s/.test(n)) return { ok: false, text: 'recommendation: no spaces - join words as camelCase or with a hyphen' };
   const parts = n.split('_');
-  if (parts.length !== 7) return { ok: false, text: `recommendation: 7 parts joined by _ (this has ${parts.length})` };
+  if (parts.length !== PARTS.length) return { ok: false, text: `recommendation: ${PARTS.length} parts joined by _ (this has ${parts.length})` };
   if (parts.some(p => !p)) return { ok: false, text: 'recommendation: no empty part between the underscores' };
   if (!TRIGGERS.includes(parts[3])) return { ok: false, text: `recommendation: part 4 is the trigger - one of ${TRIGGERS.join(' · ')}` };
-  if (!/^H(\d{2,}|xx)$/i.test(parts[4])) return { ok: false, text: 'recommendation: part 5 is the hook id - H03, or Hxx until the library exists' };
-  if (!/^[MF]$/.test(parts[6])) return { ok: false, text: 'recommendation: part 7 is the gender - M or F' };
-  return { ok: true, text: 'follows the pattern' + (/^Hxx$/i.test(parts[4]) ? ' · fill in the hook id when the library exists' : '') };
+  if (!/^[MF]$/.test(parts[5])) return { ok: false, text: 'recommendation: part 6 is the gender - M or F' };
+  return { ok: true, text: 'follows the pattern' };
 }
 
 // A title in the house style - "2026-08-22 - Stable - 7909 - Cartpanda - Secret Ingredient -
-// AUTH - H01 - Nancy - F" - read for the angle, the trigger, the hook id, the character and
-// the gender. The tails a title picks up on the way here come off first: "(copy)", "(copy 2)"
+// AUTH - H01 - Nancy - F" - read for the angle, the trigger, the character and the gender (an "H01" in an older
+// title is passed over: the hook id is out of the pattern, V54 block 8). The tails a title picks up on the way here come off first: "(copy)", "(copy 2)"
 // from a copy, "(2)" from a second import, "· stills" from a stills cut, and the "local_…"
 // prefix a blank project's key carries. Left on, "F (copy)" is not a gender and nothing after
 // the trigger is found.
 function readTitle(title) {
-  const out = { angle: '', trigger: '', hook: '', character: '', gender: '' };
+  const out = { angle: '', trigger: '', character: '', gender: '' };
   const clean = String(title || '')
     .replace(/^local_\d+_/, '')
     .replace(/\s*\(copy(?: \d+)?\)$/i, '')
@@ -98,8 +97,6 @@ function readTitle(title) {
     out.trigger = tokens[ti].toUpperCase();
     if (ti > 0 && !/^\d/.test(tokens[ti - 1])) out.angle = camel(tokens[ti - 1]);
   }
-  const hk = tokens.find(t => /^H\d{2,}$/i.test(t));
-  if (hk) out.hook = hk.toUpperCase();
   const last = tokens[tokens.length - 1];
   if (/^[MF]$/i.test(last || '')) {
     out.gender = last.toUpperCase();
@@ -115,13 +112,12 @@ function readTitle(title) {
 // for the rest, because it is the one a person renames into the pattern; the record's own
 // name fills in whatever the title did not say. Anything still unknown stays a placeholder.
 async function partsFromProject(key, title) {
-  const out = { vertical: '', ingredient: '', angle: '', trigger: '', hook: '', character: '', gender: '' };
-  let p = null, hookId = null;
+  const out = { vertical: '', ingredient: '', angle: '', trigger: '', character: '', gender: '' };
+  let p = null;
   if (key) {
     try {
       const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/source').then(r => r.json());
       p = (d && d.project) || null;
-      hookId = (d && d.hookId) || null;
     } catch (e) { p = null; }
   }
   p = p || {};
@@ -131,13 +127,9 @@ async function partsFromProject(key, title) {
   out.gender = /^f/i.test(p.gender || '') ? 'F' : /^m/i.test(p.gender || '') ? 'M' : '';
 
   const a = readTitle(title), b = readTitle(p.name);
-  for (const k of ['angle', 'trigger', 'hook']) out[k] = a[k] || b[k];
+  for (const k of ['angle', 'trigger']) out[k] = a[k] || b[k];
   out.character = out.character || a.character || b.character;
   out.gender = out.gender || a.gender || b.gender;
-  // THE HOOK ON THE TIMELINE WINS. Every hook file carries a permanent number of its own
-  // (lib/hook-ids.js), and the one this cut opens with is the answer - a number read out of
-  // the project's title is a guess about a hook that may since have been swapped.
-  if (hookId) out.hook = hookId;
   return out;
 }
 
@@ -264,20 +256,20 @@ export async function showResult(o) {
     name.value = PARTS.map(p => {
       const f = fields[p.id];
       const raw = String(f.value || '').replace(/_/g, '');
-      return raw || (p.select ? (p.id === 'trigger' ? 'TRIGGER' : 'M') : (p.id === 'hook' ? 'Hxx' : p.label.charAt(0).toUpperCase() + p.label.slice(1)));
+      return raw || (p.select ? (p.id === 'trigger' ? 'TRIGGER' : 'M') : p.label.charAt(0).toUpperCase() + p.label.slice(1));
     }).join('_');
     paintHint();
   };
   const decompose = () => {
     const parts = name.value.trim().split('_');
-    if (parts.length !== 7) return;
+    if (parts.length !== PARTS.length) return;
     PARTS.forEach((p, i) => { const f = fields[p.id]; if (p.select) { f.value = p.select.includes(parts[i].toUpperCase()) ? parts[i].toUpperCase() : ''; } else f.value = parts[i]; });
   };
   for (const p of PARTS) {
     const f = fields[p.id];
     f.addEventListener('input', compose);
     f.addEventListener('change', compose);
-    if (!p.select) f.addEventListener('blur', () => { const c = camel(f.value); if (c && c !== f.value) { f.value = p.id === 'hook' ? c.toUpperCase() : c; compose(); } });
+    if (!p.select) f.addEventListener('blur', () => { const c = camel(f.value); if (c && c !== f.value) { f.value = c; compose(); } });
   }
   name.addEventListener('input', () => { decompose(); paintHint(); });
 
@@ -342,7 +334,7 @@ export async function showResult(o) {
   // The name on open: a file already named keeps its name and shows it taken apart; a fresh
   // render gets the parts from the project and the name they compose.
   const current = decodeURIComponent(String(o.url || '').split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
-  if (!o.fresh && current.split('_').length === 7) { name.value = current; decompose(); paintHint(); }
+  if (!o.fresh && current.split('_').length === PARTS.length) { name.value = current; decompose(); paintHint(); }
   else if (!o.fresh) { name.value = current; paintHint(); await fill().then(() => { name.value = current; paintHint(); }); }
   else await fill();
 }
