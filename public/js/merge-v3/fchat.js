@@ -564,7 +564,7 @@ function FRAMES(ctx) {
       why: () => '',
       sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into IMAGES itself.' },
+      upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
     },
     penInBar: false,
     columnFoot: () => [almanacSoon()],

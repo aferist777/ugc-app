@@ -109,8 +109,10 @@ const _grouped = (q) => !!q && !!q.filter && Object.keys(q).every(k => _Q_KEYS.i
  * The files of `type` in every folder of a tree (`nodes` - readTree's, or the media tree's, before anything is left out):
  *   -> { direct: Map(key -> files lying directly in it), total: Map(key -> how many in it and under it) }
  * `cache` (a Map) keeps the shelf's answers for one reading. A kind that could not be read throws.
+ * `fit(file)` (phase V57, the owner's (ок1)) - only the files it takes are counted and shown: the video chat's window
+ * leaves out the clips longer than the chosen model takes.
  */
-export async function folderIndex(nodes, type, cache) {
+export async function folderIndex(nodes, type, cache, fit) {
   const C = cache || new Map();
   const read = (q) => {
     const k = JSON.stringify(q);
@@ -137,7 +139,7 @@ export async function folderIndex(nodes, type, cache) {
     if (!n.q) continue;
     const recs = ownOf.has(n.key) ? ownOf.get(n.key) : (recsOf.get(n.q.filter) || []).filter(i => _inQ(i, n.q, foldersOf));
     const seen = new Set();
-    direct.set(n.key, filesOf(recs, type).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true))));
+    direct.set(n.key, filesOf(recs, type).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)) && (!fit || fit(f))));
   }
   // How many under each - a file in two folders (★ Favorites and its own) counted once.
   const total = new Map();

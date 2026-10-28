@@ -52,7 +52,7 @@ function PICTURES(ctx) {
       emptyNoProject: 'Describe a picture. A project is started for it with the first message.',
       onlyFiles: 'Only pictures can be attached here.',
       slot: 'A picture to work from - from the Library or this computer',
-      plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
+      plus: 'Add a picture from this computer. It goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself - and straight into the row above the message box.',
       cat: 'This project\'s pictures, or a folder of the Library',
       crumb: 'The pictures chat - pictures made with a model',
     },
@@ -74,7 +74,7 @@ function PICTURES(ctx) {
       why: () => '',
       sourceOf: (path) => Src.pictureSourceOf(path),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into IMAGES itself.' },
+      upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
     },
     resultPath: (g) => g.imagePath,
 

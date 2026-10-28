@@ -14,9 +14,11 @@
 //   GET    /api/mv3/chat?project=…&kind=…   that thread, oldest first (no chat clears its thread since V25)
 //   POST   /api/mv3/chat/delete              { id } - one message taken away, with what goes with it (V31)
 //
-//   POST   /api/mv3/img/upload               multipart `image` + `project` - a reference from
-//                                            the person's own disk, filed on the images shelf
-//                                            under the project's category
+//   POST   /api/mv3/img/upload               multipart `image` + `project` (+ `categoryId`) - a reference
+//                                            from the person's own disk, filed into IMAGES itself or (V57)
+//                                            the person's folder open in the window
+//   POST   /api/mv3/img/link                 { url, project, categoryId } - (V57) a picture's link from a
+//                                            browser, downloaded and filed the same way
 //
 // A MESSAGE IS SENT BY THE SERVER (phase J, the owner 2026-10-02 - the chat lives in the Library
 // panel now and is left and come back to). The press writes the person's turn, a record and an Alerts
@@ -198,9 +200,9 @@ router.post('/mv3/chat/delete', (req, res) => {
 });
 
 // ── A reference from the disk ───────────────────────────────────────────────
-// Its own door rather than /api/images/upload, and the difference is where it lands: this one
-// files the picture under the PROJECT's category - the same shelf that project's generations go
-// to - so a reference brought in by hand is findable tomorrow beside the pictures made from it.
+// Its own door rather than /api/images/upload. Until phase V56 it filed the picture under the PROJECT's
+// category; since V56 into IMAGES itself, and since V57 into the folder open in the attachment window or the
+// pictures column when that is a folder of the person's own (`_folderFor`).
 //
 // The extension is KEPT rather than normalised: a PNG with the background erased is one of the
 // things people attach, and rewriting it to .jpg would flatten the transparency onto black. A picture
@@ -228,16 +230,18 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
     try { fs.rmSync(req.file.path, { force: true }); } catch (x) { /* it is going anyway */ }
     return res.status(e.status || 400).json({ success: false, error: e.message });
   }
-  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it into IMAGES itself
+  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it into its folder
   const b = req.body || {};
   try {
     // (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images. потому что сейчас я потерял куда
-    // кинул файл") A picture brought into a chat lies in IMAGES itself - no category; the project is only remembered.
+    // кинул файл") A picture brought into a chat lies in IMAGES itself; (V57, (ок2), (ок3)) through the window or the column,
+    // in the person's folder open there. The project is only remembered.
+    const cat = _folderFor('images', b.categoryId);
     const { item } = await IMG.add(imagePath, {
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname),
       source: 'upload',
-      categoryId: '',
-      categoryLabel: '',
+      categoryId: cat.id,
+      categoryLabel: cat.label,
       meta: { project: String(b.project || '') || null, attached: true },
     });
     res.json({ success: true, item });
@@ -248,6 +252,98 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
 
 router.use('/mv3/img/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+});
+
+/**
+ * (phase V57, the owner's (ок2): "в попапе падает в корневую images либо в папку которую создал пользователь и кинул в
+ * нее") The folder a picture brought into a chat goes into: the one asked for (`id` - the folder open in the attachment
+ * window or the pictures column) when it is a folder of the person's own of this kind - not a required one (Generated,
+ * Screenshots, the references of Environments / Lookbooks: lib/library-cats.js isLocked) and nothing under those
+ * references (`closedWhy` - "В референсы окружений и лукбуков нельзя класть ничего вручную"); else the kind's root.
+ * -> { id, label } ('' for the root).
+ */
+function _folderFor(kind, id) {
+  const none = { id: '', label: '' };
+  const cid = String(id || '').trim();
+  if (!cid) return none;
+  const LC = require('../lib/library-cats');
+  const c = LC.find(kind, cid);
+  if (!c) return none;
+  if (LC.isLocked(kind, c.id)) return none;
+  if (typeof LC.closedWhy === 'function' && LC.closedWhy(kind, c.id)) return none;
+  return { id: c.id, label: c.label };
+}
+
+// ── A picture by its link (phase V57, the owner's (ок4): "Ок4 - по рекомендации. Пробовать не будем доставать") ─────
+// A picture dragged from a browser onto a chat or its attachment window. Only a picture's OWN address is taken: the
+// answer must be a picture (its bytes read by lib/image-in.js, made sendable as a file from this computer is); a page's
+// address - an Instagram post, an article - is refused in words, and nothing is pulled out of the page. Filed as an upload
+// is: into IMAGES itself from the chat, into the person's folder open from the window or the column.
+const LINK_MAX = 64 * 1024 * 1024;           // the upload's own limit
+const LINK_MS = 45000;
+const PAGE_WORDS = 'This is a page, not a picture - drag the picture itself, or open it and drag it from there (a post goes to the Telegram bot).';
+
+async function _fetchPicture(url) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), LINK_MS);
+  try {
+    let r;
+    try {
+      r = await fetch(url, { signal: ac.signal, redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' } });
+    } catch (e) {
+      throw Object.assign(new Error(ac.signal.aborted ? 'the site did not answer in time' : 'the site could not be reached'), { status: 502 });
+    }
+    if (!r.ok) throw Object.assign(new Error('the site answered ' + r.status), { status: 502 });
+    const type = String(r.headers.get('content-type') || '').toLowerCase();
+    if (/^text\/|html|json|xml/.test(type) && !/svg/.test(type)) {
+      try { await r.body.cancel(); } catch (e) { /* let it go */ }
+      throw Object.assign(new Error(PAGE_WORDS), { status: 400 });
+    }
+    const len = +r.headers.get('content-length') || 0;
+    if (len > LINK_MAX) throw Object.assign(new Error('the picture is over 64 MB'), { status: 400 });
+    const parts = [];
+    let got = 0;
+    for await (const chunk of r.body) {
+      got += chunk.length;
+      if (got > LINK_MAX) { ac.abort(); throw Object.assign(new Error('the picture is over 64 MB'), { status: 400 }); }
+      parts.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(parts);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+router.post('/mv3/img/link', async (req, res) => {
+  const b = req.body || {};
+  const url = String(b.url || '').trim();
+  if (!/^https?:\/\/\S+$/i.test(url) || url.length > 4000) return res.status(400).json({ success: false, error: 'that is not a link' });
+  let buf;
+  try { buf = await _fetchPicture(url); }
+  catch (e) { return res.status(e.status || 502).json({ success: false, error: e.message }); }
+  let pic;
+  try { pic = await IMGIN.sendable(buf); }
+  catch (e) {
+    // Bytes that are no picture - a page that did not say it was one - are the page's words too.
+    return res.status(400).json({ success: false, error: e.status === 400 && /not a picture/.test(e.message) ? PAGE_WORDS : e.message });
+  }
+  try {
+    fs.mkdirSync(MEDIA.work, { recursive: true });
+    const file = 'mref_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex') + '.' + pic.ext;
+    fs.writeFileSync(path.join(MEDIA.work, file), pic.buf);
+    // Its name: the link's last part, without its query - else "picture".
+    let name = '';
+    try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || '').replace(/\.[^.]+$/, ''); } catch (e) { name = ''; }
+    name = name.replace(/[^\p{L}\p{N} ._-]+/gu, ' ').trim().slice(0, 120) || 'picture';
+    const cat = _folderFor('images', b.categoryId);
+    const { item } = await IMG.add('/media/work/' + file, {
+      name, source: 'upload', categoryId: cat.id, categoryLabel: cat.label,
+      meta: { project: String(b.project || '') || null, attached: true, link: url.slice(0, 2000) },
+    });
+    res.json({ success: true, item });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 module.exports = router;

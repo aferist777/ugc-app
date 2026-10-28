@@ -977,6 +977,8 @@ export function createChat(make) {
         open: () => { const input = _fileOf(kind); if (input) input.click(); },
         accepts: (f) => !!(U && U.ok(f)),
         drop: (files) => _upload(files),
+        // (phase V57, (ок4)) A picture's link let go over the window: downloaded into the folder open there.
+        link: kind === 'image' && U ? (url) => _linkPicture(url, { kind, cat: Pick.pickFolder() }) : null,
       },
       // (phase V27) A clip by a link, where the description takes them (`S.links`: { video: true }).
       link: (S.links && S.links[kind]) ? {
@@ -1075,7 +1077,7 @@ export function createChat(make) {
         _say('');
         _attach(att.path, att.name, Object.assign({}, att, { kind }, typeof was.slot === 'string' && was.slot ? { slot: was.slot } : {}));
         _loadColumn();
-        if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '', [att.path]);
+        if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '', [att.path], _landAt(kind, it));
         if (_atts.some(a => a.path === att.path)) return '';
         // On the shelf, but the zone did not take it - the model's rules said why, over the box.
         const said = (_ui && _ui.said && _ui.said.textContent) || 'this place did not take it';
@@ -1109,10 +1111,13 @@ export function createChat(make) {
   // SFX -> My sounds (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images") - the thread
   // keeps a path, never the bytes - and goes straight into the row. Every way in is this one: the window's "+ from this
   // computer…" and a drop over it, a drop on the chat, the column's "+", a paste into the box. Nothing else uploads it:
-  // the Library's own drop stands down while a chat shows, or one drop would file it twice. Resolves with the kinds that
-  // came in ({ image: [paths], ... }).
-  function _upload(files) {
-    const run = _uploadNow(files);
+  // the Library's own drop stands down while a chat shows, or one drop would file it twice.
+  // (phase V57, the owner's (ок2), (ок3): "либо в папку которую создал пользователь и кинул в нее") Through the attachment
+  // window and the column's "+" it goes INTO THE FOLDER OPEN there instead, when that is a folder of the person's own
+  // (`into` { kind, cat } - chat-pick.js pickFolder; the server has the last word, routes/mv3-img.js `_folderFor`).
+  // Resolves with the kinds that came in ({ image: { paths, at }, ... } - `at` the tree's node they went into).
+  function _upload(files, into) {
+    const run = _uploadNow(files, into);
     const all = Promise.all([_uploading, run]);
     _uploading = all;
     all.finally(() => { if (_uploading === all) _uploading = null; });
@@ -1125,11 +1130,21 @@ export function createChat(make) {
   const _kindOfFile = (f) => ['image', 'video', 'audio'].find(k => _U(k) && _U(k).ok(f)) || '';
   const _fileOf = (k) => (_ui && _ui.files ? _ui.files[k] || null : null);
 
-  async function _uploadNow(files) {
+  // The node of the media tree a file of `kind` went into: its folder (`item.categoryId`) under the kind's root - `lands`,
+  // which are the roots' keys (images, uploads, sounds) - else the root itself.
+  function _landAt(kind, item) {
+    const root = ((S.pick || {}).lands || {})[kind] || '';
+    const cat = String((item && item.categoryId) || '');
+    return root && cat ? root + ':' + cat : root;
+  }
+
+  async function _uploadNow(files, into) {
     let all = [...(files || [])].filter(f => f && _kindOfFile(f));
     // (phase V13) While the picker is open, files are for its place: its kind only, and no more than the place has room
     // for - the rest would spill into the other slots of the part.
     let note = '';
+    // (phase V57) ...and they go into the folder open in it.
+    if (!into && _picking && _pickAt) into = { kind: _pickAt.kind, cat: Pick.pickFolder() };
     if (_picking && _pickAt) {
       const U = _U(_pickAt.kind);
       const mine = all.filter(f => U && U.ok(f));
@@ -1148,7 +1163,7 @@ export function createChat(make) {
     _made = true;
     _say('adding ' + list.length + ' ' + (list.length === 1 ? 'file' : 'files') + '…');
     let bad = list.length < all.length ? ((partOf(_kindOfFile(all.find(f => !list.includes(f)))) || {}).none || '') : '';
-    const filed = new Map();      // kind -> the paths that came in
+    const filed = new Map();      // kind -> { paths, at } - what came in, and the node it went into
     for (const f of list.slice(0, S.maxAtts)) {
       const k = _kindOfFile(f);
       const U = _U(k);
@@ -1156,10 +1171,12 @@ export function createChat(make) {
       fd.append(U.field, f);
       fd.append('name', String(f.name || S.noun.one).replace(/\.[^.]+$/, ''));
       fd.append('project', _key || '');
+      if (into && into.kind === k && into.cat) fd.append('categoryId', String(into.cat));
       const d = await json(U.url, { method: 'POST', body: fd });
       if (d && d.success && d.item) {
         const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
-        filed.set(k, (filed.get(k) || []).concat(a.path));
+        const was = filed.get(k) || { paths: [], at: '' };
+        filed.set(k, { paths: was.paths.concat(a.path), at: _landAt(k, d.item) });
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
       } else bad = (d && d.error) || 'it could not be added';
     }
@@ -1169,9 +1186,55 @@ export function createChat(make) {
     else if (note) _say(note);
     else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
     _loadColumn();
-    // The picker opens the root a file went into, the file in view.
-    if (_picking) for (const [k, paths] of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '', paths);
+    // The picker opens the folder a file went into, the file in view.
+    if (_picking) for (const [k, got] of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '', got.paths, got.at);
     return Object.fromEntries(filed);
+  }
+
+  // ── A picture by its link (phase V57, the owner's (ок4): "ни ссылка перетещеная из браузера ...") ─────────────────
+  // A picture dragged from a browser onto the chat or the attachment window: the server downloads it (routes/mv3-img.js
+  // POST /api/mv3/img/link - a picture's own address only; a page's is refused in words, nothing is pulled out of pages),
+  // makes it sendable as a file from this computer and files it - onto the chat into IMAGES itself, through the window or
+  // the column into the folder open there (`into`) -, and it is attached. A picture the browser handed over as data
+  // (`data:image/…`) is a file from this computer. Resolves with what to say ('' - it is in).
+  async function _linkPicture(url, into) {
+    const U = _U('image');
+    if (!U) return T.onlyFiles;
+    const z = _zone();
+    const p = z ? z.parts.find(x => x.kind === 'image') : null;
+    if (z && !(p && p.room && !p.off)) { const w = (p && (p.off || p.none)) || 'This model takes no pictures.'; _say(w); return w; }
+    if (_picking && _pickAt && _pickAt.kind !== 'image') { const w = 'Only ' + (S.noun.many || 'files') + ' of this kind here.'; _say(w); return w; }
+    if (/^data:image\//i.test(url)) {
+      try {
+        const blob = await fetch(url).then(r => r.blob());
+        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '');
+        await _upload([new File([blob], 'picture.' + ext, { type: blob.type })], into);
+        return '';
+      } catch (e) { _say('Not added: the picture could not be read'); return 'Not added: the picture could not be read'; }
+    }
+    _made = true;
+    _say('downloading the picture…');
+    const run = (async () => {
+      const d = await json('/api/mv3/img/link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, project: _key || '', categoryId: (into && into.kind === 'image' && into.cat) || '' }),
+      });
+      if (!d || !d.success || !d.item) {
+        const why = (d && d.error) || 'it could not be downloaded';
+        _say('Not added: ' + why);
+        return 'Not added: ' + why;
+      }
+      const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
+      if (_ui && /^downloading the picture/.test(_ui.said.textContent || '')) _say('');
+      _attach(a.path, a.name, Object.assign({}, a, { kind: 'image' }));
+      _loadColumn();
+      if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {}).image || '', [a.path], _landAt('image', d.item));
+      return '';
+    })();
+    const all = Promise.all([_uploading, run]);
+    _uploading = all;
+    all.finally(() => { if (_uploading === all) _uploading = null; });
+    return run;
   }
 
   // ── The thread ────────────────────────────────────────────────────────────
@@ -1631,8 +1694,15 @@ export function createChat(make) {
     if (!_col.isOwn()) _col.paint();
   }
 
-  // (phase V56, (ги4)) The column's "+": the picture goes into IMAGES itself, and the column opens there with it in view.
+  // (phase V56, (ги4)) The column's "+": the picture goes into IMAGES itself, and the column opens there with it in view -
+  // (phase V57, the owner's (ок3)) into the folder open in the column when it is a folder of the person's own in IMAGES
+  // (not a required one, nor anything under Environments / Lookbooks - the server's rule), and the column stays on it.
   let _colFile = null;
+  function _colFolder() {
+    const s = _col ? _col.selected() : null;
+    const n = s && s.node;
+    return n && n.kind === 'images' && n.cat && !n.locked ? String(n.cat) : '';
+  }
   function _plusTile() {
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
@@ -1648,8 +1718,8 @@ export function createChat(make) {
         _colFile.addEventListener('change', async () => {
           const f = [..._colFile.files || []];
           _colFile.value = '';
-          const got = await _upload(f);
-          if (got && got.image && _col && S.column.home) _col.select(S.column.home);
+          const got = await _upload(f, { kind: 'image', cat: _colFolder() });
+          if (got && got.image && _col) _col.select(got.image.at || S.column.home || '');
         });
       }
       if (!_colFile.isConnected) _ui.root.appendChild(_colFile);
@@ -1931,13 +2001,28 @@ export function createChat(make) {
       _upload(files);
     });
     // A file dropped anywhere on the chat is an attachment - and only that (library.js stands down).
+    // (phase V57, (ок4)) So is a picture's link dragged from a browser - downloaded into IMAGES itself (_linkPicture); a
+    // drag of this app's own (a tile, a clip - `application/x-…`) is not one.
+    const _linkDrag = (dt) => {
+      const t = [...((dt && dt.types) || [])];
+      return !!_U('image') && t.includes('text/uri-list') && !t.some(x => /^application\/x-/i.test(x));
+    };
     root.addEventListener('dragover', (ev) => {
-      if (!ev.dataTransfer || ![...ev.dataTransfer.types].includes('Files')) return;
+      if (!ev.dataTransfer || (![...ev.dataTransfer.types].includes('Files') && !_linkDrag(ev.dataTransfer))) return;
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'copy';
     });
     root.addEventListener('drop', (ev) => {
-      if (!ev.dataTransfer || !ev.dataTransfer.files || !ev.dataTransfer.files.length) return;
+      if (!ev.dataTransfer) return;
+      if (!ev.dataTransfer.files || !ev.dataTransfer.files.length) {
+        if (!_linkDrag(ev.dataTransfer)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const url = Pick.dropLink(ev.dataTransfer);
+        if (url) _linkPicture(url, null);
+        else _say('Only a picture\'s own link comes in this way.');
+        return;
+      }
       ev.preventDefault();
       ev.stopPropagation();
       _upload(ev.dataTransfer.files);

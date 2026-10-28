@@ -900,6 +900,23 @@ function VIDEOS(ctx) {
 
   // What cannot go into the zone at all, said on its tile: a clip or a sound shorter than the model takes (one longer
   // goes, and only its part is sent).
+  // (phase V57, the owner's (ок1)) The longest clip the chosen model takes - Seedance one clip of 2-15 s (2.5: 2-30), Kling
+  // motion control 3-30 s of the moves (10 s while the character keeps the picture's orientation), lib/video-models.js's
+  // limits as the matrix gives them: the attachment window shows no clip longer, and counts none in its folders. A clip
+  // whose length is not known yet is shown (its cell says so when it is attached).
+  function _clipFit() {
+    const r = rec(), m = model();
+    const L = (r && r.limits) || {};
+    if (!r || !m || !(L.videos > 0)) return {};
+    const cap = m.family === 'kmc'
+      ? (params().orientation === 'image' ? (L.videoSecsImage || 10) : (L.videoSecs || 30))
+      : ((L.clipSecs || [2, 15])[1] || 15);
+    return {
+      fit: (x) => !(+(x && x.dur) > 0) || +x.dur <= cap + 0.05,
+      note: 'clips up to ' + cap + ' s - ' + m.label + ' takes no longer',
+    };
+  }
+
   function _pickWhy(it, kind) {
     if (kind === 'image' || !(+it.dur > 0)) return '';
     const rule = _spanRule({ kind, path: it.path });
@@ -2476,17 +2493,18 @@ function VIDEOS(ctx) {
     // (phase V13, the owner 2026-10-07) No right column: every "+" of the zone opens the picker on its place.
     pick: {
       sources: (kind) => SOURCES[kind] || [],
-      // (phase V55) The window with the tree, the almanac's size (chat-pick.js).
-      tree: (kind) => Src.TREE[kind] || null,
+      // (phase V55) The window with the tree, the almanac's size (chat-pick.js). (phase V57, the owner's (ок1): "все клипы
+      // длинне чем берет модель") For clips: only the ones the chosen model takes by their length - read at every opening.
+      tree: (kind) => (kind === 'video' && Src.TREE.video ? Object.assign({}, Src.TREE.video, _clipFit()) : Src.TREE[kind] || null),
       start: _startFor,
       why: _pickWhy,
       sourceOf: _sourceOf,
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {
-        image: 'A picture goes into IMAGES itself.',
-        video: 'A clip goes into VIDEO → Uploads itself.',
-        audio: 'A sound goes into SFX → My sounds itself.',
+        image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.',
+        video: 'A clip goes into the folder open here when it is one of yours in VIDEO → Uploads - else into Uploads itself.',
+        audio: 'A sound goes into the folder open here when it is one of yours in My sounds - else into My sounds itself.',
       },
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),
@@ -2495,7 +2513,8 @@ function VIDEOS(ctx) {
     // as a clip from this computer (chat-shell.js _linkIn, lib/link-queue.js).
     links: { video: true },
     // (phase V7) Each kind through its own door - pictures into IMAGES, clips into VIDEO -> Uploads, sounds into SFX ->
-    // My sounds, each into the root of its kind (phase V56, (ги4)) - and straight into their part of the zone.
+    // My sounds, each into the root of its kind (phase V56, (ги4)) or, through the attachment window, the person's folder open
+    // there (V57) - and straight into their part of the zone.
     uploads: {
       image: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile,
                att: (i) => ({ path: i.imagePath, name: i.name }) },

@@ -162,6 +162,14 @@ export function showPicture({ src, name, rows, from }) {
 // back mid-generation shows a countdown that is still telling the truth - and a place that is left
 // takes its overlay with it, because a countdown lying on somebody else's stage is about nothing.
 let _held = null;                            // { place, pr }
+// (phase V57) The makers of the casting moved into windows (wk-setup.js, wk-env.js): their work - a look being dressed,
+// a lookbook, an environment - is waited for on the stage while the panel shows the script, whose own paint says "nothing
+// of mine" (`onlyHere(null)`). Those three stay through that; a frame or a clip of the script still takes the stage from
+// them (one countdown at a time), and the step's next paint puts theirs back at its real age.
+const CASTING = new Set(['look', 'lookbook', 'environment']);
+
+/** The place whose countdown is on the stage now ('' - none). */
+export const heldPlace = () => (_held ? _held.place : '');
 
 export function holdProgress(place, spec) {
   if (_held && _held.place === place) return _held.pr;
@@ -177,9 +185,11 @@ export function holdProgress(place, spec) {
   return pr;
 }
 
-/** The place being painted says so; an overlay belonging to anywhere else goes quietly. */
-export function onlyHere(place) {
+/** The place being painted says so; an overlay belonging to anywhere else goes quietly - but the casting's (above) stays
+ *  while nothing else asks for the stage, unless `all` (the step is left). */
+export function onlyHere(place, all) {
   if (!_held || _held.place === place) return;
+  if (place == null && !all && CASTING.has(_held.place)) return;
   try { _held.pr.detach(); } catch (e) { /* it was already gone */ }
   _held = null;
 }
@@ -194,6 +204,66 @@ export function endProgress(place, error) {
     else { pr.step(); pr.finish(); }
   } catch (e) { /* the stage was rebuilt under it */ }
 }
+
+// ── A maker's window (phase V57, the owner's (ок7)) ─────────────────────────
+// "+ new look" / "+ new environment" in the choosing windows of talking head (wk-setup.js, wk-env.js): the choosing window
+// closes and this one opens over the page - the frame of the chats' attachment window (css/mv3-imagen.css .pk.is-tree, the
+// almanac's size), its title and tabs in the head, the maker's own bench in the body. On the stack of layers: Escape, the
+// cross and a press beside it close it; the work it started goes on (the server's), waited for on the stage.
+//   o: { title, name, anchor, onClose }  ->  { box, head, tabs, body, close(), alive() }
+let _win = null;
+
+export function openWindow(o) {
+  closeWindow();
+  const ov = el('div', 'pk-ov is-tree is-maker');
+  const box = el('div', 'pk is-tree is-maker');
+  box.setAttribute('role', 'dialog');
+  const head = el('div', 'pk-head');
+  const h = el('h3', null, o.title || '');
+  const tabs = el('div', 'mk-tabs');
+  const x = el('button', 'pk-close', '✕');
+  x.type = 'button';
+  x.title = 'Close (Esc)';
+  head.append(h, tabs, x);
+  const body = el('div', 'mk-body');
+  box.append(head, body);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  const W_MK = 860, H_MK = 560;
+  const place = () => {
+    const W = window.innerWidth, H = window.innerHeight, M = 8;
+    const w = Math.min(W_MK, W - 2 * M), hh = Math.min(H_MK, H - 2 * M);
+    const a = o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
+    const cx = a && a.width ? a.left + a.width / 2 : W / 2;
+    const cy = a && a.height ? a.top + a.height / 2 : H / 2;
+    box.style.width = w + 'px';
+    box.style.height = hh + 'px';
+    box.style.left = Math.round(Math.max(M, Math.min(W - w - M, cx - w / 2))) + 'px';
+    box.style.top = Math.round(Math.max(M, Math.min(H - hh - M, cy - hh / 2))) + 'px';
+  };
+  place();
+  window.addEventListener('resize', place);
+  const me = { box, head, title: h, tabs, body, close: closeWindow, alive: () => !!_win && _win.me === me };
+  const layer = Layers.open(ov, { name: o.name || 'maker', onEsc: closeWindow });
+  x.addEventListener('click', closeWindow);
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeWindow(); });
+  _win = { me, ov, layer, place, onClose: o.onClose };
+  return me;
+}
+
+export function closeWindow() {
+  if (!_win) return;
+  const w = _win;
+  _win = null;
+  window.removeEventListener('resize', w.place);
+  Layers.close(w.layer);
+  w.ov.remove();
+  closeMenu();
+  if (typeof w.onClose === 'function') w.onClose();
+}
+
+/** The maker's window that is open now, or null. */
+export const openWindowNow = () => (_win ? _win.me : null);
 
 // ── The menu on a tile ──────────────────────────────────────────────────────
 // Not modal (js/layers.js): it takes Escape and leaves the page's shortcuts alone. One at a time -

@@ -1507,7 +1507,8 @@ router.post('/mv3/video/card/:id/again', (req, res) => {
 
 // ── A clip from this computer ───────────────────────────────────────────────
 // Into VIDEO -> Uploads itself, no category (phase V56, (ги4): what is brought into a chat lies in the root of its kind;
-// lib/birols-store.js places it, makes its poster, measures it).
+// lib/birols-store.js places it, makes its poster, measures it) - or (V57, (ок2)) the folder of Uploads open in the
+// attachment window.
 const EXTS = ['.mp4', '.mov', '.webm', '.m4v', '.mkv', '.avi'];
 const _upload = multer({
   storage: multer.diskStorage({
@@ -1531,9 +1532,14 @@ router.post('/mv3/video/upload', _upload.single('video'), async (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch (er) { /* gone */ }
       return res.status(400).json({ success: false, error: 'it has no picture in it' + (dim.audio ? ' - a sound goes in among the sounds' : '') });
     }
+    // (phase V57, (ок2)) Through the attachment window: into the folder of Uploads open there (`categoryId`), when it is
+    // one - else Uploads itself.
+    const LC = require('../lib/library-cats');
+    const want = String(b.categoryId || '');
     const { item } = await require('../lib/birols-store').add('/media/work/' + req.file.filename, {
       kind: 'uploads',
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname),
+      categoryId: want && LC.find('uploads', want) && !LC.isLocked('uploads', want) ? want : '',
     });
     res.json({ success: true, item });
   } catch (e) {
@@ -1549,7 +1555,8 @@ router.use('/mv3/video/upload', (err, _req, res, _next) => {
 
 // ── A sound from this computer (phase V7) ───────────────────────────────────
 // Onto the Sounds shelf (lib/sounds-store.js): from the Library into the folder open there (`categoryId`); from a chat
-// into SFX -> My sounds itself, no category (phase V56, (ги4)).
+// into SFX -> My sounds itself, no category (phase V56, (ги4)) - or (V57, (ок2)) the folder of My sounds open in the
+// attachment window (the page sends only one of the person's own, chat-pick.js pickFolder).
 const SOUND_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.webm'];
 const _uploadSound = multer({
   storage: multer.diskStorage({

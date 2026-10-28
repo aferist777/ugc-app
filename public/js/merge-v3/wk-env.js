@@ -1,12 +1,15 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — where a first frame is set: the environments shelf, and the maker of new ones.
+   MERGE — where a first frame is set: the window of the made environments, and the maker of new ones.
 
-   The branch under setting & voice that is not the character (docs/local-app/PLAN.md, "create
-   environment"):
+   Both are WINDOWS since phase V57 (the owner 2026-10-29, (ок5), (ок7), (ок8)):
 
-     environment          the saved places. Picking one sets the project in it.
-     create environment   the maker - the same bench as create lookbook: a shelf to draw a base
-                          from on the left, a field for a photo and a sentence on the right.
+     where            the lower half of the stage pressed (js/merge-v3/wk-setup.js): the attachment window's
+                      frame with no tree and no left side (chat-pick.js openChoose) - only the environments
+                      their generator made (IMAGES -> Environments; the references are photos, not places),
+                      in wide tiles, with a search. A press SETS THE PROJECT IN IT at once and the window
+                      closes. "+ new environment" at its foot closes it and opens the maker's window.
+     new environment  the maker - the same bench as create lookbook: a shelf to draw a base from on the left, a
+                      field for a photo and a sentence on the right (wk-maker.js openWindow over the page).
 
    WHAT THE MAKER CAN BE GIVEN, and what each means (the server decides the details,
    routes/scen3.js POST /scen3/gen/env):
@@ -17,21 +20,20 @@
      a picture with no place       the agent names a few places; the person picks any number and
                                    presses create again; the picture lends only its atmosphere
 
-   What is made lands on the shelf, becomes the base for the next change, and goes ON TRIAL on the
-   lower half of the stage. `select` STANDS ON THE PICKED TILE (the owner, 2026-09-21) - the one
-   click that sets the project in that place and goes back to the hub - and the stage's own cross
-   takes the trial back off. A tile pressed on the shelf goes on trial the same way; nothing here
-   writes into the project by itself (decided with the owner 2026-09-21, docs/local-app/PLAN.md
-   "Сцена, setup и таймлайн-зеркало"). The stage itself is painted by the step
-   (js/merge-v3/wk-setup.js, _stage); this module only says what is on trial.
+   As soon as the server has taken the work the window goes and the countdown is on the stage, where the answer
+   lands. The place made IS SET IN THE PROJECT it was made for - as a look made for a project is put on it -
+   unless meanwhile another place was chosen there; it is the base of the next change when the maker is opened
+   again.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as API from './scen-api.js';
+import * as Pick from './chat-pick.js';
 import { askDelete } from './ask.js';
 import { derived } from '../chars-store.js';
+import { showToast } from '../notice.js';
 import {
   el, MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
-  holdProgress, endProgress, shelfHead,
+  holdProgress, endProgress, openWindow, closeWindow,
 } from './wk-maker.js';
 
 let _envs = null;                  // the shelf; read when first needed, again after every change
@@ -43,9 +45,10 @@ let _options = null;               // the places offered for a picture with no p
 let _optionsWhy = '';
 const _picked = new Set();
 let _making = false;
-let _made = '';                    // the last one made here, on trial on the stage with `select`
 let _said = '';                    // the agent's answer or what failed, said above the sentence
-let _lookedForRunning = false;     // the journal has been asked once whether something of ours runs
+let _job = null;                   // { label, estimateMs, startedAt, key, was } - the place being made, for the stage
+let _win = null;                   // the maker's window while it is open
+let _api = null;                   // the step's api, as the maker's window was opened with it
 
 const LABEL = {
   picked: 'Making the place you picked',
@@ -58,13 +61,13 @@ const LABEL = {
 const _pathOf = (p) => String((p && p.path) || p || '');
 const _nameOf = (path) => String(path || '').split('/').pop();
 
-function _needEnvs(api) {
-  if (_envs !== null || _loading) return;
+function _readEnvs() {
+  if (_loading) return Promise.resolve(_envs);
   _loading = true;
-  API.environments()
-    .then((files) => { _envs = files; })
-    .catch((e) => { _envs = []; _said = 'Could not read the environments: ' + e.message; })
-    .finally(() => { _loading = false; api.repaint(); });
+  return API.environments()
+    .then((files) => { _envs = files; return files; })
+    .catch((e) => { _envs = _envs || []; _said = 'Could not read the environments: ' + e.message; return _envs; })
+    .finally(() => { _loading = false; });
 }
 
 // A new picture in the field is a new question: what was offered and said about the last one
@@ -76,32 +79,33 @@ function _forget() {
   _said = '';
 }
 
-// ── The head of the panel ───────────────────────────────────────────────────
-// The tabs on the left and the title on the right, as on the looks (phase V24; js/merge-v3/wk-maker.js).
-function _bar(head, api, here) {
-  const tab = (label, title, id) => {
-    const b = el('button', 'mv3-sc-tab' + (here === id ? ' is-on' : ''), label);
-    b.type = 'button';
-    b.title = title;
-    if (here === id) b.disabled = true;
-    else b.addEventListener('click', () => api.go(id));
-    return b;
-  };
-  const x = el('button', 'mv3-iconbtn', '✕');
-  x.type = 'button';
-  x.title = 'Back to setting & voice';
-  x.addEventListener('click', () => api.go('hub'));
-  shelfHead(head, [
-    tab('environment', 'The saved environments', 'env'),
-    tab('create environment', 'Make one from a photo or a sentence', 'newenv'),
-  ], x);
+// ── "Where": the made environments, in a window ─────────────────────────────
+/** The window of the environments: a press sets the project in one. `api` - wk-setup.js _envApi. */
+export function openPlaces(api) {
+  const here = String(api.casting().locationImage || '');
+  Pick.openChoose({
+    title: 'environment',
+    crumb: 'Environments',
+    hint: 'press one - the project is set in it at once',
+    name: 'environment',
+    anchor: api.anchor(),
+    load: async () => {
+      const files = await _readEnvs();
+      return { items: (files || []).map(_pathOf).filter(Boolean).map(path => ({
+        path, name: _nameOf(path).replace(/\.[^.]+$/, ''), aspect: '3:2', thumb: derived(path, 'card'),
+      })) };
+    },
+    mark: (path) => (path === here ? 'set here' : ''),
+    press: (it) => { if (it.path !== here) api.patch({ locationId: '', locationImage: it.path }); },
+    make: { label: '+ new environment', title: 'Make one from a photo or a sentence', on: () => openMaker(api) },
+    empty: 'No environments yet - "+ new environment" makes the first one.',
+  });
 }
 
-// ── One place on a shelf ────────────────────────────────────────────────────
+// ── One place on the maker's shelf ──────────────────────────────────────────
 // Landscape, the shape they are made in now; an older upright one is shown whole inside it
-// rather than cut down to a strip. The cross and the menu are the lookbook tile's, and so is
-// `act` - the button the PICKED tile carries, which here is `select`.
-function _tile(path, on, pick, api, act) {
+// rather than cut down to a strip. The cross and the menu are the lookbook tile's.
+function _tile(path, on, pick) {
   const tile = el('button', 'mv3-wk-tile is-env' + (on ? ' is-on' : ''));
   tile.type = 'button';
   tile.title = _nameOf(path);
@@ -114,24 +118,15 @@ function _tile(path, on, pick, api, act) {
   const x = el('button', 'mv3-wk-tilex', '✕');
   x.type = 'button';
   x.title = 'Delete this environment';
-  x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(tile, path, api); });
+  x.addEventListener('click', (e) => { e.stopPropagation(); _askDelete(tile, path); });
   tile.appendChild(x);
-
-  if (act) {
-    const b = el('button', 'mv3-wk-tileact', act.label);
-    b.type = 'button';
-    b.title = act.title || '';
-    b.disabled = !!act.busy;
-    b.addEventListener('click', (e) => { e.stopPropagation(); act.on(); });
-    tile.appendChild(b);
-  }
 
   tile.addEventListener('click', pick);
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     tileMenu(e, [
       { label: 'open', sub: 'look at it, full size', on: () => _open(path) },
-      { label: 'delete', sub: 'for good', on: () => _askDelete(tile, path, api), danger: true },
+      { label: 'delete', sub: 'for good', on: () => _askDelete(tile, path), danger: true },
     ], 'environment menu');
   });
   return tile;
@@ -145,10 +140,11 @@ async function _open(path) {
   showPicture({ src: path, name: _nameOf(path), rows: [['description', meta.description]], from: meta.from });
 }
 
-function _askDelete(anchor, path, api) {
-  const current = String(api.casting().locationImage || '') === path;
+function _askDelete(anchor, path) {
+  const api = _api;
+  const current = !!api && String(api.casting().locationImage || '') === path;
   askDelete(anchor, 'Delete "' + _nameOf(path) + '"?',
-    current ? 'It is where this project is set: the environment field on setting & voice will be empty again.'
+    current ? 'It is where this project is set: the lower half of the stage will be empty again.'
       : 'The picture goes from the shelf for good.',
     async () => {
       try {
@@ -156,54 +152,16 @@ function _askDelete(anchor, path, api) {
           .then(x => x.json());
         if (!r || !r.success) throw new Error((r && r.error) || 'refused');
         if (_base === path) { _base = ''; _forget(); }
-        if (_made === path) _made = '';
-        if (api.trying() === path) api.tryPlace('');
         if (current) await api.patch({ locationId: '', locationImage: '' });
       } catch (e) {
         _said = 'Could not delete it: ' + e.message;
       }
       _envs = await API.environments().catch(() => _envs);
-      api.repaint();
+      _paint();
     });
 }
 
-// ── The shelf ───────────────────────────────────────────────────────────────
-export function paintShelf(host, head, api) {
-  _bar(head, api, 'env');
-  // Leaving the maker forgets what it found there: coming back asks the journal again.
-  _lookedForRunning = false;
-  if (_envs === null) {
-    host.appendChild(api.note('reading the environments…'));
-    _needEnvs(api);
-    return;
-  }
-  if (_said) host.appendChild(api.note(_said, true));
-  const current = String(api.casting().locationImage || '');
-  const trial = String(api.trying() || '');
-  const grid = el('div', 'mv3-wk-grid is-env');
-  const add = el('button', 'mv3-wk-tile is-add', '+');
-  add.type = 'button';
-  add.title = 'Create an environment from a photo or a sentence';
-  add.addEventListener('click', () => api.go('newenv'));
-  grid.appendChild(add);
-  for (const p of _envs) {
-    const path = _pathOf(p);
-    if (!path) continue;
-    // Lit: the one on trial, else the one the project is set in. A press puts a place on trial on
-    // the stage and `select` on the tile itself (the owner, 2026-09-21) - that is the write; a
-    // second press on the same tile takes the trial off again.
-    grid.appendChild(_tile(path, path === (trial || current), () => {
-      api.tryPlace(path === trial ? '' : path);
-      api.repaint();
-    }, api, path === trial ? {
-      label: 'select', title: 'Set this project in this environment', busy: api.saving(), on: () => api.select(),
-    } : null));
-  }
-  host.appendChild(grid);
-  if (!_envs.length) host.appendChild(api.note('No environments yet - the + makes the first one.'));
-}
-
-// ── The maker ───────────────────────────────────────────────────────────────
+// ── The maker's window ──────────────────────────────────────────────────────
 const MODE_LABEL = {
   picked: 'make the place you picked',
   photoWords: 'read the photo and apply the words',
@@ -235,38 +193,46 @@ function _why() {
   return '';
 }
 
-export function paintMaker(host, head, api) {
-  host.classList.add('is-split');
-  _bar(head, api, 'newenv');
-  _pickUpRunning(api);
+/** The maker's window, over the page. `api` - wk-setup.js _envApi. */
+export function openMaker(api) {
+  _api = api;
+  const win = openWindow({
+    title: 'new environment', name: 'new environment', anchor: api.anchor(),
+    onClose: () => { if (_win === win) _win = null; },
+  });
+  _win = win;
+  if (_envs === null) _readEnvs().then(_paint);
+  _paint();
+}
+
+function _paint() {
+  const win = _win;
+  if (!win || !win.alive()) return;
+  const api = _api;
+  win.body.textContent = '';
+  win.body.className = 'mk-body mv3-wk-scroll is-split';
 
   // LEFT: the shelf a base is drawn from. What is made joins it, so the pile grows while you work.
   const left = el('div', 'mv3-wk-half is-shelf');
   if (_envs === null) {
-    left.appendChild(api.note('reading the environments…'));
-    _needEnvs(api);
+    left.appendChild(_noteEl('reading the environments…'));
   } else if (!_envs.length) {
-    left.appendChild(api.note('No environments yet. The first one is made on the right.'));
+    left.appendChild(_noteEl('No environments yet. The first one is made on the right.'));
   } else {
     const grid = el('div', 'mv3-wk-grid is-env');
-    const here = String(api.casting().locationImage || '');
     for (const p of _envs) {
       const path = _pathOf(p);
       if (!path) continue;
-      // The one just made is on trial on the stage, and carries the `select` that sets the project
-      // in it - the same button the shelf's picked tile has, in the place where the answer landed.
       grid.appendChild(_tile(path, path === _base && !_ref, () => {
         _base = (_base === path ? '' : path);
         if (_base) _ref = null;                    // one base, not two
         _forget();
-        api.repaint();
-      }, api, (path === _made && path !== here) ? {
-        label: 'select', title: 'Set this project in this environment', busy: api.saving(), on: () => api.select(),
-      } : null));
+        _paint();
+      }));
     }
     left.appendChild(grid);
   }
-  host.appendChild(left);
+  win.body.appendChild(left);
 
   // RIGHT: the field. A photo from this computer replaces whatever was chosen on the left.
   const right = el('div', 'mv3-wk-half is-make');
@@ -275,14 +241,14 @@ export function paintMaker(host, head, api) {
     empty: 'a photo from this computer, or pick an environment on the left',
     onFile: (file) => {
       readPicture(file)
-        .then((p) => { _ref = { ...p, token: '' }; _base = ''; _forget(); api.repaint(); })
-        .catch((e) => { _said = e.message; api.repaint(); });
+        .then((p) => { _ref = { ...p, token: '' }; _base = ''; _forget(); _paint(); })
+        .catch((e) => { _said = e.message; _paint(); });
     },
-    onClear: () => { _ref = null; _base = ''; _forget(); api.repaint(); },
+    onClear: () => { _ref = null; _base = ''; _forget(); _paint(); },
     onOpen: () => (_ref ? showPicture({ src: _ref.dataUrl, name: _ref.name }) : _open(_base)),
   });
   right.append(drop, input);
-  host.appendChild(right);
+  win.body.appendChild(right);
 
   // THE FOOT, on the bottom edge: what was said, the places to pick, the sentence, the button.
   const foot = el('div', 'mv3-wk-foot');
@@ -294,8 +260,8 @@ export function paintMaker(host, head, api) {
     go.disabled = !!why || _making;
     go.textContent = _making ? 'making…' : 'create';
     go.title = why || 'Make it - this spends credits';
-    hint.textContent = _making ? '' : (why || MODE_LABEL[_mode()] || '');
-    hint.classList.toggle('is-why', !!why);
+    hint.textContent = _making ? (_job ? 'the stage says how far' : 'asking…') : (why || MODE_LABEL[_mode()] || '');
+    hint.classList.toggle('is-why', !!why && !_making);
   };
 
   const said = _said ? el('div', 'mv3-wk-said', _said) : null;
@@ -336,21 +302,18 @@ export function paintMaker(host, head, api) {
   foot.append(note, row);
   sync();
   right.appendChild(foot);
+}
 
-  // THE STAGE shows the place just made, on trial with `select` under it - unless it is already
-  // the project's, in which case it is simply there. The step paints the stage right after this
-  // (js/merge-v3/wk-setup.js, _stage), so the trial is only stated here, not painted.
-  if (_made && _made !== String(api.casting().locationImage || '') && api.trying() !== _made) api.tryPlace(_made);
+function _noteEl(text, bad) {
+  return el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), text);
 }
 
 async function _make(api) {
   const mode = _mode();
   if (!mode || _why() || _making) return;
   _making = true;
-  _made = '';
   _said = '';
-  api.repaint();
-  holdProgress('newenv', { label: LABEL[mode] || 'Making the place', estimateMs: 120000 });
+  _paint();
 
   const body = {
     prompt: _note.trim(), choices: [..._picked],
@@ -379,67 +342,83 @@ async function _make(api) {
     if (_ref && r.refToken) _ref.token = r.refToken;
 
     if (r.choose) {
-      // Nothing was made and nothing spent: the agent is asking which place. Not a duration worth
-      // learning either, so the overlay is let go rather than finished.
-      endProgress('newenv', '');
+      // Nothing was made and nothing spent: the agent is asking which place - in the window.
       _options = r.options || [];
       _optionsWhy = r.why || '';
       _picked.clear();
       _making = false;
-      api.repaint();
+      _paint();
       return;
     }
     // From here the server owns it: it waits, files the place on the shelf with its description and
-    // the photo it came from, and writes the answer into the journal. This only watches.
+    // the photo it came from, and writes the answer into the journal. The window goes; the stage waits.
+    _start(api, LABEL[mode] || 'Making the place', Date.now());
+    closeWindow();
     await _followMake(api, r.alertId);
   } catch (e) {
     const msg = (e && e.message) || 'unknown';
-    endProgress('newenv', msg);
+    _stop(msg);
     _making = false;
     // An agent that refused has answered the question, and it reads better as that than as an error.
     _said = e && e.refused ? msg : 'The environment failed: ' + msg;
-    api.repaint();
+    _paint();
+    if (!_win) showToast({ failed: true, mark: '!', title: 'The environment failed', where: msg, ms: 9000 });
   }
 }
 
-// Watching one row of the journal to its end. Started by `create`, and again by the panel itself
-// when it finds a row of its own already running - after a reload, or after somebody walked away
-// and came back.
+// The countdown on the stage, and what the project was set in when it began (`was`) - the place made goes in
+// only while nobody chose another meanwhile, in that same project.
+function _start(api, label, startedAt) {
+  _job = { label, estimateMs: 120000, startedAt: startedAt || Date.now(), key: api.key(), was: String(api.casting().locationImage || '') };
+  holdProgress('environment', _job);
+}
+function _stop(error) {
+  _job = null;
+  endProgress('environment', error);
+}
+
+/** The place being made, for the stage's countdown (wk-setup.js _reHold) - null when nothing is. */
+export const running = () => _job;
+
+// Watching one row of the journal to its end. Started by `create`, and again by the step itself when
+// it finds a row of its own already running - after a reload, or after somebody walked away and came back.
 async function _followMake(api, id) {
+  const job = _job;
   try {
     const rec = await API.follow(id);
-    endProgress('newenv');
+    _stop();
     _envs = await API.environments().catch(() => _envs);
-    _made = String((rec.result || {}).path || '');
-    _base = _made;                                 // the next change builds on it
+    const made = String((rec.result || {}).path || '');
+    _base = made;                                  // the next change builds on it
     _ref = null;
     _note = '';
     _forget();
+    // Set in the project it was made for - unless that is not the one open, or another place was chosen there.
+    if (made && job && api.key() === job.key && String(api.casting().locationImage || '') === job.was) {
+      await api.patch({ locationId: '', locationImage: made });
+    } else if (made) {
+      showToast({ mark: '✓', title: 'The environment is made', where: 'It is in IMAGES → Environments - "where" sets a project in it.', ms: 9000 });
+    }
   } catch (e) {
     const msg = (e && e.message) || 'unknown';
-    endProgress('newenv', msg);
+    _stop(msg);
     _said = 'The environment failed: ' + msg;
+    if (!_win) showToast({ failed: true, mark: '!', title: 'The environment failed', where: msg, ms: 9000 });
   }
   _making = false;
+  _paint();
   api.repaint();
 }
 
-// Is something of ours already running? Asked once per visit to the maker: the journal knows, and
-// the page may have been reloaded since it was started.
-function _pickUpRunning(api) {
-  if (_lookedForRunning || _making) return;
-  _lookedForRunning = true;
-  API.alerts().then((d) => {
-    const key = api.key();
-    const mine = (d.items || []).find(r => r.state === 'running' && r.what === 'environment'
-      && r.where && r.where.spot && r.where.spot.key === key && r.where.spot.view === 'newenv');
-    if (!mine || _making) return;
-    _making = true;
-    api.repaint();
-    holdProgress('newenv', {
-      label: 'Making the place', estimateMs: 120000,
-      startedAt: Date.parse(mine.startedAt) || 0,
-    });
-    _followMake(api, mine.id);
-  }).catch(() => { /* the list is not the work: without it the panel simply shows nothing */ });
+/** A row of this step's own found running in the journal (wk-setup.js _pickUpRunning): followed to its end. */
+export function pickUp(api, rec) {
+  if (_making || !rec) return;
+  _making = true;
+  _start(api, 'Making the place', Date.parse(rec.startedAt) || 0);
+  _followMake(api, rec.id);
+}
+
+/** The step is left: the windows go with it (wk-setup.js leave closes them); the work goes on. */
+export function leave() {
+  _win = null;
 }
