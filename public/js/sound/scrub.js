@@ -3,20 +3,26 @@
    плейхед, а то сейчас двигаются только рамки") - ONE module for the music player of the Library (js/sound/player.js) and
    the Cut window (js/sound/cut-window.js).
 
-   A canvas of two bands: the RULER on top - its seconds; a press and a drag on it move the playhead - and the WAVE under it
-   from the server's peaks (GET /api/track-peaks, lib/track-peaks.js: 200 a second, 0..255 of the file's loudest - nothing
-   is decoded in the page; the tile's 64 points stand in while they come, or when they cannot). Over the wave: the piece
-   between two gold handles, and the playhead, always shown - ▶ plays from it.
+   A canvas of two bands: the RULER on top - its seconds - and the WAVE under it from the server's peaks (GET
+   /api/track-peaks, lib/track-peaks.js: 200 a second, 0..255 of the file's loudest - nothing is decoded in the page; the
+   tile's 64 points stand in while they come, or when they cannot). The piece lies between two gold handles - a line
+   through the wave and a FLAG on the ruler, drawn over its ticks so it is always seen; and the playhead, always shown -
+   ▶ plays from it.
 
-   On the wave a handle is grabbed within a few pixels of it; a press elsewhere does what the owner of the wave says:
-   `press: 'seek'` moves the playhead (the player), `press: 'handle'` brings the nearer handle there (the Cut window).
+   One rule for the player and the Cut window (the owner 2026-10-28: "желтые флажки должны перекрывать линейку, чтобы их
+   видно было и перетаскивание флажков строго по линейке, а проигрывание и перестановка плейхеда по клику на волну"):
+   a handle is taken and dragged ONLY by its flag on the ruler; a press on the wave moves the playhead there (and a drag
+   on it goes on moving it); a press on the ruler away from the flags does nothing. Cursors: ew-resize over a flag,
+   pointer over the wave, the plain arrow over the rest of the ruler.
 
-     scrubber({ src, dur, wave, height, handles, press, range: [a, b], onSeek(t), onRange(a, b) })
-       -> { el, setTime(t), time(), setRange(a, b), range(), dur(), redraw(), destroy() }
+     scrubber({ src, dur, wave, height, handles, range: [a, b], onSeek(t), onRange(a, b) })
+       -> { el, setTime(t), time(), setRange(a, b), range(), dur(), dragging(), redraw(), destroy() }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const RULER = 16;          // the ruler's band, px
-const GRAB = 7;            // how near a handle a press takes it, px
+const FLAG = 10;           // a handle's flag on the ruler: its width from the pole, px
+const FLAG_H = 12;         // ... and its height from the ruler's top
+const GRAB = 3;            // a flag is taken this much past its edges, px
 const MIN_PIECE = 0.1;     // the shortest piece, s - lib/audio-cut.js refuses less
 
 // Seconds as a ruler says them: a sound under a minute in seconds ("0.5 s", "12 s"), a longer one as "1:30".
@@ -36,7 +42,7 @@ function _step(dur, w) {
 }
 
 export function scrubber(opts) {
-  const o = Object.assign({ height: 48, handles: true, press: 'seek', onSeek: () => {}, onRange: () => {} }, opts || {});
+  const o = Object.assign({ height: 48, handles: true, onSeek: () => {}, onRange: () => {} }, opts || {});
   const el = document.createElement('div');
   el.className = 'snd-scrub';
   const cv = document.createElement('canvas');
@@ -69,6 +75,16 @@ export function scrubber(opts) {
   const H = () => RULER + o.height;
   const xOf = (s) => (dur > 0 ? (s / dur) * W() : 0);
   const tOf = (x) => (dur > 0 ? Math.max(0, Math.min(dur, (x / W()) * dur)) : 0);
+
+  // A handle's flag: its pole at the handle, the cloth towards the inside of the piece ('a' to the right, 'b' to the
+  // left) - turned the other way when that side has no room at the edge of the canvas. The drawing and the press read it.
+  function _flag(which) {
+    const x = Math.round(xOf(which === 'a' ? a : b));
+    let dir = which === 'a' ? 1 : -1;
+    if (dir > 0 && x + FLAG > W()) dir = -1;
+    else if (dir < 0 && x - FLAG < 0) dir = 1;
+    return { x, dir, x0: Math.min(x, x + dir * FLAG), x1: Math.max(x, x + dir * FLAG) };
+  }
 
   // The loudest peak under each column of pixels.
   function _column(x0, x1) {
@@ -143,10 +159,10 @@ export function scrubber(opts) {
       g.fillRect(x, top + (hh - bh) / 2, bar, bh);
     }
     g.globalAlpha = 1;
+    // The handles' lines through the wave.
     if (o.handles) {
       g.fillStyle = gold;
-      g.fillRect(xa - 1, top, 2, hh); g.fillRect(xb - 1, top, 2, hh);
-      g.fillRect(xa - 1, top, 7, 5); g.fillRect(xb - 6, top + hh - 5, 7, 5);
+      g.fillRect(Math.round(xa) - 1, top, 2, hh); g.fillRect(Math.round(xb) - 1, top, 2, hh);
     }
     // The playhead: a line over both bands, a mark on the ruler.
     const xp = xOf(t);
@@ -155,23 +171,43 @@ export function scrubber(opts) {
     g.beginPath();
     g.moveTo(xp - 5, 0); g.lineTo(xp + 5, 0); g.lineTo(xp, 7); g.closePath();
     g.fill();
+    // The flags last, over the ruler's ticks and labels and the playhead's mark: a pole down the ruler and a cloth with
+    // a notch - what is taken to move a handle.
+    if (o.handles) {
+      g.fillStyle = gold;
+      for (const k of ['a', 'b']) {
+        const f = _flag(k);
+        const tip = f.x + f.dir * FLAG;
+        g.fillRect(f.x - 1, 0, 2, RULER);
+        g.beginPath();
+        g.moveTo(f.x, 0); g.lineTo(tip, 0); g.lineTo(tip - f.dir * 3, FLAG_H / 2); g.lineTo(tip, FLAG_H); g.lineTo(f.x, FLAG_H);
+        g.closePath();
+        g.fill();
+      }
+    }
   }
 
   // ── The pointer ──
   let drag = null;           // 'seek' | 'a' | 'b'
   const at = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  // What a press at p takes: on the ruler a flag (the one whose pole is nearer when two overlap) or nothing; on the
+  // wave the playhead.
   function _what(p) {
-    if (p.y < RULER) return 'seek';
-    if (o.handles) {
-      const da = Math.abs(p.x - xOf(a)), db = Math.abs(p.x - xOf(b));
-      if (Math.min(da, db) <= GRAB) return da <= db ? 'a' : 'b';
+    if (p.y >= RULER) return 'seek';
+    if (!o.handles) return null;
+    let best = null, bd = Infinity;
+    for (const k of ['a', 'b']) {
+      const f = _flag(k);
+      if (p.x < f.x0 - GRAB || p.x > f.x1 + GRAB) continue;
+      const d = Math.abs(p.x - f.x);
+      if (d < bd) { bd = d; best = k; }
     }
-    if (o.press === 'handle' && o.handles) { const s = tOf(p.x); return Math.abs(s - a) <= Math.abs(s - b) ? 'a' : 'b'; }
-    return 'seek';
+    return best;
   }
+  let off = 0;               // where in its flag a handle was taken, px - kept while it is dragged
   function _apply(p) {
-    const s = tOf(p.x);
-    if (drag === 'seek') { t = s; draw(); o.onSeek(t); return; }
+    if (drag === 'seek') { t = tOf(p.x); draw(); o.onSeek(t); return; }
+    const s = tOf(p.x - off);
     if (drag === 'a') a = Math.max(0, Math.min(s, b - MIN_PIECE));
     else b = Math.min(dur, Math.max(s, a + MIN_PIECE));
     draw();
@@ -180,13 +216,15 @@ export function scrubber(opts) {
   cv.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !(dur > 0)) return;
     drag = _what(at(e));
+    if (!drag) return;
     cv.setPointerCapture(e.pointerId);
-    _apply(at(e));
+    // A flag taken keeps where in it the press was - it does not jump to the pointer; the wave moves the playhead at once.
+    if (drag === 'seek') { off = 0; _apply(at(e)); } else off = at(e).x - xOf(drag === 'a' ? a : b);
   });
   cv.addEventListener('pointermove', (e) => {
     if (drag) { _apply(at(e)); return; }
     const w = _what(at(e));
-    cv.style.cursor = w === 'seek' ? (at(e).y < RULER ? 'col-resize' : 'pointer') : 'ew-resize';
+    cv.style.cursor = w === 'seek' ? 'pointer' : (w ? 'ew-resize' : 'default');
   });
   const up = () => { drag = null; };
   cv.addEventListener('pointerup', up);

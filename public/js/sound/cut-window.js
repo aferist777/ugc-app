@@ -3,8 +3,9 @@
    the owner 2026-10-27, (зв25), (зв26), (зв28), (зв29)) - the window for SFX and My sounds in the Library and for EVERY
    sound in Merge's Library panel (a track of Music in the Library is cut in its player instead, js/sound/player.js).
 
-   The sound drawn large with a RULER over it (js/sound/scrub.js, the server's peaks): a press and a drag on the ruler move
-   the playhead, ▶ plays from it; two gold handles mark the piece, "▶ the piece" plays it alone. "Cut" makes the piece a
+   The sound drawn large with a RULER over it (js/sound/scrub.js, the server's peaks - the same rule as the player's, the
+   owner 2026-10-28): a press on the wave moves the playhead, ▶ plays from it; two gold handles mark the piece, each
+   dragged by its flag on the ruler, "▶ the piece" plays it alone. "Cut" makes the piece a
    NEW sound (POST /api/audio/cut, lib/audio-cut.js) - and where it goes follows WHAT is cut, with no choice: a piece of a
    track of Music into the root of Music, a piece of SFX or My sounds into the root of My sounds. The sound it was cut from
    is not touched. In Merge "to timeline" lays the piece at the playhead - the same file, cut by the piece, no new file
@@ -55,7 +56,7 @@ export async function openCut(it, opts) {
 
   const stage = el('div', 'snd-cut-stage');
   const sc = scrubber({
-    src: it.path, dur, wave: it.wave, height: 120, handles: true, press: 'handle', range: [a, b],
+    src: it.path, dur, wave: it.wave, height: 120, handles: true, range: [a, b],
     onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = sc.dur() || dur; paintClock(); },
     onRange: (x0, x1) => { a = x0; b = x1; paintInfo(); },
   });
@@ -68,7 +69,7 @@ export async function openCut(it, opts) {
 
   const row = el('div', 'snd-cut-row');
   const play = el('button', 'snd-btn snd-cut-play', '▶');
-  play.title = 'Play from the playhead (Space) - move it on the ruler';
+  play.title = 'Play from the playhead (Space) - a press on the wave moves it';
   const piece = el('button', 'snd-btn', '▶ the piece');
   piece.title = 'Play only the piece between the gold handles';
   play.type = piece.type = 'button';
@@ -109,7 +110,7 @@ export async function openCut(it, opts) {
   const paintInfo = () => {
     const long = D() >= 60;
     info.textContent = 'from ' + fmt(a, long) + ' to ' + fmt(b, long) + ' · ' + (b - a).toFixed(2) + ' s of ' + fmt(D(), long)
-      + ' - drag the gold handles; the ruler moves the playhead';
+      + ' - drag the gold flags on the ruler; a press on the wave moves the playhead';
   };
   const paintClock = () => {
     const short = D() < 10;

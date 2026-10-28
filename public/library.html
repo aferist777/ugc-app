@@ -97,7 +97,13 @@
          selected tile is - on Characters, Lookbooks and Environments (js/library/info.js) - or the
          selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
-      <div class="lib-grid" id="lib-grid"></div>
+      <!-- The gallery's column: the grid, and under it (phase V54) THE MUSIC PLAYER while Music is open - out of the grid
+           that is drawn again, and only under it: the tree's column on the right goes down to the bottom (the owner
+           2026-10-28: "плеер не должен заходить под столбец дерева"; js/sound/player.js, shown by js/library/main.js). -->
+      <div class="lib-field" id="lib-field">
+        <div class="lib-grid" id="lib-grid"></div>
+        <div id="lib-player" hidden></div>
+      </div>
       <!-- (V38.6) Scenarios: the list's width, dragged and remembered (js/library/main.js _wireScSash). -->
       <div class="lib-tree-sash lib-sc-sash" id="lib-sc-sash" hidden title="Drag to resize the list, double-click for the usual width"></div>
       <!-- THE MEDIA TREE (phase V28.5, the owner 2026-10-12): on Media, what it selects is what the grid shows -
@@ -111,9 +117,6 @@
       <!-- (V38.6) Scenarios: a draft selected in the list - the generator's form, moved here (js/library/make.js mount). -->
       <section class="lib-sc-draft" id="lib-sc-draft" hidden></section>
     </div>
-    <!-- (phase V54) THE MUSIC PLAYER: the bottom of Media while Music is open, out of the gallery that is drawn again
-         (js/sound/player.js, shown by js/library/main.js). -->
-    <div id="lib-player" hidden></div>
     <!-- THE SCENARIO GENERATOR (phase E): sources down the left, the form or a source's topics on the
          right. Built the first time "New scenario" is pressed and only hidden after that, so what it
          runs goes on while the list is looked at (js/library/make.js). -->

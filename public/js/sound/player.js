@@ -1,15 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE MUSIC PLAYER (phase V54, the owner 2026-10-27: "давай у музыки во всю ширину поля будет плеер, в котором пользователь
    сможет перематывать, обрезать и все то, что делает попап cut"; (зв12)-(зв16), (зв25): only on the Library's page, only
-   with Music; "этот плеер я бы поместил перманентно в музыкальной вкладке библиотеки") - a bar at the bottom of the Media
-   field, outside the gallery that is drawn again, there while Music is open (its root, highlights, its moods).
+   with Music; "этот плеер я бы поместил перманентно в музыкальной вкладке библиотеки") - a bar under the gallery only
+   (the owner 2026-10-28: "плеер не должен заходить под столбец дерева" - library.html #lib-field), outside the grid that
+   is drawn again, there while Music is open (its root, highlights, its moods).
 
    Until a track is pressed it says "choose a track"; then the last track stays on it where it was. Leaving Music stops the
    sound and hides the bar; coming back shows the same track at the same place (kept for the next visit of the page too).
    SFX and My sounds do not play in it - their tiles play as before, their "Cut…" is the Cut window.
 
    On the bar: ▶/⏸, the name, "0:41 / 3:12", the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a
-   press on the wave or the ruler moves the playhead), the handles of a piece, "▶ the piece", "Cut" - the piece a new track
+   press on the wave moves the playhead, playing goes on from there), the handles of a piece - dragged by their gold flags
+   on the ruler -, "▶ the piece", "Cut" - the piece a new track
    in the root of Music (POST /api/audio/cut, lib/audio-cut.js) - and ✕, which takes the track off the bar. Space on the
    page plays and pauses (the page asks, js/library/main.js). "Cut…" in a track's menu opens it here with a piece marked.
 
@@ -104,7 +106,7 @@ export function createPlayer(host, opts) {
     playEnd = 0;
     const d = cur.dur;
     sc = scrubber({
-      src: cur.path, dur: d, wave: cur.wave, height: 48, handles: true, press: 'seek',
+      src: cur.path, dur: d, wave: cur.wave, height: 48, handles: true,
       range: range || [0, d],
       onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = 0; paint(); },
       onRange: () => save(),
@@ -134,7 +136,7 @@ export function createPlayer(host, opts) {
       audio.pause();
       audio.currentTime = a; sc.setTime(a);
       host.classList.remove('is-flash'); void host.offsetWidth; host.classList.add('is-flash');
-      o.status('Drag the gold handles round the piece, then Cut - it becomes a new track in Music.');
+      o.status('Drag the gold flags on the ruler round the piece, then Cut - it becomes a new track in Music.');
       save(); paint();
       return;
     }

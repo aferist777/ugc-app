@@ -138,7 +138,10 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
 /* (V38.6) Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
    selected one on the right - a scenario's column, or a draft's form (#lib-sc-draft, the generator's form moved in). */
-.lib-split.is-scenarios > #lib-grid{ flex:0 0 var(--sc-list-w, 360px); }
+/* (phase V54) The gallery's column: the grid and, under it only, the music player (#lib-player) - the tree's column beside
+   it goes down to the bottom. */
+.lib-field{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0; }
+.lib-split.is-scenarios > .lib-field{ flex:0 0 var(--sc-list-w, 360px); }
 .lib-split.is-scenarios > .lib-info{ flex:1 1 0; border-left:0; }
 .lib-sc-draft{ flex:1 1 0; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); }
 .lib-sc-draft[hidden]{ display:none; }

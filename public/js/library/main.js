@@ -30,7 +30,7 @@ import { waveEl } from '../sound/wave.js';
 import { soundMenu, myCats } from '../sound/menu.js';
 import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
-// (phase V54) The music player at the bottom of Media while Music is open.
+// (phase V54) The music player under the gallery while Music is open.
 import { createPlayer } from '../sound/player.js';
 // (phase V54) Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
 import * as TS from '../tile-select.js';
@@ -180,8 +180,8 @@ function _paintMake() {
 }
 
 // ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
-// A bar at the bottom of Media, there while Music is open (its root, highlights, its moods) - out of the gallery, so
-// drawing the gallery again stops nothing. Leaving Music stops it and hides it; back, the same track where it was.
+// A bar under the gallery (not under the tree's column), there while Music is open (its root, highlights, its moods) -
+// out of the grid, so drawing the grid again stops nothing. Leaving Music stops it and hides it; back, the same track where it was.
 let _player = null;
 const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
 function _paintPlayer() {
