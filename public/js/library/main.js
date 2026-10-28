@@ -19,11 +19,14 @@ import * as RE from './renders.js';
 import * as INFO from './info.js';
 import * as MK from './make.js';
 import * as CM from './chmake.js';
-import * as MC from './makechat.js';
+// (phase V56, (ги7)) What is known about a made environment or lookbook, in the viewer's right column.
+import { madeRows } from './made-rows.js';
 import * as NR from './narrators.js';
 import { PICTURE_ACCEPT } from '../picture-file.js';
 import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
+// (phase V58, the owner's (лк6)) New environment / New lookbook - the generators' window (sub-session P's module).
+import { openGenerator } from '../gen-window.js';
 // (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
 // - the same modules as Merge's Library panel.
 import { waveEl } from '../sound/wave.js';
@@ -84,8 +87,8 @@ let _reqId = 0;
 // last - a newer read that overtakes the one that asked must not drop them.
 let _checksDue = false;
 // THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
-// shelf - Scenarios the generator, Characters New Character; Environments and Lookbooks' chats
-// (js/library/makechat.js) on Media since phase V56 (_openMediaMaker). "New …" at the LEFT of the header opens it,
+// shelf - Scenarios the generator, Characters New Character (Environments' and Lookbooks' generators are WINDOWS since
+// phase V58 - _openGen, below). "New …" at the LEFT of the header opens it,
 // "← …" in the same place brings the shelf back, read again. Leaving one only hides it: what it runs goes
 // on. Each module answers init(hooks), open(opts) and close(), and none of them touches its host's
 // `hidden` for good - _paintMake is the one writer, because it runs on every read of a shelf and an area
@@ -101,23 +104,15 @@ const MAKERS = {
     title: 'Make a character - from the parameters, a preset, a random face or your own picture',
     backTitle: 'Back to the characters - what is being made goes on',
   },
-  environments: {
-    mod: MC.environments, host: 'lib-envmake', label: 'New environment', back: '← Environments',
-    title: 'Make an environment - from words, from a photo, or one already made changed',
-    backTitle: 'Back to the environments - what is being made goes on',
-  },
-  lookbooks: {
-    mod: MC.lookbooks, host: 'lib-lbmake', label: 'New lookbook', back: '← Lookbooks',
-    title: 'Make a lookbook - from words, from a photo, or one already made built on',
-    backTitle: 'Back to the lookbooks - what is being made goes on',
-  },
 };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
-// (phase V55, the owner's (гн10)) ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the tree's row, the bar's "New …")
-// opens their generator - (phase V56, the owner's п. 20) on the WHOLE field, the gallery and the tree put away as a shelf's
-// making area puts its shelf away ("в генераторах можно дерево которое с самого права скрывать, так как у нас есть
-// столбце с деревом дропдауном"); "← Environments" / "← Lookbooks" or the Media button bring the gallery back.
-let _mediaMaking = '';    // 'environments' | 'lookbooks' while its generator shows on Media; '' = the gallery
+// (phase V55, the owner's (гн10); phase V58, the owner's (лк6)) ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the
+// tree's row, its menu, the bar's "New …") opens their generator as a WINDOW over the page (_openGen) - the gallery and the
+// tree stay where they are.
+const GEN = {
+  environments: { label: 'New environment', title: 'Make an environment - from words, from a photo, or one already made changed' },
+  lookbooks: { label: 'New lookbook', title: 'Make a lookbook - from words, from a photo, or one already made built on' },
+};
 const MADE_KINDS = new Set(['environments', 'lookbooks']);
 // The node selected is Environments or Lookbooks itself: its kind, else ''.
 const _madeNode = () => (_shelf === 'media' && _node && _node.make && MADE_KINDS.has(_node.make) ? _node.make : '');
@@ -157,67 +152,81 @@ function _paintShelves() {
   const onMedia = _shelf === 'media' && !_makingOn;
   for (const id of ['lib-tree', 'lib-tree-sash']) { const e = $(id); if (e) e.hidden = !onMedia; }
   // (phase V34.E) The search over SFX goes with Media; it is painted again when the shelf is read (_paintSndHead).
-  // (phase V35) So does the path to the node - and (phase V55) both give way to a generator shown there.
-  if (!onMedia || _mediaMaking) for (const id of ['lib-snd-head', 'lib-crumbs']) { const h = $(id); if (h) h.hidden = true; }
+  // (phase V35) So does the path to the node.
+  if (!onMedia) for (const id of ['lib-snd-head', 'lib-crumbs']) { const h = $(id); if (h) h.hidden = true; }
 }
 
 // ── The making areas ────────────────────────────────────────────────────────
 function _paintMake() {
   if (_makingOn && _makingOn !== _shelf) _makingOn = '';
   if (_narrOn && _shelf !== 'scenarios') _narrOn = false;
-  // (phase V55) On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator in
-  // place of the gallery, "← Environments" / "← Lookbooks" brings the gallery back.
-  const g = _mediaMaking || _madeNode();
-  const mm = g ? MAKERS[g] : null;
-  const m = mm || MAKERS[_shelf];
+  // (phase V55, V58) On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator's
+  // window over the page - there is nothing to come back from, so no "←".
+  const g = _madeNode();
+  const m = g ? GEN[g] : MAKERS[_shelf];
   const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split'), nr = $('lib-narr');
   if (nb) {
-    nb.hidden = mm ? !!_mediaMaking : (!m || !!_makingOn || _narrOn);
+    nb.hidden = g ? false : (!m || !!_makingOn || _narrOn);
     if (m) { nb.textContent = m.label; nb.title = m.title; }
   }
   if (bb) {
-    bb.hidden = mm ? !_mediaMaking : (!m || !(_makingOn || _narrOn));
-    if (mm) {
-      bb.textContent = '← ' + (g === 'lookbooks' ? 'Lookbooks' : 'Environments');
-      bb.title = 'Back to the pictures in IMAGES - what is being made goes on';
-    } else if (_narrOn) {
+    bb.hidden = g ? true : (!m || !(_makingOn || _narrOn));
+    if (g) bb.textContent = '';
+    else if (_narrOn) {
       bb.textContent = _makingOn ? '← Generate script' : '← Scenarios';
       bb.title = _makingOn ? 'Back to the generator, as it was' : 'Back to the list of scenarios';
     } else if (m) { bb.textContent = m.back; bb.title = m.backTitle; }
   }
   if (nr) nr.hidden = _shelf !== 'scenarios' || _narrOn;
-  if (split) split.hidden = !!_makingOn || _narrOn || !!_mediaMaking;
+  if (split) split.hidden = !!_makingOn || _narrOn;
   for (const k of Object.keys(MAKERS)) {
     const h = $(MAKERS[k].host);
-    if (h) h.hidden = !((_makingOn === k && !_narrOn) || _mediaMaking === k);
+    if (h) h.hidden = !(_makingOn === k && !_narrOn);
   }
   const nh = $('lib-narrators');
   if (nh) nh.hidden = !_narrOn;
   _paintPlayer();
 }
 
-// (phase V55, (гн10); V56, п. 20) The generator of Environments or Lookbooks on Media, on the whole field. Its folder is
-// selected in the tree, so "←" comes back to it.
-async function _openMediaMaker(kind) {
-  if (_shelf !== 'media' || !MADE_KINDS.has(kind) || !MAKERS[kind]) return;
-  if (_mediaMaking && _mediaMaking !== kind) _closeMediaMaker(false);
-  if (_tree && (!_node || _node.key !== kind)) { _tree.select(kind, false); _node = _tree.selected(); }
-  _stopHearing();
-  if (_tsel) _tsel.clear();
-  _mediaMaking = kind;
-  _paintShelves();
-  _status('');
-  await MAKERS[kind].mod.open({});
+// (phase V55, (гн10); phase V58, the owner's (лк6), (лк7)) THE GENERATOR OF ENVIRONMENTS OR LOOKBOOKS - the same window a
+// talking head's "where" / "who" open (sub-session P's module), the size of the almanac, over the page: the gallery and the
+// tree stay where they are, the folder selected behind it. What it makes lands in that folder - the tree's numbers and,
+// while the folder is open, the gallery are read again.
+// What the window says to Alerts (`where`): the generator's address - a row still running, or failed, opens the window
+// again - and the old chat's `spot`, so a row that ended leads to the picture outlined in its folder
+// (alerts-bell.js `_hrefOf`) and a row running is picked up by the window opened again here.
+const GEN_WHERE = {
+  environments: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
+  lookbooks: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: 'Library · New lookbook', spot: { view: 'lbmake' } },
+};
+const GEN_KIND = { environments: 'environment', lookbooks: 'lookbook' };
+const _genWins = {};          // the window open per kind - pressed again, the same one stays
+async function _openGen(kind) {
+  if (!MADE_KINDS.has(kind)) return;
+  if (_shelf === 'media' && _tree && (!_node || _node.key !== kind)) {
+    _tree.select(kind, false);
+    _node = _tree.selected();
+    await _load({ checks: false });
+  }
+  if (_genWins[kind] && _genWins[kind].alive()) return;
+  try {
+    _genWins[kind] = openGenerator({
+      kind: GEN_KIND[kind],
+      where: () => GEN_WHERE[kind],
+      onMade: (path) => _genLanded(kind, path),
+      onClose: () => { _genWins[kind] = null; },
+    });
+  } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
 }
-
-// The gallery back - read again unless the caller reads it itself (a node pressed in the tree).
-function _closeMediaMaker(reload = true) {
-  if (!_mediaMaking) return null;
-  const k = _mediaMaking;
-  MAKERS[k].mod.close();
-  _mediaMaking = '';
-  _paintShelves();
-  return reload ? _load({ keepScroll: true }) : null;
+// Something the window made landed (whether or not the window is still open): the numbers, and - while the gallery shows
+// that folder - the gallery, the new picture outlined (its id there is its file name).
+function _genLanded(kind, path) {
+  if (_tree) _tree.load();
+  _counts();
+  if (_shelf === 'media' && _node && _node.key === kind) {
+    if (path) { _sel = String(path).split('/').pop(); _scrollSel = true; }
+    _load({ keepScroll: true, checks: false });
+  }
 }
 
 // ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
@@ -354,12 +363,10 @@ function _initTree() {
       _node = n;
       _sel = '';
       if (_tsel) _tsel.clear();         // another folder: nothing picked
-      // A node selected while a generator shows (an address landing on another folder): the gallery again, on that node.
-      if (_mediaMaking) _closeMediaMaker(false);
       if (_shelf === 'media') _load({ checks: false });
     },
-    // (phase V55, (гн10)) Environments / Lookbooks' "+": their generator, on the whole field since V56.
-    onMake: (n) => { if (_shelf === 'media' && n && n.make) _openMediaMaker(n.make); },
+    // (phase V55, (гн10)) Environments / Lookbooks' "+": their generator's window (phase V58).
+    onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make); },
     onChanged: (what) => (_shelf === 'media'
       ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
@@ -635,7 +642,7 @@ function _open(it, list, follow) {
       const orig = Cut.originalRow(item, repaintViewer);
       if (orig) rows.push(orig);
       // (phase V55) A made environment or lookbook in IMAGES: what is known about it, as its shelf's column says.
-      rows.push(...MC.madeRows(item));
+      rows.push(...madeRows(item));
       return rows;
     },
     onAction: async (id, item) => {
@@ -955,7 +962,7 @@ async function _deleteMany(all) {
 function _paintCrumbs() {
   const host = $('lib-crumbs');
   if (!host) return;
-  const on = _shelf === 'media' && !_makingOn && !_mediaMaking && !!_tree && !!_node;
+  const on = _shelf === 'media' && !_makingOn && !!_tree && !!_node;
   host.hidden = !on;
   host.textContent = '';
   if (on) host.appendChild(_tree.crumbsEl(_node));
@@ -966,7 +973,7 @@ function _paintSndHead() {
   _paintCrumbs();
   const host = $('lib-snd-head');
   if (!host) return;
-  const on = _shelf === 'media' && !_makingOn && !_mediaMaking && SS.isSfx(_node);
+  const on = _shelf === 'media' && !_makingOn && SS.isSfx(_node);
   host.hidden = !on;
   host.textContent = '';
   if (!on) return;
@@ -1277,7 +1284,6 @@ function _select(kind) {
   // (phase F4); pressing the open shelf otherwise does nothing.
   if (kind === _shelf) {
     if (_makingOn) _closeMaker();
-    else if (_mediaMaking) _closeMediaMaker();
     else _closeNarrators();
     return;
   }
@@ -1286,7 +1292,6 @@ function _select(kind) {
   if (_shelf === 'scenarios') SC.leave();  // and the lines typed are stored, an answer on its way dropped
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
-  if (_mediaMaking) _closeMediaMaker(false);      // (phase V55) Media's generator too
   if (_narrOn) { NR.close(); _narrOn = false; }
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
@@ -1501,7 +1506,7 @@ function _paintUpload() {
   const inp = $('lib-file');
   if (!btn) return;
   // (phase V55) Environments / Lookbooks take only what their generator made: "New …" stands in the bar instead.
-  btn.hidden = _shelf !== 'media' || !!_madeNode() || !!_mediaMaking;
+  btn.hidden = _shelf !== 'media' || !!_madeNode();
   // (phase V27) Clips come by a link too - B-rolls, Uploads, Hooks, not pictures or sounds.
   const lk = $('lib-link');
   if (lk) {
@@ -1689,7 +1694,7 @@ async function _upload(files) {
 // made there), ?shelf=characters&sel=<id> a character on the shelf, selected and in view, ?shelf=scenarios&make=1&src=<id>
 // the generator on a source (phase V28.1: a source being added is a row of its own), ?shelf=scenarios&make=1&draft=<id> the
 // generator on a draft (phase V38.1: the way back from Admin -> AI settings), ?shelf=media&kind=environments&make=1 (phase V56)
-// the generator of Environments on Media, ?shelf=media&kind=environments&sel=<file> a picture outlined there - and the old
+// the generator of Environments - its window over Media since phase V58, where the old chat's Alerts rows lead too -, ?shelf=media&kind=environments&sel=<file> a picture outlined there - and the old
 // ?shelf=environments|lookbooks[&make=1|&sel=] of the shelves that went land in the same places. Read when the
 // page loads, and - when the Library is already open - taken from the Alerts list without loading the
 // page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
@@ -1720,9 +1725,6 @@ async function _goToPlace(p) {
     if (_shelf !== p.kind) return;
   }
   _closeNarrators();                              // what the address names is under them
-  // (phase V56) Environments' or Lookbooks' generator on Media; any other place there puts it away.
-  if (p.made) { await _openMediaMaker(p.made); return; }
-  if (_mediaMaking) _closeMediaMaker(false);
   // (V38.6) A draft named - "← back" from AI settings, a link - is the draft selected on the shelf, its form on the right.
   if (p.make && p.kind === 'scenarios' && p.draft && !p.src) {
     if (_makingOn) await _closeMaker(() => SC.select('d:' + p.draft));
@@ -1745,6 +1747,8 @@ async function _goToPlace(p) {
     if (p.sel) { _sel = p.sel; _scrollSel = true; }
     await _load({ keepScroll: !p.mkind });
   }
+  // (phase V56, V58) Environments' or Lookbooks' generator: its window, over their folder.
+  if (p.made) await _openGen(p.made);
 }
 
 window.addEventListener('ugc:goto', (e) => {
@@ -1823,21 +1827,12 @@ function boot() {
       () => { if (id) { _sel = String(id); _scrollSel = true; } },
       () => _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved')),
   });
-  // The chats (phase V55, V56): "show in Environments" under a picture is the gallery of IMAGES -> Environments / Lookbooks
-  // again, that picture outlined - its id there is its file name (routes/library.js); a picture landing reads the tree's
-  // numbers.
-  const chatHooks = {
-    showOnShelf: (kind, path) => _goToPlace({ kind: 'media', sel: path ? String(path).split('/').pop() : '', mkind: MADE_KINDS.has(kind) ? kind : '' }),
-    landed: () => { if (_tree) _tree.load(); _counts(); },
-  };
-  MC.environments.init(chatHooks);
-  MC.lookbooks.init(chatHooks);
   const nb = $('lib-new');
-  // Scenarios asks which (phase V28.2); the other shelves open their making area; (phase V55) on Media, Environments or
-  // Lookbooks selected, their generator in place of the gallery.
-  if (nb) nb.addEventListener('click', () => (_madeNode() ? _openMediaMaker(_madeNode()) : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
+  // Scenarios asks which (phase V28.2); the other shelves open their making area; (phase V55, V58) on Media, Environments
+  // or Lookbooks selected, their generator's window.
+  if (nb) nb.addEventListener('click', () => (_madeNode() ? _openGen(_madeNode()) : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
-  if (bb) bb.addEventListener('click', () => (_mediaMaking ? _closeMediaMaker() : _narrOn ? _closeNarrators() : _closeMaker()));
+  if (bb) bb.addEventListener('click', () => (_narrOn ? _closeNarrators() : _closeMaker()));
   const nr = $('lib-narr');
   if (nr) nr.addEventListener('click', _openNarrators);
 
@@ -1884,7 +1879,7 @@ function boot() {
   if (grid) {
     _tsel = TS.createSelection({
       host: grid, tile: '.lib-card[data-key]',
-      active: () => _shelf === 'media' && !_makingOn && !_mediaMaking,
+      active: () => _shelf === 'media' && !_makingOn,
       onDelete: (keys) => _deleteMany(_items.filter(x => keys.includes(_keyOf(x)))),
     });
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
@@ -1926,8 +1921,9 @@ function boot() {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).
     if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(_makeOpts(arrive));
-    // (phase V56) An address of Environments' or Lookbooks' generator: it, on Media - unless another folder was pressed meanwhile.
-    else if (arrive && arrive.made && _shelf === 'media' && !_mediaMaking && _node && _node.key === arrive.made) _openMediaMaker(arrive.made);
+    // (phase V56, V58) An address of Environments' or Lookbooks' generator: its window, over Media - unless another folder was
+    // pressed meanwhile.
+    else if (arrive && arrive.made && _shelf === 'media' && _node && _node.key === arrive.made) _openGen(arrive.made);
   });
   _counts();
 }

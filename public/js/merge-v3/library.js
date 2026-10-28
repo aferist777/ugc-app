@@ -26,7 +26,8 @@
 
    (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - opened, laid on a lane as a picture,
    deleted, never moved (no star) - and their "+" (the tree's row, the gallery's "+" tile) opens New environment / New
-   lookbook - the Library's own chat - as a view of this panel (openMaker, below).
+   lookbook - (phase V58, the owner's (лк7)) the generator's WINDOW over the page, the one a talking head's "where" / "who"
+   open (openMaker, below).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
@@ -40,8 +41,10 @@ import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages,
 // (phase TG, block 7) Cutting a piece out of any video - one module with the Library page and the post viewer.
 import * as Cut from '../cut.js';
 import { DRAG_TYPE, DRAG_MEDIA, markGone, key as storeKey, onChange as onStoreChange } from './store.js';
-// (phase V55, the owner's (гн11)) New environment / New lookbook - the Library's own chats - as a view of this panel.
-import * as MC from '../library/makechat.js';
+// (phase V56, (ги7)) What is known about a made environment or lookbook, in the viewer's right column.
+import { madeRows } from '../library/made-rows.js';
+// (phase V58, the owner's (лк7)) New environment / New lookbook - the generators' window (sub-session P's module).
+import { openGenerator } from '../gen-window.js';
 // (phase V54, (зв29)) The Cut window's "to timeline": the piece at the playhead - the timeline's own function (sub-session B).
 import { placeSoundPiece } from './timeline-b.js';
 import { setOpenColumn } from './layout.js';
@@ -405,7 +408,7 @@ function _viewerRows(item) {
   const tr = item.meta && item.meta.trimmed;
   if (tr) rows.push(['trimmed', (+tr.in).toFixed(1) + 's – ' + (+tr.out).toFixed(1) + 's of the upload']);
   // (phase V55) A made environment or lookbook: what is known about it, as its shelf's column says.
-  rows.push(...MC.madeRows(item));
+  rows.push(...madeRows(item));
   return rows;
 }
 
@@ -557,9 +560,9 @@ function _plusTile() {
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
     return b;
   }
-  // (phase V55, the owner's (гн11)) IMAGES -> Environments / Lookbooks: "+" opens their generator right here, in the panel.
+  // (phase V55, the owner's (гн11); phase V58, (лк7)) IMAGES -> Environments / Lookbooks: "+" opens their generator's window.
   if (_node && _node.make && MADE.has(_node.make)) {
-    b.title = _node.makeLabel + ' - opens the generator here, in the Library panel';
+    b.title = _node.makeLabel + ' - opens the generator in a window';
     b.addEventListener('click', (e) => { e.stopPropagation(); openMaker(_node.make); });
     return b;
   }
@@ -1091,60 +1094,44 @@ export async function reveal(path) {
   return true;
 }
 
-// ── New environment / New lookbook in the panel (phase V55, the owner 2026-10-28, (гн11): "открывать генератор прямо в
-// панели") ──
+// ── New environment / New lookbook (phase V55, (гн11); phase V58, the owner's (лк6), (лк7)) ──
 // The "+" of IMAGES -> Environments / Lookbooks - their row in the tree, their menu, the gallery's "+" tile - opens the
-// Library's own chat (js/library/makechat.js: the same conversation, kept on the server) as a VIEW of this panel, the way
-// its chats are (js/merge-v3/lib-views.js): the gallery and the tree give way, the panel takes the room, "Library" in the
-// header leads back, another chat coming forward lets it go. A send carries Merge's address, so its Alerts row leads back
-// here (`?open=envmake|lbmake`, routes/makechat.js); "show on shelf" is the picture lit among Environments' / Lookbooks'.
+// generator's WINDOW over the page, the size of the almanac: the same window a talking head's "where" / "who" open
+// (sub-session P's module), one for the whole app. The panel stays as it is, the gallery and the tree where they were; what
+// the window makes lands in its folder, and the tree and the gallery are read again. (Until V58 it was the Library's chat
+// as a view of this panel - js/library/makechat.js, gone.) An Alerts row of that old chat sent from here still leads here,
+// `?open=envmake|lbmake` (routes/makechat.js), and opens the window.
 const MAKE_VIEW = { environments: 'envmake', lookbooks: 'lbmake' };
-const MAKE_HOST = { environments: 'lib-envmake', lookbooks: 'lib-lbmake' };
-let _making = '';             // the one showing, or ''
+const MAKE_KIND = { environments: 'environment', lookbooks: 'lookbook' };
+const MAKE_LABEL = { environments: 'New environment', lookbooks: 'New lookbook' };
+const _makeWins = {};         // the window open per kind - pressed again, the same one stays
 
-function _makerShown(kind, on) {
-  const h = document.getElementById(MAKE_HOST[kind]);
-  // `hidden` too: the chat asks again while something runs only while its host is not hidden (makechat.js _poll).
-  if (h) h.hidden = !on;
-}
-
-/** Open the generator of 'environments' or 'lookbooks' in the Library panel. */
+/** Open the generator of 'environments' or 'lookbooks' - its window, over the page. */
 export async function openMaker(kind) {
   if (!MAKE_VIEW[kind]) return;
-  Views.toBase();
-  setOpenColumn('library');
-  if (_making && _making !== kind) _closeMaker(_making, false);
-  _making = kind;
-  _makerShown(kind, true);
-  Views.setBase(MAKE_VIEW[kind], true);
-  await MC[kind].open({});
+  if (_makeWins[kind] && _makeWins[kind].alive()) return;
+  try {
+    _makeWins[kind] = openGenerator({
+      kind: MAKE_KIND[kind],
+      // Merge's address for the Alerts row - the window again, on whichever project is open; the place (`spot`) is one for
+      // every project, so a row running is picked up by the window opened again in any of them.
+      where: () => ({
+        page: 'merge', href: '/merge?' + (storeKey() ? 'p=' + encodeURIComponent(storeKey()) + '&' : '') + 'open=' + MAKE_VIEW[kind],
+        label: 'Merge · ' + MAKE_LABEL[kind], spot: { view: MAKE_VIEW[kind], page: 'merge' },
+      }),
+      anchor: document.getElementById('mv3-library'),
+      onMade: () => _makerLanded(),
+      onClose: () => { _makeWins[kind] = null; },
+    });
+  } catch (e) { _status((e && e.message) || 'The generator did not open', true); }
 }
 
-// Let go of - "Library" pressed (`back`: the panel shows the shelf again, read anew), or another chat took the base.
-function _closeMaker(kind, back) {
-  MC[kind].close();
-  _makerShown(kind, false);
-  if (_making === kind) _making = '';
-  if (back) { Views.setBase(MAKE_VIEW[kind], false); _reload(); }
-}
+// Something the window made landed: the tree's numbers, and the gallery while it is the folder shown.
+function _makerLanded() { _reload(); }
 
 function _initMakers() {
-  for (const kind of Object.keys(MAKE_VIEW)) {
-    MC[kind].init({
-      // Merge's address, for the Alerts row of a send made here.
-      where: () => ({ page: 'merge', href: '/merge?' + (storeKey() ? 'p=' + encodeURIComponent(storeKey()) + '&' : '') + 'open=' + MAKE_VIEW[kind] }),
-      landed: () => { if (_tree) _tree.load(); },
-      // The picture among the others of its folder, lit (reveal leaves the view for the shelf first).
-      showOnShelf: (_k, path) => { if (path) reveal(path); },
-    });
-    Views.registerChat(MAKE_VIEW[kind], {
-      root: MAKE_HOST[kind],
-      onBack: () => _closeMaker(kind, true),
-      onYield: () => _closeMaker(kind, false),
-    });
-  }
-  // ?open=envmake|lbmake - where the Alerts row of a send made here leads: the generator again, once a project is open (in a
-  // talking head, on its timeline step - where the Library is). Said once: the address forgets it.
+  // ?open=envmake|lbmake - where the Alerts row of the old chat's send made here leads: the window, once the page has its
+  // project. Said once: the address forgets it.
   let want = '';
   try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { want = ''; }
   const kindOf = (v) => Object.keys(MAKE_VIEW).find(k => MAKE_VIEW[k] === v) || '';
@@ -1154,10 +1141,10 @@ function _initMakers() {
       if (done || !storeKey()) return;
       done = true;
       try { const u = new URL(location.href); u.searchParams.delete('open'); history.replaceState({}, '', u); } catch (e) { /* a reload opens it again */ }
-      _openFromAddress(kindOf(want));
+      openMaker(kindOf(want));
     });
   }
-  // ...and from the Alerts list on this page, without a reload (js/alerts-bell.js `ugc:goto`): the chat is one for every
+  // ...and from the Alerts list on this page, without a reload (js/alerts-bell.js `ugc:goto`): the window is one for every
   // project, so the project open stays.
   window.addEventListener('ugc:goto', (e) => {
     let u;
@@ -1165,17 +1152,8 @@ function _initMakers() {
     const k = u.pathname === location.pathname ? kindOf(u.searchParams.get('open') || '') : '';
     if (!k) return;
     e.preventDefault();
-    _openFromAddress(k);
+    openMaker(k);
   });
-}
-
-async function _openFromAddress(kind) {
-  try {
-    const W = await import('./workshop.js');
-    await W.settled();
-    if (W.isTalking() && W.step() !== 'timeline') W.setStep('timeline');
-  } catch (e) { /* not a talking head */ }
-  openMaker(kind).catch(err => console.warn('[merge-v3] ' + kind + ':', err.message));
 }
 
 // ── The sash between the gallery and the tree ───────────────────────────────

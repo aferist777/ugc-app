@@ -183,9 +183,9 @@ function _hrefOf(rec) {
   if (rec.state === 'done' && rec.what === 'sheet' && spot.key) {
     return '/library?shelf=characters&sel=' + encodeURIComponent(spot.key);
   }
-  // An environment or a lookbook from the Library's chats (phase I): once it is made, the row leads
-  // to it, outlined - (phase V56) in IMAGES -> Environments / Lookbooks on Media, the shelves having gone;
-  // its id there is its file name. While it runs, to the chat.
+  // An environment or a lookbook made from the Library (phase I's chats; phase V58 the generators' window, js/gen-window.js,
+  // with the same place): once it is made, the row leads to it, outlined - (phase V56) in IMAGES -> Environments / Lookbooks
+  // on Media, the shelves having gone; its id there is its file name. While it runs, or when it failed, to the generator.
   if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'envmake' || spot.view === 'lbmake')) {
     return '/library?shelf=media&kind=' + (spot.view === 'envmake' ? 'environments' : 'lookbooks')
       + '&sel=' + encodeURIComponent(path.split('/').pop());
@@ -457,7 +457,27 @@ function _announce(rec) {
 }
 
 // ── reading the journal ─────────────────────────────────────────────────────
-async function _poll() {
+// ONE READ AT A TIME (phase V58, the owner's "two popups from one task"): the journal is read from several places - the
+// timer, a window handed over (pulseAlerts), the list opened, a retry - and two reads going at once both saw a finished
+// row before either had marked it announced, so it popped up twice. A read asked for while one goes is made once after
+// it (any number of asks - one more read), and the page remembers what it announced: a row is never announced twice
+// here, even when the mark did not reach the server (a row asked again and ended again is news again).
+let _reading = null;                        // the read going on - its promise
+let _again = false;                         // asked for again while it went
+const _told = new Set();                    // the ends this page announced: id + when it ended (a retried row ends again)
+const _endOf = (r) => r.id + '|' + (r.doneAt || '');
+
+function _poll() {
+  if (_reading) { _again = true; return _reading; }
+  _reading = (async () => {
+    try {
+      do { _again = false; await _readOnce(); } while (_again);
+    } finally { _reading = null; }
+  })();
+  return _reading;
+}
+
+async function _readOnce() {
   const d = await _json('/api/alerts');
   if (!d || !d.success) return;
   _items = d.items || [];
@@ -466,8 +486,9 @@ async function _poll() {
   _paintWait();
   if (_menu) _paintMenu();
 
-  const fresh = _items.filter(r => r.state !== 'running' && !r.notified);
+  const fresh = _items.filter(r => r.state !== 'running' && !r.notified && !_told.has(_endOf(r)));
   if (!fresh.length) return;
+  for (const rec of fresh) _told.add(_endOf(rec));
   for (const rec of fresh.slice(0, 3)) _announce(rec);
   await _json('/api/alerts/notified', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

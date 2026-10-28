@@ -37,8 +37,9 @@ const STATICS = ['/js/app-nav.js', '/presets/anatolian-stone.jpg', MANNEQUIN,
                  '/js/library/chmake.js', '/js/library/character/create-panel.js', '/js/library/character/edit-panel.js',
                  '/js/library/character/save-panel.js', '/js/library/character/presets.js', '/js/library/character/schema.js',
                  '/css/char-make.css',
-                 // the making chats of Environments and Lookbooks (phase I): the page's module, its styles, both chats
-                 '/js/library/makechat.js', '/js/library/links.js', '/css/makechat.css', '/api/makechat/environments', '/api/makechat/lookbooks',
+                 // what is known about a made environment or lookbook (phase V58: the making chats' page went, their routes stay
+                 // for the old Alerts rows), and the links module
+                 '/js/library/made-rows.js', '/js/library/links.js', '/css/made-rows.css', '/api/makechat/environments', '/api/makechat/lookbooks',
                  // the pictures chat in Merge's Library panel (phase J), on the shell both chats share (phase V1)
                  '/js/merge-v3/picchat.js', '/js/merge-v3/chat-shell.js', '/js/merge-v3/vidchat.js', '/js/merge-v3/vcatalog.js', '/css/mv3-catalog.css', '/api/mv3/video/matrix', '/css/mv3-imagen.css', '/api/mv3/img/matrix',
                  // the captions' one style module, the page's and the server's (phase K0)

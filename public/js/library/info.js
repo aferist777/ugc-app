@@ -4,7 +4,7 @@
 // itself - a copy sized for the column, never the original, and the way into the enlarged view - then
 // what belongs to it: a character's voices and looks. (Lookbooks and Environments had this column too
 // until phase V56 took their shelves away, (ги7): what it let one write - a lookbook's gender, the
-// description, how a place moves - is written in the viewer's right column now, js/library/makechat.js
+// description, how a place moves - is written in the viewer's right column now, js/library/made-rows.js
 // madeRows.)
 //
 // Read from the server on EVERY selection, a second press on the same tile included
