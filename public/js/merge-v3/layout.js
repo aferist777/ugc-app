@@ -16,7 +16,7 @@
    the preview 60px wide, and nothing on the page would explain why.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { key as storeKey } from './store.js';
+import { key as storeKey, timeline as storeTimeline } from './store.js';
 
 // New keys, on purpose: a width saved for the old shell - a 360px column beside a
 // full-width timeline - would put today's timeline in a 360px box.
@@ -91,6 +91,17 @@ let _panelFloor = false;   // a chat put the timeline on its floor (panelRoom) a
 // A highlights fragment is its project's: moving between fragments is not another project.
 const _projOf = (k) => String(k || '').replace(/^(hl_[^_]+)_\d+$/, '$1');
 const _follows = () => _atFloor || (_panelOn && _panelFloor);
+// (phase V58.1, the owner 2026-10-29: "давай его делать минимальным если нет ничего на таймлайне. потому что сейчас я
+// открываю проект ... на таймлайне ничего нет, а он открывается на всю высоту") AN EMPTY TIMELINE IS AT ITS MINIMUM. Lanes
+// with no clip and no line on any of them (a subtitle or a text line is a clip of its lane) have nothing to show, so their
+// floor is the hand's minimum, MIN_TL_H, not their height (_measureFloor); and a project opened with nothing on it goes to
+// that floor whatever height was kept for it (lanesChanged) - in any project and on any step, because every automatic
+// place (a talking head's setup and timeline, highlights, a chat, a new project) puts the timeline on its floor. A clip
+// laid: the floor is the lanes' again and a timeline following it goes up to them; the hand drags as before.
+function _empty() {
+  const t = storeTimeline();
+  return !!t && Array.isArray(t.tracks) && t.tracks.every(l => !(l && Array.isArray(l.clips) && l.clips.length));
+}
 
 function _measureFloor() {
   const panel = document.getElementById('mv3-timeline');
@@ -105,7 +116,8 @@ function _measureFloor() {
     if (getComputedStyle(ch).position === 'absolute') continue;
     h += ch.offsetHeight;
   }
-  return Math.ceil(h + BAR_H);
+  // (V58.1) Nothing on the lanes: the minimum, not their height.
+  return _empty() ? Math.min(MIN_TL_H, Math.ceil(h + BAR_H)) : Math.ceil(h + BAR_H);
 }
 
 // Against the column it lives in, not the page: the bar above is not room it can take. `hand` (V56): a height the person
@@ -132,7 +144,8 @@ export function lanesChanged() {
   if (k && k !== _proj) {
     const keep = _proj === null && !_atFloor && _keptIn() === k;
     _proj = k;
-    if (!keep) _atFloor = true;
+    // (V58.1) An empty one goes to its minimum even over a height kept for it.
+    if (!keep || _empty()) _atFloor = true;
   }
   const now = _tlNow();
   const to = _follows() ? _clampTl(0) : _clampTl(now, true);
