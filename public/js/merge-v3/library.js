@@ -23,6 +23,10 @@
    (phase V34.E) AUDIO -> SFX: ★ Favorites, Built-in (the program's set - read only), My sounds. A sound's tile carries its
    waveform, and - the one tile with a menu (the owner's (р2)) - the right button: Cut…, Rename, Move to, About, Delete
    (js/sound/menu.js). Over the grid of SFX: the search and "find online…" (js/sound/shelf.js, js/sound/online.js).
+
+   (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - opened, laid on a lane as a picture,
+   deleted, never moved (no star) - and their "+" (the tree's row, the gallery's "+" tile) opens New environment / New
+   lookbook - the Library's own chat - as a view of this panel (openMaker, below).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer, closeViewer, repaint as repaintViewer } from '../library/viewer.js';
@@ -35,7 +39,9 @@ import { toggleFavorite, deleteItem, deleteQuestion, uploadVideos, uploadImages,
          loadCats, setCategory, setKind, KINDS, createCategory } from '../library/actions.js';
 // (phase TG, block 7) Cutting a piece out of any video - one module with the Library page and the post viewer.
 import * as Cut from '../cut.js';
-import { DRAG_TYPE, DRAG_MEDIA, markGone } from './store.js';
+import { DRAG_TYPE, DRAG_MEDIA, markGone, key as storeKey, onChange as onStoreChange } from './store.js';
+// (phase V55, the owner's (гн11)) New environment / New lookbook - the Library's own chats - as a view of this panel.
+import * as MC from '../library/makechat.js';
 // (phase V54, (зв29)) The Cut window's "to timeline": the piece at the playhead - the timeline's own function (sub-session B).
 import { placeSoundPiece } from './timeline-b.js';
 import { setOpenColumn } from './layout.js';
@@ -78,7 +84,9 @@ const _isHeads = () => _kind() === 'heads';
 // Where a clip brought in lands, in words: a B-roll comes in with no category - into Generated itself.
 const _landName = (kind) => _tree.homeName(kind);
 const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
-const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : it.kind === 'images' ? 'image' : 'video');
+// (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - pictures, opened, laid and deleted, never moved.
+const MADE = new Set(['environments', 'lookbooks']);
+const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : (it.kind === 'images' || MADE.has(it.kind)) ? 'image' : 'video');
 
 function _body() { return document.querySelector('#mv3-library .mv3-panel-body'); }
 
@@ -279,7 +287,8 @@ function _tile(it, list) {
   }
 
   const star = document.createElement('button');
-  if (it.kind === 'heads') star.hidden = true;            // a kept talking head: no favourite to set
+  // A kept talking head, (phase V55) a made environment or lookbook: no favourite to set.
+  if (it.kind === 'heads' || MADE.has(it.kind)) star.hidden = true;
   star.type = 'button';
   star.className = 'mv3-tile-btn mv3-tile-star';
   star.textContent = '★';
@@ -381,7 +390,7 @@ const _viewerOptsOf = () => ({
     if (window.__ugcHighlightsFrom) window.__ugcHighlightsFrom('', '', (it.meta && it.meta.source) || it.id);
     return null;
   },
-  showSrc: (it) => (it.kind === 'images' ? '/api/thumb?src=' + encodeURIComponent(it.media) + '&v=main' : null),
+  showSrc: (it) => ((it.kind === 'images' || MADE.has(it.kind)) ? '/api/thumb?src=' + encodeURIComponent(it.media) + '&v=main' : null),
 });
 
 function _viewerRows(item) {
@@ -395,6 +404,8 @@ function _viewerRows(item) {
   // A clip trimmed the old way, once (before phase TG): what it was cut to.
   const tr = item.meta && item.meta.trimmed;
   if (tr) rows.push(['trimmed', (+tr.in).toFixed(1) + 's – ' + (+tr.out).toFixed(1) + 's of the upload']);
+  // (phase V55) A made environment or lookbook: what is known about it, as its shelf's column says.
+  rows.push(...MC.madeRows(item));
   return rows;
 }
 
@@ -541,6 +552,12 @@ function _plusTile() {
   if (_isHeads()) {
     b.disabled = true;
     b.title = 'Talking heads come from the talking-head projects - drag one onto a lane to use it here';
+    return b;
+  }
+  // (phase V55, the owner's (гн11)) IMAGES -> Environments / Lookbooks: "+" opens their generator right here, in the panel.
+  if (_node && _node.make && MADE.has(_node.make)) {
+    b.title = _node.makeLabel + ' - opens the generator here, in the Library panel';
+    b.addEventListener('click', (e) => { e.stopPropagation(); openMaker(_node.make); });
     return b;
   }
   // (phase V35) REFERENCES fills itself: the Telegram bot's posts, the pieces cut from a video, the sources downloaded.
@@ -807,13 +824,16 @@ async function _afterMany(d, verb) {
 }
 function _manyMenu(items, e) {
   const n = items.length;
-  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind));
+  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind) && !MADE.has(x.kind));
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
+  // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
+  const madeOnly = items.every(x => MADE.has(x.kind));
   TS.menuAt(e.clientX, e.clientY, [
-    ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
-      done: () => _reload(), status: (t, bad) => _status(t, bad),
-    })],
-    [allFav ? '★ Remove from favourites' : '★ Add to favourites', starable.length < n ? 'posts have no star' : '',
+    madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
+      : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
+        done: () => _reload(), status: (t, bad) => _status(t, bad),
+      })],
+    [allFav ? '★ Remove from favourites' : '★ Add to favourites', !starable.length ? 'they have no star' : starable.length < n ? 'some of them have no star' : '',
       starable.length ? async () => {
         try { await _afterMany(await TS.batch('favorite', starable, { favorite: !allFav }), allFav ? 'taken off favourites' : 'in favourites'); }
         catch (err) { _status(err.message, true); }
@@ -869,6 +889,11 @@ function _lock(on) {
 async function _upload(files, what) {
   const list = Array.from(files || []);
   if (!list.length) return;
+  // (phase V55) Environments / Lookbooks take only what their generator made.
+  if (_node && _node.make && MADE.has(_node.make)) {
+    _status(_node.label + ' takes only what ' + _node.makeLabel + ' makes - a photo goes into its references', true);
+    return;
+  }
   if (_isImages()) return _uploadAs(list.filter(isPictureFile), list.length, 'images', 'image', (l, on) => uploadImages(l, on));
   if (_isAudio()) {
     const into = SS.filesTo(_node);
@@ -928,7 +953,8 @@ function _wireDrop() {
     // let go of elsewhere on the panel then is nobody's, but it must not replace the page either - nor over
     // the captions view, where the shelf is hidden (K6).
     if (Views.isChat() || Views.isCaptions()) {
-      if (!(e.target && e.target.closest && e.target.closest('.mv3-pc.is-shown'))) e.dataTransfer.dropEffect = 'none';
+      // (phase V55) The generator of Environments / Lookbooks takes a photo let go on it, as a chat does.
+      if (!(e.target && e.target.closest && e.target.closest('.mv3-pc.is-shown, .mv3-mkchat.is-shown'))) e.dataTransfer.dropEffect = 'none';
       return;
     }
     e.dataTransfer.dropEffect = 'copy';
@@ -1013,7 +1039,9 @@ export async function showGroup(kind, catLabel) {
 // Where the Alerts row of a picture or a clip that has landed leads (js/alerts-bell.js, js/merge-v3/main.js): its kind
 // and category selected in the tree, its tile in view and lit until the shelf is painted again.
 const _KIND_OF_PATH = [['/media/birols/', 'birols'], ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'],
-  ['/media/images/', 'images'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music']];
+  ['/media/images/', 'images'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music'],
+  // (phase V55) IMAGES -> Environments / Lookbooks - their generators' own folders.
+  ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks']];
 export async function reveal(path) {
   const want = String(path || '').split('?')[0];
   if (!want || !_tree) return false;
@@ -1044,6 +1072,93 @@ export async function reveal(path) {
   // (js/merge-v3/layout.js, roomForTimeline), and the panel's height is part of where "centre" is.
   requestAnimationFrame(() => cell.scrollIntoView({ block: 'center', behavior: 'smooth' }));
   return true;
+}
+
+// ── New environment / New lookbook in the panel (phase V55, the owner 2026-10-28, (гн11): "открывать генератор прямо в
+// панели") ──
+// The "+" of IMAGES -> Environments / Lookbooks - their row in the tree, their menu, the gallery's "+" tile - opens the
+// Library's own chat (js/library/makechat.js: the same conversation, kept on the server) as a VIEW of this panel, the way
+// its chats are (js/merge-v3/lib-views.js): the gallery and the tree give way, the panel takes the room, "Library" in the
+// header leads back, another chat coming forward lets it go. A send carries Merge's address, so its Alerts row leads back
+// here (`?open=envmake|lbmake`, routes/makechat.js); "show on shelf" is the picture lit among Environments' / Lookbooks'.
+const MAKE_VIEW = { environments: 'envmake', lookbooks: 'lbmake' };
+const MAKE_HOST = { environments: 'lib-envmake', lookbooks: 'lib-lbmake' };
+let _making = '';             // the one showing, or ''
+
+function _makerShown(kind, on) {
+  const h = document.getElementById(MAKE_HOST[kind]);
+  // `hidden` too: the chat asks again while something runs only while its host is not hidden (makechat.js _poll).
+  if (h) h.hidden = !on;
+}
+
+/** Open the generator of 'environments' or 'lookbooks' in the Library panel. */
+export async function openMaker(kind) {
+  if (!MAKE_VIEW[kind]) return;
+  Views.toBase();
+  setOpenColumn('library');
+  if (_making && _making !== kind) _closeMaker(_making, false);
+  _making = kind;
+  _makerShown(kind, true);
+  Views.setBase(MAKE_VIEW[kind], true);
+  await MC[kind].open({});
+}
+
+// Let go of - "Library" pressed (`back`: the panel shows the shelf again, read anew), or another chat took the base.
+function _closeMaker(kind, back) {
+  MC[kind].close();
+  _makerShown(kind, false);
+  if (_making === kind) _making = '';
+  if (back) { Views.setBase(MAKE_VIEW[kind], false); _reload(); }
+}
+
+function _initMakers() {
+  for (const kind of Object.keys(MAKE_VIEW)) {
+    MC[kind].init({
+      // Merge's address, for the Alerts row of a send made here.
+      where: () => ({ page: 'merge', href: '/merge?' + (storeKey() ? 'p=' + encodeURIComponent(storeKey()) + '&' : '') + 'open=' + MAKE_VIEW[kind] }),
+      landed: () => { if (_tree) _tree.load(); },
+      // The picture among the others of its folder, lit (reveal leaves the view for the shelf first).
+      showOnShelf: (_k, path) => { if (path) reveal(path); },
+    });
+    Views.registerChat(MAKE_VIEW[kind], {
+      root: MAKE_HOST[kind],
+      onBack: () => _closeMaker(kind, true),
+      onYield: () => _closeMaker(kind, false),
+    });
+  }
+  // ?open=envmake|lbmake - where the Alerts row of a send made here leads: the generator again, once a project is open (in a
+  // talking head, on its timeline step - where the Library is). Said once: the address forgets it.
+  let want = '';
+  try { want = new URLSearchParams(location.search).get('open') || ''; } catch (e) { want = ''; }
+  const kindOf = (v) => Object.keys(MAKE_VIEW).find(k => MAKE_VIEW[k] === v) || '';
+  if (kindOf(want)) {
+    let done = false;
+    onStoreChange(() => {
+      if (done || !storeKey()) return;
+      done = true;
+      try { const u = new URL(location.href); u.searchParams.delete('open'); history.replaceState({}, '', u); } catch (e) { /* a reload opens it again */ }
+      _openFromAddress(kindOf(want));
+    });
+  }
+  // ...and from the Alerts list on this page, without a reload (js/alerts-bell.js `ugc:goto`): the chat is one for every
+  // project, so the project open stays.
+  window.addEventListener('ugc:goto', (e) => {
+    let u;
+    try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
+    const k = u.pathname === location.pathname ? kindOf(u.searchParams.get('open') || '') : '';
+    if (!k) return;
+    e.preventDefault();
+    _openFromAddress(k);
+  });
+}
+
+async function _openFromAddress(kind) {
+  try {
+    const W = await import('./workshop.js');
+    await W.settled();
+    if (W.isTalking() && W.step() !== 'timeline') W.setStep('timeline');
+  } catch (e) { /* not a talking head */ }
+  openMaker(kind).catch(err => console.warn('[merge-v3] ' + kind + ':', err.message));
 }
 
 // ── The sash between the gallery and the tree ───────────────────────────────
@@ -1121,7 +1236,10 @@ export function initLibrary() {
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => !!SS.filesTo(n),
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
+    // (phase V55, (гн11)) Environments / Lookbooks' "+": their generator, right in this panel.
+    onMake: (n) => { if (n && n.make) openMaker(n.make); },
   });
+  _initMakers();
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
   // (phase V54) Several tiles picked in the gallery (js/tile-select.js) - while the shelf is what the panel shows.
   const body = _body();

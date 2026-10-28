@@ -12,6 +12,12 @@
 /* (phase V55, (гн10)) On Media it stands in the gallery's place, the tree beside it: a window too narrow for its three
    columns cuts them at its edge rather than letting them run under the tree (js/library/main.js _placeMaker). */
 .lib-split > .lib-mkchat{ flex:1 1 0; overflow:hidden; }
+/* (phase V55, (гн11)) In Merge's Library panel: a view of the panel, as its chats are - shown while it is the view
+   (js/merge-v3/lib-views.js puts .is-chat on the panel and .is-shown on it), the gallery and the tree giving way; never
+   in a folded column. */
+#mv3-library .mv3-mkchat{ display:none; overflow:hidden; background:var(--bg); }
+#mv3-library.is-chat .mv3-mkchat.is-shown:not([hidden]){ display:flex; }
+.mv3-col.is-collapsed .mv3-mkchat{ display:none !important; }
 .mkc{ display:flex; flex:1 1 auto; min-height:0; min-width:0; position:relative; }
 .mkc.is-drag::after{
   content:'drop the picture'; position:absolute; inset:6px; z-index:20; pointer-events:none;

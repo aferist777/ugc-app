@@ -26,6 +26,8 @@
 <!-- The pictures chat in the Library panel (js/merge-v3/picchat.js, phase J). -->
 <link rel="stylesheet" href="css/mv3-imagen.css">
 <link rel="stylesheet" href="css/mv3-catalog.css">
+<!-- (phase V55) New environment / New lookbook in the Library panel - the Library's making chats (js/library/makechat.js). -->
+<link rel="stylesheet" href="css/makechat.css">
 <!-- The fonts captions are drawn in - the same files the render uses (phase K5). -->
 <link rel="stylesheet" href="css/caption-fonts.css">
 <!-- The caption presets beside the settings of the picked captions (js/merge-v3/captions-view.js, phase K6). -->
@@ -150,6 +152,10 @@
         <div class="mv3-pc is-video" id="mv3-vc"></div>
         <!-- (phase V34.E) "generate audio": the settings, the constructor, "Made here" (js/merge-v3/audchat.js). -->
         <div class="mv3-pc is-audio" id="mv3-ac"></div>
+        <!-- (phase V55, the owner's (гн11)) New environment / New lookbook - the Library's own chats (js/library/makechat.js),
+             opened by the "+" of IMAGES -> Environments / Lookbooks as a view of this panel (js/merge-v3/library.js). -->
+        <div class="lib-mkchat mv3-mkchat" id="lib-envmake" hidden></div>
+        <div class="lib-mkchat mv3-mkchat" id="lib-lbmake" hidden></div>
         <!-- The scenarios view: a talking head starts here (js/merge-v3/scen-pick.js). -->
         <div class="mv3-scv" id="mv3-sc"></div>
         <!-- A highlights project's tiles and the card of a moment (phase V33.1, js/merge-v3/highlights.js). -->
