@@ -980,7 +980,7 @@ export function createChat(make) {
       },
       // (phase V27) A clip by a link, where the description takes them (`S.links`: { video: true }).
       link: (S.links && S.links[kind]) ? {
-        hint: 'At the best quality there is, without a login - into Uploads, in this project\'s folder, and into this place.',
+        hint: 'At the best quality there is, without a login - into VIDEO → Uploads itself, and into this place.',
         add: (url) => _linkIn(url, kind),
       } : null,
       onClose: () => {
@@ -1044,7 +1044,7 @@ export function createChat(make) {
 
   // ── A clip by a link (phase V27, the owner 2026-10-12) ──────────────────────
   // Into the place the picker is open on: the server downloads it (lib/link-queue.js - the best there is, no login) into
-  // Uploads, in the project's category, as this chat's own upload files a clip, and it is attached the moment it is in.
+  // VIDEO -> Uploads itself (phase V56), as this chat's own upload files a clip, and it is attached the moment it is in.
   // Meanwhile the empty place it goes into says how far (`_linking`, painted by _empty / _holeCell) and the line over the
   // box the rest; a send waits for it as for an upload. One at a time. Resolves with what to say when it did not come
   // or did not go into its place ('' - it did).
@@ -1075,7 +1075,7 @@ export function createChat(make) {
         _say('');
         _attach(att.path, att.name, Object.assign({}, att, { kind }, typeof was.slot === 'string' && was.slot ? { slot: was.slot } : {}));
         _loadColumn();
-        if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '');
+        if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '', [att.path]);
         if (_atts.some(a => a.path === att.path)) return '';
         // On the shelf, but the zone did not take it - the model's rules said why, over the box.
         const said = (_ui && _ui.said && _ui.said.textContent) || 'this place did not take it';
@@ -1105,9 +1105,12 @@ export function createChat(make) {
   }
 
   // ── Bringing files in from this computer ──────────────────────────────────
-  // Through the chat's own door: the file is filed on its shelf under the PROJECT's category - the thread
-  // keeps a path, never the bytes - and goes straight into the row. Nothing else uploads it: the Library's
-  // own drop stands down while a chat shows, or one drop would file it twice.
+  // Through the chat's own door: the file is filed on its shelf IN THE ROOT OF ITS KIND - IMAGES, VIDEO -> Uploads,
+  // SFX -> My sounds (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images") - the thread
+  // keeps a path, never the bytes - and goes straight into the row. Every way in is this one: the window's "+ from this
+  // computer…" and a drop over it, a drop on the chat, the column's "+", a paste into the box. Nothing else uploads it:
+  // the Library's own drop stands down while a chat shows, or one drop would file it twice. Resolves with the kinds that
+  // came in ({ image: [paths], ... }).
   function _upload(files) {
     const run = _uploadNow(files);
     const all = Promise.all([_uploading, run]);
@@ -1145,7 +1148,7 @@ export function createChat(make) {
     _made = true;
     _say('adding ' + list.length + ' ' + (list.length === 1 ? 'file' : 'files') + '…');
     let bad = list.length < all.length ? ((partOf(_kindOfFile(all.find(f => !list.includes(f)))) || {}).none || '') : '';
-    const filed = new Set();
+    const filed = new Map();      // kind -> the paths that came in
     for (const f of list.slice(0, S.maxAtts)) {
       const k = _kindOfFile(f);
       const U = _U(k);
@@ -1155,8 +1158,8 @@ export function createChat(make) {
       fd.append('project', _key || '');
       const d = await json(U.url, { method: 'POST', body: fd });
       if (d && d.success && d.item) {
-        filed.add(k);
         const a = typeof U.att === 'function' ? U.att(d.item) : { path: d.item.imagePath, name: d.item.name };
+        filed.set(k, (filed.get(k) || []).concat(a.path));
         _attach(a.path, a.name, Object.assign({}, a, { kind: k }));
       } else bad = (d && d.error) || 'it could not be added';
     }
@@ -1166,8 +1169,9 @@ export function createChat(make) {
     else if (note) _say(note);
     else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
     _loadColumn();
-    // The shelf a file was filed on shows it in the picker.
-    if (_picking) for (const k of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '');
+    // The picker opens the root a file went into, the file in view.
+    if (_picking) for (const [k, paths] of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '', paths);
+    return Object.fromEntries(filed);
   }
 
   // ── The thread ────────────────────────────────────────────────────────────
@@ -1546,8 +1550,8 @@ export function createChat(make) {
         try { await _ensureProject(); }
         catch (e) { _adopt = false; note(at, 'Could not start a project.', String(e.message || e).slice(0, 120)); return; }
       }
-      // The conversation's key (phase V49): a highlights fragment talks in its project's - what is made and brought in is filed
-      // under the project's name (catLabelFor), and its Alerts row leads back to the project with this chat open.
+      // The conversation's key (phase V49): a highlights fragment talks in its project's, and its Alerts row leads back to
+      // the project with this chat open.
       const key = Views.chatKey(Store.key());
       const d = await json(S.sendUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1627,11 +1631,30 @@ export function createChat(make) {
     if (!_col.isOwn()) _col.paint();
   }
 
+  // (phase V56, (ги4)) The column's "+": the picture goes into IMAGES itself, and the column opens there with it in view.
+  let _colFile = null;
   function _plusTile() {
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
     b.title = T.plus;
-    b.addEventListener('click', () => { if (_ui.file) _ui.file.click(); });
+    b.addEventListener('click', () => {
+      if (!_ui || !_ui.file) return;
+      if (!_colFile) {
+        _colFile = document.createElement('input');
+        _colFile.type = 'file';
+        _colFile.multiple = true;
+        _colFile.accept = _ui.file.accept;
+        _colFile.hidden = true;
+        _colFile.addEventListener('change', async () => {
+          const f = [..._colFile.files || []];
+          _colFile.value = '';
+          const got = await _upload(f);
+          if (got && got.image && _col && S.column.home) _col.select(S.column.home);
+        });
+      }
+      if (!_colFile.isConnected) _ui.root.appendChild(_colFile);
+      _colFile.click();
+    });
     return b;
   }
 

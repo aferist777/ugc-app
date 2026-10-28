@@ -39,7 +39,6 @@ const GENS = require('../lib/mv3-gens');
 const CHAT = require('../lib/mv3-chat');
 const AGENT = require('../lib/mv3-agent');
 const IMG = require('../lib/images-store');
-const LC = require('../lib/library-cats');
 const { MEDIA } = require('../lib/config');
 const { toDiskExisting } = require('../lib/media');
 
@@ -229,17 +228,16 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
     try { fs.rmSync(req.file.path, { force: true }); } catch (x) { /* it is going anyway */ }
     return res.status(e.status || 400).json({ success: false, error: e.message });
   }
-  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it to the project's category
+  const imagePath = '/media/work/' + path.basename(abs);    // IMG.add moves it into IMAGES itself
   const b = req.body || {};
   try {
-    // The same category the project's generations use, by the same rule - see catLabelFor.
-    let cat = { id: '', label: '' };
-    try { cat = LC.add('images', GENS.catLabelFor(_titleOf(String(b.project || '')))).cat || cat; } catch (e) {}
+    // (phase V56, the owner's (ги4): "добавленные файлы ... пускай падают в корневую images. потому что сейчас я потерял куда
+    // кинул файл") A picture brought into a chat lies in IMAGES itself - no category; the project is only remembered.
     const { item } = await IMG.add(imagePath, {
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname),
       source: 'upload',
-      categoryId: cat.id,
-      categoryLabel: cat.label,
+      categoryId: '',
+      categoryLabel: '',
       meta: { project: String(b.project || '') || null, attached: true },
     });
     res.json({ success: true, item });
@@ -251,15 +249,5 @@ router.post('/mv3/img/upload', _upload.single('image'), async (req, res) => {
 router.use('/mv3/img/upload', (err, _req, res, _next) => {
   res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
-
-// The project's own name, read from the timeline store. Same read mv3-gens does, and for the
-// same reason: the title can change between the upload and anything else that looks at it.
-function _titleOf(key) {
-  if (!key) return '';
-  try {
-    const rec = require('../lib/merge-store').read().timelines[key];
-    return (rec && rec.title) || '';
-  } catch (e) { return ''; }
-}
 
 module.exports = router;

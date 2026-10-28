@@ -135,8 +135,7 @@ function FRAMES(ctx) {
   // (phase V55) The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
   const SOURCES = [
     { id: 'frames', label: 'this project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
-    { id: 'people', label: 'characters & looks', load: Src.people },
-    Src.ENV_ROW,
+    Src.PEOPLE_ROW,
   ];
   const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'] };
 
@@ -565,7 +564,7 @@ function FRAMES(ctx) {
       why: () => '',
       sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into Images, in this project\'s folder.' },
+      upWords: { image: 'A picture goes into IMAGES itself.' },
     },
     penInBar: false,
     columnFoot: () => [almanacSoon()],

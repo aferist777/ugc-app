@@ -9,11 +9,13 @@
 //   - under it the FOLDERS of the one open, as tiles - pressed, one opens;
 //   - then what lies DIRECTLY in it (its `q`, the media tree's rule since V35): the pictures, each its own shape, stacked
 //     in columns. A REFERENCES post gives its pictures one by one (`files`).
+//   - (phase V56, (ги2), (ги3)) only the folders holding files of that type - in them or under them - are offered, and
+//     their number is how many of those (typedTree: the shelf read once per kind, its answer dealt to the folders).
 //
 // The tiles are the caller's (`tile(it)`): what a press does, its mark, a drag. Nothing is remembered unless `lsKey`.
 //
-// The helpers under it - readTree, nodeFiles, subtreeFiles, filesOf - are the attachment window's too
-// (js/merge-v3/chat-pick.js, phase V55): a node's files are read by its `q`, never by a list of the app's folders.
+// The helpers under it - readTree, folderIndex, pruneTree, filesUnder, filesOf, locateFile - are the attachment window's
+// too (js/merge-v3/chat-pick.js, phase V55): a node's files are read by its `q`, never by a list of the app's folders.
 
 import * as Layers from './layers.js';
 
@@ -91,39 +93,98 @@ export async function nodeFiles(node, type) {
   return filesOf(d.items, type);
 }
 
+// ── Only the folders that hold the type wanted (phase V56, the owner 2026-10-28, п. 2, (ги2), (ги3)) ──
+// "отображать только те папки в которых есть изображения и писать их количество. не показываем пустые папки и не
+// показываем в выборе изображения папки с видео": a folder is offered only when files of the type lie in it or in a folder
+// under it, and its number is how many - every one under it too. One rule for the attachment window (js/merge-v3/
+// chat-pick.js), the pictures chat's right column and the Images column of New environment / New lookbook (below).
+
+const _Q_KEYS = ['filter', 'cat', 'src', 'folder', 'mood'];
+const ANYCAT = '__cat__';
+// A folder's query the shelf answers by these keys alone is answered here from its kind's whole answer (_inQ, the
+// shelf's own filters) - one request per kind; any other query (★ Favorites' group, "some category") is read by itself.
+const _grouped = (q) => !!q && !!q.filter && Object.keys(q).every(k => _Q_KEYS.includes(k)) && q.cat !== ANYCAT;
+
 /**
- * Everything in a node AND every folder under it, as files of `type` - for a search "in the open folder and deeper".
- * Folders of one kind that differ only by their category are read in one request of that kind; the rest by their own
- * `q`. `cache` (a Map) keeps the answers for one opening.
+ * The files of `type` in every folder of a tree (`nodes` - readTree's, or the media tree's, before anything is left out):
+ *   -> { direct: Map(key -> files lying directly in it), total: Map(key -> how many in it and under it) }
+ * `cache` (a Map) keeps the shelf's answers for one reading. A kind that could not be read throws.
  */
-export async function subtreeFiles(node, type, cache) {
+export async function folderIndex(nodes, type, cache) {
   const C = cache || new Map();
-  const qs = [];
-  const walk = (n) => { if (n.q) qs.push(n.q); for (const c of n.children || []) walk(c); };
-  walk(node);
-  const byKind = new Map();     // filter -> Set of cats (UNCAT - none)
-  const own = [];
-  for (const q of qs) {
-    const keys = Object.keys(q);
-    if (q.filter && q.cat && keys.length === 2) {
-      if (!byKind.has(q.filter)) byKind.set(q.filter, new Set());
-      byKind.get(q.filter).add(q.cat);
-    } else own.push(q);
-  }
-  const read = async (q) => {
+  const read = (q) => {
     const k = JSON.stringify(q);
-    if (!C.has(k)) C.set(k, _json('/api/library/shelf/media?' + new URLSearchParams(q)).then(d => (d && d.success ? d.items || [] : [])));
+    if (!C.has(k)) {
+      C.set(k, _json('/api/library/shelf/media?' + new URLSearchParams(q)).then((d) => {
+        if (!d || !d.success) throw new Error((d && d.error) || 'the shelf could not be read');
+        return d.items || [];
+      }));
+    }
     return C.get(k);
   };
-  const parts = await Promise.all([
-    ...[...byKind].map(async ([filter, cats]) => (await read({ filter })).filter(i => {
-      const c = (i.meta || {}).categoryId || '';
-      return c ? cats.has(c) : cats.has(UNCAT);
-    })),
-    ...own.map(read),
-  ]);
+  const all = [];
+  const byKey = new Map();
+  const walk = (list) => { for (const n of list || []) { all.push(n); byKey.set(n.key, n); walk(n.children); } };
+  walk(nodes);
+  const kinds = [...new Set(all.filter(n => _grouped(n.q)).map(n => n.q.filter))];
+  const own = all.filter(n => n.q && !_grouped(n.q));
+  const [kindRecs, ownRecs] = await Promise.all([Promise.all(kinds.map(f => read({ filter: f }))), Promise.all(own.map(n => read(n.q)))]);
+  const recsOf = new Map(kinds.map((f, i) => [f, kindRecs[i]]));
+  const ownOf = new Map(own.map((n, i) => [n.key, ownRecs[i]]));
+  const foldersOf = (s) => (((byKey.get('references:' + s) || {}).children) || []).map(c => String(c.ref || '').split('/')[1]).filter(Boolean);
+  const direct = new Map();
+  for (const n of all) {
+    if (!n.q) continue;
+    const recs = ownOf.has(n.key) ? ownOf.get(n.key) : (recsOf.get(n.q.filter) || []).filter(i => _inQ(i, n.q, foldersOf));
+    const seen = new Set();
+    direct.set(n.key, filesOf(recs, type).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true))));
+  }
+  // How many under each - a file in two folders (★ Favorites and its own) counted once.
+  const total = new Map();
+  const under = (n) => {
+    const s = new Set((direct.get(n.key) || []).map(f => f.path));
+    for (const c of n.children || []) for (const p of under(c)) s.add(p);
+    total.set(n.key, s.size);
+    return s;
+  };
+  for (const n of nodes || []) under(n);
+  return { direct, total };
+}
+
+/** The tree with only the folders that hold files of the index's type, each counting them (`count`). Copies - `nodes` is
+ *  left as it was. */
+export function pruneTree(nodes, idx) {
+  const keep = (list) => (list || []).filter(n => (idx.total.get(n.key) || 0) > 0).map((n) => {
+    const c = Object.assign({}, n, { count: idx.total.get(n.key), empty: false });
+    if (n.children) { c.children = keep(n.children); if (!c.children.length) delete c.children; }
+    return c;
+  });
+  return keep(nodes);
+}
+
+/** Every file of the index under a node - in it and in every folder under it, each once (a search "here and deeper"). */
+export function filesUnder(node, idx) {
+  const out = [];
   const seen = new Set();
-  return filesOf(parts.flat(), type).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)));
+  const walk = (n) => {
+    for (const f of idx.direct.get(n.key) || []) if (!seen.has(f.path)) { seen.add(f.path); out.push(f); }
+    for (const c of n.children || []) walk(c);
+  };
+  if (node) walk(node);
+  return out;
+}
+
+/** readTree, with only the folders holding files of `type` - readTree's answer plus `index` (folderIndex's), or null. */
+export async function typedTree(roots, type, cache) {
+  const t = await readTree(roots);
+  if (!t) return null;
+  const index = await folderIndex(t.nodes, type, cache);
+  const nodes = pruneTree(t.nodes, index);
+  const byKey = new Map();
+  const parentOf = new Map();
+  const walk = (list, p) => { for (const n of list) { byKey.set(n.key, n); if (p) parentOf.set(n.key, p.key); if (n.children) walk(n.children, n); } };
+  walk(nodes, null);
+  return { nodes, byKey, parentOf, index };
 }
 
 // Which shelf kind a library address is read from, by its folder (lib/layout.js MEDIA) - '' when none of the tree's.
@@ -147,7 +208,7 @@ function _inQ(i, q, foldersOf) {
   }
   if (q.folder && !_isIn(m.folder, q.folder)) return false;
   if (q.mood && !_isIn(m.mood, q.mood)) return false;
-  if (q.cat) { const c = m.categoryId || ''; if (q.cat === UNCAT ? !!c : c !== q.cat) return false; }
+  if (q.cat) { const c = m.categoryId || ''; if (q.cat === ANYCAT || (q.cat === UNCAT ? !!c : c !== q.cat)) return false; }
   return true;
 }
 
@@ -196,13 +257,14 @@ export async function locateFile(path, roots) {
 export function createFolderColumn(host, o) {
   const opt = Object.assign({ files: 'photo', empty: 'Nothing in this folder.', title: 'Show' }, o || {});
   const OWN = 'own';
-  let tree = null;              // readTree's answer
+  let tree = null;              // typedTree's answer - only the folders holding files of `files`, and their files
   let sel = '';                 // OWN or a node's key
+  let wanted = '';              // a folder asked for while it held nothing of the type - opened once it does (an upload)
   let ownItems = [];
   let files = [];               // what lies in the node open
   let state = 'idle';           // 'reading' | 'ready' | 'error'
   let why = '';
-  let seq = 0;
+  let loads = 0;
   let menu = null;              // the dropdown, while open
 
   host.textContent = '';
@@ -234,46 +296,44 @@ export function createFolderColumn(host, o) {
   function _fallback() { return opt.own ? OWN : ((tree && tree.nodes[0]) || {}).key || ''; }
 
   async function load() {
-    const t = await readTree(opt.roots);
+    const mine = ++loads;
+    // The first reading says so; a reading again keeps what is shown until the answer is in.
+    if (!tree && sel !== OWN) { state = 'reading'; paint(); }
+    let t = null;
+    let err = '';
+    try { t = await typedTree(opt.roots, opt.files); } catch (e) { err = e.message || 'the folders could not be read'; }
+    if (mine !== loads) return;
     if (t) tree = t;
+    if (wanted && _valid(wanted)) { sel = wanted; remember(); }
+    wanted = '';
     if (!sel) {
       const want = [opt.start, stored()].find(k => k && _valid(k));
       sel = want || _fallback();
     } else if (!_valid(sel)) {
-      // A folder deleted or renamed elsewhere: the nearest that is still there.
+      // A folder deleted or renamed elsewhere, or with nothing of the type left: the nearest that is still there.
       sel = _fallback();
     }
     _paintHead();
-    await _read();
+    if (!t && err) { state = 'error'; why = err; paint(); return; }
+    _read();
   }
 
   async function reload() {
     await load();
   }
 
-  async function _read() {
-    const mine = ++seq;
+  // What lies in the folder open - from the reading of the tree, so its number and its tiles agree.
+  function _read() {
     if (sel === OWN) { state = 'ready'; why = ''; paint(); return; }
-    const n = node(sel);
-    files = [];
-    state = 'reading';
-    paint();
-    try {
-      const got = await nodeFiles(n, opt.files);
-      if (mine !== seq) return;
-      files = got;
-      state = 'ready';
-      why = '';
-    } catch (e) {
-      if (mine !== seq) return;
-      state = 'error';
-      why = e.message || 'the folder could not be read';
-    }
+    files = (tree && tree.index.direct.get(sel)) || [];
+    state = 'ready';
+    why = '';
     paint();
   }
 
   function select(k) {
-    if (!_valid(k)) return;
+    // A folder with nothing of the type is not offered; asked for (where an upload went), it opens at the next reading.
+    if (!_valid(k)) { if (k) wanted = k; return; }
     const same = k === sel;
     sel = k;
     remember();

@@ -4,8 +4,8 @@
    The pictures chat's shell (chat-shell.js) with its own description: "LIBRARY / generate video" in the panel's
    header, its own crumb, buttons and box, its own conversation (kind 'clip'). The server is phase V2
    (routes/mv3-video.js): a press writes the turn, a record and an Alerts row for each clip asked for, and the
-   work - the writer, the references hosted, the aggregator asked, the clip fetched and filed on the B-roll shelf
-   in the project's category - goes on behind it.
+   work - the writer, the references hosted, the aggregator asked, the clip fetched and filed as a B-roll with no
+   category (VIDEO -> Generated) - goes on behind it.
 
    What is this chat's own (the owner, 2026-10-05):
    - ONE dropdown of every model, each its own line with its price; the chosen model shows ITS OWN parameters
@@ -831,7 +831,6 @@ function VIDEOS(ctx) {
   const _shape = Src.shape;
   const _clip = (path, poster, name, x) => Object.assign({ path, src: path, poster: poster || '', name: name || '',
     thumb: poster ? thumbOf(poster, 'strip') : '' }, x || {});
-  const _people = Src.people;
   // The clips this chat made in this project.
   async function _made() {
     const k = ctx.key();
@@ -859,7 +858,7 @@ function VIDEOS(ctx) {
   // (phase V55, (гн2)) What is not a folder, as rows above the window's tree; the rest - REFERENCES, IMAGES, VIDEO,
   // AUDIO - is the media tree itself (chat-sources.js TREE).
   const SOURCES = {
-    image: [{ id: 'people', label: 'characters & looks', load: _people }, Src.ENV_ROW, Src.LOOKBOOK_ROW],
+    image: [Src.PEOPLE_ROW],
     video: [{ id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' }],
     audio: [{ id: 'voices', label: 'voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' }],
   };
@@ -2485,18 +2484,18 @@ function VIDEOS(ctx) {
       // The shelf a file from this computer is filed on, and what the picker says of it.
       lands: { image: 'images', video: 'uploads', audio: 'sounds' },
       upWords: {
-        image: 'A picture goes into Images, in this project\'s folder.',
-        video: 'A clip goes into Uploads, in this project\'s folder.',
-        audio: 'A sound goes onto the Sounds shelf, in this project\'s folder.',
+        image: 'A picture goes into IMAGES itself.',
+        video: 'A clip goes into VIDEO → Uploads itself.',
+        audio: 'A sound goes into SFX → My sounds itself.',
       },
       // A part window left open over the zone goes: the picker covers it.
       onOpen: () => closeTrim(),
     },
-    // (phase V27) A clip comes by a link too - the picker's "from a link", into Uploads in the project's category and into
-    // its place, as a clip from this computer (chat-shell.js _linkIn, lib/link-queue.js).
+    // (phase V27) A clip comes by a link too - the picker's "from a link", into Uploads (its root, V56) and into its place,
+    // as a clip from this computer (chat-shell.js _linkIn, lib/link-queue.js).
     links: { video: true },
-    // (phase V7) Each kind through its own door, filed under the project's category: pictures into Images, clips into
-    // Uploads, sounds onto the Sounds shelf - and straight into their part of the zone.
+    // (phase V7) Each kind through its own door - pictures into IMAGES, clips into VIDEO -> Uploads, sounds into SFX ->
+    // My sounds, each into the root of its kind (phase V56, (ги4)) - and straight into their part of the zone.
     uploads: {
       image: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile,
                att: (i) => ({ path: i.imagePath, name: i.name }) },

@@ -1506,7 +1506,8 @@ router.post('/mv3/video/card/:id/again', (req, res) => {
 });
 
 // ── A clip from this computer ───────────────────────────────────────────────
-// Onto Uploads under the project's category (lib/birols-store.js places it, makes its poster, measures it).
+// Into VIDEO -> Uploads itself, no category (phase V56, (ги4): what is brought into a chat lies in the root of its kind;
+// lib/birols-store.js places it, makes its poster, measures it).
 const EXTS = ['.mp4', '.mov', '.webm', '.m4v', '.mkv', '.avi'];
 const _upload = multer({
   storage: multer.diskStorage({
@@ -1533,7 +1534,6 @@ router.post('/mv3/video/upload', _upload.single('video'), async (req, res) => {
     const { item } = await require('../lib/birols-store').add('/media/work/' + req.file.filename, {
       kind: 'uploads',
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname),
-      categoryLabel: VGENS.catLabelFor(_titleOf(String(b.project || ''))),
     });
     res.json({ success: true, item });
   } catch (e) {
@@ -1548,8 +1548,8 @@ router.use('/mv3/video/upload', (err, _req, res, _next) => {
 });
 
 // ── A sound from this computer (phase V7) ───────────────────────────────────
-// Onto the Sounds shelf (lib/sounds-store.js): from the video chat into the project's category, from the Library into
-// the category open there (`categoryId`), else none.
+// Onto the Sounds shelf (lib/sounds-store.js): from the Library into the folder open there (`categoryId`); from a chat
+// into SFX -> My sounds itself, no category (phase V56, (ги4)).
 const SOUND_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.flac', '.opus', '.webm'];
 const _uploadSound = multer({
   storage: multer.diskStorage({
@@ -1567,11 +1567,9 @@ router.post('/sounds/upload', _uploadSound.single('sound'), async (req, res) => 
   if (!req.file) return res.status(400).json({ success: false, error: 'no sound - mp3, wav, m4a, aac, ogg, flac or opus' });
   const b = req.body || {};
   try {
-    const project = String(b.project || '');
     const { item } = await require('../lib/sounds-store').add('/media/work/' + req.file.filename, {
       name: String(b.name || '').trim().slice(0, 120) || path.basename(req.file.originalname).replace(/\.[^.]+$/, ''),
       categoryId: String(b.categoryId || ''),
-      categoryLabel: project ? VGENS.catLabelFor(_titleOf(project)) : '',
       source: 'upload',
     });
     res.json({ success: true, item });

@@ -64,17 +64,17 @@ function PICTURES(ctx) {
       map: (g) => ({ path: g.imagePath, aspect: g.aspect, state: g.state, name: g.prompt || '', error: g.error }),
     },
     // (phase V55, (гн7)) The right column: this project, then REFERENCES' pictures and IMAGES by their folders.
-    column: { roots: ['references', 'images'], files: 'photo', group: 'images' },
+    column: { roots: ['references', 'images'], files: 'photo', group: 'images', home: 'images' },
     // (phase V55, (гн6)) "+" of the zone opens the attachment window with the tree: characters & looks above it (and the
     // environments and lookbooks while IMAGES has no folders of them), REFERENCES and IMAGES in it.
     pick: {
-      sources: () => [{ id: 'people', label: 'characters & looks', load: Src.people }, Src.ENV_ROW, Src.LOOKBOOK_ROW],
+      sources: () => [Src.PEOPLE_ROW],
       tree: () => Src.TREE.image,
       start: () => '',
       why: () => '',
       sourceOf: (path) => Src.pictureSourceOf(path),
       lands: { image: 'images' },
-      upWords: { image: 'A picture goes into Images, in this project\'s folder.' },
+      upWords: { image: 'A picture goes into IMAGES itself.' },
     },
     resultPath: (g) => g.imagePath,
 

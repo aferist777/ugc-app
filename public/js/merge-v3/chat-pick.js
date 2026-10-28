@@ -6,7 +6,7 @@
 
      left    where it comes from - the Library's shelves of that kind, as the chat's description lists them - and
              "from this computer": files of this kind through the chat's own door, and every file let go over the
-             window; each is filed under the project's category and goes straight into this place
+             window; each is filed into the root of its kind (phase V56) and goes straight into this place
      centre  a search by name, the categories of a shelf that has them (the project's own first), and the tiles:
              pictures at their own shape with a larger look while the pointer rests on one, clips as posters that
              play in their tile (▶ with the sound), sounds as rows to listen to
@@ -35,12 +35,24 @@
 
    A press attaches or takes off, and the window stays open while the place has room - as before. Opened on a thing in
    the zone, it opens where the thing is: its row, else its folder (folder-column.js locateFile).
+
+   PHASE V56 (the owner's check of V55 2026-10-28, п. 1, 2, 9; (ги1)-(ги4), (ги8)):
+     - "characters & looks" pressed: in place of the tree, the CHARACTERS - the ones with the most looks first, the first
+       shown at once; the pointer resting on one shows its sheet and its looks on the right, and the last one stays when
+       the pointer leaves the list; a look pressed is attached. Pressed again, the row lets go and the tree comes back on
+       IMAGES (a row's loader answers `groups` - chat-sources.js people).
+     - Only the folders holding this kind - in them or under them -, each with how many (createTree `shape` with
+       folder-column.js folderIndex / pruneTree): no empty folders, no folders of clips among the pictures. What a folder
+       shows and a search looks through is that same reading.
+     - A file brought in (let go over the window, "+ from this computer…", a link) lies in the kind's root - IMAGES,
+       VIDEO -> Uploads, My sounds (the chats' upload routes) - and the window opens that root with it in view (`home`).
+     - No larger look while the pointer rests on a picture (the old window keeps it - the 3D Studio's).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
-import { nodeFiles, subtreeFiles, locateFile } from '../folder-column.js';
+import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../folder-column.js';
 
 const PAGE = 120;                 // tiles drawn at once - the next ones as the grid is scrolled to its end
 const LS_SRC = 'mv3_vpick_v1';    // { <kind>: <source id> } - where each kind was last taken from
@@ -55,8 +67,8 @@ const _cache = new Map();         // source id -> { items, cats, why } for one o
 const _catMemo = new Map();       // '<project>|<source>' -> the category last shown there, for the page's life
 const _hp = hoverPlayer('pk-vid');
 let _sound = null;                // { path, audio, btn } - the one sound being listened to
-// (phase V55) The window with the tree: { tree, node, files: Map(node key -> { items, why }), deep: Map(node key -> items),
-// reads: Map (subtreeFiles' answers), qT } - null for the window without it.
+// (phase V55) The window with the tree: { tree, node, index, shapeOn, groups, group, all, qT } (_openTree) - null for the
+// window without it.
 let _t = null;
 
 const _lc = (s) => String(s || '').trim().toLowerCase();
@@ -87,12 +99,13 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *   computer  { word, hint, open(), accepts(file), drop(files), lands } - `lands` is the source a file goes to
  *   link      (phase V27) { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
  *   onClose()
- *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item } - the media tree's
- *             top nodes, the key it remembers its branches under, the node opened the first time, what of a folder is
- *             shown ('photo' | 'video' | 'audio') and how one of its files becomes an item. Then `sources` are the rows
- *             above the tree (`unless`: a path in the tree - 'images/Environments' - that makes the row needless), `start`
- *             is a list of 'row:<id>' / 'node:<key>[/<label>…]' tried in order, `select.srcs` the rows that may hold the
- *             thing, and `anchor` the chat the window stands over.
+ *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
+ *             tree's top nodes, the key it remembers its branches under, the node opened the first time, what of a folder
+ *             is shown ('photo' | 'video' | 'audio'), how one of its files becomes an item and (V56) the node a file brought
+ *             in lies in. Then `sources` are the rows above the tree (`unless`: a path in the tree that makes the row
+ *             needless; a loader may answer `groups` [{ key, label, sub, n, items }] - shown in place of the tree, V56),
+ *             `start` is a list of 'row:<id>' / 'node:<key>[/<label>…]' tried in order, `select.srcs` the rows that may
+ *             hold the thing, and `anchor` the chat the window stands over.
  */
 export function openPick(o) {
   closePick();
@@ -147,11 +160,15 @@ export function pickSay(t) {
   if (_w) _w.said.textContent = t || '';
 }
 
-/** A file came in through the door of this kind: its shelf is read again. */
-export function pickRefresh(sourceId) {
+/** A file came in through the door of this kind: its shelf is read again. `paths` - (phase V56) what came in. */
+export function pickRefresh(sourceId, paths) {
   if (!_w) return;
-  // (phase V55) With the tree: a file is filed under the project's folder - the tree and what is open are read again.
-  if (_t) { _refreshTree(); return; }
+  // (phase V56, (ги4)) With the tree: a file lies in its kind's root (`tree.home`) - the window opens it, the file in view.
+  if (_t) {
+    const p = [].concat(paths || []).filter(Boolean);
+    _refreshTree(false, p.length ? { node: _o.tree.home || '', path: p[p.length - 1] } : null);
+    return;
+  }
   _cache.delete(sourceId);
   if (_st.src === sourceId) _load(true);
 }
@@ -511,7 +528,8 @@ function _tile(it) {
       play.textContent = '■';
     });
     t.appendChild(play);
-  } else if (it.big) {
+  } else if (it.big && !_t) {
+    // The larger look is the old window's (the 3D Studio's): the window with the tree has none (phase V56, (ги8)).
     hit.addEventListener('pointerenter', () => _peekShow(it.big, t));
     hit.addEventListener('pointerleave', _peekHide);
   }
@@ -573,7 +591,9 @@ const W_TREE = 860, H_TREE = 560;          // the almanac's size (vhelp.js)
 function _openTree(o) {
   _o = o;
   _cache.clear();
-  _t = { tree: null, node: null, files: new Map(), deep: new Map(), reads: new Map(), qT: 0 };
+  // index - the files of this kind in every folder (folder-column.js folderIndex), shapeOn - the tree deals them itself
+  // (createTree `shape`); groups / group / all - a row read in groups (characters & looks) and the group shown.
+  _t = { tree: null, node: null, index: null, shapeOn: false, groups: null, group: '', all: [], qT: 0 };
   _st = { src: '', cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: true, sel: null };
   _buildTree();
   _paintHead();
@@ -596,11 +616,12 @@ function _buildTree() {
   x.title = 'Close (Esc)';
   head.append(h, hint, left, x);
 
-  // Left: the rows that are not folders, then the tree.
+  // Left: the rows that are not folders, then the tree - or, while a row read in groups is open, its groups (V56).
   const side = el('div', 'pk-side');
   const rows = el('div', 'pk-rows');
+  const people = el('div', 'pk-people');
   const treeHost = el('div', 'pk-tree');
-  side.append(rows, treeHost);
+  side.append(rows, people, treeHost);
   // Right: the path, the search, the folders and the files.
   const main = el('div', 'pk-main');
   const bar = el('div', 'pk-bar');
@@ -619,7 +640,6 @@ function _buildTree() {
   bar.append(path, q, count);
   const grid = el('div', 'pk-grid');
   grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
-  grid.addEventListener('scroll', _peekHide, { passive: true });
   main.append(bar, grid);
   const body = el('div', 'pk-body');
   body.append(side, main);
@@ -673,16 +693,26 @@ function _buildTree() {
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closePick(); });
   q.addEventListener('input', () => {
     _st.q = q.value;
-    if (_st.src) _paintGrid(); else _searchTree();
+    if (_st.src) _rowShow(); else _searchTree();
   });
   _takeFiles(ov, box);
   const place = () => _placeTree(box);
   window.addEventListener('resize', place);
-  _w = { ov, box, h, hint, left, side, rows, treeHost, path, q, cat, count, grid, said, drop, layer, io: null, shut: 0, sentinel: null, place };
+  _w = { ov, box, h, hint, left, side, rows, people, treeHost, path, q, cat, count, grid, said, drop, layer, io: null, shut: 0, sentinel: null, place };
   place();
 
+  const t = _t;
   _t.tree = createTree(treeHost, {
     page: T.page, roots: T.roots, fallback: T.fallback,
+    // (phase V56, the owner's п. 2, (ги2)) Only the folders holding this kind - in them or under them -, each counting
+    // them; the files read for that are what a folder shows and what a search looks through.
+    shape: async (nodes) => {
+      const idx = await folderIndex(nodes, T.type).catch(() => null);
+      if (!idx) return nodes;
+      t.shapeOn = true;
+      t.index = idx;
+      return pruneTree(nodes, idx);
+    },
     status: (text) => pickSay(text),
     onSelect: (n) => _openNode(n),
     // A folder made, renamed or moved here: the tree reads itself again; what is open is read again too.
@@ -725,7 +755,9 @@ function _paintRows() {
   for (const s of vis) {
     const b = el('button', 'pk-src' + (s.id === _st.src ? ' on' : ''), s.label);
     b.type = 'button';
-    b.addEventListener('click', () => { if (_st.src !== s.id) _openRow(s.id); });
+    // (phase V56, the owner's п. 1) Pressed again, the open row lets go: the tree comes back, on the kind's root.
+    b.title = s.id === _st.src ? 'Press again to go back to the folders' : '';
+    b.addEventListener('click', () => { if (_st.src === s.id) _leaveRow(); else _openRow(s.id); });
     R.appendChild(b);
   }
   R.hidden = !vis.length;
@@ -733,12 +765,45 @@ function _paintRows() {
   _w.treeHost.classList.toggle('is-rowon', !!_st.src);
 }
 
+// The left side: the rows, then the tree - or the open row's groups in its place (characters & looks: the characters).
+function _paintSide() {
+  _paintRows();
+  const P = _w.people;
+  const on = !!(_st.src && _t.groups);
+  _w.side.classList.toggle('is-people', on);
+  P.textContent = '';
+  if (!on) return;
+  for (const g of _t.groups) {
+    const b = el('button', 'pk-person' + (g.key === _t.group ? ' on' : ''));
+    b.type = 'button';
+    b.dataset.key = g.key;
+    b.title = g.label + (g.sub ? ' · ' + g.sub : '');
+    b.append(el('span', 'pk-person-t', g.label), el('span', 'pk-person-n', String(g.n)));
+    // The pointer resting on a row shows its things; the last one stays when the pointer leaves the list (the owner).
+    b.addEventListener('pointerenter', () => _pickGroup(g.key));
+    b.addEventListener('click', () => _pickGroup(g.key));
+    P.appendChild(b);
+  }
+}
+
+function _pickGroup(key) {
+  if (!_t || !_t.groups || _t.group === key) return;
+  _t.group = key;
+  for (const b of _w.people.children) b.classList.toggle('on', b.dataset.key === key);
+  _paintPath();
+  _rowShow();
+}
+
 function _paintPath() {
   const P = _w.path;
   P.textContent = '';
   if (_st.src) {
     const s = _rows().find(x => x.id === _st.src);
-    P.appendChild(el('span', 'mt-crumb is-here', s ? s.label : ''));
+    const g = _t.groups ? _t.groups.find(x => x.key === _t.group) : null;
+    const box = el('div', 'mt-crumbs');
+    box.appendChild(el('span', 'mt-crumb is-top' + (g ? '' : ' is-here'), s ? s.label : ''));
+    if (g) { box.appendChild(el('span', 'mt-crumb-sep', '/')); box.appendChild(el('span', 'mt-crumb is-here', g.label)); }
+    P.appendChild(box);
   } else if (_t.node) P.appendChild(_t.tree.crumbsEl(_t.node));
 }
 
@@ -752,11 +817,22 @@ async function _rowItems(s) {
   return got;
 }
 
+// The files of this kind in every folder: the tree's own reading dealt them when it takes `shape` - else read here.
+async function _freshIndex() {
+  const t = _t;
+  if (!t || t.shapeOn) return;
+  const nodes = (_o.tree.roots || []).map(k => t.tree.node(k)).filter(Boolean);
+  const idx = nodes.length ? await folderIndex(nodes, _o.tree.type).catch(() => null) : null;
+  if (_t === t) t.index = idx;
+}
+
 // Where the window opens: on the thing it was opened on - its row, else its folder -, else the first of `start` that is
 // there, else where this kind was last taken from (a row, or the tree's own node).
 async function _startTree() {
   const o = _o;
   await _t.tree.load();
+  if (!_w || _o !== o) return;
+  await _freshIndex();
   if (!_w || _o !== o) return;
   _paintRows();
   const path = o.select && o.select.path;
@@ -766,7 +842,7 @@ async function _startTree() {
       if (!s) continue;
       const got = await _rowItems(s);
       if (!_w || _o !== o) return;
-      if ((got.items || []).some(x => x.path === path)) { _st.sel = { path, srcs: [id] }; _openRow(id); return; }
+      if ((got.items || []).some(x => x.path === path)) { _openRow(id, path); return; }
     }
     const key = await locateFile(path, o.tree.roots).catch(() => '');
     if (!_w || _o !== o) return;
@@ -798,45 +874,88 @@ function _go(s) {
   return false;
 }
 
-function _openRow(id) {
+// A row: its things - or, read in groups (characters & looks), its groups on the left in place of the tree, the first
+// shown (the one holding `reveal`, the one shown before a reading again); the thing `reveal` in view.
+async function _openRow(id, reveal) {
+  const s = _rows().find(x => x.id === id);
+  if (!s || !_t) return;
   _st.src = id;
   _t.node = null;
   _st.cat = ALL;
+  _st.cats = [];
   const m = _stored();
   m[_o.kind] = 'row:' + id;
   _keep(m);
-  _paintRows();
-  _paintPath();
-  // A row read already (to find the thing the window was opened on) is not being read: _load paints it at once.
+  _paintCats();
+  const mine = ++_seq;
+  _hp.stop();
+  _quiet();
+  if (!_cache.has(id)) { _t.groups = null; _paintSide(); _paintPath(); _st.loading = true; _paintGrid(); }
+  const got = await _rowItems(s);
+  if (!_w || mine !== _seq || _st.src !== id) return;
   _st.loading = false;
-  _load();
+  _st.why = got.why || '';
+  _t.all = got.items || [];
+  _t.groups = Array.isArray(got.groups) && got.groups.length ? got.groups : null;
+  if (_t.groups) {
+    const g = (reveal && _t.groups.find(x => x.items.some(i => i.path === reveal)))
+      || _t.groups.find(x => x.key === _t.group) || _t.groups[0];
+    _t.group = g.key;
+  }
+  _paintSide();
+  _paintPath();
+  _rowShow();
+  if (reveal) _reveal(reveal);
+}
+
+// What the open row shows: the group shown - or, while a search is typed, everything of the row.
+function _rowShow() {
+  if (!_w || !_st.src) return;
+  const g = _t.groups ? _t.groups.find(x => x.key === _t.group) : null;
+  _st.items = g && !_st.q.trim() ? g.items : _t.all;
+  _paintGrid();
+}
+
+// (phase V56, the owner's п. 1: "повторный клик по кнопке characters & looks снимает выделение этой кнопки и показывает
+// содержание корневой images") The open row let go of: the tree on the kind's own root - IMAGES, VIDEO, AUDIO.
+function _leaveRow() {
+  const roots = _o.tree.roots || [];
+  const k = [roots[roots.length - 1]].concat(roots).find(x => x && _t.tree.node(x));
+  _t.groups = null;
+  if (k) { _t.tree.select(k, false); _openNode(_t.tree.node(k)); return; }
+  _st.src = '';
+  _st.items = [];
+  _paintSide();
+  _paintPath();
+  _paintGrid();
 }
 
 async function _openNode(n, reveal) {
   if (!_w || !_t || !n) return;
   _st.src = '';
   _t.node = n;
+  _t.groups = null;
   _st.cat = ALL;
   _st.cats = [];
   const m = _stored();
   m[_o.kind] = 'tree';
   _keep(m);
-  _paintRows();
+  _paintSide();
   _paintPath();
   _paintCats();
   if (_st.q.trim()) { _searchTree(true); return; }
   const mine = ++_seq;
   _hp.stop();
   _quiet();
-  _peekHide();
-  let got = _t.files.get(n.key);
-  if (!got) {
+  let got;
+  if (_t.index) got = { items: (_t.index.direct.get(n.key) || []).map(_o.tree.map).filter(Boolean), why: '' };
+  else {
+    // The folders could not be read in one go: this one by itself.
     _st.loading = true;
     _paintGrid();
     try { got = { items: (await nodeFiles(n, _o.tree.type)).map(_o.tree.map).filter(Boolean), why: '' }; }
     catch (e) { got = { items: [], why: e.message || 'the folder could not be read' }; }
     if (!_w || mine !== _seq) return;
-    _t.files.set(n.key, got);
   }
   _st.loading = false;
   _st.items = got.items;
@@ -845,42 +964,41 @@ async function _openNode(n, reveal) {
   if (reveal) _reveal(reveal);
 }
 
-// A search in the open folder and every folder under it - read once per folder for this opening.
+// A search in the open folder and every folder under it - in what was read for the tree.
 function _searchTree(now) {
   clearTimeout(_t.qT);
-  const run = async () => {
+  const run = () => {
     const n = _t && _t.node;
     if (!_w || !n) return;
     if (!_st.q.trim()) { _openNode(n); return; }
-    const mine = ++_seq;
-    let got = _t.deep.get(n.key);
-    if (!got) {
-      _st.loading = true;
-      _paintGrid();
-      try { got = (await subtreeFiles(n, _o.tree.type, _t.reads)).map(_o.tree.map).filter(Boolean); } catch (e) { got = []; }
-      if (!_w || mine !== _seq) return;
-      _t.deep.set(n.key, got);
-    }
+    ++_seq;
     _st.loading = false;
-    _st.items = got;
-    _st.why = '';
+    _st.items = _t.index ? filesUnder(n, _t.index).map(_o.tree.map).filter(Boolean) : [];
+    _st.why = _t.index ? '' : 'the folders could not be read';
     _paintGrid();
   };
   if (now) run(); else _t.qT = setTimeout(run, 180);
 }
 
-// Something came in, or a folder changed: what was read is read again - the tree too, unless it did that itself.
-async function _refreshTree(treeDone) {
-  if (!_t) return;
+// Something came in, or a folder changed: the tree and what it holds are read again - the tree too, unless it did that
+// itself. `land` { node, path } (phase V56, (ги4)): a file brought in - the window opens the kind's root it went into, the
+// file in view.
+async function _refreshTree(treeDone, land) {
+  const t = _t;
+  if (!t) return;
   _cache.clear();
-  _t.files.clear();
-  _t.deep.clear();
-  _t.reads.clear();
-  if (!treeDone) await _t.tree.load();
-  if (!_w || !_t) return;
+  if (!treeDone) { if (t.shapeOn) t.index = null; await t.tree.load(); }
+  if (!t.shapeOn) t.index = null;
+  await _freshIndex();
+  if (_t !== t || !_w) return;
   _paintRows();
-  if (_st.src) { if (_rows().some(x => x.id === _st.src)) { _st.loading = false; _load(true); } else _openNode(_t.tree.selected()); return; }
-  const n = (_t.node && _t.tree.node(_t.node.key)) || _t.tree.selected();
+  if (land && land.node && t.tree.node(land.node)) {
+    t.tree.select(land.node, false);
+    _openNode(t.tree.node(land.node), land.path);
+    return;
+  }
+  if (_st.src) { if (_rows().some(x => x.id === _st.src)) _openRow(_st.src); else _leaveRow(); return; }
+  const n = (t.node && t.tree.node(t.node.key)) || t.tree.selected();
   if (n) _openNode(n);
 }
 
