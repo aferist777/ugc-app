@@ -128,7 +128,9 @@ export async function subtreeFiles(node, type, cache) {
 
 // Which shelf kind a library address is read from, by its folder (lib/layout.js MEDIA) - '' when none of the tree's.
 const _KIND_DIR = [['/media/images/', 'images'], ['/media/references/', 'references'], ['/media/birols/', 'birols'],
-  ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music']];
+  ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music'],
+  // (phase V55, sub-session Q) the generated environments and lookbooks - IMAGES -> Environments / Lookbooks
+  ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks']];
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 
 // Whether a shelf record lies DIRECTLY in a node of the query `q` - the server's rule (routes/library.js _inNode), for the
