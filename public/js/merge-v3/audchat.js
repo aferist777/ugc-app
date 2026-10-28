@@ -680,8 +680,7 @@ async function _uploadVideo(file) {
   const fd = new FormData();
   fd.append('video', file);
   fd.append('name', file.name);
-  // Under the project's name in Uploads, as the video chat files what it is given.
-  if (_key) fd.append('project', _key);
+  // Into VIDEO → Uploads itself, as the chats file what they are given (phase V56, (ги4): no project folder any more).
   try {
     const d = await api('/api/mv3/video/upload', { method: 'POST', body: fd });
     say('"' + file.name + '" is in VIDEO → Uploads.');
