@@ -1,7 +1,8 @@
 // THE FOLDER COLUMN (phase V55, the owner 2026-10-28, (гн7), (гн13): "в правом столбце чата изображений нужно в дропдауне
 // сделать дерево, а ниже показывать изображения"; "показывать плитками, иначе как мне выбирать медиа которое хочу
 // прикрепить"). ONE module for a narrow column of pictures to point at - the pictures chat's right column (js/merge-v3/
-// chat-shell.js) and the Images column of New environment / New lookbook (js/library/makechat.js):
+// chat-shell.js). (The Images column of the old New environment / New lookbook chat went with it in phase V58 - the
+// generators are windows now, js/gen-window.js.)
 //
 //   - on top a DROPDOWN of the media tree (GET /api/library/tree, only `roots`), worn as "Move to…" wears it
 //     (css/media-tree.css .mtp-row, css/references.css .ref-move) - folded but for the way to what is open; a first row
