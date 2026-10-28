@@ -64,7 +64,10 @@ router.get('/home/continue', (_req, res) => {
         sub = frs.length ? ready.length + ' of ' + frs.length + ' fragments made' : 'no fragments yet';
         // Its own timeline is often empty - the first made fragment shows what it is.
         if (!thumb) for (const f of ready) { const ft = timelines['hl_' + hl.id + '_' + f.n]; thumb = ft && _thumbOf(ft); if (thumb) break; }
-      } else if (/^sv3_/.test(key) && kindOfProject.get(key.slice(4)) === 'scenarios') kind = 'talking head';
+      } else if (kindOfProject.get((/^sv3_([^_]+)(?:_\d+)?$/.exec(key) || [])[1]) === 'scenarios') {
+        // (phase V56, (ги6)) A talking head - its second timeline (sv3_<project>_<n>) too: Merge's rule (js/merge-v3/workshop.js projectIdOf).
+        kind = 'talking head';
+      }
       items.push({ key, title: t.title || 'Untitled', kind, updatedAt: t.updatedAt || t.createdAt || null, clips, thumb, sub });
     }
     // (phase V49, the owner's (пр12)) The draft first, as in Merge's list - when there is something in it to continue.

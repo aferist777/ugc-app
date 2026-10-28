@@ -16,10 +16,13 @@
    the preview 60px wide, and nothing on the page would explain why.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { key as storeKey } from './store.js';
+
 // New keys, on purpose: a width saved for the old shell - a 360px column beside a
 // full-width timeline - would put today's timeline in a 360px box.
 const LS_LEFT_W = 'mv3_left_w2';
 const LS_TL_H   = 'mv3_timeline_h2';
+const LS_TL_IN  = 'mv3_timeline_h2_in';   // (V56) the project the kept height was dragged in
 const LS_OPEN   = 'mv3_open_col';
 
 // The column carries the timeline now, so it takes most of the window by default; the
@@ -69,14 +72,25 @@ function _leftNow() {
 // block to the bottom (V41), a chat or the captions view putting the timeline on its floor left ~7 px of the audio lane in
 // sight. Now the floor is what the lanes take - the header, the deleted-files notice, the ruler, every lane, the seam and
 // the horizontal scrollbar - measured from what is drawn, not from the scroll box (_measureFloor), again whenever the lanes
-// are built (a project opened, a lane added or taken away: lanesChanged) and when the window or the notice changes. The sash
-// cannot go below it, above it drags as before; every "the timeline to its minimum" (a chat, captions, scenarios, highlights,
+// are built (a project opened, a lane added or taken away: lanesChanged) and when the window or the notice changes. (V56: the
+// sash may go below it - the hand is never held by the lanes, see _proj.) Every "the timeline to its minimum" (a chat, captions, scenarios, highlights,
 // a new project, a talking head's Setup) means to it. A window too short for it keeps the panel above its MIN_WORK_H and the
 // lanes scroll.
 let _floor = MIN_TL_H;
 // The arrangement asked for the timeline at its minimum (roomForWork, roomForTimeline) and nothing was dragged since: it
 // follows the lanes down as well as up. Kept as 'floor' in place of a height.
 let _atFloor = false;
+// (phase V56, the owner's п. 14 and (ги5): "я был на проекте с заполнеными дорожками и открыл проект talking head на котором
+// были пустые дорожки, но почему то высота поля с таймлайном не уменьшилась. и изменить не могу") THE HEIGHT IS THE
+// PROJECT'S. Another project opened is fitted to ITS lanes - before, a height not "at the floor" was only ever lifted, so the
+// tall timeline of a project with many lanes stayed over a talking head with few; a height DRAGGED is the person's in the
+// project it was dragged in only (a reload of that project keeps it, LS_TL_IN); and the hand is never held by the floor -
+// it may take the timeline below its lanes (they scroll), down to MIN_TL_H; only the automatic places use the floor.
+let _proj = null;          // the project the timeline was last fitted in; null - none since the page opened
+let _panelFloor = false;   // a chat put the timeline on its floor (panelRoom) and nothing was dragged since
+// A highlights fragment is its project's: moving between fragments is not another project.
+const _projOf = (k) => String(k || '').replace(/^(hl_[^_]+)_\d+$/, '$1');
+const _follows = () => _atFloor || (_panelOn && _panelFloor);
 
 function _measureFloor() {
   const panel = document.getElementById('mv3-timeline');
@@ -94,37 +108,51 @@ function _measureFloor() {
   return Math.ceil(h + BAR_H);
 }
 
-// Against the column it lives in, not the page: the bar above is not room it can take.
-function _clampTl(px) {
+// Against the column it lives in, not the page: the bar above is not room it can take. `hand` (V56): a height the person
+// set - held by MIN_TL_H, not by the lanes' floor.
+function _clampTl(px, hand) {
   const col = document.getElementById('mv3-left');
   const h = col ? col.getBoundingClientRect().height : window.innerHeight;
   const room = h - MIN_WORK_H - SASH;
-  const lo = Math.max(MIN_TL_ABS, Math.min(_floor, room));
+  const lo = Math.max(MIN_TL_ABS, Math.min(hand ? Math.min(MIN_TL_H, _floor) : _floor, room));
   const hi = Math.max(lo, room);
   return Math.round(Math.max(lo, Math.min(px, hi)));
 }
 
 /**
  * The lanes were built again (js/merge-v3/timeline-b.js, the end of _build) - or the window, or the notice over them,
- * changed: the floor is measured again; at its minimum the timeline follows it, else it is only lifted to it.
+ * changed: the floor is measured again. (V56) Another project: fitted to its lanes - unless this is the page's first build
+ * and the height kept was dragged in this very project. Then: following its lanes, it goes to them, up or down; a height
+ * the person set stays, only kept inside the column.
  */
 export function lanesChanged() {
-  const f = _measureFloor();
-  const was = _floor;
-  _floor = f;
+  _floor = _measureFloor();
+  const k = _projOf(storeKey());
+  // No project yet (the page's first build, before one is read): nothing to fit to - the next build has it.
+  if (k && k !== _proj) {
+    const keep = _proj === null && !_atFloor && _keptIn() === k;
+    _proj = k;
+    if (!keep) _atFloor = true;
+  }
   const now = _tlNow();
-  if ((_panelOn || _atFloor) && Math.abs(now - _clampTl(0)) >= 1) _applyTl(0);
-  else if (f !== was || now < _clampTl(now) - 0.5) _applyTl(now);
-  else return;
+  const to = _follows() ? _clampTl(0) : _clampTl(now, true);
+  if (Math.abs(now - to) < 1) return;
+  _applyTl(to, !_follows());
   _placeCross();
 }
 
 /** The timeline's floor now, in px - for a test. */
 export const timelineFloor = () => _clampTl(0);
-function _applyTl(px) {
+function _applyTl(px, hand) {
   const el = document.getElementById('mv3-timeline');
-  if (el) el.style.height = _clampTl(px) + 'px';
+  if (el) el.style.height = _clampTl(px, hand) + 'px';
 }
+// (V56) The project the kept height was dragged in.
+function _keptIn() {
+  try { return localStorage.getItem(LS_TL_IN) || ''; } catch (e) { return ''; }
+}
+// The person takes the height: it stops following the lanes, the chat's floor included.
+function _byHand() { _atFloor = false; _panelFloor = false; }
 function _tlNow() {
   const el = document.getElementById('mv3-timeline');
   return el ? el.getBoundingClientRect().height : DEF_TL_H;
@@ -195,8 +223,8 @@ function _wireSash(sash, { axis, sign, get, set, save, reset }) {
   const cls = axis === 'x' ? 'mv3-resize-v' : 'mv3-resize-h';
   sash.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    // (V49) The timeline's height dragged is the person's from now on: it stops following the lanes.
-    if (axis === 'y') _atFloor = false;
+    // (V49) The timeline's height dragged is the person's from now on: it stops following the lanes (V56: in this project).
+    if (axis === 'y') _byHand();
     const from = axis === 'x' ? e.clientX : e.clientY;
     const base = get();
     document.body.classList.add(cls);
@@ -245,13 +273,13 @@ function _wireCross() {
     e.stopPropagation();                       // not also a drag of the sash underneath
     const x0 = e.clientX, y0 = e.clientY;
     const left0 = _leftNow(), tl0 = _tlNow();
-    _atFloor = false;
+    _byHand();
     document.body.classList.add('mv3-resize-xy');
     const move = (ev) => {
       // The column hangs off the right edge, so it GROWS as the pointer goes left (P1)...
       _applyLeft(left0 - (ev.clientX - x0));
       // ...and the timeline hangs off the bottom, so it GROWS as the pointer goes up.
-      _applyTl(tl0 - (ev.clientY - y0));
+      _applyTl(tl0 - (ev.clientY - y0), true);
       _placeCross();
     };
     const up = () => {
@@ -266,9 +294,9 @@ function _wireCross() {
   });
   cross.addEventListener('dblclick', (e) => {
     e.stopPropagation();
-    _atFloor = false;
+    _byHand();
     _applyLeft(_defLeft());
-    _applyTl(DEF_TL_H);
+    _applyTl(DEF_TL_H, true);
     _save();
     _placeCross();
   });
@@ -282,11 +310,17 @@ function _save() {
   if (_panelOn) return;
   try {
     localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow())));
-    localStorage.setItem(LS_TL_H, _tlKept());
+    _keepTl();
   } catch (e) { /* a private window */ }
 }
-// (V49) The timeline at its minimum is kept as 'floor' - it follows the lanes after a reload too; else its height.
+// (V49) The timeline at its minimum is kept as 'floor' - it follows the lanes after a reload too; else its height, and
+// (V56) the project it was set in.
 const _tlKept = () => (_atFloor ? 'floor' : String(Math.round(_tlNow())));
+function _keepTl() {
+  localStorage.setItem(LS_TL_H, _tlKept());
+  if (_atFloor) localStorage.removeItem(LS_TL_IN);
+  else if (_proj) localStorage.setItem(LS_TL_IN, _proj);
+}
 
 /**
  * THE TIMELINE STEP'S ARRANGEMENT (phase L1, the owner 2026-09-23): the timeline as tall as its
@@ -352,18 +386,23 @@ export function panelRoom(on) {
   try { back = JSON.parse(localStorage.getItem(LS_ROOM) || 'null'); } catch (e) { back = null; }
   if (on) {
     if (!back) {
-      try { localStorage.setItem(LS_ROOM, JSON.stringify({ left: Math.round(_leftNow()), tl: Math.round(_tlNow()) })); } catch (e) { /* a private window */ }
+      // (V56) With whether it was following its lanes - so a height dragged under the chat does not come back as the person's.
+      try { localStorage.setItem(LS_ROOM, JSON.stringify({ left: Math.round(_leftNow()), tl: Math.round(_tlNow()), floor: _atFloor })); } catch (e) { /* a private window */ }
     }
+    _panelFloor = true;                      // (V56) until the person drags it
     _applyLeft(Number.MAX_SAFE_INTEGER);     // clamped to what the preview can spare
     _applyTl(0);                             // ...and to the timeline's floor
     _placeCross();
     return;
   }
+  _panelFloor = false;
   if (!back) return;
   try { localStorage.removeItem(LS_ROOM); } catch (e) { /* a private window */ }
+  if (back.floor) _atFloor = true;
   _applyLeft(+back.left || _defLeft());
-  // (V49) Back at the lanes' height when that is what it was at - they may have changed while the panel was up.
-  _applyTl(_atFloor ? 0 : (+back.tl || DEF_TL_H));
+  // (V49) Back at the lanes' height when that is what it was at - they may have changed while the panel was up; (V56) and
+  // when another project was opened meanwhile.
+  _applyTl(_atFloor ? 0 : (+back.tl || DEF_TL_H), !_atFloor);
   _placeCross();
   _save();
 }
@@ -377,7 +416,7 @@ export function initLayout() {
   let keptTl = null;
   try { keptTl = localStorage.getItem(LS_TL_H); } catch (e) { /* a private window */ }
   _atFloor = keptTl === 'floor';
-  _applyTl(_atFloor ? 0 : _num(LS_TL_H, DEF_TL_H));
+  _applyTl(_atFloor ? 0 : _num(LS_TL_H, DEF_TL_H), !_atFloor);
 
   // A collapsed column is one big button. Clicking the open one does nothing on
   // purpose - collapsing it would leave the left side with no panel at all.
@@ -399,9 +438,9 @@ export function initLayout() {
 
   _wireSash(document.getElementById('mv3-sash-h'), {
     axis: 'y', sign: -1,
-    get: _tlNow, set: (px) => { _applyTl(px); _placeCross(); },
-    reset: () => { _applyTl(DEF_TL_H); _placeCross(); },
-    save: () => { if (_panelOn) return; try { localStorage.setItem(LS_TL_H, _tlKept()); } catch (e) {} },
+    get: _tlNow, set: (px) => { _applyTl(px, true); _placeCross(); },
+    reset: () => { _applyTl(DEF_TL_H, true); _placeCross(); },
+    save: () => { if (_panelOn) return; try { _keepTl(); } catch (e) {} },
   });
 
   _wireCross();
@@ -409,7 +448,7 @@ export function initLayout() {
   // Re-clamp when the window changes, or a size that fitted yesterday's window
   // squeezes today's preview to nothing. The crossing follows whatever that leaves.
   // (V49) The floor too: the notice over the lanes may wrap onto another line in a narrower column.
-  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow()); lanesChanged(); _placeCross(); });
+  window.addEventListener('resize', () => { _applyLeft(_leftNow()); _applyTl(_tlNow(), !_follows()); lanesChanged(); _placeCross(); });
   // The notice about deleted files shown, closed or wrapped by a dragged column: the floor is measured again.
   const gone = document.getElementById('mv3-tl-gone');
   if (gone && window.ResizeObserver) {

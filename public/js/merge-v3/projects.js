@@ -24,6 +24,8 @@ import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
 import { openScenarios } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
+// (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
+import { projectIdOf } from './workshop.js';
 import { showError } from '../notice.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
@@ -69,8 +71,11 @@ async function _paint() {
     o.value = p.key;
     // Clip count in the label because two projects from the same day are otherwise told
     // apart only by their title, and imported titles all start with the date. (phase V20) The draft says what it is.
+    // (phase V56, the owner's п. 14 and (ги6): "давай пометим в названиях проектов talking head проекты") A talking head
+    // says so before its name, as highlights does - in the list and in the closed field.
     o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
       : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
+      : projectIdOf(p.key) ? 'talking head · ' + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     sel.appendChild(o);
   }
