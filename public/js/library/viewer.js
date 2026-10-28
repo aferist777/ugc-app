@@ -254,9 +254,11 @@ export function step(d) {
 
 // Escape is the stack's (js/layers.js) - it belongs to whatever is on top, which may be a
 // box opened over this viewer. The arrows are this viewer's own, and only while it is the
-// top layer.
+// top layer - and never in a field (phase V56: a description is written in the right column).
 function _onKey(e) {
   if (!_ov || !Layers.topIs(_layer)) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
 }

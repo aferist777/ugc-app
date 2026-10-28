@@ -48,11 +48,11 @@ const PHOTO_MAX = 30 * 1024 * 1024;
 const SPEC = {
   environments: {
     type: 'environment', title: 'Environment', shelf: () => CFG.ENVIRONMENTS_DIR, cat: 'uploads_environments',
-    where: { page: 'library', href: '/library?shelf=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
+    where: { page: 'library', href: '/library?shelf=media&kind=environments&make=1', label: 'Library · New environment', spot: { view: 'envmake' } },
   },
   lookbooks: {
     type: 'lookbook', title: 'Lookbook', shelf: () => CFG.LOOKBOOKS_DIR, cat: 'uploads_lookbooks',
-    where: { page: 'library', href: '/library?shelf=lookbooks&make=1', label: 'Library · New lookbook', spot: { view: 'lbmake' } },
+    where: { page: 'library', href: '/library?shelf=media&kind=lookbooks&make=1', label: 'Library · New lookbook', spot: { view: 'lbmake' } },
   },
 };
 

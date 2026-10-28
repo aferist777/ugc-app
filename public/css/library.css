@@ -46,8 +46,6 @@
   display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   height:calc(2.5em + 6px);
 }
-.lib-grid.is-lookbooks,
-.lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
 
 /* ── Card hover controls ────────────────────────────────────────────────────
    The star top left, the cross top right, both over the thumbnail. Hidden until the
@@ -136,6 +134,9 @@
 .lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
 body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
 .lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
+/* (phase V56, the owner 2026-10-28: "выделил золотым цветом в дереве справа названия environment и lookbooks но именно в
+   library") IMAGES -> Environments / Lookbooks (js/media-tree.js .is-made) - gold here only, Merge's tree keeps its colours. */
+#lib-tree .mt-row.is-made .mt-name{ color:var(--gold); }
 /* (V38.6) Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
    selected one on the right - a scenario's column, or a draft's form (#lib-sc-draft, the generator's form moved in). */
 /* (phase V54) The gallery's column: the grid and, under it only, the music player (#lib-player) - the tree's column beside
@@ -157,14 +158,13 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 .lib-info-body{ flex:1 1 auto; min-height:0; overflow-y:auto; }
 /* The picture itself, the width of the column - a copy sized for it - and the way into the
    enlarged view. Held at the shape it will have where the shape is known, so the voices and the
-   looks do not jump down when it arrives: a sheet is 16:9, a lookbook square; environments vary. */
+   looks do not jump down when it arrives: a sheet is 16:9. */
 .lib-info-ref{
   display:block; width:100%; padding:0; border:0; border-bottom:1px solid var(--border);
   background:var(--surface-2); cursor:zoom-in;
 }
 .lib-info-ref img{ display:block; width:100%; height:auto; }
 .lib-info-ref.is-characters img{ aspect-ratio:16 / 9; object-fit:cover; }
-.lib-info-ref.is-lookbooks img{ aspect-ratio:1; object-fit:cover; }
 .lib-info-note{ padding:10px 12px; font-size:10.5px; color:var(--muted); }
 /* A character's voices: the play button and the lines of a Voices row, and the main one in gold. */
 .lib-info-voice{
@@ -227,27 +227,6 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
   font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
 }
 .lib-info-text.is-none{ color:var(--muted); }
-/* A lookbook's gender and description, an environment's description - shown, and written by hand when
-   wanted (phase I); an empty one asks for nothing. */
-.lib-info-k{ display:block; padding:8px 12px 3px; font:700 8.5px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
-.lib-info-genders{ display:flex; align-items:center; flex-wrap:wrap; gap:4px; padding:6px 12px 0; }
-.lib-info-genders .lib-info-k{ padding:0 6px 0 0; }
-.lib-info-chip{
-  padding:3px 8px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--muted); font:600 10px/1.2 var(--font); cursor:pointer;
-}
-.lib-info-chip:hover{ color:var(--ink); }
-.lib-info-chip.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
-.lib-info-edit{
-  display:block; width:calc(100% - 24px); margin:0 12px; min-height:64px; padding:6px 8px; resize:vertical;
-  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
-  color:var(--ink); font:500 11px/1.5 var(--font);
-}
-.lib-info-edit:focus{ outline:none; border-color:var(--primary); }
-.lib-info-edit::placeholder{ color:var(--muted); }
-.lib-info-editfoot{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:22px; padding:4px 12px 0; }
-.lib-info-said{ flex:1 1 auto; font-size:10px; color:var(--muted); }
-
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .lib-grid{
   flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;

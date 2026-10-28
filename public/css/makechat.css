@@ -9,9 +9,6 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 .lib-mkchat{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
-/* (phase V55, (гн10)) On Media it stands in the gallery's place, the tree beside it: a window too narrow for its three
-   columns cuts them at its edge rather than letting them run under the tree (js/library/main.js _placeMaker). */
-.lib-split > .lib-mkchat{ flex:1 1 0; overflow:hidden; }
 /* (phase V55, (гн11)) In Merge's Library panel: a view of the panel, as its chats are - shown while it is the view
    (js/merge-v3/lib-views.js puts .is-chat on the panel and .is-shown on it), the gallery and the tree giving way; never
    in a folded column. */
@@ -206,3 +203,23 @@ body.mkc-resizing, body.mkc-resizing *{ cursor:col-resize !important; user-selec
 }
 .mkc-card:hover{ border-color:var(--border-soft); }
 .mkc-card.on{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+/* (phase V56, (ги7)) What the Environments / Lookbooks shelves' column let one write, in the viewer's right column (Library
+   and Merge, js/library/makechat.js madeRows): a lookbook's gender, the description, how a place moves. */
+.mkc-ed{ display:flex; flex-direction:column; gap:3px; }
+.mkc-ed-ta{
+  display:block; width:100%; min-height:54px; padding:5px 7px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--ink); font:500 11px/1.45 var(--font);
+}
+.mkc-ed-ta:focus{ outline:none; border-color:var(--primary); }
+.mkc-ed-ta::placeholder{ color:var(--muted); }
+.mkc-ed-foot{ display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:0; }
+.mkc-ed-foot:has(.mkc-ed-save:not([hidden])), .mkc-ed-foot:has(.mkc-ed-said:not(:empty)){ min-height:22px; }
+.mkc-ed-said{ flex:1 1 auto; font-size:10px; color:var(--muted); }
+.mkc-ed-chips{ display:flex; flex-wrap:wrap; gap:4px; }
+.mkc-ed-chip{
+  padding:2px 7px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--muted); font:600 10px/1.2 var(--font); cursor:pointer;
+}
+.mkc-ed-chip:hover{ color:var(--ink); }
+.mkc-ed-chip.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }

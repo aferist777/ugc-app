@@ -335,7 +335,9 @@ export function createTree(host, o) {
     const isGroup = depth === 0;
     const isCat = !!n.cat && !n.uncat && !n.project;
     const row = _el('div', 'mt-row' + (isGroup ? ' is-group' : '') + (n.key === sel ? ' is-sel' : '') + (fresh.has(n.key) ? ' is-new' : '')
-      + (n.empty ? ' is-empty' : '') + (n.locked ? ' is-locked' : '') + (isCat ? ' is-cat' : ''));
+      + (n.empty ? ' is-empty' : '') + (n.locked ? ' is-locked' : '') + (isCat ? ' is-cat' : '')
+      // (phase V56) Environments / Lookbooks - their names gold in the Library's tree (css/library.css), not in Merge's.
+      + (n.make ? ' is-made' : ''));
     row.dataset.key = n.key;
     row.setAttribute('role', 'treeitem');
     row.style.paddingLeft = (3 + depth * 11) + 'px';

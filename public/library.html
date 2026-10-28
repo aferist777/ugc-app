@@ -45,8 +45,7 @@
   <!-- Shelves. One row per kind; the count fills in when a shelf is read. -->
   <aside class="lib-shelves" id="lib-shelves">
     <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
-    <button class="lib-shelf" type="button" data-kind="lookbooks">Lookbooks<span class="lib-n"></span></button>
-    <button class="lib-shelf" type="button" data-kind="environments">Environments<span class="lib-n"></span></button>
+    <!-- (phase V56) Lookbooks and Environments are IMAGES -> Lookbooks / Environments on Media, no shelves of their own. -->
     <!-- Everything a timeline takes - video (B-rolls, Hooks, Uploads), pictures, music and sounds - in a gallery with
          the media tree beside it (phase V28.5; the Music shelf is Audio -> Music here). -->
     <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
@@ -96,7 +95,7 @@
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
     </div>
     <!-- THE RIGHT COLUMN (phase B): the grid keeps two thirds, and the last third says what the
-         selected tile is - on Characters, Lookbooks and Environments (js/library/info.js) - or the
+         selected tile is - on Characters (js/library/info.js) - or the
          selected voice, on Voices (js/library/voices.js). Every other shelf has the whole width. -->
     <div class="lib-split" id="lib-split">
       <!-- The gallery's column: the grid, and under it (phase V54) THE MUSIC PLAYER while Music is open - out of the grid
@@ -131,9 +130,10 @@
          draws the 4K sheet. Built the first time "New Character" is pressed and only hidden after that,
          so a portrait or a sheet being made goes on while the shelf is looked at (js/library/chmake.js). -->
     <div class="lib-chmake" id="lib-chmake" hidden></div>
-    <!-- THE MAKING CHATS (phase I): New environment and New lookbook - the shelf to build on, the chat,
-         and where else a picture comes from. Built the first time they are opened and only hidden after
-         that; the work they start goes on on the server (js/library/makechat.js). -->
+    <!-- THE MAKING CHATS (phase I): New environment and New lookbook - what was made, to build on, the chat,
+         and where else a picture comes from; opened from IMAGES -> Environments / Lookbooks on Media, on the
+         whole field (phase V56). Built the first time they are opened and only hidden after that; the work
+         they start goes on on the server (js/library/makechat.js). -->
     <div class="lib-mkchat" id="lib-envmake" hidden></div>
     <div class="lib-mkchat" id="lib-lbmake" hidden></div>
   </main>

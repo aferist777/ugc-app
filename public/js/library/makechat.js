@@ -1,7 +1,8 @@
-// LIBRARY - the making chats: New environment on the Environments shelf, New lookbook on the Lookbooks
-// shelf (phase I, the owner 2026-10-01: "как в попапе где мы генерируем изображения в merge").
+// LIBRARY - the making chats: New environment and New lookbook (phase I, the owner 2026-10-01: "как в попапе где мы
+// генерируем изображения в merge"). Their pictures lie in IMAGES -> Environments / Lookbooks (phase V55); the shelves of
+// their own went from the Library's list in phase V56 ((ги7)).
 //
-// Three columns in place of the shelf. On the LEFT the shelf itself, small: a tile pressed is the BASE
+// Three columns in place of the gallery. On the LEFT what was made, small: a tile pressed is the BASE
 // of the next message - an environment to change, a lookbook to build on. In the MIDDLE the chat: what
 // was asked and what came of it, oldest first, and under it five places for pictures and the box to
 // type in - Enter sends, Shift+Enter breaks the line, ">" sends too. On the RIGHT where else a picture
@@ -18,10 +19,10 @@
 // A picture that lands becomes the base of the next message - unless the place above the box was
 // changed while it was being made, which is the person deciding something else.
 //
-// (phase V55, the owner 2026-10-28, (гн10), (гн11)) THE SAME CHAT IN THREE PLACES: its shelf's making area, the Library's
-// Media in place of the gallery (IMAGES -> Environments / Lookbooks' "+", js/library/main.js - the tree stays), and Merge's
-// Library panel (js/merge-v3/library.js - a view of the panel, as its chats are). The page gives `hooks`: showOnShelf,
-// landed, and where (Merge's address for the Alerts row, routes/makechat.js).
+// (phase V55, the owner 2026-10-28, (гн10), (гн11)) THE SAME CHAT IN TWO PLACES: the Library's Media in place of the gallery
+// AND the tree (IMAGES -> Environments / Lookbooks' "+", js/library/main.js; phase V56, the owner's п. 20: the whole field),
+// and Merge's Library panel (js/merge-v3/library.js - a view of the panel, as its chats are). The page gives `hooks`:
+// showOnShelf (the picture outlined in its folder), landed, and where (Merge's address for the Alerts row, routes/makechat.js).
 
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from './viewer.js';
@@ -65,7 +66,7 @@ const SPECS = {
     host: 'lib-envmake', title: 'New environment', shelf: 'Environments', aspect: '3:2', estimateMs: 120000,
     uploads: 'uploads_environments',
     placeholder: 'Describe a place - or pick a picture and say what to change: "evening, the lamps on"',
-    empty: 'Describe a place to make it from words. Press one on the left to change it, or take a photo from the right - from this computer or the Library\'s Images - and the place is taken out of it. Everything made here stays in this chat and on the Environments shelf.',
+    empty: 'Describe a place to make it from words. Press one on the left to change it, or take a photo from the right - from this computer or the Library\'s Images - and the place is taken out of it. Everything made here stays in this chat and in IMAGES -> Environments.',
     hint: (att, text) => !att ? 'drawn from your words'
       : att.from === 'base' ? (text ? 'this environment, changed as you say' : 'say what to change in this environment')
         : (text ? 'the place taken out of the photo, and your words applied' : 'the place taken out of the photo'),
@@ -75,7 +76,7 @@ const SPECS = {
     host: 'lib-lbmake', title: 'New lookbook', shelf: 'Lookbooks', aspect: '1:1', estimateMs: 45000,
     uploads: 'uploads_lookbooks',
     placeholder: 'Describe an outfit - or pick a picture: alone it takes the outfit out of it, with words it applies them',
-    empty: 'Describe an outfit to draw it from words. Press a lookbook on the left to build on it, or take a photo from the right - from this computer or the Library\'s Images - and the outfit is taken out of it. Everything made here stays in this chat and on the Lookbooks shelf.',
+    empty: 'Describe an outfit to draw it from words. Press a lookbook on the left to build on it, or take a photo from the right - from this computer or the Library\'s Images - and the outfit is taken out of it. Everything made here stays in this chat and in IMAGES -> Lookbooks.',
     hint: (att, text) => !att ? 'drawn from your words'
       : (text ? 'the picture read, and your words applied' : 'the outfit taken out of the picture'),
     modes: { extract: 'the outfit taken out of a picture', edit: 'a picture read and words applied', draw: 'drawn from words' },
@@ -633,17 +634,17 @@ function createMaker(kind) {
       useB.type = 'button';
       useB.title = 'Build the next message on it';
       useB.addEventListener('click', () => { _setAtt({ path: s.result.path, from: 'base' }); _ui.ta.focus(); });
-      const shelfB = el('button', 'lib-btn', 'show on shelf');
+      const shelfB = el('button', 'lib-btn', 'show in ' + sp.shelf);
       shelfB.type = 'button';
-      shelfB.title = 'Back to the ' + sp.shelf + ' shelf, with this one selected';
+      shelfB.title = 'Where it lies - IMAGES -> ' + sp.shelf + ', this one outlined';
       shelfB.addEventListener('click', () => { if (_hooks.showOnShelf) _hooks.showOnShelf(kind, s.result.path); });
       acts.append(useB, shelfB);
       fig.appendChild(acts);
       img.addEventListener('click', () => _view(s));
-      // Taken off the shelf since: the chat says so instead of a broken picture, and nothing builds on it.
+      // Deleted from its folder since: the chat says so instead of a broken picture, and nothing builds on it.
       img.addEventListener('error', () => {
         _gone.add(s.result.path);
-        const gone = el('div', 'mkc-gone', 'not on the shelf any more');
+        const gone = el('div', 'mkc-gone', 'not in ' + sp.shelf + ' any more');
         gone.style.aspectRatio = sp.aspect.replace(':', '/');
         img.replaceWith(gone);
         useB.disabled = true;
@@ -759,8 +760,8 @@ function createMaker(kind) {
     const host = _ui.baseList;
     if (!host) return;
     host.textContent = '';
-    if (_shelf === null) { host.appendChild(el('div', 'mkc-none', 'reading the shelf…')); return; }
-    if (!_shelf.length) { host.appendChild(el('div', 'mkc-none', 'Nothing on the shelf yet - the first one is made from words or a photo.')); return; }
+    if (_shelf === null) { host.appendChild(el('div', 'mkc-none', 'reading ' + sp.shelf + '…')); return; }
+    if (!_shelf.length) { host.appendChild(el('div', 'mkc-none', 'Nothing in ' + sp.shelf + ' yet - the first one is made from words or a photo.')); return; }
     for (const it of _shelf) {
       const t = _tileOf('mkc-tile', it, '');
       t.addEventListener('click', () => {
@@ -875,15 +876,94 @@ export const lookbooks = createMaker('lookbooks');
 /**
  * (phase V55, the owner's (гн9): "открыть (просмотр как на полке, с описанием)") What is known about a picture the
  * generator made, for the viewer's right column where it is opened from IMAGES -> Environments / Lookbooks (the Library's
- * Media and Merge's Library panel): the rows its shelf's column shows (js/library/info.js) - read only here; they are
- * written on the shelf. [] for anything else.
+ * Media and Merge's Library panel). (phase V56, (ги7)) The shelves went, so what their right column let one WRITE is
+ * written here: a lookbook's gender, the description, how a place moves (phase V26.8, the owner: "сделай how it moves
+ * редактируемым"); and how many looks were dressed in a lookbook. [] for anything else.
  */
+const GENDERS = ['male', 'female', 'unisex'];
+const _patchMeta = (it, body) => json('/api/library/meta/' + encodeURIComponent(it.kind) + '/' + encodeURIComponent(it.id), {
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+});
+
+// One text written by hand: its box, and "save" under it only while the box differs from what is kept. `store` sends it
+// and answers with what is kept now; the item's meta follows, so the viewer opened again shows it.
+function _textRow(value, placeholder, rows, store) {
+  const box = el('div', 'mkc-ed');
+  const ta = el('textarea', 'mkc-ed-ta');
+  ta.value = value || '';
+  ta.placeholder = placeholder;
+  ta.rows = rows;
+  ta.spellcheck = true;
+  const foot = el('div', 'mkc-ed-foot');
+  const said = el('span', 'mkc-ed-said');
+  const save = el('button', 'lib-btn mkc-ed-save', 'save');
+  save.type = 'button';
+  save.hidden = true;
+  let kept = ta.value;
+  ta.addEventListener('input', () => { save.hidden = ta.value.trim() === kept.trim(); said.textContent = ''; });
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      kept = await store(ta.value);
+      ta.value = kept;
+      save.hidden = true;
+      said.textContent = 'saved';
+    } catch (e) { said.textContent = e.message; }
+    save.disabled = false;
+  });
+  foot.append(said, save);
+  box.append(ta, foot);
+  return box;
+}
+
+function _genderRow(it, m) {
+  const row = el('div', 'mkc-ed-chips');
+  let cur = GENDERS.includes(m.gender) ? m.gender : '';
+  const paint = () => row.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === cur));
+  for (const g of GENDERS.concat([''])) {
+    const b = el('button', 'mkc-ed-chip', g || '—');
+    b.type = 'button';
+    b.dataset.g = g;
+    b.title = g ? 'Worn by ' + (g === 'unisex' ? 'either' : 'a ' + g + ' character') : 'Not said';
+    b.addEventListener('click', async () => {
+      if (g === cur) return;
+      const was = cur;
+      cur = g;
+      paint();
+      try { m.gender = (await _patchMeta(it, { gender: g })).gender; }
+      catch (e) { cur = was; paint(); b.title = e.message; }
+    });
+    row.appendChild(b);
+  }
+  paint();
+  return row;
+}
+
 export function madeRows(it) {
   const m = (it && it.meta) || {};
   if (!it || !m.made || !SPECS[it.kind]) return [];
   const rows = [];
-  rows.push([it.kind === 'lookbooks' ? 'the outfit' : 'the place', m.description || 'not written yet - on the ' + SPECS[it.kind].shelf + ' shelf']);
-  if (m.motion) rows.push(['how it moves', m.motion]);
+  const look = it.kind === 'lookbooks';
+  if (look) rows.push(['gender', _genderRow(it, m)]);
+  rows.push([look ? 'the outfit' : 'the place', _textRow(m.description, look
+    ? 'What it is - not written yet. Optional: the dressing reads it.'
+    : 'What the place is - not written yet. Optional: the first frames are composed from it.', 4,
+  async (text) => (m.description = (await _patchMeta(it, { description: text })).description))]);
+  if (!look) {
+    const how = _textRow(m.motion, 'How it moves - not written yet. The agent writes it the first time a video is filmed here.', 3,
+      async (text) => (m.motion = String(((await post('/api/scen3/env/motion', { path: it.media, motion: text })).entry || {}).motion || '')));
+    how.title = 'What moves in the background by itself. Every video filmed here animates by it, word for word -'
+      + ' a prompt written with the old words is written again.';
+    rows.push(['how it moves', how]);
+  }
+  if (look) {
+    // The looks dressed in it - read when the viewer asks (routes/library.js INFO.lookbooks).
+    const n = el('span', 'mkc-ed-looks', '…');
+    json('/api/library/info/lookbooks/' + encodeURIComponent(it.id))
+      .then((d) => { const k = (d.looks || []).length; n.textContent = k ? k + ' dressed in it' : 'none dressed in it yet'; })
+      .catch(() => { n.textContent = '—'; });
+    rows.push(['looks', n]);
+  }
   if (m.from) rows.push(['made from', String(m.from).split('/').pop()]);
   return rows;
 }
