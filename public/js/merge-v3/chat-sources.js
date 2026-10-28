@@ -1,6 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — where a chat's picker takes pictures from (phase V13 in the video chat; shared since phase V26.5 with the
-   frames chat). Each loader answers { items, cats?, why? } - an item is { path, name, sub, cat, thumb, big, aspect }.
+   frames chat, since V55 with the pictures chat). Each loader answers { items, cats?, why? } - an item is { path, name,
+   sub, cat, thumb, big, aspect }. Since V55 the shelves of folders are the window's tree (TREE below); the loaders here
+   are its rows - what is not a folder.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { thumbOf, json } from './chat-shell.js';
@@ -32,24 +34,35 @@ export async function flat(kind, aspect) {
   return { items: (d.items || []).filter(i => i && i.media).map(i => pic(i.media, i.name, '', { aspect })) };
 }
 
-/** A media shelf with its categories: Images, B-roll, Uploads, Sounds - read whole, its categories chosen in the window. */
-export async function mediaShelf(filter, map) {
-  const d = await json('/api/library/shelf/media?filter=' + filter);
-  if (!d || !d.success) return gone(d);
-  const cats = (d.cats || []).filter(c => c && c.id);
-  const nameOf = new Map(cats.map(c => [c.id, c.name || '']));
-  return { cats, items: (d.items || []).filter(i => i && i.media).map(i => {
-    const m = i.meta || {};
-    return Object.assign(map(i, m), { cat: m.categoryId || '', sub: nameOf.get(m.categoryId || '__uncat__') || '' });
-  }) };
-}
-
-// (phase TG, block 5d) REFERENCES' pictures come as one more category of Images (`refs=1`).
-export const images = () => mediaShelf('images&refs=1', (i, m) => pic(i.media, i.name, '', { aspect: shape(m.w, m.h) }));
-
-/** Where a picture is on the shelves, by its folder - the picker opens there, on it. */
+/** Where a picture is on the shelves, by its folder - the picker opens there, on it (with the tree: the rows that may
+ *  hold it; a picture of IMAGES or REFERENCES is found in the tree by the window itself). */
 export function pictureSourceOf(path) {
   const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
   return at('characters') || at('looks') ? ['people'] : at('locations') ? ['environments'] : at('lookbooks') ? ['lookbooks']
     : at('images') || at('references') ? ['images'] : [];
+}
+
+// ── The attachment window with the tree (phase V55, chat-pick.js `tree`) ─────
+// What of the media tree each kind shows (its top nodes), the key the tree remembers its branches under, the folder opened
+// the first time, and how a file of a folder (js/folder-column.js filesOf) becomes the window's item.
+const _treeClip = (f) => ({ path: f.path, src: f.path, poster: f.thumb || '', name: f.name || '', thumb: f.thumb ? thumbOf(f.thumb, 'strip') : '',
+  aspect: f.aspect || '', dur: +f.dur || 0 });
+export const TREE = {
+  image: { roots: ['references', 'images'], page: 'pk_image', fallback: 'images', type: 'photo', map: (f) => pic(f.path, f.name, '', { aspect: f.aspect || '' }) },
+  video: { roots: ['references', 'video'], page: 'pk_video', fallback: 'uploads', type: 'video', map: _treeClip },
+  audio: { roots: ['audio'], page: 'pk_audio', fallback: 'sounds', type: 'audio', map: (f) => ({ path: f.path, src: f.path, name: f.name || '', dur: +f.dur || 0 }) },
+};
+
+// (phase V55) Environments and lookbooks become folders of IMAGES (sub-session Q, (гн8)); until the tree has them, they
+// stay rows - a row says the path that makes it needless (`unless`).
+export const ENV_ROW = { id: 'environments', label: 'environments', load: () => flat('environments', '3:2'), unless: 'images/Environments' };
+export const LOOKBOOK_ROW = { id: 'lookbooks', label: 'lookbooks', load: () => flat('lookbooks', '1:1'), unless: 'images/Lookbooks' };
+
+/** Where the window opens for a picture's slot by what it is for: a person on characters & looks, a place on Environments,
+ *  clothes on Lookbooks (their rows while the tree has no such folder), anything else on IMAGES. */
+export function pictureStart(role) {
+  if (role === 'person') return ['row:people'];
+  if (role === 'location') return ['node:images/Environments', 'row:environments', 'node:images'];
+  if (role === 'outfit') return ['node:images/Lookbooks', 'row:lookbooks', 'node:images'];
+  return ['node:images'];
 }

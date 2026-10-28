@@ -91,11 +91,8 @@
 .mv3-pc.is-narrow .mv3-ig-atts{ gap:5px; padding:7px 10px }
 .mv3-pc.is-narrow .mv3-ig-att,
 .mv3-pc.is-narrow .mv3-ig-att-slot{ width:40px; height:40px; line-height:38px; font-size:15px }
-.mv3-pc.is-narrow .mv3-ig-bar{ flex-wrap:wrap; gap:6px; padding:8px 10px }
-.mv3-pc.is-narrow .mv3-ig-say{ flex:1 1 100%; order:-1 }
-.mv3-pc.is-narrow .mv3-ig-bar .pen{ margin-left:auto }
-/* (phase V15) The video chat has no pen in its bar: the count goes to the right. */
-.mv3-pc.is-narrow .mv3-ig-bar .n:first-of-type{ margin-left:auto }
+/* (phase V55, (гн5)) The box and its small buttons keep one line here too. */
+.mv3-pc.is-narrow .mv3-ig-bar{ gap:5px; padding:6px 10px }
 
 /* ── middle: the conversation ── */
 .mv3-ig-chat{ flex:1 1 auto; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
@@ -296,38 +293,40 @@
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .n{ min-width:8px; padding:0 1px; font-size:6.5px; line-height:8px }
 .mv3-pc.is-narrow .mv3-ig-atts.is-zone .mv3-ig-att .x{ width:9px; height:9px; font-size:6px; line-height:9px }
 
-/* ── the input ── */
+/* ── the input ──
+   (phase V55, the owner 2026-10-28, (гн5): "текстовое поле ... сделай меньше по высоте ... и кнопки и поле компактней")
+   One line of 26 px in a bar of 38, the buttons 24 px; the box grows with its words up to six lines (chat-shell.js _grow). */
 .mv3-ig-bar{
-  flex:0 0 auto; display:flex; align-items:flex-end; gap:7px;
-  padding:10px 12px; border-top:1px solid var(--border); background:var(--surface-2);
+  flex:0 0 auto; display:flex; align-items:flex-end; gap:6px;
+  padding:6px 10px; border-top:1px solid var(--border); background:var(--surface-2);
 }
 .mv3-ig-say{
-  flex:1 1 auto; min-width:0; min-height:30px; max-height:140px; padding:7px 9px; resize:none;
+  flex:1 1 auto; min-width:0; height:26px; min-height:26px; max-height:106px; padding:4px 8px; resize:none;
   border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--ink); font:500 11.5px/1.5 var(--font);
+  background:var(--surface); color:var(--ink); font:500 11.5px/16px var(--font);
 }
 .mv3-ig-say::placeholder{ color:var(--muted) }
 .mv3-ig-say.is-bad{ border-color:var(--danger) }
 /* The writer, on or off. Filled when on: it changes what is sent. */
 .mv3-ig-bar .pen{
-  flex:0 0 auto; width:30px; height:30px; padding:0;
+  flex:0 0 auto; width:24px; height:24px; margin-bottom:1px; padding:0;
   border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 13px/28px var(--font);
+  background:var(--surface); color:var(--muted); font:600 12px/22px var(--font);
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .pen:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
 .mv3-ig-bar .pen.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink) }
 .mv3-ig-bar .n{
-  flex:0 0 auto; height:30px; padding:0 9px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); font:600 11px/28px var(--font);
+  flex:0 0 auto; height:24px; margin-bottom:1px; padding:0 7px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 10.5px/22px var(--font);
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .n:hover:not([disabled]){ color:var(--ink); border-color:var(--border-soft) }
 /* The one action here. */
 .mv3-ig-bar .b{
-  flex:0 0 auto; height:30px; min-width:38px; padding:0 12px;
+  flex:0 0 auto; height:24px; min-width:30px; margin-bottom:1px; padding:0 9px;
   border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary); color:var(--primary-ink); font:700 13px/1 var(--font);
+  background:var(--primary); color:var(--primary-ink); font:700 12px/1 var(--font);
   cursor:pointer; transition:.12s var(--ease);
 }
 .mv3-ig-bar .b:hover:not([disabled]){ filter:brightness(1.1) }
@@ -343,26 +342,7 @@
 /* Between the chat and the strip, where the markup puts it: Merge's own vertical sash rule sends a
    sash to the far end with order:2 (phase P). */
 .mv3-sash.is-v.mv3-ig-sash{ order:0 }
-.mv3-ig-strip-head{
-  flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 10px;
-  border-bottom:1px solid var(--border); background:var(--surface-2);
-  font:700 9px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
-}
-.mv3-ig-strip-head .p{
-  flex:1 1 auto; min-width:0; color:var(--ink);
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.mv3-ig-cat{
-  flex:0 0 auto; margin:8px 8px 0; height:24px; padding:0 5px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink); font:600 10.5px/22px var(--font); cursor:pointer;
-}
-/* Columns rather than a grid: every tile keeps its OWN shape. */
-.mv3-ig-strip-list{
-  flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-gutter:stable; padding:8px;
-  display:flex; gap:7px; align-items:flex-start;
-}
-.mv3-ig-col{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:7px }
+/* (phase V55) Its head, folders and columns of pictures are the folder column's (css/folder-column.css); the tiles here. */
 .mv3-ig-card{
   position:relative; width:100%; min-height:40px;
   border:1px solid var(--border); border-radius:var(--r-xs);
@@ -380,7 +360,6 @@
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
 .mv3-ig-card.is-fail .sp{ font:600 8.5px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
-.mv3-ig-none{ font:600 10px/1.5 var(--font); color:var(--muted); padding:10px 4px; text-align:center }
 
 /* Hovering shows the picture larger, at one fixed place over the conversation. */
 .mv3-ig-peek{
@@ -795,6 +774,45 @@ audio.vtrim-media{ background:none; height:32px }
   .pk-body{ grid-template-columns:150px minmax(0, 1fr) }
   .pk-grid{ --pk-h:132px }
 }
+
+/* ── The chats' attachment window with the tree (phase V55, the owner 2026-10-28, (гн1)-(гн3)) ──
+   The almanac's size, over the middle of the chat (chat-pick.js places it): on the left the rows that are not folders and
+   the media tree of the kind, on the right the path, the search, the folder's folders as tiles and its files; the foot
+   brings files from this computer (and a clip by a link). The tiles are the window's above, a size smaller. */
+.pk-ov.is-tree{ display:block; padding:0; background:oklch(0 0 0 / .38) }
+.pk.is-tree{ position:absolute; width:860px; height:560px; max-width:none; box-shadow:0 14px 40px rgba(0,0,0,.5) }
+.pk.is-tree .pk-head{ padding:7px 11px }
+.pk.is-tree .pk-body{ grid-template-columns:210px minmax(0, 1fr) }
+.pk.is-tree .pk-side{ overflow:hidden; gap:0; padding:6px 4px 4px 6px }
+.pk-rows{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
+.pk-rows[hidden]{ display:none }
+.pk.is-tree .pk-src{ padding:5px 8px; font-size:10.5px }
+.pk-tree{ flex:1 1 auto; min-height:0 }
+.pk-tree .mt{ padding:2px 2px 8px 0 }
+/* A row is open: the tree's node is not the one shown. */
+.pk-tree.is-rowon .mt-row.is-sel{ background:none }
+.pk-tree.is-rowon .mt-row.is-sel::before{ display:none }
+.pk-tree.is-rowon .mt-row.is-sel .mt-name{ font-weight:inherit }
+.pk.is-tree .pk-bar{ gap:8px; padding:6px 10px }
+.pk-path{ flex:1 1 auto; min-width:0; overflow:hidden; font:600 11px/1.2 var(--font) }
+.pk-path .mt-crumbs{ margin:0; flex-wrap:nowrap; overflow:hidden }
+.pk-path > .mt-crumb{ display:inline-block; padding:3px 5px; color:var(--ink); font-weight:700 }
+.pk.is-tree .pk-q{ flex:0 1 210px; min-width:110px; height:24px }
+.pk.is-tree .pk-count{ margin-left:0; flex:0 0 auto }
+.pk.is-tree .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
+.pk.is-tree .pk-grid.is-rows{ grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)) }
+/* The folder's own folders first, a line of their own. */
+.pk-grid .mt-folders{ flex:0 0 100%; width:100%; grid-column:1 / -1; margin:0 0 2px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) }
+.pk-grid .mt-ftile{ height:32px }
+.pk.is-tree .pk-foot{ gap:8px; padding:6px 10px }
+.pk-up{
+  flex:0 0 auto; padding:4px 10px; border:1px dashed var(--border); border-radius:var(--r-xs);
+  background:transparent; color:var(--muted); font:600 10.5px/1.3 var(--font); cursor:pointer;
+}
+.pk-up:hover{ border-style:solid; border-color:var(--primary); color:var(--ink) }
+.pk.is-tree .pk-link{ flex:0 1 250px; min-width:150px }
+.pk.is-tree .pk-link input{ padding:3px 7px; font-size:10.5px }
+.pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
 /* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
    A window beside the column, clear of the prompt field, half the attachment picker, no backdrop: the sections on the

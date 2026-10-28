@@ -12,22 +12,21 @@
    video chat. What is the pictures chat's own is here: the model table and its settings column (model,
    aggregator, quality, shape, price), what a finished picture looks like in the thread, and where the
    pictures come from (`POST /api/mv3/img/send`, the project's pictures, the Library's Images).
+
+   (phase V55, the owner 2026-10-28, (гн6), (гн7)) Its attachments are laid out as the video chat's: a ZONE "PICTURES
+   0/N" (N - as many as the model takes) of small squares, its "+" opening the attachment window with the tree
+   (chat-pick.js); its right column is the folder column (js/folder-column.js): a dropdown of the media tree - this
+   project, REFERENCES (pictures), IMAGES with all its folders -, the open folder's folders as tiles, then its pictures.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, thumbOf, almanacSoon } from './chat-shell.js';
 import { modelColumn } from './pic-models.js';
+import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
 
 const MAX_ATTS = 5;
 const LS_LAST = 'mv3-imagen-last';       // the model choice - the key the window this replaced used
-
-// A library record carries its size; without one a square is wrong by less than anything else.
-function arOf(i) {
-  const w = +(i.w || (i.meta || {}).w || 0);
-  const h = +(i.h || (i.meta || {}).h || 0);
-  return (w > 0 && h > 0) ? (w + ':' + h) : '1:1';
-}
 
 function PICTURES(ctx) {
   // The model, the aggregator, the quality, the shape and the price (phase V26.5: shared with the frames chat).
@@ -52,23 +51,30 @@ function PICTURES(ctx) {
       empty: 'Describe a picture. What comes back stays in this project — and in the Library.',
       emptyNoProject: 'Describe a picture. A project is started for it with the first message.',
       onlyFiles: 'Only pictures can be attached here.',
-      slot: 'A picture to work from - from this computer, or press one on the right',
+      slot: 'A picture to work from - from the Library or this computer',
       plus: 'Add a picture from this computer. It goes into Images and straight into the row above the message box.',
-      cat: 'This project\'s pictures, or a folder of the Library\'s Images',
+      cat: 'This project\'s pictures, or a folder of the Library',
       crumb: 'The pictures chat - pictures made with a model',
     },
     // Any picture, a phone's HEIC too - the server makes it a JPEG on the way in (phase V24).
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
-    // The right column: this project's pictures, or any category of the Library's Images.
+    // The right column's "this project": the pictures made in it.
     feed: {
       url: (k) => '/api/mv3/img/feed?project=' + encodeURIComponent(k),
       map: (g) => ({ path: g.imagePath, aspect: g.aspect, state: g.state, name: g.prompt || '', error: g.error }),
     },
-    cats: {
-      // (phase TG, block 5d) REFERENCES' pictures are one more category here (`refs=1`).
-      url: '/api/library/shelf/media?filter=images&refs=1',
-      map: (i) => ({ path: i.media, aspect: arOf(i), state: 'done', name: i.name || '', libId: i.id || '' }),
-      group: 'images',
+    // (phase V55, (гн7)) The right column: this project, then REFERENCES' pictures and IMAGES by their folders.
+    column: { roots: ['references', 'images'], files: 'photo', group: 'images' },
+    // (phase V55, (гн6)) "+" of the zone opens the attachment window with the tree: characters & looks above it (and the
+    // environments and lookbooks while IMAGES has no folders of them), REFERENCES and IMAGES in it.
+    pick: {
+      sources: () => [{ id: 'people', label: 'characters & looks', load: Src.people }, Src.ENV_ROW, Src.LOOKBOOK_ROW],
+      tree: () => Src.TREE.image,
+      start: () => '',
+      why: () => '',
+      sourceOf: (path) => Src.pictureSourceOf(path),
+      lands: { image: 'images' },
+      upWords: { image: 'A picture goes into Images, in this project\'s folder.' },
     },
     resultPath: (g) => g.imagePath,
 
@@ -81,6 +87,8 @@ function PICTURES(ctx) {
       // The project's own shape is the dot among the shapes.
       onProject: M.onProject,
       room: M.room,
+      // (phase V55, (гн6)) One part, as the video chat's: as many places as the model takes.
+      zone: () => ({ parts: [{ kind: 'image', word: 'pictures', one: 'picture', room: M.room(), none: 'This model takes no pictures.' }] }),
       ready: M.ready,
       body: M.body,
     },

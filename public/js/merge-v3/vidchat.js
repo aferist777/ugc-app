@@ -832,8 +832,6 @@ function VIDEOS(ctx) {
   const _clip = (path, poster, name, x) => Object.assign({ path, src: path, poster: poster || '', name: name || '',
     thumb: poster ? thumbOf(poster, 'strip') : '' }, x || {});
   const _people = Src.people;
-  const _flat = Src.flat;
-  const _media = Src.mediaShelf;
   // The clips this chat made in this project.
   async function _made() {
     const k = ctx.key();
@@ -842,14 +840,6 @@ function VIDEOS(ctx) {
     if (!d || !d.success) return _gone(d);
     return { items: (d.items || []).filter(g => g && g.state === 'done' && g.videoPath).map(g => _clip(g.videoPath, g.posterPath,
       String(g.said || g.prompt || '').slice(0, 80), { aspect: _shape(g.w, g.h) || (g.params || {}).aspect || '', dur: +g.duration || 0 })) };
-  }
-  // The music (Media -> Audio -> Music since phase V28.4: Suno's tracks and the ones brought in) offered as sounds - each
-  // with the length its record keeps.
-  async function _music() {
-    const d = await json('/api/library/shelf/media?filter=music');
-    if (!d || !d.success) return _gone(d);
-    return { items: (d.items || []).filter(i => i && i.media)
-      .map(i => ({ path: i.media, src: i.media, name: i.name || '', sub: (i.meta || {}).source === 'upload' ? 'music' : 'Suno', dur: +i.dur || 0 })) };
   }
   // (phase V15, the owner 2026-10-07) The Library's saved voices - our own demo of each - among the sounds: listened to
   // in the picker, attached as a sound whose role is "voice" and whose name is the voice's. Nothing is attached by
@@ -866,43 +856,26 @@ function VIDEOS(ctx) {
         sub: [looks, whose ? 'voice of ' + whose : ''].filter(Boolean).join(' · ') };
     }) };
   }
+  // (phase V55, (гн2)) What is not a folder, as rows above the window's tree; the rest - REFERENCES, IMAGES, VIDEO,
+  // AUDIO - is the media tree itself (chat-sources.js TREE).
   const SOURCES = {
-    image: [
-      { id: 'people', label: 'characters & looks', load: _people },
-      { id: 'environments', label: 'environments', load: () => _flat('environments', '3:2') },
-      { id: 'lookbooks', label: 'lookbooks', load: () => _flat('lookbooks', '1:1') },
-      { id: 'images', label: 'Images', load: Src.images },
-    ],
-    video: [
-      { id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' },
-      { id: 'birols', label: 'B-roll', load: () => _media('birols', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
-      { id: 'uploads', label: 'Uploads', load: () => _media('uploads', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })) },
-      // (phase TG, block 5d) The videos of REFERENCES' posts - by their folders and the owner's categories.
-      { id: 'references', label: 'REFERENCES', load: () => _media('refvideos', (i, m) => _clip(i.media, i.thumb, i.name, { aspect: _shape(m.w, m.h), dur: +i.dur || 0 })),
-        empty: 'No videos in REFERENCES yet - send posts to the Telegram bot (Admin -> API keys).' },
-    ],
-    audio: [
-      { id: 'sounds', label: 'Sounds', load: () => _media('sounds', (i) => ({ path: i.media, src: i.media, name: i.name || '', dur: +i.dur || 0 })) },
-      { id: 'music', label: 'music (Suno)', load: _music },
-      { id: 'voices', label: 'voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' },
-    ],
+    image: [{ id: 'people', label: 'characters & looks', load: _people }, Src.ENV_ROW, Src.LOOKBOOK_ROW],
+    video: [{ id: 'made', label: 'made in this project', load: _made, empty: 'No clips made in this project yet.' }],
+    audio: [{ id: 'voices', label: 'voices', load: _voices, empty: 'No saved voices yet - they are kept on the Library\'s Voices shelf.' }],
   };
-  // Where the picker opens: a recipe's slot of pictures by what it is for (the owner) - a person on the characters and
-  // looks, a place on the environments, clothes on the lookbooks, anything else on Images; else ('') where this kind
-  // was last taken from - the picker remembers -, the first time `FIRST`.
+  // Where the window opens: a recipe's slot of pictures by what it is for (the owner) - a person on the characters and
+  // looks, a place on Environments, clothes on Lookbooks, anything else on IMAGES; else ('') where this kind was last
+  // taken from - the window remembers -, the first time the tree's own (chat-sources.js TREE fallback).
   function _startFor(kind, s) {
     if (kind !== 'image' || !s || !s.key) return '';
-    return s.role === 'person' ? 'people' : s.role === 'location' ? 'environments' : s.role === 'outfit' ? 'lookbooks' : 'images';
+    return Src.pictureStart(s.role);
   }
-  // Uploads first for clips: it is where clips from this computer go.
-  const FIRST = { image: 'images', video: 'uploads', audio: 'sounds' };
-  // (phase V15) Where a thing in the zone is on the shelves, by its folder - the picker opens there, on it (a clip made
-  // here is on B-roll too: this project's own first).
+  // (phase V15) Where a thing in the zone is - the rows that may hold it; the window finds the rest in the tree itself.
   function _sourceOf(path, kind) {
     const at = (dir) => String(path || '').startsWith('/media/' + dir + '/');
     if (kind === 'image') return Src.pictureSourceOf(path);
-    if (kind === 'video') return at('birols') ? ['made', 'birols'] : at('uploads') ? ['uploads'] : at('references') ? ['references'] : [];
-    return at('sounds') ? ['sounds'] : at('audio') ? ['music'] : at('voice') ? ['voices'] : [];
+    if (kind === 'video') return at('birols') ? ['made'] : [];
+    return at('voice') ? ['voices'] : [];
   }
   // ── The almanac - the prompt reference (phase V14; V15: at the foot of the column, vhelp.js) ──
   // One for the whole chat (the owner, 2026-10-07): a tip pressed there is copied, and the note says so on the prompt
@@ -2504,8 +2477,9 @@ function VIDEOS(ctx) {
     // (phase V13, the owner 2026-10-07) No right column: every "+" of the zone opens the picker on its place.
     pick: {
       sources: (kind) => SOURCES[kind] || [],
+      // (phase V55) The window with the tree, the almanac's size (chat-pick.js).
+      tree: (kind) => Src.TREE[kind] || null,
       start: _startFor,
-      first: FIRST,
       why: _pickWhy,
       sourceOf: _sourceOf,
       // The shelf a file from this computer is filed on, and what the picker says of it.

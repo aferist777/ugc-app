@@ -132,13 +132,13 @@ function FRAMES(ctx) {
       .map(g => Src.pic(g.imagePath, String(g.prompt || '').slice(0, 60), 'from the chat', { aspect: g.aspect || ar }));
     return { items: set.concat(made) };
   }
+  // (phase V55) The rows above the window's tree; REFERENCES and IMAGES are the tree (chat-sources.js TREE).
   const SOURCES = [
     { id: 'frames', label: 'this project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
     { id: 'people', label: 'characters & looks', load: Src.people },
-    { id: 'environments', label: 'environments', load: () => Src.flat('environments', '3:2') },
-    { id: 'images', label: 'Images', load: Src.images },
+    Src.ENV_ROW,
   ];
-  const START = { character: 'people', place: 'environments', frame: 'frames', extra: 'images' };
+  const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'] };
 
   // ── A message of this chat (the owner, 2026-10-10, after the first look) ──
   // ONE MESSAGE PER SEND, all of one kind (the owner's answer (g)): what was asked at its head - the words and the pictures,
@@ -560,8 +560,8 @@ function FRAMES(ctx) {
     upload: { url: '/api/mv3/img/upload', field: 'image', accept: PICTURE_ACCEPT, ok: isPictureFile },
     pick: {
       sources: () => SOURCES,
+      tree: () => Src.TREE.image,
       start: (kind, s) => (s && START[s.key]) || '',
-      first: { image: 'frames' },
       why: () => '',
       sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },

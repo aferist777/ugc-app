@@ -11,9 +11,9 @@
    from the server every few seconds with each countdown drawn from its record's real age and its cross
    letting go of the row, "the result becomes the reference", sending (a project started for a send from
    "no project"), the attachment row, bringing files in, the right column of things to point at behind a
-   sash - or, for a description that says where its attachments come from (`pick`, the video chat since
-   phase V13), no column and a picker behind every "+" of the zone (chat-pick.js) -, the hover peek, and
-   the narrow layout.
+   sash (`column`: since phase V55 the folder column, js/folder-column.js - the pictures chat), the picker behind
+   every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
+   V55 the window with the tree), the hover peek, and the narrow layout.
 
    ── What a description says ─────────────────────────────────────────────────
    Its name and kind, its element ids and storage keys, its words, the settings column (`settings`: load,
@@ -48,6 +48,7 @@ import * as Store from './store.js';
 import { setOpenColumn } from './layout.js';
 import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
+import { createFolderColumn } from '../folder-column.js';
 import { startInlineProgress } from '../progress.js';
 import * as LK from '../library/links.js';
 import { closeAsk, note } from './ask.js';
@@ -142,8 +143,8 @@ export function createChat(make) {
   let _chat = false;         // the panel shows this chat
   let _key = null;           // whose conversation this is - '' before a project exists
   let _thread = [];
-  let _feed = [];            // the right column
-  let _cat = '';             // its category; '' = this project's own
+  let _feed = [];            // this project's own results - the right column's "this project"
+  let _col = null;           // (phase V55) the right column - js/folder-column.js; null for a chat without one
   let _timer = 0;
   let _seq = 0;
   let _sending = false;
@@ -267,6 +268,7 @@ export function createChat(make) {
       peekHide();
       // The picker goes with the chat, and the description lets go of what floats over it.
       if (_picking) Pick.closePick();
+      if (_col) _col.close();
       if (typeof S.onHide === 'function') S.onHide();
       // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
       for (const n of _nodes.values()) n.away = true;
@@ -279,7 +281,7 @@ export function createChat(make) {
     // SEEN: lib-views takes the room for it, and gives it back when the Library folds (K6b).
     _fit();
     set.load();
-    _loadCats();
+    _loadColumn();
     await _reload(true);
     if (_chat && _ui) _ui.ta.focus();
   }
@@ -297,7 +299,6 @@ export function createChat(make) {
     // (phase V49, the owner's (пр5)) A highlights project talks in ONE conversation: its fragments' keys are its home's, so
     // pressing another fragment is no project switch here - the thread, the view and what is being written stay.
     const k = Views.chatKey(Store.key());
-    if (_ui && _ui.stripP) _ui.stripP.textContent = Store.title() || (k ? k : 'no project');
     // (phase V21) The draft saved under a name: its own from now on - the words in the box go with it (the drafts' keep
     // none of them), it stays on the chat it was on, and its conversation is read again (the project's copy). The next
     // draft opens on the chat the drafts were left on.
@@ -334,9 +335,9 @@ export function createChat(make) {
     if (_ui) { const e = _ui.thread.querySelector('.mv3-ig-empty'); if (e) e.remove(); }
     _loadDraft(k, m);
     set.onProject();
-    // This project's own results are another project's; a category is the same whatever is open.
-    if (!_cat) _feed = [];
-    else if (_chat) _loadStrip();
+    // This project's own results are another project's; a folder is the same whatever is open.
+    _feed = [];
+    if (_col) _col.setOwn([]);
     if (adopt && !HOSTED) { Views.rememberView(k, S.name); Views.rememberView('', null, S.name); }
     // A hosted chat stays as it was: its owner shows it for the project it holds.
     const want = HOSTED ? _chat : (adopt || Views.viewOf(_lk(k)) === S.name);
@@ -950,6 +951,9 @@ export function createChat(make) {
       hint: (s && s.hint) || '',
       project: { key: _key || '', title: Store.title() || '' },
       sources: P.sources(kind),
+      // (phase V55) The window with the tree - the almanac's size, over the middle of this chat.
+      tree: typeof P.tree === 'function' ? P.tree(kind) : null,
+      anchor: _ui ? _ui.root : null,
       start: P.start(kind, s),
       first: (P.first || {})[kind] || '',
       select: target && target.path && typeof P.sourceOf === 'function' ? { srcs: P.sourceOf(target.path, kind), path: target.path } : null,
@@ -1070,7 +1074,7 @@ export function createChat(make) {
         const att = U && typeof U.att === 'function' ? U.att(it) : { path: it.videoPath, name: it.name };
         _say('');
         _attach(att.path, att.name, Object.assign({}, att, { kind }, typeof was.slot === 'string' && was.slot ? { slot: was.slot } : {}));
-        _loadCats();
+        _loadColumn();
         if (_picking) Pick.pickRefresh(((S.pick || {}).lands || {})[kind] || '');
         if (_atts.some(a => a.path === att.path)) return '';
         // On the shelf, but the zone did not take it - the model's rules said why, over the box.
@@ -1161,7 +1165,7 @@ export function createChat(make) {
     if (bad) _say('Not added: ' + bad);
     else if (note) _say(note);
     else if (_ui && /^adding \d+ /.test(_ui.said.textContent || '')) _say('');
-    _loadCats();
+    _loadColumn();
     // The shelf a file was filed on shows it in the picker.
     if (_picking) for (const k of filed) Pick.pickRefresh(((S.pick || {}).lands || {})[k] || '');
   }
@@ -1195,7 +1199,7 @@ export function createChat(make) {
     const mine = ++_seq;
     const k = _key || '';
     // The column's own results are read with the thread - when there is a column, and it shows this project's own.
-    const own = !!_ui.list && !_cat;
+    const own = !!_col && _col.isOwn();
     const [d, f] = k
       ? await Promise.all([
         json('/api/mv3/chat?project=' + encodeURIComponent(k) + '&kind=' + S.kind),
@@ -1204,7 +1208,7 @@ export function createChat(make) {
       : [{ success: true, items: [] }, own ? { success: true, items: [] } : null];
     if (mine !== _seq || k !== (_key || '') || !_chat) return;
     if (d && d.success) _thread = d.items || [];
-    // A category is read when it is chosen, not on every tick.
+    // A folder is read when it is opened, not on every tick.
     if (f && f.success && own) _feed = (f.items || []).map(S.feed.map);
     _landed();
     _paintThread(toEnd);
@@ -1597,76 +1601,30 @@ export function createChat(make) {
     if (typeof set.onPen === 'function') set.onPen(_write);
   }
 
+  // (phase V55, (гн5)) One line of 26 px, growing with the words up to six lines (css/mv3-imagen.css .mv3-ig-say).
+  const SAY_MAX = 106;
   function _grow() {
     const ta = _ui.ta;
     // Empty, it is one line - measured, the placeholder of a box not laid out yet would make it tall.
     if (!ta.value) { ta.style.height = ''; return; }
     ta.style.height = 'auto';
-    ta.style.height = Math.min(140, ta.scrollHeight) + 'px';
+    // scrollHeight is the words and the padding; the box's height takes its border too.
+    ta.style.height = Math.min(SAY_MAX, ta.scrollHeight + 2) + 'px';
   }
 
   // ── The right column ──────────────────────────────────────────────────────
-  // This project's own, or a category of the Library's Images - the pictures chat's. A description with a picker (the
-  // video chat, phase V13) has none of it: `_ui.list` is null there, and everything here stands down.
-  let _cats = [];               // the Images categories, as last read
-  async function _loadCats() {
-    if (!_ui || !_ui.cat) return;
-    const d = await json(S.cats.url);
-    _cats = (d && d.success) ? (d.cats || []).filter(c => c && c.id) : [];
-    const sel = _ui.cat;
-    sel.innerHTML = '';
-    const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
-    sel.appendChild(opt('', 'this project'));
-    for (const c of _cats) sel.appendChild(opt(c.id, c.label || c.name || c.id));
-    sel.value = [...sel.options].some(o => o.value === _cat) ? _cat : '';
-    if (sel.value !== _cat) { _cat = ''; _reload(); }
+  // (phase V55, the owner's (гн7)) The FOLDER COLUMN (js/folder-column.js): a dropdown of the media tree - "this project"
+  // first, then the description's roots (the pictures chat: REFERENCES and IMAGES with all their folders) -, the open
+  // folder's folders as tiles, then its pictures. "this project" is this project's own results, read with the thread.
+  function _loadColumn() {
+    if (_col) _col.reload();
   }
 
-  // The column turned to a category by its dropdown ('' - this project's own).
-  function _setCat(id) {
-    if (!_ui || !_ui.cat) return;
-    const v = String(id || '');
-    if (v === _cat) return;
-    _cat = v;
-    _ui.cat.value = [..._ui.cat.options].some(o => o.value === _cat) ? _cat : '';
-    _feed = [];
-    _paintStrip();
-    _loadStrip();
-  }
-
-  async function _loadStrip() {
-    if (!_cat) return _reload();
-    const k = _cat;
-    const d = await json(S.cats.url + '&cat=' + encodeURIComponent(k));
-    const items = (d && d.success ? d.items || [] : []).filter(i => i && i.media).map(S.cats.map);
-    if (k !== _cat) return;
-    _feed = items;
-    _paintStrip();
-  }
-
-  // Mixed shapes, stacked in columns: each tile keeps its own shape and goes into the shorter column.
+  // What the column shows drawn again - this project's own as last read, every tile's mark as the row is now.
   function _paintStrip() {
-    if (!_ui || !_ui.list) return;
-    const host = _ui.list;
-    const wide = host.clientWidth - 16;
-    const cols = wide >= 330 ? 3 : wide >= 150 ? 2 : 1;
-    const H = new Array(cols).fill(0);
-    const boxes = [];
-    for (let i = 0; i < cols; i++) boxes.push(el('div', 'mv3-ig-col'));
-    boxes[0].appendChild(_plusTile());
-    H[0] += 0.5;
-    for (const it of _feed) {
-      let k = 0;
-      for (let j = 1; j < cols; j++) if (H[j] < H[k]) k = j;
-      H[k] += 1 / ratioOf(it.aspect);
-      boxes[k].appendChild(_tile(it));
-    }
-    host.replaceChildren(...boxes);
-    _ui.count.textContent = String(_feed.length);
-    if (!_feed.length) {
-      const none = el('div', 'mv3-ig-none', _cat ? 'Nothing in this folder.' : 'Nothing made in this project yet.');
-      host.replaceChildren(none, _plusTile());
-    }
+    if (!_col) return;
+    _col.setOwn(_feed);
+    if (!_col.isOwn()) _col.paint();
   }
 
   function _plusTile() {
@@ -1683,7 +1641,7 @@ export function createChat(make) {
       + (_atts.some(a => a.path === it.path) ? ' on' : ''));
     if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
     t.title = it.name || '';
-    if (it.state === 'done' && it.path) {
+    if ((it.state || 'done') === 'done' && it.path) {
       const img = document.createElement('img');
       img.src = thumbOf(it.path, 'strip');
       img.alt = it.name || '';
@@ -1697,7 +1655,7 @@ export function createChat(make) {
         ev.dataTransfer.effectAllowed = 'copy';
         ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
           libId: it.libId || '', src: it.path, thumb: it.path,
-          name: (it.name || '').slice(0, 60), group: S.cats.group, dur: 0,
+          name: (it.name || '').slice(0, 60), group: S.column.group || 'images', dur: 0,
         }));
         t.classList.add('is-dragging');
       });
@@ -1887,21 +1845,13 @@ export function createChat(make) {
     }
     chat.append(banner, thread, attsAt, over, ...Object.values(files), bar);
 
-    // The right column - unless the description picks its attachments in a window (phase V13).
-    let sash = null, stripBox = null, stripP = null, count = null, cat = null, list = null;
-    if (!S.pick) {
+    // The right column - for a description that has one (`column`, the pictures chat); the video chat picks its
+    // attachments in a window only (phase V13).
+    let sash = null, stripBox = null;
+    if (S.column) {
       sash = el('div', 'mv3-sash is-v mv3-ig-sash');
       sash.title = 'Drag to resize · double-click to reset';
       stripBox = el('div', 'mv3-ig-strip');
-      const sHead = el('div', 'mv3-ig-strip-head');
-      stripP = el('span', 'p', Store.title() || Store.key() || 'no project');
-      count = el('span', 'n', '0');
-      sHead.append(stripP, count);
-      cat = document.createElement('select');
-      cat.className = 'mv3-ig-cat';
-      cat.title = T.cat;
-      list = el('div', 'mv3-ig-strip-list');
-      stripBox.append(sHead, cat, list);
       main.append(setBox, chat, sash, stripBox);
     } else main.append(setBox, chat);
 
@@ -1919,13 +1869,22 @@ export function createChat(make) {
       headL.append(...S.crumbButtons());
     }
 
-    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, go, stripBox, stripP, count, cat, list, narrow: null };
+    _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, go, stripBox, narrow: null };
+    if (stripBox) {
+      _col = createFolderColumn(stripBox, {
+        roots: S.column.roots, files: S.column.files || 'photo', title: T.cat || 'Show',
+        own: { label: 'this project', empty: 'Nothing made in this project yet.' },
+        tile: _tile, lead: _plusTile,
+        // "this project" opened: its own results are read now, not at the next tick.
+        onChange: (sel) => { if (sel.own) _reload(); },
+      });
+      _col.setOwn(_feed);
+    }
     if (sash) _wireStripSash(sash, stripBox);
 
     for (const input of Object.values(files)) {
       input.addEventListener('change', () => { const f = [...(input.files || [])]; input.value = ''; _upload(f); });
     }
-    if (cat) cat.addEventListener('change', () => _setCat(cat.value || ''));
     nBtn.addEventListener('click', () => {
       const i = S.counts.indexOf(_n);
       _n = S.counts[(i + 1) % S.counts.length];
