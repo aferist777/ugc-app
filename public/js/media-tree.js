@@ -185,6 +185,9 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *                 trees of different pages never share it (what is NEW stays shared - seen in one, seen in all)
  *   o.roots       (phase V54) only these top nodes, by key - ['video'] shows VIDEO alone; omitted - all of them
  *   o.fallback    the node selected when none is remembered (one of `roots` when they are given)
+ *   o.shape(nodes)  (phase V56) async, optional: the nodes as read (after `roots`) -> the nodes to show; it may drop
+ *                 folders and set their `count` / `empty` (js/folder-column.js: only folders holding files of its kind,
+ *                 counted with their folders inside); what it answers is what the tree indexes and draws. Omitted - as read
  *   o.status(text, bad)   say something
  *   o.onSelect(node)      a node was chosen (also once the first read lands)
  *   o.onChanged(what)     the library changed from here (a category made, renamed, deleted; a tile moved) - read the
@@ -277,6 +280,8 @@ export function createTree(host, o) {
     nodes = d.nodes || [];
     // (phase V54) A tree of some roots only - Merge's Video to Music shows VIDEO alone.
     if (Array.isArray(opt.roots) && opt.roots.length) nodes = nodes.filter(n => opt.roots.includes(n.key));
+    // (phase V56) The page's own shape of the nodes - the folder column keeps only folders of its kind of file (`shape`).
+    if (typeof opt.shape === 'function') nodes = (await opt.shape(nodes)) || nodes;
     byKey.clear(); parentOf.clear();
     _index(nodes, null);
     // A remembered node that is not there any more (a category deleted, renamed elsewhere): its kind, else the fallback -
