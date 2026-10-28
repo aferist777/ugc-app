@@ -27,6 +27,9 @@ import { startInlineProgress } from '../progress.js';
 import { openViewer } from './viewer.js';
 import { nonsense, MIN_WORDS_ALONE } from '../merge-v3/wk-maker.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
+// (phase V55, the owner's (гн13)) The Images column is the pictures chat's folder column: the media tree's dropdown, the
+// open folder's folders as tiles, then its pictures (sub-session P's module).
+import { createFolderColumn } from '../folder-column.js';
 
 const POLL_MS = 4000;
 const PLACES = 5;
@@ -95,11 +98,10 @@ function createMaker(kind) {
   let _uploading = 0;                               // photos still on their way into Images
   let _upSeq = 0;                                   // the newest of them is the one that lands in the place
   let _shelf = null;                                // the base tiles
-  let _masonryCols = 0;                             // how many columns the Images kladka was last drawn in
-  let _paintedCat = null;                           // which category it was last drawn for
-  let _cat = '';
-  let _images = null;
-  let _cats = [];
+  // (phase V55) The Images column (js/folder-column.js) and the folder open in it - a node's key of the media tree.
+  let _col = null;
+  let _colKey = '';
+  let _cat = '';                                    // what the old dropdown remembered (an Images category's id) - read once
   let _timer = 0;
   let _said = '';
   const _nodes = new Map();                         // send id -> { user, agent, sig, prog }
@@ -108,7 +110,7 @@ function createMaker(kind) {
   // ── the bench, remembered ─────────────────────────────────────────────────
   function _remember() {
     try {
-      localStorage.setItem(LS, JSON.stringify({ text: _ui.ta ? _ui.ta.value : '', att: _att, cat: _cat }));
+      localStorage.setItem(LS, JSON.stringify({ text: _ui.ta ? _ui.ta.value : '', att: _att, col: _colKey }));
     } catch (e) { /* this view only */ }
   }
   function _recall() {
@@ -117,7 +119,9 @@ function createMaker(kind) {
     if (!w) return;
     if (_ui.ta && typeof w.text === 'string') _ui.ta.value = w.text;
     if (w.att && typeof w.att.path === 'string' && w.att.path.startsWith('/')) _att = { path: w.att.path, from: w.att.from === 'base' ? 'base' : 'photo' };
-    if (typeof w.cat === 'string') _cat = w.cat;
+    if (typeof w.col === 'string') _colKey = w.col;
+    // The old dropdown's category: that folder of IMAGES, the first time.
+    else if (typeof w.cat === 'string') _cat = w.cat;
   }
 
   // ── build ─────────────────────────────────────────────────────────────────
@@ -175,11 +179,9 @@ function createMaker(kind) {
     upT.appendChild(el('span', null, 'click, drop it here, or paste it into the message box'));
     drop.appendChild(upT);
     src.appendChild(drop);
-    const cat = document.createElement('select');
-    cat.className = 'mkc-cat';
-    src.appendChild(cat);
-    const libList = el('div', 'mkc-masonry');
-    src.appendChild(libList);
+    // (phase V55, (гн13)) Under it the folder column (js/folder-column.js) - built once the bench is recalled (below).
+    const fcHost = el('div', 'mkc-fc');
+    src.appendChild(fcHost);
 
     const file = document.createElement('input');
     file.type = 'file';
@@ -196,19 +198,25 @@ function createMaker(kind) {
 
     _root.append(base, sashL, chat, sashR, src);
     host.appendChild(_root);
-    _ui = { base, src, chat, baseList, count, thread, atts, ta, go, cat, libList, drop, file };
+    _ui = { base, src, chat, baseList, count, thread, atts, ta, go, fcHost, libList: null, drop, file };
     _wireSash(sashL, 'base', 1);
     _wireSash(sashR, 'src', -1);
     _applyWidths();
-    // The kladka counts its columns from its width: drawn again when that count changes, not on every
-    // pixel of a drag, and in the next frame rather than in the middle of one.
+    // The pictures count their columns from the width: drawn again when that count changes, not on every pixel of a drag,
+    // and in the next frame rather than in the middle of one.
     if (window.ResizeObserver) {
-      let raf = 0;
+      let raf = 0, cols = 0;
       new ResizeObserver(() => {
         if (raf) return;
         // Not while the area is hidden (width 0): it would be drawn in one column and shown so for a frame.
-        raf = requestAnimationFrame(() => { raf = 0; if (libList.clientWidth && _colsOf(libList) !== _masonryCols) _paintImages(); });
-      }).observe(libList);
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          const w = fcHost.clientWidth;
+          if (!w || !_col || _colsOf(w) === cols) return;
+          cols = _colsOf(w);
+          _paintImages();
+        });
+      }).observe(fcHost);
     }
 
     // No "Save image as" on a miniature, and the box keeps its own cut and paste.
@@ -226,7 +234,6 @@ function createMaker(kind) {
       e.preventDefault();
       _upload(f);
     });
-    cat.addEventListener('change', () => { _cat = cat.value; _remember(); _loadImages(); });
     drop.addEventListener('click', () => file.click());
     file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) _upload(f); });
     // A file dropped anywhere on the area.
@@ -243,6 +250,16 @@ function createMaker(kind) {
     });
 
     _recall();
+    // (phase V55, (гн13)) REFERENCES' pictures and IMAGES with every folder, Environments and Lookbooks among them; it opens
+    // where it was left - else on the old dropdown's folder, else IMAGES.
+    _col = createFolderColumn(fcHost, {
+      roots: ['references', 'images'], files: 'photo', title: 'Images', empty: 'Nothing in this folder.',
+      start: _colKey || (_cat ? 'images:' + _cat : 'images'),
+      cols: _colsOf,
+      tile: _picTile,
+      onChange: (s) => { _colKey = (s && s.node && s.node.key) || ''; _remember(); },
+    });
+    _ui.libList = _col.el;
     _grow();
     _paintAtts();
     _paintThread();
@@ -434,8 +451,8 @@ function createMaker(kind) {
       const d = await post(ADDR + '/photo', { dataUrl, name: f.name || '' });
       _said = '';
       if (my === _upSeq) {
-        // The dropdown goes to where it was filed, so the picture just added is in view (phase I4).
-        if (d.catId) _cat = String(d.catId);
+        // The column goes to where it was filed - this chat's references (phase V55) - so the picture just added is in view.
+        if (d.catId && _col) _col.select('images:' + d.catId);
         _setAtt({ path: d.path, from: 'photo' });
       }
       await _loadImages();
@@ -767,85 +784,51 @@ function createMaker(kind) {
     mark(_ui.libList, 'photo');
   }
 
-  // ── the right column: Images ──────────────────────────────────────────────
-  let _imagesErr = '';                               // the last read failed - said instead of "no pictures"
+  // ── the right column: Images (phase V55, (гн13): the folder column, js/folder-column.js) ──
+  // The tree and the open folder read again - on opening, after a photo brought in.
   async function _loadImages() {
-    const want = _cat;
-    try {
-      const d = await json('/api/library/shelf/media?filter=images' + (want ? '&cat=' + encodeURIComponent(want) : ''));
-      if (want !== _cat) return;
-      _images = d.items || [];
-      _cats = d.cats || [];
-      _imagesErr = '';
-    } catch (e) {
-      if (want !== _cat) return;
-      // What was there stays; the column says the Library could not be read (review I4).
-      _imagesErr = 'could not read the Library - it is asked again when the chat is opened again';
-      if (_images === null) _images = [];
-    }
-    _paintImages();
+    if (!_col) return;
+    try { await _col.reload(); } catch (e) { /* the column says what it could not read */ }
+    _markOn();
   }
 
   // As many columns as tiles of ~120px fit, one at the least.
-  const _colsOf = (host) => Math.max(1, Math.min(6, Math.floor(((host && host.clientWidth) || 0) / 126) || 1));
+  const _colsOf = (w) => Math.max(1, Math.min(6, Math.floor((+w || 0) / 126) || 1));
 
   function _paintImages() {
-    const host = _ui.libList;
-    if (!host) return;
-    const sel = _ui.cat;
-    sel.textContent = '';
-    const all = document.createElement('option');
-    all.value = '';
-    all.textContent = 'all images';
-    sel.appendChild(all);
-    for (const c of _cats) {
-      const o = document.createElement('option');
-      o.value = c.id;
-      o.textContent = c.label || c.name || c.id;
-      sel.appendChild(o);
-    }
-    sel.value = _cat;
-    // A remembered category that is not there any more (deleted, or made again under another id) is
-    // dropped - once the categories are known - and all of Images read in its place: the answer in
-    // hand was for the dead one (review I4).
-    if (_images !== null && !_imagesErr && sel.value !== _cat) {
-      _cat = '';
-      sel.value = '';
-      _remember();
-      _loadImages();
-      return;
-    }
-
-    // The scroll is kept only for the same list drawn again (a width change, a reload); another
-    // category starts at its top, where the newest is (review I4).
-    const top = _paintedCat === _cat ? host.scrollTop : 0;
-    _paintedCat = _cat;
-    host.textContent = '';
-    if (host.clientWidth) _masonryCols = _colsOf(host);
-    else if (!_masonryCols) _masonryCols = 2;
-    if (_images === null) { host.appendChild(el('div', 'mkc-none', 'reading the Library…')); return; }
-    if (_imagesErr && !_images.length) { host.appendChild(el('div', 'mkc-none', _imagesErr)); return; }
-    if (!_images.length) { host.appendChild(el('div', 'mkc-none', _cat ? 'Nothing in this folder.' : 'No pictures in the Library\'s Images yet.')); return; }
-    // A kladka: each tile its own shape, the next into the shortest column.
-    const cols = [];
-    const h = [];
-    for (let i = 0; i < _masonryCols; i++) { cols.push(el('div', 'mkc-mcol')); h.push(0); }
-    for (const it of _images) {
-      const m = it.meta || {};
-      const sized = m.w > 0 && m.h > 0;
-      let k = 0;
-      for (let j = 1; j < cols.length; j++) if (h[j] < h[k]) k = j;
-      h[k] += sized ? m.h / m.w : 1;
-      const t = _tileOf('mkc-card', it, sized ? (m.w + '/' + m.h) : '1/1');
-      t.addEventListener('click', () => {
-        const on = !!_att && _att.from === 'photo' && _att.path === it.media;
-        _setAtt(on ? null : { path: it.media, from: 'photo' });
-      });
-      cols[k].appendChild(t);
-    }
-    host.append(...cols);
-    host.scrollTop = top;
+    if (!_col) return;
+    _col.paint();
     _markOn();
+  }
+
+  // A picture of the column (a file of js/folder-column.js filesOf): its own shape - a made environment 3:2, a made
+  // lookbook square, else its measure -, a miniature, and a press makes it the photo of the next message (again: not).
+  const _shapeOf = (it) => (it.aspect ? it.aspect.replace(':', '/')
+    : it.kind === 'environments' ? '3/2' : '1/1');
+  const _miniOf = (it) => {
+    const t = String(it.thumb || '');
+    return t.startsWith('/api/thumb?') ? t.replace('&v=card', '&v=strip') : thumb(t || it.path, 'strip');
+  };
+  function _picTile(it) {
+    const t = el('button', 'mkc-card');
+    t.type = 'button';
+    t.title = it.name || '';
+    t.dataset.path = it.path;
+    const box = el('span', 'mkc-box');
+    box.style.aspectRatio = _shapeOf(it);
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = _miniOf(it);
+    box.appendChild(img);
+    t.appendChild(box);
+    t.classList.toggle('on', !!_att && _att.from === 'photo' && _att.path === it.path);
+    t.addEventListener('click', () => {
+      const on = !!_att && _att.from === 'photo' && _att.path === it.path;
+      _setAtt(on ? null : { path: it.path, from: 'photo' });
+    });
+    return t;
   }
 
   // ── the area's door ───────────────────────────────────────────────────────
@@ -880,6 +863,7 @@ function createMaker(kind) {
       _timer = 0;
       // A countdown left running while the area is hidden is not timed if it lands meanwhile.
       for (const n of _nodes.values()) if (n.prog) n.away = true;
+      if (_col) _col.close();                      // its dropdown, if open
       _remember();
     },
   };
