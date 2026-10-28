@@ -629,7 +629,7 @@ function _open(it, list, follow) {
       }
       if (_CATABLE.has(item.kind)) {
         rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind)),
+          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '')),
           (id) => _setCat(item, id), 'Folder')]);
       }
       const orig = Cut.originalRow(item, repaintViewer);
@@ -652,8 +652,10 @@ function _open(it, list, follow) {
 // the time.
 let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
 // (phase V54 block 6, (зв45)) A folder in a folder reads as its path - "Товары / Обувь / Лето" - in the tree's order.
-const _catsFor = (kind) => (_catsByKind[kind] || []).map(c => Object.assign({}, c,
-  { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }));
+// (phase V57) The references of Environments / Lookbooks (`closed`) take nothing by hand: offered only as where the item
+// already is (`current`), and not to be chosen.
+const _catsFor = (kind, current) => (_catsByKind[kind] || []).filter(c => !c.closed || c.id === current).map(c => Object.assign({}, c,
+  { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }, c.closed ? { disabled: true } : {}));
 async function _loadCats() {
   try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] }; }
 }
@@ -672,6 +674,7 @@ function _picker(cls, current, options, onPick, title) {
     for (const o of options()) {
       const opt = document.createElement('option');
       opt.value = o.id; opt.textContent = o.label;
+      if (o.disabled) opt.disabled = true;
       if (o.id === current) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -855,7 +858,7 @@ function _card(it, extra) {
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
     card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind)),
+      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '')),
       (id) => _setCat(it, id), 'Folder'));
   }
 
@@ -988,7 +991,7 @@ async function _setKind(it, kind) {
 // Filing one clip under a category, from wherever the control is. Repaints through
 // _apply so the chip counts and the filtered view stay honest.
 async function _setCat(it, id) {
-  const c = _catsFor(it.kind).find(x => x.id === id) || { id: '', label: '' };
+  const c = _catsFor(it.kind, id).find(x => x.id === id) || { id: '', label: '' };
   try {
     await A.setCategory(it, c.id, c.label);
     it.meta = it.meta || {}; it.meta.categoryId = c.id;
@@ -1512,7 +1515,8 @@ function _paintUpload() {
   btn.disabled = false;
   if (kind === 'images') {
     btn.textContent = 'Upload images';
-    btn.title = 'Add pictures to the library. A PNG keeps its transparency.';
+    // (phase V57) In the references of Environments / Lookbooks it says why not, and a press says it again (`_shut`).
+    btn.title = _shut() || 'Add pictures to the library. A PNG keeps its transparency.';
     if (inp) inp.accept = PICTURE_ACCEPT;
     return;
   }
@@ -1618,9 +1622,14 @@ async function _addLinks(urls, kind) {
       + (bad.length ? ' - ' + bad[0].error : '')), bad.length ? 'err' : '');
 }
 
+// (phase V57, the owner's (ок2)) The node selected is the references of Environments / Lookbooks or a folder in them: nothing
+// goes there by hand - why, in words (js/media-tree.js closedSays); '' anywhere else.
+function _shut() { return _shelf === 'media' && _tree && _node ? _tree.closedSays(_node) : ''; }
+
 async function _upload(files) {
   const list = Array.from(files || []);
   if (!list.length) return;
+  if (_shut()) { _status(_shut(), 'err'); return; }
   const btn = $('lib-upload');
   if (btn) btn.disabled = true;
   const kind = _mkind();
@@ -1835,7 +1844,8 @@ function boot() {
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (btn && inp) {
-    btn.addEventListener('click', () => inp.click());
+    // (phase V57) Refused in words before the file window opens - in the references of Environments / Lookbooks.
+    btn.addEventListener('click', () => { if (_shut()) { _status(_shut(), 'err'); return; } inp.click(); });
     // Copy the FileList into an array BEFORE clearing the input: input.files is live,
     // so `inp.value = ''` empties the very list you are holding and the upload sees
     // nothing. Clearing is still needed, or picking the same file twice fires no change.
@@ -1880,9 +1890,13 @@ function boot() {
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
     grid.addEventListener('contextmenu', (e) => {
-      if (!(_shelf === 'media' && !_makingOn) || !_tree || !_node || !_tree.holds(_node)) return;
+      if (!(_shelf === 'media' && !_makingOn) || !_tree || !_node) return;
+      // (phase V57) In the references of Environments / Lookbooks: "New folder" is there, not to be pressed, saying why.
+      const shut = _shut();
+      if (!shut && !_tree.holds(_node)) return;
       if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
       e.preventDefault();
+      if (shut) { TS.menuAt(e.clientX, e.clientY, [['New folder', 'not here - nothing goes into references by hand', null]]); return; }
       const here = _node;
       TS.menuAt(e.clientX, e.clientY, [['New folder', 'in ' + here.label, async () => {
         const mark = document.createElement('div');

@@ -459,9 +459,12 @@ function _categorySelect(item) {
     none.value = ''; none.textContent = '— no folder —';
     sel.appendChild(none);
     for (const c of (list || [])) {
+      // (phase V57) The references of Environments / Lookbooks take nothing by hand: only where it already is, not chosen.
+      if (c.closed && c.id !== current) continue;
       const o = document.createElement('option');
       // (phase V54 block 6, (зв45)) A folder in a folder reads as its path, in the tree's order.
       o.value = c.id; o.textContent = Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label);
+      if (c.closed) o.disabled = true;
       sel.appendChild(o);
     }
     sel.value = current;
@@ -558,6 +561,14 @@ function _plusTile() {
   if (_node && _node.make && MADE.has(_node.make)) {
     b.title = _node.makeLabel + ' - opens the generator here, in the Library panel';
     b.addEventListener('click', (e) => { e.stopPropagation(); openMaker(_node.make); });
+    return b;
+  }
+  // (phase V57, the owner's (ок2)) The references of Environments / Lookbooks and the folders in them take nothing by hand -
+  // the "+" says why, at a press too.
+  const shut = _shut();
+  if (shut) {
+    b.title = shut;
+    b.addEventListener('click', (e) => { e.stopPropagation(); _status(shut, true); });
     return b;
   }
   // (phase V35) REFERENCES fills itself: the Telegram bot's posts, the pieces cut from a video, the sources downloaded.
@@ -886,14 +897,20 @@ function _lock(on) {
   if (t) t.classList.toggle('is-locked', on);
 }
 
+// (phase V57) The node selected is the references of Environments / Lookbooks or a folder in them: why nothing goes there by
+// hand, in words (js/media-tree.js closedSays); '' anywhere else.
+function _shut() { return _tree && _node ? _tree.closedSays(_node) : ''; }
+
 async function _upload(files, what) {
   const list = Array.from(files || []);
   if (!list.length) return;
   // (phase V55) Environments / Lookbooks take only what their generator made.
   if (_node && _node.make && MADE.has(_node.make)) {
-    _status(_node.label + ' takes only what ' + _node.makeLabel + ' makes - a photo goes into its references', true);
+    _status(_node.label + ' takes only what ' + _node.makeLabel + ' makes', true);
     return;
   }
+  // (phase V57) Nor their references, by hand.
+  if (_shut()) { _status(_shut(), true); return; }
   if (_isImages()) return _uploadAs(list.filter(isPictureFile), list.length, 'images', 'image', (l, on) => uploadImages(l, on));
   if (_isAudio()) {
     const into = SS.filesTo(_node);
@@ -1252,9 +1269,13 @@ export function initLibrary() {
     // (phase V54 block 6) The right button on the gallery's EMPTY space: "New folder" inside the open folder - when it
     // holds folders (js/media-tree.js holds). On a tile or a folder tile their own menus answer.
     body.addEventListener('contextmenu', (e) => {
-      if (!(body.offsetParent !== null) || !_tree || !_node || !_tree.holds(_node)) return;
+      if (!(body.offsetParent !== null) || !_tree || !_node) return;
+      // (phase V57) In the references of Environments / Lookbooks: "New folder" is there, not to be pressed, saying why.
+      const shut = _shut();
+      if (!shut && !_tree.holds(_node)) return;
       if (e.target.closest && e.target.closest('[data-key], .mt-ftile, button, select, input, textarea, a')) return;
       e.preventDefault();
+      if (shut) { TS.menuAt(e.clientX, e.clientY, [['New folder', 'not here - nothing goes into references by hand', null]]); return; }
       const here = _node;
       TS.menuAt(e.clientX, e.clientY, [['New folder', 'in ' + here.label, async () => {
         const mark = document.createElement('div');

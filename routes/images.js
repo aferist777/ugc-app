@@ -48,6 +48,13 @@ const _upload = multer({
 
 router.post('/images/upload', _upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  // (phase V57, the owner's (ок2)) Not into the references of Environments / Lookbooks: only the photos their generators
+  // are given lie there (lib/library-cats.js closedWhy) - the file brought goes, refused in words.
+  const shut = LC.closedWhy('images', String((req.body || {}).categoryId || ''));
+  if (shut) {
+    try { fs.rmSync(req.file.path, { force: true }); } catch (x) { /* it is going anyway */ }
+    return res.status(409).json({ success: false, error: shut });
+  }
   let abs = req.file.path;
   try { abs = await IMGIN.sendableFile(abs); }
   catch (e) {

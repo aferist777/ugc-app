@@ -126,6 +126,9 @@ router.post('/references/:id/move', async (req, res) => {
 
     // ── out of REFERENCES, into VIDEO or IMAGES ──
     if (!VIDEO_KINDS.includes(kind) && kind !== 'images') return res.status(400).json({ success: false, error: 'it goes to REFERENCES, VIDEO or IMAGES' });
+    // (phase V57, the owner's (ок2)) Not into the references of Environments / Lookbooks (lib/library-cats.js closedWhy).
+    const shut = require('../lib/library-cats').closedWhy(kind, cat);
+    if (shut) return res.status(409).json({ success: false, error: shut });
     const fileRecord = require('./library').fileRecord;
     const IMG = require('../lib/images-store');
     const moved = [];

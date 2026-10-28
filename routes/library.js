@@ -709,9 +709,12 @@ function _tree() {
 // media/lookbooks/; no records: the file IS the entry, `_imageShelf`), asked for as `filter=environments|lookbooks`; inside
 // each, its `references` - the required category uploads_environments / uploads_lookbooks. That category stays where it is
 // in the list - a TOP folder of IMAGES, found BY NAME (lib/library-cats.js REQUIRED) - and on the disk: the tree only SHOWS
-// it here, under its key, so a remembered selection, a tile filed into it and a folder made in it work as before. A made
+// it here, under its key, so a remembered selection and the generators' filing work as before. A made
 // picture is opened and deleted here as on its shelf, never moved (descriptions, 3D layouts and looks point at its
 // address - _moveOne); nothing is moved into these two but their references' own (js/media-tree.js).
+// (phase V57, the owner's (ок2)) And NOTHING GOES INTO THOSE REFERENCES BY HAND - only the photo a generator is given
+// (lib/library-cats.js closedWhy): the node and every folder under it are `closed` - the page refuses a tile, a folder, a
+// file and "New folder" there in words, "Move to…" leaves them out (js/media-targets.js) - and `noAdd`.
 const MADE = [
   { kind: 'environments', label: 'Environments', refs: 'uploads_environments', make: 'New environment', noun: 'environment' },
   { kind: 'lookbooks', label: 'Lookbooks', refs: 'uploads_lookbooks', make: 'New lookbook', noun: 'lookbook' },
@@ -733,10 +736,12 @@ function _madeFolders(images) {
       q: { filter: g.kind }, make: g.kind, makeLabel: g.make,
       // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (V35's `tiles: 'wide'`).
       ...(g.kind === 'environments' ? { tiles: 'wide' } : {}),
-      tip: g.label + ' - the ' + g.noun + 's its generator made (+ opens it); a photo to make one from goes into its references' };
+      tip: g.label + ' - the ' + g.noun + 's its generator made (+ opens it); the photos it was given lie in its references' };
     if (ref) {
+      const shut = (n) => { n.closed = true; n.noAdd = true; for (const c of n.children || []) shut(c); };
+      shut(ref);
       node.children = [Object.assign(ref, { label: 'references',
-        tip: 'references - the photos ' + g.make + ' is given; required: it cannot be renamed, moved or deleted' })];
+        tip: 'references - the photos ' + g.make + ' was given; nothing is put here by hand. Required: it cannot be renamed, moved or deleted' })];
     }
     return node;
   });
@@ -1530,6 +1535,12 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
     if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
+    // (phase V57, the owner's (ок2)) Into the references of Environments / Lookbooks - never by hand: only the photos their
+    // generators are given lie there (lib/library-cats.js closedWhy). Out of them - as anywhere.
+    if (patch.categoryId && patch.categoryId !== String(it.categoryId || '')) {
+      const shut = LC.closedWhy(kind, patch.categoryId);
+      if (shut) return _r(409, { success: false, error: shut });
+    }
     // (phase V28.4) A track's name is its title: the music panel and the video chat read that.
     if (kind === 'music' && 'name' in patch) { patch.title = patch.name; delete patch.name; }
     // (phase V54 block 6) A category is a folder that is there - a nested one is chosen by its id, never guessed from a name.
@@ -1880,7 +1891,7 @@ function _moveOne(it, to) {
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
   // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
   if (MADE_KINDS.has(from)) return MADE_STAYS[from];
-  if (MADE_KINDS.has(to.kind)) return 'only its generator puts pictures into ' + (to.kind === 'lookbooks' ? 'Lookbooks' : 'Environments') + ' - a photo goes into its references';
+  if (MADE_KINDS.has(to.kind)) return to.kind === 'lookbooks' ? 'only New lookbook puts pictures into Lookbooks' : 'only New environment puts pictures into Environments';
   if (from === 'music' || to.kind === 'music') {
     if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
     if (to.cat) {
@@ -1962,6 +1973,9 @@ router.post('/library/batch/move', (req, res) => {
       folder: String(t.folder || ''), mood: String(t.mood || '') };
     if (!items.length || !to.kind) return res.status(400).json({ success: false, error: 'what, and where to' });
     if (to.cat === UNCAT) to.cat = '';
+    // (phase V57) The references of Environments / Lookbooks take nothing by hand - said once, nothing moved.
+    const shut = LC.closedWhy(to.kind, to.cat);
+    if (shut) return res.status(409).json({ success: false, error: shut });
     const skipped = [];
     const posts = items.filter(x => x.kind === 'references');
     if (posts.length) {
@@ -2296,7 +2310,7 @@ function _fileRecord(b) {
 // CATEGORIES - FOLDERS - one list per kind, owned by lib/library-cats.js; moved with their files by lib/folders.js
 //
 //   GET    /api/library/cats?kind=          the lists, for the dropdowns: every folder with its `parent` and `trail` (its
-//                                           names from the top), in the tree's order
+//                                           names from the top), in the tree's order; `closed` (V57) - nothing goes there by hand
 //   POST   /api/library/cats                { kind, label }           filed by name (the code's way: top first, then anywhere)
 //                                           { kind, label, parent }   (phase V54) a new folder in `parent` ('' - the kind)
 //   PATCH  /api/library/cats/:id            { kind, label }           rename (its folder on the disk with everything under it)
@@ -2356,9 +2370,12 @@ function _subtree(kind, id) {
 router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
+    const state = LC.read();
     for (const k of LC.KINDS) {
+      // (phase V57) `closed` - the references of Environments / Lookbooks and what is under them: a dropdown offers them only
+      // as where a picture already is (lib/library-cats.js closedWhy).
       const list = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title,
-        parent: c.parent || '', trail: c.trail || [c.title] }));
+        parent: c.parent || '', trail: c.trail || [c.title], ...(LC.closedWhy(k, c.id, state) ? { closed: true } : {}) }));
       const kids = (p) => list.filter(c => c.parent === p)
         .sort((a, b) => (Number(!!b.locked) - Number(!!a.locked)) || _abc(a.title || a.label, b.title || b.label));
       const out = [];

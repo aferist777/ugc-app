@@ -12,7 +12,7 @@
 // REFERENCES - back to the post's own source folder (no category: the sources' folders themselves are not places, a post
 // goes back to its own) and its own categories; VIDEO - Generated (a B-roll with no category), B-rolls' categories,
 // Hooks, Uploads and theirs (never Talking heads: a take is its project's); IMAGES (unless `images: false`) - IMAGES
-// itself and its categories. (Phase V35: the tree has no Uncategorized nodes - what has no category lies in the node that
+// itself and its categories, never the references of Environments / Lookbooks (`closed`, phase V57). (Phase V35: the tree has no Uncategorized nodes - what has no category lies in the node that
 // says so with `loose`.)
 //
 // (phase V54, `audio: true` - "Move to…" of several tiles, js/tile-select.js) AUDIO too: Music itself, its highlights
@@ -37,6 +37,8 @@ export function placesOf(tree, opts) {
   const map = (n, path) => {
     if (n.kind === 'heads' || n.ref) return null;
     if (n.kind === 'sfx' || n.key === 'sfx-fav') return null;          // Built-in is the app's; Favorites is a star
+    // (phase V57, the owner's (ок2)) The references of Environments / Lookbooks and the folders in them take nothing by hand.
+    if (n.closed) return null;
     let to = null;
     if (n.kind === 'music' && o.audio) to = { kind: 'music', cat: n.cat || '', label: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '', text: path || n.label };
     else if (n.loose && takes(n.loose)) to = { kind: n.loose, cat: '', label: '', text: path || n.label };

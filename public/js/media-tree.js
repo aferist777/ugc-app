@@ -56,8 +56,13 @@
    (routes/library.js _madeFolders) - the pictures their generators made lie in them, and their `references` (the required
    uploads_environments / uploads_lookbooks, an IMAGES folder like any) inside. Such a node carries `make` (its kind) and
    `makeLabel`: its row has a "+" - and its menu an item - that opens the generator where the page says (`onMake`). A made
-   picture moves nowhere, nothing is moved in but into references, and a folder goes into references, not into them - each
-   refused IN WORDS when let go there.
+   picture moves nowhere and nothing is moved in - each refused IN WORDS when let go there.
+   (phase V57, the owner's (ок2): "В референсы окружений и лукбуков нельзя класть ничего вручную, туда падает только если из
+   референсов создают окружения и лукбуки") Their references, and every folder in them, are `closed` (the server's flag,
+   lib/library-cats.js closedWhy): only the photo a generator is given lands there. A tile, several tiles, a post's picture,
+   a folder or files from Explorer let go there, and "New folder" in them (the menu, the gallery's empty space), are refused
+   in words (`closedSays` - the page says the same for its Upload / "+"); "Move to…" does not offer them
+   (js/media-targets.js). Out of them, renamed, deleted - as any folder.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -120,6 +125,8 @@ function _target(n) {
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
   // (phase V55) Environments / Lookbooks: only their generator files there - what is let go is refused in words.
   if (MADE[n.kind]) return { kind: n.kind, cat: '', made: true };
+  // (phase V57) Their references and the folders in them: closed to the hand - refused in words too.
+  if (n.closed) return { kind: n.kind, cat: n.cat || '', closed: true };
   if (n.kind === 'music') return { kind: 'music', cat: n.cat || '', name: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '' };
   // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
   // its source's folder.
@@ -142,7 +149,7 @@ function _dropAction(n, from, refType) {
   // (phase V55, (гн9)) A made environment or lookbook goes nowhere - refused in words wherever it is let go but its own
   // folder; a picture let go on Environments / Lookbooks is refused in words too (a photo goes into references).
   if (MADE[from]) return t.kind === from ? '' : 'refuse';
-  if (t.made) return (from === 'images' || (from === 'references' && refType === 'photo')) ? 'refuse' : '';
+  if (t.made || t.closed) return (from === 'images' || (from === 'references' && refType === 'photo')) ? 'refuse' : '';
   // (phase V35) A track goes between Music, highlights and its moods - and nowhere else; nothing else goes there.
   if (from === 'music' || t.kind === 'music') return from === t.kind ? 'place' : '';
   if (from === 'references') {
@@ -196,7 +203,8 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *   o.onFiles(node, files)  they were
  *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks) - open its
  *                         generator ('environments' | 'lookbooks' in node.make); without it the node has no "+"
- * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind) }
+ * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind), holds(node), newFolder(node, anchor),
+ *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may }
  */
 export function createTree(host, o) {
   const opt = Object.assign({ page: 'lib', fallback: 'video', status: () => {}, onSelect: () => {}, onChanged: () => {} }, o || {});
@@ -226,8 +234,21 @@ export function createTree(host, o) {
   // A dragged folder may go into this node: one of its kind that holds folders, not itself or under it, not where it is.
   const takesFolder = (n) => !!_dragging && !!n && n.kind === _dragging.kind && holds(n) && !isUnderKey(n.key, _dragging.key)
     && parentOf.get(_dragging.key) !== n.key;
-  // (phase V55) An IMAGES folder let go on Environments / Lookbooks - refused in words (its references takes it).
-  const refusesFolder = (n) => !!_dragging && !!n && !!MADE[n.kind] && !!n.make && _dragging.kind === 'images';
+  // (phase V55) An IMAGES folder let go on Environments / Lookbooks - refused in words; (V57) on their references or a folder
+  // in them too - but not where it already is, nor on itself.
+  const refusesFolder = (n) => !!_dragging && !!n && _dragging.kind === 'images' && ((!!MADE[n.kind] && !!n.make)
+    || (!!n.closed && n.key !== _dragging.key && parentOf.get(_dragging.key) !== n.key && !isUnderKey(n.key, _dragging.key)));
+  // (phase V57) Why nothing goes into a closed node by hand, in words - the server's (lib/library-cats.js closedWhy); '' for
+  // any other node.
+  function closedSays(node) {
+    const n = node && byKey.get(node.key);
+    if (!n || !n.closed) return '';
+    let m = n;
+    while (m && !m.make) m = byKey.get(parentOf.get(m.key));
+    const env = !m || m.make !== 'lookbooks';
+    return 'Nothing goes into ' + (env ? 'Environments' : 'Lookbooks') + ' / references by hand - only the photo '
+      + (env ? 'New environment makes an environment' : 'New lookbook makes a lookbook') + ' from lands there.';
+  }
   const _hasType = (dt, t) => Array.from((dt && dt.types) || []).some(x => x === t || x.startsWith(t));
 
   function _index(list, parent) {
@@ -456,9 +477,12 @@ export function createTree(host, o) {
   // A tile let go here - or (phase V34.E) files from Explorer, on a node that takes them (the page says, `takesFiles`).
   // The same on a node's row, its folder tile and its word in the path (phase V35).
   function _takesDrops(target, n) {
-    const _files = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files')
-      && typeof opt.takesFiles === 'function' && opt.takesFiles(n);
+    const _anyFiles = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
+    const _files = (e) => _anyFiles(e) && typeof opt.takesFiles === 'function' && opt.takesFiles(n);
     target.addEventListener('dragover', (e) => {
+      // (phase V57) Files from Explorer over a closed node: taken here (not lit), to be refused in words - so the page under
+      // it does not upload them either.
+      if (n.closed && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; return; }
       // (phase V54) A folder dragged onto a folder of its kind, or the kind's row.
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         // (phase V55) An IMAGES folder over Environments / Lookbooks: taken, to be refused in words (not lit).
@@ -486,12 +510,13 @@ export function createTree(host, o) {
     target.addEventListener('dragleave', () => target.classList.remove('is-drop'));
     target.addEventListener('drop', (e) => {
       target.classList.remove('is-drop');
+      if (n.closed && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); opt.status(closedSays(n), true); return; }
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         if (refusesFolder(n)) {
           e.preventDefault();
           e.stopPropagation();
           _dragging = null;
-          opt.status(MADE[n.kind] + ' holds only what its generator made and its references - put the folder into references', true);
+          opt.status(n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
           return;
         }
         if (!takesFolder(n)) return;
@@ -628,9 +653,12 @@ export function createTree(host, o) {
     const t = _target(n);
     if (!act || !t) return;
     if (act === 'refuse') {
+      // (phase V57) A picture let go on the closed folder it already lies in: nothing to say.
+      if (t.closed && !MADE[it.kind] && !(Array.isArray(it.many) && it.many.length > 1) && (it.cat || '') === t.cat) return;
       opt.status(MADE[it.kind] ? MADE_SAYS[it.kind]
         : t.made ? 'Only ' + (t.kind === 'lookbooks' ? 'New lookbook' : 'New environment') + ' puts pictures into ' + MADE[t.kind]
-          + ' (+ on it) - a photo goes into its references'
+          + ' (+ on it)'
+        : t.closed ? closedSays(n)
         : 'A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
       return;
     }
@@ -882,8 +910,9 @@ export function createTree(host, o) {
   function _menu(n, row, x, y) {
     _closeMenu();
     const items = [];
-    // (phase V54) A new folder INSIDE the one pressed (зв19).
+    // (phase V54) A new folder INSIDE the one pressed (зв19); (V57) none in the references of Environments / Lookbooks.
     if (holds(n)) items.push(['New folder', 'in ' + n.label, () => _newFolder(n, row)]);
+    else if (n.closed) items.push(['New folder', 'not here - nothing goes into references by hand', null]);
     // (phase V55) Environments / Lookbooks: their generator; what they hold is the app's to keep where it is.
     if (n.make && typeof opt.onMake === 'function') {
       items.push([n.makeLabel, 'opens the generator', () => opt.onMake(n, row)]);
@@ -924,6 +953,8 @@ export function createTree(host, o) {
     // (phase V54) the gallery's empty space: "New folder" inside the open node, when it holds folders
     holds: (node) => holds(node && byKey.get(node.key)),
     newFolder: (node, anchor) => _newFolder(node && byKey.get(node.key), anchor),
+    // (phase V57) why nothing goes into this node by hand ('' - it may): the page's Upload, "+" and empty-space menu
+    closedSays,
     selected: () => byKey.get(sel) || null,
     node: (key) => byKey.get(key) || null,
   };
