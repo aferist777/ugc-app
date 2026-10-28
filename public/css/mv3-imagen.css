@@ -827,35 +827,37 @@ audio.vtrim-media{ background:none; height:32px }
 .pk.is-tree .pk-link input{ padding:3px 7px; font-size:10.5px }
 .pk.is-tree .pk-said{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
-/* ── Talking head's choosing windows and makers' windows (phase V57, the owner's (ок5)-(ок8)) ──
-   "who" and "where" are the window above with no tree (chat-pick.js openChoose): the characters on the left with the
-   scenario's gender and "all" over them, or no left side at all (the environments, wide tiles). The makers' windows
-   (wk-maker.js openWindow) are the same frame with tabs in the head and a maker's bench for a body; they stand under
-   the viewer, the tile menus and the "delete?" asks they open. */
-.pk.is-flat .pk-body{ grid-template-columns:minmax(0, 1fr) }
-.pk.is-flat .pk-side{ display:none }
-.pk.is-choose.is-flat .pk-grid{ --pk-h:150px }
+/* ── Talking head's windows (phase V57; V58 - js/gen-window.js frames, js/merge-v3/wk-maker.js paintChoose) ──
+   "who" and "where" choose from a list in the attachment window's tiles: the characters on the left with the scenario's
+   gender and "all" over them, or no left side at all (the environments, wide tiles); the new look's page dresses a
+   character - the lookbooks, and at the foot who + what and `apply`. */
+.wkc{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:210px minmax(0, 1fr) }
+.wkc.is-flat{ grid-template-columns:minmax(0, 1fr) }
+.wkc.is-flat .pk-side{ display:none }
+.wkc .pk-side{ overflow:hidden; gap:0; padding:6px 4px 4px 6px }
+.wkc .pk-bar{ gap:8px; padding:6px 10px }
+.wkc .pk-q{ flex:0 1 240px; min-width:110px; height:24px }
+.wkc .pk-count{ margin-left:auto }
+.wkc .pk-grid{ --pk-h:128px; padding:10px; gap:10px 8px }
+.wkc.is-flat .pk-grid{ --pk-h:150px }
+.wkc-said{ flex:0 0 auto; min-height:0; padding:0 12px; font:600 10.5px/1.4 var(--font); color:var(--muted) }
+.wkc-said:not(:empty){ padding:6px 12px; border-top:1px solid var(--border-soft) }
 .pk-ftabs{ flex:0 0 auto; display:flex; gap:4px; padding:0 2px 6px 0; margin-bottom:4px; border-bottom:1px solid var(--border-soft) }
 .pk-ftabs .mv3-sc-tab{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .pk-none.is-side{ padding:14px 4px; text-align:left }
-.pk-ov.is-maker{ z-index:8900 }
-body:has(.pk-ov.is-maker) .mv3-ask{ z-index:9450 }
-.pk.is-maker .pk-head{ gap:10px }
-.mk-tabs{ flex:1 1 auto; min-width:0; display:flex; gap:4px }
-.mk-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden }
-.mk-body.mv3-wk-scroll.is-split{ flex-direction:row; overflow:hidden }
-.mk-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 4px }
-.mk-scroll .mv3-wk-grid{ grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px }
-.mk-body .mv3-wk-half.is-shelf .mv3-wk-grid{ grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)) }
-.mk-body .mv3-wk-half.is-shelf .mv3-wk-grid.is-env{ grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)) }
-.mk-body .mv3-wk-half.is-make{ overflow-y:auto }
-.mk-body .mv3-wk-drop img{ max-height:260px }
-.mk-foot{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:7px 10px; border-top:1px solid var(--border); background:var(--surface-2) }
+.mk-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto }
 .mk-pair{ flex:0 0 auto; display:flex; align-items:center; gap:6px }
 .mk-pair-img{ width:64px; height:44px; object-fit:contain; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface) }
 .mk-pair-img.is-empty{ display:flex; align-items:center; justify-content:center; font:600 9.5px/1 var(--font); color:var(--muted); border-style:dashed }
 .mk-pair-plus{ font:600 13px/1 var(--font); color:var(--muted) }
-.mk-said{ flex:1 1 auto; min-width:0; font:600 10.5px/1.4 var(--font); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.mk-dress .gw-row{ margin-top:0 }
+/* (phase V58) A half of the stage waits for its own work: a box over the half, what is under it blurred, the countdown in
+   it (js/progress.js); presses go through it to the stage - the half is still a door. */
+.mv3-half-ov{ position:absolute; left:0; right:0; height:50%; z-index:4; pointer-events:none;
+  backdrop-filter:blur(6px) saturate(.85); -webkit-backdrop-filter:blur(6px) saturate(.85) }
+.mv3-half-ov *{ pointer-events:none }
+.mv3-half-ov.is-top{ top:0 }
+.mv3-half-ov.is-bottom{ top:50% }
 
 /* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
    A window beside the column, clear of the prompt field, half the attachment picker, no backdrop: the sections on the

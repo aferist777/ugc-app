@@ -11,6 +11,9 @@
 //     in columns. A REFERENCES post gives its pictures one by one (`files`).
 //   - (phase V56, (ги2), (ги3)) only the folders holding files of that type - in them or under them - are offered, and
 //     their number is how many of those (typedTree: the shelf read once per kind, its answer dealt to the folders).
+//   - (phase V58, (лк1), (лк2)) a ✕ in the corner of every picture of a folder, pressed twice ("really?" - "used in N
+//     projects" when timelines hold it), deletes it from the library the way its shelf does (js/del-x.js); the column
+//     reads itself again and tells the caller (`onDeleted`).
 //
 // The tiles are the caller's (`tile(it)`): what a press does, its mark, a drag. Nothing is remembered unless `lsKey`.
 //
@@ -18,6 +21,7 @@
 // too (js/merge-v3/chat-pick.js, phase V55): a node's files are read by its `q`, never by a list of the app's folders.
 
 import * as Layers from './layers.js';
+import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from './del-x.js';
 
 const UNCAT = '__uncat__';
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2c.6 0 1.2.24 1.65.66L12.8 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11z"/></svg>';
@@ -252,6 +256,7 @@ export async function locateFile(path, roots) {
  *   o.empty        words for an empty folder (default 'Nothing in this folder.')
  *   o.onChange(sel)  what is open changed - sel { own: true } or { node }
  *   o.title        the dropdown's first line (default 'Show')
+ *   o.del          false - no ✕ on the pictures (V58: there is one by default); o.onDeleted(file) after one went
  * -> { el, load(), reload(), paint(), setOwn(items), select(key), selected(), isOwn(), items(), close() }
  *    load()   reads the tree (and what is open); reload() - the tree and what is open read again (after an upload);
  *    paint()  the pictures drawn again - the caller's marks changed, or the column's width.
@@ -408,6 +413,14 @@ export function createFolderColumn(host, o) {
       for (let j = 1; j < n; j++) if (H[j] < H[k]) k = j;
       H[k] += 1 / _ratio(it.aspect);
       const t = opt.tile(it);
+      if (t && !own && opt.del !== false && canDelete(it)) {
+        t.appendChild(delX({
+          host: t, title: titleOf(it),
+          ask: () => usageWords(delFiles(it)),
+          run: () => deleteFile(it),
+          done: () => { reload(); if (typeof opt.onDeleted === 'function') opt.onDeleted(it); },
+        }));
+      }
       if (t) boxes[k].appendChild(t);
     }
     list.replaceChildren(...boxes);

@@ -1,16 +1,16 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   MERGE — what the two makers share: create lookbook and create environment.
-
-   Both are the same bench (docs/local-app/PLAN.md): a shelf to draw a base from, a field that
-   takes a picture, a sentence, and a button that says what is missing. The pieces that must
-   behave identically in both live here, so a rule learned on one - the owner's twenty
-   characters, a field that opens its picture when clicked - cannot drift on the other.
+   MERGE — what talking head's setup and its windows share: the owner's twenty characters and the
+   keyboard-mess test (the generators' benches, js/gen-window.js, and the Library's makechat.js), the
+   viewer for one picture, a tile's menu, the gentler wheel, the countdown of the script on the
+   whole stage (holdProgress) and - since phase V58 - the countdowns of the casting on the stage's
+   halves (holdHalf) and the list "who" and "where" choose from (paintChoose). The benches
+   themselves moved into js/gen-window.js in phase V58, so they open anywhere.
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
 import { openViewer } from '../library/viewer.js';
 import { startProgress } from '../progress.js';
-import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
+import { delX } from '../del-x.js';
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -81,61 +81,6 @@ export function nonsense(s) {
   return false;
 }
 
-// ── A picture from this computer ────────────────────────────────────────────
-// Read once and kept as a data URL: it is what the server takes, and holding the File would mean
-// reading it again on every repaint. Anything that is not an image is simply not taken.
-// A phone's HEIC too - known by its name when it has no type - made a JPEG first: the page cannot
-// show one (phase V24, js/picture-file.js).
-export async function readPicture(file) {
-  if (!isPictureFile(file)) throw new Error('that is not a picture');
-  return { name: file.name || 'photo', dataUrl: await pictureDataUrl(file) };
-}
-
-/**
- * The field a base picture goes into.
- *
- * EMPTY, a click opens the file picker. HOLDING A PICTURE, a click opens that picture large - the
- * owner's rule (2026-09-17): what is in the field is the thing being judged, and a click that
- * threw it away for another file dialog was the wrong answer to "let me look at it". The cross
- * takes it off; dropping a file onto the field replaces it either way.
- *
- * @returns { drop, input } - the input goes NEXT to the field, never inside it: its own click
- *   would bubble back into the field's handler.
- */
-export function dropField({ src, empty, onFile, onClear, onOpen }) {
-  const drop = el('div', 'mv3-wk-drop' + (src ? ' is-full' : ''));
-  drop.title = src ? 'Click to look at it large - drop another photo here to replace it'
-    : 'Drop a photo here, or click to choose one from this computer';
-  if (src) {
-    const img = el('img');
-    img.alt = '';
-    img.src = src;
-    drop.appendChild(img);
-    const clear = el('button', 'mv3-wk-dropx', '✕');
-    clear.type = 'button';
-    clear.title = 'Take it off';
-    clear.addEventListener('click', (e) => { e.stopPropagation(); onClear(); });
-    drop.appendChild(clear);
-  } else {
-    drop.appendChild(el('span', null, empty || 'a photo from this computer'));
-  }
-  const input = el('input');
-  input.type = 'file';
-  input.accept = PICTURE_ACCEPT;
-  input.hidden = true;
-  input.addEventListener('change', () => { if (input.files && input.files[0]) onFile(input.files[0]); });
-  drop.addEventListener('click', () => { if (src) onOpen(); else input.click(); });
-  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
-  drop.addEventListener('drop', (e) => {
-    e.preventDefault();
-    drop.classList.remove('is-over');
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) onFile(f);
-  });
-  return { drop, input };
-}
-
 /**
  * One picture in the Library's viewer, with what is known about it in the column beside it.
  *
@@ -162,12 +107,6 @@ export function showPicture({ src, name, rows, from }) {
 // back mid-generation shows a countdown that is still telling the truth - and a place that is left
 // takes its overlay with it, because a countdown lying on somebody else's stage is about nothing.
 let _held = null;                            // { place, pr }
-// (phase V57) The makers of the casting moved into windows (wk-setup.js, wk-env.js): their work - a look being dressed,
-// a lookbook, an environment - is waited for on the stage while the panel shows the script, whose own paint says "nothing
-// of mine" (`onlyHere(null)`). Those three stay through that; a frame or a clip of the script still takes the stage from
-// them (one countdown at a time), and the step's next paint puts theirs back at its real age.
-const CASTING = new Set(['look', 'lookbook', 'environment']);
-
 /** The place whose countdown is on the stage now ('' - none). */
 export const heldPlace = () => (_held ? _held.place : '');
 
@@ -185,11 +124,9 @@ export function holdProgress(place, spec) {
   return pr;
 }
 
-/** The place being painted says so; an overlay belonging to anywhere else goes quietly - but the casting's (above) stays
- *  while nothing else asks for the stage, unless `all` (the step is left). */
-export function onlyHere(place, all) {
+/** The place being painted says so; an overlay belonging to anywhere else goes quietly. */
+export function onlyHere(place) {
   if (!_held || _held.place === place) return;
-  if (place == null && !all && CASTING.has(_held.place)) return;
   try { _held.pr.detach(); } catch (e) { /* it was already gone */ }
   _held = null;
 }
@@ -205,65 +142,195 @@ export function endProgress(place, error) {
   } catch (e) { /* the stage was rebuilt under it */ }
 }
 
-// ── A maker's window (phase V57, the owner's (ок7)) ─────────────────────────
-// "+ new look" / "+ new environment" in the choosing windows of talking head (wk-setup.js, wk-env.js): the choosing window
-// closes and this one opens over the page - the frame of the chats' attachment window (css/mv3-imagen.css .pk.is-tree, the
-// almanac's size), its title and tabs in the head, the maker's own bench in the body. On the stack of layers: Escape, the
-// cross and a press beside it close it; the work it started goes on (the server's), waited for on the stage.
-//   o: { title, name, anchor, onClose }  ->  { box, head, tabs, body, close(), alive() }
-let _win = null;
+// ── THE HALVES OF THE STAGE WAIT APART (phase V58, the owner 2026-10-29: "когда пользователь работает с "кто" ...
+// анимация процесса только на поле "кто" в превью ... чтобы пока генерируется поле "кто" пользователь мог работать с
+// "где"") ─────────────────────────────────────────────────────────────────────
+// Talking head's casting - a look dressed, a lookbook made (who, the upper half), an environment made (where, the lower)
+// - is waited for on ITS half of the stage only: a box over that half (`.mv3-half-ov`, blurring what is under it) holds
+// the countdown (js/progress.js), the other half stays itself. A frame or a clip of the script (the whole stage, above)
+// takes the stage from them: the step drops the halves then and puts them back at their real age (wk-setup.js _syncHalves).
+const _halves = { top: null, bottom: null };          // { place, pr, host }
 
-export function openWindow(o) {
-  closeWindow();
-  const ov = el('div', 'pk-ov is-tree is-maker');
-  const box = el('div', 'pk is-tree is-maker');
-  box.setAttribute('role', 'dialog');
-  const head = el('div', 'pk-head');
-  const h = el('h3', null, o.title || '');
-  const tabs = el('div', 'mk-tabs');
-  const x = el('button', 'pk-close', '✕');
-  x.type = 'button';
-  x.title = 'Close (Esc)';
-  head.append(h, tabs, x);
-  const body = el('div', 'mk-body');
-  box.append(head, body);
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  const W_MK = 860, H_MK = 560;
-  const place = () => {
-    const W = window.innerWidth, H = window.innerHeight, M = 8;
-    const w = Math.min(W_MK, W - 2 * M), hh = Math.min(H_MK, H - 2 * M);
-    const a = o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
-    const cx = a && a.width ? a.left + a.width / 2 : W / 2;
-    const cy = a && a.height ? a.top + a.height / 2 : H / 2;
-    box.style.width = w + 'px';
-    box.style.height = hh + 'px';
-    box.style.left = Math.round(Math.max(M, Math.min(W - w - M, cx - w / 2))) + 'px';
-    box.style.top = Math.round(Math.max(M, Math.min(H - hh - M, cy - hh / 2))) + 'px';
+/** The place waited for on a half ('' - none). */
+export const halfPlace = (half) => (_halves[half] && _halves[half].host.isConnected ? _halves[half].place : '');
+
+/** A countdown on one half - `spec` { label, estimateMs, startedAt }. The same place there already is kept. */
+export function holdHalf(half, place, spec) {
+  const h = _halves[half];
+  if (h && h.place === place && h.host.isConnected) return h.pr;
+  dropHalf(half);
+  const stage = document.getElementById('mv3-stage');
+  if (!stage) return null;
+  const host = el('div', 'mv3-half-ov is-' + half);
+  stage.appendChild(host);
+  const s = spec || {};
+  const pr = startProgress(host, { label: s.label || 'Making it', total: 1, startedAt: s.startedAt || 0, estimateMs: s.estimateMs || 90000 });
+  _halves[half] = { place, pr, host };
+  return pr;
+}
+
+/** A half let go of without an end - the stage is someone else's for a while; the work goes on. */
+export function dropHalf(half) {
+  const h = _halves[half];
+  if (!h) return;
+  _halves[half] = null;
+  try { h.pr.detach(); } catch (e) { /* gone with the stage */ }
+  h.host.remove();
+}
+
+export function dropHalves() { dropHalf('top'); dropHalf('bottom'); }
+
+/** The work of `place` ended: its half says so (a failure in words) and goes. */
+export function endHalf(place, error) {
+  for (const half of ['top', 'bottom']) {
+    const h = _halves[half];
+    if (!h || h.place !== place) continue;
+    _halves[half] = null;
+    try {
+      if (error) h.pr.fail(error);
+      else { h.pr.step(); h.pr.finish(); }
+    } catch (e) { /* the stage was rebuilt under it */ }
+    setTimeout(() => h.host.remove(), error ? 4000 : 900);
+  }
+}
+
+// ── A LIST TO CHOOSE FROM (phase V58; talking head's "who" and "where" - wk-setup.js, wk-env.js) ──────────────────
+// Painted into a window's body (js/gen-window.js openFrame), in the attachment window's tiles (css/mv3-imagen.css .pk-*):
+// on the left the GROUPS - a filter's two tabs over them ("female · 12", "all · 27") -, the pointer resting on one shows
+// its things and the last one stays; no groups, no left side (the environments, wide tiles). On the right a search over
+// what is shown (every group the filter passes, while words are typed) and the tiles: a press IS the choice (`press`), a
+// mark says what is chosen now, a ✕ pressed twice deletes (`del`), a thing with `say` is there to be seen and says why.
+//   o: { groups?: [{ key, label, n, sub, items }], items?, filter?: { label, test(g) }, state: { group, filterOn, q },
+//        onGroup(g), mark(it) -> words, press(it), del(it) -> null | { title, ask?, run, done }, empty, why }
+//   An item: { path, name, sub, thumb, aspect, say? }.
+export function paintChoose(host, o) {
+  const st = o.state || (o.state = {});
+  const groups = Array.isArray(o.groups) ? o.groups : null;
+  const f = o.filter || null;
+  if (st.filterOn == null) st.filterOn = !!(f && f.on);
+  const shown = () => (groups || []).filter(g => !(f && st.filterOn) || f.test(g));
+  host.textContent = '';
+  const box = el('div', 'wkc' + (groups ? '' : ' is-flat'));
+  const side = el('div', 'pk-side is-people');
+  const people = el('div', 'pk-people');
+  side.appendChild(people);
+  const main = el('div', 'pk-main');
+  const bar = el('div', 'pk-bar');
+  const q = el('input', 'pk-q');
+  q.type = 'search';
+  q.placeholder = 'search by name';
+  q.spellcheck = false;
+  q.value = st.q || '';
+  const count = el('span', 'pk-count', '');
+  bar.append(q, count);
+  const grid = el('div', 'pk-grid');
+  grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
+  const said = el('div', 'wkc-said', '');
+  main.append(bar, grid, said);
+  box.append(side, main);
+  host.appendChild(box);
+
+  const group = () => (groups ? shown().find(g => g.key === st.group) || null : null);
+  if (groups && !group()) st.group = (shown()[0] || {}).key || '';
+
+  const paintSide = () => {
+    people.textContent = '';
+    if (!groups) return;
+    if (f) {
+      const tabs = el('div', 'pk-ftabs');
+      const tab = (label, on, set) => {
+        const b = el('button', 'mv3-sc-tab' + (on ? ' is-on' : ''), label);
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          if (st.filterOn === set) return;
+          st.filterOn = set;
+          if (typeof f.onChange === 'function') f.onChange(set);
+          if (!group()) st.group = (shown()[0] || {}).key || '';
+          paintSide();
+          paintGrid();
+        });
+        return b;
+      };
+      tabs.append(tab(f.label + ' · ' + groups.filter(f.test).length, st.filterOn, true), tab('all · ' + groups.length, !st.filterOn, false));
+      people.appendChild(tabs);
+    }
+    const vis = shown();
+    if (!vis.length) people.appendChild(el('div', 'pk-none is-side', groups.length ? 'Nobody of that kind - show all.' : ''));
+    for (const g of vis) {
+      const b = el('button', 'pk-person' + (g.key === st.group ? ' on' : ''));
+      b.type = 'button';
+      b.title = g.label + (g.sub ? ' · ' + g.sub : '');
+      b.append(el('span', 'pk-person-t', g.label), el('span', 'pk-person-n', String(g.n)));
+      const pick = () => {
+        if (st.group === g.key) return;
+        st.group = g.key;
+        for (const x of people.querySelectorAll('.pk-person')) x.classList.toggle('on', x === b);
+        paintGrid();
+        if (typeof o.onGroup === 'function') o.onGroup(g);
+      };
+      b.addEventListener('pointerenter', pick);
+      b.addEventListener('click', pick);
+      people.appendChild(b);
+    }
   };
-  place();
-  window.addEventListener('resize', place);
-  const me = { box, head, title: h, tabs, body, close: closeWindow, alive: () => !!_win && _win.me === me };
-  const layer = Layers.open(ov, { name: o.name || 'maker', onEsc: closeWindow });
-  x.addEventListener('click', closeWindow);
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeWindow(); });
-  _win = { me, ov, layer, place, onClose: o.onClose };
-  return me;
-}
 
-export function closeWindow() {
-  if (!_win) return;
-  const w = _win;
-  _win = null;
-  window.removeEventListener('resize', w.place);
-  Layers.close(w.layer);
-  w.ov.remove();
-  closeMenu();
-  if (typeof w.onClose === 'function') w.onClose();
-}
+  const ar = (a) => { const p = String(a || '').split(':'); const v = (+p[0] || 0) / (+p[1] || 0); return v > 0 && isFinite(v) ? v : 0; };
+  const tile = (it) => {
+    const t = el('div', 'pk-tile');
+    t.dataset.path = it.path;
+    const hit = el('button', 'pk-hit');
+    hit.type = 'button';
+    hit.title = it.name + (it.sub ? ' · ' + it.sub : '');
+    const bx = el('span', 'pk-box');
+    const known = ar(it.aspect);
+    t.style.setProperty('--ar', String(known || 0.75));
+    if (it.thumb) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      if (!known) img.addEventListener('load', () => { if (img.naturalWidth && img.naturalHeight) t.style.setProperty('--ar', String(img.naturalWidth / img.naturalHeight)); }, { once: true });
+      img.addEventListener('error', () => { img.remove(); bx.classList.add('is-blank'); }, { once: true });
+      img.src = it.thumb;
+      bx.appendChild(img);
+    } else bx.classList.add('is-blank');
+    hit.appendChild(bx);
+    t.appendChild(hit);
+    t.appendChild(el('span', 'pk-cap', it.name || ''));
+    if (it.sub) t.appendChild(el('span', 'pk-sub', it.sub));
+    const m = typeof o.mark === 'function' ? o.mark(it) : '';
+    if (m) { t.classList.add('is-on'); bx.appendChild(el('span', 'pk-mark', m)); }
+    hit.addEventListener('click', () => {
+      if (it.say) { said.textContent = it.say; return; }
+      said.textContent = '';
+      o.press(it);
+    });
+    const d = typeof o.del === 'function' ? o.del(it) : null;
+    if (d) t.appendChild(delX(Object.assign({ host: t }, d)));
+    return t;
+  };
 
-/** The maker's window that is open now, or null. */
-export const openWindowNow = () => (_win ? _win.me : null);
+  const paintGrid = () => {
+    grid.textContent = '';
+    said.textContent = '';
+    const look = String(st.q || '').trim().toLowerCase();
+    const g = group();
+    const pool = groups ? (look ? shown().flatMap(x => x.items || []) : (g ? g.items : [])) : (o.items || []);
+    const list = look ? pool.filter(it => String(it.name || '').toLowerCase().includes(look) || String(it.sub || '').toLowerCase().includes(look)) : pool;
+    count.textContent = look ? list.length + ' of ' + pool.length : String(pool.length);
+    if (!list.length) {
+      grid.appendChild(el('div', 'pk-none', o.why || (look ? 'Nothing here is called “' + look + '”.' : (o.empty || 'Nothing here yet.'))));
+      return;
+    }
+    for (const it of list) grid.appendChild(tile(it));
+  };
+
+  q.addEventListener('input', () => { st.q = q.value; paintGrid(); });
+  paintSide();
+  paintGrid();
+  setTimeout(() => { if (q.isConnected && !q.value) q.focus(); }, 0);
+  return { group };
+}
 
 // ── The menu on a tile ──────────────────────────────────────────────────────
 // Not modal (js/layers.js): it takes Escape and leaves the page's shortcuts alone. One at a time -

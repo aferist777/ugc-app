@@ -11,24 +11,31 @@
    half is a door and a field: empty, it says what it is waiting for. Each half carries a
    CROSS while it holds a choice, which takes that choice off the project.
 
-   THE DOORS ARE WINDOWS (phase V57, the owner 2026-10-29: "весь setup замызавыется плиткой
-   персонажей и много пустых пространств из-за этого. давай сделаем попап, как в чате генерации
-   изображений"). "Who" opens the attachment window's frame (js/merge-v3/chat-pick.js openChoose):
-   the characters on the left - the ones with the most looks first, the first shown at once, the
-   scenario's gender with "all" beside it -, the one the pointer rests on shows its 4K sheet and
-   its looks on the right, and A PRESS ON A LOOK CASTS IT AT ONCE and closes the window (the owner's
-   (ок5)). "Where" is the made environments' window (js/merge-v3/wk-env.js). There is no trial on
-   the stage any more and no `select`: the stage shows what is written.
+   THE DOORS ARE WINDOWS (phase V57; phase V58 - one window each, its content changing, with
+   CRUMBS in its head, js/gen-window.js openFrame). "Who":
+     characters / Mute (+ new look)          the characters on the left - the most looks first, the
+                                             scenario's gender with "all" beside it -, the one the
+                                             pointer rests on shows its 4K sheet and its looks (wk-maker.js
+                                             paintChoose); A PRESS ON A LOOK CASTS IT AT ONCE and closes the
+                                             window (V57, (ок5)); a look's ✕ pressed twice deletes it from the
+                                             character - one a talking head is cast in is refused by the
+                                             server with the project's name ((лк3), lib/casting-use.js);
+                                             "+ new look" stands right of the name ((п. 11-12): "кнопка прямо
+                                             напротив имени будет в самый раз")
+     characters / Mute / new look            the lookbooks to dress them in, the one picked, `apply`
+     … / new look / create lookbook          the generator's bench (js/gen-window.js paintBench)
+   Each crumb but the last goes back. "Where" is js/merge-v3/wk-env.js, the same way.
 
-   MAKING A LOOK IS A WINDOW OVER IT (the owner's (ок7): "окно закрывается а сверху открывается new
-   look / new environment"). "+ new look" at the foot of "who" closes it and opens the maker's
-   window (wk-maker.js openWindow) for the character shown: "create look" - the lookbooks to dress
-   them in, the one picked and `apply` - and "create lookbook" - a reference to take an outfit from,
-   a sentence about what is wanted, or both (the server decides what that means: extract the outfit,
-   draw one, or read the photo and apply the sentence). The waiting happens on the STAGE - the
-   blurred overlay with the countdown the rest of the app uses - because that is where the answer
-   will appear: `apply` closes the window as soon as the server took it; a lookbook being made keeps
-   its window (the next one is usually made from it), and the countdown is on the stage behind it.
+   THE WINDOWS DO NOT CLOSE BY THEMSELVES AFTER A GENERATION IS STARTED ((лк5)): `apply` and the
+   benches' `create` put the work into Alerts, the window says so on its line ("in Alerts · …"),
+   and the person closes it. THE HALVES OF THE STAGE WAIT APART (the owner 2026-10-29): a look or a
+   lookbook is waited for on the UPPER half only, an environment on the LOWER (wk-maker.js holdHalf);
+   while one is made, the other half's window opens and its choice is written.
+
+   A WINDOW OVER A WINDOW (the owner 2026-10-29: "пользователь кликает по алерту и нужно открыть попап
+   "кто" поверх рабочего попапа "где""): a row of Alerts (or its popup) of THIS project's "who" or
+   "where" asks the page first (js/alerts-bell.js `ugc:goto`); this step opens that window over what
+   is open, and closing it shows the one under it as it was.
 
    The look belongs to the CHARACTER when it is done (obraz-save), not to this project. The
    server puts one made for this project on it (routes/scen3.js), so the next talking head cast
@@ -49,21 +56,20 @@
    they belong to the Character tab and to the looks library, and this only points
    at them.
 
-   Built in phases C4, C5, V1-V3, F1-F3, S, M and V57 (docs/local-app/PLAN.md).
+   Built in phases C4, C5, V1-V3, F1-F3, S, M, V57 and V58 (docs/local-app/PLAN.md).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { loadCharacters, filterByGender, byLooks, derived } from '../chars-store.js';
 import * as API from './scen-api.js';
 import * as PV from './preview-b.js';
-import { askDelete } from './ask.js';
 import * as ENV from './wk-env.js';
 import * as VOICE from './wk-voice.js';
 import * as FRAG from './wk-fragments.js';
-import * as Pick from './chat-pick.js';
-import { showToast } from '../notice.js';
+import * as GW from '../gen-window.js';
+import { delX } from '../del-x.js';
 import {
-  MIN_WORDS_ALONE, nonsense, readPicture, dropField, showPicture, tileMenu,
-  holdProgress, endProgress, onlyHere, heldPlace, softScroll, openWindow, closeWindow,
+  showPicture, tileMenu, onlyHere, heldPlace, softScroll, paintChoose,
+  holdHalf, endHalf, dropHalf, dropHalves, halfPlace,
 } from './wk-maker.js';
 
 let _chars = null;
@@ -71,7 +77,9 @@ let _state = 'idle';                     // 'idle' | 'loading' | an error to sho
 let _all = false;                        // the gender filter lifted by hand
 let _ctx = null;                         // { project, repaint } from the workshop
 let _host = null;                        // the panel - the windows stand over it
+let _active = false;                     // this step is the one painted (for `ugc:goto`)
 let _saving = false;
+let _picShown = false;                   // the stage shows a line's frame or clip - not the halves
 // Where in the step the panel is. The hub is the script (js/merge-v3/wk-fragments.js); beside it:
 //
 //   hub      the voice, the lines, the open line
@@ -80,8 +88,8 @@ let _saving = false;
 //
 // The character, the environment and their makers are WINDOWS since phase V57. ?view= in the address
 // opens one of the places directly - that is how the Alerts list takes somebody back to where a
-// generation was started (js/alerts-bell.js); the old shelves' names open their windows: cast and
-// lookbooks / newlb "who" and "new look", env and newenv "where" and "new environment". Read once,
+// generation was started (js/alerts-bell.js); the old shelves' names open their windows: cast "who",
+// lookbooks "new look", newlb "create lookbook", env "where", newenv "new environment". Read once,
 // when this module is first loaded - which is when the step is opened.
 const VIEWS = ['hub', 'voice', 'fchat'];
 const WINDOWS = ['cast', 'lookbooks', 'newlb', 'env', 'newenv'];
@@ -93,20 +101,15 @@ let _ask = '';                           // a window the address asked for, open
   if (VIEWS.includes(v)) _view = v;
   else if (WINDOWS.includes(v)) _ask = v;
 })();
-// What the next lookbook is made FROM: either a file the person chose here, or one the
-// library already holds. Never both - choosing on one side clears the other, because the
-// question "what is this based on" has one answer.
-let _ref = null;                          // { name, dataUrl } - a picture from this computer
-let _refLb = '';                          // ...or the path of a lookbook already on the shelf
-let _lbNote = '';                         // what is wanted, in words
-let _making = false;
-let _lbs = null;                          // the lookbook shelf, read once
+let _lbs = null;                          // the lookbooks to dress in, read when that page opens
 let _lbPick = '';                         // the outfit picked to dress in
 let _dressing = false;                    // one at a time: it is a minute and it is paid for
-// The window of a new look: who it is for and which of its two faces shows.
-let _look = null;                         // { win, char, tab: 'look' | 'lookbook' }
-// The casting's own work being waited for on the stage - put back after the script's paint (wk-maker.js).
-const _jobs = { look: null, lookbook: null };   // { label, estimateMs, startedAt }
+let _dressSaid = '';                      // the line of the dressing page - in Alerts, done, failed
+// The window of "who": its page ('list' | 'look' | 'lookbook') and the character the pages after the list are for.
+let _who = null;                          // { win, page, char }
+const _whoState = {};                     // the list's group (the character shown), filter, search
+// The dressing being waited for on the stage's upper half (the benches' own: GW.running).
+let _dress = null;                        // { label, estimateMs, startedAt, key }
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -171,6 +174,7 @@ function _faceOf(c) {
 export function paint(host, ctx) {
   _ctx = ctx;
   _host = host;
+  _active = true;
   host.classList.add('is-wk');
 
   const root = _el('div', 'mv3-wk-setup');
@@ -200,8 +204,8 @@ export function paint(host, ctx) {
   // The stage is painted AFTER the panel, from the same state (this file, _stage).
   FRAG.paint(scroll, ctx, _fragApi(chosen), head);
   _stage(chosen);
-  // The casting's own countdown, when the script's left the stage to it (wk-maker.js).
-  _reHold();
+  // The casting's own countdowns, each on its half, when the stage shows the halves (V58).
+  _syncHalves();
   // Arriving at the project is when to ask the journal whether a look, a lookbook or an environment of this
   // place is being made; a repaint is not.
   _pickUpRunning();
@@ -221,15 +225,15 @@ function _go(view) {
   _ctx.repaint();
 }
 
-// An old shelf's name - from the address, or a crumb - opens its window.
+// An old shelf's name - from the address, a row of Alerts, a crumb - opens its window, over what is open.
 function _openAsked(v) {
   if (!_ctx || !_ctx.project) return;
-  if (v === 'cast') _openWho();
-  else if (v === 'lookbooks' || v === 'newlb') {
-    const c = _castChar();
-    if (c) _openNewLook(c, v === 'newlb' ? 'lookbook' : 'look'); else _openWho();
-  } else if (v === 'env') ENV.openPlaces(_envApi());
-  else if (v === 'newenv') ENV.openMaker(_envApi());
+  const c = _castChar();
+  if (v === 'cast') _openWho('list');
+  else if (v === 'lookbooks') _openWho(c ? 'look' : 'list', c);
+  else if (v === 'newlb') _openWho(c ? 'lookbook' : 'list', c);
+  else if (v === 'env') ENV.openWhere(_envApi(), 'list');
+  else if (v === 'newenv') ENV.openWhere(_envApi(), 'make');
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
@@ -264,6 +268,7 @@ function _stage(chosen) {
   // A line open in the script with a clip or a frame shows THAT: it is what is being judged. The
   // doors are back the moment the line is closed (a second press on its row).
   const pic = FRAG.openPicture(_ctx.project);
+  _picShown = !!pic;
   if (pic) {
     // A clip PLAYS here (X4) - and ONLY here: it is put up stopped, with its triangle, and the
     // press that starts it is a press on the stage (the owner, 2026-09-22).
@@ -355,68 +360,13 @@ function _pick(half, ev) {
       half === 'top' ? 'character menu' : 'environment menu');
     return;
   }
-  if (half === 'top') _openWho(); else ENV.openPlaces(_envApi());
-}
-
-// ── "Who": the characters and their looks, in a window (phase V57, (ок5), (ок6)) ──
-// The attachment window's frame (chat-pick.js openChoose): the characters on the left, the most looks
-// first (chars-store.js byLooks), the scenario's gender with "all" beside it (whoever is cast is always
-// among them); the one shown - the cast one, else the first - shows its 4K sheet and its looks; a look
-// pressed is cast at once. The sheet is there to be seen: a person is cast in a look, never bare,
-// because that look is what every frame is made from.
-function _openWho(startId) {
-  if (!_chars) return;
-  const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
-  const cast = _casting();
-  const castId = String(cast.characterId || '');
-  const nLooks = (n) => (n === 1 ? '1 look' : n ? n + ' looks' : 'no looks yet');
-  const groups = _chars.map((c) => {
-    const sheet = c.sheet || c.face || '';
-    const items = [];
-    if (sheet) {
-      items.push({ path: sheet, name: c.name, sub: c.sheet ? '4K sheet' : 'portrait', aspect: c.sheet ? '16:9' : '',
-        thumb: derived(sheet, 'card'), char: c,
-        say: c.name + ' is cast in a look - press one of the looks, or "+ new look" to dress them in a new one.' });
-    }
-    for (const o of c.obrazy) {
-      items.push({ path: o.image, name: o.name || 'look', sub: 'look', thumb: derived(o.image, 'card'), char: c, look: o });
-    }
-    return { key: c.id, label: c.name, n: c.obrazy.length, sub: nLooks(c.obrazy.length), items, char: c };
-  });
-  Pick.openChoose({
-    title: 'character & look',
-    crumb: 'characters',
-    hint: 'press a look - it is cast at once',
-    name: 'character and look',
-    anchor: _host,
-    load: async () => ({ groups }),
-    filter: want ? {
-      label: want,
-      test: (g) => g.key === castId || filterByGender([g.char], want).length > 0,
-      on: !_all,
-      onChange: (on) => { _all = !on; },
-    } : null,
-    start: startId || castId,
-    mark: (path) => (cast.obrazImage && path === cast.obrazImage ? 'cast' : ''),
-    press: (it) => { if (it.look) _castLook(it.char, it.look); },
-    make: {
-      label: '+ new look',
-      title: 'Dress the character shown in a lookbook - or make a lookbook first',
-      on: (g) => { const c = (g && g.char) || _castChar() || (_chars || [])[0] || null; if (c) _openNewLook(c, 'look'); },
-    },
-    empty: 'No characters yet - make one with New Character on the Characters shelf of the Library.',
-  });
-}
-
-// The one write of "who": the look with its character - it belongs to them.
-function _castLook(c, o) {
-  if (!c || !o) return;
-  _patch({ characterId: c.id, characterName: c.name, obrazId: o.id, obrazImage: o.image });
+  if (half === 'top') _openWho('list'); else ENV.openWhere(_envApi(), 'list');
 }
 
 // ── The environment ─────────────────────────────────────────────────────────
 // Its own module (js/merge-v3/wk-env.js). This is everything it may reach in here: the casting and
-// the way to save it, where it was started from, and the panel the windows stand over.
+// the way to save it, where it was started from, the panel the windows stand over, and the stage's
+// lower half.
 // Where a generation was started, as the Alerts list needs it: the address that opens this very
 // place again, a line a person can read, and the place itself - so the panel can ask the journal
 // "is one of these running rows mine?" (lib/alerts.js).
@@ -443,6 +393,9 @@ function _envApi() {
     repaint: () => _ctx.repaint(),
     anchor: () => _host,
     saving: () => _saving,
+    // The lower half of the stage waits for the place being made (V58).
+    onStart: () => _syncHalves(),
+    onEnd: (place, error) => { endHalf(place, error); _syncHalves(); },
   };
 }
 
@@ -495,6 +448,7 @@ function _voiceApi(chosen) {
   };
 }
 
+
 // ── Where you are inside the step ───────────────────────────────────────────
 // The route in the panel header: `setup`, then the place inside it, drawn by the workshop on one
 // tint (js/merge-v3/workshop.js, _paintRoute). At the hub there is none - the panel's own title says
@@ -515,71 +469,151 @@ export function goCrumb(id) {
   _go(want);
 }
 
-// ── THE NEW LOOK'S WINDOW (phase V57, (ок7)) ────────────────────────────────
-// Over the page, for one character: "create look" - the lookbooks, the one picked, `apply` - and
-// "create lookbook" - the bench that makes one. "+" on the first leads to the second.
-function _openNewLook(c, tab) {
-  if (!c) return;
-  const win = openWindow({
-    title: 'new look · ' + c.name, name: 'new look', anchor: _host,
-    onClose: () => { if (_look && _look.win === win) _look = null; },
+// ── "WHO": THE WINDOW (phase V57; V58 - crumbs, the ✕ of a look, a new look in the same window) ──
+/** The window of "who" on `page` ('list' | 'look' | 'lookbook'), for `char` on the pages after the list - over everything
+ *  open; opened while it is under another window, it comes up over it. */
+function _openWho(page, char) {
+  if (!_chars) return;
+  if (_who && _who.win.alive() && !_who.win.isTop()) _who.win.close();
+  if (!_who || !_who.win.alive()) {
+    const win = GW.openFrame({ name: 'character and look', anchor: _host, onClose: () => { if (_who && _who.win === win) _who = null; } });
+    _who = { win, page: 'list', char: null };
+    // Opened on the one cast, else the first.
+    const c = _castChar();
+    if (c) _whoState.group = c.id;
+  }
+  _who.page = page || 'list';
+  if (char) { _who.char = char; _whoState.group = char.id; }
+  _paintWho();
+}
+
+function _whoGo(page) {
+  if (!_who || !_who.win.alive()) return;
+  _who.page = page;
+  _paintWho();
+}
+
+// The character shown: the one hovered last in the list, else the one the pages were opened for.
+const _shownChar = () => (_chars || []).find(c => c.id === _whoState.group) || (_who && _who.char) || _castChar() || (_chars || [])[0] || null;
+
+function _whoCrumbs() {
+  const win = _who.win;
+  const c = _shownChar();
+  const list = { label: 'characters', on: () => _whoGo('list') };
+  if (_who.page === 'list') {
+    win.setCrumbs([{ label: 'characters' }].concat(c ? [{
+      label: c.name,
+      act: { label: '+ new look', title: 'Dress ' + c.name + ' in a lookbook - or make a lookbook first', on: () => { _who.char = c; _whoGo('look'); } },
+    }] : []));
+    return;
+  }
+  const name = { label: c ? c.name : 'character', on: () => _whoGo('list') };
+  if (_who.page === 'look') win.setCrumbs([list, name, { label: 'new look' }]);
+  else win.setCrumbs([list, name, { label: 'new look', on: () => _whoGo('look') }, { label: 'create lookbook' }]);
+}
+
+function _paintWho() {
+  if (!_who || !_who.win.alive()) return;
+  const body = _who.win.body;
+  body.textContent = '';
+  body.className = 'gw-body';
+  if (_who.page !== 'list' && !_shownChar()) _who.page = 'list';
+  _whoCrumbs();
+  if (_who.page === 'look') { _paintDress(body, _shownChar()); return; }
+  if (_who.page === 'lookbook') { GW.paintBench(body, _lbOpts()); return; }
+  _paintCharacters(body);
+}
+
+// The characters and their looks (wk-maker.js paintChoose): the 4K sheet first - there to be seen, a person is cast in a
+// look, never bare, because that look is what every frame is made from -, then the looks.
+function _paintCharacters(body) {
+  const want = String((_ctx.project && _ctx.project.gender) || '').toLowerCase();
+  const cast = _casting();
+  const castId = String(cast.characterId || '');
+  const nLooks = (n) => (n === 1 ? '1 look' : n ? n + ' looks' : 'no looks yet');
+  const groups = _chars.map((c) => {
+    const sheet = c.sheet || c.face || '';
+    const items = [];
+    if (sheet) {
+      items.push({ path: sheet, name: c.name, sub: c.sheet ? '4K sheet' : 'portrait', aspect: c.sheet ? '16:9' : '',
+        thumb: derived(sheet, 'card'), char: c,
+        say: c.name + ' is cast in a look - press one of the looks, or "+ new look" by the name to dress them in a new one.' });
+    }
+    for (const o of c.obrazy) {
+      items.push({ path: o.image, name: o.name || 'look', sub: 'look', thumb: derived(o.image, 'card'), char: c, look: o });
+    }
+    return { key: c.id, label: c.name, n: c.obrazy.length, sub: nLooks(c.obrazy.length), items, char: c };
   });
-  _look = { win, char: c, tab: tab === 'lookbook' ? 'lookbook' : 'look' };
-  _paintLook();
+  paintChoose(body, {
+    state: _whoState,
+    groups,
+    filter: want ? {
+      label: want,
+      on: !_all,
+      test: (g) => g.key === castId || filterByGender([g.char], want).length > 0,
+      onChange: (on) => { _all = !on; },
+    } : null,
+    // The crumb follows the character shown - "+ new look" stands by THAT name.
+    onGroup: () => _whoCrumbs(),
+    mark: (it) => (it.look && cast.obrazImage && it.path === cast.obrazImage ? 'cast' : ''),
+    press: (it) => {
+      if (!it.look) return;
+      _castLook(it.char, it.look);
+      if (_who) _who.win.close();
+    },
+    del: (it) => (it.look ? {
+      title: 'Delete this look of ' + it.char.name,
+      run: async () => {
+        const d = await fetch('/api/library/item/obrazy/' + encodeURIComponent(it.look.id), { method: 'DELETE' })
+          .then(r => r.json()).catch(() => null);
+        return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+      },
+      done: async () => {
+        _chars = byLooks(await loadCharacters(true));
+        _paintWho();
+        _ctx.repaint();
+      },
+    } : null),
+    empty: _chars.length ? 'No looks yet - "+ new look" by the name dresses them in one.'
+      : 'No characters yet - make one with New Character on the Characters shelf of the Library.',
+  });
 }
 
-function _paintLook() {
-  if (!_look || !_look.win.alive()) return;
-  const { win, char: c, tab } = _look;
-  win.tabs.textContent = '';
-  win.body.textContent = '';
-  win.body.className = 'mk-body';
-  const mk = (label, title, id) => {
-    const b = _el('button', 'mv3-sc-tab' + (tab === id ? ' is-on' : ''), label);
-    b.type = 'button';
-    b.title = title;
-    if (tab === id) b.disabled = true;
-    else b.addEventListener('click', () => { _look.tab = id; _paintLook(); });
-    return b;
-  };
-  win.tabs.append(
-    mk('create look', 'Dress ' + c.name + ' in one of these', 'look'),
-    mk('create lookbook', 'Make one from a photo and a sentence', 'lookbook'),
-  );
-  if (tab === 'lookbook') _paintNewLookbook(win.body, c);
-  else _paintLookbooks(win.body, c);
+// The one write of "who": the look with its character - it belongs to them.
+function _castLook(c, o) {
+  if (!c || !o) return;
+  _patch({ characterId: c.id, characterName: c.name, obrazId: o.id, obrazImage: o.image });
 }
 
-// The shelf of outfits: picking one is the question "what should they wear"; `apply` at the foot - with
-// who and what side by side - dresses them. An empty shelf offers the way to fill it.
-function _paintLookbooks(host, c) {
+// ── NEW LOOK: dress the character in a lookbook ─────────────────────────────
+// The lookbooks ("+" leads to the bench that makes one), the one picked, and at the foot who + what and `apply`. After
+// `apply` the window stays ((лк5)): its line says the dressing is in Alerts, the stage's upper half how far.
+function _paintDress(body, c) {
   const list = _el('div', 'mk-scroll');
   softScroll(list);
-  host.appendChild(list);
+  body.appendChild(list);
   if (_lbs === null) {
-    list.appendChild(_note('reading the lookbooks…'));
-    _readLbs();
+    list.appendChild(_el('div', 'gw-note', 'reading the lookbooks…'));
+    API.lookbooks().then((files) => { _lbs = files || []; _paintWho(); })
+      .catch((e) => { _lbs = []; _dressSaid = 'Could not read the lookbooks: ' + e.message; _paintWho(); });
   } else {
-    const grid = _el('div', 'mv3-wk-grid is-lb');
-    const add = _el('button', 'mv3-wk-tile is-add', '+');
+    const grid = _el('div', 'gw-grid is-lookbook');
+    const add = _el('button', 'gw-tile is-add', '+');
     add.type = 'button';
     add.title = 'Make a lookbook from a photo and a sentence';
-    add.addEventListener('click', () => { _look.tab = 'lookbook'; _paintLook(); });
+    add.addEventListener('click', () => _whoGo('lookbook'));
     grid.appendChild(add);
     for (const p of _lbs) {
       const path = String((p && p.path) || p || '');
-      if (!path) continue;
-      grid.appendChild(_lbTile(path, path === _lbPick, () => {
-        _lbPick = (_lbPick === path ? '' : path);
-        _paintLook();
-      }, true));
+      if (path) grid.appendChild(_lbTile(path));
     }
     list.appendChild(grid);
-    if (!_lbs.length) list.appendChild(_note('No lookbooks yet. Make one with "create lookbook".'));
+    if (!_lbs.length) list.appendChild(_el('div', 'gw-note', 'No lookbooks yet - the "+" makes one.'));
   }
 
-  // The foot: who, in what, and the press that dresses them.
-  const foot = _el('div', 'mk-foot');
+  // The foot: who, in what, the line, and the press that dresses them.
+  const foot = _el('div', 'gw-foot mk-dress');
+  const row = _el('div', 'gw-row');
   const pair = _el('div', 'mk-pair');
   const face = _el('img', 'mk-pair-img');
   face.alt = '';
@@ -592,340 +626,153 @@ function _paintLookbooks(host, c) {
     fit.src = derived(_lbPick, 'card');
     pair.appendChild(fit);
   } else pair.appendChild(_el('span', 'mk-pair-img is-empty', 'outfit'));
-  const said = _el('span', 'mk-said', _dressing ? 'dressing ' + c.name + '… - the stage says how far' : (_lbPick ? '' : 'pick an outfit'));
-  const go = _el('button', 'mv3-wk-create', _dressing ? 'dressing…' : 'apply');
+  const said = _el('span', 'gw-hint' + (_dressing ? ' is-on' : ''), _dressSaid || (_lbPick ? '' : 'pick an outfit'));
+  const go = _el('button', 'gw-create', _dressing ? 'dressing…' : 'apply');
   go.type = 'button';
   go.disabled = _dressing || !_lbPick;
   go.title = 'Dress ' + c.name + ' in this outfit and save it as a look - this spends credits';
   go.addEventListener('click', () => _apply(c));
-  foot.append(pair, said, go);
-  host.appendChild(foot);
+  row.append(pair, said, go);
+  foot.appendChild(row);
+  body.appendChild(foot);
 }
 
-function _readLbs() {
-  _needLbMeta();
-  API.lookbooks().then((files) => { _lbs = files; _paintLook(); })
-    .catch((e) => { _lbs = []; _state = 'Could not read the lookbooks: ' + e.message; _paintLook(); _ctx.repaint(); });
-}
-
-// ── Making a lookbook ───────────────────────────────────────────────────────
-// Two fields and one button. What they mean together is the server's rule, and it is worth
-// stating where it is read: a photo alone takes the outfit OUT of it, a sentence alone draws
-// one, and both together read the photo and apply the sentence to it. So the button says
-// which of the three is about to happen instead of a flat "generate".
-function _mode() {
-  const base = !!(_ref || _refLb);
-  if (base && _lbNote.trim()) return 'edit';
-  if (base) return 'extract';
-  if (_lbNote.trim()) return 'draw';
-  return '';
-}
-
-// What stops the button, in words. Empty means nothing does. The twenty characters and the
-// keyboard-mess test are the rule both makers share (js/merge-v3/wk-maker.js).
-function _why() {
-  const base = !!(_ref || _refLb);
-  const note = _lbNote.trim();
-  if (!base && !note) return 'a photo or a sentence';
-  if (!base) {
-    if (note.length < MIN_WORDS_ALONE) return (MIN_WORDS_ALONE - note.length) + ' more characters';
-    if (nonsense(note)) return 'that is not a description';
-  } else if (note && nonsense(note)) {
-    return 'that is not a description';
-  }
-  return '';
-}
-const _MODE_LABEL = {
-  edit: 'read the photo and apply the words',
-  extract: 'take the outfit out of the photo',
-  draw: 'draw it from the words',
-};
-
-// The agent's refusal or what failed, said above the sentence it is about.
-let _lbSaid = '';
-
-function _paintNewLookbook(host, c) {
-  host.classList.add('mv3-wk-scroll', 'is-split');
-  // LEFT: the shelf this one is drawn from. Picking a lookbook here puts it in the field on
-  // the right as the base - which is what "make another one like that, but ..." means - and
-  // the new lookbook joins this same shelf when it is done, so the pile grows while you work.
-  const left = _el('div', 'mv3-wk-half is-shelf');
-  if (_lbs === null) {
-    left.appendChild(_note('reading the lookbooks…'));
-    _readLbs();
-  } else if (!_lbs.length) {
-    left.appendChild(_note('No lookbooks yet. The first one is made on the right.'));
-  } else {
-    const grid = _el('div', 'mv3-wk-grid is-lb');
-    for (const p of _lbs) {
-      const path = String((p && p.path) || p || '');
-      if (path) grid.appendChild(_lbTile(path, path === _refLb, () => {
-        _refLb = (_refLb === path ? '' : path);
-        if (_refLb) _ref = null;                 // one base, not two
-        _lbSaid = '';
-        _paintLook();
-      }));
-    }
-    left.appendChild(grid);
-  }
-  host.appendChild(left);
-
-  // RIGHT: what is being made. The field takes a picture from this computer, which drops whatever
-  // was chosen on the left - and, holding a picture, it opens that picture large when clicked.
-  const right = _el('div', 'mv3-wk-half is-make');
-  const { drop, input } = dropField({
-    src: _ref ? _ref.dataUrl : (_refLb ? derived(_refLb, 'card') : ''),
-    empty: 'a photo from this computer, or pick a lookbook on the left',
-    onFile: (file) => {
-      readPicture(file)
-        .then((p) => { _ref = p; _refLb = ''; _lbSaid = ''; _paintLook(); })
-        .catch((e) => { _lbSaid = e.message; _paintLook(); });
-    },
-    onClear: () => { _ref = null; _refLb = ''; _lbSaid = ''; _paintLook(); },
-    onOpen: () => (_ref ? showPicture({ src: _ref.dataUrl, name: _ref.name }) : _openLb(_refLb)),
-  });
-  right.append(drop, input);
-  host.appendChild(right);
-
-  // The sentence and its button at the foot of the RIGHT half - under the field they are about.
-  const foot = _el('div', 'mv3-wk-foot');
-  const said = _lbSaid ? _el('div', 'mv3-wk-said', _lbSaid) : null;
-  if (said) foot.appendChild(said);
-  const note = _el('textarea', 'mv3-sc-lines is-short');
-  note.placeholder = 'What should it be? With a photo, say what to change - "shoes to white Nike trainers".';
-  note.value = _lbNote;
-  const row = _el('div', 'mv3-wk-footrow');
-  const hint = _el('span', 'mv3-wk-mode mv3-sc-meta');
-  const go = _el('button', 'mv3-wk-create', 'create');
-  go.type = 'button';
-  const sync = () => {
-    const why = _why();
-    go.disabled = !!why || _making;
-    go.textContent = _making ? 'making…' : 'create';
-    go.title = why ? why : 'Make it - this spends credits';
-    hint.textContent = _making ? 'the stage says how far' : (why || (_mode() ? _MODE_LABEL[_mode()] : ''));
-    hint.classList.toggle('is-why', !!why && !_making);
-  };
-  note.addEventListener('input', () => {
-    _lbNote = note.value;
-    // Typing answers whatever was said, and it goes without a repaint that would lose the cursor.
-    if (said && said.isConnected) { said.remove(); _lbSaid = ''; }
-    sync();
-  });
-  go.addEventListener('click', () => _make(c));
-  row.append(hint, go);
-  foot.append(note, row);
-  sync();
-  right.appendChild(foot);
-}
-
-// ── One tile on a lookbook shelf ────────────────────────────────────────────
-// Used by both faces of the window - the one that picks what to WEAR and the one that picks what a new
-// lookbook is BASED on - because a lookbook is the same thing on either, and so is getting rid of one.
-// The cross asks first; deleting is the only act here that cannot be undone. `dim`: the dressing shelf
-// dims the picture of the PICKED outfit (phase V24, the owner 2026-10-09).
-function _lbTile(path, on, pick, dim) {
-  const tile = _el('button', 'mv3-wk-tile is-lb' + (on ? ' is-on' : '') + (on && dim ? ' is-dim' : ''));
+// A lookbook to dress in: picked, dimmed; its ✕ pressed twice deletes it; its right button opens it large.
+function _lbTile(path) {
+  const on = path === _lbPick;
+  const tile = _el('button', 'gw-tile' + (on ? ' is-on is-dim' : ''));
   tile.type = 'button';
   tile.title = path.split('/').pop();
-  const img = _el('img', 'mv3-wk-face');
+  const img = _el('img');
   img.alt = '';
   img.loading = 'lazy';
   img.src = derived(path, 'card');
   tile.appendChild(img);
-
-  const x = _el('button', 'mv3-wk-tilex', '✕');
-  x.type = 'button';
-  x.title = 'Delete this lookbook';
-  x.addEventListener('click', (e) => { e.stopPropagation(); _askDeleteLb(tile, path); });
-  tile.appendChild(x);
-
-  tile.addEventListener('click', pick);
+  tile.appendChild(delX({
+    host: tile, title: 'Delete this lookbook from the library',
+    run: async () => {
+      const d = await fetch('/api/library/item/lookbooks/' + encodeURIComponent(path.split('/').pop()), { method: 'DELETE' })
+        .then(r => r.json()).catch(() => null);
+      return d && d.success ? '' : ((d && d.error) || 'the app did not answer');
+    },
+    done: async () => {
+      if (_lbPick === path) _lbPick = '';
+      _lbs = await API.lookbooks().catch(() => _lbs);
+      _paintWho();
+    },
+  }));
+  tile.addEventListener('click', () => { _lbPick = on ? '' : path; _dressSaid = _dressing ? _dressSaid : ''; _paintWho(); });
   tile.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    tileMenu(e, [
-      { label: 'open', sub: 'look at it, full size', on: () => _openLb(path) },
-      { label: 'delete', sub: 'for good', on: () => _askDeleteLb(tile, path), danger: true },
-    ], 'lookbook menu');
+    tileMenu(e, [{ label: 'open', sub: 'look at it, full size', on: () => _openLb(path) }], 'lookbook menu');
   });
   return tile;
 }
 
-// The viewer the Library uses, so a lookbook is looked at the same way wherever it is met -
-// with, in the column beside it, what the agent wrote about it when it was made and the photo it
-// was made from. READ AGAIN AT EVERY OPEN: the lookbook most likely to be opened is the one just made.
+// The viewer the Library uses, with what the agent wrote about it - read again at every open.
 async function _openLb(path) {
-  try { _lbMetaMap = (await API.lookbookMeta()) || {}; } catch (e) { /* what was known before */ }
-  const meta = (_lbMetaMap && _lbMetaMap[path]) || {};
-  showPicture({
-    src: path, name: path.split('/').pop(),
-    rows: [['description', meta.description], ['suits', meta.gender]],
-    from: meta.from,
-  });
+  let meta = {};
+  try { meta = ((await API.lookbookMeta()) || {})[path] || {}; } catch (e) { /* nothing known */ }
+  showPicture({ src: path, name: path.split('/').pop(), rows: [['description', meta.description], ['suits', meta.gender]], from: meta.from });
 }
 
-// Read once beside the shelf itself: both answer "what is on this shelf".
-let _lbMetaMap = null;
-function _needLbMeta() {
-  if (_lbMetaMap) return;
-  _lbMetaMap = {};
-  API.lookbookMeta().then((m) => { _lbMetaMap = m || {}; }).catch(() => { /* nothing known */ });
-}
-
-function _askDeleteLb(anchor, path) {
-  const name = path.split('/').pop();
-  askDelete(anchor, 'Delete "' + name + '"?',
-    'The picture goes from the shelf for good. Looks already made from it keep what they are.',
-    async () => {
-      try {
-        const r = await fetch('/api/library/item/lookbooks/' + encodeURIComponent(name), { method: 'DELETE' })
-          .then(x => x.json());
-        if (!r || !r.success) throw new Error((r && r.error) || 'refused');
-      } catch (e) {
-        _lbSaid = 'Could not delete it: ' + e.message;
-      }
-      _lbs = await API.lookbooks().catch(() => _lbs);
-      if (_lbPick === path) _lbPick = '';
-      if (_refLb === path) _refLb = '';
-      _paintLook();
-    });
-}
-
-const LB_LABEL = {
-  extract: 'Taking the outfit out of the photo',
-  edit: 'Reading the photo and your words',
-  draw: 'Drawing the outfit',
-};
-
-async function _make(c) {
-  const mode = _mode();
-  if (!mode || _making || _why()) return;
-  _making = true;
-  _lbSaid = '';
-  _paintLook();
-  _hold('lookbook', { label: LB_LABEL[mode] || 'Making the lookbook', estimateMs: 45000 });
-  try {
-    const r = await API.makeLookbook({
-      prompt: _lbNote.trim(),
-      imageBase64: _ref ? _ref.dataUrl : '',
-      imagePath: _ref ? '' : _refLb,
-      refName: _ref ? _ref.name : '',
-      title: 'Lookbook', where: _where('newlb'),
-    });
-    // The server files it - onto the shelf, with its description and the photo it was made from
-    // (Images / uploads_lookbooks) - and this follows the journal row it wrote.
-    await _followLb(r.alertId, c);
-  } catch (e) {
-    const msg = (e && e.message) || 'unknown';
-    _end('lookbook', msg);
-    _making = false;
-    // A refusal from the agent is not a failure of the machinery - it is an answer about what
-    // was asked for, and it reads better as that than as an error.
-    _lbSaid = e && e.refused ? msg : 'The lookbook failed: ' + msg;
-    _paintLook();
-  }
-}
-
-async function _followLb(id, c) {
-  try {
-    const rec = await API.follow(id);
-    _end('lookbook');
-    // The shelf on the left gains a tile and the bench stays where it is: one lookbook is rarely the
-    // end of it. The new one is the base of the next, and the outfit picked to dress in.
-    _lbs = await API.lookbooks().catch(() => _lbs);
-    _refLb = String((rec.result || {}).path || '');
-    _lbPick = _refLb || _lbPick;
-    _ref = null;
-    _lbNote = '';
-    // The window was closed meanwhile: the news says where it is.
-    if (!_look && c) {
-      showToast({ mark: '✓', title: 'The lookbook is made', where: 'Dress ' + c.name + ' in it: "+ new look"',
-        act: { label: 'dress', run: () => _openNewLook(c, 'look') }, ms: 9000 });
-    }
-  } catch (e) {
-    const msg = (e && e.message) || 'unknown';
-    _end('lookbook', msg);
-    _lbSaid = 'The lookbook failed: ' + msg;
-  }
-  _making = false;
-  _paintLook();
+// The lookbook bench's options for this project (js/gen-window.js): a lookbook made is the outfit picked to dress in; its
+// countdown is the upper half's.
+function _lbOpts() {
+  return {
+    kind: 'lookbook',
+    where: () => _where('newlb'),
+    onStart: () => _syncHalves(),
+    onEnd: (error) => { endHalf('lookbook', error); _syncHalves(); },
+    onMade: (path) => {
+      _lbs = null;
+      _lbPick = path;
+      _dressSaid = '';
+      if (_who && _who.win.alive() && _who.page === 'look') _paintWho();
+    },
+  };
 }
 
 // ── The dressing itself ─────────────────────────────────────────────────────
-// On the stage, because that is where the answer lands: the window goes as soon as the server has
-// taken it. The overlay carries the countdown that learns from the last run of the same job
-// (js/progress.js), so the second dressing already says roughly how long it will take.
+// The server dresses, files the look under the character and - because this one was asked for by a project - puts it
+// on that project, whether or not anybody is still looking. The window stays; the upper half of the stage counts down.
 async function _apply(c) {
   if (_dressing) return;
   const base = c.sheet || c.face || '';
-  if (!base) { _state = c.name + ' has no reference sheet to dress.'; _paintLook(); return _ctx.repaint(); }
+  if (!base) { _dressSaid = c.name + ' has no reference sheet to dress.'; _paintWho(); return; }
   const lb = _lbPick;
   if (!lb) return;
   _dressing = true;
-  _paintLook();
-  _hold('look', { label: 'Dressing ' + c.name, estimateMs: 90000 });
+  _dressSaid = 'asking…';
+  _paintWho();
   try {
-    // The server dresses, files the look under the character and - because this one was asked for
-    // by a project - puts it on that project, whether or not anybody is still looking.
     const r = await API.dress({
       basePath: base, lookbookPath: lb, note: '',
       charId: c.id, charName: c.name, gender: c.gender || '',
       projectId: String((_ctx.project || {}).id || ''),
       title: 'Look · ' + c.name, where: _where('lookbooks'),
     });
-    if (_look && _look.char === c) closeWindow();
+    _beginDress(c.name, Date.now());
     await _followDress(r.alertId);
   } catch (e) {
-    _end('look', (e && e.message) || 'the dressing failed');
-    _dressing = false;
-    _state = 'The dressing failed: ' + ((e && e.message) || 'unknown');
-    _paintLook();
-    _ctx.repaint();
+    _endDress((e && e.message) || 'the dressing failed');
+    _dressSaid = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _paintWho();
   }
+}
+
+function _beginDress(name, startedAt) {
+  _dressing = true;
+  _dress = { label: 'Dressing ' + name, estimateMs: 90000, startedAt: startedAt || Date.now(), key: (_ctx && _ctx.key) || '' };
+  _dressSaid = 'in Alerts · Dressing ' + name + '…';
+  _syncHalves();
+  _paintWho();
+}
+
+function _endDress(error) {
+  _dressing = false;
+  _dress = null;
+  endHalf('look', error);
+  _syncHalves();
 }
 
 async function _followDress(id) {
   try {
     await API.follow(id);
-    _end('look');
+    _endDress('');
     // The wardrobe and the project are read again rather than patched by hand: the server filed
     // the look and wrote it into the casting, and what it wrote is what should be on screen. A look
     // made for this project is chosen by it (decided with the owner 2026-09-21).
     _chars = byLooks(await loadCharacters(true));
     await _ctx.reloadProject();
     _lbPick = '';
+    _dressSaid = 'in Alerts · done - the new look is cast';
   } catch (e) {
-    _end('look', (e && e.message) || 'the dressing failed');
-    _state = 'The dressing failed: ' + ((e && e.message) || 'unknown');
+    _endDress((e && e.message) || 'the dressing failed');
+    _dressSaid = 'The dressing failed: ' + ((e && e.message) || 'unknown');
   }
-  _dressing = false;
-  _paintLook();
+  _paintWho();
   _ctx.repaint();
 }
 
-// ── The countdown of the casting's own work, on the stage ───────────────────
-// Each job knows the project it was started in (`key`): another project's stage does not show it.
-function _hold(place, spec) {
-  _jobs[place] = { label: spec.label, estimateMs: spec.estimateMs, startedAt: spec.startedAt || Date.now(), key: (_ctx && _ctx.key) || '' };
-  holdProgress(place, _jobs[place]);
-}
-function _end(place, error) {
-  _jobs[place] = null;
-  endProgress(place, error);
-}
-// After the script's paint: the stage is free (no frame or clip of the script being waited for) - a look,
-// a lookbook or an environment of this project being made puts its countdown back, at its real age.
-function _reHold() {
-  if (heldPlace()) return;
-  const key = (_ctx && _ctx.key) || '';
-  const mine = (j) => (j && j.key === key ? j : null);
-  const env = mine(ENV.running());
-  const [place, spec] = mine(_jobs.look) ? ['look', _jobs.look] : mine(_jobs.lookbook) ? ['lookbook', _jobs.lookbook] : env ? ['environment', env] : [];
-  if (place) holdProgress(place, spec);
+// ── THE HALVES OF THE STAGE (phase V58) ─────────────────────────────────────
+// Each half waits for its own work: the upper for a look being dressed or a lookbook being made, the lower for an
+// environment - only this project's, and only while the stage shows the halves and the script is not counting down on
+// the whole of it (a frame or a clip; wk-maker.js heldPlace).
+function _syncHalves() {
+  if (!_active || !_ctx) return;
+  if (_picShown || heldPlace()) { dropHalves(); return; }
+  const key = _ctx.key || '';
+  const mine = (j) => (j && j.spot && j.spot.key === key ? j : null);
+  const lb = mine(GW.running('lookbook'));
+  const env = mine(GW.running('environment'));
+  const top = _dress && _dress.key === key ? ['look', _dress] : lb ? ['lookbook', lb] : null;
+  if (top) holdHalf('top', top[0], top[1]); else if (halfPlace('top')) dropHalf('top');
+  if (env) holdHalf('bottom', 'environment', env); else if (halfPlace('bottom')) dropHalf('bottom');
 }
 
-// Something of this step's casting may be running already - started before a reload, or before
-// somebody walked off and came back. The journal knows; asked once per project opened.
+// Something of this step's casting may be running already - started before a reload, or before somebody walked off and
+// came back. The journal knows; asked once per project opened.
 let _lookedFor = '';
 function _pickUpRunning() {
   const key = (_ctx && _ctx.key) || '';
@@ -936,20 +783,30 @@ function _pickUpRunning() {
       && r.where && r.where.spot && r.where.spot.key === key && r.where.spot.view === view);
     const look = mine('look', 'lookbooks');
     if (look && !_dressing) {
-      _dressing = true;
-      _hold('look', { label: 'Dressing ' + ((_castChar() || {}).name || 'the character'), estimateMs: 90000, startedAt: Date.parse(look.startedAt) || 0 });
+      _beginDress(((_castChar() || {}).name || 'the character'), Date.parse(look.startedAt) || 0);
       _followDress(look.id);
     }
     const lb = mine('lookbook', 'newlb');
-    if (lb && !_making) {
-      _making = true;
-      _hold('lookbook', { label: 'Making the lookbook', estimateMs: 45000, startedAt: Date.parse(lb.startedAt) || 0 });
-      _followLb(lb.id, _castChar());
-    }
+    if (lb) GW.adopt('lookbook', lb, _lbOpts());
     const env = mine('environment', 'newenv');
-    if (env) ENV.pickUp(_envApi(), env);
+    if (env) GW.adopt('environment', env, ENV.benchOpts(_envApi()));
   }).catch(() => { /* without the list the panel simply shows nothing running */ });
 }
+
+// ── A WINDOW OVER A WINDOW (phase V58) ──────────────────────────────────────
+// A row of Alerts or its popup asks the page before it goes anywhere (js/alerts-bell.js `_goTo` - a cancellable
+// `ugc:goto`; js/merge-v3/main.js and library.js hear it for their own addresses, `reveal` and `open`, never a `view`).
+// One of THIS project's "who" or "where" (`?p=<key>&...&view=<a window>`) opens that window over what is open, here.
+window.addEventListener('ugc:goto', (e) => {
+  if (e.defaultPrevented || !_active || !_ctx || !_ctx.project) return;
+  let u;
+  try { u = new URL((e.detail && e.detail.href) || '', location.href); } catch (err) { return; }
+  if (u.pathname !== location.pathname || u.searchParams.get('p') !== (_ctx.key || '')) return;
+  const v = u.searchParams.get('view') || '';
+  if (!WINDOWS.includes(v)) return;
+  e.preventDefault();
+  _openAsked(v);
+});
 
 function _note(text, bad) {
   return _el('div', 'mv3-ins-note' + (bad ? ' is-err' : ''), text);
@@ -958,13 +815,15 @@ function _note(text, bad) {
 /** Painted over, or the step is left (js/merge-v3/workshop.js, setStep): stop a voice sample or a read
  *  that was playing, close the windows of this step, and take what it laid over the stage. */
 export function leave() {
+  _active = false;
   VOICE.leave();
   FRAG.leave();
-  Pick.closePick();
-  closeWindow();
+  if (_who && _who.win.alive()) _who.win.close();
+  _who = null;
   ENV.leave();
-  // What it laid over the stage goes with it, and so does a countdown of its own (the server keeps
-  // making it; coming back puts the countdown back at its real age - _reHold).
+  // What it laid over the stage goes with it, and so do its countdowns (the server keeps making it; coming back puts
+  // them back at their real age - _syncHalves).
   _dropStageCtl();
-  onlyHere(null, true);
+  dropHalves();
+  onlyHere(null);
 }

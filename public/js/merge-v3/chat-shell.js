@@ -961,6 +961,8 @@ export function createChat(make) {
       room: () => (!_pickAt || !_pickAt.target || _pickAt.filled ? ''
         : _pickAt.target.hole ? 'its place is empty - one goes here' : 'press another to put it in its place'),
       mark: _markOf,
+      // (phase V58) A picture deleted in the window by its ✕ leaves the zone too.
+      removed: (path) => { if (_atts.some(a => a.path === path)) _detach(path); },
       press: (it) => {
         const here = _atts.find(a => a.path === it.path);
         if (here) {
@@ -1968,6 +1970,8 @@ export function createChat(make) {
         roots: S.column.roots, files: S.column.files || 'photo', title: T.cat || 'Show',
         own: { label: 'this project', empty: 'Nothing made in this project yet.' },
         tile: _tile, lead: _plusTile,
+        // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
+        onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },
         // "this project" opened: its own results are read now, not at the next tick.
         onChange: (sel) => { if (sel.own) _reload(); },
       });

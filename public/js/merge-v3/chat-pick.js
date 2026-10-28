@@ -59,14 +59,19 @@
        in view and attached (`pickRefresh` `at`).
      - A picture's LINK let go over the window (from a browser) is downloaded by the server into the same folder
        (`computer.link`); a page's link is refused in words.
-     - openChoose (talking head, phase V57 (ок5)-(ок8)): the same window with no tree - characters and their looks, or
-       the made environments in wide tiles - where a press is the choice itself and closes it; its foot makes a new one.
+     - (V57's openChoose for talking head's who / where moved into their own windows in phase V58 - js/merge-v3/wk-setup.js,
+       wk-env.js on js/gen-window.js.)
+
+   PHASE V58 (the owner's check of V57 2026-10-29, п. 6; (лк1), (лк2)): a ✕ in the corner of every picture of a folder,
+   pressed twice ("really?" - "used in N projects"), deletes it from the library as its shelf does (js/del-x.js); the window
+   reads itself again and the chat lets go of it (`removed`).
    ════════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from '../layers.js';
 import { hoverPlayer } from './hover-play.js';
 import { createTree } from '../media-tree.js';
 import { nodeFiles, folderIndex, pruneTree, filesUnder, locateFile } from '../folder-column.js';
+import { delX, canDelete, deleteFile, usageWords, filesOf as delFiles, titleOf } from '../del-x.js';
 
 const PAGE = 120;                 // tiles drawn at once - the next ones as the grid is scrolled to its end
 const LS_SRC = 'mv3_vpick_v1';    // { <kind>: <source id> } - where each kind was last taken from
@@ -114,6 +119,7 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *             `link` (V57) a picture's link let go over the window - resolves with what to say ('' - in)
  *   link      (phase V27) { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
  *   onClose()
+ *   removed(path)  (V58) a picture of the window deleted by its ✕ - the chat lets go of it
  *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
  *             tree's top nodes, the key it remembers its branches under, the node opened the first time, what of a folder
  *             is shown ('photo' | 'video' | 'audio'), how one of its files becomes an item and (V56) the node a file brought
@@ -346,8 +352,6 @@ function _paintHead() {
   const hint = [o.hint || '', note].filter(Boolean).join(' · ');
   _w.hint.textContent = hint;
   _w.hint.title = hint;
-  // The choosing window (V57) says only its own words there.
-  if (_t && _t.choose) { _w.left.textContent = _o.room(); return; }
   const n = Math.max(0, o.left());
   const words = typeof o.room === 'function' ? o.room() : '';
   _w.left.textContent = words || (n ? (n === 1 ? 'one more goes here' : n + ' more go here') : 'no room left');
@@ -555,8 +559,6 @@ const _subOf = (it) => (it.sub && !(_st.cat !== ALL && it.cat === _st.cat) ? it.
 // A press: in, or back out. One that cannot go says why and stays as it is.
 function _press(it) {
   _peekHide();
-  // (phase V57) A thing shown only to be seen - a character's 4K sheet in the choosing window - says why.
-  if (it.say) { pickSay(it.say); return; }
   const on = !!_o.mark(it.path);
   // The place filled a moment ago and the window is about to close: a second press goes nowhere else.
   const why = on ? '' : _o.left() <= 0 ? 'No room left here.' : _o.why(it);
@@ -615,6 +617,19 @@ function _tile(it) {
     // The larger look is the old window's (the 3D Studio's): the window with the tree has none (phase V56, (ги8)).
     hit.addEventListener('pointerenter', () => _peekShow(it.big, t));
     hit.addEventListener('pointerleave', _peekHide);
+  }
+  // (phase V58, (лк1), (лк2)) A picture of a folder: its ✕ - pressed twice, it goes from the library.
+  if (_t && _t.tree && _o.kind === 'image' && it._f && canDelete(it._f)) {
+    const f = it._f;
+    t.appendChild(delX({
+      host: t, title: titleOf(f),
+      ask: () => usageWords(delFiles(f)),
+      run: () => deleteFile(f),
+      done: () => {
+        if (typeof _o.removed === 'function') { try { _o.removed(f.path); } catch (e) { /* the chat's */ } }
+        _refreshTree(false);
+      },
+    }));
   }
   _paintMark(t, it.path);
   return t;
@@ -885,12 +900,14 @@ function _paintPath() {
     const s = _rows().find(x => x.id === _st.src);
     const g = _t.groups ? _t.groups.find(x => x.key === _t.group) : null;
     const box = el('div', 'mt-crumbs');
-    const top = _t.choose ? (_t.choose.crumb || _t.choose.title || '') : (s ? s.label : '');
-    box.appendChild(el('span', 'mt-crumb is-top' + (g ? '' : ' is-here'), top));
+    box.appendChild(el('span', 'mt-crumb is-top' + (g ? '' : ' is-here'), s ? s.label : ''));
     if (g) { box.appendChild(el('span', 'mt-crumb-sep', '/')); box.appendChild(el('span', 'mt-crumb is-here', g.label)); }
     P.appendChild(box);
   } else if (_t.node) P.appendChild(_t.tree.crumbsEl(_t.node));
 }
+
+// A file of a folder as the window's item - its file kept (`_f`), for its ✕ (phase V58).
+const _itemOf = (f) => { const it = _o.tree.map(f); return it ? Object.assign(it, { _f: f }) : null; };
 
 // (phase V57, (ок1)) What the window may show at all: everything, unless the tree says what it takes (`fit`).
 const _fits = (x) => !(_o && _o.tree && typeof _o.tree.fit === 'function') || !!_o.tree.fit(x);
@@ -1003,9 +1020,7 @@ async function _openRow(id, reveal) {
 function _rowShow() {
   if (!_w || !_st.src) return;
   const g = _t.groups ? _t.groups.find(x => x.key === _t.group) : null;
-  // The choosing window searches the groups its filter shows.
-  const all = _t.choose && _t.groups ? _chooseGroups().flatMap(x => x.items || []) : _t.all;
-  _st.items = g && !_st.q.trim() ? g.items : all;
+  _st.items = g && !_st.q.trim() ? g.items : _t.all;
   _paintGrid();
 }
 
@@ -1041,12 +1056,12 @@ async function _openNode(n, reveal) {
   _hp.stop();
   _quiet();
   let got;
-  if (_t.index) got = { items: (_t.index.direct.get(n.key) || []).map(_o.tree.map).filter(Boolean), why: '' };
+  if (_t.index) got = { items: (_t.index.direct.get(n.key) || []).map(_itemOf).filter(Boolean), why: '' };
   else {
     // The folders could not be read in one go: this one by itself.
     _st.loading = true;
     _paintGrid();
-    try { got = { items: (await nodeFiles(n, _o.tree.type)).filter(_fits).map(_o.tree.map).filter(Boolean), why: '' }; }
+    try { got = { items: (await nodeFiles(n, _o.tree.type)).filter(_fits).map(_itemOf).filter(Boolean), why: '' }; }
     catch (e) { got = { items: [], why: e.message || 'the folder could not be read' }; }
     if (!_w || mine !== _seq) return;
   }
@@ -1066,7 +1081,7 @@ function _searchTree(now) {
     if (!_st.q.trim()) { _openNode(n); return; }
     ++_seq;
     _st.loading = false;
-    _st.items = _t.index ? filesUnder(n, _t.index).map(_o.tree.map).filter(Boolean) : [];
+    _st.items = _t.index ? filesUnder(n, _t.index).map(_itemOf).filter(Boolean) : [];
     _st.why = _t.index ? '' : 'the folders could not be read';
     _paintGrid();
   };
@@ -1093,177 +1108,6 @@ async function _refreshTree(treeDone, land) {
   if (_st.src) { if (_rows().some(x => x.id === _st.src)) _openRow(_st.src); else _leaveRow(); return; }
   const n = (t.node && t.tree.node(t.node.key)) || t.tree.selected();
   if (n) _openNode(n);
-}
-
-// ── THE CHOOSING WINDOW (phase V57, the owner 2026-10-29, (ок5)-(ок8)) ──────
-// "давай сделаем попап, как в чате генерации изображений ... таким списком попап показываем для выбора персонажа и образа.
-// и так же с кликом на окружение в превью поступим": talking head's "who" and "where" (wk-setup.js, wk-env.js) open the
-// attachment window's frame with no tree - a list of groups on the left (the characters, the most looks first, the first
-// shown at once; the pointer resting on one shows its things, the last one stays), or no left side at all (the made
-// environments, `items`, in wide tiles); a search; a press IS the choice - the caller writes it - and the window closes.
-// The foot makes a new one (`make`: "+ new look", "+ new environment" - the caller opens its maker's window).
-//   o: { title, hint, anchor, name,
-//        load() -> Promise<{ groups?: [{ key, label, sub, n, items }], items?, why? }>,
-//        filter?: { label, test(group), on, onChange(on) } - a tab of the groups that pass ("female · 12") beside "all",
-//        start?   the group shown first (its key),
-//        mark(path) -> words on what is chosen now ('' - not), why(it) -> why it cannot be chosen ('' - it can),
-//        press(it)  the choice, make?: { label, title, on(groupShown) }, empty, onClose() }
-//   An item with `say` is shown as it is and a press only says those words (a character's 4K sheet: cast in a look).
-export function openChoose(o) {
-  closePick();
-  _o = Object.assign({}, o, {
-    kind: 'image', sources: [], computer: { word: '' },
-    left: () => 1, room: () => o.room || '', why: (it) => (o.why ? o.why(it) : ''),
-    mark: (path) => (o.mark ? o.mark(path) : ''),
-    press: (it) => { o.press(it); closePick(); },
-  });
-  _cache.clear();
-  _t = { tree: null, node: null, index: null, shapeOn: false, groups: null, group: '', all: [], qT: 0, choose: o, filterOn: !!(o.filter && o.filter.on) };
-  _st = { src: 'choose', cat: ALL, q: '', items: [], cats: [], why: '', list: [], drawn: 0, loading: true, sel: null };
-  _buildChoose();
-  _paintHead();
-  _paintGrid();
-  _loadChoose();
-  setTimeout(() => { if (_w) _w.q.focus(); }, 0);
-}
-
-function _buildChoose() {
-  const o = _t.choose;
-  const ov = el('div', 'pk-ov is-tree is-choose');
-  const box = el('div', 'pk is-tree is-choose');
-  box.setAttribute('role', 'dialog');
-  const head = el('div', 'pk-head');
-  const h = el('h3', null, '');
-  const hint = el('span', 'pk-hint', '');
-  const left = el('span', 'pk-room', '');
-  const x = el('button', 'pk-close', '✕');
-  x.type = 'button';
-  x.title = 'Close (Esc)';
-  head.append(h, hint, left, x);
-  const side = el('div', 'pk-side is-people');
-  const rows = el('div', 'pk-rows');
-  rows.hidden = true;
-  const people = el('div', 'pk-people');
-  const treeHost = el('div', 'pk-tree');
-  side.append(rows, people, treeHost);
-  const main = el('div', 'pk-main');
-  const bar = el('div', 'pk-bar');
-  const path = el('div', 'pk-path');
-  const q = document.createElement('input');
-  q.type = 'search';
-  q.className = 'pk-q';
-  q.placeholder = 'search by name';
-  q.spellcheck = false;
-  const cat = document.createElement('select');
-  cat.className = 'pk-cat';
-  cat.hidden = true;
-  const count = el('span', 'pk-count', '');
-  bar.append(path, q, count);
-  const grid = el('div', 'pk-grid');
-  grid.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.pk-tile')) e.preventDefault(); });
-  main.append(bar, grid);
-  const body = el('div', 'pk-body');
-  body.append(side, main);
-  const foot = el('div', 'pk-foot');
-  let make = null;
-  if (o.make) {
-    make = el('button', 'pk-up', o.make.label || '+ new');
-    make.type = 'button';
-    make.title = o.make.title || '';
-    make.addEventListener('click', () => {
-      const g = _t && _t.groups ? _t.groups.find(x2 => x2.key === _t.group) || null : null;
-      const on = o.make.on;
-      closePick();
-      on(g);
-    });
-    foot.appendChild(make);
-  }
-  const said = el('span', 'pk-said', '');
-  const done = el('button', 'mv3-c-btn pk-done', 'done');
-  done.type = 'button';
-  foot.append(said, done);
-  box.append(head, body, foot);
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  const layer = Layers.open(ov, { name: o.name || 'choose', onEsc: closePick });
-  x.addEventListener('click', closePick);
-  done.addEventListener('click', closePick);
-  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closePick(); });
-  q.addEventListener('input', () => { _st.q = q.value; _rowShow(); });
-  const place = () => _placeTree(box);
-  window.addEventListener('resize', place);
-  _w = { ov, box, h, hint, left, side, rows, people, treeHost, path, q, cat, count, grid, said, drop: null, layer, io: null, shut: 0, sentinel: null, place, make };
-  place();
-}
-
-async function _loadChoose() {
-  const o = _t.choose;
-  const mine = ++_seq;
-  let got = null;
-  try { got = await o.load(); } catch (e) { got = null; }
-  if (!_w || mine !== _seq || !_t || _t.choose !== o) return;
-  got = got || { items: [], why: 'it could not be read' };
-  _st.loading = false;
-  _t.groups = Array.isArray(got.groups) ? got.groups : null;
-  const none = _t.groups ? !_t.groups.length : !(got.items || []).length;
-  _st.why = got.why || (none ? o.empty || '' : '');
-  _t.all = _t.groups ? _t.groups.flatMap(g => g.items || []) : (got.items || []);
-  // No groups: the things fill the window, no left side (the environments).
-  _w.box.classList.toggle('is-flat', !_t.groups);
-  if (_t.groups) {
-    const vis = _chooseGroups();
-    const g = vis.find(x => x.key === o.start) || vis[0] || null;
-    _t.group = g ? g.key : '';
-  }
-  _chooseSide();
-  _paintPath();
-  _rowShow();
-}
-
-// The groups shown: those the filter passes, while it is on.
-function _chooseGroups() {
-  const f = _t.choose.filter;
-  return (_t.groups || []).filter(g => !(f && _t.filterOn) || f.test(g));
-}
-
-// The left side of the choosing window: the filter's two tabs, then the groups.
-function _chooseSide() {
-  const P = _w.people;
-  P.textContent = '';
-  if (!_t.groups) return;
-  const f = _t.choose.filter;
-  if (f) {
-    const tabs = el('div', 'pk-ftabs');
-    const tab = (label, on, set) => {
-      const b = el('button', 'mv3-sc-tab' + (on ? ' is-on' : ''), label);
-      b.type = 'button';
-      b.addEventListener('click', () => {
-        if (_t.filterOn === set) return;
-        _t.filterOn = set;
-        if (typeof f.onChange === 'function') f.onChange(set);
-        const vis = _chooseGroups();
-        if (!vis.some(g => g.key === _t.group)) _t.group = vis[0] ? vis[0].key : '';
-        _chooseSide();
-        _paintPath();
-        _rowShow();
-      });
-      return b;
-    };
-    tabs.append(tab(f.label + ' · ' + _t.groups.filter(f.test).length, _t.filterOn, true), tab('all · ' + _t.groups.length, !_t.filterOn, false));
-    P.appendChild(tabs);
-  }
-  const vis = _chooseGroups();
-  if (!vis.length) P.appendChild(el('div', 'pk-none is-side', _t.groups.length ? 'Nobody of that kind - show all.' : ''));
-  for (const g of vis) {
-    const b = el('button', 'pk-person' + (g.key === _t.group ? ' on' : ''));
-    b.type = 'button';
-    b.dataset.key = g.key;
-    b.title = g.label + (g.sub ? ' · ' + g.sub : '');
-    b.append(el('span', 'pk-person-t', g.label), el('span', 'pk-person-n', String(g.n)));
-    b.addEventListener('pointerenter', () => _pickGroup(g.key));
-    b.addEventListener('click', () => _pickGroup(g.key));
-    P.appendChild(b);
-  }
 }
 
 // ── The larger look at a picture ────────────────────────────────────────────

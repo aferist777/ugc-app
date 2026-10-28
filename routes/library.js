@@ -1647,6 +1647,11 @@ function _deleteOne(kindIn, idIn, filesIn) {
       const base = path.basename(id);
       if (!base || !IMG_RE.test(base)) return _r(400, { success: false, error: 'not an image on this shelf' });
       if (!fs.existsSync(path.join(shelf.dir, base))) return _r(404, { success: false, error: 'not found' });
+      // (phase V58, (лк4)) An environment a talking head is set in, or a 3D scene was laid out from, stays - in words.
+      if (kind === 'environments') {
+        const why = require('../lib/casting-use').envRefusal(`${shelf.url}/${base}`);
+        if (why) return _r(409, { success: false, error: why });
+      }
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
       // And its preview, made for a large one when it was filed (routes/scen3.js _previewTarget) - it
@@ -1684,6 +1689,13 @@ function _deleteOne(kindIn, idIn, filesIn) {
     const it = list.find(x => x && String(x.id) === id);
     if (!it && kind === 'heads') return _r(409, { success: false, error: 'This talking head is its project\'s - it is deleted in the project, or kept when the project is deleted.' });
     if (!it) return _r(404, { success: false, error: 'not found' });
+    // (phase V58, (лк3)) A look a talking head is cast in stays - in words, with the project's name.
+    if (kind === 'obrazy') {
+      let dir = '';
+      try { const abs = store.folder(it); dir = abs ? toUrl(abs) : ''; } catch (e) { dir = ''; }
+      const why = require('../lib/casting-use').lookRefusal(it, dir);
+      if (why) return _r(409, { success: false, error: why });
+    }
 
     if (withFiles) {
       if (store.folder) {
