@@ -51,6 +51,13 @@
    a branch held over opens as for a tile. The server refuses in words what cannot be (a name the place has, (зв35); a
    required one; into itself; a path too long, (зв34)) and the status line says so. A folder drag carries
    `application/x-ugc-folder` and `application/x-ugc-folder-kind-<kind>`.
+
+   ENVIRONMENTS AND LOOKBOOKS IN IMAGES (phase V55, the owner 2026-10-28, (гн8)-(гн11)): two locked folders first in IMAGES
+   (routes/library.js _madeFolders) - the pictures their generators made lie in them, and their `references` (the required
+   uploads_environments / uploads_lookbooks, an IMAGES folder like any) inside. Such a node carries `make` (its kind) and
+   `makeLabel`: its row has a "+" - and its menu an item - that opens the generator where the page says (`onMake`). A made
+   picture moves nowhere, nothing is moved in but into references, and a folder goes into references, not into them - each
+   refused IN WORDS when let go there.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -67,6 +74,12 @@ const FOLDER_DRAG = 'application/x-ugc-folder';
 const FOLDER_KIND = 'application/x-ugc-folder-kind-';
 let _dragging = null;       // { kind, id, key, label } while a folder of this page is dragged
 const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
+// (phase V55) What the generators of IMAGES -> Environments / Lookbooks made: their own kinds, never moved.
+const MADE = { environments: 'Environments', lookbooks: 'Lookbooks' };
+const MADE_SAYS = {
+  environments: 'A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
+  lookbooks: 'A made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
+};
 // (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
@@ -105,6 +118,8 @@ function _dragKind(dt) {
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
+  // (phase V55) Environments / Lookbooks: only their generator files there - what is let go is refused in words.
+  if (MADE[n.kind]) return { kind: n.kind, cat: '', made: true };
   if (n.kind === 'music') return { kind: 'music', cat: n.cat || '', name: n.cat ? (n.name || n.label) : '', folder: n.folder || '', mood: n.mood || '' };
   // (phase TG, block 5b) REFERENCES: its own categories file a post; the root and the sources' folders let it go back to
   // its source's folder.
@@ -124,6 +139,10 @@ function _dropAction(n, from, refType) {
   if (!t || !from) return '';
   // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
   if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
+  // (phase V55, (гн9)) A made environment or lookbook goes nowhere - refused in words wherever it is let go but its own
+  // folder; a picture let go on Environments / Lookbooks is refused in words too (a photo goes into references).
+  if (MADE[from]) return t.kind === from ? '' : 'refuse';
+  if (t.made) return (from === 'images' || (from === 'references' && refType === 'photo')) ? 'refuse' : '';
   // (phase V35) A track goes between Music, highlights and its moods - and nowhere else; nothing else goes there.
   if (from === 'music' || t.kind === 'music') return from === t.kind ? 'place' : '';
   if (from === 'references') {
@@ -172,6 +191,8 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *                         gallery again; the tree reads itself again
  *   o.takesFiles(node)    (phase V34.E) whether files from Explorer may be let go on this node's row
  *   o.onFiles(node, files)  they were
+ *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks) - open its
+ *                         generator ('environments' | 'lookbooks' in node.make); without it the node has no "+"
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind) }
  */
 export function createTree(host, o) {
@@ -202,6 +223,8 @@ export function createTree(host, o) {
   // A dragged folder may go into this node: one of its kind that holds folders, not itself or under it, not where it is.
   const takesFolder = (n) => !!_dragging && !!n && n.kind === _dragging.kind && holds(n) && !isUnderKey(n.key, _dragging.key)
     && parentOf.get(_dragging.key) !== n.key;
+  // (phase V55) An IMAGES folder let go on Environments / Lookbooks - refused in words (its references takes it).
+  const refusesFolder = (n) => !!_dragging && !!n && !!MADE[n.kind] && !!n.make && _dragging.kind === 'images';
   const _hasType = (dt, t) => Array.from((dt && dt.types) || []).some(x => x === t || x.startsWith(t));
 
   function _index(list, parent) {
@@ -347,6 +370,15 @@ export function createTree(host, o) {
       add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
       row.appendChild(add);
     }
+    // (phase V55, (гн10), (гн11)) Environments / Lookbooks: "+" opens their generator - where, the page says (`onMake`).
+    if (n.make && typeof opt.onMake === 'function') {
+      const mk = _el('button', 'mt-act mt-add mt-make', '+');
+      mk.type = 'button';
+      mk.tabIndex = -1;
+      mk.title = n.makeLabel + ' - opens the generator';
+      mk.addEventListener('click', (e) => { e.stopPropagation(); opt.onMake(n, mk); });
+      row.appendChild(mk);
+    }
     if (isCat && n.own && !n.locked) {
       const x = _el('button', 'mt-act mt-x', '✕');
       x.type = 'button';
@@ -422,6 +454,8 @@ export function createTree(host, o) {
     target.addEventListener('dragover', (e) => {
       // (phase V54) A folder dragged onto a folder of its kind, or the kind's row.
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
+        // (phase V55) An IMAGES folder over Environments / Lookbooks: taken, to be refused in words (not lit).
+        if (refusesFolder(n)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; return; }
         if (!takesFolder(n)) return;
         e.preventDefault();
         e.stopPropagation();
@@ -446,6 +480,13 @@ export function createTree(host, o) {
     target.addEventListener('drop', (e) => {
       target.classList.remove('is-drop');
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
+        if (refusesFolder(n)) {
+          e.preventDefault();
+          e.stopPropagation();
+          _dragging = null;
+          opt.status(MADE[n.kind] + ' holds only what its generator made and its references - put the folder into references', true);
+          return;
+        }
         if (!takesFolder(n)) return;
         e.preventDefault();
         e.stopPropagation();
@@ -580,7 +621,10 @@ export function createTree(host, o) {
     const t = _target(n);
     if (!act || !t) return;
     if (act === 'refuse') {
-      opt.status('A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
+      opt.status(MADE[it.kind] ? MADE_SAYS[it.kind]
+        : t.made ? 'Only ' + (t.kind === 'lookbooks' ? 'New lookbook' : 'New environment') + ' puts pictures into ' + MADE[t.kind]
+          + ' (+ on it) - a photo goes into its references'
+        : 'A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);
       return;
     }
     const item = { kind: it.kind, id: it.id, meta: { categoryId: it.cat || '' } };
@@ -833,6 +877,11 @@ export function createTree(host, o) {
     const items = [];
     // (phase V54) A new folder INSIDE the one pressed (зв19).
     if (holds(n)) items.push(['New folder', 'in ' + n.label, () => _newFolder(n, row)]);
+    // (phase V55) Environments / Lookbooks: their generator; what they hold is the app's to keep where it is.
+    if (n.make && typeof opt.onMake === 'function') {
+      items.push([n.makeLabel, 'opens the generator', () => opt.onMake(n, row)]);
+      items.push(['Required', 'what its generator made stays here - open it or delete it', null]);
+    }
     if (n.cat && !n.uncat && !n.project) {
       if (n.builtin) items.push(['Built-in', 'part of the app - read only', null]);
       else if (n.locked) items.push(['Required', 'it cannot be renamed, moved or deleted', null]);

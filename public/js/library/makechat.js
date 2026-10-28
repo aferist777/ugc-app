@@ -17,6 +17,11 @@
 //
 // A picture that lands becomes the base of the next message - unless the place above the box was
 // changed while it was being made, which is the person deciding something else.
+//
+// (phase V55, the owner 2026-10-28, (гн10), (гн11)) THE SAME CHAT IN THREE PLACES: its shelf's making area, the Library's
+// Media in place of the gallery (IMAGES -> Environments / Lookbooks' "+", js/library/main.js - the tree stays), and Merge's
+// Library panel (js/merge-v3/library.js - a view of the panel, as its chats are). The page gives `hooks`: showOnShelf,
+// landed, and where (Merge's address for the Alerts row, routes/makechat.js).
 
 import { startInlineProgress } from '../progress.js';
 import { openViewer } from './viewer.js';
@@ -461,7 +466,9 @@ function createMaker(kind) {
     _paintAtts();
     const att = _att;
     try {
-      const d = await post(ADDR + '/send', { text, ref: att });
+      // (phase V55) Sent from Merge's Library panel: its address, so the Alerts row leads back there.
+      const where = typeof _hooks.where === 'function' ? _hooks.where() : null;
+      const d = await post(ADDR + '/send', where ? { text, ref: att, where } : { text, ref: att });
       _ui.ta.value = '';
       _grow();
       // The picture stays above the box until it is replaced - by hand, or by the result of this.
@@ -880,3 +887,19 @@ function createMaker(kind) {
 
 export const environments = createMaker('environments');
 export const lookbooks = createMaker('lookbooks');
+
+/**
+ * (phase V55, the owner's (гн9): "открыть (просмотр как на полке, с описанием)") What is known about a picture the
+ * generator made, for the viewer's right column where it is opened from IMAGES -> Environments / Lookbooks (the Library's
+ * Media and Merge's Library panel): the rows its shelf's column shows (js/library/info.js) - read only here; they are
+ * written on the shelf. [] for anything else.
+ */
+export function madeRows(it) {
+  const m = (it && it.meta) || {};
+  if (!it || !m.made || !SPECS[it.kind]) return [];
+  const rows = [];
+  rows.push([it.kind === 'lookbooks' ? 'the outfit' : 'the place', m.description || 'not written yet - on the ' + SPECS[it.kind].shelf + ' shelf']);
+  if (m.motion) rows.push(['how it moves', m.motion]);
+  if (m.from) rows.push(['made from', String(m.from).split('/').pop()]);
+  return rows;
+}

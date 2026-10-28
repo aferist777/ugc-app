@@ -379,6 +379,9 @@ function _mediaShelf(opts) {
 
   const items = fromArchive.concat(fromHooks).concat(fromImages).concat(fromSounds).concat(fromMusic).concat(fromHeads)
     .filter(i => _onDisk(i.media)).concat(fromSfx);
+  // (phase V55) IMAGES -> Environments / Lookbooks: the pictures their generators made - only when asked (`filter`), read
+  // from their folders (always on the disk).
+  if (opts && opts.made && MADE_KINDS.has(opts.made)) items.push(..._madeItems(opts.made));
   // (phase TG, block 6; the owner: "в library на полке media можно смотреть видео скачаные с youtube ... все видео-источники
   // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
   // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
@@ -501,7 +504,8 @@ function _mediaCats(items, kind, labelFor) {
 //   REFERENCES -> the sources' folders, its own categories
 //   VIDEO  -> Generated (B-rolls -> categories, Talking heads -> projects; a B-roll with no category in Generated itself),
 //             Hooks, Uploads -> categories
-//   IMAGES -> its categories          AUDIO -> Music (-> highlights -> the moods), SFX -> Favorites, Built-in, My sounds
+//   IMAGES -> Environments, Lookbooks (what their generators made -> references; phase V55, _madeFolders), its categories
+//   AUDIO  -> Music (-> highlights -> the moods), SFX -> Favorites, Built-in, My sounds
 // Every node: { key, label, count, q?, loose?, direct?, children? } - since V35 the tree is FOLDERS: `q` is what the shelf is
 // asked for what lies DIRECTLY in the node (`filter` and `cat`, `src`, `folder`/`mood`; none - it only holds folders),
 // `children` its folders, `key` what a page remembers it by. In a branch (the owner): the locked first, then those with
@@ -692,9 +696,70 @@ function _tree() {
   // The owner's own categories, after the sources' folders: the ones with posts, then the empty ones, each A-Z.
   references.children.push(...catsOf('references', refs, false).out);
   // (after block 8) No root YOUTUBE any more: its videos are REFERENCES -> YouTube -> Videos (the owner 2026-10-22).
-  const roots = [references, video, kindNode('images', 'images', 'IMAGES'), audio];
+  const images = kindNode('images', 'images', 'IMAGES');
+  _madeFolders(images);
+  const roots = [references, video, images, audio];
   _stampNewest(roots, items);
   return roots;
+}
+
+// (phase V55, the owner 2026-10-28, (гн8)-(гн9): "в images нужно сделать так папки Environment (references, а в корневой
+// окружений - сгенерированые изображения); так же и с одеждой") IMAGES -> ENVIRONMENTS and LOOKBOOKS, locked, first among
+// IMAGES' folders. In their root lie the pictures their generators made - the shelves' own files (media/locations/,
+// media/lookbooks/; no records: the file IS the entry, `_imageShelf`), asked for as `filter=environments|lookbooks`; inside
+// each, its `references` - the required category uploads_environments / uploads_lookbooks. That category stays where it is
+// in the list - a TOP folder of IMAGES, found BY NAME (lib/library-cats.js REQUIRED) - and on the disk: the tree only SHOWS
+// it here, under its key, so a remembered selection, a tile filed into it and a folder made in it work as before. A made
+// picture is opened and deleted here as on its shelf, never moved (descriptions, 3D layouts and looks point at its
+// address - _moveOne); nothing is moved into these two but their references' own (js/media-tree.js).
+const MADE = [
+  { kind: 'environments', label: 'Environments', refs: 'uploads_environments', make: 'New environment', noun: 'environment' },
+  { kind: 'lookbooks', label: 'Lookbooks', refs: 'uploads_lookbooks', make: 'New lookbook', noun: 'lookbook' },
+];
+const MADE_KINDS = new Set(MADE.map(m => m.kind));
+// Why a made picture does not move, in words (the batch's and the item route's refusal).
+const MADE_STAYS = {
+  environments: 'a made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
+  lookbooks: 'a made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
+};
+function _madeFolders(images) {
+  const kids = images.children || [];
+  const made = MADE.map((g) => {
+    const n = _imageShelf(g.kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR, '', g.kind).length;
+    const at = kids.findIndex(c => c.locked && String(c.name || '') === g.refs);
+    const ref = at >= 0 ? kids.splice(at, 1)[0] : null;
+    const all = n + (ref ? ref.count : 0);
+    const node = { key: g.kind, kind: g.kind, label: g.label, locked: true, count: all, direct: n, empty: !all,
+      q: { filter: g.kind }, make: g.kind, makeLabel: g.make,
+      // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (V35's `tiles: 'wide'`).
+      ...(g.kind === 'environments' ? { tiles: 'wide' } : {}),
+      tip: g.label + ' - the ' + g.noun + 's its generator made (+ opens it); a photo to make one from goes into its references' };
+    if (ref) {
+      node.children = [Object.assign(ref, { label: 'references',
+        tip: 'references - the photos ' + g.make + ' is given; required: it cannot be renamed, moved or deleted' })];
+    }
+    return node;
+  });
+  images.children = made.concat(kids);
+  images.count += made.reduce((s, m) => s + m.direct, 0);
+}
+// What the media shelf gives for them (`filter=environments|lookbooks`) - a picture's shape, as Images' are: `thumb` a
+// thumbnail door address (of the shelf's own 600px copy when there is one), and what is known about it for the viewer.
+function _madeItems(kind) {
+  const dir = kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR;
+  const meta = SM.read(kind);
+  return _imageShelf(dir, toUrl(dir), kind).map((it) => {
+    const m = meta[it.media] || {};
+    return Object.assign(it, {
+      thumb: '/api/thumb?src=' + encodeURIComponent(it.thumb || it.media) + '&v=card',
+      dur: 0,
+      meta: Object.assign(it.meta, {
+        categoryId: '', favorite: false, made: true,
+        description: String(m.description || ''), from: String(m.from || ''),
+        ...(kind === 'environments' ? { motion: String(m.motion || '') } : { gender: String(m.gender || '') }),
+      }),
+    });
+  });
 }
 
 // (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом ... куда добавилось что-то новое") Every node
@@ -999,7 +1064,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
-        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')) })
+        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '' })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
@@ -1446,6 +1511,8 @@ function _patchOne(kindIn, idIn, bodyIn) {
       require('../lib/sfx-favorites').set(s.path, !!b.favorite);
       return _r(200, { success: true, kind, id: s.id, patch: { favorite: !!b.favorite }, item: { id: s.id, favorite: !!b.favorite } });
     }
+    // (phase V55) A made environment or lookbook: written about on its shelf (PATCH /library/meta), never filed elsewhere.
+    if (MADE_KINDS.has(kind)) return _r(409, { success: false, error: MADE_STAYS[kind] });
     const store = RECORD_STORES[kind];
     if (!store) return _r(400, { success: false, error: `"${kind}" cannot be edited here` });
     const id = String(req.params.id || '');
@@ -1798,7 +1865,12 @@ function _recOf(kind, id) {
   if (!st) return null;
   try { return st.read().find(x => x && String(x.id) === String(id)) || null; } catch (e) { return null; }
 }
-const _nameOfRec = (kind, id) => { const r = _recOf(kind, id); return r ? String(r.name || r.title || '') : ''; };
+const _nameOfRec = (kind, id) => {
+  // (phase V55) A made environment or lookbook has no record: its id is its file's name.
+  if (MADE_KINDS.has(kind)) return String(id || '').replace(/\.[^.]+$/, '');
+  const r = _recOf(kind, id);
+  return r ? String(r.name || r.title || '') : '';
+};
 
 // One item to `to`: '' when it went (or was there already), else why not.
 function _moveOne(it, to) {
@@ -1806,6 +1878,9 @@ function _moveOne(it, to) {
   if (from === 'sfx') return 'a built-in sound stays in Built-in';
   if (from === 'heads') return 'a talking head is its project\'s';
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
+  // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
+  if (MADE_KINDS.has(from)) return MADE_STAYS[from];
+  if (MADE_KINDS.has(to.kind)) return 'only its generator puts pictures into ' + (to.kind === 'lookbooks' ? 'Lookbooks' : 'Environments') + ' - a photo goes into its references';
   if (from === 'music' || to.kind === 'music') {
     if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
     if (to.cat) {
@@ -1917,7 +1992,7 @@ router.post('/library/batch/favorite', (req, res) => {
     const favorite = !!(req.body || {}).favorite;
     const skipped = [];
     for (const x of items) {
-      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube') { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
+      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube' || MADE_KINDS.has(x.kind)) { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
       const r = _patchOne(x.kind, x.id, { favorite });
       if (r.status !== 200) skipped.push({ kind: x.kind, id: x.id, why: _whyOf(r) });
     }

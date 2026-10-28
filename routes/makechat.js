@@ -4,7 +4,8 @@
 // THE LIBRARY'S MAKING CHATS (phase I, the owner 2026-10-01): New environment and New lookbook.
 //
 //   GET  /api/makechat/:kind             the chat - its sends, the running ones checked against Alerts
-//   POST /api/makechat/:kind/send        { text, ref: { path, from: 'base'|'photo' } | null } -> { send }
+//   POST /api/makechat/:kind/send        { text, ref: { path, from: 'base'|'photo' } | null, where? } -> { send }
+//                                         (`where` - Merge's address when sent from its Library panel, phase V55)
 //   POST /api/makechat/:kind/photo       { dataUrl, name } -> { path }   a photo from this computer, into Images
 //
 // `kind` is the shelf: environments | lookbooks.
@@ -59,6 +60,18 @@ function _spec(req) {
   const s = SPEC[String(req.params.kind || '')];
   if (!s) throw Object.assign(new Error('no such chat'), { status: 404 });
   return s;
+}
+
+// (phase V55, the owner's (гн11)) THE SAME CHAT OPENS IN MERGE'S LIBRARY PANEL (js/merge-v3/library.js): a send from there
+// carries Merge's address, and its Alerts row leads back there (`/merge?p=<project>&open=envmake|lbmake`) - the record
+// carries the place it was started from. Anything else is the Library's address.
+function _whereOf(sp, b) {
+  const w = b && b.where;
+  const href = String((w && w.href) || '');
+  if (w && w.page === 'merge' && href.length <= 300 && /^\/merge\?[\w%=&.\-]*$/.test(href)) {
+    return { page: 'merge', href, label: 'Merge · ' + sp.where.label.replace(/^Library · /, ''), spot: { view: sp.where.spot.view } };
+  }
+  return sp.where;
 }
 
 const _within = (abs, dir) => abs.startsWith(path.resolve(dir) + path.sep);
@@ -125,7 +138,8 @@ router.post('/makechat/:kind/send', (req, res) => {
     }
 
     // What the maker is asked: the same request Merge sends, and what "try again" will send again.
-    const request = { prompt: text, title: sp.title, where: sp.where, refName: ref ? path.basename(ref.path) : '' };
+    const where = _whereOf(sp, b);
+    const request = { prompt: text, title: sp.title, where, refName: ref ? path.basename(ref.path) : '' };
     if (ref && sp.type === 'environment') {
       if (ref.from === 'base') request.imagePath = ref.path; else request.photoPath = ref.path;
     } else if (ref) {
@@ -138,7 +152,7 @@ router.post('/makechat/:kind/send', (req, res) => {
     const row = JOBS.submitted({
       kind: 'image', what: sp.type,
       title: sp.title + (text ? ' · ' + text.replace(/\s+/g, ' ').slice(0, 60) : ''),
-      where: sp.where, engine: M.engine, taskIds: [],
+      where, engine: M.engine, taskIds: [],
       stage: ref ? 'sending the picture' : 'reading your words',
       job: { type: sp.type, params: { kick, chat: { kind, id: sendId }, request, file: {} } },
     });

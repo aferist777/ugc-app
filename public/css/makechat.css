@@ -9,6 +9,9 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 .lib-mkchat{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
+/* (phase V55, (гн10)) On Media it stands in the gallery's place, the tree beside it: a window too narrow for its three
+   columns cuts them at its edge rather than letting them run under the tree (js/library/main.js _placeMaker). */
+.lib-split > .lib-mkchat{ flex:1 1 0; overflow:hidden; }
 .mkc{ display:flex; flex:1 1 auto; min-height:0; min-width:0; position:relative; }
 .mkc.is-drag::after{
   content:'drop the picture'; position:absolute; inset:6px; z-index:20; pointer-events:none;
