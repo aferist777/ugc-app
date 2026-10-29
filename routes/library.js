@@ -66,6 +66,12 @@ try {
   const rb = RC.releaseBrollGenerated();
   if (rb && rb.had) console.log('[library] B-roll\'s "Generated" let go of: ' + rb.records + ' clip(s) to no category');
 } catch (e) { console.warn('[library] required categories were not made ready:', e.message); }
+// (phase V60.2, the owner's (дг4а)) Every B-roll in the folder of the model that made it: the first time, the library is moved
+// into the models' folders (its stores copied into backups/ first); after that a clip lying outside them goes into its
+// model's. A library in order is left alone (lib/model-folders.js sweep).
+try { require('../lib/model-folders').sweep(); }
+catch (e) { console.warn('[models] the B-rolls were not all put into their models\' folders -', e.message); }
+const MF = require('../lib/model-folders');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -255,6 +261,7 @@ function _mediaShelf(opts) {
   const bir = _read(path.join(DATA_DIR, 'biroly.json'), { archive: [] });
   const arch = Array.isArray(bir.archive) ? bir.archive : [];
   const hooks = _read(path.join(DATA_DIR, 'hooks-archive.json'), []);
+  const cstate = LC.read();
 
   const fromArchive = arch.filter(e => e && e.videoPath).map(e => ({
     id: String(e.id),
@@ -277,9 +284,11 @@ function _mediaShelf(opts) {
       w: +e.w || 0, h: +e.h || 0,
       // (phase V27) Where it came from, when it came by a link; the viewer shows it.
       link: e.link || '',
+      // (phase V60.2) A B-roll: the model whose folder it lies in - a dropdown offers its own model's folders.
+      ...(_isUpload(e) ? {} : { model: MF.modelOfCat(cstate, e.categoryId) }),
     },
   }));
-  const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
+  const fromHooks =(Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
     id: String(h.id || ('hook:' + i)),
     name: String(h.name || '').trim() || 'hook',
     kind: 'hooks',
@@ -653,13 +662,18 @@ function _tree() {
     if (out.length) node.children = out;
     return node;
   };
-  // VIDEO -> Generated: B-rolls (its categories), Talking heads (a project each); a B-roll with no category lies in
-  // Generated itself (the owner, second round of V28.4: what the chats make goes there).
+  // VIDEO -> Generated: (phase V60.2, the owner's (дг4а)-(дг12а)) THE FOLDERS OF THE MODELS that made the B-rolls - Grok
+  // classic, Seedance 2.5... with the groups inside them (lib/model-folders.js; no "B-rolls" folder any more) -, then Talking
+  // heads (a project each). A model's folder shows only while something lies under it ((дг9б)), the folders by name, Other
+  // last. A folder outside every model's (a library not swept yet) shows after them.
   const birols = byKind.birols || [];
   const inCat = birols.filter(i => (i.meta || {}).categoryId);
-  const brolls = { key: 'birols', kind: 'birols', label: 'B-rolls', count: inCat.length,
-    children: catsOf('birols', birols).out };
-  if (!brolls.children.length) delete brolls.children;
+  const bTop = catsOf('birols', birols).out;
+  const modelNodes = bTop.filter(n => MF.isModelCat(n.cat) && n.count > 0)
+    .map(n => Object.assign(n, { model: String(n.cat).slice(LC.MODEL_PREFIX.length),
+      tip: n.label + ' - the clips it made, and your folders of them; a clip of another model goes into its own' }))
+    .sort((a, b) => ((a.model === MF.OTHER) - (b.model === MF.OTHER)) || _abc(a.label, b.label));
+  const strayNodes = bTop.filter(n => !MF.isModelCat(n.cat));
   const heads = byKind.heads || [];
   const projects = new Map();
   for (const h of heads) {
@@ -676,7 +690,7 @@ function _tree() {
   if (!headsNode.children.length) delete headsNode.children;
   const loose = birols.length - inCat.length;
   const generated = { key: 'generated', label: 'Generated', locked: true, count: birols.length + heads.length,
-    q: { filter: 'birols', cat: UNCAT }, loose: 'birols', direct: loose, children: [brolls, headsNode] };
+    q: { filter: 'birols', cat: UNCAT }, loose: 'birols', direct: loose, children: [...modelNodes, ...strayNodes, headsNode] };
   const video = { key: 'video', label: 'VIDEO',
     children: [generated, kindNode('hooks', null, null, { locked: true }), kindNode('uploads', null, null, { locked: true })] };
   video.count = video.children.reduce((n, c) => n + c.count, 0);
@@ -1572,6 +1586,15 @@ function _patchOne(kindIn, idIn, bodyIn) {
     }
     if ('favorite' in patch) patch.favorite = !!patch.favorite;
     if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
+    // (phase V60.2, the owner's (дг10а)) A B-roll lies in its model's folder: "no folder" is that folder itself, a folder of
+    // another model's is refused in words (lib/model-folders.js).
+    if (kind === 'birols' && 'categoryId' in patch) {
+      try {
+        const t = MF.targetFor(it, patch.categoryId);
+        patch.categoryId = t.id;
+        patch.categoryLabel = t.label;
+      } catch (e) { return _r(e.status || 409, { success: false, error: e.message }); }
+    }
     // (phase V57, the owner's (ок2)) Into the references of Environments / Lookbooks - never by hand: only the photos their
     // generators are given lie there (lib/library-cats.js closedWhy). Out of them - as anywhere.
     if (patch.categoryId && patch.categoryId !== String(it.categoryId || '')) {
@@ -1838,6 +1861,12 @@ function _kindOne(fromIn, idIn, toIn) {
       if (to === 'uploads') it.source = 'upload';
       else delete it.source;
       if (it.categoryId === UPLOADS_CAT) it.categoryId = '';       // the legacy marker is not a category
+      // (phase V60.2) A B-roll lies in its model's folder (a clip of before told by its file's name); out of B-rolls, out of
+      // it - a folder of B-rolls is no folder of Uploads.
+      if (to === 'birols') {
+        const f = MF.folderFor(MF.modelOf(Object.assign({}, it, { categoryId: '' }), { byName: true }));
+        it.categoryId = f.id; it.categoryLabel = f.label;
+      } else if (from === 'birols') { it.categoryId = ''; it.categoryLabel = ''; }
       stamp(it);
       src.write(srcList);
       // Another shelf is another folder.
@@ -1880,6 +1909,11 @@ function _kindOne(fromIn, idIn, toIn) {
         status: 'done',
       });
       if (to === 'uploads') moved.source = 'upload';
+      // (phase V60.2) A hook made a B-roll: into its model's folder - Other, unless its file's name says (a clip of before).
+      if (to === 'birols') {
+        const f = MF.folderFor(MF.modelOf(moved, { byName: true }));
+        moved.categoryId = f.id; moved.categoryLabel = f.label;
+      }
     }
     const dstList = dst.read();
     dstList.unshift(moved);
@@ -2329,7 +2363,7 @@ function _fileRecord(b) {
   if (byId) {
     rec.categoryId = byId.id;
     rec.categoryLabel = byId.label;
-  } else if (categoryLabel && kind !== 'hooks') {
+  } else if (categoryLabel && kind !== 'hooks' && kind !== 'birols') {
     try {
       const { cat } = LC.add(kind === 'uploads' ? 'uploads' : kind, String(categoryLabel));
       rec.categoryId = cat.id;
@@ -2356,6 +2390,18 @@ function _fileRecord(b) {
   }
   if (+b.duration > 0) rec.duration = Math.round(+b.duration * 100) / 100;
   if (+b.w > 0 && +b.h > 0) { rec.w = +b.w; rec.h = +b.h; }
+  // (phase V60.2, the owner's (дг4а), (дг10а)) A B-roll lies in the folder of the model that made it - a piece its clip's, a
+  // file brought in Other's: a group asked for by name inside that folder, one of another model's refused in words.
+  if (kind === 'birols') {
+    const model = MF.modelOf(Object.assign({}, rec, { categoryId: '' }));
+    if (!rec.categoryId && categoryLabel) {
+      const g = MF.groupFor(model, String(categoryLabel));
+      rec.categoryId = g.id; rec.categoryLabel = g.label;
+    } else {
+      const t = MF.targetFor(rec, rec.categoryId, { model });
+      rec.categoryId = t.id; rec.categoryLabel = t.label;
+    }
+  }
   list.unshift(rec);
   store.write(list);
   // Filed means placed: the file leaves media/work/ (or wherever it was) for its kind and
@@ -2433,11 +2479,17 @@ router.get('/library/cats', (_req, res) => {
   try {
     const byKind = {};
     const state = LC.read();
+    // (phase V60.2) B-rolls: which model's folder each lies in (`model` - a dropdown offers a clip its own model's), and a
+    // model's folder with nothing under it is not offered ((дг9б)).
+    const bUsed = new Set();
+    for (const e of RECORD_STORES.birols.read()) if (e && e.categoryId) bUsed.add(MF.modelOfCat(state, e.categoryId));
     for (const k of LC.KINDS) {
       // (phase V57) `closed` - the references of Environments / Lookbooks and what is under them: a dropdown offers them only
       // as where a picture already is (lib/library-cats.js closedWhy).
       const list = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own, locked: c.locked, title: c.title,
-        parent: c.parent || '', trail: c.trail || [c.title], ...(LC.closedWhy(k, c.id, state) ? { closed: true } : {}) }));
+        parent: c.parent || '', trail: c.trail || [c.title], ...(LC.closedWhy(k, c.id, state) ? { closed: true } : {}),
+        ...(k === 'birols' ? { model: MF.modelOfCat(state, c.id) } : {}) }))
+        .filter(c => !(k === 'birols' && MF.isModelCat(c.id) && !bUsed.has(c.model)));
       const kids = (p) => list.filter(c => c.parent === p)
         .sort((a, b) => (Number(!!b.locked) - Number(!!a.locked)) || _abc(a.title || a.label, b.title || b.label));
       const out = [];
@@ -2454,6 +2506,8 @@ router.post('/library/cats', (req, res) => {
     const b = req.body || {};
     const kind = String(b.kind || '');
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be one of ' + LC.KINDS.join(', ') });
+    // (phase V60.2) Filed by name at the top of B-rolls - there is no such place: the top is the models' folders.
+    if (kind === 'birols' && !('parent' in b)) return res.status(409).json({ success: false, error: LC.MODELS_TOP });
     // (phase V54) A folder made where the person asked - in `parent`, or the kind itself.
     const { cat, created } = ('parent' in b) ? LC.make(kind, b.label, String(b.parent || '')) : LC.add(kind, b.label);
     res.json({ success: true, cat, created });
