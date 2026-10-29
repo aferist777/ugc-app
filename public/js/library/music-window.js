@@ -1,35 +1,50 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE LIBRARY'S MUSIC WINDOW (phase V59, the owner 2026-10-29: "надо бы еще попап с генератором музыки вложить в library.
    по аналогии с окружениями и лукбуками ... конкретно suno взять и в попап сделать генератор музыки в library") - Suno's
-   generator in a window over the Media shelf, the almanac's size (js/gen-window.js openFrame, 860×560, as the generators of
-   environments and lookbooks), the gallery and the tree staying where they are behind it.
+   generator in a window over the Media shelf (js/gen-window.js openFrame), the gallery and the tree staying where they are
+   behind it. Phase V59.1 (the owner 2026-10-29, after the first look; (мз1а)-(мз9а)) gave it its present shape:
 
+     head     the MODE's name - "Suno · Simple · background, no vocals" / "Suno · Custom · title, style, lyrics" /
+              "Suno · Lyrics" - and a "?" right of it: a press shows how the mode works (on the stack of layers, as the
+              SFX search's "?" - js/sound/sites.js); the fields it speaks of have short hints on hover
      left     the settings: the mode (Simple, Custom, Lyrics - (мг1а): no Sounds, they lie in SFX), Suno's model (V6 /
-              V6_MINI / V6_WILD, remembered - (мг10а)), in Simple a highlights mood, the length (a number - there is no video
-              here), the folded chips, the price, the almanac at the foot
-     middle   the constructor of the mode and "generate" - js/sound/suno-form.js, the one Merge's "/ generate audio" is
-              built from; under it the line of the last press ("in Alerts · …"), and in Lyrics the texts written last
+              V6_MINI / V6_WILD, remembered - (мг10а)), "Length [46] s" in one line, the folded chips; their notes are
+              hover hints. No highlights mood (a mood's tracks are Merge's) and no price box. Its width is the person's -
+              the sash right of it, remembered (`lib_music_sash_v1`)
+     right    the gold card - the mode's fields only (js/sound/suno-form.js, the one Merge's "/ generate audio" is built
+              from); in Lyrics the texts under it, a row each (▸ title - text): the last press's open, the earlier
+              presses of this window folded below, the newest on top; each with "save" (Music -> Lyrics), "use in
+              custom", "copy"
+     foot     under the right column: ALMANAC on the left, the line of the last press ("in Alerts · …"), and at the
+              right edge where the tracks go ("into Music → Pop"), the price and "generate" ("write the lyrics")
+
+   1100×720, smaller on a smaller screen ((мз4а)).
 
    NO "MADE HERE" ((мг5б)): the window stays open after "generate", says the press is in Alerts, and what Suno makes lands in
    the gallery behind it - the opener reads the tree and the gallery again and outlines the new tracks while their folder is
    open (`onLanded`). WHERE THEY GO ((мг4а)): the folder under Music the window was opened on - Music itself, or a folder of
-   the person's in it; a highlights mood's preset files its two tracks into Music -> highlights -> that mood whatever is open,
-   and highlights or a mood open without one - Music's root (lib/audio-gens.js `_intoOf`, the server's rule). Simple's
-   writer writes as for a blank project (lib/audio-writer-rules.js). The Alerts row leads to that folder with the press's
-   tracks outlined once they are filed (js/alerts-bell.js _hrefOf, `where.spot.view` 'musicmake'), to the folder alone while
-   it runs or when it failed.
+   the person's in it; highlights, its moods and Lyrics open - Music's root, and the foot says why (lib/audio-gens.js
+   `_intoOf`, the server's rule). Simple's writer writes as for a blank project (lib/audio-writer-rules.js). The Alerts row
+   leads to that folder with the press's tracks outlined once they are filed (js/alerts-bell.js _hrefOf, `where.spot.view`
+   'musicmake'), to the folder alone while it runs or when it failed.
 
-     open(o)    o: { place() -> the folder open { key, cat?, folder?, label, trail? }, anchor, onLanded(gen, dest), onClose }
+     open(o)    o: { place() -> the folder open { key, cat?, folder?, label, trail? }, anchor, onLanded(gen, dest),
+                onSaved(), onClose, lyric? { title, text } - opened on Custom with that text (the event `ugc:lyric-use`) }
      follow(o)  the presses of this window still being made (a reload, the window closed) are followed with `o`'s onLanded
    What the person set is remembered in the browser (`lib_music_v1`).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openFrame } from '../gen-window.js';
-import { createSunoForm, el, api } from '../sound/suno-form.js';
+import * as Layers from '../layers.js';
+import { createSunoForm, el, api, ls, lsSet, copyText, titleOf } from '../sound/suno-form.js';
 
 const MODES = ['simple', 'custom', 'lyrics'];
 const VIEW = 'musicmake';
 const KEY = 'lib_music_v1';
+const KEY_SASH = 'lib_music_sash_v1';
+const SIZE = { w: 1100, h: 720 };             // (мз4а)
+const SET_W = 260, SET_MIN = 200, SET_MAX = 460, RIGHT_MIN = 480;
+const LYR_MAX = 12;                           // the presses of Lyrics shown
 
 let F = null;              // the form - made at the first open, kept for the page
 let _win = null;           // the window, while it is open
@@ -37,25 +52,32 @@ let _ui = null;            // its parts
 let _o = {};               // the opener's hooks - kept after the window closes: a press lands whether or not it is open
 let _going = false;
 const _runs = new Map();   // id -> { gen, dest } - the presses of this window being followed
-let _last = null;          // { gen, dest } - the last press: its line under "generate"
-let _lyrics = null;        // the last Lyrics record written: its texts under the Lyrics card
+let _last = null;          // { gen, dest } - the last press: its line in the foot
+let _err = '';             // the last press refused before it started - said in the foot until the next one
+let _lyricGens = [];       // this window's Lyrics records that wrote texts, newest first
+const _rowOpen = new Map(); // a text's row the person opened or folded: `<gen>:<i>` -> true / false
 let _looked = false;       // the server asked once for presses of this window still being made
 let _timer = 0;
+let _help = null;          // the "?" popup open
 
 const S = () => F.S;
+const _mode = () => (F.cat() ? F.cat().modes.find(x => x.id === S().mode) : null);
 
 function _form() {
   if (F) return F;
   F = createSunoForm({
     store: KEY, title: 'Generate music',
     base: { mode: 'simple' },
+    moods: false, compact: true,
     say: (t, bad) => _say(t, bad),
     paintCol: () => paintCol(),
     paintMake: () => paintMake(),
-    paintMakePrice: () => paintMakePrice(),
+    paintMakePrice: () => paintFoot(),
     setMode: (id) => setMode(id),
+    onSaved: () => { if (typeof _o.onSaved === 'function') _o.onSaved(); if (_ui && S().mode === 'lyrics') paintMake(); },
     // No video here: the length is said in seconds.
-    lengthNote: (mode) => (mode === 'simple' ? 'how long the music is - the bed comes out a little longer' : ''),
+    lengthNote: (mode) => (mode === 'simple' ? 'how long the music is - the bed comes out a little longer'
+      : mode === 'custom' ? 'how long the music is: 10–360 s' : ''),
   });
   if (!MODES.includes(F.S.mode)) F.S.mode = 'simple';
   return F;
@@ -65,8 +87,14 @@ function setMode(id) {
   if (!MODES.includes(id)) return;
   S().mode = id;
   F.save();
+  _err = '';
+  paint();
+}
+function paint() {
+  paintHead();
   paintCol();
   paintMake();
+  paintFoot();
 }
 
 let _sayT = 0;
@@ -81,16 +109,59 @@ function _say(text, bad) {
 }
 
 // ── where the tracks go ─────────────────────────────────────────────────────
-// { node: the tree's key of the folder they lie in, into: the folder's id for the server ('' - Music's root or a mood),
+// { node: the tree's key of the folder they lie in, into: the folder's id for the server ('' - Music's root),
 //   label: its path in words, note: why it is not the folder open }.
 function _dest() {
   const p = (typeof _o.place === 'function' ? _o.place() : null) || null;
-  const mood = F.preset();
   if (S().mode === 'lyrics') return { node: p && p.key ? p.key : 'music', into: '', label: '' };
-  if (mood) return { node: 'music:highlights:' + mood.id, into: '', label: 'Music → highlights → ' + mood.label };
-  if (p && p.cat) return { node: p.key, into: p.cat, label: 'Music → ' + (p.trail || p.label) };
+  const key = String((p && p.key) || '');
+  const hl = /^music:highlights(:|$)/.test(key) || (p && p.folder === 'highlights');
+  const lyr = key === 'music:lyrics';
+  if (p && p.cat && !hl && !lyr) return { node: key, into: p.cat, label: 'Music → ' + (p.trail || p.label) };
   return { node: 'music', into: '', label: 'Music',
-    note: p && p.folder === 'highlights' ? 'highlights and its moods take only what a mood\'s preset makes' : '' };
+    note: hl ? 'highlights takes only a mood\'s preset - made in Merge' : lyr ? 'Lyrics holds texts only' : '' };
+}
+
+// ── the head: the mode's name and its "?" ───────────────────────────────────
+function paintHead() {
+  if (!_win || !_win.alive()) return;
+  const m = _mode();
+  _win.setCrumbs([{ label: 'Suno · ' + (m ? m.label : 'music') }]);
+  const q = el('button', 'au-q', '?');
+  q.type = 'button';
+  q.title = 'How this mode works';
+  q.setAttribute('aria-label', 'How this mode works');
+  q.addEventListener('click', () => _openHelp(q));
+  _win.crumbs.appendChild(q);
+  _closeHelp();
+}
+function _closeHelp() {
+  if (!_help) return;
+  const h = _help;
+  _help = null;
+  h.box.remove();
+  document.removeEventListener('mousedown', h.away, true);
+  Layers.close(h.layer);
+  if (h.anchor.isConnected) h.anchor.classList.remove('is-on');
+}
+// The mode's instruction - what the gold card used to say - under the "?"; pressed again it folds.
+function _openHelp(anchor) {
+  if (_help) { const was = _help.anchor === anchor; _closeHelp(); if (was) return; }
+  const m = _mode();
+  const d = _dest();
+  const box = el('div', 'au-qpop');
+  box.appendChild(el('b', null, 'Suno · ' + (m ? m.label : '')));
+  box.appendChild(el('div', null, F.helpText('AUDIO → ' + (d.label || 'Music')) || ''));
+  document.body.appendChild(box);
+  const r = anchor.getBoundingClientRect();
+  const bw = box.offsetWidth, bh = box.offsetHeight;
+  box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - bw - 6, r.left - 12))) + 'px';
+  box.style.top = Math.round(r.bottom + 6 + bh > window.innerHeight - 6 ? Math.max(6, r.top - bh - 6) : r.bottom + 6) + 'px';
+  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor) _closeHelp(); };
+  const layer = Layers.open(box, { modal: false, name: 'how the mode works', onEsc: _closeHelp });
+  _help = { box, away, layer, anchor };
+  anchor.classList.add('is-on');
+  document.addEventListener('mousedown', away, true);
 }
 
 // ── the settings column ─────────────────────────────────────────────────────
@@ -108,71 +179,103 @@ function paintCol() {
     return r;
   };
   const sep = (text) => col.appendChild(el('div', 'mv3-ig-sep', text));
+  // A missing key stays in words: it is why nothing would come.
   row('Mode', F.modeSelect(CAT.modes.filter(m => MODES.includes(m.id))),
     CAT.keys && !CAT.keys.kie && !CAT.fake ? 'No kie.ai key - add it on Admin → API keys.' : '');
-  if (S().mode !== 'lyrics') row('Model', F.modelSelect(), 'one price for all three');
-  F.moodRow(row);
+  if (S().mode !== 'lyrics') row('Model', F.modelSelect());
   F.lengthRows(row, sep);
   F.chipRows(col);
-  F.priceBox(col);
-  _ui.alm.textContent = '';
-  F.almanacButton(_ui.alm);
 }
 
-function paintMakePrice() {
-  const s = _ui && _ui.make.querySelector('.au-go-row .au-muted');
-  if (s) s.textContent = F.priceText();
-}
-
-// ── the constructor ─────────────────────────────────────────────────────────
+// ── the right column: the gold card, and Lyrics' texts under it ────────────────
 function paintMake() {
   if (!_ui || !F.cat()) return;
   const host = _ui.make;
   host.textContent = '';
-  const m = F.cat().modes.find(x => x.id === S().mode);
-  if (!m) return;
-  const d = _dest();
+  if (!_mode()) return;
   const card = el('div', 'au-card');
-  const h = el('div', 'au-card-h');
-  h.appendChild(document.createTextNode('Suno · ' + m.label));
-  h.appendChild(el('span', 'au-muted', S().mode === 'lyrics' ? 'text only - nothing is filed'
-    : 'into ' + d.label + (d.note ? ' - ' + d.note : '')));
-  card.appendChild(h);
-  const bot = el('div', 'au-bot');
-  bot.appendChild(el('div', 'au-bot-ico', '♪'));
-  bot.appendChild(el('div', 'au-bot-tx', F.helpText('AUDIO → ' + (d.label || 'Music')) || ''));
-  card.appendChild(bot);
   F.paintFields(card);
-  const goRow = el('div', 'au-go-row');
-  const go = el('button', 'au-go', S().mode === 'lyrics' ? 'write the lyrics' : 'generate');
-  go.type = 'button';
-  go.addEventListener('click', () => _generate(go));
-  goRow.appendChild(go);
-  goRow.appendChild(el('span', 'au-muted', F.priceText()));
-  card.appendChild(goRow);
-  const line = el('div', 'au-line');
-  card.appendChild(line);
-  card.appendChild(el('div', 'au-err'));
   host.appendChild(card);
-  _ui.line = line;
-  _paintLine();
-  // Lyrics: the texts written last, each with "use in custom".
-  if (S().mode === 'lyrics' && _lyrics && (_lyrics.lyrics || []).length) {
-    const box = el('div', 'au-lyrs');
-    box.appendChild(el('div', 'au-made-h', 'written last · ' + (_lyrics.said || '')));
-    for (const l of _lyrics.lyrics) box.appendChild(F.lyricCard(l));
-    host.appendChild(box);
-  }
+  if (S().mode === 'lyrics') host.appendChild(_lyricsList());
 }
 
-// The line of the last press: where it is in Alerts, what came of it.
+// (мз5а) Every Lyrics press of this window: the last one's texts open, the earlier ones folded below, the newest on top.
+function _lyricsList() {
+  const box = el('div', 'au-lyrs');
+  const gens = _lyricGens.slice(0, LYR_MAX);
+  if (!gens.length) {
+    box.appendChild(el('div', 'au-note', 'The texts come here - a row each, to save into Music → Lyrics or to use in Custom.'));
+    return box;
+  }
+  gens.forEach((g, gi) => {
+    const grp = el('div', 'au-lyr-g');
+    grp.appendChild(el('div', 'au-made-h', (gi ? 'written ' : 'written last · ') + _when(g.doneAt || g.at) + (g.said ? ' · ' + g.said : '')));
+    (g.lyrics || []).forEach((l, i) => grp.appendChild(_lyricRow(l, g, gi === 0, g.id + ':' + i)));
+    box.appendChild(grp);
+  });
+  return box;
+}
+function _lyricRow(l, g, latest, key) {
+  const open = _rowOpen.has(key) ? _rowOpen.get(key) : latest;
+  const row = el('div', 'au-lr' + (open ? ' is-open' : ''));
+  const h = el('div', 'au-lr-h');
+  const t = el('button', 'au-lr-t');
+  t.type = 'button';
+  t.title = 'Open or fold the text';
+  const peek = String(l.text || '').split('\n').map(s => s.trim()).filter(s => s && !/^\[[^\]]*\]$/.test(s)).slice(0, 2).join(' / ');
+  t.append(el('span', 'au-chips-tw', '▸'), el('b', null, l.title || titleOf(l.text)), el('span', 'au-lr-peek', peek ? '— ' + peek : ''));
+  t.addEventListener('click', () => {
+    const now = !row.classList.contains('is-open');
+    _rowOpen.set(key, now);
+    row.classList.toggle('is-open', now);
+  });
+  const use = el('button', 'au-link', 'use in custom');
+  use.type = 'button';
+  use.addEventListener('click', () => F.useLyric(l));
+  const copy = el('button', 'au-link', 'copy');
+  copy.type = 'button';
+  copy.addEventListener('click', async () => { const ok = await copyText(l.text); _say(ok ? 'Copied.' : 'Not copied - the clipboard refused it.', !ok); });
+  h.append(t, F.saveButton(l, g), use, copy);
+  row.append(h, el('pre', 'au-lr-text', l.text || ''));
+  return row;
+}
+function _when(iso) {
+  const d = new Date(iso || Date.now());
+  if (isNaN(d)) return '';
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const now = new Date();
+  return d.toDateString() === now.toDateString() ? hm : String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hm;
+}
+
+// ── the foot: ALMANAC, the line of the last press, where the tracks go, the price, "generate" ─────────────────────────
+function paintFoot() {
+  if (!_ui) return;
+  const lyr = S().mode === 'lyrics';
+  const d = _dest();
+  const into = lyr ? 'texts only · save → Music → Lyrics' : 'into ' + d.label + (d.note ? ' - ' + d.note : '');
+  _ui.into.textContent = into;
+  _ui.into.title = lyr ? 'Texts only - nothing is filed by itself; "save" keeps a text in Music → Lyrics' : into;
+  const p = F.price();
+  _ui.price.textContent = '';
+  if (p.big) {
+    _ui.price.appendChild(el('b', null, p.big));
+    _ui.price.appendChild(el('span', null, p.small + (F.cat() && F.cat().fake ? ' · FAKE' : '')));
+  }
+  _ui.price.title = p.big ? 'per press · ' + p.big + ' · ' + p.small : '';
+  _ui.go.textContent = lyr ? 'write the lyrics' : 'generate';
+  _paintLine();
+}
+
+// The line of the last press: where it is in Alerts, what came of it - or why it did not start.
 function _paintLine() {
   const line = _ui && _ui.line;
-  if (!line || !line.isConnected) return;
+  if (!line) return;
+  line.className = 'au-line';
+  if (_err) { line.textContent = _err; line.title = _err; line.classList.add('is-bad'); return; }
   const r = _last;
   const g = r && r.gen;
   line.textContent = '';
-  line.className = 'au-line';
+  line.title = '';
   if (!g) return;
   const lyr = g.kind === 'lyrics';
   let t;
@@ -181,26 +284,27 @@ function _paintLine() {
     line.classList.add('is-on');
   } else if (g.state === 'done') {
     const n = (g.results || []).length;
-    t = lyr ? 'the lyrics are written - ' + (S().mode === 'lyrics' ? 'below' : 'in Lyrics')
+    t = lyr ? 'the lyrics are written - ' + (S().mode === 'lyrics' ? 'above' : 'in Lyrics')
       : 'in Alerts · done - ' + n + ' track' + (n === 1 ? '' : 's') + ' in ' + (r.dest.label || 'Music');
   } else {
     t = (lyr ? '' : 'in Alerts · ') + (g.refused ? 'refused' : 'failed') + ' - ' + (g.error || 'it did not come');
     line.classList.add('is-bad');
   }
   line.textContent = t;
+  line.title = t;
 }
 
 async function _generate(btn) {
   if (_going || !F.cat()) return;
   _going = true;
   btn.disabled = true;
-  const err = btn.closest('.au-card').querySelector('.au-err');
-  err.textContent = '';
+  _err = '';
+  _paintLine();
   try {
     const b = F.body('blank');
     if (!b) throw new Error('nothing to ask for in this mode');
     const d = _dest();
-    const m = F.cat().modes.find(x => x.id === S().mode);
+    const m = _mode();
     // The Alerts row keeps `spot`'s key, view and step (lib/alerts.js): the key is the tree's key of the folder; the words of
     // it stay on the record of the press (lib/audio-gens.js keeps `where` as it is) for the line after a reload.
     b.where = {
@@ -210,9 +314,9 @@ async function _generate(btn) {
     if (d.into) b.into = d.into;
     const r = await F.press(b);
     _track(r.gen, d);
-    paintMake();
   } catch (e) {
-    err.textContent = e.message;
+    _err = e.message;
+    _paintLine();
   } finally {
     _going = false;
     btn.disabled = false;
@@ -224,10 +328,17 @@ function _track(gen, dest) {
   if (!gen || !gen.id) return;
   _last = { gen, dest };
   if (gen.state === 'pending') _runs.set(gen.id, { gen, dest });
+  _paintLine();
   _tick();
 }
 function _tick() {
   if (!_timer && _runs.size) _timer = setTimeout(_poll, 3000);
+}
+function _addLyrics(g) {
+  if (!g || g.kind !== 'lyrics' || g.state !== 'done' || !(g.lyrics || []).length) return false;
+  _lyricGens = [g, ..._lyricGens.filter(x => x.id !== g.id)]
+    .sort((a, b) => String(b.doneAt || b.at || '').localeCompare(String(a.doneAt || a.at || '')));
+  return true;
 }
 async function _poll() {
   _timer = 0;
@@ -240,17 +351,18 @@ async function _poll() {
     if (_last && _last.gen.id === id) _last.gen = g;
     if (g.state === 'pending') continue;
     _runs.delete(id);
-    if (g.kind === 'lyrics') { if (g.state === 'done') { _lyrics = g; lyricsCame = true; } }
+    if (g.kind === 'lyrics') { if (_addLyrics(g)) lyricsCame = true; }
     else if (g.state === 'done' && typeof _o.onLanded === 'function') {
       try { await _o.onLanded(g, r.dest); } catch (e) { /* the opener's */ }
     }
   }
-  if (lyricsCame && _ui && S().mode === 'lyrics') paintMake(); else _paintLine();
+  if (lyricsCame && _ui && S().mode === 'lyrics') paintMake();
+  _paintLine();
   _tick();
 }
 
 // The presses of this window the server is still making - after a reload, or with the window closed and opened again -
-// are followed to their end; and the lyrics written last are shown again. Asked once per page.
+// are followed to their end; and the texts Lyrics wrote here are shown again. Asked once per page.
 async function _pickUp() {
   if (_looked) return;
   _looked = true;
@@ -260,11 +372,45 @@ async function _pickUp() {
   const destOf = (g) => ({ node: g.where.spot.key || 'music', into: g.into || '', label: g.where.spot.label || '' });
   for (const g of mine.slice().reverse()) {
     if (g.state === 'pending' && !_runs.has(g.id)) _track(g, destOf(g));
+    _addLyrics(g);
   }
-  if (!_lyrics) _lyrics = mine.find(g => g.kind === 'lyrics' && g.state === 'done') || null;
   if (!_last && mine[0]) _last = { gen: mine[0], dest: destOf(mine[0]) };
-  if (_ui) paintMake();
+  if (_ui) { paintMake(); _paintLine(); }
 }
+
+// ── the sash between the columns (remembered, `lib_music_sash_v1`) ───────────
+function _setW(w) {
+  if (!_ui || !_win) return SET_W;
+  const room = _win.box.clientWidth - RIGHT_MIN;
+  const v = Math.round(Math.max(SET_MIN, Math.min(Math.max(SET_MIN, Math.min(SET_MAX, room)), +w || SET_W)));
+  _ui.set.style.flexBasis = v + 'px';
+  return v;
+}
+function _wireSash() {
+  const { sash, set } = _ui;
+  sash.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    sash.setPointerCapture(e.pointerId);
+    sash.classList.add('is-on');
+    const x0 = e.clientX, w0 = set.getBoundingClientRect().width;
+    let w = w0;
+    const move = (ev) => { w = _setW(w0 + ev.clientX - x0); };
+    const up = () => {
+      sash.removeEventListener('pointermove', move);
+      sash.removeEventListener('pointerup', up);
+      sash.removeEventListener('pointercancel', up);
+      sash.classList.remove('is-on');
+      lsSet(KEY_SASH, w);
+    };
+    sash.addEventListener('pointermove', move);
+    sash.addEventListener('pointerup', up);
+    sash.addEventListener('pointercancel', up);
+  });
+  // A double press: back to the width it came with.
+  sash.addEventListener('dblclick', () => lsSet(KEY_SASH, _setW(SET_W)));
+}
+const _onResize = () => { if (_ui) _setW(ls(KEY_SASH, SET_W)); };
 
 /** The presses of this window still being made are followed with `o.onLanded` - the Library calls it as it starts. */
 export function follow(o) {
@@ -272,39 +418,61 @@ export function follow(o) {
   _pickUp();
 }
 
-/** The window - one per page: pressed again while it is open, the same one stays (its place followed anew). */
+/** The window - one per page: pressed again while it is open, the same one stays (its place followed anew). `o.lyric`
+ *  { title, text } - on Custom with that text (the title only when it is empty). */
 export async function open(o) {
-  _o = Object.assign({}, _o, o || {});
+  const { lyric, ...hooks } = o || {};
+  _o = Object.assign({}, _o, hooks);
   _form();
-  if (_win && _win.alive()) { paintCol(); paintMake(); return _win; }
+  if (_win && _win.alive()) {
+    if (lyric && F.cat()) F.useLyric(lyric); else if (F.cat()) paint();
+    return _win;
+  }
   _win = openFrame({
-    name: 'generate music', anchor: _o.anchor, cls: 'is-music',
+    name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: SIZE,
     onClose: () => {
       F.closeAlmanac();
+      _closeHelp();
+      window.removeEventListener('resize', _onResize);
       _win = null;
       _ui = null;
       if (typeof _o.onClose === 'function') _o.onClose();
     },
   });
-  _win.setCrumbs([{ label: 'generate music' }]);
+  _win.setCrumbs([{ label: 'Suno' }]);
   const body = _win.body;
   body.classList.add('au-win');
   const set = el('div', 'mv3-ig-set au-set');
   const col = el('div', 'mv3-ig-scroll');
-  const alm = el('div', 'au-alm-foot');
-  set.append(col, alm);
+  set.appendChild(col);
+  const sash = el('div', 'au-msash');
+  sash.title = 'Drag to widen the settings - a double press puts it back';
+  const right = el('div', 'au-right');
   const mid = el('div', 'au-mid');
   const status = el('div', 'au-status');
   status.hidden = true;
   const make = el('div', 'au-make');
   mid.append(status, make);
-  body.append(set, mid);
-  _ui = { col, alm, mid, status, make, line: null };
+  const foot = el('div', 'au-foot');
+  const alm = el('div', 'au-foot-alm');
+  const line = el('div', 'au-line');
+  const into = el('div', 'au-into');
+  const price = el('div', 'au-price');
+  const go = el('button', 'au-go', 'generate');
+  go.type = 'button';
+  go.addEventListener('click', () => _generate(go));
+  foot.append(alm, line, into, price, go);
+  right.append(mid, foot);
+  body.append(set, sash, right);
+  _ui = { set, col, sash, mid, status, make, alm, line, into, price, go };
+  _setW(ls(KEY_SASH, SET_W));
+  _wireSash();
+  window.addEventListener('resize', _onResize);
   col.appendChild(el('div', 'au-note', 'reading…'));
   const win = _win;
   if (!(await F.ready()) || win !== _win) return win;
-  paintCol();
-  paintMake();
+  F.almanacButton(alm);
+  if (lyric) F.useLyric(lyric); else paint();
   _pickUp();
   return win;
 }

@@ -59,7 +59,9 @@ const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vh
 const _frames = [];                        // open, the top last
 
 /**
- * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls }.
+ * A window over the page. `o`: { name, anchor (an element it stands over), onClose, cls, size }.
+ *   size  { w, h } - another size than the almanac's (phase V59.1, (мз4а): the Library's music window, 1100×720); a
+ *         smaller screen still makes it smaller
  * -> { box, head, crumbs, body, close(), alive(), isTop(), setCrumbs(list) }
  *    setCrumbs([{ label, on?, act?: { label, title, on } }]) - the last is where the window is; the others go back.
  */
@@ -80,7 +82,8 @@ export function openFrame(o) {
   document.body.appendChild(ov);
   const place = () => {
     const W = window.innerWidth, H = window.innerHeight, M = 8;
-    const w = Math.min(W_WIN, W - 2 * M), h = Math.min(H_WIN, H - 2 * M);
+    const sz = o.size || {};
+    const w = Math.min(+sz.w || W_WIN, W - 2 * M), h = Math.min(+sz.h || H_WIN, H - 2 * M);
     const a = o.anchor && o.anchor.isConnected ? o.anchor.getBoundingClientRect() : null;
     const cx = a && a.width ? a.left + a.width / 2 : W / 2;
     const cy = a && a.height ? a.top + a.height / 2 : H / 2;

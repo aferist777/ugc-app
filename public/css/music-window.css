@@ -1,16 +1,54 @@
-/* ── The Library's music window (phase V59, js/library/music-window.js) ──
-   Suno's generator in the generators' window (css/gen-window.css, .gw-ov.is-music): the settings column on the left, the
-   constructor in the middle - drawn by Merge's css/mv3-audio.css (.au-*), linked on the Library's page too. What Merge's
-   own sheets give its view and the Library does not load is here, kept to this window: the chats' settings column
-   (css/mv3-imagen.css .mv3-ig-*), the almanac's gold button and its window (.mv3-vc-almanac, .hp), the chips
-   (css/merge-v3.css .mv3-chip). */
+/* ── The Library's music window (phase V59, V59.1; js/library/music-window.js) ──
+   Suno's generator in the generators' window (css/gen-window.css, .gw-ov.is-music), 1100×720: the mode's name and its "?" in
+   the head, the settings column on the left, the sash, the right column - the gold card (drawn by Merge's css/mv3-audio.css,
+   .au-*, linked on the Library's page too) and under it the foot: ALMANAC, the line of the last press, where the tracks go,
+   the price, "generate". What Merge's own sheets give its view and the Library does not load is here, kept to this window:
+   the chats' settings column (css/mv3-imagen.css .mv3-ig-*), the almanac's gold button and its window (.mv3-vc-almanac,
+   .hp), the chips (css/merge-v3.css .mv3-chip). */
 .gw-body.au-win{ flex-direction:row }
-.gw-body.au-win .au-mid{ min-width:0 }
 
 .gw-ov.is-music .mv3-ig-set{
-  flex:0 0 232px; display:flex; flex-direction:column; min-height:0;
-  border-right:1px solid var(--border); background:var(--surface);
+  flex:0 0 260px; display:flex; flex-direction:column; min-height:0; min-width:0;
+  background:var(--surface);
 }
+/* the sash: the settings column's width, dragged and remembered */
+.au-msash{ flex:0 0 5px; cursor:col-resize; border-left:1px solid var(--border); background:transparent; touch-action:none }
+.au-msash:hover, .au-msash.is-on{ background:color-mix(in oklch, var(--primary) 35%, transparent) }
+.au-right{ flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column }
+.gw-body.au-win .au-mid{ flex:1 1 auto; min-width:0; min-height:0 }
+
+/* the head: the mode's name, its "?" - a press shows how the mode works */
+.gw-ov.is-music .gw-crumb.is-here{ overflow:visible }
+.au-q{
+  flex:0 0 auto; width:19px; height:19px; padding:0; margin-left:2px; border-radius:50%; cursor:pointer;
+  border:1px solid var(--border); background:none; color:var(--muted); font:700 10.5px/17px var(--font); text-align:center;
+}
+.au-q:hover, .au-q.is-on{ color:var(--gold); border-color:var(--gold) }
+.au-qpop{
+  position:fixed; z-index:9300; width:min(420px, calc(100vw - 12px)); box-sizing:border-box; padding:10px 13px 12px;
+  background:var(--surface); border:1px solid var(--gold); border-radius:var(--r-sm); box-shadow:0 10px 30px rgba(0,0,0,.45);
+  color:var(--ink); font:500 12px/1.55 var(--font);
+}
+.au-qpop b{ display:block; margin-bottom:5px; color:var(--gold); font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase }
+
+/* "Length [46] s" in one line */
+.gw-ov.is-music .au-len-one{ flex-wrap:nowrap; margin-top:6px }
+.gw-ov.is-music .au-len-one > label{ flex:0 0 auto; margin-right:2px; font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted) }
+
+/* the foot under the right column */
+.au-foot{
+  flex:0 0 auto; display:flex; align-items:center; gap:12px; min-width:0;
+  padding:8px 16px 9px 12px; border-top:1px solid var(--border); background:var(--surface);
+}
+.au-foot-alm{ flex:0 0 auto }
+.gw-ov.is-music .au-foot .mv3-vc-almanac{ margin:0; height:30px }
+.au-foot .au-line{ display:block; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.au-into{ flex:0 1 auto; margin-left:auto; max-width:300px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  color:var(--muted); font:500 11px/1.3 var(--font) }
+.au-price{ flex:0 0 auto; display:flex; align-items:baseline; gap:6px; white-space:nowrap }
+.au-price b{ font:700 13px/1 var(--font); color:var(--ink); font-variant-numeric:tabular-nums }
+.au-price span{ font:500 10.5px/1.2 var(--font); color:var(--muted) }
+.au-foot .au-go{ flex:0 0 auto }
 .gw-ov.is-music .mv3-ig-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:11px 12px }
 .gw-ov.is-music .mv3-ig-row{ display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:3px 0 }
 .gw-ov.is-music .mv3-ig-row > label{ font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted) }
@@ -45,14 +83,27 @@
 .gw-ov.is-music .mv3-chip:hover{ color:var(--ink); border-color:var(--muted) }
 .gw-ov.is-music .mv3-chip.on{ background:var(--primary); border-color:var(--primary); color:oklch(.99 0 0) }
 
-/* The line of the last press, under "generate": in Alerts, done, failed. */
+/* The line of the last press, in the foot: in Alerts, done, failed. */
 .au-line{ font:600 10.5px/1.4 var(--font); color:var(--muted) }
 .au-line:empty{ display:none }
 .au-line.is-on{ color:var(--accent) }
 .au-line.is-bad{ color:var(--danger) }
-/* Lyrics: the texts written last, under the card. */
-.au-lyrs{ display:flex; flex-direction:column; gap:8px }
-.au-lyrs .au-made-h{ padding:2px 0 0 }
+/* Lyrics: every press's texts under the card, a row each (▸ title - text) - the last press's open. */
+.au-lyrs{ display:flex; flex-direction:column; gap:12px; margin-top:12px }
+.au-lyr-g{ display:flex; flex-direction:column; gap:5px }
+.au-lyrs .au-made-h{ padding:2px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.au-lr{ border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg) }
+.au-lr.is-open{ border-color:var(--border) }
+.au-lr-h{ display:flex; align-items:center; gap:12px; padding:6px 10px }
+.au-lr-t{ flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:7px; padding:0; border:0; background:none;
+  color:var(--ink); font:600 12px/1.4 var(--font); text-align:left; cursor:pointer }
+.au-lr-t b{ flex:0 1 auto; min-width:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.au-lr-peek{ flex:1 1 auto; min-width:0; color:var(--muted); font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.au-lr.is-open .au-lr-peek{ display:none }
+.au-lr.is-open .au-chips-tw{ transform:rotate(90deg) }
+.au-lr-h .au-link{ flex:0 0 auto; white-space:nowrap }
+.au-lr-text{ display:none; margin:0; padding:0 12px 10px 26px; white-space:pre-wrap; font:12px/1.5 var(--font); color:var(--ink) }
+.au-lr.is-open .au-lr-text{ display:block }
 .gw-ov.is-music .sp{ flex:1 }
 
 /* The almanac's window over it - the chats' frame (css/mv3-imagen.css .hp), V34.A's notes in it (css/mv3-audio.css). */

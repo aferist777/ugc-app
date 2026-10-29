@@ -125,7 +125,9 @@ const MADE_KINDS = new Set(['environments', 'lookbooks']);
 const _madeNode = () => (_shelf === 'media' && _node && _node.make && MADE_KINDS.has(_node.make) ? _node.make : '');
 // The generator the bar's "New …" opens on the node selected: Environments' or Lookbooks' (the node itself), or (phase V59)
 // Music's - on Music or any folder under it. Upload stays beside it there (Music takes files).
-const _genNode = () => _madeNode() || (_shelf === 'media' && _node && _node.kind === 'music' ? 'music' : '');
+// (phase V59.1) Music -> Lyrics (kind 'lyrics', sub-session Q's) is a folder under Music too: the bar's "Generate music" stays.
+const _musicish = (n) => !!n && (n.kind === 'music' || n.kind === 'lyrics');
+const _genNode = () => _madeNode() || (_shelf === 'media' && _musicish(_node) ? 'music' : '');
 // THE NARRATORS (phase V28.2, the owner 2026-10-12): an area on the Scenarios shelf over the list or over the generator -
 // "Narrators" beside "New scenario", or the gear by the generator's Narrator field. `_makingOn` stays as it was under it,
 // so "←" goes back to where it was opened from: the list ("← Scenarios") or the generator ("← Generate script").
@@ -244,18 +246,25 @@ function _genLanded(kind, path) {
 // window over Media (js/library/music-window.js), the size of the almanac, the gallery and the tree staying behind it.
 // From Music's "+" in the tree (and its menu, and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
 // the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
-// moods take only a mood's preset - the window and the server say so).
-async function _openMusic(fromTree) {
+// moods take only a mood's preset - the window and the server say so). `lyric` (phase V59.1) - a saved text's "use in custom"
+// (the event `ugc:lyric-use`, sub-session Q's tile and viewer): the window on Custom with it, the gallery staying where it is.
+async function _openMusic(fromTree, lyric) {
   if (_shelf !== 'media' || !_tree) return;
-  if ((fromTree || !_node || _node.kind !== 'music') && (!_node || _node.key !== 'music')) {
+  if ((fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music')) {
     _tree.select('music', false);
     _node = _tree.selected();
     await _load({ checks: false });
   }
-  const at = _node && _node.kind === 'music' ? _node : null;
+  const at = _musicish(_node) ? _node : null;
   try {
-    await MW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), onLanded: _musicLanded });
+    await MW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), onLanded: _musicLanded, onSaved: _lyricsSaved, lyric });
   } catch (e) { _status((e && e.message) || 'The music generator did not open', 'err'); }
+}
+// (phase V59.1) A text saved by the window into Music -> Lyrics: the tree's numbers again, and the gallery while it shows Lyrics.
+async function _lyricsSaved() {
+  if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
+  _counts();
+  if (_shelf === 'media' && _node && _node.key === 'music:lyrics') await _load({ keepScroll: true, checks: false });
 }
 // The folder the window puts its tracks into, as the window wants it: its key, its folder's id, and its path under Music.
 function _musicPlace(n) {
@@ -1937,7 +1946,9 @@ function boot() {
   _wireScSash();
   _initTree();
   // (phase V59) The music window's presses still being made (a reload) - the gallery read again when they land.
-  MW.follow({ onLanded: _musicLanded });
+  MW.follow({ onLanded: _musicLanded, onSaved: _lyricsSaved });
+  // (phase V59.1) "use in custom" on a saved text - its tile or its viewer (js/sound/lyrics.js, which closes the viewer first).
+  window.addEventListener('ugc:lyric-use', (e) => { const l = e && e.detail; if (l && String(l.text || '').trim()) _openMusic(false, l); });
   // (phase V54) Several tiles picked on Media (js/tile-select.js).
   const grid = $('lib-grid');
   if (grid) {

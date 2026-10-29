@@ -50,6 +50,13 @@
 .au-chip.on{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
 .au-link{border:0; background:none; padding:0; cursor:pointer; color:var(--primary); font:500 11.5px var(--font)}
 .au-link:hover{text-decoration:underline}
+/* (phase V59.1) "save" of a text into Music -> Lyrics - "saved ✓" once it is there; Custom's links under the Lyrics field,
+   the dropdown of the saved texts over it */
+.au-link[disabled]{cursor:default; text-decoration:none; color:var(--muted)}
+.au-save.is-saved{color:var(--success)}
+.au-f-links{display:flex; align-items:baseline; gap:16px; flex-wrap:wrap}
+.au-sel.au-saved{margin-bottom:2px}
+.au-sel.au-saved[disabled]{color:var(--muted); cursor:default}
 .au-btn{padding:5px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink); font:600 11px/1 var(--font); cursor:pointer; white-space:nowrap}
 .au-btn:hover{border-color:var(--muted)}
 .au-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}

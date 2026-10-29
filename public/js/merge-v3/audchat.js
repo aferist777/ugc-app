@@ -178,7 +178,8 @@ function paintCol() {
   F.moodRow(row);
   F.lengthRows(row, sep);
   F.chipRows(col);
-  F.priceBox(col);
+  // (phase V59.1, the owner 2026-10-29: "в merge убери только ценники из левого столбца") No price box here: the price is
+  // beside "generate".
 
   // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press copies one (V34.F).
   _ui.alm.textContent = '';
@@ -531,7 +532,7 @@ function _genCard(g) {
       card.appendChild(again);
     }
   } else if (g.kind === 'lyrics') {
-    for (const l of (g.lyrics || [])) card.appendChild(_lyric(l));
+    for (const l of (g.lyrics || [])) card.appendChild(_lyric(l, g));
   } else {
     for (const r of (g.results || [])) card.appendChild(_result(r));
     // (phase V54) Made from a clip: where its track was laid, or why not.
@@ -619,8 +620,8 @@ function _result(r) {
   }
   return row;
 }
-// A text of Lyrics - the shared form's card ("use in custom", "copy", "all").
-const _lyric = (l) => F.lyricCard(l);
+// A text of Lyrics - the shared form's card ("use in custom", "save" - phase V59.1, "copy", "all").
+const _lyric = (l, g) => F.lyricCard(l, g);
 
 // The shelf's items by path: a result row's name, waveform and star - and what a lane is given when it is dragged.
 async function _index() {
@@ -932,4 +933,13 @@ export function initAudChat() {
   });
   Store.onChange(_onStore);
   _onStore();
+  // (phase V59.1) "use in custom" on a tile of Music -> Lyrics or in its text's viewer (sub-session Q's, the event
+  // `ugc:lyric-use` { id, title, text }): this view on Suno's Custom with that text - the title only when it is empty.
+  window.addEventListener('ugc:lyric-use', async (e) => {
+    const l = (e && e.detail) || {};
+    if (!String(l.text || '').trim()) return;
+    await openAudio();
+    if (!CAT || !_shown) return;
+    F.useLyric(l);
+  });
 }
