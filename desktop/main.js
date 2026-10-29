@@ -3,7 +3,8 @@
 /* UGC Studio's desktop shell - the Electron main process.
 
    It settles the library, runs the server (desktop/supervisor.js) and shows the app in a window
-   of its own, full screen. The pages still do everything through the server over loopback, as
+   of its own, maximised (phase V60: full screen is F11 or the strip's button, never at the start).
+   The pages still do everything through the server over loopback, as
    they did in a browser tab. The shell supplies what the tab used to get from the browser: the
    window, downloads, links that leave the app, a context menu, the usual keys.
 
@@ -96,7 +97,7 @@ function run() {
   const outside = (url) => { if (/^(https?|mailto):/i.test(url)) shell.openExternal(url); };
 
   // Full screen and back - F11, and the strip's own button (phase V19). Out of full screen the window is maximised,
-  // with Windows' own title bar.
+  // with Windows' own title bar - (phase V60, the owner's (пп3а)) the way it always opens; nothing is remembered.
   function toggleFull(win) {
     const full = !win.isFullScreen();
     if (!full) win.once('leave-full-screen', () => win.maximize());
@@ -215,9 +216,9 @@ function run() {
   function openMainWindow() {
     const win = new BrowserWindow({
       title: 'UGC Studio',
+      // The size it takes when it is restored from maximised by hand.
       width: 1440,
       height: 900,
-      fullscreen: !WINDOWED,
       show: false,
       backgroundColor: BG,
       autoHideMenuBar: true,
@@ -231,7 +232,14 @@ function run() {
         backgroundThrottling: false,
       },
     });
-    win.once('ready-to-show', () => (WINDOWED ? win.showInactive() : win.show()));
+    // (phase V60, the owner 2026-10-29, (пп3а): "давай при открытии приложения открывать во все окно, но не на полный экран")
+    // MAXIMISED at every start - Windows' title bar and the taskbar stay; full screen is the person's (F11, the strip's
+    // button), and the next start is maximised again. `--windowed` (checks) is an ordinary window that takes no focus.
+    win.once('ready-to-show', () => {
+      if (WINDOWED) { win.showInactive(); return; }
+      win.maximize();
+      win.show();
+    });
     // The strip's buttons follow full screen, however it was left or taken (F11, the button, Windows).
     for (const ev of ['enter-full-screen', 'leave-full-screen']) {
       win.on(ev, () => { if (!win.isDestroyed()) win.webContents.send('ugc-window-full', ev === 'enter-full-screen'); });

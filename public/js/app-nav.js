@@ -76,7 +76,8 @@ function _windowButtons(nav) {
   const close = button('close', 'Quit UGC Studio', () => W.close());
   const full = button('full', 'Full screen', () => W.toggleFull());
   const paint = (isFull) => { min.hidden = win.hidden = close.hidden = !isFull; full.hidden = !!isFull; };
-  paint(true);
+  // (phase V60, (пп3а)) The window opens maximised - drawn so until the shell answers.
+  paint(false);
   Promise.resolve(W.isFull()).then(paint).catch(() => { /* as drawn */ });
   W.onFull(paint);
   nav.appendChild(box);
