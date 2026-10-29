@@ -385,15 +385,12 @@ export function createTree(host, o) {
     for (const k of [...open]) if (!byKey.has(k)) { open.delete(k); gone = true; }
     if (gone) _save();
   }
-  // The first answer: what was kept stays when it is one path and the node selected is on it or beside it (its parents
-  // open; a top node selected is open); else the path to the node selected - a top node open itself.
+  // The first answer - the node selected is the address's (the page keeps it under K_SEL first) or the last visit's: the
+  // path to it opened and the rest folded, as the page's select does; what was open in it stays while that is one path.
   function _firstOpen() {
     _dropGone();
-    let ok = _onePath() && (!_isTop(sel) || open.has(sel));
-    for (let p = parentOf.get(sel); ok && p; p = parentOf.get(p)) if (!open.has(p)) ok = false;
-    if (ok) return;
-    open = new Set();
     _setOpen(sel, _isTop(sel));
+    if (!_onePath()) { const self = open.has(sel); open = new Set(); _setOpen(sel, self || _isTop(sel)); }
     _save();
   }
 
