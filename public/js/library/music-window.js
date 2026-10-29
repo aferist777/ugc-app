@@ -73,31 +73,56 @@ function _moodOpen() {
   return m && F && F.moods().some(x => x.id === m[1]) ? m[1] : '';
 }
 
+// (phase V60.2, the owner 2026-10-29: "а вот lyrics убираем из дропдауна если генерируем трек настроений"; (ми7а), (ми8а))
+// On a mood folder the modes are Simple and Custom, and the window opens there on Simple - the mood's own generator. The
+// mode remembered for the other folders (`_rest`) is not changed by what is chosen on a mood folder: the form writes it,
+// not the mode of the moment, while a mood folder is open.
+const _modes = () => (_moodOpen() ? MODES.filter(m => m !== 'lyrics') : MODES);
+let _rest = '';            // the mode remembered for the folders that are not a mood's
+let _placeKey = null;      // the folder the window was last fitted to
+
 function _form() {
   if (F) return F;
   F = createSunoForm({
     store: KEY, title: 'Generate music',
     base: { mode: 'simple' },
     mood: () => _moodOpen(),
+    lyricsOff: () => !!_moodOpen(),
     say: (t, bad) => _say(t, bad),
     paintCol: () => paintCol(),
     paintMake: () => paintMake(),
     paintMakePrice: () => paintFoot(),
-    setMode: (id) => setMode(id),
+    setMode: (id, how) => setMode(id, how),
+    persist: (st) => ({ mode: _moodOpen() ? (_rest || 'simple') : st.mode, model: st.model, f: st.f }),
     onSaved: () => { if (typeof _o.onSaved === 'function') _o.onSaved(); if (_ui && S().mode === 'lyrics') paintMake(); },
     // No video here: the length is said in seconds.
     lengthNote: (mode) => (mode === 'simple' ? 'up to 360 s - the bed comes out a little longer' : mode === 'custom' ? '10–360 s' : ''),
   });
   if (!MODES.includes(F.S.mode)) F.S.mode = 'simple';
+  _rest = F.S.mode;
   return F;
 }
 
-function setMode(id) {
-  if (!MODES.includes(id)) return;
+// The mode fitted to the folder the window is opened on: a mood's - Simple; another - the mode remembered for them.
+function _fitMode() {
+  const p = (typeof _o.place === 'function' ? _o.place() : null) || null;
+  const key = String((p && p.key) || '');
+  if (key === _placeKey) return;
+  _placeKey = key;
+  if (_moodOpen()) S().mode = 'simple';
+  else if (_rest && MODES.includes(_rest)) S().mode = _rest;
+}
+
+function setMode(id, how) {
+  if (!_modes().includes(id)) return;
+  // (phase V60.2, (ми2а)-(ми4а)) Custom picked while the mood's card is in "edit": its Style and Exclude go with it.
+  const carried = id === 'custom' && how === 'pick' && F.carryEdit();
   S().mode = id;
+  if (!_moodOpen()) _rest = id;
   F.save();
   _err = '';
   paint();
+  if (carried) _say('The mood\'s Style and Exclude are in Custom - its tracks go into Music → highlights.');
 }
 function paint() {
   paintHead();
@@ -130,9 +155,11 @@ function _dest() {
   // (phase V60, (пп9а)) A mood folder open: Simple makes its mood, and the server files the tracks there.
   const mood = F.preset();
   if (mood) return { node: key, into: '', label: 'Music → highlights → ' + mood.label };
+  // (phase V60.2, (ми6а)) Custom on a mood folder: into highlights itself - the highlights popup offers it; the mood folder
+  // keeps only what its preset made (the owner's (ф3)).
+  if (_moodOpen()) return { node: 'music:highlights', into: 'highlights', label: 'Music → highlights' };
   return { node: 'music', into: '', label: 'Music',
-    note: _moodOpen() ? 'a mood takes only its preset\'s tracks - Simple makes them' : hl ? 'highlights takes only a mood\'s preset - open a mood\'s folder'
-      : lyr ? 'Lyrics holds texts only' : '' };
+    note: hl ? 'highlights takes only a mood\'s preset - open a mood\'s folder' : lyr ? 'Lyrics holds texts only' : '' };
 }
 
 // ── the head: the mode's name and its "?" ───────────────────────────────────
@@ -162,7 +189,7 @@ function paintCol() {
     return r;
   };
   // A missing key stays in words: it is why nothing would come.
-  const modes = CAT.modes.filter(m => MODES.includes(m.id));
+  const modes = CAT.modes.filter(m => _modes().includes(m.id));
   row('Mode', F.modeSelect(modes), modeRowHelp(modes),
     CAT.keys && !CAT.keys.kie && !CAT.fake ? 'No kie.ai key - add it on Admin → API keys.' : '');
   if (S().mode !== 'lyrics') row('Model', F.modelSelect(), MODEL_ROW_HELP);
@@ -408,12 +435,15 @@ export async function open(o) {
   _o = Object.assign({}, _o, hooks);
   _form();
   if (_win && _win.alive()) {
+    // (phase V60.2) Opened again on another folder: the mode fitted to it.
+    if (F.cat()) _fitMode();
     if (lyric && F.cat()) F.useLyric(lyric); else if (F.cat()) paint();
     return _win;
   }
   // (phase V60.1, (пк7б)) A mood's preset edited in an earlier opening is not carried into this one: the standard again -
   // and a refusal said then is not said again.
   F.resetEdit();
+  _placeKey = null;
   _err = '';
   _win = openFrame({
     name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: SIZE,
@@ -459,6 +489,7 @@ export async function open(o) {
   const win = _win;
   if (!(await F.ready()) || win !== _win) return win;
   F.almanacButton(alm);
+  _fitMode();
   if (lyric) F.useLyric(lyric); else paint();
   _pickUp();
   return win;

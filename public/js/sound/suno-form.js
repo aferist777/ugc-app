@@ -128,12 +128,16 @@ export function titleOf(text) {
  *   o.title            the generator's name in a failure to start ("Generate audio" - Merge's)
  *   o.paintCol() / o.paintMake() / o.paintMakePrice()   paint the settings column / the constructor / the price beside
  *                      "generate" again
- *   o.setMode(id)      another mode chosen here ("write lyrics from an idea…", "use in custom", the mode's dropdown)
+ *   o.setMode(id, how) another mode chosen here ("write lyrics from an idea…", "use in custom", the mode's dropdown - `how`
+ *                      'pick')
  *   o.videoSecs()      the video's length - "by the video (N s)" beside the length (Merge only)
  *   o.lengthNote(mode) what the length's note says (the Library has no video: not "the video's length")
  *   o.priceOf(mode, p) a price this form does not know how to say (Merge's Video to Music) - or null
  *   o.mood()           the highlights mood Simple makes - the id of the mood folder the Library's window is open on, '' for
  *                      none (phase V60, (пп9а): a mood's tracks are made there now; Merge has no moods any more)
+ *   o.lyricsOff()      true - Lyrics is not a mode here (phase V60.2: the Library's window on a mood folder): Custom shows
+ *                      no "write lyrics from an idea…"
+ *                      (a pick in the dropdown is when the Library's window carries a mood's edit into Custom: carryEdit)
  */
 export function createSunoForm(o) {
   const S = Object.assign({ mode: 'simple', model: 'V6' }, o.base || {}, ls(o.store, {}));
@@ -154,6 +158,7 @@ export function createSunoForm(o) {
   // { mood, style, negative }, for ONE press ((пк7б)): gone after "generate" and when the Library's window opens again
   // (resetEdit); never kept in the browser.
   let _edit = null;
+  let _litT = 0;                 // the chips' light painted again a moment after the mood's Style is typed in
 
   async function ready() {
     const saved = loadSaved();
@@ -232,8 +237,35 @@ export function createSunoForm(o) {
     call('paintMake');
   }
 
+  // (phase V60.2, the owner 2026-10-29: "только во время создания музыки для mood нужно приписать чипсы для добавления";
+  // (ми1а)) On a mood folder a chip's words go into the mood's Style as the person edits it: the chip opens "edit" by itself
+  // when it is not open, its words are written after the Style, a press again takes them out; it is lit while they are
+  // there. Like the edit, for ONE press.
+  const moodHas = (mood, c) => { const e = editOf(mood); return !!e && !!c.style && String(e.style || '').includes(c.style); };
+  function moodChip(mood, c) {
+    if (!editOf(mood)) _edit = { mood: mood.id, style: String(mood.style || ''), negative: String(mood.negative || '') };
+    _edit.style = moodHas(mood, c) ? _takeOut(_edit.style, c.style) : _join(_edit.style, c.style);
+    call('paintCol');
+    call('paintMake');
+  }
+  // (phase V60.2, (ми2а)-(ми5а)) Custom chosen while the mood's card is in "edit": its Style and Exclude go into Custom's,
+  // replacing what was there; the title is the mood's when Custom has none; instrumental on (the presets are). From then on it
+  // is Custom's own text; the mood's edit stays on its card for its one press. true - carried.
+  function carryEdit() {
+    const mood = preset();
+    const e = editOf(mood);
+    if (!mood || !e) return false;
+    const c = S.f.custom;
+    c.style = _t(e.style);
+    c.negative = _t(e.negative);
+    if (!_t(c.title)) c.title = String(mood.title || mood.label || '').slice(0, 80);
+    c.instrumental = true;
+    save();
+    return true;
+  }
+
   // ── the settings column's rows ────────────────────────────────────────────
-  /** The mode's dropdown, of `modes` (the catalog's records). */
+  /** The mode's dropdown, of `modes` (the catalog's records). A choice here is the person's: setMode(id, 'pick'). */
   function modeSelect(modes) {
     const ms = el('select');
     for (const m of modes || []) {
@@ -242,7 +274,7 @@ export function createSunoForm(o) {
       ms.appendChild(op);
     }
     ms.value = S.mode;
-    ms.addEventListener('change', () => call('setMode', ms.value));
+    ms.addEventListener('change', () => call('setMode', ms.value, 'pick'));
     return ms;
   }
   /** Suno's model - one price for all three; the choice is remembered. */
@@ -299,13 +331,17 @@ export function createSunoForm(o) {
   // них") Each group is a FOLDED ROW - its name and its "?", in Simple what is picked in it ("Genre · Lo-fi, Jazz"); a press
   // opens it and folds the one open before.
   function chipRows(col) {
-    if (!['simple', 'custom', 'compose'].includes(S.mode) || preset()) return;
-    const why = S.mode === 'simple' ? 'Pick any in each group, or none - the writer reads them with your words.'
+    if (!['simple', 'custom', 'compose'].includes(S.mode)) return;
+    const mood = preset();
+    const why = mood ? 'A press adds the chip\'s words to the mood\'s Style on the card - "edit" opens by itself; a press again takes them out. For this press only, as the edit.'
+      : S.mode === 'simple' ? 'Pick any in each group, or none - the writer reads them with your words.'
       : 'A press on a chip adds its words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.';
+    // Lit: in Simple the chips picked; on a mood folder those whose words are in the mood's Style.
+    const lit = (g, c) => (mood ? moodHas(mood, c) : S.mode === 'simple' && isPicked(g.key, c));
     for (const g of chipGroups()) {
       const gk = g.key || g.label;
       const open = _chipOpen === gk;
-      const picked = S.mode === 'simple' ? g.chips.filter(c => isPicked(g.key, c)).map(c => c.label) : [];
+      const picked = mood || S.mode === 'simple' ? g.chips.filter(c => lit(g, c)).map(c => c.label) : [];
       const head = el('button', 'au-chips-h' + (open ? ' is-open' : '') + (picked.length ? ' has-picked' : ''));
       head.type = 'button';
       head.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -318,12 +354,13 @@ export function createSunoForm(o) {
       if (!open) continue;
       const wrap = el('div', 'mv3-chips au-chips-open');
       for (const c of g.chips) {
-        const on = S.mode === 'simple' && isPicked(g.key, c);
+        const on = lit(g, c);
         const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
         b.type = 'button';
         b.title = c.style;
         b.addEventListener('click', () => {
-          if (S.mode === 'simple') { pick(g.key, c); call('paintCol'); call('paintMake'); }
+          if (mood) moodChip(mood, c);
+          else if (S.mode === 'simple') { pick(g.key, c); call('paintCol'); call('paintMake'); }
           else addWords(c.style);
         });
         wrap.appendChild(b);
@@ -450,7 +487,8 @@ export function createSunoForm(o) {
           t.rows = rows;
           t.placeholder = ph;
           t.value = e[key] == null ? '' : String(e[key]);
-          t.addEventListener('input', () => { e[key] = t.value; paintMark(); });
+          // (phase V60.2) The chips lit by the words in the Style follow what is typed.
+          t.addEventListener('input', () => { e[key] = t.value; paintMark(); clearTimeout(_litT); _litT = setTimeout(() => call('paintCol'), 250); });
           return t;
         };
         box.appendChild(field('Style', area('style', 4, 'genre, tempo, instruments, texture, production - by commas'),
@@ -460,13 +498,14 @@ export function createSunoForm(o) {
       }
       box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
         ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
-      const fl = field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no chips and no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ - an edited style too.\n"edit" - change its style and excludes for THIS press; after "generate", or when the window opens again, it is the mood\'s own preset. "standard" - back to it now.' });
+      const fl = field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ - an edited style too.\n"edit" - change its style and excludes for THIS press; a chip on the left adds its words to the style. After "generate", or when the window opens again, it is the mood\'s own preset. "standard" - back to it now.\nCustom chosen while editing takes this style and these excludes.' });
       const act = el('span', 'au-f-act');
       const btn = el('button', 'au-link au-edit', e ? 'standard' : 'edit');
       btn.type = 'button';
       btn.title = e ? 'Back to the mood\'s own preset' : 'Change the mood\'s style and excludes - for this press only';
       btn.addEventListener('click', () => {
         _edit = e ? null : { mood: mood.id, style: String(mood.style || ''), negative: String(mood.negative || '') };
+        call('paintCol');
         call('paintMake');
       });
       paintMark();
@@ -502,7 +541,8 @@ export function createSunoForm(o) {
         });
         // (phase V59.1, (мз7а)) "save" - the text written here into Music -> Lyrics, named by the title (else its first line).
         const links = el('div', 'au-f-links');
-        links.append(wr, saveOwn(f, ly));
+        // (phase V60.2, (ми7а)) Not on a mood folder: Lyrics is not one of its modes there.
+        if (call('lyricsOff')) links.append(saveOwn(f, ly)); else links.append(wr, saveOwn(f, ly));
         fl.appendChild(links);
         card.appendChild(fl);
         const vs = el('select', 'au-sel');
@@ -648,6 +688,7 @@ export function createSunoForm(o) {
       f.presetN[b.preset] = (f.presetN[b.preset] || 0) + 1;
       save();
       _edit = null;
+      call('paintCol');
       call('paintMake');
     }
     return d;
@@ -945,7 +986,7 @@ export function createSunoForm(o) {
     modeSelect, modelSelect, lengthRows, chipRows,
     price, priceText, priceBox, paintPrice,
     field, text, check, knob,
-    helpText, paintFields, body, press, lyricCard, resetEdit,
+    helpText, paintFields, body, press, lyricCard, resetEdit, carryEdit,
     saveButton, useLyric,
     almanacButton, closeAlmanac,
   };
