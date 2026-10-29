@@ -6,8 +6,11 @@
 // smaller on a small screen; there is no "← Characters" any more. Its ✕, Escape or a press beside it HIDE it: what runs
 // goes on and the bench stays - the content is built once, in #lib-chmake (hidden, its parking place), and is MOVED into
 // the window's body and back, never built again. The rows of Alerts of a portrait or a sheet
-// (/library?shelf=characters&make=1, `spot.view` 'chmake') and Home's "+ new character" open the shelf with the window.
-// Saved: the window closes and the shelf shows the new character selected (`onSaved`).
+// (/library?shelf=characters&make=1, `spot.view` 'chmake') open the shelf with the window - always the Library's, wherever
+// it was started (phase V60.1, the owner's (пк5б)). Saved: the window closes and the shelf shows the new character selected
+// (`onSaved`). (phase V60.1, (пк4а)) HOME opens the same window over itself - "+ new character", "Make your first
+// character" - with a parking place of its own (home.html #lib-chmake) and the same bench (`lib_chmake_v1`); saved there, a
+// popup says so with "open in Library" (js/home/main.js).
 //
 // Before V60: "New Character" put this where the grid and its column were, and
 // "← Characters" (the same place) brought them back. It is the Character page's creation, moved: the

@@ -13,8 +13,31 @@
    ════════════════════════════════════════════════════════════════════════════ */
 
 import { initNav } from '../app-nav.js';
+// (phase V60.1, the owner's (пк4а)) New Character opens HERE - the Library's window, the same module and the same bench
+// (`lib_chmake_v1`, one for every page); its rows in Alerts still lead to the Library ((пк5б), chmake.js `_where`).
+import * as CM from '../library/chmake.js';
+import { showError, showToast } from '../notice.js';
 
 initNav();
+
+// Saved here: the window has closed; a popup says so, with the way to the character on the Library's shelf. The blocks are
+// read again - "Make your first character" is done.
+CM.init({
+  onSaved: (id, name) => {
+    showToast({
+      mark: '✓', title: 'Saved · ' + (name || 'the character'), where: 'Library · Characters - its voices are chosen there',
+      ms: 9000, act: { label: 'open in Library', run: () => { location.href = '/library?shelf=characters&sel=' + encodeURIComponent(id || ''); } },
+    });
+    for (const k of Object.keys(made)) made[k].paint().catch(() => { /* the block says so itself */ });
+  },
+});
+// "+ new character" and "Make your first character": the window, without leaving Home (the link stays a link to the
+// Library's window for a press with a modifier).
+function _newCharacter(e) {
+  if (e.button !== 0 || e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  try { CM.open(); } catch (err) { showError('New Character did not open: ' + ((err && err.message) || 'no reason was given')); }
+}
 
 const $ = (s, r) => (r || document).querySelector(s);
 const el = (tag, cls, text) => {
@@ -75,13 +98,14 @@ BLOCKS.continue = () => {
   const news = el('div', 'hm-new');
   for (const [label, href, primary] of [
     // Merge's own "+ new project" menu and its items (js/merge-v3/projects.js `?new=`); a character - New Character's
-    // window over the Library's Characters shelf (phase V60, the owner's (пп5)).
+    // window, here (phase V60.1, the owner's (пк4а); the address is the Library's window).
     ['+ new project', '/merge?new=menu', true], ['+ talking head', '/merge?new=talking', false],
     ['+ highlights', '/merge?new=highlights', false], ['+ blank', '/merge?new=blank', false],
     ['+ new character', '/library?shelf=characters&make=1', false],
   ]) {
     const a = el('a', 'hm-btn' + (primary ? ' is-primary' : ''), label);
     a.href = href;
+    if (label === '+ new character') a.addEventListener('click', _newCharacter);
     news.appendChild(a);
   }
   f.body.append(grid, news);
@@ -291,7 +315,13 @@ BLOCKS.steps = () => {
       tx.appendChild(el('div', 'hm-step-t', s.title));
       tx.appendChild(el('div', 'hm-step-d', s.sub));
       li.appendChild(tx);
-      if (!done[s.id]) { const a = el('a', 'hm-btn is-gold', s.go); a.href = s.href; li.appendChild(a); }
+      if (!done[s.id]) {
+        const a = el('a', 'hm-btn is-gold', s.go);
+        a.href = s.href;
+        // (phase V60.1) The first character is made here, in New Character's window.
+        if (s.id === 'char') a.addEventListener('click', _newCharacter);
+        li.appendChild(a);
+      }
       return li;
     }));
   };
