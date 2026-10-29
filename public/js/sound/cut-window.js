@@ -5,7 +5,9 @@
 
    The sound drawn large with a RULER over it (js/sound/scrub.js, the server's peaks - the same rule as the player's, the
    owner 2026-10-28): a press on the wave moves the playhead, ▶ plays from it; two gold handles mark the piece, each
-   dragged by its flag on the ruler, "▶ the piece" plays it alone. "Cut" makes the piece a
+   dragged by its flag on the ruler, "▶ the piece" plays it alone. "Cut" - on the ruler right of the right flag, only while
+   a piece is marked (phase V59, (мг11): the player's rule, scrub.js `cut`; the window opens with the middle third marked,
+   so it is there at once) - makes the piece a
    NEW sound (POST /api/audio/cut, lib/audio-cut.js) - and where it goes follows WHAT is cut, with no choice: a piece of a
    track of Music into the root of Music, a piece of SFX or My sounds into the root of My sounds. The sound it was cut from
    is not touched. In Merge "to timeline" lays the piece at the playhead - the same file, cut by the piece, no new file
@@ -49,8 +51,9 @@ export async function openCut(it, opts) {
   const audio = new Audio(it.path);
   let dur = +it.dur || 0;
   let a = 0, b = dur;
-  // A piece offered at first: the middle third of a long sound, the whole of a short one.
-  if (dur > 8) { a = dur / 3; b = Math.min(dur, a + Math.min(10, dur / 3)); }
+  // A piece offered at first: the middle third, at most 10 s - (phase V59) of a short sound too, so "Cut" by the right
+  // flag is there at once (the whole sound is not cut).
+  if (dur > 0.3) { a = dur / 3; b = Math.min(dur, a + Math.min(10, dur / 3)); }
   let playEnd = 0;          // where playing stops: the piece's end, or the sound's
   let raf = 0;
 
@@ -59,6 +62,8 @@ export async function openCut(it, opts) {
     src: it.path, dur, wave: it.wave, height: 120, handles: true, range: [a, b],
     onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = sc.dur() || dur; paintClock(); },
     onRange: (x0, x1) => { a = x0; b = x1; paintInfo(); },
+    // (phase V59, (мг11)) "Cut" by the right flag, only while a piece is marked.
+    cut: { title: music ? 'The piece becomes a new track in Music' : 'The piece becomes a new sound in My sounds', onCut: (x0, x1) => _cut(x0, x1) },
   });
   stage.appendChild(sc.el);
   win.appendChild(stage);
@@ -83,12 +88,8 @@ export async function openCut(it, opts) {
     lay.title = 'Lay the piece at the playhead of the timeline - the same file, cut to the piece';
     row.appendChild(lay);
   }
-  const go = el('button', 'snd-btn is-primary', 'Cut');
-  go.type = 'button';
-  go.title = music ? 'The piece becomes a new track in Music' : 'The piece becomes a new sound in My sounds';
-  row.appendChild(go);
   win.appendChild(row);
-  const said = el('div', 'snd-cut-said snd-muted', 'Cut makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
+  const said = el('div', 'snd-cut-said snd-muted', 'Cut by the right flag makes the piece a new ' + (music ? 'track in Music' : 'sound in My sounds')
     + ' - the sound itself stays as it is.');
   win.appendChild(said);
   const err = el('div', 'snd-err');
@@ -166,24 +167,23 @@ export async function openCut(it, opts) {
     });
   }
 
-  go.addEventListener('click', async () => {
-    go.disabled = true;
+  // "Cut" by the right flag (scrub.js waits on its button while this goes).
+  async function _cut(x0, x1) {
     err.textContent = '';
     said.textContent = 'cutting…';
     said.classList.remove('is-bad');
     try {
       const r = await fetch('/api/audio/cut', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ src: it.path, in: +a.toFixed(3), out: +b.toFixed(3) }),
+        body: JSON.stringify({ src: it.path, in: +x0.toFixed(3), out: +x1.toFixed(3) }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error || 'it could not be cut');
       close();
       if (o.done) o.done(d.item, d.where);
     } catch (e) {
-      go.disabled = false;
       said.textContent = '';
       err.textContent = e.message;
     }
-  });
+  }
 }

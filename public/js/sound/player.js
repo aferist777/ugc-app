@@ -9,11 +9,14 @@
    sound and hides the bar; coming back shows the same track at the same place (kept for the next visit of the page too).
    SFX and My sounds do not play in it - their tiles play as before, their "Cut…" is the Cut window.
 
-   On the bar: ▶/⏸, the name, "0:41 / 3:12", the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a
-   press on the wave moves the playhead, playing goes on from there), the handles of a piece - dragged by their gold flags
-   on the ruler -, "▶ the piece", "Cut" - the piece a new track
-   in the root of Music (POST /api/audio/cut, lib/audio-cut.js) - and ✕, which takes the track off the bar. Space on the
-   page plays and pauses (the page asks, js/library/main.js). "Cut…" in a track's menu opens it here with a piece marked.
+   On the bar: ▶/⏸, "0:41 / 3:12", the name OVER the wave (phase V59, the owner 2026-10-29: "название было не справа от
+   кнопки play - а сверху над волной"), the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a press on
+   the wave moves the playhead, playing goes on from there), the handles of a piece - dragged by their gold flags on the
+   ruler -, "▶ the piece" and ✕, which takes the track off the bar. "Cut" is not in that row (phase V59): it stands on the
+   ruler right of the right flag while a piece is marked (scrub.js `cut`) and makes the piece a new track in the root of
+   Music (POST /api/audio/cut, lib/audio-cut.js) - with the flags at the very ends there is nothing to cut, and the whole
+   track is never saved a second time. Space on the page plays and pauses (the page asks, js/library/main.js). "Cut…" in
+   a track's menu opens it here with its middle marked - "Cut" there at once.
 
      createPlayer(host, { status(text, bad), changed() })
        -> { show(on), open(item, { cut, play }), toggle(), pause(), current(), forget(id), sync(items), mark(root) }
@@ -48,19 +51,19 @@ export function createPlayer(host, opts) {
   const play = el('button', 'snd-btn snd-pl-play', '▶');
   play.type = 'button';
   play.title = 'Play / pause (Space)';
-  const name = el('span', 'snd-pl-name', 'choose a track');
   const time = el('span', 'snd-clock', '');
+  // (phase V59) The name over the wave, in one column with it.
+  const mid = el('div', 'snd-pl-mid');
+  const name = el('span', 'snd-pl-name', 'choose a track');
   const wave = el('div', 'snd-pl-wave');
+  mid.append(name, wave);
   const piece = el('button', 'snd-btn snd-pl-tool', '▶ the piece');
   piece.type = 'button';
   piece.title = 'Play only the piece between the gold handles';
-  const cut = el('button', 'snd-btn is-primary snd-pl-tool', 'Cut');
-  cut.type = 'button';
-  cut.title = 'The piece between the gold handles becomes a new track in Music - the track itself stays as it is';
   const x = el('button', 'snd-btn snd-pl-x snd-pl-tool', '✕');
   x.type = 'button';
   x.title = 'Take the track off the player';
-  host.append(play, name, time, wave, piece, cut, x);
+  host.append(play, time, mid, piece, x);
 
   const D = () => (sc && sc.dur()) || (cur && cur.dur) || 0;
   const save = () => {
@@ -70,7 +73,7 @@ export function createPlayer(host, opts) {
   };
   const paint = () => {
     const on = !!cur;
-    for (const b of [play, piece, cut, x]) b.disabled = !on;
+    for (const b of [play, piece, x]) b.disabled = !on;
     host.classList.toggle('is-empty', !on);
     name.textContent = on ? cur.name : 'choose a track - press one in Music';
     name.title = on ? cur.name : '';
@@ -110,6 +113,8 @@ export function createPlayer(host, opts) {
       range: range || [0, d],
       onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = 0; paint(); },
       onRange: () => save(),
+      // (phase V59) "Cut" by the right flag, only while a piece is marked.
+      cut: { title: 'The piece between the gold flags becomes a new track in Music - the track itself stays as it is', onCut: _cut },
     });
     wave.textContent = '';
     wave.appendChild(sc.el);
@@ -128,15 +133,16 @@ export function createPlayer(host, opts) {
     if (!it) return;
     const same = cur && cur.id === String(it.id) && cur.path === String(it.media || it.path);
     if (h.cut) {
-      // "Cut…": the track here with a piece marked - its middle third of a long one - and nothing playing.
+      // "Cut…": the track here with a piece marked - its middle third, at most 30 s (phase V59: a short one too, so "Cut"
+      // by the right flag is there at once) - and nothing playing.
       if (!same) _load(it, 0, null);
       const d = D();
-      const a = d > 8 ? d / 3 : 0, b = d > 8 ? Math.min(d, a + Math.min(30, d / 3)) : d;
+      const a = d > 0.3 ? d / 3 : 0, b = d > 0.3 ? Math.min(d, a + Math.min(30, d / 3)) : d;
       sc.setRange(a, b);
       audio.pause();
       audio.currentTime = a; sc.setTime(a);
       host.classList.remove('is-flash'); void host.offsetWidth; host.classList.add('is-flash');
-      o.status('Drag the gold flags on the ruler round the piece, then Cut - it becomes a new track in Music.');
+      o.status('Drag the gold flags on the ruler round the piece, then Cut by the right flag - the piece becomes a new track in Music.');
       save(); paint();
       return;
     }
@@ -165,10 +171,9 @@ export function createPlayer(host, opts) {
     audio.play().catch(() => o.status('That file will not play', true));
   });
   x.addEventListener('click', () => forget(cur && cur.id));
-  cut.addEventListener('click', async () => {
-    if (!cur || !sc) return;
-    const [a, b] = sc.range();
-    cut.disabled = true;
+  // (phase V59) The piece a new track - only a piece: with the flags at the very ends the wave shows no "Cut".
+  async function _cut(a, b) {
+    if (!cur || !sc || !sc.piece()) return;
     o.status('Cutting…');
     try {
       const r = await fetch('/api/audio/cut', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -179,8 +184,7 @@ export function createPlayer(host, opts) {
       const made = d.item || {};
       o.status('"' + (made.title || made.name || 'The piece') + '" is a new ' + (d.where === 'music' ? 'track in Music' : 'sound in My sounds'));
     } catch (e) { o.status(e.message, true); }
-    finally { cut.disabled = !cur; }
-  });
+  }
 
   /** The bar shown (Music is open) or hidden - the sound stops; the track and its place are kept. */
   function show(on) {

@@ -15,8 +15,15 @@
    on it goes on moving it); a press on the ruler away from the flags does nothing. Cursors: ew-resize over a flag,
    pointer over the wave, the plain arrow over the rest of the ruler.
 
-     scrubber({ src, dur, wave, height, handles, range: [a, b], onSeek(t), onRange(a, b) })
-       -> { el, setTime(t), time(), setRange(a, b), range(), dur(), dragging(), redraw(), destroy() }
+   "CUT" BY THE RIGHT FLAG (phase V59, the owner 2026-10-29: "кнопка cut должна быть активной, когда выбран фрагмент на
+   волне, сейчас cut при флажках по самым краям, оригинал трека, сохраняет трек еще раз ... кнопка cut будет появляться
+   справа от правого флажка, когда выбран фрагмент трека"; (мг11) the Cut window the same): with `cut` given, a button on
+   the ruler right of the right flag - only while a PIECE is marked (the flags not at the very ends; the whole sound is
+   not cut into a second copy of itself). It follows the flag as it is dragged; when the flag is at the very end it stands
+   inside the wave, left of the flags. Its press is `cut.onCut(a, b)`; the button waits while what it answers goes.
+
+     scrubber({ src, dur, wave, height, handles, range: [a, b], onSeek(t), onRange(a, b), cut: { title, onCut(a, b) } })
+       -> { el, setTime(t), time(), setRange(a, b), range(), piece(), dur(), dragging(), redraw(), destroy() }
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const RULER = 16;          // the ruler's band, px
@@ -49,6 +56,25 @@ export function scrubber(opts) {
   cv.className = 'snd-scrub-cv';
   cv.style.height = (RULER + o.height) + 'px';
   el.appendChild(cv);
+  // (phase V59) "Cut" by the right flag - on the ruler, shown only while a piece is marked (css/sound.css .snd-scrub-cut).
+  let cutBtn = null, cutW = 0;
+  if (o.handles && o.cut && typeof o.cut.onCut === 'function') {
+    cutBtn = document.createElement('button');
+    cutBtn.type = 'button';
+    cutBtn.className = 'snd-scrub-cut';
+    cutBtn.textContent = 'Cut';
+    cutBtn.title = o.cut.title || 'The piece between the gold flags becomes a new sound - this one stays as it is';
+    cutBtn.style.height = RULER + 'px';
+    cutBtn.hidden = true;
+    cutBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    cutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (cutBtn.disabled || _whole()) return;
+      cutBtn.disabled = true;
+      Promise.resolve().then(() => o.cut.onCut(a, b)).catch(() => {}).then(() => { if (cutBtn) cutBtn.disabled = false; });
+    });
+    el.appendChild(cutBtn);
+  }
 
   let dur = +o.dur || 0;
   let t = 0;
@@ -75,6 +101,8 @@ export function scrubber(opts) {
   const H = () => RULER + o.height;
   const xOf = (s) => (dur > 0 ? (s / dur) * W() : 0);
   const tOf = (x) => (dur > 0 ? Math.max(0, Math.min(dur, (x / W()) * dur)) : 0);
+  // The piece is the whole sound - its flags at the very ends: drawn plain, nothing to cut.
+  const _whole = () => !o.handles || !(dur > 0) || (a <= 0.01 && b >= dur - 0.01);
 
   // A handle's flag: its pole at the handle, the cloth towards the inside of the piece ('a' to the right, 'b' to the
   // left) - turned the other way when that side has no room at the edge of the canvas. The drawing and the press read it.
@@ -139,7 +167,7 @@ export function scrubber(opts) {
     // what has played lit (--primary).
     const top = RULER, hh = o.height;
     const xa = xOf(a), xb = xOf(b);
-    const whole = !o.handles || (a <= 0.01 && b >= dur - 0.01);
+    const whole = _whole();
     if (o.handles && !whole) {
       g.fillStyle = 'rgba(255,255,255,0.06)';
       g.fillRect(xa, top, Math.max(0, xb - xa), hh);
@@ -185,6 +213,23 @@ export function scrubber(opts) {
         g.fill();
       }
     }
+    _placeCut(w, whole);
+  }
+
+  // (phase V59) "Cut" right of the right flag's pole; with no room there (the flag at the very end) inside the wave, left
+  // of the right flag - and left of the left one too when the piece is too short for it between them.
+  function _placeCut(w, whole) {
+    if (!cutBtn) return;
+    cutBtn.hidden = whole;
+    if (whole) return;
+    cutW = cutBtn.offsetWidth || cutW || 32;
+    const fb = _flag('b'), fa = _flag('a');
+    let left = fb.x1 + 4;
+    if (left + cutW > w - 1) {
+      left = fb.x0 - 4 - cutW;
+      if (left + cutW > fa.x0 - GRAB && left < fa.x1 + GRAB) left = fa.x0 - GRAB - 2 - cutW;
+    }
+    cutBtn.style.left = Math.round(Math.max(0, left)) + 'px';
   }
 
   // ── The pointer ──
@@ -245,10 +290,12 @@ export function scrubber(opts) {
       draw();
     },
     range: () => [a, b],
+    // (phase V59) a piece is marked - the flags are not at the very ends
+    piece: () => !_whole(),
     dur: () => dur,
     dragging: () => !!drag,
     redraw: draw,
-    destroy() { alive = false; if (ro) ro.disconnect(); el.remove(); },
+    destroy() { alive = false; if (ro) ro.disconnect(); el.remove(); cutBtn = null; },
   };
 }
 
