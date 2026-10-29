@@ -150,6 +150,7 @@ app.use('/api', require('./routes/scriptgen'));
 app.use('/api', require('./routes/music'));   // Suno tracks for the music lane and shelf
 app.use('/api', require('./routes/audio-gen'));   // generate audio: music and sounds by Suno and ElevenLabs (phase V34.C)
 app.use('/api', require('./routes/audio-lib'));   // a piece of a sound, and the online CC0 search (Openverse)
+app.use('/api', require('./routes/lyrics'));   // saved lyrics - AUDIO -> Music -> Lyrics (phase V59.1)
 app.use('/api', require('./routes/proxies'));
 app.use('/api', require('./routes/track-peaks'));   // a sound's peaks for its waveform on Merge's lanes (phase V36)
 app.use('/api', require('./routes/userdata'));

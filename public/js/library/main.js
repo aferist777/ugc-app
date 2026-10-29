@@ -37,6 +37,8 @@ import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
 // (phase V54) The music player under the gallery while Music is open.
 import { createPlayer } from '../sound/player.js';
+// (phase V59.1) Music -> Lyrics: a saved text's tile and its viewer - one module with Merge's panel.
+import * as LYR from '../sound/lyrics.js';
 // (phase V54) Several tiles picked at once - Ctrl, Shift, a band - and what is done with them.
 import * as TS from '../tile-select.js';
 import * as Layers from '../layers.js';
@@ -670,6 +672,15 @@ function _openPost(it, file) {
   RP.openPost(posts, at, { file, onChanged: (w) => _apply({ removed: !!(w && w.deleted), reload: true, msg: (w && w.deleted) ? 'Post deleted' : '' }) });
 }
 
+// (phase V59.1) A saved text of Music -> Lyrics, whole, in the viewer - paging through the texts here (js/sound/lyrics.js):
+// Copy, Use in Custom, Rename, Delete; renamed or deleted, the gallery and the tree are read again.
+function _openLyric(it) {
+  LYR.openLyrics(_items, it, {
+    status: (t, bad) => _status(t, bad ? 'err' : ''),
+    changed: async () => { if (_tree) await _tree.load(); await _load({ keepScroll: true, checks: false }); _counts(); },
+  });
+}
+
 // Open in the viewer, with the same actions available there. `follow` is told every item the viewer
 // steps to: a picture shelf moves its selection with it, so closing the viewer leaves you on the one
 // you were looking at (phase B5).
@@ -822,7 +833,12 @@ function _card(it, extra) {
   const src = _tileSrc(it);
   const box = document.createElement('div');
   box.className = 'lib-thumb-box' + (src ? '' : ' lib-thumb-pending');
-  if (AUDIO.has(it.kind)) {
+  if (LYR.isLyrics(it)) {
+    // (phase V59.1) A saved text: its title and first lines; a press opens it whole (_openLyric).
+    box.className = 'lib-thumb-box lib-thumb-text';
+    box.appendChild(LYR.tileFace(it));
+    card.title = LYR.tileTitle(it);
+  } else if (AUDIO.has(it.kind)) {
     // A sound or a track has no picture: a note and its length; the card plays it (_hearToggle).
     box.className = 'lib-thumb-box lib-thumb-sound';
     const note = document.createElement('span');
@@ -909,7 +925,8 @@ function _card(it, extra) {
   }
   name.appendChild(document.createTextNode(it.name));
   // (phase V35, the owner's (т1)) A sound or a track is a square, as in Merge: its name inside it, under the note.
-  if (AUDIO.has(it.kind)) box.appendChild(name); else card.appendChild(name);
+  // (phase V59.1) A saved text has its title on its face already.
+  if (AUDIO.has(it.kind)) box.appendChild(name); else if (!LYR.isLyrics(it)) card.appendChild(name);
   // A sound's or a track's name is changed where it is read - it has no window to do it in.
   if (AUDIO.has(it.kind) && it.kind !== 'sfx') {
     name.title = it.name + (it.meta && it.meta.style ? ' · ' + it.meta.style : '') + ' - a double press renames it';
@@ -987,12 +1004,14 @@ async function _afterMany(d, verb, deleted) {
 }
 function _manyMenu(items, e) {
   const n = items.length;
-  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind) && !MADE_KINDS.has(x.kind));
+  const starable = items.filter(x => !['references', 'heads', 'youtube', 'lyrics'].includes(x.kind) && !MADE_KINDS.has(x.kind));
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
   // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
   const madeOnly = items.every(x => MADE_KINDS.has(x.kind));
   TS.menuAt(e.clientX, e.clientY, [
-    madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
+    // (phase V59.1) Saved texts stay in Music -> Lyrics.
+    items.every(LYR.isLyrics) ? ['Move to…', 'texts stay in Music → Lyrics', null]
+    : madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
       : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
         done: (d) => _afterMany(null, '', false).then(() => d),
         status: (t, bad) => _status(t, bad ? 'err' : ''),
@@ -1116,6 +1135,8 @@ function _renderGrid() {
   // Videos, the node's `tiles: 'wide'`) has 16:9 ones - css/library.css.
   if (_shelf === 'media') {
     grid.classList.toggle('is-sound', _items.length > 0 && _items.every(x => AUDIO.has(x.kind)));
+    // (phase V59.1) Music -> Lyrics: cards of text.
+    grid.classList.toggle('is-text', _items.length > 0 && _items.every(LYR.isLyrics));
     grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
   }
   // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
@@ -1129,6 +1150,8 @@ function _renderGrid() {
     const e = document.createElement('div');
     e.className = 'lib-empty';
     e.textContent = _shelf === 'media' ? (searching ? 'Nothing with "' + _q + '" in SFX.'
+      // (phase V59.1) Music -> Lyrics: where its texts come from.
+      : _mkind() === 'lyrics' ? 'No saved lyrics yet - Generate music saves them here (its Lyrics, or "save" by Custom\'s Lyrics).'
       : 'Nothing here' + (_node && _node.cat ? ' in this folder.' : ' yet.')) : 'Nothing on this shelf yet.';
     grid.appendChild(e);
     return;
@@ -1169,6 +1192,7 @@ function _renderGrid() {
       if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); });
       else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
       else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
+      else if (LYR.isLyrics(it)) card.addEventListener('click', () => _openLyric(it));
       else card.addEventListener('click', () => _open(it, _shelf === 'media' ? seen : null));
     }
     grid.appendChild(card);
@@ -1622,6 +1646,13 @@ function _paintUpload() {
     btn.title = 'Talking heads come from the talking-head projects - nothing is uploaded here';
     return;
   }
+  // (phase V59.1) Music -> Lyrics: texts saved by Generate music - no file.
+  if (kind === 'lyrics') {
+    btn.textContent = 'Upload';
+    btn.disabled = true;
+    btn.title = 'Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is uploaded here';
+    return;
+  }
   if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
   btn.textContent = 'Upload to ' + _landName(_linkKind());
@@ -1742,6 +1773,7 @@ async function _upload(files) {
   }
   if (_node && _node.key === 'audio') { if (btn) btn.disabled = false; _status('Pick Music or SFX in the tree first', 'err'); return; }
   if (kind === 'heads') { if (btn) btn.disabled = false; _status('Talking heads come from the talking-head projects', 'err'); return; }
+  if (kind === 'lyrics') { _status('Music → Lyrics holds only texts - saved from Generate music', 'err'); return; }
   // The kind selected decides where the clips are filed: looking at Hooks and pressing Upload means "add hooks"; under
   // Video they go to Uploads, which is what a file brought in from outside is. They arrive with no category - filed
   // afterwards, on the tree or in the viewer - and the kind is shown so they are seen.

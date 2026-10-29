@@ -219,6 +219,8 @@ export function deleteWarning(it) {
   if (it.kind === 'sounds') return 'Delete the sound "' + (it.name || '') + '"?\n\nThe sound file is removed from disk.';
   // (phase V28.4, the owner) A track goes with its file, as everything on Media.
   if (it.kind === 'music') return 'Delete the track "' + (it.name || '') + '"?\n\nThe music file is removed from disk.';
+  // (phase V59.1) A saved text of Music -> Lyrics - no file goes with it.
+  if (it.kind === 'lyrics') return 'Delete the lyrics "' + (it.name || '') + '"?\n\nThe text is removed from Music → Lyrics.';
   return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
 }
 

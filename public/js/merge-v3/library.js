@@ -62,6 +62,8 @@ import { openOnline } from '../sound/online.js';
 import * as SS from '../sound/shelf.js';
 // (phase V54) Several tiles picked at once - one module with the Library page.
 import * as TS from '../tile-select.js';
+// (phase V59.1) Music -> Lyrics: a saved text's tile and its viewer - one module with the Library page.
+import * as LYR from '../sound/lyrics.js';
 
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const AUDIO = new Set(['music', 'sounds', 'sfx']);
@@ -144,7 +146,40 @@ const _mmss = (s) => {
 // (phase TG, block 6) A video of YOUTUBE is a source of the scenarios - onto a lane and to highlights, never deleted here.
 const _fixed = (it) => (it.kind === 'heads' && !(it.meta && it.meta.kept)) || it.kind === 'youtube';
 
+// (phase V59.1, (мз6а)) A saved text of Music -> Lyrics: its title and first lines; a press opens it whole in the viewer
+// (js/sound/lyrics.js - Copy, Use in Custom, Rename, Delete). Never laid on a lane - it carries nothing a lane takes -,
+// dragged only onto the tree, which refuses it in words; the ✕ deletes it as any tile.
+function _lyricTile(it) {
+  const cell = document.createElement('div');
+  cell.className = 'mv3-tile is-text';
+  cell.dataset.key = it.kind + ':' + it.id;
+  cell.title = LYR.tileTitle(it);
+  cell.appendChild(LYR.tileFace(it));
+  cell.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const many = _pickedWith(it);
+    if (many) _manyMenu(many, e);
+  });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'mv3-tile-btn mv3-tile-del';
+  del.textContent = '✕';
+  del.title = 'Delete these lyrics';
+  del.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    del.disabled = true;
+    if (!confirm(await deleteQuestion(it))) { del.disabled = false; return; }
+    try { await deleteItem(it); await _reload(); } catch (err) { showError(err.message); del.disabled = false; }
+  });
+  cell.appendChild(del);
+  cell.draggable = true;
+  cell.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; setMediaDrag(e.dataTransfer, it, _pickedWith(it)); });
+  cell.addEventListener('click', () => LYR.openLyrics(_items, it, { status: (t, bad) => _status(t, bad), changed: () => _reload() }));
+  return cell;
+}
+
 function _tile(it, list) {
+  if (LYR.isLyrics(it)) return _lyricTile(it);
   const cell = document.createElement('div');
   const audio = AUDIO.has(it.kind);
   cell.className = 'mv3-tile' + (audio ? ' is-sound' : '') + (it.meta && it.meta.favorite ? ' is-fav' : '');
@@ -574,6 +609,12 @@ function _plusTile() {
     b.addEventListener('click', (e) => { e.stopPropagation(); _status(shut, true); });
     return b;
   }
+  // (phase V59.1) Music -> Lyrics: the texts Generate music saved - nothing is brought in.
+  if (_kind() === 'lyrics') {
+    b.disabled = true;
+    b.title = 'Lyrics holds the texts saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics) - nothing is added here';
+    return b;
+  }
   // (phase V35) REFERENCES fills itself: the Telegram bot's posts, the pieces cut from a video, the sources downloaded.
   if (_kind() === 'references') {
     b.disabled = true;
@@ -801,7 +842,9 @@ function _paint() {
   if (folders) b.appendChild(folders);
   const grid = document.createElement('div');
   // (phase V35, the owner's (т3), (у4)) A folder of horizontal videos (YouTube -> Videos) has 16:9 tiles.
-  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : '');
+  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : '')
+    // (phase V59.1) Music -> Lyrics: wider tiles of text.
+    + (_kind() === 'lyrics' ? ' is-text' : '');
   grid.appendChild(_plusTile());
   // An empty shelf still gets the grid - it is how files get onto it in the first
   // place, so replacing it with an "empty" placard would hide the only way in. A folder of folders says nothing.
@@ -810,13 +853,15 @@ function _paint() {
     if (folders) return;
     const s = document.createElement('span');
     s.className = 'mv3-grid-note';
-    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _node && _node.cat ? 'nothing in this folder'
+    s.textContent = searching ? 'nothing with "' + _q + '" in SFX' : _kind() === 'lyrics' ? 'no saved lyrics yet - Generate music saves them here'
+      : _node && _node.cat ? 'nothing in this folder'
       : _node && !_node.q ? 'empty' : 'empty - drop files here';
     b.appendChild(s);
     return;
   }
-  // The viewer pages through what it can show - not the sounds, which play on their tiles.
-  const seen = _items.filter(it => !AUDIO.has(it.kind));
+  // The viewer pages through what it can show - not the sounds, which play on their tiles (a saved text pages through the
+  // texts, js/sound/lyrics.js).
+  const seen = _items.filter(it => !AUDIO.has(it.kind) && !LYR.isLyrics(it));
   _items.forEach((it) => grid.appendChild(_tile(it, seen)));
   b.appendChild(grid);
   if (_tsel) _tsel.refresh();
@@ -838,12 +883,14 @@ async function _afterMany(d, verb) {
 }
 function _manyMenu(items, e) {
   const n = items.length;
-  const starable = items.filter(x => !['references', 'heads', 'youtube'].includes(x.kind) && !MADE.has(x.kind));
+  const starable = items.filter(x => !['references', 'heads', 'youtube', 'lyrics'].includes(x.kind) && !MADE.has(x.kind));
   const allFav = starable.length && starable.every(x => x.meta && x.meta.favorite);
   // (phase V55, (гн9)) What the generators of Environments / Lookbooks made moves nowhere - said where "Move to…" was.
   const madeOnly = items.every(x => MADE.has(x.kind));
   TS.menuAt(e.clientX, e.clientY, [
-    madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
+    // (phase V59.1) Saved texts stay in Music -> Lyrics.
+    items.every(LYR.isLyrics) ? ['Move to…', 'texts stay in Music → Lyrics', null]
+    : madeOnly ? ['Move to…', 'made by its generator - it stays where it is', null]
       : ['Move to…', n + ' items - each where it can go', () => TS.moveMany(e.clientX, e.clientY, items, {
         done: () => _reload(), status: (t, bad) => _status(t, bad),
       })],
@@ -914,6 +961,8 @@ async function _upload(files, what) {
   }
   // (phase V57) Nor their references, by hand.
   if (_shut()) { _status(_shut(), true); return; }
+  // (phase V59.1) Nor Music -> Lyrics - it holds texts.
+  if (_kind() === 'lyrics') { _status('Music → Lyrics holds only texts - saved from Generate music', true); return; }
   if (_isImages()) return _uploadAs(list.filter(isPictureFile), list.length, 'images', 'image', (l, on) => uploadImages(l, on));
   if (_isAudio()) {
     const into = SS.filesTo(_node);
@@ -1025,7 +1074,8 @@ async function _load() {
     const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
     if (!d || !d.success) throw new Error((d && d.error) || 'shelf refused');
-    _items = (d.items || []).filter(i => i && i.media);
+    // (phase V59.1) A saved text of Music -> Lyrics has no file - it is a tile all the same.
+    _items = (d.items || []).filter(i => i && (i.media || LYR.isLyrics(i)));
     _paint();
   } catch (e) {
     if (mine !== _seq) return;

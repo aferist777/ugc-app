@@ -77,6 +77,9 @@
    a folder or files from Explorer let go there, and "New folder" in them (the menu, the gallery's empty space), are refused
    in words (`closedSays` - the page says the same for its Upload / "+"); "Move to…" does not offer them
    (js/media-targets.js). Out of them, renamed, deleted - as any folder.
+   (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics (`lyrics`, kind `lyrics`, routes/library.js _lyricsNode): the texts
+   Generate music saved - locked, no "+", no folder of its own. A tile, several, a folder or files from Explorer let go
+   on it are refused in words (LYRICS_TAKE); a text let go anywhere else too (LYRICS_STAY); "Move to…" does not offer it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -99,6 +102,9 @@ const MADE_SAYS = {
   environments: 'A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
   lookbooks: 'A made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
 };
+// (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - nothing goes in by hand, nothing of it goes out.
+const LYRICS_STAY = 'A text stays in Music → Lyrics - a press opens it; "Use in Custom" takes it into Generate music';
+const LYRICS_TAKE = 'Music → Lyrics holds only texts - saved from Generate music (its Lyrics, or "save" by Custom\'s Lyrics)';
 // (phase TG, block 5b) What a post of REFERENCES holds, readable while it is dragged: one video, one picture, or 'several'.
 const REF_TYPE = 'application/x-ugc-refmedia-';
 
@@ -137,6 +143,8 @@ function _dragKind(dt) {
 function _target(n) {
   if (!n) return null;
   if (n.key === 'generated') return { kind: 'birols', cat: '' };
+  // (phase V59.1) Music -> Lyrics: only Generate music saves there - what is let go is refused in words.
+  if (n.lyrics) return { kind: 'lyrics', cat: '', lyrics: true };
   // (phase V55) Environments / Lookbooks: only their generator files there - what is let go is refused in words.
   if (MADE[n.kind]) return { kind: n.kind, cat: '', made: true };
   // (phase V57) Their references and the folders in them: closed to the hand - refused in words too.
@@ -158,6 +166,8 @@ function _target(n) {
 function _dropAction(n, from, refType) {
   const t = _target(n);
   if (!t || !from) return '';
+  // (phase V59.1) A saved text goes nowhere; nothing goes into Lyrics - both refused in words (on Lyrics itself, nothing).
+  if (from === 'lyrics' || t.lyrics) return from === 'lyrics' && t.lyrics ? '' : 'refuse';
   // (phase V34.E, the owner's (р4)) A built-in sound let go on My sounds is refused - in words.
   if (from === 'sfx') return t.kind === 'sounds' ? 'refuse' : '';
   // (phase V55, (гн9)) A made environment or lookbook goes nowhere - refused in words wherever it is let go but its own
@@ -255,8 +265,10 @@ export function createTree(host, o) {
     && parentOf.get(_dragging.key) !== n.key;
   // (phase V55) An IMAGES folder let go on Environments / Lookbooks - refused in words; (V57) on their references or a folder
   // in them too - but not where it already is, nor on itself.
-  const refusesFolder = (n) => !!_dragging && !!n && _dragging.kind === 'images' && ((!!MADE[n.kind] && !!n.make)
-    || (!!n.closed && n.key !== _dragging.key && parentOf.get(_dragging.key) !== n.key && !isUnderKey(n.key, _dragging.key)));
+  const refusesFolder = (n) => !!_dragging && !!n && ((_dragging.kind === 'images' && ((!!MADE[n.kind] && !!n.make)
+    || (!!n.closed && n.key !== _dragging.key && parentOf.get(_dragging.key) !== n.key && !isUnderKey(n.key, _dragging.key))))
+    // (phase V59.1) Music -> Lyrics holds no folder - any folder let go on it is refused in words.
+    || !!n.lyrics);
   // (phase V57) Why nothing goes into a closed node by hand, in words - the server's (lib/library-cats.js closedWhy); '' for
   // any other node.
   function closedSays(node) {
@@ -554,7 +566,8 @@ export function createTree(host, o) {
     target.addEventListener('dragover', (e) => {
       // (phase V57) Files from Explorer over a closed node: taken here (not lit), to be refused in words - so the page under
       // it does not upload them either.
-      if (n.closed && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; return; }
+      // (phase V59.1) Music -> Lyrics the same: it takes no file.
+      if ((n.closed || n.lyrics) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; return; }
       // (phase V54) A folder dragged onto a folder of its kind, or the kind's row.
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         // (phase V55) An IMAGES folder over Environments / Lookbooks: taken, to be refused in words (not lit).
@@ -582,13 +595,13 @@ export function createTree(host, o) {
     target.addEventListener('dragleave', () => target.classList.remove('is-drop'));
     target.addEventListener('drop', (e) => {
       target.classList.remove('is-drop');
-      if (n.closed && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); opt.status(closedSays(n), true); return; }
+      if ((n.closed || n.lyrics) && _anyFiles(e)) { e.preventDefault(); e.stopPropagation(); opt.status(n.lyrics ? LYRICS_TAKE : closedSays(n), true); return; }
       if (_hasType(e.dataTransfer, FOLDER_DRAG)) {
         if (refusesFolder(n)) {
           e.preventDefault();
           e.stopPropagation();
           _dragging = null;
-          opt.status(n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
+          opt.status(n.lyrics ? LYRICS_TAKE : n.closed ? closedSays(n) : MADE[n.kind] + ' holds only what its generator made - a folder does not go into it', true);
           return;
         }
         if (!takesFolder(n)) return;
@@ -738,7 +751,8 @@ export function createTree(host, o) {
     if (act === 'refuse') {
       // (phase V57) A picture let go on the closed folder it already lies in: nothing to say.
       if (t.closed && !MADE[it.kind] && !(Array.isArray(it.many) && it.many.length > 1) && (it.cat || '') === t.cat) return;
-      opt.status(MADE[it.kind] ? MADE_SAYS[it.kind]
+      opt.status(it.kind === 'lyrics' ? LYRICS_STAY : t.lyrics ? LYRICS_TAKE
+        : MADE[it.kind] ? MADE_SAYS[it.kind]
         : t.made ? 'Only ' + (t.kind === 'lookbooks' ? 'New lookbook' : 'New environment') + ' puts pictures into ' + MADE[t.kind]
           + ' (+ on it)'
         : t.closed ? closedSays(n)

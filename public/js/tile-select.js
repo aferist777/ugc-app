@@ -268,7 +268,8 @@ const _plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 /** Whether a tile of `kind` can go to the place `to` - one tile let go on a node, as js/media-tree.js _dropAction. */
 export function canGo(kind, to) {
-  if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube') return false;
+  // (phase V59.1) A saved text of Music -> Lyrics stays there.
+  if (!to || kind === 'sfx' || kind === 'heads' || kind === 'youtube' || kind === 'lyrics') return false;
   if (kind === 'music' || to.kind === 'music') return kind === to.kind;
   if (kind === 'references' || to.kind === 'references') return kind === to.kind;
   if (kind === to.kind) return true;
@@ -299,7 +300,10 @@ export async function deleteQuestion(items) {
   const n = items.length;
   const names = items.slice(0, 8).map(i => '  ' + (i.name || i.id));
   if (n > 8) names.push('  … and ' + (n - 8) + ' more');
-  let text = 'Delete ' + _plural(n, 'item') + '?\n\n' + names.join('\n') + '\n\nTheir files are removed from disk.';
+  // (phase V59.1) Saved texts of Music -> Lyrics have no file.
+  const texts = items.every(i => i.kind === 'lyrics');
+  let text = 'Delete ' + _plural(n, 'item') + '?\n\n' + names.join('\n') + '\n\n'
+    + (texts ? 'The texts are removed from Music → Lyrics.' : 'Their files are removed from disk.');
   if (items.some(i => i.kind === 'sfx')) text += '\nBuilt-in sounds are the app\'s - they stay.';
   const media = [];
   for (const i of items) {

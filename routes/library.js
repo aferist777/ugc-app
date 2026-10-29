@@ -45,6 +45,8 @@ const SM = require('../lib/shelf-meta');
 const IMG = require('../lib/images-store');
 const SND = require('../lib/sounds-store');
 const MUSIC = require('../lib/music-store');
+// (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - tiles with no file (_lyricItems).
+const LY = require('../lib/lyrics-store');
 // (phase V54 block 6) Folders in folders: renamed, moved, emptied with everything in them.
 const FOLDERS = require('../lib/folders');
 
@@ -382,6 +384,8 @@ function _mediaShelf(opts) {
   // (phase V55) IMAGES -> Environments / Lookbooks: the pictures their generators made - only when asked (`filter`), read
   // from their folders (always on the disk).
   if (opts && opts.made && MADE_KINDS.has(opts.made)) items.push(..._madeItems(opts.made));
+  // (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics: the saved texts - no file, only when asked.
+  if (opts && opts.lyrics) items.push(..._lyricItems());
   // (phase TG, block 6; the owner: "в library на полке media можно смотреть видео скачаные с youtube ... все видео-источники
   // сценариев и highlights - только скачаные с ютуба") YOUTUBE - every source with its video on the disk that came from
   // YouTube, one tile each, only when asked. It is the Sources' (Scenarios -> sources): watched, laid on a lane, sent to
@@ -550,12 +554,14 @@ function _musicNode(list, folders) {
   const moods = typeof MUSIC.moods === 'function' ? MUSIC.moods() : [];
   // (phase V54) What lies in Music itself: in no own folder and not in highlights.
   const rootN = list.filter(i => !i.meta.categoryId && i.meta.folder !== 'highlights').length;
+  // (phase V59.1, (мз6а)) Lyrics - beside highlights, after it: the app's (locked), only texts, no folders of its own.
+  const lyrics = _lyricsNode();
   // (phase V59, the owner 2026-10-29: "сделать music в дереве золотым") `make`: its name gold in the Library's tree, and its
   // "+" (and its menu) opens the Library's music window - in Merge's panel its own "/ generate audio" (js/media-tree.js onMake).
-  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
+  const node = { key: 'music', kind: 'music', label: 'Music', count: list.length + lyrics.count, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
     loose: 'music', direct: rootN, make: 'music', makeLabel: 'Generate music' };
   const own = folders || [];
-  if (!moods.length) { if (own.length) node.children = own; return node; }
+  if (!moods.length) { node.children = [lyrics, ...own]; return node; }
   const inHl = list.filter(i => i.meta.folder === 'highlights');
   const hlRootN = inHl.filter(i => !i.meta.mood).length;
   const hl = { key: 'music:highlights', kind: 'music', folder: 'highlights', label: 'highlights', locked: true, noAdd: true, count: inHl.length,
@@ -567,7 +573,25 @@ function _musicNode(list, folders) {
         locked: true, noAdd: true, moodLock: true, tip: m.label + ' - only the tracks made by its preset' + (m.about ? ' (' + m.about + ')' : ''),
         q: { filter: 'music', folder: 'highlights', mood: m.id } };
     }) };
-  return Object.assign(node, { children: [hl, ...own] });
+  return Object.assign(node, { children: [hl, lyrics, ...own] });
+}
+
+// (phase V59.1, the owner 2026-10-29: "текста песен ... давай в music будет своя папка еще для lyrics"; (мз6а)) Music ->
+// Lyrics: the texts saved from Generate music (lib/lyrics-store.js) - its Lyrics' "save", Custom's "save" by the Lyrics
+// field. The app's folder: never renamed, deleted or moved (`locked`), no folder of its own in it and nothing let go or
+// moved into it by hand (`noAdd`, `lyrics` - js/media-tree.js refuses in words); its tiles open the text.
+function _lyricsNode() {
+  const n = LY.list().length;
+  return { key: 'music:lyrics', kind: 'lyrics', label: 'Lyrics', locked: true, noAdd: true, lyrics: true, count: n, direct: n, empty: !n,
+    tip: 'Lyrics - the texts saved from Generate music (its Lyrics, and "save" by Custom\'s Lyrics); a press on one opens it',
+    q: { filter: 'lyrics' } };
+}
+// A saved text as a tile of the media shelf: its title, the text itself (the tile shows its first lines, the viewer all).
+function _lyricItems() {
+  return LY.list().map(l => ({
+    id: l.id, name: l.title, kind: 'lyrics', media: '', thumb: null, dur: 0,
+    meta: { categoryId: '', date: l.date || null, favorite: false, from: l.from, gen: l.gen, text: l.text },
+  }));
 }
 
 // (phase V35, the owner 2026-10-23, (т2): "как будто папки в library ... при нажатии на корневую категорию показывать
@@ -1071,7 +1095,8 @@ router.get('/library/shelf/:kind', (req, res) => {
     const { items, filters, labelFor, labelKeys, running } = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
-        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '' })
+        youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '',
+        lyrics: f === 'lyrics' })
       : build();
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
@@ -1640,6 +1665,11 @@ function _deleteOne(kindIn, idIn, filesIn) {
     const kind = String(req.params.kind || '');
     if (kind === 'sfx') return _r(409, { success: false, error: 'A built-in sound is part of the app - it is not deleted.' });
     const id = String(req.params.id || '');
+    // (phase V59.1) A saved text of Music -> Lyrics: no file goes with it.
+    if (kind === 'lyrics') {
+      try { LY.remove(id); return _r(200, { success: true, kind, id, removed: [] }); }
+      catch (e) { return _r(e.status || 500, { success: false, error: e.message }); }
+    }
     const withFiles = req.query.files !== '0';
     const removed = [], spared = [];
 
@@ -1893,9 +1923,14 @@ function _recOf(kind, id) {
 const _nameOfRec = (kind, id) => {
   // (phase V55) A made environment or lookbook has no record: its id is its file's name.
   if (MADE_KINDS.has(kind)) return String(id || '').replace(/\.[^.]+$/, '');
+  if (kind === 'lyrics') { const l = LY.get(id); return l ? l.title : ''; }
   const r = _recOf(kind, id);
   return r ? String(r.name || r.title || '') : '';
 };
+
+// (phase V59.1) What Music -> Lyrics says to a move - the same words as js/media-tree.js.
+const LYRICS_STAY = 'a text stays in Music → Lyrics';
+const LYRICS_TAKE = 'only Generate music saves texts into Music → Lyrics';
 
 // One item to `to`: '' when it went (or was there already), else why not.
 function _moveOne(it, to) {
@@ -1906,6 +1941,9 @@ function _moveOne(it, to) {
   // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
   if (MADE_KINDS.has(from)) return MADE_STAYS[from];
   if (MADE_KINDS.has(to.kind)) return to.kind === 'lookbooks' ? 'only New lookbook puts pictures into Lookbooks' : 'only New environment puts pictures into Environments';
+  // (phase V59.1, (мз6а)) A saved text stays in Music -> Lyrics, and only Generate music saves into it.
+  if (from === 'lyrics') return LYRICS_STAY;
+  if (to.kind === 'lyrics') return LYRICS_TAKE;
   if (from === 'music' || to.kind === 'music') {
     if (from !== to.kind) return from === 'music' ? 'a track stays in Music' : 'only tracks go into Music';
     if (to.cat) {
@@ -2020,7 +2058,7 @@ router.post('/library/batch/favorite', (req, res) => {
     const favorite = !!(req.body || {}).favorite;
     const skipped = [];
     for (const x of items) {
-      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube' || MADE_KINDS.has(x.kind)) { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
+      if (x.kind === 'references' || x.kind === 'heads' || x.kind === 'youtube' || x.kind === 'lyrics' || MADE_KINDS.has(x.kind)) { skipped.push({ kind: x.kind, id: x.id, why: 'it has no star' }); continue; }
       const r = _patchOne(x.kind, x.id, { favorite });
       if (r.status !== 200) skipped.push({ kind: x.kind, id: x.id, why: _whyOf(r) });
     }

@@ -1,8 +1,8 @@
 // LIBRARY — the viewer.
 //
 // Opens the item itself, not its thumbnail: an <img> for stills, a <video> with controls
-// for clips. Arrows step through the same list the grid is showing, so paging never
-// wanders off the current filter.
+// for clips (and, phase V59.1, a saved text of Music -> Lyrics whole - js/sound/lyrics.js). Arrows
+// step through the same list the grid is showing, so paging never wanders off the current filter.
 //
 // The element is REPLACED between items rather than reused: swapping a src on a live
 // <video> keeps the old frame on screen until the new one decodes, and a video element
@@ -75,7 +75,14 @@ function _paint() {
   // A sound of the Sounds shelf is heard whatever its extension says - a .webm there has no picture (phase V7).
   const isSound = it.kind === 'sounds';
   const isVideo = !isSound && VIDEO_RE.test(String(it.media || ''));
-  if (isVideo) {
+  if (it.kind === 'lyrics') {
+    // (phase V59.1) A saved text of Music -> Lyrics (js/sound/lyrics.js): the text itself, whole, on the stage.
+    const t = document.createElement('div');
+    t.className = 'lib-view-text';
+    t.textContent = String((it.meta && it.meta.text) || '');
+    stage.appendChild(t);
+    stage.classList.remove('has-under');
+  } else if (isVideo) {
     const v = document.createElement('video');
     v.className = 'lib-view-media';
     v.src = (_videoSrc && _videoSrc(it)) || it.media;
@@ -265,7 +272,8 @@ function _onKey(e) {
 
 export function openViewer(items, index, opts) {
   closeViewer();
-  _list = (items || []).filter(i => i && i.media);
+  // (phase V59.1) A saved text has no file - it is shown all the same.
+  _list = (items || []).filter(i => i && (i.media || i.kind === 'lyrics'));
   if (!_list.length) return;
   _at = Math.max(0, Math.min(_list.length - 1, index || 0));
   const o = opts || {};
