@@ -20,8 +20,18 @@
    or on a word of the PATH over the gallery (crumbsEl - "AUDIO / SFX / My sounds", each word a press away) goes there
    as on its row. A branch opens on a DOUBLE press of its row or a press of its ▸ (the owner, second round) - and (phase
    V39) under a tile dragged and held over its row for 0.6 s -, and what is open is remembered, so is the node selected -
-   per page. The three top nodes are an accordion: one open, the others folded - what is open inside them stays as it
-   was (a branch opened under a drag folds nothing).
+   per page.
+
+   ONE PATH OPEN (phase V59, the owner 2026-10-29, (мг7б), (мг8а), (мг9а): "когда пользователь открывает корневую папку
+   (references, images, video, audio) остальные должны свернуться и подкатегории тоже должны сворачиваться"). What is open
+   is always one path from a top node down: a node opened (▸, a double press, a folder tile, a word of the path, a folder
+   made or moved into it, the page's select) folds everything off its line - the other top nodes with everything in them,
+   its sibling folders with theirs -, and a folded node folds what was open in it, so opened again it shows its first level
+   only. A TOP NODE (REFERENCES, IMAGES, VIDEO, AUDIO) opens on ONE press - selected and opened; deeper a press only
+   selects (the rows stay, a double press must find its row) and a double press or ▸ opens. A branch opened under a drag
+   still folds nothing (V39); the next opening makes it one path again. The same rule wherever the tree is drawn - the
+   Library, Merge's Library panel, the attachment window, Video to Music; `roots` show some top nodes only and the rule
+   works among them.
 
    CATEGORIES, both ways the owner asked for: the chips' gestures - "+" on a kind's row makes one, a double press on
    its name renames it, the ✕ on hover deletes it (the media moved out of it into the kind itself, or deleted with them -
@@ -57,6 +67,10 @@
    uploads_environments / uploads_lookbooks, an IMAGES folder like any) inside. Such a node carries `make` (its kind) and
    `makeLabel`: its row has a "+" - and its menu an item - that opens the generator where the page says (`onMake`). A made
    picture moves nowhere and nothing is moved in - each refused IN WORDS when let go there.
+   (phase V59, (мг3б)) A node with `make` that also holds folders of its own - AUDIO -> Music, its generator Generate music -
+   has ONE "+" on its row, the generator's (when the page gives `onMake`); its "New folder" is in the menu under the right
+   button and on the gallery's empty space. Only Environments / Lookbooks are the generators' own folders (MADE): a
+   picture's rules and "Required" belong to them alone.
    (phase V57, the owner's (ок2): "В референсы окружений и лукбуков нельзя класть ничего вручную, туда падает только если из
    референсов создают окружения и лукбуки") Their references, and every folder in them, are `closed` (the server's flag,
    lib/library-cats.js closedWhy): only the photo a generator is given lands there. A tile, several tiles, a post's picture,
@@ -201,8 +215,8 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *                         gallery again; the tree reads itself again
  *   o.takesFiles(node)    (phase V34.E) whether files from Explorer may be let go on this node's row
  *   o.onFiles(node, files)  they were
- *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks) - open its
- *                         generator ('environments' | 'lookbooks' in node.make); without it the node has no "+"
+ *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks; V59: AUDIO ->
+ *                         Music, 'music') - open its generator (node.make); without it the node has no generator's "+"
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind), holds(node), newFolder(node, anchor),
  *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may }
  */
@@ -213,10 +227,15 @@ export function createTree(host, o) {
   let nodes = [];
   const byKey = new Map();
   const parentOf = new Map();
-  let open = new Set(_ls(K_OPEN, ['video', 'audio']));
+  // (phase V59) one path - made so at the first answer when what was kept is not one (an older page kept several)
+  let open = new Set(_ls(K_OPEN, []));
   let sel = String(_ls(K_SEL, '') || opt.fallback);
   let loaded = false;       // the first answer has been painted
   let lastPress = { key: '', at: 0 };
+  // (phase V59) A top node's press draws the rows again (it opens, the others fold): the second press of a double one lands
+  // on whatever row is under the pointer then - for this long after it no other row is pressed and no branch toggles.
+  let settle = { key: '', until: 0 };
+  const SETTLE_MS = 450;
 
   const el = _el('div', 'mt');
   el.setAttribute('role', 'tree');
@@ -244,7 +263,7 @@ export function createTree(host, o) {
     const n = node && byKey.get(node.key);
     if (!n || !n.closed) return '';
     let m = n;
-    while (m && !m.make) m = byKey.get(parentOf.get(m.key));
+    while (m && !MADE[m.make]) m = byKey.get(parentOf.get(m.key));
     const env = !m || m.make !== 'lookbooks';
     return 'Nothing goes into ' + (env ? 'Environments' : 'Lookbooks') + ' / references by hand - only the photo '
       + (env ? 'New environment makes an environment' : 'New lookbook makes a lookbook') + ' from lands there.';
@@ -314,7 +333,11 @@ export function createTree(host, o) {
       sel = byKey.has(kind) ? kind : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
       _lsSet(K_SEL, sel);
     }
-    _openTo(sel);
+    // (phase V59) What is open: at the first answer one path to the node selected (what was kept, when it is one); later
+    // the path to the node selected only when that node had to change - a reading after a move or a drop folds nothing.
+    if (!loaded) _firstOpen();
+    else if (sel !== before) _setOpen(sel, _isTop(sel));
+    else _dropGone();
     _computeNew();
     paint();
     if (loaded && sel !== before && byKey.has(sel)) opt.onSelect(byKey.get(sel));
@@ -322,19 +345,56 @@ export function createTree(host, o) {
     return nodes;
   }
 
-  // The top nodes are an accordion (the owner): opening one folds the others; what is open inside them stays.
+  // ── One path open (phase V59, the owner's (мг7б)) ──
   const _isTop = (key) => nodes.some(n => n.key === key);
-  function _openOne(key) {
-    open.add(key);
-    if (_isTop(key)) for (const n of nodes) if (n.key !== key) open.delete(n.key);
-  }
-
-  function _openTo(key) {
-    let p = parentOf.get(key);
-    let changed = false;
-    while (p) { if (!open.has(p)) { _openOne(p); changed = true; } p = parentOf.get(p); }
-    if (changed) _lsSet(K_OPEN, [...open]);
+  const _isUnder = (key, anc) => key !== anc && isUnderKey(key, anc);
+  const _save = () => _lsSet(K_OPEN, [...open]);
+  // The path to `key` opened - it too with `self` -, everything off its line folded: the other top nodes and the sibling
+  // folders with all that is open in them. What is open in `key` stays only when it was open itself. -> whether it changed.
+  function _setOpen(key, self) {
+    if (!byKey.has(key)) return false;
+    const was = open.has(key);
+    const next = new Set();
+    for (let p = parentOf.get(key); p; p = parentOf.get(p)) next.add(p);
+    if (self || was) next.add(key);
+    if (was) for (const k of open) if (_isUnder(k, key)) next.add(k);
+    const changed = next.size !== open.size || [...next].some(k => !open.has(k));
+    open = next;
+    if (changed) _save();
     return changed;
+  }
+  // A node folded folds what was open in it - opened again, it shows its first level only.
+  function _fold(key) {
+    for (const k of [...open]) if (k === key || _isUnder(k, key)) open.delete(k);
+    _save();
+  }
+  // Whether what is open is one path from a top node down (each open node's parent open, one open child at most).
+  function _onePath() {
+    const taken = new Set();
+    for (const k of open) {
+      if (!byKey.has(k)) return false;
+      const p = parentOf.get(k) || '';
+      if ((p && !open.has(p)) || taken.has(p)) return false;
+      taken.add(p);
+    }
+    return true;
+  }
+  // Nodes not there any more (a folder deleted) are forgotten.
+  function _dropGone() {
+    let gone = false;
+    for (const k of [...open]) if (!byKey.has(k)) { open.delete(k); gone = true; }
+    if (gone) _save();
+  }
+  // The first answer: what was kept stays when it is one path and the node selected is on it or beside it (its parents
+  // open; a top node selected is open); else the path to the node selected - a top node open itself.
+  function _firstOpen() {
+    _dropGone();
+    let ok = _onePath() && (!_isTop(sel) || open.has(sel));
+    for (let p = parentOf.get(sel); ok && p; p = parentOf.get(p)) if (!open.has(p)) ok = false;
+    if (ok) return;
+    open = new Set();
+    _setOpen(sel, _isTop(sel));
+    _save();
   }
 
   // The selection moved, nothing opened: the rows stay - a double press on a name must find the row it began on.
@@ -389,8 +449,10 @@ export function createTree(host, o) {
       lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
       row.appendChild(lock);
     }
-    // A kind that can have folders: "+" makes one at its top.
-    if (holds(n) && !n.cat) {
+    // A kind that can have folders: "+" makes one at its top - (phase V59, (мг3б)) unless its "+" is its generator's
+    // (Music): one "+" on a row; its "New folder" is in the menu under the right button and on the gallery's empty space.
+    const makes = !!n.make && typeof opt.onMake === 'function';
+    if (holds(n) && !n.cat && !makes) {
       const add = _el('button', 'mt-act mt-add', '+');
       add.type = 'button';
       add.tabIndex = -1;
@@ -398,8 +460,9 @@ export function createTree(host, o) {
       add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
       row.appendChild(add);
     }
-    // (phase V55, (гн10), (гн11)) Environments / Lookbooks: "+" opens their generator - where, the page says (`onMake`).
-    if (n.make && typeof opt.onMake === 'function') {
+    // (phase V55, (гн10), (гн11)) Environments / Lookbooks - (V59) and Music: "+" opens their generator - where, the page
+    // says (`onMake`).
+    if (makes) {
       const mk = _el('button', 'mt-act mt-add mt-make', '+');
       mk.type = 'button';
       mk.tabIndex = -1;
@@ -420,14 +483,25 @@ export function createTree(host, o) {
 
     // A press selects; the second press of a double one does not read the gallery again.
     row.addEventListener('click', () => {
-      const again = lastPress.key === n.key && Date.now() - lastPress.at < 450;
-      lastPress = { key: n.key, at: Date.now() };
+      const now = Date.now();
+      // (phase V59) Right after a top node's press drew the rows again, the row now under the pointer is not pressed.
+      if (now < settle.until && n.key !== settle.key) return;
+      const again = lastPress.key === n.key && now - lastPress.at < 450;
+      lastPress = { key: n.key, at: now };
       if (again && n.key === sel) return;
-      select(n.key, true);
+      // (phase V59, (мг8а)) A top node opens on ONE press - selected and opened, the others folded with all in them.
+      if (isGroup && has) {
+        if (_choose(n.key, { fire: true, open: true })) settle = { key: n.key, until: now + SETTLE_MS };
+        return;
+      }
+      // Deeper a press only selects: nothing opens or folds, the rows stay (a double press must find its row).
+      _choose(n.key, { fire: true });
     });
-    // A double press opens or folds a branch (the owner, second round); on a category's name it renames it.
-    if (has) row.addEventListener('dblclick', (e) => { e.preventDefault(); toggle(n.key); });
-    if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); _rename(n, row); });
+    // A double press opens or folds a branch (the owner, second round); on a category's name it renames it. (phase V59)
+    // Not on a top node - one press opened it -, and not on the rows a top node's press has just drawn under the pointer.
+    const settled = () => Date.now() >= settle.until;
+    if (has) row.addEventListener('dblclick', (e) => { e.preventDefault(); if (!isGroup && settled()) toggle(n.key); });
+    if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); if (settled()) _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
     _takesDrops(row, n);
     if (has) row.addEventListener('dragover', (e) => _spring(n, e));
@@ -464,8 +538,9 @@ export function createTree(host, o) {
     const timer = setTimeout(() => {
       _unspring();
       if (open.has(n.key) || !byKey.has(n.key)) return;
+      // (phase V59) Under a drag nothing folds - the next opening makes it one path again.
       open.add(n.key);
-      _lsSet(K_OPEN, [...open]);
+      _save();
       paint();
     }, SPRING_MS);
     spring = { key: n.key, timer, watch };
@@ -544,12 +619,11 @@ export function createTree(host, o) {
 
   // ── Folders in the gallery (phase V35) ──
   // A node opened from its folder tile or its word in the path: selected, its own branch opened too, as Explorer's tree
-  // follows the folder you went into.
+  // follows the folder you went into - (phase V59) and what is off its line folded.
   function openNode(key) {
     const n = byKey.get(key);
     if (!n) return;
-    if (n.children && n.children.length && !open.has(key)) { _openOne(key); _lsSet(K_OPEN, [...open]); }
-    select(key, true, true);
+    _choose(key, { fire: true, repaint: true, path: true, open: !!(n.children && n.children.length) });
   }
 
   // What a node's tooltip says: the server's own word (`tip`), else what it is.
@@ -607,23 +681,35 @@ export function createTree(host, o) {
     return box;
   }
 
+  // ▸ or a double press: folded - with what was open in it -, or opened with everything off its line folded (V59).
   function toggle(key) {
-    if (open.has(key)) open.delete(key); else _openOne(key);
-    _lsSet(K_OPEN, [...open]);
+    if (open.has(key)) _fold(key); else _setOpen(key, true);
     paint();
   }
 
-  function select(key, fire, repaint) {
-    if (!byKey.has(key)) return;
+  // A node chosen. `how`: fire - the page is told; repaint - the rows drawn again anyway; path - the path to it opened and
+  // what is off its line folded (V59); open - it opens too. Neither: a row's own press - nothing opens or folds, so the
+  // rows stay. -> whether what is open changed.
+  function _choose(key, how) {
+    if (!byKey.has(key)) return false;
+    const h = how || {};
     sel = key;
     _lsSet(K_SEL, sel);
     // Opened: it and everything under it are seen - and its branch is green only while something else in it is new.
     _seeAll(byKey.get(key));
     _computeNew();
-    if (_openTo(key) || repaint) paint(); else _mark();
+    const changed = h.path || h.open ? _setOpen(key, !!h.open) : false;
+    if (changed || h.repaint) paint(); else _mark();
     const row = el.querySelector('.mt-row.is-sel');
     if (row) row.scrollIntoView({ block: 'nearest' });
-    if (fire) opt.onSelect(byKey.get(key));
+    if (h.fire) opt.onSelect(byKey.get(key));
+    return changed;
+  }
+
+  // The page selects a node - an address, a file that landed, files let go on a row: (phase V59) the path to it opens and
+  // the rest folds; a top node opens itself, as its press does.
+  function select(key, fire, repaint) {
+    _choose(key, { fire, repaint, path: true, open: _isTop(key) });
   }
 
   // A kind and a category, as a node: no category is the kind itself - a B-roll's is Generated (V35: no Uncategorized).
@@ -759,8 +845,7 @@ export function createTree(host, o) {
       submit: async (name) => (await A.addFolder(kind, name, n.cat || '')).cat,
     });
     if (!cat) return;
-    open.add(n.key);
-    _lsSet(K_OPEN, [...open]);
+    _setOpen(n.key, true);
     await _after('Made the folder "' + cat.label + '"', { cats: kind });
   }
 
@@ -791,8 +876,7 @@ export function createTree(host, o) {
       }).then(x => x.json());
     } catch (e) { r = { success: false, error: e.message }; }
     if (!r || !r.success) { opt.status((r && r.error) || 'Could not move the folder', true); return; }
-    open.add(t.key);
-    _lsSet(K_OPEN, [...open]);
+    _setOpen(t.key, true);
     await _after('"' + d.label + '" is in ' + (t.cat ? t.label : (t.label || kindLabel(d.kind))) + ' now', { cats: d.kind, moved: { folder: d.id } });
   }
 
@@ -916,7 +1000,8 @@ export function createTree(host, o) {
     // (phase V55) Environments / Lookbooks: their generator; what they hold is the app's to keep where it is.
     if (n.make && typeof opt.onMake === 'function') {
       items.push([n.makeLabel, 'opens the generator', () => opt.onMake(n, row)]);
-      items.push(['Required', 'what its generator made stays here - open it or delete it', null]);
+      // (phase V59) Only the generators' own folders keep what they made; Music's tracks move as any.
+      if (MADE[n.kind]) items.push(['Required', 'what its generator made stays here - open it or delete it', null]);
     }
     if (n.cat && !n.uncat && !n.project) {
       if (n.builtin) items.push(['Built-in', 'part of the app - read only', null]);
