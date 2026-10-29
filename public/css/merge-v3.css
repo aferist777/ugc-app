@@ -528,6 +528,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 .mv3-lib-sash:hover::after{opacity:1}
 .mv3-lib-tree{flex:0 0 180px; min-width:0; min-height:0; overflow:hidden; background:var(--bg)}
 .mv3-lib-tree.is-locked{pointer-events:none; opacity:.6}
+/* (phase V59.1, the owner 2026-10-29, check 36: "сделай music золотым") Music's name gold here too, as in the Library's tree
+   (css/library.css); Environments / Lookbooks keep Merge's colours. */
+#mv3-lib-tree .mt-row.is-made[data-key="music"] .mt-name{color:var(--gold)}
 
 /* (phase V28.4) A clip whose file was deleted from the library: red, striped, "deleted · <name>" - to be replaced (a tile
    let go on it) or removed - and the notice over the timeline that says so as the project opens. */
