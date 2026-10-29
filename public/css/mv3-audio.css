@@ -207,7 +207,9 @@
    page darkened and a little blurred: the sections on the left, the open one's notes as chips under their categories, the
    note of the chip pressed under them, "your prompt" at the foot ── */
 .aal-ov{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .45); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px)}
+  /* (phase V60.1) the one look of every window over the page - css/app-shell.css --ov-* */
+  background:var(--ov-dim, oklch(0 0 0 / .45));
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
 .aal{width:min(860px, calc(100vw - 32px)); height:min(560px, calc(100vh - 32px)); display:flex; flex-direction:column; min-height:0;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:0 18px 50px rgba(0,0,0,.55);
   overflow:hidden; color:var(--ink)}
