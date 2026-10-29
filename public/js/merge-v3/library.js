@@ -73,7 +73,7 @@ const TREE_DEF = 180, TREE_MIN = 120, TREE_MAX = 420;
 
 let _items = [];      // what the grid is showing, and what the viewer pages through
 let _tree = null;
-let _node = null;     // the tree's selected node - what the gallery shows
+let _node = null;     // the tree's selected node - what the gallery shows; (phase V60.2) null - the panel's ROOTS
 let _seq = 0;         // guards against a slow response for a node you have left
 
 const _kind = () => (_node && _node.kind) || '';
@@ -833,6 +833,14 @@ function _paint() {
   const b = _body();
   if (!b) return;
   b.textContent = '';
+  // (phase V60.2, the owner's (дг1а)) THE ROOTS - "Library" pressed: REFERENCES, VIDEO, IMAGES, AUDIO as folder tiles with their
+  // numbers, the tree folded, no "+" (nothing is brought in here - a file let go on them is refused in words, _upload).
+  if (_tree && !_node) {
+    const roots = _tree.foldersEl(null);
+    if (roots) b.appendChild(roots);
+    if (_tsel) _tsel.refresh();
+    return;
+  }
   if (_tree && _node) b.appendChild(_tree.crumbsEl(_node));
   const searching = !!(_q && SS.isSfx(_node));
   if (SS.isSfx(_node)) {
@@ -954,6 +962,8 @@ function _shut() { return _tree && _node ? _tree.closedSays(_node) : ''; }
 async function _upload(files, what) {
   const list = Array.from(files || []);
   if (!list.length) return;
+  // (phase V60.2) At the roots there is no place to put them yet.
+  if (!_node && !what) { _status('Open a folder first - REFERENCES, VIDEO, IMAGES or AUDIO, then the folder the files go into', true); return; }
   // (phase V55) Environments / Lookbooks take only what their generator made.
   if (_node && _node.make && MADE.has(_node.make)) {
     _status(_node.label + ' takes only what ' + _node.makeLabel + ' makes', true);
@@ -1062,7 +1072,8 @@ function _wireDrop() {
 // ── Reading the shelf for the node selected ─────────────────────────────────
 async function _load() {
   const mine = ++_seq;
-  if (!_node) return;
+  // (phase V60.2) The roots: the four tiles, nothing asked of the shelf.
+  if (!_node) { _items = []; _paint(); return; }
   if (!SS.isSfx(_node)) _q = '';
   // (phase V35) What lies directly in the node (its `q`) - none in a node that only holds folders; a search over SFX looks
   // through all of SFX, whichever of its folders is open (the owner's (у3)).
@@ -1246,6 +1257,13 @@ function _wireTreeSash() {
   });
 }
 
+/** (phase V60.2, the owner's (дг1а)) The panel's roots: nothing selected, the tree folded, the four top folders as tiles. */
+export function toRoots() {
+  if (!_tree) return;
+  _q = '';
+  _tree.home(true);         // -> onSelect(null): the gallery painted as the roots
+}
+
 export function initLibrary() {
   const inp = document.getElementById('mv3-lib-file');
   if (inp) {
@@ -1275,10 +1293,15 @@ export function initLibrary() {
   const host = document.getElementById('mv3-lib-tree');
   if (!host) return;
   host.addEventListener('click', (e) => e.stopPropagation());     // the folded column's press must not see it
+  // (phase V60.2, the owner's (дг1а)-(дг3а)) The panel has ROOTS - "Library" pressed leads there (lib-views.js) - with no word
+  // in the path; Merge opened, reloaded or another project opened: the panel on the folder it was left on - or the roots, when
+  // it was left there (`mv3_tree_sel_v1` '') - and the old shelf button's kind the first time ever.
+  let start = fallback;
+  try { const kept = localStorage.getItem('mv3_tree_sel_v1'); if (kept != null) start = String(JSON.parse(kept) || ''); } catch (e) { /* a private window */ }
   _tree = createTree(host, {
-    page: 'mv3', fallback,
+    page: 'mv3', fallback, home: true, start,
     status: (t, bad) => { _status(t, bad); if (t && !bad) setTimeout(() => _status(''), 3000); },
-    onSelect: (n) => { _node = n; if (_tsel) _tsel.clear(); _load(); },
+    onSelect: (n) => { _node = n || null; if (_tsel) _tsel.clear(); _load(); },
     onChanged: () => _load(),        // awaited by the tree before it says what was done
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => !!SS.filesTo(n),
@@ -1287,6 +1310,8 @@ export function initLibrary() {
     onMake: (n) => { if (n && n.make) openMaker(n.make); },
   });
   _initMakers();
+  // (phase V60.2) "Library" pressed - from the shelf, a chat or the captions: the roots.
+  Views.onLibraryRoots(toRoots);
   _tree.load().then(() => { _node = _tree.selected(); _load(); });
   // (phase V54) Several tiles picked in the gallery (js/tile-select.js) - while the shelf is what the panel shows.
   const body = _body();

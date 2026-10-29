@@ -207,8 +207,9 @@ function _paint() {
   }
   const title = $('mv3-lib-title');
   if (title) {
-    title.classList.toggle('is-link', t !== 'shelf');
-    title.title = t === 'shelf' ? '' : 'Back to the Library';
+    // (phase V60.2) A link always: it leads to the Library's roots, from the shelf too.
+    title.classList.add('is-link');
+    title.title = 'The Library - REFERENCES, VIDEO, IMAGES, AUDIO';
   }
   for (const [name, c] of _chats) {
     const on = t === name;
@@ -232,17 +233,24 @@ function _paint() {
   _room();
 }
 
+/** (phase V60.2) What "Library" does once the shelf is back: the panel's roots (js/merge-v3/library.js toRoots). */
+let _toRoots = null;
+export function onLibraryRoots(fn) { _toRoots = typeof fn === 'function' ? fn : null; }
+
 export function initViews() {
   onColumnOpen(() => _room());
-  // "Library" always lands on the shelf: the captions let go of, then the chat under them left.
+  // "Library" always lands on the shelf: the captions let go of, then the chat under them left - and (phase V60.2, the
+  // owner's (дг1а): "при нажатии на крошку library в merge нужно уводить пользователя в корневую папку") on the shelf's
+  // ROOTS, from the shelf itself too. A folded column's press is the column's (it opens it).
   const title = $('mv3-lib-title');
   if (title) {
     title.addEventListener('click', (e) => {
-      if (top() === 'shelf') return;
+      if (!_libraryOpen()) return;
       e.stopPropagation();
       if (_caps && _capsBack) _capsBack();
       const c = _chats.get(_base);
       if (c && c.onBack) c.onBack();
+      if (_toRoots) _toRoots();
     });
   }
   const cap = $('mv3-lib-cap');

@@ -87,6 +87,8 @@
    every branch folded. It starts there unless the page names a node (`start` - an address); what was selected last is
    not read. The path over the gallery begins with the `home` word ("Media / AUDIO / SFX"), and that word pressed goes
    back to the roots (home()). A root's tile opens it as its row's press does - the others fold (one path, V59).
+   (phase V60.2, the owner's (дг1а)-(дг3а)) Merge's Library panel has the roots too, with `home: true` - no word in the path
+   (the panel's own "Library" crumb leads there) - and starts on the node it names (`start`: the last one, or the roots).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -235,7 +237,7 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks; V59: AUDIO ->
  *                         Music, 'music') - open its generator (node.make); without it the node has no generator's "+"
  *   o.home        (phase V60) the word the path begins with ('Media'): nothing selected is allowed - the roots; onSelect(null)
- *                 says the page went back to them (the word pressed)
+ *                 says the page went back to them (the word pressed). (phase V60.2) `true` - the roots with no word in the path
  *   o.start       (phase V60, with `home`) the node to open on - an address's; '' or omitted - the roots
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind), holds(node), newFolder(node, anchor),
  *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may; home(fire) - (V60) back to the roots }
@@ -695,18 +697,19 @@ export function createTree(host, o) {
     const box = _el('div', 'mt-crumbs');
     const chain = [];
     for (let k = node && node.key; k && byKey.has(k); k = parentOf.get(k)) chain.unshift(byKey.get(k));
-    if (opt.home) {
+    const word = typeof opt.home === 'string' ? opt.home : '';
+    if (word) {
       const here = !chain.length;
-      const w = _el(here ? 'span' : 'button', 'mt-crumb is-home' + (here ? ' is-here' : ''), opt.home);
+      const w = _el(here ? 'span' : 'button', 'mt-crumb is-home' + (here ? ' is-here' : ''), word);
       if (!here) {
         w.type = 'button';
-        w.title = 'Back to ' + opt.home + ' - REFERENCES, VIDEO, IMAGES, AUDIO';
+        w.title = 'Back to ' + word + ' - REFERENCES, VIDEO, IMAGES, AUDIO';
         w.addEventListener('click', () => home(true));
       }
       box.appendChild(w);
     }
     chain.forEach((c, i) => {
-      if (i || opt.home) box.appendChild(_el('span', 'mt-crumb-sep', '/'));
+      if (i || word) box.appendChild(_el('span', 'mt-crumb-sep', '/'));
       const last = i === chain.length - 1;
       const w = _el(last ? 'span' : 'button', 'mt-crumb' + (last ? ' is-here' : '') + (i === 0 ? ' is-top' : ''), c.label);
       if (!last) {
