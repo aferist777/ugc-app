@@ -2,18 +2,22 @@
    SUNO'S FORM (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge. конкретно suno взять") -
    ONE constructor of Suno's music for two places:
      - Merge's "/ generate audio" (js/merge-v3/audchat.js) - which adds what is Merge's own: the engine switch and
-       ElevenLabs, Sounds, Video to Music, "Made here", "by the video", the mode a project was left on;
+       ElevenLabs, Sounds, Video to Music, the project's presses under the card, "by the video", the mode a project was
+       left on;
      - the Library's window (js/library/music-window.js) - Simple, Custom and Lyrics, nothing else.
 
    What is here:
      the state of a page's form    remembered in the browser under the page's own key (Merge `mv3_audio_v1` as before)
      the catalog and the almanac    GET /api/audio/catalog, V34.A's public/js/audio/almanac-data.js - once per page
-     the settings column's rows     the mode, Suno's model (V6 / V6_MINI / V6_WILD), a highlights mood (Simple), the
-                                    length, the chips folded into Genre / Mood / Sound (one open at a time), the price,
-                                    the almanac at the foot (a press on a note copies it)
-     the constructor                Simple (the chips and the person's words, or a highlights mood's preset), Custom,
-                                    Lyrics - their fields, their request (body), a press of "generate" (press)
+     the settings column's rows     the mode, Suno's model (V6 / V6_MINI / V6_WILD), the length in one line, the chips
+                                    folded into Genre / Mood / Sound (one open at a time), the price, the almanac's button
+     the constructor                Simple (the chips and the person's words, or - the Library's window opened on a mood
+                                    folder of Music -> highlights - that mood's preset), Custom, Lyrics - their fields,
+                                    their request (body), a press of "generate" (press)
      the lyrics' card               "use in custom", "save", "copy", "all"
+     THE "?" (phase V60, (пп10а))   every parameter's name and every field of the card has a "?" right of it - what it is
+                                    and how to use it, on the pointer resting there (js/sound/qmark.js); the grey notes
+                                    under the rows and the hints on whole rows (V59.1) went into them
      SAVED LYRICS (phase V59.1, (мз7а)-(мз9а))   Music -> Lyrics, sub-session Q's store (GET|POST /api/audio/lyrics): in
                                     Custom a dropdown of them over the Lyrics field (a choice replaces the text, the title
                                     only when it is empty) and "save" under it; "save" on every text Lyrics wrote - a text
@@ -26,6 +30,9 @@
 
 import * as Layers from '../layers.js';
 import { secs } from './wave.js';
+import { qmark, withQ, closeQ } from './qmark.js';
+
+export { qmark, withQ, closeQ };
 
 export const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -52,9 +59,31 @@ export function modeHelp(mode, into) {
   return '';
 }
 export const MODEL_HELP = { V6: 'the newest - most natural', V6_MINI: 'faster', V6_WILD: 'bolder, stranger' };
-// The length a mode takes: [lowest, highest, what the note under it says]; empty - the model decides.
+// The length a mode takes: [lowest, highest, what its "?" says]; empty - the model decides.
 const LEN = { simple: [0, 360, 'the video\'s length - the bed comes out a little longer'], custom: [10, 360, '10–360 s'],
   compose: [3, 600, '3 s – 10 min'], sfx: [0.5, 30, '0.5–30 s'] };
+
+// (phase V60, (пп10а)) What the "?" of the shared rows says - the mode's dropdown lists the modes it offers, each in a line.
+export const MODE_SHORT = {
+  simple: 'background music for a voice to talk over - from the chips and your words, no singing',
+  custom: 'a track of your own - you write the title, the style and, unless it is instrumental, the lyrics',
+  lyrics: 'song lyrics from an idea - text only, two or three versions',
+  sounds: 'a sound or a loop by Suno, from a description',
+  compose: 'music by ElevenLabs from a description',
+  video: 'music made for a video - ElevenLabs watches it and scores it',
+  sfx: 'a sound effect by ElevenLabs, up to 30 s',
+};
+const CHIP_HELP = {
+  genre: 'The kind of music - lo-fi, pop, cinematic…',
+  mood: 'How it feels - calm, bright, dark…',
+  sound: 'What it is made of - the instruments, the texture, the production.',
+};
+/** The "?" of the mode's row: what each of `modes` makes. */
+export function modeRowHelp(modes) {
+  const lines = (modes || []).map(m => m.label + ' - ' + (MODE_SHORT[m.id] || ''));
+  return 'What to make.\n' + lines.join('\n');
+}
+export const MODEL_ROW_HELP = 'Suno\'s model - one price for all three.\nV6 - the newest, most natural · V6_MINI - faster · V6_WILD - bolder, stranger.\nThe choice is remembered.';
 
 // The catalog and the almanac, read once per page.
 let CAT = null;
@@ -99,14 +128,13 @@ export function titleOf(text) {
  *   o.videoSecs()      the video's length - "by the video (N s)" beside the length (Merge only)
  *   o.lengthNote(mode) what the length's note says (the Library has no video: not "the video's length")
  *   o.priceOf(mode, p) a price this form does not know how to say (Merge's Video to Music) - or null
- *   o.moods            false - no highlights moods here (the Library's window, phase V59.1: a mood's tracks are Merge's)
- *   o.compact          true - the Library's window (phase V59.1, (мз1а), (мз2а)): the settings column's grey notes are
- *                      hover hints, the length one line with its name on the left, the fields' hints on hover
+ *   o.mood()           the highlights mood Simple makes - the id of the mood folder the Library's window is open on, '' for
+ *                      none (phase V60, (пп9а): a mood's tracks are made there now; Merge has no moods any more)
  */
 export function createSunoForm(o) {
   const S = Object.assign({ mode: 'simple', model: 'V6' }, o.base || {}, ls(o.store, {}));
   S.f = Object.assign({
-    simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [], preset: '', pSeconds: 120, presetN: {} },
+    simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [], pSeconds: 120, presetN: {} },
     custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
     lyrics: { idea: '' },
   }, o.fields || {}, S.f || {});
@@ -117,8 +145,6 @@ export function createSunoForm(o) {
   let _chipOpen = '';            // (phase V54) the one chip group open in the settings column - '' all folded
   let _priceBox = null;
   let _almWin = null;
-  // (phase V59.1) A hover hint - only in the Library's window; Merge's look stays as it was.
-  const tip = (node, t) => { if (o.compact && node && t) node.title = t; return node; };
 
   async function ready() {
     const saved = loadSaved();
@@ -140,12 +166,16 @@ export function createSunoForm(o) {
   // (phase V34.F, the owner's (ф3)) The highlights moods - V34.A's ten presets: the server's list (the catalog), the
   // almanac's own words for them when it is there.
   function moods() {
-    if (o.moods === false) return [];
     const fromCat = (CAT && Array.isArray(CAT.moods)) ? CAT.moods : [];
     const P = (ALM && Array.isArray(ALM.HIGHLIGHT_PRESETS)) ? ALM.HIGHLIGHT_PRESETS : [];
     return fromCat.map(m => Object.assign({}, P.find(x => x.id === m.id) || {}, m));
   }
-  const preset = () => (S.mode === 'simple' && S.f.simple.preset ? moods().find(m => m.id === S.f.simple.preset) || null : null);
+  // (phase V60, (пп9а)) The mood Simple makes is the folder's the Library's window is open on - no dropdown anywhere.
+  const preset = () => {
+    if (S.mode !== 'simple') return null;
+    const id = String(call('mood') || '');
+    return id ? moods().find(m => m.id === id) || null : null;
+  };
 
   function chipGroups() {
     // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
@@ -211,30 +241,12 @@ export function createSunoForm(o) {
     }
     mo.value = S.model;
     mo.addEventListener('change', () => { S.model = mo.value; save(); });
-    return tip(mo, 'Suno\'s model - one price for all three.');
+    return mo;
   }
-  // (phase V34.F, the owner's (ф3)) A HIGHLIGHTS MOOD in place of the chips: one of the ten presets, written by its own rule,
-  // and the two tracks are filed into Music -> highlights -> that mood - what the highlights popup offers.
-  function moodRow(row) {
-    if (S.mode !== 'simple' || !moods().length) return;
-    const f = S.f.simple;
-    const sel = el('select');
-    const none = el('option', null, '— none: the chips and your words —');
-    none.value = '';
-    sel.appendChild(none);
-    for (const m of moods()) {
-      const op = el('option', null, m.label);
-      op.value = m.id;
-      op.title = m.about || '';
-      sel.appendChild(op);
-    }
-    sel.value = preset() ? f.preset : '';
-    sel.addEventListener('change', () => { f.preset = sel.value; save(); call('paintCol'); call('paintMake'); });
-    const p = preset();
-    row('Highlights mood', sel, p ? 'into Music → highlights → ' + p.label : 'for the highlights popup: a mood\'s preset, filed into its folder');
-  }
-  // The length: what a mode takes, empty - the model decides.
-  function lengthRows(row, sep) {
+  // The length: what a mode takes, empty - the model decides. (phase V59.1 in the Library, V60 in Merge, the owner: "название
+  // length и дропдаун в одну строку") ONE line - "Length ? [46] s · by the video (46 s)" -, its name left of the field, what
+  // it means in its "?". `row(label, body)` - the caller's row of the settings column.
+  function lengthRows(row) {
     if (!LEN[S.mode]) return;
     let [lo, hi, note] = LEN[S.mode];
     const said = call('lengthNote', S.mode);
@@ -254,35 +266,28 @@ export function createSunoForm(o) {
       n.value = f[key] ? String(f[key]) : '';
       save(); paintPrice(); call('paintMakePrice');
     });
-    if (o.compact) {
-      // (phase V59.1, the owner: "lenght - название параметра поместить слева от поля") One line - "Length [46] s" -, what
-      // it means on hover.
-      const one = el('div', 'au-len au-len-one');
-      one.append(el('label', null, 'Length'), n, el('span', 'au-len-auto', 's'));
-      one.title = note.charAt(0).toUpperCase() + note.slice(1) + '. Empty - the model decides.';
-      row('', one);
-      return;
-    }
-    sep('Length');
-    const r = el('div', 'au-len');
-    r.append(n, el('span', 'au-len-auto', 's · empty - the model decides'));
     const vs = +call('videoSecs') || 0;
-    if (vs > 0 && S.mode !== 'sfx' && !mood) {
-      const by = el('button', 'au-link', 'by the video (' + secs(vs) + ')');
+    const byVideo = vs > 0 && S.mode !== 'sfx' && !mood;
+    const one = el('div', 'au-len au-len-one');
+    const lab = withQ(el('label', null, 'Length'), 'How long it is, in seconds: ' + note + '. Empty - the model decides.'
+      + (byVideo ? '\n"by the video" - as long as the video lanes of this project.' : ''));
+    one.append(lab, n, el('span', 'au-len-auto', 's'));
+    if (byVideo) {
+      const by = el('button', 'au-link', '· by the video (' + secs(vs) + ')');
       by.type = 'button';
       by.addEventListener('click', () => { f.seconds = Math.max(lo || 1, Math.min(hi, Math.round(vs))); save(); call('paintCol'); call('paintMakePrice'); });
-      r.appendChild(by);
+      one.appendChild(by);
     }
-    row('', r, note);
+    row('', one);
   }
   // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
   // (phase V54, block 7, the owner 2026-10-27: "чтобы они были свернутыми дропдаунами и открыт может быть только один из
-  // них") Each group is a FOLDED ROW - its name and, in Simple, what is picked in it ("Genre · Lo-fi, Jazz"); a press opens
-  // it and folds the one open before.
+  // них") Each group is a FOLDED ROW - its name and its "?", in Simple what is picked in it ("Genre · Lo-fi, Jazz"); a press
+  // opens it and folds the one open before.
   function chipRows(col) {
     if (!['simple', 'custom', 'compose'].includes(S.mode) || preset()) return;
-    const why = S.mode === 'simple' ? 'What the music is: the writer reads them with your words.'
-      : 'A press adds the chip\'s words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.';
+    const why = S.mode === 'simple' ? 'Pick any in each group, or none - the writer reads them with your words.'
+      : 'A press on a chip adds its words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.';
     for (const g of chipGroups()) {
       const gk = g.key || g.label;
       const open = _chipOpen === gk;
@@ -291,10 +296,9 @@ export function createSunoForm(o) {
       head.type = 'button';
       head.setAttribute('aria-expanded', open ? 'true' : 'false');
       head.appendChild(el('span', 'au-chips-tw', '▸'));
-      head.appendChild(el('b', null, g.label));
+      head.appendChild(withQ(el('b', null, g.label), (CHIP_HELP[g.key] ? CHIP_HELP[g.key] + '\n' : '') + why + '\nOne group is open at a time.'));
       head.appendChild(el('span', 'au-chips-sel', picked.length ? '· ' + picked.join(', ') : ''));
       head.appendChild(el('span', 'au-chips-n', String(g.chips.length)));
-      head.title = (o.compact ? why + '\n' : '') + (open ? 'Fold ' : 'Open ') + g.label + (picked.length ? ' - picked: ' + picked.join(', ') : '');
       head.addEventListener('click', () => { _chipOpen = open ? '' : gk; call('paintCol'); });
       col.appendChild(head);
       if (!open) continue;
@@ -303,7 +307,7 @@ export function createSunoForm(o) {
         const on = S.mode === 'simple' && isPicked(g.key, c);
         const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
         b.type = 'button';
-        b.title = (o.compact && S.mode !== 'simple' ? 'Adds: ' : '') + c.style;
+        b.title = c.style;
         b.addEventListener('click', () => {
           if (S.mode === 'simple') { pick(g.key, c); call('paintCol'); call('paintMake'); }
           else addWords(c.style);
@@ -312,7 +316,6 @@ export function createSunoForm(o) {
       }
       col.appendChild(wrap);
     }
-    if (!o.compact) col.appendChild(el('div', 'au-note', why));
   }
 
   // ── the price ─────────────────────────────────────────────────────────────
@@ -352,12 +355,12 @@ export function createSunoForm(o) {
   }
 
   // ── the constructor's builders ───────────────────────────────────────────
+  // (phase V60, (пп10а)) `help` - what the field's "?" says (right of its name); no grey words in its head any more.
   function field(label, input, opts) {
     const op = opts || {};
     const f = el('div', 'au-f');
     const h = el('div', 'au-f-h');
-    h.appendChild(document.createTextNode(label));
-    if (op.small) h.appendChild(el('small', null, op.small));
+    if (label) h.appendChild(withQ(el('span', 'au-f-n', label), op.help));
     if (op.max) {
       const cnt = el('span', 'au-cnt');
       const upd = () => { const n = String(input.value || '').length; cnt.textContent = n + ' / ' + op.max; cnt.classList.toggle('is-over', n > op.max); };
@@ -365,9 +368,8 @@ export function createSunoForm(o) {
       upd();
       h.appendChild(cnt);
     }
-    f.append(h, input);
-    tip(h, op.tip);
-    tip(input, op.tip);
+    if (h.childNodes.length) f.appendChild(h);
+    f.appendChild(input);
     return f;
   }
   function text(obj, key, opts) {
@@ -380,35 +382,35 @@ export function createSunoForm(o) {
     t.addEventListener('input', () => { obj[key] = t.value; save(); });
     return t;
   }
-  function check(obj, key, label, after) {
+  // A tick box - its words, and its "?" (`help`) right of them.
+  function check(obj, key, label, after, help) {
     const lab = el('label', 'au-check');
     const c = el('input');
     c.type = 'checkbox';
     c.checked = !!obj[key];
     c.addEventListener('change', () => { obj[key] = c.checked; save(); if (after) after(); });
-    lab.append(c, el('span', null, label));
+    lab.append(c, withQ(el('span', null, label), help));
     return lab;
   }
+  // A knob of fine-tuning - its name with its "?" (`hint`), the slider, the value (a double press: back to the engine's own).
   function knob(obj, key, label, min, max, step, hint) {
     const row = el('div', 'au-knob');
-    row.title = hint || '';
-    row.appendChild(el('span', null, label));
+    row.appendChild(withQ(el('span', null, label), (hint ? hint + '\n' : '') + 'A double press on the value gives it back to the engine.'));
     const r = el('input');
     r.type = 'range'; r.min = String(min); r.max = String(max); r.step = String(step);
     const v = el('span', null, obj[key] === '' || obj[key] == null ? 'auto' : String(obj[key]));
     r.value = obj[key] === '' || obj[key] == null ? String((min + max) / 2) : String(obj[key]);
     r.addEventListener('input', () => { obj[key] = +r.value; v.textContent = String(obj[key]); save(); });
     v.addEventListener('dblclick', () => { obj[key] = ''; v.textContent = 'auto'; save(); });
-    v.title = 'a double press: back to Suno\'s own';
     row.append(r, v);
     return row;
   }
 
-  /** The words under the card's head: a mood's, or the mode's own (`into` - where its tracks go). null - not a mode of
-   *  this form. */
+  /** How the mode works - the "?" of the mode's name (phase V60, (пп11а): once the ♪ block of the gold card): a mood's, or
+   *  the mode's own (`into` - where its tracks go). null - not a mode of this form. */
   function helpText(into) {
     const p = preset();
-    if (p) return 'Background music for highlights in one mood: its preset goes to Suno as it is, and Suno makes TWO tracks. They go to Music → highlights → ' + p.label + ', and the highlights popup offers them. Each press turns one colour of the mood, so the next tracks differ.';
+    if (p) return 'Background music for highlights in one mood: its preset goes to Suno as it is - no chips, no words - and Suno makes TWO tracks. They go to Music → highlights → ' + p.label + ', and the highlights popup offers them. Each press turns one colour of the mood, so the next tracks differ.';
     return ['simple', 'custom', 'lyrics'].includes(S.mode) ? modeHelp(S.mode, into) : null;
   }
 
@@ -425,7 +427,7 @@ export function createSunoForm(o) {
       if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
       box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
         ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
-      card.appendChild(field('The mood', box));
+      card.appendChild(field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no chips and no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ.' }));
       return true;
     }
     if (S.mode === 'simple') {
@@ -433,18 +435,18 @@ export function createSunoForm(o) {
       const row = el('div', 'au-picked');
       if (picked.length) for (const p of picked) row.appendChild(el('span', 'au-chip on', p));
       else row.appendChild(el('span', null, 'No chips yet - pick the genre, the mood and the sound on the left.'));
-      card.appendChild(field('The feel', row, { tip: 'The chips picked on the left - the genre, the mood and the sound.' }));
-      card.appendChild(field('In your words', text(f, 'words', { area: true, rows: 3, placeholder: 'e.g. soft and warm under a skincare review, nothing that pulls the ear away from the voice' }), { small: 'any language · optional', max: 1000, tip: 'More about the feel, in any language - the writer reads it with the chips.' }));
-      card.appendChild(tip(check(f, 'writer', 'the writer makes Suno\'s style of it (off - the chips go as they are)'), 'The writer turns the chips and your words into Suno\'s style. Off - the chips go to Suno as they are.'));
+      card.appendChild(field('The feel', row, { help: 'The chips picked on the left - the genre, the mood and the sound. None - the writer chooses.' }));
+      card.appendChild(field('In your words', text(f, 'words', { area: true, rows: 3, placeholder: 'e.g. soft and warm under a skincare review, nothing that pulls the ear away from the voice' }), { max: 1000, help: 'More about the feel, in any language - optional. The writer reads it with the chips. Up to 1000 characters.' }));
+      card.appendChild(check(f, 'writer', 'the writer makes Suno\'s style', null, 'The writer turns the chips and your words into Suno\'s style - what it wrote shows on the press.\nOff - the chips go to Suno as they are.'));
       return true;
     }
     if (S.mode === 'custom') {
-      card.appendChild(field('Title', text(f, 'title', { placeholder: 'the track\'s name' }), { max: 80, tip: 'The track\'s name - both tracks are called by it.' }));
-      card.appendChild(field('Style', text(f, 'style', { area: true, rows: 3, placeholder: 'genre, mood, instruments, tempo, production - e.g. indie pop, bright clean guitars, 110 BPM, warm female vocal' }), { max: 1000, tip: 'Genre, mood, instruments, tempo, production. A chip on the left adds its words here.' }));
-      card.appendChild(tip(check(f, 'instrumental', 'instrumental - no voice, no lyrics', () => call('paintMake')), 'Only the music: no voice and no lyrics.'));
+      card.appendChild(field('Title', text(f, 'title', { placeholder: 'the track\'s name' }), { max: 80, help: 'The track\'s name - both tracks are called by it. Up to 80 characters.' }));
+      card.appendChild(field('Style', text(f, 'style', { area: true, rows: 3, placeholder: 'genre, mood, instruments, tempo, production - e.g. indie pop, bright clean guitars, 110 BPM, warm female vocal' }), { max: 1000, help: 'Genre, mood, instruments, tempo, production - the most important first, by commas. A chip on the left adds its words here. Up to 1000 characters.' }));
+      card.appendChild(check(f, 'instrumental', 'instrumental', () => call('paintMake'), 'Only the music: no voice and no lyrics.'));
       if (!f.instrumental) {
         const ly = text(f, 'lyrics', { area: true, rows: 7, placeholder: '[Verse]\n...\n[Chorus]\n...' });
-        const fl = field('Lyrics', ly, { max: 5000, small: 'empty - Suno sings what it makes up', tip: 'What is sung, in parts: [Verse], [Chorus]… Up to 5000 characters. Empty - Suno sings what it makes up.' });
+        const fl = field('Lyrics', ly, { max: 5000, help: 'What is sung, in parts: [Verse], [Chorus]… Up to 5000 characters. Empty - Suno sings what it makes up.\nThe list over it - the texts kept in Music → Lyrics: a choice replaces the text, the title is taken only when it is empty. "save" keeps this text there; "write lyrics from an idea…" opens Lyrics.' });
         // (phase V59.1, (мз8)) The saved texts over the field: a choice replaces the text, the title only when it is empty.
         fl.insertBefore(savedPick(f), ly);
         const wr = el('button', 'au-link', 'write lyrics from an idea…');
@@ -462,19 +464,19 @@ export function createSunoForm(o) {
         for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
         vs.value = f.vocal || '';
         vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
-        card.appendChild(field('Voice', vs));
+        card.appendChild(field('Voice', vs, { help: 'Whose voice Suno is asked for - it only makes it likelier. Saying it in the style ("warm female vocal") holds better.' }));
       }
-      card.appendChild(field('Keep out', text(f, 'negative', { placeholder: 'e.g. heavy metal, distortion, choir' }), { small: 'styles Suno should avoid', max: 500 }));
+      card.appendChild(field('Exclude', text(f, 'negative', { placeholder: 'e.g. heavy metal, distortion, choir' }), { max: 500, help: 'Styles and sounds Suno should avoid - bare words by commas (heavy metal, choir), never "no …" in the style. Up to 500 characters.' }));
       const kn = el('details', 'au-knobs');
-      kn.appendChild(el('summary', null, 'fine-tuning (Suno\'s own when untouched)'));
-      kn.appendChild(knob(f, 'styleWeight', 'hold the style', 0, 1, 0.05, 'how closely it keeps to the style'));
-      kn.appendChild(knob(f, 'weirdness', 'weirdness', 0, 1, 0.05, 'how far it may wander'));
-      kn.appendChild(knob(f, 'variety', 'variety', 0, 4, 1, '0 - your style as written (V6 rewrites it at 1 and up) · 4 max: how different the two tracks are'));
+      kn.appendChild(withQ(el('summary', null, 'fine-tuning'), 'Suno\'s own values while untouched - open it only to steer the result.'));
+      kn.appendChild(knob(f, 'styleWeight', 'hold the style', 0, 1, 0.05, 'How closely it keeps to the style.'));
+      kn.appendChild(knob(f, 'weirdness', 'weirdness', 0, 1, 0.05, 'How far it may wander from the expected.'));
+      kn.appendChild(knob(f, 'variety', 'variety', 0, 4, 1, '0 - your style as written (V6 rewrites it at 1 and up); 4 - the two tracks as different as they get.'));
       card.appendChild(kn);
       return true;
     }
     if (S.mode === 'lyrics') {
-      card.appendChild(field('The idea', text(f, 'idea', { area: true, rows: 2, placeholder: 'e.g. a hopeful song about the first coffee of the morning' }), { max: 200, tip: 'What the song is about - Suno writes two or three texts from it.' }));
+      card.appendChild(field('The idea', text(f, 'idea', { area: true, rows: 2, placeholder: 'e.g. a hopeful song about the first coffee of the morning' }), { max: 200, help: 'What the song is about - Suno writes two or three texts from it. Up to 200 characters.' }));
       return true;
     }
     return false;
@@ -494,7 +496,6 @@ export function createSunoForm(o) {
       sel.appendChild(op);
     }
     sel.disabled = !SAVED.length;
-    sel.title = 'Lyrics kept in Music → Lyrics: a choice replaces the text below; the title is taken only when it is empty.';
     sel.addEventListener('change', () => {
       const it = SAVED.find(x => x.id === sel.value);
       if (!it) return;
@@ -566,10 +567,11 @@ export function createSunoForm(o) {
   function body(writerKind) {
     const f = S.f[S.mode];
     const b = { mode: S.mode, model: S.model };
-    if (S.mode === 'simple' && preset()) {
+    const mood = preset();
+    if (mood) {
       // (V34.F) A highlights mood: its preset and which press of it this is; the chips and the words stay out.
-      b.preset = f.preset;
-      b.n = (f.presetN || {})[f.preset] || 0;
+      b.preset = mood.id;
+      b.n = (f.presetN || {})[mood.id] || 0;
       b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);
       b.chips = {}; b.words = ''; b.projectKind = 'highlights';
     } else if (S.mode === 'simple') {
@@ -755,7 +757,7 @@ export function createSunoForm(o) {
     S, save, ready,
     cat: () => CAT, alm: () => ALM,
     moods, preset, chipGroups,
-    modeSelect, modelSelect, moodRow, lengthRows, chipRows,
+    modeSelect, modelSelect, lengthRows, chipRows,
     price, priceText, priceBox, paintPrice,
     field, text, check, knob,
     helpText, paintFields, body, press, lyricCard,

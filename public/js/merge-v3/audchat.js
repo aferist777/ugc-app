@@ -4,18 +4,21 @@
    into Merge. Not a chat: ONE message of the app per mode - its fields, its attachment where it takes one - and what was
    made under it.
 
-     left     the settings: the engine (Suno · kie.ai | ElevenLabs), the mode, the model, the length (the video's by a press),
-              the chips (V34.A's almanac, public/js/audio/almanac-data.js) or, in Simple, one of the ten HIGHLIGHTS MOODS
-              (V34.F: two tracks into Music -> highlights -> that mood), the price of a press; the almanac at its foot (a press
-              on a note copies it)
-     middle   the CONSTRUCTOR of the open mode and "generate"
-     right    MADE HERE - the presses of THE OPEN PROJECT only (the owner's (р1); the draft's are the drafts' one list, as their
-              chats' conversation is): its stage while it is made, its tracks or sounds when done - a press plays one, ★,
-              "show" (on the shelf), and dragged onto an audio lane it lies there as a tile of the shelf does -, the lyrics
-              with "use in custom", its error and "try again" when it failed. A sash between it and the constructor.
-              (phase V54, the owner's (зв23)) In VIDEO TO MUSIC the right column is the VIDEO tree (js/media-tree.js `roots`,
-              its own memory `v2m`): the path to the node open, its folders as tiles, then its videos - a press puts one into
-              "The video" (its track goes to Music and "Made here" only, (зв24)); "Made here" moves under the constructor.
+     left     the settings: the engine (Suno · kie.ai | ElevenLabs), the mode, the model, "Length [10] s · by the video (46 s)"
+              in one line, the chips (V34.A's almanac, public/js/audio/almanac-data.js); the almanac at its foot. Every row's
+              name has a "?" (phase V60, (пп10а): js/sound/qmark.js - what it is, on the pointer resting there) in place of
+              the grey notes under the rows. No highlights mood since V60 ((пп9а)): a mood's tracks are made by the Library's
+              music window opened on that mood's folder.
+     middle   the CONSTRUCTOR of the open mode - the gold card: its head ("SUNO · SIMPLE · BACKGROUND, NO VOCALS") with a "?"
+              that says how the mode works (V60, (пп11а): once the ♪ block of the card), its fields each with a "?", and
+              "generate"; UNDER IT the presses of THE OPEN PROJECT only (the owner's (р1); the draft's are the drafts' one
+              list, as their chats' conversation is) - a thin line "this project · N", then a card per press, newest first
+              (V60, (пп12а): "Made here" and its column went): its stage while it is made, its tracks or sounds when done - a
+              press plays one, ★, "show" (on the shelf), and dragged onto an audio lane it lies there as a tile of the shelf
+              does -, the lyrics with "use in custom", its error and "try again" when it failed; ✕ takes it off the list.
+     right    only in VIDEO TO MUSIC (phase V54, the owner's (зв23)): the VIDEO tree (js/media-tree.js `roots`, its own memory
+              `v2m`): the path to the node open, its folders as tiles, then its videos - a press puts one into "The video"
+              (its track goes to Music only, (зв24)). Narrower than 900 px it goes under the gold card.
 
    (phase V54, block 2, the owner's (зв3)-(зв7)) VIDEO TO MUSIC FROM A CLIP: the right button on a clip of a video lane
    (timeline-b.js) brings THAT clip, as it is seen, into "The video" (videoToMusicFromClip) - its lane, from-to, length and
@@ -33,7 +36,8 @@
 
    (phase V59, the owner 2026-10-29) SUNO'S PART IS SHARED with the Library's music window: the settings rows, the chips, the
    price, the almanac and the constructor of Simple / Custom / Lyrics are js/sound/suno-form.js; this view adds what is
-   Merge's own - the engine switch, ElevenLabs, Sounds, Video to Music, "Made here", "by the video", the project's mode.
+   Merge's own - the engine switch, ElevenLabs, Sounds, Video to Music, the project's presses, "by the video", the project's
+   mode.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -44,7 +48,7 @@ import { isTalking } from './workshop.js';
 import { setMediaDrag, createTree } from '../media-tree.js';
 import { waveEl, secs } from '../sound/wave.js';
 import { refuseHome } from './chat-shell.js';
-import { createSunoForm, el, api, post, ls, lsSet } from '../sound/suno-form.js';
+import { createSunoForm, el, api, post, withQ, modeRowHelp, MODEL_ROW_HELP } from '../sound/suno-form.js';
 
 const NAME = 'audio';
 const $ = (id) => document.getElementById(id);
@@ -137,25 +141,24 @@ function say(text, bad) {
   if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
 }
 
-// (phase V34.F) The highlights moods and the one picked - the shared form's (js/sound/suno-form.js).
+// (phase V34.F) The highlights moods - the shared form's (js/sound/suno-form.js): an older press of a mood says its folder.
 const _moods = () => F.moods();
-const _preset = () => F.preset();
 
 // ── the settings column: the chats' column (.mv3-ig-set, css/mv3-imagen.css) ───────────────────────────────
-// Suno's rows - the model, a highlights mood, the length, the folded chips, the price, the almanac - are the shared form's;
-// the engine and ElevenLabs' model are Merge's own.
+// Suno's rows - the model, the length, the folded chips, the almanac - are the shared form's; the engine and ElevenLabs'
+// model are Merge's own. (phase V60) Every row's name has its "?"; a missing key stays in words - it is why nothing would come.
+const ENGINE_HELP = 'Who makes it: Suno through kie.ai - music, lyrics and sounds -, or ElevenLabs - music from a description or made for a video, and sound effects. Each needs its key on Admin → API keys.';
 function paintCol() {
   const col = _ui.col;
   col.textContent = '';
-  const row = (label, body, note) => {
+  const row = (label, body, help, warn) => {
     const r = el('div', 'mv3-ig-row');
-    if (label) r.appendChild(el('label', null, label));
+    if (label) r.appendChild(withQ(el('label', null, label), help));
     r.appendChild(body);
-    if (note) r.appendChild(el('div', 'au-note', note));
+    if (warn) r.appendChild(el('div', 'au-note', warn));
     col.appendChild(r);
     return r;
   };
-  const sep = (text) => col.appendChild(el('div', 'mv3-ig-sep', text));
 
   const seg = el('div', 'mv3-ig-ar-row');
   for (const e of (CAT ? CAT.engines : [])) {
@@ -164,19 +167,20 @@ function paintCol() {
     b.addEventListener('click', () => setEngine(e.id));
     seg.appendChild(b);
   }
-  row('Engine', seg, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
+  row('Engine', seg, ENGINE_HELP, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
     ? 'No ' + (S.engine === 'eleven' ? 'ElevenLabs' : 'kie.ai') + ' key - add it on Admin → API keys.' : '');
 
-  row('Mode', F.modeSelect(CAT ? CAT.modes.filter(x => x.engine === S.engine) : []));
+  const modes = CAT ? CAT.modes.filter(x => x.engine === S.engine) : [];
+  row('Mode', F.modeSelect(modes), modeRowHelp(modes));
 
   if (S.engine === 'suno' && S.mode !== 'lyrics') {
-    row('Model', F.modelSelect(), 'one price for all three');
+    row('Model', F.modelSelect(), MODEL_ROW_HELP);
   } else if (S.engine === 'eleven') {
-    row('Model', el('div', 'au-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
+    row('Model', el('div', 'au-val', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'),
+      'ElevenLabs has one model for each mode - nothing to choose.');
   }
 
-  F.moodRow(row);
-  F.lengthRows(row, sep);
+  F.lengthRows(row);
   F.chipRows(col);
   // (phase V59.1, the owner 2026-10-29: "в merge убери только ценники из левого столбца") No price box here: the price is
   // beside "generate".
@@ -236,7 +240,7 @@ function setMode(id) {
 // The field builders are the shared form's (they write what is typed into its state).
 const _field = (label, input, opts) => F.field(label, input, opts);
 const _text = (obj, key, opts) => F.text(obj, key, opts);
-const _check = (obj, key, label, after) => F.check(obj, key, label, after);
+const _check = (obj, key, label, after, help) => F.check(obj, key, label, after, help);
 const _knob = (obj, key, label, min, max, step, hint) => F.knob(obj, key, label, min, max, step, hint);
 
 function paintMake() {
@@ -246,46 +250,49 @@ function paintMake() {
   if (!m) return;
   const card = el('div', 'au-card');
   const h = el('div', 'au-card-h');
-  h.appendChild(document.createTextNode((S.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + m.label));
+  // (phase V60, (пп11а)) How the mode works - once the ♪ block under this head - is the "?" right of the mode's name.
+  h.appendChild(withQ(el('span', 'au-card-n', (S.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + m.label),
+    () => F.helpText() || MODE_HELP[S.mode] || '', { title: (S.engine === 'eleven' ? 'ElevenLabs' : 'Suno') + ' · ' + m.label }));
   h.appendChild(el('span', 'au-muted', 'for ' + (Store.title() || 'this project')));
   card.appendChild(h);
-  const bot = el('div', 'au-bot');
-  bot.appendChild(el('div', 'au-bot-ico', S.mode === 'sounds' || S.mode === 'sfx' ? '✦' : '♪'));
-  bot.appendChild(el('div', 'au-bot-tx', F.helpText() || MODE_HELP[S.mode] || ''));
-  card.appendChild(bot);
   const f = S.f[S.mode];
 
-  // Simple (or its highlights mood), Custom, Lyrics - the shared form's; the rest are Merge's own.
+  // Simple, Custom, Lyrics - the shared form's; the rest are Merge's own.
+  const LOOP = 'The end joins the start, so it can be laid again and again with no seam.';
   if (F.paintFields(card)) { /* painted */ } else if (S.mode === 'sounds') {
-    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }), { max: 500 }));
+    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }),
+      { max: 500, help: 'What the sound is, as a sound designer says it - the source, the action, the material; a loop with its tempo and key. Up to 500 characters.' }));
     const r2 = el('div', 'au-row2');
     const tempo = el('input', 'au-in');
     tempo.type = 'number'; tempo.min = '0'; tempo.max = '300'; tempo.placeholder = 'auto';
     tempo.value = f.tempo ? String(f.tempo) : '';
     tempo.addEventListener('change', () => { f.tempo = Math.max(0, Math.min(300, Math.round(+tempo.value || 0))); save(); });
-    r2.appendChild(_field('Tempo', tempo, { small: 'BPM, for a loop' }));
+    r2.appendChild(_field('Tempo', tempo, { help: 'Beats per minute, for a loop. Empty - Suno\'s own.' }));
     const key = el('select', 'au-sel');
     for (const k of (CAT.soundKeys || ['Any'])) { const op = el('option', null, k); op.value = k; key.appendChild(op); }
     key.value = f.key || 'Any';
     key.addEventListener('change', () => { f.key = key.value; save(); });
-    r2.appendChild(_field('Key', key));
+    r2.appendChild(_field('Key', key, { help: 'The key of a musical loop. Any - Suno\'s own.' }));
     card.appendChild(r2);
-    card.appendChild(_check(f, 'loop', 'a seamless loop'));
+    card.appendChild(_check(f, 'loop', 'a seamless loop', null, LOOP));
   } else if (S.mode === 'compose') {
-    card.appendChild(_field('The music', _text(f, 'prompt', { area: true, rows: 4, placeholder: 'e.g. calm lo-fi with soft piano and vinyl crackle, steady, nothing that jumps out - under a voiceover' }), { max: 4100 }));
-    card.appendChild(_check(f, 'instrumental', 'instrumental - no voice'));
+    card.appendChild(_field('The music', _text(f, 'prompt', { area: true, rows: 4, placeholder: 'e.g. calm lo-fi with soft piano and vinyl crackle, steady, nothing that jumps out - under a voiceover' }),
+      { max: 4100, help: 'In sentences: what it is for first, then the genre, the instruments, the tempo, the key and its shape. "no …" is honoured here. A chip on the left adds its words. Up to 4100 characters.' }));
+    card.appendChild(_check(f, 'instrumental', 'instrumental', null, 'No voice. Off - ElevenLabs may sing.'));
   } else if (S.mode === 'video') {
-    card.appendChild(_field('The video', _attachment(f)));
-    card.appendChild(_field('What you want', _text(f, 'description', { area: true, rows: 3, placeholder: 'optional - e.g. upbeat and modern, builds to the reveal at the end' }), { max: 4100 }));
-    card.appendChild(_field('Tags', _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { small: 'up to 10, by commas' }));
-    card.appendChild(_check(f, 'sfx', 'add sound effects from what happens in the video'));
-    card.appendChild(_check(f, 'useAudio', 'use the video\'s own sound as a reference (its genre, tempo, mood)'));
+    card.appendChild(_field('The video', _attachment(f), { help: 'The video ElevenLabs scores: a press on a video in the tree on the right, a clip of the timeline by its right button (its track is then laid under it), "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.' }));
+    card.appendChild(_field('What you want', _text(f, 'description', { area: true, rows: 3, placeholder: 'optional - e.g. upbeat and modern, builds to the reveal at the end' }),
+      { max: 4100, help: 'Optional - the feel, where it builds, what to keep out. Up to 4100 characters.' }));
+    card.appendChild(_field('Tags', _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { help: 'Up to 10 words, by commas - upbeat, cinematic…' }));
+    card.appendChild(_check(f, 'sfx', 'add sound effects', null, 'ElevenLabs adds sound effects from what happens in the video.'));
+    card.appendChild(_check(f, 'useAudio', 'use the video\'s own sound', null, 'The video\'s own sound is taken as a reference - its genre, tempo and mood.'));
   } else if (S.mode === 'sfx') {
-    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a quick airy whoosh, left to right' }), { max: 1000 }));
+    card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a quick airy whoosh, left to right' }),
+      { max: 1000, help: 'The source, the action, the material, the space, the distance, how it starts and ends. Up to 1000 characters; the length on the left (0.5–30 s) or its own.' }));
     const inf = el('div');
-    inf.appendChild(_knob(f, 'influence', 'follow the words', 0, 1, 0.05, 'higher - closer to the description, less varied'));
+    inf.appendChild(_knob(f, 'influence', 'follow the words', 0, 1, 0.05, 'Higher - closer to the description, less varied.'));
     card.appendChild(_field('', inf));
-    card.appendChild(_check(f, 'loop', 'a seamless loop'));
+    card.appendChild(_check(f, 'loop', 'a seamless loop', null, LOOP));
   }
 
   const goRow = el('div', 'au-go-row');
@@ -297,7 +304,7 @@ function paintMake() {
   card.appendChild(goRow);
   card.appendChild(el('div', 'au-err'));
   host.appendChild(card);
-  // (phase V54) The right column follows the mode: Video to Music's VIDEO tree, or "Made here".
+  // (phase V54) Video to Music has the VIDEO tree on the right; the other modes none.
   _place();
 }
 
@@ -469,12 +476,12 @@ const _ago = (iso) => {
   const d = new Date(t);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 };
+// (phase V60, (пп12а)) The open project's presses under the gold card, newest first - no heading, a thin line "this project · N".
 function paintMade() {
   if (!_ui) return;
   const host = _ui.made;
   host.textContent = '';
-  _ui.madeN.textContent = GENS.length ? '· ' + GENS.length : '';
-  if (!GENS.length) { host.appendChild(el('div', 'au-empty', 'Nothing yet for this project - what you make appears here, newest first.')); return; }
+  _ui.madeH.textContent = 'this project · ' + (GENS.length ? GENS.length : 'nothing made here yet');
   for (const g of GENS) host.appendChild(_genCard(g));
 }
 function _genCard(g) {
@@ -668,10 +675,10 @@ function _unfollow() { clearInterval(_timer); _timer = 0; }
 // The almanac (V34.A's notes, a press copies one) is the shared form's - js/sound/suno-form.js.
 
 // ── the view ────────────────────────────────────────────────────────────────
-// Built the first time it shows: the settings column, the middle (the word line, the constructor), the sash, "Made here".
-// Narrower than 900 px "Made here" goes under the constructor (.au-mid); narrower than 620 the settings column goes above
-// both (.au-narrow).
-const KEY_MADE_W = 'mv3_audio_made_w';
+// Built the first time it shows: the settings column, the middle (the word line, the gold card, the project's presses
+// under it) and - in Video to Music only - the VIDEO tree on the right. Narrower than 900 px the tree goes under the gold
+// card (.au-tight); narrower than 620 the settings column goes above the rest (.au-narrow) - its own names, not the chats'
+// .is-narrow (which folds their settings into one row) nor .au-mid (the middle column's own class, phase V59.1 (мз11)).
 function _build() {
   if (_ui) return;
   const root = $('mv3-ac');
@@ -685,56 +692,38 @@ function _build() {
   const status = el('div', 'au-status');
   status.hidden = true;
   const make = el('div', 'au-make');
-  mid.append(status, make);
-  const sash = el('div', 'mv3-lib-sash au-sash');
-  sash.title = 'Drag to resize - a double press gives the default width back';
-  // The right column: "Made here" - or (phase V54) in Video to Music the VIDEO tree, "Made here" under the constructor.
-  const madeCol = el('div', 'au-madecol');
-  const madeBox = el('div', 'au-madebox');
-  const madeH = el('div', 'au-made-h', 'Made here ');
-  const madeN = el('span', 'au-muted');
-  madeH.appendChild(madeN);
+  const madeH = el('div', 'au-proj');
   const made = el('div', 'au-made');
-  madeBox.append(madeH, made);
+  mid.append(status, make, madeH, made);
   const v2m = el('div', 'au-v2m');
   const v2mGal = el('div', 'au-v2m-gal');
   const v2mTree = el('div', 'au-v2m-tree');
   v2m.append(v2mGal, v2mTree);
   v2m.hidden = true;
-  madeCol.append(madeBox);
-  root.append(set, mid, sash, madeCol);
-  _ui = { root, set, col, alm, mid, status, make, sash, madeCol, madeBox, made, madeN, v2m, v2mGal, v2mTree, price: null, narrow: '' };
-  _wireMadeSash();
+  root.append(set, mid, v2m);
+  _ui = { root, set, col, alm, mid, status, make, madeH, made, v2m, v2mGal, v2mTree, narrow: '' };
   new ResizeObserver(() => _fit()).observe(root);
 }
 function _fit() {
   if (!_ui) return;
   const w = _ui.root.clientWidth;
   if (!w) return;
-  // Its own names: the chats' `is-narrow` (css/mv3-imagen.css) folds their settings into one row, which this column is not.
-  const n = w < 620 ? 'au-narrow' : w < 900 ? 'au-mid' : '';
+  const n = w < 620 ? 'narrow' : w < 900 ? 'tight' : '';
   if (n === _ui.narrow) return;
   _ui.narrow = n;
-  _ui.root.classList.toggle('au-narrow', n === 'au-narrow');
-  _ui.root.classList.toggle('au-mid', n !== '');
+  _ui.root.classList.toggle('au-narrow', n === 'narrow');
+  _ui.root.classList.toggle('au-tight', n !== '');
   _place();
 }
-// Where the right column's parts go. Wide: beside the constructor behind the sash - "Made here", or in Video to Music the VIDEO
-// tree with "Made here" under the constructor. Narrower than 900 px: all of it under the constructor, the tree first.
+// Where Video to Music's VIDEO tree goes: beside the middle - or, narrower than 900 px, under the gold card (before the
+// project's presses). In the other modes it is hidden.
 function _place() {
   if (!_ui) return;
   const video = S.mode === 'video';
   _ui.v2m.hidden = !video;
   _ui.root.classList.toggle('au-v2m-on', video);
-  if (_ui.narrow) {
-    _ui.mid.appendChild(_ui.madeCol);
-    if (video) _ui.madeCol.append(_ui.v2m, _ui.madeBox);
-    else _ui.madeCol.append(_ui.madeBox);
-  } else {
-    _ui.root.appendChild(_ui.madeCol);
-    if (video) { _ui.madeCol.appendChild(_ui.v2m); _ui.mid.appendChild(_ui.madeBox); }
-    else _ui.madeCol.appendChild(_ui.madeBox);
-  }
+  if (_ui.narrow) { if (_ui.v2m.parentNode !== _ui.mid) _ui.mid.insertBefore(_ui.v2m, _ui.madeH); }
+  else if (_ui.v2m.parentNode !== _ui.root) _ui.root.appendChild(_ui.v2m);
   if (video) _v2mOpen();
 }
 
@@ -821,37 +810,6 @@ export async function videoToMusicFromClip(o) {
   if (S.mode !== 'video') setMode('video');
   else { save(); paintCol(); paintMake(); }
   say('The clip is in "The video" - say what you want if you like, then generate. Its track is laid under it when it comes.');
-}
-function _wireMadeSash() {
-  const { sash, madeCol: box, root } = _ui;
-  const room = () => {
-    const view = root.getBoundingClientRect().width;
-    const set = _ui.set.getBoundingClientRect().width;
-    return Math.max(260, view - set - 360 - 5);
-  };
-  const apply = (w) => {
-    if (!(w > 0)) { box.style.flexBasis = ''; return 0; }
-    const v = Math.max(260, Math.min(room(), Math.round(w)));
-    box.style.flexBasis = v + 'px';
-    return v;
-  };
-  apply(+ls(KEY_MADE_W, 0) || 0);
-  sash.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    const from = e.clientX;
-    const base = box.getBoundingClientRect().width;
-    document.body.classList.add('mv3-resize-v');
-    const move = (ev) => apply(base - (ev.clientX - from));
-    const up = () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
-      document.body.classList.remove('mv3-resize-v');
-      lsSet(KEY_MADE_W, Math.round(box.getBoundingClientRect().width));
-    };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
-  });
-  sash.addEventListener('dblclick', () => { apply(0); lsSet(KEY_MADE_W, 0); });
 }
 
 // The catalog and the almanac - the shared form reads them once (a model it does not know falls back to V6).

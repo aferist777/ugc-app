@@ -1,10 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — "/ generate audio" (phase V34.E; js/merge-v3/audchat.js): the Library panel's view of music and sounds, the
    audio lab's constructor moved into Merge. Its box is a chat's (.mv3-pc, shown by lib-views.js), its settings column the
-   chats' (.mv3-ig-set, css/mv3-imagen.css); this file draws the middle - the constructor of the open mode - and "Made
-   here", the open project's presses, behind a sash. Narrower than 900 px "Made here" goes under the constructor
-   (.au-mid), narrower than 620 the settings column goes above both (.au-narrow) - not the chats' .is-narrow, which folds
-   their settings into one row.
+   chats' (.mv3-ig-set, css/mv3-imagen.css); this file draws the middle - the constructor of the open mode and, under it,
+   the open project's presses (phase V60, (пп12а): "Made here" and its column went) - and, in Video to Music, the VIDEO
+   tree on the right. Narrower than 900 px the tree goes under the gold card (.au-tight), narrower than 620 the settings
+   column goes above the rest (.au-narrow) - not the chats' .is-narrow, which folds their settings into one row.
+   Linked on the Library's page too (its music window): the "?" of a parameter (js/sound/qmark.js, phase V60) is here
+   for both pages.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* Four crumbs now: the chats' read "image" / "video" / "audio" a little sooner. In a highlights project too (phase V49, the
@@ -42,6 +44,27 @@
 .au-len{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
 .au-len .au-in{width:74px; height:26px; padding:0 6px}
 .au-len-auto{font-size:10px; color:var(--muted)}
+/* "Length ? [46] s · by the video (46 s)" in one line (phase V59.1 in the Library, V60 in Merge) */
+.au-len-one{flex-wrap:nowrap; margin-top:6px; min-width:0}
+.au-len-one > label{flex:0 0 auto; display:inline-flex; align-items:center; margin-right:2px; font:600 9.5px/1.3 var(--font); letter-spacing:.03em; color:var(--muted)}
+.au-len-one .au-in{flex:0 0 56px; width:56px}
+.au-len-one .au-link{flex:0 1 auto; min-width:0; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+/* a value with nothing to choose (ElevenLabs' model) */
+.au-val{font:600 10.5px/1.4 var(--font); color:var(--ink); opacity:.8}
+
+/* ── (phase V60, (пп10а)) the "?" right of a parameter's name, and its popup (js/sound/qmark.js) ── */
+.qm{display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:13px; height:13px; margin-left:5px;
+  box-sizing:border-box; border:1px solid var(--border); border-radius:50%; color:var(--muted); background:none;
+  font:700 8.5px/1 var(--font); letter-spacing:0; text-transform:none; vertical-align:1px; cursor:help; user-select:none}
+.qm:hover, .qm.is-on{color:var(--gold); border-color:var(--gold)}
+.qm-pop{position:fixed; z-index:9700; width:max-content; max-width:min(380px, calc(100vw - 12px)); box-sizing:border-box;
+  padding:9px 12px 10px; background:var(--surface); border:1px solid var(--gold); border-radius:var(--r-sm);
+  box-shadow:0 10px 30px rgba(0,0,0,.45); color:var(--ink); font:500 12px/1.5 var(--font); letter-spacing:0; text-transform:none}
+.qm-pop b{display:block; margin-bottom:4px; color:var(--gold); font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase}
+.qm-pop p{margin:0}
+.qm-pop p + p{margin-top:5px}
+.au-set .mv3-ig-row > label, .au-chips-h b, .au-f-n{display:inline-flex; align-items:center}
+.au-set .mv3-ig-row > label{align-self:flex-start}
 .au-sel, .au-in, .au-ta{width:100%; box-sizing:border-box; background:var(--bg); color:var(--ink); border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.4 var(--font); padding:6px 8px}
 .au-sel{padding:5px 6px}
 .au-sel:focus, .au-in:focus, .au-ta:focus{outline:none; border-color:var(--primary)}
@@ -72,9 +95,8 @@
 .au-card{position:relative; padding:12px 14px 14px; border:1px solid var(--gold); border-radius:var(--r-sm); background:var(--bg); display:flex; flex-direction:column; gap:10px}
 .au-card-h{display:flex; align-items:baseline; gap:8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
 .au-card-h .au-muted{text-transform:none; letter-spacing:0; font-weight:400; font-size:11px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.au-bot{display:flex; gap:10px; align-items:flex-start}
-.au-bot-ico{flex:0 0 28px; height:28px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--gold); font-size:14px}
-.au-bot-tx{font-size:12.5px; line-height:1.5; color:var(--ink)}
+.au-card-n{flex:0 0 auto; display:inline-flex; align-items:center}
+.au-card-h .qm{width:14px; height:14px}
 .au-f{display:flex; flex-direction:column; gap:4px}
 .au-f-h{display:flex; align-items:baseline; gap:8px; font:600 11px/1.2 var(--font); color:var(--ink)}
 .au-f-h small{font-weight:400; color:var(--muted)}
@@ -82,8 +104,10 @@
 .au-cnt.is-over{color:var(--danger)}
 .au-row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 .au-check{display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer}
+.au-check > span{display:inline-flex; align-items:center}
 .au-knobs{border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:6px 10px}
 .au-knobs summary{cursor:pointer; font:600 11px/1.6 var(--font); color:var(--muted)}
+.au-knob > span:first-child{display:inline-flex; align-items:center}
 .au-knob{display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:8px; font-size:11.5px; margin-top:6px}
 .au-knob input[type=range]{width:100%}
 .au-knob span:last-child{text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
@@ -109,7 +133,7 @@
 .au-att-tx .au-err{margin-top:2px; font-size:10.5px}
 
 /* (phase V54, the owner's (зв23)) Video to Music's right column: the gallery of the node open, the VIDEO tree beside it */
-.au-v2m{flex:1 1 auto; min-height:0; display:flex}
+.au-v2m{flex:0 0 42%; min-width:260px; min-height:0; display:flex; border-left:1px solid var(--border); background:var(--bg)}
 .au-v2m[hidden]{display:none}
 .au-v2m-gal{flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:10px 10px 16px}
 .au-v2m-gal .mt-folders{grid-template-columns:repeat(auto-fill, minmax(120px, 1fr))}
@@ -123,18 +147,16 @@
 .au-v2m-it img, .au-v2m-it .au-att-ph{width:100%; aspect-ratio:9/12; object-fit:cover; border-radius:var(--r-xs); background:var(--surface-2)}
 .au-v2m-it .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .au-v2m-it .d{color:var(--muted); font-size:9.5px; font-variant-numeric:tabular-nums}
-/* "Made here" under the constructor while the tree has the column */
-.au-mid > .au-madebox .au-made-h{padding:6px 0 4px}
-.au-mid > .au-madebox .au-made{overflow:visible; padding:0}
-
-/* ── "Made here": the open project's presses ── */
-.au-sash{flex:0 0 5px}
-.au-madecol{flex:0 0 42%; min-width:260px; min-height:0; display:flex; flex-direction:column; background:var(--bg)}
-.au-madebox{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
+/* ── the open project's presses, under the gold card (phase V60, (пп12а)): a thin line "this project · N", a card each ── */
+.au-proj{flex:0 0 auto; margin-top:2px; padding:0 2px 5px; border-bottom:1px solid var(--border-soft);
+  font:600 10px/1.3 var(--font); letter-spacing:.04em; color:var(--muted)}
+/* a heading of a group of presses - the Library window's Lyrics (css/music-window.css .au-lyrs) */
 .au-made-h{flex:0 0 auto; padding:12px 14px 8px; font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
-.au-made{flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 14px 20px; display:flex; flex-direction:column; gap:8px}
+.au-made{flex:0 0 auto; display:flex; flex-direction:column; gap:8px; margin-top:-4px}
+.au-made:empty{display:none}
 .au-gen{padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface); display:flex; flex-direction:column; gap:7px}
 .au-gen.is-failed{border-color:oklch(.66 .19 25 / .5)}
+.au-gen > .au-link{align-self:flex-start}
 .au-gen-h{display:flex; align-items:baseline; gap:8px; font-size:11px; color:var(--muted); min-width:0}
 .au-gen-h b{color:var(--ink); font-size:12px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .au-gen-h > span:not(.au-state):not(.sp){white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
@@ -169,11 +191,7 @@
    also the middle column's class, and its display:flex kept the view shown under another view of the panel - hidden here
    whenever lib-views.js does not show it. */
 .mv3-pc.is-audio:not(.is-shown){display:none}
-.mv3-pc.is-audio.au-mid .au-sash{display:none}
-.mv3-pc.is-audio.au-mid .au-madecol{flex:0 0 auto; min-width:0; background:none}
-.mv3-pc.is-audio.au-mid .au-made-h{padding:6px 0 4px}
-.mv3-pc.is-audio.au-mid .au-made{overflow:visible; padding:0}
-.mv3-pc.is-audio.au-mid .au-v2m{flex:0 0 auto; height:380px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg)}
+.mv3-pc.is-audio.au-tight .au-v2m{flex:0 0 auto; min-width:0; height:380px; border:1px solid var(--border-soft); border-radius:var(--r-xs)}
 .mv3-pc.is-audio.au-narrow{flex-direction:column}
 .mv3-pc.is-audio.au-narrow .au-set{flex:0 0 auto; max-height:38%; border-right:0; border-bottom:1px solid var(--border)}
 .mv3-pc.is-audio.au-narrow .au-mid{min-width:0; padding:10px 12px 20px}

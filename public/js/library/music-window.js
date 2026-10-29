@@ -5,12 +5,12 @@
    behind it. Phase V59.1 (the owner 2026-10-29, after the first look; (мз1а)-(мз9а)) gave it its present shape:
 
      head     the MODE's name - "Suno · Simple · background, no vocals" / "Suno · Custom · title, style, lyrics" /
-              "Suno · Lyrics" - and a "?" right of it: a press shows how the mode works (on the stack of layers, as the
-              SFX search's "?" - js/sound/sites.js); the fields it speaks of have short hints on hover
+              "Suno · Lyrics" - and a "?" right of it: the pointer resting on it shows how the mode works (phase V60,
+              (пп11а): js/sound/qmark.js, on the stack of layers - once a press)
      left     the settings: the mode (Simple, Custom, Lyrics - (мг1а): no Sounds, they lie in SFX), Suno's model (V6 /
-              V6_MINI / V6_WILD, remembered - (мг10а)), "Length [46] s" in one line, the folded chips; their notes are
-              hover hints. No highlights mood (a mood's tracks are Merge's) and no price box. Its width is the person's -
-              the sash right of it, remembered (`lib_music_sash_v1`)
+              V6_MINI / V6_WILD, remembered - (мг10а)), "Length [46] s" in one line, the folded chips; every row's name
+              and every field of the card has its "?" (phase V60, (пп10а) - the hints on whole rows went). No price box.
+              Its width is the person's - the sash right of it, remembered (`lib_music_sash_v1`)
      right    the gold card - the mode's fields only (js/sound/suno-form.js, the one Merge's "/ generate audio" is built
               from); in Lyrics the texts under it, a row each (▸ title - text): the last press's open, the earlier
               presses of this window folded below, the newest on top; each with "save" (Music -> Lyrics), "use in
@@ -23,8 +23,11 @@
    NO "MADE HERE" ((мг5б)): the window stays open after "generate", says the press is in Alerts, and what Suno makes lands in
    the gallery behind it - the opener reads the tree and the gallery again and outlines the new tracks while their folder is
    open (`onLanded`). WHERE THEY GO ((мг4а)): the folder under Music the window was opened on - Music itself, or a folder of
-   the person's in it; highlights, its moods and Lyrics open - Music's root, and the foot says why (lib/audio-gens.js
-   `_intoOf`, the server's rule). Simple's writer writes as for a blank project (lib/audio-writer-rules.js). The Alerts row
+   the person's in it; highlights and Lyrics open - Music's root, and the foot says why (lib/audio-gens.js `_intoOf`, the
+   server's rule). A MOOD FOLDER open (Music → highlights → <mood>; phase V60, (пп9а) - Merge makes no moods any more):
+   Simple makes that mood - its preset, no chips, no words, the card says so -, and the tracks go into that folder (the
+   server files a preset's tracks there, lib/music-store.js `place`); Custom there goes to Music's root. Simple's writer
+   writes as for a blank project (lib/audio-writer-rules.js). The Alerts row
    leads to that folder with the press's tracks outlined once they are filed (js/alerts-bell.js _hrefOf, `where.spot.view`
    'musicmake'), to the folder alone while it runs or when it failed.
 
@@ -35,8 +38,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openFrame } from '../gen-window.js';
-import * as Layers from '../layers.js';
-import { createSunoForm, el, api, ls, lsSet, copyText, titleOf } from '../sound/suno-form.js';
+import { createSunoForm, el, api, ls, lsSet, copyText, titleOf, qmark, withQ, closeQ, modeRowHelp, MODEL_ROW_HELP } from '../sound/suno-form.js';
 
 const MODES = ['simple', 'custom', 'lyrics'];
 const VIEW = 'musicmake';
@@ -58,17 +60,22 @@ let _lyricGens = [];       // this window's Lyrics records that wrote texts, new
 const _rowOpen = new Map(); // a text's row the person opened or folded: `<gen>:<i>` -> true / false
 let _looked = false;       // the server asked once for presses of this window still being made
 let _timer = 0;
-let _help = null;          // the "?" popup open
 
 const S = () => F.S;
 const _mode = () => (F.cat() ? F.cat().modes.find(x => x.id === S().mode) : null);
+// (phase V60, (пп9а)) The mood folder the window is open on (Music → highlights → <mood>) - its id, '' for any other folder.
+function _moodOpen() {
+  const p = (typeof _o.place === 'function' ? _o.place() : null) || null;
+  const m = /^music:highlights:(.+)$/.exec(String((p && p.key) || ''));
+  return m && F && F.moods().some(x => x.id === m[1]) ? m[1] : '';
+}
 
 function _form() {
   if (F) return F;
   F = createSunoForm({
     store: KEY, title: 'Generate music',
     base: { mode: 'simple' },
-    moods: false, compact: true,
+    mood: () => _moodOpen(),
     say: (t, bad) => _say(t, bad),
     paintCol: () => paintCol(),
     paintMake: () => paintMake(),
@@ -76,8 +83,7 @@ function _form() {
     setMode: (id) => setMode(id),
     onSaved: () => { if (typeof _o.onSaved === 'function') _o.onSaved(); if (_ui && S().mode === 'lyrics') paintMake(); },
     // No video here: the length is said in seconds.
-    lengthNote: (mode) => (mode === 'simple' ? 'how long the music is - the bed comes out a little longer'
-      : mode === 'custom' ? 'how long the music is: 10–360 s' : ''),
+    lengthNote: (mode) => (mode === 'simple' ? 'up to 360 s - the bed comes out a little longer' : mode === 'custom' ? '10–360 s' : ''),
   });
   if (!MODES.includes(F.S.mode)) F.S.mode = 'simple';
   return F;
@@ -118,50 +124,24 @@ function _dest() {
   const hl = /^music:highlights(:|$)/.test(key) || (p && p.folder === 'highlights');
   const lyr = key === 'music:lyrics';
   if (p && p.cat && !hl && !lyr) return { node: key, into: p.cat, label: 'Music → ' + (p.trail || p.label) };
+  // (phase V60, (пп9а)) A mood folder open: Simple makes its mood, and the server files the tracks there.
+  const mood = F.preset();
+  if (mood) return { node: key, into: '', label: 'Music → highlights → ' + mood.label };
   return { node: 'music', into: '', label: 'Music',
-    note: hl ? 'highlights takes only a mood\'s preset - made in Merge' : lyr ? 'Lyrics holds texts only' : '' };
+    note: _moodOpen() ? 'a mood takes only its preset\'s tracks - Simple makes them' : hl ? 'highlights takes only a mood\'s preset - open a mood\'s folder'
+      : lyr ? 'Lyrics holds texts only' : '' };
 }
 
 // ── the head: the mode's name and its "?" ───────────────────────────────────
+// (phase V60, (пп11а)) The mode's instruction - what the gold card used to say - in the "?" right of its name, on the pointer
+// resting there (js/sound/qmark.js), as every "?" of the form.
 function paintHead() {
   if (!_win || !_win.alive()) return;
+  closeQ();
   const m = _mode();
   _win.setCrumbs([{ label: 'Suno · ' + (m ? m.label : 'music') }]);
-  const q = el('button', 'au-q', '?');
-  q.type = 'button';
-  q.title = 'How this mode works';
-  q.setAttribute('aria-label', 'How this mode works');
-  q.addEventListener('click', () => _openHelp(q));
-  _win.crumbs.appendChild(q);
-  _closeHelp();
-}
-function _closeHelp() {
-  if (!_help) return;
-  const h = _help;
-  _help = null;
-  h.box.remove();
-  document.removeEventListener('mousedown', h.away, true);
-  Layers.close(h.layer);
-  if (h.anchor.isConnected) h.anchor.classList.remove('is-on');
-}
-// The mode's instruction - what the gold card used to say - under the "?"; pressed again it folds.
-function _openHelp(anchor) {
-  if (_help) { const was = _help.anchor === anchor; _closeHelp(); if (was) return; }
-  const m = _mode();
-  const d = _dest();
-  const box = el('div', 'au-qpop');
-  box.appendChild(el('b', null, 'Suno · ' + (m ? m.label : '')));
-  box.appendChild(el('div', null, F.helpText('AUDIO → ' + (d.label || 'Music')) || ''));
-  document.body.appendChild(box);
-  const r = anchor.getBoundingClientRect();
-  const bw = box.offsetWidth, bh = box.offsetHeight;
-  box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - bw - 6, r.left - 12))) + 'px';
-  box.style.top = Math.round(r.bottom + 6 + bh > window.innerHeight - 6 ? Math.max(6, r.top - bh - 6) : r.bottom + 6) + 'px';
-  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor) _closeHelp(); };
-  const layer = Layers.open(box, { modal: false, name: 'how the mode works', onEsc: _closeHelp });
-  _help = { box, away, layer, anchor };
-  anchor.classList.add('is-on');
-  document.addEventListener('mousedown', away, true);
+  _win.crumbs.appendChild(qmark(() => F.helpText('AUDIO → ' + (_dest().label || 'Music')) || '',
+    { title: 'Suno · ' + (m ? m.label : '') }));
 }
 
 // ── the settings column ─────────────────────────────────────────────────────
@@ -170,20 +150,20 @@ function paintCol() {
   const CAT = F.cat();
   const col = _ui.col;
   col.textContent = '';
-  const row = (label, body, note) => {
+  const row = (label, body, help, warn) => {
     const r = el('div', 'mv3-ig-row');
-    if (label) r.appendChild(el('label', null, label));
+    if (label) r.appendChild(withQ(el('label', null, label), help));
     r.appendChild(body);
-    if (note) r.appendChild(el('div', 'au-note', note));
+    if (warn) r.appendChild(el('div', 'au-note', warn));
     col.appendChild(r);
     return r;
   };
-  const sep = (text) => col.appendChild(el('div', 'mv3-ig-sep', text));
   // A missing key stays in words: it is why nothing would come.
-  row('Mode', F.modeSelect(CAT.modes.filter(m => MODES.includes(m.id))),
+  const modes = CAT.modes.filter(m => MODES.includes(m.id));
+  row('Mode', F.modeSelect(modes), modeRowHelp(modes),
     CAT.keys && !CAT.keys.kie && !CAT.fake ? 'No kie.ai key - add it on Admin → API keys.' : '');
-  if (S().mode !== 'lyrics') row('Model', F.modelSelect());
-  F.lengthRows(row, sep);
+  if (S().mode !== 'lyrics') row('Model', F.modelSelect(), MODEL_ROW_HELP);
+  F.lengthRows(row);
   F.chipRows(col);
 }
 
@@ -432,7 +412,7 @@ export async function open(o) {
     name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: SIZE,
     onClose: () => {
       F.closeAlmanac();
-      _closeHelp();
+      closeQ();
       window.removeEventListener('resize', _onResize);
       _win = null;
       _ui = null;
