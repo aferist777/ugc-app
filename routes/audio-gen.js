@@ -8,9 +8,11 @@
 //   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
 //                                     the writer's rules are there
 //   POST   /api/audio/gen             { mode, ...the mode's fields, where, project?, into? } -> { gen }   a press: the record and
-//                                     its Alerts row NOW, the asking behind the answer
-//   GET    /api/audio/gens?limit=&project=   the history, newest first - of one project when it is named (Merge's "Made
-//                                     here", V34.E: the draft's are the drafts' one list)
+//                                     its Alerts row NOW, the asking behind the answer. Simple with a highlights mood's
+//                                     `preset` may bring `presetEdit: { style, negative }` - that preset changed for this
+//                                     one press (phase V60.1; checked and kept on the request by lib/audio-gens.js)
+//   GET    /api/audio/gens?limit=&project=   the history, newest first - of one project when it is named (Merge's presses
+//                                     under its gold card, V34.E / V60: the draft's are the drafts' one list)
 //   GET    /api/audio/gens/:id        one record (the page follows a press with it)
 //   DELETE /api/audio/gens/:id        off the history - never its files
 //

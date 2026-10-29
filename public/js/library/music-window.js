@@ -26,7 +26,10 @@
    the person's in it; highlights and Lyrics open - Music's root, and the foot says why (lib/audio-gens.js `_intoOf`, the
    server's rule). A MOOD FOLDER open (Music → highlights → <mood>; phase V60, (пп9а) - Merge makes no moods any more):
    Simple makes that mood - its preset, no chips, no words, the card says so -, and the tracks go into that folder (the
-   server files a preset's tracks there, lib/music-store.js `place`); Custom there goes to Music's root. Simple's writer
+   server files a preset's tracks there, lib/music-store.js `place`); Custom there goes to Music's root. (phase V60.1,
+   (пк6а)-(пк8а)) "edit" on that card shows the preset's Style and Exclude to change - for ONE press: after "generate" or a
+   new opening of this window it is the standard preset again (js/sound/suno-form.js `resetEdit`); the press sends
+   `presetEdit`, the title, the mood's `vary` and its folder stay the preset's. Simple's writer
    writes as for a blank project (lib/audio-writer-rules.js). The Alerts row
    leads to that folder with the press's tracks outlined once they are filed (js/alerts-bell.js _hrefOf, `where.spot.view`
    'musicmake'), to the folder alone while it runs or when it failed.
@@ -408,6 +411,10 @@ export async function open(o) {
     if (lyric && F.cat()) F.useLyric(lyric); else if (F.cat()) paint();
     return _win;
   }
+  // (phase V60.1, (пк7б)) A mood's preset edited in an earlier opening is not carried into this one: the standard again -
+  // and a refusal said then is not said again.
+  F.resetEdit();
+  _err = '';
   _win = openFrame({
     name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: SIZE,
     onClose: () => {

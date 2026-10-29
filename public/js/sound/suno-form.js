@@ -149,6 +149,11 @@ export function createSunoForm(o) {
   let _chipOpen = '';            // (phase V54) the one chip group open in the settings column - '' all folded
   let _priceBox = null;
   let _almWin = null;
+  // (phase V60.1, the owner 2026-10-29: "давай в simple давать пользователю редактировать стандартный шаблон кнопкой edit на
+  // самой карточке в золотой рамке"; (пк6а)-(пк8а)) The mood's preset as the person changes it - Suno's style and excludes -
+  // { mood, style, negative }, for ONE press ((пк7б)): gone after "generate" and when the Library's window opens again
+  // (resetEdit); never kept in the browser.
+  let _edit = null;
 
   async function ready() {
     const saved = loadSaved();
@@ -180,6 +185,11 @@ export function createSunoForm(o) {
     const id = String(call('mood') || '');
     return id ? moods().find(m => m.id === id) || null : null;
   };
+  // (phase V60.1) The edit of THIS mood's preset, when it is being edited; changed - it says other than the preset does.
+  const editOf = (mood) => (_edit && mood && _edit.mood === mood.id ? _edit : null);
+  const _t = (s) => String(s || '').replace(/\r\n/g, '\n').trim();
+  const editChanged = (mood, e) => !!e && (_t(e.style) !== _t(mood.style) || _t(e.negative) !== _t(mood.negative));
+  function resetEdit() { _edit = null; }
 
   function chipGroups() {
     // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
@@ -428,10 +438,41 @@ export function createSunoForm(o) {
       const box = el('div', 'au-preset');
       box.appendChild(el('b', null, mood.label + (mood.title ? ' · ' + mood.title : '')));
       if (mood.about) box.appendChild(el('div', 'au-muted', mood.about));
-      if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
+      // (phase V60.1) "edit": the preset's style and excludes in two fields, filled with the mood's own, for this press only.
+      const e = editOf(mood);
+      const mark = el('span', 'au-edited', 'edited · this press only');
+      const paintMark = () => { mark.hidden = !editChanged(mood, e); };
+      if (!e) {
+        if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
+      } else {
+        const area = (key, rows, ph) => {
+          const t = el('textarea', 'au-ta');
+          t.rows = rows;
+          t.placeholder = ph;
+          t.value = e[key] == null ? '' : String(e[key]);
+          t.addEventListener('input', () => { e[key] = t.value; paintMark(); });
+          return t;
+        };
+        box.appendChild(field('Style', area('style', 4, 'genre, tempo, instruments, texture, production - by commas'),
+          { max: 1000, help: 'What Suno is asked for - the mood\'s own words to start with. By commas, the most important first; the bed\'s own words (instrumental, background, steady) are added after them by themselves. Up to 1000 characters.' }));
+        box.appendChild(field('Exclude', area('negative', 2, 'what must not be there - bare words, by commas'),
+          { max: 1000, help: 'What Suno should keep out - bare words by commas, never "no …". Voices, drops and risers are kept out of every bed by themselves. Up to 1000 characters.' }));
+      }
       box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
         ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
-      card.appendChild(field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no chips and no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ.' }));
+      const fl = field('The mood', box, { help: 'The preset of this mood folder: it goes to Suno as it is - no chips and no words are needed. Its two tracks go into this folder, and the highlights popup offers them.\nEach press turns another colour of the mood, so the next tracks differ - an edited style too.\n"edit" - change its style and excludes for THIS press; after "generate", or when the window opens again, it is the mood\'s own preset. "standard" - back to it now.' });
+      const act = el('span', 'au-f-act');
+      const btn = el('button', 'au-link au-edit', e ? 'standard' : 'edit');
+      btn.type = 'button';
+      btn.title = e ? 'Back to the mood\'s own preset' : 'Change the mood\'s style and excludes - for this press only';
+      btn.addEventListener('click', () => {
+        _edit = e ? null : { mood: mood.id, style: String(mood.style || ''), negative: String(mood.negative || '') };
+        call('paintMake');
+      });
+      paintMark();
+      act.append(mark, btn);
+      fl.querySelector('.au-f-h').appendChild(act);
+      card.appendChild(fl);
       return true;
     }
     if (S.mode === 'simple') {
@@ -576,6 +617,12 @@ export function createSunoForm(o) {
       // (V34.F) A highlights mood: its preset and which press of it this is; the chips and the words stay out.
       b.preset = mood.id;
       b.n = (f.presetN || {})[mood.id] || 0;
+      // (phase V60.1) The preset as the person changed it, for this press - only when it says other than the preset.
+      const e = editOf(mood);
+      if (editChanged(mood, e)) {
+        if (!_t(e.style)) throw new Error('The mood\'s style is empty - write it, or press "standard".');
+        b.presetEdit = { style: _t(e.style), negative: _t(e.negative) };
+      }
       b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);
       b.chips = {}; b.words = ''; b.projectKind = 'highlights';
     } else if (S.mode === 'simple') {
@@ -595,11 +642,13 @@ export function createSunoForm(o) {
   async function press(b) {
     const d = await post('/api/audio/gen', b);
     if (b.preset) {
-      // The next press of this mood turns another of its colours.
+      // The next press of this mood turns another of its colours; (phase V60.1, (пк7б)) an edit served its one press.
       const f = S.f.simple;
       f.presetN = f.presetN || {};
       f.presetN[b.preset] = (f.presetN[b.preset] || 0) + 1;
       save();
+      _edit = null;
+      call('paintMake');
     }
     return d;
   }
@@ -896,7 +945,7 @@ export function createSunoForm(o) {
     modeSelect, modelSelect, lengthRows, chipRows,
     price, priceText, priceBox, paintPrice,
     field, text, check, knob,
-    helpText, paintFields, body, press, lyricCard,
+    helpText, paintFields, body, press, lyricCard, resetEdit,
     saveButton, useLyric,
     almanacButton, closeAlmanac,
   };
