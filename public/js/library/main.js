@@ -140,6 +140,7 @@ let _narrOn = false;
 // The next read of the shelf brings the selected tile into view (a character just saved lands ~23rd).
 let _scrollSel = false;
 let _drafts = [];         // the drafts heading the Scenarios list (phase E)
+let _scArchived = [];     // (phase V60) the archived scenarios - the folded "Archive" at the list's bottom
 
 // The page's line: what was just done ("Saved", "Reading…"). A refusal or a failure (kind 'err') is a popup in the corner
 // instead (phase V49.1, the owner's (пр28), (пр29); js/notice.js), and the line goes.
@@ -1123,6 +1124,8 @@ function _renderGrid() {
       // (V38.6) A draft is selected like a scenario, its form on the right; one made elsewhere is
       // selected once the list has been read with it.
       drafts: _drafts, showDraft: _showDraftHere, hideDraft: _hideDraftHere,
+      // (phase V60, the owner's (пп6а)) the archived, under "▸ Archive · N" at the bottom
+      archived: _scArchived,
       openDraft: (id) => { SC.select('d:' + id); return _load({ keepScroll: true }); },
     });
     return;
@@ -1330,6 +1333,7 @@ async function _load(opts) {
       _drafts = (dd && dd.success && dd.drafts) || [];
     }
     _items = d.items || [];
+    _scArchived = _shelf === 'scenarios' ? (d.archived || []) : [];
     _paintSndHead();
     _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
     _shelfRunning = d.running || 0;

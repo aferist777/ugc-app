@@ -527,6 +527,20 @@ body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-sel
 }
 .lib-sc-tag.run{ color:var(--primary-ink); background:var(--primary); }
 .lib-srow.is-draft{ border-style:dashed; }
+/* (phase V60, the owner's (пп6а)) THE ARCHIVE at the bottom of the list: a folded row "▸ Archive · N", the archived
+   scenarios under it when it is open - paler; the selected one keeps its gold at full strength. */
+.lib-sc-arch{
+  display:flex; align-items:center; gap:6px; width:100%; margin-top:6px; padding:6px 10px; text-align:left;
+  background:none; border:1px dashed var(--border); border-radius:var(--r-sm); cursor:pointer;
+  color:var(--muted); font:600 11px/1.2 var(--font); letter-spacing:.02em;
+}
+.lib-sc-arch:hover{ color:var(--ink); border-color:var(--primary); }
+.lib-sc-arch-c{ font-size:9px; transition:transform .12s var(--ease); }
+.lib-sc-arch.is-open .lib-sc-arch-c{ transform:rotate(90deg); }
+.lib-sc-arch.is-open{ color:var(--ink); }
+.lib-sc-arch-n{ font-weight:500; font-variant-numeric:tabular-nums; }
+.lib-srow.is-archived:not(.cur){ opacity:.6; background:transparent; }
+.lib-srow.is-archived:not(.cur):hover{ opacity:.85; }
 
 /* ── The scenario generator (phase E, js/library/make.js) ─────────────────────
    Sources down a narrow column on the left, the form - or the chosen source's topics - on the

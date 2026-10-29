@@ -994,36 +994,43 @@ function _labels(s) {
 }
 
 function _scenariosShelf() {
-  const list = _read(SCEN3_FILE, []);
-  // Archived ones are not on the shelf (phase D5): archiving is taking a scenario out of the list,
-  // and Merge's picker, which has an archive of its own to restore from, already reads it that way.
-  const items = (Array.isArray(list) ? list : [])
-    .filter(s => s && !s.archived)
-    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
-    .map(s => ({
-      id: String(s.id),
-      name: s.title || 'untitled',
-      kind: 'scenarios',
-      media: null,
-      thumb: null,
-      meta: {
-        type: s.type || '', vertical: s.vertical || '', product: s.product || '',
-        // Every field the shelf filters by (phase F7): the role's name and gender apart, and the
-        // narrator the scenario IS (its own, or the generator's when not set). No language (phase V29).
-        role: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).name || '',
-        gender: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).gender || '',
-        narrator: (_labels(s).narrator || {}).name || '',
-        // roles are records - {id, name, gender} - so the row reads their names, with the
-        // gender in brackets because "doctor" and "doctor" are two different castings.
-        roles: (Array.isArray(s.roles) ? s.roles : [])
-          .map(r => (r && r.name ? r.name + (r.gender ? ' (' + String(r.gender)[0] + ')' : '') : ''))
-          .filter(Boolean).join(', '),
-        lines: Array.isArray(s.lines) ? s.lines.length : 0,
-        date: s.updatedAt || s.createdAt || null,
-        createdAt: s.createdAt || null,
-      },
-    }));
-  return { items, filters: [] };
+  const all = _read(SCEN3_FILE, []);
+  const list = (Array.isArray(all) ? all : []).filter(Boolean)
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  // Archived ones are not among the shelf's items (phase D5): archiving is taking a scenario out of the list - its
+  // count, its filters. (phase V60, the owner's (пп6а)) They come beside them as `archived`, newest first, for the
+  // folded "Archive" at the bottom of the list; the archive is Merge's too (PATCH `archived`, routes/scen3.js).
+  const items = list.filter(s => !s.archived).map(_scRow);
+  const archived = list.filter(s => s.archived).map(_scRow);
+  return { items, archived, filters: [] };
+}
+
+// One scenario as a row of the shelf.
+function _scRow(s) {
+  return {
+    id: String(s.id),
+    name: s.title || 'untitled',
+    kind: 'scenarios',
+    media: null,
+    thumb: null,
+    meta: {
+      type: s.type || '', vertical: s.vertical || '', product: s.product || '',
+      // Every field the shelf filters by (phase F7): the role's name and gender apart, and the
+      // narrator the scenario IS (its own, or the generator's when not set). No language (phase V29).
+      role: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).name || '',
+      gender: ((Array.isArray(s.roles) ? s.roles : [])[0] || {}).gender || '',
+      narrator: (_labels(s).narrator || {}).name || '',
+      // roles are records - {id, name, gender} - so the row reads their names, with the
+      // gender in brackets because "doctor" and "doctor" are two different castings.
+      roles: (Array.isArray(s.roles) ? s.roles : [])
+        .map(r => (r && r.name ? r.name + (r.gender ? ' (' + String(r.gender)[0] + ')' : '') : ''))
+        .filter(Boolean).join(', '),
+      lines: Array.isArray(s.lines) ? s.lines.length : 0,
+      date: s.updatedAt || s.createdAt || null,
+      createdAt: s.createdAt || null,
+      ...(s.archived ? { archived: true } : {}),
+    },
+  };
 }
 
 // How many lookbooks or environments are being made right now (phase I) - a chat's, or Merge's maker's.
@@ -1092,12 +1099,13 @@ router.get('/library/shelf/:kind', (req, res) => {
     const f = String(req.query.filter || '');
     const cat = String(req.query.cat || '');
     const grp = GROUPS[String(req.query.group || '')] || null;
-    const { items, filters, labelFor, labelKeys, running } = kind === 'media'
+    const built = kind === 'media'
       ? _mediaShelf({ music: f === 'music' || !!(grp && grp.includes('music')), heads: f === 'heads' || !!(grp && grp.includes('heads')),
         refs: f === 'references' || !!(grp && grp.includes('references')),
         youtube: f === 'youtube', sfx: f === 'sfx' || !!(grp && grp.includes('sfx')), made: MADE_KINDS.has(f) ? f : '',
         lyrics: f === 'lyrics' })
       : build();
+    const { items, filters, labelFor, labelKeys, running } = built;
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
     const cats = (kind === 'media' && (!f || LC.KINDS.includes(f))) ? _mediaCats(items, f, labelFor) : [];
@@ -1138,7 +1146,9 @@ router.get('/library/shelf/:kind', (req, res) => {
       if (r.items.length) cats2 = cats.concat([{ id: REF_CAT, name: 'REFERENCES', label: 'REFERENCES · ' + r.items.length, count: r.items.length }]);
     }
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats: cats2, labelKeys: labelKeys || null, running: running || 0 });
+      filters: filters || [], cats: cats2, labelKeys: labelKeys || null, running: running || 0,
+      // (phase V60) Scenarios: the archived ones beside the live (_scenariosShelf).
+      ...(Array.isArray(built.archived) ? { archived: built.archived } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

@@ -32,10 +32,21 @@
 // Lines are `{text}` records - the roles live on the scenario, not on its lines - so splitting the
 // textarea on newlines maps onto the store exactly. A line that carries a newline of its own (the
 // generator can write one) is shown on one textarea line, or a Save would quietly make it two.
+//
+// THE ARCHIVE (phase V60, the owner 2026-10-29, (пп6а)-(пп8а): "снизу списка будет типа под папка в которой будут
+// архивированные сценарии. правый клик по сценарию открывает контекстное меню в котором кнопка archive"): at the bottom of
+// the list a folded row "▸ Archive · N" - pressed, the archived scenarios open under it, paler, newest first; pressed
+// again, they fold; remembered. None archived - no row. While any filter over the list is chosen the archive is not
+// shown at all (the owner: "архивные записи не показываются при изменении фильтров"); the filters and their numbers
+// count the live scenarios only. The right button on a scenario: "Archive"; on an archived one: "Restore" (drafts have
+// no menu). An archived one selected: its lines on the right, edited and saved as any, with "Restore" where "Make video"
+// stands - a video is not made from the archive. The archive is Merge's too: the same flag, the same edit (scen-api.js
+// `archive`); going in keeps the scenario's date, coming back gives it a new one, so it heads the list.
 
 import { askName } from '../name-box.js';
 import * as Layers from '../layers.js';
-import { talkingHead } from '../merge-v3/scen-api.js';
+import { talkingHead, archive as archiveScenario } from '../merge-v3/scen-api.js';
+import { menuAt } from '../tile-select.js';
 import { spokenSeconds } from './jobs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -136,6 +147,15 @@ let _seq = 0;            // an answer for a scenario no longer selected is dropp
 let _hooks = {};
 let _say = null;         // { id, text, kind } - said in the column once it is painted again
 
+// ── The archive (phase V60) ─────────────────────────────────────────────────
+let _archived = [];      // the archived scenarios, newest first (the shelf's `archived`)
+const LS_ARCH = 'library_sc_archive_open_v1';
+let _archOpen = (() => { try { return localStorage.getItem(LS_ARCH) === '1'; } catch (e) { return false; } })();
+// Shown only with no filter chosen, and only when there is something in it.
+const _archShown = () => _archived.length > 0 && !Object.keys(_filters).length;
+// A scenario of the shelf by id - live or archived.
+const _any = (id) => _items.find(x => String(x.id) === String(id)) || _archived.find(x => String(x.id) === String(id)) || null;
+
 // ── The rows ────────────────────────────────────────────────────────────────
 function _paintSel() {
   document.querySelectorAll('#lib-grid .lib-srow').forEach(r => r.classList.toggle('cur', r.dataset.id === _sel));
@@ -192,6 +212,7 @@ function _showDraft(id) {
 export function render(items, hooks = {}) {
   _hooks = hooks || {};
   _items = items || [];
+  _archived = Array.isArray(_hooks.archived) ? _hooks.archived : [];
   const grid = $('lib-grid');
   if (!grid) return;
   grid.textContent = '';
@@ -201,33 +222,89 @@ export function render(items, hooks = {}) {
   // (V38.6) A draft chosen stays chosen while it is there - saved or discarded, the scenarios have the selection back.
   if (_sel.startsWith('d:') && !drafts.some(d => 'd:' + d.id === _sel)) _sel = '';
   const shown = _items.filter(it => _passes(it) || String(it.id) === _keep);
+  // (phase V60) The archived ones in sight: the archive shown (no filter) and open.
+  const arch = _archShown() && _archOpen ? _archived : [];
   // The selection survives a reload while that scenario is still shown; otherwise the first scenario - or, with none
-  // to show, the first draft.
-  if (!_sel.startsWith('d:') && !shown.some(i => String(i.id) === _sel)) {
-    _sel = shown.length ? String(shown[0].id) : drafts.length ? 'd:' + drafts[0].id : '';
+  // to show, the first draft, then the first archived one in sight.
+  if (!_sel.startsWith('d:') && !shown.concat(arch).some(i => String(i.id) === _sel)) {
+    _sel = shown.length ? String(shown[0].id) : drafts.length ? 'd:' + drafts[0].id : arch.length ? String(arch[0].id) : '';
   }
   for (const dr of drafts) grid.appendChild(_draftRow(dr));
 
-  if (!_items.length) grid.appendChild(_el('div', 'lib-empty', 'No scenarios yet. “New scenario” above writes one.'));
+  if (!_items.length) grid.appendChild(_el('div', 'lib-empty', _archived.length ? 'Every scenario is in the archive.' : 'No scenarios yet. “New scenario” above writes one.'));
   else if (!shown.length) grid.appendChild(_el('div', 'lib-empty', 'Nothing under these filters.'));
-  for (const it of shown) {
-    const outside = !_passes(it);
-    const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : ''));
-    row.type = 'button';
-    row.dataset.id = String(it.id);
-    if (outside) row.title = 'Outside the filters - shown because it was opened';
-    const main = _el('div', 'lib-srow-main');
-    main.appendChild(_el('div', 'lib-srow-t', it.name));
-    main.appendChild(_el('div', 'lib-srow-s', _tail(it.meta || {})));
-    row.appendChild(main);
-    row.appendChild(_el('div', 'lib-srow-d', _fmtDate((it.meta || {}).date)));
-    // Pressing the selected one again reads its column again, as on the picture shelves.
-    row.addEventListener('click', () => _pick(it));
-    grid.appendChild(row);
+  for (const it of shown) grid.appendChild(_row(it, false));
+  if (_archShown()) {
+    grid.appendChild(_archHead());
+    for (const it of arch) grid.appendChild(_row(it, true));
   }
   if (_sel.startsWith('d:')) { _showDraft(_sel.slice(2)); return; }
-  if (!shown.length) { _empty(_items.length ? 'Nothing under these filters.' : undefined); return; }
-  _show(_items.find(i => String(i.id) === _sel));
+  const cur = shown.concat(arch).find(i => String(i.id) === _sel);
+  if (!cur) { _empty(_items.length ? 'Nothing under these filters.' : undefined); return; }
+  _show(cur);
+}
+
+// A scenario's row - live, or (phase V60) archived: paler, and its menu says "Restore".
+function _row(it, archived) {
+  const outside = !archived && !_passes(it);
+  const row = _el('button', 'lib-srow' + (String(it.id) === _sel ? ' cur' : '') + (outside ? ' is-outside' : '') + (archived ? ' is-archived' : ''));
+  row.type = 'button';
+  row.dataset.id = String(it.id);
+  if (outside) row.title = 'Outside the filters - shown because it was opened';
+  else if (archived) row.title = 'Archived - the right button puts it back';
+  const main = _el('div', 'lib-srow-main');
+  main.appendChild(_el('div', 'lib-srow-t', it.name));
+  main.appendChild(_el('div', 'lib-srow-s', _tail(it.meta || {})));
+  row.appendChild(main);
+  row.appendChild(_el('div', 'lib-srow-d', _fmtDate((it.meta || {}).date)));
+  // Pressing the selected one again reads its column again, as on the picture shelves.
+  row.addEventListener('click', () => _pick(it));
+  // (phase V60, the owner's (пп7а)) The right button: "Archive", or on an archived one "Restore".
+  row.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    menuAt(e.clientX, e.clientY, [archived
+      ? ['Restore', 'back into the list of scenarios', () => _setArchived(it, false)]
+      : ['Archive', 'out of the list - into Archive at the bottom', () => _setArchived(it, true)]]);
+  });
+  return row;
+}
+
+// "▸ Archive · N" - pressed, the archived ones open under it; pressed again, they fold. Remembered.
+function _archHead() {
+  const b = _el('button', 'lib-sc-arch' + (_archOpen ? ' is-open' : ''));
+  b.type = 'button';
+  b.setAttribute('aria-expanded', _archOpen ? 'true' : 'false');
+  b.title = _archOpen ? 'Fold the archive' : 'The archived scenarios';
+  b.appendChild(_el('span', 'lib-sc-arch-c', '▸'));
+  b.appendChild(_el('span', 'lib-sc-arch-t', 'Archive'));
+  b.appendChild(_el('span', 'lib-sc-arch-n', '· ' + _archived.length));
+  b.addEventListener('click', () => {
+    _archOpen = !_archOpen;
+    try { localStorage.setItem(LS_ARCH, _archOpen ? '1' : '0'); } catch (e) { /* this view only */ }
+    const grid = $('lib-grid');
+    const top = grid ? grid.scrollTop : 0;
+    render(_items, _hooks);
+    if (grid) grid.scrollTop = top;
+  });
+  return b;
+}
+
+// Into the archive or back - the edit Merge sends (scen-api.js `archive`). What is typed into it is stored first. Going in,
+// it stays selected while the archive is open; coming back, it heads the list and stays selected.
+async function _setArchived(it, yes) {
+  const id = String(it.id);
+  if (_auto && String(_auto.s.id) === id) await _flushA(_auto);
+  try {
+    await archiveScenario(id, yes);
+  } catch (e) {
+    if (_hooks.status) _hooks.status((yes ? 'Not archived: ' : 'Not restored: ') + e.message, 'err');
+    return;
+  }
+  if (!yes || _sel === id) _sel = id;
+  if (!yes) _keep = id;
+  if (_hooks.reload) await _hooks.reload();
+  if (_hooks.counts) _hooks.counts();
+  if (_hooks.status) _hooks.status(yes ? 'Archived “' + (it.name || 'untitled') + '” - Archive, at the bottom of the list' : 'Restored “' + (it.name || 'untitled') + '”');
 }
 
 // ── The column ──────────────────────────────────────────────────────────────
@@ -499,7 +576,7 @@ async function _patch(s, patch, what) {
     if (!d || !d.success) throw new Error((d && d.error) || 'refused');
     Object.assign(s, d.scenario);
     // The row and the filters read the shelf's items: this one is told what it is now.
-    const it = _items.find(x => String(x.id) === String(s.id));
+    const it = _any(s.id);
     if (it) {
       const role = (d.scenario.roles || [])[0] || {};
       it.meta = { ...(it.meta || {}), type: d.scenario.type || '', vertical: d.scenario.vertical || '', product: d.scenario.product || '',
@@ -585,10 +662,13 @@ async function _show(it) {
   if (my !== _seq) return;
 
   // (V38.6, the owner's (щ2)) The buttons over the lines, under the fields; the lines under them, a card each.
+  // (phase V60, the owner's (пп8а)) An archived one: "Restore" where "Make video" stands - no video from the archive.
   const foot = _el('div', 'lib-sc-bar');
-  const make = _el('button', 'lib-btn primary', 'Make video');
+  const archived = !!s.archived;
+  const make = _el('button', 'lib-btn primary', archived ? 'Restore' : 'Make video');
   make.type = 'button';
-  make.title = 'Make a talking-head project from this scenario and open it in Merge';
+  make.title = archived ? 'Archived - put it back into the list of scenarios (a video is made from the list)'
+    : 'Make a talking-head project from this scenario and open it in Merge';
   const st = _el('span', 'lib-sc-status');
   const del = _el('button', 'lib-btn danger', 'Delete');
   del.type = 'button';
@@ -606,7 +686,11 @@ async function _show(it) {
   // Leaving the lines - for anything but another of them - is the save that makes them English (phase V29), never the
   // pause in the typing.
   box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) _flushA(a, true); });
-  make.addEventListener('click', () => _makeVideo(a, make));
+  make.addEventListener('click', () => {
+    if (!archived) { _makeVideo(a, make); return; }
+    make.disabled = true;
+    _setArchived(_any(s.id) || { id: s.id, name: s.title }, false).finally(() => { make.disabled = false; });
+  });
   del.addEventListener('click', () => _delete(s, del));
 
   // What the last Save or refusal said, now that the column is painted again.
@@ -762,7 +846,7 @@ async function _save(a, keepalive, english) {
     // The row, the head of the lines and their count say what is stored now - in place: painting the column
     // again would take the cards from under the typing.
     const n = lines.length;
-    const it = _items.find(x => String(x.id) === String(a.s.id));
+    const it = _any(a.s.id);
     if (it) {
       it.meta = { ...(it.meta || {}), lines: n };
       const row = document.querySelector('#lib-grid .lib-srow[data-id="' + CSS.escape(String(a.s.id)) + '"] .lib-srow-s');
