@@ -234,6 +234,10 @@ export function createChat(make) {
       return Views.chatKey(Store.key());
     },
     shots: (m, progs) => _shots(m, progs),
+    // (phase V60.2) A result's "read more" on its own, and every finished one of the thread large from it - for a description
+    // that lays its result out itself (the video chat's field at a message's head).
+    facts: (g) => _facts(g),
+    view: (g) => _view(g),
     // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
     stageWords: (g) => _stageWords(g),
     footChanged: () => { if (_ui) _paintThread(true); },

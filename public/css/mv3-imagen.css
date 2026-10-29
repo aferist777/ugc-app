@@ -642,6 +642,57 @@ audio.vtrim-media{ background:none; height:32px }
 .vc-frame-busy{ display:flex; flex-direction:column; align-items:flex-start; gap:5px; max-width:100% }
 .vc-step:empty{ display:none }
 
+/* (phase V60.2, the owner 2026-10-29, (вч6а)-(вч17а)) THE COMPACT MESSAGE. Its head: what was asked on the left, the video on
+   the right against the message's right edge - 180 px wide at the clip's shape (9:16 180×320, 16:9 180×101). Its steps (two at
+   most) under it, every prompt folded into one line; "read more" of the clip shown at its foot. */
+.vm-head{ display:flex; align-items:flex-start; gap:12px; min-width:0 }
+.vm-head-l{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:6px }
+.vm-vid{ flex:0 0 180px; width:180px; min-width:0; max-width:180px; display:flex; flex-direction:column; gap:5px; margin-left:auto }
+.vm-vid-cell{ display:flex; flex-direction:column; gap:5px; width:100%; min-width:0 }
+.vm-vid .mv3-vc-shot{ width:100%; min-width:0; max-width:100%; max-height:none }
+.vm-vid-box{
+  position:relative; width:100%; box-sizing:border-box; display:flex; align-items:center; justify-content:center;
+  padding:10px; border:1px dashed var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  overflow:hidden;
+}
+.vm-vid-box .w{ font:600 10px/1.45 var(--font); color:var(--muted); text-align:center; word-break:break-word }
+.vm-vid-box.is-empty .w{ opacity:.8 }
+/* Being made: the field striped as a picture waiting, its countdown at its foot. */
+.vm-vid-box.is-busy{
+  align-items:flex-end; padding:6px; border-style:solid;
+  background:repeating-linear-gradient(135deg, oklch(.27 .02 265) 0 10px, oklch(.24 .02 265) 10px 20px);
+}
+.vm-vid-box.is-busy .mv3-ig-prog{ min-width:0; width:100%; background:var(--surface) }
+.vm-vid-box.is-bad{ border:1px solid var(--danger); background:color-mix(in oklch, var(--danger) 8%, var(--surface-2)) }
+.vm-vid-box.is-bad .w{
+  color:var(--danger); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden;
+}
+.vm-foot:empty{ display:none }
+/* A set's variants, small: "‹ 2 of 3 ›" - in a prompt's line, under a sheet, under the video. */
+.vm-pg{ flex:0 0 auto; display:inline-flex; align-items:center; gap:4px }
+.vm-pg .vc-nav{ width:20px; height:20px; font-size:12px; line-height:18px }
+.vm-pg-t{ font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
+.vm-pg.is-vid{ align-self:center }
+.vc-step > .vm-pg{ align-self:flex-start }
+/* A prompt folded into one line: its word, ▸, its first words, how many characters; open - the whole text to edit. */
+.vm-fold{ display:flex; flex-direction:column; gap:6px; min-width:0 }
+.vm-fold-line{ display:flex; align-items:center; gap:8px; min-width:0 }
+.vm-fold-b{
+  flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:7px; height:26px; padding:0 8px; box-sizing:border-box;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink);
+  font:500 11px/24px var(--font); text-align:left; cursor:pointer;
+}
+.vm-fold-b:hover{ border-color:var(--primary) }
+.vm-fold.is-open .vm-fold-b{ border-color:var(--border-soft) }
+.vm-fold-b .k{ flex:0 0 auto; font:700 9px/24px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent) }
+.vm-fold-b .tw{ flex:0 0 auto; width:9px; color:var(--muted); font-size:9px }
+.vm-fold-b .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted) }
+.vm-fold-b .n{ flex:0 0 auto; font:500 9.5px/24px var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.vm-fold-part{ display:flex; flex-direction:column; gap:6px; min-width:0 }
+.vm-fold-part[hidden]{ display:none }
+/* Open: as tall as its text, never a box of its own scrolling or empty under it - and as wide as the message, whatever it holds. */
+.vc-prompt-ta.is-fit{ field-sizing:content; contain:inline-size; min-height:44px; resize:none; overflow:hidden }
+
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
    As big as the catalog: where things come from on the left, the tiles in the middle - a picture or a clip at its own
    shape (one height, the width its shape's, never cut to fit a cell), a sound a row. What is in the zone wears the

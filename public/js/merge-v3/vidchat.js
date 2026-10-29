@@ -559,7 +559,7 @@ function VIDEOS(ctx) {
       // Frames on their own make the clip in their shape; beside a clip or a sound they go as references.
       const fixed = n > 0 && ((fam === 'grok' && !(r.aspectWithImages && n > 1)) || (fam === 'seedance' && _framesMode() && !mixed));
       const sel = _select('mv3-vc-ar', 'Shape', r.aspects.map(a => ({ value: a, text: a + (a === fmt ? ' •' : '') })),
-        r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => setParam('aspect', v));
+        r.aspects.includes(p.aspect) ? p.aspect : (r.aspects.includes(fmt) ? fmt : r.aspects[0]), (v) => { setParam('aspect', v); _freshenCards(); });
       sel.disabled = fixed;
       if (fixed) sel.title = 'The clip takes the shape of the picture';
       _row(box, 'shape', sel);
@@ -1386,10 +1386,11 @@ function VIDEOS(ctx) {
   const _busy = (thread) => thread.some(m => (m.card && (m.card.type === 'prompt' || m.card.type === 'board') && m.card.state === 'writing')
     || (m.boards || []).some(g => g.state === 'pending'));
 
-  // (phase V16, the owner 2026-10-07) Every working message is a SUB-PROJECT (vsteps.js): its steps paged at its top, the
-  // variants of the step shown at its foot - the chat does not grow with every attempt. The plain chat's message and a
-  // one-step recipe's are "prompt" then "video"; one with a picture first - the column's storyboard, a two-step recipe -
-  // has four, and Kling's first frame (V17) three: its prompt, the picture, the video.
+  // (phase V16, the owner 2026-10-07) Every working message is a SUB-PROJECT (vsteps.js): its steps paged at its top - the
+  // chat does not grow with every attempt. (phase V60.2, the owner 2026-10-29) Two steps at most, the video at the head of
+  // the message: the plain chat's and a one-step recipe's - "clip watched" (Seedance with clips) and "prompt"; the column's
+  // storyboard and a two-step recipe - "storyboard" (the clips' descriptions, its prompt and its sheet) and "video prompt";
+  // Kling's first frame (V17) - "first frame prompt" and "first frame". Every prompt folded into one line.
   function _cardBubble(m, progs) {
     const c = m.card;
     if (c.type === 'board' || c.board) return _storyCard(m, progs);
@@ -1419,11 +1420,14 @@ function VIDEOS(ctx) {
   function _forget(id) {
     const l = _live.get(id);
     if (l && l.steps) l.steps.destroy();
+    if (l && l.vid) l.vid.destroy();
     _live.delete(id);
   }
   function _freshenOne(id, l) {
     if (l.story) _freshenStory(id, l);
     else _freshenReview(id, l);
+    // (phase V60.2) Its video field: before any clip it takes the shape the column would make it.
+    _paintVid(l);
   }
 
   // Whether a card can go to the model chosen now - the card's own attachments are the server's to check.
@@ -1550,18 +1554,15 @@ function VIDEOS(ctx) {
         h.appendChild(el('span', null, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent')));
         if (w.edited) h.appendChild(el('span', 'is-mine', 'corrected by you'));
       }
-      box.appendChild(h);
       if (w.state === 'done') {
         const ta = document.createElement('textarea');
-        ta.className = 'vc-prompt-ta vc-watch-ta';
+        ta.className = 'vc-prompt-ta vc-watch-ta is-fit';
         ta.spellcheck = true;
         ta.maxLength = 40000;
         ta.value = w.text || '';
         ta.readOnly = locked;
         ta.title = locked ? 'The prompt is being written from this now'
           : 'What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.';
-        const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(360, ta.scrollHeight + 2) + 'px'; };
-        requestAnimationFrame(grow);
         const key = 'w:' + m.id + ':' + w.n;
         let last = ta.value;
         const save = () => {
@@ -1571,11 +1572,19 @@ function VIDEOS(ctx) {
           last = ta.value;
           return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, watch: { n: w.n, text: ta.value } }, 'PATCH');
         };
-        ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+        ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
         ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
         saves.set(w.n, save);
-        box.appendChild(ta);
-      } else if (w.state === 'watching') {
+        // (phase V60.2, (вч10а), (вч12а)) Folded into one line; open, its part, who watched it, the description and - one line,
+        // no empty block under it any more - what the writer does with it.
+        const open = [h, ta];
+        if (!locked) open.push(el('div', 'vc-card-note', 'The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".'));
+        box.appendChild(_foldLine({ id: m.id, key: 'watch' + w.n, word: 'clip ' + w.n, lead: _clipT(w.in) + '–' + _clipT(w.out) + ' · ', text: () => ta.value, ta, open }));
+        b.appendChild(box);
+        continue;
+      }
+      box.appendChild(h);
+      if (w.state === 'watching') {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
         progs.set('watch:' + w.n, startInlineProgress(strip, {
@@ -1583,14 +1592,14 @@ function VIDEOS(ctx) {
           startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
         }));
       } else if (w.state === 'waiting') {
-        box.appendChild(el('div', 'vc-card-why', 'waits for clip ' + (w.n - 1)));
+        // (phase V60.2, (вч12а)) A note of one line - `vc-card-why` is the row of presses' and stood 180 px tall here.
+        box.appendChild(el('div', 'vc-card-note', 'waits for clip ' + (w.n - 1)));
       } else {
         box.appendChild(el('div', 'mv3-ig-bad', 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.'));
       }
       b.appendChild(box);
     }
     if (failed) b.appendChild(el('div', 'mv3-ig-bad', 'The prompt was not written: ' + (c.error || 'no writer answered')));
-    else if (list.some(w => w.state === 'done') && !locked) b.appendChild(el('div', 'vc-card-why', 'The writer writes the prompt from this. Correct who is who or what happens here, then "write it again".'));
   }
   function _watchActs(m, a) {
     const c = m.card;
@@ -1734,10 +1743,11 @@ function VIDEOS(ctx) {
   // wrote both prompts at once, the sheet is drawn by its press, and the video follows the sheet shown. Kling's first
   // frame (`swap`, V17 - V7.6's recipe before it): the writer's prompt for a picture of the person's character in the pose
   // of the clip's still, drawn by its press; then Kling moves the picture shown with the part of the clip from that
-  // moment, by its own prompt. Their steps: the first prompt (every writing a variant) · the sheet, or the picture (every
-  // one drawn a variant - the one shown is the one the video follows) · the video prompt (every writing a variant; not
-  // Kling's) · the video (the clips). A recipe's message and Kling's open on their first step; the column's steps grow as
-  // the work goes.
+  // moment, by its own prompt. Their steps (phase V60.2: two, the video at the message's head): the storyboard's -
+  // "storyboard" (its prompt, every writing a variant, and its sheets, every one drawn a variant - the one shown is the one
+  // the video follows) · "video prompt" (every writing a variant); Kling's - "first frame prompt" · "first frame" (the
+  // pictures, and the press that makes the video). A recipe's message and Kling's open on their first step; the column's
+  // steps grow as the work goes.
   const _kindOf = (c) => (c.type === 'board' ? 'column' : c.board && c.board.kind === 'frame' ? 'swap' : 'recipe');
   function _storyCard(m, progs) {
     const c = m.card;
@@ -1755,10 +1765,14 @@ function VIDEOS(ctx) {
     // (phase V18.3) What was asked, at the head - seen on every step.
     const asked = _askedOf(kind === 'column' || own ? { words: c.text, media: m.media, none: own ? 'from your pictures' : 'from the attachments alone' }
       : { request: _requestOf(m), media: m.media });
-    if (asked) box.appendChild(asked);
+    // (phase V60.2) What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
+    const foot = el('div', 'vm-foot');
+    const vid = _vidField(m.id, foot);
+    box.appendChild(_headOf(asked, vid));
     const B = c.board || {};
     // (phase V48) A Seedance card whose clips are being watched, or were, has its steps at once.
     if (!((B.versions || []).length || B.prompt) && !(c.watch || []).length) {
+      vid.paint(_clipsOf(m), _shapeNow(m.media || []));
       // Nothing written yet: the writer at work, or why not.
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
@@ -1782,8 +1796,8 @@ function VIDEOS(ctx) {
       return box;
     }
     const steps = stepCard(m.id);
-    box.append(...steps.parts);
-    const l = { m, el: box, steps, story: true, kind, W: kind === 'swap' ? 'picture' : 'storyboard', ta: null, go: null, price: null, save: null,
+    box.append(...steps.parts, foot);
+    const l = { m, el: box, steps, vid, story: true, kind, W: kind === 'swap' ? 'picture' : 'storyboard', ta: null, go: null, price: null, save: null,
                 bta: null, range: null, drawGo: null, drawPrice: null, ver: '', vmodel: '', boardId: '', patchKey: '' };
     _live.set(m.id, l);
     _paintStory(m.id, l);
@@ -1811,87 +1825,139 @@ function VIDEOS(ctx) {
     const vv = (c.versions || []).length ? c.versions : (c.prompt ? [{ id: 'v0', prompt: c.prompt, model: c.model, boardId: '' }] : []);
     const vvars = vv.map(v => ({ key: v.id, sig: (v.model || '') + ':' + (v.boardId || ''), v }));
     if (writing && (kind === 'recipe' || c.writing === 'video')) vvars.push({ key: 'writing', sig: 'writing', writing: true });
-    const clips = _triesOf(m).flatMap((t, i) => t.gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.videoPath || '') + ':' + (g.error || ''), g, t, n: i + 1 })));
-    const say = (x) => { const p = x && x.g && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(x.t ? ctx.stageWords(x.g) : _boardWords(x.g, l.W)); };
-    // (phase V17) Kling's first frame: the writer's variants of its prompt, the moment of the clip with them.
-    const first = kind === 'swap' ? {
-      key: 'picture-prompt', title: 'first frame prompt', word: 'variant', pick: B.cur || 'b0', variants: bvars,
-      note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw the picture" draws this one'),
-      body: (x, b, progs) => _momentStep(m, l, x, b, progs),
-      acts: (x, a) => _boardPromptActs(m, l, x, a),
-      page: (x) => { if (x && x.v && (B.versions || []).length && x.key !== B.cur) patch({ bcur: x.key }); },
-      freshen: () => _freshenStory(id, l),
-    } : {
-      key: 'board-prompt', title: 'storyboard prompt', word: 'variant', pick: B.cur || 'b0', variants: bvars,
-      note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw the storyboard" draws this one'),
-      body: (x, b, progs) => _boardPromptStep(m, l, x, b, progs),
-      acts: (x, a) => _boardPromptActs(m, l, x, a),
-      page: (x) => { if (x && x.v && (B.versions || []).length && x.key !== B.cur) patch({ bcur: x.key }); },
-      freshen: () => _freshenStory(id, l),
+    const made = _triesOf(m).some(t => t.gens.length);
+    // A sheet's countdown in its words, on the step that shows it.
+    const say = (x) => { const p = x && x.g && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(_boardWords(x.g, l.W)); };
+    // Its sheets (Kling: its pictures) - every one drawn a variant; the one paged to, when it has landed, is the one chosen.
+    const sheetSet = {
+      key: 'board', word: kind === 'swap' ? 'picture' : 'sheet', pick: B.chosen, variants: sheets,
+      note: (x) => (!x ? '' : x.g.state === 'pending' ? 'being drawn' : !_boardOk(x.g) ? (x.g.gone ? 'not on the Images shelf any more' : 'not drawn')
+        : 'the video follows this one'),
+      page: (x) => { if (x && _boardOk(x.g) && x.key !== B.chosen) patch({ chosen: x.key }); },
     };
-    // (phase V48) What the agent saw of the clips, first; the first prompt once there is something of it.
-    const watch = _watchStep(m, l, bvars.some(x => !x.writing));
-    const steps = [watch, bvars.length ? first : null].filter(Boolean);
-    // The sheets: on a recipe's message from the start, so its steps never move under the person; on the column's once
-    // one is drawn. (phase V48) Not before its prompt is written.
-    if (sheets.length || (kind !== 'column' && bvars.some(x => !x.writing))) {
-      steps.push({
-        key: 'board', title: kind === 'swap' ? 'first frame' : 'storyboard', word: kind === 'swap' ? 'picture' : 'sheet', pick: B.chosen, variants: sheets,
-        note: (x) => (!x ? '' : x.g.state === 'pending' ? 'being drawn' : !_boardOk(x.g) ? (x.g.gone ? 'not on the Images shelf any more' : 'not drawn')
-          : 'the video follows this one'),
-        body: (x, b, progs) => _sheetStep(m, l, x, b, progs),
-        acts: (x, a) => _sheetActs(m, l, x, a),
-        // The sheet paged to - when it has landed - is the one chosen.
-        page: (x) => { if (x && _boardOk(x.g) && x.key !== B.chosen) patch({ chosen: x.key }); },
-        freshen: (x) => { say(x); _freshenStory(id, l); },
-      });
-    }
-    // (phase V17) Kling's prompt is its own, put in by the server: the video is made from the first frame's step.
-    if (vvars.length && kind !== 'swap') {
-      steps.push({
-        key: 'prompt', title: 'video prompt', word: 'variant', pick: c.cur || 'v0', variants: vvars,
-        // The sheet a recipe's video follows is shown with its prompt: another one paged to on its step draws this anew.
-        sig: () => (kind === 'column' ? '' : (_chosenSheet(l) || {}).id || ''),
-        note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
-        body: (x, b, progs) => _videoPromptStep(m, l, x, b, progs),
-        acts: (x, a) => _videoPromptActs(m, l, x, a),
-        page: (x) => { if (x && x.v && (c.versions || []).length && x.key !== c.cur) patch({ cur: x.key }); },
-        freshen: () => _freshenStory(id, l),
-      });
-    }
-    if (clips.length) {
-      steps.push({
-        key: 'video', title: 'video', word: 'clip', variants: clips,
-        note: (x) => (x ? 'attempt ' + x.n : ''),
-        body: (x, b, progs) => _videoStep(m, x, b, progs),
-        freshen: say,
-      });
+    const bpage = (x) => { if (x && x.v && (B.versions || []).length && x.key !== B.cur) patch({ bcur: x.key }); };
+    const steps = [];
+    // (phase V60.2, the owner's (вч6а), (вч7а)) Two steps at most - the video is at the head of the message.
+    if (kind === 'swap') {
+      // (phase V17) Kling's first frame: 1 - its prompt and the moment of the clip; 2 - the picture, and the press that makes
+      // the video from it (Kling's prompt is its own, put in by the server).
+      if (bvars.length) {
+        steps.push({
+          key: 'picture-prompt', title: 'first frame prompt', word: 'variant', pick: B.cur || 'b0', variants: bvars,
+          note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw the picture" draws this one'),
+          body: (x, b, progs, nav) => _momentStep(m, l, x, b, progs, nav),
+          acts: (x, a) => _boardPromptActs(m, l, x, a),
+          page: bpage,
+          freshen: () => _freshenStory(id, l),
+        });
+      }
+      if (sheets.length || bvars.some(x => !x.writing)) {
+        steps.push(Object.assign({}, sheetSet, {
+          title: 'first frame',
+          body: (x, b, progs, nav) => _sheetStep(m, l, x, b, progs, nav),
+          acts: (x, a) => _sheetActs(m, l, x, a),
+          freshen: (x) => { say(x); _freshenStory(id, l); },
+        }));
+      }
+    } else {
+      // The storyboard: 1 - what the agent saw of the clips (V48), the sheet's prompt and the sheet; 2 - the video's prompt.
+      const watchSig = (c.watch || []).filter(Boolean).map(w => w.n + ':' + w.state + ':' + (w.why ? 1 : 0)).join(',') + '|' + (c.state === 'writing' ? 'w' : 'r');
+      if ((c.watch || []).length || bvars.length) {
+        steps.push({
+          key: 'board-prompt', title: 'storyboard', word: 'variant', pick: B.cur || 'b0', variants: bvars, more: [sheetSet],
+          sig: () => watchSig,
+          note: (x) => (!x ? '' : x.writing ? 'being written' : '"draw" draws from this one'),
+          body: (x, b, progs, nav) => _storyStep(m, l, x, b, progs, nav),
+          acts: (x, a, nav) => _storyActs(m, l, x, a, nav),
+          page: bpage,
+          freshen: (x, nav) => { say(nav.shown('board')); _freshenStory(id, l); },
+        });
+      }
+      if (vvars.length) {
+        steps.push({
+          key: 'prompt', title: 'video prompt', word: 'variant', pick: c.cur || 'v0', variants: vvars,
+          // The sheet a recipe's video follows is shown with its prompt: another one paged to on its step draws this anew.
+          sig: () => (kind === 'column' ? '' : (_chosenSheet(l) || {}).id || ''),
+          note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
+          body: (x, b, progs, nav) => _videoPromptStep(m, l, x, b, progs, nav),
+          acts: (x, a) => _videoPromptActs(m, l, x, a),
+          page: (x) => { if (x && x.v && (c.versions || []).length && x.key !== c.cur) patch({ cur: x.key }); },
+          freshen: () => _freshenStory(id, l),
+        });
+      }
     }
     // A recipe's message nothing has been drawn or made from yet opens on its first step.
-    l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !clips.length && steps.length ? steps[0].key : '' });
+    l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !made && steps.length ? steps[0].key : '' });
+    _paintVid(l);
+  }
+  // (phase V60.2) The storyboard's first step: the clips' descriptions (folded), the sheet's prompt (folded) and the sheet.
+  function _storyStep(m, l, x, b, progs, nav) {
+    const c = l.m.card;
+    const B = c.board || {};
+    const written = (B.versions || []).length > 0 || !!B.prompt;
+    if ((c.watch || []).length) _watchBody(l.m, b, progs, !written && c.state === 'failed');
+    l.bta = null;
+    if (x) _boardPromptStep(m, l, x, b, progs, nav);
+    if (written || (l.m.boards || []).length) _sheetStep(m, l, nav.shown('board'), b, progs, nav);
+  }
+  // Its presses: draw (from the prompt shown, as it is edited), "write the video" (the column's, from the sheet shown), the
+  // price, "write it again" / "write both again", the attachments back, "change the values".
+  function _storyActs(m, l, x, a, nav) {
+    l.drawGo = null; l.drawPrice = null;
+    if (!x || x.writing) return;
+    const sx = nav.shown('board');
+    const ok = !!(sx && _boardOk(sx.g));
+    if (l.kind === 'column') {
+      const write = el('button', 'mv3-c-btn vc-go' + (ok ? ' is-make' : ''), 'write the video');
+      write.type = 'button';
+      write.title = 'The video\'s prompt from your words, with this storyboard among the pictures - you see it before the video is made';
+      write.addEventListener('click', () => _writeVideo(l.m, l, write));
+      write.disabled = !ok;
+      a.appendChild(write);
+    }
+    const drawn = (l.m.boards || []).length > 0;
+    const go = el('button', 'mv3-c-btn vc-go' + (drawn && l.kind === 'column' ? '' : ' is-make'), drawn ? 'draw again' : 'draw the ' + l.W);
+    go.type = 'button';
+    go.title = 'A sheet from the storyboard prompt shown - as you edited it';
+    const two = { bta: l.bta, range: null, frame: false, busy: false };
+    go.addEventListener('click', (e) => _drawBoard(l.m, two, go, e));
+    const price = el('span', 'vc-card-why');
+    a.append(go, price);
+    const again = el('button', 'vc-link', l.kind === 'recipe' ? 'write both again' : 'write it again');
+    again.type = 'button';
+    again.title = l.kind === 'recipe' ? 'Another variant of both prompts - the storyboard\'s and the video\'s - from the same request; these stay'
+      : 'Another variant of the storyboard prompt from the same words and pictures - this one stays';
+    again.addEventListener('click', () => _rewrite(l.m, again));
+    a.appendChild(again);
+    if (l.kind === 'column' && (l.m.media || []).length) a.appendChild(_backLink(l.m));
+    if (l.kind === 'recipe' && _ownRecipe(l.m.card)) a.appendChild(_changeLink());
+    l.drawGo = go;
+    l.drawPrice = price;
+    _freshenStory(m.id, l);
   }
   // 1 · the storyboard prompt: its words to edit (the variant shown), the pictures it is drawn with.
-  function _boardPromptStep(m, l, x, b, progs) {
+  function _boardPromptStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     l.bta = null;
     if (!x || x.writing) {
+      const B = c.board || {};
+      const first = !((B.versions || []).length || B.prompt);
       const strip = el('div', 'mv3-ig-prog');
       b.appendChild(strip);
       progs.set('w', startInlineProgress(strip, {
-        label: l.kind === 'recipe' ? 'writing another variant of both prompts…' : 'writing another variant of the storyboard prompt…',
+        label: l.kind === 'recipe' ? (first ? 'writing the prompts…' : 'writing another variant of both prompts…')
+          : (first ? 'writing the storyboard prompt…' : 'writing another variant of the storyboard prompt…'),
         key: l.kind === 'recipe' ? 'mv3-video-writer' : 'mv3-board-writer', estimateMs: l.kind === 'recipe' ? 25000 : 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
       }));
       return;
     }
     if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board';
+    bta.className = 'vc-prompt-ta is-board is-fit';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = x.v.prompt || '';
     bta.title = 'The storyboard sheet\'s prompt - numbered panels, one per beat of the clip; Image 1, Image 2 are the pictures below.';
-    const grow = () => { bta.style.height = 'auto'; bta.style.height = Math.min(320, bta.scrollHeight + 2) + 'px'; };
-    requestAnimationFrame(grow);
     const key = 'b:' + m.id + ':' + x.key;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -1900,9 +1966,10 @@ function VIDEOS(ctx) {
       if (x.key !== 'b0') body.bver = x.key;
       return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), body, 'PATCH');
     };
-    bta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    b.appendChild(bta);
+    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end.
+    b.appendChild(_foldLine({ id: m.id, key: 'board-prompt', word: 'storyboard prompt', text: () => bta.value, ta: bta, open: [bta], pager: nav ? nav.pager() : null }));
     l.bta = bta;
   }
   // 1 · Kling's first frame (V7.6 as a recipe; the chat's own since V17): the moment of the clip it is drawn from and the
@@ -1910,7 +1977,7 @@ function VIDEOS(ctx) {
   // its clip's length (V17) the moment is where the part starts, anywhere in the clip; on an older one it lies within
   // the part.
   const _t = (v) => { const x = Math.max(0, +v || 0); const mm = Math.floor(x / 60); return mm + ':' + (x - mm * 60).toFixed(1).padStart(4, '0'); };
-  function _momentStep(m, l, x, b, progs) {
+  function _momentStep(m, l, x, b, progs, nav) {
     const c = l.m.card, B = c.board || {};
     l.bta = null; l.range = null;
     if (!x || x.writing) {
@@ -1956,13 +2023,11 @@ function VIDEOS(ctx) {
     mo.append(v, side);
     b.appendChild(mo);
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board';
+    bta.className = 'vc-prompt-ta is-board is-fit';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = toShown(x.v.prompt || '');
     bta.title = 'The first frame\'s prompt: [clip 1] is the clip\'s still at the moment above, [picture 1], [picture 2]... your pictures by their numbers.';
-    const grow = () => { bta.style.height = 'auto'; bta.style.height = Math.min(240, bta.scrollHeight + 2) + 'px'; };
-    requestAnimationFrame(grow);
     const key = 'b:' + m.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -1971,9 +2036,10 @@ function VIDEOS(ctx) {
       if (x.key !== 'b0') body.bver = x.key;
       return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), body, 'PATCH');
     };
-    bta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    b.appendChild(bta);
+    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end; the moment above stays in sight.
+    b.appendChild(_foldLine({ id: m.id, key: 'picture-prompt', word: 'first frame prompt', text: () => bta.value, ta: bta, open: [bta], pager: nav ? nav.pager() : null }));
     l.bta = bta;
     l.range = range;
   }
@@ -2001,18 +2067,23 @@ function VIDEOS(ctx) {
     _freshenStory(m.id, l);
   }
   // 2 · the storyboard (the picture): the one shown - drawing, drawn (press: large), or why not.
-  function _sheetStep(m, l, x, b, progs) {
+  function _sheetStep(m, l, x, b, progs, nav) {
     if (!x) {
-      b.appendChild(el('div', 'vc-card-note', 'Not drawn yet - "draw the ' + l.W + '" on the step before. The video follows the one shown here.'));
+      b.appendChild(el('div', 'vc-card-note', l.kind === 'swap' ? 'Not drawn yet - "draw the picture" on the step before. The video follows the one shown here.'
+        : 'Not drawn yet - "draw the storyboard" below. The video follows the one shown here.'));
       return;
     }
+    // (phase V60.2) Its sheets' pager under it - the bar at the message's foot went.
+    const pg = nav ? nav.pager('board') : null;
     const g = x.g;
-    if (g.state === 'pending') { b.appendChild(_boardBusy(g, progs, g.id, l.W)); return; }
+    if (g.state === 'pending') { b.appendChild(_boardBusy(g, progs, g.id, l.W)); if (pg) b.appendChild(pg); return; }
     if (!_boardOk(g)) {
       b.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+      if (pg) b.appendChild(pg);
       return;
     }
     b.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, l.kind === 'swap' ? 'frame' : 'big'));
+    if (pg) b.appendChild(pg);
     // (phase V17) Kling's prompt is its own: said, not a field.
     if (l.kind === 'swap') {
       const clip = (l.m.media || []).find(y => y.kind === 'video') || {};
@@ -2094,7 +2165,7 @@ function VIDEOS(ctx) {
   // 3 · the video prompt: its words to edit, and what goes with it - the pictures with the sheet as the last one (the
   // column's: the sheet ITS variant was written with; a recipe's: the one shown on its step). Kling's first frame has no
   // such step - its prompt is Kling's own (V17).
-  function _videoPromptStep(m, l, x, b, progs) {
+  function _videoPromptStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     l.ta = null; l.ver = ''; l.vmodel = ''; l.boardId = ''; l.patchKey = '';
     if (!x || x.writing) {
@@ -2109,12 +2180,10 @@ function VIDEOS(ctx) {
     const v = x.v;
     if (c.error && c.writing !== 'board') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta is-fit';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
     ta.title = 'The prompt the model gets - edit it before the video is made. [picture N] names a picture; the storyboard is the last one.';
-    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
-    requestAnimationFrame(grow);
     const key = 'p:' + m.id + ':' + v.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -2123,16 +2192,16 @@ function VIDEOS(ctx) {
       if (v.id !== 'v0') body.ver = v.id;
       return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), body, 'PATCH');
     };
-    ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    b.appendChild(ta);
     const media = l.m.media || [];
     const sheet = l.kind === 'column' ? (l.m.boards || []).find(g => g.id === v.boardId) : _chosenSheet(l);
     const has = !!(sheet && sheet.imagePath);
     const all = media.filter(a => a.kind === 'image').concat(has ? [{ path: sheet.imagePath, kind: 'image', role: 'storyboard', label: 'storyboard' }] : [])
       .concat(media.filter(a => a.kind !== 'image'));
+    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end; open, the prompt and what goes with it.
     const row = _mediaRow(all);
-    if (row) b.appendChild(row);
+    b.appendChild(_foldLine({ id: m.id, key: 'prompt', word: 'video prompt', text: () => ta.value, ta, open: [ta].concat(row ? [row] : []), pager: nav ? nav.pager() : null }));
     if (l.kind === 'column' && sheet && sheet.gone) b.appendChild(el('div', 'mv3-ig-bad', 'Its storyboard is not on the Images shelf any more - write the video again from another sheet.'));
     if (l.kind !== 'column' && !has) b.appendChild(el('div', 'vc-card-note', 'No ' + l.W + ' the video can follow yet - it follows the one shown on the step before: draw one there.'));
     Object.assign(l, { ta, save, ver: v.id === 'v0' ? '' : v.id, vmodel: v.model || c.model, boardId: v.boardId || '', patchKey: key });
@@ -2239,19 +2308,41 @@ function VIDEOS(ctx) {
     });
   }
   // The message drawn at the press (the shell's `sending`): what was asked, and "sending…" until the answer comes.
+  // (phase V60.2, (вч14а), (вч17а)) With its head as every message has it: the video's field on the right, empty.
+  let _pendSeq = 0;
   function _sendingCard(o) {
-    const card = ctx.writing() && !isMC() || _mcSteps() || _boardOn();
-    const box = el('div', 'mv3-ig-msg is-agent is-sending' + (card ? ' vc-card' : ''));
-    if (card) {
-      const h = el('div', 'vc-card-h');
-      const m = model();
-      h.appendChild(el('span', 'k', _boardOn() ? 'storyboard' : 'video'));
-      if (m) h.appendChild(el('span', 'm', 'for ' + m.label));
-      box.appendChild(h);
-    }
+    const box = el('div', 'mv3-ig-msg is-agent is-sending vc-card');
+    const h = el('div', 'vc-card-h');
+    const m = model();
+    h.appendChild(el('span', 'k', _boardOn() ? 'storyboard' : 'video'));
+    if (m) h.appendChild(el('span', 'm', 'for ' + m.label));
+    box.appendChild(h);
     const asked = _askedOf({ words: o.text, media: o.media, none: 'from the attachments alone' });
-    if (asked) box.appendChild(asked);
+    const vid = _vidField('pend:' + (++_pendSeq), null);
+    vid.paint([], _shapeNow(o.media || null));
+    box.appendChild(_headOf(asked, vid));
     box.appendChild(el('div', 'vc-sending', 'sending…'));
+    return box;
+  }
+  // (phase V60.2, the owner's (вч17а)) A message of the one press - the writer off - has the same head: what was asked on the
+  // left, its clip on the right (×2 - its variants), "read more" at its foot. It has no steps. Its countdown is the thread's
+  // to finish when the clip lands, as before (`progs`).
+  function _plainBubble(m, progs, asked) {
+    if (m.role === 'user' || m.card) return null;
+    const gens = (m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []);
+    if (!gens.length) return null;
+    const box = el('div', 'mv3-ig-msg is-agent vc-card is-plain-msg');
+    const h = el('div', 'vc-card-h');
+    h.appendChild(el('span', 'k', 'video'));
+    if (gens[0].model) h.appendChild(el('span', 'm', 'for ' + _labelOf(gens[0].model)));
+    box.appendChild(h);
+    const media = (m.media || []).length ? m.media : ((asked && asked.media) || []);
+    const words = m.asked != null ? m.asked : (asked ? asked.text : '');
+    const head = (String(words || '').trim() || media.length) ? _askedOf({ words, media }) : null;
+    const foot = el('div', 'vm-foot');
+    const vid = _vidField(m.id, foot, progs);
+    box.append(_headOf(head, vid), foot);
+    vid.paint(gens.map(g => ({ key: g.id, g, n: 0, at: g.at })), (gens[0].params || {}).aspect || '9:16');
     return box;
   }
 
@@ -2273,6 +2364,205 @@ function VIDEOS(ctx) {
       row.appendChild(wrap);
     }
     return row;
+  }
+
+  // ── A PROMPT FOLDED INTO ONE LINE (phase V60.2, the owner 2026-10-29, (вч10а), (вч11а)) ──
+  // Every prompt of a message - a clip's description, the storyboard's or the first frame's prompt, the video's - is one
+  // line: its word and ▸, its first words, how many characters, and its variants' "‹ 2 of 3 ›" at the right end. A press
+  // opens it in place, to read and edit, as tall as its text. What is open stays open while the person stays in the chat -
+  // the thread's repaints, another variant, a make -, and everything folds again when anything hides the chat (another view
+  // of the panel, another project, another page, a reload).
+  const _open = new Set();       // message id + ':' + line key - the lines open now
+  const _folds = new Set();      // { el, fold } of every line drawn - folded at once when the chat hides
+  function _foldAll() {
+    _open.clear();
+    for (const f of _folds) { if (f.el.isConnected) f.fold(); else _folds.delete(f); }
+  }
+  const _flat = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const _chars = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' chars';
+  // o: { id, key, word, lead, text(), ta, open: [what the open line shows], pager }
+  function _foldLine(o) {
+    const key = o.id + ':' + o.key;
+    const wrap = el('div', 'vm-fold');
+    const line = el('div', 'vm-fold-line');
+    const btn = el('button', 'vm-fold-b');
+    btn.type = 'button';
+    const tw = el('span', 'tw');
+    const sum = el('span', 's');
+    const n = el('span', 'n');
+    btn.append(el('span', 'k', o.word), tw, sum, n);
+    line.appendChild(btn);
+    if (o.pager) line.appendChild(o.pager);
+    const part = el('div', 'vm-fold-part');
+    part.append(...(o.open || []));
+    wrap.append(line, part);
+    const say = () => {
+      const t = String(o.text() || '');
+      sum.textContent = (o.lead || '') + (_flat(t) || '—');
+      n.textContent = t.trim() ? _chars(t.length) : '';
+    };
+    say();
+    if (o.ta) o.ta.addEventListener('input', say);
+    const set = (on) => {
+      wrap.classList.toggle('is-open', on);
+      part.hidden = !on;
+      tw.textContent = on ? '▾' : '▸';
+      btn.title = on ? 'Fold it into one line' : 'Open the whole text - to read and edit';
+      if (on) _open.add(key); else _open.delete(key);
+    };
+    // Folded with a change being typed: its blur writes it.
+    const fold = () => { if (o.ta && document.activeElement === o.ta) o.ta.blur(); set(false); };
+    set(_open.has(key));
+    btn.addEventListener('click', () => set(!wrap.classList.contains('is-open')));
+    _folds.add({ el: wrap, fold });
+    return wrap;
+  }
+
+  // ── THE VIDEO AT THE HEAD OF ITS MESSAGE (phase V60.2, the owner 2026-10-29, (вч13б)-(вч17а)) ──
+  // Right of what was asked, against the message's right edge, 180 px wide at the clip's shape (9:16 - 180×320, 16:9 -
+  // 180×101, 1:1 - 180×180). Before any clip: a dashed field of the shape the column would make it now (the price and the
+  // press follow the column too), "the video will appear here" - from the press of ">" on. Being made: its countdown in it,
+  // the cross letting go of the row. Failed: a red frame and its words, "Alerts can try it again" under it. Several clips -
+  // ×2, made again - are its variants: "‹ 1 of 3 ›" under it, a new one shown by itself, which attempt it is under the
+  // pointer. "to timeline" under it, as before; "read more" at the message's foot, as before (вч16б).
+  const _vidShown = new Map();   // message id -> { key, n } - the clip shown as the person left it, and how many there were
+  const _dims = new Map();       // a clip's path -> 'w:h' ('' while it is read) - one clip decides Seedance's shape (V47)
+  const _arOf = (shape) => String(shape || '9:16').replace(':', ' / ');
+  function _readDims(path) {
+    if (_dims.has(path)) return;
+    _dims.set(path, '');
+    json('/api/media/probe?src=' + encodeURIComponent(path)).then((d) => {
+      if (!(d && d.success && d.w > 0 && d.h > 0)) return;
+      _dims.set(path, d.w + ':' + d.h);
+      _freshenCards();
+    });
+  }
+  // The shape a clip would come out at now: one clip that decides it - the clip's; else the column's.
+  function _shapeNow(media) {
+    try {
+      const r = rec();
+      const one = r ? _byClip(r, media || null) : null;
+      if (one && one.path) {
+        const d = _dims.get(one.path);
+        if (d) return d;
+        _readDims(one.path);
+      }
+      return _body(media || null).params.aspect || '9:16';
+    } catch (e) { return '9:16'; }
+  }
+  async function _letGo(g) {
+    await json('/api/alerts/' + encodeURIComponent(g.alertId) + '/cancel', { method: 'POST' });
+    ctx.reload();
+  }
+  // The field of one message: `paint(clips, shape)` - clips [{ key, g, n, at, ver, zh }] in their order, `shape` the field's
+  // before any of them; `foot` - where the shown clip's "read more" goes; `outer` - the thread's map of the message's
+  // countdowns, when the thread draws the message anew rather than this field (a message of the one press).
+  function _vidField(id, foot, outer) {
+    const box = el('div', 'vm-vid');
+    let sig = null, prog = null, progId = '', last = null;
+    const drop = (landed) => {
+      if (prog) { if (landed) prog.finish(); else prog.detach(); }
+      if (outer && progId) outer.delete(progId);
+      prog = null;
+      progId = '';
+    };
+    function paint(clips, shape) {
+      last = [clips, shape];
+      const known = _vidShown.get(id);
+      let key = known && clips.some(c => c.key === known.key) ? known.key : '';
+      // What has just appeared is shown by itself.
+      if (!known || clips.length > known.n || !key) key = clips.length ? clips[clips.length - 1].key : '';
+      _vidShown.set(id, { key, n: clips.length });
+      const i = clips.findIndex(c => c.key === key);
+      const x = i >= 0 ? clips[i] : null;
+      const g = x ? x.g : null;
+      const nsig = (g ? g.id + ':' + g.state + ':' + (g.videoPath || '') + ':' + (g.error || '') + ':' + (g.posterPath || '') : 'none:' + shape) + '|' + i + '/' + clips.length;
+      if (nsig === sig) { if (g && g.state === 'pending' && prog) prog.say(ctx.stageWords(g)); return; }
+      drop(!!(g && prog && progId === g.id && g.state === 'done'));
+      sig = nsig;
+      box.textContent = '';
+      if (foot) foot.textContent = '';
+      if (!g) {
+        const e = el('div', 'vm-vid-box is-empty');
+        e.style.aspectRatio = _arOf(shape);
+        e.appendChild(el('span', 'w', 'the video will appear here'));
+        box.appendChild(e);
+        return;
+      }
+      const shp = g.w && g.h ? g.w + ':' + g.h : (g.params || {}).aspect || shape || '9:16';
+      let face = null;
+      if (g.state === 'done' && g.videoPath) {
+        const cell = el('div', 'vm-vid-cell');
+        _shotOf(g, cell, () => ctx.view(g));
+        box.appendChild(cell);
+        face = cell.querySelector('.mv3-vc-shot');
+      } else if (g.state === 'pending') {
+        face = el('div', 'vm-vid-box is-busy');
+        face.style.aspectRatio = _arOf(shp);
+        const strip = el('div', 'mv3-ig-prog');
+        face.appendChild(strip);
+        box.appendChild(face);
+        prog = startInlineProgress(strip, {
+          label: ctx.stageWords(g), key: 'mv3-video-' + (g.model || ''), estimateMs: 180000, startedAt: Date.parse(g.at) || 0,
+          onCancel: g.alertId ? () => _letGo(g) : null,
+        });
+        progId = g.id;
+        if (outer) outer.set(g.id, prog);
+      } else {
+        face = el('div', 'vm-vid-box is-bad');
+        face.style.aspectRatio = _arOf(shp);
+        face.appendChild(el('span', 'w', g.error || 'nothing came back'));
+        box.appendChild(face);
+        if (!g.cancelled && g.alertId && !/question instead/.test(g.error || '')) box.appendChild(el('div', 'mv3-ig-note', 'Alerts can try it again'));
+      }
+      // Which attempt it is, under the pointer.
+      const when = x.at ? new Date(x.at) : null;
+      const said = [x.n ? 'attempt ' + x.n : '', when && !isNaN(when) ? when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        x.ver ? 'from prompt variant ' + x.ver : '', x.zh ? 'sent in 中文' : ''].filter(Boolean).join(' · ');
+      if (face && said) face.title = (face.title ? face.title + ' · ' : '') + said;
+      if (clips.length > 1) {
+        const pg = el('span', 'vm-pg is-vid');
+        const p = el('button', 'vc-nav is-prev', '‹');
+        const t = el('span', 'vm-pg-t', (i + 1) + ' of ' + clips.length);
+        const nx = el('button', 'vc-nav is-next', '›');
+        p.type = 'button'; nx.type = 'button';
+        p.disabled = i <= 0;
+        nx.disabled = i >= clips.length - 1;
+        t.title = 'clip ' + (i + 1) + ' of ' + clips.length + (said ? ' · ' + said : '');
+        p.title = i > 0 ? '‹ The clip before (' + i + ' of ' + clips.length + ')' : 'This is the first clip';
+        nx.title = i < clips.length - 1 ? 'The next clip (' + (i + 2) + ' of ' + clips.length + ') ›' : 'This is the newest clip';
+        const to = (d) => { const c = clips[i + d]; if (!c) return; _vidShown.set(id, { key: c.key, n: clips.length }); sig = null; paint(...last); };
+        p.addEventListener('click', () => to(-1));
+        nx.addEventListener('click', () => to(1));
+        pg.append(p, t, nx);
+        // Between the clip and "to timeline".
+        const acts = box.querySelector('.mv3-ig-acts');
+        if (acts) acts.before(pg); else box.appendChild(pg);
+      }
+      if (foot) foot.appendChild(ctx.facts(g));
+    }
+    return { el: box, paint, destroy: () => drop(false) };
+  }
+  // What was asked on the left, the video on the right: the message's head.
+  function _headOf(asked, vid) {
+    const h = el('div', 'vm-head');
+    const left = el('div', 'vm-head-l');
+    if (asked) left.appendChild(asked);
+    h.append(left, vid.el);
+    return h;
+  }
+  // A card's clips, attempt by attempt, as the field shows them.
+  function _clipsOf(m) {
+    const vers = m.card.versions || [];
+    return _triesOf(m).flatMap((t, i) => t.gens.map(g => {
+      const vi = t.ver ? vers.findIndex(v => v.id === t.ver) : -1;
+      return { key: g.id, g, n: i + 1, at: t.at || g.at, ver: vi >= 0 && vers.length > 1 ? vi + 1 : 0, zh: !!t.zh };
+    }));
+  }
+  // A working message's field drawn as the card is now.
+  function _paintVid(l) {
+    if (!l || !l.vid) return;
+    l.vid.paint(_clipsOf(l.m), _shapeNow(l.m.media || []));
   }
 
   // ── The writer's message (phase V16, the owner 2026-10-07) ──
@@ -2297,9 +2587,13 @@ function VIDEOS(ctx) {
     const frames = (m.media || []).some(a => /^frame-/.test(String(a.role || '')));
     const asked = _askedOf(c.plain ? { words: c.text, media: m.media, none: frames ? 'from the frames alone' : 'from the attachments alone' }
       : { request: _requestOf(m), media: m.media });
-    if (asked) box.appendChild(asked);
+    // (phase V60.2) What was asked on the left, the video on the right; "read more" of the clip shown at the foot.
+    const foot = el('div', 'vm-foot');
+    const vid = _vidField(m.id, foot);
+    box.appendChild(_headOf(asked, vid));
     // (phase V48) A card whose clips are being watched, or were, has its steps at once: what the agent saw comes first.
     if (!_versOf(c).length && !(c.watch || []).length) {
+      vid.paint(_clipsOf(m), _shapeNow(m.media || []));
       if (c.state === 'writing') {
         const strip = el('div', 'mv3-ig-prog');
         box.appendChild(strip);
@@ -2320,12 +2614,13 @@ function VIDEOS(ctx) {
       return box;
     }
     const steps = stepCard(m.id);
-    box.append(...steps.parts);
-    const l = { m, el: box, steps, ta: null, go: null, price: null, save: null, review: true, ver: '', vmodel: '', patchKey: '' };
+    box.append(...steps.parts, foot);
+    const l = { m, el: box, steps, vid, ta: null, go: null, price: null, save: null, review: true, ver: '', vmodel: '', patchKey: '' };
     _live.set(m.id, l);
     _paintReview(m.id, l);
     return box;
   }
+  // (phase V60.2, (вч6а)) Two steps at most: what the agent saw of the clips, then the prompt - the video is at the head.
   function _paintReview(id, l) {
     const m = l.m, c = m.card;
     const vers = _versOf(c).map(v => ({ key: v.id, sig: v.model, v }));
@@ -2338,24 +2633,16 @@ function VIDEOS(ctx) {
     if (vers.length) steps.push({
       key: 'prompt', title: 'prompt', word: 'variant', pick: c.cur || 'v0', variants: vers,
       note: (x) => (!x ? '' : x.writing ? 'being written' : '"make the video" sends this one'),
-      body: (x, b, progs) => _promptStep(m, l, x, b, progs),
+      body: (x, b, progs, nav) => _promptStep(m, l, x, b, progs, nav),
       acts: (x, a) => _promptActs(m, l, x, a),
       // The variant paged to is the chosen one (the server keeps it for the next read).
       page: (x) => { if (x && x.v && x.key !== 'v0' && x.key !== l.m.card.cur) _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, cur: x.key }, 'PATCH'); },
       freshen: () => _freshenReview(id, l),
     });
-    const clips = _triesOf(m).flatMap((t, i) => t.gens.map(g => ({ key: g.id, sig: g.state + ':' + (g.videoPath || '') + ':' + (g.error || ''), g, t, n: i + 1 })));
-    if (clips.length) {
-      steps.push({
-        key: 'video', title: 'video', word: 'clip', variants: clips,
-        note: (x) => (x ? 'attempt ' + x.n : ''),
-        body: (x, b, progs) => _videoStep(m, x, b, progs),
-        freshen: (x) => { const p = x && x.g.state === 'pending' ? l.steps.progs.get(x.g.id) : null; if (p) p.say(ctx.stageWords(x.g)); },
-      });
-    }
     l.steps.paint({ steps });
+    _paintVid(l);
   }
-  function _promptStep(m, l, x, b, progs) {
+  function _promptStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     l.ta = null; l.ver = ''; l.vmodel = ''; l.patchKey = '';
     if (!x || x.writing) {
@@ -2372,12 +2659,10 @@ function VIDEOS(ctx) {
     const v = x.v;
     if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const ta = document.createElement('textarea');
-    ta.className = 'vc-prompt-ta';
+    ta.className = 'vc-prompt-ta is-fit';
     ta.spellcheck = true;
     ta.value = toShown(v.prompt);
     ta.title = 'The prompt the model gets - edit it before the video is made. [picture 1], [clip 1] name what is attached, by its number in its part.';
-    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(420, ta.scrollHeight + 2) + 'px'; };
-    requestAnimationFrame(grow);
     const key = 'p:' + m.id + ':' + v.id;
     const save = () => {
       clearTimeout(_patchT.get(key));
@@ -2386,9 +2671,10 @@ function VIDEOS(ctx) {
       if (v.id !== 'v0') body.ver = v.id;
       return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), body, 'PATCH');
     };
-    ta.addEventListener('input', () => { grow(); clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    b.appendChild(ta);
+    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end.
+    b.appendChild(_foldLine({ id: m.id, key: 'prompt', word: 'prompt', text: () => ta.value, ta, open: [ta], pager: nav ? nav.pager() : null }));
     Object.assign(l, { ta, save, ver: v.id === 'v0' ? '' : v.id, vmodel: v.model || c.model, patchKey: key });
   }
   function _promptActs(m, l, x, a) {
@@ -2443,21 +2729,49 @@ function VIDEOS(ctx) {
           : '≈' + money(pr.usd * n) + ' · ' + _secsWords(pr) + ' · ' + pr.res + ' · '
             + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
   }
-  function _videoStep(m, x, b, progs) {
-    if (!x) return;
-    const t = x.t;
-    const h = el('div', 'vc-try-h');
-    h.appendChild(el('span', 'k', 'attempt ' + x.n));
-    const when = t.at ? new Date(t.at) : null;
-    if (when && !isNaN(when)) h.appendChild(el('span', null, when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })));
-    // An attempt from before phase V29 that went in Chinese says so - its history.
-    if (t.zh) h.appendChild(el('span', null, '中文'));
-    const vi = t.ver ? (m.card.versions || []).findIndex(v => v.id === t.ver) : -1;
-    if (vi >= 0 && (m.card.versions || []).length > 1) h.appendChild(el('span', null, 'from prompt variant ' + (vi + 1)));
-    b.appendChild(h);
-    const shots = ctx.shots({ gens: [x.g] }, progs);
-    if (shots) b.appendChild(shots);
+  // A finished clip: its poster - a press plays it, and it can be dragged onto a lane (phase V13) - and "to timeline" under
+  // it. (phase V60.2) At its message's head, 180 px wide at its shape.
+  function _shotOf(g, cell, open) {
+    const box = el('div', 'mv3-vc-shot');
+    const shape = (g.w && g.h) ? g.w + '/' + g.h : String((g.params || {}).aspect || '9:16').replace(':', '/');
+    box.style.aspectRatio = shape;
+    if (g.posterPath) {
+      const img = document.createElement('img');
+      img.className = 'mv3-ig-shot';
+      img.src = '/api/thumb?src=' + encodeURIComponent(g.posterPath) + '&v=strip';
+      img.alt = g.said || '';
+      img.loading = 'lazy'; img.decoding = 'async';
+      img.draggable = false;
+      img.addEventListener('error', () => { img.remove(); }, { once: true });
+      box.appendChild(img);
+    }
+    box.appendChild(el('span', 'mv3-ig-play', '▶'));
+    if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', (+g.duration).toFixed(1) + 's'));
+    box.title = 'Play it · drag it onto a lane';
+    box.addEventListener('click', open);
+    const item = {
+      clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
+      name: String(g.said || g.prompt || '').slice(0, 60), dur: +g.duration || 0, group: 'videochat',
+    };
+    box.draggable = true;
+    box.addEventListener('dragstart', (ev) => {
+      // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
+      if (refuseHome(box, ev)) return;
+      ev.dataTransfer.effectAllowed = 'copy';
+      ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(item));
+      box.classList.add('is-dragging');
+    });
+    box.addEventListener('dragend', () => box.classList.remove('is-dragging'));
+    cell.appendChild(box);
+    const acts = el('div', 'mv3-ig-acts');
+    const add = el('button', 'mv3-c-btn', 'to timeline');
+    add.type = 'button';
+    add.title = 'Puts it on the lane above main video, at the playhead, at its own length.';
+    add.addEventListener('click', () => ctx.place(item, add));
+    acts.append(add);
+    cell.appendChild(acts);
   }
+
   // "attachments back to the zone" (the owner's answer 6): this message's attachments in the zone again, for the next
   // message - what is there now is replaced, after a question.
   function _backLink(m) {
@@ -2573,11 +2887,14 @@ function VIDEOS(ctx) {
       return (String(words || '').trim() || media.length) ? _askedOf({ words, media }) : null;
     },
     sending: (o) => _sendingCard(o),
+    // (phase V60.2, (вч17а)) A message of the one press has the working message's head.
+    bubble: (m, progs, asked) => _plainBubble(m, progs, asked),
     // (phase V7) Clips and sounds in the zone: the part that goes, and what the cell says of it.
     attState: _attState,
     onAttach: (a) => { _onAttach(a); },
     trimFor: _trimFor,
-    onHide: () => { closeTrim(); closeHelp(); },
+    // (phase V60.2, (вч11а)) Whatever hides the chat folds every prompt again.
+    onHide: () => { closeTrim(); closeHelp(); _foldAll(); },
     // (phase V15, the owner 2026-10-07) The writer is a switch of the column, and the almanac stands at its foot.
     penInBar: false,
     columnFoot: () => [_almanacBtn()],
@@ -2598,7 +2915,7 @@ function VIDEOS(ctx) {
       },
       onCount: _paintPrice,
       // The reference was open for the project being left - its field is another project's.
-      onProject: () => { closeHelp(); if (_set) _paintParams(); },
+      onProject: () => { closeHelp(); _foldAll(); if (_set) _paintParams(); },
       room: _room,
       zone: _zone,
       ready: _ready,
@@ -2619,48 +2936,8 @@ function VIDEOS(ctx) {
       onPen: () => { _paintRecipe(); _paintParams(); ctx.paintAtts(); },
     },
 
-    // A finished clip in the thread: its poster - a press plays it, and it can be dragged onto a lane (phase V13: the
-    // right column it used to be dragged from is gone) - and "to timeline" under it.
-    shot(g, cell, open) {
-      const box = el('div', 'mv3-vc-shot');
-      const shape = (g.w && g.h) ? g.w + '/' + g.h : String((g.params || {}).aspect || '9:16').replace(':', '/');
-      box.style.aspectRatio = shape;
-      if (g.posterPath) {
-        const img = document.createElement('img');
-        img.className = 'mv3-ig-shot';
-        img.src = '/api/thumb?src=' + encodeURIComponent(g.posterPath) + '&v=strip';
-        img.alt = g.said || '';
-        img.loading = 'lazy'; img.decoding = 'async';
-        img.draggable = false;
-        img.addEventListener('error', () => { img.remove(); }, { once: true });
-        box.appendChild(img);
-      }
-      box.appendChild(el('span', 'mv3-ig-play', '▶'));
-      if (g.duration) box.appendChild(el('span', 'mv3-ig-dur', (+g.duration).toFixed(1) + 's'));
-      box.title = 'Play it · drag it onto a lane';
-      box.addEventListener('click', open);
-      const item = {
-        clip: true, src: g.videoPath, thumb: g.posterPath || null, libId: g.birolId || '',
-        name: String(g.said || g.prompt || '').slice(0, 60), dur: +g.duration || 0, group: 'videochat',
-      };
-      box.draggable = true;
-      box.addEventListener('dragstart', (ev) => {
-        // (phase V49) Not onto a highlights project's own timeline - a fragment is opened first.
-        if (refuseHome(box, ev)) return;
-        ev.dataTransfer.effectAllowed = 'copy';
-        ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(item));
-        box.classList.add('is-dragging');
-      });
-      box.addEventListener('dragend', () => box.classList.remove('is-dragging'));
-      cell.appendChild(box);
-      const acts = el('div', 'mv3-ig-acts');
-      const add = el('button', 'mv3-c-btn', 'to timeline');
-      add.type = 'button';
-      add.title = 'Puts it on the lane above main video, at the playhead, at its own length.';
-      add.addEventListener('click', () => ctx.place(item, add));
-      acts.append(add);
-      cell.appendChild(acts);
-    },
+    // A finished clip: the field at a message's head draws it (phase V60.2), the shell's results too.
+    shot: _shotOf,
 
     facts: (g) => [
       ['model', (g.model || '') + ' · ' + (g.agg || '?') + ' · ' + (((g.params || {}).resolution) || '')],
