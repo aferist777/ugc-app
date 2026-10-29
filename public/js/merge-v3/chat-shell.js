@@ -11,7 +11,8 @@
    from the server every few seconds with each countdown drawn from its record's real age and its cross
    letting go of the row, "the result becomes the reference", sending (a project started for a send from
    "no project"), the attachment row, bringing files in, the right column of things to point at behind a
-   sash (`column`: since phase V55 the folder column, js/folder-column.js - the pictures chat), the picker behind
+   sash (`column`: since phase V55 the folder column, js/folder-column.js - the pictures chat; since V60.2 the video chat's
+   too), the picker behind
    every "+" of the zone for a description that says where its attachments come from (`pick`, chat-pick.js - since
    V55 the window with the tree), the hover peek, and the narrow layout.
 
@@ -236,6 +237,9 @@ export function createChat(make) {
     // What a countdown of a result says - its stage in words - for a description that keeps its clips fresh itself.
     stageWords: (g) => _stageWords(g),
     footChanged: () => { if (_ui) _paintThread(true); },
+    // (phase V60.2) What the right column offers may have changed - the video chat's model takes no clips, or shorter ones:
+    // it is read again when its description's `sig` says so.
+    columnChanged: () => _columnChanged(),
   };
   const S = make(ctx);
   const T = S.text;
@@ -269,6 +273,7 @@ export function createChat(make) {
       // The picker goes with the chat, and the description lets go of what floats over it.
       if (_picking) Pick.closePick();
       if (_col) _col.close();
+      _hearStop();
       if (typeof S.onHide === 'function') S.onHide();
       // The arrangement there was before the chat (phase J7) comes back by itself: the room is lib-views'.
       for (const n of _nodes.values()) n.away = true;
@@ -1685,8 +1690,18 @@ export function createChat(make) {
   // (phase V55, the owner's (гн7)) The FOLDER COLUMN (js/folder-column.js): a dropdown of the media tree - "this project"
   // first, then the description's roots (the pictures chat: REFERENCES and IMAGES with all their folders) -, the open
   // folder's folders as tiles, then its pictures. "this project" is this project's own results, read with the thread.
+  // (phase V60.2) A description's `sig` says what its column offers now (the video chat: which tops, the longest clip): read
+  // again only when it changed.
+  let _colSig = null;
+  const _sigNow = () => (S.column && typeof S.column.sig === 'function' ? String(S.column.sig()) : '');
   function _loadColumn() {
-    if (_col) _col.reload();
+    if (!_col) return;
+    _colSig = _sigNow();
+    _col.reload();
+  }
+  function _columnChanged() {
+    if (!_col || _sigNow() === _colSig) return;
+    _loadColumn();
   }
 
   // What the column shows drawn again - this project's own as last read, every tile's mark as the row is now.
@@ -1705,6 +1720,16 @@ export function createChat(make) {
     const n = s && s.node;
     return n && n.kind === 'images' && n.cat && !n.locked ? String(n.cat) : '';
   }
+  // (phase V60.2) A column of several kinds (`column.multi` - the video chat): the folder open is the person's own folder of
+  // one kind's home (`pick.lands` - IMAGES, VIDEO -> Uploads, My sounds) -> { kind, cat }, else null - the server has the last
+  // word (`_folderFor`), as through the attachment window.
+  function _colInto() {
+    const s = _col ? _col.selected() : null;
+    const n = s && s.node;
+    const lands = (S.pick || {}).lands || {};
+    const kind = n && n.cat && !n.locked ? Object.keys(lands).find(k => lands[k] === n.kind) : '';
+    return kind ? { kind, cat: String(n.cat) } : null;
+  }
   function _plusTile() {
     const b = el('button', 'mv3-ig-card is-plus', '+');
     b.type = 'button';
@@ -1715,11 +1740,20 @@ export function createChat(make) {
         _colFile = document.createElement('input');
         _colFile.type = 'file';
         _colFile.multiple = true;
-        _colFile.accept = _ui.file.accept;
+        _colFile.accept = S.column.multi ? Object.values(_ui.files).map(i => i.accept).join(',') : _ui.file.accept;
         _colFile.hidden = true;
         _colFile.addEventListener('change', async () => {
           const f = [..._colFile.files || []];
           _colFile.value = '';
+          if (S.column.multi) {
+            // Each file into the root of its kind - or the folder open, when it is the person's own of that kind - and
+            // the column opens where the first of them went.
+            const into = _colInto();
+            const got = (await _upload(f, into || undefined)) || {};
+            const k = into && got[into.kind] ? into.kind : Object.keys(got)[0];
+            if (k && got[k] && _col) _col.select(got[k].at || S.column.home || '');
+            return;
+          }
           const got = await _upload(f, { kind: 'image', cat: _colFolder() });
           if (got && got.image && _col) _col.select(got.image.at || S.column.home || '');
         });
@@ -1731,6 +1765,9 @@ export function createChat(make) {
   }
 
   function _tile(it) {
+    // (phase V60.2) The video chat's column holds clips and sounds too.
+    if (it && it.ftype === 'video') return _clipTile(it);
+    if (it && it.ftype === 'audio') return _soundTile(it);
     const t = el('div', 'mv3-ig-card'
       + (it.state === 'pending' ? ' is-busy' : it.state === 'failed' ? ' is-fail' : '')
       + (_atts.some(a => a.path === it.path) ? ' on' : ''));
@@ -1768,6 +1805,108 @@ export function createChat(make) {
     } else {
       t.appendChild(el('span', 'sp', String(it.error || 'failed').slice(0, 70)));
     }
+    return t;
+  }
+
+  // (phase V60.2, the owner's (вч1б)) What the video chat's column holds besides pictures. A press attaches it to its part of
+  // the zone as the attachment window does - a clip with its poster and length (its part window opens as there), a sound
+  // with its length -, a second press takes it off; what the model cannot take of it is said over the box (`pick.why`, `_say`).
+  // Dragged, it goes onto a lane as a shelf's tile does.
+  function _colPress(it, kind, extra) {
+    if (_atts.some(a => a.path === it.path)) { _detach(it.path); return; }
+    const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, kind) : '';
+    if (why) { _say(why); return; }
+    _attach(it.path, it.name, Object.assign({ kind }, extra));
+  }
+  function _colDrag(t, item, media) {
+    t.draggable = true;
+    t.addEventListener('dragstart', (ev) => {
+      if (refuseHome(t, ev)) return;
+      ev.dataTransfer.effectAllowed = 'copy';
+      ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify(Object.assign(item, { media })));
+      ev.dataTransfer.setData(Store.DRAG_MEDIA + media, '1');
+      t.classList.add('is-dragging');
+    });
+    t.addEventListener('dragend', () => t.classList.remove('is-dragging'));
+  }
+  const _secsOf = (v) => (+v > 0 ? (+v).toFixed(1) + 's' : '');
+
+  // A clip: its poster at its shape, its length, ▶ in the corner plays it large (`column.play`).
+  function _clipTile(it) {
+    const t = el('div', 'mv3-ig-card is-clip'
+      + (it.state === 'pending' ? ' is-busy' : it.state === 'failed' ? ' is-fail' : '')
+      + (_atts.some(a => a.path === it.path) ? ' on' : ''));
+    if (it.aspect) t.style.aspectRatio = String(it.aspect).replace(':', '/');
+    t.title = it.name || '';
+    if ((it.state || 'done') !== 'done' || !it.path) {
+      t.appendChild(el('span', 'sp', it.state === 'pending' ? 'making…' : String(it.error || 'failed').slice(0, 70)));
+      return t;
+    }
+    const poster = it.thumb || posterOf(it.path);
+    const img = document.createElement('img');
+    img.src = thumbOf(poster, 'strip');
+    img.alt = it.name || '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.draggable = false;
+    img.addEventListener('error', () => img.remove(), { once: true });
+    t.appendChild(img);
+    const secs = _secsOf(it.dur);
+    if (secs) t.appendChild(el('span', 'mv3-ig-dur', secs));
+    const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, 'video') : '';
+    if (why) { t.classList.add('is-short'); t.title = (it.name ? it.name + ' - ' : '') + why; }
+    if (S.column && typeof S.column.play === 'function') {
+      const play = el('button', 'mv3-ig-cplay', '▶');
+      play.type = 'button';
+      play.title = 'Play it';
+      play.draggable = false;
+      play.addEventListener('click', (e) => { e.stopPropagation(); S.column.play(it); });
+      t.appendChild(play);
+    }
+    _colDrag(t, {
+      libId: it.libId || '', src: it.path, thumb: poster, name: (it.name || '').slice(0, 60),
+      group: it.group || (it.kind === 'references' ? 'uploads' : it.kind || 'uploads'), dur: +it.dur || 0, bed: false,
+    }, 'video');
+    t.addEventListener('click', () => _colPress(it, 'video', { poster, dur: +it.dur || 0 }));
+    return t;
+  }
+
+  // A sound: a row - ▶ to listen here, its name, its length.
+  let _hear = null;             // { audio, btn, path } - the column's sound playing
+  function _hearStop() {
+    if (!_hear) return;
+    try { _hear.audio.pause(); } catch (e) { /* gone */ }
+    _hear.btn.textContent = '▶';
+    _hear = null;
+  }
+  function _soundTile(it) {
+    const t = el('div', 'mv3-ig-card is-sound' + (_atts.some(a => a.path === it.path) ? ' on' : ''));
+    t.title = it.name || '';
+    const play = el('button', 'mv3-ig-splay', _hear && _hear.path === it.path ? '❚❚' : '▶');
+    play.type = 'button';
+    play.title = 'Listen';
+    play.draggable = false;
+    // Drawn again while it plays: this button is the one that stops it now.
+    if (_hear && _hear.path === it.path) _hear.btn = play;
+    play.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const same = _hear && _hear.path === it.path;
+      _hearStop();
+      if (same) return;
+      const a = new Audio(it.path);
+      a.addEventListener('ended', () => { if (_hear && _hear.audio === a) _hearStop(); });
+      a.play().catch(() => { if (_hear && _hear.audio === a) _hearStop(); });
+      _hear = { audio: a, btn: play, path: it.path };
+      play.textContent = '❚❚';
+    });
+    t.append(play, el('span', 'nm', it.name || 'sound'), el('span', 'du', _secsOf(it.dur)));
+    const why = S.pick && typeof S.pick.why === 'function' ? S.pick.why(it, 'audio') : '';
+    if (why) { t.classList.add('is-short'); t.title = (it.name ? it.name + ' - ' : '') + why; }
+    _colDrag(t, {
+      libId: it.libId || '', src: it.path, thumb: null, name: (it.name || '').slice(0, 60),
+      group: it.kind || 'sounds', dur: +it.dur || 0, bed: it.kind === 'music',
+    }, 'audio');
+    t.addEventListener('click', () => _colPress(it, 'audio', { dur: +it.dur || 0 }));
     return t;
   }
 
@@ -1940,8 +2079,8 @@ export function createChat(make) {
     }
     chat.append(banner, thread, attsAt, over, ...Object.values(files), bar);
 
-    // The right column - for a description that has one (`column`, the pictures chat); the video chat picks its
-    // attachments in a window only (phase V13).
+    // The right column - for a description that has one (`column`: the pictures chat; since phase V60.2 the video chat too,
+    // the owner's (вч1б) - its pictures, clips and sounds, `column.multi`).
     let sash = null, stripBox = null;
     if (S.column) {
       sash = el('div', 'mv3-sash is-v mv3-ig-sash');
@@ -1967,7 +2106,7 @@ export function createChat(make) {
     _ui = { root, main, set: setBox, left, said, chat, banner, thread, foot, atts, attsAt, over, file, files, bar, ta, pen, nBtn, go, stripBox, narrow: null };
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
-        roots: S.column.roots, files: S.column.files || 'photo', title: T.cat || 'Show',
+        roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
         own: { label: 'this project', empty: 'Nothing made in this project yet.' },
         tile: _tile, lead: _plusTile,
         // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.

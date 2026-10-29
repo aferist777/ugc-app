@@ -16,6 +16,9 @@
 //     projects" when timelines hold it), deletes it from the library the way its shelf does (js/del-x.js); the column
 //     reads itself again and tells the caller (`onDeleted`).
 //
+//   - (phase V60.2, the owner's (вч1б)) the video chat's right column too: this project's clips, REFERENCES, IMAGES, VIDEO and
+//     AUDIO - each top node its own type of files (`files` as a function), clips the model cannot take left out (`fit`).
+//
 // The tiles are the caller's (`tile(it)`): what a press does, its mark, a drag. Nothing is remembered unless `lsKey`.
 //
 // The helpers under it - readTree, folderIndex, pruneTree, filesUnder, filesOf, locateFile - are the attachment window's
@@ -60,7 +63,7 @@ const _ar = (w, h) => (w > 0 && h > 0 ? w + ':' + h : '');
 
 /**
  * What a shelf answer holds of one TYPE - 'photo' | 'video' | 'audio' - as files:
- *   { path, name, aspect, w, h, thumb, dur, kind, libId, item }  (`item` - the shelf's own record)
+ *   { path, name, aspect, w, h, thumb, dur, kind, libId, item, ftype }  (`item` - the shelf's own record; `ftype` - the type)
  * A REFERENCES post gives its files of that type one by one (a long video kept as a tile has none); a downloaded YouTube
  * video is a video; anything else is taken when its file is of the type.
  */
@@ -75,17 +78,17 @@ export function filesOf(items, type) {
       files.forEach((f, k) => out.push({
         path: f.path, name: String(i.name || 'post') + (files.length > 1 ? ' · ' + (k + 1) + ' of ' + files.length : ''),
         aspect: _ar(+f.w, +f.h), w: +f.w || 0, h: +f.h || 0, thumb: f.thumb || '', dur: +f.dur || 0,
-        kind: 'references', libId: '', item: i,
+        kind: 'references', libId: '', item: i, ftype: t,
       }));
       continue;
     }
     if (i.kind === 'youtube') {
-      if (t === 'video') out.push({ path: i.media, name: i.name || '', aspect: _ar(+m.w, +m.h), w: +m.w || 0, h: +m.h || 0, thumb: i.thumb || '', dur: +i.dur || 0, kind: i.kind, libId: String(i.id || ''), item: i });
+      if (t === 'video') out.push({ path: i.media, name: i.name || '', aspect: _ar(+m.w, +m.h), w: +m.w || 0, h: +m.h || 0, thumb: i.thumb || '', dur: +i.dur || 0, kind: i.kind, libId: String(i.id || ''), item: i, ftype: t });
       continue;
     }
     if (!RX[t].test(String(i.media))) continue;
     out.push({ path: i.media, name: i.name || '', aspect: _ar(+m.w, +m.h), w: +m.w || 0, h: +m.h || 0, thumb: i.thumb || '',
-      dur: +(i.dur || m.dur) || 0, kind: i.kind || '', libId: String(i.id || ''), item: i });
+      dur: +(i.dur || m.dur) || 0, kind: i.kind || '', libId: String(i.id || ''), item: i, ftype: t });
   }
   return out;
 }
@@ -116,6 +119,8 @@ const _grouped = (q) => !!q && !!q.filter && Object.keys(q).every(k => _Q_KEYS.i
  * `cache` (a Map) keeps the shelf's answers for one reading. A kind that could not be read throws.
  * `fit(file)` (phase V57, the owner's (ок1)) - only the files it takes are counted and shown: the video chat's window
  * leaves out the clips longer than the chosen model takes.
+ * `type` (phase V60.2, the owner's (вч1б)) may be a function of the top node's key -> a type or a list of them: the video
+ * chat's column shows the pictures of IMAGES, the clips of VIDEO, the sounds of AUDIO and both of a REFERENCES post.
  */
 export async function folderIndex(nodes, type, cache, fit) {
   const C = cache || new Map();
@@ -131,8 +136,10 @@ export async function folderIndex(nodes, type, cache, fit) {
   };
   const all = [];
   const byKey = new Map();
-  const walk = (list) => { for (const n of list || []) { all.push(n); byKey.set(n.key, n); walk(n.children); } };
-  walk(nodes);
+  const rootOf = new Map();
+  const walk = (list, rk) => { for (const n of list || []) { all.push(n); byKey.set(n.key, n); rootOf.set(n.key, rk || n.key); walk(n.children, rk || n.key); } };
+  walk(nodes, '');
+  const typesOf = typeof type === 'function' ? (k) => [].concat(type(rootOf.get(k)) || []).filter(t => RX[t]) : () => [type];
   const kinds = [...new Set(all.filter(n => _grouped(n.q)).map(n => n.q.filter))];
   const own = all.filter(n => n.q && !_grouped(n.q));
   const [kindRecs, ownRecs] = await Promise.all([Promise.all(kinds.map(f => read({ filter: f }))), Promise.all(own.map(n => read(n.q)))]);
@@ -144,7 +151,7 @@ export async function folderIndex(nodes, type, cache, fit) {
     if (!n.q) continue;
     const recs = ownOf.has(n.key) ? ownOf.get(n.key) : (recsOf.get(n.q.filter) || []).filter(i => _inQ(i, n.q, foldersOf));
     const seen = new Set();
-    direct.set(n.key, filesOf(recs, type).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)) && (!fit || fit(f))));
+    direct.set(n.key, typesOf(n.key).flatMap(t => filesOf(recs, t)).filter(f => (seen.has(f.path) ? false : (seen.add(f.path), true)) && (!fit || fit(f))));
   }
   // How many under each - a file in two folders (★ Favorites and its own) counted once.
   const total = new Map();
@@ -181,11 +188,12 @@ export function filesUnder(node, idx) {
   return out;
 }
 
-/** readTree, with only the folders holding files of `type` - readTree's answer plus `index` (folderIndex's), or null. */
-export async function typedTree(roots, type, cache) {
+/** readTree, with only the folders holding files of `type` - readTree's answer plus `index` (folderIndex's), or null.
+ *  `type` and `fit` as folderIndex takes them. */
+export async function typedTree(roots, type, cache, fit) {
   const t = await readTree(roots);
   if (!t) return null;
-  const index = await folderIndex(t.nodes, type, cache);
+  const index = await folderIndex(t.nodes, type, cache, fit);
   const nodes = pruneTree(t.nodes, index);
   const byKey = new Map();
   const parentOf = new Map();
@@ -243,8 +251,11 @@ export async function locateFile(path, roots) {
 
 /**
  * createFolderColumn(host, o) - builds the column in `host` (emptied).
- *   o.roots        the tree's top nodes offered, by key - ['references', 'images']
- *   o.files        'photo' (default) | 'video' | 'audio' - what of a folder is shown
+ *   o.roots        the tree's top nodes offered, by key - ['references', 'images'] - or a function answering them at every
+ *                  reading (phase V60.2: the video chat's VIDEO goes while its model takes no clips, (вч4б))
+ *   o.files        'photo' (default) | 'video' | 'audio' - what of a folder is shown; or a function of the top node's key
+ *                  answering one or a list (phase V60.2, (вч1б): the video chat's pictures, clips and sounds)
+ *   o.fit(file)    -> false for a file not to show or count (the video chat: a clip longer than its model takes, V57)
  *   o.own          { label, empty } - a first row that is not a folder ("this project"); its pictures are the caller's,
  *                  given with setOwn(items) - each { path, name, aspect, state, ... } as the caller's tile takes it
  *   o.start        what is open first: 'own', a node's key - else what `lsKey` remembers, else `own`, else roots[0]
@@ -309,7 +320,8 @@ export function createFolderColumn(host, o) {
     if (!tree && sel !== OWN) { state = 'reading'; paint(); }
     let t = null;
     let err = '';
-    try { t = await typedTree(opt.roots, opt.files); } catch (e) { err = e.message || 'the folders could not be read'; }
+    const roots = typeof opt.roots === 'function' ? opt.roots() : opt.roots;
+    try { t = await typedTree(roots, opt.files, null, typeof opt.fit === 'function' ? opt.fit : null); } catch (e) { err = e.message || 'the folders could not be read'; }
     if (mine !== loads) return;
     if (t) tree = t;
     if (wanted && _valid(wanted)) { sel = wanted; remember(); }
@@ -404,7 +416,8 @@ export function createFolderColumn(host, o) {
       list.replaceChildren(...[words ? el('div', 'fc-none', words) : null, lead].filter(Boolean));
       return;
     }
-    const n = Math.max(1, _cols(list.clientWidth));
+    // Sounds are rows across the column (phase V60.2): a folder of AUDIO is one column.
+    const n = shown.every(x => x && x.ftype === 'audio') ? 1 : Math.max(1, _cols(list.clientWidth));
     const H = new Array(n).fill(0);
     const boxes = [];
     for (let i = 0; i < n; i++) boxes.push(el('div', 'fc-col'));
@@ -512,7 +525,9 @@ export function createFolderColumn(host, o) {
     setOwn: (items) => { ownItems = Array.isArray(items) ? items : []; if (sel === OWN) paint(); else _paintHead(); },
     select,
     selected: () => (sel === OWN ? { own: true } : { node: node(sel) }),
-    isOwn: () => sel === OWN,
+    // (phase V60.2) Before the first reading has chosen, "this project" is what opens when nothing else is asked for - so the
+    // caller's first read of its own results is not left for its next tick.
+    isOwn: () => sel === OWN || (!sel && !!opt.own && !opt.start && !stored()),
     items: () => (sel === OWN ? ownItems : files),
     close: _closeMenu,
   };

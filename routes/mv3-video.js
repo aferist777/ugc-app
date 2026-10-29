@@ -68,7 +68,9 @@ router.get('/mv3/video/matrix', (_req, res) => {
 
 router.get('/mv3/video/feed', (req, res) => {
   try {
-    const p = String(req.query.project || '');
+    // (phase V60.2) A draft's clips are kept under the drafts' conversation (lib/mv3-chat.js threadOf): the right column's
+    // "this project" and the window's "made in this project" ask by the draft's own key.
+    const p = CHAT.threadOf(String(req.query.project || ''));
     res.json({ success: true, items: p ? VGENS.list(p) : [] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

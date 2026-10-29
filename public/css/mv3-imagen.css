@@ -360,6 +360,25 @@
 .mv3-ig-card.is-fail{ border-color:var(--danger) }
 .mv3-ig-card.is-fail .sp{ font:600 8.5px/1.3 var(--font); color:var(--danger); text-align:center; padding:4px }
 .mv3-ig-card.is-dragging{ opacity:.5 }
+/* (phase V60.2) The video chat's column: a clip - its poster, its length, ▶ in the corner plays it large; a sound - a row with
+   ▶ to listen, its name and its length. One the model cannot take (too short) is dimmed, and says why under the pointer. */
+.mv3-ig-card.is-clip .mv3-ig-dur{ z-index:1 }
+.mv3-ig-cplay{
+  position:absolute; left:4px; top:4px; z-index:2; width:22px; height:22px; padding:0; border:0; border-radius:50%;
+  background:rgba(0,0,0,.55); color:#fff; font:600 9px/22px var(--font); cursor:pointer; opacity:.85;
+}
+.mv3-ig-cplay:hover{ background:var(--primary); color:var(--primary-ink); opacity:1 }
+.mv3-ig-card.is-sound{
+  display:flex; align-items:center; gap:6px; min-height:0; height:30px; padding:0 7px 0 4px; box-sizing:border-box;
+}
+.mv3-ig-card.is-sound .nm{ flex:1 1 auto; min-width:0; font:600 10px/1.2 var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.mv3-ig-card.is-sound .du{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums }
+.mv3-ig-splay{
+  flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:50%;
+  background:var(--surface); color:var(--ink); font:600 8px/20px var(--font); cursor:pointer;
+}
+.mv3-ig-splay:hover{ border-color:var(--primary); color:var(--primary) }
+.mv3-ig-card.is-short{ opacity:.45 }
 
 /* Hovering shows the picture larger, at one fixed place over the conversation. */
 .mv3-ig-peek{

@@ -15,9 +15,13 @@
    - Kling motion control's VIDEO has no writer - Kling gets its own prompt. With the writer off the box IS that prompt
      (empty: the standard one); with it on the box says what to take from which picture, and the first frame is drawn
      before the video (phase V17).
-   - (phase V13, the owner 2026-10-07) No right column: every "+" of the attachment zone opens the picker on its place
-     (chat-pick.js) - the Library's shelves of that kind and this computer. A clip that lands is not put in the zone by
-     itself - it is one press on it there, under "made in this project".
+   - (phase V13, the owner 2026-10-07) Every "+" of the attachment zone opens the picker on its place (chat-pick.js) - the
+     Library's shelves of that kind and this computer. A clip that lands is not put in the zone by itself - it is one press
+     on it there, under "made in this project".
+   - (phase V60.2, the owner 2026-10-29, (вч1б)-(вч5а)) A RIGHT COLUMN again, the pictures chat's folder column
+     (js/folder-column.js): "this project" - the clips made here - first, then REFERENCES, IMAGES, VIDEO and AUDIO; a press
+     puts a picture, a clip or a sound into its part of the zone. VIDEO is not there while the model takes no clips (and
+     AUDIO while it takes no sounds), and a clip longer than the model takes is not shown (V57's rule of the window).
    - (phase V7) Clips and sounds are references too: from this project's clips, B-roll, Uploads, the Sounds shelf, this
      computer or a lane of the timeline; each goes as the PART of it the person chose (vtrim.js), the first seconds
      the model takes by default, and the price follows that part.
@@ -258,6 +262,8 @@ function VIDEOS(ctx) {
     const L = r.limits || {};
     return k === 'video' ? L.videos > 0 : k === 'audio' ? L.audios > 0 : L.images > 0;
   };
+  // (phase V60.2) What the right column offers: everything until the models are read.
+  const _colTakes = (k) => !_table || _takes(k);
   // (phase V47, the owner 2026-10-24/25) ONE clip decides Seedance's length and shape (lib/video-models.js byClip): the
   // column's rows show the clip's and are not sent - 2.5 on kie makes the clip's own seconds, the others its seconds
   // rounded. With several clips the column's length and shape go. `media`: a card's own attachments, else the zone.
@@ -589,7 +595,7 @@ function VIDEOS(ctx) {
     if (fam === 'kmc') {
       _row(box, 'orientation', _select('mv3-vc-or', 'Which way the character faces', [
         { value: 'video', text: 'as in the clip (up to 30 s)' }, { value: 'image', text: 'as on the picture (up to 10 s)' },
-      ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); }));
+      ], p.orientation || 'video', (v) => { setParam('orientation', v); ctx.paintAtts(); ctx.columnChanged(); }));
       // (phase V10.2) Whose background: the picture's, always - Kling puts the moves into the picture's place (V10.1 No 11,
       // 12; kie's "keep the clip's room" for 3.0 came back on the picture's background too). Said, not chosen.
       const bg = _select('mv3-vc-bg', 'Kling puts the moves into your picture\'s place - the room of the clip does not come along. For another place, keep the writer on: it draws the first frame with your character there.',
@@ -609,6 +615,8 @@ function VIDEOS(ctx) {
       : _framesMode() ? 'What happens from the first frame' + (_asOf() === 'fl' ? ' to the last' : '') + ' - or leave it empty, and the writer decides' : '');
     _paintSwitches();
     _paintPrice();
+    // (phase V60.2) The right column follows the model: its VIDEO and AUDIO, the longest clip it shows.
+    ctx.columnChanged();
   }
 
   function _paintPrice() {
@@ -2471,7 +2479,7 @@ function VIDEOS(ctx) {
     name: 'videos',
     kind: 'clip',
     ids: { root: 'mv3-vc', head: 'mv3-vc-head', headL: 'mv3-vc-headl', crumb: 'mv3-lib-vgen' },
-    keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1' },
+    keys: { draft: 'mv3_vc_draft_v1', write: 'mv3_vc_write_v1', strip: 'mv3-vc-strip-w' },
     maxAtts: MAX_ATTS,
     counts: [1, 2],
     noun: { one: 'picture', many: 'pictures' },
@@ -2489,8 +2497,31 @@ function VIDEOS(ctx) {
       onlyFiles: 'Only pictures, clips and sounds can be attached here.',
       slot: 'From the Library or this computer',
       crumb: 'The video chat - clips made with a model',
+      plus: 'Add a picture, a clip or a sound from this computer - into the folder open here when it is one of yours of its kind (IMAGES, VIDEO → Uploads, My sounds), else into the root of its kind - and straight into the zone.',
+      cat: 'This project\'s clips, or a folder of the Library',
     },
-    // (phase V13, the owner 2026-10-07) No right column: every "+" of the zone opens the picker on its place.
+    // (phase V60.2) The right column's "this project": the clips made in it.
+    feed: {
+      url: (k) => '/api/mv3/video/feed?project=' + encodeURIComponent(k),
+      map: (g) => ({
+        path: g.videoPath, aspect: Src.shape(g.w, g.h) || (g.params || {}).aspect || '', state: g.state, error: g.error,
+        name: String(g.said || g.prompt || '').slice(0, 80), thumb: g.posterPath || '', dur: +g.duration || 0,
+        ftype: 'video', libId: g.birolId || '', group: 'videochat',
+      }),
+    },
+    // (phase V60.2, the owner's (вч1б), (вч4б)) The right column: what the zone takes, by the model chosen.
+    column: {
+      multi: true,
+      roots: () => ['references', 'images'].concat(_colTakes('video') ? ['video'] : [], _colTakes('audio') ? ['audio'] : []),
+      files: (root) => (root === 'references' ? (_colTakes('video') ? ['photo', 'video'] : 'photo')
+        : root === 'video' ? 'video' : root === 'audio' ? 'audio' : 'photo'),
+      fit: (f) => { if (!f || f.ftype !== 'video') return true; const c = _clipFit(); return !c.fit || c.fit(f); },
+      // Read again when what it offers changes with the model: clips or not, sounds or not, the longest clip.
+      sig: () => [_colTakes('video'), _colTakes('audio'), _clipFit().note || ''].join('|'),
+      group: 'images', home: 'images',
+      play: (it) => openViewer([{ id: it.libId || it.path, kind: 'birols', media: it.path, thumb: it.thumb || it.path, name: it.name || '' }], 0),
+    },
+    // (phase V13, the owner 2026-10-07) Every "+" of the zone opens the picker on its place.
     pick: {
       sources: (kind) => SOURCES[kind] || [],
       // (phase V55) The window with the tree, the almanac's size (chat-pick.js). (phase V57, the owner's (ок1): "все клипы
