@@ -837,10 +837,12 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 }
 .mk-scene-secs{ font-size:9px; color:var(--muted); text-align:center; }
 
-/* The "add a source" window, on the layer stack. */
+/* The "add a source" window, on the layer stack. (phase V60.1, (пк2а)) The page under it darkened and blurred - the one
+   rule of css/app-shell.css. */
 .mk-ov{
   position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .72); padding:24px;
+  background:var(--ov-dim, oklch(0 0 0 / .45)); padding:24px;
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
 .mk-panel{
   display:flex; flex-direction:column; width:min(620px, 96vw); max-height:min(820px, 92vh);
@@ -893,7 +895,8 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .mk-addl-acts{ display:flex; flex-wrap:wrap; gap:6px; }
 .mk-addl .mk-x{ opacity:1; top:7px; right:7px; }
 /* Handed over to Alerts: the window flies into the button (js/alerts-bell.js flyToAlerts), the dimming goes. */
-.mk-ov.is-leaving{ background:transparent; transition:background .4s ease-in; pointer-events:none; }
+.mk-ov.is-leaving{ background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none;
+  transition:background .4s ease-in; pointer-events:none; }
 
 /* (phase V27) "Add by a link" on the Media shelf (js/library/links.js): the links, one per line, and Add. */
 .lk-panel{ width:min(520px, 96vw); }

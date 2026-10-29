@@ -3,7 +3,9 @@
    carry a button - "characters / Mute (+ new look)"), a body that is the caller's or a generator's BENCH: a shelf to draw a
    base from on the left, the photo field, the sentence, the line of Alerts and `create` on the right. Its own look, put in
    by the module, so every page shows it the same. Under the viewer (9000), the tile menus (9300) and the delete asks. */
-.gw-ov{ position:fixed; inset:0; z-index:8900; background:oklch(0 0 0 / .38) }
+/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+.gw-ov{ position:fixed; inset:0; z-index:8900; background:var(--ov-dim, oklch(0 0 0 / .45));
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px)) }
 .gw{
   position:absolute; display:flex; flex-direction:column; min-height:0; overflow:hidden;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);

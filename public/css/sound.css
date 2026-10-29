@@ -48,7 +48,8 @@
 .snd-about-row a{color:var(--primary)}
 
 /* windows: the cut and the online search */
-.snd-back{position:fixed; inset:0; z-index:9280; background:rgba(0,0,0,.45)}
+/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+.snd-back{position:fixed; inset:0; z-index:9280; background:var(--ov-dim, oklch(0 0 0 / .45)); backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
 .snd-win{position:fixed; z-index:9290; left:50%; top:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:86vh;
   display:flex; flex-direction:column; gap:10px; padding:12px 14px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow)}
 .snd-win-head{display:flex; align-items:baseline; gap:10px}

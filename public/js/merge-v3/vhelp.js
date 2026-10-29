@@ -2,12 +2,14 @@
    MERGE — the video chat's PROMPT REFERENCE, the ALMANAC (phase V14, the owner 2026-10-07; since V15 the button at the
    foot of the chat's left column - it was "/" by the send; docs/local-app/PLAN.md "Фаза V14", "Фаза V15").
 
-   A small window beside the column, clear of the prompt field it serves - the chat's box, or a card's prompt, whichever
-   was typed in last -, half the size of the attachment picker, laid out like a reference book: the SECTIONS on the left
+   (phase V60.1, the owner's (пк3а)) A window IN THE MIDDLE over the page darkened and a little blurred - as the sound
+   almanac, the one rule of the windows (css/app-shell.css) -, half the size of the attachment picker; until V60.1 it stood
+   beside the column, clear of the prompt field, with no backdrop. Laid out like a reference book: the SECTIONS on the left
    - Camera movement with its seven categories, the others "in development", each saying what it will hold - and the
    TIPS of the open one on the right: a still that plays while the pointer rests on it, the name, the category and the
-   words. A press COPIES the tip (the owner's answer 3): the tip blinks, a note over the prompt field says it was copied,
-   and the window stays open for the next one. Escape, the cross, the button again and a press anywhere else close it.
+   words. A press COPIES the tip (the owner's answer 3): the tip blinks, a note says it was copied - over the prompt field
+   when it is in sight, else at the foot -, and the window stays open for the next one. Escape, the cross and a press on
+   the dark around it close it.
 
    The sections are data: public/presets/helper/index.json lists them, each ready one with its file (camera.json, made
    by tools/fetch-camera.js). A section is added there, not here.
@@ -37,7 +39,7 @@ function _keep() { try { localStorage.setItem(LS, JSON.stringify({ sec: _st.sec,
 const _lc = (s) => String(s || '').toLowerCase();
 
 /**
- * Opens the reference beside `anchor` - the almanac at the foot of the chat's column. `field()` is the prompt field a
+ * Opens the reference - the almanac at the foot of the chat's column (`anchor`) - in the middle of the page. `field()` is the prompt field a
  * copied tip is for - asked at every copy, so the note stands over the one typed in last. `note()`: a line over the
  * camera tips for the chosen model, or ''.
  */
@@ -60,14 +62,15 @@ export function closeHelp() {
   if (!_w) return;
   const w = _w;
   _w = null;
-  document.removeEventListener('mousedown', w.away, true);
   window.removeEventListener('resize', w.place);
   Layers.close(w.layer);
-  w.box.remove();
+  w.ov.remove();
 }
 
 // ── The window ──────────────────────────────────────────────────────────────
 function _build(o) {
+  // (phase V60.1) Over the page darkened and blurred: a modal layer - a press on the dark closes it.
+  const ov = el('div', 'hp-ov');
   const box = el('div', 'hp');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Almanac');
@@ -94,55 +97,28 @@ function _build(o) {
   const body = el('div', 'hp-body');
   body.append(side, main);
   box.append(head, body);
-  document.body.appendChild(box);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
 
   const fieldOf = () => (typeof o.field === 'function' ? o.field() : o.field);
-  const place = () => _place(box, o.anchor, fieldOf());
-  // A press anywhere but in the window - or on the button that opened it, which toggles - closes it.
-  const away = (e) => {
-    const t = e.target;
-    if (!t || box.contains(t) || (o.anchor && (o.anchor === t || o.anchor.contains(t)))) return;
-    closeHelp();
-  };
-  _w = { box, side, main, q, count, note, list, anchor: o.anchor, fieldOf, noteOf: o.note, layer: null, away, place };
-  _w.layer = Layers.open(box, { name: 'prompt reference', modal: false, onEsc: closeHelp });
-  document.addEventListener('mousedown', away, true);
+  const place = () => _place(box);
+  _w = { ov, box, side, main, q, count, note, list, anchor: o.anchor, fieldOf, noteOf: o.note, layer: null, place };
+  _w.layer = Layers.open(ov, { name: 'prompt reference', onEsc: closeHelp });
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeHelp(); });
   window.addEventListener('resize', place);
   x.addEventListener('click', closeHelp);
   q.addEventListener('input', () => { _st.q = q.value; _paintList(); });
   place();
 }
 
-// (phase V15) Right of the chat's column - the almanac stands at its foot -, above the prompt field when there is room
-// there, else under it, else level with the button's foot, so the field stays in sight for the note and the paste. A
-// narrow chat (its settings folded over the box) leaves too little room right of the button: the window then stands
-// clear of the button AND the field - above both, or below both -, the whole window inside the page (a window too small
-// for that is the one case it covers them).
-function _place(box, anchor, field) {
-  const a = anchor ? anchor.getBoundingClientRect() : { top: innerHeight - 60, bottom: innerHeight - 30, right: innerWidth - 20 };
-  const f = field && field.isConnected ? field.getBoundingClientRect() : null;
-  if (innerWidth - a.right - 20 >= 640) {
-    const left = a.right + 8;
-    const w = Math.min(W_MAX, innerWidth - left - 12);
-    let top, h;
-    if (f && f.width && f.top - 16 >= 320) { h = Math.min(H_MAX, f.top - 16); top = f.top - 8 - h; }
-    else if (f && f.width && innerHeight - f.bottom - 16 >= 320) { h = Math.min(H_MAX, innerHeight - f.bottom - 16); top = f.bottom + 8; }
-    else { h = Math.max(220, Math.min(H_MAX, a.bottom - 16)); top = Math.max(8, a.bottom - h); }
-    box.style.width = w + 'px';
-    box.style.height = h + 'px';
-    box.style.left = Math.round(left) + 'px';
-    box.style.top = Math.round(top) + 'px';
-    return;
-  }
-  const r = f && f.width ? { top: Math.min(a.top, f.top), bottom: Math.max(a.bottom, f.bottom), right: a.right } : a;
-  const w = Math.min(W_MAX, innerWidth - 24);
-  const above = r.top - 16, below = innerHeight - r.bottom - 16;
-  const up = above >= 320 || above >= below;
-  const h = Math.max(220, Math.min(H_MAX, up ? above : below));
+// (phase V60.1, (пк3а)) In the middle of the page, half the attachment picker - smaller on a small window. (Until V60.1:
+// right of the chat's column, clear of the prompt field.)
+function _place(box) {
+  const w = Math.min(W_MAX, innerWidth - 32), h = Math.min(H_MAX, innerHeight - 32);
   box.style.width = w + 'px';
   box.style.height = h + 'px';
-  box.style.left = Math.round(Math.max(12, Math.min(innerWidth - w - 12, r.right - w))) + 'px';
-  box.style.top = Math.round(up ? Math.max(8, r.top - 8 - h) : Math.min(innerHeight - h - 8, r.bottom + 8)) + 'px';
+  box.style.left = Math.round((innerWidth - w) / 2) + 'px';
+  box.style.top = Math.round((innerHeight - h) / 2) + 'px';
 }
 
 // ── The sections ────────────────────────────────────────────────────────────
@@ -314,7 +290,13 @@ function _toast(field, words, bad) {
   const t = el('div', 'hp-toast' + (bad ? ' is-bad' : ''), words);
   document.body.appendChild(t);
   const r = field && field.isConnected ? field.getBoundingClientRect() : null;
-  if (r && r.width) {
+  // (phase V60.1) The window stands in the middle now: a field under it - the note at the window's foot instead.
+  const b = _w && _w.box ? _w.box.getBoundingClientRect() : null;
+  const under = !!(r && r.width && b && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top);
+  if (under) {
+    t.style.left = Math.round(Math.max(8, b.left + (b.width - t.offsetWidth) / 2)) + 'px';
+    t.style.top = Math.round(b.bottom - t.offsetHeight - 12) + 'px';
+  } else if (r && r.width) {
     t.style.left = Math.round(Math.max(8, Math.min(innerWidth - t.offsetWidth - 8, r.left + 10))) + 'px';
     t.style.top = Math.round(Math.max(8, r.top + Math.min(r.height, 44) / 2 - t.offsetHeight / 2)) + 'px';
   } else {

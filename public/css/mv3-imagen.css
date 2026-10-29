@@ -630,7 +630,8 @@ audio.vtrim-media{ background:none; height:32px }
 .pk-ov{
   position:fixed; inset:0; z-index:9400;
   display:flex; align-items:stretch; justify-content:center;
-  background:oklch(0 0 0 / .72); padding:18px;
+  background:var(--ov-dim, oklch(0 0 0 / .45)); padding:18px;
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
 .pk{
   position:relative; display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0;
@@ -779,7 +780,8 @@ audio.vtrim-media{ background:none; height:32px }
    The almanac's size, over the middle of the chat (chat-pick.js places it): on the left the rows that are not folders and
    the media tree of the kind, on the right the path, the search, the folder's folders as tiles and its files; the foot
    brings files from this computer (and a clip by a link). The tiles are the window's above, a size smaller. */
-.pk-ov.is-tree{ display:block; padding:0; background:oklch(0 0 0 / .38) }
+/* (phase V60.1, (пк2а)) The page darkened and blurred under it too - the one rule of css/app-shell.css. */
+.pk-ov.is-tree{ display:block; padding:0 }
 .pk.is-tree{ position:absolute; width:860px; height:560px; max-width:none; box-shadow:0 14px 40px rgba(0,0,0,.5) }
 .pk.is-tree .pk-head{ padding:7px 11px }
 .pk.is-tree .pk-body{ grid-template-columns:210px minmax(0, 1fr) }
@@ -860,11 +862,16 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-half-ov.is-bottom{ top:50% }
 
 /* ── The prompt reference, the almanac (phase V14; V15 at the foot of the column - js/merge-v3/vhelp.js) ──
-   A window beside the column, clear of the prompt field, half the attachment picker, no backdrop: the sections on the
-   left - the ones in development dimmed and saying so -, the tips on the right: a still that plays under the pointer, the
-   name, the category, the words. A press copies: the tip blinks and a note sits on the prompt field for a moment. */
+   (phase V60.1, (пк3а)) A window in the middle over the page darkened and blurred - the one rule of css/app-shell.css -,
+   half the attachment picker: the sections on the left - the ones in development dimmed and saying so -, the tips on the
+   right: a still that plays under the pointer, the name, the category, the words. A press copies: the tip blinks and a
+   note sits on the prompt field - or at the window's foot when the field is under it - for a moment. */
+.hp-ov{
+  position:fixed; inset:0; z-index:9300; background:var(--ov-dim, oklch(0 0 0 / .45));
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
+}
 .hp{
-  position:fixed; z-index:9300; display:flex; flex-direction:column; min-height:0;
+  position:absolute; display:flex; flex-direction:column; min-height:0;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
   box-shadow:0 14px 40px rgba(0,0,0,.5); overflow:hidden;
 }

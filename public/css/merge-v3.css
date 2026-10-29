@@ -144,7 +144,9 @@ select.mv3-rr-rf{cursor:pointer}
 .mv3-big{
   position:fixed; inset:0; z-index:9200;
   display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .86); padding:40px;
+  background:var(--ov-dim-deepest, oklch(0 0 0 / .86)); padding:40px;
+  /* (phase V60.1, (пк2а)) Darker than the other windows - one looks at the picture here -, blurred as they are. */
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
 .mv3-big-box{
   width:100%; height:100%; display:flex; align-items:center; justify-content:center;
@@ -2158,7 +2160,9 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-vplay.is-send.is-busy{animation:mv3-wk-pulse 1.1s ease-in-out infinite}
 
 /* THE CLIPS OF A LINE, in a window (V26.1): every clip, playable, `use` on all but the one in use. */
-.mv3-wk-cwin{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center; background:oklch(0 0 0 / .72); padding:24px}
+/* (phase V60.1, (пк2а)) The page under it darkened and blurred - the one rule of css/app-shell.css. */
+.mv3-wk-cwin{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center; background:var(--ov-dim, oklch(0 0 0 / .45)); padding:24px;
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px))}
 .mv3-wk-cwin-box{display:flex; flex-direction:column; gap:10px; max-width:min(920px, 94vw); max-height:92vh; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r)}
 .mv3-wk-cwin-head{display:flex; align-items:center; gap:8px; font:700 10px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--gold)}
 .mv3-wk-cwin-x{margin-left:auto; padding:2px 6px; border:0; background:transparent; color:var(--muted); cursor:pointer; font:600 12px/1 var(--font)}

@@ -12,7 +12,8 @@
 .vc-ov{
   position:fixed; inset:0; z-index:9400;
   display:flex; align-items:stretch; justify-content:center;
-  background:oklch(0 0 0 / .72); padding:18px;
+  background:var(--ov-dim, oklch(0 0 0 / .45)); padding:18px;
+  backdrop-filter:var(--ov-blur, blur(3px)); -webkit-backdrop-filter:var(--ov-blur, blur(3px));
 }
 .vc{
   display:flex; flex-direction:column; width:100%; max-width:1720px; min-height:0;
