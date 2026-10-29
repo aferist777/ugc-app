@@ -550,8 +550,10 @@ function _musicNode(list, folders) {
   const moods = typeof MUSIC.moods === 'function' ? MUSIC.moods() : [];
   // (phase V54) What lies in Music itself: in no own folder and not in highlights.
   const rootN = list.filter(i => !i.meta.categoryId && i.meta.folder !== 'highlights').length;
+  // (phase V59, the owner 2026-10-29: "сделать music в дереве золотым") `make`: its name gold in the Library's tree, and its
+  // "+" (and its menu) opens the Library's music window - in Merge's panel its own "/ generate audio" (js/media-tree.js onMake).
   const node = { key: 'music', kind: 'music', label: 'Music', count: list.length, q: { filter: 'music', folder: UNCAT, cat: UNCAT },
-    loose: 'music', direct: rootN };
+    loose: 'music', direct: rootN, make: 'music', makeLabel: 'Generate music' };
   const own = folders || [];
   if (!moods.length) { if (own.length) node.children = own; return node; }
   const inHl = list.filter(i => i.meta.folder === 'highlights');

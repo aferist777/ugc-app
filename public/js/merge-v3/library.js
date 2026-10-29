@@ -1106,8 +1106,10 @@ const MAKE_KIND = { environments: 'environment', lookbooks: 'lookbook' };
 const MAKE_LABEL = { environments: 'New environment', lookbooks: 'New lookbook' };
 const _makeWins = {};         // the window open per kind - pressed again, the same one stays
 
-/** Open the generator of 'environments' or 'lookbooks' - its window, over the page. */
+/** Open the generator of 'environments' or 'lookbooks' - its window, over the page; (phase V59) of 'music' - this panel's own
+ *  "/ generate audio" on Simple (js/merge-v3/audchat.js; the Library's music window is the Library's). */
 export async function openMaker(kind) {
+  if (kind === 'music') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
   if (!MAKE_VIEW[kind]) return;
   if (_makeWins[kind] && _makeWins[kind].alive()) return;
   try {

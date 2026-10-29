@@ -7,7 +7,7 @@
 //
 //   GET    /api/audio/catalog         the engines, their modes, models, chips, prices; whether the keys, the almanac and
 //                                     the writer's rules are there
-//   POST   /api/audio/gen             { mode, ...the mode's fields, where, project? } -> { gen }   a press: the record and
+//   POST   /api/audio/gen             { mode, ...the mode's fields, where, project?, into? } -> { gen }   a press: the record and
 //                                     its Alerts row NOW, the asking behind the answer
 //   GET    /api/audio/gens?limit=&project=   the history, newest first - of one project when it is named (Merge's "Made
 //                                     here", V34.E: the draft's are the drafts' one list)
@@ -40,10 +40,12 @@ router.get('/audio/catalog', (_req, res) => {
 // (phase V54) Video to Music: `video` - a file of the library, or `clip` { key, clipId } - one clip of a timeline as it is
 // seen, made into a file by the server when it is asked and the track laid under the clip; over ten minutes or 200 MB it is
 // refused here in words, before anything is paid.
+// (phase V59) `into` - the id of the folder under Music open in the Library's music window: its tracks lie there
+// (lib/audio-gens.js `_intoOf` - a folder of kind 'music' that is there, never with a highlights mood).
 router.post('/audio/gen', async (req, res) => {
   const b = req.body || {};
   try {
-    const g = await AG.create(String(b.mode || ''), b, b.where || null, { project: String(b.project || '') });
+    const g = await AG.create(String(b.mode || ''), b, b.where || null, { project: String(b.project || ''), into: String(b.into || '') });
     res.json({ success: true, gen: g, price: ENG.price(g.req) });
   } catch (e) {
     if (!e.status) console.warn('[audio/gen]', e.message);

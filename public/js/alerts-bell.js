@@ -190,6 +190,14 @@ function _hrefOf(rec) {
     return '/library?shelf=media&kind=' + (spot.view === 'envmake' ? 'environments' : 'lookbooks')
       + '&sel=' + encodeURIComponent(path.split('/').pop());
   }
+  // (phase V59, the owner 2026-10-29: "клик по alerts будет вести не в окно попап, а в папку с выделением сгенерированного
+  // файла музыки") Music made in the Library's window (js/library/music-window.js): the folder under Music its tracks went into
+  // (`spot.key` - the tree's key), both tracks outlined once they are filed (the result's `ids`, lib/audio-gens.js); while it
+  // runs, or when it failed, that folder alone.
+  if (w.page === 'library' && spot.view === 'musicmake') {
+    const ids = rec.state === 'done' ? ((rec.result || {}).ids || []).filter(Boolean) : [];
+    return '/library?shelf=media&kind=' + encodeURIComponent(spot.key || 'music') + ids.map(id => '&sel=' + encodeURIComponent(id)).join('');
+  }
   return w.href || '';
 }
 

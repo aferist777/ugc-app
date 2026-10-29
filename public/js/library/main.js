@@ -27,6 +27,8 @@ import * as LK from './links.js';
 import { createTree, setMediaDrag } from '../media-tree.js';
 // (phase V58, the owner's (лк6)) New environment / New lookbook - the generators' window (sub-session P's module).
 import { openGenerator } from '../gen-window.js';
+// (phase V59) Generate music - Suno's window over Media (js/library/music-window.js, sub-session P's).
+import * as MW from './music-window.js';
 // (phase V34.E) Sound on the Media shelf: the waveform, the menu under the right button, the search and the online libraries
 // - the same modules as Merge's Library panel.
 import { waveEl } from '../sound/wave.js';
@@ -80,6 +82,9 @@ const _mcat = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 // since phase V56 took the Lookbooks and Environments shelves away.)
 const PICKABLE = new Set(['characters']);
 let _sel = '';
+// (phase V59) More tiles outlined beside _sel on Media - a press of the music window made TWO tracks, and its Alerts row
+// leads to both (?sel=<id>&sel=<id>).
+let _selAlso = new Set();
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
@@ -112,10 +117,15 @@ let _makingOn = '';       // the shelf whose making area is showing; '' = the sh
 const GEN = {
   environments: { label: 'New environment', title: 'Make an environment - from words, from a photo, or one already made changed' },
   lookbooks: { label: 'New lookbook', title: 'Make a lookbook - from words, from a photo, or one already made built on' },
+  // (phase V59, the owner's (мг2а)) while Music or any folder under it is selected - the tracks go into that folder.
+  music: { label: 'Generate music', title: 'Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open' },
 };
 const MADE_KINDS = new Set(['environments', 'lookbooks']);
 // The node selected is Environments or Lookbooks itself: its kind, else ''.
 const _madeNode = () => (_shelf === 'media' && _node && _node.make && MADE_KINDS.has(_node.make) ? _node.make : '');
+// The generator the bar's "New …" opens on the node selected: Environments' or Lookbooks' (the node itself), or (phase V59)
+// Music's - on Music or any folder under it. Upload stays beside it there (Music takes files).
+const _genNode = () => _madeNode() || (_shelf === 'media' && _node && _node.kind === 'music' ? 'music' : '');
 // THE NARRATORS (phase V28.2, the owner 2026-10-12): an area on the Scenarios shelf over the list or over the generator -
 // "Narrators" beside "New scenario", or the gear by the generator's Narrator field. `_makingOn` stays as it was under it,
 // so "←" goes back to where it was opened from: the list ("← Scenarios") or the generator ("← Generate script").
@@ -162,7 +172,7 @@ function _paintMake() {
   if (_narrOn && _shelf !== 'scenarios') _narrOn = false;
   // (phase V55, V58) On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator's
   // window over the page - there is nothing to come back from, so no "←".
-  const g = _madeNode();
+  const g = _genNode();
   const m = g ? GEN[g] : MAKERS[_shelf];
   const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split'), nr = $('lib-narr');
   if (nb) {
@@ -201,7 +211,8 @@ const GEN_WHERE = {
 };
 const GEN_KIND = { environments: 'environment', lookbooks: 'lookbook' };
 const _genWins = {};          // the window open per kind - pressed again, the same one stays
-async function _openGen(kind) {
+async function _openGen(kind, fromTree) {
+  if (kind === 'music') return _openMusic(fromTree);
   if (!MADE_KINDS.has(kind)) return;
   if (_shelf === 'media' && _tree && (!_node || _node.key !== kind)) {
     _tree.select(kind, false);
@@ -224,9 +235,52 @@ function _genLanded(kind, path) {
   if (_tree) _tree.load();
   _counts();
   if (_shelf === 'media' && _node && _node.key === kind) {
-    if (path) { _sel = String(path).split('/').pop(); _scrollSel = true; }
+    if (path) { _sel = String(path).split('/').pop(); _selAlso = new Set(); _scrollSel = true; }
     _load({ keepScroll: true, checks: false });
   }
+}
+
+// (phase V59, the owner 2026-10-29: "создать попап с генератором музыки как в merge ... в library") GENERATE MUSIC - Suno's
+// window over Media (js/library/music-window.js), the size of the almanac, the gallery and the tree staying behind it.
+// From Music's "+" in the tree (and its menu, and the address ?shelf=media&kind=music&make=1): Music itself, selected; from
+// the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
+// moods take only a mood's preset - the window and the server say so).
+async function _openMusic(fromTree) {
+  if (_shelf !== 'media' || !_tree) return;
+  if ((fromTree || !_node || _node.kind !== 'music') && (!_node || _node.key !== 'music')) {
+    _tree.select('music', false);
+    _node = _tree.selected();
+    await _load({ checks: false });
+  }
+  const at = _node && _node.kind === 'music' ? _node : null;
+  try {
+    await MW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), onLanded: _musicLanded });
+  } catch (e) { _status((e && e.message) || 'The music generator did not open', 'err'); }
+}
+// The folder the window puts its tracks into, as the window wants it: its key, its folder's id, and its path under Music.
+function _musicPlace(n) {
+  if (!n) return { key: 'music', label: 'Music' };
+  let trail = '';
+  try {
+    const names = [...(_tree.crumbsEl(n).querySelectorAll('.mt-crumb'))].map(e => e.textContent);
+    const i = names.indexOf('Music');
+    trail = i >= 0 ? names.slice(i + 1).join(' / ') : '';
+  } catch (e) { trail = ''; }
+  return { key: n.key, cat: n.cat || '', folder: n.folder || '', label: n.label, trail: trail || n.label };
+}
+// A press of the window landed (open or closed): the tree's numbers again, and - while the gallery shows the folder its tracks
+// went into - the gallery, both tracks outlined.
+async function _musicLanded(gen, dest) {
+  if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
+  _counts();
+  if (_shelf !== 'media' || !_node || _node.kind !== 'music') return;
+  const ids = ((gen && gen.results) || []).map(r => String(r.id || '')).filter(Boolean);
+  if (dest && _node.key === dest.node && ids.length) {
+    _sel = ids[0];
+    _selAlso = new Set(ids.slice(1));
+    _scrollSel = true;
+  }
+  await _load({ keepScroll: true, checks: false });
 }
 
 // ── The music player (phase V54, the owner's (зв12)-(зв15), (зв25)) ─────────
@@ -362,11 +416,13 @@ function _initTree() {
     onSelect: (n) => {
       _node = n;
       _sel = '';
+      _selAlso = new Set();
       if (_tsel) _tsel.clear();         // another folder: nothing picked
       if (_shelf === 'media') _load({ checks: false });
     },
     // (phase V55, (гн10)) Environments / Lookbooks' "+": their generator's window (phase V58).
-    onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make); },
+    // (phase V59) Music's "+": the music window, on Music itself.
+    onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make, true); },
     onChanged: (what) => (_shelf === 'media'
       ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
@@ -1099,7 +1155,7 @@ function _renderGrid() {
     } else {
       // (phase V28.1) Media opens a tile in the viewer and selects nothing - but one arrived at from elsewhere (a
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
-      if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel);
+      if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel || _selAlso.has(String(it.id)));
       // (phase V54) A track in Music plays in the player; SFX and My sounds on their cards, as before.
       if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); });
       else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
@@ -1296,6 +1352,7 @@ function _select(kind) {
   if (PICKABLE.has(_shelf)) INFO.leave();  // nor a character's voice, or an answer on its way
   _shelf = kind;
   _sel = '';                               // a shelf opens on its top-left tile (B2)
+  _selAlso = new Set();
   if (_tsel) _tsel.clear();
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load({ checks: kind === 'media' });
@@ -1703,14 +1760,17 @@ function _place(u) {
   let kind = q.get('shelf') || '';
   // (phase V28.5) The Music shelf is Media -> Audio -> Music: an old address lands there.
   if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', draft: '', mkind: 'music' };
+  // (phase V59) Several tiles outlined: ?sel=<id>&sel=<id> - the first is `sel`, the others `also`.
+  const also = q.getAll('sel').slice(1).filter(Boolean);
   const make = q.get('make') === '1';
   // (phase V56) The shelves of Environments and Lookbooks went: their folder on Media - `made` its generator opened there.
-  if (MADE_KINDS.has(kind)) return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', draft: '', mkind: kind, made: make ? kind : '' };
+  if (MADE_KINDS.has(kind)) return { kind: 'media', sel: q.get('sel') || '', also, make: false, src: '', draft: '', mkind: kind, made: make ? kind : '' };
   if (!SHELVES[kind]) return null;
   // `kind` (phase V28.1): Media's kind to open on - a vertical video sent onto Uploads is shown there, outlined (`sel`).
   const mkind = kind === 'media' ? (q.get('kind') || '') : '';
-  return { kind, sel: q.get('sel') || '', make, src: q.get('src') || '', draft: q.get('draft') || '', mkind,
-    made: make && MADE_KINDS.has(mkind) ? mkind : '' };
+  // (phase V59) ?shelf=media&kind=music&make=1 - the music window, over Music.
+  return { kind, sel: q.get('sel') || '', also, make, src: q.get('src') || '', draft: q.get('draft') || '', mkind,
+    made: make && (MADE_KINDS.has(mkind) || mkind === 'music') ? mkind : '' };
 }
 
 // What the making area opens on: a source, a draft (V38.1), or a clean form.
@@ -1742,9 +1802,10 @@ async function _goToPlace(p) {
     else if (p.kind !== 'scenarios') await MAKERS[p.kind].mod.open({});
     return;
   }
-  if (_makingOn) await _closeMaker(() => { if (p.sel) { _sel = p.sel; _scrollSel = true; } });
+  const outline = () => { if (p.sel) { _sel = p.sel; _selAlso = new Set(p.also || []); _scrollSel = true; } };
+  if (_makingOn) await _closeMaker(outline);
   else if (p.sel || p.mkind) {
-    if (p.sel) { _sel = p.sel; _scrollSel = true; }
+    outline();
     await _load({ keepScroll: !p.mkind });
   }
   // (phase V56, V58) Environments' or Lookbooks' generator: its window, over their folder.
@@ -1789,7 +1850,7 @@ function boot() {
   if (arrive) {
     _shelf = arrive.kind;
     try { localStorage.setItem(LS_SHELF, arrive.kind); } catch (e) {}
-    if (arrive.sel) { _sel = arrive.sel; _scrollSel = true; }
+    if (arrive.sel) { _sel = arrive.sel; _selAlso = new Set(arrive.also || []); _scrollSel = true; }
     // (V38.6) A draft named: selected on the shelf, not the generator opened on it.
     if (arrive.kind === 'scenarios' && arrive.make && arrive.draft && !arrive.src) { SC.select('d:' + arrive.draft); arrive.make = false; }
     if (arrive.mkind) { try { localStorage.setItem('lib_tree_sel_v1', JSON.stringify(arrive.mkind)); } catch (e) { /* a private window */ } }
@@ -1830,7 +1891,8 @@ function boot() {
   const nb = $('lib-new');
   // Scenarios asks which (phase V28.2); the other shelves open their making area; (phase V55, V58) on Media, Environments
   // or Lookbooks selected, their generator's window.
-  if (nb) nb.addEventListener('click', () => (_madeNode() ? _openGen(_madeNode()) : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
+  // (phase V59) On Music or a folder under it, "Generate music" - its window.
+  if (nb) nb.addEventListener('click', () => (_genNode() ? _openGen(_genNode()) : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
   if (bb) bb.addEventListener('click', () => (_narrOn ? _closeNarrators() : _closeMaker()));
   const nr = $('lib-narr');
@@ -1874,6 +1936,8 @@ function boot() {
   _wireTreeSash();
   _wireScSash();
   _initTree();
+  // (phase V59) The music window's presses still being made (a reload) - the gallery read again when they land.
+  MW.follow({ onLanded: _musicLanded });
   // (phase V54) Several tiles picked on Media (js/tile-select.js).
   const grid = $('lib-grid');
   if (grid) {

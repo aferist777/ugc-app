@@ -887,6 +887,14 @@ export async function openAudio() {
   await _show(true);
 }
 
+/** (phase V59) AUDIO -> Music's "+" in the Library panel's tree (and its menu): this view, on Suno's Simple - Music is not
+ *  gold here, and its generator is this one, not the Library's window (merge-v3/library.js openMaker). */
+export async function openMusicMaker() {
+  await openAudio();
+  if (!CAT || !_shown) return;
+  if (S.mode !== 'simple') setMode('simple');
+}
+
 function _crumb() {
   const c = $('mv3-lib-agen');
   if (c) c.hidden = !(Store.isReady() && !!Store.key());
