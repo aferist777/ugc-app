@@ -18,6 +18,10 @@
      THE "?" (phase V60, (пп10а))   every parameter's name and every field of the card has a "?" right of it - what it is
                                     and how to use it, on the pointer resting there (js/sound/qmark.js); the grey notes
                                     under the rows and the hints on whole rows (V59.1) went into them
+     THE ALMANAC (phase V60, (пп13а)-(пп15а))   a window in the middle over a darkened, blurred page: the sections on the
+                                    left, the open one's notes as chips under their categories, a chip's note under them
+                                    ("+ add", "copy"), and a field the notes are gathered in - "into <field>" adds it to
+                                    the open mode's own field
      SAVED LYRICS (phase V59.1, (мз7а)-(мз9а))   Music -> Lyrics, sub-session Q's store (GET|POST /api/audio/lyrics): in
                                     Custom a dropdown of them over the Lyrics field (a choice replaces the text, the title
                                     only when it is empty) and "save" under it; "save" on every text Lyrics wrote - a text
@@ -623,134 +627,266 @@ export function createSunoForm(o) {
   }
 
   // ── the almanac (V34.A: public/js/audio/almanac-data.js) ──────────────────
-  // Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right.
-  // (phase V34.F, the owner 2026-10-23, (т6)-(т9), (у5)) A press on a note COPIES its text - "copied" on the note - and is
-  // pasted by the person where it is wanted: nothing is written into a field, no knob is set. No sources under the notes. A
-  // press anywhere outside the window closes it, as Escape and its cross do; it opens again where it was left - the same
-  // section, category and scroll (kept in the browser, `mv3_audio_alm_v1` - one for every page).
+  // (phase V60, the owner 2026-10-29: "давай almanac переберем для музыки ... задний фон под попапом нужно темнить и размывать
+  // немного ... поле где пользователь может скомпоновать нужные теги ... слева ... кнопкой выбора категории ... в правом будут
+  // появляться чипсы расположеные по подкатегориям при нажатии на которые под всеми чипсами снизу будут описываться текстом
+  // описания чипса"; (пп13а)-(пп15а)) A window of 860×560 in the middle, the page under it darkened and a little blurred - a
+  // press on it, its ✕ or Escape closes it. Left: the SECTIONS as buttons in two groups (Music, Sounds) - a press chooses one.
+  // Right, on top: the section's name with its "?" (`about`), its NOTES as chips under their categories; a chip pressed shows
+  // its note under all of them - the text, why, the fields it is for, "try …" (the knobs and the length it suggests, to set by
+  // hand) - with "+ add" (not on an advice: nothing to insert) and "copy". Right, at the foot: YOUR PROMPT - the notes added,
+  // a field to change by hand, ✕ empties it; a chip whose text is in it is gold. "into <field>" adds it AFTER what the open
+  // mode's own field holds, by a comma (Simple - In your words, Custom - Style, Lyrics - the idea, ElevenLabs - its
+  // description, Sounds - the sound); in Custom a note of Exclude goes into Exclude and a note of the lyrics into Lyrics. The
+  // prompt is never emptied by itself. It opens where it was left - the section, the note, the scroll and the prompt, kept in
+  // the browser (`mv3_audio_alm_v1`, one for every page).
   const KEY_ALM = 'mv3_audio_alm_v1';
   const almSections = () => ((ALM && Array.isArray(ALM.SECTIONS)) ? ALM.SECTIONS.filter(s => s && s.label && Array.isArray(s.notes)) : []);
   const fieldLabel = (f) => (ALM && ALM.FIELDS && ALM.FIELDS[f] && ALM.FIELDS[f].label) || f;
+  // The open mode's own field a prompt goes into: { key of S.f[mode], its name in the card }.
+  const INTO = {
+    simple: { key: 'words', label: 'In your words' }, custom: { key: 'style', label: 'Style' }, lyrics: { key: 'idea', label: 'The idea' },
+    compose: { key: 'prompt', label: 'The music' }, video: { key: 'description', label: 'What you want' },
+    sounds: { key: 'prompt', label: 'The sound' }, sfx: { key: 'prompt', label: 'The sound' },
+  };
+  // Text after text: by a comma, or by a blank line when either holds lines (a note of the lyrics).
+  const _join = (cur, add) => {
+    const c = String(cur || '').replace(/[\s,]+$/, '');
+    const a = String(add || '').trim();
+    if (!c.trim()) return a;
+    if (!a) return c;
+    return c + (/\n/.test(c) || /\n/.test(a) ? '\n\n' : ', ') + a;
+  };
+  // A text taken out of the prompt, the comma or the blank line around it with it.
+  const _takeOut = (s, t) => {
+    const i = String(s || '').indexOf(t);
+    if (!t || i < 0) return s;
+    const a = s.slice(0, i).replace(/[\s,]+$/, '');
+    const b = s.slice(i + t.length).replace(/^[\s,]+/, '');
+    const nl = /\n/.test(s.slice(a.length, i)) || /\n/.test(s.slice(i + t.length, s.length - b.length));
+    return a && b ? a + (nl ? '\n\n' : ', ') + b : a || b;
+  };
 
   /** The almanac's gold button, into the column's foot. */
   function almanacButton(foot) {
     const alm = el('button', 'mv3-vc-almanac' + (almSections().length ? '' : ' is-soon'), 'almanac');
     alm.type = 'button';
-    alm.title = almSections().length ? 'Notes on styles and sounds - a press on a note copies it' : 'The almanac of music and sounds is being written - soon';
-    alm.addEventListener('click', () => { if (almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
+    alm.title = almSections().length ? 'Notes on styles and sounds - gather them into a prompt' : 'The almanac of music and sounds is being written - soon';
+    alm.addEventListener('click', () => { if (almSections().length) openAlmanac(); else say('The almanac is being written (V34.A) - soon.'); });
     foot.appendChild(alm);
     return alm;
   }
   function closeAlmanac() { if (_almWin) _almWin.close(); }
 
-  function openAlmanac(anchor) {
-    if (_almWin) { _almWin.close(); return; }
+  function openAlmanac() {
+    if (_almWin) return;
+    closeQ();
     const secs0 = almSections();
-    const win = el('div', 'hp au-alm');
-    const head = el('div', 'hp-head');
+    const allNotes = secs0.flatMap(s => s.notes.map(n => Object.assign({ sec: s.id }, n)));
+    const ov = el('div', 'aal-ov');
+    const win = el('div', 'aal');
+    win.setAttribute('role', 'dialog');
+    const head = el('div', 'aal-head');
     head.appendChild(el('b', null, 'Almanac'));
-    head.appendChild(el('span', 'hp-sub', 'music and sounds · a press copies a note - paste it where you want it' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
-    const x = el('button', 'hp-x', '✕');
+    head.appendChild(el('span', 'aal-sub', 'music and sounds · press a chip to read it, "+ add" gathers it into your prompt' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
+    const x = el('button', 'aal-x', '✕');
     x.type = 'button';
+    x.title = 'Close (Esc)';
     head.appendChild(x);
-    win.appendChild(head);
-    const bodyEl = el('div', 'hp-body');
-    const side = el('div', 'hp-side');
-    const main = el('div', 'au-alm-main');
-    bodyEl.append(side, main);
-    win.appendChild(bodyEl);
-    // Beside the settings column: the constructor stays in sight, to paste into.
-    const r = anchor.getBoundingClientRect();
-    const w = Math.max(520, Math.min(820, window.innerWidth - r.right - 30));
-    win.style.left = Math.round(Math.max(8, Math.min(r.right + 10, window.innerWidth - w - 16))) + 'px';
-    win.style.top = '84px';
-    win.style.width = w + 'px';
-    win.style.height = 'calc(100vh - 120px)';
-    document.body.appendChild(win);
+    const side = el('div', 'aal-side');
+    const chips = el('div', 'aal-chips');
+    const desc = el('div', 'aal-desc');
+    const build = el('div', 'aal-build');
+    const right = el('div', 'aal-right');
+    right.append(chips, desc, build);
+    const bodyEl = el('div', 'aal-body');
+    bodyEl.append(side, right);
+    win.append(head, bodyEl);
+    ov.appendChild(win);
+    document.body.appendChild(ov);
 
-    // Where it was left: the section, its category and how far it was scrolled.
+    // Where it was left: the section, the note pressed, how far the chips were scrolled, the prompt.
     const at = ls(KEY_ALM, {}) || {};
     const soundy = S.mode === 'sounds' || S.mode === 'sfx';
     let open = secs0.find(s => s.id && s.id === at.sec) || secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
-    let cat = open && at.sec === open.id && (open.cats || []).some(c => c.id === at.cat) ? at.cat : '';
-    const remember = () => lsSet(KEY_ALM, { sec: open ? open.id : '', cat, scroll: Math.round(main.scrollTop) });
+    let noteId = open && at.sec === open.id && open.notes.some(n => n.id === at.note) ? at.note : '';
+    let built = String(at.built || '');
+    const remember = () => lsSet(KEY_ALM, { sec: open ? open.id : '', note: noteId, scroll: Math.round(chips.scrollTop), built });
 
-    const away = (e) => { if (!win.contains(e.target) && !anchor.contains(e.target)) close(); };
-    const layer = Layers.open(win, { modal: false, name: 'the audio almanac', onEsc: () => close() });
+    const layer = Layers.open(ov, { name: 'the audio almanac', onEsc: () => close() });
     const close = () => {
       remember();
-      document.removeEventListener('mousedown', away, true);
-      win.remove();
+      closeQ();
+      ov.remove();
       Layers.close(layer);
       _almWin = null;
     };
     _almWin = { close };
     x.addEventListener('click', close);
-    setTimeout(() => { if (_almWin) document.addEventListener('mousedown', away, true); }, 0);
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
     let _st = 0;
-    main.addEventListener('scroll', () => { clearTimeout(_st); _st = setTimeout(remember, 250); });
+    chips.addEventListener('scroll', () => { clearTimeout(_st); _st = setTimeout(remember, 250); });
 
+    const inBuilt = (n) => !!n.text && built.includes(n.text);
     const paintSide = () => {
       side.textContent = '';
       for (const [g, label] of [['music', 'Music'], ['sound', 'Sounds']]) {
         const list = secs0.filter(s => s.group === g);
         if (!list.length) continue;
-        side.appendChild(el('div', 'au-lbl au-alm-g', label));
+        side.appendChild(el('div', 'aal-g', label));
         for (const s of list) {
-          const b = el('button', 'hp-sec' + (s === open ? ' on' : ''));
+          const b = el('button', 'aal-sec' + (s === open ? ' on' : ''));
           b.type = 'button';
           b.appendChild(el('span', 'nm', s.label));
           b.appendChild(el('small', null, String(s.notes.length)));
-          b.title = s.about || '';
-          b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
+          b.addEventListener('click', () => {
+            if (s === open) return;
+            open = s; noteId = '';
+            paintSide(); paintChips(); paintDesc();
+            chips.scrollTop = 0;
+            remember();
+          });
           side.appendChild(b);
-          if (s === open && (s.cats || []).length > 1) {
-            for (const c of s.cats) {
-              const cb = el('button', 'hp-cat' + (cat === c.id ? ' on' : ''));
-              cb.type = 'button';
-              cb.appendChild(el('span', 'nm', c.label));
-              cb.appendChild(el('small', null, String(s.notes.filter(n => n.cat === c.id).length)));
-              cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
-              side.appendChild(cb);
-            }
-          }
         }
       }
     };
-    const paintNotes = () => {
-      main.textContent = '';
+    const paintChips = () => {
+      chips.textContent = '';
       if (!open) return;
-      if (open.about) main.appendChild(el('div', 'au-said', open.about));
-      for (const n of open.notes.filter(y => !cat || y.cat === cat)) {
-        const b = el('button', 'au-alm-note' + ((n.to || []).length ? '' : ' is-advice'));
-        b.type = 'button';
-        const h = el('div', 'au-lyr-h');
-        h.appendChild(el('span', null, n.title));
-        h.appendChild(el('span', 'sp'));
-        const to = (n.to || []).map(fieldLabel);
-        h.appendChild(el('span', 'au-muted', to.length ? 'for ' + to.join(', ') : 'advice'));
-        h.appendChild(el('span', 'au-copied', 'copied'));
-        b.appendChild(h);
-        b.appendChild(el('div', 'au-alm-text', n.text));
-        if (n.why) b.appendChild(el('div', 'au-said', n.why));
-        // What the note suggests for the knobs and the length - to set by hand; nothing is set by the press.
-        const extra = [];
-        if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
-        if (n.seconds) extra.push(n.seconds + ' s');
-        if (extra.length) b.appendChild(el('div', 'au-muted au-alm-set', 'try ' + extra.join(' · ')));
-        b.addEventListener('click', async () => {
-          const ok = await copyText(n.text);
-          if (!ok) { say('Not copied - the clipboard refused it.', true); return; }
-          b.classList.add('is-put');
-          setTimeout(() => b.classList.remove('is-put'), 1200);
-        });
-        main.appendChild(b);
+      chips.appendChild(withQ(el('div', 'aal-title', open.label), open.about || ''));
+      const cats = (open.cats || []).length ? open.cats : [{ id: '', label: '' }];
+      for (const c of cats) {
+        const list = open.notes.filter(n => !c.id || n.cat === c.id);
+        if (!list.length) continue;
+        if (c.label) chips.appendChild(el('div', 'aal-cat', c.label));
+        const row = el('div', 'aal-row');
+        for (const n of list) {
+          const b = el('button', 'aal-chip' + (n.id === noteId ? ' on' : '') + (inBuilt(n) ? ' is-in' : '') + ((n.to || []).length ? '' : ' is-advice'), n.title);
+          b.type = 'button';
+          b.dataset.id = n.id;
+          b.addEventListener('click', () => { noteId = n.id; paintChips(); paintDesc(); remember(); });
+          row.appendChild(b);
+        }
+        chips.appendChild(row);
       }
     };
+    // The gold of the chips whose text is in the prompt - again after every change of it.
+    const markChips = () => {
+      for (const b of chips.querySelectorAll('.aal-chip')) {
+        const n = open && open.notes.find(y => y.id === b.dataset.id);
+        b.classList.toggle('is-in', !!n && inBuilt(n));
+      }
+    };
+    const paintDesc = () => {
+      desc.textContent = '';
+      const n = open && open.notes.find(y => y.id === noteId);
+      if (!n) {
+        desc.appendChild(el('div', 'aal-hint', 'Press a chip to read its note. "+ add" puts its words into your prompt below; dashed chips are advice - to read, nothing to add.'));
+        return;
+      }
+      const h = el('div', 'aal-note-h');
+      h.appendChild(el('b', null, n.title));
+      const to = (n.to || []).map(fieldLabel);
+      h.appendChild(el('span', 'aal-for', to.length ? 'for ' + to.join(', ') : 'advice'));
+      h.appendChild(el('span', 'sp'));
+      if (to.length) {
+        const has = inBuilt(n);
+        const add = el('button', 'aal-btn' + (has ? '' : ' is-primary'), has ? '− take out' : '+ add');
+        add.type = 'button';
+        add.title = has ? 'Take its words out of your prompt' : 'Add its words to your prompt below';
+        add.addEventListener('click', () => {
+          built = inBuilt(n) ? _takeOut(built, n.text) : _join(built, n.text);
+          paintBuild(); markChips(); paintDesc(); remember();
+        });
+        h.appendChild(add);
+      }
+      const cp = el('button', 'aal-btn', 'copy');
+      cp.type = 'button';
+      cp.addEventListener('click', async () => {
+        const ok = await copyText(n.text);
+        cp.textContent = ok ? 'copied ✓' : 'not copied';
+        setTimeout(() => { if (cp.isConnected) cp.textContent = 'copy'; }, 1400);
+      });
+      h.appendChild(cp);
+      desc.appendChild(h);
+      desc.appendChild(el('div', 'aal-text', n.text));
+      if (n.why) desc.appendChild(el('div', 'aal-why', n.why));
+      // What the note suggests for the knobs and the length - to set by hand; nothing is set by a press.
+      const extra = [];
+      if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
+      if (n.seconds) extra.push(n.seconds + ' s');
+      if (extra.length) desc.appendChild(el('div', 'aal-try', 'try ' + extra.join(' · ')));
+    };
+
+    // ── your prompt ──
+    const bh = el('div', 'aal-build-h');
+    bh.appendChild(withQ(el('span', 'aal-lbl', 'Your prompt'), 'The notes you add with "+ add" gather here - change the words by hand if you like.\n"into …" puts it after what the open mode\'s field holds, by a comma: Simple - In your words, Custom - Style (a note of Exclude into Exclude, of the lyrics into Lyrics), Lyrics - the idea, ElevenLabs - its description, Sounds - the sound; what the field holds already is not added twice.\nIt stays here until ✕ empties it.'));
+    const said = el('span', 'aal-said');
+    const sp = el('span', 'sp');
+    const clear = el('button', 'aal-x aal-clear', '✕');
+    clear.type = 'button';
+    clear.title = 'Empty your prompt';
+    const into = el('button', 'aal-btn is-primary aal-into');
+    into.type = 'button';
+    bh.append(said, sp, clear, into);
+    const ta = el('textarea', 'aal-ta');
+    ta.rows = 3;
+    ta.placeholder = 'Empty - press a chip, then "+ add".';
+    build.append(bh, ta);
+    let _bt = 0;
+    ta.addEventListener('input', () => {
+      built = ta.value;
+      paintInto(); markChips();
+      clearTimeout(_bt); _bt = setTimeout(() => { remember(); paintDesc(); }, 300);
+    });
+    clear.addEventListener('click', () => { built = ''; paintBuild(); markChips(); paintDesc(); remember(); ta.focus(); });
+    // A mood's preset (Simple on a mood folder) takes no words - nothing to write into.
+    const target = () => (preset() ? null : INTO[S.mode] || null);
+    const paintInto = () => {
+      const t = target();
+      into.textContent = t ? 'into ' + t.label : 'no field here';
+      into.title = t ? '' : 'This mode has no field for words - a mood\'s preset goes to Suno as it is';
+      into.disabled = !t || !built.trim();
+      clear.disabled = !built;
+    };
+    const paintBuild = () => { if (ta.value !== built) ta.value = built; paintInto(); };
+    let _saidT = 0;
+    const tell = (t) => { said.textContent = t; clearTimeout(_saidT); _saidT = setTimeout(() => { said.textContent = ''; }, 2600); };
+    into.addEventListener('click', () => {
+      const t = target();
+      const f = t && S.f[S.mode];
+      if (!f || !built.trim()) return;
+      // In Custom a note's own field when it has one there - Exclude, Lyrics; in a mode with no Exclude a note of Exclude
+      // goes in as "without …", so the writer or the engine is not asked FOR it.
+      let rest = built;
+      const neg = [], lyr = [];
+      for (const n of allNotes) {
+        if (!n.text || !rest.includes(n.text)) continue;
+        const to = n.to || [];
+        const onlyNeg = to.length && to.every(k => k === 'negative');
+        if (S.mode === 'custom' && onlyNeg) { neg.push(n.text); rest = _takeOut(rest, n.text); }
+        else if (S.mode === 'custom' && to[0] === 'lyrics') { lyr.push(n.text); rest = _takeOut(rest, n.text); }
+        else if (onlyNeg) rest = rest.replace(n.text, 'without ' + n.text);
+      }
+      // What the field holds already is not written twice - "into" pressed again adds nothing.
+      const has = (k, t2) => String(f[k] || '').includes(t2);
+      const went = [];
+      if (rest.trim() && !has(t.key, rest.trim())) { f[t.key] = _join(f[t.key], rest.trim()); went.push(t.label); }
+      const negNew = neg.filter(x => !has('negative', x));
+      if (negNew.length) { f.negative = _join(f.negative, negNew.join(', ')); went.push('Exclude'); }
+      const lyrNew = lyr.filter(x => !has('lyrics', x));
+      if (lyrNew.length) { f.lyrics = [String(f.lyrics || '').trim(), ...lyrNew].filter(Boolean).join('\n\n'); went.push('Lyrics'); }
+      save();
+      call('paintMake');
+      tell(went.length ? 'into ' + went.join(', ') + ' ✓' : 'it is there already');
+    });
+
     paintSide();
-    paintNotes();
-    // The scroll it was left at - once the notes are there.
-    if (open && at.sec === open.id && (at.cat || '') === cat && +at.scroll > 0) main.scrollTop = +at.scroll;
+    paintChips();
+    paintDesc();
+    paintBuild();
+    // The scroll it was left at - once the chips are there.
+    if (open && at.sec === open.id && +at.scroll > 0) chips.scrollTop = +at.scroll;
   }
 
   return {

@@ -5,8 +5,8 @@
    the open project's presses (phase V60, (пп12а): "Made here" and its column went) - and, in Video to Music, the VIDEO
    tree on the right. Narrower than 900 px the tree goes under the gold card (.au-tight), narrower than 620 the settings
    column goes above the rest (.au-narrow) - not the chats' .is-narrow, which folds their settings into one row.
-   Linked on the Library's page too (its music window): the "?" of a parameter (js/sound/qmark.js, phase V60) is here
-   for both pages.
+   Linked on the Library's page too (its music window): the "?" of a parameter (js/sound/qmark.js) and the almanac's
+   window (phase V60) are here for both pages.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* Four crumbs now: the chats' read "image" / "video" / "audio" a little sooner. In a highlights project too (phase V49, the
@@ -17,7 +17,7 @@
 @container libhead (max-width: 420px){ .mv3-lib-crumb, #mv3-library .mv3-panel-title{letter-spacing:.01em} }
 
 .mv3-pc.is-audio{min-width:0}
-.mv3-pc.is-audio .sp, .au-alm .sp{flex:1}
+.mv3-pc.is-audio .sp, .aal .sp{flex:1}
 .au-set{flex:0 0 232px}
 .au-alm-foot .mv3-vc-almanac{width:calc(100% - 20px)}
 .au-alm-foot .mv3-vc-almanac.is-soon{opacity:.75}
@@ -196,17 +196,62 @@
 .mv3-pc.is-audio.au-narrow .au-set{flex:0 0 auto; max-height:38%; border-right:0; border-bottom:1px solid var(--border)}
 .mv3-pc.is-audio.au-narrow .au-mid{min-width:0; padding:10px 12px 20px}
 
-/* ── the almanac's window - the chats' .hp frame (css/mv3-imagen.css), V34.A's notes in it ── */
-.au-alm{z-index:9300}
-.au-lbl{font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:5px}
-.au-alm-g{margin:8px 4px 2px}
-.au-alm-main{min-height:0; overflow-y:auto; padding:10px 12px; display:flex; flex-direction:column; gap:7px}
-.au-alm-note{display:flex; flex-direction:column; gap:4px; text-align:left; padding:8px 10px; border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); cursor:pointer; font:inherit}
-.au-alm-note:hover{border-color:var(--gold)}
-.au-alm-note.is-advice{border-style:dashed}
-.au-alm-note.is-put{border-color:var(--gold); background:color-mix(in oklch, var(--gold) 14%, var(--bg))}
-.au-alm-text{font-size:12px; line-height:1.45; color:var(--ink)}
-.au-alm-set{font-size:10.5px}
-/* (V34.F) a press copies the note: "copied" shows on it for a moment */
-.au-copied{display:none; font:700 9px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--gold); padding:3px 6px; border:1px solid var(--gold); border-radius:var(--pill)}
-.au-alm-note.is-put .au-copied{display:inline-block}
+/* ── the almanac's window (phase V60, (пп13а)-(пп15а); js/sound/suno-form.js openAlmanac) - 860×560 in the middle over the
+   page darkened and a little blurred: the sections on the left, the open one's notes as chips under their categories, the
+   note of the chip pressed under them, "your prompt" at the foot ── */
+.aal-ov{position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .45); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px)}
+.aal{width:min(860px, calc(100vw - 32px)); height:min(560px, calc(100vh - 32px)); display:flex; flex-direction:column; min-height:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:0 18px 50px rgba(0,0,0,.55);
+  overflow:hidden; color:var(--ink)}
+.aal-head{display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border)}
+.aal-head b{font:700 12px/1.2 var(--font); white-space:nowrap}
+.aal-sub{flex:1 1 auto; min-width:0; font:500 10.5px/1.2 var(--font); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.aal-x{flex:0 0 auto; width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font:600 11px/1 var(--font); cursor:pointer}
+.aal-x:hover{color:var(--ink)}
+.aal-x[disabled]{opacity:.4; cursor:default}
+.aal-body{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:190px minmax(0, 1fr)}
+.aal-side{min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px; border-right:1px solid var(--border)}
+.aal-g{margin:10px 4px 3px; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.aal-g:first-child{margin-top:2px}
+.aal-sec{display:flex; align-items:baseline; gap:6px; width:100%; padding:6px 8px; border:1px solid transparent; border-radius:var(--r-xs);
+  background:none; color:var(--ink); font:600 11px/1.3 var(--font); text-align:left; cursor:pointer}
+.aal-sec .nm{flex:1 1 auto; min-width:0}
+.aal-sec small{flex:0 0 auto; font:600 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.aal-sec:hover{background:var(--surface-2)}
+.aal-sec.on{border-color:var(--primary); background:var(--primary-soft)}
+.aal-right{min-width:0; min-height:0; display:flex; flex-direction:column}
+.aal-chips{flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px 14px 12px}
+.aal-title{display:flex; align-items:center; font:700 10px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--gold)}
+.aal-cat{margin:10px 0 5px; font:600 10px/1.2 var(--font); color:var(--muted)}
+.aal-row{display:flex; flex-wrap:wrap; gap:5px}
+.aal-chip{padding:4px 9px; border:1px solid var(--border-soft); border-radius:var(--pill); background:transparent; color:var(--ink);
+  font:500 11px/1.25 var(--font); cursor:pointer; white-space:nowrap}
+.aal-chip:hover{border-color:var(--muted)}
+.aal-chip.is-advice{border-style:dashed; color:var(--muted)}
+/* (пп14а) its text is in your prompt - gold */
+.aal-chip.is-in{border-color:var(--gold); color:var(--gold); background:color-mix(in oklch, var(--gold) 12%, transparent)}
+/* the chip pressed - its note shows under all of them */
+.aal-chip.on{box-shadow:0 0 0 1px var(--primary) inset; border-color:var(--primary); background:var(--primary-soft); color:var(--ink)}
+.aal-chip.on.is-in{border-color:var(--gold); color:var(--gold)}
+.aal-desc{flex:0 0 auto; max-height:42%; min-height:64px; box-sizing:border-box; overflow-y:auto; padding:10px 14px; border-top:1px solid var(--border-soft); background:var(--bg)}
+.aal-hint{font-size:11.5px; line-height:1.45; color:var(--muted)}
+.aal-note-h{display:flex; align-items:center; gap:8px; margin-bottom:5px; min-width:0}
+.aal-note-h b{font:600 12.5px/1.3 var(--font); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.aal-for{flex:0 1 auto; min-width:0; font-size:10.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.aal-text{font-size:12.5px; line-height:1.5; color:var(--ink); white-space:pre-wrap}
+.aal-why{margin-top:5px; font-size:11px; line-height:1.45; color:var(--muted)}
+.aal-try{margin-top:4px; font-size:10.5px; color:var(--accent)}
+.aal-btn{flex:0 0 auto; padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2); color:var(--ink);
+  font:600 11px/1.1 var(--font); cursor:pointer; white-space:nowrap}
+.aal-btn:hover{border-color:var(--muted)}
+.aal-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.aal-btn[disabled]{opacity:.45; cursor:default}
+.aal-build{flex:0 0 auto; display:flex; flex-direction:column; gap:5px; padding:8px 14px 12px; border-top:1px solid var(--border); background:var(--surface)}
+.aal-build-h{display:flex; align-items:center; gap:8px; min-width:0}
+.aal-lbl{display:inline-flex; align-items:center; font:700 9.5px/1.2 var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.aal-said{font:600 10.5px/1.2 var(--font); color:var(--success); white-space:nowrap}
+.aal-ta{width:100%; box-sizing:border-box; min-height:58px; max-height:120px; resize:vertical; background:var(--bg); color:var(--ink);
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); font:500 12px/1.45 var(--font); padding:6px 8px}
+.aal-ta:focus{outline:none; border-color:var(--gold)}
