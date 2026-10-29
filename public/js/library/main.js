@@ -727,7 +727,7 @@ function _open(it, list, follow) {
       }
       if (_CATABLE.has(item.kind)) {
         rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '')),
+          () => [{ id: '', label: '— no folder —' }].concat(_catsFor(item.kind, (item.meta && item.meta.categoryId) || '', (item.meta || {}).model)),
           (id) => _setCat(item, id), 'Folder')]);
       }
       const orig = Cut.originalRow(item, repaintViewer);
@@ -752,8 +752,10 @@ let _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] };
 // (phase V54 block 6, (зв45)) A folder in a folder reads as its path - "Товары / Обувь / Лето" - in the tree's order.
 // (phase V57) The references of Environments / Lookbooks (`closed`) take nothing by hand: offered only as where the item
 // already is (`current`), and not to be chosen.
-const _catsFor = (kind, current) => (_catsByKind[kind] || []).filter(c => !c.closed || c.id === current).map(c => Object.assign({}, c,
-  { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }, c.closed ? { disabled: true } : {}));
+// (phase V60.2, the owner's (дг10а)) A B-roll (`model` - the model whose folder it lies in) is offered its own model's folders.
+const _catsFor = (kind, current, model) => (_catsByKind[kind] || []).filter(c => !c.closed || c.id === current)
+  .filter(c => !(kind === 'birols' && model && c.model && c.model !== model)).map(c => Object.assign({}, c,
+    { label: Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label) }, c.closed ? { disabled: true } : {}));
 async function _loadCats() {
   try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [], sounds: [] }; }
 }
@@ -962,7 +964,7 @@ function _card(it, extra) {
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
     card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '')),
+      () => [{ id: '', label: '— no folder —' }].concat(_catsFor(it.kind, (it.meta && it.meta.categoryId) || '', (it.meta || {}).model)),
       (id) => _setCat(it, id), 'Folder'));
   }
 

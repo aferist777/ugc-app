@@ -487,6 +487,9 @@ function _categorySelect(item) {
   sel.className = 'lib-view-sel';
   sel.title = 'Which folder it is in';
   let current = (item.meta && item.meta.categoryId) || '';
+  // (phase V60.2, the owner's (дг10а)) A B-roll lies in its model's folder: offered that model's folders, a new one made in it.
+  const model = item.kind === 'birols' ? String((item.meta && item.meta.model) || '') : '';
+  const newIn = model ? 'model_' + model : '';
 
   const fill = (list) => {
     sel.textContent = '';
@@ -499,6 +502,7 @@ function _categorySelect(item) {
     for (const c of (list || [])) {
       // (phase V57) The references of Environments / Lookbooks take nothing by hand: only where it already is, not chosen.
       if (c.closed && c.id !== current) continue;
+      if (model && c.model && c.model !== model) continue;
       const o = document.createElement('option');
       // (phase V54 block 6, (зв45)) A folder in a folder reads as its path, in the tree's order.
       o.value = c.id; o.textContent = Array.isArray(c.trail) && c.trail.length ? c.trail.join(' / ') : (c.title || c.label);
@@ -544,7 +548,7 @@ function _categorySelect(item) {
         await refill();
         sel.value = cat.id;
         await file(cat.id, cat.label);
-      });
+      }, newIn);
       return;
     }
     const id = sel.value;
@@ -556,15 +560,17 @@ function _categorySelect(item) {
 
 // A new category, named beside the dropdown it came from (js/name-box.js). A name already on the
 // list is refused in the box rather than made twice.
-async function _askCategoryName(anchor, kind, onMade) {
+async function _askCategoryName(anchor, kind, onMade, parent) {
+  // (phase V54) A new folder at the kind's top - one inside another is made in the tree. (phase V60.2) A B-roll's: in its
+  // model's folder (`parent`).
+  const p = String(parent || '');
   const cat = await askName({
-    // (phase V54) A new folder at the kind's top - one inside another is made in the tree.
     anchor, title: 'New folder', okLabel: 'Create', maxLength: 60,
     check: (name) => {
-      const taken = ((_allCats || {})[kind] || []).find(c => !c.parent && String(c.label).toLowerCase() === name.toLowerCase());
+      const taken = ((_allCats || {})[kind] || []).find(c => (c.parent || '') === p && String(c.label).toLowerCase() === name.toLowerCase());
       return taken ? 'There is already a folder called ' + (taken.title || taken.label) + '.' : '';
     },
-    submit: async (name) => (await createCategory(kind, name, '')).cat,
+    submit: async (name) => (await createCategory(kind, name, p)).cat,
   });
   if (cat) await onMade(cat);
 }

@@ -356,7 +356,9 @@ export function createTree(host, o) {
     const before = sel;
     if (!atHome() && !byKey.has(sel)) {
       // (phase V35) A remembered "Uncategorized" is gone too: what it held lies in its kind - a B-roll's in Generated.
-      const kind = sel === 'birols:' + UNCAT ? 'generated' : String(sel).split(':')[0];
+      // (phase V60.2) No B-rolls node any more (VIDEO -> Generated holds the models' folders): a remembered B-roll place that
+      // is gone - B-rolls itself, a folder deleted, a model's folder emptied - opens Generated.
+      const kind = /^birols(:|$)/.test(String(sel)) ? 'generated' : String(sel).split(':')[0];
       // (phase V60) With `home`, no kind to fall back on is the roots.
       sel = byKey.has(kind) ? kind : opt.home ? '' : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
       _lsSet(K_SEL, sel);
@@ -772,7 +774,8 @@ export function createTree(host, o) {
   function selectFor(kind, cat, fire = true) {
     const none = !cat || cat === UNCAT;
     const want = none ? (kind === 'birols' ? 'generated' : kind) : kind + ':' + cat;
-    select(byKey.has(want) ? want : kind, fire);
+    // (phase V60.2) B-rolls has no node of its own: a B-roll place not shown is Generated.
+    select(byKey.has(want) ? want : (kind === 'birols' ? 'generated' : kind), fire);
   }
 
   const kindLabel = (kind) => ((byKey.get(kind) || {}).label) || kind;
