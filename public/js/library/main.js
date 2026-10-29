@@ -70,7 +70,10 @@ let _shelf = 'characters';
 // столбец, а слева уже галерея сама"): the media tree's selected node is what the grid shows - Video, a kind, a category;
 // the kind and category rows went. The same tree as Merge's Library panel (js/media-tree.js).
 let _tree = null;
+// (phase V60, (пп1а)) null - Media is at its ROOTS: REFERENCES, VIDEO, IMAGES, AUDIO as folder tiles, the tree folded.
 let _node = null;
+// The node the tree opens on - an address's (boot); '' - the roots, whatever was looked at last.
+let _treeStart = '';
 const VIDEO = new Set(['birols', 'hooks', 'uploads']);
 const AUDIO = new Set(['music', 'sounds', 'sfx']);
 const _mkind = () => (_node && _node.kind) || '';
@@ -422,10 +425,11 @@ function _initTree() {
   const host = $('lib-tree');
   if (!host || _tree) return _tree;
   _tree = createTree(host, {
-    page: 'lib', fallback: 'video',
+    // (phase V60, (пп1а), (пп2а)) Nothing selected is the roots; the path begins with "Media", which goes back to them.
+    page: 'lib', home: 'Media', start: _treeStart,
     status: (t, bad) => _status(t, bad ? 'err' : ''),
     onSelect: (n) => {
-      _node = n;
+      _node = n || null;
       _sel = '';
       _selAlso = new Set();
       if (_tsel) _tsel.clear();         // another folder: nothing picked
@@ -447,7 +451,8 @@ function _showLanded(kind) {
   // (phase V35) What came in with no category lies in its kind - a B-roll's in Generated - and a folder shows only what
   // lies directly in it: a node elsewhere gives way to that kind.
   const home = kind === 'birols' ? 'generated' : kind;
-  if (!_tree || !_node || _node.key === home) return false;
+  // (phase V60) From the roots too.
+  if (!_tree || (_node && _node.key === home)) return false;
   _tree.select(home, false);
   _node = _tree.selected();
   return true;
@@ -1046,7 +1051,8 @@ async function _deleteMany(all) {
 function _paintCrumbs() {
   const host = $('lib-crumbs');
   if (!host) return;
-  const on = _shelf === 'media' && !_makingOn && !!_tree && !!_node;
+  // (phase V60, (пп2а)) "Media" first - alone at the roots, a press away from any folder.
+  const on = _shelf === 'media' && !_makingOn && !!_tree;
   host.hidden = !on;
   host.textContent = '';
   if (on) host.appendChild(_tree.crumbsEl(_node));
@@ -1140,9 +1146,10 @@ function _renderGrid() {
     grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
   }
   // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
-  // directly in it. A search over SFX shows what it found in all of SFX, with no folders.
+  // directly in it. A search over SFX shows what it found in all of SFX, with no folders. (phase V60) At the roots: the four
+  // top nodes as folder tiles.
   const searching = _shelf === 'media' && !!(_q && SS.isSfx(_node));
-  const folders = _shelf === 'media' && !searching && _tree && _node ? _tree.foldersEl(_node) : null;
+  const folders = _shelf === 'media' && !searching && _tree ? _tree.foldersEl(_node) : null;
   if (folders) grid.appendChild(folders);
 
   if (!_items.length) {
@@ -1391,6 +1398,26 @@ function _select(kind) {
   _load({ checks: kind === 'media' });
 }
 
+// (phase V60, the owner 2026-10-29, (пп1а): "чтобы не рандомная папка открывалась при нажатии полки, а показывались все
+// корневые папки") Media's ROOTS: nothing selected in the tree, every branch folded, the gallery the four top nodes. The
+// shelf pressed - from another shelf, or on Media again - opens there; an address with a folder opens on its folder.
+function _toRoots() {
+  if (_tree) _tree.home(false);
+  _node = null;
+  _q = '';
+  _sel = '';
+  _selAlso = new Set();
+  if (_tsel) _tsel.clear();
+}
+function _pressShelf(kind) {
+  if (kind !== 'media' || !_tree) { _select(kind); return; }
+  const here = _shelf === 'media';
+  _toRoots();
+  if (!here) { _select('media'); return; }
+  _stopHearing();
+  _load({ checks: false });
+}
+
 // All three at once. Each one looks at the shelf again after its answer: one that lands after
 // Media was left must not show its button on another shelf.
 function _runChecks() {
@@ -1596,7 +1623,8 @@ function _paintUpload() {
   const inp = $('lib-file');
   if (!btn) return;
   // (phase V55) Environments / Lookbooks take only what their generator made: "New …" stands in the bar instead.
-  btn.hidden = _shelf !== 'media' || !!_madeNode();
+  // (phase V60) At the roots nothing is brought in - a root is opened first.
+  btn.hidden = _shelf !== 'media' || !_node || !!_madeNode();
   // (phase V27) Clips come by a link too - B-rolls, Uploads, Hooks, not pictures or sounds.
   const lk = $('lib-link');
   if (lk) {
@@ -1819,8 +1847,10 @@ const _makeOpts = (p) => (p.src ? { sourceId: p.src } : p.draft ? { draftId: p.d
 
 async function _goToPlace(p) {
   if (!p) return;
-  // Media's kind first (the tree's node): switching to the shelf reads it with it.
+  // Media's kind first (the tree's node): switching to the shelf reads it with it. (phase V60) Media with no folder named:
+  // its roots.
   if (p.mkind && _tree) { _tree.select(p.mkind, false); _node = _tree.selected(); }
+  else if (p.kind === 'media' && !p.made && _tree) _toRoots();
   if (p.kind !== _shelf) {
     _select(p.kind);
     if (_shelf !== p.kind) return;
@@ -1845,9 +1875,9 @@ async function _goToPlace(p) {
   }
   const outline = () => { if (p.sel) { _sel = p.sel; _selAlso = new Set(p.also || []); _scrollSel = true; } };
   if (_makingOn) await _closeMaker(outline);
-  else if (p.sel || p.mkind) {
+  else if (p.sel || p.mkind || p.kind === 'media') {
     outline();
-    await _load({ keepScroll: !p.mkind });
+    await _load({ keepScroll: !p.mkind && p.kind !== 'media' });
   }
   // (phase V56, V58) Environments' or Lookbooks' generator: its window, over their folder.
   if (p.made) await _openGen(p.made);
@@ -1868,20 +1898,14 @@ function boot() {
   try {
     const saved = localStorage.getItem(LS_SHELF);
     if (saved && SHELVES[saved]) _shelf = saved;
-    // (phase V28.5) The Music shelf is Media -> Audio -> Music now.
-    else if (saved === 'music') { _shelf = 'media'; localStorage.setItem('lib_tree_sel_v1', JSON.stringify('music')); }
-    // (phase V56) Lookbooks and Environments are IMAGES' folders on Media now.
-    else if (MADE_KINDS.has(saved)) {
+    // (phase V28.5) The Music shelf is Media -> Audio -> Music now; (phase V56) Lookbooks and Environments are IMAGES'
+    // folders on Media - a remembered shelf of theirs opens there, once.
+    else if (saved === 'music' || MADE_KINDS.has(saved)) {
       _shelf = 'media';
       localStorage.setItem(LS_SHELF, 'media');
-      localStorage.setItem('lib_tree_sel_v1', JSON.stringify(saved));
+      _treeStart = saved;
     }
-    // The kind and category the rows remembered become the tree's first node - once - and their keys go.
-    const was = localStorage.getItem('library_filter_v1');
-    if (was != null && localStorage.getItem('lib_tree_sel_v1') == null) {
-      const cat = localStorage.getItem('library_cat_v1') || '';
-      localStorage.setItem('lib_tree_sel_v1', JSON.stringify(!was ? 'video' : (cat ? was + ':' + cat : was)));
-    }
+    // (phase V60) The kind and category rows of before V28.5 are forgotten: Media opens on its roots.
     for (const k of ['library_filter_v1', 'library_cat_v1', 'library_cats_h_v1']) localStorage.removeItem(k);
   } catch (e) {}
   // The address wins over the remembered shelf, and is then taken off it: a reload is not a second
@@ -1894,12 +1918,14 @@ function boot() {
     if (arrive.sel) { _sel = arrive.sel; _selAlso = new Set(arrive.also || []); _scrollSel = true; }
     // (V38.6) A draft named: selected on the shelf, not the generator opened on it.
     if (arrive.kind === 'scenarios' && arrive.make && arrive.draft && !arrive.src) { SC.select('d:' + arrive.draft); arrive.make = false; }
-    if (arrive.mkind) { try { localStorage.setItem('lib_tree_sel_v1', JSON.stringify(arrive.mkind)); } catch (e) { /* a private window */ } }
+    // (phase V60) A folder named: the tree opens on it; none - Media's roots.
+    _treeStart = arrive.mkind || '';
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays */ }
   }
 
+  // (phase V60) Media pressed opens on its roots (_pressShelf).
   document.querySelectorAll('.lib-shelf').forEach(b => {
-    b.addEventListener('click', () => _select(b.dataset.kind));
+    b.addEventListener('click', () => _pressShelf(b.dataset.kind));
   });
 
   const dup = $('lib-dupes');

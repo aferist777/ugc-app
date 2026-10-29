@@ -80,6 +80,13 @@
    (phase V59.1, (мз6а)) AUDIO -> Music -> Lyrics (`lyrics`, kind `lyrics`, routes/library.js _lyricsNode): the texts
    Generate music saved - locked, no "+", no folder of its own. A tile, several, a folder or files from Explorer let go
    on it are refused in words (LYRICS_TAKE); a text let go anywhere else too (LYRICS_STAY); "Move to…" does not offer it.
+
+   THE ROOTS (phase V60, the owner 2026-10-29, (пп1а), (пп2а): "при нажатии полки media показывать в основном поле корневые
+   папки (references, video, images, audio)"). With `home` - the Library's Media shelf only, never Merge's panel - the tree
+   may have NOTHING selected: the page is then at the roots, its gallery the top nodes as folder tiles (foldersEl(null)),
+   every branch folded. It starts there unless the page names a node (`start` - an address); what was selected last is
+   not read. The path over the gallery begins with the `home` word ("Media / AUDIO / SFX"), and that word pressed goes
+   back to the roots (home()). A root's tile opens it as its row's press does - the others fold (one path, V59).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as A from './library/actions.js';
@@ -227,8 +234,11 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *   o.onFiles(node, files)  they were
  *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks; V59: AUDIO ->
  *                         Music, 'music') - open its generator (node.make); without it the node has no generator's "+"
+ *   o.home        (phase V60) the word the path begins with ('Media'): nothing selected is allowed - the roots; onSelect(null)
+ *                 says the page went back to them (the word pressed)
+ *   o.start       (phase V60, with `home`) the node to open on - an address's; '' or omitted - the roots
  * -> { el, load(), select(key), selectFor(kind, cat), selected(), node(key), kindLabel(kind), holds(node), newFolder(node, anchor),
- *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may }
+ *      closedSays(node) - (V57) why nothing goes into it by hand, '' when it may; home(fire) - (V60) back to the roots }
  */
 export function createTree(host, o) {
   const opt = Object.assign({ page: 'lib', fallback: 'video', status: () => {}, onSelect: () => {}, onChanged: () => {} }, o || {});
@@ -239,7 +249,10 @@ export function createTree(host, o) {
   const parentOf = new Map();
   // (phase V59) one path - made so at the first answer when what was kept is not one (an older page kept several)
   let open = new Set(_ls(K_OPEN, []));
-  let sel = String(_ls(K_SEL, '') || opt.fallback);
+  // (phase V60) With `home` the tree starts at the roots, or on the node the page names - never on the last visit's.
+  let sel = opt.home ? String(opt.start || '') : String(_ls(K_SEL, '') || opt.fallback);
+  // At the roots: `home` given and nothing selected.
+  const atHome = () => !!opt.home && !sel;
   let loaded = false;       // the first answer has been painted
   let lastPress = { key: '', at: 0 };
   // (phase V59) A top node's press draws the rows again (it opens, the others fold): the second press of a double one lands
@@ -339,20 +352,21 @@ export function createTree(host, o) {
     // A remembered node that is not there any more (a category deleted, renamed elsewhere): its kind, else the fallback -
     // and the page is told, once it has had its first answer (it reads the gallery for the first one itself).
     const before = sel;
-    if (!byKey.has(sel)) {
+    if (!atHome() && !byKey.has(sel)) {
       // (phase V35) A remembered "Uncategorized" is gone too: what it held lies in its kind - a B-roll's in Generated.
       const kind = sel === 'birols:' + UNCAT ? 'generated' : String(sel).split(':')[0];
-      sel = byKey.has(kind) ? kind : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
+      // (phase V60) With `home`, no kind to fall back on is the roots.
+      sel = byKey.has(kind) ? kind : opt.home ? '' : (byKey.has(opt.fallback) ? opt.fallback : ((nodes[0] || {}).key || ''));
       _lsSet(K_SEL, sel);
     }
     // (phase V59) What is open: at the first answer one path to the node selected (what was kept, when it is one); later
     // the path to the node selected only when that node had to change - a reading after a move or a drop folds nothing.
     if (!loaded) _firstOpen();
-    else if (sel !== before) _setOpen(sel, _isTop(sel));
+    else if (sel !== before) { if (atHome()) { open = new Set(); _save(); } else _setOpen(sel, _isTop(sel)); }
     else _dropGone();
     _computeNew();
     paint();
-    if (loaded && sel !== before && byKey.has(sel)) opt.onSelect(byKey.get(sel));
+    if (loaded && sel !== before) { if (byKey.has(sel)) opt.onSelect(byKey.get(sel)); else if (atHome()) opt.onSelect(null); }
     loaded = true;
     return nodes;
   }
@@ -400,6 +414,8 @@ export function createTree(host, o) {
   // The first answer - the node selected is the address's (the page keeps it under K_SEL first) or the last visit's: the
   // path to it opened and the rest folded, as the page's select does; what was open in it stays while that is one path.
   function _firstOpen() {
+    // (phase V60) At the roots everything is folded.
+    if (atHome()) { open = new Set(); _save(); return; }
     _dropGone();
     _setOpen(sel, _isTop(sel));
     if (!_onePath()) { const self = open.has(sel); open = new Set(); _setOpen(sel, self || _isTop(sel)); }
@@ -641,12 +657,14 @@ export function createTree(host, o) {
     : n.locked ? n.label + ' - required: it cannot be renamed, moved or deleted'
     : n.empty ? n.label + ' - empty' : n.label);
 
-  /** The folders of a node, as tiles - first in its gallery. null when it has none. */
+  /** The folders of a node, as tiles - first in its gallery. null when it has none. (phase V60) With `home` and no node:
+   *  the roots - REFERENCES, VIDEO, IMAGES, AUDIO. */
   function foldersEl(node) {
     const n = node && byKey.get(node.key);
-    if (!n || !n.children || !n.children.length) return null;
-    const box = _el('div', 'mt-folders');
-    for (const c of n.children) {
+    const list = n ? n.children : (!node && opt.home ? nodes : null);
+    if (!list || !list.length) return null;
+    const box = _el('div', 'mt-folders' + (n ? '' : ' is-roots'));
+    for (const c of list) {
       const t = _el('button', 'mt-ftile' + (c.empty ? ' is-empty' : '') + (c.locked ? ' is-locked' : '') + (fresh.has(c.key) ? ' is-new' : ''));
       t.type = 'button';
       t.dataset.key = c.key;
@@ -671,13 +689,24 @@ export function createTree(host, o) {
     return box;
   }
 
-  /** The path to a node over its gallery - "AUDIO / SFX / My sounds"; every word but the last opens its folder. */
+  /** The path to a node over its gallery - "AUDIO / SFX / My sounds"; every word but the last opens its folder. (phase V60)
+   *  With `home` it begins with that word - "Media / AUDIO / SFX" -, which goes back to the roots; at the roots it is alone. */
   function crumbsEl(node) {
     const box = _el('div', 'mt-crumbs');
     const chain = [];
     for (let k = node && node.key; k && byKey.has(k); k = parentOf.get(k)) chain.unshift(byKey.get(k));
+    if (opt.home) {
+      const here = !chain.length;
+      const w = _el(here ? 'span' : 'button', 'mt-crumb is-home' + (here ? ' is-here' : ''), opt.home);
+      if (!here) {
+        w.type = 'button';
+        w.title = 'Back to ' + opt.home + ' - REFERENCES, VIDEO, IMAGES, AUDIO';
+        w.addEventListener('click', () => home(true));
+      }
+      box.appendChild(w);
+    }
     chain.forEach((c, i) => {
-      if (i) box.appendChild(_el('span', 'mt-crumb-sep', '/'));
+      if (i || opt.home) box.appendChild(_el('span', 'mt-crumb-sep', '/'));
       const last = i === chain.length - 1;
       const w = _el(last ? 'span' : 'button', 'mt-crumb' + (last ? ' is-here' : '') + (i === 0 ? ' is-top' : ''), c.label);
       if (!last) {
@@ -720,6 +749,20 @@ export function createTree(host, o) {
   // the rest folds; a top node opens itself, as its press does.
   function select(key, fire, repaint) {
     _choose(key, { fire, repaint, path: true, open: _isTop(key) });
+  }
+
+  // (phase V60, (пп1а), (пп2а)) Back to the roots - the shelf pressed, the path's first word: nothing selected, every branch
+  // folded. `fire` - the page is told (onSelect(null)). Only with `home`.
+  function home(fire) {
+    if (!opt.home) return;
+    sel = '';
+    _lsSet(K_SEL, sel);
+    open = new Set();
+    _save();
+    _computeNew();
+    paint();
+    el.scrollTop = 0;
+    if (fire) opt.onSelect(null);
   }
 
   // A kind and a category, as a node: no category is the kind itself - a B-roll's is Generated (V35: no Uncategorized).
@@ -1045,7 +1088,7 @@ export function createTree(host, o) {
   }
 
   return {
-    el, load, select, selectFor, kindLabel, openNode, foldersEl, crumbsEl, homeName,
+    el, load, select, selectFor, kindLabel, openNode, foldersEl, crumbsEl, homeName, home,
     // (phase V54) the gallery's empty space: "New folder" inside the open node, when it holds folders
     holds: (node) => holds(node && byKey.get(node.key)),
     newFolder: (node, anchor) => _newFolder(node && byKey.get(node.key), anchor),
