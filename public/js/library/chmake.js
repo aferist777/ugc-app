@@ -1,7 +1,16 @@
 // LIBRARY - making a character, on the Characters shelf (phase H, the owner 2026-09-30 / 10-01).
 //
-// "New Character" in the shelf's header puts this where the grid and its column were, and
-// "← Characters" (the same place) brings them back. It is the Character page's creation, moved: the
+// A WINDOW (phase V60, the owner 2026-10-29, (пп4), (пп5): "процесс создания персонажей я бы сделал в попапе"; only the
+// move - "пока только косметика", the making itself is the owner's to change later). "New Character" in the shelf's
+// header opens it over the shelf - the generators' window (js/gen-window.js openFrame), 1100×720 as the music window,
+// smaller on a small screen; there is no "← Characters" any more. Its ✕, Escape or a press beside it HIDE it: what runs
+// goes on and the bench stays - the content is built once, in #lib-chmake (hidden, its parking place), and is MOVED into
+// the window's body and back, never built again. The rows of Alerts of a portrait or a sheet
+// (/library?shelf=characters&make=1, `spot.view` 'chmake') and Home's "+ new character" open the shelf with the window.
+// Saved: the window closes and the shelf shows the new character selected (`onSaved`).
+//
+// Before V60: "New Character" put this where the grid and its column were, and
+// "← Characters" (the same place) brought them back. It is the Character page's creation, moved: the
 // parameters and presets, TPDNE and your own picture, the edit chips, the takes, and the save form that
 // draws the 4K reference sheet. The panels are js/library/character/ (create-panel, edit-panel,
 // save-panel, presets, schema - they came with the page, which went in phase H8); the orchestration is
@@ -28,6 +37,8 @@ import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './character
 import { genName } from './character/schema.js';
 import { startProgress, lockControls } from '../progress.js';
 import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
+// (phase V60) The window it is shown in.
+import { openFrame } from '../gen-window.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
@@ -560,6 +571,8 @@ async function _finishSave() {
   _setStage(false);
   _showFace(null);
   _remember();
+  // (phase V60) The window closes; the shelf selects the new character.
+  _hide(true);
   if (_hooks.onSaved) _hooks.onSaved(id, name);
 }
 
@@ -833,24 +846,51 @@ function _restore() {
   _recheck();
 }
 
-// ── The area's door ─────────────────────────────────────────────────────────
+// ── The window's door (phase V60) ───────────────────────────────────────────
+// hooks: onSaved(id, name) - a character saved (the window closed first); onClosed() - the window hidden by the person
+// (✕, Escape, a press beside it), what was made meanwhile to be read again.
 export function init(hooks) { _hooks = hooks || {}; }
+
+const W_CHM = 1100, H_CHM = 720;           // the music window's size (js/library/music-window.js) - the owner's (пп4)
+let _win = null;                           // the window open now
+let _savedClose = false;                   // the close a save makes - the shelf is told by onSaved, not onClosed
+
+/** Whether the window is open. */
+export const isOpen = () => !!(_win && _win.alive());
 
 let _opened = false;
 export function open() {
   const host = $('lib-chmake');
   if (!host) return;
   if (!_built) _build();
-  host.hidden = false;
-  // The first time only: after that the area keeps its own state - it was only hidden - and is only
+  if (!isOpen()) {
+    _win = openFrame({ name: 'New Character', size: { w: W_CHM, h: H_CHM }, cls: 'is-chmake', onClose: _park });
+    _win.setCrumbs([{ label: 'New Character' }]);
+    // The same nodes, moved - what is typed, picked, waited for and drawn stays as it was.
+    _win.body.appendChild(_root);
+  }
+  // The first time only: after that the bench keeps its own state - it was only hidden - and is only
   // asked whether a failure shown here has been started again from Alerts meanwhile.
-  if (!_opened) { _opened = true; _restore(); window.addEventListener('focus', () => { if (host && !host.hidden) _recheck(); }); }
+  if (!_opened) { _opened = true; _restore(); window.addEventListener('focus', () => { if (isOpen()) _recheck(); }); }
   else _recheck();
 }
 
-// Hidden, not stopped: a portrait or a sheet being waited for goes on, and so does its wait here.
-export function close() {
+// The window gone (its ✕, Escape, a press beside it, or _hide): the content goes back to its parking place, hidden.
+function _park() {
   const host = $('lib-chmake');
-  if (host) host.hidden = true;
+  if (host && _root && _root.parentNode !== host) host.appendChild(_root);
+  _win = null;
+  const saved = _savedClose;
+  _savedClose = false;
+  if (!saved && _hooks.onClosed) _hooks.onClosed();
 }
+
+function _hide(saved) {
+  if (!isOpen()) return;
+  _savedClose = !!saved;
+  _win.close();
+}
+
+// Hidden, not stopped: a portrait or a sheet being waited for goes on, and so does its wait here.
+export function close() { _hide(false); }
 

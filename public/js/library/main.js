@@ -97,8 +97,8 @@ let _reqId = 0;
 // last - a newer read that overtakes the one that asked must not drop them.
 let _checksDue = false;
 // THE MAKING AREAS (phases E, H, I): a shelf that makes its own things has one, shown in place of the
-// shelf - Scenarios the generator, Characters New Character (Environments' and Lookbooks' generators are WINDOWS since
-// phase V58 - _openGen, below). "New …" at the LEFT of the header opens it,
+// shelf - Scenarios the generator (Environments' and Lookbooks' generators are WINDOWS since phase V58 - _openGen, below;
+// so is New Character since phase V60 - _openChar). "New …" at the LEFT of the header opens it,
 // "← …" in the same place brings the shelf back, read again. Leaving one only hides it: what it runs goes
 // on. Each module answers init(hooks), open(opts) and close(), and none of them touches its host's
 // `hidden` for good - _paintMake is the one writer, because it runs on every read of a shelf and an area
@@ -109,12 +109,10 @@ const MAKERS = {
     title: 'A new scenario - written by hand, or generated in a narrator’s voice',
     backTitle: 'Back to the list of scenarios - what is being written goes on',
   },
-  characters: {
-    mod: CM, host: 'lib-chmake', label: 'New Character', back: '← Characters',
-    title: 'Make a character - from the parameters, a preset, a random face or your own picture',
-    backTitle: 'Back to the characters - what is being made goes on',
-  },
 };
+// (phase V60, the owner's (пп4), (пп5)) NEW CHARACTER IS A WINDOW over the Characters shelf (js/library/chmake.js): the
+// header's "New Character" opens it, there is no "← Characters"; hidden, its work goes on and its bench stays.
+const CHAR_WIN = { label: 'New Character', title: 'Make a character - from the parameters, a preset, a random face or your own picture; in a window' };
 let _makingOn = '';       // the shelf whose making area is showing; '' = the shelf itself
 // (phase V55, the owner's (гн10); phase V58, the owner's (лк6)) ON MEDIA: IMAGES -> Environments / Lookbooks' "+" (the
 // tree's row, its menu, the bar's "New …") opens their generator as a WINDOW over the page (_openGen) - the gallery and the
@@ -179,17 +177,18 @@ function _paintMake() {
   if (_makingOn && _makingOn !== _shelf) _makingOn = '';
   if (_narrOn && _shelf !== 'scenarios') _narrOn = false;
   // (phase V55, V58) On Media, Environments or Lookbooks selected: "New environment" / "New lookbook" opens the generator's
-  // window over the page - there is nothing to come back from, so no "←".
+  // window over the page - there is nothing to come back from, so no "←". (phase V60) So does Characters' "New Character".
   const g = _genNode();
-  const m = g ? GEN[g] : MAKERS[_shelf];
+  const w = g ? GEN[g] : _shelf === 'characters' ? CHAR_WIN : null;
+  const m = w || MAKERS[_shelf];
   const nb = $('lib-new'), bb = $('lib-back'), split = $('lib-split'), nr = $('lib-narr');
   if (nb) {
-    nb.hidden = g ? false : (!m || !!_makingOn || _narrOn);
+    nb.hidden = w ? false : (!m || !!_makingOn || _narrOn);
     if (m) { nb.textContent = m.label; nb.title = m.title; }
   }
   if (bb) {
-    bb.hidden = g ? true : (!m || !(_makingOn || _narrOn));
-    if (g) bb.textContent = '';
+    bb.hidden = w ? true : (!m || !(_makingOn || _narrOn));
+    if (w) bb.textContent = '';
     else if (_narrOn) {
       bb.textContent = _makingOn ? '← Generate script' : '← Scenarios';
       bb.title = _makingOn ? 'Back to the generator, as it was' : 'Back to the list of scenarios';
@@ -305,6 +304,16 @@ let _player = null;
 const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
 function _paintPlayer() {
   if (_player) _player.show(_inMusic());
+}
+
+// (phase V60) New Character's window over the Characters shelf - the shelf itself stays behind it. The column lets go
+// first (a voice demo must not play on under the window); hidden by the person, the shelf is read again - something
+// may have been made (onClosed); saved, it is read on the new character (onSaved).
+function _openChar() {
+  if (_shelf !== 'characters') return;
+  INFO.leave();
+  _status('');
+  try { CM.open(); } catch (e) { _status((e && e.message) || 'New Character did not open', 'err'); }
 }
 
 // The open shelf's area, in place of the shelf. Lines typed into a scenario are stored first (phase V28.2:
@@ -1390,6 +1399,7 @@ function _select(kind) {
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   if (_shelf === 'media') _stopHearing();  // nor a sound or a track
   if (_shelf === 'scenarios') SC.leave();  // and the lines typed are stored, an answer on its way dropped
+  if (_shelf === 'characters') CM.close(); // (phase V60) New Character's window, hidden - its work goes on
   // A making area is hidden, not stopped: a draft typed into is saved now, what it runs goes on.
   if (_makingOn) { MAKERS[_makingOn].mod.close(); _makingOn = ''; }
   if (_narrOn) { NR.close(); _narrOn = false; }
@@ -1820,8 +1830,9 @@ async function _upload(files) {
 }
 
 // ── An address to land on (phase H5) ─────────────────────────────────────────
-// What an Alerts row leads to: ?shelf=characters&make=1 is the making area (a portrait or a sheet being
-// made there), ?shelf=characters&sel=<id> a character on the shelf, selected and in view, ?shelf=scenarios&make=1&src=<id>
+// What an Alerts row leads to: ?shelf=characters&make=1 is New Character - its window over the shelf since phase V60 (a
+// portrait or a sheet being made there; Home's "+ new character" too), ?shelf=characters&sel=<id> a character on the shelf,
+// selected and in view, ?shelf=scenarios&make=1&src=<id>
 // the generator on a source (phase V28.1: a source being added is a row of its own), ?shelf=scenarios&make=1&draft=<id> the
 // generator on a draft (phase V38.1: the way back from Admin -> AI settings), ?shelf=media&kind=environments&make=1 (phase V56)
 // the generator of Environments - its window over Media since phase V58, where the old chat's Alerts rows lead too -, ?shelf=media&kind=environments&sel=<file> a picture outlined there - and the old
@@ -1860,6 +1871,9 @@ async function _goToPlace(p) {
     if (_shelf !== p.kind) return;
   }
   _closeNarrators();                              // what the address names is under them
+  // (phase V60) New Character: its window over the shelf (a portrait's or a sheet's row of Alerts, Home) - opened, or, open
+  // already, asked whether a row it shows was started again from Alerts.
+  if (p.make && p.kind === 'characters') { _openChar(); return; }
   // (V38.6) A draft named - "← back" from AI settings, a link - is the draft selected on the shelf, its form on the right.
   if (p.make && p.kind === 'scenarios' && p.draft && !p.src) {
     if (_makingOn) await _closeMaker(() => SC.select('d:' + p.draft));
@@ -1954,16 +1968,28 @@ function boot() {
     draftsChanged: _refreshDraftRows,
   });
   CM.init({
-    // Done: the shelf again, on the character just made - selected, in view, its column open.
-    onSaved: (id, name) => _closeMaker(
-      () => { if (id) { _sel = String(id); _scrollSel = true; } },
-      () => _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved')),
+    // Done (phase V60: the window has closed): the shelf again, on the character just made - selected, in view, its column open.
+    onSaved: async (id, name) => {
+      if (_shelf !== 'characters') _select('characters');
+      if (id) { _sel = String(id); _scrollSel = true; }
+      await _load({ keepScroll: true });
+      _counts();
+      _status(name ? 'Saved “' + name + '” - its voices are chosen in the column on the right' : 'Saved');
+    },
+    // Hidden by the person: the shelf read again - something may have been made. After the press that hid it has done what
+    // else it does (another shelf pressed reads that one).
+    onClosed: () => Promise.resolve().then(() => {
+      if (_shelf !== 'characters') return;
+      _load({ keepScroll: true });
+      _counts();
+    }),
   });
   const nb = $('lib-new');
   // Scenarios asks which (phase V28.2); the other shelves open their making area; (phase V55, V58) on Media, Environments
   // or Lookbooks selected, their generator's window.
-  // (phase V59) On Music or a folder under it, "Generate music" - its window.
-  if (nb) nb.addEventListener('click', () => (_genNode() ? _openGen(_genNode()) : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
+  // (phase V59) On Music or a folder under it, "Generate music" - its window. (phase V60) On Characters, New Character's.
+  if (nb) nb.addEventListener('click', () => (_genNode() ? _openGen(_genNode()) : _shelf === 'characters' ? _openChar()
+    : _shelf === 'scenarios' ? _newMenu(nb) : _openMaker()));
   const bb = $('lib-back');
   if (bb) bb.addEventListener('click', () => (_narrOn ? _closeNarrators() : _closeMaker()));
   const nr = $('lib-narr');
@@ -2057,7 +2083,8 @@ function boot() {
   Promise.all([_loadCats(), _tree ? _tree.load() : null]).then(() => { _node = _tree ? _tree.selected() : null; return _load({ checks: true }); }).then(() => {
     // Only if the shelf it asked for is still the open one: a shelf pressed while the page was still
     // reading is the person's choice, and its own area is not opened in its place (review I).
-    if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(_makeOpts(arrive));
+    if (arrive && arrive.make && arrive.kind === 'characters' && _shelf === 'characters') _openChar();
+    else if (arrive && arrive.make && MAKERS[arrive.kind] && _shelf === arrive.kind && !_makingOn) _openMaker(_makeOpts(arrive));
     // (phase V56, V58) An address of Environments' or Lookbooks' generator: its window, over Media - unless another folder was
     // pressed meanwhile.
     else if (arrive && arrive.made && _shelf === 'media' && _node && _node.key === arrive.made) _openGen(arrive.made);
