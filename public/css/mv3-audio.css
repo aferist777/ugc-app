@@ -165,6 +165,10 @@
 .au-lyr.open pre{max-height:none}
 
 /* ── narrower panels ── */
+/* (phase V59.1, (мз11), the owner: "мз11 - да, исправь") The view's own `au-mid` (set by audchat.js _fit under 900 px) is
+   also the middle column's class, and its display:flex kept the view shown under another view of the panel - hidden here
+   whenever lib-views.js does not show it. */
+.mv3-pc.is-audio:not(.is-shown){display:none}
 .mv3-pc.is-audio.au-mid .au-sash{display:none}
 .mv3-pc.is-audio.au-mid .au-madecol{flex:0 0 auto; min-width:0; background:none}
 .mv3-pc.is-audio.au-mid .au-made-h{padding:6px 0 4px}
