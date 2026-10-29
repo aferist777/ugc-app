@@ -30,9 +30,12 @@
    The server is routes/audio-gen.js and lib/audio-gens.js: a press writes its record and its Alerts row at once, the server
    asks, waits, downloads and files - this view only follows. Its Alerts row leads back here (?open=audio, js/merge-v3/main.js).
    What the person set is remembered (localStorage `mv3_audio_v1`).
+
+   (phase V59, the owner 2026-10-29) SUNO'S PART IS SHARED with the Library's music window: the settings rows, the chips, the
+   price, the almanac and the constructor of Simple / Custom / Lyrics are js/sound/suno-form.js; this view adds what is
+   Merge's own - the engine switch, ElevenLabs, Sounds, Video to Music, "Made here", "by the video", the project's mode.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import * as Layers from '../layers.js';
 import * as Store from './store.js';
 import * as Views from './lib-views.js';
 import { DRAG_TYPE, DRAG_MEDIA } from './store.js';
@@ -41,63 +44,61 @@ import { isTalking } from './workshop.js';
 import { setMediaDrag, createTree } from '../media-tree.js';
 import { waveEl, secs } from '../sound/wave.js';
 import { refuseHome } from './chat-shell.js';
+import { createSunoForm, el, api, post, ls, lsSet } from '../sound/suno-form.js';
 
 const NAME = 'audio';
 const $ = (id) => document.getElementById(id);
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const KEY = 'mv3_audio_v1';
-const ls = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* a private window */ } };
-async function api(url, opts) {
-  const r = await fetch(url, opts);
-  const d = await r.json().catch(() => null);
-  if (!d || d.success === false) throw new Error((d && d.error) || ('status ' + r.status));
-  return d;
-}
-const post = (url, body) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
 // ── what the person set ─────────────────────────────────────────────────────
+// Simple, Custom and Lyrics say what they are in js/sound/suno-form.js (modeHelp); these are Merge's own modes.
 const MODE_HELP = {
-  simple: 'Background music with no voice, for a video where somebody talks. Pick the feel with the chips on the left and, if you like, say more in your own words (any language). The writer turns it into Suno\'s style and Suno makes TWO tracks of the length on the left. They go to AUDIO → Music.',
-  custom: 'You write it: a title, a style and - unless it is instrumental - the lyrics ([Verse], [Chorus]…). The chips on the left add their words to the style. Suno makes TWO tracks; the length on the left (10–360 s) or Suno\'s own.',
-  lyrics: 'Song lyrics from an idea - two or three texts. A text can go straight into Custom with "use in custom". Text only: no row in Alerts.',
   sounds: 'A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.',
   compose: 'Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.',
   video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in the tree on the right - or a clip on the timeline with the right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.',
   sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
 };
-const MODEL_HELP = { V6: 'the newest - most natural', V6_MINI: 'faster', V6_WILD: 'bolder, stranger' };
 const KIND_MODE = { 'talking head': 'simple', blank: 'custom', draft: 'custom', highlights: 'simple' };
 const WRITER_KIND = { 'talking head': 'talking-head', blank: 'blank', draft: 'draft', highlights: 'highlights' };
 
-const S = Object.assign({ engine: 'suno', mode: 'custom', model: 'V6', lastMode: { suno: 'simple', eleven: 'compose' }, f: {}, of: {} }, ls(KEY, {}));
-S.f = Object.assign({
-  simple: { words: '', seconds: 30, writer: true, picked: { genre: [], mood: [], sound: [] }, flat: [], preset: '', pSeconds: 120, presetN: {} },
-  custom: { title: '', style: '', lyrics: '', instrumental: false, vocal: '', negative: '', styleWeight: '', weirdness: '', variety: 0, seconds: 0 },
-  lyrics: { idea: '' },
-  sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
-  compose: { prompt: '', seconds: 30, instrumental: true },
-  // `clip` (phase V54) - a clip of a timeline { key, trackId, clipId, name, start, dur, thumb } in place of a file; `dur` - the
-  // file's length when it is known (the price).
-  video: { video: '', name: '', thumb: '', dur: 0, clip: null, description: '', tags: '', sfx: false, useAudio: false },
-  sfx: { prompt: '', seconds: 0, loop: false, influence: 0.3 },
-}, S.f || {});
+// The shared form (js/sound/suno-form.js) holds the state - Suno's three modes and, through `fields`, Merge's own four.
+const F = createSunoForm({
+  store: KEY, title: 'Generate audio',
+  base: { engine: 'suno', mode: 'custom', lastMode: { suno: 'simple', eleven: 'compose' }, f: {}, of: {} },
+  fields: {
+    sounds: { prompt: '', loop: false, tempo: 0, key: 'Any' },
+    compose: { prompt: '', seconds: 30, instrumental: true },
+    // `clip` (phase V54) - a clip of a timeline { key, trackId, clipId, name, start, dur, thumb } in place of a file; `dur` - the
+    // file's length when it is known (the price).
+    video: { video: '', name: '', thumb: '', dur: 0, clip: null, description: '', tags: '', sfx: false, useAudio: false },
+    sfx: { prompt: '', seconds: 0, loop: false, influence: 0.3 },
+  },
+  // Each project's mode, as it was left - the last 60.
+  persist: (st) => {
+    const of = {};
+    for (const k of Object.keys(st.of || {}).slice(-60)) of[k] = st.of[k];
+    st.of = of;
+    return { engine: st.engine, mode: st.mode, model: st.model, lastMode: st.lastMode, f: st.f, of: st.of };
+  },
+  say: (t, bad) => say(t, bad),
+  paintCol: () => paintCol(),
+  paintMake: () => paintMake(),
+  paintMakePrice: () => paintMakePrice(),
+  setMode: (id) => setMode(id),
+  videoSecs: () => _videoSecs(),
+  priceOf: (mode, p) => {
+    if (mode !== 'video' || !p.usdPerMin) return null;
+    // (phase V54) By the seconds of the clip or the file in "The video", when they are known.
+    const sec = _v2m().dur;
+    return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: secs(sec) + ' of music, as long as the video · ElevenLabs' }
+      : { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
+  },
+});
+const S = F.S;
 if (!S.of || typeof S.of !== 'object') S.of = {};
-// Each project's mode, as it was left - the last 60.
-const save = () => {
-  const of = {};
-  for (const k of Object.keys(S.of).slice(-60)) of[k] = S.of[k];
-  S.of = of;
-  lsSet(KEY, { engine: S.engine, mode: S.mode, model: S.model, lastMode: S.lastMode, f: S.f, of: S.of });
-};
+const save = () => F.save();
 
-let CAT = null;            // GET /api/audio/catalog
-let ALM = null;            // the almanac module, when it is there
+let CAT = null;            // GET /api/audio/catalog (the shared form reads it - F.ready())
 let GENS = [];
 let LIBIDX = new Map();    // path -> the shelf's item (its wave, star, id, name)
 let _ui = null;            // the view's parts, built the first time it shows
@@ -136,26 +137,13 @@ function say(text, bad) {
   if (text && !bad) _sayT = setTimeout(() => { if (s.textContent === text) { s.textContent = ''; s.hidden = true; } }, 9000);
 }
 
-// (phase V34.F, the owner's (ф3)) The highlights moods - V34.A's ten presets: the server's list (the catalog), the
-// almanac's own words for them when it is there.
-function _moods() {
-  const fromCat = (CAT && Array.isArray(CAT.moods)) ? CAT.moods : [];
-  const P = (ALM && Array.isArray(ALM.HIGHLIGHT_PRESETS)) ? ALM.HIGHLIGHT_PRESETS : [];
-  return fromCat.map(m => Object.assign({}, P.find(x => x.id === m.id) || {}, m));
-}
-const _preset = () => (S.mode === 'simple' && S.f.simple.preset ? _moods().find(m => m.id === S.f.simple.preset) || null : null);
-
-const _chipsGroups = () => {
-  // The almanac's (V34.A: { genre, mood, sound } of { id, label, style }) - else the catalog's three lists of words.
-  if (ALM && ALM.CHIPS && Array.isArray(ALM.CHIPS.genre)) {
-    return [['genre', 'Genre'], ['mood', 'Mood'], ['sound', 'Sound']]
-      .map(([k, label]) => ({ key: k, label, chips: (ALM.CHIPS[k] || []).map(c => ({ id: c.id, label: c.label, style: c.style || c.label })) }))
-      .filter(g => g.chips.length);
-  }
-  return ((CAT && CAT.chips) || []).map(g => ({ key: '', label: g.label, chips: g.chips.map(c => ({ id: c, label: c, style: c })) }));
-};
+// (phase V34.F) The highlights moods and the one picked - the shared form's (js/sound/suno-form.js).
+const _moods = () => F.moods();
+const _preset = () => F.preset();
 
 // ── the settings column: the chats' column (.mv3-ig-set, css/mv3-imagen.css) ───────────────────────────────
+// Suno's rows - the model, a highlights mood, the length, the folded chips, the price, the almanac - are the shared form's;
+// the engine and ElevenLabs' model are Merge's own.
 function paintCol() {
   const col = _ui.col;
   col.textContent = '';
@@ -179,203 +167,26 @@ function paintCol() {
   row('Engine', seg, CAT && !CAT.keys[S.engine === 'eleven' ? 'eleven' : 'kie'] && !CAT.fake
     ? 'No ' + (S.engine === 'eleven' ? 'ElevenLabs' : 'kie.ai') + ' key - add it on Admin → API keys.' : '');
 
-  const ms = el('select');
-  for (const m of (CAT ? CAT.modes.filter(x => x.engine === S.engine) : [])) {
-    const op = el('option', null, m.label);
-    op.value = m.id;
-    ms.appendChild(op);
-  }
-  ms.value = S.mode;
-  ms.addEventListener('change', () => setMode(ms.value));
-  row('Mode', ms);
+  row('Mode', F.modeSelect(CAT ? CAT.modes.filter(x => x.engine === S.engine) : []));
 
   if (S.engine === 'suno' && S.mode !== 'lyrics') {
-    const mo = el('select');
-    for (const id of (CAT ? CAT.sunoModels : ['V6'])) {
-      const op = el('option', null, id + ' - ' + (MODEL_HELP[id] || ''));
-      op.value = id;
-      mo.appendChild(op);
-    }
-    mo.value = S.model;
-    mo.addEventListener('change', () => { S.model = mo.value; save(); });
-    row('Model', mo, 'one price for all three');
+    row('Model', F.modelSelect(), 'one price for all three');
   } else if (S.engine === 'eleven') {
     row('Model', el('div', 'au-note', S.mode === 'sfx' ? 'eleven_text_to_sound_v2' : S.mode === 'compose' ? 'music_v2_5 (Eleven Music)' : 'Eleven Music'));
   }
 
-  // (phase V34.F, the owner's (ф3)) A HIGHLIGHTS MOOD in place of the chips: one of the ten presets, written by its own rule,
-  // and the two tracks are filed into Music -> highlights -> that mood - what the highlights popup offers.
-  if (S.mode === 'simple' && _moods().length) {
-    const f = S.f.simple;
-    const sel = el('select');
-    const none = el('option', null, '— none: the chips and your words —');
-    none.value = '';
-    sel.appendChild(none);
-    for (const m of _moods()) {
-      const op = el('option', null, m.label);
-      op.value = m.id;
-      op.title = m.about || '';
-      sel.appendChild(op);
-    }
-    sel.value = _preset() ? f.preset : '';
-    sel.addEventListener('change', () => { f.preset = sel.value; save(); paintCol(); paintMake(); });
-    const p = _preset();
-    row('Highlights mood', sel, p ? 'into Music → highlights → ' + p.label : 'for the highlights popup: a mood\'s preset, filed into its folder');
-  }
-
-  // The length: what a mode takes, empty - the model decides.
-  const LEN = { simple: [0, 360, 'the video\'s length - the bed comes out a little longer'], custom: [10, 360, '10–360 s'],
-    compose: [3, 600, '3 s – 10 min'], sfx: [0.5, 30, '0.5–30 s'] };
-  if (LEN[S.mode]) {
-    let [lo, hi, note] = LEN[S.mode];
-    const f = S.f[S.mode];
-    // A mood's track is longer than a fragment: the highlight takes a window from its middle (V33.8) - its own length.
-    const mood = !!_preset();
-    const key = mood ? 'pSeconds' : 'seconds';
-    if (mood) { lo = 30; note = 'a highlight plays a window from its middle - 90-180 s leaves room'; if (f.pSeconds == null) f.pSeconds = 120; }
-    sep('Length');
-    const r = el('div', 'au-len');
-    const n = el('input', 'au-in');
-    n.type = 'number'; n.min = '0'; n.max = String(hi); n.step = S.mode === 'sfx' ? '0.5' : '1';
-    n.value = f[key] ? String(f[key]) : '';
-    n.placeholder = 'auto';
-    n.addEventListener('change', () => {
-      const v = +n.value || 0;
-      f[key] = v <= 0 ? 0 : Math.max(lo || 1, Math.min(hi, v));
-      n.value = f[key] ? String(f[key]) : '';
-      save(); paintPrice(); paintMakePrice();
-    });
-    r.append(n, el('span', 'au-len-auto', 's · empty - the model decides'));
-    const vs = _videoSecs();
-    if (vs > 0 && S.mode !== 'sfx' && !mood) {
-      const by = el('button', 'au-link', 'by the video (' + secs(vs) + ')');
-      by.type = 'button';
-      by.addEventListener('click', () => { f.seconds = Math.max(lo || 1, Math.min(hi, Math.round(vs))); save(); paintCol(); paintMakePrice(); });
-      r.appendChild(by);
-    }
-    row('', r, note);
-  }
-
-  // The chips: in Simple they ARE the request; in Custom and ElevenLabs' music a chip adds its words to the text.
-  // (phase V54, block 7, the owner 2026-10-27: "чтобы они были свернутыми дропдаунами и открыт может быть только один из
-  // них") Each group is a FOLDED ROW - its name and, in Simple, what is picked in it ("Genre · Lo-fi, Jazz"); a press opens
-  // it and folds the one open before (_chipOpen).
-  if (['simple', 'custom', 'compose'].includes(S.mode) && !_preset()) {
-    for (const g of _chipsGroups()) {
-      const gk = g.key || g.label;
-      const open = _chipOpen === gk;
-      const picked = S.mode === 'simple' ? g.chips.filter(c => _isPicked(g.key, c)).map(c => c.label) : [];
-      const head = el('button', 'au-chips-h' + (open ? ' is-open' : '') + (picked.length ? ' has-picked' : ''));
-      head.type = 'button';
-      head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      head.appendChild(el('span', 'au-chips-tw', '▸'));
-      head.appendChild(el('b', null, g.label));
-      const said = el('span', 'au-chips-sel', picked.length ? '· ' + picked.join(', ') : '');
-      head.appendChild(said);
-      head.appendChild(el('span', 'au-chips-n', String(g.chips.length)));
-      head.title = (open ? 'Fold ' : 'Open ') + g.label + (picked.length ? ' - picked: ' + picked.join(', ') : '');
-      head.addEventListener('click', () => { _chipOpen = open ? '' : gk; paintCol(); });
-      col.appendChild(head);
-      if (!open) continue;
-      const wrap = el('div', 'mv3-chips au-chips-open');
-      for (const c of g.chips) {
-        const on = S.mode === 'simple' && _isPicked(g.key, c);
-        const b = el('button', 'mv3-chip' + (on ? ' on' : ''), c.label);
-        b.type = 'button';
-        b.title = c.style;
-        b.addEventListener('click', () => {
-          if (S.mode === 'simple') { _pick(g.key, c); paintCol(); paintMake(); }
-          else _addWords(c.style);
-        });
-        wrap.appendChild(b);
-      }
-      col.appendChild(wrap);
-    }
-    col.appendChild(el('div', 'au-note', S.mode === 'simple' ? 'What the music is: the writer reads them with your words.'
-      : 'A press adds the chip\'s words to the ' + (S.mode === 'custom' ? 'style' : 'description') + '.'));
-  }
-
-  const cost = el('div', 'mv3-ig-cost');
-  _ui.price = cost;
-  col.appendChild(cost);
-  paintPrice();
+  F.moodRow(row);
+  F.lengthRows(row, sep);
+  F.chipRows(col);
+  F.priceBox(col);
 
   // The almanac at the foot of the column, as in the video chat: V34.A's notes, a press copies one (V34.F).
-  const foot = _ui.alm;
-  foot.textContent = '';
-  const alm = el('button', 'mv3-vc-almanac' + (_almSections().length ? '' : ' is-soon'), 'almanac');
-  alm.type = 'button';
-  alm.title = _almSections().length ? 'Notes on styles and sounds - a press on a note copies it' : 'The almanac of music and sounds is being written - soon';
-  alm.addEventListener('click', () => { if (_almSections().length) openAlmanac(alm); else say('The almanac is being written (V34.A) - soon.'); });
-  foot.appendChild(alm);
+  _ui.alm.textContent = '';
+  F.almanacButton(_ui.alm);
 }
 
-let _chipOpen = '';            // (phase V54) the one chip group open in the settings column - '' all folded
-
-function _isPicked(group, c) {
-  const f = S.f.simple;
-  return group ? ((f.picked || {})[group] || []).includes(c.id) : (f.flat || []).includes(c.label);
-}
-function _pick(group, c) {
-  const f = S.f.simple;
-  if (group) {
-    f.picked = f.picked || {};
-    const l = f.picked[group] || (f.picked[group] = []);
-    const i = l.indexOf(c.id);
-    if (i >= 0) l.splice(i, 1); else l.push(c.id);
-  } else {
-    f.flat = f.flat || [];
-    const i = f.flat.indexOf(c.label);
-    if (i >= 0) f.flat.splice(i, 1); else f.flat.push(c.label);
-  }
-  save();
-}
-function _pickedLabels() {
-  const out = [];
-  for (const g of _chipsGroups()) for (const c of g.chips) if (_isPicked(g.key, c)) out.push(c.label);
-  return out;
-}
-function _addWords(words) {
-  const key = S.mode === 'custom' ? 'style' : 'prompt';
-  const f = S.f[S.mode];
-  const cur = String(f[key] || '').trim();
-  f[key] = cur ? cur.replace(/[,\s]*$/, '') + ', ' + words : words;
-  save();
-  paintMake();
-}
-
-function _price() {
-  const P = (CAT && CAT.prices) || {};
-  const p = P[S.mode];
-  if (!p) return { big: '', small: '' };
-  const f = S.f[S.mode] || {};
-  if (p.credits != null) return { big: '$' + p.usd, small: p.credits + ' kie credits · ' + p.note };
-  if (p.usdPerMin) {
-    if (S.mode === 'video') {
-      // (phase V54) By the seconds of the clip or the file in "The video", when they are known.
-      const sec = _v2m().dur;
-      return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: secs(sec) + ' of music, as long as the video · ElevenLabs' }
-        : { big: '≈ $' + p.usdPerMin + '/min', small: 'of music, as long as the video' };
-    }
-    const sec = +f.seconds || 0;
-    return sec ? { big: '≈ $' + (p.usdPerMin * sec / 60).toFixed(3), small: sec + ' s · ' + p.note } : { big: '≈ $' + p.usdPerMin + '/min', small: p.note };
-  }
-  if (p.elPerSec) {
-    const sec = +f.seconds || 0;
-    return sec ? { big: '≈ ' + Math.round(p.elPerSec * sec), small: 'ElevenLabs credits for ' + sec + ' s' }
-      : { big: '≈ ' + p.elPerSec + '/s', small: 'ElevenLabs credits per second of what comes back' };
-  }
-  return { big: '', small: '' };
-}
-const _priceText = () => { const p = _price(); return p.big ? p.big + ' · ' + p.small : ''; };
-function paintPrice() {
-  const box = _ui && _ui.price;
-  if (!box) return;
-  const p = _price();
-  box.textContent = '';
-  box.appendChild(el('b', null, p.big));
-  box.appendChild(el('span', null, 'per press · ' + p.small + (CAT && CAT.fake ? ' · FAKE - nothing is paid' : '')));
-}
+const paintPrice = () => F.paintPrice();
+const _priceText = () => F.priceText();
 function paintMakePrice() {
   const s = _ui && _ui.make.querySelector('.au-go-row .au-muted');
   if (s) s.textContent = _priceText();
@@ -421,55 +232,11 @@ function setMode(id) {
 }
 
 // ── the constructor ─────────────────────────────────────────────────────────
-function _field(label, input, opts) {
-  const o = opts || {};
-  const f = el('div', 'au-f');
-  const h = el('div', 'au-f-h');
-  h.appendChild(document.createTextNode(label));
-  if (o.small) h.appendChild(el('small', null, o.small));
-  if (o.max) {
-    const cnt = el('span', 'au-cnt');
-    const upd = () => { const n = String(input.value || '').length; cnt.textContent = n + ' / ' + o.max; cnt.classList.toggle('is-over', n > o.max); };
-    input.addEventListener('input', upd);
-    upd();
-    h.appendChild(cnt);
-  }
-  f.append(h, input);
-  return f;
-}
-function _text(obj, key, opts) {
-  const o = opts || {};
-  const t = el(o.area ? 'textarea' : 'input', o.area ? 'au-ta' : 'au-in');
-  if (!o.area) t.type = 'text';
-  if (o.rows) t.rows = o.rows;
-  t.placeholder = o.placeholder || '';
-  t.value = obj[key] == null ? '' : String(obj[key]);
-  t.addEventListener('input', () => { obj[key] = t.value; save(); });
-  return t;
-}
-function _check(obj, key, label, after) {
-  const lab = el('label', 'au-check');
-  const c = el('input');
-  c.type = 'checkbox';
-  c.checked = !!obj[key];
-  c.addEventListener('change', () => { obj[key] = c.checked; save(); if (after) after(); });
-  lab.append(c, el('span', null, label));
-  return lab;
-}
-function _knob(obj, key, label, min, max, step, hint) {
-  const row = el('div', 'au-knob');
-  row.title = hint || '';
-  row.appendChild(el('span', null, label));
-  const r = el('input');
-  r.type = 'range'; r.min = String(min); r.max = String(max); r.step = String(step);
-  const v = el('span', null, obj[key] === '' || obj[key] == null ? 'auto' : String(obj[key]));
-  r.value = obj[key] === '' || obj[key] == null ? String((min + max) / 2) : String(obj[key]);
-  r.addEventListener('input', () => { obj[key] = +r.value; v.textContent = String(obj[key]); save(); });
-  v.addEventListener('dblclick', () => { obj[key] = ''; v.textContent = 'auto'; save(); });
-  v.title = 'a double press: back to Suno\'s own';
-  row.append(r, v);
-  return row;
-}
+// The field builders are the shared form's (they write what is typed into its state).
+const _field = (label, input, opts) => F.field(label, input, opts);
+const _text = (obj, key, opts) => F.text(obj, key, opts);
+const _check = (obj, key, label, after) => F.check(obj, key, label, after);
+const _knob = (obj, key, label, min, max, step, hint) => F.knob(obj, key, label, min, max, step, hint);
 
 function paintMake() {
   const host = _ui.make;
@@ -483,62 +250,12 @@ function paintMake() {
   card.appendChild(h);
   const bot = el('div', 'au-bot');
   bot.appendChild(el('div', 'au-bot-ico', S.mode === 'sounds' || S.mode === 'sfx' ? '✦' : '♪'));
-  bot.appendChild(el('div', 'au-bot-tx', _preset()
-    ? 'Background music for highlights in one mood: its preset goes to Suno as it is, and Suno makes TWO tracks. They go to Music → highlights → ' + _preset().label + ', and the highlights popup offers them. Each press turns one colour of the mood, so the next tracks differ.'
-    : (MODE_HELP[S.mode] || '')));
+  bot.appendChild(el('div', 'au-bot-tx', F.helpText() || MODE_HELP[S.mode] || ''));
   card.appendChild(bot);
   const f = S.f[S.mode];
 
-  const mood = _preset();
-  if (mood) {
-    // The preset says it all: what it is for, the style Suno is given (the rules add the bed's excludes and knobs).
-    const n = (f.presetN || {})[mood.id] || 0;
-    const box = el('div', 'au-preset');
-    box.appendChild(el('b', null, mood.label + (mood.title ? ' · ' + mood.title : '')));
-    if (mood.about) box.appendChild(el('div', 'au-muted', mood.about));
-    if (mood.style) box.appendChild(el('div', 'au-preset-style', mood.style));
-    box.appendChild(el('div', 'au-muted', 'press ' + (n + 1) + ' of this mood' + (Array.isArray(mood.vary) && mood.vary.length
-      ? ' - with a touch of ' + mood.vary[n % mood.vary.length] : '') + ' · two tracks into Music → highlights → ' + mood.label));
-    card.appendChild(_field('The mood', box));
-  } else if (S.mode === 'simple') {
-    const picked = _pickedLabels();
-    const row = el('div', 'au-picked');
-    if (picked.length) for (const p of picked) row.appendChild(el('span', 'au-chip on', p));
-    else row.appendChild(el('span', null, 'No chips yet - pick the genre, the mood and the sound on the left.'));
-    card.appendChild(_field('The feel', row));
-    card.appendChild(_field('In your words', _text(f, 'words', { area: true, rows: 3, placeholder: 'e.g. soft and warm under a skincare review, nothing that pulls the ear away from the voice' }), { small: 'any language · optional', max: 1000 }));
-    card.appendChild(_check(f, 'writer', 'the writer makes Suno\'s style of it (off - the chips go as they are)'));
-  } else if (S.mode === 'custom') {
-    card.appendChild(_field('Title', _text(f, 'title', { placeholder: 'the track\'s name' }), { max: 80 }));
-    card.appendChild(_field('Style', _text(f, 'style', { area: true, rows: 3, placeholder: 'genre, mood, instruments, tempo, production - e.g. indie pop, bright clean guitars, 110 BPM, warm female vocal' }), { max: 1000 }));
-    card.appendChild(_check(f, 'instrumental', 'instrumental - no voice, no lyrics', () => paintMake()));
-    if (!f.instrumental) {
-      const ly = _text(f, 'lyrics', { area: true, rows: 7, placeholder: '[Verse]\n...\n[Chorus]\n...' });
-      const fl = _field('Lyrics', ly, { max: 5000, small: 'empty - Suno sings what it makes up' });
-      const wr = el('button', 'au-link', 'write lyrics from an idea…');
-      wr.type = 'button';
-      wr.addEventListener('click', () => {
-        if (!S.f.lyrics.idea) S.f.lyrics.idea = [f.title, f.style].filter(Boolean).join(' - ').slice(0, 200);
-        setMode('lyrics');
-      });
-      fl.appendChild(wr);
-      card.appendChild(fl);
-      const vs = el('select', 'au-sel');
-      for (const [v, t] of [['', 'any voice'], ['f', 'a woman\'s voice (likelier)'], ['m', 'a man\'s voice (likelier)']]) { const op = el('option', null, t); op.value = v; vs.appendChild(op); }
-      vs.value = f.vocal || '';
-      vs.addEventListener('change', () => { f.vocal = vs.value; save(); });
-      card.appendChild(_field('Voice', vs));
-    }
-    card.appendChild(_field('Keep out', _text(f, 'negative', { placeholder: 'e.g. heavy metal, distortion, choir' }), { small: 'styles Suno should avoid', max: 500 }));
-    const kn = el('details', 'au-knobs');
-    kn.appendChild(el('summary', null, 'fine-tuning (Suno\'s own when untouched)'));
-    kn.appendChild(_knob(f, 'styleWeight', 'hold the style', 0, 1, 0.05, 'how closely it keeps to the style'));
-    kn.appendChild(_knob(f, 'weirdness', 'weirdness', 0, 1, 0.05, 'how far it may wander'));
-    kn.appendChild(_knob(f, 'variety', 'variety', 0, 4, 1, '0 - your style as written (V6 rewrites it at 1 and up) · 4 max: how different the two tracks are'));
-    card.appendChild(kn);
-  } else if (S.mode === 'lyrics') {
-    card.appendChild(_field('The idea', _text(f, 'idea', { area: true, rows: 2, placeholder: 'e.g. a hopeful song about the first coffee of the morning' }), { max: 200 }));
-  } else if (S.mode === 'sounds') {
+  // Simple (or its highlights mood), Custom, Lyrics - the shared form's; the rest are Merge's own.
+  if (F.paintFields(card)) { /* painted */ } else if (S.mode === 'sounds') {
     card.appendChild(_field('The sound', _text(f, 'prompt', { area: true, rows: 3, placeholder: 'e.g. a soft camera shutter click with a short mechanical whir' }), { max: 500 }));
     const r2 = el('div', 'au-row2');
     const tempo = el('input', 'au-in');
@@ -691,23 +408,9 @@ async function _uploadVideo(file) {
 // The request of the open mode, and where its Alerts row leads: back here, in this project.
 function _body() {
   const f = S.f[S.mode];
-  const b = { mode: S.mode, model: S.model };
-  if (S.mode === 'simple' && _preset()) {
-    // (V34.F) A highlights mood: its preset and which press of it this is; the chips and the words stay out.
-    b.preset = f.preset;
-    b.n = (f.presetN || {})[f.preset] || 0;
-    b.seconds = f.pSeconds == null ? 120 : (f.pSeconds || 0);
-    b.chips = {}; b.words = ''; b.projectKind = 'highlights';
-  } else if (S.mode === 'simple') {
-    const groups = _chipsGroups();
-    b.chips = groups.length && groups[0].key ? { genre: (f.picked || {}).genre || [], mood: (f.picked || {}).mood || [], sound: (f.picked || {}).sound || [] } : (f.flat || []);
-    b.words = f.words; b.seconds = f.seconds || 0; b.writer = f.writer !== false;
-    b.projectKind = WRITER_KIND[_kind()] || 'blank';
-  } else if (S.mode === 'custom') {
-    Object.assign(b, { title: f.title, style: f.style, lyrics: f.lyrics, instrumental: !!f.instrumental, vocal: f.vocal, negative: f.negative,
-      styleWeight: f.styleWeight, weirdness: f.weirdness, variety: f.variety, seconds: f.seconds || 0 });
-  } else if (S.mode === 'lyrics') b.idea = f.idea;
-  else if (S.mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
+  // Simple, Custom, Lyrics - the shared form's request (Simple's writer told this project's kind); the rest Merge's own.
+  const b = F.body(WRITER_KIND[_kind()] || 'blank') || { mode: S.mode, model: S.model };
+  if (S.mode === 'sounds') Object.assign(b, { prompt: f.prompt, loop: !!f.loop, tempo: f.tempo || 0, key: f.key || 'Any' });
   else if (S.mode === 'compose') Object.assign(b, { prompt: f.prompt, seconds: f.seconds || 0, instrumental: f.instrumental !== false });
   else if (S.mode === 'video') {
     // (phase V54) A clip - the server makes it into a file and lays the track under it - or a file of the library.
@@ -739,14 +442,9 @@ async function generate(btn) {
     const vc = S.mode === 'video' ? S.f.video.clip : null;
     if (vc && vc.key === Store.key() && !(await Store.flush())) throw new Error('The timeline could not be saved - the clip is read from the saved one. Try again in a moment.');
     const body = _body();
-    const d = await post('/api/audio/gen', body);
-    if (body.preset) {
-      const f = S.f.simple;
-      f.presetN = f.presetN || {};
-      f.presetN[body.preset] = (f.presetN[body.preset] || 0) + 1;
-      save();
-      paintMake();
-    }
+    // The shared press: a mood's next press turns another of its colours.
+    const d = await F.press(body);
+    if (body.preset) paintMake();
     GENS = [d.gen].concat(GENS.filter(g => g.id !== d.gen.id));
     paintMade();
     say(d.gen.kind === 'lyrics' ? 'Writing the lyrics…' : 'Asked - it is in Alerts too; you can go on working, the app files it when it comes.');
@@ -921,31 +619,8 @@ function _result(r) {
   }
   return row;
 }
-function _lyric(l) {
-  const box = el('div', 'au-lyr');
-  const h = el('div', 'au-lyr-h');
-  h.appendChild(el('span', null, l.title || 'Lyrics'));
-  h.appendChild(el('span', 'sp'));
-  const use = el('button', 'au-link', 'use in custom');
-  use.type = 'button';
-  use.addEventListener('click', () => {
-    S.f.custom.lyrics = l.text;
-    if (!S.f.custom.title) S.f.custom.title = String(l.title || '').slice(0, 80);
-    S.f.custom.instrumental = false;
-    setMode('custom');
-    say('The lyrics are in Custom.');
-  });
-  const copy = el('button', 'au-link', 'copy');
-  copy.type = 'button';
-  copy.addEventListener('click', () => { navigator.clipboard.writeText(l.text).then(() => say('Copied.')).catch(() => say('Not copied.', true)); });
-  const more = el('button', 'au-link', 'all');
-  more.type = 'button';
-  more.addEventListener('click', () => box.classList.toggle('open'));
-  h.append(use, copy, more);
-  box.appendChild(h);
-  box.appendChild(el('pre', null, l.text));
-  return box;
-}
+// A text of Lyrics - the shared form's card ("use in custom", "copy", "all").
+const _lyric = (l) => F.lyricCard(l);
 
 // The shelf's items by path: a result row's name, waveform and star - and what a lane is given when it is dragged.
 async function _index() {
@@ -989,142 +664,7 @@ function _follow() {
 }
 function _unfollow() { clearInterval(_timer); _timer = 0; }
 
-// ── the almanac (V34.A: public/js/audio/almanac-data.js) ────────────────────
-// Its SECTIONS in two groups (Music, Sounds) on the left, the open one's categories under it, its NOTES on the right.
-// (phase V34.F, the owner 2026-10-23, (т6)-(т9), (у5)) A press on a note COPIES its text - "copied" on the note - and is
-// pasted by the person where it is wanted: nothing is written into a field, no knob is set. No sources under the notes. A
-// press anywhere outside the window closes it, as Escape and its cross do; it opens again where it was left - the same
-// section, category and scroll (kept in the browser, `mv3_audio_alm_v1`).
-const KEY_ALM = 'mv3_audio_alm_v1';
-function _almSections() {
-  return (ALM && Array.isArray(ALM.SECTIONS)) ? ALM.SECTIONS.filter(s => s && s.label && Array.isArray(s.notes)) : [];
-}
-const _fieldLabel = (f) => (ALM && ALM.FIELDS && ALM.FIELDS[f] && ALM.FIELDS[f].label) || f;
-async function _copy(text) {
-  try { await navigator.clipboard.writeText(String(text || '')); return true; } catch (e) { /* not allowed */ }
-  // Without the clipboard API: a hidden field, selected and copied.
-  try {
-    const t = el('textarea');
-    t.value = String(text || '');
-    t.style.position = 'fixed'; t.style.opacity = '0';
-    document.body.appendChild(t);
-    t.select();
-    const ok = document.execCommand('copy');
-    t.remove();
-    return ok;
-  } catch (e) { return false; }
-}
-let _almWin = null;
-function openAlmanac(anchor) {
-  if (_almWin) { _almWin.close(); return; }
-  const secs0 = _almSections();
-  const win = el('div', 'hp au-alm');
-  const head = el('div', 'hp-head');
-  head.appendChild(el('b', null, 'Almanac'));
-  head.appendChild(el('span', 'hp-sub', 'music and sounds · a press copies a note - paste it where you want it' + (ALM.UPDATED ? ' · ' + ALM.UPDATED : '')));
-  const x = el('button', 'hp-x', '✕');
-  x.type = 'button';
-  head.appendChild(x);
-  win.appendChild(head);
-  const body = el('div', 'hp-body');
-  const side = el('div', 'hp-side');
-  const main = el('div', 'au-alm-main');
-  body.append(side, main);
-  win.appendChild(body);
-  // Beside the settings column: the constructor stays in sight, to paste into.
-  const r = anchor.getBoundingClientRect();
-  const w = Math.max(520, Math.min(820, window.innerWidth - r.right - 30));
-  win.style.left = Math.round(Math.max(8, Math.min(r.right + 10, window.innerWidth - w - 16))) + 'px';
-  win.style.top = '84px';
-  win.style.width = w + 'px';
-  win.style.height = 'calc(100vh - 120px)';
-  document.body.appendChild(win);
-
-  // Where it was left: the section, its category and how far it was scrolled.
-  const at = ls(KEY_ALM, {}) || {};
-  const soundy = S.mode === 'sounds' || S.mode === 'sfx';
-  let open = secs0.find(s => s.id && s.id === at.sec) || secs0.find(s => (s.group === 'sound') === soundy) || secs0[0];
-  let cat = open && at.sec === open.id && (open.cats || []).some(c => c.id === at.cat) ? at.cat : '';
-  const remember = () => lsSet(KEY_ALM, { sec: open ? open.id : '', cat, scroll: Math.round(main.scrollTop) });
-
-  const away = (e) => { if (!win.contains(e.target) && !anchor.contains(e.target)) close(); };
-  const layer = Layers.open(win, { modal: false, name: 'the audio almanac', onEsc: () => close() });
-  const close = () => {
-    remember();
-    document.removeEventListener('mousedown', away, true);
-    win.remove();
-    Layers.close(layer);
-    _almWin = null;
-  };
-  _almWin = { close };
-  x.addEventListener('click', close);
-  setTimeout(() => { if (_almWin) document.addEventListener('mousedown', away, true); }, 0);
-  let _st = 0;
-  main.addEventListener('scroll', () => { clearTimeout(_st); _st = setTimeout(remember, 250); });
-
-  const paintSide = () => {
-    side.textContent = '';
-    for (const [g, label] of [['music', 'Music'], ['sound', 'Sounds']]) {
-      const list = secs0.filter(s => s.group === g);
-      if (!list.length) continue;
-      side.appendChild(el('div', 'au-lbl au-alm-g', label));
-      for (const s of list) {
-        const b = el('button', 'hp-sec' + (s === open ? ' on' : ''));
-        b.type = 'button';
-        b.appendChild(el('span', 'nm', s.label));
-        b.appendChild(el('small', null, String(s.notes.length)));
-        b.title = s.about || '';
-        b.addEventListener('click', () => { open = s; cat = ''; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
-        side.appendChild(b);
-        if (s === open && (s.cats || []).length > 1) {
-          for (const c of s.cats) {
-            const cb = el('button', 'hp-cat' + (cat === c.id ? ' on' : ''));
-            cb.type = 'button';
-            cb.appendChild(el('span', 'nm', c.label));
-            cb.appendChild(el('small', null, String(s.notes.filter(n => n.cat === c.id).length)));
-            cb.addEventListener('click', () => { cat = cat === c.id ? '' : c.id; paintSide(); paintNotes(); main.scrollTop = 0; remember(); });
-            side.appendChild(cb);
-          }
-        }
-      }
-    }
-  };
-  const paintNotes = () => {
-    main.textContent = '';
-    if (!open) return;
-    if (open.about) main.appendChild(el('div', 'au-said', open.about));
-    for (const n of open.notes.filter(y => !cat || y.cat === cat)) {
-      const b = el('button', 'au-alm-note' + ((n.to || []).length ? '' : ' is-advice'));
-      b.type = 'button';
-      const h = el('div', 'au-lyr-h');
-      h.appendChild(el('span', null, n.title));
-      h.appendChild(el('span', 'sp'));
-      const to = (n.to || []).map(_fieldLabel);
-      h.appendChild(el('span', 'au-muted', to.length ? 'for ' + to.join(', ') : 'advice'));
-      const done = el('span', 'au-copied', 'copied');
-      h.appendChild(done);
-      b.appendChild(h);
-      b.appendChild(el('div', 'au-alm-text', n.text));
-      if (n.why) b.appendChild(el('div', 'au-said', n.why));
-      // What the note suggests for the knobs and the length - to set by hand; nothing is set by the press.
-      const extra = [];
-      if (n.set) extra.push(Object.entries(n.set).map(([k, v]) => k + ' ' + v).join(', '));
-      if (n.seconds) extra.push(n.seconds + ' s');
-      if (extra.length) b.appendChild(el('div', 'au-muted au-alm-set', 'try ' + extra.join(' · ')));
-      b.addEventListener('click', async () => {
-        const ok = await _copy(n.text);
-        if (!ok) { say('Not copied - the clipboard refused it.', true); return; }
-        b.classList.add('is-put');
-        setTimeout(() => b.classList.remove('is-put'), 1200);
-      });
-      main.appendChild(b);
-    }
-  };
-  paintSide();
-  paintNotes();
-  // The scroll it was left at - once the notes are there.
-  if (open && at.sec === open.id && (at.cat || '') === cat && +at.scroll > 0) main.scrollTop = +at.scroll;
-}
+// The almanac (V34.A's notes, a press copies one) is the shared form's - js/sound/suno-form.js.
 
 // ── the view ────────────────────────────────────────────────────────────────
 // Built the first time it shows: the settings column, the middle (the word line, the constructor), the sash, "Made here".
@@ -1313,12 +853,11 @@ function _wireMadeSash() {
   sash.addEventListener('dblclick', () => { apply(0); lsSet(KEY_MADE_W, 0); });
 }
 
+// The catalog and the almanac - the shared form reads them once (a model it does not know falls back to V6).
 async function _ready() {
-  if (CAT) return true;
-  try { CAT = await api('/api/audio/catalog'); } catch (e) { CAT = null; say('Generate audio could not start: ' + e.message, true); return false; }
-  if (CAT.almanac) { try { ALM = await import('/js/audio/almanac-data.js'); } catch (e) { ALM = null; } }
-  if (!CAT.sunoModels.includes(S.model)) S.model = 'V6';
-  return true;
+  const ok = await F.ready();
+  CAT = F.cat();
+  return ok;
 }
 
 // `remember` is false when another view took the base (onYield): that one writes its own mark.
@@ -1326,7 +865,7 @@ async function _show(on, remember = true) {
   _shown = !!on;
   if (remember) Views.rememberView(_lk(_key), _shown ? NAME : null, NAME);
   Views.setBase(NAME, _shown);
-  if (!_shown) { _stopHearing(); _unfollow(); if (_almWin) _almWin.close(); return; }
+  if (!_shown) { _stopHearing(); _unfollow(); F.closeAlmanac(); return; }
   _build();
   if (!(await _ready()) || !_shown) return;
   _forProject();
