@@ -122,6 +122,8 @@ const GEN = {
   lookbooks: { label: 'New lookbook', title: 'Make a lookbook - from words, from a photo, or one already made built on' },
   // (phase V59, the owner's (мг2а)) while Music or any folder under it is selected - the tracks go into that folder.
   music: { label: 'Generate music', title: 'Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open' },
+  // (phase V26.6) IMAGES -> Props: the New prop window (js/prop-window.js) - a photo and what you know about the product.
+  props: { label: 'New prop', title: 'Add a product - a photo and what you know about it; an agent describes it for the frames chat' },
 };
 // (phase V26.6) IMAGES -> Props too: the products, added by New prop.
 const MADE_KINDS = new Set(['environments', 'lookbooks', 'props']);
@@ -222,6 +224,7 @@ const _genWins = {};          // the window open per kind - pressed again, the s
 async function _openGen(kind, fromTree) {
   if (kind === 'music') return _openMusic(fromTree);
   if (!MADE_KINDS.has(kind)) return;
+  if (kind === 'props') return _openProp();
   if (_shelf === 'media' && _tree && (!_node || _node.key !== kind)) {
     _tree.select(kind, false);
     _node = _tree.selected();
@@ -236,6 +239,17 @@ async function _openGen(kind, fromTree) {
       onClose: () => { _genWins[kind] = null; },
     });
   } catch (e) { _status((e && e.message) || 'The generator did not open', 'err'); }
+}
+// (phase V26.6) NEW PROP - its window over Media, Props selected behind it; a product added is outlined there, and the gallery
+// is read again when its description lands (its name may come from the agent).
+async function _openProp() {
+  if (_shelf === 'media' && _tree && (!_node || _node.key !== 'props')) {
+    _tree.select('props', false);
+    _node = _tree.selected();
+    await _load({ checks: false });
+  }
+  const { openNewProp } = await import('../prop-window.js');
+  openNewProp({ onAdded: (it) => _genLanded('props', it && it.media) });
 }
 // Something the window made landed (whether or not the window is still open): the numbers, and - while the gallery shows
 // that folder - the gallery, the new picture outlined (its id there is its file name).

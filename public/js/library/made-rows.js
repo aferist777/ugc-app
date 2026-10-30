@@ -57,6 +57,8 @@ function _textRow(value, placeholder, rows, store) {
   });
   foot.append(said, save);
   box.append(ta, foot);
+  // (phase V26.6) What is kept changed elsewhere ("read again"): the box shows it, nothing to save.
+  box.setKept = (v) => { kept = String(v || ''); ta.value = kept; save.hidden = true; said.textContent = ''; };
   return box;
 }
 
@@ -123,8 +125,45 @@ function _propRows(it, m) {
   name.classList.add('is-line');
   const words = _textRow(m.words, 'What you know about the product - what it is, its size, what matters to show. Any language.', 3,
     async (text) => (m.words = (await _patchMeta(it, { words: text })).words));
-  const desc = _textRow(m.description, m.reading ? 'describing…' : 'Not described yet.', 8,
+  const desc = _textRow(m.description, m.reading ? 'describing…' : m.fail ? 'Not described: ' + m.fail : 'Not described yet.', 8,
     async (text) => (m.description = (await _patchMeta(it, { description: text })).description));
   desc.title = 'What the frames chat is told about this product, in English. Written by the agent from the picture and your words; yours once you edit it.';
-  return [['name', name], ['your words', words], ['description', desc]];
+  return [['name', name], ['your words', words], ['description', desc], ['', _readAgain(it, m, desc)]];
+}
+
+// "read again" (the owner's (п4)): the agent looks at the picture and reads the words as they are saved now, and its
+// description REPLACES the one there (written by hand too). The box says "describing…" until it lands.
+function _readAgain(it, m, desc) {
+  const box = el('div', 'made-ed-foot');
+  const said = el('span', 'made-ed-said');
+  const b = el('button', 'lib-btn made-ed-save', 'read again');
+  b.type = 'button';
+  b.title = 'The agent writes the description anew from the picture and your words (saved) - it replaces the one here';
+  const ta = desc.querySelector('textarea');
+  const id = encodeURIComponent(it.id);
+  const wait = async (n) => {
+    if (!b.isConnected) return;
+    let d = null;
+    try { d = await json('/api/library/info/props/' + id); } catch (e) { said.textContent = e.message; b.disabled = false; return; }
+    if (d.reading && n < 240) { setTimeout(() => wait(n + 1), 1500); return; }
+    m.description = d.description || '';
+    m.fail = d.fail || '';
+    m.reading = false;
+    desc.setKept(m.description);
+    if (ta) ta.placeholder = m.fail ? 'Not described: ' + m.fail : 'Not described yet.';
+    said.textContent = m.fail && !d.description ? 'not described' : 'described';
+    if (d.name) it.name = d.name;
+    b.disabled = false;
+  };
+  b.addEventListener('click', async () => {
+    b.disabled = true;
+    said.textContent = 'describing…';
+    try { await post('/api/props/' + id + '/read', {}); }
+    catch (e) { said.textContent = e.message; b.disabled = false; return; }
+    if (ta) { ta.value = ''; ta.placeholder = 'describing…'; }
+    wait(0);
+  });
+  if (m.reading) { b.disabled = true; said.textContent = 'describing…'; setTimeout(() => wait(0), 1500); }
+  box.append(said, b);
+  return box;
 }

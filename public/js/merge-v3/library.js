@@ -1179,6 +1179,12 @@ const _makeWins = {};         // the window open per kind - pressed again, the s
  *  "/ generate audio" on Simple (js/merge-v3/audchat.js; the Library's music window is the Library's). */
 export async function openMaker(kind) {
   if (kind === 'music') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
+  // (phase V26.6) IMAGES -> Props: the New prop window; a product added - the tree and the gallery read again.
+  if (kind === 'props') {
+    const { openNewProp } = await import('../prop-window.js');
+    openNewProp({ anchor: document.getElementById('mv3-library'), onAdded: () => _makerLanded() });
+    return;
+  }
   if (!MAKE_VIEW[kind]) return;
   if (_makeWins[kind] && _makeWins[kind].alive()) return;
   try {

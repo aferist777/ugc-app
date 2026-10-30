@@ -819,7 +819,7 @@ function _madeItems(kind) {
         categoryId: '', favorite: false, made: true,
         description: String(m.description || ''), from: String(m.from || ''),
         ...(kind === 'environments' ? { motion: String(m.motion || '') }
-          : kind === 'props' ? { words: String(m.words || ''), by: String(m.by || ''), reading: _propReading(it.media) }
+          : kind === 'props' ? { words: String(m.words || ''), by: String(m.by || ''), fail: String(m.fail || ''), reading: _propReading(it.media) }
           : { gender: String(m.gender || '') }),
       }),
     });
@@ -1271,7 +1271,7 @@ const INFO = {
     if (!media) return null;
     const m = SM.read('props')[media] || {};
     return { media, name: String(m.name || ''), words: String(m.words || ''), description: String(m.description || ''),
-      by: String(m.by || ''), reading: _propReading(media) };
+      by: String(m.by || ''), fail: String(m.fail || ''), reading: _propReading(media) };
   },
 };
 
@@ -1309,6 +1309,35 @@ router.patch('/library/meta/:kind/:id', (req, res) => {
     SM.write(kind, all);
     res.json({ success: true, kind, id: String(req.params.id), gender: String(m.gender || ''), description: String(m.description || ''),
       ...(kind === 'props' ? { name: String(m.name || ''), words: String(m.words || '') } : {}) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// (phase V26.6, the owner's (п3), (пр1)-(пр5)) NEW PROP - a product brought into IMAGES -> Props: a photo (its bytes from this
+// computer, or a library address - a picture of IMAGES stays where it is) with a name and what the person knows about it.
+// Answered once the picture lies in Props; the agent writes its description behind the answer (lib/props.js) - no Alerts
+// row, nothing generated.
+//   POST /api/props/add        { imageBase64 | imagePath, name, words } -> { id, media, name }
+//   POST /api/props/:id/read   "read again": the description written anew from the picture and the words, replacing it
+router.post('/props/add', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const raw = String(b.imageBase64 || '');
+    const buf = raw ? Buffer.from(raw.replace(/^data:[^;,]*;base64,/i, ''), 'base64') : null;
+    const out = await require('../lib/props').add({ buf, path: buf ? '' : String(b.imagePath || ''), name: b.name, words: b.words });
+    res.json({ success: true, kind: 'props', ...out });
+  } catch (e) {
+    console.error('[props/add]', e.message);
+    res.status(e.status || 500).json({ success: false, error: e.message });
+  }
+});
+router.post('/props/:id/read', (req, res) => {
+  try {
+    const media = _flatEntry(PROPS_DIR, String(req.params.id || ''));
+    if (!media) return res.status(404).json({ success: false, error: 'not in Props any more' });
+    const P = require('../lib/props');
+    if (P.reading(media)) return res.status(409).json({ success: false, error: 'it is being described already' });
+    P.describe(media).catch((e) => console.warn('[props] ' + media + ' was not described: ' + e.message));
+    res.json({ success: true, reading: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
