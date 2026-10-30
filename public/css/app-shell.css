@@ -156,3 +156,18 @@ body{
   background:transparent; border:1px solid var(--border-soft); border-radius:var(--r-xs);
 }
 .mv3-lib-stop:hover{ color:var(--ink); border-color:var(--primary); }
+
+/* ── THE BUBBLE (phase V61, the owner's (т4), (т4а); js/bubble.js) ─────────────────────────────────────────────────
+   A hint as a speech bubble, as in a comic: over what it is about, its tail pointing down at it (`is-below` - under it,
+   the tail up). The setup of a talking head hangs its explanations on it, and every "?" of the app opens it
+   (js/sound/qmark.js). The tail is a turned square with two gold edges, at --tail-x from the bubble's left. */
+.bub{position:fixed; z-index:9700; width:max-content; max-width:min(360px, calc(100vw - 12px)); box-sizing:border-box;
+  padding:9px 13px 10px; background:var(--surface); border:1.5px solid var(--gold); border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45); color:var(--ink); font:500 12px/1.5 var(--font); letter-spacing:0;
+  text-transform:none; text-align:left; white-space:normal; --tail-x:50%}
+.bub::after{content:''; position:absolute; left:var(--tail-x); bottom:-7px; width:11px; height:11px; margin-left:-6px;
+  background:var(--surface); border:solid var(--gold); border-width:0 1.5px 1.5px 0; transform:rotate(45deg)}
+.bub.is-below::after{bottom:auto; top:-7px; border-width:1.5px 0 0 1.5px}
+.bub b{display:block; margin-bottom:4px; color:var(--gold); font:700 9.5px/1.3 var(--font); letter-spacing:.07em; text-transform:uppercase}
+.bub p{margin:0}
+.bub p + p{margin-top:5px}

@@ -241,13 +241,15 @@ function _kindMenu(anchor) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mv3-plus-item';
+    // A kind that is coming (phase V61): there, greyed, and nothing happens on a press (css/app-shell.css [disabled]).
+    if (!on) btn.disabled = true;
     const t = document.createElement('span');
     t.textContent = label;
     btn.appendChild(t);
     const s = document.createElement('small');
     s.textContent = sub;
     btn.appendChild(s);
-    btn.addEventListener('click', (e) => { e.stopPropagation(); _closeKind(); on(); });
+    if (on) btn.addEventListener('click', (e) => { e.stopPropagation(); _closeKind(); on(); });
     el.appendChild(btn);
   };
   item('blank', 'an empty timeline to build on', () => { if (_newBlank) _newBlank(); });
@@ -259,6 +261,9 @@ function _kindMenu(anchor) {
     _note('creating…');
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
+  // (phase V61, the owner 2026-10-30: "будет новый режим в new project - называться будет voiceover, в котором просто
+  // генерируется голосом текст сценария... пока только запланируй и добавь under development этот пункт") - phase V62.
+  item('voiceover · in development', 'the script in a voice, B-roll over it', null);
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();

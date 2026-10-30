@@ -6,12 +6,12 @@
    The hub of the setup step (js/merge-v3/wk-setup.js), painted into its panel. Two columns: on
    the left the whole script, one row per line with what it has - the read, the frame, the clip;
    on the right the line that is open, with everything made for it - or, with none open, the
-   GENERAL ZONE: the one mood, and the three zones of the whole video in gold, voice, first
-   frames, video, each a drawer with its own `generate` (phase W; open and shut, by hand or by
-   itself when its work is done or cannot start - W2.5). Over the right column, whatever it shows,
-   the counters - read, frames, clips - and `generate all` (_counters). The list never goes away
-   while a line is open: the script is one thing, and judging a line means seeing the ones around
-   it. Who and where are on the stage, not here.
+   GENERAL ZONE. Since phase V61 (the owner 2026-10-30: "нужно чтобы пошагово создавался проект") its fields OPEN ONE
+   AFTER ANOTHER: until the character and the place are chosen on the stage they are blurred and take no press (the
+   script is there to be read, its rows do nothing); then 1 "mood & voice" - one line, one `generate` that marks the
+   script up and reads it -; 2 the frames and 3 the video, red until every line is read (_voiceLock). No counters and no
+   `generate all`: a project is made step by step. The list never goes away while a line is open: the script is one
+   thing, and judging a line means seeing the ones around it. Who and where are on the stage, not here.
 
    THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
    button - tagged by the mood first - and its words can be changed there too, tags and all; a take
@@ -43,7 +43,8 @@ import { takeOf, isRead, isLive, liveLines } from './scen-api.js';
 import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
-import { askDelete, askChoice } from './ask.js';
+import { askDelete, note as askNote } from './ask.js';
+import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
 
@@ -55,7 +56,6 @@ const FRAME_PRICE = 0.06;
 const CEILING_FALLBACK = 30;
 
 const KEY = 'mv3_frag_open_v1';          // { <timeline key>: <open line> } - where you were, per project
-const TIP_MS = 320;                      // hover before a row's whole text appears
 // HOW WIDE THE SCRIPT COLUMN IS (phase R, the owner 2026-09-22). The two columns of this step are
 // rebuilt on every repaint, so the width cannot live in the DOM; it lives here and is put back
 // after each paint, the way the columns' scroll offsets are. 0 means "never dragged" - the CSS
@@ -567,10 +567,9 @@ function _clipWork(p, lines) {
 // /scen3/fragments/clips), every fragment gets its journal row from the press, and the server sends
 // them a second apart without waiting for any. The panel adopts the rows and shows each fragment
 // waiting, the same way it does after a reload.
-async function _makeClips(p, only) {
+async function _makeClips(p) {
   try {
-    const r = await _post('/api/scen3/fragments/clips', { projectId: p.id, key: (_ctx && _ctx.key) || '',
-      ...(only ? { only: [...only] } : {}) });
+    const r = await _post('/api/scen3/fragments/clips', { projectId: p.id, key: (_ctx && _ctx.key) || '' });
     _lookedClips = '';                    // adopt the rows this call just made
     _pickUpClips();
     const queued = (r.queued || []).length;
@@ -587,8 +586,6 @@ async function _writeVideo(p, opts) {
   // (phase V26.8) The animation prompts and the clips here are Kling's; a Seedance project writes its fragments' own.
   if (_seedance()) return _writeSdVideo(p, opts);
   const withClips = !!(opts && opts.clips);
-  // (phase V23) `generate all` names the lines its question priced; the zone's own button asks for every one.
-  const only = (opts && opts.only) || null;
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
@@ -612,11 +609,11 @@ async function _writeVideo(p, opts) {
   }
   if (withClips && !_readErr) {
     const now = _ctx.project || p;
-    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines).filter(x => !only || only.has(x.i));
+    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : lines);
     if (want.length) {
       _writing = 'clips';
       _ctx.repaint();
-      await _makeClips(now, only);
+      await _makeClips(now);
     }
   }
   _writing = '';
@@ -626,10 +623,9 @@ async function _writeVideo(p, opts) {
 
 // (phase V26.8) THE VIDEO FIELD'S `generate` FOR SEEDANCE: how the place moves, when nothing is written for it, then the
 // prompt of every line that needs one - one request each, a few at once - then, asked with `clips`, the clips of the
-// lines that have none (part 5; `only` - the ones the question of generate all priced).
+// lines that have none (part 5).
 async function _writeSdVideo(p, opts) {
   const withClips = !!(opts && opts.clips);
-  const only = (opts && opts.only) || null;
   _readErr = '';
   if (!_envMotion(p)) {
     _writing = 'place';
@@ -646,11 +642,11 @@ async function _writeSdVideo(p, opts) {
   }
   if (withClips && !_readErr) {
     const now = _ctx.project || p;
-    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : []).filter(x => !only || only.has(x.i));
+    const want = _clipWork(now, Array.isArray(now.lines) ? now.lines : []);
     if (want.length) {
       _writing = 'clips';
       _ctx.repaint();
-      await _makeClips(now, only);
+      await _makeClips(now);
     }
   }
   _writing = '';
@@ -863,7 +859,7 @@ async function _saveVideo(patch) {
 // ── The panel ───────────────────────────────────────────────────────────────
 // `host` is the step's scroll box, under its title; `api` is what the step lends - the character
 // cast (the voice row is theirs), the voice module's api, and the way to the shelves.
-export function paint(host, ctx, api, head) {
+export function paint(host, ctx, api) {
   _ctx = ctx;
   _api = api;
   const p = ctx.project;
@@ -874,7 +870,7 @@ export function paint(host, ctx, api, head) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); _tipHide(); }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); }
   _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
   // (phase V26.5) Arriving on the frames chat - its Alerts row, a reload there - is arriving on the chat, not on a fragment.
   if (_open === null) _open = _asked >= 0 ? _asked : api.view() === 'fchat' ? -1 : _remembered();
@@ -909,11 +905,14 @@ export function paint(host, ctx, api, head) {
   VOICE.pickUpRead(api.voiceApi());       // a read the SERVER is doing, started before this paint (X2)
   // The list is the script and nothing else (owner, 2026-09-21): the voice stands in its own field
   // on the right, with everything else that is set once for the whole video.
-  if (!folded) _list(left, p, lines);
-
-  // Where the whole script stands goes in the panel's HEADER, beside the name of the step (the
-  // owner, 2026-09-22): it is about the whole video, and so is the line it now shares.
-  _counters(head, p, lines);
+  // (phase V61, (т2)) Until the character and the place are chosen the script is there to be read - every word of it - and
+  // its rows do nothing: no fragment opens, nothing is read or put in.
+  if (!folded) {
+    _list(left, p, lines);
+    if (_missing(p).length) left.classList.add('is-locked');
+  }
+  // (phase V61, (т9)) No counters and no `generate all` in a header any more - the setup has no header of its own; the
+  // fields go one after another, each opening when the one before it has done its work.
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   if (chat) {
     FCHAT.show(right, p, {
@@ -1070,6 +1069,20 @@ function _needs(p) {
   else if (!v.quality) out.video = 'the quality';
   return out;
 }
+// (phase V61, the owner 2026-10-30, (т5): "Кадры и видео открываются, когда прочитаны все строки, а позже переписанная
+// строка их обратно не закрывает") THE FRAMES AND THE VIDEO WAIT FOR THE VOICE: red, and a press on them says why, until
+// every line of the video has been read once - a line rewritten later keeps its old take and opens nothing again; only
+// its own clip waits for the new read. A project already past it - a frame in its pool, a clip made - is never shut again.
+// By Seedance's voice sample nothing is read: they wait for a voice with its demo. '' - open.
+const _everRead = (l) => { const a = (l && l.audio) || {}; return !!((a.tagged && a.tagged.path) || (a.plain && a.plain.path)); };
+function _voiceLock(p) {
+  if (_missing(p).length) return '';                // the whole zone waits for who and where first
+  if (_bySample()) return _needs(p).voice ? 'Choose a voice with its demo first - field 1, mood & voice.' : '';
+  const live = liveLines(p.lines);
+  if (!live.length || _pool(p).length || live.some(x => _clipsOf(p, x.l).length)) return '';
+  return live.every(x => _everRead(x.l)) ? '' : 'Voice the lines first - field 1, mood & voice.';
+}
+
 // The "none" a menu shows while nothing is chosen in it: the first line, and it cannot be chosen back.
 function _noneOption(sel, word) {
   const o = el('option', '', word || 'none');
@@ -1079,35 +1092,28 @@ function _noneOption(sel, word) {
   sel.appendChild(o);
 }
 
-// ── The general zone: the whole video, in three stages ──────────────────────
-// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W.) The one mood every stage
-// reads from, in gold; then three zones in gold, one above the other - voice, first frames, video -
-// each a drawer with its own `generate` at the foot. The counters and `generate all` stand in the
-// panel's header, whatever the panel shows (W2.5).
+// ── The general zone: the whole video, step by step ─────────────────────────
+// (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W; laid out again in phase V61, the owner 2026-10-30,
+// (т13): "давай пока по рекомендации. там посмотрим".) FIELD 1, "mood & voice", across the whole width on top - one line;
+// under it two columns: 2 the first frames with the frames shelf on the left, 3 the video on the right. Each field is as
+// tall as what it holds, and the lower field of a column takes what is left.
+//
+// UNTIL WHO AND WHERE ARE CHOSEN (the owner: "давай заблеривать все поля, кроме поля превью где пользователь должен выбрать
+// персонажа и окружение") the fields are blurred and take no press, with one line over them saying what to do first.
 function _all(host, p, lines) {
-  // FOUR FIELDS, TWO BY TWO, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): mark up, read,
-  // draw, film. The number sits on the corner of each gold frame, and the FRAME says where the
-  // field stands - dashed while there is work in it, solid when there is none. They do not open
-  // and shut any more: four fields side by side hold what four drawers held, and a drawer that
-  // shuts itself is one more thing to reopen.
-  //
-  // TWO COLUMNS, NOT TWO ROWS (phase V26.1, the owner 2026-10-10): the voice field grew a row of its
-  // own settings and the video field below it had room to spare. In rows a field is as tall as its
-  // neighbour, so the voice could not grow without the mood growing with it; in columns each field
-  // is as tall as what it holds, and the lower field of a column takes what is left.
+  const missing = _missing(p);
+  if (missing.length) host.appendChild(_note('Choose ' + missing.join(' and ') + ' first - on the preview. Then the fields open.'));
+  const zone = el('div', 'mv3-wk-zone' + (missing.length ? ' is-locked' : ''));
+  host.appendChild(zone);
+  _stageMoodVoice(zone, p, lines);
   const cols = el('div', 'mv3-wk-zcols');
-  const left = el('div', 'mv3-wk-zcol');
+  const left = el('div', 'mv3-wk-zcol is-shelved');
   const right = el('div', 'mv3-wk-zcol');
   cols.append(left, right);
-  host.appendChild(cols);
-  _stageMood(left, p, lines);
+  zone.appendChild(cols);
   _stageFrames(left, p);
-  _stageVoice(right, p, lines);
+  _shelfFrames(left, p);
   _stageVideo(right, p, lines);
-  // (phase V26.8, the owner 2026-10-13) SEEDANCE HAS MORE TO SET: the video field runs down to the foot of the zone and
-  // the frames shelf, under the four fields at full width otherwise, is as wide as the first-frames field, under it.
-  if (_seedance()) left.classList.add('is-shelved');
-  _shelfFrames(_seedance() ? left : host, p);
 }
 
 // ONE FIELD: a gold frame with its number on the corner, a head, a body and a foot with the
@@ -1122,10 +1128,20 @@ function _all(host, p, lines) {
 function _stage(host, id, spec) {
   // Blocked outranks done: a pool made before the character was taken off is not a field at rest. And
   // a choice not made (`need`, phase V24) outranks both: the frame is red and dashed until it is made.
-  const done = !!spec.done && !spec.blocked && !spec.need;
+  const done = !!spec.done && !spec.blocked && !spec.need && !spec.lock;
   const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
-    + (spec.blocked ? ' is-blocked' : '') + (spec.need ? ' is-need' : '') + (spec.half ? ' is-half' : '')
-    + (spec.work ? ' is-working' : ''));
+    + (spec.blocked ? ' is-blocked' : '') + ((spec.need || spec.lock) ? ' is-need' : '') + (spec.half ? ' is-half' : '')
+    + (spec.work ? ' is-working' : '') + (spec.lock ? ' is-voicelock' : '') + (spec.wide ? ' is-wide' : ''));
+  // (phase V61, (т5)) WAITING FOR THE VOICE: red, what is in it dimmed and dead - but for what is marked `is-free` - and a
+  // press on it says what to do first (the owner: "при попытке выбрать что то во first frames и video будет говорить что
+  // сначала озвучить нужно строки").
+  if (spec.lock) {
+    box.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.is-free')) return;
+      e.preventDefault();
+      askNote(box, spec.lock);
+    });
+  }
   // The field's number, on the corner of its own frame (the owner, 2026-09-22): 1 mark up, 2 read,
   // 3 draw, 4 film - the order they actually work in, said once and visibly.
   if (spec.step) box.appendChild(el('span', 'mv3-wk-znum', String(spec.step)));
@@ -1140,10 +1156,11 @@ function _stage(host, id, spec) {
   head.appendChild(el('span', '', spec.name));
   // What the field IS, and then where it stands. The second used to appear only when the drawer
   // was shut; with nothing to shut, it belongs in the head all the time.
-  const sub = spec.need ? 'choose ' + spec.need
+  const sub = spec.lock ? spec.lock.replace(/ - field 1.*$/, '').replace(/\.$/, '').toLowerCase()
+    : spec.need ? 'choose ' + spec.need
     : spec.blocked ? 'needs ' + spec.why
       : [spec.sub, spec.summary].filter(Boolean).join(' · ');
-  if (sub) head.appendChild(el('span', 'mv3-wk-vsub' + (spec.need ? ' is-need' : ''), sub));
+  if (sub) head.appendChild(el('span', 'mv3-wk-vsub' + ((spec.need || spec.lock) ? ' is-need' : ''), sub));
   if (spec.need) head.title = 'Choose ' + spec.need + ' - nothing in this field is made until it is chosen';
   else if (spec.blocked) head.title = 'Still missing: ' + spec.why;
   box.appendChild(head);
@@ -1209,221 +1226,44 @@ function _standing(p) {
   };
 }
 
-// The counters, in THE PANEL'S HEADER (the owner, 2026-09-22): three boxes - read, frames, clips -
-// with the count and its name side by side. Since phase V24 (the owner, 2026-10-09) `generate all`
-// comes FIRST, the boxes after it, and the step's title stands on the right of the row
-// (`.is-tabs-left`, the shelves' heads do the same - js/merge-v3/wk-maker.js shelfHead).
-function _counters(host, p, lines) {
-  if (!host) return;
-  const s = _standing(p);
-  const top = el('div', 'mv3-ins-head-act is-counters');
-  _chainButton(top, p, lines);
-  const stat = el('div', 'mv3-wk-fstats');
-  const cell = (num, label, done, title) => {
-    const c = el('div', 'mv3-wk-fstat' + (done ? ' is-done' : ''));
-    c.appendChild(el('div', 'mv3-wk-fstat-n', num));
-    c.appendChild(el('div', 'mv3-wk-fstat-l', label));
-    c.title = title;
-    stat.appendChild(c);
-  };
-  const n = s.n;
-  if (!_bySample()) cell(s.read + '/' + n, 'read', n > 0 && s.read === n, 'Lines read, of all the lines');
-  cell(_drawing.size ? s.frames + '/' + s.framesAsked : String(s.frames), 'frames', s.framesDone,
-    _drawing.size ? 'Frames in the pool, of the set being drawn' : 'Frames in the pool - the fragments take theirs from it');
-  cell(s.clips + '/' + n, 'clips', n > 0 && s.clips === n, 'Lines with a clip, of all the lines');
-  top.appendChild(stat);
-  host.classList.add('is-tabs-left');
-  host.prepend(top);
-}
-
-// ── `generate all`: every stage in one press (phase W3c) ────────────────────
-// The voice and the frames do not depend on each other and go TOGETHER; the video waits for both,
-// because an animation prompt is written from the frames the lines open on. What the chain will
-// spend is said before it starts and confirmed by a second press - the frames are dollars (the
-// reads and the prompts are credits), and a set is only drawn when there is none.
-let _chain = '';                          // '' | 'voice+frames' | 'video'
-
-// WHAT THE WHOLE RUN WILL DO, AND COST (phase V23, the owner 2026-10-09: it always asks, in a window). The clips
-// of the lines this very run reads cannot be priced exactly - their reads do not exist yet - so they are estimated:
-// the line's earlier read when it has one, else its characters at about fifteen a second. `only` is every line the
-// question priced, and the clips stage asks for no other.
-const CHARS_PER_SEC = 15;
-const _readChars = (l) => String((l && (l.tagged || l.text)) || '').replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim().length;
-function _chainEstimate(p, lines, w) {
-  const tier = _tier();
-  const ceiling = _ceiling();
-  const can = !w.missing.length && !!_video().quality && !_seedance() && (w.pool > 0 || w.frames > 0);
-  const now = (can && w.pool) ? _clipWork(p, lines) : [];
-  const only = new Set(now.map(x => x.i));
-  let chars = 0, later = 0, laterCost = 0, tooLong = 0;
-  for (const { l, i } of liveLines(lines)) {
-    const willRead = _canRead() && !_bySample() && !isRead(l);
-    if (willRead) chars += _readChars(l);
-    if (!can || only.has(i) || _clipping.has(i) || _clipSettled(p, l, i)) continue;
-    const take = _take(l);
-    const readNow = _readState(l) === 'ok' && !!take;
-    if (!readNow && !willRead) continue;
-    if (!_frameFor(p, l, i).v && !w.frames) continue;
-    const dur = readNow ? take.dur : ((take && take.dur) || _readChars(l) / CHARS_PER_SEC);
-    if (dur > ceiling) { tooLong++; continue; }
-    later++;
-    laterCost += _clipCost(dur, tier);
-    only.add(i);
-  }
-  return { now: now.length, nowCost: now.reduce((a, x) => a + x.cost, 0), later, laterCost, tooLong, chars, only };
-}
-
-function _chainWork(p, lines) {
-  const missing = _missing(p);
-  const pool = _pool(p).length;
-  const v = _video();
-  const live = _live(lines);
-  // Stage one is its own step now (Z2): the chain does it first, and the read waits for it.
-  const tags = VOICE.untagged(p).length;
-  const voice = _canRead() && !_bySample() ? live.filter(l => !isRead(l)).length : 0;
-  const frames = (!missing.length && !pool && !_drawing.size) ? (v.frames || 0) : 0;
-  // The video stage needs a frame to write from: with none in the pool, only a set being drawn now
-  // (frames above) can give it one.
-  // (phase V26.8) A Seedance project writes its fragments' prompts (part 4), Kling its lines' animation prompts.
-  const video = (!missing.length && (pool || frames))
-    ? (_seedance() ? _sdNeeds(p).length : live.filter(l => !_animated(l) && !((l.shot || {}).motionEdited && (l.shot || {}).motion)).length) : 0;
-  // The clips of the lines that can be clipped NOW. Lines that only become clippable during the
-  // chain - read in this very run, or opening on a frame drawn in it - are counted when the video
-  // stage is reached, not here: their price cannot be known before they exist.
-  const clips = (!missing.length && pool) ? _clipWork(p, lines) : [];
-  const clipCost = clips.reduce((a, x) => a + x.cost, 0);
-  return {
-    missing, tags, voice, frames, video, pool, clips: clips.length, clipCost,
-    anything: tags + voice + frames + video + clips.length > 0,
-  };
-}
-
-function _chainButton(host, p, lines) {
-  const w = _chainWork(p, lines);
-  // A clip already running does NOT hold this shut (V4, the owner 2026-09-22): clips are per
-  // fragment and the planner steps over the ones in flight, so the rest can be started while one
-  // renders. What does hold it shut is work that is one-at-a-time - a chain, the reads, the
-  // planner, a set being drawn, the writer.
-  const busy = !!_chain || VOICE.reading().busy || _planning || _drawing.size > 0 || _envWriting || !!_writing;
-  // What the whole run costs, as far as it can be known before it starts: the frames of a set that
-  // is not there yet, and the clips of the fragments that could be clipped this moment. The clips
-  // of lines this run will read are paid for when the video stage gets to them and are named then.
-  const b = el('button', 'mv3-wk-gen mv3-wk-genall',
-    _chain === 'tags' ? 'tags…' : _chain === 'voice+frames' ? 'voice, frames…' : _chain === 'video' ? 'video, clips…'
-      : 'generate all');
-  b.type = 'button';
-  // NOT WHILE A FRAME IS RED (phase V24, the owner 2026-10-09): every choice is made first - the chain
-  // would otherwise run on choices nobody made, or skip the read for want of a voice without a word.
-  const needs = Object.values(_needs(p));
-  b.disabled = busy || !lines.length || needs.length > 0 || !w.anything;
-  b.title = needs.length ? 'Choose first: ' + needs.join(', ')
-    : w.missing.length
-    ? 'The frames and the video need ' + w.missing.join(' and ') + ' - the voice can be read without them'
-    : !w.anything ? 'Everything that can be made is made'
-      : 'In one press: ' + [
-        w.tags ? w.tags + (w.tags === 1 ? ' line marked up' : ' lines marked up') : '',
-        w.voice ? w.voice + (w.voice === 1 ? ' line read' : ' lines read') : '',
-        w.frames ? w.frames + ' frames drawn · ' + _money(w.frames * FRAME_PRICE) : '',
-        w.video ? w.video + (w.video === 1 ? ' animation prompt' : ' animation prompts') : '',
-        w.clips ? w.clips + (w.clips === 1 ? ' clip' : ' clips') + ' · ' + _money(w.clipCost) : '',
-      ].filter(Boolean).join(', ') + '. The voice and the frames together, then the video and the clips. It asks first.';
-  b.addEventListener('click', () => _askChain(b, p, lines));
-  host.appendChild(b);
-}
-
-// Waiting for the frames to LAND, not just to be asked for: the video stage writes from them.
-async function _untilDrawn() {
-  for (let k = 0; k < 1200 && _drawing.size; k++) await new Promise(r => setTimeout(r, 500));
-}
-
-// The question (phase V23): every stage of the run with what it spends - credits for the mark-up, the reads and the
-// prompts, dollars for the frames and the clips - and the clips of this run's own reads as an estimate.
-function _askChain(anchor, p, lines) {
-  if (_chain) return;
-  const w = _chainWork(p, lines);
-  if (!w.anything) return;
-  const e = _chainEstimate(p, lines, w);
-  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-  const rows = [];
-  if (w.tags) rows.push('mark-up: ' + plural(w.tags, 'line', 'lines') + ' (credits)');
-  if (w.voice) rows.push('read: ' + plural(w.voice, 'line', 'lines') + ' · about ' + e.chars + ' characters (ElevenLabs credits)');
-  if (w.frames) rows.push('frames: ' + w.frames + ' × ' + _money(FRAME_PRICE) + ' = ' + _money(w.frames * FRAME_PRICE));
-  if (w.video) rows.push('animation prompts: ' + w.video + ' (credits)');
-  if (e.now) rows.push('clips now: ' + e.now + ' · ' + _money(e.nowCost));
-  if (e.later) rows.push('clips of the lines this run reads: about ' + e.later + ' · about ' + _money(e.laterCost));
-  if (e.tooLong) rows.push('left out - longer than ' + _ceiling() + ' s: ' + plural(e.tooLong, 'line', 'lines'));
-  const dollars = (w.frames ? w.frames * FRAME_PRICE : 0) + e.nowCost + e.laterCost;
-  if (dollars) rows.push('in all: ' + (e.later ? 'about ' : '') + _money(dollars) + ' and the credits');
-  askChoice(anchor, 'Generate all?', rows, [
-    { label: 'Run it', kind: 'yes', on: () => _generateAll(p, lines, e.only) },
-    { label: 'Cancel' },
-  ], { stay: true });
-}
-
-async function _generateAll(p, lines, only) {
-  if (_chain) return;
-  if (Object.keys(_needs(p)).length) return;   // a red frame first (phase V24)
-  const w = _chainWork(p, lines);
-  if (!w.anything) return;
-  _readErr = '';
-  // STAGE ONE FIRST, and alone: the read is spoken from the tags, so nothing can start beside it.
-  if (w.tags) {
-    _chain = 'tags';
-    _ctx.repaint();
-    await VOICE.tagAll(_api.voiceApi());
-    if (!VOICE.canSpeak(_ctx.project || p)) { _chain = ''; return _ctx.repaint(); }
-  }
-  _chain = 'voice+frames';
-  _ctx.repaint();
-  try {
-    await Promise.all([
-      w.voice ? VOICE.generate(_api.voiceApi()) : Promise.resolve(),
-      w.frames ? _makeSet().then(_untilDrawn) : Promise.resolve(),
-    ]);
-    // A stage that failed says so in its own field; the chain stops rather than writing prompts for
-    // frames that never arrived.
-    if (_readErr || !_pool(_ctx.project).length) { _chain = ''; return _ctx.repaint(); }
-    _chain = 'video';
-    _ctx.repaint();
-    // The last stage is the whole video zone: the place, the animation prompts, and then the clips
-    // of every fragment that can have one - including the lines this very run has just read.
-    const now = _ctx.project;
-    await _writeVideo(now, { clips: true, only: only || null });
-  } catch (e) {
-    _readErr = 'The chain stopped: ' + e.message;
-  }
-  _chain = '';
-  _ctx.repaint();
-}
-
-// MOOD - stage one. The emotion of the whole thing, the one choice the person makes here (owner,
-// 2026-09-18) and the one vocabulary every stage reads from (2026-09-21): the tags of the read, the
-// expression in the frames, the movement in the clips. Its one line under the menu says what the
-// choice means.
-//
-// AND IT IS WHERE THE SCRIPT IS MARKED UP (the owner, 2026-09-22). The tagging used to be the first
-// half of the voice field's button, which meant the markup happened on the way to being spoken and
-// nobody saw it before the read was paid for. It belongs to the mood - the mood is what it marks up
-// by - so it is this field's own `generate`, and the read is stage two. There is no silent pass
-// left anywhere: with a line still unmarked, the voice will not start at all.
-function _stageMood(host, p, lines) {
+// FIELD 1 - MOOD & VOICE (phase V61, the owner 2026-10-30: "пользователь должен выбрать сначала mood и voice - давай объединим
+// 2 поля в одно горизонтальное. кнопка change должна быть справа от выбранного голоса и никогда не переносится на следующую
+// строку"; (т3) one `generate`; (т12) the mood's own sentence in a bubble over its menu). ONE LINE: the mood ▾ | ▶ the voice
+// · change | stability, speed | generate. The mood is the one vocabulary every stage reads from (the tags of the read, the
+// face in the frames, the movement in the clips), and the script is marked up by it; the voice reads the marked-up words,
+// ElevenLabs v3. The one `generate` does both, one after the other (VOICE.markAndRead): the mark-up when a line of the video
+// has no [tags], then every line that needs a read - and says on itself which it is doing. A mark-up that fails stops there
+// and says so under the line. By Seedance's voice sample nothing is read: `generate` marks up, and the voice needs its demo.
+function _stageMoodVoice(host, p, lines) {
   const v = _video();
   const g = VOICE.reading();
   const live = _live(lines);
-  const want = VOICE.untagged(p);
-  const done = live.length > 0 && !want.length;
+  const sample = _bySample();
+  const untagged = VOICE.untagged(p).length;
+  const read = live.filter(isRead).length;
+  // Read with other settings than the project's now (V26.1): still read, but work left in this field.
+  const redo = sample ? [] : live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
+  const will = sample ? 0 : live.filter(l => !isRead(l)).length;
+  const has = _canRead();
+  const needs = _needs(p);
+  const need = [needs.mood, needs.voice].filter(Boolean).join(' and ');
+  const done = live.length > 0 && !untagged && !will && !redo.length && !g.busy && !need;
   const now = ((_kit && _kit.moods) || []).find(m => m.id === v.mood) || null;
-  const need = _needs(p).mood;
-  const { body } = _stage(host, 'mood', {
-    step: 1, half: true, bare: true,     // its button stands on the mood's own line, not in a foot
-    // One call to an agent has no halfway point, so this fills by an estimate that learns (N3).
-    work: g.tagging ? () => _byTime(g.tagAt, 'tag') : null,
-    name: 'mood', sub: 'and the tags of the read', done, need,
-    summary: want.length ? want.length + (want.length === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
+  const { body } = _stage(host, 'moodvoice', {
+    step: 1, bare: true, wide: true,
+    // The mark-up is one call to an agent and goes by an estimate that learns (N3); the reads are counted.
+    work: g.tagging ? () => _byTime(g.tagAt, 'tag')
+      : g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
+        : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
+    name: 'mood & voice', sub: sample ? 'the voice\'s sample, for Seedance' : 'ElevenLabs v3', done, need,
+    summary: [untagged ? untagged + (untagged === 1 ? ' line to mark up' : ' lines to mark up') : 'marked up',
+      sample ? (!has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen')
+        : read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
   });
-  const row = el('div', 'mv3-wk-fsets');
-  const mood = el('select', 'mv3-wk-vsel is-small is-wide');
-  mood.title = 'The emotion of the whole video: the read, the frames and the clips all follow it';
+  const row = el('div', 'mv3-wk-mvrow');
+  body.appendChild(row);
+  // The mood. What it means is said in a bubble over the menu (the owner's (т12)).
+  const mood = el('select', 'mv3-wk-vsel is-small is-mood');
   if (!now) _noneOption(mood, 'mood: none');
   for (const m of (_kit && _kit.moods) || []) {
     const o = el('option', '', 'mood: ' + m.label);
@@ -1431,101 +1271,56 @@ function _stageMood(host, p, lines) {
     if (m.id === v.mood) o.selected = true;
     mood.appendChild(o);
   }
-  mood.disabled = _saving || !_kit || g.tagging;
+  mood.disabled = _saving || !_kit || g.busy;
   mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
+  hint(mood, () => {
+    const m = ((_kit && _kit.moods) || []).find(x => x.id === mood.value) || null;
+    return (m && m.about ? m.about + '\n' : '') + 'The emotion of the whole video: the read, the frames and the clips all follow it.';
+  });
   row.appendChild(mood);
-  body.appendChild(row);
-  // The mood's own sentence and the button that acts on it share a line (the owner, 2026-09-22):
-  // the words say what this mood IS, the button marks the script up by it, and a count of the
-  // lines still to mark was a third thing said where two were enough - the frame already says
-  // whether there is work left in this field.
-  const under = el('div', 'mv3-wk-fwishrow is-mood');
-  if (now && now.about) under.appendChild(el('div', 'mv3-wk-mood-about', now.about));
-  body.appendChild(under);
-  _genButton(under, {
-    label: g.tagging ? 'tagging…' : 'generate',
-    disabled: g.busy || !_kit || !live.length || !want.length || !!need,
-    title: need ? 'Choose a mood first - the script is marked up by it'
-      : !want.length ? 'Every line has its tags. Change the words of one and it comes back here.'
-      : 'Read the script and put the [tags] of this mood between the words - '
-        + want.length + (want.length === 1 ? ' line' : ' lines') + '. Costs credits, not dollars.',
-    on: () => VOICE.tagAll(_api.voiceApi()),
-  });
-}
-
-// VOICE - the first zone, the one the timeline waits for: the voice the script is read in - the
-// character's, or the project's own before there is a character - and `generate`, which tags the
-// script by the mood and reads every line that needs it, three at a time (ElevenLabs v3). Shut by
-// itself once every line is read.
-function _stageVoice(host, p, lines) {
-  if (_bySample()) return _stageVoiceSample(host, p);
-  const g = VOICE.reading();
-  const live = _live(lines);
-  const read = live.filter(isRead).length;
-  // Read with other settings than the project's now (V26.1): still read, but work left in this field.
-  const redo = live.map(l => VOICE.unsettledBy(p, l)).filter(Boolean);
-  const done = live.length > 0 && read === live.length && !redo.length && !g.busy;
-  const untagged = VOICE.untagged(p).length;
-  const { body, foot } = _stage(host, 'voice', {
-    step: 2, half: true,
-    // Counted, when there is a batch: every line that lands moves it. One line read by hand has
-    // nothing to count, so that one goes by the estimate (N3).
-    work: g.batch ? () => (g.batch.done || 0) / Math.max(1, g.batch.total)
-      : g.lines.length ? () => _byTime(g.readAt, 'read') : null,
-    // Red while there is no voice to read in at all - the character has none and the project has
-    // chosen none (phase V24, the owner 2026-10-09).
-    name: 'voice', sub: 'ElevenLabs v3', done, need: _needs(p).voice,
-    summary: read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : ''),
-  });
-  VOICE.paintRow(body, _api.voiceApi());
-  const has = _canRead();
-  const will = live.filter(l => !isRead(l)).length;
+  // The voice - ▶, its name, `change` right of it (js/merge-v3/wk-voice.js); what it has to say goes under the line.
+  const voice = el('div', 'mv3-wk-mvvoice');
+  row.appendChild(voice);
+  const notes = el('div', 'mv3-wk-mvnotes');
+  VOICE.paintRow(voice, _api.voiceApi(), { notes });
+  // How it is spoken (V26.1) - not by the voice sample, where nothing is read.
+  const ctl = el('div', 'mv3-wk-vctl');
+  if (!sample) _voiceSettings(ctl, p, g.busy);
+  row.appendChild(ctl);
+  const label = g.tagging ? 'marking up…'
+    : g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
+      : g.lines.length ? 'reading…' : 'generate';
+  const wait = !live.length ? 'This script has no lines'
+    : !v.mood ? 'Choose the mood first - the script is marked up by it'
+      : !has ? 'Choose a voice first - a character with one, or one for the project'
+        : (!untagged && !will && !redo.length) ? (sample ? 'Marked up - nothing is read by the voice sample' : 'Every line is marked up and read, with these settings')
+          : '';
   const again = redo.filter(w => w === 'stability').length;
   const retime = redo.length - again;
-  // HOW IT IS SPOKEN, in one row with the button (the owner, 2026-10-10): the stability on the left,
-  // the speed beside it, `generate` on the right. What the press will do is said on the button
-  // itself, under the pointer - a line of it under the row was one thing said twice (the owner).
-  foot.classList.add('is-voice');
-  const ctl = el('div', 'mv3-wk-vctl');
-  foot.appendChild(ctl);
-  _voiceSettings(ctl, p, g.busy);
-  const label = g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
-    : g.lines.length ? 'reading…' : 'generate';
   _genButton(ctl, {
     label,
-    disabled: !has || g.busy || !live.length || !(will + redo.length) || !!untagged,
-    title: !has ? 'Choose a voice first - a character with one, or one for the project'
-      : untagged ? 'The script is not marked up yet: ' + untagged + (untagged === 1 ? ' line has' : ' lines have')
-        + ' no tags. Stage 1 - the mood field - does that, and the read follows the tags.'
-        : !(will + redo.length) ? 'Every line is read, with these settings'
-          : [will && 'Read every line that needs it (' + will + '), one a second - ElevenLabs v3, by the tags the mood put in.',
-            again && 'Read again the ' + again + (again === 1 ? ' line' : ' lines') + ' read with another stability - ElevenLabs, credits.',
-            retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
-            redo.length && 'A line with a clip keeps it on the timeline until a new one is made.'].filter(Boolean).join(' '),
-    on: () => VOICE.generate(_api.voiceApi()),
+    disabled: g.busy || !!wait || !_kit,
+    title: wait || [
+      untagged && 'Mark the script up by the mood - the [tags] go between the words of ' + untagged + (untagged === 1 ? ' line' : ' lines') + '. Credits.',
+      will && 'Then read every line that needs it (' + will + '), one a second - ElevenLabs v3, by those tags. Credits.',
+      again && 'Read again the ' + again + (again === 1 ? ' line' : ' lines') + ' read with another stability - ElevenLabs, credits.',
+      retime && 'Retime the ' + retime + (retime === 1 ? ' line' : ' lines') + ' read at another speed - here, free.',
+      redo.length && 'A line with a clip keeps it on the timeline until a new one is made.',
+    ].filter(Boolean).join(' '),
+    on: () => VOICE.markAndRead(_api.voiceApi(), { read: !sample }),
   });
-}
-
-// (the sixth round) BY THE VOICE'S SAMPLE nothing is read: the field is the voice alone - chosen, it is done (the owner:
-// "Если голос у выбранного персонажа есть, и выбран sample то все окей"), red while there is none.
-function _stageVoiceSample(host, p) {
-  const has = _canRead();
-  const { body } = _stage(host, 'voice', {
-    step: 2, half: true, work: null,
-    name: 'voice', sub: 'its sample, for Seedance', done: has && !_demoMissing(p), need: _needs(p).voice,
-    summary: !has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen',
-  });
-  VOICE.paintRow(body, _api.voiceApi());
-  body.appendChild(el('div', 'mv3-wk-fwhy', 'Seedance takes the timbre from this voice’s demo and says the lines itself - nothing is read.'
-    + ' The voice is changed here; the sound is chosen in field 4.'));
-  if (_demoFor) body.appendChild(_note('Making the voice’s demo…'));
-  else if (_demoMissing(p)) {
-    body.appendChild(_note(_demoErr || 'This voice has no demo yet.', !!_demoErr));
-    const again = el('button', 'mv3-wk-vuse', 'make the demo');
-    again.type = 'button';
-    again.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
-    again.addEventListener('click', () => _askDemo(p));
-    body.appendChild(again);
+  body.appendChild(notes);
+  // By the voice sample: the voice's demo, made once (the sixth round of V26.8).
+  if (sample && has) {
+    if (_demoFor) notes.appendChild(_note('Making the voice’s demo…'));
+    else if (_demoMissing(p)) {
+      notes.appendChild(_note(_demoErr || 'This voice has no demo yet - Seedance takes its timbre from it.', !!_demoErr));
+      const mk = el('button', 'mv3-wk-vuse', 'make the demo');
+      mk.type = 'button';
+      mk.title = 'Read the demo phrase in this voice - ElevenLabs, credits, about ten seconds';
+      mk.addEventListener('click', () => _askDemo(p));
+      notes.appendChild(mk);
+    }
   }
 }
 
@@ -1660,8 +1455,9 @@ function _stageFrames(host, p) {
   const missing = _missing(p);
   const blocked = missing.length > 0;
   const s = _standing(p);
+  const lock = _voiceLock(p);
   const { body, foot } = _stage(host, 'frames', {
-    step: 3, half: true,
+    step: 2, half: true, lock,
     // The frames that have landed, plus how far the ones still drawing have got (N3).
     work: (_planning || _drawing.size) ? () => _framesPart(p) : null,
     name: 'first frames', sub: 'a set for the video', done: s.framesDone,
@@ -1768,7 +1564,7 @@ function _stageFrames(host, p) {
 function _shelfFrames(host, p) {
   const s = _standing(p);
   const { body } = _stage(host, 'shelf', {
-    bare: true,
+    bare: true, lock: _voiceLock(p),
     name: 'frames', sub: 'what has been drawn', done: s.framesDone,
     summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '') : '',
   });
@@ -1892,8 +1688,9 @@ function _stageVideo(host, p, lines) {
   const soon = _seedance();
   const done = s.n > 0 && s.clips === s.n && !_clipping.size && !why;
   const need = _needs(p).video;
+  const lock = _voiceLock(p);
   const { body, foot } = _stage(host, 'video', {
-    step: 4, half: true,
+    step: 3, half: true, lock,
     // The clips that have landed, plus the ones in flight; the place and the prompts, which come
     // first and are quick, go by the estimate of a clip (N3).
     work: (_writing || _envWriting || _clipping.size) ? () => _clipsPart(p, lines) : null,
@@ -1943,6 +1740,9 @@ function _stageVideo(host, p, lines) {
   const about = (_modelOf() || {}).about;
   if (about) body.appendChild(el('div', 'mv3-wk-fwhy', about));
   if (_seedance()) _seedanceSettings(body, p);
+  // (phase V61) WAITING FOR THE VOICE, the field's choices stay free: what films the video - and by Seedance's voice
+  // sample nothing is read at all, so that choice cannot wait for a read. What makes waits.
+  if (lock) body.querySelectorAll('.mv3-wk-fsets').forEach(r => r.classList.add('is-free'));
   // How the PLACE moves has no field here (phase V26.8, the owner 2026-10-14: "поле точно не нужно"): `generate` and
   // a clip have the agent write it first, and its sentence goes into every prompt word for word. It is put right in the
   // Library's environment column, "how it moves" (public/js/library/info.js) - or in the prompt of a line or a fragment.
@@ -1967,7 +1767,7 @@ function _stageVideo(host, p, lines) {
   const armed = _armedVideo && clips.length > 0;
   // What the press still waits for (phase V24): the field is open, its `generate` is not - the
   // character and the place, a first frame to animate, the quality, and the mood the person moves in.
-  const wait = [why, need, _needs(p).mood].filter(Boolean);
+  const wait = [lock && lock.replace(/\.$/, ''), why, need, _needs(p).mood].filter(Boolean);
   // (phase V26.8, parts 4-5) SEEDANCE: the place, then the prompt of every fragment that has none - one request each,
   // credits - then the clips of the fragments that have none, priced, on a second press.
   if (soon) {
@@ -2242,17 +2042,15 @@ function _row(p, l, i, n) {
   dot(_clipping.has(i) ? 'busy' : _clipState(p, l, i), 'clip');
   row.appendChild(dots);
 
-  // The whole text under the pointer (the owner, 2026-09-21): the row clips it to two lines, and a
-  // line is judged by all of its words. Beside the row, 200px wide, gone when the pointer goes.
-  row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, l, i, n), TIP_MS); });
-  row.addEventListener('mouseleave', _tipHide);
+  // (phase V61, the owner 2026-10-30: "в правом столбце давай отображать полностью текста реплик. при наведении не
+  // показываем всплывашку с полным текстом") The row shows every word of the line; nothing opens on the pointer.
   // What a line can have DONE to it, out of the way of the list (the owner, 2026-09-22): read it
   // again, or take it off the script. The press OPENS this fragment first - a menu about a line you
   // are not looking at is a menu applied to the wrong one - and opening is all it does: a second
   // right-click on the open line does not shut it, unlike a left one.
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    _tipHide();
+    if (row.closest('.is-locked')) return;           // (phase V61, (т2)) no who / where yet - the rows do nothing
     if (_open !== i || _inserting >= 0) { _open = i; _inserting = -1; _picking = false; _pickView = ''; _setPick = ''; _stagePick = ''; _stageFor = i; _remember(); _ctx.repaint(); }
     _rowMenu(e, row, p, l, i, n);
   });
@@ -2261,7 +2059,7 @@ function _row(p, l, i, n) {
   row.appendChild(_insPlus(i));
   // Pressing the open one again closes it: the right column then speaks for the whole script.
   row.addEventListener('click', () => {
-    _tipHide();
+    if (row.closest('.is-locked')) return;           // (phase V61, (т2))
     _inserting = -1;
     _open = _open === i ? -1 : i;
     _picking = false;
@@ -2275,7 +2073,7 @@ function _row(p, l, i, n) {
 // THE "+" UNDER A ROW (phase V26.8). Not while anything is being made in the project: a read, a clip or a prompt lands
 // on its line by number, and a line put in above it would move it (the server refuses too - /line/insert).
 const _insBusy = () => (VOICE.reading().busy ? 'the voice is busy' : _clipping.size ? 'a clip is being made'
-  : (_writing || _chain) ? 'the video is being written for' : '');
+  : _writing ? 'the video is being written for' : '');
 function _insPlus(i) {
   const why = _insBusy();
   const plus = el('span', 'mv3-wk-fins' + (why ? ' is-off' : ''), '+');
@@ -2283,7 +2081,6 @@ function _insPlus(i) {
   plus.title = why ? 'Not now: ' + why : 'Put a new line in under this one';
   plus.addEventListener('click', (e) => {
     e.stopPropagation();
-    _tipHide();
     if (why) return;
     _inserting = i;
     _insDraft = '';
@@ -2368,8 +2165,6 @@ function _offRow(l, i) {
   back.disabled = _offing;
   back.addEventListener('click', () => _setOff(i, false));
   row.appendChild(back);
-  row.addEventListener('mouseenter', () => { _tipT = setTimeout(() => _tipShow(row, l, i, 0), TIP_MS); });
-  row.addEventListener('mouseleave', _tipHide);
   return row;
 }
 
@@ -2524,7 +2319,7 @@ function _readAct(p, l, i) {
   const rs = _readState(l);
   const busy = VOICE.reading().busy;
   const why = !_canRead() ? 'choose a voice first'
-    : !VOICE.canSpeak(p) ? 'mark the script up first - stage 1'
+    : !VOICE.canSpeak(p) ? 'mark the script up first - field 1'
       : busy ? 'the voice is busy' : '';
   const va = _api.voiceApi();
   return { label: rs === 'none' ? 'read' : 'read again', why, on: why ? null : () => VOICE.readLine(va, i) };
@@ -2571,33 +2366,6 @@ function _rowMenu(ev, row, p, l, i, n) {
 // ── The whole text of a row, under the pointer ──────────────────────────────
 // Not a layer (js/layers.js): it takes no keyboard and answers no question. Parked on the body,
 // because the list scrolls and clips its children; beside the row on the side with room.
-let _tip = null;
-let _tipT = 0;
-function _tipHide() {
-  clearTimeout(_tipT);
-  if (!_tip) return;
-  _tip.remove();
-  window.removeEventListener('scroll', _tipHide, true);
-  _tip = null;
-}
-function _tipShow(row, l, i, n) {
-  _tipHide();
-  if (!row.isConnected) return;
-  const tip = el('div', 'mv3-wk-ftip');
-  tip.appendChild(el('div', 'mv3-wk-ftip-t', _words(l) || '(no words)'));
-  tip.appendChild(el('div', 'mv3-wk-ftip-n', n
-    ? 'fragment ' + n + (i === _open ? ' · press again for the whole video' : ' · press to open')
-    : 'taken off the script'));
-  document.body.appendChild(tip);
-  const r = row.getBoundingClientRect();
-  const w = tip.offsetWidth, h = tip.offsetHeight;
-  const left = r.right + 8 + w <= window.innerWidth - 6 ? r.right + 8 : Math.max(6, r.left - w - 8);
-  tip.style.left = Math.round(left) + 'px';
-  tip.style.top = Math.round(Math.max(6, Math.min(window.innerHeight - h - 6, r.top - 4))) + 'px';
-  _tip = tip;
-  window.addEventListener('scroll', _tipHide, true);
-}
-
 // ── The right column: the open fragment ─────────────────────────────────────
 // A grid of two rows, the animation prompt down the left, the two pictures of a fragment - what it
 // opens on and what it becomes - one above the other on the right:
@@ -3071,19 +2839,21 @@ function _clipCol(p, l, i, rs, take) {
   let price = '';
   // (phase V26.8, part 5) A line filmed by Seedance: its own reasons, its seconds and its price.
   const sf = _seedance() ? _sdFragOf(p, i) : null;
-  if (_seedance()) {
+  const vlock = _voiceLock(p);
+  if (vlock) cap = vlock.replace(/\.$/, '').toLowerCase();      // (phase V61, (т5))
+  else if (_seedance()) {
     if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
-    else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 2)';
+    else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 1)';
     else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
     else if (!fr) cap = 'make the frames first';
-    else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
+    else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
     else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
     else if (sf.secs > 0) { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
     else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price (the owner's answer (я10))
   } else if (rs !== 'ok') cap = 'read this line first';
   else if (!fr) cap = 'make the frames first';
-  else if (!_video().model) cap = 'choose the model of the clips first (field 4)';
-  else if (!_video().quality) cap = 'choose the quality of the clips first (field 4)';
+  else if (!_video().model) cap = 'choose the model of the clips first (field 3)';
+  else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
   else { ready = true; cap = take.dur.toFixed(1) + ' s · ' + (tier ? _money(_clipCost(take.dur, tier)) : '…'); }
   if (!sf && ready && tier) price = _money(_clipCost(take.dur, tier));
@@ -3198,6 +2968,5 @@ export function openPicture(p) {
 /** Leaving the step stops the read that was playing, and drops what was hanging over the list. */
 export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
-  _tipHide();
   _closeMenu();
 }

@@ -170,6 +170,15 @@ function _faceOf(c) {
   return { src: c.face || c.sheet || '', left: !c.face && !!c.sheet };
 }
 
+// (phase V61, (т9а)) "saving…" at the right of the panel's head while the casting is saved; gone with the save, and with the step.
+function _savingWord() {
+  const head = document.querySelector('#mv3-inspector .mv3-panel-head');
+  if (!head) return;
+  let w = head.querySelector('.mv3-wk-saving');
+  if (!_saving || !_active) { if (w) w.remove(); return; }
+  if (!w) head.appendChild(_el('span', 'mv3-wk-saving', 'saving…'));
+}
+
 // ── The panel ───────────────────────────────────────────────────────────────
 export function paint(host, ctx) {
   _ctx = ctx;
@@ -180,15 +189,10 @@ export function paint(host, ctx) {
   const root = _el('div', 'mv3-wk-setup');
   host.appendChild(root);
 
-  // THE TITLE LINE IS TWO COLUMNS (the owner, 2026-09-22; turned round in phase V24, 2026-10-09):
-  // on the left `generate all` and where the whole script stands - the counters, hung there by the
-  // script pane itself (js/merge-v3/wk-fragments.js, _counters) - and what this step is on the right.
-  const head = _el('div', 'mv3-ins-head is-wk');
-  const txt = _el('div', 'mv3-ins-head-txt');
-  txt.appendChild(_el('div', 'mv3-ins-title', 'setup'));
-  txt.appendChild(_el('div', 'mv3-ins-sub', _saving ? 'saving…' : 'Who says it, where, in what voice - and the frame and the clip of each fragment'));
-  head.appendChild(txt);
-  root.appendChild(head);
+  // NO TITLE LINE OF ITS OWN (phase V61, the owner 2026-10-30, (т9): "давай всю строку удалим вместе с кнопкой generate all и
+  // header setup с описанием"): the panel's own head says "Setup" and carries the crumbs (js/merge-v3/workshop.js), and
+  // "saving…" stands grey at its right while the casting is saved ((т9а)).
+  _savingWord();
 
   if (!ctx.project) { root.appendChild(_note('Reading the project…')); return; }
   if (_chars === null) { _load(ctx.repaint); root.appendChild(_note('reading the characters…')); return; }
@@ -202,7 +206,7 @@ export function paint(host, ctx) {
   // still talking over the script is a sound with nothing on screen to explain it.
   if (_view !== 'voice') VOICE.leave();
   // The stage is painted AFTER the panel, from the same state (this file, _stage).
-  FRAG.paint(scroll, ctx, _fragApi(chosen), head);
+  FRAG.paint(scroll, ctx, _fragApi(chosen));
   _stage(chosen);
   // The casting's own countdowns, each on its half, when the stage shows the halves (V58).
   _syncHalves();
@@ -816,6 +820,7 @@ function _note(text, bad) {
  *  that was playing, close the windows of this step, and take what it laid over the stage. */
 export function leave() {
   _active = false;
+  _savingWord();
   VOICE.leave();
   FRAG.leave();
   if (_who && _who.win.alive()) _who.win.close();

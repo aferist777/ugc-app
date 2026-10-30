@@ -3400,11 +3400,11 @@ function _unchosen(video, which) {
   const v = video || {};
   const words = {
     mood: !v.mood && 'the mood (field 1)',
-    framing: !v.framing && 'the shot size (field 3)',
-    frames: !v.frames && 'how many frames (field 3)',
-    spread: !v.spread && 'how the fragments take their frames (field 3)',
-    model: !v.model && 'the model of the clips (field 4)',
-    quality: !v.quality && 'the quality of the clips (field 4)',
+    framing: !v.framing && 'the shot size (field 2)',
+    frames: !v.frames && 'how many frames (field 2)',
+    spread: !v.spread && 'how the fragments take their frames (field 2)',
+    model: !v.model && 'the model of the clips (field 3)',
+    quality: !v.quality && 'the quality of the clips (field 3)',
   };
   const miss = which.map(k => words[k]).filter(Boolean);
   return miss.length ? 'choose ' + miss.join(', ') + ' first' : '';
@@ -4140,9 +4140,9 @@ function _sdClipPlan(proj, i) {
   if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
   const sound = video.sound || TH.SOUND_DEFAULT;
   const sample = sound === 'sample' ? _sdSample(proj) : '';
-  if (sound === 'sample' && !sample) return { skipped: 'the voice has no demo yet - it is made in the voice field (field 2)' };
+  if (sound === 'sample' && !sample) return { skipped: 'the voice has no demo yet - it is made in field 1, mood & voice' };
   const quality = TH.qualityOf(video.model, video.quality);
-  if (!quality) return { skipped: 'choose the quality of the clips (field 4) first' };
+  if (!quality) return { skipped: 'choose the quality of the clips (field 3) first' };
   const voice = sound === 'sample' ? String((_castVoice(proj) || {}).id || '') : '';
   // With `sample` Seedance picks the length (-1) and bills what it made: no price beforehand (the owner's answer (я10)).
   return { frag: f, video, sound, sample, voice, quality, cast, cost: f.secs > 0 ? +(quality.pricePerSec * f.secs).toFixed(4) : null };
@@ -4289,19 +4289,17 @@ function _sdClipRoute(req, res, proj) {
   _sdStartClip(rec, request);
 }
 
-// POST /scen3/fragments/clips for a Seedance project: every line that needs its clip (or the ones `only` names), a row
-// each at once, then asked a second apart.
+// POST /scen3/fragments/clips for a Seedance project: every line that needs its clip, a row each at once, then asked a
+// second apart.
 function _sdClipsRoute(req, res, proj) {
   const b = req.body || {};
   const id = String(proj.id);
   const key = String(b.key || '');
   const title = String(proj.name || proj.title || 'talking head');
-  const only = Array.isArray(b.only) ? new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0)) : null;
   const busy = _sdRunning(id);
   const queued = [], skipped = [];
   for (const f of _sdView(proj) || []) {
     const i = f.line;
-    if (only && !only.has(i)) continue;
     if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
     const plan = _sdClipPlan(proj, i);
     if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }
@@ -5717,12 +5715,9 @@ router.post('/scen3/fragments/clips', (req, res) => {
         && String(r.job.params.file.projectId) === id)
       .map(r => Number(r.job.params.file.line)));
 
-    // (phase V23) Only the lines the person was asked about: `generate all` names the ones its question priced, and a
-    // line that was not in the question is not paid for. Without a list, every line that needs a clip.
-    const only = Array.isArray(b.only) ? new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0)) : null;
+    // Every line that needs a clip. (A list of lines, `only`, was `generate all`'s - gone in phase V61.)
     const queued = [], skipped = [];
     for (let i = 0; i < lines.length; i++) {
-      if (only && !only.has(i)) continue;
       if (busy.has(i)) { skipped.push({ line: i + 1, why: 'already being made' }); continue; }
       const plan = _clipPlan(proj, i);
       if (plan.skipped) { skipped.push({ line: i + 1, why: plan.skipped }); continue; }

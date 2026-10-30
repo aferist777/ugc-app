@@ -1350,8 +1350,7 @@ body.mv3-locked #mv3-timeline{
    counters come first, the step's title stands at the right end of the row, and a shelf's cross
    stays at the far right where it was (js/merge-v3/wk-maker.js shelfHead, wk-fragments.js _counters). */
 .mv3-ins-head.is-wk.is-tabs-left > .mv3-ins-head-txt{text-align:right}
-.mv3-ins-head.is-wk.is-tabs-left > .mv3-wk-bar,
-.mv3-ins-head.is-wk.is-tabs-left > .mv3-ins-head-act.is-counters{margin-left:0}
+.mv3-ins-head.is-wk.is-tabs-left > .mv3-wk-bar{margin-left:0}
 .mv3-ins-head.is-wk.is-tabs-left > .mv3-iconbtn{flex:0 0 auto}
 .mv3-wk-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:26px}
 .mv3-wk-bar{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-left:auto}
@@ -1690,10 +1689,6 @@ body.mv3-locked #mv3-timeline{
    the three boxes - on the left of the row since phase V24, the name of the step on the right
    (.is-tabs-left above). In the header the boxes do not stretch - the title has the width - and the
    title drops to its own line when the panel is too narrow to hold both (the header wraps). */
-.mv3-ins-head-act.is-counters{margin-left:auto; gap:8px}
-.mv3-ins-head-act.is-counters .mv3-wk-fstats{flex:0 0 auto; margin:0}
-.mv3-ins-head-act.is-counters .mv3-wk-fstat{flex:0 0 auto}
-.mv3-wk-genall{flex:0 0 auto}
 .mv3-wk-mood-about{margin:4px 2px 0; font:400 10.5px/1.45 var(--font); color:var(--muted)}
 /* FOUR FIELDS, TWO BY TWO, NUMBERED THE WAY THEY RUN (the owner, 2026-09-22): 1 mood - which is
    also where the script is marked up - 2 voice, 3 first frames, 4 video. They do not open and shut:
@@ -1850,9 +1845,10 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-popup{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:60; max-width:420px;
   padding:10px 16px; border:1px solid var(--gold); border-radius:8px; background:var(--bg);
   font:600 11px/1.45 var(--font); color:var(--gold); box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:none}
+/* (phase V61, the owner 2026-10-30) EVERY WORD of the line, as many lines as it takes - no clamp, no tip on hover. */
 .mv3-wk-ftext{
   flex:1 1 auto; min-width:0; font:400 10.5px/1.4 var(--font); color:var(--ink);
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  white-space:normal; overflow-wrap:break-word;
 }
 /* A LINE TAKEN OFF THE SCRIPT (phase Z), at the foot of the list: dim, with no number and no
    marks - it is not in the video - and carrying the one act it has. A div rather than a button:
@@ -1898,31 +1894,6 @@ body.mv3-locked #mv3-timeline{
 /* The model takes what the tier leaves of its row; the motion has a row of its own. */
 .mv3-wk-vsel.is-small.is-model{flex:1 1 auto}
 .mv3-wk-vsel.is-small.is-wide{flex:1 1 100%}
-/* Where the whole script stands, over the right column: three boxes, and in each the count with
-   its name BESIDE it rather than under it (the owner, 2026-09-21) - the row is then one line high
-   and the number is read together with what it counts. */
-.mv3-wk-fstats{display:flex; gap:6px; margin:0}
-.mv3-wk-fstat{
-  flex:1 1 0; min-width:0; padding:5px 8px; display:flex; align-items:baseline; gap:5px;
-  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface);
-}
-.mv3-wk-fstat.is-done{border-color:var(--success, oklch(.72 .15 150))}
-.mv3-wk-fstat-n{flex:0 0 auto; font:700 14px/1.2 var(--font); color:var(--ink); font-variant-numeric:tabular-nums}
-.mv3-wk-fstat-l{
-  flex:1 1 auto; min-width:0; font:600 9px/1.2 var(--font); letter-spacing:.05em; text-transform:uppercase;
-  color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.mv3-wk-fstat.is-done .mv3-wk-fstat-n{color:var(--success, oklch(.72 .15 150))}
-
-/* The whole text of a row, under the pointer (js/merge-v3/wk-fragments.js, _tipShow): fixed to
-   the viewport and parked on the body, like the face enlargement - the list scrolls and clips its
-   own children. 400px wide (the owner, 2026-09-22; 200 before that). */
-.mv3-wk-ftip{
-  position:fixed; z-index:9600; width:400px; pointer-events:none; padding:7px 9px 6px;
-  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface); box-shadow:var(--shadow);
-}
-.mv3-wk-ftip-t{font:400 11px/1.45 var(--font); color:var(--ink); white-space:normal; word-break:break-word}
-.mv3-wk-ftip-n{margin-top:5px; font:600 8.5px/1.2 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
 /* The cross in the corner of a stage half that holds something written - the character, the
    environment - takes it off the project (js/merge-v3/wk-setup.js, _stageClears). In the corner
    of the HALF, not of the picture: the picture moves under the zoom, the cross does not. */
@@ -2132,6 +2103,31 @@ body.mv3-locked #mv3-timeline{
   position:absolute; top:3px; left:3px; width:5px; height:5px; z-index:2; pointer-events:none;
   border-radius:50%; background:var(--accent); box-shadow:0 0 0 1px oklch(0 0 0 / .55);
 }
+
+/* ── TALKING HEAD STEP BY STEP (phase V61, the owner 2026-10-30) ──────────────────────────────────────────────────────
+   Until who and where are chosen the fields are blurred and take no press - as the timeline under setup is - and the rows
+   of the script do nothing (js/merge-v3/wk-fragments.js, _all, paint). */
+.mv3-wk-zone.is-locked{filter:blur(3px) saturate(.7); opacity:.5; pointer-events:none; user-select:none}
+.mv3-wk-half.is-frags.is-locked .mv3-wk-frow{pointer-events:none; cursor:default}
+.mv3-wk-half.is-frags.is-locked .mv3-wk-frow > button, .mv3-wk-half.is-frags.is-locked .mv3-wk-fdots{opacity:.35}
+/* A field waiting for the voice ((т5)): red (is-need), what is in it dimmed and dead - but its free rows - and a press on it
+   says why (ask.js note). */
+.mv3-wk-stage.is-voicelock{cursor:not-allowed}
+.mv3-wk-stage.is-voicelock > .mv3-wk-stage-body > :not(.is-free),
+.mv3-wk-stage.is-voicelock > .mv3-wk-stage-foot{opacity:.4; pointer-events:none}
+.mv3-wk-stage.is-voicelock .is-free{cursor:auto}
+/* FIELD 1, MOOD & VOICE - ONE LINE that never wraps (the owner): the mood, the voice with `change` right of it (a long name
+   ends in an ellipsis), the stability and the speed, `generate`. What it has to say goes under the line. */
+.mv3-wk-mvrow{display:flex; align-items:center; gap:10px; flex-wrap:nowrap; min-width:0}
+.mv3-wk-mvrow > .mv3-wk-vsel.is-mood{flex:0 1 170px; min-width:90px}
+.mv3-wk-mvvoice{flex:1 1 auto; min-width:0; display:flex}
+.mv3-wk-mvvoice > .mv3-wk-vrow{flex:1 1 auto; min-width:0; margin:0; flex-wrap:nowrap}
+.mv3-wk-mvvoice .mv3-wk-vsub.is-grow{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mv3-wk-mvvoice .mv3-wk-vmore{white-space:nowrap}
+.mv3-wk-mvrow > .mv3-wk-vctl{flex:0 0 auto; flex-wrap:nowrap}
+.mv3-wk-mvnotes:empty{display:none}
+/* "saving…" at the right of the Setup panel's head while the casting is saved ((т9а); js/merge-v3/wk-setup.js). */
+.mv3-panel-head .mv3-wk-saving{margin-left:8px; font:400 10px/1 var(--font); color:var(--muted); letter-spacing:0; text-transform:none}
 
 /* THE VOICE FIELD'S ONE ROW (phase V26.1, the owner 2026-10-10): the stability and the speed on the
    left and `generate` on the right, never wrapping. What the press will do is in its tooltip. */

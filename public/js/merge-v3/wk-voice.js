@@ -40,6 +40,7 @@
 
 import { el } from './wk-maker.js';
 import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
+import { hint } from '../bubble.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -138,29 +139,38 @@ const _active = (rec) => {
 // sub-level where voices are chosen. The dropdown is only for the ones already theirs - picking
 // a NEW one is a search, not a choice from a list. With nobody cast, or a character with no
 // voice of their own, the row is the project's own pick - or the way to one.
-export function paintRow(host, api) {
+// (phase V61, the owner 2026-10-30) ONE LINE in the field "mood & voice", and it never wraps: ▶, the voice - a long name ends
+// in an ellipsis - and `change` right of it. What used to stand under the name - whose voice this is - is said in a bubble
+// over the name when the pointer rests on it ((т4): "все пять - пояснения можно всплывашкой подсказкой показывать над тем, к
+// чему относится"), and the news of a voice just taken is not said at all. `o.notes` - where the notes go (the row's host
+// when not given): the field keeps its one line and puts them under it.
+export function paintRow(host, api, o) {
   const rec = api.char();
   const pick = api.pick();
   const mine = _mine(rec);
   const now = _active(rec);
+  const notes = (o && o.notes) || host;
 
   const row = el('div', 'mv3-wk-vrow is-now');
   if (!mine.length && pick) {
     // The project's own voice: one, so a name rather than a menu of one.
     row.appendChild(_playBtn(pick.sample || '', 'our own demo'));
     const txt = el('div', 'mv3-wk-vtxt');
-    txt.appendChild(el('div', 'mv3-wk-vname', pick.name || pick.voiceId));
-    txt.appendChild(el('div', 'mv3-wk-vsub', rec
-      ? 'the project’s voice - ' + (rec.name || 'the character') + ' has none of their own'
-      : 'the project’s voice - a character with one of their own will speak in theirs'));
+    const name = el('div', 'mv3-wk-vname', pick.name || pick.voiceId);
+    hint(name, (rec
+      ? 'The project’s voice - ' + (rec.name || 'the character') + ' has none of their own.'
+      : 'The project’s voice - a character with one of their own will speak in theirs.')
+      + (_sub(pick) ? '\n' + _sub(pick) : ''));
+    txt.appendChild(name);
     row.appendChild(txt);
     row.appendChild(_pick(api, 'change'));
   } else if (!mine.length) {
-    // What is missing, and the way to fix it at the end of the same line (the owner, 2026-09-22):
-    // the sentence gives up the width - it wraps inside its own box - and the button stays put.
-    row.appendChild(el('span', 'mv3-wk-vsub is-grow', rec
-      ? (rec.name || 'This character') + ' has no voice yet - every line is read in it'
-      : 'No voice yet - choose one for the project, or a character who has one'));
+    // What is missing, and the way to fix it at the end of the same line (the owner, 2026-09-22).
+    const none = el('span', 'mv3-wk-vsub is-grow', 'no voice yet');
+    hint(none, rec
+      ? (rec.name || 'This character') + ' has no voice yet - every line is read in the one chosen here.'
+      : 'No voice yet - choose one for the project, or cast a character who has one.');
+    row.appendChild(none);
     row.appendChild(_pick(api, 'choose a voice'));
   } else {
     row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
@@ -180,11 +190,11 @@ export function paintRow(host, api) {
   }
   host.appendChild(row);
 
-  if (mine.length && !now) host.appendChild(api.note('None of them is set as the voice - pick one above.', true));
-  // What the sub-level had to say - a voice taken, or one that could not be - is said ONCE
-  // here, on the way back, and then let go: it is news about what just happened, not a label.
-  if (_said) { host.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
-  if (_rsaid) host.appendChild(api.note(_rsaid, _rbad));
+  if (mine.length && !now) notes.appendChild(api.note('None of them is set as the voice - pick one in the menu.', true));
+  // What the sub-level had to say - a voice that could not be taken, or a demo that failed - is said ONCE here, on the way
+  // back, and then let go: it is news about what just happened, not a label.
+  if (_said) { notes.appendChild(api.note(_said, _bad)); _said = ''; _bad = false; }
+  if (_rsaid) notes.appendChild(api.note(_rsaid, _rbad));
 }
 
 /** Does the character have a voice to read in? */
@@ -437,9 +447,8 @@ async function _take(api, card) {
     if (!rec) {
       // Nobody cast: the project's own voice (routes/scen3.js, voice.pick).
       await api.setPick(entry);
-      _said = t.reused ? 'Already in the library, so its demo was kept. It is the project’s voice now.'
-        : t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.'
-          : 'Taken - it is the project’s voice now.';
+      // (phase V61, (т4)) Taken is said by the row itself - the name is there now; only a demo that failed is news.
+      _said = t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
       _bad = false;
       _busy = '';
       return _repaint(api);
@@ -452,10 +461,8 @@ async function _take(api, card) {
     });
     // Three different things can have happened, and a sentence that blurs them sends somebody
     // looking for a second copy that does not exist.
-    _said = had ? 'Already this character’s - it is their voice now.'
-      : t.reused ? 'Already in the library, so its demo was kept. It is this character’s voice now.'
-        : t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.'
-          : 'Taken - it is this character’s voice now.';
+    // (phase V61, (т4)) The row shows the voice taken; only a demo that failed is said.
+    _said = !had && t.sampleError ? 'Taken. Its demo failed to record, which is cosmetic.' : '';
     _bad = false;
   } catch (e) {
     _said = 'Could not take it: ' + e.message;
@@ -614,13 +621,29 @@ async function _tag(api, only) {
 export async function generate(api) {
   if (_tagging || _reading.length || _batch) return;
   if (!canSpeak(api.project() || {})) {
-    _rsaid = 'The script is not marked up yet - stage 1, in the mood field, does that.';
+    _rsaid = 'The script is not marked up yet - field 1, mood & voice, does that.';
     _rbad = true;
     return _repaint(api);
   }
   // ...and the lines read with other settings (V26.1): read again for another stability, retimed
   // for another speed. Only here - the chain reads what is not read, as it always did.
   await readAll(api, { settle: true });
+}
+
+/**
+ * (phase V61, the owner 2026-10-30, (т3): "одна") THE ONE `generate` of the field "mood & voice": the script marked up by
+ * the mood when any line of the video has no [tags], then every line that needs it read - the two stages the mood and the
+ * voice fields had, one after the other. A mark-up that fails stops here, said in words, and nothing is read. `o.read`
+ * false - by Seedance's voice sample nothing is read: the mark-up alone.
+ */
+export async function markAndRead(api, o) {
+  if (_tagging || _reading.length || _batch) return;
+  if (untagged(api.project() || {}).length) {
+    await tagAll(api);
+    if (_rbad || untagged(api.project() || {}).length) return;
+  }
+  if (o && o.read === false) return;
+  await generate(api);
 }
 
 // A chunk of lines, spoken now in one call - tagged first where they have no tags yet, because
@@ -635,7 +658,7 @@ async function _speak(api, lines, inBatch) {
   // the lines around it.
   const some = Array.isArray(api.project() && api.project().lines) ? api.project().lines : [];
   if (lines.some(i => some[i] && !_tagged(some[i]))) {
-    _rsaid = 'This line has no tags yet - mark the script up first, in the mood field.';
+    _rsaid = 'This line has no tags yet - mark the script up first, in field 1, mood & voice.';
     _rbad = true;
     _repaint(api);
     return false;

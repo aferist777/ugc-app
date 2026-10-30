@@ -53,6 +53,9 @@
 .hm-btn:hover{border-color:var(--muted)}
 .hm-btn.is-primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
 .hm-btn.is-gold{background:transparent; border-color:var(--gold); color:var(--gold)}
+/* A kind of project that is coming (phase V61: voiceover) - there, greyed, not pressable. */
+.hm-btn.is-off{opacity:.45; cursor:default}
+.hm-btn.is-off:hover{border-color:var(--border)}
 
 /* ── rows: Now, New since ── */
 .hm-rows{display:flex; flex-direction:column; gap:6px}

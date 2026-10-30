@@ -96,14 +96,22 @@ BLOCKS.continue = () => {
   f.right.appendChild(all);
   const grid = el('div', 'hm-projects');
   const news = el('div', 'hm-new');
-  for (const [label, href, primary] of [
-    // Merge's own "+ new project" menu and its items (js/merge-v3/projects.js `?new=`); a character - New Character's
-    // window, here (phase V60.1, the owner's (пк4а); the address is the Library's window).
-    ['+ new project', '/merge?new=menu', true], ['+ talking head', '/merge?new=talking', false],
-    ['+ highlights', '/merge?new=highlights', false], ['+ blank', '/merge?new=blank', false],
-    ['+ new character', '/library?shelf=characters&make=1', false],
+  for (const [label, href] of [
+    // The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`) - since phase V61 the kinds
+    // alone, blank first (the owner 2026-10-30, (т10), (т15): "кнопку new project со страницы home удаляем. только типа
+    // проектов", "только blank проект должен быть первым"); voiceover is coming (V62) and does nothing yet. A character -
+    // New Character's window, here (phase V60.1, the owner's (пк4а); the address is the Library's window).
+    ['+ blank', '/merge?new=blank'], ['+ talking head', '/merge?new=talking'], ['+ highlights', '/merge?new=highlights'],
+    ['+ voiceover · in development', ''],
+    ['+ new character', '/library?shelf=characters&make=1'],
   ]) {
-    const a = el('a', 'hm-btn' + (primary ? ' is-primary' : ''), label);
+    if (!href) {
+      const off = el('span', 'hm-btn is-off', label);
+      off.title = 'Coming: the script read in a voice, B-roll over it';
+      news.appendChild(off);
+      continue;
+    }
+    const a = el('a', 'hm-btn', label);
     a.href = href;
     if (label === '+ new character') a.addEventListener('click', _newCharacter);
     news.appendChild(a);
@@ -263,7 +271,7 @@ const STEPS = [
   { id: 'cf', title: 'Add the Cloudflare key', sub: 'hosts the references the models fetch · R2 needs a card once', go: 'add', href: '/admin#keys' },
   { id: 'bot', title: 'Connect your Telegram bot', sub: 'send links and media from the phone into REFERENCES', go: 'connect', href: '/admin#keys' },
   { id: 'char', title: 'Make your first character', sub: 'a portrait, then a 4K sheet - Library · Characters', go: 'start', href: '/library?shelf=characters&make=1' },
-  { id: 'head', title: 'Make a talking head', sub: 'a scenario → mood → voice → first frames → video', go: 'start', href: '/merge?new=talking' },
+  { id: 'head', title: 'Make a talking head', sub: 'a scenario → mood & voice → frames chat → video', go: 'start', href: '/merge?new=talking' },
   { id: 'speech', title: 'Download the speech model', sub: 'captions heard on this computer, free · 574 MB', go: 'download', href: '/admin#local' },
 ];
 BLOCKS.steps = () => {

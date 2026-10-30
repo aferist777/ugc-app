@@ -89,21 +89,26 @@ const _lend = () => {
 function _readCount() {
   // The lines that are IN the video: one taken off is not waited for (phase Z, scen-api.js).
   const lines = ((_project && Array.isArray(_project.lines)) ? _project.lines : []).filter(isLive);
-  return { read: lines.filter(isRead).length, total: lines.length };
+  return { read: lines.filter(isRead).length, clips: lines.filter(_hasClip).length, total: lines.length };
 }
-// IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first read has been laid on it
-// (the owner, 2026-09-22): a cut of two fragments is a cut, and waiting for the last line before
-// letting anybody look at it helps nobody. Anything on any lane counts - the mirror's cells
-// (lib/frag-mirror.js) and whatever the person put there themselves.
+// A line with a clip of its own - Kling's takes or Seedance's (routes/scen3.js keeps both on the line).
+function _hasClip(l) {
+  const v = (l && l.video) || {};
+  return ((v.plain || []).length + (v.tagged || []).length + (((l && l.sd) || {}).clips || []).length) > 0;
+}
+// IS THERE ANYTHING TO EDIT? The timeline opens as soon as the first CLIP has been laid on it (phase V61, the owner's
+// (т1а): a read with no clip lies nowhere in a talking head - lib/frag-mirror.js): a cut of two fragments is a cut, and
+// waiting for the last line before letting anybody look at it helps nobody. Anything on any lane counts - the mirror's
+// cells and whatever the person put there themselves.
 function _hasCut() {
   const tl = Store.timeline();
   return !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
 }
 function _mayEdit() {
   if (_hasCut()) return true;
-  // Before the page has the timeline in hand, the project's own reads answer the same question:
-  // one read means the mirror has something to lay, and the Library spine should not be dead.
-  return !!(_project && _readCount().read > 0);
+  // Before the page has the timeline in hand, the project's own clips answer the same question:
+  // one clip means the mirror has something to lay, and the Library spine should not be dead.
+  return !!(_project && _readCount().clips > 0);
 }
 
 // The step being left lets go of what it was doing on its own - a read still playing.
@@ -185,7 +190,7 @@ function _firstStep() {
 
 // ── The spines ──────────────────────────────────────────────────────────────
 // What the two folded panels say, which in a talking head is what the steps say (phase L). The
-// Library spine is dead until the timeline has something on it - the first read laid is enough -
+// Library spine is dead until the timeline has something on it - the first clip laid is enough (V61) -
 // and says how far the script has got; a blank project has no Setup spine at all (the body class
 // lets the stylesheet hide it).
 function _paintSpines() {
@@ -196,10 +201,10 @@ function _paintSpines() {
   lib.classList.toggle('is-off', off);
   const n = _readCount();
   lib.title = !_pid ? ''
-    : off ? (_project ? 'Read a fragment first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total : 'Reading the project…')
-      : _step === 'setup' ? 'The timeline and the Library · ' + n.read + '/' + n.total + ' read' : '';
+    : off ? (_project ? 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total : 'Reading the project…')
+      : _step === 'setup' ? 'The timeline and the Library · ' + n.clips + '/' + n.total + ' with a clip' : '';
   const ins = document.getElementById('mv3-inspector');
-  if (ins) ins.title = _pid && _step === 'timeline' ? 'Back to setup - the script and the four fields' : '';
+  if (ins) ins.title = _pid && _step === 'timeline' ? 'Back to setup - the script and its fields' : '';
 }
 
 // ── The route, in the panel's own header ────────────────────────────────────
@@ -231,7 +236,7 @@ function _paintRoute() {
   b.type = 'button';
   b.className = 'mv3-wk-step is-on';
   b.textContent = 'setup';
-  b.title = 'Back to the script and the four fields';
+  b.title = 'Back to the script and its fields';
   b.addEventListener('click', () => mod.goCrumb('hub'));
   const wrap = document.createElement('div');
   wrap.className = 'mv3-wk-stepwrap';
