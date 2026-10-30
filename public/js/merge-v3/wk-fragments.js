@@ -1260,32 +1260,44 @@ function _stageMoodVoice(host, p, lines) {
       sample ? (!has ? 'no voice yet' : _demoFor ? 'making its demo…' : _demoMissing(p) ? 'its demo is missing' : 'the voice is chosen')
         : read + '/' + live.length + ' read' + (redo.length ? ' · ' + redo.length + ' to redo' : '')].join(' · '),
   });
-  const row = el('div', 'mv3-wk-mvrow');
+  // TWO LINES (the owner 2026-10-30, after block 1: "давай в поле mood и voice добавим сверху строку с пояснениями что это за
+  // поля: дропдаун mood - сверху mood со всплывашкой при наведении, голос - voice со всплывашкой подсказкой при наведении,
+  // stability и speed аналогично. кнопка generate во второй строке"): the names of the controls on top, each with its bubble,
+  // the controls under them - `generate` at the end of that second line. One grid, so a name stands over its control.
+  const row = el('div', 'mv3-wk-mvrow' + (sample ? ' is-sample' : ''));
   body.appendChild(row);
-  // The mood. What it means is said in a bubble over the menu (the owner's (т12)).
+  const name = (word, tip) => hint(el('span', 'mv3-wk-mvname', word), tip);
+  // The mood. What it means is said in the bubble of its name (the owner's (т12)).
   const mood = el('select', 'mv3-wk-vsel is-small is-mood');
-  if (!now) _noneOption(mood, 'mood: none');
+  if (!now) _noneOption(mood, 'none');
   for (const m of (_kit && _kit.moods) || []) {
-    const o = el('option', '', 'mood: ' + m.label);
+    const o = el('option', '', m.label);
     o.value = m.id;
     if (m.id === v.mood) o.selected = true;
     mood.appendChild(o);
   }
   mood.disabled = _saving || !_kit || g.busy;
   mood.addEventListener('change', () => _saveVideo({ mood: mood.value }));
-  hint(mood, () => {
-    const m = ((_kit && _kit.moods) || []).find(x => x.id === mood.value) || null;
-    return (m && m.about ? m.about + '\n' : '') + 'The emotion of the whole video: the read, the frames and the clips all follow it.';
-  });
-  row.appendChild(mood);
-  // The voice - ▶, its name, `change` right of it (js/merge-v3/wk-voice.js); what it has to say goes under the line.
+  // The voice - ▶, its name, `change` right of it (js/merge-v3/wk-voice.js); what it has to say goes under the lines.
   const voice = el('div', 'mv3-wk-mvvoice');
-  row.appendChild(voice);
   const notes = el('div', 'mv3-wk-mvnotes');
   VOICE.paintRow(voice, _api.voiceApi(), { notes });
   // How it is spoken (V26.1) - not by the voice sample, where nothing is read.
-  const ctl = el('div', 'mv3-wk-vctl');
-  if (!sample) _voiceSettings(ctl, p, g.busy);
+  const how = sample ? null : _voiceSettings(p, g.busy);
+  row.append(
+    name('mood', () => {
+      const m = ((_kit && _kit.moods) || []).find(x => x.id === mood.value) || null;
+      return (m ? m.label + (m.about ? ' - ' + m.about : '') + '\n' : '')
+        + 'The emotion of the whole video: the script is marked up by it, and the read, the frames and the clips all follow it.';
+    }),
+    name('voice', sample
+      ? 'The voice Seedance takes its timbre from - its demo. Nothing is read: Seedance says the lines itself.'
+      : 'The voice every line is read in - ElevenLabs v3. The character’s own when they have one, else the one chosen here for the project. "change" opens the saved voices and the ElevenLabs library.'),
+    ...(how ? [name('stability', STAB_TIP), name('speed', SPEED_TIP)] : []),
+    el('span', 'mv3-wk-mvname'),
+    mood, voice, ...(how ? [how.stab, how.speed] : []),
+  );
+  const ctl = el('div', 'mv3-wk-mvgo');
   row.appendChild(ctl);
   const label = g.tagging ? 'marking up…'
     : g.batch ? 'reading ' + g.batch.done + ' of ' + g.batch.total + '…'
@@ -1333,7 +1345,12 @@ const STABILITY = [
   { v: 1, label: 'robust', tip: 'Very even - follows the tags less' },
 ];
 const SPEED = { min: 0.7, max: 1.2, step: 0.05 };
-function _voiceSettings(foot, p, busy) {
+// What the two are, said in the bubbles of their names in field 1 (phase V61).
+const STAB_TIP = 'How steady the voice is. ElevenLabs v3 knows three: creative - more emotional, and more likely to stray from the words; natural - the closest to the voice as recorded; robust - very even, follows the tags less. A line read before keeps its read until generate reads it again.';
+const SPEED_TIP = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
+  + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch, and the timeline follows. A line given its own speed in its fragment keeps it.';
+// The two controls, for the second line of field 1 (their names stand over them, with STAB_TIP and SPEED_TIP).
+function _voiceSettings(p, busy) {
   const now = VOICE.params(p);
   const stab = el('select', 'mv3-wk-vsel is-small is-stab');
   for (const s of STABILITY) {
@@ -1345,9 +1362,6 @@ function _voiceSettings(foot, p, busy) {
   }
   stab.disabled = busy || _saving;
   stab.addEventListener('change', () => _saveVoice({ stability: +stab.value, speed: VOICE.params(p).speed }));
-  const sw = el('label', 'mv3-wk-vlab');
-  sw.title = 'How steady the voice is. ElevenLabs v3 knows three: creative, natural, robust. A line read before keeps its read until generate reads it again.';
-  sw.append(el('span', '', 'stability'), stab);
   const speed = el('input', 'mv3-wk-vnum');
   speed.type = 'number';
   speed.min = String(SPEED.min);
@@ -1356,12 +1370,7 @@ function _voiceSettings(foot, p, busy) {
   speed.value = String(now.speed);
   speed.disabled = busy || _saving;
   _speedLater(speed, 'project', () => VOICE.params(_ctx.project).speed, v => ({ speed: v }));
-  const pw = el('label', 'mv3-wk-vlab');
-  pw.title = 'How fast the reads play: 1 is as ElevenLabs speaks, ' + SPEED.min + ' to ' + SPEED.max
-    + '. Applied at once - the reads already made are retimed here, free, with the voice at its own pitch,'
-    + ' and the timeline follows. A line given its own speed in its fragment keeps it.';
-  pw.append(el('span', '', 'speed'), speed);
-  foot.append(sw, pw);
+  return { stab, speed };
 }
 
 // A SPEED IS APPLIED AFTER A PAUSE (the owner, 2026-10-10): the arrows of the field can be pressed several

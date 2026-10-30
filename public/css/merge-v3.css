@@ -2116,15 +2116,21 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-stage.is-voicelock > .mv3-wk-stage-body > :not(.is-free),
 .mv3-wk-stage.is-voicelock > .mv3-wk-stage-foot{opacity:.4; pointer-events:none}
 .mv3-wk-stage.is-voicelock .is-free{cursor:auto}
-/* FIELD 1, MOOD & VOICE - ONE LINE that never wraps (the owner): the mood, the voice with `change` right of it (a long name
-   ends in an ellipsis), the stability and the speed, `generate`. What it has to say goes under the line. */
-.mv3-wk-mvrow{display:flex; align-items:center; gap:10px; flex-wrap:nowrap; min-width:0}
-.mv3-wk-mvrow > .mv3-wk-vsel.is-mood{flex:0 1 170px; min-width:90px}
-.mv3-wk-mvvoice{flex:1 1 auto; min-width:0; display:flex}
+/* FIELD 1, MOOD & VOICE - TWO LINES that never wrap (the owner): the names on top, each with its bubble, and under them the
+   mood, the voice with `change` right of it (a long name ends in an ellipsis), the stability, the speed and `generate`. One
+   grid, so each name stands over its control. What it has to say goes under the two lines. */
+.mv3-wk-mvrow{display:grid; grid-template-columns:minmax(90px, 170px) minmax(0, 1fr) auto auto auto; column-gap:10px; row-gap:3px; align-items:center; min-width:0}
+.mv3-wk-mvrow.is-sample{grid-template-columns:minmax(90px, 170px) minmax(0, 1fr) auto}
+.mv3-wk-mvname{justify-self:start; font:700 8.5px/1.3 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); cursor:help; user-select:none}
+.mv3-wk-mvname:hover{color:var(--gold)}
+.mv3-wk-mvname:empty{cursor:default}
+.mv3-wk-mvrow > .mv3-wk-vsel.is-mood{width:100%; min-width:0}
+.mv3-wk-mvrow > .mv3-wk-vsel.is-stab{flex:none; width:auto}
+.mv3-wk-mvgo{display:flex; justify-content:flex-end}
+.mv3-wk-mvvoice{min-width:0; display:flex}
 .mv3-wk-mvvoice > .mv3-wk-vrow{flex:1 1 auto; min-width:0; margin:0; flex-wrap:nowrap}
 .mv3-wk-mvvoice .mv3-wk-vsub.is-grow{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .mv3-wk-mvvoice .mv3-wk-vmore{white-space:nowrap}
-.mv3-wk-mvrow > .mv3-wk-vctl{flex:0 0 auto; flex-wrap:nowrap}
 .mv3-wk-mvnotes:empty{display:none}
 /* "saving…" at the right of the Setup panel's head while the casting is saved ((т9а); js/merge-v3/wk-setup.js). */
 .mv3-panel-head .mv3-wk-saving{margin-left:8px; font:400 10px/1 var(--font); color:var(--muted); letter-spacing:0; text-transform:none}
