@@ -7,7 +7,8 @@
 // dressed in a lookbook. (phase V58) It lived in the Library's making chat (js/library/makechat.js), which went when the
 // generators became windows (the owner's (лк6)); the rows stayed, word for word.
 
-const MADE = new Set(['environments', 'lookbooks']);
+// (phase V26.6) And IMAGES -> Props: a product's name, the person's own words and the agent's description (_propRows).
+const MADE = new Set(['environments', 'lookbooks', 'props']);
 const GENDERS = ['male', 'female', 'unisex'];
 
 const el = (tag, cls, text) => {
@@ -86,6 +87,7 @@ function _genderRow(it, m) {
 export function madeRows(it) {
   const m = (it && it.meta) || {};
   if (!it || !m.made || !MADE.has(it.kind)) return [];
+  if (it.kind === 'props') return _propRows(it, m);
   const rows = [];
   const look = it.kind === 'lookbooks';
   if (look) rows.push(['gender', _genderRow(it, m)]);
@@ -110,4 +112,19 @@ export function madeRows(it) {
   }
   if (m.from) rows.push(['made from', String(m.from).split('/').pop()]);
   return rows;
+}
+
+// (phase V26.6, the owner's (п4)) A PRODUCT of IMAGES -> Props: its name, what the person said about it (kept apart, as
+// typed) and the agent's description (English, in sections) - each written by hand here, "save" under it. The frames chat
+// reads the name and the description.
+function _propRows(it, m) {
+  const name = _textRow(it.name || '', 'What it is called', 1,
+    async (text) => { const d = await _patchMeta(it, { name: text }); it.name = d.name || it.name; return d.name; });
+  name.classList.add('is-line');
+  const words = _textRow(m.words, 'What you know about the product - what it is, its size, what matters to show. Any language.', 3,
+    async (text) => (m.words = (await _patchMeta(it, { words: text })).words));
+  const desc = _textRow(m.description, m.reading ? 'describing…' : 'Not described yet.', 8,
+    async (text) => (m.description = (await _patchMeta(it, { description: text })).description));
+  desc.title = 'What the frames chat is told about this product, in English. Written by the agent from the picture and your words; yours once you edit it.';
+  return [['name', name], ['your words', words], ['description', desc]];
 }

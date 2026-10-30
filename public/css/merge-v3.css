@@ -591,6 +591,9 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
    (js/merge-v3/library.js, the node's tiles: 'wide'). */
 .mv3-grid.is-wide{grid-template-columns:repeat(auto-fill, minmax(124px, 1fr))}
 .mv3-grid.is-wide .mv3-tile{aspect-ratio:16 / 9}
+/* (phase V26.6) IMAGES -> Props: square tiles, the product whole in them. */
+.mv3-grid.is-whole .mv3-tile{aspect-ratio:1}
+.mv3-grid.is-whole .mv3-tile img{object-fit:contain; padding:4px; box-sizing:border-box}
 /* A talking head's line number on its tile (the hooks' numbers that shared it are gone, V54 block 8). Bottom left,
    because the star and the cross own the top corners; readable over any frame, so it carries its own ground. */
 .mv3-tile-hid{

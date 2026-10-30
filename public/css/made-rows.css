@@ -18,3 +18,5 @@
 }
 .made-ed-chip:hover{ color:var(--ink); }
 .made-ed-chip.on{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+/* (phase V26.6) A product's name: one line. */
+.made-ed.is-line .made-ed-ta{ min-height:0; resize:none; white-space:nowrap; overflow:hidden; }

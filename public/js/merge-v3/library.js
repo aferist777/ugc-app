@@ -90,7 +90,8 @@ const _isHeads = () => _kind() === 'heads';
 const _landName = (kind) => _tree.homeName(kind);
 const _catOf = () => (_node && _node.cat && !_node.uncat ? _node.cat : '');
 // (phase V55) IMAGES -> Environments / Lookbooks: what their generators made - pictures, opened, laid and deleted, never moved.
-const MADE = new Set(['environments', 'lookbooks']);
+// (phase V26.6) And IMAGES -> Props: the products, added by New prop.
+const MADE = new Set(['environments', 'lookbooks', 'props']);
 const _mediaOf = (it) => (AUDIO.has(it.kind) ? 'audio' : (it.kind === 'images' || MADE.has(it.kind)) ? 'image' : 'video');
 
 function _body() { return document.querySelector('#mv3-library .mv3-panel-body'); }
@@ -856,7 +857,8 @@ function _paint() {
   if (folders) b.appendChild(folders);
   const grid = document.createElement('div');
   // (phase V35, the owner's (т3), (у4)) A folder of horizontal videos (YouTube -> Videos) has 16:9 tiles.
-  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : '')
+  // (phase V26.6) IMAGES -> Props: a product shown whole in its square tile.
+  grid.className = 'mv3-grid' + (_node && _node.tiles === 'wide' ? ' is-wide' : _node && _node.tiles === 'whole' ? ' is-whole' : '')
     // (phase V59.1) Music -> Lyrics: wider tiles of text.
     + (_kind() === 'lyrics' ? ' is-text' : '');
   grid.appendChild(_plusTile());

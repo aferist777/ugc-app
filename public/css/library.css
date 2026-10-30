@@ -1120,6 +1120,9 @@ body.mk-resizing, body.mk-resizing *{ cursor:col-resize !important; user-select:
 .lib-grid.is-sound{ --card-w:100px; --card-h:98px; }  /* the box inside the 1px border: a 100x100 card */
 /* (phase V35, the owner's (т3)) REFERENCES -> YouTube -> Videos: horizontal videos, 16:9 cards (the node's tiles: 'wide'). */
 .lib-grid.is-wide{ --card-w:160px; --card-h:90px; }
+/* (phase V26.6) IMAGES -> Props: square cards, the product WHOLE in them (not cut to fill), its name under it. */
+.lib-grid.is-whole{ --card-w:120px; --card-h:120px; }
+.lib-grid.is-whole .lib-thumb{ object-fit:contain; padding:4px; box-sizing:border-box; }
 /* The square of a sound: the note, its name (two lines at most) under it, the wave and the length at the bottom - laid out
    as Merge's sound tile is. */
 .lib-grid.is-sound .lib-thumb-sound{ flex-direction:column; justify-content:flex-start; gap:2px; padding:12px 6px 0; box-sizing:border-box; }

@@ -206,7 +206,9 @@ export async function typedTree(roots, type, cache, fit) {
 const _KIND_DIR = [['/media/images/', 'images'], ['/media/references/', 'references'], ['/media/birols/', 'birols'],
   ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music'],
   // (phase V55, sub-session Q) the generated environments and lookbooks - IMAGES -> Environments / Lookbooks
-  ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks']];
+  ['/media/locations/', 'environments'], ['/media/lookbooks/', 'lookbooks'],
+  // (phase V26.6) the products - IMAGES -> Props
+  ['/media/props/', 'props']];
 const _isIn = (v, want) => (want === UNCAT ? !v : String(v || '') === String(want));
 
 // Whether a shelf record lies DIRECTLY in a node of the query `q` - the server's rule (routes/library.js _inNode), for the

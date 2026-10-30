@@ -106,8 +106,11 @@ const FOLDER_KIND = 'application/x-ugc-folder-kind-';
 let _dragging = null;       // { kind, id, key, label } while a folder of this page is dragged
 const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture', sounds: 'sound', music: 'track', references: 'post', sfx: 'sound' };
 // (phase V55) What the generators of IMAGES -> Environments / Lookbooks made: their own kinds, never moved.
-const MADE = { environments: 'Environments', lookbooks: 'Lookbooks' };
+// (phase V26.6) And IMAGES -> Props: the products, added by New prop.
+const MADE = { environments: 'Environments', lookbooks: 'Lookbooks', props: 'Props' };
+const MADE_BY = { environments: 'New environment', lookbooks: 'New lookbook', props: 'New prop' };
 const MADE_SAYS = {
+  props: 'A prop stays in Props - its description is kept by its place there',
   environments: 'A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
   lookbooks: 'A made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
 };
@@ -802,7 +805,7 @@ export function createTree(host, o) {
       if (t.closed && !MADE[it.kind] && !(Array.isArray(it.many) && it.many.length > 1) && (it.cat || '') === t.cat) return;
       opt.status(it.kind === 'lyrics' ? LYRICS_STAY : t.lyrics ? LYRICS_TAKE
         : MADE[it.kind] ? MADE_SAYS[it.kind]
-        : t.made ? 'Only ' + (t.kind === 'lookbooks' ? 'New lookbook' : 'New environment') + ' puts pictures into ' + MADE[t.kind]
+        : t.made ? 'Only ' + MADE_BY[t.kind] + ' puts pictures into ' + MADE[t.kind]
           + ' (+ on it)'
         : t.closed ? closedSays(n)
         : 'A built-in sound stays in Built-in - ★ puts it in Favorites, Cut… (the right button) makes a piece of your own', true);

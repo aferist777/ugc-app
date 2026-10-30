@@ -123,7 +123,8 @@ const GEN = {
   // (phase V59, the owner's (мг2а)) while Music or any folder under it is selected - the tracks go into that folder.
   music: { label: 'Generate music', title: 'Make music with Suno - Simple, Custom or Lyrics, in a window; the tracks go into the folder open' },
 };
-const MADE_KINDS = new Set(['environments', 'lookbooks']);
+// (phase V26.6) IMAGES -> Props too: the products, added by New prop.
+const MADE_KINDS = new Set(['environments', 'lookbooks', 'props']);
 // The node selected is Environments or Lookbooks itself: its kind, else ''.
 const _madeNode = () => (_shelf === 'media' && _node && _node.make && MADE_KINDS.has(_node.make) ? _node.make : '');
 // The generator the bar's "New …" opens on the node selected: Environments' or Lookbooks' (the node itself), or (phase V59)
@@ -1158,6 +1159,8 @@ function _renderGrid() {
     // (phase V59.1) Music -> Lyrics: cards of text.
     grid.classList.toggle('is-text', _items.length > 0 && _items.every(LYR.isLyrics));
     grid.classList.toggle('is-wide', !!(_node && _node.tiles === 'wide'));
+    // (phase V26.6) IMAGES -> Props: a product is shown whole in its square, never cut to fill it.
+    grid.classList.toggle('is-whole', !!(_node && _node.tiles === 'whole'));
   }
   // (phase V35, the owner's (т2)) Media is a folder: its folders first as tiles (js/media-tree.js), then what lies
   // directly in it. A search over SFX shows what it found in all of SFX, with no folders. (phase V60) At the roots: the four

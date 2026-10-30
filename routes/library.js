@@ -30,7 +30,7 @@ const path    = require('path');
 const router  = express.Router();
 
 const {
-  LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
+  LOOKBOOKS_DIR, ENVIRONMENTS_DIR, PROPS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
   FINALS_DIR,
 } = require('../lib/config');
 const { toUrl, toDiskWithin } = require('../lib/media');
@@ -755,28 +755,43 @@ function _tree() {
 // (phase V57, the owner's (ок2)) And NOTHING GOES INTO THOSE REFERENCES BY HAND - only the photo a generator is given
 // (lib/library-cats.js closedWhy): the node and every folder under it are `closed` - the page refuses a tile, a folder, a
 // file and "New folder" there in words, "Move to…" leaves them out (js/media-targets.js) - and `noAdd`.
+// (phase V26.6, the owner 2026-10-30, (п1) "a"): IMAGES -> PROPS, the third - the products a character holds in a frame,
+// one picture each, added by the New prop window (lib/props.js) and described by an agent. No references: the photo IS the
+// product. Its tiles show the product whole (`tiles: 'whole'`).
 const MADE = [
   { kind: 'environments', label: 'Environments', refs: 'uploads_environments', make: 'New environment', noun: 'environment' },
   { kind: 'lookbooks', label: 'Lookbooks', refs: 'uploads_lookbooks', make: 'New lookbook', noun: 'lookbook' },
+  { kind: 'props', label: 'Props', refs: '', make: 'New prop', noun: 'prop' },
 ];
 const MADE_KINDS = new Set(MADE.map(m => m.kind));
+const MADE_DIRS = { environments: ENVIRONMENTS_DIR, lookbooks: LOOKBOOKS_DIR, props: PROPS_DIR };
 // Why a made picture does not move, in words (the batch's and the item route's refusal).
 const MADE_STAYS = {
   environments: 'a made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
   lookbooks: 'a made lookbook stays in Lookbooks - its description and the looks dressed in it point at it',
+  props: 'a prop stays in Props - its description is kept by its place there',
+};
+// ...and why nothing is moved INTO them.
+const MADE_TAKES = {
+  environments: 'only New environment puts pictures into Environments',
+  lookbooks: 'only New lookbook puts pictures into Lookbooks',
+  props: 'only New prop puts pictures into Props',
 };
 function _madeFolders(images) {
   const kids = images.children || [];
   const made = MADE.map((g) => {
-    const n = _imageShelf(g.kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR, '', g.kind).length;
-    const at = kids.findIndex(c => c.locked && String(c.name || '') === g.refs);
+    const n = _imageShelf(MADE_DIRS[g.kind], '', g.kind).length;
+    const at = g.refs ? kids.findIndex(c => c.locked && String(c.name || '') === g.refs) : -1;
     const ref = at >= 0 ? kids.splice(at, 1)[0] : null;
     const all = n + (ref ? ref.count : 0);
     const node = { key: g.kind, kind: g.kind, label: g.label, locked: true, count: all, direct: n, empty: !all,
       q: { filter: g.kind }, make: g.kind, makeLabel: g.make,
-      // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (V35's `tiles: 'wide'`).
-      ...(g.kind === 'environments' ? { tiles: 'wide' } : {}),
-      tip: g.label + ' - the ' + g.noun + 's its generator made (+ opens it); the photos it was given lie in its references' };
+      // An environment is a 3:2 picture: its tiles are wide, as YouTube's videos are (V35's `tiles: 'wide'`); a product is
+      // shown whole, never cut to fill its square (phase V26.6).
+      ...(g.kind === 'environments' ? { tiles: 'wide' } : g.kind === 'props' ? { tiles: 'whole' } : {}),
+      tip: g.kind === 'props'
+        ? 'Props - the products a character holds in a frame, each with what is known about it (+ adds one); the frames chat takes them'
+        : g.label + ' - the ' + g.noun + 's its generator made (+ opens it); the photos it was given lie in its references' };
     if (ref) {
       const shut = (n) => { n.closed = true; n.noAdd = true; for (const c of n.children || []) shut(c); };
       shut(ref);
@@ -791,21 +806,27 @@ function _madeFolders(images) {
 // What the media shelf gives for them (`filter=environments|lookbooks`) - a picture's shape, as Images' are: `thumb` a
 // thumbnail door address (of the shelf's own 600px copy when there is one), and what is known about it for the viewer.
 function _madeItems(kind) {
-  const dir = kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR;
+  const dir = MADE_DIRS[kind];
   const meta = SM.read(kind);
   return _imageShelf(dir, toUrl(dir), kind).map((it) => {
     const m = meta[it.media] || {};
     return Object.assign(it, {
       thumb: '/api/thumb?src=' + encodeURIComponent(it.thumb || it.media) + '&v=card',
       dur: 0,
+      // (phase V26.6) A product goes by the name it was given, not its file's.
+      ...(kind === 'props' && m.name ? { name: String(m.name) } : {}),
       meta: Object.assign(it.meta, {
         categoryId: '', favorite: false, made: true,
         description: String(m.description || ''), from: String(m.from || ''),
-        ...(kind === 'environments' ? { motion: String(m.motion || '') } : { gender: String(m.gender || '') }),
+        ...(kind === 'environments' ? { motion: String(m.motion || '') }
+          : kind === 'props' ? { words: String(m.words || ''), by: String(m.by || ''), reading: _propReading(it.media) }
+          : { gender: String(m.gender || '') }),
       }),
     });
   });
 }
+// (phase V26.6) Whether the agent is describing a product right now (lib/props.js) - the viewer says "describing…".
+const _propReading = (media) => { try { return require('../lib/props').reading(media); } catch (e) { return false; } };
 
 // (phase TG, the owner 2026-10-21: "выделять строку в дереве зеленым цветом ... куда добавилось что-то новое") Every node
 // says when the newest thing under it came (`newest`, ms) - the page lights the nodes holding something newer than when they
@@ -1244,6 +1265,14 @@ const INFO = {
     const m = SM.read('environments')[media] || {};
     return { media, description: String(m.description || ''), motion: String(m.motion || ''), from: String(m.from || '') };
   },
+  // (phase V26.6) A product: its name, the person's own words and the agent's description - and whether it is being read.
+  props: (id) => {
+    const media = _flatEntry(PROPS_DIR, id);
+    if (!media) return null;
+    const m = SM.read('props')[media] || {};
+    return { media, name: String(m.name || ''), words: String(m.words || ''), description: String(m.description || ''),
+      by: String(m.by || ''), reading: _propReading(media) };
+  },
 };
 
 // WRITTEN BY HAND IN THE COLUMN (phase I, the owner: shown, and filling them is optional). One writer
@@ -1252,14 +1281,15 @@ const INFO = {
 //   PATCH /api/library/meta/:kind/:id   { description?, gender? }
 // A lookbook's gender decides which lookbooks Merge offers a character, and its description is what
 // the dressing reads - which is the point of correcting them.
-const META_FIELDS = { lookbooks: ['description', 'gender'], environments: ['description'] };
+// (phase V26.6) A product's name, the person's words and the description, each written by hand in the viewer.
+const META_FIELDS = { lookbooks: ['description', 'gender'], environments: ['description'], props: ['name', 'words', 'description'] };
 const GENDERS = ['male', 'female', 'unisex'];
 router.patch('/library/meta/:kind/:id', (req, res) => {
   try {
     const kind = String(req.params.kind || '');
     const fields = META_FIELDS[kind];
     if (!fields) return res.status(404).json({ success: false, error: `nothing to write on "${kind}"` });
-    const media = _flatEntry(kind === 'lookbooks' ? LOOKBOOKS_DIR : ENVIRONMENTS_DIR, String(req.params.id || ''));
+    const media = _flatEntry(MADE_DIRS[kind], String(req.params.id || ''));
     if (!media) return res.status(404).json({ success: false, error: 'not on this shelf any more' });
     const b = req.body || {};
     if (b.gender != null && b.gender !== '' && !GENDERS.includes(String(b.gender))) {
@@ -1269,13 +1299,16 @@ router.patch('/library/meta/:kind/:id', (req, res) => {
     const m = { ...(all[media] || {}) };
     for (const f of fields) {
       if (b[f] == null) continue;
-      const v = String(b[f]).trim().slice(0, 4000);
+      const v = String(b[f]).trim().slice(0, f === 'name' ? 120 : 4000);
       if (v) m[f] = v; else delete m[f];
     }
+    // (phase V26.6) A description written by hand is the person's now - "read again" is what gives it back to the agent.
+    if (kind === 'props' && b.description != null) m.by = m.description ? 'you' : '';
     m.at = new Date().toISOString();
     all[media] = m;
     SM.write(kind, all);
-    res.json({ success: true, kind, id: String(req.params.id), gender: String(m.gender || ''), description: String(m.description || '') });
+    res.json({ success: true, kind, id: String(req.params.id), gender: String(m.gender || ''), description: String(m.description || ''),
+      ...(kind === 'props' ? { name: String(m.name || ''), words: String(m.words || '') } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1526,9 +1559,12 @@ RECORD_STORES.uploads = RECORD_STORES.birols;
 // Lookbooks and environments are not records at all — the shelf IS the directory.
 // Delete-only by design: these filenames are referenced by look records (a look can
 // point at a lookbook image), so renaming the file would silently break them.
+// (phase V26.6) And Props: a product deleted takes its picture, thumbnail and description; the frames drawn with it stay
+// (the owner's (п8)) - they keep what they knew of it.
 const FILE_SHELVES = {
   lookbooks:    { dir: LOOKBOOKS_DIR,    url: toUrl(LOOKBOOKS_DIR) },
   environments: { dir: ENVIRONMENTS_DIR, url: toUrl(ENVIRONMENTS_DIR) },
+  props:        { dir: PROPS_DIR,        url: toUrl(PROPS_DIR) },
 };
 
 const _r = (status, body) => ({ status, body });
@@ -1966,6 +2002,8 @@ function _recOf(kind, id) {
 }
 const _nameOfRec = (kind, id) => {
   // (phase V55) A made environment or lookbook has no record: its id is its file's name.
+  // (phase V26.6) A product goes by the name it was given.
+  if (kind === 'props') { const m = SM.read('props')[toUrl(PROPS_DIR) + '/' + path.basename(String(id || ''))] || {}; if (m.name) return String(m.name); }
   if (MADE_KINDS.has(kind)) return String(id || '').replace(/\.[^.]+$/, '');
   if (kind === 'lyrics') { const l = LY.get(id); return l ? l.title : ''; }
   const r = _recOf(kind, id);
@@ -1984,7 +2022,7 @@ function _moveOne(it, to) {
   if (from === 'youtube') return 'a YouTube source stays in REFERENCES';
   // (phase V55, (гн9)) A picture an environment's or a lookbook's generator made is never moved; and nothing is moved in.
   if (MADE_KINDS.has(from)) return MADE_STAYS[from];
-  if (MADE_KINDS.has(to.kind)) return to.kind === 'lookbooks' ? 'only New lookbook puts pictures into Lookbooks' : 'only New environment puts pictures into Environments';
+  if (MADE_KINDS.has(to.kind)) return MADE_TAKES[to.kind];
   // (phase V59.1, (мз6а)) A saved text stays in Music -> Lyrics, and only Generate music saves into it.
   if (from === 'lyrics') return LYRICS_STAY;
   if (to.kind === 'lyrics') return LYRICS_TAKE;
