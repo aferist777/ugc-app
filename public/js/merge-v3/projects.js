@@ -451,10 +451,12 @@ async function _delete(key, files, heads) {
     const kept = d.files && d.files.kept;
     // (phase V28.4) What it filed under its name on the shelves is in Uncategorized now.
     const loose = Object.values(d.released || {}).includes('released');
-    const heads = d.files && d.files.heads;
+    // (phase V61) Not `heads`: that name is the parameter ('keep' | 'delete') the address above reads, and a const of the
+    // same name in this block made that read throw before the request ("Cannot access 'heads' before initialization").
+    const keptHeads = d.files && d.files.heads;
     _after = [kept ? kept + (kept === 1 ? ' file' : ' files') + ' still used elsewhere moved to media/work' : '',
       loose ? 'what it filed is in the Library, in Uncategorized' : '',
-      heads ? heads + (heads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
+      keptHeads ? keptHeads + (keptHeads === 1 ? ' talking head' : ' talking heads') + ' kept in the Library' : ''].filter(Boolean).join(' · ');
     await Store.openBlank();
   } catch (e) { _fail(e.message); }
 }
