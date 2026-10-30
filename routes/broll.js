@@ -28,4 +28,28 @@ router.post('/broll/:id/mode', (req, res) => {
   try { res.json({ success: true, state: BR.setMode(String(req.params.id), String((req.body || {}).mode || '')) }); } catch (e) { _fail(res, e); }
 });
 
+// ── Block 2 - another item for a piece, from the Library panel ──
+//   GET  /api/broll/:id/piece/:cell            -> { success, piece }  its sentence's batch (lib/broll.js piece)
+//   GET  /api/broll/:id/thumb/:item            -> the item's picture
+//   POST /api/broll/:id/swap  { cell, item }   -> { success, state }  the piece takes that item - chosen by hand
+router.get('/broll/:id/piece/:cell', (req, res) => {
+  try { res.json({ success: true, piece: BR.piece(String(req.params.id), String(req.params.cell)) }); } catch (e) { _fail(res, e); }
+});
+
+router.get('/broll/:id/thumb/:item', async (req, res) => {
+  try {
+    const t = await BR.thumbOf(String(req.params.id), String(req.params.item));
+    if (t.redirect) return res.redirect(t.redirect);
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.sendFile(t.file);
+  } catch (e) { _fail(res, e); }
+});
+
+router.post('/broll/:id/swap', (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ success: true, state: BR.swap(String(req.params.id), String(b.cell || ''), String(b.item || '')) });
+  } catch (e) { _fail(res, e); }
+});
+
 module.exports = router;

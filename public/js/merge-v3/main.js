@@ -29,6 +29,8 @@ import { initFramesChat } from './fchat.js';
 import { initViews } from './lib-views.js';
 import { initScenarios } from './scen-pick.js';
 import { initHighlights } from './highlights.js';
+// (phase V62, block 2) A voiceover's B-roll piece, another item for it - a view of the Library panel.
+import { initBroll } from './broll-view.js';
 import { askModelOnce } from './model-ask.js';
 
 initNav();
@@ -40,6 +42,7 @@ initVidChat();
 initAudChat();
 initScenarios();
 initHighlights();
+initBroll();
 initFramesChat();
 initTimelineB();
 initPreviewB();
