@@ -66,6 +66,13 @@ const ROWS = [
     desc: 'SFX → "find online…": free sound effects (CC0 only) straight from Freesound. Without it the search goes through Openverse, which is often down.',
   },
   {
+    // (phase V62, block 3, the owner's (во43)) A voiceover's B-roll - stock videos and photos from Pixabay (lib/pixabay.js).
+    label: 'Pixabay API:', settingsKey: 'pixabayApiKey', probe: 'pixabay',
+    placeholder: '12345678-••• (pixabay.com → API docs)',
+    link: 'https://pixabay.com/api/docs/', linkText: 'pixabay.com/api/docs (a free account - the key is on that page)',
+    desc: 'Voiceover → field 2 "find B-roll": stock videos (1080p) and photos for every sentence of the voice. Free.',
+  },
+  {
     // (phase TG, block 2; the owner: the bot's key "в админке над r2") The owner's own bot: what it is sent goes into
     // REFERENCES. Under it: who it listens to (the code), how its messages come in, the queue (lib/telegram.js).
     group: 'Telegram bot · links, photos and videos you send it go into REFERENCES',

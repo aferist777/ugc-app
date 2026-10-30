@@ -31,6 +31,7 @@ const _el = (tag, cls, text) => {
   return e;
 };
 const _pid = () => WK.projectIdOf(Store.key() || '');
+const _site = (s) => (s === 'pixabay' ? 'Pixabay' : s === 'fake' ? 'fake stock' : String(s || ''));
 const _isVo = () => { const p = WK.project(); return !!(p && p.type === 'voiceover'); };
 
 let _shown = false;
@@ -87,7 +88,17 @@ function _paint() {
   const d = _data;
   const head = _el('div', 'mv3-brv-head');
   head.appendChild(_el('div', 'mv3-brv-sent', '«' + d.text + '»'));
-  head.appendChild(_el('div', 'mv3-brv-meta', 'piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: ' + (d.queries || []).join(' · ')));
+  const meta = _el('div', 'mv3-brv-meta', 'piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: ' + (d.queries || []).join(' · '));
+  // (phase V62, block 3, (во45)) Pixabay's terms: where the results come from, linked.
+  if (d.items.some(i => i.site === 'pixabay')) {
+    meta.appendChild(document.createTextNode(' · '));
+    const a = _el('a', 'mv3-brv-src', 'from Pixabay');
+    a.href = 'https://pixabay.com/';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    meta.appendChild(a);
+  }
+  head.appendChild(meta);
   root.appendChild(head);
   if (_said) root.appendChild(_el('div', 'mv3-ins-note is-err', _said));
   const scroll = _el('div', 'mv3-brv-scroll');
@@ -112,9 +123,11 @@ function _tile(it) {
   t.appendChild(img);
   if (it.kind === 'video') t.appendChild(_el('span', 'mv3-brv-dur', '▶ ' + (it.dur ? Math.round(it.dur) + ' s' : '')));
   if (it.on) t.appendChild(_el('span', 'mv3-brv-on', '✓'));
+  // (phase V62, block 3, (во45)) Where it is from, and whose - Pixabay's terms: its results say so.
+  t.appendChild(_el('span', 'mv3-brv-by', [_site(it.site), it.author].filter(Boolean).join(' · ')));
   if (_busy === it.id) t.appendChild(_el('span', 'mv3-brv-wait', 'putting it in…'));
-  t.title = (it.here ? 'In this piece now' : 'Put it into this piece') + (it.author ? ' · ' + it.author : '') + (it.site ? ' · ' + it.site : '')
-    + (it.filed ? '' : ' - downloaded when chosen');
+  t.title = (it.here ? 'In this piece now' : 'Put it into this piece') + (it.filed ? '' : ' - downloaded when chosen')
+    + '\n' + [_site(it.site), it.author].filter(Boolean).join(' · ') + (it.page ? '\n' + it.page : '');
   t.disabled = !!_busy;
   t.addEventListener('mouseenter', () => _openPop(t, it));
   t.addEventListener('mouseleave', _closePop);

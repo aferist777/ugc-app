@@ -29,6 +29,8 @@ const SECRET_KEYS = [
   'telegramBotToken',
   // (phase V54) the owner's Freesound account - finding CC0 sound effects online (lib/freesound.js)
   'freesoundApiKey',
+  // (phase V62, block 3) the owner's Pixabay key - a voiceover's B-roll (lib/pixabay.js); it goes in the request's address
+  'pixabayApiKey',
 ];
 // Written by the server only: the Cloudflare key's id, once its check passed (lib/cloudflare.js) - what lib/r2.js makes
 // its pair from. A page cannot set it, and a key replaced or removed drops it: a new key is R2's only once IT passed.
