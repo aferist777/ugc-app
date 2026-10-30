@@ -43,7 +43,7 @@ import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
 import * as Layers from '../layers.js';
 
-const PAGE = 12;                       // results per page; the panel shows them as a list
+const PAGE = 20;                       // results per page (phase V62, the owner: "по 20 штук")
 
 let _filters = null;                   // the vocabularies, read once per page load
 let _res = null;                       // the last search: { voices, total, hasMore }
@@ -447,13 +447,21 @@ export function paintPicker(host, api) {
   foot.appendChild(go);
   host.appendChild(foot);
 
+  // (phase V62, the owner: "когда открывается поиск попап elevenlabs сразу показывать голоса... с перелистыванием страниц по 20
+  // штук. кнопки страниц показаны всегда снизу попапа") In its window the library is searched the moment it opens - with the
+  // filters as they stand - and its pages, 20 voices each, are always at the window's foot (`api.pagerHost`).
+  const pagerHost = api.pagerHost || null;
+  if (pagerHost) pagerHost.textContent = '';
+  if (!_asked && api.inWindow && !_busy) { _asked = true; setTimeout(() => _search(api, 1), 0); }
   if (!_asked) {
     host.appendChild(api.note('The library is thousands of voices. Narrow it with the filters, then search - listening costs nothing.'));
+    if (pagerHost) _pager(pagerHost, api);
     return;
   }
   const found = (_res && _res.voices) || [];
   if (!found.length) {
-    host.appendChild(api.note(_busy === 'search' ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
+    host.appendChild(api.note(_busy === 'search' || !_res ? 'searching…' : 'Nothing matches all of those. Drop a filter.'));
+    if (pagerHost) _pager(pagerHost, api);
     return;
   }
   const have = new Set(mine.map(v => String(v.voiceId)));
@@ -475,7 +483,13 @@ export function paintPicker(host, api) {
     row.appendChild(take);
     host.appendChild(row);
   }
+  _pager(pagerHost || host, api);
+}
 
+// The pages of the library's search: ‹ "N voices · page k of n" ›. In the window it stands at the foot always - greyed while
+// there is nothing to page through yet.
+function _pager(host, api) {
+  const found = (_res && _res.voices) || [];
   const total = (_res && _res.total) || found.length;
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const pager = el('div', 'mv3-wk-vpager');
@@ -486,9 +500,10 @@ export function paintPicker(host, api) {
     b.addEventListener('click', () => _search(api, to));
     pager.appendChild(b);
   };
-  step('‹', _page - 1, _page > 1);
-  pager.appendChild(el('span', 'mv3-wk-vcount', total + ' voices · page ' + _page + ' of ' + pages));
-  step('›', _page + 1, _page < pages || (_res && _res.hasMore));
+  step('‹', _page - 1, !!_res && _page > 1);
+  pager.appendChild(el('span', 'mv3-wk-vcount', _busy === 'search' ? 'searching…'
+    : !_res ? 'the ElevenLabs library' : total + ' voices · page ' + _page + ' of ' + pages));
+  step('›', _page + 1, !!_res && (_page < pages || !!_res.hasMore));
   host.appendChild(pager);
 }
 

@@ -268,12 +268,16 @@ function _openVoices() {
 function _paintVoices(chosen) {
   if (!_voiceOpen()) return;
   const body = _voiceWin.body;
-  const at = body.scrollTop;
+  // What scrolls is the list above the foot; the foot - the library's pages - stays at the window's bottom (the owner:
+  // "кнопки страниц показаны всегда снизу попапа").
+  const was = body.querySelector('.mv3-wk-vwin');
+  const at = was ? was.scrollTop : 0;
   body.textContent = '';
   const box = _el('div', 'mv3-wk-vwin');
-  body.appendChild(box);
-  VOICE.paintPicker(box, { ..._voiceApi(chosen), inWindow: true });
-  if (at) body.scrollTop = at;
+  const foot = _el('div', 'mv3-wk-vwinfoot');
+  body.append(box, foot);
+  VOICE.paintPicker(box, { ..._voiceApi(chosen), inWindow: true, pagerHost: foot });
+  if (at) box.scrollTop = at;
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
