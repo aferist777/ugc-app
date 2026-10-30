@@ -99,10 +99,11 @@ BLOCKS.continue = () => {
   for (const [label, href] of [
     // The kinds of project of Merge's own "+ new project" menu (js/merge-v3/projects.js `?new=`) - since phase V61 the kinds
     // alone, blank first (the owner 2026-10-30, (т10), (т15): "кнопку new project со страницы home удаляем. только типа
-    // проектов", "только blank проект должен быть первым"); voiceover is coming (V62) and does nothing yet. A character -
-    // New Character's window, here (phase V60.1, the owner's (пк4а); the address is the Library's window).
+    // проектов", "только blank проект должен быть первым"); a voiceover (phase V62) - the scenarios view in its voiceover mode,
+    // with "+ your text". A character - New Character's window, here (phase V60.1, the owner's (пк4а); the address is the
+    // Library's window).
     ['+ blank', '/merge?new=blank'], ['+ talking head', '/merge?new=talking'], ['+ highlights', '/merge?new=highlights'],
-    ['+ voiceover · in development', ''],
+    ['+ voiceover', '/merge?new=voiceover'],
     ['+ new character', '/library?shelf=characters&make=1'],
   ]) {
     if (!href) {

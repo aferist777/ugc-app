@@ -75,7 +75,7 @@ async function _paint() {
     // says so before its name, as highlights does - in the list and in the closed field.
     o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
       : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
-      : projectIdOf(p.key) ? 'talking head · ' + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
+      : projectIdOf(p.key) ? (p.voiceover ? 'voiceover · ' : 'talking head · ') + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     sel.appendChild(o);
   }
@@ -182,6 +182,7 @@ function _wireNew() {
       try { const u = new URL(location.href); u.searchParams.delete('new'); history.replaceState({}, '', u); } catch (e) { /* a reload asks again */ }
       if (want === 'blank') { if (_newBlank) _newBlank(); }
       else if (want === 'talking') openScenarios();
+      else if (want === 'voiceover') openScenarios({ voiceover: true });
       else if (want === 'highlights') {
         (async () => {
           _note('creating…');
@@ -262,8 +263,8 @@ function _kindMenu(anchor) {
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
   // (phase V61, the owner 2026-10-30: "будет новый режим в new project - называться будет voiceover, в котором просто
-  // генерируется голосом текст сценария... пока только запланируй и добавь under development этот пункт") - phase V62.
-  item('voiceover · in development', 'the script in a voice, B-roll over it', null);
+  // генерируется голосом текст сценария") - phase V62: the scenarios view in its voiceover mode, with "+ your text".
+  item('voiceover', 'a scenario or your own text, read in a voice', () => { openScenarios({ voiceover: true }); });
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();

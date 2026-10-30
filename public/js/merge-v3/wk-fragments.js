@@ -966,6 +966,7 @@ function _notes(host) {
 function _missing(p) {
   const cast = p.casting || {};
   const out = [];
+  if (_isVo(p)) return out;                          // (phase V62) a voiceover has nobody and nowhere to choose
   if (!cast.obrazImage) out.push('a character in a look');
   if (!cast.locationImage) out.push('an environment');
   return out;
@@ -988,11 +989,14 @@ function _needs(p) {
   if (!_canRead()) out.voice = 'a voice';
   // (the sixth round) By the voice sample the voice is there once its demo is (the owner's answer (я7)).
   else if (_demoMissing(p)) out.voice = 'a voice with its demo';
-  // (phase V26.8) The model first - Kling avatar or a Seedance - then the quality it makes.
+  // (phase V26.8) The model first - Kling avatar or a Seedance - then the quality it makes. (phase V62) A voiceover makes no clips.
+  if (_isVo(p)) return out;
   if (!v.model) out.video = 'the model';
   else if (!v.quality) out.video = 'the quality';
   return out;
 }
+// (phase V62) A VOICEOVER: the script in a voice - field 1 and the B-roll, no who / where, frames or clips.
+const _isVo = (p) => !!(p && p.type === 'voiceover');
 // (phase V61, the owner 2026-10-30, (т5): "Кадры и видео открываются, когда прочитаны все строки, а позже переписанная
 // строка их обратно не закрывает") THE FRAMES AND THE VIDEO WAIT FOR THE VOICE: red, and a press on them says why, until
 // every line of the video has been read once - a line rewritten later keeps its old take and opens nothing again; only
@@ -1029,6 +1033,7 @@ function _all(host, p, lines) {
   const zone = el('div', 'mv3-wk-zone' + (missing.length ? ' is-locked' : ''));
   host.appendChild(zone);
   _stageMoodVoice(zone, p, lines);
+  if (_isVo(p)) { _stageBroll(zone, p, lines); return; }
   const cols = el('div', 'mv3-wk-zcols');
   const left = el('div', 'mv3-wk-zcol');
   const right = el('div', 'mv3-wk-zcol');
@@ -1372,6 +1377,35 @@ function _labelled(word, sel, tip, tight) {
   box.appendChild(el('span', 'mv3-wk-fsetlabw', word));
   box.appendChild(sel);
   return box;
+}
+
+// ── A VOICEOVER'S LINE, AT MOST VO_MAX CHARACTERS (phase V62, (во27), (во28)) ──
+// The field of a line's words - edited or put in - stops at the limit (ElevenLabs reads 5 000 at a time, the mood's tags
+// included) and says under it how many are in. Nothing for a talking head. Returns the counter's repaint, or null.
+function _voCount(p, box) {
+  if (!_isVo(p)) return null;
+  box.maxLength = API.VO_MAX;
+  const c = el('div', 'mv3-wk-fwhy mv3-vo-count');
+  const paint = () => {
+    c.textContent = box.value.length.toLocaleString('en-US').replace(/,/g, ' ') + ' / ' + API.VO_MAX.toLocaleString('en-US').replace(/,/g, ' ');
+    c.classList.toggle('is-full', box.value.length >= API.VO_MAX);
+  };
+  paint();
+  queueMicrotask(() => { if (box.isConnected) box.after(c); });
+  return paint;
+}
+
+// ── FIELD 2 OF A VOICEOVER - B-ROLL (phase V62) ──
+// The picture of a voiceover: videos and pictures from the stock, laid over the voice by its sentences. Red until every
+// line is read (the same rule as a talking head's frames and video, _voiceLock); its "find B-roll" comes with V62's block 1.
+function _stageBroll(host, p, lines) {
+  const lock = _voiceLock(p);
+  const { body } = _stage(host, 'broll', {
+    step: 2, bare: true, wide: true, lock,
+    name: 'B-roll', sub: 'videos and pictures from the stock, by the sentences',
+  });
+  body.appendChild(_note(lock ? 'The voice first - every line read, then its captions heard. Then the B-roll is found for it.'
+    : 'Finding the B-roll comes next (V62, block 1): videos and pictures from the stock, laid over the voice by its sentences.'));
 }
 
 // ── FIELD 2 - FRAMES (phase V61, the owner 2026-10-30, (т6): "поле first frames удаляем, а набор фреймов нужно показывать.
@@ -1915,7 +1949,8 @@ function _insertEditor(host, p, lines) {
   box.placeholder = 'The words of the new line';
   box.value = _insDraft;
   box.disabled = _insSaving;
-  box.addEventListener('input', () => { _insDraft = box.value; save.disabled = _insSaving || !box.value.trim(); });
+  const count = _voCount(p, box);
+  box.addEventListener('input', () => { _insDraft = box.value; save.disabled = _insSaving || !box.value.trim(); if (count) count(); });
   box.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.stopPropagation(); cancel(); }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _insertLine(p, after); }
@@ -1933,7 +1968,8 @@ function _insertEditor(host, p, lines) {
   drop.addEventListener('click', cancel);
   acts.append(save, drop);
   host.appendChild(acts);
-  host.appendChild(el('div', 'mv3-wk-fwhy', 'It takes the next frame of the set. Then, in its fragment: mood - its [tags] - and read.'));
+  host.appendChild(el('div', 'mv3-wk-fwhy', _isVo(p) ? 'Then, in its line: mood - its [tags] - and read.'
+    : 'It takes the next frame of the set. Then, in its fragment: mood - its [tags] - and read.'));
   if (!_insSaving) setTimeout(() => { if (box.isConnected) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } }, 0);
 }
 async function _insertLine(p, after) {
@@ -2149,8 +2185,10 @@ function _rowMenu(ev, row, p, l, i, n) {
   // CHOOSE A CLIP (the owner, 2026-10-10): every clip the line has, in a window, each to be watched there
   // and picked - a line keeps the clip it had when its read is redone, and this is the way to another.
   const clips = _clipsOf(p, l).filter(c => c && c.path);
-  item('choose a clip', clips.length ? clips.length + (clips.length === 1 ? ' take' : ' takes') + ' · watch and pick' : 'no clips yet',
-    clips.length ? () => _clipWindow(p, l, i, n) : null);
+  if (!_isVo(p)) {
+    item('choose a clip', clips.length ? clips.length + (clips.length === 1 ? ' take' : ' takes') + ' · watch and pick' : 'no clips yet',
+      clips.length ? () => _clipWindow(p, l, i, n) : null);
+  }
 
   item('remove line', 'out of the video, kept in the project', () => {
     askDelete(row, 'Take fragment ' + n + ' out of the video?',
@@ -2201,8 +2239,9 @@ function _fragment(host, p, l, i) {
   if (_editWords === i) {
     const box = el('textarea', 'mv3-wk-ledit is-frag');
     box.value = _wordsDraft;
-    box.rows = 3;
-    box.addEventListener('input', () => { _wordsDraft = box.value; });
+    box.rows = _isVo(p) ? 12 : 3;
+    const count = _voCount(p, box);
+    box.addEventListener('input', () => { _wordsDraft = box.value; if (count) count(); });
     box.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); _editWords = -1; _ctx.repaint(); }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _saveWords(va, i); }
@@ -2276,6 +2315,8 @@ function _fragment(host, p, l, i) {
     back.addEventListener('click', () => VOICE.saveText(va, i, take.said));
     host.appendChild(back);
   }
+  // (phase V62) A voiceover's line is its words and its read - no frame, no clip, no takes.
+  if (_isVo(p)) return;
 
   // Two rows, and each is a picture with the words it is made of beside it (the owner, 2026-09-21):
   // the frame with the prompt it was drawn from, the clip with the animation prompt it will be made

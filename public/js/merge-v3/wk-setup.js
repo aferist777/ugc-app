@@ -97,8 +97,9 @@ let _ask = '';                           // a window the address asked for, open
 (function _urlView() {
   let v = '';
   try { v = new URLSearchParams(location.search).get('view') || ''; } catch (e) { v = ''; }
-  if (VIEWS.includes(v)) _view = v;
-  else if (WINDOWS.includes(v)) _ask = v;
+  // (phase V62, (во17)) The voices are a window now: an address that asks for them opens it.
+  if (v === 'voice' || WINDOWS.includes(v)) _ask = v;
+  else if (VIEWS.includes(v)) _view = v;
 })();
 let _lbs = null;                          // the lookbooks to dress in, read when that page opens
 let _lbPick = '';                         // the outfit picked to dress in
@@ -203,9 +204,10 @@ export function paint(host, ctx) {
   root.appendChild(scroll);
   // The sample a voice was being listened to stops when the panel leaves that level: a voice
   // still talking over the script is a sound with nothing on screen to explain it.
-  if (_view !== 'voice') VOICE.leave();
+  if (!_voiceOpen()) VOICE.leave();
   // The stage is painted AFTER the panel, from the same state (this file, _stage).
   FRAG.paint(scroll, ctx, _fragApi(chosen));
+  _paintVoices(chosen);
   _stage(chosen);
   // The casting's own countdowns, each on its half, when the stage shows the halves (V58).
   _syncHalves();
@@ -224,6 +226,9 @@ const _castChar = () => (_chars || []).find(c => c.id === String(_casting().char
 // Every move inside the step goes through here.
 function _go(view) {
   if (WINDOWS.includes(view)) { _openAsked(view); return; }
+  // (phase V62, (во17)) The voices open in a window over the setup - a talking head's and a voiceover's alike.
+  if (view === 'voice') { _openVoices(); return; }
+  if (view === 'hub' && _voiceOpen()) { _voiceWin.close(); return; }
   _view = VIEWS.includes(view) ? view : 'hub';
   _ctx.repaint();
 }
@@ -231,6 +236,8 @@ function _go(view) {
 // An old shelf's name - from the address, a row of Alerts, a crumb - opens its window, over what is open.
 function _openAsked(v) {
   if (!_ctx || !_ctx.project) return;
+  // (phase V62) A voiceover has no who, where or frames chat - only the voices.
+  if (_ctx.project.type === 'voiceover' && v !== 'voice') return;
   const c = _castChar();
   if (v === 'cast') _openWho('list');
   else if (v === 'lookbooks') _openWho(c ? 'look' : 'list', c);
@@ -238,6 +245,35 @@ function _openAsked(v) {
   else if (v === 'env') ENV.openWhere(_envApi(), 'list');
   else if (v === 'newenv') ENV.openWhere(_envApi(), 'make');
   else if (v === 'fchat') FRAG.openChat();          // (phase V61) its rows of Alerts, the address
+  else if (v === 'voice') _openVoices();            // (phase V62)
+}
+
+// ── THE VOICES, A WINDOW (phase V62, the owner 2026-10-30, (во2): "нужен поиск по голосам в elevenlabs как в talking head но
+// поиск в попапе будет"; (во17) "в обоих") ──
+// What stood in the right column - the saved voices and the ElevenLabs library with its filters and its search
+// (js/merge-v3/wk-voice.js paintPicker) - in the window of js/gen-window.js, over the setup. Field 1's "change" opens it; it
+// stays open after a voice is taken, and is painted again with every repaint of the step, where it was scrolled to.
+let _voiceWin = null;
+const _voiceOpen = () => !!(_voiceWin && _voiceWin.alive());
+function _openVoices() {
+  if (!_ctx || !_ctx.project) return;
+  if (_voiceOpen()) return;
+  _voiceWin = GW.openFrame({
+    name: 'voices', size: { w: 900, h: 660 },
+    onClose: () => { _voiceWin = null; VOICE.leave(); },
+  });
+  _voiceWin.setCrumbs([{ label: 'voices' }]);
+  _paintVoices(_castChar());
+}
+function _paintVoices(chosen) {
+  if (!_voiceOpen()) return;
+  const body = _voiceWin.body;
+  const at = body.scrollTop;
+  body.textContent = '';
+  const box = _el('div', 'mv3-wk-vwin');
+  body.appendChild(box);
+  VOICE.paintPicker(box, { ..._voiceApi(chosen), inWindow: true });
+  if (at) body.scrollTop = at;
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
@@ -269,6 +305,14 @@ function _whereHalf() {
 }
 
 function _stage(chosen) {
+  // (phase V62) A VOICEOVER has nobody and nowhere to choose: the stage stays empty - its picture is the B-roll.
+  if ((_ctx.project || {}).type === 'voiceover') {
+    PV.cropOff();
+    PV.showStill('', '');
+    _picShown = false;
+    _stageClears(false, false);
+    return;
+  }
   // A line open in the script with a clip or a frame shows THAT: it is what is being judged. The
   // doors are back the moment the line is closed (a second press on its row).
   const pic = FRAG.openPicture(_ctx.project);
@@ -821,6 +865,8 @@ function _note(text, bad) {
 export function leave() {
   _active = false;
   _savingWord();
+  if (_voiceOpen()) _voiceWin.close();
+  _voiceWin = null;
   VOICE.leave();
   FRAG.leave();
   if (_who && _who.win.alive()) _who.win.close();

@@ -12,6 +12,7 @@
 //     saved(rec)   after every save and restore - the list behind the window reads itself again
 //     use(rec)     makes the project and opens it; a throw is said in the window, which stays
 //     closeOnSave  the window goes after a save (the Library: the shelf shows it, selected)
+//     voiceover    (phase V62) `use` makes a voiceover, and the lines are kept in the language they are typed in
 
 import * as API from './merge-v3/scen-api.js';
 import * as Layers from './layers.js';
@@ -110,7 +111,8 @@ export async function openScenario(summary, hooks = {}) {
   use.type = 'button';
   const dressUse = () => {
     use.textContent = archived ? 'restore' : 'use';
-    use.title = archived ? 'Put it back in the library' : 'Save it and make a talking-head project from it';
+    use.title = archived ? 'Put it back in the library'
+      : 'Save it and make a ' + (hooks.voiceover ? 'voiceover' : 'talking-head') + ' project from it';
   };
   dressUse();
   foot.append(save, note, use);
@@ -187,12 +189,13 @@ export async function openScenario(summary, hooks = {}) {
     roles: (role.value.trim() || gender.value) ? [{ id: 'r0', name: role.value.trim(), gender: gender.value }] : [],
     lines: linesOf().map(text => ({ text })),
     // (phase V29, the owner 2026-10-14) Lines typed in another language are kept in English: the server translates them.
-    english: true,
+    // (phase V62) Not for a voiceover: it is read in the language it is written in.
+    english: !hooks.voiceover,
   });
 
   const store = async () => {
     const sent = lines.value;
-    note.textContent = /(?!\p{Script=Latin})\p{L}/u.test(sent) ? 'translating into English…' : 'saving…';
+    note.textContent = !hooks.voiceover && /(?!\p{Script=Latin})\p{L}/u.test(sent) ? 'translating into English…' : 'saving…';
     rec = await API.save(collect());
     // What is kept is what the window shows - the English, when the lines were typed in another language.
     if (lines.value === sent && Array.isArray(rec.lines)) { lines.value = rec.lines.map(l => l.text || '').join('\n'); gate(); }

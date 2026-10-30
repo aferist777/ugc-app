@@ -87,3 +87,6 @@
   background:var(--bg); color:var(--ink); font:400 11.5px/1.7 var(--font);
 }
 .mv3-sc-lines:focus{outline:1px solid var(--primary); outline-offset:-1px}
+/* (phase V62) A voiceover from one's own text (js/merge-v3/vo-text.js): a taller field, and its counter red at the limit. */
+.mv3-sc-lines.is-votext{min-height:300px}
+.mv3-vo-count.is-full{color:var(--danger)}

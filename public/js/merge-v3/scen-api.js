@@ -88,6 +88,21 @@ export async function talkingHead(scenarioId) {
   return d.key;
 }
 
+/** (phase V62, (во27), (во28)) A voiceover's line, at most - ElevenLabs reads 5 000 characters at a time, the mood's tags
+ *  included; the server keeps the same number (routes/scen3.js VO_MAX). */
+export const VO_MAX = 4500;
+
+/**
+ * (phase V62) A VOICEOVER - from a scenario ({ scenarioId }) or from one's own text ({ text, name }, the whole text one line):
+ * the project, read in the language it is written in, and its empty timeline. Returns the timeline's key.
+ */
+export async function voiceover(from) {
+  const p = await _post('/api/scen3/projects', { ...from, type: 'voiceover' }).then(d => d.project);
+  const d = await _post('/api/mv3/timeline/new', { projectId: p.id });
+  if (!d.key) throw new Error('the timeline was refused');
+  return d.key;
+}
+
 /**
  * The take a line is read BY now, and the words it should have said. A line with its words
  * marked up ([tags]) is read by its tagged take - ElevenLabs v3 performs the tags; one without, by

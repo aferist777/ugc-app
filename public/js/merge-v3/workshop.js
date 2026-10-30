@@ -108,8 +108,11 @@ function _mayEdit() {
   if (_hasCut()) return true;
   // Before the page has the timeline in hand, the project's own clips answer the same question:
   // one clip means the mirror has something to lay, and the Library spine should not be dead.
-  return !!(_project && _readCount().clips > 0);
+  // (phase V62) A voiceover's reads are what the mirror lays: one read is enough.
+  return !!(_project && (_isVo() ? _readCount().read > 0 : _readCount().clips > 0));
 }
+// (phase V62) Is the project open a voiceover - the script in a voice, no clips of its own?
+const _isVo = () => !!(_project && _project.type === 'voiceover');
 
 // The step being left lets go of what it was doing on its own - a read still playing.
 function _leave() {
@@ -201,8 +204,10 @@ function _paintSpines() {
   lib.classList.toggle('is-off', off);
   const n = _readCount();
   lib.title = !_pid ? ''
-    : off ? (_project ? 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total : 'Reading the project…')
-      : _step === 'setup' ? 'The timeline and the Library · ' + n.clips + '/' + n.total + ' with a clip' : '';
+    : off ? (!_project ? 'Reading the project…'
+      : _isVo() ? 'Read the lines first - the reads lay themselves on the timeline · ' + n.read + '/' + n.total
+        : 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total)
+      : _step === 'setup' ? 'The timeline and the Library · ' + (_isVo() ? n.read + '/' + n.total + ' read' : n.clips + '/' + n.total + ' with a clip') : '';
   const ins = document.getElementById('mv3-inspector');
   if (ins) ins.title = _pid && _step === 'timeline' ? 'Back to setup - the script and its fields' : '';
 }

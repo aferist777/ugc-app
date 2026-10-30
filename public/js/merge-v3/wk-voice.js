@@ -229,7 +229,8 @@ function _bar(host, api) {
 }
 
 export function paintPicker(host, api) {
-  _bar(host, api);
+  // (phase V62) In its window (js/merge-v3/wk-setup.js) the window's own ✕ closes it - no bar of its own.
+  if (!api.inWindow) _bar(host, api);
   const rec = api.char();
   if (_filters === null) { _loadFilters(api); host.appendChild(api.note('reading the filters…')); return; }
 

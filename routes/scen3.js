@@ -2283,8 +2283,12 @@ function _tagPrompt(mood, lines) {
     + '\n- NEVER change, add, remove or reorder a single word. Punctuation stays exactly as it is.'
     + ' You are only inserting [tags] between the existing words.'
     + '\n- A tag goes immediately before the words it affects.'
-    + '\n- Most lines take one or two tags. Some take none: if a tag would not change how the'
-    + ' line is delivered, leave that line untouched.'
+    + (mood.voiceover
+      // (phase V62, (во28)) A voiceover is often ONE long line: tags go by its sentences, or the mood would be one tag deep.
+      ? '\n- Tag by SENTENCES, not by lines: one or two tags every few sentences, wherever a tag changes how those'
+        + ' sentences are delivered. A line may be many sentences long - tag through it, all the way to its end.'
+      : '\n- Most lines take one or two tags. Some take none: if a tag would not change how the'
+        + ' line is delivered, leave that line untouched.')
     + '\n- Never place two tags next to each other.'
     + '\n- Shape the arc described above ACROSS the whole script. Where the read should be flat,'
     + ' leave it flat, so the marked moments actually stand out.'
@@ -2337,7 +2341,9 @@ function _retagPrompt(mood, lines, want) {
     + ' as one performance. Do not restart the arc.'
     + '\n- NEVER change, add, remove or reorder a word of the flagged line. Punctuation stays'
     + ' exactly as it is. You are only inserting [tags] between the existing words.'
-    + '\n- One or two tags, or none at all if the line is better plain.'
+    + (mood.voiceover
+      ? '\n- Tag by sentences: one or two tags every few sentences of the flagged line, all the way to its end.'
+      : '\n- One or two tags, or none at all if the line is better plain.')
     + '\n\nReply with strict JSON only:'
     + '\n{"lines":[{"n":<line number>,"text":"the line with tags"}]}'
     + `\nexactly ${want.length} entr${want.length === 1 ? 'y' : 'ies'}, for line(s) ${want.map(i => i + 1).join(', ')}.`
@@ -2392,7 +2398,7 @@ async function _tagRoute(req, res) {
     const vm = req.body.mood ? MP.moodById(String(req.body.mood)) : null;
     if (!vm) return res.status(400).json({ success: false, error: req.body.mood ? 'no such mood' : 'a mood is needed' });
     const merge = true;
-    const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags };
+    const mood = { id: vm.id, label: vm.label, brief: vm.brief, tags: vm.tags, voiceover: proj.type === 'voiceover' };
 
     // `only` re-tags just those lines, leaving every approved line untouched. Sent
     // empty (or absent) it is a full pass over the script.
@@ -2502,15 +2508,29 @@ function _audioDur(file) {
   });
 }
 
-async function _speakLine(key, voiceId, model, text, params) {
+// (phase V62) A voiceover is read in the language it is written in: Cyrillic - Russian, plain English letters only - English,
+// anything else (Spanish with its ñ, German with its ü...) - nothing said, v3 decides by itself. A talking head's lines are
+// always English (V29).
+const _langOfText = (t) => {
+  const s = String(t || '').replace(/\[[^\]]*\]/g, ' ');           // the mood's [tags] are English whatever the line is
+  if (/\p{Script=Cyrillic}/u.test(s)) return 'ru';
+  return /\p{L}/u.test(s) && !/[^\x00-\x7F]/.test(s.replace(/[‘’“”–—… ]/g, '')) ? 'en' : null;
+};
+// (phase V62, (во28)) A voiceover's line, at most: ElevenLabs v3 reads 5 000 characters at a time, tags included - 500 are
+// left for the mood's tags. The page's fields stop at it too.
+const VO_MAX = 4500;
+
+async function _speakLine(key, voiceId, model, text, params, lang) {
+  const code = lang === undefined ? 'en' : lang;
   const r = await axios.post(
     `${EL_TTS_BASE}/${encodeURIComponent(voiceId)}`,
     {
       text,
       model_id: model,
       // (phase V29) Every line is English, and v3 is told so - its accent does not drift with a name or a loan word.
-      // multilingual_v2 does not take the code (ElevenLabs' reference, 2026-10-14) and is sent nothing.
-      ...(model === EL_MODEL_TAGGED ? { language_code: 'en' } : {}),
+      // multilingual_v2 does not take the code (ElevenLabs' reference, 2026-10-14) and is sent nothing. A voiceover's
+      // line says its own (V62, `lang`).
+      ...(model === EL_MODEL_TAGGED && code ? { language_code: code } : {}),
       voice_settings: {
         stability: typeof params.stability === 'number' ? params.stability : 0.5,
         similarity_boost: 0.75,
@@ -2518,8 +2538,10 @@ async function _speakLine(key, voiceId, model, text, params) {
         speed: 1,
       },
     },
+    // Two minutes for a line of a talking head; a voiceover's line of up to 4 500 characters (~5 minutes of speech, V62)
+    // is given longer by its length.
     { headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-      responseType: 'arraybuffer', timeout: 120000 },
+      responseType: 'arraybuffer', timeout: Math.max(120000, String(text || '').length * 80) },
   );
   return Buffer.from(r.data);
 }
@@ -2579,6 +2601,7 @@ function _readCtx(proj) {
   const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
   return {
     id: String(proj.id),
+    voiceover: proj.type === 'voiceover',
     lines: (proj.lines || []).map(_normLine),
     voice,
     variant,
@@ -2603,7 +2626,7 @@ async function _speakOne(key, ctx, i) {
   // as soon as the sound is in hand, not when the project has been saved.
   await _speakSlot();
   let buf;
-  try { buf = await _speakLine(key, ctx.cast.id, ctx.model, text, ctx.voice.ttsParams); }
+  try { buf = await _speakLine(key, ctx.cast.id, ctx.model, text, ctx.voice.ttsParams, ctx.voiceover ? _langOfText(line.text || text) : undefined); }
   finally { _speakDone(); }
   const name = `v${ctx.id}_${i + 1}_${ctx.variant}_${Date.now()}.mp3`;
   const abs = path.join(ctx.dir, name);
@@ -3129,7 +3152,8 @@ function _normProject(p, now) {
     frameRef:   _normFrameRef(src.frameRef),
     name:       String(src.name || '').trim() || 'untitled project',
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
-    type:       'talking_head',
+    // (phase V62) A voiceover is the same record with no who / where, frames or clips; everything else is a talking head.
+    type:       src.type === 'voiceover' ? 'voiceover' : 'talking_head',
     gender:     String(src.gender || '').toLowerCase(),
     title:      String(src.title || ''),
     lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],
@@ -3530,9 +3554,11 @@ router.get('/scen3/projects/:id', (req, res) => {
 router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
+    const voiceover = b.id == null && b.type === 'voiceover';
     // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
-    // came in - gets them in English, and so does the scenario: what is spoken is English.
-    if (b.id == null && b.scenarioId != null) {
+    // came in - gets them in English, and so does the scenario: what is spoken is English. A VOICEOVER is read in the
+    // language it is written in (phase V62, the owner 2026-10-30): nothing is translated.
+    if (b.id == null && b.scenarioId != null && !voiceover) {
       const s0 = _load().find(x => String(x.id) === String(b.scenarioId));
       const texts = s0 ? (s0.lines || []).map(l => String((l && l.text) || '')) : [];
       if (texts.some(t => t.trim() && !AGENT.english(t))) {
@@ -3584,8 +3610,27 @@ router.post('/scen3/projects', async (req, res) => {
       return res.json({ success: true, project: _projFull(merged) });
     }
 
+    // (phase V62, (во1), (во16), (во27)) A VOICEOVER FROM ONE'S OWN TEXT: no scenario - the whole text is ONE line (the quick
+    // way), at most VO_MAX characters, 500 left for the mood's tags within ElevenLabs' 5 000 (во28).
+    if (voiceover && b.scenarioId == null) {
+      const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
+      if (!text) return res.status(400).json({ success: false, error: 'the text is empty' });
+      if (text.length > VO_MAX) return res.status(400).json({ success: false, error: 'the text is longer than ' + VO_MAX + ' characters' });
+      const title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120) || text.split(' ').slice(0, 6).join(' ');
+      const rec = _normProject({
+        id: _newId(list), owner: OWN.uidOf(req), type: 'voiceover',
+        name: `${now.slice(0, 10)} — ${title}`, title, lines: [{ text }], video: { v: 2 }, createdAt: now, updatedAt: now,
+      }, now);
+      list.unshift(rec);
+      _saveProjects(list);
+      return res.json({ success: true, project: _projFull(rec) });
+    }
+
     const scen = _load().find(x => String(x.id) === String(b.scenarioId || ''));
     if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
+    if (voiceover && (scen.lines || []).some(l => String((l && l.text) || '').length > VO_MAX)) {
+      return res.status(400).json({ success: false, error: 'a line of this scenario is longer than ' + VO_MAX + ' characters' });
+    }
     // '' when the scenario does not say, and that is allowed: the casting then offers
     // every character rather than none.
     const gender = GENDERS.includes(_genderOf(scen)) ? _genderOf(scen) : '';
@@ -3594,6 +3639,7 @@ router.post('/scen3/projects', async (req, res) => {
     const rec = _normProject({
       id: _newId(list),
       owner: OWN.uidOf(req),
+      ...(voiceover ? { type: 'voiceover' } : {}),
       name: `${day} — ${scen.title}`,
       scenarioId: scen.id,
       gender,
@@ -3634,9 +3680,12 @@ router.post('/scen3/projects/:id/line', async (req, res) => {
   try {
     let text = String((req.body || {}).text == null ? '' : (req.body || {}).text).trim();
     if (!text) return res.status(400).json({ success: false, error: 'a line cannot be empty' });
+    // (phase V62) A voiceover's line is kept in its own language, and no longer than VO_MAX.
+    const vo = (_loadProjects().find(p => String(p.id) === String(req.params.id)) || {}).type === 'voiceover';
+    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
     // (phase V29) Typed in another language, the words are made English before they are kept - the field shows the
     // English. Then the project is read and written in one go, as before.
-    if (!AGENT.english(text)) {
+    if (!vo && !AGENT.english(text)) {
       const t = await _englishLines([text]);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
       text = String(t.texts[0] || '').trim();
@@ -3781,8 +3830,11 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     if (!(after >= 0 && after < (proj.lines || []).length)) return res.status(400).json({ success: false, error: 'no such line' });
     const busy = _scriptBusy(id);
     if (busy) return res.status(409).json({ success: false, error: busy + ' - put the line in when it is done' });
+    // (phase V62) A voiceover's line goes in as typed, in its own language, and no longer than VO_MAX.
+    const vo = proj.type === 'voiceover';
+    if (vo && text.length > VO_MAX) return res.status(400).json({ success: false, error: 'a line is at most ' + VO_MAX + ' characters' });
     // (phase V29) Typed in another language, it goes in English - and nothing may have started while it was translated.
-    if (!AGENT.english(text)) {
+    if (!vo && !AGENT.english(text)) {
       const t = await _englishLines([text]);
       if (t.fail) return res.status(502).json({ success: false, error: t.fail });
       text = String(t.texts[0] || '').replace(/\s+/g, ' ').trim();

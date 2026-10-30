@@ -113,13 +113,17 @@ router.get('/mv3/timelines', (req, res) => {
     const own = _folderFiles(Object.keys(s.timelines));
     // (phase V33.1) A highlights project is ONE line - its own timeline; its fragments' timelines open from its tiles.
     const HLS = require('../lib/highlights-store');
+    const PROJ = require('../lib/projects-store');
     const list = Object.keys(s.timelines).filter(key => !((HLS.ofKey(key) || {}).n > 0)).map(key => {
       const t = s.timelines[key];
       let clips = 0;
       for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
+      // (phase V62) A scenarios project's timeline says which of the two it is: a talking head or a voiceover.
+      const pm = /^sv3_(\d+)$/.exec(key);
+      const vo = pm ? ((PROJ.get(pm[1]) || {}).type === 'voiceover') : false;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
                kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t),
-               ...(HLS.ofKey(key) ? { highlights: true } : {}) };
+               ...(HLS.ofKey(key) ? { highlights: true } : {}), ...(vo ? { voiceover: true } : {}) };
     // (phase V20) The draft first, then newest first.
     }).sort((a, b) => (b.draft - a.draft) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     // Everyone sees every owner. The picker groups by them; which entries the caller may
