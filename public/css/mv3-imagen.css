@@ -724,6 +724,39 @@ audio.vtrim-media{ background:none; height:32px }
 .mv3-ig-msg-refs.vm-refs-s{ flex:0 0 auto; gap:4px }
 .vm-refs-s .vc-ref{ width:40px }
 .vm-refs-s .mv3-ig-msg-ref{ width:40px; height:40px }
+/* (вс7а) The storyboard's sheet in a row under its prompt: 72 px high, at its shape; its countdown or why not beside it. */
+.vm-sheet{ flex:0 0 auto; display:flex; align-items:center; gap:8px; min-width:0; height:72px }
+.vc-board.is-row{ flex:0 0 auto; height:72px; width:auto; aspect-ratio:var(--ar, .5625); cursor:zoom-in }
+.vc-board.is-row img{ width:100%; height:100%; object-fit:contain }
+.vm-sheet > .vc-card-note{ flex:1 1 auto; min-width:0 }
+.vm-sheet > .vc-board.is-busy{ flex:1 1 auto; width:auto; height:72px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-end; padding:5px }
+.vm-sheet > .vc-board.is-bad{ flex:1 1 auto; width:auto; max-height:72px; box-sizing:border-box; overflow:hidden }
+/* (вс6а) Kling's first frame fills its step down to the bottom of the video, at least 160 px, at its shape. */
+.vm-fill{ position:relative; flex:1 1 0; min-height:160px; min-width:0 }
+.vm-fill > .vc-board.is-frame{ position:absolute; inset:0; width:auto; aspect-ratio:auto; border:0; background:none }
+.vm-fill > .vc-board.is-frame img{ object-fit:contain; object-position:left top; border-radius:var(--r-xs) }
+.vm-fill > .vc-frame-busy{ position:absolute; inset:0; align-items:stretch }
+.vm-fill > .vc-frame-busy > .vc-board{ flex:1 1 0; width:auto; min-height:0; aspect-ratio:auto }
+.vm-fill.is-empty{
+  display:flex; align-items:center; justify-content:center; padding:8px; box-sizing:border-box;
+  border:1px dashed var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+}
+.vm-fill.is-empty > .w{ font:600 10px/1.45 var(--font); color:var(--muted); text-align:center }
+.vm-note2{ flex:0 0 auto; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden }
+/* (вс9б) The presses in ONE line under both columns: the price gives way (whole under the pointer); a narrow panel wraps. */
+.vc-step-acts > .vc-card-why{ flex:1 1 0; min-width:48px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+/* (вс11а) A message of the one press: its words whole, as a block down to the bottom of the video, scrolling inside. */
+.vm-head-l > .vm-plain{ flex:1 1 auto; min-height:0 }
+.vm-words{
+  flex:1 1 0; min-height:60px; overflow-y:auto; padding:6px 8px; box-sizing:border-box;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--bg);
+  font:500 11.5px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; word-break:break-word;
+}
+/* (вс12б) Side by side always; a message narrower than 460 px has its video 120 px wide (9:16 - 120×213). */
+.vc-card{ container:vmsg / inline-size }
+@container vmsg (max-width: 435px){
+  .vm-head{ grid-template-columns:minmax(0, 1fr) 120px }
+}
 
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
    As big as the catalog: where things come from on the left, the tiles in the middle - a picture or a clip at its own

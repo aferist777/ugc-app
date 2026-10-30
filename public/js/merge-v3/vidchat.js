@@ -1529,52 +1529,45 @@ function VIDEOS(ctx) {
     const list = (c.watch || []).filter(Boolean);
     if (!list.length) return null;
     const failed = !written && c.state === 'failed';
-    const sig = list.map(w => w.n + ':' + w.state + ':' + (w.why ? 1 : 0)).join(',') + '|' + (c.state === 'writing' ? 'w' : 'r') + '|' + (failed ? c.error || 'x' : '');
+    const tail = '|' + (c.state === 'writing' ? 'w' : 'r') + '|' + (failed ? c.error || 'x' : '');
+    // (phase V60.3, the owner's (вс6а)) One clip's description at a time, as a field down to the bottom of the video: each clip
+    // is a variant of the step - "‹ 1 of 2 ›" in its title line.
+    const variants = list.map(w => ({ key: 'c' + w.n, sig: w.n + ':' + w.state + ':' + (w.why ? 1 : 0) + tail, w }));
     return {
-      key: 'watch', title: list.length > 1 ? 'clips watched' : 'clip watched', word: 'description', variants: [{ key: 'w', sig }],
-      body: (x, b, progs) => _watchBody(l.m, b, progs, failed),
+      key: 'watch', title: list.length > 1 ? 'clips watched' : 'clip watched', word: 'clip', variants, pick: variants[0].key,
+      note: (x) => (!x ? '' : x.w.state === 'done' ? 'what the agent saw in it' : x.w.state === 'failed' ? 'not watched' : x.w.state),
+      body: (x, b, progs, nav) => _watchBody(l.m, b, progs, failed, x ? { w: x.w, nav } : null),
       acts: (x, a) => _watchActs(l.m, a),
     };
   }
-  function _watchBody(m, b, progs, failed) {
+  // The clips' descriptions: `one` - { w, nav } - the one shown as a field (the step "clip watched"); without it every clip folded
+  // into one line (the storyboard's step, (вс7а)).
+  function _watchBody(m, b, progs, failed, one) {
     const c = m.card;
     const list = (c.watch || []).filter(Boolean);
     const clips = (m.media || []).filter(a => a && a.kind === 'video');
     const locked = c.state === 'writing';
-    const saves = new Map();
+    // Kept across the step's redraws: a description paged away from is written by its own pending save.
+    const saves = _watchSaves.get(m.id) || new Map();
     _watchSaves.set(m.id, saves);
-    for (const w of list) {
+    for (const w of (one ? [one.w] : list)) {
+      const lab = clips[w.n - 1] && clips[w.n - 1].label;
+      if (one) {
+        _watchField(m, w, lab, b, progs, saves, locked, one.nav);
+        continue;
+      }
       const box = el('div', 'vc-watch is-' + w.state);
       const h = el('div', 'vc-try-h');
       h.appendChild(el('span', 'k', '[clip ' + w.n + ']'));
       h.appendChild(el('span', null, _clipT(w.in) + '–' + _clipT(w.out)));
-      const lab = clips[w.n - 1] && clips[w.n - 1].label;
       if (lab) h.appendChild(el('span', null, lab));
       if (w.state === 'done') {
         h.appendChild(el('span', null, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent')));
         if (w.edited) h.appendChild(el('span', 'is-mine', 'corrected by you'));
       }
       if (w.state === 'done') {
-        const ta = document.createElement('textarea');
-        ta.className = 'vc-prompt-ta vc-watch-ta is-fit';
-        ta.spellcheck = true;
-        ta.maxLength = 40000;
-        ta.value = w.text || '';
-        ta.readOnly = locked;
-        ta.title = locked ? 'The prompt is being written from this now'
-          : 'What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.';
-        const key = 'w:' + m.id + ':' + w.n;
-        let last = ta.value;
-        const save = () => {
-          clearTimeout(_patchT.get(key));
-          _patchT.delete(key);
-          if (ta.value === last || !ta.value.trim()) return Promise.resolve();
-          last = ta.value;
-          return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, watch: { n: w.n, text: ta.value } }, 'PATCH');
-        };
-        ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
-        ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-        saves.set(w.n, save);
+        const ta = _watchTa(m, w, locked, saves);
+        ta.classList.add('is-fit');
         // (phase V60.2, (вч10а), (вч12а)) Folded into one line; open, its part, who watched it, the description and - one line,
         // no empty block under it any more - what the writer does with it.
         const open = [h, ta];
@@ -1600,6 +1593,58 @@ function VIDEOS(ctx) {
       b.appendChild(box);
     }
     if (failed) b.appendChild(el('div', 'mv3-ig-bad', 'The prompt was not written: ' + (c.error || 'no writer answered')));
+  }
+  // A clip's description to correct: written 0.6 s after the typing stops, or when the field is left; read-only while the
+  // prompt is being written from it.
+  function _watchTa(m, w, locked, saves) {
+    const ta = document.createElement('textarea');
+    ta.className = 'vc-prompt-ta vc-watch-ta';
+    ta.spellcheck = true;
+    ta.maxLength = 40000;
+    ta.value = w.text || '';
+    ta.readOnly = locked;
+    ta.title = locked ? 'The prompt is being written from this now'
+      : 'What the agent saw in this clip - correct who is who or what happens; "write it again" writes the prompt from it as it stands.';
+    const key = 'w:' + m.id + ':' + w.n;
+    let last = ta.value;
+    const save = () => {
+      clearTimeout(_patchT.get(key));
+      _patchT.delete(key);
+      if (ta.value === last || !ta.value.trim()) return Promise.resolve();
+      last = ta.value;
+      return _post('/api/mv3/video/card/' + encodeURIComponent(m.id), { project: m.project, watch: { n: w.n, text: ta.value } }, 'PATCH');
+    };
+    ta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
+    ta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
+    saves.set(w.n, save);
+    return ta;
+  }
+  // (phase V60.3, the owner's (вс6а)) The clip shown on the step "clip watched": its description as a field down to the bottom
+  // of the video - its part, who watched it, "corrected by you" in the title line, what the writer does with it under the
+  // pointer; being watched, waiting or not watched - said in the field's place.
+  function _watchField(m, w, lab, b, progs, saves, locked, nav) {
+    const c = m.card;
+    const n = (c.watch || []).filter(Boolean).length;
+    const part = _clipT(w.in) + '–' + _clipT(w.out);
+    const base = { nav, word: 'clip ' + w.n, always: true, pager: nav ? nav.pager() : null };
+    if (w.state === 'done') {
+      const ta = _watchTa(m, w, locked, saves);
+      const lead = [part, lab, (w.cached ? 'watched before by ' : 'watched by ') + (w.by || 'an agent'), w.edited ? 'corrected by you' : ''].filter(Boolean).join(' · ');
+      b.appendChild(_field(Object.assign(base, { lead, text: () => ta.value, ta })));
+      return;
+    }
+    const lead = [part, lab].filter(Boolean).join(' · ');
+    if (w.state === 'watching') {
+      b.appendChild(_waitField(Object.assign(base, { lead, progs, progKey: 'watch:' + w.n, prog: {
+        label: 'watching clip ' + w.n + (n > 1 ? ' of ' + n : '') + ' with its sound…', key: 'mv3-clip-watch', estimateMs: 60000,
+        startedAt: Date.parse(w.at || c.startedAt || m.at) || 0,
+      } })));
+    } else if (w.state === 'waiting') {
+      b.appendChild(_waitField(Object.assign(base, { lead, words: 'waits for clip ' + (w.n - 1) })));
+    } else {
+      b.appendChild(_waitField(Object.assign(base, { lead, bad: true,
+        words: 'Clip not watched - ' + (w.why || 'no model watched it') + '. The writer saw three of its frames instead.' })));
+    }
   }
   function _watchActs(m, a) {
     const c = m.card;
@@ -1680,13 +1725,15 @@ function VIDEOS(ctx) {
   // A sheet: a press shows the card's sheets large, hovering shows it bigger.
   // (phase V18.1, the owner 2026-10-08) `how`: 'big' - the storyboard at the message's width, from the 1280px tier (the
   // 440px miniature stretched to 600 came out in squares); 'frame' - Kling's first frame at its own shape, at most 320px
-  // high, its box set before the picture loads. No popup under the pointer: the press opens it large.
+  // high, its box set before the picture loads. No popup under the pointer: the press opens it large. (phase V60.3) 'row' -
+  // the storyboard's sheet in its row under the prompt, 72 px high at its shape; Kling's first frame fills its step down to the
+  // bottom of the video (css .vm-fill).
   function _boardThumb(g, all, W, how) {
     const word = W || 'storyboard';
     const t = el('button', 'vc-board' + (how ? ' is-' + how : ''));
     t.type = 'button';
     t.dataset.id = g.id;
-    if (how === 'frame') t.style.setProperty('--ar', String(ratioOf(g.aspect)));
+    if (how === 'frame' || how === 'row') t.style.setProperty('--ar', String(ratioOf(g.aspect)));
     const img = document.createElement('img');
     img.src = '/api/thumb?src=' + encodeURIComponent(g.imagePath) + '&v=' + (how ? 'preset' : 'strip');
     img.loading = 'lazy'; img.decoding = 'async'; img.alt = word;
@@ -1892,15 +1939,34 @@ function VIDEOS(ctx) {
     l.steps.paint({ steps, start: kind !== 'column' && !sheets.length && !made && steps.length ? steps[0].key : '' });
     _paintVid(l);
   }
-  // (phase V60.2) The storyboard's first step: the clips' descriptions (folded), the sheet's prompt (folded) and the sheet.
+  // (phase V60.2) The storyboard's first step: the clips' descriptions (folded), the sheet's prompt and the sheet.
+  // (phase V60.3, the owner's (вс7а)) The sheet's prompt a field down to the bottom of the video, the sheet a row under it.
   function _storyStep(m, l, x, b, progs, nav) {
     const c = l.m.card;
     const B = c.board || {};
     const written = (B.versions || []).length > 0 || !!B.prompt;
-    if ((c.watch || []).length) _watchBody(l.m, b, progs, !written && c.state === 'failed');
+    const watched = (c.watch || []).length > 0;
+    if (watched) _watchBody(l.m, b, progs, !written && c.state === 'failed');
     l.bta = null;
-    if (x) _boardPromptStep(m, l, x, b, progs, nav);
-    if (written || (l.m.boards || []).length) _sheetStep(m, l, nav.shown('board'), b, progs, nav);
+    // The steps' line stays over the clips' lines when there are some, not in the prompt's title line under them.
+    if (x) _boardPromptStep(m, l, x, b, progs, watched ? Object.assign({}, nav, { head: null }) : nav);
+    if (written || (l.m.boards || []).length) _sheetRow(m, l, nav.shown('board'), b, progs, nav);
+  }
+  // (phase V60.3, the owner's (вс7а)) The storyboard's sheet under its prompt: a row 72 px high - the sheet shown at its shape
+  // (a press: the card's sheets large), its "‹ 2 of 3 ›", what it is; being drawn - its countdown; not drawn - why.
+  function _sheetRow(m, l, x, b, progs, nav) {
+    const row = el('div', 'vm-sheet');
+    const pg = nav ? nav.pager('board') : null;
+    const g = x ? x.g : null;
+    if (!g) row.appendChild(el('span', 'vc-card-note', 'Not drawn yet - "draw the storyboard" below. The video follows the one shown here.'));
+    else if (g.state === 'pending') row.appendChild(_boardBusy(g, progs, g.id, l.W));
+    else if (!_boardOk(g)) row.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+    else {
+      row.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, 'row'));
+      row.appendChild(el('span', 'vc-card-note', 'the storyboard - the video follows this one'));
+    }
+    if (pg) row.appendChild(pg);
+    b.appendChild(row);
   }
   // Its presses: draw (from the prompt shown, as it is edited), "write the video" (the column's, from the sheet shown), the
   // price, "write it again" / "write both again", the attachments back, "change the values".
@@ -1944,18 +2010,17 @@ function VIDEOS(ctx) {
     if (!x || x.writing) {
       const B = c.board || {};
       const first = !((B.versions || []).length || B.prompt);
-      const strip = el('div', 'mv3-ig-prog');
-      b.appendChild(strip);
-      progs.set('w', startInlineProgress(strip, {
+      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      b.appendChild(_waitField({ nav, word: 'prompt', always: true, pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: l.kind === 'recipe' ? (first ? 'writing the prompts…' : 'writing another variant of both prompts…')
           : (first ? 'writing the storyboard prompt…' : 'writing another variant of the storyboard prompt…'),
         key: l.kind === 'recipe' ? 'mv3-video-writer' : 'mv3-board-writer', estimateMs: l.kind === 'recipe' ? 25000 : 20000, startedAt: Date.parse(c.startedAt || m.at) || 0,
-      }));
+      } }));
       return;
     }
     if (c.error && c.writing !== 'video') b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board is-fit';
+    bta.className = 'vc-prompt-ta is-board';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = x.v.prompt || '';
@@ -1970,8 +2035,9 @@ function VIDEOS(ctx) {
     };
     bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end.
-    b.appendChild(_foldLine({ id: m.id, key: 'board-prompt', word: 'storyboard prompt', text: () => bta.value, ta: bta, open: [bta], pager: nav ? nav.pager() : null }));
+    // (phase V60.3, (вс7а)) A field down to the bottom of the video (less the sheet's row under it), its variants' pager in its
+    // title line.
+    b.appendChild(_field({ nav, word: 'prompt', always: true, text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null }));
     l.bta = bta;
   }
   // 1 · Kling's first frame (V7.6 as a recipe; the chat's own since V17): the moment of the clip it is drawn from and the
@@ -1983,11 +2049,10 @@ function VIDEOS(ctx) {
     const c = l.m.card, B = c.board || {};
     l.bta = null; l.range = null;
     if (!x || x.writing) {
-      const strip = el('div', 'mv3-ig-prog');
-      b.appendChild(strip);
-      progs.set('w', startInlineProgress(strip, {
+      // (phase V60.3, (вс8а)) In the place the prompt will stand in.
+      b.appendChild(_waitField({ nav, word: 'first frame prompt', pager: nav ? nav.pager() : null, progs, progKey: 'w', prog: {
         label: 'writing another variant of the first frame\'s prompt…', key: 'mv3-video-writer', estimateMs: 25000, startedAt: Date.parse(c.startedAt || m.at) || 0,
-      }));
+      } }));
       return;
     }
     if (c.error) b.appendChild(el('div', 'mv3-ig-bad', 'The last writing did not work: ' + c.error));
@@ -2023,9 +2088,8 @@ function VIDEOS(ctx) {
     side.append(range, said, el('span', 'vc-card-note', whole ? 'A new moment needs a new picture: the first frame is drawn from it.'
       : 'Pick a moment where the dancer is seen whole - the picture keeps that pose, room, light and angle.'));
     mo.append(v, side);
-    b.appendChild(mo);
     const bta = document.createElement('textarea');
-    bta.className = 'vc-prompt-ta is-board is-fit';
+    bta.className = 'vc-prompt-ta is-board';
     bta.spellcheck = true;
     bta.maxLength = 6000;
     bta.value = toShown(x.v.prompt || '');
@@ -2040,8 +2104,11 @@ function VIDEOS(ctx) {
     };
     bta.addEventListener('input', () => { clearTimeout(_patchT.get(key)); _patchT.set(key, setTimeout(save, 600)); });
     bta.addEventListener('blur', () => { if (_patchT.has(key)) save(); });
-    // (phase V60.2, (вч10а)) Folded into one line, its variants' pager at its end; the moment above stays in sight.
-    b.appendChild(_foldLine({ id: m.id, key: 'picture-prompt', word: 'first frame prompt', text: () => bta.value, ta: bta, open: [bta], pager: nav ? nav.pager() : null }));
+    // (phase V60.3, the owner's (вс6а)) Its title line (the steps, the variants' pager), the moment of the clip under it, then the
+    // prompt as a field down to the bottom of the video.
+    const f = _field({ nav, word: 'first frame prompt', text: () => bta.value, ta: bta, pager: nav ? nav.pager() : null });
+    f.insertBefore(mo, bta);
+    b.appendChild(f);
     l.bta = bta;
     l.range = range;
   }
@@ -2068,28 +2135,27 @@ function VIDEOS(ctx) {
     l.drawPrice = price;
     _freshenStory(m.id, l);
   }
-  // 2 · the storyboard (the picture): the one shown - drawing, drawn (press: large), or why not.
+  // 2 · Kling's first frame (the picture): the one shown - drawing, drawn (press: large), or why not. (phase V60.3, the owner's
+  // (вс6а)) It fills the step down to the bottom of the video, at least 160 px, at its shape; the steps and its pictures'
+  // "‹ 2 of 3 ›" in its title line, Kling's own prompt under it. (The storyboard's sheet is a row under its prompt: _sheetRow.)
   function _sheetStep(m, l, x, b, progs, nav) {
-    if (!x) {
-      b.appendChild(el('div', 'vc-card-note', l.kind === 'swap' ? 'Not drawn yet - "draw the picture" on the step before. The video follows the one shown here.'
-        : 'Not drawn yet - "draw the storyboard" below. The video follows the one shown here.'));
-      return;
-    }
-    // (phase V60.2) Its sheets' pager under it - the bar at the message's foot went.
-    const pg = nav ? nav.pager('board') : null;
-    const g = x.g;
-    if (g.state === 'pending') { b.appendChild(_boardBusy(g, progs, g.id, l.W)); if (pg) b.appendChild(pg); return; }
-    if (!_boardOk(g)) {
-      b.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
-      if (pg) b.appendChild(pg);
-      return;
-    }
-    b.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, l.kind === 'swap' ? 'frame' : 'big'));
-    if (pg) b.appendChild(pg);
+    const fill = el('div', 'vm-fill');
+    const g = x ? x.g : null;
+    const ok = !!(g && _boardOk(g));
+    if (!g) {
+      fill.classList.add('is-empty');
+      fill.appendChild(el('span', 'w', 'Not drawn yet - "draw the picture" on the step before. The video follows the one shown here.'));
+    } else if (g.state === 'pending') fill.appendChild(_boardBusy(g, progs, g.id, l.W));
+    else if (!ok) fill.appendChild(el('div', 'vc-board is-bad', g.gone ? 'not on the Images shelf any more - it cannot be followed' : String(g.error || 'it was not drawn').slice(0, 200)));
+    else fill.appendChild(_boardThumb(g, (l.m.boards || []).filter(_boardOk), l.W, 'frame'));
+    b.appendChild(_field({ nav, word: 'first frame', pager: nav ? nav.pager('board') : null, wait: fill }));
     // (phase V17) Kling's prompt is its own: said, not a field.
-    if (l.kind === 'swap') {
+    if (ok) {
       const clip = (l.m.media || []).find(y => y.kind === 'video') || {};
-      b.appendChild(el('div', 'vc-card-note', 'Kling moves this picture with the clip ' + _t(clip.in) + ' – ' + _t(clip.out) + ' and gets: ' + (l.m.card.prompt || '')));
+      const said = 'Kling moves this picture with the clip ' + _t(clip.in) + ' – ' + _t(clip.out) + ' and gets: ' + (l.m.card.prompt || '');
+      const n = el('div', 'vc-card-note vm-note2', said);
+      n.title = said;
+      b.appendChild(n);
     }
   }
   function _sheetActs(m, l, x, a) {
@@ -2245,6 +2311,7 @@ function VIDEOS(ctx) {
     if (l.drawGo) {
       const bp = _boardPrice(l);
       l.drawPrice.textContent = bp.text;
+      l.drawPrice.title = bp.text;
       l.drawGo.disabled = !bp.ok;
     }
     if (l.go) {
@@ -2254,6 +2321,7 @@ function VIDEOS(ctx) {
         l.go.classList.add('is-make');
         l.go.textContent = 'make the video';
         l.price.textContent = 'this video is made by ' + (l.kind === 'swap' ? 'Kling motion control' : 'Seedance') + ' - pick it on the left';
+        l.price.title = l.price.textContent;
       }
     }
   }
@@ -2329,8 +2397,8 @@ function VIDEOS(ctx) {
     return box;
   }
   // (phase V60.2, the owner's (вч17а)) A message of the one press - the writer off - has the same head: what was asked on the
-  // left, its clip on the right (×2 - its variants), "read more" at its foot. It has no steps. Its countdown is the thread's
-  // to finish when the clip lands, as before (`progs`).
+  // left, its clip on the right (×2 - its variants), "read more" at its foot. It has no steps and no presses. Its countdown is
+  // the thread's to finish when the clip lands, as before (`progs`).
   function _plainBubble(m, progs, asked) {
     if (m.role === 'user' || m.card) return null;
     const gens = (m.gens && m.gens.length) ? m.gens : (m.gen ? [m.gen] : []);
@@ -2341,8 +2409,16 @@ function VIDEOS(ctx) {
     if (gens[0].model) h.appendChild(el('span', 'm', 'for ' + _labelOf(gens[0].model)));
     box.appendChild(h);
     const media = (m.media || []).length ? m.media : ((asked && asked.media) || []);
-    const words = m.asked != null ? m.asked : (asked ? asked.text : '');
-    const head = (String(words || '').trim() || media.length) ? _askedOf({ words, media }) : null;
+    const words = String((m.asked != null ? m.asked : (asked ? asked.text : '')) || '').trim();
+    // (phase V60.3, the owner's (вс11а)) The words whole, as a block down to the bottom of the video, scrolling inside - not
+    // three lines and "more"; the attachments under them.
+    let head = null;
+    if (words || media.length) {
+      head = el('div', 'vc-asked vm-plain');
+      if (words) head.appendChild(el('div', 'vm-words', words));
+      const row = _mediaRow(media);
+      if (row) head.appendChild(row);
+    }
     const foot = el('div', 'vm-foot');
     const vid = _vidField(m.id, foot, progs);
     box.append(_headOf(head, vid).el, foot);
@@ -2776,6 +2852,8 @@ function VIDEOS(ctx) {
         : pr.fromClip ? (pr.usd != null ? '≈' + money(pr.usd * n) + ' at most · ' + _s(pr.secs) + ' of the clip' : '≈' + money(pr.per) + ' per second of clip') + ' · ' + (mm ? mm.label : '')
           : '≈' + money(pr.usd * n) + ' · ' + _secsWords(pr) + ' · ' + pr.res + ' · '
             + (mm ? mm.label : '') + ' · ' + (rec() ? rec().aggLabel : '');
+    // (phase V60.3, (вс9б)) The row of presses stays one line: the price gives way, whole under the pointer.
+    l.price.title = l.price.textContent;
   }
   // A finished clip: its poster - a press plays it, and it can be dragged onto a lane (phase V13). (phase V60.2) At its
   // message's head, 180 px wide at its shape. (phase V60.3, the owner's (вс1б)) No "to timeline" under it: the drag lays it.

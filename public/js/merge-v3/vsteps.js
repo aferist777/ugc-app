@@ -10,7 +10,7 @@
 
    (phase V60.2, the owner 2026-10-29, (вч6а)-(вч10а)) Two steps at most - the video is not a step any more: it stands at the
    head of the message (vidchat.js). The bar of variants at the bottom went: a step puts a small "‹ 2 of 3 ›" where it wants
-   it (`pager`) - into the folded line of its prompt, under its sheet. A step may have more than one set of variants (the
+   it (`pager`) - into its field's title line (V60.3), beside its sheet. A step may have more than one set of variants (the
    storyboard's step: its prompt's writings and its sheets).
 
    (phase V60.3, the owner 2026-10-30, (вс2а), (вс4а)) The message is two columns: the steps' line and the step shown stand
