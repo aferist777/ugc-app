@@ -1401,15 +1401,81 @@ function _voCount(p, box) {
 // ── FIELD 2 OF A VOICEOVER - B-ROLL (phase V62) ──
 // The picture of a voiceover: videos and pictures from the stock, laid over the voice by its sentences. Red until every
 // line is read (the same rule as a talking head's frames and video, _voiceLock); its "find B-roll" comes with V62's block 1.
+// (phase V62, block 1) "find B-roll" - the SERVER finds it (routes/broll.js, lib/broll.js): the sentences from the captions, the
+// agent's English keywords for each, a batch of videos and pictures from the stock per sentence, the pieces laid on main video
+// edge to edge through the voice - and this field follows it ("finding 3 of 14…"). The menu beside it says what is laid -
+// videos and pictures mixed, videos only, pictures only - and lays it again when changed (the pieces chosen by hand stay).
+let _broll = null;            // { key, state } - the server's word on this project's B-roll
+let _brollT = 0;
+const BROLL_MODES = [['mixed', 'videos and pictures'], ['video', 'only videos'], ['image', 'only pictures']];
+function _brollWatch(p, now) {
+  clearTimeout(_brollT);
+  const id = String(p.id);
+  const ask = async () => {
+    try {
+      const r = await fetch('/api/broll/' + encodeURIComponent(id) + '/state').then(x => x.json());
+      if (!_ctx || !_ctx.project || String(_ctx.project.id) !== id) return;
+      const was = _broll && _broll.state;
+      _broll = { key: id, state: (r && r.state) || null };
+      const st = _broll.state || {};
+      // The work ended: the timeline has the pieces now.
+      if (was && was.running && !st.running) Store.refresh().catch(() => {});
+      if (JSON.stringify(was) !== JSON.stringify(st)) _ctx.repaint();
+      if (st.running) _brollT = setTimeout(ask, 1200);
+    } catch (e) { _brollT = setTimeout(ask, 3000); }
+  };
+  if (now) ask(); else _brollT = setTimeout(ask, 1200);
+}
+async function _brollPost(p, what, body) {
+  try {
+    const r = await _post('/api/broll/' + encodeURIComponent(p.id) + '/' + what, body || {});
+    _broll = { key: String(p.id), state: r.state || null };
+  } catch (e) {
+    _broll = { key: String(p.id), state: Object.assign({}, (_broll && _broll.state) || {}, { running: false, error: e.message }) };
+  }
+  _ctx.repaint();
+  _brollWatch(p, false);
+}
+
 function _stageBroll(host, p, lines) {
-  const lock = !liveLines(lines).length ? 'Choose the script first - a scenario or your own text, on the right.' : _voiceLock(p);
-  const { body } = _stage(host, 'broll', {
-    step: 2, bare: true, wide: true, lock,
+  const live = liveLines(lines);
+  const lock = !live.length ? 'Choose the script first - a scenario or your own text, on the right.' : _voiceLock(p);
+  if (!_broll || _broll.key !== String(p.id)) { _broll = { key: String(p.id), state: null }; _brollWatch(p, true); }
+  const st = (_broll && _broll.state) || {};
+  const total = +st.total || 0, done = +st.done || 0;
+  const { body, foot } = _stage(host, 'broll', {
+    step: 2, wide: true, lock, done: !!st.laid && !st.running && !st.error && !st.left,
+    work: st.running ? () => (total ? done / total : 0) : null,
     name: 'B-roll', sub: 'videos and pictures from the stock, by the sentences',
+    summary: st.running ? (st.step || 'finding…') : st.sentences ? st.laid + ' pieces · ' + st.sentences + ' sentences' + (st.left ? ' · ' + st.left + ' without B-roll' : '') : '',
   });
-  body.appendChild(_note(!liveLines(lines).length ? 'The script first, then the voice. Then the B-roll is found for it.'
-    : lock ? 'The voice first - every line read, then its captions heard. Then the B-roll is found for it.'
-    : 'Finding the B-roll comes next (V62, block 1): videos and pictures from the stock, laid over the voice by its sentences.'));
+  if (!live.length) { body.appendChild(_note('The script first, then the voice. Then the B-roll is found for it.')); return; }
+  if (lock) { body.appendChild(_note('The voice first - every line read, then its captions heard. Then the B-roll is found for it.')); return; }
+  if (st.error) body.appendChild(_note(st.error, true));
+  else if (!st.sentences && !st.running) {
+    body.appendChild(_note('Videos and pictures from the stock for every sentence of the voice, laid over it edge to edge - '
+      + 'free; the keywords are written by the agent (a fraction of a cent).'));
+  }
+  // What is laid, and laid again when changed.
+  const mode = el('select', 'mv3-wk-vsel is-small mv3-wk-bmode');
+  for (const [v, label] of BROLL_MODES) {
+    const o = el('option', '', label);
+    o.value = v;
+    if ((st.mode || 'mixed') === v) o.selected = true;
+    mode.appendChild(o);
+  }
+  mode.title = 'What is laid: videos and pictures mixed at random, only videos, or only pictures. Changed, every piece is laid again - but the ones you chose yourself.';
+  mode.disabled = !!st.running;
+  mode.addEventListener('change', () => _brollPost(p, 'mode', { mode: mode.value }));
+  foot.appendChild(mode);
+  _genButton(foot, {
+    label: st.running ? (st.step || 'finding…') : st.sentences && !st.left ? 'find again' : 'find B-roll',
+    disabled: !!st.running,
+    title: st.running ? 'The B-roll is being found' : st.sentences && !st.left
+      ? 'Every sentence has its B-roll - this finds it for sentences new since (a line read again, put in)'
+      : 'Find the B-roll of every sentence that has none yet and lay it over the voice',
+    on: () => _brollPost(p, 'find'),
+  });
 }
 
 // ── FIELD 2 - FRAMES (phase V61, the owner 2026-10-30, (т6): "поле first frames удаляем, а набор фреймов нужно показывать.

@@ -161,6 +161,7 @@ app.use('/api', require('./routes/char-store'));
 app.use('/api', require('./routes/mv3-captions'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
+app.use('/api', require('./routes/broll'));   // (phase V62) a voiceover's B-roll engine
 app.use('/api', require('./routes/scen3-fchat'));   // a talking head's frames chat (phase V26.5)
 app.use('/api', require('./routes/makechat'));   // the Library's chats that make environments and lookbooks (phase I)
 app.use('/api', require('./routes/character-v2'));   // making a character: the portrait, read and drawn (Library, New Character)
