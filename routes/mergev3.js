@@ -120,12 +120,16 @@ router.get('/mv3/timelines', (req, res) => {
       for (const tr of (Array.isArray(t.tracks) ? t.tracks : [])) clips += ((tr && tr.clips) || []).length;
       // (phase V62) A scenarios project's timeline says which of the two it is: a talking head or a voiceover.
       const pm = /^sv3_(\d+)$/.exec(key);
-      const vo = pm ? ((PROJ.get(pm[1]) || {}).type === 'voiceover') : false;
+      const pr = pm ? (PROJ.get(pm[1]) || {}) : {};
+      const vo = pr.type === 'voiceover';
+      // (phase V62, (во35)) THE voiceover draft: "draft · voiceover", under Merge's draft.
+      const vod = vo && !!pr.draft;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
                kind: t.kind || null, clips, rev: _revOf(t), ownFiles: own.has(key), draft: !!t.draft, ...OWN.ownerView(t),
-               ...(HLS.ofKey(key) ? { highlights: true } : {}), ...(vo ? { voiceover: true } : {}) };
-    // (phase V20) The draft first, then newest first.
-    }).sort((a, b) => (b.draft - a.draft) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+               ...(HLS.ofKey(key) ? { highlights: true } : {}), ...(vo ? { voiceover: true } : {}), ...(vod ? { vodraft: true } : {}) };
+    // (phase V20) The draft first, then (phase V62) the voiceover draft, then newest first.
+    }).sort((a, b) => (b.draft - a.draft) || ((b.vodraft ? 1 : 0) - (a.vodraft ? 1 : 0))
+      || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     // Everyone sees every owner. The picker groups by them; which entries the caller may
     // change is answered per project, from its `owner` against `me`.
     res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines),

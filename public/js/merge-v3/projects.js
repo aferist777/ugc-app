@@ -22,7 +22,7 @@ import * as Layers from '../layers.js';
 import { roomForWork } from './layout.js';
 import { askName } from '../name-box.js';
 import { askChoice } from './ask.js';
-import { openScenarios } from './scen-pick.js';
+import { openScenarios, openVoiceover } from './scen-pick.js';
 import { createHighlights, homeOf } from './highlights.js';
 // (phase V56) A talking head is told by its key, the workshop's one rule (sv3_<project>[_n]).
 import { projectIdOf } from './workshop.js';
@@ -75,6 +75,7 @@ async function _paint() {
     // says so before its name, as highlights does - in the list and in the closed field.
     o.textContent = p.draft ? 'draft · not saved' + (p.clips ? ' · ' + p.clips : '')
       : p.highlights ? 'highlights · ' + p.title + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
+      : p.vodraft ? 'draft · voiceover' + (p.clips ? ' · ' + p.clips : '')
       : projectIdOf(p.key) ? (p.voiceover ? 'voiceover · ' : 'talking head · ') + p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '')
       : p.title + (p.clips ? ' · ' + p.clips : '') + (p.createdAt ? ' · ' + _fmtDate(p.createdAt) : '');
     sel.appendChild(o);
@@ -182,7 +183,7 @@ function _wireNew() {
       try { const u = new URL(location.href); u.searchParams.delete('new'); history.replaceState({}, '', u); } catch (e) { /* a reload asks again */ }
       if (want === 'blank') { if (_newBlank) _newBlank(); }
       else if (want === 'talking') openScenarios();
-      else if (want === 'voiceover') openScenarios({ voiceover: true });
+      else if (want === 'voiceover') _voiceover();
       else if (want === 'highlights') {
         (async () => {
           _note('creating…');
@@ -219,6 +220,12 @@ function _wireNew() {
       b.disabled = false;
     }
   };
+}
+
+// (phase V62) THE voiceover draft opened (js/merge-v3/scen-pick.js openVoiceover); a refusal is a popup.
+async function _voiceover() {
+  _note('opening…');
+  try { await openVoiceover(); _note(''); } catch (e) { _fail(e.message); }
 }
 
 // The menu itself: a layer like the library's "+" (js/layers.js), so Escape closes it and the
@@ -263,8 +270,8 @@ function _kindMenu(anchor) {
     try { await createHighlights(); _note(''); } catch (e) { _fail(e.message); }
   });
   // (phase V61, the owner 2026-10-30: "будет новый режим в new project - называться будет voiceover, в котором просто
-  // генерируется голосом текст сценария") - phase V62: the scenarios view in its voiceover mode, with "+ your text".
-  item('voiceover', 'a scenario or your own text, read in a voice', () => { openScenarios({ voiceover: true }); });
+  // генерируется голосом текст сценария") - phase V62: THE voiceover draft, on its setup.
+  item('voiceover', 'a scenario or your own text, read in a voice', () => { _voiceover(); });
 
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();

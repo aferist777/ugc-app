@@ -41,6 +41,7 @@
 import { el } from './wk-maker.js';
 import { isRead, plainWords, isLive, takeOf } from './scen-api.js';
 import { hint } from '../bubble.js';
+import * as Layers from '../layers.js';
 
 const PAGE = 12;                       // results per page; the panel shows them as a list
 
@@ -144,50 +145,38 @@ const _active = (rec) => {
 // over the name when the pointer rests on it ((т4): "все пять - пояснения можно всплывашкой подсказкой показывать над тем, к
 // чему относится"), and the news of a voice just taken is not said at all. `o.notes` - where the notes go (the row's host
 // when not given): the field keeps its one line and puts them under it.
+// (phase V62, the owner after block 0: "пока голос не выбран, в первом поле mood и voice нужно показывать дропдаун с уже
+// сохраненными голосами, которые есть у нас. а те примеры которые мы записывали показывать в предпросмотре"; (во33) "первая строка
+// elevenlabs library"; (во34) "вверху списка показывать elevenlabs library, ниже голоса этого персонажа, и еще ниже сохраненные
+// голоса") THE VOICE IS A LIST, in a talking head and a voiceover alike: ▶ the voice that reads, and its name with ▾ - pressed,
+// the menu (_voiceMenu): "ElevenLabs library…" (the window of the search), the character's voices, the saved ones - each with ▶
+// our own demo, a press chooses it. It stays after a voice is chosen; "change" went into it.
 export function paintRow(host, api, o) {
   const rec = api.char();
   const pick = api.pick();
   const mine = _mine(rec);
   const now = _active(rec);
   const notes = (o && o.notes) || host;
+  // What reads now: the character's voice, else - nobody cast, or a character with none - the project's own pick.
+  const cur = now || (!mine.length ? pick : null);
 
   const row = el('div', 'mv3-wk-vrow is-now');
-  if (!mine.length && pick) {
-    // The project's own voice: one, so a name rather than a menu of one.
-    row.appendChild(_playBtn(pick.sample || '', 'our own demo'));
-    const txt = el('div', 'mv3-wk-vtxt');
-    const name = el('div', 'mv3-wk-vname', pick.name || pick.voiceId);
-    hint(name, (rec
-      ? 'The project’s voice - ' + (rec.name || 'the character') + ' has none of their own.'
-      : 'The project’s voice - a character with one of their own will speak in theirs.')
-      + (_sub(pick) ? '\n' + _sub(pick) : ''));
-    txt.appendChild(name);
-    row.appendChild(txt);
-    row.appendChild(_pick(api, 'change'));
-  } else if (!mine.length) {
-    // What is missing, and the way to fix it at the end of the same line (the owner, 2026-09-22).
-    const none = el('span', 'mv3-wk-vsub is-grow', 'no voice yet');
-    hint(none, rec
-      ? (rec.name || 'This character') + ' has no voice yet - every line is read in the one chosen here.'
-      : 'No voice yet - choose one for the project, or cast a character who has one.');
-    row.appendChild(none);
-    row.appendChild(_pick(api, 'choose a voice'));
-  } else {
-    row.appendChild(_playBtn((now && now.sample) || '', 'our own demo'));
-    const sel = el('select', 'mv3-wk-vsel');
-    sel.title = 'The voice every line is read in' + (now ? ' · ' + (_sub(now) || 'no tags') : '');
-    for (const v of mine) {
-      const o = el('option', '', v.name || v.voiceId);
-      o.value = v.voiceId;
-      if (now && v.voiceId === now.voiceId) o.selected = true;
-      sel.appendChild(o);
-    }
-    sel.disabled = !!_busy;
-    sel.addEventListener('change', () => _star(api, sel.value));
-    row.appendChild(sel);
-    // The way to another voice sits in the same row, right of the choice it changes (owner).
-    row.appendChild(_pick(api, 'change'));
-  }
+  row.appendChild(_playBtn((cur && cur.sample) || '', 'our own demo'));
+  const btn = el('button', 'mv3-wk-vpickbtn' + (cur ? '' : ' is-need'));
+  btn.type = 'button';
+  btn.appendChild(el('span', 'mv3-wk-vpickname', cur ? (cur.name || cur.voiceId) : (_busy.startsWith('saved:') ? 'taking it…' : 'choose a voice')));
+  btn.appendChild(el('span', 'mv3-wk-vpickarrow', '▾'));
+  btn.disabled = !!_busy;
+  hint(btn, (now
+    ? 'The voice ' + (rec.name || 'the character') + ' is read in.'
+    : cur
+      ? (rec ? 'The project’s voice - ' + (rec.name || 'the character') + ' has none of their own.'
+        : 'The project’s voice - a character with one of their own will speak in theirs.')
+      : rec ? (rec.name || 'This character') + ' has no voice yet - every line is read in the one chosen here.'
+        : 'No voice yet - choose one: a saved voice, or one from the ElevenLabs library.')
+    + (cur && _sub(cur) ? '\n' + _sub(cur) : '') + '\nPress for the saved voices and the ElevenLabs library.');
+  btn.addEventListener('click', (e) => { e.stopPropagation(); _voiceMenu(btn, api); });
+  row.appendChild(btn);
   host.appendChild(row);
 
   if (mine.length && !now) notes.appendChild(api.note('None of them is set as the voice - pick one in the menu.', true));
@@ -204,12 +193,138 @@ export const hasVoice = (rec) => !!_active(rec);
  *  (routes/scen3.js, _castVoice). */
 export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 
-function _pick(api, label) {
-  const b = el('button', 'mv3-wk-vmore', label);
-  b.type = 'button';
-  b.title = 'The saved voices, and the ElevenLabs library';
-  b.addEventListener('click', () => api.go('voice'));
-  return b;
+// ── THE VOICES' MENU (phase V62) ────────────────────────────────────────────
+// Under field 1's voice: "ElevenLabs library…" first, then the character's own voices (a talking head with somebody cast), then
+// every SAVED voice - the shelf of the voices taken before (lib/voice-shelf.js, the Library's Voices; read once, again after a
+// voice is taken) - each a row: ▶ our own demo, the name, its tags. A press on a row chooses it; ▶ only plays. A layer
+// (js/layers.js): Escape and a press outside close it.
+let _shelf = null;                       // the saved voices, as the Library's shelf lists them - null until read
+let _shelfLoading = false;
+let _menu = null;                        // { el, layer, away }
+function _closeMenu() {
+  if (!_menu) return;
+  _menu.el.remove();
+  document.removeEventListener('mousedown', _menu.away, true);
+  Layers.close(_menu.layer);
+  _menu = null;
+}
+async function _loadShelf() {
+  if (_shelfLoading) return;
+  _shelfLoading = true;
+  try {
+    const d = await (await fetch('/api/library/shelf/voices')).json();
+    _shelf = (d && d.success && Array.isArray(d.items)) ? d.items : [];
+  } catch (e) { _shelf = []; }
+  _shelfLoading = false;
+}
+const _labelsSub = (L) => _sub({ descriptive: L.descriptive, gender: L.gender, age: L.age, accent: L.accent, language: L.language });
+
+async function _voiceMenu(anchor, api) {
+  if (_menu) { _closeMenu(); return; }
+  const box = el('div', 'mv3-plus-menu mv3-wk-vmenu');
+  const rec = api.char();
+  const mine = _mine(rec);
+  const now = _active(rec);
+  const pick = api.pick();
+  const curId = String((now && now.voiceId) || (!mine.length && pick ? pick.voiceId : '') || '');
+
+  const lib = el('button', 'mv3-plus-item is-lib');
+  lib.type = 'button';
+  lib.appendChild(el('span', '', 'ElevenLabs library…'));
+  lib.appendChild(el('small', '', 'thousands of voices - search and listen free, take one'));
+  lib.addEventListener('click', (e) => { e.stopPropagation(); _closeMenu(); api.go('voice'); });
+  box.appendChild(lib);
+
+  const row = (src, name, sub, on, isOn, disabled) => {
+    const r = el('div', 'mv3-wk-vmrow' + (isOn ? ' is-on' : '') + (disabled ? ' is-off' : ''));
+    r.appendChild(_playBtn(src || '', 'our own demo'));
+    const t = el('div', 'mv3-wk-vtxt');
+    t.appendChild(el('div', 'mv3-wk-vname', name));
+    if (sub) t.appendChild(el('div', 'mv3-wk-vsub', sub));
+    r.appendChild(t);
+    if (isOn) r.appendChild(el('span', 'mv3-wk-vtag', 'the voice'));
+    if (!disabled && !isOn) r.addEventListener('click', () => { _closeMenu(); on(); });
+    box.appendChild(r);
+  };
+  if (rec && mine.length) {
+    box.appendChild(el('div', 'mv3-sc-menu-sep', (rec.name || 'the character') + '’s voices'));
+    for (const v of mine) row(v.sample, v.name || v.voiceId, _sub(v), () => _star(api, v.voiceId), String(v.voiceId) === curId);
+  }
+  box.appendChild(el('div', 'mv3-sc-menu-sep', 'saved voices'));
+  const savedAt = box.childNodes.length;
+  const paintSaved = () => {
+    while (box.childNodes.length > savedAt) box.lastChild.remove();
+    if (_shelf === null) { box.appendChild(el('div', 'mv3-wk-vmnote', 'reading the saved voices…')); return; }
+    const have = new Set(mine.map(v => String(v.voiceId)));
+    const list = _shelf.filter(it => !have.has(String(it.id)));
+    if (!list.length) { box.appendChild(el('div', 'mv3-wk-vmnote', 'No saved voices yet - take one from the ElevenLabs library.')); return; }
+    for (const it of list) {
+      const m = it.meta || {};
+      row(it.media, it.name, [_labelsSub(m.labels || {}), m.accountRemoved ? 'out of the account - taken back free when chosen' : ''].filter(Boolean).join(' · '),
+        () => _useSaved(api, it), String(it.id) === curId);
+    }
+  };
+  paintSaved();
+
+  document.body.appendChild(box);
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    box.style.left = Math.round(Math.max(6, Math.min(window.innerWidth - box.offsetWidth - 6, r.left))) + 'px';
+    const below = window.innerHeight - r.bottom - 10;
+    box.style.maxHeight = Math.max(220, Math.min(560, below > 260 ? below : r.top - 10)) + 'px';
+    box.style.top = Math.round(below > 260 ? r.bottom + 4 : Math.max(6, r.top - 4 - box.offsetHeight)) + 'px';
+  };
+  place();
+  const away = (e) => { if (!box.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) _closeMenu(); };
+  _menu = { el: box, away, layer: Layers.open(box, { modal: false, name: 'voices menu', onEsc: _closeMenu }) };
+  document.addEventListener('mousedown', away, true);
+  _mark();
+  if (_shelf === null) {
+    await _loadShelf();
+    if (_menu && _menu.el === box) { paintSaved(); place(); _mark(); }
+  }
+}
+
+// A SAVED VOICE CHOSEN: the project's voice (nobody cast), or the character's - added to their list and made theirs, as a
+// voice taken from the library is (_take). One released from the account to free its slot is taken back first - free, the
+// same request as a take, our demo kept (routes/scen3.js /scen3/voices/take) - and read by the id ElevenLabs gives back.
+async function _useSaved(api, it) {
+  if (_busy) return;
+  const m = it.meta || {};
+  _busy = 'saved:' + it.id;
+  _said = ''; _bad = false;
+  _repaint(api);
+  try {
+    let id = String(it.id), sample = it.media || '', dur = +m.dur || 0;
+    if (m.accountRemoved) {
+      if (!m.publicOwnerId) throw new Error('it is out of the account and there is no way to take it back - take another');
+      const t = await (await fetch('/api/scen3/voices/take', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerId: m.publicOwnerId, voiceId: m.sharedVoiceId || it.id, name: it.name }),
+      })).json();
+      if (!t || !t.success) throw new Error((t && t.error) || 'it could not be taken back into the account');
+      id = String(t.voiceId || id);
+      sample = t.sample || sample;
+      dur = t.dur || dur;
+      _shelf = null;                                   // its slot is ours again: read the shelf afresh next time
+    }
+    const L = m.labels || {};
+    const entry = {
+      voiceId: id, name: it.name, gender: L.gender || '', age: L.age || '', accent: L.accent || '',
+      descriptive: L.descriptive || '', language: L.language || '', sample, dur,
+    };
+    const rec = api.char();
+    if (!rec) await api.setPick(entry);
+    else {
+      const all = _saved(rec);
+      await api.patchChar({ voice: id, voices: all.filter(v => String(v.voiceId) !== id).concat([entry]) });
+    }
+  } catch (e) {
+    _said = 'Could not take it: ' + e.message;
+    _bad = true;
+  }
+  _busy = '';
+  _repaint(api);
 }
 
 // ── The sub-level ───────────────────────────────────────────────────────────
@@ -294,7 +409,12 @@ export function paintPicker(host, api) {
   search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _search(api, 1); } });
   f.appendChild(search);
 
+  // (phase V62, the owner: "в попапе выбора голоса, нужно дать обозначения фильтров elevenlabs. названия фильров написать над
+  // дропдаунами") Each filter's name over its menu.
+  const NAMES = { gender: 'gender', age: 'age', descriptives: 'style', use_cases: 'use case', accent: 'accent', language: 'language' };
   const pick = (key, label, list) => {
+    const cell = el('label', 'mv3-wk-vfcell');
+    cell.appendChild(el('span', 'mv3-wk-vfname', NAMES[key] || key));
     const s = el('select', 'mv3-wk-vfilter');
     s.title = label;
     const any = el('option', '', label);
@@ -308,7 +428,8 @@ export function paintPicker(host, api) {
       s.appendChild(o);
     }
     s.addEventListener('change', () => { _q[key] = s.value; _search(api, 1); });
-    f.appendChild(s);
+    cell.appendChild(s);
+    f.appendChild(cell);
   };
   pick('gender', 'any gender', _filters.genders || []);
   pick('age', 'any age', _filters.ages || []);
@@ -438,6 +559,7 @@ async function _take(api, card) {
       body: JSON.stringify({ ownerId: card.public_owner_id, voiceId: card.voice_id, name: card.name }),
     })).json();
     if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
+    _shelf = null;                                   // (phase V62) it is a saved voice now: field 1's menu reads the shelf afresh
 
     const rec = api.char();
     const entry = {

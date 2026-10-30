@@ -922,6 +922,8 @@ function _voicesShelf() {
         verifiedLanguages: e.verifiedLanguages || 0,
         dur: e.dur || 0,
         publicOwnerId: String(e.publicOwnerId || ''),
+        // (phase V62) The shared library's id - what brings a released voice back into the account (/scen3/voices/take).
+        sharedVoiceId: String(e.sharedVoiceId || ''),
         // Whether the slot is still ours. `accountRemoved` is written when one is released.
         accountRemoved: !!e.accountRemoved,
         characters: users[id] || [],

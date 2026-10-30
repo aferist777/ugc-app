@@ -2665,6 +2665,9 @@ function _fileTake(ctx, i, take, ifPath, keep, quiet) {
     if (ifPath && ((l.audio[ctx.variant] || {}).path || '') !== ifPath) return;
     const held = keep ? _clipNow(fresh, l, i, ctx.variant) : '';
     l.audio[ctx.variant] = take;
+    // (phase V62, (во36)) A VOICEOVER DRAFT IS A PROJECT FROM ITS FIRST READ: the reads are its files. Its name - the
+    // scenario's or the text's - and its folder were given when its script was chosen (/scen3/projects/:id/script).
+    if (fresh.draft) delete fresh.draft;
     if (held) l.chosen = { ...(l.chosen || {}), [ctx.variant]: held };
     else if (l.chosen) l.chosen = { ...l.chosen, [ctx.variant]: '' };
     fresh.updatedAt = take.at;
@@ -3157,6 +3160,8 @@ function _normProject(p, now) {
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
     // (phase V62) A voiceover is the same record with no who / where, frames or clips; everything else is a talking head.
     type:       src.type === 'voiceover' ? 'voiceover' : 'talking_head',
+    // (phase V62, (во29), (во35)) THE VOICEOVER DRAFT - one; a project once its first line is read (_fileTake).
+    ...(src.type === 'voiceover' && src.draft ? { draft: true } : {}),
     gender:     String(src.gender || '').toLowerCase(),
     title:      String(src.title || ''),
     lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],
@@ -3479,7 +3484,7 @@ function _ttsParams(p) {
 }
 
 const _projSummary = p => ({
-  id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type,
+  id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type, draft: !!p.draft,   // (phase V62) the voiceover draft
   gender: p.gender, title: p.title,
   vertical: p.vertical, product: p.product, roles: p.roles,
   casting: _normCasting(p.casting),
@@ -3557,11 +3562,10 @@ router.get('/scen3/projects/:id', (req, res) => {
 router.post('/scen3/projects', async (req, res) => {
   try {
     const b    = req.body || {};
-    const voiceover = b.id == null && b.type === 'voiceover';
     // (phase V29) A talking head made from a scenario with lines in another language - kept before the translation
-    // came in - gets them in English, and so does the scenario: what is spoken is English. A VOICEOVER is read in the
-    // language it is written in (phase V62, the owner 2026-10-30): nothing is translated.
-    if (b.id == null && b.scenarioId != null && !voiceover) {
+    // came in - gets them in English, and so does the scenario: what is spoken is English. (A voiceover is not made
+    // here: it is THE voiceover draft, /scen3/voiceover/draft - phase V62.)
+    if (b.id == null && b.scenarioId != null) {
       const s0 = _load().find(x => String(x.id) === String(b.scenarioId));
       const texts = s0 ? (s0.lines || []).map(l => String((l && l.text) || '')) : [];
       if (texts.some(t => t.trim() && !AGENT.english(t))) {
@@ -3613,27 +3617,8 @@ router.post('/scen3/projects', async (req, res) => {
       return res.json({ success: true, project: _projFull(merged) });
     }
 
-    // (phase V62, (во1), (во16), (во27)) A VOICEOVER FROM ONE'S OWN TEXT: no scenario - the whole text is ONE line (the quick
-    // way), at most VO_MAX characters, 500 left for the mood's tags within ElevenLabs' 5 000 (во28).
-    if (voiceover && b.scenarioId == null) {
-      const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
-      if (!text) return res.status(400).json({ success: false, error: 'the text is empty' });
-      if (text.length > VO_MAX) return res.status(400).json({ success: false, error: 'the text is longer than ' + VO_MAX + ' characters' });
-      const title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120) || text.split(' ').slice(0, 6).join(' ');
-      const rec = _normProject({
-        id: _newId(list), owner: OWN.uidOf(req), type: 'voiceover',
-        name: `${now.slice(0, 10)} — ${title}`, title, lines: [{ text }], video: { v: 2 }, createdAt: now, updatedAt: now,
-      }, now);
-      list.unshift(rec);
-      _saveProjects(list);
-      return res.json({ success: true, project: _projFull(rec) });
-    }
-
     const scen = _load().find(x => String(x.id) === String(b.scenarioId || ''));
     if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
-    if (voiceover && (scen.lines || []).some(l => String((l && l.text) || '').length > VO_MAX)) {
-      return res.status(400).json({ success: false, error: 'a line of this scenario is longer than ' + VO_MAX + ' characters' });
-    }
     // '' when the scenario does not say, and that is allowed: the casting then offers
     // every character rather than none.
     const gender = GENDERS.includes(_genderOf(scen)) ? _genderOf(scen) : '';
@@ -3642,7 +3627,6 @@ router.post('/scen3/projects', async (req, res) => {
     const rec = _normProject({
       id: _newId(list),
       owner: OWN.uidOf(req),
-      ...(voiceover ? { type: 'voiceover' } : {}),
       name: `${day} — ${scen.title}`,
       scenarioId: scen.id,
       gender,
@@ -3658,6 +3642,97 @@ router.post('/scen3/projects', async (req, res) => {
     list.unshift(rec);
     _saveProjects(list);
     res.json({ success: true, project: _projFull(rec) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── THE VOICEOVER DRAFT (phase V62, the owner 2026-10-30: (во29) "давай проект будет создаваться только когда пользователь
+   сгенерировал голоса. до этого - это черновик voiceover"; (во30) "можно отменить выбраный сценарий и вернуться к списку
+   сценариев и добавить свой текст"; (во35) one, as Merge's draft; (во36) a project from its first read; (во37) then its script
+   stays) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   POST /api/scen3/voiceover/draft                               -> { success, project, key, timeline }
+        THE draft - the one there is, or a new empty one ("voiceover draft"): what "+ new project -> voiceover" and Home's
+        "+ voiceover" open. `timeline` says whether its timeline is made yet (the page makes it, /mv3/timeline/new).
+   POST /api/scen3/projects/:id/script  { scenarioId } | { text, name } | { clear: true }   -> { success, project }
+        Its script, while it is the draft: a scenario's lines (a snapshot, in their own language), one's own text as ONE line
+        (at most VO_MAX), or none again - back to the list. The project takes the scenario's title or the text's name, and
+        its folder that name; cleared, it is "voiceover draft" again. Its mood and voice stay. The first read files it as a
+        project (_fileTake) - from then on its script is its own.
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+const VO_DRAFT_NAME = 'voiceover draft';
+const _voDraftOf = (list) => list.find(p => p && p.type === 'voiceover' && p.draft) || null;
+
+router.post('/scen3/voiceover/draft', (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const list = _loadProjects();
+    let rec = _voDraftOf(list);
+    if (!rec) {
+      rec = _normProject({
+        id: _newId(list), owner: OWN.uidOf(req), type: 'voiceover', draft: true,
+        name: VO_DRAFT_NAME, title: '', lines: [], video: { v: 2 }, createdAt: now, updatedAt: now,
+      }, now);
+      list.unshift(rec);
+      _saveProjects(list);
+    }
+    const key = 'sv3_' + rec.id;
+    res.json({ success: true, project: _projFull(rec), key, timeline: !!require('../lib/merge-store').locate(key) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/scen3/projects/:id/script', async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
+    if (proj.type !== 'voiceover' || !proj.draft) {
+      return res.status(409).json({ success: false, error: 'its voices are read - the script is this project\'s now; another one is a new voiceover' });
+    }
+    const busy = _scriptBusy(id);
+    if (busy) return res.status(409).json({ success: false, error: busy + ' - change the script when it is done' });
+    const b = req.body || {};
+    let lines = [], title = '', scenarioId = '', extra = {};
+    if (b.clear) { /* back to the list: no script */ }
+    else if (b.scenarioId != null) {
+      const scen = _load().find(x => String(x.id) === String(b.scenarioId));
+      if (!scen) return res.status(400).json({ success: false, error: 'scenarioId not found' });
+      lines = (scen.lines || []).map(l => String((l && l.text) || '').trim()).filter(Boolean);
+      if (!lines.length) return res.status(400).json({ success: false, error: 'this scenario has no lines' });
+      if (lines.some(t => t.length > VO_MAX)) return res.status(400).json({ success: false, error: 'a line of this scenario is longer than ' + VO_MAX + ' characters' });
+      title = String(scen.title || '').trim() || 'untitled';
+      scenarioId = String(scen.id);
+      extra = { vertical: scen.vertical || '', product: scen.product || '', roles: scen.roles || [] };
+    } else {
+      const text = String(b.text == null ? '' : b.text).replace(/\s+/g, ' ').trim();
+      if (!text) return res.status(400).json({ success: false, error: 'the text is empty' });
+      if (text.length > VO_MAX) return res.status(400).json({ success: false, error: 'the text is longer than ' + VO_MAX + ' characters' });
+      lines = [text];
+      title = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120) || text.split(' ').slice(0, 6).join(' ').slice(0, 120);
+    }
+    const now = new Date().toISOString();
+    const day = now.slice(0, 10);
+    const saved = PROJECTS.apply(id, (fresh) => {
+      fresh.lines = lines.map(text => _normLine({ text }));
+      fresh.title = title;
+      fresh.scenarioId = scenarioId;
+      Object.assign(fresh, { vertical: '', product: '', roles: [] }, extra);
+      // The name, and so the folder (lib/projects-store.js): given now, while the folder holds nothing but the timeline.
+      fresh.name = lines.length ? `${day} — ${title}` : VO_DRAFT_NAME;
+      fresh.updatedAt = now;
+    });
+    if (!saved) return res.status(404).json({ success: false, error: 'not found' });
+    // The timeline's name follows, as a new talking head's is made (routes/mergev3.js /mv3/timeline/new).
+    try {
+      require('../lib/merge-store').update('sv3_' + id, (t) => {
+        t.title = lines.length ? `${day} - ${title}` : VO_DRAFT_NAME;
+        t.updatedAt = now;
+      });
+    } catch (e) { console.warn('[scen3/script] the timeline was not renamed:', e.message); }
+    const fresh = PROJECTS.get(id) || saved;
+    try { await MIRROR.rebuild(id, { project: fresh }); }
+    catch (e) { console.warn('[scen3/script] the timeline was not re-laid:', e.message); }
+    console.log('[scen3/script] ' + id + (b.clear ? ' cleared' : ' takes ' + lines.length + ' line(s) - ' + title));
+    res.json({ success: true, project: _projFull(fresh) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

@@ -36,8 +36,6 @@ import * as Store from './store.js';
 import * as WK from './workshop.js';
 import * as Views from './lib-views.js';
 import { openScenario } from '../scen-window.js';
-// (phase V62) A voiceover from one's own text - the window of the "+ your text" button.
-import { openOwnText } from './vo-text.js';
 // (phase V49.1) A failure is a popup in the corner (js/notice.js), not the browser's alert().
 import { showError } from '../notice.js';
 
@@ -55,11 +53,7 @@ let _counts = { all: 0, library1: 0, library2: 0, sources: [], noSource: 0 };
 let _lib = '';                // '' | 'library1' | 'src:<id>' | 'nosrc' | 'archive'
 let _q = '';
 let _state = '';              // '', 'loading', or an error to show in place of the list
-let _ui = null;               // { root, filter, search, list, own } - built the first time the view shows
-// (phase V62) WHAT "use" MAKES: a talking head, or - opened by "+ new project -> voiceover" or Home's "+ voiceover" - a
-// voiceover, with "+ your text" beside "+ scenario". The crumb opens it for a talking head, as before.
-let _mode = 'talking';        // 'talking' | 'voiceover'
-const _vo = () => _mode === 'voiceover';
+let _ui = null;               // { root, filter, search, list } - built the first time the view shows
 
 const _el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -89,17 +83,24 @@ function _crumb() {
 }
 
 /**
- * Every way in: the crumb, "+ new project -> talking head" - and, with { voiceover: true }, "+ new project -> voiceover" and
- * Home's "+ voiceover" (phase V62). A talking head is never where the view is - the draft is opened for it first.
+ * Every way in: the crumb, "+ new project -> talking head". A talking head is never where the view is - the draft is
+ * opened for it first.
  */
-export async function openScenarios(opts) {
-  _mode = opts && opts.voiceover ? 'voiceover' : 'talking';
+export async function openScenarios() {
   if (Store.isReady() && (WK.projectIdOf(Store.key() || '') || _hl(Store.key()))) await Store.openBlank();
   if (!_allowed()) return;
   Views.toBase();
   setOpenColumn('library');
   _show(true);
-  _paintMode();
+}
+
+/**
+ * (phase V62, the owner after block 0: "давай voiceover открывать сразу на этапе, когда показаны поля для выбора голоса и крошки
+ * видны. шаг со списком сценариев удаляем из voiceover") "+ new project -> voiceover" and Home's "+ voiceover": THE voiceover
+ * draft, opened on its setup - its script column offers the scenarios and "+ your text" (js/merge-v3/vo-script.js).
+ */
+export async function openVoiceover() {
+  return _open(await API.voiceoverDraft());
 }
 
 // `remember` is false when a chat took the base (onYield): that chat writes its own mark.
@@ -283,12 +284,6 @@ function _build() {
   add.title = 'Write a new scenario';
   add.addEventListener('click', () => openForm(null));
   top.appendChild(add);
-  // (phase V62) A voiceover's other way in: one's own text, pasted - no scenario.
-  const own = _el('button', 'mv3-sc-new is-own', '+ your text');
-  own.type = 'button';
-  own.title = 'A voiceover of your own text - pasted or typed, in any language';
-  own.addEventListener('click', () => openOwnText(_open));
-  top.appendChild(own);
 
   // The category: one button showing the choice and its count; pressing it opens the list.
   const filter = _el('button', 'mv3-sc-filter');
@@ -305,16 +300,7 @@ function _build() {
 
   const list = _el('div', 'mv3-sc-list');
   root.appendChild(list);
-  _ui = { root, filter, search, list, own };
-  _paintMode();
-}
-
-// (phase V62) The mode shows in what the view offers: "+ your text" in a voiceover's, and what "use" says it makes.
-function _paintMode() {
-  if (!_ui) return;
-  _ui.own.hidden = !_vo();
-  _ui.root.classList.toggle('is-vo', _vo());
-  _paintList();
+  _ui = { root, filter, search, list };
 }
 
 function _paintFilter() {
@@ -370,7 +356,7 @@ function _paintList() {
     go.type = 'button';
     go.title = s.archived
       ? 'Put it back in the library'
-      : 'Make a ' + (_vo() ? 'voiceover' : 'talking head') + ' from this scenario and open it';
+      : 'Make a talking head from this scenario and open it';
     go.addEventListener('click', async (e) => {
       e.stopPropagation();                       // the row opens the text; this does not
       if (s.archived) return _archive(s, false);
@@ -378,7 +364,7 @@ function _paintList() {
       for (const b of acts.children) b.disabled = true;     // the cross waits for the project too
       go.textContent = '…';
       try {
-        await (_vo() ? _useVo(s.id) : _use(s.id));
+        await _use(s.id);
       } catch (err) {
         for (const b of acts.children) b.disabled = false;
         go.textContent = 'use';
@@ -427,7 +413,8 @@ function _rowMenu(ev, s, row) {
   item('open', 'read and edit the text', () => openForm(s));
   // (phase V62) Both kinds from the same scenario, whichever way the view was opened.
   if (!s.archived) item('talking head', 'make a talking head from it', () => _use(s.id).catch(e => showError('Could not make the project: ' + e.message)));
-  if (!s.archived) item('voiceover', 'read it in a voice - B-roll over it', () => _useVo(s.id).catch(e => showError('Could not make the project: ' + e.message)));
+  // (phase V62, (во32) а) Into THE voiceover draft, which opens.
+  if (!s.archived) item('voiceover', 'read it in a voice - B-roll over it', () => _toVoiceover(s.id).catch(e => showError('Could not put it into the voiceover: ' + e.message)));
   if (s.archived) item('restore', 'put it back in the library', () => _archive(s, false));
   else item('archive', 'out of the list, kept', () => _archive(s, true));
   // Anchored on the ROW, not on the menu item that opened it: the menu is gone by the time
@@ -492,9 +479,11 @@ function _disarm() {
 async function _use(scenarioId) {
   return _open(await API.talkingHead(scenarioId));
 }
-// (phase V62) A voiceover from a scenario: its lines in their own language, never translated.
-async function _useVo(scenarioId) {
-  return _open(await API.voiceover({ scenarioId }));
+// (phase V62) A scenario into THE voiceover draft - its lines in their own language, never translated - and the draft opened.
+async function _toVoiceover(scenarioId) {
+  const key = await API.voiceoverDraft();
+  await API.voiceoverScript(WK.projectIdOf(key), { scenarioId });
+  return _open(key);
 }
 async function _open(key) {
   await Store.open(key);
@@ -506,9 +495,6 @@ async function _open(key) {
 // ── The scenario itself, read or written ────────────────────────────────────
 // The window is shared with the Library (js/scen-window.js, phase V28.2): here a save reads the list
 // behind it again, and `use` makes the project and opens it.
-// (phase V62) In a voiceover's view the window's `use` makes a voiceover, and the lines are kept in the language they are typed
-// in (a talking head made from them later is translated then, routes/scen3.js).
 export function openForm(summary) {
-  if (_vo()) return openScenario(summary, { saved: () => _load(), use: (rec) => _useVo(rec.id), voiceover: true });
   return openScenario(summary, { saved: () => _load(), use: (rec) => _use(rec.id) });
 }

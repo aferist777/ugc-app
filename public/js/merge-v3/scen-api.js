@@ -93,15 +93,21 @@ export async function talkingHead(scenarioId) {
 export const VO_MAX = 4500;
 
 /**
- * (phase V62) A VOICEOVER - from a scenario ({ scenarioId }) or from one's own text ({ text, name }, the whole text one line):
- * the project, read in the language it is written in, and its empty timeline. Returns the timeline's key.
+ * (phase V62, (во29), (во35)) THE VOICEOVER DRAFT - the one there is, or a new empty one - and its timeline, made when it is
+ * missing. Returns the timeline's key: what "+ new project -> voiceover" and Home's "+ voiceover" open.
  */
-export async function voiceover(from) {
-  const p = await _post('/api/scen3/projects', { ...from, type: 'voiceover' }).then(d => d.project);
-  const d = await _post('/api/mv3/timeline/new', { projectId: p.id });
-  if (!d.key) throw new Error('the timeline was refused');
-  return d.key;
+export async function voiceoverDraft() {
+  const d = await _post('/api/scen3/voiceover/draft', {});
+  if (d.timeline) return d.key;
+  const t = await _post('/api/mv3/timeline/new', { projectId: d.project.id });
+  if (!t.key) throw new Error('the timeline was refused');
+  return t.key;
 }
+
+/** (phase V62, (во30)) The draft's script: { scenarioId } - a scenario's lines, { text, name } - one's own text as one line,
+ *  { clear: true } - none, back to the list. Refused once its first line is read (it is a project then). Returns the project. */
+export const voiceoverScript = (projectId, body) =>
+  _post('/api/scen3/projects/' + encodeURIComponent(projectId) + '/script', body).then(d => d.project);
 
 /**
  * The take a line is read BY now, and the words it should have said. A line with its words

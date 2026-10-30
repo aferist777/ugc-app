@@ -4,10 +4,10 @@
    быстрый режим"; (во27) "в поле вставки текста не давать пользователю вставить текст длиннее 5000 символов и показывать
    сколько символов уже вставлено"; (во28) 4 500 - the rest is the mood's tags').
 
-   The "+ your text" button of the scenarios view in its voiceover mode (js/merge-v3/scen-pick.js) opens it: a name and the
-   text, in any language - it is read in the language it is written in, never translated. The whole text is ONE line of the
-   project; it never goes onto the scenarios shelf. The field takes no more than VO_MAX characters (a paste is cut there,
-   and the counter says so), and `create` makes the project and its timeline and hands the key back.
+   The "+ your text" button of the voiceover draft's script column (js/merge-v3/vo-script.js) opens it: a name and the text, in
+   any language - it is read in the language it is written in, never translated. The whole text is ONE line of the draft
+   (POST /scen3/projects/:id/script); it never goes onto the scenarios shelf. The field takes no more than VO_MAX characters
+   (a paste is cut there, and the counter says so), and `use` puts it into the draft and closes the window.
 
    Its frame and buttons are the scenario window's (css/dialog.css .mv3-x.is-scen).
    ════════════════════════════════════════════════════════════════════════════ */
@@ -24,9 +24,10 @@ const _el = (tag, cls, text) => {
 const _n = (v) => v.toLocaleString('en-US').replace(/,/g, ' ');
 
 /**
- * @param use(key) opens the project made; a throw is said in the window, which stays
+ * @param projectId  the voiceover draft the text goes into
+ * @param done(project)  the draft as it is now, with its one line; a refusal is said in the window, which stays
  */
-export function openOwnText(use) {
+export function openOwnText(projectId, done) {
   const ov = _el('div', 'mv3-x-ov');
   const box = _el('div', 'mv3-x is-scen is-votext');
   ov.appendChild(box);
@@ -62,9 +63,9 @@ export function openOwnText(use) {
 
   const foot = _el('div', 'mv3-x-foot');
   const note = _el('span', 'mv3-x-note');
-  const go = _el('button', 'mv3-c-btn mv3-x-use', 'create');
+  const go = _el('button', 'mv3-c-btn mv3-x-use', 'use');
   go.type = 'button';
-  go.title = 'Make a voiceover project of this text and open it';
+  go.title = 'Make this text the voiceover\'s script - one line';
   foot.append(note, go);
   box.appendChild(foot);
 
@@ -94,11 +95,11 @@ export function openOwnText(use) {
   go.addEventListener('click', async () => {
     if (!text.value.trim()) return;
     go.disabled = true;
-    note.textContent = 'creating…';
+    note.textContent = 'saving…';
     try {
-      const key = await API.voiceover({ text: text.value, name: name.value.trim() });
+      const project = await API.voiceoverScript(projectId, { text: text.value, name: name.value.trim() });
       _close(ov, layer);
-      await use(key);
+      done(project);
     } catch (e) {
       note.textContent = e.message;
       go.disabled = false;

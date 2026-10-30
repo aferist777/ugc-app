@@ -1634,6 +1634,50 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-vhead:first-child{margin-top:2px}
 /* (phase V62) The voices in their window (js/merge-v3/wk-setup.js _openVoices), with the room a window has. */
 .mv3-wk-vwin{padding:12px 16px}
+/* (phase V62) Each ElevenLabs filter with its name over it. */
+.mv3-wk-vfcell{flex:1 1 92px; min-width:0; max-width:150px; display:flex; flex-direction:column; gap:2px}
+.mv3-wk-vfcell .mv3-wk-vfilter{flex:0 0 auto; max-width:none; width:100%}
+.mv3-wk-vfname{font:700 8.5px/1.2 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+/* (phase V62) Field 1's voice: its name with ▾ - the menu of the saved voices and the ElevenLabs library (wk-voice.js). */
+.mv3-wk-vpickbtn{
+  flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; padding:4px 7px; cursor:pointer; text-align:left;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--bg); color:var(--ink); font:600 11px/1.3 var(--font);
+}
+.mv3-wk-vpickbtn:hover{border-color:var(--primary)}
+.mv3-wk-vpickbtn.is-need{border-color:var(--danger); color:var(--danger)}
+.mv3-wk-vpickbtn[disabled]{opacity:.6; cursor:default}
+.mv3-wk-vpickname{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mv3-wk-vpickarrow{flex:0 0 auto; color:var(--muted)}
+.mv3-wk-vmenu{width:min(420px, 92vw); overflow-y:auto}
+.mv3-wk-vmenu .mv3-plus-item.is-lib span{color:var(--primary)}
+.mv3-wk-vmrow{display:flex; align-items:center; gap:7px; padding:4px 8px; cursor:pointer; border-radius:var(--r-xs)}
+.mv3-wk-vmrow:hover{background:var(--surface-2)}
+.mv3-wk-vmrow.is-on{cursor:default; background:var(--primary-soft)}
+.mv3-wk-vmnote{padding:4px 8px 6px; font:400 10px/1.4 var(--font); color:var(--muted)}
+/* (phase V62) Field 1 in a NARROW setup (a field under ~520 px - the preview beside it takes half the window): its one line
+   gave the voice no room at all, and the voice is now the menu that chooses it. Under that width the line folds in two pairs -
+   mood and voice, stability and speed, each name over its control - and generate under them at the right. The children, in
+   order (wk-fragments.js _stageMoodVoice): 4 names, an empty cell, 4 controls, generate. Wide, it is one line as before. */
+.mv3-wk-stage-body:has(> .mv3-wk-mvrow){container-type:inline-size}
+@container (max-width: 520px){
+  .mv3-wk-mvrow:not(.is-sample){grid-template-columns:minmax(0, 1fr) minmax(0, 1.5fr)}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(1){grid-area:1 / 1}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(2){grid-area:1 / 2}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(6){grid-area:2 / 1}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(7){grid-area:2 / 2}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(3){grid-area:3 / 1}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(4){grid-area:3 / 2}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(8){grid-area:4 / 1}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(9){grid-area:4 / 2}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(5){display:none}
+  .mv3-wk-mvrow:not(.is-sample) > :nth-child(10){grid-area:5 / 1 / 6 / 3}
+}
+/* (phase V62) The voiceover draft's script column while it has no script (js/merge-v3/vo-script.js), and its bar over the lines. */
+.mv3-vos{display:flex; flex-direction:column; min-height:0; flex:1 1 auto}
+.mv3-vos-top{display:flex; align-items:center; gap:6px; padding:6px 2px 0}
+.mv3-vos-cat{flex:0 1 auto; max-width:45%}
+.mv3-vos-list{flex:1 1 auto; min-height:0; overflow-y:auto; padding-left:0; padding-right:0}
+.mv3-vos-bar{display:flex; align-items:center; gap:7px; margin:0 0 6px}
 .mv3-wk-vhead.is-lib{border-top:1px solid var(--border-soft); padding-top:9px}
 /* Six vocabularies and a search box. They wrap: the panel is narrow when the sash is left
    alone and wide when it is not, and a fixed grid would be wrong in both. */

@@ -46,6 +46,8 @@ import { askDelete, note as askNote } from './ask.js';
 import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
+// (phase V62) The voiceover draft's script, chosen in its script column.
+import * as VOS from './vo-script.js';
 
 // The one ceiling a read has for Kling avatar, from the tier (lib/motion-presets.js) - read from
 // the kit when it has arrived, this only until then.
@@ -857,7 +859,8 @@ export function paint(host, ctx, api) {
   // fields go one after another, each opening when the one before it has done its work.
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   _notes(right);
-  if (!lines.length) {
+  // (phase V62) A voiceover draft with no script yet still has its fields: the voice is chosen while the script is.
+  if (!lines.length && !_isVo(p)) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
     return;
   }
@@ -1399,12 +1402,13 @@ function _voCount(p, box) {
 // The picture of a voiceover: videos and pictures from the stock, laid over the voice by its sentences. Red until every
 // line is read (the same rule as a talking head's frames and video, _voiceLock); its "find B-roll" comes with V62's block 1.
 function _stageBroll(host, p, lines) {
-  const lock = _voiceLock(p);
+  const lock = !liveLines(lines).length ? 'Choose the script first - a scenario or your own text, on the right.' : _voiceLock(p);
   const { body } = _stage(host, 'broll', {
     step: 2, bare: true, wide: true, lock,
     name: 'B-roll', sub: 'videos and pictures from the stock, by the sentences',
   });
-  body.appendChild(_note(lock ? 'The voice first - every line read, then its captions heard. Then the B-roll is found for it.'
+  body.appendChild(_note(!liveLines(lines).length ? 'The script first, then the voice. Then the B-roll is found for it.'
+    : lock ? 'The voice first - every line read, then its captions heard. Then the B-roll is found for it.'
     : 'Finding the B-roll comes next (V62, block 1): videos and pictures from the stock, laid over the voice by its sentences.'));
 }
 
@@ -1729,6 +1733,23 @@ function _seedanceSettings(body, p) {
 }
 
 function _list(host, p, lines) {
+  // (phase V62, the owner after block 0) THE VOICEOVER DRAFT'S SCRIPT is chosen in this column: with no lines, the scenarios
+  // and "+ your text" stand where its lines will (js/merge-v3/vo-script.js); with them, "other script" over them takes them
+  // off again - while it is the draft.
+  if (_isVo(p) && p.draft) {
+    const adopt = (project) => { _adopt({ project }); _open = -1; Store.refresh().catch(() => {}); _ctx.repaint(); };
+    adopt.repaint = () => _ctx.repaint();
+    if (!lines.length) { VOS.paintChooser(host, p, adopt); return; }
+    const bar = el('div', 'mv3-vos-bar');
+    bar.appendChild(el('span', 'mv3-wk-vsub is-grow', p.scenarioId ? 'the scenario «' + (p.title || 'untitled') + '»' : 'your own text'));
+    const other = el('button', 'mv3-wk-vmore', 'other script');
+    other.type = 'button';
+    other.title = 'Take this script off - back to the scenarios and your own text. Once a line is read it is this voiceover\'s for good.';
+    other.disabled = VOICE.reading().busy;
+    other.addEventListener('click', () => VOS.clearScript(p, adopt));
+    bar.appendChild(other);
+    host.appendChild(bar);
+  }
   // HOW THE TWO COLUMNS WORK, said over the list they are about (the owner, 2026-09-22). It used to
   // sit in grey italics at the foot of the general zone, where somebody scrolling the stages never
   // reached it; here it is the first thing above the script, and it changes with where you are.
