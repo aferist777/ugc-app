@@ -3940,8 +3940,10 @@ function _sdView(p) {
     const frameId = fr ? fr.id : '';
     const words = SDP.wordsSig(l);
     const dur = !sample && take ? Math.round((+take.dur || 0) * 100) / 100 : 0;
+    // (phase V26.6) The products whose pictures go with the clip - another set of them makes the prompt stale.
+    const prodSig = _frameProds(fr).filter(x => x.have).map(x => x.path).join('|');
     const sig = SDP.sigOf({ frameId, mood: st.video.mood, gestures: st.gestures && st.gestures.id, sound: st.sound, place: st.place, words,
-      take: take && !sample ? take.path : '', voice: sample ? voice : '' });
+      take: take && !sample ? take.path : '', voice: sample ? voice : '', props: prodSig });
     const k = l.sd || null;
     const clips = ((k && k.clips) || []).map(c => ({ ...c, fresh: _sdFresh(c, frameId, take, words, voice) }));
     const clip = (k && k.chosen && clips.find(c => c.id === k.chosen)) || clips.filter(c => c.fresh).pop() || null;
@@ -4010,10 +4012,16 @@ async function _writeSdPromptsNow(id, only) {
       const frame = fr ? await _seeable(fr.preview || fr.path) : '';
       const rows = SDP.rows(lines[f.line]);
       const shot = shotOf(fr);
+      // (phase V26.6, the owner's (пр4)) The products of the line's frame: told to the writer, and their pictures go with the clip
+      // after the sheet ({{image:3}} on) - each said in the prompt.
+      const prods = _frameProds(fr).filter(x => x.have);
+      const prodPics = await Promise.all(prods.map(x => _seeable(x.path)));
       const t = await AGENT.thinkTalk({ facts: { ...facts0, selfie: shot === 'selfie', clothes: _clothesShown(proj0, _frameSet(shot) ? shot : 'full'),
-        dur: f.secs > 0 ? f.dur : 0, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
+        dur: f.secs > 0 ? f.dur : 0, lines: rows, products: prods.map(x => ({ name: x.name, label: x.label, held: x.held })) },
+      picUrls: [frame, sheet].concat(prodPics).filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
-      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place, ...said });
+      const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place, ...said,
+        products: prods.map(x => ({ name: x.name, what: x.what })) });
       write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
       report.written++;
     } catch (e) { report.failed.push({ n: f.n, error: e.message }); }
@@ -4247,6 +4255,12 @@ async function _submitSdClip(b, onStage, onAsk) {
   const f = plan.frag;
   const fr = _framePool(proj).find(v => v.id === f.frameId);
   const srcs = { frame: fr && fr.path, sheet: plan.cast.obrazImage, sound: plan.sound === 'sample' ? plan.sample : f.audio };
+  // (phase V26.6, the owner's (пр4)) The products of the frame go as pictures after the sheet - as many as the prompt was
+  // written for (its fingerprint holds them); a prompt naming a picture that is not sent is refused in words.
+  const prods = _frameProds(fr).filter(x => x.have);
+  prods.forEach((x, k) => { srcs['prop' + k] = x.path; });
+  const named = Math.max(0, ...[...String(f.prompt || '').matchAll(/@Image(\d+)/g)].map(m => +m[1]));
+  if (named > 2 + prods.length) throw new Error('the prompt names a product picture that is not in Props any more - write the prompt again');
   const abs = {};
   for (const [k, u] of Object.entries(srcs)) {
     abs[k] = u ? toDiskExisting(u) : '';
@@ -4261,7 +4275,8 @@ async function _submitSdClip(b, onStage, onAsk) {
     if (!hosted) {
       say('sending the references');
       if (FAKE.on()) {
-        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) : f.dur };
+        hosted = { frame: FAKE.host(srcs.frame), sheet: FAKE.host(srcs.sheet), sound: FAKE.host(srcs.sound), secs: plan.sound === 'sample' ? Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) : f.dur,
+          props: prods.map((x, k) => FAKE.host(srcs['prop' + k])) };
       } else {
         const VP = require('../lib/video-prep');
         const one = await VP.image(abs.frame, pair);
@@ -4270,11 +4285,16 @@ async function _submitSdClip(b, onStage, onAsk) {
         const snd = await VP.sound(abs.sound, pair, plan.sound === 'sample'
           ? { from: 0, to: Math.min(pair.limits.audioSecs || 15, await _audioDur(abs.sound) || 10) } : { from: 0, to: f.dur });
         try {
+          const props = [];
+          for (let k = 0; k < prods.length; k++) {
+            const pic = await VP.image(abs['prop' + k], pair);
+            props.push(await H.uploadToPublicHost(pic.buf, { ext: pic.ext, verify: true, forceFresh: true }));
+          }
           hosted = {
             frame: await H.uploadToPublicHost(one.buf, { ext: one.ext, verify: true, forceFresh: true }),
             sheet: await H.uploadToPublicHost(two.buf, { ext: two.ext, verify: true, forceFresh: true }),
             sound: await H.uploadToPublicHost(snd.file, { ext: 'mp3', verify: true, forceFresh: true }),
-            secs: snd.secs,
+            secs: snd.secs, props,
           };
         } finally { if (typeof snd.drop === 'function') snd.drop(); }
       }
@@ -4283,7 +4303,8 @@ async function _submitSdClip(b, onStage, onAsk) {
     const prompt = pair.agg === 'kie' ? f.prompt : f.prompt.replace(/@(Image|Video|Audio)(\d+)/g, '[$1$2]');
     const req = {
       prompt,
-      media: [{ kind: 'image', url: hosted.frame }, { kind: 'image', url: hosted.sheet }, { kind: 'audio', url: hosted.sound, in: 0, out: hosted.secs }],
+      media: [{ kind: 'image', url: hosted.frame }, { kind: 'image', url: hosted.sheet }]
+        .concat((hosted.props || []).map(url => ({ kind: 'image', url })), [{ kind: 'audio', url: hosted.sound, in: 0, out: hosted.secs }]),
       params: { resolution: plan.video.quality, duration: f.secs, aspect: FRAG_FORMATS.includes(format) ? format : '9:16', audio: true },
     };
     try { VMOD.check(pair, req); } catch (e) { reasons.push(pair.aggLabel + ': ' + e.message); continue; }
@@ -5062,6 +5083,11 @@ const MOTION_LIPS =
   + ' words, so the talking is plainly visible on the face.';
 
 // The one shot size that has a hand in the shot: it is holding the phone, and it must not wander.
+// (phase V26.6, the owner's (п7)) A product in the person's hand in the frame - Kling avatar moves the hands and may let it
+// drift; the agent is told it stays as it is.
+const MOTION_PRODUCT = ' THE PRODUCT in the lines that hold one: it stays exactly as it is in the frame - in the same hand, its'
+  + ' label turned to the camera, never changing its shape or its letters, never disappearing, never doubling; the hand moves it'
+  + ' only a little - a small tilt toward the lens on the words about it, never turned away or put down.';
 const MOTION_SELFIE =
   ' THIS IS A SELFIE: the arm holding the phone stays where it is for the whole clip - it does not'
   + ' lower, change hands or leave the frame - so the free hand is the only one that gestures, and'
@@ -5144,6 +5170,9 @@ async function _writePromptsNow(id, want) {
 
     const sets = [...new Map(only.map(i => { const s = setOf(where(i).fr); return [s.id, s]; })).values()];
     const one = sets.length === 1;
+    // (phase V26.6, the owner's (п7), (пр4)) The products the line's frame was drawn with: said in the line's row, and one rule.
+    const prodsOf = (i) => _frameProds(where(i).fr);
+    const anyProd = only.some(i => prodsOf(i).length);
     const ask = 'You are directing a talking-head video: one person, one place, spoken'
       + ' straight to camera. IMAGE 1' + (shown.length > 1 ? ' to ' + shown.length : '') + ' are the first'
       + ' frames of this video - the instants the lines open on.'
@@ -5155,6 +5184,7 @@ async function _writePromptsNow(id, want) {
       + (envMotion ? '\nTHE PLACE MOVES BY ITSELF: ' + envMotion + ' - let it, but do not describe it again.' : '')
       + '\n\n' + MOTION_RULES
       + (!sets.some(s => s.id === 'selfie') ? '' : one ? MOTION_SELFIE : ' IN THE SELFIE LINES:' + MOTION_SELFIE.replace(' THIS IS A SELFIE:', ''))
+      + (anyProd ? MOTION_PRODUCT : '')
       + '\n\nThe lines, in order. Each says which frame it opens on and what is happening in that frame.'
       + ' The script is one arc: write the movement of each line as its place in that arc, not as a'
       + ' performance of its own.\n'
@@ -5163,6 +5193,8 @@ async function _writePromptsNow(id, want) {
         return '[' + (i + 1) + '] frame ' + (w.at >= 0 ? 'IMAGE ' + (w.at + 1) : 'unknown')
           + (one ? '' : ', ' + setOf(w.fr).label)
           + ((w.fr && w.fr.moment) ? ' (' + w.fr.moment + ')' : '')
+          + prodsOf(i).map(p => ', holding the product "' + p.name + '"' + (p.label ? ' (its label: ' + p.label + ')' : '')
+            + (p.held ? ' - ' + p.held : '')).join('')
           + ' | "' + String(lines[i].text || '').replace(/\s+/g, ' ').trim() + '"';
       }).join('\n')
       + '\n\nAnswer with JSON and nothing else: {"lines":[{"n":<the number in brackets>,"motion":"..."}]}'
@@ -5440,6 +5472,23 @@ function _fchatFacts(projectId, shot) {
 function _framePropsOf(list) {
   return (Array.isArray(list) ? list : []).filter(p => p && p.path).slice(0, 2)
     .map(p => ({ path: String(p.path), name: String(p.name || '').slice(0, 120), description: String(p.description || '').slice(0, 4000) }));
+}
+
+// (phase V26.6, the owner's (п7), (пр4)) The products of a line's frame as its clip's writers are told of them: the name and
+// the description as kept in Props now (lib/props.js), else as the frame remembered them (a product deleted - (п8)); its
+// LABEL and HOW IT IS HELD read out of the description; `have` - its picture is still in Props (Seedance is sent it).
+const _descPart = (d, key) => {
+  const m = new RegExp('^' + key + ':\\s*(.+)$', 'mi').exec(String(d || ''));
+  return m ? m[1].trim().replace(/[.\s]+$/, '') : '';
+};
+function _frameProds(fr) {
+  const P = require('../lib/props');
+  return _framePropsOf(fr && fr.props).map((p) => {
+    const n = P.facts(p.path, p);
+    const abs = toDiskExisting(p.path);
+    return { path: p.path, name: n.name, label: _descPart(n.description, 'LABEL'), held: _descPart(n.description, 'HOW IT IS HELD'),
+      what: _descPart(n.description, 'WHAT IT IS'), have: !!(abs && fs.existsSync(abs)) };
+  });
 }
 
 // A frame of the chat put into the set (`to frames`): it joins the pool like any frame - the lines take from it by the
