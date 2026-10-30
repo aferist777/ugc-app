@@ -3007,13 +3007,13 @@ function _laneMenu(e) {
     box.appendChild(b);
   };
   // The pictures chat, in the Library panel's place (phase J).
-  item('generate image', 'the pictures chat · "to timeline" puts it here',
-    'Make a picture with a model - it lands on the images shelf, and "to timeline" lays it at the playhead',
+  item('generate image', 'the pictures chat · drag a picture onto a lane',
+    'Make a picture with a model - it lands on the images shelf; drag it from the chat onto a lane',
     () => import('./picchat.js').then(m => m.openPictures())
       .catch(err => console.warn('[timeline] the pictures chat did not open:', (err && err.message) || err)));
   // The video chat, the same place (phase V3).
-  item('generate video', 'the video chat · "to timeline" puts it here',
-    'Make a clip with a model - it lands on the B-roll shelf, and "to timeline" lays it at the playhead',
+  item('generate video', 'the video chat · drag a clip onto a lane',
+    'Make a clip with a model - it lands on the B-roll shelf; drag it from the chat onto a lane',
     () => import('./vidchat.js').then(m => m.openVideos())
       .catch(err => console.warn('[timeline] the video chat did not open:', (err && err.message) || err)));
 

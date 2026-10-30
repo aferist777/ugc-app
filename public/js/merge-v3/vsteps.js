@@ -13,12 +13,17 @@
    it (`pager`) - into the folded line of its prompt, under its sheet. A step may have more than one set of variants (the
    storyboard's step: its prompt's writings and its sheets).
 
+   (phase V60.3, the owner 2026-10-30, (вс2а), (вс4а)) The message is two columns: the steps' line and the step shown stand
+   in the left one, under what was asked, the presses under both columns (vidchat.js puts the parts there). The steps' line
+   goes into the title line of the step's field when the step takes it (`nav.head()`), else it stands over the step.
+
    It knows nothing of videos. The description hands it the steps on every read of the thread - { steps, start }:
      { key, title, word, variants: [{ key, sig }], pick, page(v), note(v),
        more: [{ key, word, variants, pick, page(v), note(v) }],      - its other sets of variants
        sig, body(v, box, progs, nav), acts(v, box, nav), freshen(v, nav) }
    `nav.shown(setKey)` - the variant shown of a set (the step's own key is its first set); `nav.pager(setKey)` - the small
-   pager of a set, or null when it has one variant. A variant's `sig` says when its view must be drawn again - never its
+   pager of a set, or null when it has one variant; `nav.head()` - the steps' line, for the body to put into its title line;
+   `nav.many()` - whether there are two steps. A variant's `sig` says when its view must be drawn again - never its
    text, so a prompt being typed is never rebuilt under the typing; a step's own `sig` (a value, or a function asked at
    every paint) the same for what it shows of another step; `freshen` keeps what changes without a redraw (a price, a
    countdown's words) up to date. `start`: the step a message opens on before the person pages anywhere (else its newest).
@@ -52,6 +57,10 @@ export function stepCard(id) {
   const sText = el('span', 'vc-steps-t');
   const sNext = arrow('is-next', '›');
   top.append(sPrev, sText, sNext);
+  // Where the steps' line stands when the step shown does not take it into its title line.
+  const slot = el('div', 'vc-steps-slot');
+  slot.appendChild(top);
+  let adopted = false;
   const body = el('div', 'vc-step');
   const acts = el('div', 'vc-card-acts vc-step-acts');
   const progs = new Map();
@@ -93,7 +102,11 @@ export function stepCard(id) {
     box.append(p, t, x);
     return box;
   }
-  const nav = { pager, shown: (k) => now[k] || null };
+  const nav = {
+    pager, shown: (k) => now[k] || null,
+    head: () => { adopted = true; return top; },
+    many: () => stepsOf().length > 1,
+  };
 
   function paint(next) {
     if (next) spec = next;
@@ -144,12 +157,15 @@ export function stepCard(id) {
       sig = nsig;
       for (const p of progs.values()) p.detach();
       progs.clear();
+      adopted = false;
       body.textContent = '';
       acts.textContent = '';
       s.body(v, body, progs, nav);
       if (s.acts) s.acts(v, acts, nav);
+      if (!adopted) slot.appendChild(top);
     } else if (s.freshen) s.freshen(v, nav);
     acts.hidden = !acts.childNodes.length;
+    slot.hidden = top.parentNode !== slot || top.hidden;
   }
 
   function goTo(key) {
@@ -186,5 +202,5 @@ export function stepCard(id) {
   }
   // The variant shown of a set, as the person left it (null - the set's own pick, or the newest).
   const shown = (key) => mem().vars[key] || null;
-  return { parts: [top, body, acts], paint, goTo, destroy, progs, shown };
+  return { parts: [slot, body, acts], paint, goTo, destroy, progs, shown };
 }

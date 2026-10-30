@@ -19,8 +19,9 @@
    project, REFERENCES (pictures), IMAGES with all its folders -, the open folder's folders as tiles, then its pictures.
    ════════════════════════════════════════════════════════════════════════════ */
 
+import * as Store from './store.js';
 import { openViewer } from '../library/viewer.js';
-import { createChat, el, thumbOf, almanacSoon } from './chat-shell.js';
+import { createChat, el, thumbOf, almanacSoon, refuseHome } from './chat-shell.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
@@ -94,7 +95,7 @@ function PICTURES(ctx) {
     },
 
     // A finished picture in the thread: a miniature - hovering shows it properly, a press opens it over
-    // everything - with "to reference" and "to timeline" under it.
+    // everything - with "to reference" under it. (phase V60.3, the owner's (вс1б)) No "to timeline": it is dragged onto a lane.
     shot(g, cell, open) {
       const img = document.createElement('img');
       img.className = 'mv3-ig-shot';
@@ -102,28 +103,34 @@ function PICTURES(ctx) {
       img.alt = g.prompt || '';
       img.loading = 'lazy'; img.decoding = 'async';
       img.style.aspectRatio = String(g.aspect || '9:16').replace(':', '/');
-      img.title = 'Open it large';
+      img.title = 'Open it large · drag it onto a lane';
       img.addEventListener('mouseenter', () => ctx.peekShow(thumbOf(g.imagePath, 'main'), img));
       img.addEventListener('mouseleave', ctx.peekHide);
       img.addEventListener('click', open);
+      // Dragged onto a lane as a tile of the right column is - the shelf's own payload.
+      img.draggable = true;
+      img.addEventListener('dragstart', (ev) => {
+        if (refuseHome(img, ev)) return;
+        ctx.peekHide();
+        ev.dataTransfer.effectAllowed = 'copy';
+        ev.dataTransfer.setData(Store.DRAG_TYPE, JSON.stringify({
+          libId: g.imageId || '', src: g.imagePath, thumb: g.imagePath, name: (g.prompt || '').slice(0, 60), group: 'images', dur: 0,
+        }));
+      });
       cell.appendChild(img);
       const acts = el('div', 'mv3-ig-acts');
       const use = el('button', 'mv3-c-btn', 'to reference');
       use.type = 'button';
       use.title = 'Put it in the row above the message box and carry on from it';
       use.addEventListener('click', () => ctx.attach(g.imagePath, (g.prompt || '').slice(0, 60)));
-      const add = el('button', 'mv3-c-btn', 'to timeline');
-      add.type = 'button';
-      add.title = 'Puts it on the lane above main video, at the playhead.';
-      add.addEventListener('click', () => ctx.place({ src: g.imagePath, thumb: g.imagePath, libId: g.imageId || '', name: (g.prompt || '').slice(0, 60) }, add));
-      acts.append(use, add);
+      acts.append(use);
       cell.appendChild(acts);
       // Taken off the shelf since: said, instead of a broken picture, and nothing builds on it.
       img.addEventListener('error', () => {
         const gone = el('div', 'mv3-ig-gone', 'not in the Library any more');
         gone.style.aspectRatio = img.style.aspectRatio;
         img.replaceWith(gone);
-        use.disabled = true; add.disabled = true;
+        use.disabled = true;
       }, { once: true });
     },
 

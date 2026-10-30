@@ -95,7 +95,9 @@
 .mv3-pc.is-narrow .mv3-ig-bar{ gap:5px; padding:6px 10px }
 
 /* ── middle: the conversation ── */
-.mv3-ig-chat{ flex:1 1 auto; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
+/* (phase V60.3, the owner's point 5) The rest of the width after the right column: a basis of 0, never the width of its
+   longest line - with `auto` a long text in the thread took all the room and the column's sash moved nothing. */
+.mv3-ig-chat{ flex:1 1 0; display:flex; flex-direction:column; min-width:240px; min-height:0; background:var(--bg) }
 .mv3-ig-thread{
   flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px;
   display:flex; flex-direction:column; gap:12px;
@@ -645,9 +647,13 @@ audio.vtrim-media{ background:none; height:32px }
 /* (phase V60.2, the owner 2026-10-29, (вч6а)-(вч17а)) THE COMPACT MESSAGE. Its head: what was asked on the left, the video on
    the right against the message's right edge - 180 px wide at the clip's shape (9:16 180×320, 16:9 180×101). Its steps (two at
    most) under it, every prompt folded into one line; "read more" of the clip shown at its foot. */
-.vm-head{ display:flex; align-items:flex-start; gap:12px; min-width:0 }
-.vm-head-l{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:6px }
-.vm-vid{ flex:0 0 180px; width:180px; min-width:0; max-width:180px; display:flex; flex-direction:column; gap:5px; margin-left:auto }
+/* (phase V60.3, the owner 2026-10-30, (вс2а)-(вс5а)) TWO COLUMNS: what was asked at the top of the left one, the steps under
+   it - the step's text a field down to the bottom of the right column, at least 120 px, scrolling inside -, the video in the
+   right one; the presses and "read more" under both. */
+.vm-head{ display:grid; grid-template-columns:minmax(0, 1fr) 180px; column-gap:12px; align-items:stretch; min-width:0 }
+.vm-head-l{ min-width:0; min-height:0; display:flex; flex-direction:column; gap:6px }
+.vm-head-l > .vc-step{ flex:1 1 auto; min-height:0; gap:6px }
+.vm-vid{ align-self:start; width:100%; min-width:0; display:flex; flex-direction:column; gap:5px }
 .vm-vid-cell{ display:flex; flex-direction:column; gap:5px; width:100%; min-width:0 }
 .vm-vid .mv3-vc-shot{ width:100%; min-width:0; max-width:100%; max-height:none }
 .vm-vid-box{
@@ -692,6 +698,32 @@ audio.vtrim-media{ background:none; height:32px }
 .vm-fold-part[hidden]{ display:none }
 /* Open: as tall as its text, never a box of its own scrolling or empty under it - and as wide as the message, whatever it holds. */
 .vc-prompt-ta.is-fit{ field-sizing:content; contain:inline-size; min-height:44px; resize:none; overflow:hidden }
+/* (phase V60.3) Where the steps' line stands when the step shown has no field to take it. */
+.vc-steps-slot[hidden]{ display:none }
+/* A step's text as a field: its title line - the steps' "‹ step k of N ›", its word, what it is, how many characters, its
+   variants' "‹ 2 of 3 ›" -, then the field down to the bottom of the video's column. */
+.vm-field{ flex:1 1 auto; min-height:0; min-width:0; display:flex; flex-direction:column; gap:4px }
+.vm-fh{ flex:0 0 auto; display:flex; align-items:center; gap:8px; min-width:0; height:24px }
+.vm-fh .vc-steps{ flex:0 1 auto; min-width:0; padding:0; border:0; gap:4px }
+.vm-fh .vc-steps-t{ flex:0 1 auto; text-align:left }
+.vm-fh .vc-nav{ width:20px; height:20px; font-size:12px; line-height:18px }
+.vm-fh .k{ flex:0 0 auto; font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); white-space:nowrap }
+.vm-fh .s{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 10px/1.3 var(--font); color:var(--muted) }
+.vm-fh .n{ flex:0 0 auto; font:500 9.5px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap }
+.vc-prompt-ta.vm-ta{ flex:1 1 0; min-height:120px; resize:none; overflow-y:auto }
+/* (вс8а) Its place while it has no text: dashed, as tall, the countdown (or "sending…") inside, why not in red. */
+.vm-wait{
+  flex:1 1 0; min-height:120px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-end; gap:6px;
+  padding:8px; border:1px dashed var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+}
+.vm-wait > .w{ margin:auto 0; font:600 10px/1.45 var(--font); color:var(--muted); text-align:center; word-break:break-word }
+.vm-wait .mv3-ig-prog{ min-width:0; width:100%; background:var(--surface) }
+.vm-wait.is-bad{ border-style:solid; border-color:var(--danger); background:color-mix(in oklch, var(--danger) 6%, var(--surface-2)) }
+.vm-wait.is-bad > .w{ color:var(--danger) }
+/* (вс7а) What goes with the video, under its prompt, in small cells. */
+.mv3-ig-msg-refs.vm-refs-s{ flex:0 0 auto; gap:4px }
+.vm-refs-s .vc-ref{ width:40px }
+.vm-refs-s .mv3-ig-msg-ref{ width:40px; height:40px }
 
 /* ── The picker of attachments (phase V13, the owner 2026-10-07; js/merge-v3/chat-pick.js) ──
    As big as the catalog: where things come from on the left, the tiles in the middle - a picture or a clip at its own
