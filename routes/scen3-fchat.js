@@ -38,10 +38,27 @@ const { toDiskExisting } = require('../lib/media');
 const KIND = 'fchat';
 const AT_ONCE = 5;
 const COUNTS = [1, 2, 4];
-const ROLES = ['character', 'place', 'frame', 'extra'];
+const ROLES = ['character', 'place', 'frame', 'extra', 'product'];
 // A picture's role as the page says it; anything else - a row kept from before the two fields - is an extra one.
 const _roleOf = (r) => (ROLES.includes(String(r || '')) ? String(r) : 'extra');
 const SCEN = () => require('./scen3');
+const PROPS = require('../lib/props');
+
+// (phase V26.6, the owner's (п5)) THE PRODUCTS of a message: a picture in the product place that is a product of IMAGES ->
+// Props goes with its name and description (lib/props.js) - anything else there is an extra picture. -> { roles, notes
+// (aligned with the pictures: { name, description } of a product, else null), props: [{ path, name, description }] - what the
+// frame remembers }.
+function _products(refs, roles) {
+  const out = { roles: roles.slice(), notes: refs.map(() => null), props: [] };
+  refs.forEach((p, i) => {
+    if (out.roles[i] !== 'product') return;
+    if (!PROPS.isProp(p)) { out.roles[i] = 'extra'; return; }
+    const n = PROPS.facts(p);
+    out.notes[i] = n;
+    out.props.push({ path: String(p).split('?')[0], name: n.name, description: n.description });
+  });
+  return out;
+}
 
 // The talking head a message is for: its timeline key (`sv3_<id>`) and its project, which must be there.
 function _projectOf(b) {
@@ -71,7 +88,8 @@ router.post('/scen3/fchat/send', (req, res) => {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    const roles = refs.map((x, i) => _roleOf((b.roles || [])[i]));
+    const pr = _products(refs, refs.map((x, i) => _roleOf((b.roles || [])[i])));
+    const roles = pr.roles;
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const write = b.write !== false;
     const facts = SCEN().fchatFacts(id, String(b.shot || ''));
@@ -93,7 +111,7 @@ router.post('/scen3/fchat/send', (req, res) => {
       // The idea the words came from is used now (the owner's answer (d)).
       _ideaUsed(b.idea, key);
       res.json({ success: true, send: card.id, card: card.id, review: true });
-      _writeCard(card.id, kickW, { id, engine, text, refs, roles, facts, before });
+      _writeCard(card.id, kickW, { id, engine, text, refs, roles, notes: pr.notes, facts, before });
       return;
     }
     if (GENS.runningSends(key, true) >= AT_ONCE) {
@@ -109,14 +127,14 @@ router.post('/scen3/fchat/send', (req, res) => {
       ids.push(GENS.create({
         project: key, send: msgId, kick, where: b.where, stage: 'reading your message',
         engine, provider: b.provider, prompt: text, said: text, aspect, quality: b.quality, refs,
-        frame: true, scen: id, shot: String(b.shot || ''),
+        frame: true, scen: id, shot: String(b.shot || ''), props: pr.props,
       }).id);
     }
     // The words on the answer itself: the message is drawn whole - what was asked over what came of it (the owner's answer (g)).
     CHAT.add({ id: msgId, project: key, kind: KIND, role: 'agent', text: '', genId: ids[0], genIds: ids, refs, media, asked: text });
     _ideaUsed(b.idea, key);
     res.json({ success: true, send: msgId, genIds: ids });
-    _light({ text, roles, edge: _edgeOf(facts), ids, kick });
+    _light({ text, roles, notes: pr.notes, edge: _edgeOf(facts), ids, kick });
   } catch (err) {
     if (kick) GENS.asking.delete(kick);
     console.error('[fchat/send]', err.message);
@@ -130,10 +148,10 @@ async function _light(o) {
   try {
     let over;
     try {
-      const t = await AGENT.frameLight({ text: o.text, roles: o.roles, edge: o.edge });
+      const t = await AGENT.frameLight({ text: o.text, roles: o.roles, notes: o.notes, edge: o.edge });
       over = { prompt: t.prompt, fell: t.fell || '', writer: t.writer || '' };
     } catch (err) {
-      over = { prompt: [o.text, AGENT.frameListing(o.roles), o.edge].filter(Boolean).join('\n\n'), fell: 'the writer could not be reached' };
+      over = { prompt: [o.text, AGENT.frameListing(o.roles, o.notes), o.edge].filter(Boolean).join('\n\n'), fell: 'the writer could not be reached' };
     }
     await Promise.all(o.ids.map(id => GENS.submit(id, over, o.kick)));
   } catch (err) {
@@ -166,7 +184,7 @@ async function _writeCard(cardId, kick, o) {
     o.facts = await _factsRead(o.id, ((o.facts || {}).edge || {}).id || '');
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(o.refs); } catch (e) { picUrls = []; }
-    const t = await AGENT.thinkShot({ engine: o.engine, text: o.text, roles: o.roles, facts: o.facts, picUrls, thread: o.before || [] });
+    const t = await AGENT.thinkShot({ engine: o.engine, text: o.text, roles: o.roles, notes: o.notes, facts: o.facts, picUrls, thread: o.before || [] });
     out = t.prompt ? { prompt: t.prompt, writer: t.writer || '' } : { error: t.fail || 'the writer answered nothing usable - write it again' };
   } catch (e) {
     out = { error: 'the writer broke off: ' + String(e.message || e).slice(0, 300) };
@@ -236,14 +254,15 @@ router.post('/scen3/fchat/card/:id/rewrite', (req, res) => {
       const abs = toDiskExisting(refs[i]);
       if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'picture ' + (i + 1) + ' is not in the library any more' });
     }
-    const roles = media.map(a => _roleOf(a.role));
+    const pr = _products(refs, media.map(a => _roleOf(a.role)));
+    const roles = pr.roles;
     const { id } = _projectOf({ project: key });
     const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
     const kickW = 'w' + crypto.randomBytes(8).toString('hex');
     CHAT.writing.add(kickW);
     CHAT.update(m.id, (x) => { Object.assign(x.card, { state: 'writing', kick: kickW, startedAt: new Date().toISOString(), error: '' }); });
     res.json({ success: true, card: m.id });
-    _writeCard(m.id, kickW, { id, engine, text: m.card.text || '', refs, roles, facts, before: [] });
+    _writeCard(m.id, kickW, { id, engine, text: m.card.text || '', refs, roles, notes: pr.notes, facts, before: [] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -279,6 +298,8 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
     const n = COUNTS.includes(+b.n) ? +b.n : 1;
     const facts = SCEN().fchatFacts(id, String((m.card.params || {}).shot || ''));
     const aspect = (facts && facts.format) || '9:16';
+    // (phase V26.6) The frame remembers its products.
+    const pr = _products(refs, (Array.isArray(m.media) ? m.media : []).filter(a => a && a.path).map(a => _roleOf(a.role)));
     kick = 'k' + crypto.randomBytes(8).toString('hex');
     GENS.asking.add(kick);
     const ids = [];
@@ -286,7 +307,7 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
       ids.push(GENS.create({
         project: key, send: m.id, kick, where: b.where, stage: 'asking ' + (b.provider || 'the model'),
         engine, provider: b.provider, prompt, said: m.card.text || prompt, aspect, quality: b.quality, refs,
-        frame: true, scen: id, shot: String((m.card.params || {}).shot || ''),
+        frame: true, scen: id, shot: String((m.card.params || {}).shot || ''), props: pr.props,
       }).id);
     }
     CHAT.update(m.id, (x) => {
@@ -336,7 +357,8 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     if (!key || !proj) return res.status(400).json({ success: false, error: 'open a talking head first' });
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const refs = (Array.isArray(b.refs) ? b.refs : []).map(x => String(x || '').split('?')[0]).filter(Boolean).slice(0, 8);
-    const roles = refs.map((x, i) => _roleOf((b.roles || [])[i]));
+    const pr = _products(refs, refs.map((x, i) => _roleOf((b.roles || [])[i])));
+    const roles = pr.roles;
     if (!roles.includes('character') && !roles.includes('place') && !roles.includes('frame')) return res.status(400).json({ success: false, error: 'put the person or the place above the box first' });
     for (let i = 0; i < refs.length; i++) {
       const abs = toDiskExisting(refs[i]);
@@ -347,7 +369,7 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     const facts = await _factsRead(id, String(b.shot || ''));
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(keep.map(i => refs[i])); } catch (e) { picUrls = []; }
-    const t = await AGENT.frameIdeas({ roles: keep.map(i => roles[i]), facts, picUrls });
+    const t = await AGENT.frameIdeas({ roles: keep.map(i => roles[i]), notes: keep.map(i => pr.notes[i]), facts, picUrls });
     if (!t.ideas) return res.status(502).json({ success: false, error: t.fail || 'no ideas came back' });
     const media = keep.map(i => ({ path: refs[i], kind: 'image', role: roles[i], label: roles[i] }));
     const m = CHAT.add({ project: key, kind: KIND, role: 'agent', text: 'Ideas for a frame - press one to put it into the box.', refs: media.map(a => a.path), media, ideas: t.ideas });
@@ -369,7 +391,8 @@ router.post('/scen3/fchat/to-set', async (req, res) => {
     const abs = toDiskExisting(g.imagePath);
     if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'the frame is not on the disk any more' });
     // (phase V61) The frame keeps the edge it was asked with - the clip's writer reads its shot from it.
-    const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id, shot: g.shot || '' });
+    // (phase V26.6) ...and the products it was drawn with - the clip's writers read them.
+    const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id, shot: g.shot || '', props: g.props || [] });
     res.json(Object.assign({ success: true }, out));
   } catch (e) {
     console.error('[fchat/to-set]', e.message);

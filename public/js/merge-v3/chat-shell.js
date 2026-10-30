@@ -508,6 +508,9 @@ export function createChat(make) {
         return;
       }
     }
+    // (phase V26.6) A place that takes only some things says why, whichever way the thing came (the picker, a file).
+    const refused = typeof S.refuseAt === 'function' ? S.refuseAt(slot, path) : '';
+    if (refused) { _say(refused); if (_picking) Pick.pickSay(refused); return; }
     _say('');
     // (phase V7) A clip or a sound comes with its poster, its length and the part of it that goes (in/out); (phase V15)
     // a thing that says what it is for - a voice from the picker's voices - with its role and its name.
@@ -982,7 +985,10 @@ export function createChat(make) {
         }
         _attach(it.path, it.name, kind === 'image' ? {} : { kind, poster: it.poster || '', dur: +it.dur || 0, role: it.role || '', label: it.label || '' });
       },
-      why: (it) => P.why(it, kind),
+      // (phase V26.6) ...and the place it would go into: the frames chat's product place takes only a product of Props.
+      why: (it) => P.why(it, kind, slot),
+      // (phase V26.6, the owner's (пр3)) A place's own way to make what goes into it - the product place's "+ new prop".
+      make: typeof P.make === 'function' ? P.make(kind, slot) : null,
       computer: {
         word: p.word, hint: (P.upWords || {})[kind] || '',
         open: () => { const input = _fileOf(kind); if (input) input.click(); },

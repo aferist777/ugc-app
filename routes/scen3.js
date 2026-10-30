@@ -3119,6 +3119,9 @@ function _normMix(m) {
       // (phase V26.5) A frame made to order in the frames chat: 'chat', and the chat's record it came from.
       made:    (v && v.made === 'chat') ? 'chat' : '',
       genId:   String((v && v.genId) || ''),
+      // (phase V26.6) The products it was drawn with in the frames chat - { path, name, description }, at most two: the
+      // clips' writers of a line that opens on it know them (_writePromptsNow, _writeSdPromptsNow).
+      props:   _framePropsOf(v && v.props),
     })).filter(v => v.id && v.path) : [],
     // The order the frames were dragged into (the owner, 2026-09-21), by id. A frame not named
     // here - a new one - keeps its natural place, after the ones that were arranged.
@@ -5364,6 +5367,8 @@ router.post('/scen3/frames/crop', async (req, res) => {
       size: { w, h },
       set: src.set || '', framing: src.framing || '', n: src.n || 0,
       moment: src.moment || '',
+      // (phase V26.6) A frame cut from one with a product keeps it.
+      props: _framePropsOf(src.props),
     };
     // Cutting the picture and making its preview took a moment, and other things write this project
     // (phase X0). Read it again and add the frame to the set AS IT IS NOW.
@@ -5431,6 +5436,12 @@ function _fchatFacts(projectId, shot) {
   };
 }
 
+// (phase V26.6) A frame's products as kept on it: { path, name, description }, at most two.
+function _framePropsOf(list) {
+  return (Array.isArray(list) ? list : []).filter(p => p && p.path).slice(0, 2)
+    .map(p => ({ path: String(p.path), name: String(p.name || '').slice(0, 120), description: String(p.description || '').slice(0, 4000) }));
+}
+
 // A frame of the chat put into the set (`to frames`): it joins the pool like any frame - the lines take from it by the
 // rule (the owner's answer (d): option 1) - marked as made to order, with the prompt it was drawn from. Once per file.
 async function _addChatFrame(projectId, o) {
@@ -5446,7 +5457,7 @@ async function _addChatFrame(projectId, o) {
       id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
       path: pathUrl, preview, prompt: String((o && o.prompt) || '').slice(0, 4000),
       at: new Date().toISOString(), taskId: '', set: '', framing: String((o && o.shot) || ''), n: 0, moment: '',
-      made: 'chat', genId: String((o && o.genId) || ''),
+      made: 'chat', genId: String((o && o.genId) || ''), props: _framePropsOf(o && o.props),
     };
     fresh.mix.variants.push(variant);
     // A set dragged into an order keeps it: the new frame stands at its end.

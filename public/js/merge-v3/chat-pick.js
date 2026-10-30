@@ -118,6 +118,8 @@ function _keep(v) { try { localStorage.setItem(LS_SRC, JSON.stringify(v)); } cat
  *   computer  { word, hint, open(), accepts(file), drop(files), lands, link(url)? } - `lands` is the source a file goes to;
  *             `link` (V57) a picture's link let go over the window - resolves with what to say ('' - in)
  *   link      (phase V27) { hint, add(url) -> Promise<words ('' - in its place)> } - a clip by a link; absent, no field
+ *   make      (phase V26.6) { label, title, on() } - the place's own way to make what goes into it, a button in the foot
+ *             (the frames chat's product place: "+ new prop")
  *   onClose()
  *   removed(path)  (V58) a picture of the window deleted by its ✕ - the chat lets go of it
  *   tree      (phase V55) the window with the tree: { roots, page, fallback, type, map(file) -> item, home } - the media
@@ -750,6 +752,15 @@ function _buildTree() {
   up.title = (c.hint ? c.hint + ' ' : '') + 'Or let files go anywhere over this window.';
   up.addEventListener('click', () => c.open());
   foot.appendChild(up);
+  // (phase V26.6, the owner's (пр3)) The place's own way to make what goes into it: the product place's "+ new prop".
+  const M = _o.make;
+  if (M && typeof M.on === 'function') {
+    const mk = el('button', 'pk-up is-make', M.label || '+ new');
+    mk.type = 'button';
+    if (M.title) mk.title = M.title;
+    mk.addEventListener('click', () => M.on());
+    foot.appendChild(mk);
+  }
   const L = _o.link;
   if (L) {
     const row = el('div', 'pk-link');

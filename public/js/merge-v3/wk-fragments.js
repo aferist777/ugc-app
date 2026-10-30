@@ -1460,7 +1460,10 @@ function _stageFrames(host, p) {
       ids.splice(at < 0 ? ids.length : at, 0, from);
       _saveOrder(p, ids);
     });
+    // (phase V26.6) ...and the products it was drawn with.
+    const prods = (Array.isArray(fr.props) ? fr.props : []).map(x => x && x.name).filter(Boolean);
     b.title = (fr.made === 'chat' ? 'from the frames chat · ' : '') + (fr.framing ? fr.framing + ' ' : '') + (fr.n ? fr.n + ' · ' : '')
+      + (prods.length ? 'product ' + prods.join(', ') + ' · ' : '')
       + (gone ? 'switched off - no fragment takes it' : 'press to see it on the stage; right-click to open it large');
     // (phase V26.5) A frame made to order in the frames chat says so on its tile.
     if (fr.made === 'chat') b.appendChild(el('span', 'mv3-wk-fsetmade', 'chat'));

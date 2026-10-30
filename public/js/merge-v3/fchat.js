@@ -22,6 +22,7 @@
 import * as Store from './store.js';
 import { createChat, el, thumbOf, json, money, refCell, almanacSoon } from './chat-shell.js';
 import { note } from './ask.js';
+import { closePick } from './chat-pick.js';
 import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
@@ -40,7 +41,14 @@ const BASE_CAST = [
 const BASE_FRAME = [
   { key: 'frame', label: 'frame', max: 1, min: 0, hint: 'The frame being changed - its cross puts the person and the place back' },
 ];
-const EXTRA = { key: 'extra', label: 'extra', max: 4, min: 0, hint: 'Anything else for the frame - a product, an object, a pose to copy; say in the message what it is' };
+const EXTRA = { key: 'extra', label: 'extra', max: 4, min: 0, hint: 'Anything else for the frame - an object, a pose to copy, a look; say in the message what it is' };
+// (phase V26.6, the owner 2026-10-30, (п5), (пр2)) THE PRODUCT - up to two products of IMAGES -> Props, between the base and
+// the extra pictures; each goes with its name and description, drawn exactly as on its picture. It stays from message to
+// message until taken off (the zone is never emptied by a send). The pictures stay at most 6: the extra ones take the rest.
+const PRODUCT = { key: 'product', label: 'product', max: 2, min: 0, hint: 'A product of IMAGES → Props - drawn exactly as on its picture; its description goes with it' };
+const PROPS_AT = '/media/props/';
+const _isProp = (path) => String(path || '').split('?')[0].startsWith(PROPS_AT);
+const NOT_PROP = 'A product comes from IMAGES → Props - add it there with New prop, or put the picture into extra';
 // The shot sizes of the set (routes/scen3.js FRAME_SETS) - here only as where the frame's edge is.
 const SHOTS = [['', 'none'], ['selfie', 'selfie'], ['half', 'half body'], ['full', 'full body']];
 
@@ -105,13 +113,15 @@ function FRAMES(ctx) {
   function zone() {
     const room = Math.min(MAX_ATTS, M.room());
     const base = _base === 'frame' ? BASE_FRAME : BASE_CAST;
+    const prod = Object.assign({}, PRODUCT, { max: Math.max(0, Math.min(PRODUCT.max, room - base.length)) });
     const extra = Object.assign({}, EXTRA, { max: Math.max(0, Math.min(EXTRA.max, room - base.length)) });
     return { parts: [{
       kind: 'image', word: 'pictures', one: 'picture', room,
-      // The two fields; the shell still knows every slot of the part, in the order the numbers count.
-      slots: base.concat(extra.max ? [extra] : []),
+      // The fields; the shell still knows every slot of the part, in the order the numbers count.
+      slots: base.concat(prod.max ? [prod] : [], extra.max ? [extra] : []),
       groups: [
         { word: _base === 'frame' ? 'frame to change' : 'person & place', slots: base, cls: 'is-base' },
+        ...(prod.max ? [{ word: 'product', slots: [prod], labels: false, cls: 'is-product', note: 'from Props', noteLong: 'Up to two products of IMAGES → Props - each drawn exactly as on its picture, its description going with it; it stays from message to message until you take it off' }] : []),
         ...(extra.max ? [{ word: 'extra', slots: [extra], labels: false, cls: 'is-extra', note: 'say what each is', noteLong: 'Whatever else goes into the frame - say in your message what each picture is and what to take from it' }] : []),
       ],
       none: 'This model takes no pictures.',
@@ -139,7 +149,8 @@ function FRAMES(ctx) {
     { id: 'frames', label: 'this project\'s frames', load: _frames, empty: 'No frames in this project yet.' },
     Src.PEOPLE_ROW,
   ];
-  const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'] };
+  const START = { character: ['row:people'], place: Src.pictureStart('location'), frame: ['row:frames'], extra: ['node:images'],
+    product: ['node:images/Props', 'node:images'] };
 
   // ── A message of this chat (the owner, 2026-10-10, after the first look) ──
   // ONE MESSAGE PER SEND, all of one kind (the owner's answer (g)): what was asked at its head - the words and the pictures,
@@ -156,7 +167,7 @@ function FRAMES(ctx) {
   const COUNTS_D = [1, 2, 4];
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const _cardUrl = (m, tail) => '/api/scen3/fchat/card/' + encodeURIComponent(m.id) + (tail || '');
-  const ROLE_WORD = { character: 'character', place: 'place', frame: 'frame', extra: 'extra' };
+  const ROLE_WORD = { character: 'character', place: 'place', frame: 'frame', extra: 'extra', product: 'product' };
 
   // What was asked: the words, and the pictures by number with the field each was in.
   function _askedHead(words, media) {
@@ -255,7 +266,7 @@ function FRAMES(ctx) {
     });
     const use = el('button', 'mv3-c-btn', 'to reference');
     use.type = 'button';
-    use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the extra pictures stay';
+    use.title = 'Change this frame with the next message: it takes the place of the person and the place above the box; the products and the extra pictures stay';
     use.addEventListener('click', () => toReference(g.imagePath, (g.said || g.prompt || '').slice(0, 60)));
     acts.append(add, use);
     return acts;
@@ -484,7 +495,7 @@ function FRAMES(ctx) {
   function _ideasSide() {
     const b = el('button', 'mv3-fc-ideas', 'ideas');
     b.type = 'button';
-    b.title = 'The agent looks at the pictures above the box - the person, the place, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
+    b.title = 'The agent looks at the pictures above the box - the person, the place, the products, the extra ones - and offers six frames in words; press one to put it into the box. Ask again after adding pictures. Fractions of a cent.';
     b.addEventListener('click', () => _askIdeas(b));
     return [b];
   }
@@ -563,7 +574,26 @@ function FRAMES(ctx) {
       sources: () => SOURCES,
       tree: () => Src.TREE.image,
       start: (kind, s) => (s && START[s.key]) || '',
-      why: () => '',
+      // (phase V26.6, the owner's (пр2)) The product place takes only a product of Props.
+      why: (it, kind, slot) => (slot === 'product' && it && !_isProp(it.path) ? NOT_PROP : ''),
+      // (phase V26.6, the owner's (пр3)) ...and makes one: New prop over the chat, the product added going straight into the
+      // place.
+      make: (kind, slot) => (slot !== 'product' ? null : {
+        label: '+ new prop', title: 'A product of your own - its photo and what you know about it; it goes into IMAGES → Props and into this place',
+        on: async () => {
+          closePick();
+          const { openNewProp } = await import('../prop-window.js');
+          let taken = '';
+          openNewProp({
+            onAdded: (it) => {
+              if (!it || !it.media || taken === it.media) return;
+              taken = it.media;
+              ctx.attach(it.media, it.name || 'product', { slot: 'product' });
+              ctx.saveDraft();
+            },
+          });
+        },
+      }),
       sourceOf: (path) => (String(path || '').startsWith('/projects/') ? ['frames'] : Src.pictureSourceOf(path)),
       lands: { image: 'images' },
       upWords: { image: 'A picture goes into the folder open here when it is one of yours in IMAGES - else into IMAGES itself.' },
@@ -584,11 +614,13 @@ function FRAMES(ctx) {
     attsSide: _ideasSide,
     // The idea a message went from is used now; the box is its own again.
     afterSend: () => { _armedIdea = null; },
+    // (phase V26.6, the owner's (пр2)) Into the product place only a product of Props - a file from this computer too.
+    refuseAt: (slot, path) => (slot === 'product' && !_isProp(path) ? NOT_PROP : ''),
     // The frame being changed taken out of the base: the person and the place come back (the owner's answer (v)).
     onDetach: (a) => {
       if (!a || a.slot !== 'frame') return false;
       _base = 'cast';
-      const keep = ctx.zoneAtts().filter(x => x.slot === 'extra' && !x.hole);
+      const keep = ctx.zoneAtts().filter(x => (x.slot === 'extra' || x.slot === 'product') && !x.hole);
       const c = _cast();
       const back = [];
       if (c.obrazImage) back.push({ path: c.obrazImage, name: c.characterName || 'the character', slot: 'character' });
@@ -714,7 +746,7 @@ function _autoCast(opening) {
   // A row kept from before the two fields (places `prop`, `other`) - or a frame left in a base that holds the person and
   // the place - goes to the extra field.
   if (opening) {
-    const keys = _base === 'frame' ? ['frame', 'extra'] : ['character', 'place', 'extra'];
+    const keys = _base === 'frame' ? ['frame', 'product', 'extra'] : ['character', 'place', 'product', 'extra'];
     const real = CHAT.ctx.zoneAtts().filter(a => !a.hole);
     if (real.some(a => !keys.includes(a.slot))) {
       CHAT.ctx.useAtts(real.map(a => (keys.includes(a.slot) ? a : Object.assign({}, a, { slot: 'extra' }))));
@@ -814,7 +846,7 @@ export function toReference(path, name) {
   const z = CHAT.ctx.zoneAtts();
   const was = z.find(a => a.slot === 'frame' && !a.hole);
   if (was && was.path === path) return;
-  const keep = z.filter(a => a.slot === 'extra' && !a.hole && a.path !== path);
+  const keep = z.filter(a => (a.slot === 'extra' || a.slot === 'product') && !a.hole && a.path !== path);
   _base = 'frame';
   CHAT.ctx.useAtts([{ path, name: name || 'frame', slot: 'frame' }].concat(keep));
   CHAT.ctx.saveDraft();
