@@ -193,6 +193,21 @@ export const hasVoice = (rec) => !!_active(rec);
  *  (routes/scen3.js, _castVoice). */
 export const canRead = (api) => hasVoice(api.char()) || !!api.pick();
 
+// (phase V62, the owner's (во41) а) THE LIBRARY'S LANGUAGE, BY THE TEXT: the window's language filter starts at the language of
+// the script - a voiceover in Russian looks among Russian voices, a talking head (always English, V29) among English ones. Set
+// when the window opens for another project than last time; a filter changed by hand stays for that project.
+let _langFor = '';
+export function languageFor(key, lang) {
+  if (_langFor === key) return;
+  _langFor = key;
+  const want = String(lang == null ? 'en' : lang);   // '' - every language
+  if (_q.language === want) return;
+  _q.language = want;
+  _asked = false;                        // searched again, in that language, as the window opens
+  _res = null;
+  _page = 1;
+}
+
 // ── THE VOICES' MENU (phase V62) ────────────────────────────────────────────
 // Under field 1's voice: "ElevenLabs library…" first, then the character's own voices (a talking head with somebody cast), then
 // every SAVED voice - the shelf of the voices taken before (lib/voice-shelf.js, the Library's Voices; read once, again after a

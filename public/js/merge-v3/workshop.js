@@ -34,6 +34,7 @@ import * as Store from './store.js';
 import * as PV from './preview-b.js';
 import { lock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
+import { hint } from '../bubble.js';
 
 // TWO STEPS (decided with the owner 2026-09-21): `setup` builds the project, `timeline` edits the
 // result. There are NO CHIPS for them any more (phase L, the owner 2026-09-23): the pair of panels
@@ -104,12 +105,18 @@ function _hasCut() {
   const tl = Store.timeline();
   return !!(tl && (tl.tracks || []).some(t => (t.clips || []).length));
 }
+// (phase V62, the owner's (во38)-(во40): "у talking head тоже. там будет появляться только когда все фрагменты имеют видео";
+// "показывать крошки только они не нажимаемы. при наведении показывать, что нужно сделать чтобы они стали активны") THE WAY ON
+// FROM SETUP is the crumbs in its head - "Library / generate image / generate video / generate audio / captions" - and they are
+// pressed once the script is done: a voiceover's lines all read, a talking head's fragments all with their video. Until then
+// they stand greyed, and the bubble over them says what is left. The Library's spine in setup went (css/merge-v3.css).
+function _ready() {
+  if (!_project) return false;
+  const n = _readCount();
+  return n.total > 0 && (_isVo() ? n.read === n.total : n.clips === n.total);
+}
 function _mayEdit() {
-  if (_hasCut()) return true;
-  // Before the page has the timeline in hand, the project's own clips answer the same question:
-  // one clip means the mirror has something to lay, and the Library spine should not be dead.
-  // (phase V62) A voiceover's reads are what the mirror lays: one read is enough.
-  return !!(_project && (_isVo() ? _readCount().read > 0 : _readCount().clips > 0));
+  return _ready();
 }
 // (phase V62) Is the project open a voiceover - the script in a voice, no clips of its own?
 const _isVo = () => !!(_project && _project.type === 'voiceover');
@@ -228,7 +235,8 @@ function _paintRoute() {
   // reads "setup → looks → …", its first word being the way back to the hub.
   const mod = _loaded.setup;
   const crumbs = (_pid && _step === 'setup' && mod && typeof mod.crumbs === 'function') ? (mod.crumbs() || []) : [];
-  if (!crumbs.length) { if (bar) bar.remove(); return; }
+  // (phase V62) In setup the bar is always there: "setup", the route inside it, and the way on (_paintOn).
+  if (!(_pid && _step === 'setup')) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
     bar.className = 'mv3-wk-steps';
@@ -242,7 +250,7 @@ function _paintRoute() {
   b.className = 'mv3-wk-step is-on';
   b.textContent = 'setup';
   b.title = 'Back to the script and its fields';
-  b.addEventListener('click', () => mod.goCrumb('hub'));
+  b.addEventListener('click', () => { if (mod) mod.goCrumb('hub'); });
   const wrap = document.createElement('div');
   wrap.className = 'mv3-wk-stepwrap';
   wrap.appendChild(b);
@@ -260,6 +268,7 @@ function _paintRoute() {
     if (!c.here) sb.addEventListener('click', () => { mod.goCrumb(c.id); });
     wrap.appendChild(sb);
   }
+  _paintOn(wrap);
   bar.appendChild(wrap);
   // A route longer than the panel is wide scrolls sideways (css/merge-v3.css), and its END is
   // where you are - so that is the part kept in view. The start is a flick away; the current
@@ -270,6 +279,48 @@ function _paintRoute() {
     const over = here.getBoundingClientRect().right - bar.getBoundingClientRect().right;
     if (over > 0) bar.scrollLeft = Math.ceil(over) + 2;
   }
+}
+
+// THE WAY ON (phase V62): after "setup", the Library panel's own crumbs - each one the timeline step with that view of the panel
+// (the panel's crumb pressed for it, js/merge-v3/lib-views.js). Greyed until _ready(); the bubble says what is left.
+const ON = [
+  ['Library', 'mv3-lib-title', 'The timeline and the Library'],
+  ['generate image', 'mv3-lib-gen', 'The pictures chat, beside the timeline'],
+  ['generate video', 'mv3-lib-vgen', 'The video chat, beside the timeline'],
+  ['generate audio', 'mv3-lib-agen', 'Music and sounds, beside the timeline'],
+  ['captions', 'mv3-lib-cap', 'The captions of the timeline - their look and presets'],
+];
+function _paintOn(wrap) {
+  const ok = _ready();
+  const n = _readCount();
+  const left = !_project ? 'Reading the project…'
+    : !n.total ? (_isVo() ? 'Choose the script first - a scenario or your own text, on the right.' : 'This project has no lines.')
+      : _isVo() ? 'Read every line first - field 1, mood & voice: ' + n.read + ' of ' + n.total + ' read. Then the timeline, the Library and the chats open.'
+        : 'Make the video of every fragment first - field 3, video: ' + n.clips + ' of ' + n.total + ' with a video. Then the timeline, the Library and the chats open.';
+  for (const [label, id, what] of ON) {
+    const sep = document.createElement('span');
+    sep.className = 'mv3-wk-arrow';
+    sep.textContent = '/';
+    wrap.appendChild(sep);
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'mv3-wk-sub mv3-wk-on' + (ok ? '' : ' is-off');
+    c.textContent = label;
+    // Never reaching the panel's head: a press there is the column's (it would ask for the setup step back).
+    c.addEventListener('click', (e) => { e.stopPropagation(); if (ok) _goOn(id); });
+    if (ok) c.title = what;
+    else {
+      c.setAttribute('aria-disabled', 'true');
+      hint(c, left);
+    }
+    wrap.appendChild(c);
+  }
+}
+function _goOn(id) {
+  if (!_ready()) return;
+  setStep('timeline');
+  // The panel is open a moment later; its own crumb then opens the view, as a press on it would.
+  requestAnimationFrame(() => { const el = document.getElementById(id); if (el) el.click(); });
 }
 
 // ── Following the open project ──────────────────────────────────────────────

@@ -258,6 +258,14 @@ const _voiceOpen = () => !!(_voiceWin && _voiceWin.alive());
 function _openVoices() {
   if (!_ctx || !_ctx.project) return;
   if (_voiceOpen()) return;
+  // (phase V62, (во41) а) The library's language filter starts at the script's: Cyrillic - Russian, plain English letters - English,
+  // anything else - every language; a talking head is English (V29).
+  const p = _ctx.project;
+  const text = (p.lines || []).map(l => String((l && l.text) || '')).join(' ').replace(/\s+/g, ' ');
+  const lang = p.type !== 'voiceover' ? 'en'
+    : /\p{Script=Cyrillic}/u.test(text) ? 'ru'
+      : !text.trim() || !/[^ -~‘’“”–—…]/.test(text) ? 'en' : '';
+  VOICE.languageFor(String(p.id), lang);
   _voiceWin = GW.openFrame({
     name: 'voices', size: { w: 900, h: 660 },
     onClose: () => { _voiceWin = null; VOICE.leave(); },

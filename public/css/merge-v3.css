@@ -229,6 +229,9 @@ select.mv3-rr-rf{cursor:pointer}
 .mv3-col.is-collapsed.is-off:hover{background:none}
 /* A project that is not a talking head has no setup, so no Setup spine: the pair is the Library. */
 body:not(.mv3-talking) #mv3-inspector.is-collapsed{display:none}
+/* (phase V62, the owner's (во38)) Nor a Library spine in setup - a talking head's or a voiceover's: the way on is the crumbs in
+   the Setup panel's head (js/merge-v3/workshop.js _paintOn). The Setup spine stays on the timeline step, the way back. */
+body.mv3-talking #mv3-library.is-collapsed{display:none}
 
 .mv3-spine{
   display:none; flex:1; align-items:center; justify-content:center;
@@ -1436,6 +1439,10 @@ body.mv3-locked #mv3-timeline{
    and where you stand needs no box to be found, because it is where the trail ends. */
 .mv3-wk-sub.is-trail{border-style:dashed; border-color:var(--primary)}
 .mv3-wk-sub.is-here{cursor:default}
+/* (phase V62, (во39), (во40)) The way on after "setup" - Library and the panel's views: lit once the script is done, greyed and
+   dead before, the bubble over them saying what is left. */
+.mv3-wk-sub.mv3-wk-on.is-off{color:var(--muted); opacity:.7; cursor:default}
+.mv3-wk-sub.mv3-wk-on.is-off:hover{color:var(--muted)}
 
 /* The sentence and its button, at the foot of the right half and ON the panel's bottom edge:
    the half that holds it gives up the padding every other half keeps under its content. */
