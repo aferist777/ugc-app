@@ -3793,8 +3793,20 @@ router.post('/scen3/projects/:id/line/insert', async (req, res) => {
     const saved = PROJECTS.apply(id, (fresh) => {
       fresh.lines = (fresh.lines || []).map(_normLine);
       fresh.lines.forEach((l, k) => { if (!Number.isInteger(l.slot)) l.slot = k; });
-      const above = fresh.lines[after];
-      fresh.lines.splice(after + 1, 0, _normLine({ text, slot: (above ? above.slot : after) + 1 }));
+      // (phase V61) ITS OWN NUMBER: the one after the line above was the line below's too, so the new line opened on the same
+      // frame as the next one. It takes a number no line has - the first past the largest whose frame, by the project's own
+      // rule, is neither of its neighbours' when the pool has room for that.
+      const pool = _framePool(fresh);
+      const spread = _normVideo(fresh.video).spread;
+      const near = [after, after + 1].filter(k => fresh.lines[k])
+        .map(k => (_frameOfLine(pool, fresh.lines[k], k, spread, id) || {}).id).filter(Boolean);
+      const base = Math.max(-1, ...fresh.lines.map(l => l.slot)) + 1;
+      let slot = base;
+      for (let k = 0; pool.length > near.length && k < pool.length; k++) {
+        const fr = _frameOfLine(pool, { slot: base + k }, base + k, spread, id);
+        if (fr && !near.includes(fr.id)) { slot = base + k; break; }
+      }
+      fresh.lines.splice(after + 1, 0, _normLine({ text, slot }));
       fresh.updatedAt = new Date().toISOString();
     });
     if (!saved) return res.status(404).json({ success: false, error: 'not found' });
@@ -3916,7 +3928,7 @@ async function _writeSdPromptsNow(id, only) {
   const cast = _normCasting(proj0.casting);
   if (!cast.obrazImage) throw Object.assign(new Error('choose the character in a look first - its sheet goes with every clip'), { status: 400 });
   const pool = _framePool(proj0);
-  if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip begins on one'), { status: 400 });
+  if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip begins on one'), { status: 400 });
   const view = _sdView(proj0) || [];
   const want = view.filter(f => !f.tooLong && !f.noRead && (Array.isArray(only) ? only.includes(f.line) : (!f.prompt || (f.stale && !f.edited))));
   const report = { written: 0, failed: [] };
@@ -3924,12 +3936,11 @@ async function _writeSdPromptsNow(id, only) {
 
   const lines = (proj0.lines || []).map(_normLine);
   const mood = MP.moodById(st.video.mood);
-  const set = _frameSet(st.video.framing);
   const covered = _faceCovered(proj0);
-  const facts0 = {
-    mood: { label: mood.label, face: mood.face }, gestures: st.gestures, selfie: st.video.framing === 'selfie',
-    covered, clothes: _clothesShown(proj0, set ? set.id : 'full'),
-  };
+  const facts0 = { mood: { label: mood.label, face: mood.face }, gestures: st.gestures, covered };
+  // (phase V61) The shot of the line's OWN frame - from the frames chat, each with its edge; the project's old menu for a
+  // frame without one: whether it is a selfie, and which garments it shows.
+  const shotOf = (fr) => String((fr && fr.framing) || st.video.framing || '');
   const sheet = await _seeable(cast.obrazImage);
   // (the sixth round, probe P7) Who speaks and, by the voice sample, the voice in words and the mood's own tone - the
   // caption of a piece of the line that has no [tag] (lib/sd-prompt.js captioned).
@@ -3943,7 +3954,9 @@ async function _writeSdPromptsNow(id, only) {
       const fr = pool.find(v => v.id === f.frameId);
       const frame = fr ? await _seeable(fr.preview || fr.path) : '';
       const rows = SDP.rows(lines[f.line]);
-      const t = await AGENT.thinkTalk({ facts: { ...facts0, dur: f.secs > 0 ? f.dur : 0, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
+      const shot = shotOf(fr);
+      const t = await AGENT.thinkTalk({ facts: { ...facts0, selfie: shot === 'selfie', clothes: _clothesShown(proj0, _frameSet(shot) ? shot : 'full'),
+        dur: f.secs > 0 ? f.dur : 0, lines: rows }, picUrls: [frame, sheet].filter(Boolean) });
       if (t.fail) { report.failed.push({ n: f.n, error: t.fail }); return; }
       const prompt = SDP.assemble({ model: st.video.model, covered, sound: st.sound, rows, body: t.body, place: st.place, ...said });
       write.set(f.line, { prompt, agent: prompt, edited: false, sig: f.sig, writer: t.writer || '', at: new Date().toISOString() });
@@ -4135,7 +4148,7 @@ function _sdClipPlan(proj, i) {
   if (!f || f.noRead) return { skipped: video.sound === 'sample' ? 'this line has no words' : 'this line is not read yet - Seedance hears its read' };
   const model = TH.byId(video.model);
   if (f.tooLong) return { skipped: 'this line is ' + f.dur.toFixed(1) + ' s - longer than ' + (model ? model.label : 'the model') + ' takes' };
-  if (!f.frameId) return { skipped: 'no first frame for this line' };
+  if (!f.frameId) return { skipped: 'no frame for this line - make one in the frames chat' };
   const cast = _normCasting(proj.casting);
   if (!cast.obrazImage) return { skipped: 'choose the character in a look first - its sheet goes with the clip' };
   const sound = video.sound || TH.SOUND_DEFAULT;
@@ -4491,6 +4504,7 @@ const FRAG_FRAME_ENGINE = 'nano-banana-2';
 const FRAG_FRAME_RES = '2K';
 const FRAG_FORMATS = ['9:16', '16:9'];
 const FRAME_SET_MAX = 5;
+const FRAME_SHOW_MAX = 10;              // (phase V61) the frames one animation request may show its writer
 // How generations of a project's own pictures leave here: five together, then a second's pause,
 // then five more (the owner, 2026-09-21). The engine takes a burst well enough, but a set - and,
 // when they come, the clips of a whole script - is a queue rather than a shout.
@@ -4653,6 +4667,23 @@ async function _frameRef(projectId, cast) {
     + (ref.clothes ? ref.clothes.split('\n').length : 0) + ' lines, environment '
     + ref.environment.length + 'ch, lighting ' + ref.lighting.length + 'ch');
   return ref;
+}
+
+// (phase V61) THE FRAMES CHAT READS THE LOOK AND THE PLACE ITSELF. What a frame must keep that a picture cannot say - a covered
+// face, the clothes garment by garment - came from this reading, and only a set drawn in the first-frames field asked for it;
+// that field is gone, so the chat asks the first time a message or its ideas need it (routes/scen3-fchat.js). The same reading
+// and the same keeping: once per look and place, read again for another one. One at a time per project.
+const _frameReading = new Map();
+function _fchatRead(projectId) {
+  const p = _loadProjects().find(x => String(x.id) === String(projectId || ''));
+  if (!p) return Promise.resolve(null);
+  const cast = _normCasting(p.casting);
+  if (!cast.obrazImage || !cast.locationImage) return Promise.resolve(null);
+  const key = String(projectId) + '|' + cast.obrazImage + '|' + cast.locationImage;
+  if (_frameReading.has(key)) return _frameReading.get(key);
+  const run = _frameRef(projectId, cast).finally(() => _frameReading.delete(key));
+  _frameReading.set(key, run);
+  return run;
 }
 
 // The moments: N variations of the one shot, written by the agent that sees the look, the place and
@@ -5014,13 +5045,16 @@ async function _writePromptsNow(id, want) {
     const lines = (proj.lines || []).map(_normLine);
     if (!lines.length) throw Object.assign(new Error('this project has no lines'), { status: 400 });
     const pool = _framePool(proj);
-    if (!pool.length) throw Object.assign(new Error('make the first frames first: a clip is made from one'), { status: 400 });
+    if (!pool.length) throw Object.assign(new Error('make a frame in the frames chat first: a clip is made from one'), { status: 400 });
     const video = _normVideo(proj.video);
     // The person moves in the mood they chose (phase V24): not chosen yet is said, not assumed.
     const missing = _unchosen(video, ['mood']);
     if (missing) throw Object.assign(new Error(missing), { status: 400 });
     const mood = MP.moodById(video.mood) || MP.MOODS[0];
-    const set = _frameSet(video.framing) || _frameSet('half');
+    // (phase V61) THE SHOT OF EACH LINE'S OWN FRAME: the frames come from the frames chat now, each with the edge it was asked
+    // with (`framing`; none - half body); a set drawn before the phase has one for all of its frames, and the project's old
+    // menu is what a frame without one falls back to.
+    const setOf = (fr) => _frameSet((fr && fr.framing) || video.framing) || _frameSet('half');
 
     // The place's own movement. It is written once per PLACE and belongs to the place, not to this
     // project (phase W3a) - and since X6 it is also part of every line's prompt, which is why it is
@@ -5040,9 +5074,12 @@ async function _writePromptsNow(id, want) {
     // For the whole script the agent sees the set; for ONE line it sees that line's frame and
     // nothing else - the other frames are not about it, and hosting them would be attention paid
     // to a picture the answer has to ignore.
+    // (phase V61) The frames the lines open on, each once - the pool's first five were all it saw, and a line opening on the
+    // sixth frame of the chat's was written for "frame unknown". At most FRAME_SHOW_MAX pictures in one request.
     const shown = (Array.isArray(want) && want.length === 1)
       ? [_frameOfLine(pool, lines[only[0]], only[0], _normVideo(proj.video).spread, id)].filter(Boolean)
-      : pool.slice(0, FRAME_SET_MAX);
+      : [...new Map(only.map(i => _frameOfLine(pool, lines[i], i, video.spread, id)).filter(Boolean).map(f => [f.id, f])).values()]
+        .slice(0, FRAME_SHOW_MAX);
     const urls = await Promise.all(shown.map(v => _hostLocal(v.preview || v.path)));
     const where = (i) => {
       const fr = _frameOfLine(pool, lines[i], i, video.spread, id);
@@ -5050,21 +5087,26 @@ async function _writePromptsNow(id, want) {
       return { fr, at };
     };
 
-    const ask = 'You are directing a talking-head video: one person, one place, one shot size, spoken'
+    const sets = [...new Map(only.map(i => { const s = setOf(where(i).fr); return [s.id, s]; })).values()];
+    const one = sets.length === 1;
+    const ask = 'You are directing a talking-head video: one person, one place, spoken'
       + ' straight to camera. IMAGE 1' + (shown.length > 1 ? ' to ' + shown.length : '') + ' are the first'
       + ' frames of this video - the instants the lines open on.'
       + '\n\nTHE FEEL OF THE WHOLE VIDEO: ' + mood.label + '. ' + mood.brief
       + '\nTHE FACE: ' + mood.face
       + '\nTHE BODY: ' + mood.gestures
-      + '\nTHE SHOT: ' + set.rule
+      + (one ? '\nTHE SHOT: ' + sets[0].rule
+        : '\nTHE SHOTS - each line says which: ' + sets.map(s => s.label + ': ' + s.rule).join(' | '))
       + (envMotion ? '\nTHE PLACE MOVES BY ITSELF: ' + envMotion + ' - let it, but do not describe it again.' : '')
-      + '\n\n' + MOTION_RULES + (set.id === 'selfie' ? MOTION_SELFIE : '')
+      + '\n\n' + MOTION_RULES
+      + (!sets.some(s => s.id === 'selfie') ? '' : one ? MOTION_SELFIE : ' IN THE SELFIE LINES:' + MOTION_SELFIE.replace(' THIS IS A SELFIE:', ''))
       + '\n\nThe lines, in order. Each says which frame it opens on and what is happening in that frame.'
       + ' The script is one arc: write the movement of each line as its place in that arc, not as a'
       + ' performance of its own.\n'
       + only.map((i) => {
         const w = where(i);
         return '[' + (i + 1) + '] frame ' + (w.at >= 0 ? 'IMAGE ' + (w.at + 1) : 'unknown')
+          + (one ? '' : ', ' + setOf(w.fr).label)
           + ((w.fr && w.fr.moment) ? ' (' + w.fr.moment + ')' : '')
           + ' | "' + String(lines[i].text || '').replace(/\s+/g, ' ').trim() + '"';
       }).join('\n')
@@ -5114,7 +5156,7 @@ async function _writePromptsNow(id, want) {
       }
       fresh.updatedAt = now;
     });
-    console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + set.id + ' frames=' + shown.length
+    console.log('[scen3/video/prompts] ' + id + ' ' + mood.id + ' ' + sets.map(s => s.id).join('+') + ' frames=' + shown.length
       + ' written=' + report.written + ' skipped=' + report.skipped.length);
     return { project: saved || proj, report };
   }
@@ -5468,7 +5510,7 @@ function _clipPlan(proj, i) {
   const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
   if (!said.trim()) return { skipped: 'this fragment has no words' };
   const frame = _frameOfLine(_framePool(proj), line, i, video.spread, proj.id);
-  if (!frame || !frame.path) return { skipped: 'no first frame for this fragment' };
+  if (!frame || !frame.path) return { skipped: 'no frame for this fragment - make one in the frames chat' };
   const take = (line.audio || {})[variant];
   if (!take || !take.path) return { skipped: 'this fragment is not read yet' };
   if (take.said !== said) return { skipped: 'the read is of other words - read it again' };
@@ -5946,6 +5988,7 @@ router.loadProjects = _loadProjects;
 router.framePool = _framePool;
 // (phase V26.5) The frames chat (routes/scen3-fchat.js).
 router.fchatFacts = _fchatFacts;
+router.fchatRead = _fchatRead;
 router.addChatFrame = _addChatFrame;
 router.frameOfLine = _frameOfLine;
 // (phase V26.8) A Seedance project's fragments with their clips, for the timeline mirror.

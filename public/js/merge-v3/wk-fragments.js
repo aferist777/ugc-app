@@ -9,8 +9,9 @@
    GENERAL ZONE. Since phase V61 (the owner 2026-10-30: "нужно чтобы пошагово создавался проект") its fields OPEN ONE
    AFTER ANOTHER: until the character and the place are chosen on the stage they are blurred and take no press (the
    script is there to be read, its rows do nothing); then 1 "mood & voice" - one line, one `generate` that marks the
-   script up and reads it -; 2 the frames and 3 the video, red until every line is read (_voiceLock). No counters and no
-   `generate all`: a project is made step by step. The list never goes away while a line is open: the script is one
+   script up and reads it -; 2 the frames - the set the lines take theirs from, and the door to the FRAMES CHAT, a window
+   (js/merge-v3/fchat.js) - and 3 the video, red until every line is read (_voiceLock). No counters, no `generate all`, no
+   set of first frames drawn by an agent: a project is made step by step, its frames asked for in words. The list never goes away while a line is open: the script is one
    thing, and judging a line means seeing the ones around it. Who and where are on the stage, not here.
 
    THE READ (V3, moved in here in M; v3 only since W1). A line is spoken from the open line's own
@@ -18,13 +19,11 @@
    made of other words is stale until the line is read again or the words are put back. The
    speaking itself is js/merge-v3/wk-voice.js.
 
-   THE FIRST FRAMES (W2) are a SET for the whole video, not a frame per line: one shot size the
-   person picks - selfie, half body, full body - and N variations of it, planned by an agent from
-   the look, the place, the mood and the person's own words, drawn side by side on kie
-   (routes/scen3.js, frames/plan). Every frame is a row in Alerts from the moment it is asked for,
-   and the SERVER files it into the project's pool - this panel only follows the rows, so leaving
-   loses nothing. THE LINES TAKE FROM THE POOL IN TURN (_frameFor): the first line the first frame,
-   the second the second, round again - until a line is given a frame by hand, which it keeps.
+   THE FRAMES are a SET for the whole video, not a frame per line - since phase V61 made in the frames chat, each with the
+   edge it was asked with (`framing`); a set planned by an agent in the first-frames field (W2, routes/scen3.js frames/plan)
+   is what older projects have, and its rows in Alerts are still followed here. THE LINES TAKE FROM THE POOL IN TURN
+   (_frameFor): the first line the first frame, the second the second, round again - or, ticked "scattered", one drawn for
+   each line - until a line is given a frame by hand, which it keeps.
 
    THE ANIMATION of a line - the prompt the video model hears - is written by the video stage (W3)
    and edited here; a prompt written by hand survives the next pass. The clips (F4) are still to
@@ -48,9 +47,6 @@ import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
 
-// What a frame costs: nano-banana-2 at 2K on kie (lib/mv3-img.js, the price table). Said beside the
-// button so nothing is spent on a surprise.
-const FRAME_PRICE = 0.06;
 // The one ceiling a read has for Kling avatar, from the tier (lib/motion-presets.js) - read from
 // the kit when it has arrived, this only until then.
 const CEILING_FALLBACK = 30;
@@ -92,9 +88,6 @@ const _drawing = new Map();
 // animation belongs to the place, so it is the same map for every project.
 let _envMeta = null;
 let _envWriting = false;
-let _planning = false;                    // the agent is writing the moments of a set
-let _planAt = 0;                          // ...since when (N3: the field's bar before any frame exists)
-let _armedSet = false;                    // the set's `generate` pressed once and asking
 let _armedVideo = false;                  // ...and the video zone's, which pays for the clips
 let _dragging = '';                       // the frame being dragged along the strip
 let _picking = false;                     // the open fragment's frame list is down
@@ -102,9 +95,6 @@ let _pickView = '';                       // ...and the frame being looked at in
 let _lookedAt = '';                       // the project the journal was last asked about
 let _setPick = '';                        // a frame of the pool pressed in the general zone: shown on the stage
 // (phase V26.5) The frames chat: a frame of it pressed - on the stage - and whether the script is folded away beside it.
-let _chatPick = null;                     // { path, name }
-const FOLD_KEY = 'mv3_fc_fold_v1';
-let _fold = (() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch (e) { return false; } })();
 // WHICH OF THE TWO THE OPEN FRAGMENT IS SHOWING (phase X4, the owner 2026-09-22): its clip, playing,
 // or its frame. The clip when there is one, because that is the thing that was just made; pressing
 // the frame moves the stage to it, and pressing the clip brings it back. Forgotten when another
@@ -365,12 +355,13 @@ function _playBtn(src, what, then) {
   return b;
 }
 
-// ── The kit: tiers, moods, the mannequins and the shot sizes of a set ───────
+// ── The kit: the models and their qualities, the moods ──────────────────────
+// (phase V61) The mannequins and the shot sizes of a set went with the first-frames field.
 function _loadKit(repaint) {
   if (_kitState !== 'idle') return;
   _kitState = 'loading';
   const get = (u) => fetch(u).then(r => r.json()).catch(() => null);
-  Promise.all([get('/api/scen3/motion-presets'), get('/api/scen3/poses'), get('/api/scen3/frame-sets')]).then(([m, p, s]) => {
+  get('/api/scen3/motion-presets').then((m) => {
     _kit = {
       // (phase V26.8) The models of the clips, each with its qualities - Kling avatar and the Seedances - and
       // Seedance's ways of voicing a clip (lib/th-video.js). A server started before V26.8 answers Kling's qualities
@@ -378,14 +369,10 @@ function _loadKit(repaint) {
       models: (m && m.models) || (m && m.qualities ? [{ id: 'kling', label: 'kling avatar', family: 'kling', qualities: m.qualities }] : []),
       sounds: (m && m.sounds) || [],
       moods: (m && m.moods) || [],
-      poses: (p && p.poses) || [],
-      sets: (s && s.sets) || [],
-      setMax: (s && s.max) || 5,
     };
     _kitState = 'done';
   }).finally(() => repaint());
 }
-const _poseById = (id) => ((_kit && _kit.poses) || []).find(x => x.id === id) || null;
 
 // Take the project the server answered with INTO the record the workshop holds (js/merge-v3/
 // workshop.js hands the same object to every paint), not over it.
@@ -407,45 +394,9 @@ async function _post(url, body) {
   return r;
 }
 
-// ── The set of first frames ─────────────────────────────────────────────────
-// Where the set was asked from, for the Alerts list: the general zone of this project.
-function _where() {
-  const key = (_ctx && _ctx.key) || '';
-  const p = (_ctx && _ctx.project) || {};
-  return {
-    page: 'merge',
-    href: '/merge?p=' + encodeURIComponent(key) + '&step=setup',
-    label: 'Merge · ' + String(p.title || p.name || 'talking head') + ' · setup › first frames',
-    spot: { key, step: 'setup', view: 'frames' },
-  };
-}
-const _format = () => { try { const t = Store.timeline(); return (t && t.format) || '9:16'; } catch (e) { return '9:16'; } };
-
-// `generate` of the first frames field: the agent plans N moments of the chosen shot size, the
-// server asks kie for every one, and this follows the rows. Pressed twice (owner): the first press
-// says how many and how much.
-async function _makeSet() {
-  const p = _ctx && _ctx.project;
-  if (!p || _planning) return;
-  const v = _video();
-  _readErr = '';
-  _planning = true;
-  _planAt = Date.now();
-  _ctx.repaint();
-  try {
-    const r = await _post('/api/scen3/frames/plan', { projectId: p.id, set: v.framing, n: v.frames, wish: v.wish, format: _format(), where: _where() });
-    for (const a of r.alerts || []) {
-      _drawing.set(a.alertId, { startedAt: Date.now(), n: a.n });
-      _follow(a.alertId);
-    }
-  } catch (e) {
-    _readErr = 'The frames were not asked for: ' + e.message;
-  }
-  _planning = false;
-  _ctx.repaint();
-}
-
-// The row is the truth: whatever happened to the page in between, it says done or failed.
+// ── The frames of a set being drawn ─────────────────────────────────────────
+// (phase V61) Nothing here asks for a set any more - the first-frames field went; a set asked for before (or its rows tried
+// again from Alerts) is still followed. The row is the truth: whatever happened to the page in between, it says done or failed.
 async function _follow(alertId) {
   try {
     await API.follow(alertId);
@@ -870,10 +821,9 @@ export function paint(host, ctx, api) {
 
   // Which fragment is open: the address first (it is the newer instruction), then where this
   // project was left, then the general zone.
-  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); }
+  if (_key !== ctx.key) { _key = ctx.key; _open = null; _listAt = 0; _editWords = -1; _inserting = -1; _insDraft = ''; _rightAt.clear(); FCHAT.close(); }
   _bars.length = 0;                       // the fields are built fresh; so is the list of bars (N3)
-  // (phase V26.5) Arriving on the frames chat - its Alerts row, a reload there - is arriving on the chat, not on a fragment.
-  if (_open === null) _open = _asked >= 0 ? _asked : api.view() === 'fchat' ? -1 : _remembered();
+  if (_open === null) _open = _asked >= 0 ? _asked : _remembered();
   _asked = -1;
   if (_open >= lines.length) _open = lines.length ? 0 : -1;
   // A line taken off (Z4) has no fragment to open: the general zone is where that press lands.
@@ -881,24 +831,16 @@ export function paint(host, ctx, api) {
   if (_stageFor !== _open) { _stageFor = _open; _stagePick = ''; }
 
   host.classList.add('is-split');
-  // (phase V26.5) THE FRAMES CHAT stands where the fields stand (js/merge-v3/fchat.js lays itself over this column), and
-  // the script beside it folds away to the right (the owner, 2026-10-10): a strip at its left edge folds it, the same
-  // strip right of the chat brings it back. A line pressed in the script opens its fragment in the chat's place; the
-  // fragment's cross comes back to the chat.
-  const chat = api.view() === 'fchat' && _open < 0;
-  if (!chat) _chatPick = null;
-  const folded = chat && _fold;
+  // (phase V61) The frames chat is a WINDOW over the page now (js/merge-v3/fchat.js) - it no longer stands where the fields
+  // stand, and the script beside them never folds away.
   const left = el('div', 'mv3-wk-half is-frags');
-  if (!folded) {
-    host.appendChild(left);
-    host.appendChild(_splitSash(host, left));
-  }
-  if (chat) host.appendChild(_foldStrip(folded));
+  host.appendChild(left);
+  host.appendChild(_splitSash(host, left));
   if (_inserting >= lines.length) _inserting = -1;
-  const right = el('div', 'mv3-wk-half is-guide is-frag' + (chat ? ' is-fcslot' : (_open >= 0 || _inserting >= 0) ? ' has-close' : ''));
+  const right = el('div', 'mv3-wk-half is-guide is-frag' + ((_open >= 0 || _inserting >= 0) ? ' has-close' : ''));
   host.appendChild(right);
-  if (!folded) _applySplit(host, left);
-  if (!chat) _keepScroll(right, 'r' + _open + ':' + api.view());
+  _applySplit(host, left);
+  _keepScroll(right, 'r' + _open + ':' + api.view());
 
   _pickUpDrawing();
   _pickUpClips();
@@ -907,24 +849,13 @@ export function paint(host, ctx, api) {
   // on the right, with everything else that is set once for the whole video.
   // (phase V61, (т2)) Until the character and the place are chosen the script is there to be read - every word of it - and
   // its rows do nothing: no fragment opens, nothing is read or put in.
-  if (!folded) {
-    _list(left, p, lines);
-    if (_missing(p).length) left.classList.add('is-locked');
-  }
+  _list(left, p, lines);
+  if (_missing(p).length) left.classList.add('is-locked');
+  // The frames chat's window, when open, takes the project as it is now (the casting may have changed).
+  FCHAT.update(p);
   // (phase V61, (т9)) No counters and no `generate all` in a header any more - the setup has no header of its own; the
   // fields go one after another, each opening when the one before it has done its work.
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
-  if (chat) {
-    FCHAT.show(right, p, {
-      close: () => { _chatPick = null; api.go('hub'); },
-      stage: (path, name) => { _chatPick = { path, name: name || '' }; _ctx.repaint(); },
-      // A frame put into the set: the project as the server has it now - the shelf and the counters follow.
-      added: (project) => { _adopt({ project }); _ctx.repaint(); },
-    });
-    _mark();
-    onlyHere(null);
-    return;
-  }
   _notes(right);
   if (!lines.length) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
@@ -998,19 +929,16 @@ function _splitSash(host, col) {
   return s;
 }
 
-// The strip that folds the script away beside the frames chat, and brings it back (the owner, 2026-10-10): five pixels
-// wide, the whole height, in gold, its arrow saying which way it goes.
-function _foldStrip(folded) {
-  const b = el('button', 'mv3-wk-fold' + (folded ? ' is-folded' : ''));
-  b.type = 'button';
-  b.title = folded ? 'Show the script' : 'Fold the script away to the right';
-  b.setAttribute('aria-label', b.title);
-  b.addEventListener('click', () => {
-    _fold = !folded;
-    try { localStorage.setItem(FOLD_KEY, _fold ? '1' : '0'); } catch (e) { /* a private window */ }
-    _ctx.repaint();
+// (phase V61, the owner 2026-10-30: "кнопка с открытием чата для создания frames давай будет открывать попап с чатом для
+// создания фреймов"; (т7) - as New Character) THE FRAMES CHAT, A WINDOW over the page for this project (js/merge-v3/fchat.js).
+// A frame pressed there opens large - the stage is under the window; a frame put into the set lands on the frames field.
+export function openChat() {
+  const p = _ctx && _ctx.project;
+  if (!p) return;
+  FCHAT.open(p, {
+    stage: (path, name) => showPicture({ src: path, name: name || 'frame from the chat' }),
+    added: (project) => { _adopt({ project }); _ctx.repaint(); },
   });
-  return b;
 }
 
 function _keepScroll(box, key) {
@@ -1060,10 +988,6 @@ function _needs(p) {
   if (!_canRead()) out.voice = 'a voice';
   // (the sixth round) By the voice sample the voice is there once its demo is (the owner's answer (я7)).
   else if (_demoMissing(p)) out.voice = 'a voice with its demo';
-  // (phase V26.5, the owner 2026-10-10) THE FIRST FRAMES ARE THERE ONCE THE SET HAS A FRAME - from the frames chat or a
-  // set drawn here: the field's menus are needed only to draw a set, so they are red only while there is none.
-  const f = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean);
-  if (f.length && !_pool(p).length) out.frames = f.join(', ');
   // (phase V26.8) The model first - Kling avatar or a Seedance - then the quality it makes.
   if (!v.model) out.video = 'the model';
   else if (!v.quality) out.video = 'the quality';
@@ -1095,8 +1019,7 @@ function _noneOption(sel, word) {
 // ── The general zone: the whole video, step by step ─────────────────────────
 // (Decided with the owner 2026-09-21, docs/local-app/PLAN.md, phase W; laid out again in phase V61, the owner 2026-10-30,
 // (т13): "давай пока по рекомендации. там посмотрим".) FIELD 1, "mood & voice", across the whole width on top - one line;
-// under it two columns: 2 the first frames with the frames shelf on the left, 3 the video on the right. Each field is as
-// tall as what it holds, and the lower field of a column takes what is left.
+// under it two columns: 2 the frames on the left, 3 the video on the right, as tall as each other.
 //
 // UNTIL WHO AND WHERE ARE CHOSEN (the owner: "давай заблеривать все поля, кроме поля превью где пользователь должен выбрать
 // персонажа и окружение") the fields are blurred and take no press, with one line over them saying what to do first.
@@ -1107,12 +1030,11 @@ function _all(host, p, lines) {
   host.appendChild(zone);
   _stageMoodVoice(zone, p, lines);
   const cols = el('div', 'mv3-wk-zcols');
-  const left = el('div', 'mv3-wk-zcol is-shelved');
+  const left = el('div', 'mv3-wk-zcol');
   const right = el('div', 'mv3-wk-zcol');
   cols.append(left, right);
   zone.appendChild(cols);
   _stageFrames(left, p);
-  _shelfFrames(left, p);
   _stageVideo(right, p, lines);
 }
 
@@ -1191,8 +1113,6 @@ function _framesPart(p) {
   const asked = Math.max(1, s.framesAsked);
   let got = s.frames;
   for (const d of _drawing.values()) got += _byTime(d.startedAt, 'frame');
-  // The planner is thinking: it is one call before any frame exists, and it is a tenth of the wait.
-  if (_planning && !_drawing.size) return Math.min(0.1, _byTime(_planAt, 'tag') * 0.1);
   return Math.min(1, got / asked);
 }
 // ...and the same for the clips. The place and the prompts happen before any clip is asked for,
@@ -1454,140 +1374,24 @@ function _labelled(word, sel, tip, tight) {
   return box;
 }
 
-// FIRST FRAMES - a set for the whole video (owner, 2026-09-21): the shot size with its mannequin
-// beside its menus and the wishes, how many, and the pool as it stands under them, the full width -
-// every frame a door to the stage. `generate` plans the moments and asks for every frame at once;
-// the lines take from the pool in turn. Shut while there is no one in a look and no place to draw
-// them in, and by itself once the set is drawn.
+// ── FIELD 2 - FRAMES (phase V61, the owner 2026-10-30, (т6): "поле first frames удаляем, а набор фреймов нужно показывать.
+// это поле нужно, чтобы было видно набор фреймов которые есть и кнопка открытия чата"; (т6а) "scattered" a tick here) ──
+// The set the lines take their frames from - the shelf of phase R, everything it could do came with it: press a frame to put
+// it on the stage, ✕ to take it out of the rotation, drag to reorder, right-click to see it large - and at its foot the tick
+// "scattered" (off: the lines take the frames in turn, in this order; on: one drawn for each line by its number, never
+// reshuffled) and "frames chat", the window where frames are asked for in words. Red, like the video, until the lines are
+// read; done once the set has a frame and nothing is being drawn.
 function _stageFrames(host, p) {
+  const s = _standing(p);
   const v = _video();
-  const missing = _missing(p);
-  const blocked = missing.length > 0;
-  const s = _standing(p);
-  const lock = _voiceLock(p);
   const { body, foot } = _stage(host, 'frames', {
-    step: 2, half: true, lock,
-    // The frames that have landed, plus how far the ones still drawing have got (N3).
-    work: (_planning || _drawing.size) ? () => _framesPart(p) : null,
-    name: 'first frames', sub: 'a set for the video', done: s.framesDone,
-    blocked, why: missing.join(' and '),
-    // Red until the shot, the amount and the spread are chosen (phase V24) - and that outranks the
-    // dimming: the menus are the way out of it, so the field must not look shut.
-    need: _needs(p).frames,
-    summary: (_drawing.size ? s.frames + '/' + s.framesAsked + ' drawn · drawing ' + _drawing.size : s.frames + (s.frames === 1 ? ' frame' : ' frames') + ' in the set'),
-  });
-  const set = ((_kit && _kit.sets) || []).find(x => x.id === v.framing) || null;
-
-  // The three menus down the left, each on its line with its name over it, and the mannequin of
-  // the chosen shot size beside them - as wide as the `generate` button under it, so the field
-  // has one right-hand edge (the owner, 2026-09-22). The wishes take the full width beneath both.
-  const row = el('div', 'mv3-wk-fsetrow');
-  const pose = set ? _poseById(set.poseId) : null;
-  const pic = el('div', 'mv3-wk-fpose' + (pose ? '' : ' is-empty'));
-  if (pose && (pose.thumb || pose.file)) {
-    const img = el('img');
-    img.alt = '';
-    img.src = pose.thumb || pose.file;
-    pic.title = pose.label + ' - ' + pose.desc;
-    pic.appendChild(img);
-  }
-  const col = el('div', 'mv3-wk-fsetcol');
-  const sets = el('div', 'mv3-wk-fsets');
-  const framing = el('select', 'mv3-wk-vsel is-small is-model');
-  framing.title = 'The shot size every frame of the set is made in';
-  if (!set) _noneOption(framing);
-  for (const s of (_kit && _kit.sets) || []) {
-    const o = el('option', '', s.label);
-    o.value = s.id;
-    if (s.id === v.framing) o.selected = true;
-    framing.appendChild(o);
-  }
-  framing.disabled = _saving || !_kit || _planning;
-  framing.addEventListener('change', () => _saveVideo({ framing: framing.value }));
-  // HOW THE LINES TAKE FROM THE SET (the owner, 2026-09-21): the pool in turn, or one drawn for
-  // each line. The options are named by the rule itself - `cycle` and `random` - because that is
-  // what they are called everywhere else, including in the project's own field.
-  const spread = el('select', 'mv3-wk-vsel is-small is-model');
-  spread.title = 'How the fragments take their frames from the set: cycle - the pool in turn; random - one drawn for each fragment';
-  if (!v.spread) _noneOption(spread);
-  for (const id of ['cycle', 'random']) {
-    const o = el('option', '', id);
-    o.value = id;
-    if (v.spread === id) o.selected = true;
-    spread.appendChild(o);
-  }
-  spread.disabled = _saving || _planning;
-  spread.addEventListener('change', () => _saveVideo({ spread: spread.value }));
-  const count = el('select', 'mv3-wk-vsel is-small is-tier');
-  count.title = 'How many variations of the shot the set holds';
-  if (!v.frames) _noneOption(count);
-  for (let k = 1; k <= ((_kit && _kit.setMax) || 5); k++) {
-    const o = el('option', '', '× ' + k);
-    o.value = String(k);
-    if (k === v.frames) o.selected = true;
-    count.appendChild(o);
-  }
-  count.disabled = _saving || !_kit || _planning;
-  count.addEventListener('change', () => _saveVideo({ frames: parseInt(count.value, 10) }));
-  // EACH MENU WEARS ITS NAME (the owner, 2026-09-22): three short menus side by side said nothing
-  // about themselves, and one of them - how the fragments take their frames - had no name anywhere.
-  // One word to the left of each, and the word carries the explanation on hover.
-  sets.append(
-    _labelled('shot', framing, 'Shot size - how much of the person is in frame. Every frame of the set is made in it.'),
-    _labelled('amount', count, 'How many variations of that shot the set holds. The fragments share them.', true),
-  );
-  const rule = el('div', 'mv3-wk-fsets');
-  rule.appendChild(_labelled('spread', spread,
-    'How the fragments take their frames from the set: cycle - the pool in turn; random - one drawn for each fragment.'));
-  col.append(sets, rule);
-  // What the person asks for, in words - kept on the project, so it is still there tomorrow. Its
-  // foot is the mannequin's foot: the two are one block (the owner, 2026-09-21).
-  const wish = el('textarea', 'mv3-wk-ftext-in is-wish');
-  wish.rows = 3;
-  wish.placeholder = 'Anything the frames should have - "arms crossed", "looking off to the left", "holding the mug"…';
-  wish.value = 'wish' in _drafts ? _drafts.wish : (v.wish || '');
-  wish.disabled = _planning;
-  wish.addEventListener('input', () => { _drafts.wish = wish.value; });
-  wish.addEventListener('change', () => { const w = wish.value; delete _drafts.wish; if (w.trim() !== String(v.wish || '').trim()) _saveVideo({ wish: w }); });
-  row.append(col, pic);
-  body.appendChild(row);
-  body.appendChild(wish);
-
-  // `generate`: the price first, the set on the second press. What was drawn is not here: it is
-  // on the shelf under the four fields (_shelfFrames), where there is width for it.
-  _framesButton(foot, p);
-}
-
-// ── FRAMES: the shelf of what has been drawn (phase R, the owner 2026-09-22) ──
-// A field of its own under the four, the full width of the column: in the first-frames field,
-// which is half a row wide, the strip showed about three frames of a set. Everything it can do
-// came with it - press a frame to put it on the stage, ✕ to take it out of the rotation, drag to
-// reorder, right-click to see it large. Its frame is dashed until the set is drawn, like the
-// others. No number: a shelf is not a step.
-//
-// AT ITS HEAD, a frame that is not a frame: an empty tile with a `+`, in gold dashes. It is the
-// door to asking for a frame in words - a chat that will open over THESE fields and leave the
-// script beside them alone - and until that door exists it says so on hover. (One stood here
-// before and was taken away in phase V for promising exactly this with nothing behind it; it
-// comes back with the promise written on it.)
-function _shelfFrames(host, p) {
-  const s = _standing(p);
-  const { body } = _stage(host, 'shelf', {
-    bare: true, lock: _voiceLock(p),
-    name: 'frames', sub: 'what has been drawn', done: s.framesDone,
-    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '') : '',
+    step: 2, half: true, lock: _voiceLock(p),
+    work: _drawing.size ? () => _framesPart(p) : null,
+    name: 'frames', sub: 'the set the lines take theirs from', done: s.framesDone,
+    summary: s.frames ? s.frames + (s.frames === 1 ? ' frame' : ' frames') + (_drawing.size ? ' · drawing ' + _drawing.size : '')
+      : 'none yet - ask for one in the frames chat',
   });
   const strip = el('div', 'mv3-wk-fset');
-  // (phase V26.5) THE DOOR TO THE FRAMES CHAT: a frame asked for in words, in place of these fields. It waits, as the
-  // first frames do, for the person in a look and the place.
-  const add = el('button', 'mv3-wk-fsetfr is-add', '+');
-  add.type = 'button';
-  const want = _missing(p);
-  add.disabled = want.length > 0;
-  add.title = want.length ? 'The frames chat needs ' + want.join(' and ') + ' first'
-    : 'The frames chat: describe a frame in words - the person and the place go with it';
-  add.addEventListener('click', () => { if (add.disabled) return; _setPick = ''; _open = -1; _remember(); _api.go('fchat'); });
-  strip.appendChild(add);
   const hidden = _off(p);
   const shown = _poolAll(p);
   for (const fr of shown) {
@@ -1648,33 +1452,25 @@ function _shelfFrames(host, p) {
     tile.appendChild(_dropX(alertId, 'this frame'));
     strip.appendChild(tile);
   }
-  body.appendChild(strip);
-}
-
-// The one button of the first-frames field, kept apart from the field itself so the shelf could
-// move out from between them.
-function _framesButton(foot, p) {
-  const n = _video().frames || 0;
-  const busy = _planning || _drawing.size > 0;
-  // What it waits for, in words (phase V24): the character in a look and the place, the three choices
-  // of this field, and the mood the frames are drawn in.
-  const needs = _needs(p);
-  // (phase V26.5) The menus are not red once the set has a frame, but a set drawn here still needs them.
-  const v = _video();
-  const menus = [!v.framing && 'the shot', !v.frames && 'the amount', !v.spread && 'the spread'].filter(Boolean).join(', ');
-  const wait = [..._missing(p), menus, needs.mood].filter(Boolean);
+  if (shown.length || _drawing.size) body.appendChild(strip);
+  // The tick and the door, along the foot.
+  foot.classList.add('is-frames');
+  const tick = el('label', 'mv3-wk-ftick');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = v.spread === 'random';
+  box.disabled = _saving;
+  box.addEventListener('change', () => _saveVideo({ spread: box.checked ? 'random' : 'cycle' }));
+  tick.append(box, el('span', '', 'scattered'));
+  hint(tick, 'Off - the lines take the frames in turn, in the order of this shelf (drag a frame to move it).\n'
+    + 'On - each line gets one of them drawn for it by its number, never reshuffled.\n'
+    + 'A frame picked by hand in a fragment stays that line\'s either way.');
+  foot.appendChild(tick);
   _genButton(foot, {
-    label: _planning ? 'planning…' : _drawing.size ? 'drawing ' + _drawing.size + '…' : _armedSet ? n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE) + '?' : 'generate',
-    cap: busy ? '' : wait.length ? 'needs ' + wait.join(', ') : n + (n === 1 ? ' frame' : ' frames') + ' · ' + _money(n * FRAME_PRICE),
-    disabled: busy || !_kit || wait.length > 0,
-    title: wait.length ? 'First: ' + wait.join(', ')
-      : 'The agent plans ' + n + ' moments of this shot from the look, the place, the mood and your words; every one is drawn at once - nano-banana-2, 2K, '
-        + _money(FRAME_PRICE) + ' each. Press again to confirm.',
-    on: () => {
-      if (!_armedSet) { _armedSet = true; _ctx.repaint(); return; }
-      _armedSet = false;
-      _makeSet();
-    },
+    label: 'frames chat',
+    disabled: _missing(p).length > 0,
+    title: 'Ask for a frame in words - the person and the place go with it; a frame you like goes into this set with "to frames"',
+    on: () => { _setPick = ''; openChat(); },
   });
 }
 
@@ -1685,7 +1481,7 @@ function _framesButton(foot, p) {
 // on its `generate`, which stays shut until they are there.
 function _stageVideo(host, p, lines) {
   const missing = _missing(p);
-  const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a first frame' : '';
+  const why = missing.length ? missing.join(' and ') : !_pool(p).length ? 'a frame - the frames chat' : '';
   const motion = _envMotion(p);
   const live = _live(lines);
   const written = live.filter(_animated).length;
@@ -2383,11 +2179,11 @@ function _rowMenu(ev, row, p, l, i, n) {
 //   |                   |  clip   + make clip                |
 function _fragment(host, p, l, i) {
   const take = _take(l);
-  // (phase V26.5, the owner 2026-10-10) ITS CROSS, top right in gold: the fragment closes - to the whole video, or back to
-  // the frames chat when it was opened from there. A second press on its row does the same, as before.
+  // (phase V26.5, the owner 2026-10-10) ITS CROSS, top right in gold: the fragment closes - to the whole video. A second press
+  // on its row does the same, as before.
   const shut = el('button', 'mv3-wk-fclose', '✕');
   shut.type = 'button';
-  shut.title = _api.view() === 'fchat' ? 'Close this fragment - back to the frames chat' : 'Close this fragment - back to the whole video';
+  shut.title = 'Close this fragment - back to the whole video';
   shut.addEventListener('click', () => { _open = -1; _remember(); _ctx.repaint(); });
   host.appendChild(shut);
   const rs = _readState(l);
@@ -2854,13 +2650,13 @@ function _clipCol(p, l, i, rs, take) {
     if (!sf || sf.noRead) cap = _bySample() ? 'this line has no words' : 'read this line first';
     else if (_bySample() && _needs(p).voice) cap = _demoFor ? 'the voice demo is being made…' : 'choose ' + _needs(p).voice + ' first (field 1)';
     else if (sf.tooLong) cap = sf.dur.toFixed(1) + ' s - longer than ' + (((_modelOf() || {}).label) || 'the model') + ' takes';
-    else if (!fr) cap = 'make the frames first';
+    else if (!fr) cap = 'make a frame in the frames chat first';
     else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
     else if (!((p.casting || {}).obrazImage)) cap = 'choose the character in a look first';
     else if (sf.secs > 0) { ready = true; price = tier ? _money(sf.secs * tier.pricePerSec) : ''; cap = sf.secs + ' s · ' + (price || '…'); }
     else { ready = true; cap = 'Seedance picks the length'; }   // by the voice sample: no price (the owner's answer (я10))
   } else if (rs !== 'ok') cap = 'read this line first';
-  else if (!fr) cap = 'make the frames first';
+  else if (!fr) cap = 'make a frame in the frames chat first';
   else if (!_video().model) cap = 'choose the model of the clips first (field 3)';
   else if (!_video().quality) cap = 'choose the quality of the clips first (field 3)';
   else if (take.dur > _ceiling()) cap = 'too long for Kling (' + take.dur.toFixed(1) + ' s) - split the line';
@@ -2933,8 +2729,6 @@ export function openPicture(p) {
     const fr = _pool(p).find(v => v.id === _pickView);
     if (fr) return { src: derived(fr.preview || fr.path, 'main'), caption: 'frame ' + (fr.n || '') + ' · press select to keep it' };
   }
-  // (phase V26.5) A frame of the frames chat pressed: on the stage while the chat shows.
-  if (!l && _chatPick) return { src: derived(_chatPick.path, 'main'), caption: _chatPick.name || 'frame from the chat' };
   if (!l) {
     // No line open: a frame of the pool pressed in the general zone, if one is. The WHOLE strip is
     // searched, switched-off frames included - a dimmed frame pressed is still a frame being looked
@@ -2978,4 +2772,5 @@ export function openPicture(p) {
 export function leave() {
   if (_audio) { _audio.pause(); _playing = ''; }
   _closeMenu();
+  FCHAT.close();                          // (phase V61) the frames chat's window goes with the step; what is written stays
 }

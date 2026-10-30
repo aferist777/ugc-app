@@ -1,10 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════════
    MERGE — the FRAMES CHAT of a talking head (phase V26.5, the owner 2026-10-10; docs/local-app/PLAN.md "V26.5").
 
-   A first frame asked for in words. The "+" at the head of the frames shelf opens it over Setup, in place of the
-   fields - the script stays on the right and folds away with its strip (js/merge-v3/wk-fragments.js). It is the
-   pictures chat's conversation (chat-shell.js) with the pictures chat's model column (pic-models.js), and what is its
-   own is here:
+   A first frame asked for in words. Since phase V61 (the owner 2026-10-30, (т7): "как у new character") it is a WINDOW over
+   the page - js/gen-window.js openFrame, 1100×720, as New Character and the music window: its root (#mv3-fc) is MOVED into
+   the window and back to its parking place in the Setup panel, so what is typed, picked and waited for stays - opened by
+   "frames chat" in the frames field of setup (js/merge-v3/wk-fragments.js) and by its rows of Alerts. It is the pictures
+   chat's conversation (chat-shell.js) with the pictures chat's model column (pic-models.js), and what is its own is here:
      - no right column: the row above the box is a ZONE of named places - `character` and `place` (the project's look
        and environment, put there when the chat opens), `frame` (a frame to edit: "to reference" under a result, or the
        picker), up to three `prop`s and `other` - and every empty place opens the picker, as in the video chat;
@@ -12,8 +13,8 @@
        `shot` - none / selfie / half body / full body - is where the frame's EDGE is, the pose is the words';
      - the writer stops for a look (as in the video chat, V16) when it is on, and with it off a light agent puts the
        words into English and names the pictures (the owner's answer (g));
-     - a frame that lands is the project's, in its frames folder - `to frames` puts it into the set, `to reference`
-       into the `frame` place, a press shows it on the stage;
+     - a frame that lands is the project's, in its frames folder - `to frames` puts it into the set with the edge it was
+       asked with (`shot`), `to reference` into the `frame` place, a press opens it large (the stage is under the window);
      - no hover popups (the owner): a picture is opened by a press;
      - the almanac at the foot of the column - not yet, dimmed.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -25,6 +26,7 @@ import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
+import { openFrame } from '../gen-window.js';
 
 const MAX_ATTS = 6;
 const LS_LAST = 'mv3-fc-last';           // the model choice of this chat
@@ -697,36 +699,13 @@ function FRAMES(ctx) {
       const x = el('button', 'mv3-iconbtn mv3-fc-close', '✕');
       x.type = 'button';
       x.title = 'Close the frames chat - back to the fields. What is written stays.';
-      x.addEventListener('click', (ev) => { ev.stopPropagation(); if (_hooks.close) _hooks.close(); });
+      x.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });
       return [x];
     },
   };
 }
 
 const CHAT = createChat(FRAMES);
-
-// ── Where it stands ──────────────────────────────────────────────────────────
-// The chat lives in the Setup panel but outside its body, which every paint empties: it is laid OVER the place the
-// fields column leaves for it (`slot`), measured after each paint and whenever that place changes size, and it goes
-// the moment the place is no longer on the page - another face of the panel, another step, another project.
-let _slot = null;
-let _ro = null;
-let _mo = null;
-const $root = () => document.getElementById('mv3-fc');
-
-function _fitNow() {
-  const root = $root();
-  const ins = document.getElementById('mv3-inspector');
-  if (!root || !ins) return;
-  if (!_slot || !_slot.isConnected) { hide(); return; }
-  const a = ins.getBoundingClientRect();
-  const b = _slot.getBoundingClientRect();
-  root.style.left = Math.round(b.left - a.left) + 'px';
-  root.style.top = Math.round(b.top - a.top) + 'px';
-  root.style.width = Math.round(b.width) + 'px';
-  root.style.height = Math.round(b.height) + 'px';
-  CHAT.fit();
-}
 
 // The project's look and place go into their places when the chat opens - unless something is there, or the person
 // took them out while it was open; and the one put there from the casting follows the casting when it changes.
@@ -769,37 +748,62 @@ function _autoCast(opening) {
   if (changed) CHAT.ctx.saveDraft();
 }
 
+// ── IN A WINDOW (phase V61, the owner 2026-10-30, (т7)) ──────────────────────────
+// The chat's root lives in the Setup panel (#mv3-fc in merge-v3.html), hidden - its parking place - and is MOVED into the
+// window while it is open and back when it closes, as New Character does (js/library/chmake.js): the conversation, the box
+// being typed, the zone and the countdowns are the same nodes. Closing the window hides the chat; nothing it asked for stops.
+const W_FC = 1100, H_FC = 720;            // New Character's and the music window's size (the owner's (т7))
+let _win = null;
+let _ro = null;
+// The node itself, held: the window takes its overlay off the page before it says it closed, and the root with it - looked
+// up by its id then, it would be gone (js/library/chmake.js holds its root the same way).
+let _rootEl = null;
+const $root = () => _rootEl || (_rootEl = document.getElementById('mv3-fc'));
+
+/** Whether the window is open. */
+export const isOpen = () => !!(_win && _win.alive());
+
 /**
- * Shown in `slot` - the place the fields column leaves for it - for the project `p`. `hooks`: { close, stage(path, name),
- * added(project) - a frame went into the set }.
- * Called by every paint of that face; the first one opens it.
+ * The window, over everything open, for the project `p`. `hooks`: { close, stage(path, name) - a frame pressed,
+ * added(project) - a frame went into the set }. Opened again while open - it only takes the project as it is now.
  */
-export function show(slot, p, hooks) {
+export function open(p, hooks) {
   _proj = p || null;
-  _hooks = hooks || {};
-  _slot = slot;
+  if (hooks) _hooks = hooks;
   const root = $root();
   if (!root) return;
-  if (!_ro && window.ResizeObserver) _ro = new ResizeObserver(() => _fitNow());
-  if (_ro) { _ro.disconnect(); _ro.observe(slot); const ins = document.getElementById('mv3-inspector'); if (ins) _ro.observe(ins); }
-  if (!_mo) {
-    const body = document.querySelector('#mv3-inspector .mv3-panel-body');
-    if (body && window.MutationObserver) {
-      _mo = new MutationObserver(() => { if (_slot && !_slot.isConnected) hide(); });
-      _mo.observe(body, { childList: true, subtree: true });
-    }
+  if (!isOpen()) {
+    _win = openFrame({ name: 'frames chat', size: { w: W_FC, h: H_FC }, cls: 'is-fchat', onClose: _park });
+    _win.setCrumbs([{ label: 'frames chat' }]);
+    root.removeAttribute('style');        // the place the old overlay measured for it
+    _win.body.appendChild(root);
+    if (!_ro && window.ResizeObserver) _ro = new ResizeObserver(() => { if (isOpen()) CHAT.fit(); });
+    if (_ro) { _ro.disconnect(); _ro.observe(root); }
   }
-  const was = CHAT.isOpen();
-  _fitNow();
-  if (!was) CHAT.open().then(() => { _fitNow(); _autoCast(true); });
-  else _autoCast(false);
+  if (!CHAT.isOpen()) CHAT.open().then(() => { CHAT.fit(); _autoCast(true); });
+  else { CHAT.fit(); _autoCast(false); }
 }
 
-/** Taken off the page: the chat hides, what is written stays. */
-export function hide() {
-  _slot = null;
+/** The project as it is now - every paint of setup while the window is open (the casting may have changed). */
+export function update(p) {
+  if (!isOpen() || !p) return;
+  _proj = p;
+  _autoCast(false);
+}
+
+/** Closed from outside - another project, another step: the window goes, the chat hides, what is written stays. */
+export function close() { if (isOpen()) _win.close(); }
+
+// The window gone (its ✕, Escape, a press beside it, or close()): the chat hides and its root goes back to its parking place.
+function _park() {
+  const root = $root();
+  const home = document.getElementById('mv3-inspector');
   if (_ro) _ro.disconnect();
+  // Home first: the chat finds its root by its id when it hides (chat-shell.js), and off the page it would not.
+  if (root && home && root.parentNode !== home) home.appendChild(root);
   CHAT.close();
+  _win = null;
+  if (_hooks.closed) _hooks.closed();
 }
 
 /**

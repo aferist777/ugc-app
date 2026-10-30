@@ -1701,11 +1701,6 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-zcols{display:flex; align-items:stretch; gap:10px}
 .mv3-wk-zcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column}
 .mv3-wk-zcol > .mv3-wk-stage:last-child{flex:1 1 auto}
-/* (phase V26.8, the owner 2026-10-13) SEEDANCE: the frames shelf stands under the first frames, as wide as they are, and
-   the video field across from them runs down to the foot of the zone. The shelf keeps its own height; the first-frames
-   field above it is the one that takes what is left, so the two columns still end level. */
-.mv3-wk-zcol.is-shelved > .mv3-wk-stage:last-child{flex:0 0 auto}
-.mv3-wk-zcol.is-shelved > .mv3-wk-stage:nth-last-child(2){flex:1 1 auto}
 .mv3-wk-stage{
   position:relative;
   margin:0 0 10px; padding:8px 10px 9px; border:1px dashed var(--gold); border-radius:var(--r-sm);
@@ -2003,14 +1998,11 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-fsetlab.is-tight .mv3-wk-vsel.is-small{flex:0 0 auto; width:46px}
 .mv3-wk-fsetlabw{flex:0 0 auto; font:500 10px/1 var(--font); color:var(--muted); letter-spacing:.02em; cursor:default}
 .mv3-wk-fsetfr.is-busy{border-style:dashed; border-color:var(--primary); display:flex; align-items:center; justify-content:center; animation:mv3-wk-pulse 1.1s ease-in-out infinite}
-/* The door to a frame made to order, at the head of the shelf (phase R): gold dashes, because it
-   is a thing to fill in, and nothing happens when it is pressed - what it says on hover is that
-   the chat behind it is still being built. */
-.mv3-wk-fsetfr.is-add{
-  display:flex; align-items:center; justify-content:center; cursor:default;
-  border-style:dashed; border-color:var(--gold); color:var(--gold); font:400 22px/1 var(--font);
-}
-.mv3-wk-fsetfr.is-add:hover{background:color-mix(in oklch, var(--gold) 10%, transparent)}
+/* (phase V61) FIELD 2's FOOT: the tick "scattered" on the left, "frames chat" on the right. */
+.mv3-wk-stage-foot.is-frames{justify-content:space-between}
+.mv3-wk-ftick{display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--font); color:var(--muted); cursor:pointer; user-select:none}
+.mv3-wk-ftick input{margin:0; accent-color:var(--gold); cursor:pointer}
+.mv3-wk-ftick:hover{color:var(--ink)}
 /* LETTING GO of something that is being made (phase N1): the cross in its top-right corner. Red,
    because it is the one control here that ends something, and small, because it is not the thing
    you are meant to press. Its own class (phase I0): it was .mv3-wk-drop, the name the makers' photo
@@ -2176,21 +2168,6 @@ body.mv3-locked #mv3-timeline{
 .mv3-wk-cwin-meta{display:flex; align-items:center; gap:6px}
 .mv3-wk-cwin-meta .mv3-wk-vuse{margin-left:auto; padding:2px 10px; font-size:10px}
 
-/* (phase V26.5) THE SCRIPT FOLDS AWAY beside the frames chat (the owner, 2026-10-10): a strip five pixels wide, the
-   whole height, in gold, at the script's left edge - and, folded, right of the chat. Its arrow says which way it goes. */
-.mv3-wk-fold{
-  order:2; flex:0 0 5px; width:5px; margin:2px 3px 8px 0; padding:0; cursor:pointer; position:relative;
-  border:1px solid var(--gold); border-radius:2px; background:transparent;
-}
-.mv3-wk-fold.is-folded{ order:3; margin:2px 8px 8px 3px }
-.mv3-wk-fold:hover{ background:color-mix(in oklch, var(--gold) 30%, transparent) }
-.mv3-wk-fold::before{
-  content:''; position:absolute; left:0; top:50%; margin-top:-4px; width:0; height:0;
-  border-top:4px solid transparent; border-bottom:4px solid transparent; border-left:3px solid var(--gold);
-}
-.mv3-wk-fold.is-folded::before{ border-left:0; border-right:3px solid var(--gold) }
-/* The place the frames chat lies over (js/merge-v3/fchat.js): nothing of its own. */
-.mv3-wk-half.is-guide.is-fcslot{ padding:0; overflow:hidden }
 /* (phase V26.5) THE FRAGMENT'S CROSS, top right in gold (the owner, 2026-10-10). */
 .mv3-wk-half.is-guide.has-close{ position:relative }
 .mv3-wk-half.is-guide.has-close > .mv3-wk-fclose + *{ margin-right:30px }

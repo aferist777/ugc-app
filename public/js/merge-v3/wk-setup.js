@@ -84,15 +84,14 @@ let _picShown = false;                   // the stage shows a line's frame or cl
 //
 //   hub      the voice, the lines, the open line
 //   voice    the voice this character is read in
-//   fchat    the frames chat, in place of the fields (phase V26.5)
 //
-// The character, the environment and their makers are WINDOWS since phase V57. ?view= in the address
-// opens one of the places directly - that is how the Alerts list takes somebody back to where a
-// generation was started (js/alerts-bell.js); the old shelves' names open their windows: cast "who",
-// lookbooks "new look", newlb "create lookbook", env "where", newenv "new environment". Read once,
-// when this module is first loaded - which is when the step is opened.
-const VIEWS = ['hub', 'voice', 'fchat'];
-const WINDOWS = ['cast', 'lookbooks', 'newlb', 'env', 'newenv'];
+// The character, the environment and their makers are WINDOWS since phase V57, and so is the frames chat since phase V61
+// (js/merge-v3/fchat.js, opened by js/merge-v3/wk-fragments.js openChat). ?view= in the address opens one of the places
+// directly - that is how the Alerts list takes somebody back to where a generation was started (js/alerts-bell.js); the old
+// shelves' names open their windows: cast "who", lookbooks "new look", newlb "create lookbook", env "where", newenv "new
+// environment", fchat the frames chat. Read once, when this module is first loaded - which is when the step is opened.
+const VIEWS = ['hub', 'voice'];
+const WINDOWS = ['cast', 'lookbooks', 'newlb', 'env', 'newenv', 'fchat'];
 let _view = 'hub';
 let _ask = '';                           // a window the address asked for, opened at the first paint
 (function _urlView() {
@@ -238,6 +237,7 @@ function _openAsked(v) {
   else if (v === 'newlb') _openWho(c ? 'lookbook' : 'list', c);
   else if (v === 'env') ENV.openWhere(_envApi(), 'list');
   else if (v === 'newenv') ENV.openWhere(_envApi(), 'make');
+  else if (v === 'fchat') FRAG.openChat();          // (phase V61) its rows of Alerts, the address
 }
 
 // ── The hub: the script ─────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ function _fragApi(chosen) {
     char: () => chosen || null,
     voiceApi: () => _voiceApi(chosen),
     go: _go,
-    // 'hub', 'voice' or 'fchat': the fields, the voices being chosen, or the frames chat.
+    // 'hub' or 'voice': the fields, or the voices being chosen.
     view: () => _view,
   };
 }
@@ -457,8 +457,8 @@ function _voiceApi(chosen) {
 // The route in the panel header: `setup`, then the place inside it, drawn by the workshop on one
 // tint (js/merge-v3/workshop.js, _paintRoute). At the hub there is none - the panel's own title says
 // where you are. The character and the environment are windows (V57), not places of the panel.
-const WHERE = { voice: 'voice', fchat: 'frames chat' };
-const PATH = { hub: [], voice: ['voice'], fchat: ['fchat'] };
+const WHERE = { voice: 'voice' };
+const PATH = { hub: [], voice: ['voice'] };
 
 /** The route from the top of the step to where you are - the workshop paints it. */
 export function crumbs() {

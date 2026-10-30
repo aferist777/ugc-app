@@ -109,7 +109,7 @@ router.post('/scen3/fchat/send', (req, res) => {
       ids.push(GENS.create({
         project: key, send: msgId, kick, where: b.where, stage: 'reading your message',
         engine, provider: b.provider, prompt: text, said: text, aspect, quality: b.quality, refs,
-        frame: true, scen: id,
+        frame: true, scen: id, shot: String(b.shot || ''),
       }).id);
     }
     // The words on the answer itself: the message is drawn whole - what was asked over what came of it (the owner's answer (g)).
@@ -153,9 +153,17 @@ const _rest = (x) => ((x.card.sends || []).length || (x.genIds || []).length ? '
 // Every writing is a VARIANT of the prompt (at most 10), the newest chosen; one that fails leaves the variants there
 // were and says why. Filed only while the card still waits for THIS writer. The writer LOOKS at the pictures (hosted
 // once - the same bytes are one upload); pictures it cannot see, it writes without.
+// (phase V61) What the writer and the ideas must know of the look - a covered face, the clothes - read now if it never was:
+// the first-frames field that read it is gone (routes/scen3.js _fchatRead). Unanswered, the chat goes on without it.
+async function _factsRead(id, shot) {
+  try { await SCEN().fchatRead(id); } catch (e) { console.warn('[fchat] the look and the place were not read: ' + e.message); }
+  return SCEN().fchatFacts(id, shot);
+}
+
 async function _writeCard(cardId, kick, o) {
   let out;
   try {
+    o.facts = await _factsRead(o.id, ((o.facts || {}).edge || {}).id || '');
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(o.refs); } catch (e) { picUrls = []; }
     const t = await AGENT.thinkShot({ engine: o.engine, text: o.text, roles: o.roles, facts: o.facts, picUrls, thread: o.before || [] });
@@ -278,7 +286,7 @@ router.post('/scen3/fchat/card/:id/draw', (req, res) => {
       ids.push(GENS.create({
         project: key, send: m.id, kick, where: b.where, stage: 'asking ' + (b.provider || 'the model'),
         engine, provider: b.provider, prompt, said: m.card.text || prompt, aspect, quality: b.quality, refs,
-        frame: true, scen: id,
+        frame: true, scen: id, shot: String((m.card.params || {}).shot || ''),
       }).id);
     }
     CHAT.update(m.id, (x) => {
@@ -336,7 +344,7 @@ router.post('/scen3/fchat/ideas', async (req, res) => {
     }
     // Everything in the zone: the base and the extra pictures (the owner: ideas with the things attached).
     const keep = refs.map((p, i) => i);
-    const facts = SCEN().fchatFacts(id, String(b.shot || ''));
+    const facts = await _factsRead(id, String(b.shot || ''));
     let picUrls = [];
     try { picUrls = await GENS.hostRefs(keep.map(i => refs[i])); } catch (e) { picUrls = []; }
     const t = await AGENT.frameIdeas({ roles: keep.map(i => roles[i]), facts, picUrls });
@@ -360,7 +368,8 @@ router.post('/scen3/fchat/to-set', async (req, res) => {
     if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     const abs = toDiskExisting(g.imagePath);
     if (!abs || !fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'the frame is not on the disk any more' });
-    const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id });
+    // (phase V61) The frame keeps the edge it was asked with - the clip's writer reads its shot from it.
+    const out = await SCEN().addChatFrame(proj.id, { path: g.imagePath, prompt: g.prompt, genId: g.id, shot: g.shot || '' });
     res.json(Object.assign({ success: true }, out));
   } catch (e) {
     console.error('[fchat/to-set]', e.message);

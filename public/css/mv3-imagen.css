@@ -1108,6 +1108,10 @@ audio.vtrim-media{ background:none; height:32px }
    paint empties; fchat.js measures that place and puts the chat on it. Its own head line over its two columns. */
 #mv3-inspector{ position:relative }
 #mv3-fc.is-shown{ display:flex; flex-direction:column; position:absolute; z-index:4; overflow:hidden }
+/* (phase V61, the owner's (т7)) IN ITS WINDOW (js/gen-window.js, as New Character): the window's whole body, and its own head
+   line hidden - the window's crumbs and ✕ say what it is. */
+.gw-body > #mv3-fc.is-shown{ position:relative; inset:auto; z-index:auto; flex:1 1 auto; min-height:0; width:100%; height:100% }
+.gw-body > #mv3-fc > .mv3-ig-top{ display:none }
 .mv3-ig-top{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:4px 8px 4px 12px;
   border-bottom:1px solid var(--border-soft); background:var(--surface);
