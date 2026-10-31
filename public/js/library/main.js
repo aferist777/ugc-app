@@ -270,9 +270,10 @@ function _genLanded(kind, path) {
 // the bar's "Generate music": the folder selected - Music or one under it. The tracks go there ((мг4а); highlights and its
 // moods take only a mood's preset - the window and the server say so). `lyric` (phase V59.1) - a saved text's "use in custom"
 // (the event `ugc:lyric-use`, sub-session Q's tile and viewer): the window on Custom with it, the gallery staying where it is.
-async function _openMusic(fromTree, lyric) {
+async function _openMusic(fromTree, lyric, stay) {
   if (_shelf !== 'media' || !_tree) return;
-  if ((fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music')) {
+  // `stay` (phase V64) - an Alerts row led to a folder (SFX → My sounds → Generated too): the window opens over it as it is.
+  if (!stay && (fromTree || !_musicish(_node)) && (!_node || _node.key !== 'music')) {
     _tree.select('music', false);
     _node = _tree.selected();
     await _load({ checks: false });
@@ -282,6 +283,58 @@ async function _openMusic(fromTree, lyric) {
     await SW.open({ place: () => _musicPlace(at), anchor: $('lib-grid'), lyric });
   } catch (e) { _status((e && e.message) || 'The music generator did not open', 'err'); }
 }
+// (phase V64 block 4, the owner 2026-10-31, (зг6), (зг11): "давай там сделаем тоже чаты в попапах - это будут черновые ...
+// обычные ни к чему непривязанные чаты ... они будут общие как для merge так и для library") THE PICTURES CHAT AND THE VIDEO
+// CHAT IN THE LIBRARY: the same windows as Merge's (js/merge-v3/chat-window.js), on THE DRAFT's conversation - the unbound one,
+// the same as Merge's draft's (js/merge-v3/chat-owner.js useDraft) - with no "this project". What they make lies in IMAGES →
+// Generated and VIDEO → Generated → <model>, as from Merge; the gallery is read again when a window closes on something made.
+const _chatOn = {};
+async function _openChat(which) {
+  try {
+    const W = await import('../merge-v3/chat-window.js');
+    W.ensureChatCss();
+    const O = await import('../merge-v3/chat-owner.js');
+    await O.useDraft();
+    if (which === 'videos') {
+      const V = await import('../merge-v3/vidchat.js');
+      if (!_chatOn.videos) { _chatOn.videos = true; V.initVidChat(); }
+      await V.openVideos();
+    } else {
+      const P = await import('../merge-v3/picchat.js');
+      if (!_chatOn.pictures) { _chatOn.pictures = true; P.initPicChat(); }
+      await P.openPictures();
+    }
+  } catch (e) { _status('The chat did not open: ' + ((e && e.message) || e), 'err'); }
+}
+// (phase V64 block 4, (зг12)) An Alerts row of a chat's result made here: ?reveal=<its file> - its folder open, it outlined;
+// ?open=pictures|videos|audio - the window again over it.
+const _KIND_OF_PATH = [['/media/birols/', 'birols'], ['/media/uploads/', 'uploads'], ['/media/hooks/', 'hooks'],
+  ['/media/images/', 'images'], ['/media/sounds/', 'sounds'], ['/media/audio/', 'music']];
+async function _revealPath(path) {
+  const want = String(path || '').split('?')[0];
+  const kind = (_KIND_OF_PATH.find(([p]) => want.startsWith(p)) || [])[1];
+  if (!kind || !_tree || _shelf !== 'media') return;
+  let it = null;
+  try {
+    const d = await fetch('/api/library/shelf/media?filter=' + kind).then(r => r.json());
+    it = ((d && d.items) || []).find(x => String(x.media || '').split('?')[0] === want) || null;
+  } catch (e) { it = null; }
+  if (!it) { _status('That file is no longer in the Library', 'err'); return; }
+  await _tree.load();
+  _tree.selectFor(kind, String((it.meta || {}).categoryId || '') || '__uncat__', false);
+  _node = _tree.selected();
+  _sel = String(it.id);
+  _selAlso = new Set();
+  _scrollSel = true;
+  await _load({ checks: false });
+}
+async function _arrived(p) {
+  if (!p || _shelf !== 'media') return;
+  if (p.reveal) await _revealPath(p.reveal);
+  if (p.open === 'pictures' || p.open === 'videos') await _openChat(p.open);
+  else if (p.open === 'audio') await _openMusic(false, null, true);
+}
+
 // (phase V64 block 5) The Library's host of the sound window (js/sound/sound-window.js): no project, the folder under Music the
 // window was opened on (`place`), the Alerts row back to that folder - or, for sounds, to SFX → My sounds → Generated - and the
 // tracks or sounds outlined there when they land.
@@ -485,9 +538,13 @@ function _initTree() {
     // (phase V55, (гн10)) Environments / Lookbooks / Props' "create": their generator's window (phase V58).
     // (phase V59) Music's "Generate music" (in its menu since V64): the music window, on Music itself.
     onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make, true); },
-    // (phase V64 block 1) A root's "generate" - AUDIO the music window, on Music.
-    generates: ['audio'],
-    onGenerate: (n) => { if (_shelf === 'media' && n && n.key === 'audio') _openMusic(false); },
+    // (phase V64 blocks 1, 4) A root's "generate": IMAGES - the pictures chat, VIDEO - the video chat (their windows, the
+    // unbound draft's conversation), AUDIO - the sound window.
+    onGenerate: (n) => {
+      if (_shelf !== 'media' || !n) return;
+      if (n.key === 'audio') _openMusic(false);
+      else if (n.key === 'images' || n.key === 'video') _openChat(n.key === 'video' ? 'videos' : 'pictures');
+    },
     onChanged: (what) => (_shelf === 'media'
       ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
@@ -1904,6 +1961,13 @@ async function _upload(files) {
 // page again (`ugc:goto`, js/alerts-bell.js), which would throw away a wait in progress.
 function _place(u) {
   const q = u.searchParams;
+  const p = _placeOf(u);
+  // (phase V64 block 4) ?open=pictures|videos|audio - a window again; ?reveal=<a file> - its folder, it outlined.
+  if (p) { p.open = q.get('open') || ''; p.reveal = q.get('reveal') || ''; }
+  return p;
+}
+function _placeOf(u) {
+  const q = u.searchParams;
   let kind = q.get('shelf') || '';
   // (phase V28.5) The Music shelf is Media -> Audio -> Music: an old address lands there.
   if (kind === 'music') return { kind: 'media', sel: q.get('sel') || '', make: false, src: '', draft: '', mkind: 'music' };
@@ -1928,7 +1992,7 @@ async function _goToPlace(p) {
   // Media's kind first (the tree's node): switching to the shelf reads it with it. (phase V60) Media with no folder named:
   // its roots.
   if (p.mkind && _tree) { _tree.select(p.mkind, false); _node = _tree.selected(); }
-  else if (p.kind === 'media' && !p.made && _tree) _toRoots();
+  else if (p.kind === 'media' && !p.made && !p.reveal && _tree) _toRoots();
   if (p.kind !== _shelf) {
     _select(p.kind);
     if (_shelf !== p.kind) return;
@@ -1962,6 +2026,8 @@ async function _goToPlace(p) {
   }
   // (phase V56, V58) Environments' or Lookbooks' generator: its window, over their folder.
   if (p.made) await _openGen(p.made);
+  // (phase V64) A chat's or the sound window's result: its folder, it outlined, the window again.
+  await _arrived(p);
 }
 
 window.addEventListener('ugc:goto', (e) => {
@@ -2156,6 +2222,14 @@ function boot() {
     // (phase V56, V58) An address of Environments' or Lookbooks' generator: its window, over Media - unless another folder was
     // pressed meanwhile.
     else if (arrive && arrive.made && _shelf === 'media' && _node && _node.key === arrive.made) _openGen(arrive.made);
+    // (phase V64) A chat's or the sound window's result: its folder, it outlined, the window again.
+    if (arrive && (arrive.open || arrive.reveal)) _arrived(arrive);
+  });
+  // (phase V64 block 4) A chat's window closed on something made: the tree and the gallery read again.
+  window.addEventListener('mv3:lib-reload', async () => {
+    if (_tree) { await _tree.load(); _node = _tree.selected() || _node; }
+    _counts();
+    if (_shelf === 'media') _load({ keepScroll: true, checks: false });
   });
   _counts();
 }

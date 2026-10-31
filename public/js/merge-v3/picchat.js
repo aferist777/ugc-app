@@ -23,7 +23,7 @@
    ?open=pictures; a picture dragged out of it lays the window aside until it is let go on a lane.
    ════════════════════════════════════════════════════════════════════════════ */
 
-import * as Store from './store.js';
+import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, thumbOf, almanacSoon, refuseHome } from './chat-shell.js';
 import { chatWindow } from './chat-window.js';

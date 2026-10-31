@@ -18,7 +18,8 @@
 
    (phase V64 block 3, the owner 2026-10-31) Every chat is HOSTED now - the frames chat since V26.5, the pictures chat and the
    video chat since V64 - and lives in a generation's window (chat-window.js): no crumb, no room, no view remembered per
-   project; the window shows and hides it, and its conversation is still the open project's.
+   project; the window shows and hides it, and its conversation is still the open project's - in the Library (block 4) THE
+   draft's, the unbound one: whose it is, chat-owner.js says (the store's words, either way).
 
    ── What a description says ─────────────────────────────────────────────────
    Its name and kind, its element ids and storage keys, its words, the settings column (`settings`: load,
@@ -49,7 +50,8 @@
    Narrower than 700px, the settings fold into one row above the input.
    ════════════════════════════════════════════════════════════════════════════ */
 
-import * as Store from './store.js';
+// (phase V64 block 4) Whose conversation it is - the open project in Merge, the unbound draft's in the Library.
+import * as Store from './chat-owner.js';
 import { setOpenColumn } from './layout.js';
 import * as Views from './lib-views.js';
 import * as Pick from './chat-pick.js';
@@ -1644,11 +1646,8 @@ export function createChat(make) {
           n: _n, write: _write,
           // Where it was asked from, for Alerts (js/alerts-bell.js): the project, and this chat in it - or (phase V26.5)
           // the place a hosted chat's description names.
-          where: typeof S.where === 'function' ? S.where(key) : {
-            page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&open=' + S.name,
-            label: 'Merge · ' + (Store.title() || 'project') + ' · ' + S.name,
-            spot: { key, view: S.name },
-          },
+          // (phase V64 block 4) From the Library's unbound chat - the Library (chat-owner.js whereOf).
+          where: typeof S.where === 'function' ? S.where(key) : Store.whereOf(key, S.name),
         })),
       });
       if (!d || !d.success) { _dropPend(); note(at, 'Not sent.', (d && d.error) || 'the server did not answer'); return; }
@@ -2127,7 +2126,8 @@ export function createChat(make) {
     if (stripBox) {
       _col = createFolderColumn(stripBox, {
         roots: S.column.roots, files: S.column.files || 'photo', fit: S.column.fit, title: T.cat || 'Show',
-        own: { label: 'this project', empty: 'Nothing made in this project yet.' },
+        // (phase V64 block 4) The Library's unbound chat has no project: no "this project" row.
+        own: Store.unbound() ? null : { label: 'this project', empty: 'Nothing made in this project yet.' },
         tile: _tile, lead: _plusTile,
         // (phase V58) A picture deleted by its ✕ leaves the zone too - a reference to a file that is gone would fail the send.
         onDeleted: (f) => { if (f && _atts.some(a => a.path === f.path)) _detach(f.path); },

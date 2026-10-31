@@ -14,6 +14,7 @@
 
      chatWindow({ chat, id, cls, name, title }) -> { open(), close(), isOpen() }
      closeChatWindows()   every chat's window closed - an Alerts row leads to a file in the Library panel behind them
+     ensureChatCss()      (phase V64 block 4) the chats' sheets on a page that does not load them (the Library)
        chat    createChat()'s answer - { open, close, isOpen, fit }
        id      its root's element id; made in a parking place of its own when the page has none (the Library, block 4)
        cls     the root's classes beside .mv3-pc ('is-video')
@@ -34,6 +35,19 @@ function _parking() {
     document.body.appendChild(p);
   }
   return p;
+}
+
+// (phase V64 block 4) The chats' look is Merge's sheets - the Library loads them the first time a chat opens there.
+const CHAT_CSS = ['merge-v3.css', 'mv3-imagen.css', 'mv3-catalog.css', 'folder-column.css'];
+export function ensureChatCss() {
+  const have = new Set([...document.querySelectorAll('link[rel="stylesheet"]')].map(l => String(l.getAttribute('href') || '').split('/').pop()));
+  for (const name of CHAT_CSS) {
+    if (have.has(name)) continue;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = '/css/' + name;
+    document.head.appendChild(l);
+  }
 }
 
 const _all = new Set();

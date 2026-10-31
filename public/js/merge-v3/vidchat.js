@@ -27,7 +27,7 @@
      the model takes by default, and the price follows that part.
    ════════════════════════════════════════════════════════════════════════════ */
 
-import * as Store from './store.js';
+import * as Store from './chat-owner.js';
 import { openViewer } from '../library/viewer.js';
 import { createChat, el, money, json, stored, keep, thumbOf, refCell, ratioOf, refuseHome } from './chat-shell.js';
 import { chatWindow } from './chat-window.js';
@@ -1159,10 +1159,8 @@ function VIDEOS(ctx) {
   const _valOf = (i) => (_skill && _skill.vals && _skill.vals[i] && _skill.vals[i].v) || null;
   const _familyOf = (id) => ((models().find(m => m.id === id) || {}).family || '');
   const _labelOf = (id) => ((models().find(m => m.id === id) || {}).label || id || '');
-  const _where = (key) => ({
-    page: 'merge', href: '/merge?p=' + encodeURIComponent(key) + '&open=videos',
-    label: 'Merge · ' + (Store.title() || 'project') + ' · videos', spot: { key, view: 'videos' },
-  });
+  // (phase V64 block 4) Merge's project with the chat open - or the Library, from its unbound chat (chat-owner.js).
+  const _where = (key) => Store.whereOf(key, 'videos');
   const _post = (url, body, method) => json(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
   // This recipe's prompt cards in the thread. The request stands at the foot only while there is none - or when
@@ -2959,7 +2957,8 @@ function VIDEOS(ctx) {
     },
     // (phase V13, the owner 2026-10-07) Every "+" of the zone opens the picker on its place.
     pick: {
-      sources: (kind) => SOURCES[kind] || [],
+      // (phase V64 block 4) The Library's unbound chat has no project: no "made in this project".
+      sources: (kind) => (SOURCES[kind] || []).filter(s => !(s.id === 'made' && Store.unbound())),
       // (phase V55) The window with the tree, the almanac's size (chat-pick.js). (phase V57, the owner's (ок1): "все клипы
       // длинне чем берет модель") For clips: only the ones the chosen model takes by their length - read at every opening.
       tree: (kind) => (kind === 'video' && Src.TREE.video ? Object.assign({}, Src.TREE.video, _clipFit()) : Src.TREE[kind] || null),

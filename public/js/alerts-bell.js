@@ -175,6 +175,12 @@ function _hrefOf(rec) {
   const w = rec.where || {};
   const spot = w.spot || {};
   const path = (rec.result || {}).path || '';
+  // (phase V64 block 4, the owner's (зг12): "вариант А. ведет в library в ту папку куда файл сгенерировался") A picture or a
+  // clip made in a chat's window on the LIBRARY page: once it is filed, the Library - the folder it lies in, it outlined
+  // (?reveal=), the window open again (?open=); while it runs, or when it failed, the window over IMAGES / VIDEO (w.href).
+  if (rec.state === 'done' && path && w.page === 'library' && (spot.view === 'pictures' || spot.view === 'videos')) {
+    return '/library?shelf=media&reveal=' + encodeURIComponent(path) + '&open=' + spot.view;
+  }
   if (rec.state === 'done' && path && (spot.view === 'pictures' || spot.view === 'videos') && spot.key) {
     return '/merge?p=' + encodeURIComponent(spot.key) + '&reveal=' + encodeURIComponent(path);
   }
@@ -197,7 +203,8 @@ function _hrefOf(rec) {
   // runs, or when it failed, that folder alone.
   if (w.page === 'library' && spot.view === 'musicmake') {
     const ids = rec.state === 'done' ? ((rec.result || {}).ids || []).filter(Boolean) : [];
-    return '/library?shelf=media&kind=' + encodeURIComponent(spot.key || 'music') + ids.map(id => '&sel=' + encodeURIComponent(id)).join('');
+    // (phase V64, (зг12)) ...and the sound window open again over it.
+    return '/library?shelf=media&kind=' + encodeURIComponent(spot.key || 'music') + ids.map(id => '&sel=' + encodeURIComponent(id)).join('') + '&open=audio';
   }
   return w.href || '';
 }
