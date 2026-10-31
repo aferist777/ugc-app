@@ -63,7 +63,7 @@ const groupOf = (mode) => (GROUPS.sounds.includes(mode) ? 'sounds' : 'music');
 const MODE_HELP = {
   sounds: 'A sound or a loop by Suno, from a description. It goes to SFX → My sounds → Generated.',
   compose: 'Music by ElevenLabs from a description - instrumental unless you untick it. The chips add their words. It goes to AUDIO → Music.',
-  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in VIDEO's folders on the right - in Merge also a clip of the timeline by its right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.',
+  video: 'Music made FOR a video: ElevenLabs watches it (cuts, pace, mood) and scores it. Press a video in the VIDEO folders on the right - in Merge also a clip of the timeline by its right button, and the track is laid under that clip too. Say what you want if you like. It goes to AUDIO → Music.',
   sfx: 'A sound effect by ElevenLabs, from a description - up to 30 s, or the length it picks. It goes to SFX → My sounds → Generated.',
 };
 const GROUP_HELP = 'Music - Simple, Custom and Lyrics by Suno; music from a description and Video to Music by ElevenLabs.\nSounds - a sound or a loop by Suno; sound effects by ElevenLabs.';
@@ -336,7 +336,7 @@ function paintMake() {
       { max: 4100, help: 'In sentences: what it is for first, then the genre, the instruments, the tempo, the key and its shape. "no …" is honoured here. A chip on the left adds its words. Up to 4100 characters.' }));
     card.appendChild(_check(f, 'instrumental', 'instrumental', null, 'No voice. Off - ElevenLabs may sing.'));
   } else if (S().mode === 'video') {
-    card.appendChild(_field('The video', _attachment(f), { help: 'The video ElevenLabs scores: a press on a video in VIDEO's folders on the right' + (H && H.clipNow ? ', a clip of the timeline by its right button (its track is then laid under it)' : '') + ', "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.' }));
+    card.appendChild(_field('The video', _attachment(f), { help: 'The video ElevenLabs scores: a press on a video in the VIDEO folders on the right' + (H && H.clipNow ? ', a clip of the timeline by its right button (its track is then laid under it)' : '') + ', "from this computer…" or a file let go here. Up to 10 minutes and 200 MB.' }));
     card.appendChild(_field('What you want', _text(f, 'description', { area: true, rows: 3, placeholder: 'optional - e.g. upbeat and modern, builds to the reveal at the end' }),
       { max: 4100, help: 'Optional - the feel, where it builds, what to keep out. Up to 4100 characters.' }));
     card.appendChild(_field('Tags', _text(f, 'tags', { placeholder: 'upbeat, cinematic' }), { help: 'Up to 10 words, by commas - upbeat, cinematic…' }));
@@ -392,7 +392,7 @@ function _attachment(f) {
       att.appendChild(tx);
     } else {
       att.appendChild(el('div', 'au-att-ph'));
-      att.appendChild(el('div', 'au-att-tx', 'Press a video in VIDEO's folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
+      att.appendChild(el('div', 'au-att-tx', 'Press a video in the VIDEO folders on the right' + (H && H.clipNow ? ', or a clip on the timeline with the right button' : '') + ' - or drop a file here. Up to 10 minutes and 200 MB.'));
     }
     const up = el('button', 'au-btn', 'from this computer…');
     up.type = 'button';
