@@ -18,7 +18,8 @@
 import * as Views from './lib-views.js';
 import * as Store from './store.js';
 import * as WK from './workshop.js';
-import { onSelChange, selectedOne } from './timeline-b.js';
+import { onSelChange, selectedOne, selectClipById, playhead } from './timeline-b.js';
+import { hint } from '../bubble.js';
 import { setOpenColumn } from './layout.js';
 import { showError } from '../notice.js';
 
@@ -41,9 +42,32 @@ let _busy = '';               // the item being put in
 let _said = '';
 let _pop = null;              // the preview under the pointer
 
+// The B-roll's pieces on main video, in their order on the timeline.
+const _pieces = () => {
+  const tl = Store.timeline();
+  const v1 = ((tl && tl.tracks) || []).find(t => t.id === 'v1');
+  return ((v1 && v1.clips) || []).filter(c => /^br_\d+_\d+_\d+/.test(String(c.id || ''))).sort((a, b) => (+a.start || 0) - (+b.start || 0));
+};
+export const laid = () => _pieces().length > 0;
+
+// (phase V62, (во53)) The crumb "b-roll /" stands in every voiceover, first in the panel's head: pale until the B-roll is laid.
 function _crumb() {
   const c = $('mv3-lib-br');
-  if (c) c.hidden = !(_isVo() && _cell);
+  if (!c) return;
+  c.hidden = !_isVo();
+  c.classList.toggle('is-off', !laid());
+}
+
+/** The crumb pressed: the piece chosen last - none, the piece under the playhead (none there - the first one) - picked and
+ *  opened. Nothing while there is no B-roll on the timeline. */
+export function openCurrent() {
+  const all = _pieces();
+  if (!all.length) return;
+  if (_cell && all.some(c => c.id === _cell)) { openPiece(_cell); return; }
+  const t = playhead();
+  const at = all.find(c => t >= (+c.start || 0) && t < (+c.start || 0) + (+c.dur || 0)) || all[0];
+  selectClipById(at.id);                   // onSelChange opens it (below)
+  if (_cell !== at.id) openPiece(at.id);
 }
 
 /** A piece pressed on the timeline - or the crumb: its sentence's batch, in the Library panel. */
@@ -87,8 +111,14 @@ function _paint() {
   if (!_data) { root.appendChild(_el('div', 'mv3-ins-note', 'reading the piece…')); return; }
   const d = _data;
   const head = _el('div', 'mv3-brv-head');
+  // (the owner 2026-10-31: "текст предложения над полем с выбором биролов выдели золотым, а синим выдели ключевые слова
+  // использованые"; (во52) а) The sentence in gold, the keywords it was searched by in blue under it.
   head.appendChild(_el('div', 'mv3-brv-sent', '«' + d.text + '»'));
-  const meta = _el('div', 'mv3-brv-meta', 'piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: ' + (d.queries || []).join(' · '));
+  const meta = _el('div', 'mv3-brv-meta', 'piece ' + (d.piece + 1) + ' of ' + d.pieces + ' · found by: ');
+  (d.queries || []).forEach((q, i) => {
+    if (i) meta.appendChild(document.createTextNode(' · '));
+    meta.appendChild(_el('span', 'mv3-brv-q', q));
+  });
   // (phase V62, block 3, (во45)) Pixabay's terms: where the results come from, linked.
   if (d.items.some(i => i.site === 'pixabay')) {
     meta.appendChild(document.createTextNode(' · '));
@@ -126,8 +156,9 @@ function _tile(it) {
   // (phase V62, block 3, (во45)) Where it is from, and whose - Pixabay's terms: its results say so.
   t.appendChild(_el('span', 'mv3-brv-by', [_site(it.site), it.author].filter(Boolean).join(' · ')));
   if (_busy === it.id) t.appendChild(_el('span', 'mv3-brv-wait', 'putting it in…'));
-  t.title = (it.here ? 'In this piece now' : 'Put it into this piece') + (it.filed ? '' : ' - downloaded when chosen')
-    + '\n' + [_site(it.site), it.author].filter(Boolean).join(' · ') + (it.page ? '\n' + it.page : '');
+  // (the owner 2026-10-31: "когда пользователь выбирает бирол, не показывай текстовую системную всплывашку") No browser tooltip:
+  // the tile and its preview say it all.
+  t.setAttribute('aria-label', it.here ? 'In this piece now' : 'Put it into this piece');
   t.disabled = !!_busy;
   t.addEventListener('mouseenter', () => _openPop(t, it));
   t.addEventListener('mouseleave', _closePop);
@@ -180,6 +211,7 @@ async function _swap(it) {
   _busy = it.id;
   _closePop();
   _paint();
+  Store.hush(120000);
   try {
     const r = await fetch('/api/broll/' + encodeURIComponent(id) + '/swap', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cell: _cell, item: it.id }),
@@ -191,10 +223,12 @@ async function _swap(it) {
       if (!s || !s.state || !s.state.running) { if (s && s.state && s.state.error) throw new Error(s.state.error); break; }
       await new Promise(res => setTimeout(res, 700));
     }
+    // (во51) The swap is the person's own act: the timeline takes it without a word by the transport.
     await Store.refresh();
   } catch (e) {
     showError('Could not put it in: ' + e.message);
   }
+  Store.hush(2000);
   _busy = '';
   await _load();
 }
@@ -202,9 +236,12 @@ async function _swap(it) {
 export function initBroll() {
   Views.registerChat(NAME, {
     root: 'mv3-br', crumb: 'mv3-lib-br',
-    crumbTitle: 'The B-roll of the piece last pressed on main video',
-    onBack: () => _show(false), onYield: () => _show(false), onCrumb: () => { if (_cell) openPiece(_cell); },
+    onBack: () => _show(false), onYield: () => _show(false), onCrumb: openCurrent,
   });
+  // Pale, it says why (the bubble - never the browser's tooltip).
+  const crumb = $('mv3-lib-br');
+  if (crumb) hint(crumb, () => (crumb.classList.contains('is-off') ? 'Find the B-roll first - field 2 of setup, B-roll.' : ''));
+  WK.onRepaint(_crumb);
   // A piece of the B-roll pressed on main video, in a voiceover: its batch, here.
   onSelChange(() => {
     const one = selectedOne();
@@ -216,7 +253,7 @@ export function initBroll() {
   let key = null;
   Store.onChange(() => {
     const k = Store.key() || '';
-    if (k === key) return;
+    if (k === key) { _crumb(); return; }
     key = k;
     _cell = '';
     _data = null;

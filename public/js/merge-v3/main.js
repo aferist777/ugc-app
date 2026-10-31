@@ -31,6 +31,8 @@ import { initScenarios } from './scen-pick.js';
 import { initHighlights } from './highlights.js';
 // (phase V62, block 2) A voiceover's B-roll piece, another item for it - a view of the Library panel.
 import { initBroll } from './broll-view.js';
+// (phase V62) A voiceover's tips, step by step, over the page.
+import { initVoTips } from './vo-tips.js';
 import { askModelOnce } from './model-ask.js';
 
 initNav();
@@ -43,6 +45,7 @@ initAudChat();
 initScenarios();
 initHighlights();
 initBroll();
+initVoTips();
 initFramesChat();
 initTimelineB();
 initPreviewB();

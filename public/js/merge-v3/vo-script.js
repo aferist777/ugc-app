@@ -16,7 +16,6 @@ import { openScenario } from '../scen-window.js';
 import { openOwnText } from './vo-text.js';
 import { el } from './wk-maker.js';
 import { showError } from '../notice.js';
-import { stepBubble } from '../bubble.js';
 
 let _rows = null;             // the scenarios, read once per draft shown - null while not read
 let _counts = null;
@@ -32,10 +31,8 @@ let _busy = false;            // a script being put in
 export function paintChooser(host, project, adopt) {
   const root = el('div', 'mv3-vos');
   host.appendChild(root);
-  // (the owner 2026-10-31: "при создании voiceover проекта будет облачко над полем для выбора сценария с кратким описанием что
-  // нужно сделать на этом шаге") What to do here, in the bubble over the scenarios - the fields beside it wait, blurred.
-  root.appendChild(stepBubble('Step 1 · the script', 'Choose a scenario below - "use" on it - or press "+ your text" to paste '
-    + 'your own. Then the voice reads it.'));
+  // (the owner 2026-10-31) What to do here is said by the tip of step 1 over this column (js/merge-v3/vo-tips.js).
+  root.appendChild(el('div', 'mv3-wk-fhint', 'The script of this voiceover: a scenario, or your own text.'));
 
   const top = el('div', 'mv3-vos-top');
   const own = el('button', 'mv3-sc-new', '+ your text');

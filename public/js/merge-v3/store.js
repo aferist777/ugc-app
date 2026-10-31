@@ -805,7 +805,8 @@ async function _checkRemote() {
   _title = d.title || _title;
   _adv = d.adv || _adv;
   if (!undoable) _bindHistory();
-  _status = !who ? null
+  // (phase V62, (во51)) A piece swapped by the person in the view "b-roll" (js/merge-v3/broll-view.js) comes in quietly.
+  _status = !who || (Date.now() < _hushUntil && who.broll && !who.frag && !who.heard && !who.laid) ? null
     : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
     : who.broll ? 'B-roll laid on main video.'
     : who.laid && !who.heard ? 'Music laid under its clip.'
@@ -822,6 +823,9 @@ const _isFrag = (c) => Number(c && c.frag) > 0;
 // (phase V54, block 2) A clip the server laid itself - Video to Music's track under its clip (lib/audio-gens.js _layUnder): the
 // mark rides only until this page saves (lib/timeline-shape.js keeps no such field).
 const _isLaid = (c) => !!(c && c.laidBy);
+// (phase V62, (во51)) While a piece is being swapped by the person (js/merge-v3/broll-view.js), its lay comes in without a word.
+let _hushUntil = 0;
+export function hush(ms) { _hushUntil = Date.now() + (+ms || 0); }
 // (phase V62) A piece of a voiceover's B-roll - its engine's cell on main video, known by its id (lib/broll.js: br_<line>_…).
 const _isBroll = (c) => /^br_\d/.test(String((c && c.id) || ''));
 function _serverOnly(base, theirs) {

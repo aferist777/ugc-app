@@ -43,7 +43,7 @@ import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
 import { askDelete, note as askNote } from './ask.js';
-import { hint, stepBubble } from '../bubble.js';
+import { hint } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
 // (phase V62) The voiceover draft's script, chosen in its script column.
@@ -1037,17 +1037,12 @@ function _noneOption(sel, word) {
 // (phase V62, the owner 2026-10-31: "нужно заблерить поле с настройками, а активным показывать поле с выбором или созданием
 // текста [...] затем когда пользователь выбирает сценарий или добавляет свой текст нужно подсветить золотой обводкой центральное
 // поле с таким же облачком инструкции по этому шагу") A VOICEOVER with no script has its fields blurred the same way - the
-// script column beside them is where to begin, its bubble says so (js/merge-v3/vo-script.js); with a script and a line still
-// to read, the bubble of step 2 stands over field 1.
+// script column beside them is where to begin. What to do at each step is said by the tips over the page (js/merge-v3/vo-tips.js),
+// over the anchors marked `data-tip`.
 function _all(host, p, lines) {
   const missing = _missing(p);
   if (missing.length) host.appendChild(_note('Choose ' + missing.join(' and ') + ' first - on the preview. Then the fields open.'));
-  const live = _live(lines);
-  const noText = _isVo(p) && !live.length;
-  if (_isVo(p) && live.length && live.some(l => !isRead(l))) {
-    host.appendChild(stepBubble('Step 2 · mood & voice', 'Choose the mood and the voice, then press "generate" - every line '
-      + 'is read. Then the B-roll is found for it and the timeline opens.'));
-  }
+  const noText = _isVo(p) && !_live(lines).length;
   const zone = el('div', 'mv3-wk-zone' + ((missing.length || noText) ? ' is-locked' : ''));
   host.appendChild(zone);
   _stageMoodVoice(zone, p, lines);
@@ -1077,6 +1072,7 @@ function _stage(host, id, spec) {
   const box = el('div', 'mv3-wk-stage' + (done ? ' is-done' : ' is-open')
     + (spec.blocked ? ' is-blocked' : '') + ((spec.need || spec.lock) ? ' is-need' : '') + (spec.half ? ' is-half' : '')
     + (spec.work ? ' is-working' : '') + (spec.lock ? ' is-voicelock' : '') + (spec.wide ? ' is-wide' : ''));
+  box.dataset.stage = id;                 // (phase V62) what a voiceover's tips point at (js/merge-v3/vo-tips.js)
   // (phase V61, (т5)) WAITING FOR THE VOICE: red, what is in it dimmed and dead - but for what is marked `is-free` - and a
   // press on it says what to do first (the owner: "при попытке выбрать что то во first frames и video будет говорить что
   // сначала озвучить нужно строки").
@@ -1483,7 +1479,7 @@ function _stageBroll(host, p, lines) {
   mode.disabled = !!st.running;
   mode.addEventListener('change', () => _brollPost(p, 'mode', { mode: mode.value }));
   foot.appendChild(mode);
-  _genButton(foot, {
+  const find = _genButton(foot, {
     label: st.running ? (st.step || 'finding…') : st.sentences && !st.left ? 'find again' : 'find B-roll',
     disabled: !!st.running,
     title: st.running ? 'The B-roll is being found' : st.sentences && !st.left
@@ -1491,6 +1487,7 @@ function _stageBroll(host, p, lines) {
       : 'Find the B-roll of every sentence that has none yet and lay it over the voice',
     on: () => _brollPost(p, 'find'),
   });
+  find.dataset.tip = 'broll-find';        // the tip of step 3 stands under it (js/merge-v3/vo-tips.js)
 }
 
 // ── FIELD 2 - FRAMES (phase V61, the owner 2026-10-30, (т6): "поле first frames удаляем, а набор фреймов нужно показывать.

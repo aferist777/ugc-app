@@ -192,10 +192,23 @@ export function lock(on) {
   const tl = document.getElementById('mv3-timeline');
   if (tl) tl.inert = want;
   if (want) setOpenColumn('inspector');
+  softLock(_soft);
 }
 
 /** Is the lock on? The timeline's own keys ask before they act (js/merge-v3/timeline-b.js). */
 export const locked = () => _locked;
+
+// (phase V62, the owner 2026-10-31, (во54) "а + 1") A VOICEOVER'S TIMELINE UNDER SETUP is not blurred once something lies on it:
+// seen as it is, still locked - its keys and its clips asleep - and a press on it is the way back to the timeline step
+// (js/merge-v3/workshop.js listens for it). Soft only while the lock is on.
+let _soft = false;
+export function softLock(on) {
+  _soft = !!on;
+  const want = _locked && _soft;
+  document.body.classList.toggle('mv3-lock-soft', want);
+  const tl = document.getElementById('mv3-timeline');
+  if (tl) tl.inert = _locked && !want;
+}
 
 // ── A SPINE MAY MEAN MORE THAN "OPEN THIS PANEL" (phase L, the owner 2026-09-23) ──
 // In a talking head the two spines are the step switch: the Library spine is the way to the

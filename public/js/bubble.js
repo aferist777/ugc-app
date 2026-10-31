@@ -14,10 +14,13 @@
                                 o.on - a class put on `node` while its bubble is open. `node` returned.
      showBubble(anchor, text, o)  opened now, over `anchor`
      closeBubble()              the bubble open, closed
-     stepBubble(title, text)    (phase V62, the owner 2026-10-31: "облачко над полем для выбора сценария с кратким описанием
-                                что нужно сделать на этом шаге") the same bubble standing IN the page, over the field it is
-                                about, its tail down at it - what to do at this step; built with the field, so it is there
-                                while the step is and goes when the field is painted without it. Not on the stack of layers.
+     tipBox(o) / placeBubble(box, anchor, side)
+                                (phase V62, the owner 2026-10-31: "облачка будут не в самих полях, а поверх интерфейса
+                                рисоваться с красным крестиком чтобы закрыть. и так же галочка, "не показывать больше"") a
+                                STEP'S TIP: the same bubble over the page with a red ✕ in its corner and the tick "don't
+                                show again" at its foot - o.title, o.text, o.onClose(), o.onNever(on); placed by its owner
+                                (js/merge-v3/vo-tips.js) over its thing ('above') or under it ('below'). Not on the stack of
+                                layers: it takes no key.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
@@ -76,19 +79,7 @@ export function showBubble(anchor, text, o) {
   if (opts.title) box.appendChild(_el('b', null, opts.title));
   for (const p of t.split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
   document.body.appendChild(box);
-  // Over the thing, centred on it; under it when there is no room above. The tail points at the thing's middle, kept off
-  // the bubble's rounded corners.
-  const r = anchor.getBoundingClientRect();
-  const W = window.innerWidth, H = window.innerHeight;
-  const bw = box.offsetWidth, bh = box.offsetHeight;
-  const cx = r.left + r.width / 2;
-  const left = Math.round(Math.max(6, Math.min(W - bw - 6, cx - bw / 2)));
-  const below = r.top - GAP - bh < 6 && r.bottom + GAP + bh <= H - 6;
-  const top = below ? r.bottom + GAP : Math.max(6, r.top - GAP - bh);
-  box.style.left = left + 'px';
-  box.style.top = Math.round(top) + 'px';
-  box.style.setProperty('--tail-x', Math.round(Math.max(16, Math.min(bw - 16, cx - left))) + 'px');
-  if (below) box.classList.add('is-below');
+  placeBubble(box, anchor);
   const layer = Layers.open(box, { modal: false, name: 'help', onEsc: closeBubble });
   _open = { box, anchor, layer, on: opts.on || '' };
   if (opts.on) anchor.classList.add(opts.on);
@@ -98,12 +89,44 @@ export function showBubble(anchor, text, o) {
   window.addEventListener('blur', closeBubble);
 }
 
-/** A step's instruction: the bubble as an element of the page (css/app-shell.css .bub.is-step), put over its field. */
-export function stepBubble(title, text) {
-  const box = _el('div', 'bub is-step');
+/**
+ * Where a bubble stands: over the thing, centred on it, its tail pointing at the thing's middle (kept off the rounded corners)
+ * - or under it, tail up, for side 'below' and when there is no room above; never past the window's edges.
+ */
+export function placeBubble(box, anchor, side) {
+  const r = anchor.getBoundingClientRect();
+  const W = window.innerWidth, H = window.innerHeight;
+  const bw = box.offsetWidth, bh = box.offsetHeight;
+  const cx = r.left + r.width / 2;
+  const left = Math.round(Math.max(6, Math.min(W - bw - 6, cx - bw / 2)));
+  const below = side === 'below' ? (r.bottom + GAP + bh <= H - 6 || r.top - GAP - bh < 6)
+    : (r.top - GAP - bh < 6 && r.bottom + GAP + bh <= H - 6);
+  const top = below ? Math.min(H - bh - 6, r.bottom + GAP) : Math.max(6, r.top - GAP - bh);
+  box.style.left = left + 'px';
+  box.style.top = Math.round(top) + 'px';
+  box.style.setProperty('--tail-x', Math.round(Math.max(16, Math.min(bw - 16, cx - left))) + 'px');
+  box.classList.toggle('is-below', below);
+}
+
+/** A step's tip (css/app-shell.css .bub.is-tip): the bubble with a red ✕ and "don't show again". Built, not placed or shown. */
+export function tipBox(o) {
+  const opts = o || {};
+  const box = _el('div', 'bub is-tip');
   box.setAttribute('role', 'note');
-  if (title) box.appendChild(_el('b', null, title));
-  for (const p of String(text || '').split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
+  const x = _el('button', 'bub-x', '✕');
+  x.type = 'button';
+  x.setAttribute('aria-label', 'Close');
+  x.addEventListener('click', () => { if (opts.onClose) opts.onClose(); });
+  box.appendChild(x);
+  if (opts.title) box.appendChild(_el('b', null, opts.title));
+  for (const p of String(opts.text || '').split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
+  const never = _el('label', 'bub-never');
+  const tick = document.createElement('input');
+  tick.type = 'checkbox';
+  tick.checked = !!opts.never;
+  tick.addEventListener('change', () => { if (opts.onNever) opts.onNever(tick.checked); });
+  never.append(tick, document.createTextNode(' don\'t show again'));
+  box.appendChild(never);
   return box;
 }
 

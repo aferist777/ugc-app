@@ -32,7 +32,7 @@
 
 import * as Store from './store.js';
 import * as PV from './preview-b.js';
-import { lock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
+import { lock, softLock, setOpenColumn, onColumnAsk, roomForWork, roomForTimeline } from './layout.js';
 import { isRead, isLive } from './scen-api.js';
 import { hint } from '../bubble.js';
 
@@ -74,8 +74,14 @@ export function project() { return _project; }
 
 /** The inspector hands us its repaint. */
 export function onChange(fn) { _onChange = fn; }
+/** (phase V62) Others that follow the setup's repaints - the crumb "b-roll /" (js/merge-v3/broll-view.js). */
+const _also = [];
+export function onRepaint(fn) { if (typeof fn === 'function') _also.push(fn); }
 
-const _repaint = () => { if (_onChange) _onChange(); };
+const _repaint = () => {
+  if (_onChange) _onChange();
+  for (const f of _also) { try { f(); } catch (e) { /* theirs */ } }
+};
 // The stage belongs to a build step while one is open, and to the timeline otherwise - and the
 // timeline and the Library the other way round: locked while a step is open (js/merge-v3/layout.js).
 // And in a talking head the open PANEL is the step (phase L): Setup for setup, the Library for
@@ -110,10 +116,20 @@ function _hasCut() {
 // FROM SETUP is the crumbs in its head - "Library / generate image / generate video / generate audio / captions" - and they are
 // pressed once the script is done: a voiceover's lines all read, a talking head's fragments all with their video. Until then
 // they stand greyed, and the bubble over them says what is left. The Library's spine in setup went (css/merge-v3.css).
+// (phase V62, the owner 2026-10-31: "давай таймлайн становится доступен, после того как фрагменты разложены на таймлайне";
+// (во54) "а + 1") A VOICEOVER's way on opens with the first read laid on the timeline - anything on it - as its timeline under
+// setup does (layout.js softLock).
 function _ready() {
   if (!_project) return false;
   const n = _readCount();
-  return n.total > 0 && (_isVo() ? n.read === n.total : n.clips === n.total);
+  if (_isVo()) return _hasCut();
+  return n.total > 0 && n.clips === n.total;
+}
+// (phase V62) Is a voiceover's B-roll on the timeline - its engine's pieces on main video (lib/broll.js: br_<line>_…)?
+function _brollLaid() {
+  const tl = Store.timeline();
+  const v1 = ((tl && tl.tracks) || []).find(t => t.id === 'v1');
+  return !!(v1 && (v1.clips || []).some(c => /^br_\d/.test(String(c.id || ''))));
 }
 function _mayEdit() {
   return _ready();
@@ -205,6 +221,7 @@ function _firstStep() {
 // lets the stylesheet hide it).
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
+  softLock(_isVo() && _hasCut());
   const lib = document.getElementById('mv3-library');
   if (!lib) return;
   const off = !!_pid && _step === 'setup' && !_mayEdit();
@@ -282,11 +299,24 @@ const ON = [
   ['captions', 'mv3-lib-cap', 'The captions of the timeline - their look and presets'],
 ];
 function _paintOn(wrap) {
+  // (phase V62, (во53)) A voiceover's "b-roll" first, right of SETUP: the B-roll's pieces, from the timeline step's Library panel
+  // (js/merge-v3/broll-view.js openCurrent) - pale until the B-roll is laid.
+  if (_isVo()) {
+    const on = _brollLaid();
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-lib-crumb mv3-wk-on' + (on ? '' : ' is-off');
+    b.textContent = '/ b-roll';
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (on) _goOn('mv3-lib-br'); });
+    if (on) b.title = 'The B-roll of a piece - what else was found for its sentence';
+    else { b.setAttribute('aria-disabled', 'true'); hint(b, 'Find the B-roll first - field 2, B-roll.'); }
+    wrap.appendChild(b);
+  }
   const ok = _ready();
   const n = _readCount();
   const left = !_project ? 'Reading the project…'
     : !n.total ? (_isVo() ? 'Choose the script first - a scenario or your own text, on the right.' : 'This project has no lines.')
-      : _isVo() ? 'Read every line first - field 1, mood & voice: ' + n.read + ' of ' + n.total + ' read. Then the timeline, the Library and the chats open.'
+      : _isVo() ? 'Read the lines first - field 1, mood & voice: each read lies on the timeline at once. Then the timeline, the Library and the chats open.'
         : 'Make the video of every fragment first - field 3, video: ' + n.clips + ' of ' + n.total + ' with a video. Then the timeline, the Library and the chats open.';
   for (const [label, id, what] of ON) {
     const c = document.createElement('button');
@@ -378,6 +408,25 @@ function _follow() {
 
 export function initWorkshop() {
   Store.onChange(_follow);
+  // (phase V62) A voiceover's timeline gaining its first cell or its B-roll changes the way on: the crumbs, the soft lock.
+  let was = '';
+  Store.onChange(() => {
+    if (!_isVo()) { was = ''; return; }
+    const now = (_hasCut() ? 'c' : '') + (_brollLaid() ? 'b' : '');
+    if (now === was) return;
+    was = now;
+    _paintRoute();
+  });
+  // (во54) A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
+  const tl = document.getElementById('mv3-timeline');
+  if (tl) {
+    tl.addEventListener('click', (e) => {
+      if (!document.body.classList.contains('mv3-lock-soft') || _step === 'timeline') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setStep('timeline');
+    }, true);
+  }
   _follow();
 }
 
