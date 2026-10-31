@@ -221,6 +221,10 @@ function _firstStep() {
 // lets the stylesheet hide it).
 function _paintSpines() {
   document.body.classList.toggle('mv3-talking', !!_pid);
+  // (phase V62, fix (к)) A voiceover has no Setup spine: the crumb "setup /" in the Library panel's head is its way back.
+  document.body.classList.toggle('mv3-vo', !!_pid && _isVo());
+  const back = document.getElementById('mv3-lib-setup');
+  if (back) back.hidden = !(_pid && _isVo());
   softLock(_isVo() && _hasCut());
   const lib = document.getElementById('mv3-library');
   if (!lib) return;
@@ -233,7 +237,7 @@ function _paintSpines() {
         : 'Make a clip first - the clips lay themselves on the timeline · ' + n.clips + '/' + n.total)
       : _step === 'setup' ? 'The timeline and the Library · ' + (_isVo() ? n.read + '/' + n.total + ' read' : n.clips + '/' + n.total + ' with a clip') : '';
   const ins = document.getElementById('mv3-inspector');
-  if (ins) ins.title = _pid && _step === 'timeline' ? 'Back to setup - the script and its fields' : '';
+  if (ins) ins.title = _pid && _step === 'timeline' && !_isVo() ? 'Back to setup - the script and its fields' : '';
 }
 
 // ── The route, in the panel's own header ────────────────────────────────────
@@ -417,6 +421,12 @@ export function initWorkshop() {
     was = now;
     _paintRoute();
   });
+  // (phase V62, fix (к)) A voiceover's "setup /", first in the Library panel's head: back to setup, as the spine was.
+  const back = document.getElementById('mv3-lib-setup');
+  if (back) {
+    back.title = 'Back to setup - the script and its fields';
+    back.addEventListener('click', (e) => { e.stopPropagation(); if (_pid && _isVo()) setStep('setup'); });
+  }
   // (во54) A press on a voiceover's timeline under setup - seen, not blurred, once something lies on it: the timeline step.
   const tl = document.getElementById('mv3-timeline');
   if (tl) {

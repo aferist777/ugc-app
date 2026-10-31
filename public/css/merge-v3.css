@@ -232,6 +232,9 @@ body:not(.mv3-talking) #mv3-inspector.is-collapsed{display:none}
 /* (phase V62, the owner's (во38)) Nor a Library spine in setup - a talking head's or a voiceover's: the way on is the crumbs in
    the Setup panel's head (js/merge-v3/workshop.js _paintOn). The Setup spine stays on the timeline step, the way back. */
 body.mv3-talking #mv3-library.is-collapsed{display:none}
+/* (phase V62, fix (к), the owner 2026-10-31: "давай уберем вертикальную кнопку setup") Nor a Setup spine in a voiceover: its way
+   back is the crumb "setup /", first in the Library panel's head (#mv3-lib-setup). A talking head keeps its spine. */
+body.mv3-vo #mv3-inspector.is-collapsed{display:none}
 
 .mv3-spine{
   display:none; flex:1; align-items:center; justify-content:center;
