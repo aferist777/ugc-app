@@ -2,7 +2,7 @@
 // THE GENERATORS' WINDOWS (phase V58, the owner 2026-10-29, (лк5)-(лк7): "я вроде хотел сделать генераторы в попапе в
 // library. чтобы открывался попап размером с альманах, как в merge проектах"). ONE module, opened from anywhere:
 //
-//   openFrame(o)      a window the almanac's size (860×560) over the page - its head a row of CRUMBS (each but the
+//   openFrame(o)      a window the almanac's size (860×560) - a generation's GEN_SIZE, 1280×800 (phase V64) - over the page - its head a row of CRUMBS (each but the
 //                     last goes back; one may carry a button, "characters / Mute (+ new look)"), its body the caller's;
 //                     on the stack of layers (js/layers.js): Escape, its ✕ and a press beside it close it. SEVERAL at
 //                     once - one over another (talking head's "who" over "where", wk-setup.js): the one closed shows the
@@ -56,6 +56,10 @@ export function ensureCss() {
 
 // ── The frame ───────────────────────────────────────────────────────────────
 const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vhelp.js)
+// (phase V64 block 2, the owner 2026-10-31, (зг5), (зг9): "давай все окна генераций 1280×800") EVERY GENERATION'S WINDOW - the
+// pictures, video and sound chats, the frames chat, New Character, New environment, New lookbook, New prop - is this size; a
+// smaller screen makes it smaller (openFrame). Pickers, the almanac, the viewer and the "who" / "where" windows keep theirs.
+export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
 const _frames = [];                        // open, the top last
 
 /**
@@ -185,7 +189,7 @@ export function paintBench(host, o) {
 /** A window of the bench alone. */
 export function openGenerator(o) {
   const kind = KINDS[o && o.kind] ? o.kind : 'environment';
-  const win = openFrame({ name: KINDS[kind].title, anchor: o.anchor, cls: 'is-gen', onClose: o.onClose });
+  const win = openFrame({ name: KINDS[kind].title, anchor: o.anchor, cls: 'is-gen', size: GEN_SIZE, onClose: o.onClose });
   win.setCrumbs([{ label: KINDS[kind].title }]);
   paintBench(win.body, Object.assign({}, o, { kind }));
   return win;

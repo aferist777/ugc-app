@@ -2,7 +2,7 @@
 //
 // A WINDOW (phase V60, the owner 2026-10-29, (пп4), (пп5): "процесс создания персонажей я бы сделал в попапе"; only the
 // move - "пока только косметика", the making itself is the owner's to change later). "New Character" in the shelf's
-// header opens it over the shelf - the generators' window (js/gen-window.js openFrame), 1100×720 as the music window,
+// header opens it over the shelf - the generators' window (js/gen-window.js openFrame), 1280×800 since phase V64 (1100×720 before) as every generation's window,
 // smaller on a small screen; there is no "← Characters" any more. Its ✕, Escape or a press beside it HIDE it: what runs
 // goes on and the bench stays - the content is built once, in #lib-chmake (hidden, its parking place), and is MOVED into
 // the window's body and back, never built again. The rows of Alerts of a portrait or a sheet
@@ -41,7 +41,7 @@ import { genName } from './character/schema.js';
 import { startProgress, lockControls } from '../progress.js';
 import { PICTURE_ACCEPT, isPictureFile, pictureDataUrl } from '../picture-file.js';
 // (phase V60) The window it is shown in.
-import { openFrame } from '../gen-window.js';
+import { openFrame, GEN_SIZE } from '../gen-window.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_WORK = 'lib_chmake_v1';
@@ -854,7 +854,6 @@ function _restore() {
 // (✕, Escape, a press beside it), what was made meanwhile to be read again.
 export function init(hooks) { _hooks = hooks || {}; }
 
-const W_CHM = 1100, H_CHM = 720;           // the music window's size (js/library/music-window.js) - the owner's (пп4)
 let _win = null;                           // the window open now
 let _savedClose = false;                   // the close a save makes - the shelf is told by onSaved, not onClosed
 
@@ -867,7 +866,7 @@ export function open() {
   if (!host) return;
   if (!_built) _build();
   if (!isOpen()) {
-    _win = openFrame({ name: 'New Character', size: { w: W_CHM, h: H_CHM }, cls: 'is-chmake', onClose: _park });
+    _win = openFrame({ name: 'New Character', size: GEN_SIZE, cls: 'is-chmake', onClose: _park });
     _win.setCrumbs([{ label: 'New Character' }]);
     // The same nodes, moved - what is typed, picked, waited for and drawn stays as it was.
     _win.body.appendChild(_root);

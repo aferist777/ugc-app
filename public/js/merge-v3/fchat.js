@@ -2,7 +2,7 @@
    MERGE — the FRAMES CHAT of a talking head (phase V26.5, the owner 2026-10-10; docs/local-app/PLAN.md "V26.5").
 
    A first frame asked for in words. Since phase V61 (the owner 2026-10-30, (т7): "как у new character") it is a WINDOW over
-   the page - js/gen-window.js openFrame, 1100×720, as New Character and the music window: its root (#mv3-fc) is MOVED into
+   the page - js/gen-window.js openFrame, 1280×800 since phase V64 (1100×720 before), as every generation's window: its root (#mv3-fc) is MOVED into
    the window and back to its parking place in the Setup panel, so what is typed, picked and waited for stays - opened by
    "frames chat" in the frames field of setup (js/merge-v3/wk-fragments.js) and by its rows of Alerts. It is the pictures
    chat's conversation (chat-shell.js) with the pictures chat's model column (pic-models.js), and what is its own is here:
@@ -27,7 +27,7 @@ import { startInlineProgress } from '../progress.js';
 import { modelColumn } from './pic-models.js';
 import * as Src from './chat-sources.js';
 import { PICTURE_ACCEPT, isPictureFile } from '../picture-file.js';
-import { openFrame } from '../gen-window.js';
+import { openFrame, GEN_SIZE } from '../gen-window.js';
 import { markText, markField } from './image-words.js';
 
 const MAX_ATTS = 6;
@@ -815,7 +815,7 @@ function _autoCast(opening) {
 // The chat's root lives in the Setup panel (#mv3-fc in merge-v3.html), hidden - its parking place - and is MOVED into the
 // window while it is open and back when it closes, as New Character does (js/library/chmake.js): the conversation, the box
 // being typed, the zone and the countdowns are the same nodes. Closing the window hides the chat; nothing it asked for stops.
-const W_FC = 1100, H_FC = 720;            // New Character's and the music window's size (the owner's (т7))
+// (phase V64 block 2) A generation's window: 1280×800 (gen-window.js GEN_SIZE) - 1100×720 until then (the owner's (т7)).
 let _win = null;
 let _ro = null;
 // The node itself, held: the window takes its overlay off the page before it says it closed, and the root with it - looked
@@ -836,7 +836,7 @@ export function open(p, hooks) {
   const root = $root();
   if (!root) return;
   if (!isOpen()) {
-    _win = openFrame({ name: 'frames chat', size: { w: W_FC, h: H_FC }, cls: 'is-fchat', onClose: _park });
+    _win = openFrame({ name: 'frames chat', size: GEN_SIZE, cls: 'is-fchat', onClose: _park });
     _win.setCrumbs([{ label: 'frames chat' }]);
     root.removeAttribute('style');        // the place the old overlay measured for it
     _win.body.appendChild(root);

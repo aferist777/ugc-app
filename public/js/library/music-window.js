@@ -18,7 +18,7 @@
      foot     under the right column: ALMANAC on the left, the line of the last press ("in Alerts · …"), and at the
               right edge where the tracks go ("into Music → Pop"), the price and "generate" ("write the lyrics")
 
-   1100×720, smaller on a smaller screen ((мз4а)).
+   1280×800 since phase V64 ((зг9); 1100×720 before), smaller on a smaller screen.
 
    NO "MADE HERE" ((мг5б)): the window stays open after "generate", says the press is in Alerts, and what Suno makes lands in
    the gallery behind it - the opener reads the tree and the gallery again and outlines the new tracks while their folder is
@@ -40,14 +40,13 @@
    What the person set is remembered in the browser (`lib_music_v1`).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { openFrame } from '../gen-window.js';
+import { openFrame, GEN_SIZE } from '../gen-window.js';
 import { createSunoForm, el, api, ls, lsSet, copyText, titleOf, qmark, withQ, closeQ, modeRowHelp, MODEL_ROW_HELP } from '../sound/suno-form.js';
 
 const MODES = ['simple', 'custom', 'lyrics'];
 const VIEW = 'musicmake';
 const KEY = 'lib_music_v1';
 const KEY_SASH = 'lib_music_sash_v1';
-const SIZE = { w: 1100, h: 720 };             // (мз4а)
 const SET_W = 260, SET_MIN = 200, SET_MAX = 460, RIGHT_MIN = 480;
 const LYR_MAX = 12;                           // the presses of Lyrics shown
 
@@ -446,7 +445,7 @@ export async function open(o) {
   _placeKey = null;
   _err = '';
   _win = openFrame({
-    name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: SIZE,
+    name: 'generate music', anchor: _o.anchor, cls: 'is-music', size: GEN_SIZE,
     onClose: () => {
       F.closeAlmanac();
       closeQ();
