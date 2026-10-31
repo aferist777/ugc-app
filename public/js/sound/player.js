@@ -4,11 +4,12 @@
    with Music; "этот плеер я бы поместил перманентно в музыкальной вкладке библиотеки") - a bar under the gallery only
    (the owner 2026-10-28: "плеер не должен заходить под столбец дерева" - library.html #lib-field), outside the grid that
    is drawn again, there while Music is open (its root, highlights, its moods) - and (phase V64 fix (а)) while its track is picked
-   on the Library's page: the page shows and hides it (js/library/main.js _paintPlayer); hidden, it stops.
+   on the Library's page: the page shows and hides it (js/library/main.js _paintPlayer); hidden, it stops. (phase V64, fix (о))
+   SFX's sounds play and are cut in it too (★ Favorites, Built-in, My sounds) - a piece of a sound is a new sound in My sounds.
 
    Until a track is pressed it says "choose a track"; then the last track stays on it where it was. Leaving Music stops the
    sound and hides the bar; coming back shows the same track at the same place (kept for the next visit of the page too).
-   SFX and My sounds do not play in it - their tiles play as before, their "Cut…" is the Cut window.
+   SFX and My sounds did not play in it until phase V64 fix (о) - their tiles played on themselves, their "Cut…" was the Cut window.
 
    On the bar: ▶/⏸, "0:41 / 3:12", the name OVER the wave (phase V59, the owner 2026-10-29: "название было не справа от
    кнопки play - а сверху над волной"), the wave with its ruler (js/sound/scrub.js - the server's peaks, ~48 px; a press on
@@ -76,7 +77,7 @@ export function createPlayer(host, opts) {
     const on = !!cur;
     for (const b of [play, piece, x]) b.disabled = !on;
     host.classList.toggle('is-empty', !on);
-    name.textContent = on ? cur.name : 'choose a track - press one in Music';
+    name.textContent = on ? cur.name : 'choose a track or a sound - press one';
     name.title = on ? cur.name : '';
     const short = D() < 10;
     time.textContent = on ? clock(audio.paused && sc ? sc.time() : audio.currentTime, short) + ' / ' + clock(D(), short) : '';
@@ -104,7 +105,8 @@ export function createPlayer(host, opts) {
   // A track on the bar: its wave, the piece, the place.
   function _load(it, at, range) {
     if (sc) { sc.destroy(); sc = null; }
-    cur = { id: String(it.id), path: String(it.path || it.media), name: String(it.name || 'track'), dur: +it.dur || 0,
+    // (phase V64, fix (о)) Its kind too - a track of Music, or a sound of SFX: the page knows it picked by "<kind>:<id>".
+    cur = { id: String(it.id), kind: String(it.kind || 'music'), path: String(it.path || it.media), name: String(it.name || 'track'), dur: +it.dur || 0,
       wave: Array.isArray(it.wave) ? it.wave : ((it.meta && it.meta.wave) || []) };
     audio.src = cur.path;
     playEnd = 0;
@@ -115,7 +117,8 @@ export function createPlayer(host, opts) {
       onSeek: (t) => { audio.currentTime = t; if (!audio.paused) playEnd = 0; paint(); },
       onRange: () => save(),
       // (phase V59) "Cut" by the right flag, only while a piece is marked.
-      cut: { title: 'The piece between the gold flags becomes a new track in Music - the track itself stays as it is', onCut: _cut },
+      cut: { title: cur.kind === 'music' ? 'The piece between the gold flags becomes a new track in Music - the track itself stays as it is'
+        : 'The piece between the gold flags becomes a new sound in My sounds - the sound itself stays as it is', onCut: _cut },
     });
     wave.textContent = '';
     wave.appendChild(sc.el);

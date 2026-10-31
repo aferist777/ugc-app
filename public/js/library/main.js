@@ -395,12 +395,18 @@ async function _musicLanded(gen, dest) {
 // another tile pressed) - the bar hides and the sound stops; the track and its place are kept for its next press.
 let _player = null;
 const _inMusic = () => _shelf === 'media' && !_makingOn && !!_node && _node.kind === 'music';
+// (phase V64, fix (о), the owner 2026-11-01: "давай кстати звуки sfx делать обрезку снизу как у music проигрывание в плеере - в
+// library") SFX too - ★ Favorites, Built-in, My sounds and its folders: a sound pressed plays in the same bar, cut there as a
+// track is (its piece a new sound in My sounds - lib/audio-cut.js).
+const SFX_NODES = new Set(['sfx-all', 'sfx-fav', 'sfx', 'sounds']);
+const _inSfx = () => _shelf === 'media' && !_makingOn && !!_node && (SFX_NODES.has(_node.key) || _node.kind === 'sounds' || _node.kind === 'sfx');
+const _inPlayer = () => _inMusic() || _inSfx();
 function _playerPicked() {
   const c = _player && _player.current();
-  return !!c && !!_tsel && _tsel.has('music:' + c.id);
+  return !!c && !!_tsel && _tsel.has((c.kind || 'music') + ':' + c.id);
 }
 function _paintPlayer() {
-  if (_player) _player.show(_inMusic() && _playerPicked());
+  if (_player) _player.show(_inPlayer() && _playerPicked());
 }
 
 // (phase V60) New Character's window over the Characters shelf - the shelf itself stays behind it. The column lets go
@@ -1097,7 +1103,7 @@ function _card(it, extra) {
       },
       // (phase V54, (зв14)) A track's "Cut…" opens it in the player, a piece marked; SFX and My sounds - the Cut window.
       // (phase V64, fix (а)) The track picked with it - the bar is there while its track is.
-      cut: (x) => (x.kind === 'music' && _player && _inMusic()
+      cut: (x) => (AUDIO.has(x.kind) && _player && _inPlayer()
         ? (_player.open(x, { cut: true }), (_tsel && _tsel.only(_keyOf(x))), _paintPlayer(), true) : false),
     });
   });
@@ -1322,7 +1328,7 @@ function _renderGrid() {
       // vertical video sent onto Uploads, "show") is outlined, so it is found at once.
       if (_shelf === 'media') card.classList.toggle('cur', String(it.id) === _sel || _selAlso.has(String(it.id)));
       // (phase V54) A track in Music plays in the player; SFX and My sounds on their cards, as before.
-      if (it.kind === 'music' && _player && _inMusic()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); _paintPlayer(); });
+      if (AUDIO.has(it.kind) && _player && _inPlayer()) card.addEventListener('click', () => { _stopHearing(); _player.open(it); _paintPlayer(); });
       else if (AUDIO.has(it.kind)) card.addEventListener('click', () => _hearToggle(it, card));
       else if (it.kind === 'references') card.addEventListener('click', () => _openPost(it, 0));
       else if (LYR.isLyrics(it)) card.addEventListener('click', () => _openLyric(it));
