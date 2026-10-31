@@ -460,9 +460,12 @@ function _initTree() {
       if (_tsel) _tsel.clear();         // another folder: nothing picked
       if (_shelf === 'media') _load({ checks: false });
     },
-    // (phase V55, (гн10)) Environments / Lookbooks' "+": their generator's window (phase V58).
-    // (phase V59) Music's "+": the music window, on Music itself.
+    // (phase V55, (гн10)) Environments / Lookbooks / Props' "create": their generator's window (phase V58).
+    // (phase V59) Music's "Generate music" (in its menu since V64): the music window, on Music itself.
     onMake: (n) => { if (_shelf === 'media' && n && n.make) _openGen(n.make, true); },
+    // (phase V64 block 1) A root's "generate" - AUDIO the music window, on Music.
+    generates: ['audio'],
+    onGenerate: (n) => { if (_shelf === 'media' && n && n.key === 'audio') _openMusic(false); },
     onChanged: (what) => (_shelf === 'media'
       ? _load({ keepScroll: true, checks: !!(what && (what.deleted || what.moved)) }).then(() => _counts()) : null),
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.

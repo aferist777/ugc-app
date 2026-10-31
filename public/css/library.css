@@ -134,9 +134,7 @@
 .lib-tree-sash[hidden], .lib-tree[hidden]{ display:none; }
 body.lib-colresize, body.lib-colresize *{ cursor:col-resize !important; user-select:none; }
 .lib-tree{ flex:0 0 240px; min-width:0; min-height:0; overflow:hidden; background:var(--surface); }
-/* (phase V56, the owner 2026-10-28: "выделил золотым цветом в дереве справа названия environment и lookbooks но именно в
-   library") IMAGES -> Environments / Lookbooks (js/media-tree.js .is-made) - gold here only, Merge's tree keeps its colours. */
-#lib-tree .mt-row.is-made .mt-name{ color:var(--gold); }
+/* (phase V56) The made folders' gold names were this tree's only; since phase V64 they are both trees' (css/media-tree.css). */
 /* (V38.6) Scenarios: the list at its remembered width on the left (--sc-list-w, js/library/main.js _wireScSash), the
    selected one on the right - a scenario's column, or a draft's form (#lib-sc-draft, the generator's form moved in). */
 /* (phase V54) The gallery's column: the grid and, under it only, the music player (#lib-player) - the tree's column beside

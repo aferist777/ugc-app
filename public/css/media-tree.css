@@ -40,6 +40,25 @@
 .mt-x{font-size:9px}
 .mt-x:hover{background:var(--danger); color:oklch(.99 0 0)}
 
+/* (phase V64 block 1, the owner 2026-10-31: "дерево с золотым цветом папок - environment, lookbooks, props. и вместо кнопки
+   "+" при наведении будет написано "create" в синей рамке с круглыми краями. при наведении на кнопку заливка золотым ...
+   напротив корневых папок - images, video, audio - они тоже должны быть золотым написаны - показываем кнопку generate золотым
+   цветом с золотой обводкой, при наведении кнопка становится полностью золотой с контрастным текстом на ней") GOLD IS WHERE A
+   GENERATOR'S BUTTON IS - in both trees (js/media-tree.js .is-made, .is-gen); Music has none. */
+.mt .mt-row.is-made .mt-name, .mt .mt-row.is-group.is-gen .mt-name{color:var(--gold)}
+.mt-act.mt-make{
+  width:auto; height:17px; padding:0 8px; border:1px solid var(--primary); border-radius:var(--pill);
+  color:var(--ink); font:600 10px/1 var(--font); letter-spacing:.02em;
+}
+.mt-act.mt-make:hover{background:var(--gold); border-color:var(--gold); color:var(--bg)}
+.mt-gen{
+  flex:0 0 auto; display:inline-flex; align-items:center; height:17px; padding:0 7px; margin-left:2px;
+  border:1px solid var(--gold); border-radius:var(--r-xs); background:none; color:var(--gold);
+  font:700 10px/1 var(--font); letter-spacing:.03em; cursor:pointer;
+  transition:background .1s var(--ease), color .1s var(--ease);
+}
+.mt-gen:hover{background:var(--gold); color:var(--bg)}
+
 /* A tile hanging over a node that takes it. */
 .mt-row.is-drop{outline:1px dashed var(--primary); outline-offset:-1px; background:var(--primary-soft)}
 

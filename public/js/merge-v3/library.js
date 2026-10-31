@@ -1218,6 +1218,13 @@ export async function openMaker(kind) {
 // Something the window made landed: the tree's numbers, and the gallery while it is the folder shown.
 function _makerLanded() { _reload(); }
 
+/** (phase V64 block 1) A root's "generate": IMAGES - the pictures chat, VIDEO - the video chat, AUDIO - the sound on Simple. */
+export async function openGenerate(root) {
+  if (root === 'images') return openPictures();
+  if (root === 'video') { const V = await import('./vidchat.js'); return V.openVideos(); }
+  if (root === 'audio') { const A = await import('./audchat.js'); return A.openMusicMaker(); }
+}
+
 function _initMakers() {
   // ?open=envmake|lbmake - where the Alerts row of the old chat's send made here leads: the window, once the page has its
   // project. Said once: the address forgets it.
@@ -1332,8 +1339,10 @@ export function initLibrary() {
     // (phase V34.E) Sounds from Explorer let go on Music, SFX or a category of My sounds go there.
     takesFiles: (n) => !!SS.filesTo(n),
     onFiles: (n, files) => { _tree.select(n.key, true); _upload(files); },
-    // (phase V55, (гн11)) Environments / Lookbooks' "+": their generator, right in this panel.
+    // (phase V55, (гн11)) Environments / Lookbooks / Props' "create": their generator, right in this panel.
     onMake: (n) => { if (n && n.make) openMaker(n.make); },
+    // (phase V64 block 1) IMAGES / VIDEO / AUDIO's "generate": the pictures chat, the video chat, the sound.
+    onGenerate: (n) => openGenerate(n && n.key),
   });
   _initMakers();
   // (phase V60.2) "Library" pressed - from the shelf, a chat or the captions: the roots.

@@ -81,6 +81,13 @@
    Generate music saved - locked, no "+", no folder of its own. A tile, several, a folder or files from Explorer let go
    on it are refused in words (LYRICS_TAKE); a text let go anywhere else too (LYRICS_STAY); "Move to…" does not offer it.
 
+   GOLD IS WHERE A GENERATOR'S BUTTON IS (phase V64 block 1, the owner 2026-10-31, (зг1)-(зг3), (зг8)) - one look in every
+   tree that is given the openers: Environments / Lookbooks / Props have their names gold and, under the pointer, "create"
+   in a blue frame with round ends (filled gold under the pointer itself) - `onMake`; the roots IMAGES / VIDEO / AUDIO
+   have their names gold and "generate" always there, gold in a gold frame (all gold, dark text, under the pointer) -
+   `onGenerate`: the pictures chat, the video chat, the sound. IMAGES' "New folder" is then in its menu only. Music has
+   neither gold nor a button since V64: its "Generate music" and "New folder" are in its menu. Patterns stay as they are.
+
    THE ROOTS (phase V60, the owner 2026-10-29, (пп1а), (пп2а): "при нажатии полки media показывать в основном поле корневые
    папки (references, video, images, audio)"). With `home` - the Library's Media shelf only, never Merge's panel - the tree
    may have NOTHING selected: the page is then at the roots, its gallery the top nodes as folder tiles (foldersEl(null)),
@@ -109,6 +116,9 @@ const NOUN = { birols: 'clip', hooks: 'clip', uploads: 'clip', images: 'picture'
 // (phase V26.6) And IMAGES -> Props: the products, added by New prop.
 const MADE = { environments: 'Environments', lookbooks: 'Lookbooks', props: 'Props' };
 const MADE_BY = { environments: 'New environment', lookbooks: 'New lookbook', props: 'New prop' };
+// (phase V64 block 1) The roots that make what lies in them - their "generate" (`onGenerate`).
+const GEN_ROOTS = new Set(['images', 'video', 'audio']);
+const GEN_TIP = { images: 'Generate pictures - the pictures chat', video: 'Generate video - the video chat', audio: 'Generate music and sounds' };
 const MADE_SAYS = {
   props: 'A prop stays in Props - its description is kept by its place there',
   environments: 'A made environment stays in Environments - its description, 3D layout and the videos filmed there point at it',
@@ -245,8 +255,10 @@ const LOCK_SVG = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="t
  *                         gallery again; the tree reads itself again
  *   o.takesFiles(node)    (phase V34.E) whether files from Explorer may be let go on this node's row
  *   o.onFiles(node, files)  they were
- *   o.onMake(node, anchor)  (phase V55) the "+" of a node with `make` (IMAGES -> Environments / Lookbooks; V59: AUDIO ->
- *                         Music, 'music') - open its generator (node.make); without it the node has no generator's "+"
+ *   o.onMake(node, anchor)  (phase V55) a node with `make` - open its generator (node.make): (V64) the "create" of IMAGES ->
+ *                         Environments / Lookbooks / Props, and Music's "Generate music" in its menu; without it none
+ *   o.onGenerate(node, anchor)  (phase V64) the "generate" of a root - IMAGES, VIDEO, AUDIO (node.key); without it none
+ *   o.generates   (phase V64) the roots that have it ('images', 'video', 'audio') - all three when omitted
  *   o.home        (phase V60) the word the path begins with ('Media'): nothing selected is allowed - the roots; onSelect(null)
  *                 says the page went back to them (the word pressed). (phase V60.2) `true` - the roots with no word in the path
  *   o.start       (phase V60, with `home`) the node to open on - an address's; '' or omitted - the roots
@@ -460,10 +472,16 @@ export function createTree(host, o) {
   function _row(n, depth) {
     const isGroup = depth === 0;
     const isCat = !!n.cat && !n.uncat && !n.project;
+    // (phase V64 block 1, the owner 2026-10-31, (зг1)-(зг3), (зг8)) GOLD IS WHERE A GENERATOR'S BUTTON IS, one look in both
+    // trees: Environments / Lookbooks / Props - "create" (under the pointer); the roots IMAGES / VIDEO / AUDIO - "generate"
+    // (always there) - each only where the page gives the opener (`onMake`, `onGenerate`). Music has neither: its "Generate
+    // music" is in the menu under the right button.
+    const creates = !!n.make && !!MADE[n.kind] && typeof opt.onMake === 'function';
+    const gens = isGroup && GEN_ROOTS.has(n.key) && typeof opt.onGenerate === 'function'
+      && (!Array.isArray(opt.generates) || opt.generates.includes(n.key));
     const row = _el('div', 'mt-row' + (isGroup ? ' is-group' : '') + (n.key === sel ? ' is-sel' : '') + (fresh.has(n.key) ? ' is-new' : '')
       + (n.empty ? ' is-empty' : '') + (n.locked ? ' is-locked' : '') + (isCat ? ' is-cat' : '')
-      // (phase V56) Environments / Lookbooks - their names gold in the Library's tree (css/library.css), not in Merge's.
-      + (n.make ? ' is-made' : ''));
+      + (creates ? ' is-made' : '') + (gens ? ' is-gen' : ''));
     row.dataset.key = n.key;
     row.setAttribute('role', 'treeitem');
     row.style.paddingLeft = (3 + depth * 11) + 'px';
@@ -489,10 +507,10 @@ export function createTree(host, o) {
       lock.title = n.tip || (n.builtin ? 'Built into the app - read only' : 'Required - it cannot be renamed, moved or deleted');
       row.appendChild(lock);
     }
-    // A kind that can have folders: "+" makes one at its top - (phase V59, (мг3б)) unless its "+" is its generator's
-    // (Music): one "+" on a row; its "New folder" is in the menu under the right button and on the gallery's empty space.
-    const makes = !!n.make && typeof opt.onMake === 'function';
-    if (holds(n) && !n.cat && !makes) {
+    // A kind that can have folders: "+" makes one at its top - unless a generator has the row (V64: a root's "generate";
+    // Music, whose generator is in its menu - (phase V59, (мг3б)) - as its "New folder" is): then "New folder" is in the
+    // menu under the right button and on the gallery's empty space.
+    if (holds(n) && !n.cat && !(n.make && typeof opt.onMake === 'function') && !gens) {
       const add = _el('button', 'mt-act mt-add', '+');
       add.type = 'button';
       add.tabIndex = -1;
@@ -500,15 +518,26 @@ export function createTree(host, o) {
       add.addEventListener('click', (e) => { e.stopPropagation(); _newFolder(n, add); });
       row.appendChild(add);
     }
-    // (phase V55, (гн10), (гн11)) Environments / Lookbooks - (V59) and Music: "+" opens their generator - where, the page
-    // says (`onMake`).
-    if (makes) {
-      const mk = _el('button', 'mt-act mt-add mt-make', '+');
+    // (phase V55, (гн10), (гн11); V64 (зг3)) Environments / Lookbooks / Props: "create" under the pointer, in a blue frame
+    // (gold under the pointer itself), opens their generator - where, the page says (`onMake`).
+    if (creates) {
+      const mk = _el('button', 'mt-act mt-make', 'create');
       mk.type = 'button';
       mk.tabIndex = -1;
       mk.title = n.makeLabel + ' - opens the generator';
       mk.addEventListener('click', (e) => { e.stopPropagation(); opt.onMake(n, mk); });
+      mk.addEventListener('dblclick', (e) => e.stopPropagation());
       row.appendChild(mk);
+    }
+    // (phase V64 (зг6)) A root's "generate" - IMAGES the pictures chat, VIDEO the video chat, AUDIO the sound window.
+    if (gens) {
+      const g = _el('button', 'mt-gen', 'generate');
+      g.type = 'button';
+      g.tabIndex = -1;
+      g.title = GEN_TIP[n.key];
+      g.addEventListener('click', (e) => { e.stopPropagation(); opt.onGenerate(n, g); });
+      g.addEventListener('dblclick', (e) => e.stopPropagation());
+      row.appendChild(g);
     }
     if (isCat && n.own && !n.locked) {
       const x = _el('button', 'mt-act mt-x', '✕');
