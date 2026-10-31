@@ -27,7 +27,8 @@
    is always one path from a top node down: a node opened (▸, a double press, a folder tile, a word of the path, a folder
    made or moved into it, the page's select) folds everything off its line - the other top nodes with everything in them,
    its sibling folders with theirs -, and a folded node folds what was open in it, so opened again it shows its first level
-   only. A TOP NODE (REFERENCES, IMAGES, VIDEO, AUDIO) opens on ONE press - selected and opened; deeper a press only
+   only. A TOP NODE (REFERENCES, IMAGES, VIDEO, AUDIO) opens on ONE press - selected and opened (phase V64, fix (и): a double press on
+   one that was OPEN folds it - `pressWas`; a folded one stays opened by its first press); deeper a press only
    selects (the rows stay, a double press must find its row) and a double press or ▸ opens. A branch opened under a drag
    still folds nothing (V39); the next opening makes it one path again. The same rule wherever the tree is drawn - the
    Library, Merge's Library panel, the attachment window, Video to Music; `roots` show some top nodes only and the rule
@@ -280,6 +281,7 @@ export function createTree(host, o) {
   const atHome = () => !!opt.home && !sel;
   let loaded = false;       // the first answer has been painted
   let lastPress = { key: '', at: 0 };
+  let pressWas = { key: '', open: false, at: 0 };   // (phase V64, fix (и)) a top node's state at the first press of a double one
   // (phase V59) A top node's press draws the rows again (it opens, the others fold): the second press of a double one lands
   // on whatever row is under the pointer then - for this long after it no other row is pressed and no branch toggles.
   let settle = { key: '', until: 0 };
@@ -556,6 +558,8 @@ export function createTree(host, o) {
       // (phase V59) Right after a top node's press drew the rows again, the row now under the pointer is not pressed.
       if (now < settle.until && n.key !== settle.key) return;
       const again = lastPress.key === n.key && now - lastPress.at < 450;
+      // (fix (и)) Whether a top node was open before the first press of a double one - the double press folds only that.
+      if (!again) pressWas = { key: n.key, open: open.has(n.key), at: now };
       lastPress = { key: n.key, at: now };
       if (again && n.key === sel) return;
       // (phase V59, (мг8а)) A top node opens on ONE press - selected and opened, the others folded with all in them.
@@ -569,7 +573,18 @@ export function createTree(host, o) {
     // A double press opens or folds a branch (the owner, second round); on a category's name it renames it. (phase V59)
     // Not on a top node - one press opened it -, and not on the rows a top node's press has just drawn under the pointer.
     const settled = () => Date.now() >= settle.until;
-    if (has) row.addEventListener('dblclick', (e) => { e.preventDefault(); if (!isGroup && settled()) toggle(n.key); });
+    // (phase V64, fix (и), the owner 2026-11-01: "давай сделаем двойным кликом сворачивание корневой папки") A top node OPEN
+    // before the double press is folded by it (its first press only selected it); a folded one stays opened by its first press.
+    if (has) {
+      row.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        if (isGroup) {
+          if (pressWas.key === n.key && pressWas.open && Date.now() - pressWas.at < 700 && open.has(n.key)) toggle(n.key);
+          return;
+        }
+        if (settled()) toggle(n.key);
+      });
+    }
     if (isCat && n.own && !n.locked) name.addEventListener('dblclick', (e) => { e.stopPropagation(); if (settled()) _rename(n, row); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); _menu(n, row, e.clientX, e.clientY); });
     _takesDrops(row, n);
