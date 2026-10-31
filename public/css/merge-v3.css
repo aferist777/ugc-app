@@ -1439,10 +1439,14 @@ body.mv3-locked #mv3-timeline{
    and where you stand needs no box to be found, because it is where the trail ends. */
 .mv3-wk-sub.is-trail{border-style:dashed; border-color:var(--primary)}
 .mv3-wk-sub.is-here{cursor:default}
-/* (phase V62, (во39), (во40)) The way on after "setup" - Library and the panel's views: lit once the script is done, greyed and
-   dead before, the bubble over them saying what is left. */
-.mv3-wk-sub.mv3-wk-on.is-off{color:var(--muted); opacity:.7; cursor:default}
-.mv3-wk-sub.mv3-wk-on.is-off:hover{color:var(--muted)}
+/* (phase V62, (во39), (во40); the owner 2026-10-31: "как у проектов типа highlights") The crumbs after SETUP - the Library panel's
+   own look (.mv3-lib-crumb): words in capitals after a "/", no pill; the way on pale until the script is done, then as any
+   crumb, the bubble over a pale one saying what is left. */
+.mv3-wk-steps.is-crumbs{margin-left:6px}
+.mv3-wk-crumbs{display:flex; align-items:center; gap:6px; flex:0 0 auto}
+.mv3-wk-crumbs .mv3-lib-crumb{flex:0 0 auto; overflow:visible}
+.mv3-lib-crumb.mv3-wk-on.is-off{opacity:.35; cursor:default}
+.mv3-lib-crumb.mv3-wk-on.is-off:hover{opacity:.35; color:var(--muted)}
 
 /* The sentence and its button, at the foot of the right half and ON the panel's bottom edge:
    the half that holds it gives up the padding every other half keeps under its content. */
@@ -1488,6 +1492,11 @@ body.mv3-locked #mv3-timeline{
 }
 .mv3-wk-sash:hover{background:oklch(1 0 0 / .10)}
 .mv3-wk-half.is-guide > *{flex:0 0 auto}
+/* (phase V62, the owner 2026-10-31: "давай добавим центральному полю такую же золотую обводку как и столбце со сценариями") A
+   voiceover's fields in the script column's frame - lit once there is a script; before, they are blurred and the frame is not
+   drawn, so the script column is the one thing lit (js/merge-v3/wk-fragments.js paint, _all). */
+.mv3-wk-half.is-guide.is-vo{margin:2px 0 8px 8px; padding:8px 9px; border:1px solid transparent; border-radius:var(--r-sm)}
+.mv3-wk-half.is-guide.is-vo.is-lit{border-color:var(--gold)}
 
 /* The maker is two halves: the shelf it draws from, and the thing being made. Side by side
    because picking a base and describing the change are one act, and a column that scrolls
@@ -1688,6 +1697,11 @@ body.mv3-locked #mv3-timeline{
 .mv3-vos-cat{flex:0 1 auto; max-width:45%}
 .mv3-vos-list{flex:1 1 auto; min-height:0; overflow-y:auto; padding-left:0; padding-right:0}
 .mv3-vos-bar{display:flex; align-items:center; gap:7px; margin:0 0 6px}
+/* (the owner 2026-10-31: "давай поле с b-roll медиа будет рядом вместе со столбцом настроек фрагмента выезжающим. потому что сейчас
+   выезжающее поле перекрывает поле") While the piece's settings strip (.mv3-over, 350 px from the right) is out, the view stands
+   LEFT of it, as the captions view does (mv3-captions.css), instead of under it. */
+#mv3-br{transition:margin-right .18s var(--ease)}
+#mv3-library:has(.mv3-over.is-open) #mv3-br.is-shown{margin-right:min(350px, 100%)}
 /* (phase V62, block 2) A B-roll piece's batch in the Library panel (js/merge-v3/broll-view.js): its sentence, then the videos and
    the pictures as tiles - ✓ laid on the timeline, gold outline in this very piece - and the preview under the pointer. */
 .mv3-brv-head{flex:0 0 auto; padding:9px 11px 6px; border-bottom:1px solid var(--border-soft)}

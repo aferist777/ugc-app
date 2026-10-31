@@ -161,15 +161,20 @@ const _INFO = new Set([
   'Music laid under its clip.',
   'The music was laid under its clip - it merges in when your edit saves.',
   'The music was laid under its clip while you edited - your edit was kept and merged in.',
+  // (phase V62) A voiceover's B-roll laid by its engine (lib/broll.js).
+  'B-roll laid on main video.',
+  'The B-roll was laid - it merges in when your edit saves.',
+  'The B-roll was laid while you edited - your edit was kept and merged in.',
 ]);
 export function statusIsInfo() { return _INFO.has(_status); }
 // (phase V49.1, the owner's (пр29)) A REFUSAL OR A FAILURE - an edit refused (no project, read only, a rule of the lanes) or
-// not saved: popped up once (bar.js, js/notice.js), and red in the timeline's header while it lasts. "Changed on another
-// device" with the edit kept or the current version shown is news, as the server's own lays are - not an error.
+// not saved: popped up once (bar.js, js/notice.js), and red in the timeline's header while it lasts.
+// (phase V62, the owner 2026-10-31: "этого уведомления не должно быть в приложении. потому что девайс только тот на котором
+// происходит работа") There is no "another device": a change that came from elsewhere - the app's own server - is merged in or
+// shown without a word, and only an edit not saved is said.
 export function statusIsError() {
   const s = String(_status || '');
-  if (!s || statusIsInfo()) return false;
-  return !/^Changed on another device/.test(s) || /not saved/i.test(s);
+  return !!s && !statusIsInfo();
 }
 export function isReady() { return !!_timeline; }
 
@@ -620,7 +625,7 @@ export async function save(_merges = 0) {
   // during one save; a fourth is a server that refuses everything, and hammering it is worse
   // than stopping and saying so.
   if (_merges > 3) {
-    _status = 'Changed on another device repeatedly - your edit is still here but not saved yet.';
+    _status = 'The timeline kept changing while it saved - your edit is still here but not saved yet.';
     _emit();
     return;
   }
@@ -644,21 +649,19 @@ export async function save(_merges = 0) {
       // about a project nobody touched would be as misleading as saying nothing when they did.
       const untouched = _same(d.timeline, _base);
       const who = untouched ? null : _serverOnly(_base, d.timeline);
-      const { timeline, added, removed } = _merge(_base, _timeline, d.timeline);
+      const { timeline } = _merge(_base, _timeline, d.timeline);
       _timeline = timeline;
       _version = d.version;
       _base = clone(d.timeline);
       _bindHistory();
       if (!untouched) {
-        const parts = [];
-        if (added) parts.push(added + (added === 1 ? ' clip' : ' clips') + ' added');
-        if (removed) parts.push(removed + (removed === 1 ? ' clip' : ' clips') + ' removed');
-        // The server laying its own cells is not another device (_serverOnly).
+        // The server laying its own cells is said as what it is (_serverOnly); any other change is merged in without a word -
+        // there is no other device (phase V62, the owner).
         _status = (who && who.frag) ? 'The fragments were laid again while you edited - your edit was kept and merged in.'
+          : who && who.broll ? 'The B-roll was laid while you edited - your edit was kept and merged in.'
           : who && who.laid && !who.heard ? 'The music was laid under its clip while you edited - your edit was kept and merged in.'
           : who ? 'The captions were laid from the sound while you edited - your edit was kept and merged in.'
-          : 'Changed on another device' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
-            + ' - your edit was kept and merged in.';
+          : null;
       }
       _emit();
       _saving = false;
@@ -691,9 +694,9 @@ export async function save(_merges = 0) {
       // buttons lit up on the edit and went grey again before anyone could press them.
       if (!raced) _timeline = stored;
       else _schedule();
-      // A message about another device stays; so does the news of a server lay this very save merged in
-      // (_merges > 0) - the resave after a merge is what would otherwise wipe it at once.
-      if (!/another device/.test(_status || '') && !(_merges > 0 && statusIsInfo())) _status = null;
+      // The news of a server lay this very save merged in stays (_merges > 0) - the resave after a merge is what would
+      // otherwise wipe it at once.
+      if (!(_merges > 0 && statusIsInfo())) _status = null;
     } else {
       throw new Error((d && d.error) || 'save refused');
     }
@@ -783,8 +786,9 @@ async function _checkRemote() {
   const typing = !_dirty && _typingNow();
   if (typing) _heldForTyping = true;
   if (_dirty || typing) {
-    _status = !who ? 'Changed on another device - your edit will be merged in when it saves.'
+    _status = !who ? null
       : who.frag ? 'The fragments were laid again - it will merge in when your edit saves.'
+      : who.broll ? 'The B-roll was laid - it merges in when your edit saves.'
       : who.laid && !who.heard ? 'The music was laid under its clip - it merges in when your edit saves.'
       : 'The captions were laid from the sound - they merge in when your edit saves.';
     _emit();
@@ -801,8 +805,9 @@ async function _checkRemote() {
   _title = d.title || _title;
   _adv = d.adv || _adv;
   if (!undoable) _bindHistory();
-  _status = !who ? 'Changed on another device - this is the current version.'
+  _status = !who ? null
     : who.frag ? 'Fragments re-laid - the reads and the clips of this script are on the timeline.'
+    : who.broll ? 'B-roll laid on main video.'
     : who.laid && !who.heard ? 'Music laid under its clip.'
     : 'Captions laid from the sound.';
   _emit();
@@ -817,6 +822,8 @@ const _isFrag = (c) => Number(c && c.frag) > 0;
 // (phase V54, block 2) A clip the server laid itself - Video to Music's track under its clip (lib/audio-gens.js _layUnder): the
 // mark rides only until this page saves (lib/timeline-shape.js keeps no such field).
 const _isLaid = (c) => !!(c && c.laidBy);
+// (phase V62) A piece of a voiceover's B-roll - its engine's cell on main video, known by its id (lib/broll.js: br_<line>_…).
+const _isBroll = (c) => /^br_\d/.test(String((c && c.id) || ''));
 function _serverOnly(base, theirs) {
   const lanes = (t) => (Array.isArray(t && t.tracks) ? t.tracks : []);
   const a = lanes(base);
@@ -832,6 +839,7 @@ function _serverOnly(base, theirs) {
   const b = lanes(theirs).filter(l => !(newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard)) && !made.has(l.id));
   let heard = lanes(theirs).some(l => newLane(l) && l.kind === 'subs' && (l.clips || []).every(isHeard));
   let frag = false;
+  let broll = false;
   if (a.length !== b.length) return null;
   const byId = (list) => list.slice().sort((x, y) => String(x.id).localeCompare(String(y.id)));
   for (let i = 0; i < a.length; i++) {
@@ -852,14 +860,15 @@ function _serverOnly(base, theirs) {
     // (`voice`, phase V30, block 1) is MOVED by the mirror with its line, a corrected one too: where it stands is
     // the server's, what it says is the person's.
     const placeFree = (c) => (subs && c && c.voice ? { ...c, start: 0, dur: 0 } : c);
-    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c) && !_isLaid(c)).map(placeFree);
+    const own = (list) => (list || []).filter(c => !_isFrag(c) && !said1(c) && !_isLaid(c) && !_isBroll(c)).map(placeFree);
     if (subs ? !_same(byId(own(xc)), byId(own(yc))) : !_same(own(xc), own(yc))) return null;
     if (!_same((xc || []).filter(_isFrag), (yc || []).filter(_isFrag))) frag = true;
+    if (!_same((xc || []).filter(_isBroll), (yc || []).filter(_isBroll))) broll = true;
     const said = (list) => (list || []).filter(c => !_isFrag(c) && said1(c));
     if (subs && !_same(said(xc), said(yc))) heard = true;
     if (!_same((xc || []).filter(_isLaid), (yc || []).filter(_isLaid))) laid = true;
   }
-  return (frag || heard || laid) ? { frag, heard, laid } : null;
+  return (frag || heard || laid || broll) ? { frag, heard, laid, broll } : null;
 }
 
 /**

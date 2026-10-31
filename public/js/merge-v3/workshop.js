@@ -239,33 +239,24 @@ function _paintRoute() {
   if (!(_pid && _step === 'setup')) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
-    bar.className = 'mv3-wk-steps';
+    bar.className = 'mv3-wk-steps is-crumbs';
     // After the title, before the spacer that holds the right-hand side of the header.
     const sp = head.querySelector('.sp');
     head.insertBefore(bar, sp || null);
   }
   bar.textContent = '';
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'mv3-wk-step is-on';
-  b.textContent = 'setup';
-  b.title = 'Back to the script and its fields';
-  b.addEventListener('click', () => { if (mod) mod.goCrumb('hub'); });
+  // (phase V62, the owner 2026-10-31, items 8 and 14: "\u043d\u0443\u0436\u043d\u043e \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043a\u0440\u043e\u0448\u043a\u0438, \u043a\u0430\u043a \u0443 \u043f\u0440\u043e\u0435\u043a\u0442\u043e\u0432 \u0442\u0438\u043f\u0430 highlights") THE CRUMBS OF
+  // HIGHLIGHTS' LOOK - the Library panel's own (`.mv3-lib-crumb`): words in capitals after a "/", no pill, no outline. The panel's
+  // title, SETUP, is the first of them; a place inside setup follows it lit, then the way on (_paintOn).
   const wrap = document.createElement('div');
-  wrap.className = 'mv3-wk-stepwrap';
-  wrap.appendChild(b);
+  wrap.className = 'mv3-wk-crumbs';
   for (const c of crumbs) {
-    const arrow = document.createElement('span');
-    arrow.className = 'mv3-wk-arrow';
-    arrow.textContent = '\u2192';
-    wrap.appendChild(arrow);
     const sb = document.createElement('button');
     sb.type = 'button';
-    // Passed through: dashed. Where you are: lit, nothing more (css/merge-v3.css).
-    sb.className = 'mv3-wk-sub' + (c.here ? ' is-here' : ' is-trail');
-    sb.textContent = c.label;
+    sb.className = 'mv3-lib-crumb' + (c.here ? ' is-on is-here' : '');
+    sb.textContent = '/ ' + c.label;
     sb.title = c.here ? 'Where you are' : 'Back to ' + c.label;
-    if (!c.here) sb.addEventListener('click', () => { mod.goCrumb(c.id); });
+    if (!c.here) sb.addEventListener('click', (e) => { e.stopPropagation(); mod.goCrumb(c.id); });
     wrap.appendChild(sb);
   }
   _paintOn(wrap);
@@ -274,7 +265,7 @@ function _paintRoute() {
   // where you are - so that is the part kept in view. The start is a flick away; the current
   // place hidden past the edge would be the one word on the row that could not be read.
   bar.scrollLeft = 0;
-  const here = bar.querySelector('.mv3-wk-sub.is-here');
+  const here = bar.querySelector('.is-here');
   if (here) {
     const over = here.getBoundingClientRect().right - bar.getBoundingClientRect().right;
     if (over > 0) bar.scrollLeft = Math.ceil(over) + 2;
@@ -298,14 +289,10 @@ function _paintOn(wrap) {
       : _isVo() ? 'Read every line first - field 1, mood & voice: ' + n.read + ' of ' + n.total + ' read. Then the timeline, the Library and the chats open.'
         : 'Make the video of every fragment first - field 3, video: ' + n.clips + ' of ' + n.total + ' with a video. Then the timeline, the Library and the chats open.';
   for (const [label, id, what] of ON) {
-    const sep = document.createElement('span');
-    sep.className = 'mv3-wk-arrow';
-    sep.textContent = '/';
-    wrap.appendChild(sep);
     const c = document.createElement('button');
     c.type = 'button';
-    c.className = 'mv3-wk-sub mv3-wk-on' + (ok ? '' : ' is-off');
-    c.textContent = label;
+    c.className = 'mv3-lib-crumb mv3-wk-on' + (ok ? '' : ' is-off');
+    c.textContent = '/ ' + label;
     // Never reaching the panel's head: a press there is the column's (it would ask for the setup step back).
     c.addEventListener('click', (e) => { e.stopPropagation(); if (ok) _goOn(id); });
     if (ok) c.title = what;

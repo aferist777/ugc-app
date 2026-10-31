@@ -43,7 +43,7 @@ import * as VOICE from './wk-voice.js';
 import { derived } from '../chars-store.js';
 import * as Layers from '../layers.js';
 import { askDelete, note as askNote } from './ask.js';
-import { hint } from '../bubble.js';
+import { hint, stepBubble } from '../bubble.js';
 import { el, holdProgress, endProgress, onlyHere, showPicture, softScroll } from './wk-maker.js';
 import * as FCHAT from './fchat.js';
 // (phase V62) The voiceover draft's script, chosen in its script column.
@@ -839,7 +839,10 @@ export function paint(host, ctx, api) {
   host.appendChild(left);
   host.appendChild(_splitSash(host, left));
   if (_inserting >= lines.length) _inserting = -1;
-  const right = el('div', 'mv3-wk-half is-guide is-frag' + ((_open >= 0 || _inserting >= 0) ? ' has-close' : ''));
+  // (phase V62, the owner 2026-10-31: "давай добавим центральному полю такую же золотую обводку как и столбце со сценариями")
+  // A voiceover's fields stand in a gold frame, as its script does, once there is a script to read - before, they are blurred.
+  const right = el('div', 'mv3-wk-half is-guide is-frag' + ((_open >= 0 || _inserting >= 0) ? ' has-close' : '')
+    + (_isVo(p) ? ' is-vo' + (_live(lines).length ? ' is-lit' : '') : ''));
   host.appendChild(right);
   _applySplit(host, left);
   _keepScroll(right, 'r' + _open + ':' + api.view());
@@ -859,7 +862,7 @@ export function paint(host, ctx, api) {
   // fields go one after another, each opening when the one before it has done its work.
   if (api.view() === 'voice') { VOICE.paintPicker(right, api.voiceApi()); return; }
   _notes(right);
-  // (phase V62) A voiceover draft with no script yet still has its fields: the voice is chosen while the script is.
+  // (phase V62) A voiceover draft with no script yet still has its fields - blurred until there is one (_all; the owner 2026-10-31).
   if (!lines.length && !_isVo(p)) {
     right.appendChild(_note('This project has no lines. The script is written on the Scenarios page and comes with the project.'));
     return;
@@ -1030,10 +1033,22 @@ function _noneOption(sel, word) {
 //
 // UNTIL WHO AND WHERE ARE CHOSEN (the owner: "давай заблеривать все поля, кроме поля превью где пользователь должен выбрать
 // персонажа и окружение") the fields are blurred and take no press, with one line over them saying what to do first.
+//
+// (phase V62, the owner 2026-10-31: "нужно заблерить поле с настройками, а активным показывать поле с выбором или созданием
+// текста [...] затем когда пользователь выбирает сценарий или добавляет свой текст нужно подсветить золотой обводкой центральное
+// поле с таким же облачком инструкции по этому шагу") A VOICEOVER with no script has its fields blurred the same way - the
+// script column beside them is where to begin, its bubble says so (js/merge-v3/vo-script.js); with a script and a line still
+// to read, the bubble of step 2 stands over field 1.
 function _all(host, p, lines) {
   const missing = _missing(p);
   if (missing.length) host.appendChild(_note('Choose ' + missing.join(' and ') + ' first - on the preview. Then the fields open.'));
-  const zone = el('div', 'mv3-wk-zone' + (missing.length ? ' is-locked' : ''));
+  const live = _live(lines);
+  const noText = _isVo(p) && !live.length;
+  if (_isVo(p) && live.length && live.some(l => !isRead(l))) {
+    host.appendChild(stepBubble('Step 2 · mood & voice', 'Choose the mood and the voice, then press "generate" - every line '
+      + 'is read. Then the B-roll is found for it and the timeline opens.'));
+  }
+  const zone = el('div', 'mv3-wk-zone' + ((missing.length || noText) ? ' is-locked' : ''));
   host.appendChild(zone);
   _stageMoodVoice(zone, p, lines);
   if (_isVo(p)) { _stageBroll(zone, p, lines); return; }

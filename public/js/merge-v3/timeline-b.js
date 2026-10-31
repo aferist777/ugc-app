@@ -478,6 +478,7 @@ export function keepPickOn(fn) { _keepPick = typeof fn === 'function' ? fn : nul
 // preview's first: on a picture it picks or moves it (place-b.js), on a page of captions it picks that (cap-place.js) - only
 // a press on neither lets go (_afterPreviewPress). Captured, so a control that keeps its own mousedown still counts.
 const _onPreview = (t) => !!(t && t.tagName === 'CANVAS' && t.closest && t.closest('#mv3-stage'));
+const _brollUp = () => !!document.querySelector('#mv3-br.is-shown');
 let _pvPress = null;           // the pick as a press on the preview found it, until that press has been the preview's
 let _pvPicked = false;         // that press picked the picture under it (place-b.js selectClipById) - the one picked already too
 function _awayFromClip(e) {
@@ -487,7 +488,11 @@ function _awayFromClip(e) {
   const t = e.target;
   if (!t || !t.closest) return;
   if (_onPreview(t)) { _pvPress = [..._sel].join(' '); return; }
-  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, .sv3-toasts, #mv3-timeline > .mv3-panel-head, .mv3b-row.is-ruler, .mv3b-clip, .mv3b-lbl')) return;
+  // (phase V62, the owner 2026-10-31: "выделение не снимается с фрагмента таймлайна пока пользователь не сменит крошку") Nor in
+  // the view "b-roll" of the Library panel and on its crumb: another item is chosen there FOR the picked piece.
+  if (t.closest('#mv3-over, #mv3-cap, #mv3-lib-cap, #mv3-br, #mv3-lib-br, .sv3-toasts, #mv3-timeline > .mv3-panel-head, .mv3b-row.is-ruler, .mv3b-clip, .mv3b-lbl')) return;
+  // While that view is up, nothing but another crumb of the panel lets the pick go (a clip or the band on the lanes picks anew).
+  if (_brollUp() && !t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
   // While the captions view is up, "Library" and a chat's crumb let the pick go by their own click (lib-views.js toBase).
   if (Views.isCaptions() && t.closest('#mv3-lib-title, .mv3-lib-crumb')) return;
   const top = Layers.top();
@@ -499,7 +504,7 @@ function _awayFromClip(e) {
 function _afterPreviewPress(e) {
   const was = _pvPress;
   _pvPress = null;
-  if (was == null || !_on || !_sel.size || e.button !== 0) return;
+  if (was == null || !_on || !_sel.size || e.button !== 0 || _brollUp()) return;
   // A picture picked, moved, sized or turned, a page of captions taken: the preview's gesture, not a press away.
   if (_pvPicked || e.defaultPrevented || [..._sel].join(' ') !== was || (_keepPick && _keepPick(e))) return;
   _clearSel();

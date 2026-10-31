@@ -14,6 +14,10 @@
                                 o.on - a class put on `node` while its bubble is open. `node` returned.
      showBubble(anchor, text, o)  opened now, over `anchor`
      closeBubble()              the bubble open, closed
+     stepBubble(title, text)    (phase V62, the owner 2026-10-31: "облачко над полем для выбора сценария с кратким описанием
+                                что нужно сделать на этом шаге") the same bubble standing IN the page, over the field it is
+                                about, its tail down at it - what to do at this step; built with the field, so it is there
+                                while the step is and goes when the field is painted without it. Not on the stack of layers.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Layers from './layers.js';
@@ -92,6 +96,15 @@ export function showBubble(anchor, text, o) {
   document.addEventListener('mousedown', _onDown, true);
   window.addEventListener('scroll', _onScroll, true);
   window.addEventListener('blur', closeBubble);
+}
+
+/** A step's instruction: the bubble as an element of the page (css/app-shell.css .bub.is-step), put over its field. */
+export function stepBubble(title, text) {
+  const box = _el('div', 'bub is-step');
+  box.setAttribute('role', 'note');
+  if (title) box.appendChild(_el('b', null, title));
+  for (const p of String(text || '').split('\n')) if (p.trim()) box.appendChild(_el('p', null, p.trim()));
+  return box;
 }
 
 /** The pointer resting on `node` opens its bubble. No text - nothing hung on it. */
