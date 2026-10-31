@@ -56,9 +56,11 @@ export function ensureCss() {
 
 // ── The frame ───────────────────────────────────────────────────────────────
 const W_WIN = 860, H_WIN = 560;            // the almanac's size (js/merge-v3/vhelp.js)
-// (phase V64 block 2, the owner 2026-10-31, (зг5), (зг9): "давай все окна генераций 1280×800") EVERY GENERATION'S WINDOW - the
-// pictures, video and sound chats, the frames chat, New Character, New environment, New lookbook, New prop - is this size; a
-// smaller screen makes it smaller (openFrame). Pickers, the almanac, the viewer and the "who" / "where" windows keep theirs.
+// (phase V64 block 2, the owner 2026-10-31, (зг5), (зг9): "давай все окна генераций 1280×800") THE GENERATIONS' WINDOWS - the
+// pictures, video and sound chats, the frames chat, New Character - are this size; a smaller screen makes it smaller
+// (openFrame). (fix (е), the owner 2026-11-01: "давай new environment/lookbook/prop сделаем маленькими окнами как были") New
+// environment, New lookbook and New prop are the almanac's size again (W_WIN × H_WIN, over their place), as are the pickers,
+// the almanac, the viewer and the "who" / "where" windows.
 // (fix (б)) And it stands in the MIDDLE OF THE SCREEN, its opener's anchor left aside - every one in the same place.
 export const GEN_SIZE = Object.freeze({ w: 1280, h: 800 });
 const _frames = [];                        // open, the top last
@@ -218,7 +220,7 @@ export function paintBench(host, o) {
 /** A window of the bench alone. */
 export function openGenerator(o) {
   const kind = KINDS[o && o.kind] ? o.kind : 'environment';
-  const win = openFrame({ name: KINDS[kind].title, anchor: o.anchor, cls: 'is-gen', size: GEN_SIZE, onClose: o.onClose });
+  const win = openFrame({ name: KINDS[kind].title, anchor: o.anchor, cls: 'is-gen', onClose: o.onClose });
   win.setCrumbs([{ label: KINDS[kind].title }]);
   paintBench(win.body, Object.assign({}, o, { kind }));
   return win;

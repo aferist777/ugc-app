@@ -14,7 +14,7 @@
 // written ("describing…"; not written - why, and "read again") - and "add another".
 // ════════════════════════════════════════════════════════════════════════════
 
-import { openFrame, ensureCss, GEN_SIZE } from './gen-window.js';
+import { openFrame, ensureCss } from './gen-window.js';
 import { isPictureFile, pictureDataUrl, PICTURE_ACCEPT } from './picture-file.js';
 import { openPick, closePick, ensurePickCss } from './merge-v3/chat-pick.js';
 import * as Src from './merge-v3/chat-sources.js';
@@ -53,7 +53,8 @@ export function openNewProp(o) {
   ensureCss();
   ensurePickCss();                         // "from IMAGES…" opens the attachment window - its look ready before
   _s = _blank();
-  _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', size: GEN_SIZE, onClose: _closed });
+  // (phase V64, fix (е)) The almanac's size again, over its place - not a generation's 1280×800.
+  _win = openFrame({ name: 'new prop', anchor: _o.anchor, cls: 'is-gen is-prop', onClose: _closed });
   _win.setCrumbs([{ label: 'new prop' }]);
   document.addEventListener('paste', _onPaste, true);
   _render();
