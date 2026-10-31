@@ -51,6 +51,8 @@
   color:var(--ink); font:600 10px/1 var(--font); letter-spacing:.02em;
 }
 .mt-act.mt-make:hover{background:var(--gold); border-color:var(--gold); color:var(--bg)}
+/* (fix (н), the owner 2026-11-01: "кнопки create нужно сделать видимыми всегда, а не только при наведении") Always there. */
+.mt-row .mt-act.mt-make{display:inline-flex}
 .mt-gen{
   flex:0 0 auto; display:inline-flex; align-items:center; height:17px; padding:0 7px; margin-left:2px;
   border:1px solid var(--gold); border-radius:var(--r-xs); background:none; color:var(--gold);

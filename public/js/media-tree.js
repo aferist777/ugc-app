@@ -83,8 +83,9 @@
    on it are refused in words (LYRICS_TAKE); a text let go anywhere else too (LYRICS_STAY); "Move to…" does not offer it.
 
    GOLD IS WHERE A GENERATOR'S BUTTON IS (phase V64 block 1, the owner 2026-10-31, (зг1)-(зг3), (зг8)) - one look in every
-   tree that is given the openers: Environments / Lookbooks / Props have their names gold and, under the pointer, "create"
-   in a blue frame with round ends (filled gold under the pointer itself) - `onMake`; the roots IMAGES / VIDEO / AUDIO
+   tree that is given the openers: Environments / Lookbooks / Props have their names gold and "create" - under the pointer
+   until fix (н), always there since (the owner 2026-11-01) - in a blue frame with round ends (filled gold under the pointer
+   itself) - `onMake`; the roots IMAGES / VIDEO / AUDIO
    have their names gold and "generate" always there, gold in a gold frame (all gold, dark text, under the pointer) -
    `onGenerate`: the pictures chat, the video chat, the sound. IMAGES' "New folder" is then in its menu only. Music has
    neither gold nor a button since V64: its "Generate music" and "New folder" are in its menu. Patterns stay as they are.
