@@ -33,7 +33,9 @@ import { isFramed, windowAt, windowW, zoomAt } from '../framing/path.js';
 // (phase V51, point 1) A clip's crop - a piece of its file cut first; the render reads the same module.
 import { active as cropActive, BLUR_FROM_PIECE } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen - one rule with the render (overlay/look.js).
-import { opacityOf, blendOf } from '../overlay/look.js';
+import { opacityOf, blendOf, isPattern } from '../overlay/look.js';
+// (phase V65, block 5) A pattern's tiles over the whole frame - one rule with the render (overlay/pattern.js).
+import * as PAT from '../overlay/pattern.js';
 
 const STAGE = 'mv3-stage';
 
@@ -790,7 +792,47 @@ function _showAs(el, sw, sh, c, gaps, main) {
   _ctx.restore();
 }
 
+// (phase V65, block 5, (пз8), (пз14)-(пз17)) A PATTERN: its file - a seamless tile - repeated over the whole frame by
+// overlay/pattern.js's rule: a tile corner at the frame's middle, the tiles sized (tileSize), turned about the middle
+// (angleAt) and slid (driftAt) at the clip's own second; its white made the clip's colour (the file's transparency kept). The
+// tile is drawn once per colour and size (_patTile) and laid as a canvas pattern. No grips: nothing to place.
+const _patTiles = new Map();      // src|colour|size -> a canvas of one tile
+function _patTile(el, f, n) {
+  const key = el.src + '|' + f.color + '|' + n;
+  let cv = _patTiles.get(key);
+  if (cv) return cv;
+  if (_patTiles.size > 24) _patTiles.clear();
+  cv = document.createElement('canvas');
+  cv.width = n; cv.height = n;
+  const g = cv.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(el, 0, 0, n, n);
+  if (f.color !== '#ffffff') {
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = f.color;
+    g.fillRect(0, 0, n, n);
+  }
+  _patTiles.set(key, cv);
+  return cv;
+}
+function _drawPattern(el, sw, c) {
+  const f = PAT.of(c);
+  const n = PAT.tileSize(sw, W, H, f.scale);
+  if (!sw || !el.naturalWidth) return;
+  const t = Math.max(0, _at - (+c.start || 0));
+  const d = PAT.driftAt(f, t, W, H);
+  const pat = _ctx.createPattern(_patTile(el, f, Math.min(4096, n)), 'repeat');
+  pat.setTransform(new DOMMatrix().translate(W / 2 + d.x, H / 2 + d.y).rotate(PAT.angleAt(f, t)).scale(n / Math.min(4096, n)));
+  _ctx.save();
+  _ctx.fillStyle = pat;
+  _ctx.fillRect(0, 0, W, H);
+  _ctx.restore();
+  _rects.set(c.id, { dx: 0, dy: 0, dw: W, dh: H, cx: W / 2, cy: H / 2, angle: 0, nogrip: true, nopick: true });
+}
+
 function _show(el, sw, sh, c, gaps, main) {
+  // (phase V65, block 5) A pattern is no picture placed: its tiles cover the frame.
+  if (isPattern(c.src)) { const lv = liveOf(c.id); _drawPattern(el, sw, lv ? Object.assign({}, c, lv) : c); return; }
   if (c.halfer) { _rects.set(c.id, _drawBand(el, sw, sh, c)); return; }
   const tFile = isFramed(c.frame) ? _fileTime(el, c) : NaN;
   // (phase V49, point 3) A main clip with PiP on: the picture the frame shows, in its own box.

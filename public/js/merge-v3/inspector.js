@@ -63,7 +63,9 @@ import { cropRows, pipOffCrop } from './crop-box.js';
 import { active as cropActive } from '../framing/crop.js';
 // (phase V65) How much of a clip is seen and how it mixes; held on the preview while the slider moves or the pointer rests
 // on a mode (place-b.js setLive).
-import { opacityOf, blendOf, BLENDS } from '../overlay/look.js';
+import { opacityOf, blendOf, BLENDS, isPattern } from '../overlay/look.js';
+// (phase V65, block 5) A pattern's own settings (overlay/pattern.js).
+import * as PAT from '../overlay/pattern.js';
 import { setLive as setLivePlace } from './place-b.js';
 import * as Layers from '../layers.js';
 
@@ -270,6 +272,71 @@ function _openBlendMenu(anchor, items, current) {
   const away = (e) => { if (!el.contains(e.target) && e.target !== anchor) _closeBlendMenu(); };
   document.addEventListener('mousedown', away, true);
   _blendMenu = { el, away, layer: Layers.open(el, { modal: false, name: 'blend', onEsc: _closeBlendMenu }) };
+}
+
+// (phase V65, block 5, the owner's (пз8), (пз14)-(пз17), (пз19)) A PATTERN'S OWN SETTINGS - for one pattern, or for every
+// pattern picked at once (each keeps its other settings): Scale 25-400 %, Colour (the PiP outline's colour box), Angle
+// 0-359°, Movement - still, rotate (0.5-20°/s, ↻ or ↺), drift (5-200 px/s, eight arrows). A slider is shown on the preview
+// while it moves (place-b.js setLive) and written on release; every change ONE undo step. `items` - [{ track, clip }] of
+// patterns.
+function _patternRows(host, items) {
+  const fs = items.map(x => PAT.of(x.clip));
+  const f0 = fs[0];
+  const differ = (k) => fs.some(f => f[k] !== f0[k]);
+  const patchOf = (x, change) => ({ pattern: Object.assign(PAT.of(x.clip), change) });
+  const write = (change) => setClipsB(items.map(x => ({ trackId: x.track.id, clipId: x.clip.id, patch: patchOf(x, change) })));
+  const live = (change) => setLivePlace(new Map(items.map(x => [x.clip.id, patchOf(x, change)])));
+  const slider = (label, key, lim, fmt, toV, fromV) => host.appendChild(C.row(label, C.slider({
+    min: lim.min, max: lim.max, step: lim.step, value: toV(f0[key]), fmt, mixed: differ(key),
+    onInput: (v) => live({ [key]: fromV(v) }),
+    onChange: (v) => { setLivePlace(null); write({ [key]: fromV(v) }); },
+  })));
+  const pct = (v) => Math.round(v) + '%';
+  slider('Scale', 'scale', { min: PAT.SCALE.min * 100, max: PAT.SCALE.max * 100, step: PAT.SCALE.step * 100 }, pct,
+    (s) => Math.round(s * 100), (v) => v / 100);
+  const col = C.color(f0.color, (v) => write({ color: v }));
+  col.title = 'The colour its white becomes' + (differ('color') ? ' - the picked patterns differ' : '');
+  host.appendChild(C.row('Colour', col));
+  slider('Angle', 'angle', { min: 0, max: 359, step: 1 }, (v) => Math.round(v) + '°', (a) => a, (v) => v);
+  host.appendChild(C.row('Movement', C.select(PAT.MOVES, differ('move') ? 'none' : f0.move, (m) => write({
+    move: m, speed: m === 'drift' ? PAT.DRIFT.def : PAT.ROTATE.def, dir: m === 'drift' ? 'e' : 'cw',
+  }))));
+  if (differ('move')) { host.appendChild(C.hint('The picked patterns move differently - a movement chosen here is given to all of them.')); return; }
+  if (f0.move === 'rotate') {
+    slider('Speed', 'speed', PAT.ROTATE, (v) => (+v).toFixed(1) + '°/s', (s) => s, (v) => v);
+    const way = _el('span', 'mv3-pat-dirs');
+    for (const [id, label, title] of [['cw', '↻', 'Clockwise'], ['ccw', '↺', 'Counter-clockwise']]) {
+      way.appendChild(C.toggleNamed(label, !differ('dir') && f0.dir === id, () => write({ dir: id }), title));
+    }
+    host.appendChild(C.row('Direction', way));
+  } else if (f0.move === 'drift') {
+    slider('Speed', 'speed', PAT.DRIFT, (v) => Math.round(v) + ' px/s', (s) => s, (v) => v);
+    const way = _el('span', 'mv3-pat-dirs');
+    for (const [id, label] of PAT.DIRS) way.appendChild(C.toggleNamed(label, !differ('dir') && f0.dir === id, () => write({ dir: id }), 'Drift ' + id));
+    host.appendChild(C.row('Direction', way));
+  }
+}
+
+// A pattern clip: what it is, its own settings, then how much of it is seen and how it mixes, and the way off the timeline.
+function _blankPattern(host, track, c) {
+  const top = _el('div', 'mv3-pat-top');
+  if (c.thumb) {
+    const img = document.createElement('img');
+    img.src = c.thumb;
+    img.alt = c.name || '';
+    top.appendChild(img);
+  }
+  top.appendChild(_el('div', 'mv3-pat-name', (c.name || 'Pattern') + ' · pattern'));
+  host.appendChild(top);
+  _patternRows(host, [{ track, clip: c }]);
+  _bsep(host);
+  _opacityRow(host, [{ track, clip: c }]);
+  if (!isMainVideo(track)) _blendRow(host, [{ track, clip: c }]);
+  host.appendChild(C.hint('Laid over the whole frame, repeated - nothing to place or crop.'));
+  _bsep(host);
+  host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
+    danger: true, title: 'Takes the pattern off the timeline. Patterns stays as it was.',
+  })));
 }
 
 function _pipSection(host, items) {
@@ -1524,6 +1591,8 @@ function _renderBlankClip(host, { track, clip }) {
 
   if (track.kind === 'subs' || track.kind === 'text') return _blankCaption(host, track, clip);
   if (track.kind === 'audio') return _blankSound(host, track, clip, set, pair);
+  // (phase V65, block 5) A pattern is no picture placed: its tiles cover the frame - its own settings.
+  if (track.kind === 'video' && isPattern(clip.src)) return _blankPattern(host, track, clip);
   if (still) return _blankStill(host, track, clip, set);
   return _blankFilm(host, track, clip, set, pair);
 }
@@ -1539,6 +1608,14 @@ function _renderMany(host, n) {
   const sounds = _soundsOf(picked);
   if (sounds.length) {
     _soundSection(host, sounds, picked.every(x => x.track.kind === 'audio'));
+    _bsep(host);
+  }
+  // (phase V65, block 5, (пз19)) Patterns only: their own settings for all of them at once; with any other clip among them
+  // only what every clip has - opacity and blend, below.
+  const pats = picked.filter(x => x.track.kind === 'video' && isPattern(x.clip.src));
+  if (pats.length && pats.length === n) {
+    host.appendChild(_el('div', 'mv3-ins-sub', 'Pattern · for ' + n + ' patterns'));
+    _patternRows(host, pats);
     _bsep(host);
   }
   // (phase V65, (пз5)) The video clips among them - every video lane - seen as much as one another: one slider, one step.
